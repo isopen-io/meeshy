@@ -79,13 +79,14 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
         conversationId: String,
         userId: String?,
         lastReadAt: Date?,
-        unreadCount: Int?
+        unreadCount: Int?,
+        type: String = "read"
     ) -> ReadStatusUpdateEvent {
         ReadStatusUpdateEvent(
             conversationId: conversationId,
             participantId: "p1",
             userId: userId,
-            type: "read",
+            type: type,
             updatedAt: Date(),
             summary: ReadStatusSummary(totalMembers: 2, deliveredCount: 1, readCount: 1),
             lastReadAt: lastReadAt,
@@ -203,6 +204,33 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
 
         let leaked = await waitUntil { (await store.conversation(id: "c1"))?.userState.lastReadAt != nil }
         XCTAssertFalse(leaked, "a peer's read receipt must not touch the current user's cursor")
+    }
+
+    func test_readStatus_receivedType_ignored() async {
+        let store = makeStore()
+        await store.hydrate(makeConv(id: "c1"))
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()), currentUserId: "me")
+
+        let readAt = Date(timeIntervalSince1970: 1_700_001_000)
+        // A 'received' (delivery) event must never advance the read cursor.
+        env.readStatus.send(makeReadEvent(conversationId: "c1", userId: "me", lastReadAt: readAt, unreadCount: 0, type: "received"))
+
+        let leaked = await waitUntil { (await store.conversation(id: "c1"))?.userState.lastReadAt != nil }
+        XCTAssertFalse(leaked, "a 'received' delivery event must not touch the read cursor")
+    }
+
+    func test_readStatus_missingFields_ignored() async {
+        let store = makeStore()
+        await store.hydrate(makeConv(id: "c1"))
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()), currentUserId: "me")
+
+        let readAt = Date(timeIntervalSince1970: 1_700_001_000)
+        // lastReadAt present but unreadCount absent (partial/legacy payload):
+        // must be dropped, never coerced to a bogus unreadCount = 0.
+        env.readStatus.send(makeReadEvent(conversationId: "c1", userId: "me", lastReadAt: readAt, unreadCount: nil))
+
+        let applied = await waitUntil { (await store.conversation(id: "c1"))?.userState.lastReadAt != nil }
+        XCTAssertFalse(applied, "a read event missing unreadCount must not be applied")
     }
 
     // MARK: UserCategoryStore routes

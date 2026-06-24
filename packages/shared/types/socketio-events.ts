@@ -634,12 +634,12 @@ export interface ReadStatusUpdatedEventData {
    * so a client applies it only when strictly newer than its local cursor.
    * `null` when the actor has no read cursor yet.
    *
-   * Emitted by the dedicated mark-read / mark-received / delivery-receipt
-   * routes. ABSENT (`undefined`) on the bulk auto-deliver broadcast
-   * (`MessageHandler._autoDeliverToOnlineRecipients`), which fans out on
-   * every new message and carries only the aggregate `summary` for sender
-   * checkmarks — it never advances a read cursor, so it omits these fields
-   * to stay off the per-message hot path.
+   * Present ONLY on `type: 'read'` broadcasts — the sole action that advances
+   * a read cursor. ABSENT (`undefined`) on `type: 'received'` (delivery never
+   * moves `lastReadAt`) and on the bulk auto-deliver broadcast
+   * (`MessageHandler._autoDeliverToOnlineRecipients`), which carries only the
+   * aggregate `summary` for sender checkmarks. Travels paired with
+   * `unreadCount`: a consumer applies them together or not at all.
    */
   readonly lastReadAt?: Date | null;
   /**

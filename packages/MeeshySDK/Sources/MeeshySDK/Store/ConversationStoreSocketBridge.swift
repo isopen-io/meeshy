@@ -18,10 +18,13 @@ import Combine
 ///                                 → `UserCategoryStore.applyRemote`
 ///
 /// `read-status:updated` mutates the CURRENT user's own state (multi-device
-/// read sync): the same broadcast also reaches peers (for message
-/// checkmarks), so it is gated on `event.userId == currentUserId` — a peer
-/// reading must not move our cursor. The store's monotone `lastReadAt` guard
-/// then drops stale and `received`-only echoes.
+/// read sync). It is applied only when (a) `type == "read"` — a `received`
+/// delivery never advances a read cursor — (b) both `lastReadAt` and
+/// `unreadCount` are present (they travel together; the gateway omits them on
+/// non-`read` broadcasts), and (c) `event.userId == currentUserId`, since the
+/// same broadcast also reaches peers (for checkmarks) and a peer reading must
+/// not move our cursor. The store's monotone `lastReadAt` guard then drops any
+/// receipt not strictly newer than the local cursor.
 ///
 /// `@MainActor`: subscriptions and `cancellables` live on the main thread
 /// (publishers deliver on main via `MessageSocketManager.decode`); each sink
@@ -88,19 +91,24 @@ public final class ConversationStoreSocketBridge {
         }.store(in: &cancellables)
 
         readStatusUpdated.sink { event in
-            // The broadcast fans out to every participant (peers need the
-            // aggregate `summary` for checkmarks), but the read cursor is
-            // per-user: only the actor's own devices may advance it. Gate on
-            // identity; the store's monotone `lastReadAt` guard then drops
-            // anything not strictly newer (stale + `received`-only echoes).
+            // Only a 'read' advances the read cursor; 'received' is delivery
+            // and must NOT touch unread state (mirrors ConversationSyncEngine's
+            // type gate). The frontier and its count travel together — require
+            // both so a partial/legacy payload can never coerce the badge to a
+            // bogus 0. The broadcast also reaches peers (for checkmarks), so we
+            // additionally gate on identity: only the actor's own devices may
+            // advance the cursor. The store's monotone `lastReadAt` guard then
+            // drops anything not strictly newer than the local cursor.
+            guard event.type == "read",
+                  let lastReadAt = event.lastReadAt,
+                  let unreadCount = event.unreadCount else { return }
             Task {
                 guard let me = await currentUserId(), event.userId == me else { return }
-                let receipt = ReadStatusEvent(
+                await store.applyReadReceipt(ReadStatusEvent(
                     conversationId: event.conversationId,
-                    unreadCount: event.unreadCount ?? 0,
-                    lastReadAt: event.lastReadAt
-                )
-                await store.applyReadReceipt(receipt)
+                    unreadCount: unreadCount,
+                    lastReadAt: lastReadAt
+                ))
             }
         }.store(in: &cancellables)
 

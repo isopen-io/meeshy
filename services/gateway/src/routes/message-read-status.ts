@@ -428,26 +428,40 @@ async function broadcastReadStatusUpdate(
   const socketIOManager = socketIOHandler?.getManager?.();
   if (!socketIOManager) return;
 
-  const [summary, activeParticipants, actorCursor, actorUnreadCount] = await Promise.all([
+  // Read frontier + unread count of the ACTOR (args.userId), scoped to their
+  // participant row, let the actor's OTHER devices sync their own read cursor
+  // without a refetch (multi-device read sync). They travel ONLY on a 'read':
+  // that is the sole action advancing the read cursor. A 'received' (delivery)
+  // never moves lastReadAt, so it carries the aggregate summary only (peers
+  // use it for checkmarks) and omits these per-user fields — which the client
+  // would drop anyway, and which would needlessly disclose the actor's backlog
+  // to every peer in the room.
+  const actorReadSyncP: Promise<{ lastReadAt: Date | null; unreadCount: number } | undefined> =
+    args.type === 'read'
+      ? Promise.all([
+          prisma.conversationReadCursor.findUnique({
+            where: {
+              conversation_participant_cursor: {
+                participantId: args.participantId,
+                conversationId: args.conversationId
+              }
+            },
+            select: { lastReadAt: true }
+          }),
+          readStatusService.getUnreadCount(args.participantId, args.conversationId)
+        ]).then(([cursor, unreadCount]) => ({
+          lastReadAt: cursor?.lastReadAt ?? null,
+          unreadCount
+        }))
+      : Promise.resolve(undefined);
+
+  const [summary, activeParticipants, actorReadSync] = await Promise.all([
     readStatusService.getLatestMessageSummary(args.conversationId),
     prisma.participant.findMany({
       where: { conversationId: args.conversationId, isActive: true },
       select: { userId: true }
     }),
-    // Read frontier + unread count of the ACTOR (args.userId), scoped to
-    // their participant row. These let the actor's OTHER devices sync their
-    // own read cursor without a refetch (multi-device read sync). Recipients
-    // whose id differs from args.userId ignore them client-side.
-    prisma.conversationReadCursor.findUnique({
-      where: {
-        conversation_participant_cursor: {
-          participantId: args.participantId,
-          conversationId: args.conversationId
-        }
-      },
-      select: { lastReadAt: true }
-    }),
-    readStatusService.getUnreadCount(args.participantId, args.conversationId)
+    actorReadSyncP
   ]);
 
   const payload: ReadStatusUpdatedEventData = {
@@ -457,8 +471,7 @@ async function broadcastReadStatusUpdate(
     type: args.type,
     updatedAt: new Date(),
     summary,
-    lastReadAt: actorCursor?.lastReadAt ?? null,
-    unreadCount: actorUnreadCount
+    ...(actorReadSync ?? {})
   };
 
   const io = socketIOManager.getIO();

@@ -130,22 +130,29 @@ describe('POST /conversations/:conversationId/messages/:messageId/delivery-recei
       participantId: PARTICIPANT_ID,
       type: 'received'
     });
-    // Per-actor read-sync fields (multi-device). No cursor yet → null
-    // frontier; no unread messages mocked → 0.
-    expect(payload).toHaveProperty('lastReadAt', null);
-    expect(payload).toHaveProperty('unreadCount', 0);
+    // A 'received' (delivery) broadcast never advances the read cursor, so it
+    // omits the per-actor read-sync fields — they would just be dropped by the
+    // client and would disclose the actor's backlog to peers.
+    expect(payload.lastReadAt).toBeUndefined();
+    expect(payload.unreadCount).toBeUndefined();
   });
 
-  it('carries the actor read frontier and unread count in the broadcast', async () => {
+  it('emits the actor read frontier and unread count on a mark-as-read broadcast', async () => {
     const frontier = new Date('2026-06-24T10:00:00.000Z');
     mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ lastReadAt: frontier });
     mockPrisma.message.count.mockResolvedValue(3);
 
-    const response = await app.inject({ method: 'POST', url: url() });
+    const response = await app.inject({
+      method: 'POST',
+      url: `/conversations/${CONVERSATION_ID}/mark-as-read`
+    });
 
     expect(response.statusCode).toBe(200);
     expect(emitMock).toHaveBeenCalledTimes(1);
-    const [, payload] = emitMock.mock.calls[0];
+    const [eventName, payload] = emitMock.mock.calls[0];
+    expect(eventName).toBe(SERVER_EVENTS.READ_STATUS_UPDATED);
+    expect(payload.type).toBe('read');
+    // A 'read' carries the per-actor multi-device sync fields.
     expect(payload.lastReadAt).toEqual(frontier);
     expect(payload.unreadCount).toBe(3);
   });
