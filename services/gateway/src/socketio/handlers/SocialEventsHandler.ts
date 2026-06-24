@@ -107,6 +107,25 @@ export class SocialEventsHandler {
   }
 
   /**
+   * Émission UNIQUE sur l'union des feed rooms (amis filtrés par visibilité +
+   * auteur) ET de la post room (`ROOMS.post`). Socket.IO dédoublonne un socket
+   * présent dans plusieurs rooms → livraison EXACTEMENT une fois, ce qui supprime
+   * la double-livraison du modèle « boucle feed + emit post room séparé » (un
+   * ami-viewer était dans sa feed room ET la post room). Cf. `commentBroadcastRooms`.
+   */
+  private emitToFeedsAndPostRoom(
+    recipientIds: string[],
+    authorId: string,
+    postId: string,
+    event: string,
+    data: unknown,
+  ): void {
+    const rooms = [...recipientIds, authorId].map((id) => ROOMS.feed(id));
+    rooms.push(ROOMS.post(postId));
+    this.io.to(rooms).emit(event, data);
+  }
+
+  /**
    * Broadcast uniquement vers l'auteur du post (notifs personnelles)
    */
   private emitToUser(userId: string, event: string, data: unknown): void {
@@ -198,13 +217,9 @@ export class SocialEventsHandler {
     visibilityUserIds: string[] = [],
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
-    this.emitToFriends(recipients, postAuthorId, SERVER_EVENTS.POST_LIKED, data);
-    // Atteindre AUSSI les viewers de la post room (détail de post + reel viewer) :
-    // ils rejoignent `ROOMS.post` mais ne sont PAS dans les feed rooms des amis de
-    // l'auteur. Payload ABSOLU (likeCount + reactionSummary) → idempotent même si un
-    // socket est dans les deux rooms (la feed room ET la post room). Modèle identique
-    // à `broadcastStoryReacted`.
-    this.io.to(ROOMS.post(data.postId)).emit(SERVER_EVENTS.POST_LIKED, data);
+    // Feed rooms (amis filtrés par visibilité + auteur) ET post room (détail /
+    // reel viewer) en UN SEUL emit dédoublonné — plus de double-livraison.
+    this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.POST_LIKED, data);
   }
 
   async broadcastPostUnliked(
@@ -214,8 +229,7 @@ export class SocialEventsHandler {
     visibilityUserIds: string[] = [],
   ): Promise<void> {
     const recipients = await this.getVisibilityFilteredRecipients(postAuthorId, visibility, visibilityUserIds);
-    this.emitToFriends(recipients, postAuthorId, SERVER_EVENTS.POST_UNLIKED, data);
-    this.io.to(ROOMS.post(data.postId)).emit(SERVER_EVENTS.POST_UNLIKED, data);
+    this.emitToFeedsAndPostRoom(recipients, postAuthorId, data.postId, SERVER_EVENTS.POST_UNLIKED, data);
   }
 
   async broadcastPostReposted(data: PostRepostedEventData, authorId: string): Promise<void> {
@@ -389,6 +403,12 @@ export class SocialEventsHandler {
 
   broadcastCommentLiked(data: CommentLikedEventData, commentAuthorId: string): void {
     this.emitToUser(commentAuthorId, SERVER_EVENTS.COMMENT_LIKED, data);
+    // Reach every viewer of the post detail (join-gated post room) so the
+    // comment's like count updates live for them too — not just the comment
+    // author. Payload is ABSOLUTE (likeCount) → idempotent even if the comment
+    // author is in both their feed room and the post room. Mirrors
+    // `broadcastPostLiked`.
+    this.io.to(ROOMS.post(data.postId)).emit(SERVER_EVENTS.COMMENT_LIKED, data);
   }
 
   // ==============================================
