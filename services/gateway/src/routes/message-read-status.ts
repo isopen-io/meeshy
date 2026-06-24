@@ -3,6 +3,7 @@ import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/a
 import { MessageReadStatusService } from '../services/MessageReadStatusService.js';
 import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService.js';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import type { ReadStatusUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 import { validateParams, validateQuery } from '../validation/helpers.js';
 import { MessageIdParamSchema, ConversationIdParamSchema, ReadStatusesQuerySchema, DeliveryReceiptParamsSchema } from '../validation/message-read-status-schemas.js';
 import { resolveConversationId } from '../utils/conversation-id-cache.js';
@@ -427,21 +428,50 @@ async function broadcastReadStatusUpdate(
   const socketIOManager = socketIOHandler?.getManager?.();
   if (!socketIOManager) return;
 
-  const [summary, activeParticipants] = await Promise.all([
+  // Read frontier + unread count of the ACTOR (args.userId), scoped to their
+  // participant row, let the actor's OTHER devices sync their own read cursor
+  // without a refetch (multi-device read sync). They travel ONLY on a 'read':
+  // that is the sole action advancing the read cursor. A 'received' (delivery)
+  // never moves lastReadAt, so it carries the aggregate summary only (peers
+  // use it for checkmarks) and omits these per-user fields — which the client
+  // would drop anyway, and which would needlessly disclose the actor's backlog
+  // to every peer in the room.
+  const actorReadSyncP: Promise<{ lastReadAt: Date | null; unreadCount: number } | undefined> =
+    args.type === 'read'
+      ? Promise.all([
+          prisma.conversationReadCursor.findUnique({
+            where: {
+              conversation_participant_cursor: {
+                participantId: args.participantId,
+                conversationId: args.conversationId
+              }
+            },
+            select: { lastReadAt: true }
+          }),
+          readStatusService.getUnreadCount(args.participantId, args.conversationId)
+        ]).then(([cursor, unreadCount]) => ({
+          lastReadAt: cursor?.lastReadAt ?? null,
+          unreadCount
+        }))
+      : Promise.resolve(undefined);
+
+  const [summary, activeParticipants, actorReadSync] = await Promise.all([
     readStatusService.getLatestMessageSummary(args.conversationId),
     prisma.participant.findMany({
       where: { conversationId: args.conversationId, isActive: true },
       select: { userId: true }
-    })
+    }),
+    actorReadSyncP
   ]);
 
-  const payload = {
+  const payload: ReadStatusUpdatedEventData = {
     conversationId: args.conversationId,
     participantId: args.participantId,
     userId: args.userId,
     type: args.type,
     updatedAt: new Date(),
-    summary
+    summary,
+    ...(actorReadSync ?? {})
   };
 
   const io = socketIOManager.getIO();

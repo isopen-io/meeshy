@@ -31,23 +31,67 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
     private struct BridgeEnv {
         let bridge: ConversationStoreSocketBridge
         let deleted = PassthroughSubject<ConversationDeletedSocketEvent, Never>()
+        let prefsUpdated = PassthroughSubject<UserPreferencesConversationUpdatedSocketEvent, Never>()
         let reordered = PassthroughSubject<UserPreferencesReorderedSocketEvent, Never>()
+        let readStatus = PassthroughSubject<ReadStatusUpdateEvent, Never>()
         let categoryCreated = PassthroughSubject<CategorySocketEvent, Never>()
         let categoryUpdated = PassthroughSubject<CategorySocketEvent, Never>()
         let categoryDeleted = PassthroughSubject<CategoryDeletedSocketEvent, Never>()
         let categoriesReordered = PassthroughSubject<CategoriesReorderedSocketEvent, Never>()
 
-        init(store: ConversationStore, categoryStore: UserCategoryStore) {
-            bridge = ConversationStoreSocketBridge(store: store, categoryStore: categoryStore)
+        init(store: ConversationStore, categoryStore: UserCategoryStore, currentUserId: String? = "me") {
+            bridge = ConversationStoreSocketBridge(
+                store: store,
+                categoryStore: categoryStore,
+                currentUserId: { currentUserId }
+            )
             bridge.activate(
                 conversationDeleted: deleted.eraseToAnyPublisher(),
+                userPreferencesUpdated: prefsUpdated.eraseToAnyPublisher(),
                 userPreferencesReordered: reordered.eraseToAnyPublisher(),
+                readStatusUpdated: readStatus.eraseToAnyPublisher(),
                 categoryCreated: categoryCreated.eraseToAnyPublisher(),
                 categoryUpdated: categoryUpdated.eraseToAnyPublisher(),
                 categoryDeleted: categoryDeleted.eraseToAnyPublisher(),
                 categoriesReordered: categoriesReordered.eraseToAnyPublisher()
             )
         }
+    }
+
+    private func makePrefsEvent(
+        conversationId: String,
+        version: Int,
+        reset: Bool = false,
+        isPinned: Bool = false,
+        isMuted: Bool = false
+    ) -> UserPreferencesConversationUpdatedSocketEvent {
+        let prefs: UserPreferencesConversationUpdatedSocketEvent.Preferences? = reset ? nil : .init(
+            isPinned: isPinned, isMuted: isMuted, mentionsOnly: false, isArchived: false,
+            tags: [], categoryId: nil, orderInCategory: nil, customName: nil,
+            reaction: nil, deletedForUserAt: nil, clearHistoryBefore: nil
+        )
+        return UserPreferencesConversationUpdatedSocketEvent(
+            userId: "me", conversationId: conversationId, version: version, reset: reset, preferences: prefs
+        )
+    }
+
+    private func makeReadEvent(
+        conversationId: String,
+        userId: String?,
+        lastReadAt: Date?,
+        unreadCount: Int?,
+        type: String = "read"
+    ) -> ReadStatusUpdateEvent {
+        ReadStatusUpdateEvent(
+            conversationId: conversationId,
+            participantId: "p1",
+            userId: userId,
+            type: type,
+            updatedAt: Date(),
+            summary: ReadStatusSummary(totalMembers: 2, deliveredCount: 1, readCount: 1),
+            lastReadAt: lastReadAt,
+            unreadCount: unreadCount
+        )
     }
 
     /// Poll an async condition (the routing hops through `Task { await … }`,
@@ -88,6 +132,105 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
             (await store.conversation(id: "c1"))?.userState.orderInCategory == 7
         }
         XCTAssertTrue(applied, "bridge must route user:preferences-reordered → applyRemoteReorder")
+    }
+
+    // MARK: user:preferences-updated (conversation scope)
+
+    func test_userPreferencesUpdated_newerVersion_routesToApplyRemote() async {
+        let store = makeStore()
+        await store.hydrate(makeConv(id: "c1"))   // version 1, unpinned
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()))
+
+        env.prefsUpdated.send(makePrefsEvent(conversationId: "c1", version: 2, isPinned: true))
+
+        let applied = await waitUntil {
+            let s = (await store.conversation(id: "c1"))?.userState
+            return s?.isPinned == true && s?.version == 2
+        }
+        XCTAssertTrue(applied, "bridge must route conversation-scope prefs → applyRemote")
+    }
+
+    func test_userPreferencesUpdated_staleVersion_dropped() async {
+        let store = makeStore()
+        await store.hydrate(makeConv(id: "c1"))   // version 1
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()))
+
+        // version 1 is NOT > local 1 → must be dropped, isPinned stays false.
+        env.prefsUpdated.send(makePrefsEvent(conversationId: "c1", version: 1, isPinned: true))
+
+        let pinned = await waitUntil { (await store.conversation(id: "c1"))?.userState.isPinned == true }
+        XCTAssertFalse(pinned, "a non-newer version must be dropped by applyRemote")
+    }
+
+    func test_userPreferencesUpdated_reset_restoresDefaults() async {
+        let store = makeStore()
+        await store.hydrate(makeConv(id: "c1"))
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()))
+
+        env.prefsUpdated.send(makePrefsEvent(conversationId: "c1", version: 2, isPinned: true))
+        _ = await waitUntil { (await store.conversation(id: "c1"))?.userState.isPinned == true }
+
+        env.prefsUpdated.send(makePrefsEvent(conversationId: "c1", version: 3, reset: true))
+
+        let reset = await waitUntil {
+            let s = (await store.conversation(id: "c1"))?.userState
+            return s?.isPinned == false && s?.version == 3
+        }
+        XCTAssertTrue(reset, "reset must restore defaults while preserving the bumped version")
+    }
+
+    // MARK: read-status:updated
+
+    func test_readStatus_currentUser_routesToApplyReadReceipt() async {
+        let store = makeStore()
+        await store.hydrate(makeConv(id: "c1"))
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()), currentUserId: "me")
+
+        let readAt = Date(timeIntervalSince1970: 1_700_001_000)
+        env.readStatus.send(makeReadEvent(conversationId: "c1", userId: "me", lastReadAt: readAt, unreadCount: 0))
+
+        let applied = await waitUntil { (await store.conversation(id: "c1"))?.userState.lastReadAt == readAt }
+        XCTAssertTrue(applied, "bridge must route own read-status → applyReadReceipt")
+    }
+
+    func test_readStatus_foreignUser_ignored() async {
+        let store = makeStore()
+        await store.hydrate(makeConv(id: "c1"))
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()), currentUserId: "me")
+
+        let readAt = Date(timeIntervalSince1970: 1_700_001_000)
+        // A PEER reading must NOT advance our own read cursor.
+        env.readStatus.send(makeReadEvent(conversationId: "c1", userId: "someone-else", lastReadAt: readAt, unreadCount: 0))
+
+        let leaked = await waitUntil { (await store.conversation(id: "c1"))?.userState.lastReadAt != nil }
+        XCTAssertFalse(leaked, "a peer's read receipt must not touch the current user's cursor")
+    }
+
+    func test_readStatus_receivedType_ignored() async {
+        let store = makeStore()
+        await store.hydrate(makeConv(id: "c1"))
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()), currentUserId: "me")
+
+        let readAt = Date(timeIntervalSince1970: 1_700_001_000)
+        // A 'received' (delivery) event must never advance the read cursor.
+        env.readStatus.send(makeReadEvent(conversationId: "c1", userId: "me", lastReadAt: readAt, unreadCount: 0, type: "received"))
+
+        let leaked = await waitUntil { (await store.conversation(id: "c1"))?.userState.lastReadAt != nil }
+        XCTAssertFalse(leaked, "a 'received' delivery event must not touch the read cursor")
+    }
+
+    func test_readStatus_missingFields_ignored() async {
+        let store = makeStore()
+        await store.hydrate(makeConv(id: "c1"))
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()), currentUserId: "me")
+
+        let readAt = Date(timeIntervalSince1970: 1_700_001_000)
+        // lastReadAt present but unreadCount absent (partial/legacy payload):
+        // must be dropped, never coerced to a bogus unreadCount = 0.
+        env.readStatus.send(makeReadEvent(conversationId: "c1", userId: "me", lastReadAt: readAt, unreadCount: nil))
+
+        let applied = await waitUntil { (await store.conversation(id: "c1"))?.userState.lastReadAt != nil }
+        XCTAssertFalse(applied, "a read event missing unreadCount must not be applied")
     }
 
     // MARK: UserCategoryStore routes
