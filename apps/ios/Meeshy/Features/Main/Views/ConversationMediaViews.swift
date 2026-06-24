@@ -454,9 +454,15 @@ final class AttachmentDownloader: ObservableObject {
 
     static func fmt(_ bytes: Int64) -> String {
         let kb = Double(bytes) / 1024
-        if kb < 1 { return "\(bytes)B" }
-        if kb < 1024 { return String(format: "%.0fKB", kb) }
-        return String(format: "%.1fMB", kb / 1024)
+        if kb < 1 {
+            return String(format: String(localized: "media.size.bytes", bundle: .main), bytes)
+        }
+        if kb < 1024 {
+            let val = String(format: "%.0f", kb)
+            return String(format: String(localized: "media.size.kb", bundle: .main), val)
+        }
+        let val = String(format: "%.1f", kb / 1024)
+        return String(format: String(localized: "media.size.mb", bundle: .main), val)
     }
 }
 

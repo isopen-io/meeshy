@@ -407,27 +407,6 @@ struct ConversationView: View {
         return currentDate.timeIntervalSince(previous) > 3600
     }
 
-    private static let dateSectionDayFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale.current
-        f.dateFormat = "EEEE"
-        return f
-    }()
-
-    private static let dateSectionDayMonthFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale.current
-        f.dateFormat = "EEEE d MMM"
-        return f
-    }()
-
-    private static let dateSectionFullFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.locale = Locale.current
-        f.dateFormat = "EEEE d MMM yyyy"
-        return f
-    }()
-
     private func formatDateSection(for date: Date) -> String {
         let calendar = Calendar.current
         let now = Date()
@@ -442,34 +421,30 @@ struct ConversationView: View {
             return "\(String(localized: "date.yesterday")) \(timeStr)"
         }
         if let sevenDaysAgo = calendar.date(byAdding: .day, value: -7, to: now), date > sevenDaysAgo {
-            return "\(Self.dateSectionDayFormatter.string(from: date).capitalized) \(timeStr)"
+            let dayName = date.formatted(.dateTime.weekday(.wide)).capitalized
+            return "\(dayName) \(timeStr)"
         }
         if calendar.component(.year, from: date) == calendar.component(.year, from: now) {
-            return Self.dateSectionDayMonthFormatter.string(from: date).capitalized
+            return date.formatted(.dateTime.weekday(.wide).day().month(.abbreviated)).capitalized
         }
-        return Self.dateSectionFullFormatter.string(from: date).capitalized
+        return date.formatted(.dateTime.weekday(.wide).day().month(.abbreviated).year()).capitalized
     }
 
     private func joinedBanner(date: Date) -> some View {
-        HStack(spacing: 6) {
+        let dateStr = date.formatted(date: .long, time: .omitted)
+        let joinedFormat = String(localized: "conversation.view.joined_on", bundle: .main)
+
+        return HStack(spacing: MeeshySpacing.xs + 2) {
             Spacer()
             Image(systemName: "person.badge.plus")
                 .font(MeeshyFont.relative(10, weight: .semibold))
-            Text(String(localized: "conversation.view.joined_on", bundle: .main))
+            Text(String(format: joinedFormat, dateStr))
                 .font(MeeshyFont.relative(11, weight: .medium))
             Spacer()
         }
         .foregroundColor(Color(hex: accentColor).opacity(0.7))
-        .padding(.vertical, 10)
+        .padding(.vertical, MeeshySpacing.sm + 2)
     }
-
-    private static let joinedDateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateStyle = .long
-        f.timeStyle = .none
-        f.locale = Locale.current
-        return f
-    }()
 
     private func dateSectionView(for date: Date) -> some View {
         HStack {
@@ -512,35 +487,35 @@ struct ConversationView: View {
     @ViewBuilder
     private var encryptionDisclaimer: some View {
         if let conv = conversation, conv.encryptionMode != nil, !viewModel.hasOlderMessages, !viewModel.isLoadingInitial {
-            VStack(spacing: 8) {
+            VStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "lock.fill")
                     .font(MeeshyFont.relative(14, weight: .bold))
                     .foregroundColor(MeeshyColors.indigo400)
-                    .padding(8)
+                    .padding(MeeshySpacing.sm)
                     .background(Circle().fill(MeeshyColors.indigo400.opacity(0.15)))
 
                 Text(String(localized: "conversation.view.e2e_notice", bundle: .main))
                     .font(MeeshyFont.relative(12))
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, MeeshySpacing.sm)
             }
-            .padding(.vertical, 16)
-            .padding(.horizontal, 16)
+            .padding(.vertical, MeeshySpacing.lg)
+            .padding(.horizontal, MeeshySpacing.lg)
             .background(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: MeeshyRadius.md - 2)
                     .fill(isDark ? Color.black.opacity(0.4) : Color(UIColor.systemBackground).opacity(0.6))
             )
-            .padding(.horizontal, 24)
-            .padding(.top, 16)
-            .padding(.bottom, 8)
+            .padding(.horizontal, MeeshySpacing.xxl)
+            .padding(.top, MeeshySpacing.lg)
+            .padding(.bottom, MeeshySpacing.sm)
         }
     }
 
     // MARK: - Closed Conversation Banner
 
     private var closedConversationBanner: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "lock.fill")
                 .foregroundColor(.secondary)
             Text(String(localized: "conversation.view.closed", bundle: .main))
@@ -548,7 +523,7 @@ struct ConversationView: View {
                 .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
+        .padding(.vertical, MeeshySpacing.md + 2)
         .background(.ultraThinMaterial)
     }
 
@@ -558,8 +533,8 @@ struct ConversationView: View {
     /// unblock to write to and receive messages from the user, with a one-tap
     /// unblock CTA. Mirrors `closedConversationBanner`'s static-zone pattern.
     private func blockedComposerZone(userId: String) -> some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "hand.raised.fill")
                     .foregroundColor(.secondary)
                 Text(String(localized: "conversation.composer.blocked.title", bundle: .main))
@@ -580,15 +555,15 @@ struct ConversationView: View {
                 Text(String(localized: "conversation.composer.blocked.unblock", bundle: .main))
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, MeeshySpacing.xxl)
+                    .padding(.vertical, MeeshySpacing.sm + 2)
                     .background(Capsule().fill(Color(hex: accentColor)))
             }
             .accessibilityLabel(String(localized: "conversation.composer.blocked.unblock", bundle: .main))
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
-        .padding(.horizontal, 24)
+        .padding(.vertical, MeeshySpacing.lg)
+        .padding(.horizontal, MeeshySpacing.xxl)
         .background(.ultraThinMaterial)
     }
 
@@ -1448,7 +1423,7 @@ struct ConversationView: View {
             ConversationTitleLabel(
                 name: conversation?.displayName ?? "Conversation",
                 favoriteEmoji: conversation?.userState.reaction,
-                font: .system(size: 15, weight: .semibold, design: .rounded),
+                font: MeeshyFont.relative(15, weight: .semibold, design: .rounded),
                 color: .white
             )
             Spacer()
@@ -1555,7 +1530,7 @@ struct ConversationView: View {
             ConversationTitleLabel(
                 name: conversation?.displayName ?? "Conversation",
                 favoriteEmoji: conversation?.userState.reaction,
-                font: .system(size: 13, weight: .bold, design: .rounded),
+                font: MeeshyFont.relative(13, weight: .bold, design: .rounded),
                 color: .white,
                 lineLimit: 2
             )
