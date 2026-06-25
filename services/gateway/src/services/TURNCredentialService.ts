@@ -96,15 +96,23 @@ export class TURNCredentialService {
     const servers = serversEnv
       .split(',')
       .filter(s => s.trim())
-      .map(serverStr => {
+      .reduce<TURNServerConfig[]>((acc, serverStr) => {
         const [host, portStr] = serverStr.trim().split(':');
-        const port = portStr ? parseInt(portStr, 10) : 3478;
+        const trimmedHost = host?.trim() ?? '';
+        if (!trimmedHost) {
+          logger.warn('⚠️ TURN server entry has empty host — skipping', { entry: serverStr });
+          return acc;
+        }
 
-        return {
-          host: host.trim(),
-          port: isNaN(port) ? 3478 : port
-        };
-      });
+        const parsedPort = portStr ? parseInt(portStr, 10) : 3478;
+        const port = isNaN(parsedPort) || parsedPort < 1 || parsedPort > 65535 ? 3478 : parsedPort;
+        if (parsedPort !== port) {
+          logger.warn('⚠️ TURN server port out of range [1-65535] — defaulting to 3478', { entry: serverStr, parsedPort });
+        }
+
+        acc.push({ host: trimmedHost, port });
+        return acc;
+      }, []);
 
     return servers;
   }

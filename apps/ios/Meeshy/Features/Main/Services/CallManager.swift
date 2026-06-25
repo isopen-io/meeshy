@@ -2889,6 +2889,21 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
             rtc.unlockForConfiguration()
         }
 
+        // WWDC 2023 (iOS 17+) — ML-based voice isolation reduces ambient noise at the
+        // hardware capture stage, before samples reach WebRTC's software AEC/NS.
+        // The two layers are complementary: Apple's ML suppresses non-voice content
+        // at hardware level; WebRTC's NS then handles any residual digital noise.
+        // Not applied on iOS-app-on-Mac — the AVAudioApplication API is iOS-only and
+        // the Mac code path already uses .default mode (no voice-processing I/O unit).
+        if #available(iOS 17, *), !ProcessInfo.processInfo.isiOSAppOnMac {
+            do {
+                try AVAudioApplication.shared.setPreferredMicrophoneMode(.voiceIsolation)
+                Logger.calls.info("[AUDIO_SESS] Preferred microphone mode set to voice isolation")
+            } catch {
+                Logger.calls.warning("[AUDIO_SESS] Voice isolation unavailable: \(error.localizedDescription)")
+            }
+        }
+
         // Audit P2-iOS-2 — `overrideOutputAudioPort` is only honored once
         // RTCAudioSession's audio engine has actually started. Calling it
         // synchronously from `didActivate` races the engine start; the
