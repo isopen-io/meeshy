@@ -172,7 +172,7 @@ export const StoryEffectsSchema = z.object({
 
 export const CreatePostSchema = z.object({
   type: z.enum(['POST', 'REEL', 'STORY', 'STATUS']).default('POST'),
-  visibility: z.enum(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY']).default('PUBLIC'),
+  visibility: z.enum(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY']).optional(),
   visibilityUserIds: z.array(z.string()).max(500).optional(),
   content: z.string().max(5000).optional(),
   communityId: z.string().optional(),

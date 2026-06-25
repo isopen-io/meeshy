@@ -1805,6 +1805,10 @@ export class NotificationService {
      * Pass mentionedUserIds so a friend who is also @mentioned only gets user_mentioned.
      */
     excludeUserIds?: string[];
+    /** Post visibility — used to filter recipients (same rules as Socket.IO broadcast). */
+    visibility?: string;
+    /** User IDs list for ONLY/EXCEPT visibility modes. */
+    visibilityUserIds?: string[];
   }): Promise<void> {
     // REEL est une variante de post : même type de notification (friend_new_post),
     // mais le contentType REEL est conservé dans la metadata pour l'affichage client.
@@ -1837,6 +1841,12 @@ export class NotificationService {
     const excludeSet = new Set(params.excludeUserIds ?? []);
     const excerpt = params.excerpt ? this.truncateMessage(params.excerpt) : '';
 
+    const visibility = params.visibility ?? 'PUBLIC';
+    const visibilityUserIds = params.visibilityUserIds ?? [];
+    const visibilityUserIdSet = new Set(visibilityUserIds);
+
+    if (visibility === 'PRIVATE') return;
+
     // Content : le wording « a publié une nouvelle … » est localisé par
     // destinataire ; le subtitle typé (« Nouvelle story » …) voyage en
     // APN-natif (restauré par le NSE) — les deux dans la langue du destinataire.
@@ -1847,10 +1857,21 @@ export class NotificationService {
     };
     const contentKey = contentKeyByType[notificationType];
 
-    const candidateFriendIds = friendRequests
+    const baseFriendIds = friendRequests
       .map(fr => (fr.senderId === params.authorId ? fr.receiverId : fr.senderId))
       .filter(id => id !== params.authorId && !excludeSet.has(id));
-    const langs = await this.resolveRecipientLangs(candidateFriendIds);
+
+    let recipientIds: string[];
+    if (visibility === 'ONLY') {
+      recipientIds = visibilityUserIds.filter(id => id !== params.authorId && !excludeSet.has(id));
+    } else if (visibility === 'EXCEPT') {
+      recipientIds = baseFriendIds.filter(id => !visibilityUserIdSet.has(id));
+    } else {
+      recipientIds = baseFriendIds;
+    }
+
+    const uniqueRecipientIds = [...new Set(recipientIds)];
+    const langs = await this.resolveRecipientLangs(uniqueRecipientIds);
 
     const actorInfo = {
       id: params.authorId,
@@ -1859,21 +1880,13 @@ export class NotificationService {
       avatar: author.avatar,
     };
 
-    const seenIds = new Set<string>();
     const tasks: Array<Promise<unknown>> = [];
 
-    for (const fr of friendRequests) {
-      const friendId = fr.senderId === params.authorId ? fr.receiverId : fr.senderId;
-
-      if (friendId === params.authorId) continue;
-      if (excludeSet.has(friendId)) continue;
-      if (seenIds.has(friendId)) continue;
-      seenIds.add(friendId);
-
-      const fLang = langs.get(friendId) ?? 'fr';
+    for (const recipientId of uniqueRecipientIds) {
+      const fLang = langs.get(recipientId) ?? 'fr';
       tasks.push(
         this.createNotification({
-          userId: friendId,
+          userId: recipientId,
           type: notificationType,
           priority: 'normal',
           content: excerpt || notificationString(fLang, contentKey),

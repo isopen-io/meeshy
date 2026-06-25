@@ -32,6 +32,7 @@ jest.mock('../../../services/CallService', () => ({
     joinCall: jest.fn<any>(),
     listHistory: jest.fn<any>(),
     handleMissedCall: jest.fn<any>(),
+    getIceServerTtl: jest.fn<any>().mockReturnValue(86400),
   })),
 }));
 
