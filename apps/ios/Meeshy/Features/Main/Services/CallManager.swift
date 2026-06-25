@@ -2145,9 +2145,14 @@ final class CallManager: ObservableObject {
         // conflicts with the bidirectional voice path (forces the OS to flap
         // between A2DP and HFP, causing periodic ~200ms audio glitches). HFP
         // already covers BT headsets via the SCO bidirectional voice link.
-        // .preferNoInterruptionsFromSystemAlerts (iOS 14.5+) prevents Siri,
-        // low-battery alerts, and other system sounds from ducking the call audio.
-        configuration.categoryOptions = [.allowBluetoothHFP, .duckOthers, .preferNoInterruptionsFromSystemAlerts]
+        // .preferNoInterruptionsFromSystemAlerts = 0x100 (iOS 14.5+) is API_UNAVAILABLE(macos);
+        // the macOS AVAudioSession shim for "Designed for iPad" builds omits it entirely.
+        // Use raw value to avoid SDK symbol resolution by the compiler; skip on Mac.
+        var categoryOptions: AVAudioSession.CategoryOptions = [.allowBluetoothHFP, .duckOthers]
+        if !ProcessInfo.processInfo.isiOSAppOnMac {
+            categoryOptions.insert(AVAudioSession.CategoryOptions(rawValue: 0x100))
+        }
+        configuration.categoryOptions = categoryOptions
         let activateNow = !callUsesCallKit
 
         audioSessionQueue.sync {

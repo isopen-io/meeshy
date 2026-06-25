@@ -152,7 +152,7 @@ final class WebRTCService {
                 return
             }
             iceCandidateBuffer.append(candidate)
-            Logger.webrtc.debug("Buffered ICE candidate (no remote description yet), count=\(iceCandidateBuffer.count)")
+            Logger.webrtc.debug("Buffered ICE candidate (no remote description yet), count=\(self.iceCandidateBuffer.count)")
             return
         }
         Task {

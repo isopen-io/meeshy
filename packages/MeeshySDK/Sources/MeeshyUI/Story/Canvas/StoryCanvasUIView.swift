@@ -1914,6 +1914,8 @@ public final class StoryCanvasUIView: UIView {
                 // doit pas relancer ses foreground players.
                 if window != nil {
                     foregroundVideosPlaybackActive = true
+                    // isPlaybackActive.didSet has an idempotency guard; call play() directly so already-attached players always start.
+                    forEachAVPlayer { $0.play() }
                 }
                 startAudioPlayback()
             }
