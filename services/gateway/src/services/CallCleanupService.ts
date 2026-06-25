@@ -20,7 +20,12 @@ export class CallCleanupService {
   private readonly CLEANUP_INTERVAL_MS = 60 * 1000;
 
   private readonly MAX_INITIATED_RINGING_MS = 60 * 1000;
-  private readonly MAX_CONNECTING_MS = 30 * 1000;
+  // CALL-FIX 2026-06-25 — 30s→90s and anchored on `answeredAt` (entry into
+  // `connecting`) instead of `startedAt`. ICE/DTLS over a TURN relay on a weak
+  // cellular link routinely needs 5–15s; anchoring on `startedAt` left a callee
+  // who answered late only the remainder of 30s to negotiate, force-FAILing
+  // healthy calls mid-handshake ("it rings, I answer, it drops").
+  private readonly MAX_CONNECTING_MS = 90 * 1000;
   private readonly MAX_ACTIVE_MS = 2 * 60 * 60 * 1000;
   private readonly HEARTBEAT_TIMEOUT_MS = 60 * 1000;
 
@@ -99,12 +104,17 @@ export class CallCleanupService {
       }
     }
 
-    // 2. connecting > 30s → FAILED
+    // 2. connecting > 90s (since answeredAt) → FAILED.
+    // Anchor on `answeredAt` — the moment the call entered `connecting` — not
+    // `startedAt`, so a callee who answered late still gets the full negotiation
+    // budget. A `connecting` row always has `answeredAt` set (joinCall stamps it
+    // at the initiated→connecting transition); a null `answeredAt` is skipped
+    // here, which fails safe (never force-FAILs a call we can't time).
     const connectingCutoff = new Date(now.getTime() - this.MAX_CONNECTING_MS);
     const staleConnecting = await this.prisma.callSession.findMany({
       where: {
         status: CallStatus.connecting,
-        startedAt: { lt: connectingCutoff }
+        answeredAt: { lt: connectingCutoff }
       }
     });
 
