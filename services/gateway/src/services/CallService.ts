@@ -176,8 +176,14 @@ export class CallService {
   private heartbeats: Map<string, Map<string, number>> = new Map();
   private ringingTimeouts: Map<string, NodeJS.Timeout> = new Map();
   private heartbeatDbWriteTimers: Map<string, NodeJS.Timeout> = new Map();
+  // Participants that signalled call:backgrounded; they receive an extended
+  // heartbeat grace period so CallKit audio calls survive iOS socket suspension.
+  private backgroundedParticipants: Map<string, Set<string>> = new Map();
   private readonly RINGING_TIMEOUT_MS = 60_000;   // Phase 1 fix P2 — FaceTime parity
   private readonly HEARTBEAT_DB_DEBOUNCE_MS = 30_000; // Write at most every 30s per participant
+  // iOS suspends the socket after ~45s in background; CallKit keeps the RTP
+  // stream alive. Give backgrounded participants 5 min before timing them out.
+  private readonly BACKGROUND_HEARTBEAT_TIMEOUT_MS = 5 * 60 * 1000;
 
   constructor(private prisma: PrismaClient) {
     this.turnCredentialService = new TURNCredentialService();
@@ -274,6 +280,7 @@ export class CallService {
    */
   clearHeartbeats(callId: string): void {
     this.heartbeats.delete(callId);
+    this.backgroundedParticipants.delete(callId);
     for (const [key, timer] of this.heartbeatDbWriteTimers) {
       if (key.startsWith(`${callId}:`)) {
         clearTimeout(timer);
@@ -283,16 +290,42 @@ export class CallService {
   }
 
   /**
-   * Get all participants with stale heartbeats (> maxAge ms ago)
+   * Mark a participant as backgrounded, granting them an extended heartbeat
+   * grace period (BACKGROUND_HEARTBEAT_TIMEOUT_MS) so CallKit audio calls
+   * survive iOS socket suspension (~45s after backgrounding).
+   */
+  recordParticipantBackgrounded(callId: string, participantId: string): void {
+    if (!this.backgroundedParticipants.has(callId)) {
+      this.backgroundedParticipants.set(callId, new Set());
+    }
+    this.backgroundedParticipants.get(callId)!.add(participantId);
+  }
+
+  /**
+   * Remove a participant from the backgrounded set. Called on call:foregrounded
+   * or when the participant leaves the call.
+   */
+  clearParticipantBackgrounded(callId: string, participantId: string): void {
+    this.backgroundedParticipants.get(callId)?.delete(participantId);
+  }
+
+  /**
+   * Get all participants with stale heartbeats (> maxAge ms ago).
+   * Backgrounded participants use the extended BACKGROUND_HEARTBEAT_TIMEOUT_MS
+   * grace period instead of maxAgeMs to survive iOS socket suspension.
    */
   getStaleHeartbeats(callId: string, maxAgeMs: number): string[] {
     const callHeartbeats = this.heartbeats.get(callId);
     if (!callHeartbeats) return [];
 
     const now = Date.now();
+    const backgrounded = this.backgroundedParticipants.get(callId);
     const stale: string[] = [];
     for (const [participantId, lastBeat] of callHeartbeats) {
-      if (now - lastBeat > maxAgeMs) {
+      const effectiveMaxAge = backgrounded?.has(participantId)
+        ? this.BACKGROUND_HEARTBEAT_TIMEOUT_MS
+        : maxAgeMs;
+      if (now - lastBeat > effectiveMaxAge) {
         stale.push(participantId);
       }
     }

@@ -1903,6 +1903,7 @@ export class CallEventsHandler {
         if (!validation.success) return;
 
         socket.data.appForeground = false;
+        this.callService.recordParticipantBackgrounded(data.callId, data.participantId);
 
         logger.debug('📞 Socket: call:backgrounded', {
           callId: data.callId,
@@ -1927,6 +1928,7 @@ export class CallEventsHandler {
         if (!validation.success) return;
 
         socket.data.appForeground = true;
+        this.callService.clearParticipantBackgrounded(data.callId, data.participantId);
 
         logger.debug('📞 Socket: call:foregrounded', {
           callId: data.callId,
