@@ -149,15 +149,39 @@ export class CallCleanupService {
       });
 
       for (const call of activeCalls) {
-        const staleParticipants = this.callService.getStaleHeartbeats(call.id, this.HEARTBEAT_TIMEOUT_MS);
-        if (staleParticipants.length > 0 && staleParticipants.length >= call.participants.length) {
-          try {
-            await this.forceEndCall(call.id, now, call.startedAt, CallStatus.ended, CallEndReason.heartbeatTimeout);
-            logger.warn('[CallCleanupService] Heartbeat timeout', { callId: call.id, staleParticipants });
-            cleaned++;
-          } catch (error) {
-            logger.error('[CallCleanupService] Heartbeat cleanup failed', { callId: call.id, error });
-            errors++;
+        const hasInMemory = this.callService.hasHeartbeatData(call.id);
+
+        if (hasInMemory) {
+          // Fast path: in-memory data is authoritative during the current process lifetime
+          const staleParticipants = this.callService.getStaleHeartbeats(call.id, this.HEARTBEAT_TIMEOUT_MS);
+          if (staleParticipants.length > 0 && staleParticipants.length >= call.participants.length) {
+            try {
+              await this.forceEndCall(call.id, now, call.startedAt, CallStatus.ended, CallEndReason.heartbeatTimeout);
+              logger.warn('[CallCleanupService] Heartbeat timeout', { callId: call.id, staleParticipants });
+              cleaned++;
+            } catch (error) {
+              logger.error('[CallCleanupService] Heartbeat cleanup failed', { callId: call.id, error });
+              errors++;
+            }
+          }
+        } else {
+          // Post-restart fallback: in-memory map is empty; check DB lastHeartbeatAt timestamps
+          const staleThreshold = new Date(now.getTime() - this.HEARTBEAT_TIMEOUT_MS);
+          const dbStaleParticipants = call.participants.filter(
+            (p: { lastHeartbeatAt: Date | null }) => !p.lastHeartbeatAt || p.lastHeartbeatAt < staleThreshold
+          );
+          if (dbStaleParticipants.length > 0 && dbStaleParticipants.length >= call.participants.length) {
+            try {
+              await this.forceEndCall(call.id, now, call.startedAt, CallStatus.ended, CallEndReason.heartbeatTimeout);
+              logger.warn('[CallCleanupService] Heartbeat timeout (DB fallback, post-restart)', {
+                callId: call.id,
+                staleCount: dbStaleParticipants.length
+              });
+              cleaned++;
+            } catch (error) {
+              logger.error('[CallCleanupService] Heartbeat cleanup failed (DB fallback)', { callId: call.id, error });
+              errors++;
+            }
           }
         }
       }

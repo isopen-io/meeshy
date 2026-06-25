@@ -54,9 +54,10 @@ const createMockPrisma = () => ({
   $transaction: jest.fn() as MockFn
 });
 
-const createMockCallService = () => ({
+const createMockCallService = (hasData = true) => ({
   getStaleHeartbeats: jest.fn() as MockFn,
-  clearHeartbeats: jest.fn() as MockFn
+  clearHeartbeats: jest.fn() as MockFn,
+  hasHeartbeatData: jest.fn().mockReturnValue(hasData) as MockFn
 });
 
 const createMockIo = () => {
@@ -458,6 +459,86 @@ describe('CallCleanupService', () => {
       const result = await service.runCleanup();
 
       expect(result.errors).toBe(1);
+    });
+
+    // DB-fallback tests (post-restart recovery)
+    it('DB fallback: force-ends when no in-memory data and all participants have stale DB lastHeartbeatAt', async () => {
+      const noMemoryCallService = createMockCallService(false);
+      const service = new CallCleanupService(prisma as any, noMemoryCallService as any);
+
+      const staleTs = new Date(Date.now() - 90_000); // 90s ago — older than 60s timeout
+      const participant = { id: 'p-1', participantId: 'part-1', leftAt: null, lastHeartbeatAt: staleTs };
+      const activeCall = {
+        id: 'call-db-stale',
+        startedAt: new Date(Date.now() - 10_000),
+        conversationId: 'conv-db',
+        participants: [participant]
+      };
+
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([]) // tier 1
+        .mockResolvedValueOnce([]) // tier 2
+        .mockResolvedValueOnce([]) // tier 3
+        .mockResolvedValueOnce([activeCall]); // heartbeat tier
+
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-db' });
+      setupTransactionPassthrough(prisma);
+
+      const result = await service.runCleanup();
+
+      expect(result.cleaned).toBe(1);
+      expect(noMemoryCallService.getStaleHeartbeats).not.toHaveBeenCalled();
+    });
+
+    it('DB fallback: does NOT force-end when no in-memory data but DB lastHeartbeatAt is fresh', async () => {
+      const noMemoryCallService = createMockCallService(false);
+      const service = new CallCleanupService(prisma as any, noMemoryCallService as any);
+
+      const freshTs = new Date(Date.now() - 10_000); // 10s ago — within 60s timeout
+      const participant = { id: 'p-1', participantId: 'part-1', leftAt: null, lastHeartbeatAt: freshTs };
+      const activeCall = {
+        id: 'call-db-fresh',
+        startedAt: new Date(Date.now() - 10_000),
+        conversationId: 'conv-db-fresh',
+        participants: [participant]
+      };
+
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([activeCall]);
+
+      const result = await service.runCleanup();
+
+      expect(result.cleaned).toBe(0);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('DB fallback: force-ends when no in-memory data and participant lastHeartbeatAt is null (never recorded)', async () => {
+      const noMemoryCallService = createMockCallService(false);
+      const service = new CallCleanupService(prisma as any, noMemoryCallService as any);
+
+      const participant = { id: 'p-1', participantId: 'part-1', leftAt: null, lastHeartbeatAt: null };
+      const activeCall = {
+        id: 'call-db-null',
+        startedAt: new Date(Date.now() - 70_000), // started 70s ago, no heartbeat
+        conversationId: 'conv-db-null',
+        participants: [participant]
+      };
+
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([activeCall]);
+
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-db-null' });
+      setupTransactionPassthrough(prisma);
+
+      const result = await service.runCleanup();
+
+      expect(result.cleaned).toBe(1);
     });
   });
 
