@@ -54,4 +54,15 @@ final class MediaLifecycleBridgeTests: XCTestCase {
         await MediaLifecycleBridge.shared.prepareForBackground()
         XCTAssertEqual(probe.deactivateCount, 0)
     }
+
+    func test_prepareForBackground_whileIdle_deactivatesSessionExactlyOnce() async {
+        _ = setupCoordinator(isPlaying: false)
+        let probe = MediaSessionCoordinatorTestProbe()
+        MediaSessionCoordinator.shared.testProbe = probe
+
+        await MediaLifecycleBridge.shared.prepareForBackground()
+        // Exactly one deactivation: the bridge must NOT pre-count — only
+        // `deactivateForBackground()`'s internal (post-guard) increment counts.
+        XCTAssertEqual(probe.deactivateCount, 1)
+    }
 }
