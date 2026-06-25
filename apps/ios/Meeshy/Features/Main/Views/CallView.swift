@@ -766,18 +766,26 @@ struct CallView: View {
 
     private var transcriptOverlay: some View {
         let localUserId = AuthManager.shared.currentUser?.id ?? ""
+        let remoteName = callManager.remoteUsername ?? String(localized: "call.interlocutor", defaultValue: "Interlocuteur", bundle: .main)
         return VStack(alignment: .leading, spacing: 6) {
             ForEach(transcriptionService.displayedSegments) { segment in
+                let isLocal = segment.speakerId == localUserId
+                let speakerName = isLocal
+                    ? String(localized: "call.transcript.you", defaultValue: "Vous", bundle: .main)
+                    : remoteName
                 HStack(alignment: .top, spacing: 8) {
                     Circle()
-                        .fill(segment.speakerId == localUserId ? MeeshyColors.indigo400 : MeeshyColors.success)
+                        .fill(isLocal ? MeeshyColors.indigo400 : MeeshyColors.success)
                         .frame(width: 8, height: 8)
                         .padding(.top, 6)
+                        .accessibilityHidden(true)
                     Text(segment.text)
                         .font(.system(size: 14, weight: segment.isFinal ? .regular : .light))
                         .foregroundColor(.white)
                         .opacity(segment.isFinal ? 1.0 : 0.7)
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(speakerName): \(segment.text)")
             }
         }
         .padding(12)
