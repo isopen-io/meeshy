@@ -171,7 +171,18 @@ final class CallManager: ObservableObject {
     /// referencing CallManager or hopping to the MainActor. Used to suppress
     /// `forceReconnect()` mid-call (token rotation / re-auth) so the WebRTC
     /// signaling socket is never torn down during a call.
-    nonisolated(unsafe) static var isCallActiveFlag: Bool = false
+    ///
+    /// Protected by `OSAllocatedUnfairLock` (iOS 16+) for safe concurrent
+    /// reads from background threads and writes from the MainActor. The lock
+    /// itself is stored with `nonisolated(unsafe)` because it is a value-type
+    /// wrapper whose internal `os_unfair_lock` provides the actual exclusion
+    /// guarantee — Swift's actor system doesn't need to track it.
+    private nonisolated(unsafe) static let _isCallActiveLock = OSAllocatedUnfairLock(initialState: false)
+
+    nonisolated static var isCallActiveFlag: Bool {
+        get { _isCallActiveLock.withLock { $0 } }
+        set { _isCallActiveLock.withLock { $0 = newValue } }
+    }
 
     // MARK: - Internal
 
