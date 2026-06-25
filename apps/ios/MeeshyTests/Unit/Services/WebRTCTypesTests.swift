@@ -22,6 +22,60 @@ final class QualityThresholdsHeartbeatTests: XCTestCase {
     }
 }
 
+// MARK: - Audio Bitrate Tier Constants
+
+/// `adjustBitrate` in WebRTCService drives Opus audio bitrate through three tiers:
+///  max (excellent conditions) → default (good) → min (any degradation).
+/// These constants are the precise boundaries; a typo here silently mis-tunes audio.
+@MainActor
+final class QualityThresholdsAudioBitrateTests: XCTestCase {
+
+    func test_audioBitrate_tiers_ordered_min_default_max() {
+        XCTAssertLessThan(QualityThresholds.minBitrate, QualityThresholds.defaultBitrate)
+        XCTAssertLessThan(QualityThresholds.defaultBitrate, QualityThresholds.maxBitrate)
+    }
+
+    func test_audioBitrate_minBitrate_is24kbps() {
+        XCTAssertEqual(QualityThresholds.minBitrate, 24_000,
+                       "Floor bitrate for degraded audio (24 kbps speech codec quality floor)")
+    }
+
+    func test_audioBitrate_defaultBitrate_is64kbps() {
+        XCTAssertEqual(QualityThresholds.defaultBitrate, 64_000,
+                       "Mid-tier audio bitrate for good but not excellent network conditions")
+    }
+
+    func test_audioBitrate_maxBitrate_is128kbps() {
+        XCTAssertEqual(QualityThresholds.maxBitrate, 128_000,
+                       "Ceiling audio bitrate used on excellent network (low RTT + low loss)")
+    }
+
+    func test_excellentRTT_boundary_is100ms() {
+        XCTAssertEqual(QualityThresholds.excellentRTT, 100.0,
+                       "Max RTT for 'excellent' quality tier (triggers max audio bitrate)")
+    }
+
+    func test_goodRTT_boundary_is250ms() {
+        XCTAssertEqual(QualityThresholds.goodRTT, 250.0,
+                       "Max RTT for 'good' quality tier (triggers default audio bitrate)")
+    }
+
+    func test_excellentPacketLoss_boundary_is1percent() {
+        XCTAssertEqual(QualityThresholds.excellentPacketLoss, 0.01, accuracy: 0.0001,
+                       "Max Δ-loss ratio for 'excellent' tier (1% interval loss)")
+    }
+
+    func test_goodPacketLoss_boundary_is5percent() {
+        XCTAssertEqual(QualityThresholds.goodPacketLoss, 0.05, accuracy: 0.0001,
+                       "Max Δ-loss ratio for 'good' tier (5% interval loss)")
+    }
+
+    func test_statsIntervalSeconds_is5() {
+        XCTAssertEqual(QualityThresholds.statsIntervalSeconds, 5.0,
+                       "Stats collection cadence — also the minimum gap between quality-level transitions (debounce)")
+    }
+}
+
 // §5.6 — thermal-aware video encoder ceiling.
 @MainActor
 final class VideoThermalProfileTests: XCTestCase {
