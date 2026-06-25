@@ -116,10 +116,7 @@ final class CallManager: ObservableObject {
     @Published private(set) var callDuration: TimeInterval = 0
     @Published private(set) var currentCallId: String?
     @Published private(set) var connectionQuality: PeerConnectionState = .new
-    /// Granular quality level derived from RTT + packet-loss stats (updated every
-    /// `statsIntervalSeconds`). `nil` before the first stats sample arrives.
-    /// Prefer this over `connectionQuality` for the quality dot — it reflects
-    /// the actual media experience, not just the ICE/DTLS connection state.
+    /// RTT+packet-loss quality level from stats samples; nil until first sample.
     @Published private(set) var liveVideoQualityLevel: VideoQualityLevel? = nil
     @Published var displayMode: CallDisplayMode = .fullScreen
     /// Une fenêtre PiP SYSTÈME (AVPictureInPicture) est affichée. Orthogonal à
@@ -2711,16 +2708,18 @@ extension CallManager: WebRTCServiceDelegate {
     nonisolated func webRTCServiceDidDisconnect(_ service: WebRTCService) {
         Task { @MainActor [weak self] in
             guard let self else { return }
+            let isFatal = self.webRTCService.connectionState == .failed
+                       || self.webRTCService.connectionState == .closed
             switch self.callState {
             case .connected:
                 self.attemptReconnection()
+            case .reconnecting where !isFatal:
+                // Transient ICE flap during renegotiation — in-flight Task owns the loop.
+                Logger.calls.info("WebRTC disconnected during ICE restart — ignoring transient flap")
             case .reconnecting:
-                // ICE disconnect during an active restart is expected — ICE can
-                // flap between disconnected/checking while renegotiating. The
-                // in-flight Task already owns the retry loop; firing a second
-                // attemptReconnection() here would advance reconnectAttempt
-                // prematurely and exhaust the budget before the restart completes.
-                Logger.calls.info("WebRTC disconnected during ICE restart — ignoring (reconnect in progress)")
+                // Fatal PeerConnection .failed/.closed during ICE restart.
+                Logger.calls.warning("WebRTC fatal disconnect during ICE restart — triggering next attempt")
+                self.attemptReconnection()
             default:
                 Logger.calls.info("WebRTC disconnected in state: \(String(describing: self.callState))")
             }
@@ -2839,11 +2838,6 @@ extension CallManager: WebRTCServiceDelegate {
             )
         }
 
-        // Exponential backoff: attempt 1 is immediate; attempt N≥2 waits
-        // min(2^(N-1), 4) seconds before restarting ICE. This prevents
-        // rapid-fire retries that exhaust maxReconnectAttempts in <1s when the
-        // peer connection is in a broken state (e.g., signaling socket down).
-        // Matches WhatsApp/FaceTime practice for ICE restart pacing.
         let attempt = reconnectAttempt
         let backoffSeconds = attempt > 1 ? min(pow(2.0, Double(attempt - 1)), 4.0) : 0.0
 
