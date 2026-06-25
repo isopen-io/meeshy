@@ -859,6 +859,11 @@ export class CallService {
 
     if (isLastParticipant) {
       this.clearHeartbeats(callId);
+    } else {
+      // Mid-call leave: clear only this participant's backgrounded state.
+      // clearHeartbeats() handles the full call cleanup when the last participant
+      // leaves; for mid-call leaves we must clean up individually.
+      this.clearParticipantBackgrounded(callId, participantId);
     }
 
     logger.info('✅ User left call successfully', { callId, userId, wasPreAnswered });
