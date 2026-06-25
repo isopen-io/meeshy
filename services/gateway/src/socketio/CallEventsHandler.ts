@@ -797,11 +797,13 @@ export class CallEventsHandler {
           if (remoteSocket.id === socket.id) continue;
           const remoteUserId = getUserId(remoteSocket.id);
           if (!remoteUserId) {
-            logger.warn('⚠️ Socket in call room has no userId, using anonymous TURN credentials', { socketId: remoteSocket.id });
+            // Skip: a STUN-only config can't relay behind symmetric NAT/CGNAT.
+            // The socket will receive proper TURN credentials via its own
+            // join/check-active path once its userId is resolvable.
+            logger.warn('⚠️ Skipping participant-joined push — remote socket has no userId in connectionMap', { socketId: remoteSocket.id });
+            continue;
           }
-          const remoteIceServers = this.callService.generateIceServers(
-            remoteUserId ?? 'anonymous'
-          );
+          const remoteIceServers = this.callService.generateIceServers(remoteUserId);
           remoteSocket.emit(CALL_EVENTS.PARTICIPANT_JOINED, {
             ...joinedEvent,
             iceServers: remoteIceServers

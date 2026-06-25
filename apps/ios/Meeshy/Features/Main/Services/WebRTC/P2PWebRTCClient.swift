@@ -716,15 +716,14 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         defer { isSettingRemoteAnswerPending = false }
         let rtcAnswer = RTCSessionDescription(type: .answer, sdp: answer.sdp)
         try await setRemoteDescription(rtcAnswer, on: pc)
-        // CALL-DIAG (temp) — log the answer's per-media direction. If the peer's
-        // answer is recvonly/inactive for a media we expect to receive, that peer
-        // is NOT sending → our inbound RTP stays 0 (one-way media symptom).
         Logger.webrtc.info("remote ANSWER directions: \(Self.sdpDirections(answer.sdp), privacy: .public)")
         Logger.webrtc.info("Remote answer set")
     }
 
-    /// CALL-DIAG (temp) — extracts per-m-section direction (sendrecv/sendonly/
-    /// recvonly/inactive) from an SDP, to diagnose one-way media.
+    /// Extracts per-m-section direction (sendrecv/sendonly/recvonly/inactive)
+    /// from an SDP string. Used in logs to diagnose one-way media: a peer whose
+    /// answer is `recvonly`/`inactive` for a given m-section is not sending RTP
+    /// for that track, which appears as zero inbound packets on our side.
     static func sdpDirections(_ sdp: String) -> String {
         var out: [String] = []
         var media = "?"
@@ -1006,9 +1005,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(15))
                 guard !Task.isCancelled, let self else { break }
-                DispatchQueue.main.async { [weak self] in
-                    self?.sendDataChannelMessage(Data("{\"type\":\"ping\"}".utf8))
-                }
+                self.sendDataChannelMessage(Data("{\"type\":\"ping\"}".utf8))
             }
         }
     }
@@ -1374,7 +1371,6 @@ extension P2PWebRTCClient: RTCPeerConnectionDelegate {
             sdpMLineIndex: candidate.sdpMLineIndex,
             candidate: candidate.sdp
         )
-        // CALL-DIAG (temp instrumentation — remove on rollback): ICE candidate typ
         let diagTyp: String = {
             guard let r = candidate.sdp.range(of: "typ ") else { return "?" }
             return String(candidate.sdp[r.upperBound...].split(separator: " ").first ?? "?")

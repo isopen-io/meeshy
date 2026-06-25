@@ -240,8 +240,7 @@ final class WebRTCService {
         let interval = QualityThresholds.statsIntervalSeconds
         qualityMonitorTask = Task { [weak self] in
             while !Task.isCancelled {
-                let nanos = UInt64(interval * 1_000_000_000)
-                try? await Task.sleep(nanoseconds: nanos)
+                try? await Task.sleep(for: .seconds(interval))
                 if Task.isCancelled { break }
                 await Task { @MainActor [weak self] in
                     guard let self else { return }
@@ -496,8 +495,7 @@ extension WebRTCService: WebRTCClientDelegate {
         disconnectDebounceTask?.cancel()
         disconnectDebounceTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            let nanos = UInt64(QualityThresholds.disconnectDebounceSeconds * 1_000_000_000)
-            try? await Task.sleep(nanoseconds: nanos)
+            try? await Task.sleep(for: .seconds(QualityThresholds.disconnectDebounceSeconds))
             if Task.isCancelled { return }
             guard self.connectionState == .disconnected else { return }
             Logger.webrtc.info("disconnect debounce elapsed — escalating to reconnect")

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct CallWaitingBannerView: View {
     // Audit P2-iOS-11 — refactored from a `show()`-returning-a-new-View
@@ -86,6 +87,10 @@ struct CallWaitingBannerView: View {
             .accessibilityLabel(String(localized: "call.waiting.banner.a11y", defaultValue: "Appel entrant de \(callerName)", bundle: .main))
             .onAppear {
                 scheduleAutoDismiss()
+                UIAccessibility.post(
+                    notification: .announcement,
+                    argument: String(localized: "call.waiting.banner.a11y", defaultValue: "Appel entrant de \(callerName)", bundle: .main)
+                )
             }
             .onDisappear {
                 autoDismissTask?.cancel()

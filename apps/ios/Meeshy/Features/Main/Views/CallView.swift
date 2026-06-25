@@ -368,9 +368,13 @@ struct CallView: View {
 
     /// §7.3 — controls auto-hide only on iPhone/iPad video calls, never on Mac
     /// (controls are persistent on desktop), never for audio-only (no video to
-    /// reveal), and never while the effects tray is open.
+    /// reveal), never while the effects tray is open, and never while VoiceOver
+    /// is running (VoiceOver users can't tap the video to reveal hidden controls).
     private var shouldAutoHideControls: Bool {
-        callManager.isVideoEnabled && !showEffectsToolbar && !ProcessInfo.processInfo.isiOSAppOnMac
+        callManager.isVideoEnabled
+            && !showEffectsToolbar
+            && !ProcessInfo.processInfo.isiOSAppOnMac
+            && !UIAccessibility.isVoiceOverRunning
     }
 
     private func toggleControls() {
@@ -426,6 +430,8 @@ struct CallView: View {
                 Capsule()
                     .fill(durationColor.opacity(0.15))
             )
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.updatesFrequently)
 
             // Status indicators
             HStack(spacing: 12) {
@@ -547,6 +553,7 @@ struct CallView: View {
                         .background(.ultraThinMaterial)
                         .clipShape(Capsule())
                         .padding(12)
+                        .accessibilityAddTraits(.updatesFrequently)
                     Spacer()
                 }
                 Spacer()
@@ -609,6 +616,10 @@ struct CallView: View {
                 try? await Task.sleep(nanoseconds: videoConnectWatchdogSeconds * 1_000_000_000)
                 if !Task.isCancelled {
                     withAnimation(.easeInOut(duration: 0.3)) { videoConnectSlow = true }
+                    UIAccessibility.post(
+                        notification: .announcement,
+                        argument: String(localized: "call.video.connecting.slow", defaultValue: "La vidéo prend plus de temps que prévu…", bundle: .main)
+                    )
                 }
             }
     }
