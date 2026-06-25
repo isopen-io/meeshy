@@ -245,6 +245,70 @@ final class AdjustBitrateSourceGuardTests: XCTestCase {
     }
 }
 
+// MARK: - applyVideoQuality source guards
+
+/// `applyVideoQuality` applies critical-tier floors and composes VideoThermalProfile
+/// before calling `applyVideoEncoding`. A regression here silently sends 0-bitrate
+/// to the encoder instead of the safety floor, or drops the thermal composition.
+@MainActor
+final class ApplyVideoQualitySourceGuardTests: XCTestCase {
+
+    private func webRTCServiceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// Critical tier returns 0 from targetVideoBitrate; applyVideoQuality must
+    /// substitute minVideoBitrate so the encoder isn't told to send 0 bps.
+    func test_applyVideoQuality_usesMinVideoBitrateFloorForCriticalTier() throws {
+        let source = try webRTCServiceSource()
+        XCTAssertTrue(
+            source.contains("level.targetVideoBitrate > 0 ? level.targetVideoBitrate : QualityThresholds.minVideoBitrate"),
+            "applyVideoQuality must floor zero targetVideoBitrate with minVideoBitrate — " +
+            "passing 0 to the encoder is undefined behavior and can stall the video track."
+        )
+    }
+
+    /// Zero targetFPS (critical) must fall back to 15 fps, not 0.
+    func test_applyVideoQuality_usesMinFpsFloorForCriticalTier() throws {
+        let source = try webRTCServiceSource()
+        XCTAssertTrue(
+            source.contains("level.targetFPS > 0 ? level.targetFPS : 15"),
+            "applyVideoQuality must floor zero targetFPS to 15 — 0 fps stalls encoding."
+        )
+    }
+
+    /// VideoThermalProfile.apply must be called inside applyVideoQuality
+    /// so thermal state is composited even on a healthy network.
+    func test_applyVideoQuality_compositesThermalProfile() throws {
+        let source = try webRTCServiceSource()
+        XCTAssertTrue(
+            source.contains("VideoThermalProfile.apply("),
+            "applyVideoQuality must compose the network quality with VideoThermalProfile — " +
+            "a hot device should shed load even when the network is excellent."
+        )
+        XCTAssertTrue(
+            source.contains("ProcessInfo.processInfo.thermalState"),
+            "applyVideoQuality must read the live thermalState from ProcessInfo."
+        )
+    }
+
+    /// The final encoding call must use the thermal-adjusted values, not the raw level values.
+    func test_applyVideoQuality_usesTourminalAdjustedValuesForEncoding() throws {
+        let source = try webRTCServiceSource()
+        XCTAssertTrue(
+            source.contains("thermal.bitrateBps") && source.contains("thermal.framerate") && source.contains("thermal.scaleDownBy"),
+            "applyVideoQuality must pass thermal.bitrateBps / .framerate / .scaleDownBy to " +
+            "applyVideoEncoding — using raw level values bypasses the thermal ceiling."
+        )
+    }
+}
+
 // MARK: - Testable WebRTC Client
 
 private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {

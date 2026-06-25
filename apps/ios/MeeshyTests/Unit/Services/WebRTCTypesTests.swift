@@ -353,3 +353,34 @@ final class VideoQualityLevelEncoderTargetsTests: XCTestCase {
         XCTAssertEqual(VideoQualityLevel.critical.targetResolutionHeight, 0)
     }
 }
+
+// MARK: - QualityThresholds video constants
+
+@MainActor
+final class QualityThresholdsVideoTests: XCTestCase {
+
+    func test_minVideoBitrate_is100kbps() {
+        XCTAssertEqual(QualityThresholds.minVideoBitrate, 100_000,
+                       "Floor bitrate passed to the encoder when targetVideoBitrate is zero (critical tier)")
+    }
+
+    func test_poorPacketLoss_boundary_is10percent() {
+        XCTAssertEqual(QualityThresholds.poorPacketLoss, 0.10, accuracy: 0.0001,
+                       "Packet-loss threshold separating 'poor' from 'critical' quality tier")
+    }
+
+    func test_maxReconnectAttempts_is3() {
+        XCTAssertEqual(QualityThresholds.maxReconnectAttempts, 3,
+                       "ICE restart limit before declaring the call unrecoverable")
+    }
+
+    func test_disconnectDebounceSeconds_is3point5() {
+        XCTAssertEqual(QualityThresholds.disconnectDebounceSeconds, 3.5, accuracy: 0.001,
+                       "Window for transient ICE disconnects before escalating to reconnect/end")
+    }
+
+    func test_outgoingRingTimeoutSeconds_is45() {
+        XCTAssertEqual(QualityThresholds.outgoingRingTimeoutSeconds, 45.0, accuracy: 0.001,
+                       "Maximum time to wait for callee to answer before auto-cancelling the call")
+    }
+}
