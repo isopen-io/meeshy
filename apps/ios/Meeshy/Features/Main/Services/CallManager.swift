@@ -248,6 +248,7 @@ final class CallManager: ObservableObject {
     private let networkMonitor = NWPathMonitor()
     private let networkQueue = DispatchQueue(label: "me.meeshy.callmanager.network")
     private var lastNetworkPath: NWPath.Status = .satisfied
+    private var lastNetworkInterfaceType: NWInterface.InterfaceType? = nil
     private let thermalMonitor = ThermalStateMonitor()
 
     // CallKit
@@ -1894,7 +1895,22 @@ final class CallManager: ObservableObject {
                 guard let self else { return }
                 let wasUnsatisfied = self.lastNetworkPath != .satisfied
                 let isNowSatisfied = path.status == .satisfied
+
+                // Detect active interface type (WiFi > cellular > other). Used to
+                // trigger ICE restart on WiFi↔cellular handoff — the path remains
+                // "satisfied" across the transition so status alone is insufficient.
+                let currentInterfaceType: NWInterface.InterfaceType?
+                if path.usesInterfaceType(.wifi) { currentInterfaceType = .wifi }
+                else if path.usesInterfaceType(.cellular) { currentInterfaceType = .cellular }
+                else if path.usesInterfaceType(.wiredEthernet) { currentInterfaceType = .wiredEthernet }
+                else { currentInterfaceType = path.availableInterfaces.first?.type }
+
+                let previousInterfaceType = self.lastNetworkInterfaceType
+                // `previousInterfaceType == nil` means first observation — no actual
+                // interface change happened, so exclude it from the ICE-restart trigger.
+                let interfaceChanged = previousInterfaceType != nil && currentInterfaceType != previousInterfaceType
                 self.lastNetworkPath = path.status
+                self.lastNetworkInterfaceType = currentInterfaceType
 
                 let isInActiveCall: Bool
                 switch self.callState {
@@ -1908,6 +1924,12 @@ final class CallManager: ObservableObject {
                     self.attemptReconnection()
                 } else if wasUnsatisfied && isNowSatisfied {
                     Logger.calls.info("Network recovered during call — performing ICE restart")
+                    self.attemptReconnection()
+                } else if interfaceChanged {
+                    // WiFi ↔ cellular handoff: local IP addresses change, existing ICE
+                    // candidates go stale. Trigger ICE restart so WebRTC negotiates new
+                    // candidates on the active interface and the call stays alive.
+                    Logger.calls.info("Network interface changed to \(String(describing: currentInterfaceType)) — ICE restart for handoff")
                     self.attemptReconnection()
                 }
             }
