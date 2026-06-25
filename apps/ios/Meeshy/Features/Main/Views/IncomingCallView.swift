@@ -26,8 +26,9 @@ struct IncomingCallView: View {
         VStack(spacing: 0) {
             Spacer()
 
-            // Pulsing ring animation
+            // Pulsing ring animation — purely decorative; caller name announced below
             ringAnimation
+                .accessibilityHidden(true)
                 .padding(.bottom, 32)
 
             // Caller name
@@ -146,6 +147,7 @@ struct IncomingCallView: View {
         HStack(spacing: 6) {
             Image(systemName: callManager.isVideoEnabled ? "video.fill" : "phone.fill")
                 .font(.system(size: 12, weight: .semibold))
+                .accessibilityHidden(true)
             Text(callManager.isVideoEnabled
                 ? String(localized: "call.incoming.badge.video", defaultValue: "Video", bundle: .main)
                 : String(localized: "call.incoming.badge.audio", defaultValue: "Audio", bundle: .main))

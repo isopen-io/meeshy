@@ -2,47 +2,48 @@
  * TURNCredentialService — unit tests
  *
  * Regression guard for the "call drops after a few minutes" bug.
+ * Also covers RFC 5389 HMAC-SHA1 compliance, security guards, and
+ * server parsing edge cases.
  *
  * Root cause: TURN credentials are generated ONCE at call:initiate / call:join
  * and embed an expiration timestamp (`now + credentialTTL`) inside the coturn
  * `use-auth-secret` username. coturn refuses to refresh a relay allocation once
  * that timestamp has passed, so any call whose media is relayed through TURN
  * (symmetric / carrier-grade NAT — common on cellular) loses its relay and
- * tears down (`disconnected` → ICE restart reusing the SAME expired creds →
- * `failed`) at roughly `credentialTTL` seconds.
+ * tears down at roughly `credentialTTL` seconds.
  *
- * The previous default of 600 s (10 min) is shorter than the maximum lifetime
- * the server itself grants an active call (CallCleanupService MAX_ACTIVE_MS =
- * 2 h), so a perfectly healthy 11-minute call was being killed by credential
- * expiry. The TTL must therefore always cover the maximum active-call duration.
- *
- * Also covers:
- * - parseTURNServers: port range validation, empty host filtering, defaults
- * - generateCredentials: RFC 5389 username format, HMAC-SHA1 shape, TTL
- * - isConfigured: reflects real vs default secret + server count
+ * The TTL MUST cover the maximum lifetime the server grants an active call
+ * (CallCleanupService MAX_ACTIVE_MS = 2 h).
  */
 
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 
+// ---------------------------------------------------------------------------
+// Mock logger before importing TURNCredentialService
+// ---------------------------------------------------------------------------
+
 jest.mock('../../../utils/logger', () => ({
   logger: {
     info: jest.fn(),
+    debug: jest.fn(),
     warn: jest.fn(),
     error: jest.fn(),
-    debug: jest.fn(),
   },
 }));
 
 import { TURNCredentialService } from '../../../services/TURNCredentialService';
 import { logger } from '../../../utils/logger';
+import crypto from 'crypto';
 
 type MockFn = jest.Mock<any>;
 const warnMock = logger.warn as MockFn;
 
-// Mirror of CallCleanupService.MAX_ACTIVE_MS (2 h) expressed in seconds. An
-// active call can legitimately live this long server-side, so TURN credentials
-// must stay valid at least as long or the relay dies mid-call.
+// Mirror of CallCleanupService.MAX_ACTIVE_MS (2 h) expressed in seconds.
 const MAX_ACTIVE_CALL_SECONDS = 2 * 60 * 60;
+
+const DEFAULT_INSECURE_SECRET = 'meeshy-turn-secret-CHANGE-IN-PRODUCTION';
+const STRONG_SECRET = 'a9f2c3e4b5d6a7f8c9e0b1d2a3f4c5e6';
+const TEST_USER_ID = 'user-abc-123';
 
 const ENV_KEYS = ['TURN_CREDENTIAL_TTL', 'TURN_SERVERS', 'TURN_SECRET', 'NODE_ENV'] as const;
 
@@ -68,12 +69,60 @@ const buildService = (env: Record<string, string | undefined> = {}) => {
   Object.assign(process.env, env);
   const svc = new TURNCredentialService();
   Object.assign(process.env, saved);
-  // restore keys that were explicitly set to undefined
   for (const key of Object.keys(env)) {
     if (env[key] === undefined) delete process.env[key];
   }
   return svc;
 };
+
+// ---------------------------------------------------------------------------
+// Production security guard
+// ---------------------------------------------------------------------------
+
+describe('TURNCredentialService — production security guard', () => {
+  beforeEach(() => jest.clearAllMocks());
+  afterEach(() => jest.clearAllMocks());
+
+  it('throws when NODE_ENV=production and no TURN_SECRET is set', () => {
+    withEnv({ NODE_ENV: 'production', TURN_SECRET: undefined }, () => {
+      expect(() => new TURNCredentialService()).toThrow('[SECURITY]');
+    });
+  });
+
+  it('throws when NODE_ENV=production and TURN_SECRET is the default insecure value', () => {
+    withEnv({ NODE_ENV: 'production', TURN_SECRET: DEFAULT_INSECURE_SECRET }, () => {
+      expect(() => new TURNCredentialService()).toThrow('[SECURITY]');
+    });
+  });
+
+  it('throws when NODE_ENV=staging and TURN_SECRET is the default insecure value', () => {
+    withEnv({ NODE_ENV: 'staging', TURN_SECRET: DEFAULT_INSECURE_SECRET }, () => {
+      expect(() => new TURNCredentialService()).toThrow('[SECURITY]');
+    });
+  });
+
+  it('does NOT throw in production when a strong custom TURN_SECRET is provided', () => {
+    withEnv({ NODE_ENV: 'production', TURN_SECRET: STRONG_SECRET }, () => {
+      expect(() => new TURNCredentialService()).not.toThrow();
+    });
+  });
+
+  it('does NOT throw in dev even when no TURN_SECRET is set', () => {
+    withEnv({ NODE_ENV: 'development', TURN_SECRET: undefined }, () => {
+      expect(() => new TURNCredentialService()).not.toThrow();
+    });
+  });
+
+  it('does NOT throw in test environment with no TURN_SECRET', () => {
+    withEnv({ NODE_ENV: 'test', TURN_SECRET: undefined }, () => {
+      expect(() => new TURNCredentialService()).not.toThrow();
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Credential TTL covers max call duration
+// ---------------------------------------------------------------------------
 
 describe('TURNCredentialService — credential TTL covers max call duration', () => {
   beforeEach(() => jest.clearAllMocks());
@@ -99,7 +148,6 @@ describe('TURNCredentialService — credential TTL covers max call duration', ()
         );
         expect(turnServer).toBeDefined();
 
-        // username format is `${expirationTimestamp}:${userId}`
         const [expiryStr] = String(turnServer!.username).split(':');
         const expirationTimestamp = parseInt(expiryStr, 10);
 
@@ -115,6 +163,10 @@ describe('TURNCredentialService — credential TTL covers max call duration', ()
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// TURN server parsing
+// ---------------------------------------------------------------------------
 
 describe('TURNCredentialService — parseTURNServers', () => {
   beforeEach(() => jest.clearAllMocks());
@@ -232,11 +284,14 @@ describe('TURNCredentialService — parseTURNServers', () => {
     const creds = svc.generateCredentials('user-1');
     const turnEntries = creds.filter(s => (s.urls as string).startsWith('turn:'));
     expect(turnEntries).toHaveLength(0);
-    // STUN servers still present
     const stunEntries = creds.filter(s => (s.urls as string).startsWith('stun:'));
     expect(stunEntries.length).toBeGreaterThan(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// generateCredentials — RFC 5389 + HMAC-SHA1 compliance
+// ---------------------------------------------------------------------------
 
 describe('TURNCredentialService — generateCredentials', () => {
   beforeEach(() => jest.clearAllMocks());
@@ -247,11 +302,11 @@ describe('TURNCredentialService — generateCredentials', () => {
       TURN_SERVERS: 'turn.example.com:3478',
       NODE_ENV: 'development',
     });
-    const userId = 'user-abc-123';
+    const userId = TEST_USER_ID;
     const creds = svc.generateCredentials(userId);
     const turnEntry = creds.find(s => (s.urls as string).startsWith('turn:'));
     expect(turnEntry).toBeDefined();
-    const username = turnEntry!.credential !== undefined ? (turnEntry as any).username : undefined;
+    const username = (turnEntry as any).username as string;
     expect(username).toMatch(/^\d+:user-abc-123$/);
   });
 
@@ -283,6 +338,36 @@ describe('TURNCredentialService — generateCredentials', () => {
     expect(expiration).toBeLessThanOrEqual(now + 660); // 600s TTL + 60s slack
   });
 
+  it('credential is valid HMAC-SHA1 of username using the configured secret', () => {
+    const svc = buildService({
+      TURN_SECRET: STRONG_SECRET,
+      TURN_SERVERS: 'turn.example.com:3478',
+      NODE_ENV: 'development',
+    });
+    const creds = svc.generateCredentials(TEST_USER_ID);
+    const turnEntry = creds.find(s => (s.urls as string).startsWith('turn:'));
+    expect(turnEntry).toBeDefined();
+    const username = String((turnEntry as any).username);
+    const credential = String((turnEntry as any).credential);
+    const expected = crypto.createHmac('sha1', STRONG_SECRET)
+      .update(username)
+      .digest('base64');
+    expect(credential).toBe(expected);
+  });
+
+  it('different userIds produce different credentials', () => {
+    const svc = buildService({
+      TURN_SECRET: STRONG_SECRET,
+      TURN_SERVERS: 'turn.example.com:3478',
+      NODE_ENV: 'development',
+    });
+    const ice1 = svc.generateCredentials('user-1');
+    const ice2 = svc.generateCredentials('user-2');
+    const turn1 = ice1.find(s => (s.urls as string).startsWith('turn:'));
+    const turn2 = ice2.find(s => (s.urls as string).startsWith('turn:'));
+    expect((turn1 as any).credential).not.toBe((turn2 as any).credential);
+  });
+
   it('always includes STUN servers regardless of TURN config', () => {
     const svc = buildService({
       TURN_SECRET: 'test-secret',
@@ -294,6 +379,10 @@ describe('TURNCredentialService — generateCredentials', () => {
     expect(stunEntries.length).toBeGreaterThanOrEqual(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// isConfigured
+// ---------------------------------------------------------------------------
 
 describe('TURNCredentialService — isConfigured', () => {
   beforeEach(() => jest.clearAllMocks());
@@ -309,7 +398,7 @@ describe('TURNCredentialService — isConfigured', () => {
 
   it('returns false when using the default insecure secret', () => {
     const svc = buildService({
-      TURN_SECRET: 'meeshy-turn-secret-CHANGE-IN-PRODUCTION',
+      TURN_SECRET: DEFAULT_INSECURE_SECRET,
       TURN_SERVERS: 'turn.example.com:3478',
       NODE_ENV: 'development',
     });
@@ -323,5 +412,38 @@ describe('TURNCredentialService — isConfigured', () => {
       NODE_ENV: 'development',
     });
     expect(svc.isConfigured()).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getStatus
+// ---------------------------------------------------------------------------
+
+describe('TURNCredentialService — getStatus', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('reflects the number of configured TURN servers', () => {
+    const svc = buildService({
+      TURN_SERVERS: 'turn1.example.com:3478,turn2.example.com:3478',
+      TURN_SECRET: STRONG_SECRET,
+      NODE_ENV: 'development',
+    });
+    const status = svc.getStatus();
+    expect(status.turnServersCount).toBe(2);
+  });
+
+  it('reports hasCustomSecret correctly', () => {
+    const svc = buildService({ TURN_SECRET: STRONG_SECRET, NODE_ENV: 'development' });
+    expect(svc.getStatus().hasCustomSecret).toBe(true);
+  });
+
+  it('reports hasCustomSecret false when using the default', () => {
+    const svc = buildService({ TURN_SECRET: undefined, NODE_ENV: 'test' });
+    expect(svc.getStatus().hasCustomSecret).toBe(false);
+  });
+
+  it('exposes credentialTTL in seconds', () => {
+    const svc = buildService({ TURN_CREDENTIAL_TTL: '300', NODE_ENV: 'test' });
+    expect(svc.getStatus().credentialTTL).toBe(300);
   });
 });

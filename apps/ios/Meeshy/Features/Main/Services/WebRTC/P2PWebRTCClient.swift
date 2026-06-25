@@ -740,6 +740,13 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
 
     func addIceCandidate(_ candidate: IceCandidate) async throws {
         guard let pc = peerConnection else { throw WebRTCError.noPeerConnection }
+        // RTCPeerConnection.add(_:) asserts/crashes on a closed connection.
+        // Delayed candidates (arriving via socket after call:ended) hit this
+        // guard rather than faulting inside libwebrtc.
+        guard pc.signalingState != .closed else {
+            Logger.webrtc.warning("Ignoring ICE candidate — peer connection already closed")
+            return
+        }
         let rtcCandidate = RTCIceCandidate(
             sdp: candidate.candidate,
             sdpMLineIndex: candidate.sdpMLineIndex,

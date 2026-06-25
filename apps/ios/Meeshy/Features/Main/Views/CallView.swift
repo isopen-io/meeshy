@@ -785,13 +785,11 @@ struct CallView: View {
 
     private var transcriptOverlay: some View {
         let localUserId = AuthManager.shared.currentUser?.id ?? ""
-        let remoteName = callManager.remoteUsername ?? String(localized: "call.interlocutor", defaultValue: "Interlocuteur", bundle: .main)
+        let localName = AuthManager.shared.currentUser?.displayName ?? AuthManager.shared.currentUser?.username ?? String(localized: "call.transcript.you", defaultValue: "Vous", bundle: .main)
+        let remoteName = callManager.remoteUsername ?? String(localized: "call.incoming.unknown_caller", defaultValue: "Appel entrant", bundle: .main)
         return VStack(alignment: .leading, spacing: 6) {
             ForEach(transcriptionService.displayedSegments) { segment in
                 let isLocal = segment.speakerId == localUserId
-                let speakerName = isLocal
-                    ? String(localized: "call.transcript.you", defaultValue: "Vous", bundle: .main)
-                    : remoteName
                 HStack(alignment: .top, spacing: 8) {
                     Circle()
                         .fill(isLocal ? MeeshyColors.indigo400 : MeeshyColors.success)
@@ -802,9 +800,9 @@ struct CallView: View {
                         .font(.system(size: 14, weight: segment.isFinal ? .regular : .light))
                         .foregroundColor(.white)
                         .opacity(segment.isFinal ? 1.0 : 0.7)
+                        .accessibilityLabel("\(isLocal ? localName : remoteName) : \(segment.text)")
                 }
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel("\(speakerName): \(segment.text)")
             }
         }
         .padding(12)
@@ -814,6 +812,7 @@ struct CallView: View {
         .padding(.bottom, 100)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         .opacity(showTranscript ? 1 : 0)
+        .accessibilityHidden(!showTranscript)
         .animation(.easeInOut(duration: 0.2), value: showTranscript)
         // PERF-005: tell the transcription service when the panel is visible
         // so it can skip per-frame partial-result work while hidden.
