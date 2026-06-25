@@ -1116,8 +1116,12 @@ struct PostDetailView: View {
             .accessibilityLabel(String(format: String(localized: "a11y.post.repost_author", defaultValue: "Publication repartagée de %@", bundle: .main), repost.author))
             .accessibilityHint(String(localized: "a11y.post.repost_author.hint", defaultValue: "Ouvre la publication d'origine", bundle: .main))
 
-            // Text content with translation support
-            if !repost.content.isEmpty {
+            // Text content with translation support.
+            // For STORY reposts the caption lives inside the canvas overlays
+            // (rendered below via StoryReaderRepresentable) — suppress the
+            // plain body here to avoid showing the same text twice, mirroring
+            // the main-post guard (`if !post.isStory`) and `StoryRepostEmbedCell`.
+            if !isStoryRepost, !repost.content.isEmpty {
                 let repostDisplayContent = repostEffectiveContent(repost)
                 Text(repostDisplayContent)
                     .font(.subheadline)
