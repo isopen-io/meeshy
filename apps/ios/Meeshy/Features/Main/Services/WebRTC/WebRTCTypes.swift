@@ -75,6 +75,11 @@ struct CallStats: Equatable, Sendable {
     // path is `inbound == 0 && outbound > 0`. Without the outbound side we cannot
     // distinguish a transport fault from a peer who simply muted / has mic off.
     let outboundPacketsSent: Int
+    /// TWCC GCC bandwidth estimate from `candidate-pair` stats. Populated when
+    /// Transport-CC is negotiated (non-zero). 0 = TWCC not yet active or not
+    /// supported on this path. When non-zero this is a more authoritative signal
+    /// than the RTT/loss heuristic for setting the video encoder ceiling.
+    let availableOutgoingBitrateBps: Int
 
     init(
         roundTripTimeMs: Double = 0,
@@ -85,7 +90,8 @@ struct CallStats: Equatable, Sendable {
         inboundPacketsReceived: Int = 0,
         inboundAudioPackets: Int = 0,
         inboundVideoPackets: Int = 0,
-        outboundPacketsSent: Int = 0
+        outboundPacketsSent: Int = 0,
+        availableOutgoingBitrateBps: Int = 0
     ) {
         self.roundTripTimeMs = roundTripTimeMs
         self.packetsLost = packetsLost
@@ -96,6 +102,7 @@ struct CallStats: Equatable, Sendable {
         self.inboundAudioPackets = inboundAudioPackets
         self.inboundVideoPackets = inboundVideoPackets
         self.outboundPacketsSent = outboundPacketsSent
+        self.availableOutgoingBitrateBps = availableOutgoingBitrateBps
     }
 }
 
@@ -145,6 +152,7 @@ extension CallStats {
     /// inbound audio/video separate.
     static func reduce(entries: [RawEntry]) -> CallStats {
         var rtt = 0.0
+        var availableOutgoingBitrateBps = 0
         var packetsLost = 0
         var bytesSent = 0
         var bytesReceived = 0
@@ -162,6 +170,7 @@ extension CallStats {
             switch entry.type {
             case "candidate-pair":
                 if let value = entry.values["currentRoundTripTime"] { rtt = value * 1000 }
+                if let bps = entry.values["availableOutgoingBitrate"] { availableOutgoingBitrateBps = Int(bps) }
             case "inbound-rtp":
                 if let lost = entry.values["packetsLost"] { packetsLost += Int(lost) }
                 let received = Int(entry.values["packetsReceived"] ?? 0)
@@ -189,7 +198,8 @@ extension CallStats {
             inboundPacketsReceived: inboundAudio + inboundVideo,
             inboundAudioPackets: inboundAudio,
             inboundVideoPackets: inboundVideo,
-            outboundPacketsSent: outbound
+            outboundPacketsSent: outbound,
+            availableOutgoingBitrateBps: availableOutgoingBitrateBps
         )
     }
 }
@@ -493,6 +503,17 @@ enum VideoQualityLevel: String, Comparable, Sendable {
         if rtt > 200 || packetLoss > 0.03 { return .fair }
         if rtt > 100 || packetLoss > 0.01 { return .good }
         return .excellent
+    }
+
+    /// Map TWCC GCC `availableOutgoingBitrate` (bps) to a quality level. Thresholds
+    /// are set conservatively below each tier's `targetVideoBitrate` to leave headroom
+    /// for audio + RTCP overhead. Returns `nil` when `bps == 0` (TWCC not active).
+    static func from(availableOutgoingBitrateBps bps: Int) -> VideoQualityLevel {
+        if bps >= 2_000_000 { return .excellent }
+        if bps >= 1_000_000 { return .good }
+        if bps >= 400_000  { return .fair }
+        if bps >= 150_000  { return .poor }
+        return .critical
     }
 }
 

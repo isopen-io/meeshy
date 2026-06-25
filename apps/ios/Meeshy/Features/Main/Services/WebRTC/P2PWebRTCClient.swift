@@ -939,7 +939,8 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         let entries: [CallStats.RawEntry] = await withCheckedContinuation { continuation in
             pc.statistics { report in
                 let numericKeys = [
-                    "currentRoundTripTime", "packetsLost", "packetsReceived",
+                    "currentRoundTripTime", "availableOutgoingBitrate",
+                    "packetsLost", "packetsReceived",
                     "packetsSent", "bytesSent", "bytesReceived"
                 ]
                 var parsed: [CallStats.RawEntry] = []
@@ -965,7 +966,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
 
         let result = CallStats.reduce(entries: entries)
         Logger.webrtc.info(
-            "[CALL-DIAG][STATS] sent=\(result.bandwidth)B/\(result.outboundPacketsSent)pkt recvAudio=\(result.inboundAudioPackets)pkt recvVideo=\(result.inboundVideoPackets)pkt rtt=\(result.roundTripTimeMs)ms lost=\(result.packetsLost) codec=\(result.codec ?? "?", privacy: .public)"
+            "[CALL-DIAG][STATS] sent=\(result.bandwidth)B/\(result.outboundPacketsSent)pkt recvAudio=\(result.inboundAudioPackets)pkt recvVideo=\(result.inboundVideoPackets)pkt rtt=\(result.roundTripTimeMs)ms lost=\(result.packetsLost) bwe=\(result.availableOutgoingBitrateBps)bps codec=\(result.codec ?? "?", privacy: .public)"
         )
         return result
     }

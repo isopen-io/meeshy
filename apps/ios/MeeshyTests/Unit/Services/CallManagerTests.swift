@@ -701,6 +701,42 @@ final class CallStatsReducerTests: XCTestCase {
         XCTAssertEqual(stats.outboundPacketsSent, 0)
         XCTAssertNil(stats.codec)
     }
+
+    func test_reduce_parsesAvailableOutgoingBitrateFromCandidatePair() {
+        let stats = CallStats.reduce(entries: [
+            CallStats.RawEntry(id: "cp", type: "candidate-pair",
+                               values: ["currentRoundTripTime": 0.050, "availableOutgoingBitrate": 1_500_000.0])
+        ])
+        XCTAssertEqual(stats.availableOutgoingBitrateBps, 1_500_000)
+    }
+
+    func test_reduce_noAvailableOutgoingBitrate_returnsZero() {
+        let stats = CallStats.reduce(entries: [
+            CallStats.RawEntry(id: "cp", type: "candidate-pair",
+                               values: ["currentRoundTripTime": 0.050])
+        ])
+        XCTAssertEqual(stats.availableOutgoingBitrateBps, 0)
+    }
+
+    func test_videoQualityLevel_fromBwe_excellent() {
+        XCTAssertEqual(VideoQualityLevel.from(availableOutgoingBitrateBps: 2_000_000), .excellent)
+    }
+
+    func test_videoQualityLevel_fromBwe_good() {
+        XCTAssertEqual(VideoQualityLevel.from(availableOutgoingBitrateBps: 1_200_000), .good)
+    }
+
+    func test_videoQualityLevel_fromBwe_fair() {
+        XCTAssertEqual(VideoQualityLevel.from(availableOutgoingBitrateBps: 500_000), .fair)
+    }
+
+    func test_videoQualityLevel_fromBwe_poor() {
+        XCTAssertEqual(VideoQualityLevel.from(availableOutgoingBitrateBps: 200_000), .poor)
+    }
+
+    func test_videoQualityLevel_fromBwe_critical() {
+        XCTAssertEqual(VideoQualityLevel.from(availableOutgoingBitrateBps: 80_000), .critical)
+    }
 }
 
 // MARK: - Call Reliability Policy (§5.8)
