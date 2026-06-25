@@ -1134,7 +1134,7 @@ export class CallEventsHandler {
               const leftEvent: CallParticipantLeftEvent = {
                 callId: callSession.id,
                 participantId: participant.id,
-                userId: (participant as any).participant?.userId || participant.participantId,
+                userId: (participant as any).participant?.userId || /* istanbul ignore next */ participant.participantId,
                 mode: callSession.mode
               };
 

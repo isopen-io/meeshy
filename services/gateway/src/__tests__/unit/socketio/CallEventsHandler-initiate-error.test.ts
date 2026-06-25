@@ -391,5 +391,36 @@ describe('CallEventsHandler — call:initiate error fallback branch', () => {
         })
       );
     });
+
+    it('does not send VoIP push when all members are foreground (line 641 false branch)', async () => {
+      // Member has an active foreground socket → foregroundUserIds.has(memberId) = true
+      // → offlineUserIds = [] → if (offlineUserIds.length > 0) is false → line 641 not logged
+      const session = makeCallSession();
+      mockInitiateCall.mockResolvedValue(session);
+
+      const foregroundMemberId = 'user-foreground-1';
+      const prisma = makePrisma({
+        participantFindMany: jest.fn<any>().mockResolvedValue([{ userId: foregroundMemberId }]),
+      });
+
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+      // Override fetchSockets to return a socket with appForeground: true
+      (io.in as jest.MockedFunction<any>).mockReturnValue({
+        fetchSockets: jest.fn<any>().mockResolvedValue([
+          { data: { appForeground: true }, emit: jest.fn<any>() },
+        ]),
+      });
+
+      const mockSendToUser = jest.fn<any>().mockResolvedValue(undefined);
+      const handler = new CallEventsHandler(prisma);
+      handler.setPushNotificationService({ sendToUser: mockSendToUser } as any);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers[CALL_EVENTS.INITIATE](INITIATE_DATA, jest.fn<any>());
+
+      // No offline member → sendToUser must not be called
+      expect(mockSendToUser).not.toHaveBeenCalled();
+      expect(mockInitiateCall).toHaveBeenCalled();
+    });
   });
 });
