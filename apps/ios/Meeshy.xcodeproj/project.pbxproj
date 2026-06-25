@@ -504,7 +504,6 @@
 		CED021E29315A3D1A3795C52 /* ConversationInfoSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6516EE29BF060C0909FAA39 /* ConversationInfoSheet.swift */; };
 		CEF2D19144F83D020B73344F /* BubbleSystemViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = FED7DB1863271ED8DD5E7F80 /* BubbleSystemViews.swift */; };
 		CF12F2974D5A8817B0FB5B04 /* MeeshySDK in Frameworks */ = {isa = PBXBuildFile; productRef = A2EA1255277DE18035F0BAFF /* MeeshySDK */; };
-		CF74D0A9DCC4FECCCBF36180 /* MeeshyShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F737DB4E37AC47B134665F21 /* MeeshyShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		CFA066F1C233118A246E5596 /* VoiceProfileWizardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D4DAF5DC5215EC48A978EAE /* VoiceProfileWizardView.swift */; };
 		CFC63171F11D174DEE6EE93B /* VoIPPushManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92754C2E4AD519D9E779BF75 /* VoIPPushManager.swift */; };
 		CFCA7E77F15FD710284A318D /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3225C64F1DBE72267E5C6B32 /* AboutView.swift */; };
@@ -616,13 +615,6 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		82310C121728213D748521ED /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 520FF232375591D2444919CD /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = E92CA5A0623E606BD619670E;
-			remoteInfo = MeeshyShareExtension;
-		};
 		8CCA30BF877C4AB27CA2D50A /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 520FF232375591D2444919CD /* Project object */;
@@ -655,7 +647,6 @@
 			files = (
 				7C2D606243CDC3349C64D957 /* MeeshyWidgets.appex in Embed Foundation Extensions */,
 				983331C0366D2E304EA716A6 /* MeeshyNotificationExtension.appex in Embed Foundation Extensions */,
-				CF74D0A9DCC4FECCCBF36180 /* MeeshyShareExtension.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -2366,7 +2357,6 @@
 			dependencies = (
 				D72CFCB3D6A026BE007381F4 /* PBXTargetDependency */,
 				59CBDD851575E0D006834FC0 /* PBXTargetDependency */,
-				8273C48817CEAD5DB838485A /* PBXTargetDependency */,
 			);
 			name = Meeshy;
 			packageProductDependencies = (
@@ -3156,11 +3146,6 @@
 			isa = PBXTargetDependency;
 			target = 9999AD8C50CACBF85DF613CF /* Meeshy */;
 			targetProxy = ABDACD2C6212EAE6DE5B9DFF /* PBXContainerItemProxy */;
-		};
-		8273C48817CEAD5DB838485A /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = E92CA5A0623E606BD619670E /* MeeshyShareExtension */;
-			targetProxy = 82310C121728213D748521ED /* PBXContainerItemProxy */;
 		};
 		D72CFCB3D6A026BE007381F4 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
