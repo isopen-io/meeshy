@@ -149,18 +149,15 @@ export class CallCleanupService {
       });
 
       for (const call of activeCalls) {
-        for (const participant of call.participants) {
-          const staleParticipants = this.callService.getStaleHeartbeats(call.id, this.HEARTBEAT_TIMEOUT_MS);
-          if (staleParticipants.length > 0 && staleParticipants.length >= call.participants.length) {
-            try {
-              await this.forceEndCall(call.id, now, call.startedAt, CallStatus.ended, CallEndReason.heartbeatTimeout);
-              logger.warn('[CallCleanupService] Heartbeat timeout', { callId: call.id, staleParticipants });
-              cleaned++;
-            } catch (error) {
-              logger.error('[CallCleanupService] Heartbeat cleanup failed', { callId: call.id, error });
-              errors++;
-            }
-            break;
+        const staleParticipants = this.callService.getStaleHeartbeats(call.id, this.HEARTBEAT_TIMEOUT_MS);
+        if (staleParticipants.length > 0 && staleParticipants.length >= call.participants.length) {
+          try {
+            await this.forceEndCall(call.id, now, call.startedAt, CallStatus.ended, CallEndReason.heartbeatTimeout);
+            logger.warn('[CallCleanupService] Heartbeat timeout', { callId: call.id, staleParticipants });
+            cleaned++;
+          } catch (error) {
+            logger.error('[CallCleanupService] Heartbeat cleanup failed', { callId: call.id, error });
+            errors++;
           }
         }
       }

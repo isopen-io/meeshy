@@ -695,6 +695,7 @@ export class CallService {
           }
         });
       });
+      this.clearHeartbeats(callId);
       logger.info('✅ Idempotent leave — call force-ended for absent participant', {
         callId, userId, wasPreAnswered: idemPreAnswered
       });
@@ -780,6 +781,10 @@ export class CallService {
         });
       }
     });
+
+    if (isLastParticipant) {
+      this.clearHeartbeats(callId);
+    }
 
     logger.info('✅ User left call successfully', { callId, userId, wasPreAnswered });
 
