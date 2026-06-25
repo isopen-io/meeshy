@@ -1631,6 +1631,12 @@ final class CallManager: ObservableObject {
             // idles — ongoing transport faults surface via the PC-state delegate,
             // not by polling stats forever.
             var halfOpenSettled = false
+            // `.reconnecting` watchdog state. `reconnectingWatchedAttempt` pins the
+            // attempt number whose budget clock `reconnectingSince` is timing; a
+            // change in attempt (any reconnection trigger advanced the counter)
+            // restarts the clock for the new attempt.
+            var reconnectingSince: Date?
+            var reconnectingWatchedAttempt: Int?
             let nanos = UInt64(QualityThresholds.rtpGatePollIntervalSeconds * 1_000_000_000)
 
             while !Task.isCancelled {
@@ -1640,6 +1646,8 @@ final class CallManager: ObservableObject {
                 switch self.callState {
                 case .connecting, .offering:
                     connectedSince = nil
+                    reconnectingSince = nil
+                    reconnectingWatchedAttempt = nil
                     let since = connectingSince ?? Date()
                     connectingSince = since
                     let elapsed = Date().timeIntervalSince(since)
@@ -1661,6 +1669,8 @@ final class CallManager: ObservableObject {
                 case .connected:
                     connectingSince = nil
                     didAttemptConnectingRestart = false
+                    reconnectingSince = nil
+                    reconnectingWatchedAttempt = nil
                     let since = connectedSince ?? Date()
                     connectedSince = since
                     guard !halfOpenSettled else { break }
@@ -1681,12 +1691,37 @@ final class CallManager: ObservableObject {
                         Logger.calls.warning("half-open detected (in=0 out=\(stats.outboundPacketsSent)) after \(Int(elapsed))s — auto ICE restart")
                         self.attemptReconnection()
                     }
-                case .reconnecting:
+                case .reconnecting(let attempt):
                     connectingSince = nil
                     connectedSince = nil
+                    didAttemptConnectingRestart = false
+                    // Restart the budget clock whenever a new attempt begins (any
+                    // reconnection trigger advanced the counter).
+                    if attempt != reconnectingWatchedAttempt {
+                        reconnectingWatchedAttempt = attempt
+                        reconnectingSince = Date()
+                    }
+                    let since = reconnectingSince ?? Date()
+                    reconnectingSince = since
+                    let elapsed = Date().timeIntervalSince(since)
+                    switch CallReliabilityPolicy.evaluateReconnecting(secondsInAttempt: elapsed) {
+                    case .waiting:
+                        break
+                    case .retry:
+                        // This attempt's ICE restart overran its budget without
+                        // reaching `.connected`. Escalate: `attemptReconnection`
+                        // advances the counter (or trips the cap → `.connectionLost`).
+                        // Clear the clock so the next tick re-arms for the new attempt.
+                        Logger.calls.warning(".reconnecting watchdog (\(Int(elapsed))s, attempt \(attempt)) — ICE restart stalled, escalating")
+                        reconnectingSince = nil
+                        reconnectingWatchedAttempt = nil
+                        self.attemptReconnection()
+                    }
                 default:
                     connectingSince = nil
                     connectedSince = nil
+                    reconnectingSince = nil
+                    reconnectingWatchedAttempt = nil
                 }
             }
         }

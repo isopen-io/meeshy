@@ -801,6 +801,39 @@ final class CallReliabilityPolicyTests: XCTestCase {
         let outcome = Policy.evaluateConnecting(secondsInConnecting: 30, didAttemptRestart: false)
         XCTAssertEqual(outcome, .fail)
     }
+
+    // --- Reconnecting watchdog (stalled ICE-restart escalation) ---
+    //
+    // A reconnection attempt whose ICE restart silently stalls (offer sent, peer
+    // never answers, no new PC-state callback, no network flap) would otherwise
+    // hang in `.reconnecting` forever — nothing re-arms `attemptReconnection`, so
+    // the 3-attempt cap is never reached. The watchdog escalates once an attempt
+    // overruns its budget; the existing `maxReconnectAttempts` cap then bounds the
+    // total reconnection window and fails the call.
+
+    func test_reconnecting_withinBudget_waits() {
+        let outcome = Policy.evaluateReconnecting(secondsInAttempt: 5, budgetSeconds: 10)
+        XCTAssertEqual(outcome, .waiting)
+    }
+
+    func test_reconnecting_atBudget_retries() {
+        let outcome = Policy.evaluateReconnecting(secondsInAttempt: 10, budgetSeconds: 10)
+        XCTAssertEqual(outcome, .retry)
+    }
+
+    func test_reconnecting_pastBudget_retries() {
+        let outcome = Policy.evaluateReconnecting(secondsInAttempt: 13, budgetSeconds: 10)
+        XCTAssertEqual(outcome, .retry)
+    }
+
+    func test_reconnecting_usesDefaultBudgetFromThresholds() {
+        let justUnder = QualityThresholds.reconnectAttemptBudgetSeconds - 0.1
+        XCTAssertEqual(Policy.evaluateReconnecting(secondsInAttempt: justUnder), .waiting)
+        XCTAssertEqual(
+            Policy.evaluateReconnecting(secondsInAttempt: QualityThresholds.reconnectAttemptBudgetSeconds),
+            .retry
+        )
+    }
 }
 
 // MARK: - CallPillStatus (minimised call pill never shows a running timer pre-connection)

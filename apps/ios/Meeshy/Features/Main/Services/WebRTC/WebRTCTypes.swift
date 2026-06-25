@@ -258,6 +258,28 @@ enum CallReliabilityPolicy {
         if secondsInConnecting >= restartAfterSeconds && !didAttemptRestart { return .restartICE }
         return .waiting
     }
+
+    /// `.reconnecting` watchdog. `attemptReconnection` self-limits at
+    /// `maxReconnectAttempts`, but it is only re-armed by a *fresh* signal — a new
+    /// `RTCPeerConnectionState` callback, a network-path flap, or a nil ICE-restart
+    /// offer. When an ICE restart is sent and then silently stalls (peer never
+    /// answers, transport wedged with no new state transition), none of those fire,
+    /// the attempt counter never advances, and the call hangs in `.reconnecting`
+    /// forever. This watchdog gives each attempt a budget; once it overruns we
+    /// escalate (`.retry` → `attemptReconnection`), which advances the counter and
+    /// eventually trips the cap → `.connectionLost`. Symmetric to the `.connecting`
+    /// watchdog, for the post-`.connected` reconnection path.
+    enum ReconnectingOutcome: Equatable {
+        case waiting
+        case retry
+    }
+
+    static func evaluateReconnecting(
+        secondsInAttempt: TimeInterval,
+        budgetSeconds: TimeInterval = QualityThresholds.reconnectAttemptBudgetSeconds
+    ) -> ReconnectingOutcome {
+        secondsInAttempt >= budgetSeconds ? .retry : .waiting
+    }
 }
 
 // MARK: - WebRTC Client Protocol
@@ -432,6 +454,17 @@ enum QualityThresholds {
     /// `outgoingRingTimeoutSeconds` (which guards `.ringing`, *before* the offer).
     static let connectingRestartSeconds: TimeInterval = 12.0
     static let connectingFailSeconds: TimeInterval = 25.0
+
+    /// `.reconnecting` watchdog budget — the max time a single ICE-restart attempt
+    /// may stay pending before the watchdog escalates to the next attempt. Covers
+    /// the per-attempt exponential backoff (≤4s) plus ICE re-gather/connect on a
+    /// weak cellular link (~5s), without leaving the user staring at "Reconnecting…".
+    /// Combined with `maxReconnectAttempts` it bounds the total reconnection window
+    /// to ~`maxReconnectAttempts × reconnectAttemptBudgetSeconds` before the call
+    /// fails with `.connectionLost` — instead of hanging forever when an ICE restart
+    /// silently stalls (offer sent, peer never answers, no new PC-state callback,
+    /// no network flap to re-arm `attemptReconnection`).
+    static let reconnectAttemptBudgetSeconds: TimeInterval = 10.0
 
     /// Caller-side ringing timeout. The gateway has its own 60s server-side
     /// timeout (CallEventsHandler.ts §scheduleRingingTimeout) but a snappier
