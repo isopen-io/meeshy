@@ -359,6 +359,12 @@ export interface PostLikeNotificationMetadata extends BaseNotificationMetadata {
   readonly postType?: SocialPostType;
   /** Aperçu de l'entité réagie (≤ ~80 chars) pour identifier QUEL contenu. */
   readonly postPreview?: string;
+  /** Nature du média principal du contenu réagi — affiché « 📷 Photo » / « 🎥 Vidéo »
+   *  quand l'entité n'a pas de texte (ex. story photo). */
+  readonly mediaType?: 'image' | 'video' | 'audio' | 'text';
+  /** Miniature (image) du contenu réagi — rendue dans la ligne in-app et
+   *  attachée au push iOS (UNNotificationAttachment). @see schema.prisma PostMedia.thumbnailUrl */
+  readonly postThumbnailUrl?: string;
   readonly action: 'view_post';
 }
 
@@ -379,6 +385,10 @@ export interface PostCommentNotificationMetadata extends BaseNotificationMetadat
   readonly postType?: SocialPostType;
   /** Aperçu du post commenté pour identifier LE contenu visé. */
   readonly postPreview?: string;
+  /** Nature du média principal du post commenté (« 📷 Photo » quand sans texte). */
+  readonly mediaType?: 'image' | 'video' | 'audio' | 'text';
+  /** Miniature (image) du post commenté — rendue in-app + attachée au push iOS. */
+  readonly postThumbnailUrl?: string;
   /** Aperçu du commentaire parent (réponse à un commentaire). */
   readonly parentCommentPreview?: string;
   readonly action: 'view_post';
@@ -394,6 +404,10 @@ export interface PostRepostNotificationMetadata extends BaseNotificationMetadata
   readonly postType?: SocialPostType;
   /** Aperçu du contenu partagé pour identifier CE qui a été repris. */
   readonly postPreview?: string;
+  /** Nature du média principal du contenu partagé (« 📷 Photo » quand sans texte). */
+  readonly mediaType?: 'image' | 'video' | 'audio' | 'text';
+  /** Miniature (image) du contenu partagé — rendue in-app + attachée au push iOS. */
+  readonly postThumbnailUrl?: string;
   readonly action: 'view_post';
 }
 
@@ -406,6 +420,8 @@ export interface CommentLikeNotificationMetadata extends BaseNotificationMetadat
   readonly emoji: string;
   /** Aperçu du commentaire réagi pour identifier QUEL commentaire. */
   readonly commentPreview?: string;
+  /** Miniature (image) du post portant le commentaire — attachée au push iOS. */
+  readonly postThumbnailUrl?: string;
   readonly action: 'view_post';
 }
 
@@ -419,6 +435,8 @@ export interface FriendContentNotificationMetadata extends BaseNotificationMetad
   /** Nature du média principal — permet d'afficher « 📷 Photo » / « 🎥 Vidéo »
    *  quand le contenu n'a pas de texte. */
   readonly mediaType?: 'image' | 'video' | 'audio' | 'text';
+  /** Miniature (image) du contenu publié — rendue in-app + attachée au push iOS. */
+  readonly postThumbnailUrl?: string;
   readonly action: 'view_post';
 }
 

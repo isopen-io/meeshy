@@ -208,6 +208,83 @@ final class NotificationModelsTests: XCTestCase {
         XCTAssertEqual(metadata.location, "Paris, France")
     }
 
+    func testNotificationMetadataDecodesPostThumbnailAndMediaType() throws {
+        let json = """
+        {
+            "action": "view_post",
+            "postId": "post1",
+            "emoji": "❤️",
+            "postType": "STORY",
+            "mediaType": "image",
+            "postThumbnailUrl": "https://cdn.meeshy.me/story-thumb.jpg"
+        }
+        """.data(using: .utf8)!
+
+        let metadata = try JSONDecoder().decode(NotificationMetadata.self, from: json)
+        XCTAssertEqual(metadata.mediaType, "image")
+        XCTAssertEqual(metadata.postThumbnailUrl, "https://cdn.meeshy.me/story-thumb.jpg")
+    }
+
+    func test_storyReaction_mediaOnly_exposesThumbnailAndContextLabel() throws {
+        // Story photo réagie sans texte : pas de body (la vignette porte le
+        // visuel) ; la vignette est exposée et la ligne de contexte décrit
+        // l'entité (« Votre story · 📷 Photo », sous-titre serveur).
+        let json = """
+        {
+            "id": "notif-story-react",
+            "userId": "user1",
+            "type": "story_reaction",
+            "subtitle": "Votre story · 📷 Photo",
+            "content": "a réagi ❤️ à votre story",
+            "actor": {"id":"s1","username":"windie","displayName":"Windie Nh"},
+            "context": {"postId":"post1"},
+            "metadata": {"action":"view_post","postId":"post1","emoji":"❤️","postType":"STORY","mediaType":"image","postThumbnailUrl":"https://cdn.meeshy.me/t.jpg"},
+            "state": {"isRead":false,"readAt":null,"createdAt":"2026-06-25T10:30:00.000Z","expiresAt":null},
+            "delivery": {"emailSent":false,"pushSent":true}
+        }
+        """.data(using: .utf8)!
+
+        let notification = try JSONDecoder().decode(APINotification.self, from: json)
+        XCTAssertNil(notification.formattedBody)
+        XCTAssertEqual(notification.postThumbnailURLString, "https://cdn.meeshy.me/t.jpg")
+        XCTAssertEqual(notification.formattedContext, "Votre story · 📷 Photo")
+    }
+
+    func test_postLike_withTextPreview_bodyKeepsTextOverMediaSummary() throws {
+        let json = """
+        {
+            "id": "notif-post-like",
+            "userId": "user1",
+            "type": "post_like",
+            "content": "a réagi 😍 à votre publication",
+            "actor": {"id":"s1","username":"windie","displayName":"Windie Nh"},
+            "context": {"postId":"post1"},
+            "metadata": {"action":"view_post","postId":"post1","emoji":"😍","postType":"POST","postPreview":"Mon plus beau voyage","mediaType":"image"},
+            "state": {"isRead":false,"readAt":null,"createdAt":"2026-06-25T10:30:00.000Z","expiresAt":null},
+            "delivery": {"emailSent":false,"pushSent":true}
+        }
+        """.data(using: .utf8)!
+
+        let notification = try JSONDecoder().decode(APINotification.self, from: json)
+        XCTAssertEqual(notification.formattedBody, "Mon plus beau voyage")
+    }
+
+    func test_postThumbnailURLString_isNilWhenAbsentOrEmpty() throws {
+        let json = """
+        {
+            "id": "n", "userId": "u", "type": "post_like", "content": "x",
+            "actor": {"id":"s1","username":"w"},
+            "context": {"postId":"p"},
+            "metadata": {"action":"view_post","postId":"p","emoji":"❤️","postThumbnailUrl":""},
+            "state": {"isRead":false,"readAt":null,"createdAt":"2026-06-25T10:30:00.000Z","expiresAt":null},
+            "delivery": {"emailSent":false,"pushSent":true}
+        }
+        """.data(using: .utf8)!
+
+        let notification = try JSONDecoder().decode(APINotification.self, from: json)
+        XCTAssertNil(notification.postThumbnailURLString)
+    }
+
     func testNotificationMetadataDecodesWithoutLoginFields() throws {
         let json = """
         {"messagePreview":"Hello!","action":"view_message"}

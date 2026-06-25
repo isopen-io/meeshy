@@ -387,6 +387,9 @@ public struct NotificationMetadata: Codable, Sendable {
     public let excerpt: String?
     /// Nature du média principal — "image" | "video" | "audio" | "text".
     public let mediaType: String?
+    /// Miniature (image) de l'entité sociale liée (post/story/réel) — rendue
+    /// comme vignette dans la ligne de notification in-app.
+    public let postThumbnailUrl: String?
     /// Détails du 1er attachment d'un message (durée audio, taille, dimensions).
     public let attachments: Attachments?
 
@@ -419,6 +422,7 @@ public struct NotificationMetadata: Codable, Sendable {
         parentCommentPreview = try container.decodeIfPresent(String.self, forKey: .parentCommentPreview)
         excerpt = try container.decodeIfPresent(String.self, forKey: .excerpt)
         mediaType = try container.decodeIfPresent(String.self, forKey: .mediaType)
+        postThumbnailUrl = try container.decodeIfPresent(String.self, forKey: .postThumbnailUrl)
         attachments = try container.decodeIfPresent(Attachments.self, forKey: .attachments)
         deviceName = try container.decodeIfPresent(String.self, forKey: .deviceName)
         deviceVendor = try container.decodeIfPresent(String.self, forKey: .deviceVendor)
@@ -435,7 +439,7 @@ public struct NotificationMetadata: Codable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case messagePreview, action, reactionEmoji, callType, memberCount
         case postId, commentId, commentPreview, emoji, postType
-        case contentType, postPreview, parentCommentPreview, excerpt, mediaType, attachments
+        case contentType, postPreview, parentCommentPreview, excerpt, mediaType, postThumbnailUrl, attachments
         case deviceName, deviceVendor, deviceOS, deviceOSVersion, deviceType
         case ipAddress, country, countryName, city, location
     }
@@ -485,6 +489,13 @@ public struct APINotification: Codable, Identifiable, Sendable, CacheIdentifiabl
     public var senderId: String? { actor?.id }
     public var senderName: String? { actor?.displayName ?? actor?.username }
     public var senderAvatar: String? { actor?.avatar }
+
+    /// Miniature (image) du contenu social lié (post/story/réel) à afficher en
+    /// vignette de la ligne — `nil` quand le contenu n'a pas de média visuel.
+    public var postThumbnailURLString: String? {
+        guard let url = metadata?.postThumbnailUrl, !url.isEmpty else { return nil }
+        return url
+    }
 
     public var message: String? { content ?? metadata?.messagePreview }
 
@@ -650,8 +661,10 @@ public struct APINotification: Codable, Identifiable, Sendable, CacheIdentifiabl
         case .postComment, .legacyPostComment, .commentReply,
              .storyNewComment, .friendStoryComment, .storyThreadReply:
             return Self.firstNonEmpty(metadata?.commentPreview, content)
-        // Reactions / likes / reposts on an entity — surface a preview of the
-        // entity being reacted to / shared.
+        // Reactions / likes / reposts on an entity — surface a text excerpt of
+        // the entity. Media-only content (e.g. a photo story) shows no body text:
+        // the thumbnail carries the visual and the context line already states
+        // « Votre story · 📷 Photo », so a body fallback would just triplicate it.
         case .postLike, .legacyPostLike, .storyReaction, .statusReaction, .postRepost:
             return metadata?.postPreview
         case .commentLike, .commentReaction:
