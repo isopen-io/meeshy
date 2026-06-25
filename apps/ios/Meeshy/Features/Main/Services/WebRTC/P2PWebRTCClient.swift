@@ -353,11 +353,14 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             // DTX: no native API — see comment above; handled via SDP fmtp `usedtx=1`.
             encoding.maxBitrateBps = NSNumber(value: 64_000)
             encoding.minBitrateBps = NSNumber(value: 16_000)
+            // networkPriority = .high → DSCP EF (Expedited Forwarding, 46) for VoIP audio.
+            // Maps to the highest WebRTC pacer priority and signals QoS to the OS network stack.
+            encoding.networkPriority = .high
         }
         audioTransceiver.sender.parameters = params
         let encodingsCount = params.encodings.count
         if encodingsCount > 0 {
-            Logger.webrtc.info("[WEBRTC] audio bitrate range applied via RtpEncodingParameters (max=64kbps, min=16kbps, encodings=\(encodingsCount, privacy: .public))")
+            Logger.webrtc.info("[WEBRTC] audio bitrate range applied via RtpEncodingParameters (max=64kbps, min=16kbps, priority=high encodings=\(encodingsCount, privacy: .public))")
         } else {
             Logger.webrtc.warning("[WEBRTC] audio bitrate NOT applied — encodings array empty")
         }
@@ -417,12 +420,15 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             encoding.maxBitrateBps = NSNumber(value: maxBitrateBps)
             encoding.maxFramerate = NSNumber(value: maxFramerate)
             encoding.scaleResolutionDownBy = NSNumber(value: max(1.0, scaleResolutionDownBy))
+            // networkPriority = .high → DSCP AF41 (Assured Forwarding, 34) for real-time video.
+            // Signals to WebRTC pacer and OS that this stream deserves elevated QoS.
+            encoding.networkPriority = .high
         }
         sender.parameters = params
         let count = params.encodings.count
         if count > 0 {
             let scaleStr = String(format: "%.2f", scaleResolutionDownBy)
-            Logger.webrtc.info("[WEBRTC] video encoding applied (max=\(maxBitrateBps / 1000, privacy: .public)kbps fps=\(maxFramerate, privacy: .public) scale=\(scaleStr, privacy: .public) degradation=maintainFramerate encodings=\(count, privacy: .public))")
+            Logger.webrtc.info("[WEBRTC] video encoding applied (max=\(maxBitrateBps / 1000, privacy: .public)kbps fps=\(maxFramerate, privacy: .public) scale=\(scaleStr, privacy: .public) degradation=maintainFramerate priority=high encodings=\(count, privacy: .public))")
         } else {
             Logger.webrtc.warning("[WEBRTC] video encoding NOT applied — encodings array empty")
         }
