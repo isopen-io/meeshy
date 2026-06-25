@@ -269,7 +269,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
     // MARK: - Caller Name Resolution
 
     /// Resolve caller name synchronously from payload fields.
-    /// Priority: callerName > callerUsername > "Appel entrant"
+    /// Priority: callerName > callerUsername > localized fallback
     /// Audit P1-15 — `internal` (was `private`) for unit-test access.
     nonisolated static func resolveCallerName(callerName: String?, callerUsername: String?) -> String {
         if let name = callerName, !name.isEmpty {
@@ -278,7 +278,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         if let username = callerUsername, !username.isEmpty {
             return username
         }
-        return "Appel entrant"
+        return String(localized: "call.incoming.unknown_caller", defaultValue: "Appel entrant", bundle: .main)
     }
 
     /// Resolve caller name asynchronously from the persisted conversations cache.
