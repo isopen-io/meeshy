@@ -309,6 +309,119 @@ final class ApplyVideoQualitySourceGuardTests: XCTestCase {
     }
 }
 
+// MARK: - Disconnect debounce source guards
+
+/// `scheduleDisconnectEscalation` fires `webRTCServiceDidDisconnect` only after
+/// `disconnectDebounceSeconds` of continuous ICE disconnection — allowing transient
+/// network blips to recover before triggering a full reconnect cycle.
+/// These guards catch a regression that would cost the user their whole call for
+/// a <3.5s packet burst.
+@MainActor
+final class DisconnectDebounceSourceGuardTests: XCTestCase {
+
+    private func webRTCServiceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_scheduleDisconnectEscalation_cancelsExistingTaskBeforeCreating() throws {
+        let src = try webRTCServiceSource()
+        guard let range = src.range(of: "func scheduleDisconnectEscalation()") else {
+            XCTFail("scheduleDisconnectEscalation not found"); return
+        }
+        let end = src.range(of: "\n    }", range: range.upperBound..<src.endIndex)?.upperBound ?? src.endIndex
+        let body = String(src[range.lowerBound..<end])
+        XCTAssertTrue(
+            body.contains("disconnectDebounceTask?.cancel()"),
+            "scheduleDisconnectEscalation must cancel any prior debounce task before arming a new one"
+        )
+    }
+
+    func test_scheduleDisconnectEscalation_usesThresholdConstant() throws {
+        let src = try webRTCServiceSource()
+        XCTAssertTrue(
+            src.contains("QualityThresholds.disconnectDebounceSeconds"),
+            "The debounce duration must reference QualityThresholds.disconnectDebounceSeconds — " +
+            "a hardcoded literal makes the window invisible to tests and impossible to tune"
+        )
+    }
+
+    func test_scheduleDisconnectEscalation_guardsConnectionStateBeforeFiring() throws {
+        let src = try webRTCServiceSource()
+        guard let range = src.range(of: "func scheduleDisconnectEscalation()") else {
+            XCTFail("scheduleDisconnectEscalation not found"); return
+        }
+        let end = src.range(of: "\n    }", range: range.upperBound..<src.endIndex)?.upperBound ?? src.endIndex
+        let body = String(src[range.lowerBound..<end])
+        XCTAssertTrue(
+            body.contains("connectionState == .disconnected"),
+            "Before firing the delegate, the escalation must re-check connectionState == .disconnected — " +
+            "the connection may have recovered during the debounce window"
+        )
+    }
+
+    func test_scheduleDisconnectEscalation_checksCancellationBeforeFiring() throws {
+        let src = try webRTCServiceSource()
+        guard let range = src.range(of: "func scheduleDisconnectEscalation()") else {
+            XCTFail("scheduleDisconnectEscalation not found"); return
+        }
+        let end = src.range(of: "\n    }", range: range.upperBound..<src.endIndex)?.upperBound ?? src.endIndex
+        let body = String(src[range.lowerBound..<end])
+        XCTAssertTrue(
+            body.contains("Task.isCancelled"),
+            "The debounce task must guard Task.isCancelled so a re-arm after ICE reconnection " +
+            "suppresses a stale escalation that was already mid-sleep"
+        )
+    }
+}
+
+// MARK: - Quality delegate source guards
+
+/// `didCollectStats` and `didChangeQualityLevel` are the two delegate callbacks
+/// that carry quality data back to CallManager. They must be called in the right
+/// places and with the right parameters.
+@MainActor
+final class WebRTCQualityDelegateSourceGuardTests: XCTestCase {
+
+    private func webRTCServiceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// `didCollectStats` must be called from the quality monitor with the
+    /// delta-based `packetLossPercent` (not the cumulative ratio) so the gateway
+    /// quality-alert and call-summary message see accurate loss data.
+    func test_qualityMonitor_callsDidCollectStats_withDeltaPacketLoss() throws {
+        let src = try webRTCServiceSource()
+        XCTAssertTrue(
+            src.contains("didCollectStats: stats, level: self.currentQualityLevel, packetLossPercent: packetLossPercent"),
+            "The quality monitor must call delegate?.webRTCService(_:didCollectStats:level:packetLossPercent:) " +
+            "with the delta-computed packetLossPercent"
+        )
+    }
+
+    /// `didChangeQualityLevel` must fire when the quality level transitions so
+    /// CallManager can emit `call:quality-report` to the gateway.
+    func test_adjustBitrate_callsDidChangeQualityLevel_onTransition() throws {
+        let src = try webRTCServiceSource()
+        XCTAssertTrue(
+            src.contains("delegate?.webRTCService(self, didChangeQualityLevel: newLevel, from: previousLevel)"),
+            "When the quality level changes, adjustBitrate must call the didChangeQualityLevel delegate " +
+            "so CallManager can report it to the gateway"
+        )
+    }
+}
+
 // MARK: - Testable WebRTC Client
 
 private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
