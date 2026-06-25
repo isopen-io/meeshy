@@ -1047,3 +1047,84 @@ final class CallManagerPreferredCallLanguageTests: XCTestCase {
         XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "ar")
     }
 }
+
+// MARK: - ICE restart task serialization source guards
+
+/// Guards that `attemptReconnection()` tracks its in-flight Task via
+/// `iceRestartTask`, cancels any prior one before starting a new one, and
+/// clears the property on teardown. Without this serialisation, two concurrent
+/// calls (e.g. a watchdog firing during exponential-backoff sleep) would both
+/// eventually send ICE restart SDP offers and corrupt the perfect-negotiation
+/// state machine — both peers enter `makingOffer=true` simultaneously with no
+/// polite-peer resolution path.
+@MainActor
+final class ICERestartTaskSerializationTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// CallManager must own an `iceRestartTask` property to track the in-flight
+    /// ICE restart. Without a named property there is no way to cancel a prior
+    /// restart before starting the next one.
+    func test_callManager_declaresIceRestartTaskProperty() throws {
+        let src = try callManagerSource()
+        XCTAssertTrue(
+            src.contains("private var iceRestartTask: Task<Void, Never>?"),
+            "CallManager must declare `private var iceRestartTask: Task<Void, Never>?` to " +
+            "track the in-flight ICE restart task. Without a named property, overlapping " +
+            "calls to attemptReconnection() create two concurrent Tasks that both eventually " +
+            "send restart offers and corrupt the perfect-negotiation state machine."
+        )
+    }
+
+    /// `attemptReconnection` must cancel any previous task before starting a new
+    /// one. A second reconnection attempt (e.g. the watchdog fires mid-backoff)
+    /// must kill the sleeping first attempt to prevent two concurrent offers.
+    func test_attemptReconnection_cancelsExistingTaskBeforeStartingNew() throws {
+        let src = try callManagerSource()
+        guard let funcRange = src.range(of: "func attemptReconnection()") else {
+            XCTFail("attemptReconnection() not found in CallManager.swift"); return
+        }
+        let bodyEnd = src.range(of: "\n    }", range: funcRange.upperBound..<src.endIndex)?.upperBound
+            ?? src.endIndex
+        let body = String(src[funcRange.lowerBound..<bodyEnd])
+        XCTAssertTrue(
+            body.contains("iceRestartTask?.cancel()"),
+            "attemptReconnection must cancel the previous iceRestartTask before creating a " +
+            "new one — two concurrent Tasks sending restart offers corrupt perfect negotiation."
+        )
+        XCTAssertTrue(
+            body.contains("iceRestartTask = Task"),
+            "attemptReconnection must assign the new Task to iceRestartTask so subsequent " +
+            "calls can cancel it."
+        )
+    }
+
+    /// `endCallInternal` must cancel and nil the ICE restart task as part of
+    /// teardown so a mid-restart offer is not sent after the call has ended.
+    func test_endCallInternal_cancelsAndNilsIceRestartTask() throws {
+        let src = try callManagerSource()
+        guard let funcRange = src.range(of: "func endCallInternal") else {
+            XCTFail("endCallInternal not found in CallManager.swift"); return
+        }
+        let bodyEnd = src.range(of: "\n    // MARK:", range: funcRange.upperBound..<src.endIndex)?.lowerBound
+            ?? src.endIndex
+        let body = String(src[funcRange.lowerBound..<bodyEnd])
+        XCTAssertTrue(
+            body.contains("iceRestartTask?.cancel()"),
+            "endCallInternal must cancel iceRestartTask to prevent a mid-restart offer from " +
+            "being sent after the call has ended."
+        )
+        XCTAssertTrue(
+            body.contains("iceRestartTask = nil"),
+            "endCallInternal must nil iceRestartTask after cancelling to release the Task object."
+        )
+    }
+}
