@@ -1677,6 +1677,8 @@ final class CallManager: ObservableObject {
         // (immédiat sur RTCPeerConnectionState.connected, §3.2). Le guard évite de
         // relancer durationTask / heartbeat / haptics si re-déclenchée.
         if case .connected = callState { return }
+        let wasReconnecting: Bool
+        if case .reconnecting = callState { wasReconnecting = true } else { wasReconnecting = false }
 
         // §2.3/§6.4 — audio activation is gated on the PLATFORM, not on the
         // fragile `!rtc.isAudioEnabled` heuristic.
@@ -1725,6 +1727,13 @@ final class CallManager: ObservableObject {
         callStartDate = Date()
         callDuration = 0
         reconnectAttempt = 0
+
+        // Notify gateway that the ICE restart succeeded so call DB status is
+        // reset to `active` and the peer sees reconnection as complete.
+        if wasReconnecting, let callId = currentCallId {
+            let userId = AuthManager.shared.currentUser?.id ?? ""
+            MessageSocketManager.shared.emitCallReconnected(callId: callId, participantId: userId)
+        }
         durationTask?.cancel()
         durationTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
@@ -2804,6 +2813,17 @@ extension CallManager: WebRTCServiceDelegate {
         callState = .reconnecting(attempt: reconnectAttempt)
         playHaptic(.light)
         Logger.calls.warning("Attempting ICE restart (\(self.reconnectAttempt)/\(QualityThresholds.maxReconnectAttempts))")
+
+        // Notify gateway so it can update call DB status to `reconnecting` and
+        // suppress premature zombie-call cleanup during the ICE restart window.
+        if let callId = currentCallId {
+            let userId = AuthManager.shared.currentUser?.id ?? ""
+            MessageSocketManager.shared.emitCallReconnecting(
+                callId: callId,
+                participantId: userId,
+                attempt: reconnectAttempt
+            )
+        }
 
         Task { [weak self] in
             guard let self, let callId = self.currentCallId, let userId = self.remoteUserId else { return }

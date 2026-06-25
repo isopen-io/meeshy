@@ -1004,6 +1004,8 @@ public protocol MessageSocketProviding: Sendable {
     func emitCallEndWithAck(callId: String) async -> Bool
     func emitCallHeartbeat(callId: String)
     func emitCallQualityReport(callId: String, level: String, rtt: Double, packetLoss: Double, bytesSent: Int, bytesReceived: Int)
+    func emitCallReconnecting(callId: String, participantId: String, attempt: Int)
+    func emitCallReconnected(callId: String, participantId: String)
 }
 
 // MARK: - Protocol Default-Arg Convenience
@@ -1021,6 +1023,9 @@ public extension MessageSocketProviding {
         callId: String, level: String, rtt: Double, packetLoss: Double,
         bytesSent: Int, bytesReceived: Int
     ) {}
+
+    func emitCallReconnecting(callId: String, participantId: String, attempt: Int) {}
+    func emitCallReconnected(callId: String, participantId: String) {}
 
     func sendWithAttachments(
         conversationId: String,
@@ -2069,6 +2074,26 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
                 "bytesSent": bytesSent,
                 "bytesReceived": bytesReceived
             ]
+        ])
+    }
+
+    /// Notify the gateway that a local ICE restart is in progress (e.g. network
+    /// handoff or connectivity loss). Fire-and-forget. The gateway updates the
+    /// call DB status to `reconnecting` and suppresses premature cleanup.
+    public func emitCallReconnecting(callId: String, participantId: String, attempt: Int) {
+        socket?.emit("call:reconnecting", [
+            "callId": callId,
+            "participantId": participantId,
+            "attempt": attempt
+        ])
+    }
+
+    /// Notify the gateway that the ICE restart completed successfully and the
+    /// call is active again. Fire-and-forget. Resets call DB status to `active`.
+    public func emitCallReconnected(callId: String, participantId: String) {
+        socket?.emit("call:reconnected", [
+            "callId": callId,
+            "participantId": participantId
         ])
     }
 
