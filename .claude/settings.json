@@ -9,7 +9,8 @@
       "Bash(./apps/ios/meeshy.sh release *)",
       "Bash(SKIP_GIT_CHECK=1 ./apps/ios/meeshy.sh release)",
       "Bash(awk '/device\\\\\\(\\\\\\)|device_deploy|cmd_device|\"device\"/{print NR\": \"$0}' apps/ios/meeshy.sh)",
-      "Bash(./apps/ios/meeshy.sh device *)"
+      "Bash(./apps/ios/meeshy.sh device *)",
+      "Bash(git rev-list *)"
     ]
   }
 }
