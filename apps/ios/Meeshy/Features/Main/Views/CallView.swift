@@ -187,13 +187,14 @@ struct CallView: View {
             )
             .ignoresSafeArea()
 
-            // Animated ambient orbs
+            // Animated ambient orbs — decorative only
             Circle()
                 .fill(MeeshyColors.indigo500.opacity(0.15))
                 .frame(width: 300, height: 300)
                 .blur(radius: 80)
                 .offset(x: -80, y: -200)
                 .floating(range: 20, duration: 5)
+                .accessibilityHidden(true)
 
             Circle()
                 .fill(MeeshyColors.indigo400.opacity(0.12))
@@ -201,6 +202,7 @@ struct CallView: View {
                 .blur(radius: 90)
                 .offset(x: 100, y: 200)
                 .floating(range: 25, duration: 6)
+                .accessibilityHidden(true)
 
             Circle()
                 .fill(MeeshyColors.error.opacity(0.1))
@@ -208,6 +210,7 @@ struct CallView: View {
                 .blur(radius: 70)
                 .offset(x: 80, y: -100)
                 .floating(range: 15, duration: 4.5)
+                .accessibilityHidden(true)
         }
     }
 
@@ -269,10 +272,12 @@ struct CallView: View {
             HStack(spacing: 8) {
                 ProgressView()
                     .tint(MeeshyColors.indigo400)
+                    .accessibilityHidden(true)
                 Text(String(localized: "call.connecting", defaultValue: "Connexion...", bundle: .main))
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(.white.opacity(0.7))
             }
+            .accessibilityElement(children: .combine)
             .padding(.bottom, 60)
 
             Spacer()
@@ -1010,7 +1015,7 @@ struct CallView: View {
 
     private var pulsingAvatar: some View {
         ZStack {
-            // Pulse rings
+            // Pulse rings — decorative animation only
             ForEach(0..<3, id: \.self) { index in
                 Circle()
                     .stroke(
@@ -1030,6 +1035,7 @@ struct CallView: View {
                             .delay(Double(index) * 0.3),
                         value: pulseScale
                     )
+                    .accessibilityHidden(true)
             }
 
             avatarCircle(size: 100)
@@ -1062,7 +1068,8 @@ struct CallView: View {
         HStack(spacing: 6) {
             Image(systemName: callManager.isVideoEnabled ? "video.fill" : "phone.fill")
                 .font(.system(size: 12, weight: .semibold))
-            Text(callManager.isVideoEnabled ? String(localized: "call.type.video", defaultValue: "Appel video", bundle: .main) : String(localized: "call.type.audio", defaultValue: "Appel audio", bundle: .main))
+                .accessibilityHidden(true)
+            Text(callManager.isVideoEnabled ? String(localized: "call.type.video", defaultValue: "Appel vidéo", bundle: .main) : String(localized: "call.type.audio", defaultValue: "Appel audio", bundle: .main))
                 .font(.system(size: 13, weight: .semibold))
         }
         .foregroundColor(MeeshyColors.indigo400)
@@ -1144,12 +1151,14 @@ struct CallView: View {
         }
         .pressable()
         .accessibilityLabel(String(localized: "call.end", defaultValue: "Raccrocher", bundle: .main))
+        .accessibilityHint(String(localized: "call.end.hint", defaultValue: "Termine l'appel en cours", bundle: .main))
     }
 
     private func statusPill(icon: String, text: String, color: Color) -> some View {
         HStack(spacing: 4) {
             Image(systemName: icon)
                 .font(.system(size: 10, weight: .semibold))
+                .accessibilityHidden(true)
             Text(text)
                 .font(.system(size: 11, weight: .medium))
         }
