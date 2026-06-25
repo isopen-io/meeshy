@@ -787,4 +787,175 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
       expect(call![0].data.metadata.mediaType).toBe('image');
     });
   });
+
+  // =====================================================
+  // Visibility filtering
+  // =====================================================
+
+  describe('visibility filtering', () => {
+    it('test_createFriendContentNotificationsBatch_PRIVATE_noNotificationsSent', async () => {
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+        makeFriendRequest(AUTHOR_ID, FRIEND_1),
+        makeFriendRequest(AUTHOR_ID, FRIEND_2),
+      ]);
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'STORY',
+        visibility: 'PRIVATE',
+      });
+
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
+    it('test_createFriendContentNotificationsBatch_ONLY_notifiesOnlyVisibilityUserIds', async () => {
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+        makeFriendRequest(AUTHOR_ID, FRIEND_1),
+        makeFriendRequest(AUTHOR_ID, FRIEND_2),
+        makeFriendRequest(AUTHOR_ID, FRIEND_3),
+      ]);
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'STORY',
+        visibility: 'ONLY',
+        visibilityUserIds: [FRIEND_2],
+      });
+
+      const calls = (prisma.notification.create as jest.Mock).mock.calls as Array<
+        [{ data: { userId: string } }]
+      >;
+      const recipientIds = calls.map((c) => c[0].data.userId);
+      expect(recipientIds).not.toContain(FRIEND_1);
+      expect(recipientIds).toContain(FRIEND_2);
+      expect(recipientIds).not.toContain(FRIEND_3);
+    });
+
+    it('test_createFriendContentNotificationsBatch_EXCEPT_notifiesFriendsExcludingListedIds', async () => {
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+        makeFriendRequest(AUTHOR_ID, FRIEND_1),
+        makeFriendRequest(AUTHOR_ID, FRIEND_2),
+        makeFriendRequest(AUTHOR_ID, FRIEND_3),
+      ]);
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'STORY',
+        visibility: 'EXCEPT',
+        visibilityUserIds: [FRIEND_2],
+      });
+
+      const calls = (prisma.notification.create as jest.Mock).mock.calls as Array<
+        [{ data: { userId: string } }]
+      >;
+      const recipientIds = calls.map((c) => c[0].data.userId);
+      expect(recipientIds).toContain(FRIEND_1);
+      expect(recipientIds).not.toContain(FRIEND_2);
+      expect(recipientIds).toContain(FRIEND_3);
+    });
+
+    it('test_createFriendContentNotificationsBatch_PUBLIC_notifiesAllFriends', async () => {
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+        makeFriendRequest(AUTHOR_ID, FRIEND_1),
+        makeFriendRequest(AUTHOR_ID, FRIEND_2),
+      ]);
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'STORY',
+        visibility: 'PUBLIC',
+      });
+
+      const calls = (prisma.notification.create as jest.Mock).mock.calls as Array<
+        [{ data: { userId: string } }]
+      >;
+      const recipientIds = calls.map((c) => c[0].data.userId);
+      expect(recipientIds).toContain(FRIEND_1);
+      expect(recipientIds).toContain(FRIEND_2);
+    });
+
+    it('test_createFriendContentNotificationsBatch_FRIENDS_notifiesAllFriends', async () => {
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+        makeFriendRequest(AUTHOR_ID, FRIEND_1),
+        makeFriendRequest(AUTHOR_ID, FRIEND_2),
+      ]);
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'STORY',
+        visibility: 'FRIENDS',
+      });
+
+      const calls = (prisma.notification.create as jest.Mock).mock.calls as Array<
+        [{ data: { userId: string } }]
+      >;
+      const recipientIds = calls.map((c) => c[0].data.userId);
+      expect(recipientIds).toContain(FRIEND_1);
+      expect(recipientIds).toContain(FRIEND_2);
+    });
+
+    it('test_createFriendContentNotificationsBatch_noVisibility_defaultsToAllFriends', async () => {
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+        makeFriendRequest(AUTHOR_ID, FRIEND_1),
+      ]);
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'STORY',
+        // no visibility field → backward-compatible default (PUBLIC)
+      });
+
+      const calls = (prisma.notification.create as jest.Mock).mock.calls as Array<
+        [{ data: { userId: string } }]
+      >;
+      expect(calls.find((c) => c[0].data.userId === FRIEND_1)).toBeDefined();
+    });
+
+    it('test_createFriendContentNotificationsBatch_ONLY_excludesExcludeUserIds', async () => {
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+        makeFriendRequest(AUTHOR_ID, FRIEND_1),
+      ]);
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'STORY',
+        visibility: 'ONLY',
+        visibilityUserIds: [FRIEND_2, FRIEND_3],
+        excludeUserIds: [FRIEND_2],
+      });
+
+      const calls = (prisma.notification.create as jest.Mock).mock.calls as Array<
+        [{ data: { userId: string } }]
+      >;
+      const recipientIds = calls.map((c) => c[0].data.userId);
+      expect(recipientIds).not.toContain(FRIEND_2);
+      expect(recipientIds).toContain(FRIEND_3);
+    });
+
+    it('test_createFriendContentNotificationsBatch_ONLY_doesNotSendToAuthor', async () => {
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([]);
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'STORY',
+        visibility: 'ONLY',
+        visibilityUserIds: [AUTHOR_ID, FRIEND_1],
+      });
+
+      const calls = (prisma.notification.create as jest.Mock).mock.calls as Array<
+        [{ data: { userId: string } }]
+      >;
+      const recipientIds = calls.map((c) => c[0].data.userId);
+      expect(recipientIds).not.toContain(AUTHOR_ID);
+      expect(recipientIds).toContain(FRIEND_1);
+    });
+  });
 });

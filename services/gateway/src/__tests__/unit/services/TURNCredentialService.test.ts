@@ -64,16 +64,8 @@ const withEnv = <T>(overrides: Record<string, string | undefined>, run: () => T)
   }
 };
 
-const buildService = (env: Record<string, string | undefined> = {}) => {
-  const saved = { ...process.env };
-  Object.assign(process.env, env);
-  const svc = new TURNCredentialService();
-  Object.assign(process.env, saved);
-  for (const key of Object.keys(env)) {
-    if (env[key] === undefined) delete process.env[key];
-  }
-  return svc;
-};
+const buildService = (env: Record<string, string | undefined> = {}) =>
+  withEnv(env, () => new TURNCredentialService());
 
 // ---------------------------------------------------------------------------
 // Production security guard

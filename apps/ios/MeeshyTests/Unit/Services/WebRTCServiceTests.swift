@@ -50,6 +50,24 @@ final class WebRTCServiceTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(client.addIceCandidateCallCount, 1)
     }
 
+    func test_addICECandidate_bufferCap_dropsExcessCandidates() async {
+        // The buffer must never exceed 200 entries. Candidates 201–205 are
+        // silently dropped; after flush, the client receives exactly 200 calls.
+        let (sut, client) = makeSUT()
+        let candidate = IceCandidate(sdpMid: "0", sdpMLineIndex: 0, candidate: "candidate:test")
+        // Overshoot the cap by 5.
+        for _ in 0..<205 {
+            sut.addICECandidate(candidate)
+        }
+        // Trigger flush by setting remote description.
+        let desc = SessionDescription(type: .answer, sdp: "v=0\r\n")
+        await sut.setRemoteDescription(desc)
+        // Give the flush task time to drain the buffer.
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        // Exactly 200 candidates forwarded — not 205.
+        XCTAssertEqual(client.addIceCandidateCallCount, 200)
+    }
+
     // MARK: - Create Offer
 
     func test_createOffer_success_returnsSessionDescription() async {
