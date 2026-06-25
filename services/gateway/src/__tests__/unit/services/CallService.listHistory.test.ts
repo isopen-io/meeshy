@@ -232,6 +232,44 @@ describe('CallService.listHistory', () => {
       expect(result.items[0].peer).toBeNull();
     });
 
+    it('skips participants with null user when resolving direct call peers', async () => {
+      // m.user === null → the if-guard at line 1029 is false → peer stays null
+      const row = makeRow({ conversationId: CONV_DIRECT, conversation: { type: 'direct', title: null, avatar: null } });
+      const prisma = makePrisma({
+        callSessionFindMany: jest.fn<any>().mockResolvedValue([row]),
+        participantFindMany: jest.fn<any>().mockResolvedValue([
+          { conversationId: CONV_DIRECT, user: null },
+        ]),
+      });
+      const svc = new CallService(prisma);
+      const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all' });
+      expect(result.items[0].peer).toBeNull();
+    });
+
+    it('maps null displayName to null in the peer object', async () => {
+      // m.user.displayName is null → ?? null fires at line 1033
+      const row = makeRow({ conversationId: CONV_DIRECT, conversation: { type: 'direct', title: null, avatar: null } });
+      const prisma = makePrisma({
+        callSessionFindMany: jest.fn<any>().mockResolvedValue([row]),
+        participantFindMany: jest.fn<any>().mockResolvedValue([
+          {
+            conversationId: CONV_DIRECT,
+            user: {
+              id: 'user-peer-2',
+              username: 'peer2',
+              displayName: null,
+              avatar: null,
+              phoneNumber: null,
+              isOnline: false,
+            },
+          },
+        ]),
+      });
+      const svc = new CallService(prisma);
+      const result = await svc.listHistory(USER_ID, { limit: 10, filter: 'all' });
+      expect(result.items[0].peer?.displayName).toBeNull();
+    });
+
     it('does NOT query participants when no direct calls are returned', async () => {
       const row = makeRow({ conversation: { type: 'group', title: null, avatar: null } });
       const participantFindMany = jest.fn<any>().mockResolvedValue([]);

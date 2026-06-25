@@ -1311,6 +1311,21 @@ describe('callRoutes', () => {
       expect(reply._body?.error?.code).toBe('INTERNAL_ERROR');
       expect(reply._body?.error?.message).toBe('Failed to get call history');
     });
+
+    it('falls back to default params (limit=30, filter=all) when Zod safeParse fails', async () => {
+      // Passing limit=abc → Number('abc') = NaN → fails z.coerce.number().int()
+      // → safeParse returns { success: false } → fallback branch fires
+      const { routes, reply } = setup();
+      mockListHistory.mockResolvedValueOnce({ items: [], hasMore: false });
+
+      const req = makeRequest({ query: { limit: 'abc' } });
+      await getRoute(routes, 'GET', '/calls/history')(req, reply);
+
+      expect(mockListHistory).toHaveBeenCalledWith(
+        USER_ID,
+        expect.objectContaining({ limit: 30, filter: 'all' })
+      );
+    });
   });
 
   // ══════════════════════════════════════════════════════════════════════════
