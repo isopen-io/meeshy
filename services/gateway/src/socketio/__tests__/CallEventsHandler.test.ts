@@ -81,6 +81,7 @@ jest.mock('../../validation/call-schemas', () => ({
   socketReconnectedSchema: {},
   socketForceLeaveSchema: {},
   socketTranscriptionSegmentSchema: {},
+  socketRequestIceServersSchema: {},
 }));
 
 jest.mock('../../utils/logger', () => ({
@@ -116,6 +117,8 @@ jest.mock('@meeshy/shared/types/video-call', () => ({
     QUALITY_ALERT: 'call:quality-alert',
     MEDIA_TOGGLED: 'call:media-toggled',
     TRANSLATED_SEGMENT: 'call:translated-segment',
+    REQUEST_ICE_SERVERS: 'call:request-ice-servers',
+    ICE_SERVERS_REFRESHED: 'call:ice-servers-refreshed',
   },
   CALL_ERROR_CODES: {
     NOT_AUTHENTICATED: 'NOT_AUTHENTICATED',
@@ -2998,6 +3001,66 @@ describe('CallEventsHandler', () => {
       // both participant-left and call:ended should be emitted
       expect(roomEmitCalls.some((c: any[]) => c[0] === 'call:participant-left')).toBe(true);
       expect(roomEmitCalls.some((c: any[]) => c[0] === 'call:ended')).toBe(true);
+    });
+  });
+
+  describe('call:request-ice-servers', () => {
+    it('returns early when getUserId returns null', async () => {
+      const { handler, io } = buildHandler();
+      const socket = makeSocket({ rooms: new Set([`call:${CALL_ID}`]) });
+      const getUserId = jest.fn<any>().mockReturnValue(null);
+      const getUserInfo = jest.fn<any>().mockReturnValue(null);
+      handler.setupCallEvents(socket as any, io as any, getUserId, getUserInfo);
+
+      await socket._trigger('call:request-ice-servers', { callId: CALL_ID });
+
+      expect(socket.emit).not.toHaveBeenCalled();
+    });
+
+    it('returns early when schema validation fails', async () => {
+      mockValidateSocketEvent.mockReturnValueOnce({ success: false });
+      const { handler, io } = buildHandler();
+      const socket = makeSocket({ rooms: new Set([`call:${CALL_ID}`]) });
+      const getUserId = jest.fn<any>().mockReturnValue(USER_ID);
+      const getUserInfo = jest.fn<any>().mockReturnValue({ id: USER_ID, isAnonymous: false });
+      handler.setupCallEvents(socket as any, io as any, getUserId, getUserInfo);
+
+      await socket._trigger('call:request-ice-servers', { callId: CALL_ID });
+
+      expect(socket.emit).not.toHaveBeenCalledWith('call:ice-servers-refreshed', expect.anything());
+    });
+
+    it('emits call:error NOT_A_PARTICIPANT when socket is not in call room', async () => {
+      const { handler, io } = buildHandler();
+      // rooms does NOT contain the call room
+      const socket = makeSocket({ rooms: new Set(['user:other']) });
+      const getUserId = jest.fn<any>().mockReturnValue(USER_ID);
+      const getUserInfo = jest.fn<any>().mockReturnValue({ id: USER_ID, isAnonymous: false });
+      handler.setupCallEvents(socket as any, io as any, getUserId, getUserInfo);
+
+      await socket._trigger('call:request-ice-servers', { callId: CALL_ID });
+
+      expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({
+        code: 'NOT_A_PARTICIPANT',
+      }));
+    });
+
+    it('emits call:ice-servers-refreshed with iceServers and ttl on happy path', async () => {
+      const iceServers = [{ urls: 'turn:turn.example.com:3478' }];
+      mockCallServiceGenerateIceServers.mockReturnValueOnce(iceServers);
+      const { handler, io } = buildHandler();
+      const socket = makeSocket({ rooms: new Set([`call:${CALL_ID}`]) });
+      const getUserId = jest.fn<any>().mockReturnValue(USER_ID);
+      const getUserInfo = jest.fn<any>().mockReturnValue({ id: USER_ID, isAnonymous: false });
+      handler.setupCallEvents(socket as any, io as any, getUserId, getUserInfo);
+
+      await socket._trigger('call:request-ice-servers', { callId: CALL_ID });
+
+      expect(socket.emit).toHaveBeenCalledWith('call:ice-servers-refreshed', {
+        callId: CALL_ID,
+        iceServers,
+        ttl: 600,
+      });
     });
   });
 });
