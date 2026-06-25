@@ -378,12 +378,15 @@ final class CallManager: ObservableObject {
             } else {
                 Logger.calls.info("Audio interruption ended without shouldResume — reactivating anyway (call active)")
             }
-            audioSessionQueue.sync {
+            // Use async dispatch to avoid blocking the MainActor while
+            // AVAudioSession.setActive (which can take 10–100ms) and
+            // RTCAudioSession configuration run. The audio reconfiguration is
+            // fire-and-forget: the call stays active; the next ICE heartbeat
+            // will surface any persistent failure to the user.
+            audioSessionQueue.async {
                 // Re-activate the system AVAudioSession first — the interruption
                 // deactivated it, so RTCAudioSession.audioSessionDidActivate is a
-                // no-op until the OS session is active again. Failure here is logged
-                // but we still tell RTCAudioSession to proceed: the next heartbeat
-                // or ICE packet will surface any persistent issue to the user.
+                // no-op until the OS session is active again.
                 do {
                     try AVAudioSession.sharedInstance().setActive(true, options: [])
                 } catch {

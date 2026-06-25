@@ -68,4 +68,29 @@ final class CallManagerAudioSessionTests: XCTestCase {
             "preferredCallLanguage must be declared `static func` for testability (pure function, no side effects)."
         )
     }
+
+    func test_callManager_audioInterruptionHandler_usesAsyncDispatch() throws {
+        // Regression guard: handleAudioInterruption must use audioSessionQueue.async
+        // (non-blocking) not .sync. Using .sync blocks the MainActor for 10–100ms
+        // during AVAudioSession.setActive, causing UI jank during call recovery
+        // after a system interruption (alarm, GSM call, Siri).
+        let source = try callManagerSource()
+
+        guard let fnRange = source.range(of: "private func handleAudioInterruption(") else {
+            XCTFail("handleAudioInterruption not found in CallManager.swift")
+            return
+        }
+        // Grab enough context to cover the function body.
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 2000, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        XCTAssertTrue(
+            fnBody.contains("audioSessionQueue.async"),
+            "handleAudioInterruption must use audioSessionQueue.async (non-blocking) to avoid blocking the MainActor."
+        )
+        XCTAssertFalse(
+            fnBody.contains("audioSessionQueue.sync"),
+            "handleAudioInterruption must NOT use audioSessionQueue.sync — it blocks the MainActor."
+        )
+    }
 }
