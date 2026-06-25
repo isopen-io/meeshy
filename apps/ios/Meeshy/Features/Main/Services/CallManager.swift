@@ -777,7 +777,10 @@ final class CallManager: ObservableObject {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            // Use APIClient's URLSession so certificate pinning applies to this
+            // freshness probe. URLSession.shared bypasses the pinning delegate,
+            // exposing the Bearer token to MITM on adversarial networks.
+            let (data, response) = try await APIClient.shared.urlSession.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse else { return }
 
             // 404 ou autre erreur → push stale, end l'appel

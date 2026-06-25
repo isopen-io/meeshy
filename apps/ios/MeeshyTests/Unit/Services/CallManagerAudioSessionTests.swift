@@ -540,4 +540,31 @@ final class CallManagerVoIPFreshnessTests: XCTestCase {
             "checkVoIPCallFreshness must treat network errors as 'fresh' (keep the call) rather than dropping it"
         )
     }
+
+    func test_freshness_check_usesPinnedSession_notURLSessionShared() throws {
+        // SECURITY: checkVoIPCallFreshness must use APIClient.shared.urlSession
+        // (which carries the CertificatePinningDelegate) rather than URLSession.shared,
+        // which has no certificate pinning. Using the bare shared session exposes the
+        // Bearer token to MITM attacks on adversarial networks (public WiFi, rogue AP).
+        let source = try callManagerSource()
+        guard let funcRange = source.range(of: "func checkVoIPCallFreshness") else {
+            XCTFail("checkVoIPCallFreshness not found")
+            return
+        }
+        let funcEnd = source.range(of: "\n    // MARK: - Phantom VoIP Call",
+                                   range: funcRange.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        let funcBody = String(source[funcRange.lowerBound..<funcEnd])
+
+        XCTAssertFalse(
+            funcBody.contains("URLSession.shared.data"),
+            "checkVoIPCallFreshness must NOT use URLSession.shared — it bypasses certificate pinning. " +
+            "Use APIClient.shared.urlSession instead."
+        )
+        XCTAssertTrue(
+            funcBody.contains("APIClient.shared.urlSession"),
+            "checkVoIPCallFreshness must use APIClient.shared.urlSession so the " +
+            "CertificatePinningDelegate protects the Bearer token on every network."
+        )
+    }
 }
