@@ -187,8 +187,17 @@ public actor MediaSessionCoordinator {
     /// to release even if the refcount is still > 0 — individual players are
     /// expected to have been stopped by `PlaybackCoordinator.stopAll()`
     /// beforehand. Fails quietly if the session is already inactive.
+    ///
+    /// During an active call the audio session is owned by RTCAudioSession /
+    /// CallKit, NOT by this coordinator — tearing it down here would mute a
+    /// live VoIP call the moment the user locks the screen. Mirror the
+    /// `callActive` guard every other method in this class already applies.
     public func deactivateForBackground() async {
+        guard Self.shouldManageSession(callActive: callActive) else { return }
         activationCount = 0
+        #if DEBUG
+        testProbe?.deactivateCount += 1
+        #endif
         do {
             try AVAudioSession.sharedInstance().setActive(
                 false,

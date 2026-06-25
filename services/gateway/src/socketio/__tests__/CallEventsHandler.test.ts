@@ -1543,7 +1543,7 @@ describe('CallEventsHandler', () => {
       expect(mockCallServiceClearRingingTimeout).toHaveBeenCalledWith(CALL_ID);
     });
 
-    it('notifies other sockets in room with STUN fallback when getUserId returns undefined', async () => {
+    it('skips the participant-joined ICE push when getUserId returns undefined (never emits a TURN-less STUN-only config)', async () => {
       const participant = makeParticipant();
       const callSession = makeCallSession({ participants: [participant] });
       mockCallServiceJoinCall.mockResolvedValue({ callSession, iceServers: [] });
@@ -1551,13 +1551,15 @@ describe('CallEventsHandler', () => {
       const remoteSocket = { id: 'remote-sock', emit: jest.fn() };
       const { socket, io, getUserId } = setupWithSocket();
       io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([remoteSocket]) });
-      // getUserId returns undefined for the remote socket → STUN-only path
+      // getUserId returns undefined for the remote socket. A TURN-less STUN-only
+      // ICE config can't relay behind symmetric/CGNAT, so we must NOT emit it —
+      // the socket gets proper credentials via its own join/check-active path.
       getUserId.mockImplementation((socketId: string) =>
         socketId === SOCKET_ID ? USER_ID : undefined
       );
 
       await socket._trigger('call:join', validData);
-      expect(remoteSocket.emit).toHaveBeenCalledWith('call:participant-joined', expect.any(Object));
+      expect(remoteSocket.emit).not.toHaveBeenCalledWith('call:participant-joined', expect.any(Object));
     });
   });
 

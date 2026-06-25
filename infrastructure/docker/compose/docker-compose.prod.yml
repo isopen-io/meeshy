@@ -275,7 +275,7 @@ services:
       - AGENT_HOST=agent
       - TURN_SECRET=${TURN_SECRET}
       - TURN_SERVERS=${TURN_SERVERS:-meeshy.me:3478}
-      - TURN_CREDENTIAL_TTL=${TURN_CREDENTIAL_TTL:-3600}
+      - TURN_CREDENTIAL_TTL=${TURN_CREDENTIAL_TTL:-86400}
       # QUEUED IMPROVEMENT — session config + branding (deploy via surgical patch when sessions feature lands)
       - SESSION_EXPIRY_MOBILE_DAYS=${SESSION_EXPIRY_MOBILE_DAYS:-365}
       - SESSION_EXPIRY_DESKTOP_DAYS=${SESSION_EXPIRY_DESKTOP_DAYS:-30}

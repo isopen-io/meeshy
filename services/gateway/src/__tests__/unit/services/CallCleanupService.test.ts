@@ -3,7 +3,7 @@
  *
  * Verifies the GC logic that runs every 60 s to force-end zombie calls:
  * - initiated/ringing  > 60 s → MISSED
- * - connecting         > 30 s → FAILED
+ * - connecting         > 90 s (since answeredAt) → FAILED
  * - active/reconnecting > 2 h  → ENDED (garbageCollected)
  * - heartbeat timeout (when callService present + stale ≥ total) → ENDED (heartbeatTimeout)
  * - forceEndCall: transaction + Socket.IO broadcast variants
@@ -293,6 +293,32 @@ describe('CallCleanupService', () => {
 
       expect(result.cleaned).toBe(1);
       expect(result.errors).toBe(0);
+    });
+
+    it('tier 2 (connecting) is anchored on answeredAt with a 90s budget, not startedAt', async () => {
+      const service = new CallCleanupService(prisma as any);
+
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([]) // tier 1
+        .mockResolvedValueOnce([]) // tier 2: connecting
+        .mockResolvedValueOnce([]); // tier 3
+
+      const before = Date.now();
+      await service.runCleanup();
+      const after = Date.now();
+
+      // The connecting tier is the 2nd findMany call.
+      const tier2Where = prisma.callSession.findMany.mock.calls[1][0].where;
+      expect(tier2Where.status).toBe(CallStatus.connecting);
+      // Must filter on answeredAt (entry into connecting), never startedAt —
+      // otherwise a late-answered call gets force-FAILED mid-handshake.
+      expect(tier2Where.answeredAt).toBeDefined();
+      expect(tier2Where.startedAt).toBeUndefined();
+
+      // Cutoff must be ~90s in the past (the cellular/TURN-tolerant budget).
+      const cutoff = tier2Where.answeredAt.lt.getTime();
+      expect(before - cutoff).toBeGreaterThanOrEqual(90_000);
+      expect(after - cutoff).toBeLessThanOrEqual(90_000 + 1_000);
     });
 
     it('force-GC-ENDED a stale active call (>2h) → cleaned:1', async () => {

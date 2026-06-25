@@ -354,12 +354,19 @@ final class CallManager: ObservableObject {
         case .began:
             Logger.calls.info("Audio interruption began (call active)")
         case .ended:
+            // `.shouldResume` is an opportunistic hint from iOS, NOT a guarantee.
+            // After an alarm / Siri / GSM interruption iOS frequently omits it
+            // AND never calls provider:didActivate: on its own — which left the
+            // rest of the call silent (mic + output dead) while ICE stayed
+            // connected. For a VoIP call we KNOW must continue (callState.isActive
+            // was checked above) we reactivate the RTCAudioSession regardless of
+            // the hint; deferring to a hint that may never come is the bug.
             let options = AVAudioSession.InterruptionOptions(rawValue: optionsRaw ?? 0)
-            guard options.contains(.shouldResume) else {
-                Logger.calls.info("Audio interruption ended without shouldResume hint — skipping resume")
-                return
+            if options.contains(.shouldResume) {
+                Logger.calls.info("Audio interruption ended (shouldResume) — re-enabling RTCAudioSession")
+            } else {
+                Logger.calls.info("Audio interruption ended without shouldResume — reactivating anyway (call active)")
             }
-            Logger.calls.info("Audio interruption ended (shouldResume) — re-enabling RTCAudioSession")
             audioSessionQueue.sync {
                 let rtc = RTCAudioSession.sharedInstance()
                 rtc.lockForConfiguration()
@@ -1809,14 +1816,11 @@ final class CallManager: ObservableObject {
                 guard let self else { return }
                 let isCapturing = UIScreen.main.isCaptured
                 Logger.calls.info("Screen capture state changed: \(isCapturing)")
-                if let callId = self.currentCallId, let remoteId = self.remoteUserId {
-                    let fromId = AuthManager.shared.currentUser?.id ?? ""
-                    MessageSocketManager.shared.emitCallSignal(
-                        callId: callId,
-                        type: "screen-capture-detected",
-                        payload: ["isCapturing": isCapturing ? "true" : "false", "from": fromId, "to": remoteId]
-                    )
-                }
+                // Do NOT relay this via `call:signal` — the gateway signal schema
+                // only accepts offer/answer/ice-candidate/ice-restart and rejects
+                // anything else with `call:error` (INVALID_SIGNAL), which used to
+                // tear the call down. Re-route via a dedicated event if peer
+                // notification of screen capture is ever required.
             }
         }
     }
@@ -1839,14 +1843,14 @@ final class CallManager: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self, let callId = self.currentCallId, let remoteId = self.remoteUserId else { return }
-                let fromId = AuthManager.shared.currentUser?.id ?? ""
-                MessageSocketManager.shared.emitCallSignal(
-                    callId: callId,
-                    type: "backgrounded",
-                    payload: ["from": fromId, "to": remoteId]
-                )
-                Logger.calls.info("Call backgrounded — notified server for extended heartbeat timeout")
+                guard let self, self.currentCallId != nil else { return }
+                // Previously emitted `call:signal type:"backgrounded"` to (try to)
+                // extend the server heartbeat timeout — but the gateway signal
+                // schema rejects it (INVALID_SIGNAL → call:error), which tore the
+                // call down on every screen lock. A real background heartbeat
+                // extension needs a dedicated server handler (follow-up); until
+                // then, emit nothing the schema will reject.
+                Logger.calls.info("Call backgrounded")
             }
         }
 
@@ -1856,14 +1860,12 @@ final class CallManager: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self, let callId = self.currentCallId, let remoteId = self.remoteUserId else { return }
-                let fromId = AuthManager.shared.currentUser?.id ?? ""
-                MessageSocketManager.shared.emitCallSignal(
-                    callId: callId,
-                    type: "foregrounded",
-                    payload: ["from": fromId, "to": remoteId]
-                )
-                Logger.calls.info("Call foregrounded — resumed normal heartbeat timeout")
+                guard let self, self.currentCallId != nil else { return }
+                // See `backgrounded` above: `call:signal type:"foregrounded"` is
+                // rejected by the gateway signal schema (INVALID_SIGNAL) and must
+                // not be emitted. The client-side heartbeat resumes on its own
+                // when the app returns to the foreground.
+                Logger.calls.info("Call foregrounded")
             }
         }
     }
@@ -2247,6 +2249,14 @@ final class CallManager: ObservableObject {
                 let message = event.message
                     ?? String(localized: "call.error.generic", defaultValue: "Erreur lors de l'appel", bundle: .main)
                 Logger.calls.error("call:error received: code=\(event.code ?? "?") message=\(message)")
+                // INVALID_SIGNAL is a per-message relay rejection (a malformed or
+                // non-WebRTC signal type), NOT a call-fatal operation error. It
+                // must never tear down a healthy WebRTC call nor surface a user
+                // toast — defense in depth against a stray app-level signal ever
+                // reaching the strict gateway schema again.
+                if event.code == "INVALID_SIGNAL" {
+                    return
+                }
                 FeedbackToastManager.shared.showError(message)
                 // Ne teardown que si un appel est réellement en vol (ringing →
                 // reconnecting). Une erreur hors-appel ne fait qu'afficher le toast.
