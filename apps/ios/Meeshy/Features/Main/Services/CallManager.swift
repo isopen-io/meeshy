@@ -379,6 +379,16 @@ final class CallManager: ObservableObject {
                 Logger.calls.info("Audio interruption ended without shouldResume — reactivating anyway (call active)")
             }
             audioSessionQueue.sync {
+                // Re-activate the system AVAudioSession first — the interruption
+                // deactivated it, so RTCAudioSession.audioSessionDidActivate is a
+                // no-op until the OS session is active again. Failure here is logged
+                // but we still tell RTCAudioSession to proceed: the next heartbeat
+                // or ICE packet will surface any persistent issue to the user.
+                do {
+                    try AVAudioSession.sharedInstance().setActive(true, options: [])
+                } catch {
+                    Logger.calls.error("AVAudioSession reactivation failed after interruption: \(error.localizedDescription)")
+                }
                 let rtc = RTCAudioSession.sharedInstance()
                 rtc.lockForConfiguration()
                 rtc.audioSessionDidActivate(AVAudioSession.sharedInstance())
@@ -1372,6 +1382,7 @@ final class CallManager: ObservableObject {
             } catch {
                 Logger.calls.error("toggleVideo failed: \(error.localizedDescription)")
                 self.isVideoEnabled = false
+                self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
                 FeedbackToastManager.shared.showError("Impossible d'activer la vidéo")
             }
         }
@@ -1412,16 +1423,26 @@ final class CallManager: ObservableObject {
         if transcriptionService.isTranscribing {
             transcriptionService.stopTranscribing()
         } else {
-            let localLang = "fr"
-            let remoteLang = "fr"
-            let localUserId = AuthManager.shared.currentUser?.id ?? ""
-            let remoteUserId = remoteUserId ?? ""
-            transcriptionService.startTranscribing(
-                localLanguage: localLang,
-                remoteLanguage: remoteLang,
-                localUserId: localUserId,
-                remoteUserId: remoteUserId
-            )
+            let localUser = AuthManager.shared.currentUser
+            let localLang = CallManager.preferredCallLanguage(for: localUser)
+            let localUserId = localUser?.id ?? ""
+            let rUserId = remoteUserId ?? ""
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                var remoteLang = CallManager.preferredCallLanguage(for: nil)
+                if !rUserId.isEmpty {
+                    let cached = await CacheCoordinator.shared.profiles.load(for: rUserId)
+                    if let profile = cached.snapshot()?.first {
+                        remoteLang = CallManager.preferredCallLanguage(for: profile)
+                    }
+                }
+                self.transcriptionService.startTranscribing(
+                    localLanguage: localLang,
+                    remoteLanguage: remoteLang,
+                    localUserId: localUserId,
+                    remoteUserId: rUserId
+                )
+            }
         }
     }
 
@@ -1874,11 +1895,14 @@ final class CallManager: ObservableObject {
                 guard let self else { return }
                 let isCapturing = UIScreen.main.isCaptured
                 Logger.calls.info("Screen capture state changed: \(isCapturing)")
-                // Do NOT relay this via `call:signal` — the gateway signal schema
-                // only accepts offer/answer/ice-candidate/ice-restart and rejects
-                // anything else with `call:error` (INVALID_SIGNAL), which used to
-                // tear the call down. Re-route via a dedicated event if peer
-                // notification of screen capture is ever required.
+                if let callId = self.currentCallId {
+                    let userId = AuthManager.shared.currentUser?.id ?? ""
+                    MessageSocketManager.shared.emitCallScreenCaptureDetected(
+                        callId: callId,
+                        participantId: userId,
+                        isCapturing: isCapturing
+                    )
+                }
             }
         }
     }
@@ -1901,13 +1925,9 @@ final class CallManager: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self, self.currentCallId != nil else { return }
-                // Previously emitted `call:signal type:"backgrounded"` to (try to)
-                // extend the server heartbeat timeout — but the gateway signal
-                // schema rejects it (INVALID_SIGNAL → call:error), which tore the
-                // call down on every screen lock. A real background heartbeat
-                // extension needs a dedicated server handler (follow-up); until
-                // then, emit nothing the schema will reject.
+                guard let self, let callId = self.currentCallId else { return }
+                let userId = AuthManager.shared.currentUser?.id ?? ""
+                MessageSocketManager.shared.emitCallBackgrounded(callId: callId, participantId: userId)
                 Logger.calls.info("Call backgrounded")
             }
         }
@@ -1918,11 +1938,9 @@ final class CallManager: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self, self.currentCallId != nil else { return }
-                // See `backgrounded` above: `call:signal type:"foregrounded"` is
-                // rejected by the gateway signal schema (INVALID_SIGNAL) and must
-                // not be emitted. The client-side heartbeat resumes on its own
-                // when the app returns to the foreground.
+                guard let self, let callId = self.currentCallId else { return }
+                let userId = AuthManager.shared.currentUser?.id ?? ""
+                MessageSocketManager.shared.emitCallForegrounded(callId: callId, participantId: userId)
                 Logger.calls.info("Call foregrounded")
             }
         }
@@ -2124,7 +2142,9 @@ final class CallManager: ObservableObject {
         // conflicts with the bidirectional voice path (forces the OS to flap
         // between A2DP and HFP, causing periodic ~200ms audio glitches). HFP
         // already covers BT headsets via the SCO bidirectional voice link.
-        configuration.categoryOptions = [.allowBluetoothHFP, .duckOthers]
+        // .preferNoInterruptionsFromSystemAlerts (iOS 14.5+) prevents Siri,
+        // low-battery alerts, and other system sounds from ducking the call audio.
+        configuration.categoryOptions = [.allowBluetoothHFP, .duckOthers, .preferNoInterruptionsFromSystemAlerts]
         let activateNow = !callUsesCallKit
 
         audioSessionQueue.sync {
@@ -2557,6 +2577,13 @@ final class CallManager: ObservableObject {
     static func isPolitePeer(localUserId: String, remoteUserId: String) -> Bool {
         guard !localUserId.isEmpty, !remoteUserId.isEmpty, localUserId != remoteUserId else { return false }
         return localUserId < remoteUserId
+    }
+
+    /// Resolves the preferred transcription/call language for a participant per
+    /// Prisme Linguistique: systemLanguage > regionalLanguage > "fr" fallback.
+    /// Pure + static — no side effects, no async, safe to unit test directly.
+    static func preferredCallLanguage(for user: MeeshyUser?) -> String {
+        user?.systemLanguage ?? user?.regionalLanguage ?? "fr"
     }
 
     // MARK: - Socket Emit Helpers

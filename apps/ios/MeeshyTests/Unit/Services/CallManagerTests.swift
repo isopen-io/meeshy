@@ -915,96 +915,6 @@ final class CallCoverPresentationTests: XCTestCase {
     }
 }
 
-// MARK: - Remote Quality Degradation (call:quality-alert FaceTime-parity)
-
-/// Source-level guards for the `isRemoteQualityDegraded` + `scheduleRemoteQualityReset`
-/// pipeline added for FaceTime-parity "remote peer has network issues" indicator.
-/// The gateway emits `call:quality-alert` when RTT>300 ms or packet-loss>5 %.
-/// CallManager must:
-///   1. Subscribe under `subscribeToCallEvents` (Combine, so cleanup is automatic).
-///   2. Filter by `currentCallId == event.callId` before mutating state.
-///   3. Set `isRemoteQualityDegraded = true` and debounce-reset via a cancellable Task.
-///   4. Clear the flag and cancel the reset task on `endCallInternal` (no leaked state).
-@MainActor
-final class RemoteQualityDegradedTests: XCTestCase {
-
-    private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
-    }
-
-    func test_isRemoteQualityDegraded_isPublished() throws {
-        let source = try callManagerSource()
-        XCTAssertTrue(
-            source.contains("@Published private(set) var isRemoteQualityDegraded: Bool = false"),
-            "isRemoteQualityDegraded must be a @Published private(set) Bool defaulting to false"
-        )
-    }
-
-    func test_remoteQualityResetTask_stored_asCancellable() throws {
-        let source = try callManagerSource()
-        XCTAssertTrue(
-            source.contains("private var remoteQualityResetTask: Task<Void, Never>?"),
-            "A cancellable remoteQualityResetTask must be stored so repeated alerts debounce the reset"
-        )
-    }
-
-    func test_callQualityAlert_subscription_filtersCallId() throws {
-        let source = try callManagerSource()
-        XCTAssertTrue(
-            source.contains("self.currentCallId == event.callId"),
-            "The call:quality-alert subscription must guard `currentCallId == event.callId` to reject stale alerts from prior calls"
-        )
-    }
-
-    func test_scheduleRemoteQualityReset_cancelsExistingTask() throws {
-        let source = try callManagerSource()
-        guard let funcRange = source.range(of: "func scheduleRemoteQualityReset") else {
-            XCTFail("scheduleRemoteQualityReset function not found in CallManager")
-            return
-        }
-        let nextFunc = source.range(of: "\n    private func ", range: funcRange.upperBound..<source.endIndex)?.lowerBound
-                    ?? source.endIndex
-        let body = String(source[funcRange.lowerBound..<nextFunc])
-        XCTAssertTrue(
-            body.contains("remoteQualityResetTask?.cancel()"),
-            "scheduleRemoteQualityReset must cancel any prior Task before creating a new one (debounce)"
-        )
-        XCTAssertTrue(
-            body.contains("Task.sleep(for: .seconds(15))"),
-            "The reset delay must be 15 seconds to match FaceTime-parity spec"
-        )
-        XCTAssertTrue(
-            body.contains("self?.isRemoteQualityDegraded = false"),
-            "scheduleRemoteQualityReset must clear isRemoteQualityDegraded after the delay"
-        )
-    }
-
-    func test_endCallInternal_clearsRemoteQualityState() throws {
-        let source = try callManagerSource()
-        guard let funcRange = source.range(of: "func endCallInternal") else {
-            XCTFail("endCallInternal not found in CallManager")
-            return
-        }
-        let nextMark = source.range(of: "\n    // MARK:", range: funcRange.upperBound..<source.endIndex)?.lowerBound
-                    ?? source.endIndex
-        let body = String(source[funcRange.lowerBound..<nextMark])
-        XCTAssertTrue(
-            body.contains("remoteQualityResetTask?.cancel()"),
-            "endCallInternal must cancel the remote quality reset task to avoid cross-call state"
-        )
-        XCTAssertTrue(
-            body.contains("isRemoteQualityDegraded = false"),
-            "endCallInternal must reset isRemoteQualityDegraded = false so the next call starts clean"
-        )
-    }
-}
-
 // MARK: - VideoSurvivalController integration guards
 
 /// Source-level guards for the `VideoSurvivalController` integration in `CallManager`.
@@ -1080,5 +990,59 @@ final class VideoSurvivalControllerIntegrationTests: XCTestCase {
             "Disabling the camera must reset videoSurvivalController so stale degradation " +
             "timers don't fire as soon as video is re-enabled"
         )
+    }
+}
+
+// MARK: - Prisme Linguistique: preferredCallLanguage (§Transcription Language Resolution)
+
+/// Behavioural tests for `CallManager.preferredCallLanguage(for:)`.
+/// Pure static function: no network, no singletons, no async.
+/// Priority order: systemLanguage > regionalLanguage > "fr" fallback.
+@MainActor
+final class CallManagerPreferredCallLanguageTests: XCTestCase {
+
+    private func makeUser(
+        systemLanguage: String? = nil,
+        regionalLanguage: String? = nil
+    ) -> MeeshyUser {
+        MeeshyUser(id: "u1", username: "testuser",
+                   systemLanguage: systemLanguage,
+                   regionalLanguage: regionalLanguage)
+    }
+
+    func test_nilUser_returnsFrFallback() {
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: nil), "fr")
+    }
+
+    func test_systemLanguagePresent_returnsSystemLanguage() {
+        let user = makeUser(systemLanguage: "en", regionalLanguage: "es")
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "en")
+    }
+
+    func test_systemLanguageNil_regionalPresent_returnsRegionalLanguage() {
+        let user = makeUser(systemLanguage: nil, regionalLanguage: "es")
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "es")
+    }
+
+    func test_bothLanguagesNil_returnsFrFallback() {
+        let user = makeUser(systemLanguage: nil, regionalLanguage: nil)
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "fr")
+    }
+
+    func test_systemLanguagePrioritisedOverRegional() {
+        // Prisme Linguistique: priority 1 (systemLanguage) beats priority 2 (regionalLanguage)
+        let user = makeUser(systemLanguage: "de", regionalLanguage: "fr")
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "de")
+    }
+
+    func test_systemLanguageUsedEvenWhenRegionalIsFrench() {
+        // When both are set, the explicit systemLanguage wins — "fr" regional must not shadow it
+        let user = makeUser(systemLanguage: "zh", regionalLanguage: "fr")
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "zh")
+    }
+
+    func test_onlySystemLanguage_noRegional_returnsSystem() {
+        let user = makeUser(systemLanguage: "ar", regionalLanguage: nil)
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "ar")
     }
 }

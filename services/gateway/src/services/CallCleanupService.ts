@@ -2,10 +2,10 @@
  * CallCleanupService - Garbage collection for zombie/orphaned calls
  *
  * Spec Section 2.6: Server cron every 60s with tiered cleanup:
- * - initiated/ringing > 60s → MISSED
+ * - initiated/ringing > 120s → MISSED
  * - connecting > 30s → FAILED
  * - active/reconnecting > 2h → ENDED (garbageCollected)
- * - active with stale heartbeat > 60s → ENDED (heartbeatTimeout)
+ * - active with stale heartbeat > 120s → ENDED (heartbeatTimeout)
  */
 
 import { PrismaClient, CallStatus, CallEndReason } from '@meeshy/shared/prisma/client';
@@ -19,7 +19,11 @@ export class CallCleanupService {
   private cleanupInterval: NodeJS.Timeout | null = null;
   private readonly CLEANUP_INTERVAL_MS = 60 * 1000;
 
-  private readonly MAX_INITIATED_RINGING_MS = 60 * 1000;
+  // CALL-FIX 2026-06-25 — 60s→120s: VoIP push on iOS can take up to 30s to
+  // wake the device + show the incoming call UI, then the user needs time to
+  // swipe/tap answer. 60s was routinely too short on slow networks, causing
+  // valid incoming calls to be force-MISSed before the user could answer.
+  private readonly MAX_INITIATED_RINGING_MS = 120 * 1000;
   // CALL-FIX 2026-06-25 — 30s→90s and anchored on `answeredAt` (entry into
   // `connecting`) instead of `startedAt`. ICE/DTLS over a TURN relay on a weak
   // cellular link routinely needs 5–15s; anchoring on `startedAt` left a callee
@@ -27,7 +31,12 @@ export class CallCleanupService {
   // healthy calls mid-handshake ("it rings, I answer, it drops").
   private readonly MAX_CONNECTING_MS = 90 * 1000;
   private readonly MAX_ACTIVE_MS = 2 * 60 * 60 * 1000;
-  private readonly HEARTBEAT_TIMEOUT_MS = 60 * 1000;
+  // CALL-FIX 2026-06-25 — 60s→120s: heartbeat interval is 10s on the iOS
+  // client; a device with moderate network latency may miss 5-6 beats before
+  // the connection recovers, and the 60s window was too tight for cellular
+  // reconnections that legitimately take 30-90s (switching between Wi-Fi and
+  // LTE, dormant radio wakeup, tunnelled corporate VPN).
+  private readonly HEARTBEAT_TIMEOUT_MS = 120 * 1000;
 
   // Optional Socket.IO server — set via `attachSocketServer()` once the
   // socket layer is ready. Without it the cleanup still runs but the
@@ -84,7 +93,7 @@ export class CallCleanupService {
     let cleaned = 0;
     let errors = 0;
 
-    // 1. initiated/ringing > 60s → MISSED
+    // 1. initiated/ringing > 120s → MISSED
     const initiatedCutoff = new Date(now.getTime() - this.MAX_INITIATED_RINGING_MS);
     const staleInitiated = await this.prisma.callSession.findMany({
       where: {

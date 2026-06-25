@@ -129,6 +129,11 @@ describe('callHistory pure helpers', () => {
       expect(item.peer).toBeNull();
     });
 
+    it('outputs endReason: null when the row has no endReason', () => {
+      const item = buildCallHistoryItem(baseRow({ endReason: null }), 'me', null);
+      expect(item.endReason).toBeNull();
+    });
+
     it('treats audio metadata as not-video and surfaces group conversation display fields', () => {
       const item = buildCallHistoryItem(
         baseRow({

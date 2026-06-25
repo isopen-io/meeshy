@@ -107,6 +107,9 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     var callToggleVideoCallCount = 0
     var callEndCallCount = 0
     var callHeartbeatCallCount = 0
+    var callBackgroundedCallCount = 0
+    var callForegroundedCallCount = 0
+    var callScreenCaptureDetectedCallCount = 0
 
     // MARK: - Protocol Methods
 
@@ -240,6 +243,18 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         callHeartbeatCallCount += 1
     }
 
+    func emitCallBackgrounded(callId: String, participantId: String) {
+        callBackgroundedCallCount += 1
+    }
+
+    func emitCallForegrounded(callId: String, participantId: String) {
+        callForegroundedCallCount += 1
+    }
+
+    func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool) {
+        callScreenCaptureDetectedCallCount += 1
+    }
+
     // MARK: - Simulation Helpers
 
     func simulateMessage(_ message: APIMessage) {
@@ -297,5 +312,8 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         callToggleVideoCallCount = 0
         callEndCallCount = 0
         callHeartbeatCallCount = 0
+        callBackgroundedCallCount = 0
+        callForegroundedCallCount = 0
+        callScreenCaptureDetectedCallCount = 0
     }
 }

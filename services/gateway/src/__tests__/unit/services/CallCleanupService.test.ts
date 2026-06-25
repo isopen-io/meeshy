@@ -2,7 +2,7 @@
  * CallCleanupService Unit Tests
  *
  * Verifies the GC logic that runs every 60 s to force-end zombie calls:
- * - initiated/ringing  > 60 s → MISSED
+ * - initiated/ringing  > 120 s → MISSED
  * - connecting         > 90 s (since answeredAt) → FAILED
  * - active/reconnecting > 2 h  → ENDED (garbageCollected)
  * - heartbeat timeout (when callService present + stale ≥ total) → ENDED (heartbeatTimeout)
@@ -260,7 +260,7 @@ describe('CallCleanupService', () => {
       expect(result).toEqual({ cleaned: 0, errors: 0 });
     });
 
-    it('force-MISSED a stale initiated call (>60s) → cleaned:1', async () => {
+    it('force-MISSED a stale initiated call (>120s) → cleaned:1', async () => {
       const service = new CallCleanupService(prisma as any);
       const staleCall = makeStaleCall(CallStatus.initiated, 90_000);
 
@@ -294,6 +294,28 @@ describe('CallCleanupService', () => {
 
       expect(result.cleaned).toBe(1);
       expect(result.errors).toBe(0);
+    });
+
+    it('tier 1 (initiated/ringing) cutoff is 120s from startedAt', async () => {
+      const service = new CallCleanupService(prisma as any);
+
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([]) // tier 1
+        .mockResolvedValueOnce([]) // tier 2
+        .mockResolvedValueOnce([]); // tier 3
+
+      const before = Date.now();
+      await service.runCleanup();
+      const after = Date.now();
+
+      const tier1Where = prisma.callSession.findMany.mock.calls[0][0].where;
+      expect(tier1Where.status).toEqual({ in: expect.arrayContaining(['initiated', 'ringing']) });
+      expect(tier1Where.startedAt).toBeDefined();
+
+      // Cutoff must be ~120s in the past (VoIP push + user-answer latency budget).
+      const cutoff = tier1Where.startedAt.lt.getTime();
+      expect(before - cutoff).toBeGreaterThanOrEqual(120_000);
+      expect(after - cutoff).toBeLessThanOrEqual(120_000 + 1_000);
     });
 
     it('tier 2 (connecting) is anchored on answeredAt with a 90s budget, not startedAt', async () => {
@@ -492,7 +514,7 @@ describe('CallCleanupService', () => {
       const noMemoryCallService = createMockCallService(false);
       const service = new CallCleanupService(prisma as any, noMemoryCallService as any);
 
-      const staleTs = new Date(Date.now() - 90_000); // 90s ago — older than 60s timeout
+      const staleTs = new Date(Date.now() - 130_000); // 130s ago — older than 120s timeout
       const participant = { id: 'p-1', participantId: 'part-1', leftAt: null, lastHeartbeatAt: staleTs };
       const activeCall = {
         id: 'call-db-stale',
@@ -520,7 +542,7 @@ describe('CallCleanupService', () => {
       const noMemoryCallService = createMockCallService(false);
       const service = new CallCleanupService(prisma as any, noMemoryCallService as any);
 
-      const freshTs = new Date(Date.now() - 10_000); // 10s ago — within 60s timeout
+      const freshTs = new Date(Date.now() - 10_000); // 10s ago — within 120s timeout
       const participant = { id: 'p-1', participantId: 'part-1', leftAt: null, lastHeartbeatAt: freshTs };
       const activeCall = {
         id: 'call-db-fresh',
