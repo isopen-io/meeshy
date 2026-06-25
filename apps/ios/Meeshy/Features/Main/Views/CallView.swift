@@ -797,7 +797,7 @@ struct CallView: View {
     private var transcriptOverlay: some View {
         let localUserId = AuthManager.shared.currentUser?.id ?? ""
         let localName = AuthManager.shared.currentUser?.displayName ?? AuthManager.shared.currentUser?.username ?? String(localized: "call.transcript.you", defaultValue: "Vous", bundle: .main)
-        let remoteName = callManager.remoteUsername ?? String(localized: "call.interlocutor", defaultValue: "Interlocuteur", bundle: .main)
+        let remoteName = callManager.remoteUsername ?? String(localized: "call.incoming.unknown_caller", defaultValue: "Appel entrant", bundle: .main)
         return VStack(alignment: .leading, spacing: 6) {
             ForEach(transcriptionService.displayedSegments) { segment in
                 let isLocal = segment.speakerId == localUserId

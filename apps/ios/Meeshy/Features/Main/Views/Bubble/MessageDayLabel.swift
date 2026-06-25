@@ -52,45 +52,24 @@ enum MessageDayLabel {
     // MARK: - Helpers
 
     private static func weekdayName(_ date: Date, calendar: Calendar, locale: Locale) -> String {
-        let formatter = DayLabelFormatterCache.shared.formatter(format: "EEEE", calendar: calendar, locale: locale)
-        return formatter.string(from: date).firstLetterUppercased(locale: locale)
+        var style = Date.FormatStyle.dateTime.weekday(.wide).locale(locale)
+        style.calendar = calendar
+        return date.formatted(style).firstLetterUppercased(locale: locale)
     }
 
     private static func fullDate(_ date: Date, calendar: Calendar, locale: Locale, includeYear: Bool) -> String {
-        let formatter = DayLabelFormatterCache.shared.formatter(
-            format: includeYear ? "EEEE d MMMM yyyy" : "EEEE d MMMM",
-            calendar: calendar,
-            locale: locale
-        )
-        return formatter.string(from: date).firstLetterUppercased(locale: locale)
-    }
-}
+        var style = Date.FormatStyle.dateTime
+            .weekday(.wide)
+            .day(.defaultDigits)
+            .month(.wide)
+            .locale(locale)
+        style.calendar = calendar
 
-/// Cache thread-safe des `DateFormatter` du séparateur de jour. `label()` est
-/// appelé pendant le scroll (sticky day pill + décoration de section) pour tout
-/// jour >= J-3 ; sans cache, chaque tick allouait un `DateFormatter` (init +
-/// construction ICU paresseuse), un coût répété sur le thread de défilement.
-/// Les formatters sont configurés une seule fois (clé = format + locale +
-/// timeZone + calendrier) puis seulement lus — `DateFormatter.string(from:)`
-/// est thread-safe en lecture concurrente tant qu'aucune propriété n'est mutée
-/// après création (garanti ici : configuration uniquement à l'insertion).
-private final class DayLabelFormatterCache: @unchecked Sendable {
-    static let shared = DayLabelFormatterCache()
-    private let lock = NSLock()
-    private var formatters: [String: DateFormatter] = [:]
-
-    func formatter(format: String, calendar: Calendar, locale: Locale) -> DateFormatter {
-        let key = "\(format)|\(locale.identifier)|\(calendar.timeZone.identifier)|\(calendar.identifier)"
-        lock.lock()
-        defer { lock.unlock() }
-        if let cached = formatters[key] { return cached }
-        let formatter = DateFormatter()
-        formatter.calendar = calendar
-        formatter.locale = locale
-        formatter.timeZone = calendar.timeZone
-        formatter.dateFormat = format
-        formatters[key] = formatter
-        return formatter
+        if includeYear {
+            return date.formatted(style.year(.defaultDigits)).firstLetterUppercased(locale: locale)
+        } else {
+            return date.formatted(style).firstLetterUppercased(locale: locale)
+        }
     }
 }
 
