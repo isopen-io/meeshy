@@ -5,7 +5,7 @@
  * synthetic fastify object and invokes them directly with crafted req/reply
  * objects so we avoid spinning up a real HTTP server.
  *
- * Routes covered (all 7):
+ * Routes covered (all 8):
  *   POST   /calls                                          - initiateCall
  *   GET    /calls/:callId                                  - getCallSession
  *   DELETE /calls/:callId                                  - endCall
@@ -13,6 +13,7 @@
  *   DELETE /calls/:callId/participants/:participantId      - leaveCall
  *   GET    /conversations/:conversationId/active-call      - getActiveCallForConversation
  *   GET    /calls/active                                   - getActiveCall (crash recovery)
+ *   GET    /calls/history                                  - listHistory (cursor-paginated call journal)
  */
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
@@ -25,6 +26,7 @@ const mockEndCall = jest.fn<any>();
 const mockJoinCall = jest.fn<any>();
 const mockLeaveCall = jest.fn<any>();
 const mockGetActiveCallForConversation = jest.fn<any>();
+const mockListHistory = jest.fn<any>();
 
 const mockSendSuccess = jest.fn<any>((reply: any, data: any, opts?: any) => {
   const statusCode = opts?.statusCode ?? 200;
@@ -44,6 +46,7 @@ jest.mock('../../../services/CallService', () => ({
     leaveCall: (...args: any[]) => mockLeaveCall(...args),
     getActiveCallForConversation: (...args: any[]) =>
       mockGetActiveCallForConversation(...args),
+    listHistory: (...args: any[]) => mockListHistory(...args),
   })),
 }));
 
@@ -1187,6 +1190,140 @@ describe('callRoutes', () => {
             }),
           }),
         })
+      );
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // GET /calls/history — listHistory
+  // ══════════════════════════════════════════════════════════════════════════
+
+  describe('GET /calls/history — listHistory', () => {
+    it('returns 200 with items and pagination on success', async () => {
+      const { routes, reply } = setup();
+      const items = [{ callId: CALL_ID, conversationId: CONV_ID, direction: 'outgoing' }];
+      mockListHistory.mockResolvedValueOnce({ items, hasMore: false, nextCursor: undefined });
+
+      const req = makeRequest({ query: {} });
+      await getRoute(routes, 'GET', '/calls/history')(req, reply);
+
+      expect(mockSendSuccess).toHaveBeenCalledWith(
+        reply,
+        items,
+        expect.objectContaining({
+          pagination: expect.objectContaining({ hasMore: false }),
+        })
+      );
+    });
+
+    it('calls listHistory with userId and parsed query params', async () => {
+      const { routes, reply } = setup();
+      mockListHistory.mockResolvedValueOnce({ items: [], hasMore: false });
+
+      const req = makeRequest({ query: { limit: '5', filter: 'all' } });
+      await getRoute(routes, 'GET', '/calls/history')(req, reply);
+
+      expect(mockListHistory).toHaveBeenCalledWith(
+        USER_ID,
+        expect.objectContaining({ limit: 5, filter: 'all' })
+      );
+    });
+
+    it('uses default params (limit=30, filter=all) when query is empty', async () => {
+      const { routes, reply } = setup();
+      mockListHistory.mockResolvedValueOnce({ items: [], hasMore: false });
+
+      const req = makeRequest({ query: {} });
+      await getRoute(routes, 'GET', '/calls/history')(req, reply);
+
+      expect(mockListHistory).toHaveBeenCalledWith(
+        USER_ID,
+        expect.objectContaining({ limit: 30, filter: 'all' })
+      );
+    });
+
+    it('forwards cursor and filter=missed when provided', async () => {
+      const { routes, reply } = setup();
+      mockListHistory.mockResolvedValueOnce({ items: [], hasMore: false });
+
+      const req = makeRequest({ query: { limit: '10', cursor: CALL_ID, filter: 'missed' } });
+      await getRoute(routes, 'GET', '/calls/history')(req, reply);
+
+      expect(mockListHistory).toHaveBeenCalledWith(
+        USER_ID,
+        expect.objectContaining({ cursor: CALL_ID, filter: 'missed' })
+      );
+    });
+
+    it('passes hasMore=true and nextCursor in pagination when more pages exist', async () => {
+      const { routes, reply } = setup();
+      const items = [{ callId: CALL_ID }];
+      mockListHistory.mockResolvedValueOnce({ items, hasMore: true, nextCursor: CALL_ID });
+
+      const req = makeRequest({ query: {} });
+      await getRoute(routes, 'GET', '/calls/history')(req, reply);
+
+      expect(mockSendSuccess).toHaveBeenCalledWith(
+        reply,
+        items,
+        expect.objectContaining({
+          pagination: expect.objectContaining({ hasMore: true, nextCursor: CALL_ID }),
+        })
+      );
+    });
+
+    it('returns 401 when userId is empty string', async () => {
+      const { routes, reply } = setup();
+      const req = makeRequest({
+        query: {},
+        authContext: { userId: '', participantId: undefined, type: 'registered' },
+      });
+
+      await getRoute(routes, 'GET', '/calls/history')(req, reply);
+
+      expect(reply.status).toHaveBeenCalledWith(401);
+      expect(reply._body?.error?.code).toBe('NOT_AUTHENTICATED');
+      expect(mockListHistory).not.toHaveBeenCalled();
+    });
+
+    it('returns 401 when userId is null', async () => {
+      const { routes, reply } = setup();
+      const req = makeRequest({
+        query: {},
+        authContext: { userId: null, participantId: undefined, type: 'anonymous' },
+      });
+
+      await getRoute(routes, 'GET', '/calls/history')(req, reply);
+
+      expect(reply.status).toHaveBeenCalledWith(401);
+      expect(reply._body?.error?.code).toBe('NOT_AUTHENTICATED');
+      expect(mockListHistory).not.toHaveBeenCalled();
+    });
+
+    it('returns 500 with INTERNAL_ERROR when listHistory throws', async () => {
+      const { routes, reply } = setup();
+      mockListHistory.mockRejectedValueOnce(new Error('DB failure'));
+
+      const req = makeRequest({ query: {} });
+      await getRoute(routes, 'GET', '/calls/history')(req, reply);
+
+      expect(reply.status).toHaveBeenCalledWith(500);
+      expect(reply._body?.error?.code).toBe('INTERNAL_ERROR');
+      expect(reply._body?.error?.message).toBe('Failed to get call history');
+    });
+
+    it('falls back to default params (limit=30, filter=all) when Zod safeParse fails', async () => {
+      // Passing limit=abc → Number('abc') = NaN → fails z.coerce.number().int()
+      // → safeParse returns { success: false } → fallback branch fires
+      const { routes, reply } = setup();
+      mockListHistory.mockResolvedValueOnce({ items: [], hasMore: false });
+
+      const req = makeRequest({ query: { limit: 'abc' } });
+      await getRoute(routes, 'GET', '/calls/history')(req, reply);
+
+      expect(mockListHistory).toHaveBeenCalledWith(
+        USER_ID,
+        expect.objectContaining({ limit: 30, filter: 'all' })
       );
     });
   });

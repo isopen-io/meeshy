@@ -204,5 +204,75 @@ describe('AuthHandler', () => {
       expect(userSockets.get('user-123')?.has('socket-456')).toBe(true);
       expect(socketToUser.has('socket-123')).toBe(false);
     });
+
+    it('should update connectedUsers with remaining socketId on multi-device disconnect', async () => {
+      socketToUser.set('socket-123', 'user-123');
+      socketToUser.set('socket-456', 'user-123');
+      connectedUsers.set('user-123', {
+        id: 'user-123',
+        socketId: 'socket-123',
+        isAnonymous: false,
+        language: 'en'
+      });
+      userSockets.set('user-123', new Set(['socket-123', 'socket-456']));
+
+      await authHandler.handleDisconnection(createMockSocket({ id: 'socket-123' }));
+
+      // connectedUsers must point to the surviving socket so presence lookups stay valid
+      expect(connectedUsers.get('user-123')?.socketId).toBe('socket-456');
+    });
+
+    it('should return early without mutating maps when socketId is unknown', async () => {
+      // Simulate race: socket not in socketToUser (already cleaned up or never registered)
+      const mockSocket = createMockSocket({ id: 'unknown-socket' });
+
+      await authHandler.handleDisconnection(mockSocket);
+
+      // Nothing mutated
+      expect(connectedUsers.size).toBe(0);
+      expect(socketToUser.size).toBe(0);
+      expect(userSockets.size).toBe(0);
+    });
+
+    it('should still delete from connectedUsers when call leaveCall throws', async () => {
+      mockCallService.leaveCall.mockRejectedValue(new Error('call service down'));
+      (mockPrisma.callParticipant.findMany as jest.Mock).mockResolvedValue([
+        { callSessionId: 'call-99', participantId: 'p-1' }
+      ]);
+
+      socketToUser.set('socket-123', 'user-123');
+      connectedUsers.set('user-123', {
+        id: 'user-123',
+        socketId: 'socket-123',
+        isAnonymous: false,
+        language: 'en'
+      });
+      userSockets.set('user-123', new Set(['socket-123']));
+
+      await authHandler.handleDisconnection(createMockSocket());
+
+      // Even though leaveCall threw, maps must be fully cleaned to avoid orphaned presence
+      expect(connectedUsers.has('user-123')).toBe(false);
+      expect(socketToUser.has('socket-123')).toBe(false);
+      expect(userSockets.has('user-123')).toBe(false);
+    });
+
+    it('should still clean maps when callParticipant.findMany throws', async () => {
+      (mockPrisma.callParticipant.findMany as jest.Mock).mockRejectedValue(new Error('db timeout'));
+
+      socketToUser.set('socket-123', 'user-123');
+      connectedUsers.set('user-123', {
+        id: 'user-123',
+        socketId: 'socket-123',
+        isAnonymous: false,
+        language: 'en'
+      });
+      userSockets.set('user-123', new Set(['socket-123']));
+
+      await authHandler.handleDisconnection(createMockSocket());
+
+      expect(connectedUsers.has('user-123')).toBe(false);
+      expect(socketToUser.has('socket-123')).toBe(false);
+    });
   });
 });

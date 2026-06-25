@@ -208,9 +208,11 @@ final class MediaLifecycleBridge {
         PlaybackCoordinator.shared.testStopAllProbe?.stopAllCount += 1
         #endif
         PlaybackCoordinator.shared.stopAll()
-        #if DEBUG
-        MediaSessionCoordinator.shared.testProbe?.deactivateCount += 1
-        #endif
+        // `deactivateForBackground()` self-increments `deactivateCount` after its
+        // `callActive` guard, so the probe counts only real deactivations. Pre-
+        // counting here would double-count (and over-count when a call is active
+        // and the guard skips the actual teardown). `stopAll()` does NOT self-count,
+        // which is why its probe increment above stays external.
         await MediaSessionCoordinator.shared.deactivateForBackground()
     }
 

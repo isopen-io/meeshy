@@ -1,6 +1,6 @@
 /**
  * Unit tests for CallEventsHandler
- * Covers: setupCallEvents (all 17 registered socket events),
+ * Covers: setupCallEvents (all 20 registered socket events),
  *         setters, createMissedCallNotifications, handleMissedCall,
  *         offer-buffering logic (via signal + join paths).
  *
@@ -21,10 +21,13 @@ const mockCallServiceUpdateParticipantMedia = jest.fn() as jest.Mock<any>;
 const mockCallServiceMarkCallAsMissed = jest.fn() as jest.Mock<any>;
 const mockCallServiceGetUnrespondedParticipants = jest.fn() as jest.Mock<any>;
 const mockCallServiceGenerateIceServers = jest.fn() as jest.Mock<any>;
+const mockCallServiceGetIceServerTtl = jest.fn().mockReturnValue(600) as jest.Mock<any>;
 const mockCallServiceScheduleRingingTimeout = jest.fn() as jest.Mock<any>;
 const mockCallServiceClearRingingTimeout = jest.fn() as jest.Mock<any>;
 const mockCallServiceRecordHeartbeat = jest.fn() as jest.Mock<any>;
 const mockCallServicePersistCallStats = jest.fn() as jest.Mock<any>;
+const mockCallServiceRecordParticipantBackgrounded = jest.fn() as jest.Mock<any>;
+const mockCallServiceClearParticipantBackgrounded = jest.fn() as jest.Mock<any>;
 const mockCallServiceCreateCallSummaryMessage = jest.fn() as jest.Mock<any>;
 
 jest.mock('../../services/CallService', () => ({
@@ -39,11 +42,14 @@ jest.mock('../../services/CallService', () => ({
     markCallAsMissed: (...a: unknown[]) => mockCallServiceMarkCallAsMissed(...a),
     getUnrespondedParticipants: (...a: unknown[]) => mockCallServiceGetUnrespondedParticipants(...a),
     generateIceServers: (...a: unknown[]) => mockCallServiceGenerateIceServers(...a),
+    getIceServerTtl: (...a: unknown[]) => mockCallServiceGetIceServerTtl(...a),
     scheduleRingingTimeout: (...a: unknown[]) => mockCallServiceScheduleRingingTimeout(...a),
     clearRingingTimeout: (...a: unknown[]) => mockCallServiceClearRingingTimeout(...a),
     recordHeartbeat: (...a: unknown[]) => mockCallServiceRecordHeartbeat(...a),
     persistCallStats: (...a: unknown[]) => mockCallServicePersistCallStats(...a),
     createCallSummaryMessage: (...a: unknown[]) => mockCallServiceCreateCallSummaryMessage(...a),
+    recordParticipantBackgrounded: (...a: unknown[]) => mockCallServiceRecordParticipantBackgrounded(...a),
+    clearParticipantBackgrounded: (...a: unknown[]) => mockCallServiceClearParticipantBackgrounded(...a),
   })),
 }));
 
@@ -79,6 +85,10 @@ jest.mock('../../validation/call-schemas', () => ({
   socketReconnectedSchema: {},
   socketForceLeaveSchema: {},
   socketTranscriptionSegmentSchema: {},
+  socketRequestIceServersSchema: {},
+  socketCallBackgroundedSchema: {},
+  socketCallForegroundedSchema: {},
+  socketCallScreenCaptureDetectedSchema: {},
 }));
 
 jest.mock('../../utils/logger', () => ({
@@ -114,6 +124,12 @@ jest.mock('@meeshy/shared/types/video-call', () => ({
     QUALITY_ALERT: 'call:quality-alert',
     MEDIA_TOGGLED: 'call:media-toggled',
     TRANSLATED_SEGMENT: 'call:translated-segment',
+    REQUEST_ICE_SERVERS: 'call:request-ice-servers',
+    ICE_SERVERS_REFRESHED: 'call:ice-servers-refreshed',
+    BACKGROUNDED: 'call:backgrounded',
+    FOREGROUNDED: 'call:foregrounded',
+    SCREEN_CAPTURE_DETECTED: 'call:screen-capture-detected',
+    SCREEN_CAPTURE_ALERT: 'call:screen-capture-alert',
   },
   CALL_ERROR_CODES: {
     NOT_AUTHENTICATED: 'NOT_AUTHENTICATED',
@@ -310,6 +326,8 @@ describe('CallEventsHandler', () => {
     mockCallServiceRecordHeartbeat.mockReturnValue(undefined);
     mockCallServicePersistCallStats.mockResolvedValue(undefined);
     mockCallServiceCreateCallSummaryMessage.mockResolvedValue(null);
+    mockCallServiceRecordParticipantBackgrounded.mockReturnValue(undefined);
+    mockCallServiceClearParticipantBackgrounded.mockReturnValue(undefined);
   });
 
   // ── Setters ──────────────────────────────────────────────────────────────
@@ -1145,6 +1163,44 @@ describe('CallEventsHandler', () => {
       // No call:quality-alert emitted
       expect(ioCalls.length).toBe(0);
     });
+
+    it('emits rtt alert when both RTT and packet loss exceed thresholds (RTT wins)', async () => {
+      mockCallServicePersistCallStats.mockResolvedValue(undefined);
+      const { socket, io } = setupWithSocket();
+
+      await socket._trigger('call:quality-report', {
+        callId: CALL_ID,
+        stats: { rtt: 450, packetLoss: 8, bytesSent: 500, bytesReceived: 500, level: 'poor' },
+      });
+
+      const roomEmit = (io.to as jest.Mock<any>).mock.results[0]?.value?.emit as jest.Mock<any>;
+      expect(roomEmit).toHaveBeenCalledWith(
+        'call:quality-alert',
+        expect.objectContaining({ metric: 'rtt', value: 450, threshold: 300 })
+      );
+    });
+
+    it('does NOT emit quality alert when participant cannot be resolved', async () => {
+      // callSession.findUnique returns null → resolveParticipantIdFromCall returns null
+      mockCallServicePersistCallStats.mockResolvedValue(undefined);
+      const { socket, io } = setupWithSocket({
+        callSession: {
+          findUnique: jest.fn<any>().mockResolvedValue(null),
+          findMany: jest.fn<any>().mockResolvedValue([]),
+          updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+        },
+      });
+
+      await socket._trigger('call:quality-report', {
+        callId: CALL_ID,
+        stats: { rtt: 500, packetLoss: 1, bytesSent: 100, bytesReceived: 100, level: 'poor' },
+      });
+
+      // Stats persisted but no room emit for quality-alert
+      expect(mockCallServicePersistCallStats).toHaveBeenCalled();
+      const ioCalls = (io.to as jest.Mock<any>).mock.calls;
+      expect(ioCalls.length).toBe(0);
+    });
   });
 
   // ── call:reconnecting ────────────────────────────────────────────────────
@@ -1543,7 +1599,7 @@ describe('CallEventsHandler', () => {
       expect(mockCallServiceClearRingingTimeout).toHaveBeenCalledWith(CALL_ID);
     });
 
-    it('notifies other sockets in room with STUN fallback when getUserId returns undefined', async () => {
+    it('skips the participant-joined ICE push when getUserId returns undefined (never emits a TURN-less STUN-only config)', async () => {
       const participant = makeParticipant();
       const callSession = makeCallSession({ participants: [participant] });
       mockCallServiceJoinCall.mockResolvedValue({ callSession, iceServers: [] });
@@ -1551,13 +1607,15 @@ describe('CallEventsHandler', () => {
       const remoteSocket = { id: 'remote-sock', emit: jest.fn() };
       const { socket, io, getUserId } = setupWithSocket();
       io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([remoteSocket]) });
-      // getUserId returns undefined for the remote socket → STUN-only path
+      // getUserId returns undefined for the remote socket. A TURN-less STUN-only
+      // ICE config can't relay behind symmetric/CGNAT, so we must NOT emit it —
+      // the socket gets proper credentials via its own join/check-active path.
       getUserId.mockImplementation((socketId: string) =>
         socketId === SOCKET_ID ? USER_ID : undefined
       );
 
       await socket._trigger('call:join', validData);
-      expect(remoteSocket.emit).toHaveBeenCalledWith('call:participant-joined', expect.any(Object));
+      expect(remoteSocket.emit).not.toHaveBeenCalledWith('call:participant-joined', expect.any(Object));
     });
   });
 
@@ -1991,7 +2049,7 @@ describe('CallEventsHandler', () => {
       const offerB = { callId: CALL_ID, signal: { type: 'offer', from: USER_ID, to: 'tgt', sdp: 'v=0...' } };
 
       // Manually plant an expired entry
-      const nowSpy = jest.spyOn(Date, 'now').mockReturnValueOnce(Date.now() - 100_000);
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValueOnce(Date.now() - 160_000);
       (handler as any).bufferOffer('call-old', offerA);
       nowSpy.mockRestore();
 
@@ -2019,7 +2077,7 @@ describe('CallEventsHandler', () => {
 
       // Buffer an offer from 'caller' to USER_ID, planted as already expired
       const expiredOffer = { callId: CALL_ID, signal: { type: 'offer', from: 'caller', to: USER_ID, sdp: 'v=0...' } };
-      jest.spyOn(Date, 'now').mockReturnValueOnce(Date.now() - 100_000);
+      jest.spyOn(Date, 'now').mockReturnValueOnce(Date.now() - 160_000);
       (handler as any).bufferOffer(CALL_ID, expiredOffer);
       jest.restoreAllMocks();
 
@@ -2958,6 +3016,200 @@ describe('CallEventsHandler', () => {
       // both participant-left and call:ended should be emitted
       expect(roomEmitCalls.some((c: any[]) => c[0] === 'call:participant-left')).toBe(true);
       expect(roomEmitCalls.some((c: any[]) => c[0] === 'call:ended')).toBe(true);
+    });
+  });
+
+  describe('call:request-ice-servers', () => {
+    it('returns early when getUserId returns null', async () => {
+      const { handler, io } = buildHandler();
+      const socket = makeSocket({ rooms: new Set([`call:${CALL_ID}`]) });
+      const getUserId = jest.fn<any>().mockReturnValue(null);
+      const getUserInfo = jest.fn<any>().mockReturnValue(null);
+      handler.setupCallEvents(socket as any, io as any, getUserId, getUserInfo);
+
+      await socket._trigger('call:request-ice-servers', { callId: CALL_ID });
+
+      expect(socket.emit).not.toHaveBeenCalled();
+    });
+
+    it('returns early when schema validation fails', async () => {
+      mockValidateSocketEvent.mockReturnValueOnce({ success: false });
+      const { handler, io } = buildHandler();
+      const socket = makeSocket({ rooms: new Set([`call:${CALL_ID}`]) });
+      const getUserId = jest.fn<any>().mockReturnValue(USER_ID);
+      const getUserInfo = jest.fn<any>().mockReturnValue({ id: USER_ID, isAnonymous: false });
+      handler.setupCallEvents(socket as any, io as any, getUserId, getUserInfo);
+
+      await socket._trigger('call:request-ice-servers', { callId: CALL_ID });
+
+      expect(socket.emit).not.toHaveBeenCalledWith('call:ice-servers-refreshed', expect.anything());
+    });
+
+    it('emits call:error NOT_A_PARTICIPANT when socket is not in call room', async () => {
+      const { handler, io } = buildHandler();
+      // rooms does NOT contain the call room
+      const socket = makeSocket({ rooms: new Set(['user:other']) });
+      const getUserId = jest.fn<any>().mockReturnValue(USER_ID);
+      const getUserInfo = jest.fn<any>().mockReturnValue({ id: USER_ID, isAnonymous: false });
+      handler.setupCallEvents(socket as any, io as any, getUserId, getUserInfo);
+
+      await socket._trigger('call:request-ice-servers', { callId: CALL_ID });
+
+      expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({
+        code: 'NOT_A_PARTICIPANT',
+      }));
+    });
+
+    it('emits call:ice-servers-refreshed with iceServers and ttl on happy path', async () => {
+      const iceServers = [{ urls: 'turn:turn.example.com:3478' }];
+      mockCallServiceGenerateIceServers.mockReturnValueOnce(iceServers);
+      const { handler, io } = buildHandler();
+      const socket = makeSocket({ rooms: new Set([`call:${CALL_ID}`]) });
+      const getUserId = jest.fn<any>().mockReturnValue(USER_ID);
+      const getUserInfo = jest.fn<any>().mockReturnValue({ id: USER_ID, isAnonymous: false });
+      handler.setupCallEvents(socket as any, io as any, getUserId, getUserInfo);
+
+      await socket._trigger('call:request-ice-servers', { callId: CALL_ID });
+
+      expect(socket.emit).toHaveBeenCalledWith('call:ice-servers-refreshed', {
+        callId: CALL_ID,
+        iceServers,
+        ttl: 600,
+      });
+    });
+  });
+
+  // ── call:backgrounded ────────────────────────────────────────────────────
+
+  describe('call:backgrounded', () => {
+    const validData = { callId: CALL_ID, participantId: PARTICIPANT_ID };
+
+    it('returns early when no userId', async () => {
+      const { socket, getUserId } = setupWithSocket();
+      getUserId.mockReturnValue(undefined);
+      await socket._trigger('call:backgrounded', validData);
+      expect(mockCallServiceRecordParticipantBackgrounded).not.toHaveBeenCalled();
+    });
+
+    it('returns early when validation fails', async () => {
+      const { socket } = setupWithSocket();
+      mockValidateSocketEvent.mockReturnValue({ success: false });
+      await socket._trigger('call:backgrounded', validData);
+      expect(mockCallServiceRecordParticipantBackgrounded).not.toHaveBeenCalled();
+    });
+
+    it('sets socket.data.appForeground to false and records background state', async () => {
+      const { socket } = setupWithSocket();
+      await socket._trigger('call:backgrounded', validData);
+      expect(socket.data.appForeground).toBe(false);
+      expect(mockCallServiceRecordParticipantBackgrounded).toHaveBeenCalledWith(
+        CALL_ID,
+        PARTICIPANT_ID
+      );
+    });
+  });
+
+  // ── call:foregrounded ────────────────────────────────────────────────────
+
+  describe('call:foregrounded', () => {
+    const validData = { callId: CALL_ID, participantId: PARTICIPANT_ID };
+
+    it('returns early when no userId', async () => {
+      const { socket, getUserId } = setupWithSocket();
+      getUserId.mockReturnValue(undefined);
+      await socket._trigger('call:foregrounded', validData);
+      expect(mockCallServiceClearParticipantBackgrounded).not.toHaveBeenCalled();
+    });
+
+    it('returns early when validation fails', async () => {
+      const { socket } = setupWithSocket();
+      mockValidateSocketEvent.mockReturnValue({ success: false });
+      await socket._trigger('call:foregrounded', validData);
+      expect(mockCallServiceClearParticipantBackgrounded).not.toHaveBeenCalled();
+    });
+
+    it('sets socket.data.appForeground to true and clears background state', async () => {
+      const { socket } = setupWithSocket();
+      socket.data.appForeground = false;
+      await socket._trigger('call:foregrounded', validData);
+      expect(socket.data.appForeground).toBe(true);
+      expect(mockCallServiceClearParticipantBackgrounded).toHaveBeenCalledWith(
+        CALL_ID,
+        PARTICIPANT_ID
+      );
+    });
+
+    it('reverses a previous call:backgrounded', async () => {
+      const { socket } = setupWithSocket();
+      await socket._trigger('call:backgrounded', validData);
+      expect(socket.data.appForeground).toBe(false);
+      await socket._trigger('call:foregrounded', validData);
+      expect(socket.data.appForeground).toBe(true);
+    });
+  });
+
+  // ── call:screen-capture-detected ─────────────────────────────────────────
+
+  describe('call:screen-capture-detected', () => {
+    const validData = { callId: CALL_ID, participantId: PARTICIPANT_ID, isCapturing: true };
+
+    it('returns early when no userId', async () => {
+      const { socket, getUserId } = setupWithSocket();
+      getUserId.mockReturnValue(undefined);
+      await socket._trigger('call:screen-capture-detected', validData);
+      expect(socket.to).not.toHaveBeenCalled();
+    });
+
+    it('returns early when validation fails', async () => {
+      const { socket } = setupWithSocket();
+      mockValidateSocketEvent.mockReturnValue({ success: false });
+      await socket._trigger('call:screen-capture-detected', validData);
+      expect(socket.to).not.toHaveBeenCalled();
+    });
+
+    it('returns silently when socket is not in the call room', async () => {
+      const { handler, io } = buildHandler();
+      const socket = makeSocket({ rooms: new Set(['user:other']) });
+      const getUserId = jest.fn<any>().mockReturnValue(USER_ID);
+      const getUserInfo = jest.fn<any>().mockReturnValue({ id: USER_ID, isAnonymous: false });
+      handler.setupCallEvents(socket as any, io as any, getUserId, getUserInfo);
+      await socket._trigger('call:screen-capture-detected', validData);
+      expect(socket.to).not.toHaveBeenCalled();
+    });
+
+    it('relays call:screen-capture-alert to others in the call room when capturing', async () => {
+      const { handler, io } = buildHandler();
+      const socket = makeSocket({ rooms: new Set([`call:${CALL_ID}`]) });
+      const getUserId = jest.fn<any>().mockReturnValue(USER_ID);
+      const getUserInfo = jest.fn<any>().mockReturnValue({ id: USER_ID, isAnonymous: false });
+      handler.setupCallEvents(socket as any, io as any, getUserId, getUserInfo);
+
+      await socket._trigger('call:screen-capture-detected', validData);
+
+      expect(socket.to).toHaveBeenCalledWith(`call:${CALL_ID}`);
+      const toEmit = (socket.to as jest.Mock<any>).mock.results[0]?.value?.emit as jest.Mock<any>;
+      expect(toEmit).toHaveBeenCalledWith('call:screen-capture-alert', {
+        callId: CALL_ID,
+        participantId: PARTICIPANT_ID,
+        isCapturing: true,
+      });
+    });
+
+    it('relays call:screen-capture-alert with isCapturing false when screen share stops', async () => {
+      const { handler, io } = buildHandler();
+      const socket = makeSocket({ rooms: new Set([`call:${CALL_ID}`]) });
+      const getUserId = jest.fn<any>().mockReturnValue(USER_ID);
+      const getUserInfo = jest.fn<any>().mockReturnValue({ id: USER_ID, isAnonymous: false });
+      handler.setupCallEvents(socket as any, io as any, getUserId, getUserInfo);
+
+      await socket._trigger('call:screen-capture-detected', { ...validData, isCapturing: false });
+
+      const toEmit = (socket.to as jest.Mock<any>).mock.results[0]?.value?.emit as jest.Mock<any>;
+      expect(toEmit).toHaveBeenCalledWith('call:screen-capture-alert', {
+        callId: CALL_ID,
+        participantId: PARTICIPANT_ID,
+        isCapturing: false,
+      });
     });
   });
 });

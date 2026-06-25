@@ -397,7 +397,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         stream.rotationCount += 1
 
         let newRequest = SFSpeechAudioBufferRecognitionRequest()
-        newRequest.requiresOnDeviceRecognition = true
+        newRequest.requiresOnDeviceRecognition = stream.recognizer.supportsOnDeviceRecognition
         newRequest.shouldReportPartialResults = true
         newRequest.addsPunctuation = true
         stream.request = newRequest
@@ -425,13 +425,8 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     }
 
     private func replaceSegments(for speakerId: String, with newSegments: [TranscriptionSegment], isFinal: Bool) {
-        if isFinal {
-            allSegments.removeAll { $0.speakerId == speakerId && !$0.isFinal }
-            allSegments.append(contentsOf: newSegments)
-        } else {
-            allSegments.removeAll { $0.speakerId == speakerId && !$0.isFinal }
-            allSegments.append(contentsOf: newSegments)
-        }
+        allSegments.removeAll { $0.speakerId == speakerId && !$0.isFinal }
+        allSegments.append(contentsOf: newSegments)
 
         if allSegments.count > Constants.segmentRetentionLimit {
             allSegments = Array(allSegments.suffix(Constants.segmentRetentionLimit))

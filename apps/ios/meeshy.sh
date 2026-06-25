@@ -413,7 +413,7 @@ ensure_booted() {
 
 is_app_running() {
     if [ "$PLATFORM" = "mac" ]; then
-        pgrep -f "$(app_path)/Contents/MacOS/" >/dev/null 2>&1
+        pgrep -f "/Wrapper/$APP_NAME.app/$APP_NAME" >/dev/null 2>&1
     else
         xcrun simctl spawn "$DEVICE_ID" launchctl list 2>/dev/null | grep -q "$BUNDLE_ID" 2>/dev/null
     fi
@@ -425,7 +425,10 @@ app_path() {
     # name lived in Configuration/Debug.xcconfig, which the generated project
     # never references — see do_device_deploy_only for the same rationale.
     if [ "$PLATFORM" = "mac" ]; then
-        echo "$DERIVED_DATA/Products/$CONFIGURATION-maccatalyst/$APP_NAME.app"
+        # "Designed for iPad" (the only valid macOS slice — SUPPORTS_MACCATALYST=0
+        # by design) builds an iOS bundle under Debug-iphoneos, NOT a Mac Catalyst
+        # app under Debug-maccatalyst. See build_destination() for the rationale.
+        echo "$DERIVED_DATA/Products/$CONFIGURATION-iphoneos/$APP_NAME.app"
     else
         echo "$DERIVED_DATA/Products/$CONFIGURATION-iphonesimulator/$APP_NAME.app"
     fi
@@ -567,8 +570,11 @@ do_build() {
 
     local mac_flags=()
     if [ "$PLATFORM" = "mac" ]; then
+        # NB: no SUPPORTS_MACCATALYST=YES here — the project is SUPPORTS_MACCATALYST=0
+        # by design (native calls are gated on isiOSAppOnMac), so the macOS build is
+        # an iOS "Designed for iPad" bundle. Forcing Catalyst would break that path
+        # and is a no-op against the Designed-for-iPad destination anyway.
         mac_flags=(
-            SUPPORTS_MACCATALYST=YES
             CODE_SIGN_IDENTITY=-
             CODE_SIGNING_REQUIRED=NO
             CODE_SIGNING_ALLOWED=NO
@@ -654,13 +660,15 @@ do_install() {
 
 do_launch() {
     if [ "$PLATFORM" = "mac" ]; then
-        # Kill existing instance
-        pkill -f "$(app_path)/Contents/MacOS/" 2>/dev/null || true
-        sleep 0.5
-
-        log "Launching ${BOLD}$APP_NAME${NC} on macOS..."
-        open "$(app_path)"
-        ok "App launched"
+        # A "Designed for iPad" build is an iOS bundle (LSRequiresIPhoneOS=true)
+        # that macOS refuses to launch from the CLI ("incorrect executable
+        # format"). Mac Catalyst would be CLI-launchable but is off the table —
+        # the native call subsystem is gated on isiOSAppOnMac. So we build here
+        # and hand off to Xcode for the actual launch.
+        warn "macOS \"Designed for iPad\" bundles cannot be launched from the CLI."
+        log "Launch from Xcode: select ${BOLD}My Mac (Designed for iPad)${NC}, then press ${BOLD}⌘R${NC}."
+        log "Bundle: ${BOLD}$(app_path)${NC}"
+        log "Stream the running app's logs with: ${BOLD}./meeshy.sh logs --mac${NC}"
         return 0
     fi
 
@@ -712,7 +720,7 @@ start_crash_monitor() {
         while true; do
             sleep 5
             if [ "$PLATFORM" = "mac" ]; then
-                if ! pgrep -f "$(app_path)/Contents/MacOS/" >/dev/null 2>&1; then
+                if ! pgrep -f "/Wrapper/$APP_NAME.app/$APP_NAME" >/dev/null 2>&1; then
                     echo ""
                     err "App appears to have crashed or been terminated."
                     err "Check logs at: $LOGFILE"
@@ -1317,7 +1325,7 @@ usage() {
     echo -e "  ${BOLD}Platform:${NC}"
     echo -e "    ${YELLOW}--iphone${NC}                 iPhone simulator ${DIM}(default)${NC}"
     echo -e "    ${YELLOW}--ipad${NC}                   iPad simulator"
-    echo -e "    ${YELLOW}--mac, --macos${NC}            macOS (Mac Catalyst)"
+    echo -e "    ${YELLOW}--mac, --macos${NC}            macOS (Designed for iPad — build only, launch via Xcode)"
     echo ""
     echo -e "  ${BOLD}Flags:${NC}"
     echo -e "    ${YELLOW}--clean, -C${NC}              Clean before building"
@@ -1331,7 +1339,7 @@ usage() {
     echo -e "  ${BOLD}Examples:${NC}"
     echo -e "    ${DIM}./meeshy.sh${NC}                          ${DIM}# Build + run iPhone sim + logs${NC}"
     echo -e "    ${DIM}./meeshy.sh run --ipad${NC}               ${DIM}# Build + run iPad sim + logs${NC}"
-    echo -e "    ${DIM}./meeshy.sh run --mac${NC}                ${DIM}# Build + run as macOS app${NC}"
+    echo -e "    ${DIM}./meeshy.sh run --mac${NC}                ${DIM}# Build macOS app (then launch via Xcode ⌘R)${NC}"
     echo -e "    ${DIM}./meeshy.sh run --clean${NC}              ${DIM}# Clean build + run${NC}"
     echo -e "    ${DIM}./meeshy.sh build --release${NC}          ${DIM}# Release build only${NC}"
     echo -e "    ${DIM}./meeshy.sh build --ipad${NC}             ${DIM}# Build for iPad sim${NC}"
@@ -1411,7 +1419,12 @@ case "$COMMAND" in
         do_install
         do_launch
         echo ""
-        if [ -t 1 ]; then
+        if [ "$PLATFORM" = "mac" ]; then
+            # Nothing was CLI-launched (see do_launch) — don't monitor a process
+            # that isn't running. Logs become available once the app is launched
+            # from Xcode: ./meeshy.sh logs --mac
+            ok "Build ready. Launch via Xcode (⌘R on \"My Mac (Designed for iPad)\")."
+        elif [ -t 1 ]; then
             # Interactive terminal — stream logs until Ctrl+C
             start_log_stream
             start_crash_monitor
@@ -1432,7 +1445,7 @@ case "$COMMAND" in
         detect_simulator
         log "Stopping $APP_NAME..."
         if [ "$PLATFORM" = "mac" ]; then
-            pkill -f "$(app_path)/Contents/MacOS/" 2>/dev/null || true
+            pkill -f "/Wrapper/$APP_NAME.app/$APP_NAME" 2>/dev/null || true
         else
             xcrun simctl terminate "$DEVICE_ID" "$BUNDLE_ID" 2>/dev/null || true
         fi
@@ -1444,7 +1457,7 @@ case "$COMMAND" in
         ensure_booted
         log "Stopping $APP_NAME..."
         if [ "$PLATFORM" = "mac" ]; then
-            pkill -f "$(app_path)/Contents/MacOS/" 2>/dev/null || true
+            pkill -f "/Wrapper/$APP_NAME.app/$APP_NAME" 2>/dev/null || true
         else
             xcrun simctl terminate "$DEVICE_ID" "$BUNDLE_ID" 2>/dev/null || true
         fi
@@ -1453,7 +1466,9 @@ case "$COMMAND" in
         do_install
         do_launch
         echo ""
-        if [ -t 1 ]; then
+        if [ "$PLATFORM" = "mac" ]; then
+            ok "Build ready. Launch via Xcode (⌘R on \"My Mac (Designed for iPad)\")."
+        elif [ -t 1 ]; then
             start_log_stream
             start_crash_monitor
             wait "$LOG_STREAM_PID" 2>/dev/null || true

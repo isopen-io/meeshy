@@ -26,8 +26,9 @@ struct IncomingCallView: View {
         VStack(spacing: 0) {
             Spacer()
 
-            // Pulsing ring animation
+            // Pulsing ring animation — purely decorative; caller name announced below
             ringAnimation
+                .accessibilityHidden(true)
                 .padding(.bottom, 32)
 
             // Caller name
@@ -146,6 +147,7 @@ struct IncomingCallView: View {
         HStack(spacing: 6) {
             Image(systemName: callManager.isVideoEnabled ? "video.fill" : "phone.fill")
                 .font(.system(size: 12, weight: .semibold))
+                .accessibilityHidden(true)
             Text(callManager.isVideoEnabled
                 ? String(localized: "call.incoming.badge.video", defaultValue: "Video", bundle: .main)
                 : String(localized: "call.incoming.badge.audio", defaultValue: "Audio", bundle: .main))
@@ -190,6 +192,7 @@ struct IncomingCallView: View {
                 }
                 .pressable()
                 .accessibilityLabel(String(localized: "call.incoming.decline.label", defaultValue: "Refuser l'appel", bundle: .main))
+                .accessibilityHint(String(localized: "call.incoming.decline.hint", defaultValue: "Décline l'appel entrant", bundle: .main))
 
                 // Accept
                 Button {
@@ -209,6 +212,7 @@ struct IncomingCallView: View {
                 }
                 .pressable()
                 .accessibilityLabel(String(localized: "call.incoming.accept.label", defaultValue: "Accepter l'appel", bundle: .main))
+                .accessibilityHint(String(localized: "call.incoming.accept.hint", defaultValue: "Répond à l'appel entrant", bundle: .main))
             }
         }
     }

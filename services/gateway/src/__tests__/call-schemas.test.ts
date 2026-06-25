@@ -14,6 +14,9 @@ import {
   socketReconnectedSchema,
   socketTranscriptionSegmentSchema,
   socketMediaToggleSchema,
+  socketCallBackgroundedSchema,
+  socketCallForegroundedSchema,
+  socketCallScreenCaptureDetectedSchema,
 } from '../validation/call-schemas';
 
 const validMongoId = '507f1f77bcf86cd799439011';
@@ -241,6 +244,22 @@ describe('Call Validation Schemas', () => {
       });
       expect(result.success).toBe(false);
     });
+
+    it('accepts availableOutgoingBitrateBps when present', () => {
+      const result = socketQualityReportSchema.safeParse({
+        callId: validMongoId,
+        stats: { packetLoss: 2.5, rtt: 80, availableOutgoingBitrateBps: 1_500_000 },
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects negative availableOutgoingBitrateBps', () => {
+      const result = socketQualityReportSchema.safeParse({
+        callId: validMongoId,
+        stats: { packetLoss: 2.5, rtt: 80, availableOutgoingBitrateBps: -1 },
+      });
+      expect(result.success).toBe(false);
+    });
   });
 
   describe('socketReconnectingSchema', () => {
@@ -343,6 +362,118 @@ describe('Call Validation Schemas', () => {
       });
       expect(result.success).toBe(false);
     });
+  });
+});
+
+describe('socketCallBackgroundedSchema', () => {
+  const validMongoId2 = '507f1f77bcf86cd799439011';
+  const validParticipantId = '507f1f77bcf86cd799439012';
+
+  it('validates with required fields', () => {
+    const result = socketCallBackgroundedSchema.safeParse({
+      callId: validMongoId2,
+      participantId: validParticipantId,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects missing participantId', () => {
+    const result = socketCallBackgroundedSchema.safeParse({
+      callId: validMongoId2,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects invalid callId', () => {
+    const result = socketCallBackgroundedSchema.safeParse({
+      callId: 'not-a-mongo-id',
+      participantId: validParticipantId,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects empty participantId', () => {
+    const result = socketCallBackgroundedSchema.safeParse({
+      callId: validMongoId2,
+      participantId: '',
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('socketCallForegroundedSchema', () => {
+  const validMongoId2 = '507f1f77bcf86cd799439011';
+  const validParticipantId = '507f1f77bcf86cd799439012';
+
+  it('validates with required fields', () => {
+    const result = socketCallForegroundedSchema.safeParse({
+      callId: validMongoId2,
+      participantId: validParticipantId,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects missing participantId', () => {
+    const result = socketCallForegroundedSchema.safeParse({
+      callId: validMongoId2,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects invalid callId', () => {
+    const result = socketCallForegroundedSchema.safeParse({
+      callId: 'short',
+      participantId: validParticipantId,
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('socketCallScreenCaptureDetectedSchema', () => {
+  const validMongoId2 = '507f1f77bcf86cd799439011';
+  const validParticipantId = '507f1f77bcf86cd799439012';
+
+  it('validates isCapturing: true', () => {
+    const result = socketCallScreenCaptureDetectedSchema.safeParse({
+      callId: validMongoId2,
+      participantId: validParticipantId,
+      isCapturing: true,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('validates isCapturing: false', () => {
+    const result = socketCallScreenCaptureDetectedSchema.safeParse({
+      callId: validMongoId2,
+      participantId: validParticipantId,
+      isCapturing: false,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects missing isCapturing', () => {
+    const result = socketCallScreenCaptureDetectedSchema.safeParse({
+      callId: validMongoId2,
+      participantId: validParticipantId,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects non-boolean isCapturing', () => {
+    const result = socketCallScreenCaptureDetectedSchema.safeParse({
+      callId: validMongoId2,
+      participantId: validParticipantId,
+      isCapturing: 'yes',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects missing participantId', () => {
+    const result = socketCallScreenCaptureDetectedSchema.safeParse({
+      callId: validMongoId2,
+      isCapturing: true,
+    });
+    expect(result.success).toBe(false);
   });
 });
 

@@ -20,7 +20,7 @@ struct IceCandidate: Codable, Sendable {
     let candidate: String
 }
 
-struct IceServer {
+struct IceServer: Sendable {
     let urls: [String]
     let username: String?
     let credential: String?
@@ -32,7 +32,7 @@ struct IceServer {
     ]
 }
 
-struct MediaTracks {
+struct MediaTracks: Sendable {
     let audioEnabled: Bool
     let videoEnabled: Bool
 }
@@ -75,6 +75,11 @@ struct CallStats: Equatable, Sendable {
     // path is `inbound == 0 && outbound > 0`. Without the outbound side we cannot
     // distinguish a transport fault from a peer who simply muted / has mic off.
     let outboundPacketsSent: Int
+    /// TWCC GCC bandwidth estimate from `candidate-pair` stats. Populated when
+    /// Transport-CC is negotiated (non-zero). 0 = TWCC not yet active or not
+    /// supported on this path. When non-zero this is a more authoritative signal
+    /// than the RTT/loss heuristic for setting the video encoder ceiling.
+    let availableOutgoingBitrateBps: Int
 
     init(
         roundTripTimeMs: Double = 0,
@@ -85,7 +90,8 @@ struct CallStats: Equatable, Sendable {
         inboundPacketsReceived: Int = 0,
         inboundAudioPackets: Int = 0,
         inboundVideoPackets: Int = 0,
-        outboundPacketsSent: Int = 0
+        outboundPacketsSent: Int = 0,
+        availableOutgoingBitrateBps: Int = 0
     ) {
         self.roundTripTimeMs = roundTripTimeMs
         self.packetsLost = packetsLost
@@ -96,6 +102,7 @@ struct CallStats: Equatable, Sendable {
         self.inboundAudioPackets = inboundAudioPackets
         self.inboundVideoPackets = inboundVideoPackets
         self.outboundPacketsSent = outboundPacketsSent
+        self.availableOutgoingBitrateBps = availableOutgoingBitrateBps
     }
 }
 
@@ -145,6 +152,7 @@ extension CallStats {
     /// inbound audio/video separate.
     static func reduce(entries: [RawEntry]) -> CallStats {
         var rtt = 0.0
+        var availableOutgoingBitrateBps = 0
         var packetsLost = 0
         var bytesSent = 0
         var bytesReceived = 0
@@ -162,6 +170,7 @@ extension CallStats {
             switch entry.type {
             case "candidate-pair":
                 if let value = entry.values["currentRoundTripTime"] { rtt = value * 1000 }
+                if let bps = entry.values["availableOutgoingBitrate"] { availableOutgoingBitrateBps = Int(bps) }
             case "inbound-rtp":
                 if let lost = entry.values["packetsLost"] { packetsLost += Int(lost) }
                 let received = Int(entry.values["packetsReceived"] ?? 0)
@@ -189,7 +198,8 @@ extension CallStats {
             inboundPacketsReceived: inboundAudio + inboundVideo,
             inboundAudioPackets: inboundAudio,
             inboundVideoPackets: inboundVideo,
-            outboundPacketsSent: outbound
+            outboundPacketsSent: outbound,
+            availableOutgoingBitrateBps: availableOutgoingBitrateBps
         )
     }
 }
@@ -247,6 +257,28 @@ enum CallReliabilityPolicy {
         if secondsInConnecting >= failAfterSeconds { return .fail }
         if secondsInConnecting >= restartAfterSeconds && !didAttemptRestart { return .restartICE }
         return .waiting
+    }
+
+    /// `.reconnecting` watchdog. `attemptReconnection` self-limits at
+    /// `maxReconnectAttempts`, but it is only re-armed by a *fresh* signal — a new
+    /// `RTCPeerConnectionState` callback, a network-path flap, or a nil ICE-restart
+    /// offer. When an ICE restart is sent and then silently stalls (peer never
+    /// answers, transport wedged with no new state transition), none of those fire,
+    /// the attempt counter never advances, and the call hangs in `.reconnecting`
+    /// forever. This watchdog gives each attempt a budget; once it overruns we
+    /// escalate (`.retry` → `attemptReconnection`), which advances the counter and
+    /// eventually trips the cap → `.connectionLost`. Symmetric to the `.connecting`
+    /// watchdog, for the post-`.connected` reconnection path.
+    enum ReconnectingOutcome: Equatable {
+        case waiting
+        case retry
+    }
+
+    static func evaluateReconnecting(
+        secondsInAttempt: TimeInterval,
+        budgetSeconds: TimeInterval = QualityThresholds.reconnectAttemptBudgetSeconds
+    ) -> ReconnectingOutcome {
+        secondsInAttempt >= budgetSeconds ? .retry : .waiting
     }
 }
 
@@ -338,7 +370,7 @@ protocol WebRTCClientDelegate: AnyObject {
 
 // MARK: - Call End Reason
 
-enum CallEndReason: Equatable {
+enum CallEndReason: Equatable, Sendable {
     case local
     case remote
     case rejected
@@ -423,6 +455,17 @@ enum QualityThresholds {
     static let connectingRestartSeconds: TimeInterval = 12.0
     static let connectingFailSeconds: TimeInterval = 25.0
 
+    /// `.reconnecting` watchdog budget — the max time a single ICE-restart attempt
+    /// may stay pending before the watchdog escalates to the next attempt. Covers
+    /// the per-attempt exponential backoff (≤4s) plus ICE re-gather/connect on a
+    /// weak cellular link (~5s), without leaving the user staring at "Reconnecting…".
+    /// Combined with `maxReconnectAttempts` it bounds the total reconnection window
+    /// to ~`maxReconnectAttempts × reconnectAttemptBudgetSeconds` before the call
+    /// fails with `.connectionLost` — instead of hanging forever when an ICE restart
+    /// silently stalls (offer sent, peer never answers, no new PC-state callback,
+    /// no network flap to re-arm `attemptReconnection`).
+    static let reconnectAttemptBudgetSeconds: TimeInterval = 10.0
+
     /// Caller-side ringing timeout. The gateway has its own 60s server-side
     /// timeout (CallEventsHandler.ts §scheduleRingingTimeout) but a snappier
     /// 45s client-side cutoff gives the user a faster fail path when:
@@ -494,11 +537,22 @@ enum VideoQualityLevel: String, Comparable, Sendable {
         if rtt > 100 || packetLoss > 0.01 { return .good }
         return .excellent
     }
+
+    /// Map TWCC GCC `availableOutgoingBitrate` (bps) to a quality level. Thresholds
+    /// are set conservatively below each tier's `targetVideoBitrate` to leave headroom
+    /// for audio + RTCP overhead. Returns `nil` when `bps == 0` (TWCC not active).
+    static func from(availableOutgoingBitrateBps bps: Int) -> VideoQualityLevel {
+        if bps >= 2_000_000 { return .excellent }
+        if bps >= 1_000_000 { return .good }
+        if bps >= 400_000  { return .fair }
+        if bps >= 150_000  { return .poor }
+        return .critical
+    }
 }
 
 // MARK: - Errors
 
-enum WebRTCError: Error, LocalizedError {
+enum WebRTCError: Error, LocalizedError, Sendable {
     case noPeerConnection
     case failedToCreatePeerConnection
     case failedToCreateSDP
@@ -538,7 +592,7 @@ enum WebRTCError: Error, LocalizedError {
 /// then takes the MORE conservative of the network target and the thermal cap
 /// on each axis. `.nominal` is a strict no-op.
 enum VideoThermalProfile {
-    struct Ceiling: Equatable {
+    struct Ceiling: Equatable, Sendable {
         let bitrateFactor: Double   // multiplies the network bitrate target (≤ 1)
         let maxFramerate: Int       // absolute fps cap
         let minScaleDownBy: Double  // floor on resolution downscale (≥ 1)

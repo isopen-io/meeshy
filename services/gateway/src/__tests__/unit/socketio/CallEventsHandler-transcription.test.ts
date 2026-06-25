@@ -1,0 +1,280 @@
+/**
+ * CallEventsHandler — call:transcription-segment relay
+ *
+ * Regression guards for the transcription relay behaviour:
+ *
+ * 1. The relay MUST NOT echo translatedText back to participants when ZMQ
+ *    translation is unavailable (would mislead consumers into thinking the
+ *    source text was a real translation).
+ * 2. Non-participants MUST receive a NOT_A_PARTICIPANT error; no segment
+ *    is relayed.
+ * 3. Ended calls MUST silently ignore segments (no relay, no error).
+ */
+
+import { jest, describe, it, expect, beforeEach } from '@jest/globals';
+
+// ---------------------------------------------------------------------------
+// Module-level mocks — must precede all imports that transitively load
+// CallService / TURNCredentialService / SocketRateLimiter (setInterval hazard)
+// ---------------------------------------------------------------------------
+
+jest.mock('../../../services/CallService', () => ({
+  CallService: jest.fn(),
+}));
+
+jest.mock('../../../services/notifications/NotificationService', () => ({
+  NotificationService: jest.fn(),
+}));
+
+jest.mock('../../../services/PushNotificationService', () => ({
+  PushNotificationService: jest.fn(),
+}));
+
+jest.mock('../../../middleware/validation', () => ({
+  validateSocketEvent: jest.fn(),
+}));
+
+const mockCheckLimit = jest.fn<() => Promise<boolean>>().mockResolvedValue(true);
+jest.mock('../../../utils/socket-rate-limiter', () => ({
+  SocketRateLimiter: jest.fn().mockImplementation(() => ({
+    checkLimit: mockCheckLimit,
+    destroy: jest.fn(),
+  })),
+  getSocketRateLimiter: jest.fn().mockReturnValue({
+    checkLimit: mockCheckLimit,
+    destroy: jest.fn(),
+  }),
+  checkSocketRateLimit: jest.fn().mockResolvedValue(true),
+  SOCKET_RATE_LIMITS: {
+    MESSAGE_SEND: { maxRequests: 20, windowMs: 60000, keyPrefix: 'socket:message:send' },
+  },
+}));
+
+jest.mock('../../../utils/logger', () => ({
+  logger: {
+    info: jest.fn(),
+    debug: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+  },
+}));
+
+// Import after mocks
+import { CallEventsHandler } from '../../../socketio/CallEventsHandler';
+import { CALL_EVENTS, CALL_ERROR_CODES } from '@meeshy/shared/types/video-call';
+import { validateSocketEvent } from '../../../middleware/validation';
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const VALID_CALL_ID = '507f1f77bcf86cd799439011';
+const VALID_CONV_ID = '507f1f77bcf86cd799439012';
+const SPEAKER_ID = 'user-speaker-abc';
+
+const VALID_SEGMENT = {
+  callId: VALID_CALL_ID,
+  segment: {
+    text: 'Bonjour le monde',
+    speakerId: SPEAKER_ID,
+    startMs: 0,
+    endMs: 1500,
+    isFinal: true,
+    confidence: 0.95,
+    language: 'fr',
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function makePrisma(overrides: {
+  callSessionFindUnique?: jest.MockedFunction<any>;
+  participantFindFirst?: jest.MockedFunction<any>;
+} = {}) {
+  return {
+    callSession: {
+      findUnique: overrides.callSessionFindUnique ?? jest.fn<any>(),
+    },
+    participant: {
+      findFirst: overrides.participantFindFirst ?? jest.fn<any>(),
+    },
+  } as unknown as PrismaClient;
+}
+
+function makeSocket() {
+  const handlers: Record<string, (...args: any[]) => any> = {};
+  const directEmit = jest.fn<any>();
+  const roomEmit = jest.fn<any>();
+  const socket = {
+    id: 'socket-test-1',
+    on: jest.fn((event: string, fn: (...args: any[]) => any) => {
+      handlers[event] = fn;
+    }),
+    emit: directEmit,
+    to: jest.fn().mockReturnValue({ emit: roomEmit }),
+    data: {},
+  };
+  return { socket, handlers, directEmit, roomEmit };
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+describe('CallEventsHandler — call:transcription-segment relay', () => {
+
+  beforeEach(() => {
+    // Default: validateSocketEvent returns success for well-formed data
+    (validateSocketEvent as jest.MockedFunction<any>).mockReturnValue({ success: true });
+  });
+
+  describe('happy path: participant in active call', () => {
+    let roomEmit: jest.MockedFunction<any>;
+    let directEmit: jest.MockedFunction<any>;
+
+    beforeEach(async () => {
+      const prisma = makePrisma({
+        callSessionFindUnique: jest.fn<any>()
+          // First call: resolveParticipantIdFromCall → conversationId
+          .mockResolvedValueOnce({ conversationId: VALID_CONV_ID })
+          // Second call: status + metadata check
+          .mockResolvedValueOnce({ status: 'active', metadata: null }),
+        participantFindFirst: jest.fn<any>().mockResolvedValue({ id: 'participant-1' }),
+      });
+      const { socket, handlers, roomEmit: r, directEmit: d } = makeSocket();
+      roomEmit = r;
+      directEmit = d;
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, {} as any, () => SPEAKER_ID);
+
+      await handlers[CALL_EVENTS.TRANSCRIPTION_SEGMENT](VALID_SEGMENT);
+    });
+
+    it('relays the segment to the call room', () => {
+      expect(roomEmit).toHaveBeenCalledTimes(1);
+    });
+
+    it('relays with event name TRANSLATED_SEGMENT', () => {
+      const [eventName] = roomEmit.mock.calls[0];
+      expect(eventName).toBe(CALL_EVENTS.TRANSLATED_SEGMENT);
+    });
+
+    it('relayed segment does NOT include translatedText', () => {
+      const [, payload] = roomEmit.mock.calls[0];
+      expect(payload.segment).not.toHaveProperty('translatedText');
+    });
+
+    it('relayed segment preserves original text', () => {
+      const [, payload] = roomEmit.mock.calls[0];
+      expect(payload.segment.text).toBe(VALID_SEGMENT.segment.text);
+    });
+
+    it('relayed segment preserves speakerId', () => {
+      const [, payload] = roomEmit.mock.calls[0];
+      expect(payload.segment.speakerId).toBe(SPEAKER_ID);
+    });
+
+    it('relayed segment includes sourceLanguage from the segment language', () => {
+      const [, payload] = roomEmit.mock.calls[0];
+      expect(payload.segment.sourceLanguage).toBe(VALID_SEGMENT.segment.language);
+    });
+
+    it('does not emit an error to the sender', () => {
+      expect(directEmit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('non-participant: user not in the call', () => {
+    let roomEmit: jest.MockedFunction<any>;
+    let directEmit: jest.MockedFunction<any>;
+
+    beforeEach(async () => {
+      const prisma = makePrisma({
+        // resolveParticipantIdFromCall returns null (call not found)
+        callSessionFindUnique: jest.fn<any>().mockResolvedValue(null),
+        participantFindFirst: jest.fn<any>().mockResolvedValue(null),
+      });
+      const { socket, handlers, roomEmit: r, directEmit: d } = makeSocket();
+      roomEmit = r;
+      directEmit = d;
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, {} as any, () => SPEAKER_ID);
+
+      await handlers[CALL_EVENTS.TRANSCRIPTION_SEGMENT](VALID_SEGMENT);
+    });
+
+    it('does NOT relay the segment to the room', () => {
+      expect(roomEmit).not.toHaveBeenCalled();
+    });
+
+    it('emits NOT_A_PARTICIPANT error to the sender', () => {
+      expect(directEmit).toHaveBeenCalledWith(
+        CALL_EVENTS.ERROR,
+        expect.objectContaining({ code: CALL_ERROR_CODES.NOT_A_PARTICIPANT })
+      );
+    });
+  });
+
+  describe('ended call: segment silently dropped', () => {
+    let roomEmit: jest.MockedFunction<any>;
+    let directEmit: jest.MockedFunction<any>;
+
+    beforeEach(async () => {
+      const prisma = makePrisma({
+        callSessionFindUnique: jest.fn<any>()
+          // resolveParticipantIdFromCall: call found with a conversationId
+          .mockResolvedValueOnce({ conversationId: VALID_CONV_ID })
+          // status check: call is ended
+          .mockResolvedValueOnce({ status: 'ended', metadata: null }),
+        participantFindFirst: jest.fn<any>().mockResolvedValue({ id: 'participant-1' }),
+      });
+      const { socket, handlers, roomEmit: r, directEmit: d } = makeSocket();
+      roomEmit = r;
+      directEmit = d;
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, {} as any, () => SPEAKER_ID);
+
+      await handlers[CALL_EVENTS.TRANSCRIPTION_SEGMENT](VALID_SEGMENT);
+    });
+
+    it('does NOT relay the segment', () => {
+      expect(roomEmit).not.toHaveBeenCalled();
+    });
+
+    it('does NOT emit an error (silent drop for ended calls)', () => {
+      expect(directEmit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('anonymous socket: no userId', () => {
+    let roomEmit: jest.MockedFunction<any>;
+    let directEmit: jest.MockedFunction<any>;
+
+    beforeEach(async () => {
+      const prisma = makePrisma();
+      const { socket, handlers, roomEmit: r, directEmit: d } = makeSocket();
+      roomEmit = r;
+      directEmit = d;
+
+      const handler = new CallEventsHandler(prisma);
+      // getUserId returns undefined → anonymous / unauthenticated
+      handler.setupCallEvents(socket as any, {} as any, () => undefined);
+
+      await handlers[CALL_EVENTS.TRANSCRIPTION_SEGMENT](VALID_SEGMENT);
+    });
+
+    it('does NOT relay the segment', () => {
+      expect(roomEmit).not.toHaveBeenCalled();
+    });
+
+    it('does NOT emit any error (silent guard for unauthenticated sockets)', () => {
+      expect(directEmit).not.toHaveBeenCalled();
+    });
+  });
+});

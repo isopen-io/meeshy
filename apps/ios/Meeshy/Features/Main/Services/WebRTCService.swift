@@ -50,6 +50,10 @@ final class WebRTCService {
     private var iceCandidateBuffer: [IceCandidate] = []
     private var hasRemoteDescription = false
     private(set) var connectionState: PeerConnectionState = .new
+    // Tracks the in-flight flush task so it can be cancelled when the
+    // connection is closed — prevents post-teardown addIceCandidate calls
+    // against a disposed RTCPeerConnection (which throw and log spurious errors).
+    private var flushCandidatesTask: Task<Void, Never>?
 
     private(set) var currentBitrate: Int = QualityThresholds.defaultBitrate
     private(set) var currentQualityLevel: VideoQualityLevel = .excellent
@@ -138,8 +142,17 @@ final class WebRTCService {
 
     func addICECandidate(_ candidate: IceCandidate) {
         guard hasRemoteDescription else {
+            // Cap the buffer to prevent unbounded growth in environments with many
+            // network interfaces (WiFi + cellular + VPN + Bluetooth + TURN relays
+            // each produce host/srflx/relay candidates). Beyond ~200 candidates
+            // the ICE agent has already selected a pair; additional ones add no
+            // connection value and only bloat memory.
+            guard iceCandidateBuffer.count < 200 else {
+                Logger.webrtc.warning("ICE candidate buffer full (200) — dropping candidate")
+                return
+            }
             iceCandidateBuffer.append(candidate)
-            Logger.webrtc.debug("Buffered ICE candidate (no remote description yet)")
+            Logger.webrtc.debug("Buffered ICE candidate (no remote description yet), count=\(self.iceCandidateBuffer.count)")
             return
         }
         Task {
@@ -227,8 +240,7 @@ final class WebRTCService {
         let interval = QualityThresholds.statsIntervalSeconds
         qualityMonitorTask = Task { [weak self] in
             while !Task.isCancelled {
-                let nanos = UInt64(interval * 1_000_000_000)
-                try? await Task.sleep(nanoseconds: nanos)
+                try? await Task.sleep(for: .seconds(interval))
                 if Task.isCancelled { break }
                 await Task { @MainActor [weak self] in
                     guard let self else { return }
@@ -268,7 +280,15 @@ final class WebRTCService {
         let denom = deltaLost + deltaReceived
         let lossRatio = denom > 0 ? Double(deltaLost) / Double(denom) : 0
 
-        let newLevel = VideoQualityLevel.from(rtt: rtt, packetLoss: lossRatio)
+        // Merge the RTT/loss heuristic with the TWCC GCC bandwidth estimate.
+        // When TWCC is active (bps > 0), GCC has better visibility into the
+        // actual available path capacity than RTT alone. Taking the min of both
+        // ensures we never over-commit beyond what either signal permits.
+        let heuristicLevel = VideoQualityLevel.from(rtt: rtt, packetLoss: lossRatio)
+        let bweLevel: VideoQualityLevel? = stats.availableOutgoingBitrateBps > 0
+            ? VideoQualityLevel.from(availableOutgoingBitrateBps: stats.availableOutgoingBitrateBps)
+            : nil
+        let newLevel = bweLevel.map { min(heuristicLevel, $0) } ?? heuristicLevel
 
         let newBitrate: Int
         if rtt <= QualityThresholds.excellentRTT && lossRatio <= QualityThresholds.excellentPacketLoss {
@@ -282,7 +302,10 @@ final class WebRTCService {
         if newBitrate != currentBitrate {
             currentBitrate = newBitrate
             let lossPct = String(format: "%.1f%%", lossRatio * 100)
-            Logger.webrtc.info("Audio bitrate adjusted to \(newBitrate) bps (RTT: \(rtt)ms, loss: \(lossPct))")
+            let bweMbps = stats.availableOutgoingBitrateBps > 0
+                ? String(format: " bwe=%.1fMbps", Double(stats.availableOutgoingBitrateBps) / 1_000_000)
+                : ""
+            Logger.webrtc.info("Audio bitrate adjusted to \(newBitrate) bps (RTT: \(rtt)ms, loss: \(lossPct)\(bweMbps))")
         }
 
         // §5.6 — a thermal transition must re-apply the encoder ceiling even
@@ -389,6 +412,8 @@ final class WebRTCService {
         stopQualityMonitor()
         disconnectDebounceTask?.cancel()
         disconnectDebounceTask = nil
+        flushCandidatesTask?.cancel()
+        flushCandidatesTask = nil
         client.disconnect()
         iceCandidateBuffer.removeAll()
         hasRemoteDescription = false
@@ -403,10 +428,13 @@ final class WebRTCService {
         let buffered = iceCandidateBuffer
         iceCandidateBuffer.removeAll()
         Logger.webrtc.info("Flushing \(buffered.count) buffered ICE candidates")
-        Task {
+        flushCandidatesTask?.cancel()
+        flushCandidatesTask = Task { [weak self] in
+            guard let self else { return }
             for candidate in buffered {
+                if Task.isCancelled { break }
                 do {
-                    try await client.addIceCandidate(candidate)
+                    try await self.client.addIceCandidate(candidate)
                 } catch {
                     Logger.webrtc.error("Failed to add buffered ICE candidate: \(error.localizedDescription)")
                 }
@@ -467,8 +495,7 @@ extension WebRTCService: WebRTCClientDelegate {
         disconnectDebounceTask?.cancel()
         disconnectDebounceTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            let nanos = UInt64(QualityThresholds.disconnectDebounceSeconds * 1_000_000_000)
-            try? await Task.sleep(nanoseconds: nanos)
+            try? await Task.sleep(for: .seconds(QualityThresholds.disconnectDebounceSeconds))
             if Task.isCancelled { return }
             guard self.connectionState == .disconnected else { return }
             Logger.webrtc.info("disconnect debounce elapsed — escalating to reconnect")

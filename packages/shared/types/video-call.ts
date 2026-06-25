@@ -249,6 +249,8 @@ export interface ConnectionQualityStats {
    */
   readonly bytesSent?: number;
   readonly bytesReceived?: number;
+  /** TWCC GCC bandwidth estimate in bps. Present when Transport-CC is active. */
+  readonly availableOutgoingBitrateBps?: number;
 }
 
 // ===== WEBRTC SIGNALING =====
@@ -633,7 +635,7 @@ export interface CallQualityAlertEvent {
  */
 export interface CallInitiateAck {
   readonly success: boolean;
-  readonly data?: { callId: string; mode: CallMode; iceServers: RTCIceServer[] };
+  readonly data?: { callId: string; mode: CallMode; iceServers: RTCIceServer[]; ttl?: number };
   readonly error?: { code: string; message: string };
 }
 
@@ -713,13 +715,15 @@ export interface CallTranscriptionSegmentEvent {
 
 /**
  * Event: call:translated-segment (Server → Client)
- * Translated transcription segment broadcast to call participants
+ * Transcription segment (with optional translation) broadcast to call participants.
+ * `translatedText` is omitted when ZMQ translation is not enabled or unavailable;
+ * consumers should fall back to displaying `text` in that case.
  */
 export interface CallTranslatedSegmentEvent {
   readonly callId: string;
   readonly segment: {
     readonly text: string;
-    readonly translatedText: string;
+    readonly translatedText?: string;
     readonly speakerId: string;
     readonly startMs: number;
     readonly endMs: number;
@@ -764,6 +768,15 @@ export interface CallState {
   translations: Map<string, Translation[]>;  // transcriptionId → translations
 }
 
+/**
+ * Server → Client: fresh ICE servers after TTL refresh.
+ */
+export interface CallIceServersRefreshedEvent {
+  readonly callId: string;
+  readonly iceServers: RTCIceServer[];
+  readonly ttl: number;
+}
+
 // ===== SOCKET.IO EVENT NAMES =====
 
 /**
@@ -785,6 +798,15 @@ export const CALL_EVENTS = {
   QUALITY_REPORT: 'call:quality-report',
   RECONNECTING: 'call:reconnecting',
   RECONNECTED: 'call:reconnected',
+  REQUEST_ICE_SERVERS: 'call:request-ice-servers',
+
+  // Client → Server (fire-and-forget, lifecycle telemetry)
+  BACKGROUNDED: 'call:backgrounded',
+  FOREGROUNDED: 'call:foregrounded',
+  SCREEN_CAPTURE_DETECTED: 'call:screen-capture-detected',
+
+  // Server → Client (peer notification)
+  SCREEN_CAPTURE_ALERT: 'call:screen-capture-alert',
 
   // Server → Client
   INITIATED: 'call:initiated',
@@ -800,6 +822,7 @@ export const CALL_EVENTS = {
   /// their devices answers a call, so the rest dismiss their ringing UI.
   ALREADY_ANSWERED: 'call:already-answered',
   QUALITY_ALERT: 'call:quality-alert',
+  ICE_SERVERS_REFRESHED: 'call:ice-servers-refreshed',
 
   // Transcription & Translation (Phase 2/3)
   TRANSCRIPTION: 'call:transcription',

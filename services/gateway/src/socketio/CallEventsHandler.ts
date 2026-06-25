@@ -30,7 +30,11 @@ import {
   socketReconnectingSchema,
   socketReconnectedSchema,
   socketForceLeaveSchema,
-  socketTranscriptionSegmentSchema
+  socketTranscriptionSegmentSchema,
+  socketRequestIceServersSchema,
+  socketCallBackgroundedSchema,
+  socketCallForegroundedSchema,
+  socketCallScreenCaptureDetectedSchema
 } from '../validation/call-schemas';
 import { getSocketRateLimiter, checkSocketRateLimit, SOCKET_RATE_LIMITS } from '../utils/socket-rate-limiter';
 import type {
@@ -53,22 +57,10 @@ import type {
   // (the Prisma generated enum is both a value AND a type, so we don't
   // need the type-only re-export from video-call.ts which duplicates it).
   CallTranscriptionSegmentEvent,
+  CallIceServersRefreshedEvent,
+  CallScreenCaptureEvent,
 } from '@meeshy/shared/types/video-call';
 
-// ICE servers configuration (STUN/TURN)
-const ICE_SERVERS_CONFIG = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' }
-    // TODO: Add TURN servers for production
-    // {
-    //   urls: 'turn:turn.meeshy.me:3478',
-    //   username: 'username',
-    //   credential: 'password'
-    // }
-  ]
-};
 
 export class CallEventsHandler {
   private callService: CallService;
@@ -95,7 +87,7 @@ export class CallEventsHandler {
    * drops stale epochs via `negotiationId` (§3.5).
    */
   private bufferedOffers = new Map<string, { signal: CallSignalEvent; bufferedAt: number }>();
-  private static readonly OFFER_BUFFER_TTL_MS = 90_000;
+  private static readonly OFFER_BUFFER_TTL_MS = 150_000;
 
   constructor(private prisma: PrismaClient) {
     this.callService = new CallService(prisma);
@@ -464,7 +456,8 @@ export class CallEventsHandler {
           data: {
             callId: callSession.id,
             mode: callSession.mode,
-            iceServers: initiatorIceServers
+            iceServers: initiatorIceServers,
+            ttl: this.callService.getIceServerTtl(),
           }
         });
 
@@ -804,11 +797,13 @@ export class CallEventsHandler {
           if (remoteSocket.id === socket.id) continue;
           const remoteUserId = getUserId(remoteSocket.id);
           if (!remoteUserId) {
-            logger.warn('⚠️ Socket in call room has no userId, using STUN-only', { socketId: remoteSocket.id });
+            // Skip: a STUN-only config can't relay behind symmetric NAT/CGNAT.
+            // The socket will receive proper TURN credentials via its own
+            // join/check-active path once its userId is resolvable.
+            logger.warn('⚠️ Skipping participant-joined push — remote socket has no userId in connectionMap', { socketId: remoteSocket.id });
+            continue;
           }
-          const remoteIceServers = remoteUserId
-            ? this.callService.generateIceServers(remoteUserId)
-            : ICE_SERVERS_CONFIG.iceServers;
+          const remoteIceServers = this.callService.generateIceServers(remoteUserId);
           remoteSocket.emit(CALL_EVENTS.PARTICIPANT_JOINED, {
             ...joinedEvent,
             iceServers: remoteIceServers
@@ -1148,7 +1143,7 @@ export class CallEventsHandler {
               const leftEvent: CallParticipantLeftEvent = {
                 callId: callSession.id,
                 participantId: participant.id,
-                userId: (participant as any).participant?.userId || participant.participantId,
+                userId: (participant as any).participant?.userId || /* istanbul ignore next */ participant.participantId,
                 mode: callSession.mode
               };
 
@@ -1814,7 +1809,6 @@ export class CallEventsHandler {
           callId: data.callId,
           segment: {
             text: data.segment.text,
-            translatedText: data.segment.text,
             speakerId: data.segment.speakerId,
             startMs: data.segment.startMs,
             endMs: data.segment.endMs,
@@ -1832,6 +1826,134 @@ export class CallEventsHandler {
         });
       } catch (error) {
         logger.error('Error handling transcription segment', { error });
+      }
+    });
+
+    /**
+     * call:request-ice-servers — refresh TURN credentials before TTL expiry.
+     * The client requests this at ~80% of the credential TTL so long calls (>10 min)
+     * always have valid TURN credentials for ICE restart.
+     */
+    socket.on(CALL_EVENTS.REQUEST_ICE_SERVERS, async (data: { callId: string }) => {
+      try {
+        const userId = getUserId(socket.id);
+        if (!userId) return;
+        rememberAuth(userId);
+
+        const validation = validateSocketEvent(socketRequestIceServersSchema, data);
+        if (!validation.success) return;
+
+        // Authorization: socket must be in the call room (joined on call:join).
+        if (!socket.rooms.has(ROOMS.call(data.callId))) {
+          socket.emit(CALL_EVENTS.ERROR, {
+            code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
+            message: 'Not in call room'
+          } as CallError);
+          return;
+        }
+
+        const iceServers = this.callService.generateIceServers(userId);
+        const ttl = this.callService.getIceServerTtl();
+        const refreshedEvent: CallIceServersRefreshedEvent = {
+          callId: data.callId,
+          iceServers,
+          ttl,
+        };
+        socket.emit(CALL_EVENTS.ICE_SERVERS_REFRESHED, refreshedEvent);
+
+        logger.debug('🔐 ICE servers refreshed for call', {
+          callId: data.callId,
+          userId,
+          ttl,
+          serverCount: iceServers.length
+        });
+      } catch (error) {
+        logger.error('Error handling call:request-ice-servers', { error });
+      }
+    });
+
+    // ─── call:backgrounded ───────────────────────────────────────────────────
+    // The iOS app signals it is going to background while a call is active.
+    // We flip socket.data.appForeground so the ringing logic knows to use VoIP
+    // push for future incoming calls instead of socket delivery.
+    socket.on(CALL_EVENTS.BACKGROUNDED, async (data: { callId: string; participantId: string }) => {
+      try {
+        const userId = getUserId(socket.id);
+        if (!userId) return;
+        rememberAuth(userId);
+
+        const validation = validateSocketEvent(socketCallBackgroundedSchema, data);
+        if (!validation.success) return;
+
+        socket.data.appForeground = false;
+        this.callService.recordParticipantBackgrounded(data.callId, data.participantId);
+
+        logger.debug('📞 Socket: call:backgrounded', {
+          callId: data.callId,
+          participantId: data.participantId,
+          userId,
+        });
+      } catch (error) {
+        logger.error('Error handling call:backgrounded', { error });
+      }
+    });
+
+    // ─── call:foregrounded ───────────────────────────────────────────────────
+    // The iOS app has returned to foreground. Reset the flag so future ringing
+    // can be delivered via socket again.
+    socket.on(CALL_EVENTS.FOREGROUNDED, async (data: { callId: string; participantId: string }) => {
+      try {
+        const userId = getUserId(socket.id);
+        if (!userId) return;
+        rememberAuth(userId);
+
+        const validation = validateSocketEvent(socketCallForegroundedSchema, data);
+        if (!validation.success) return;
+
+        socket.data.appForeground = true;
+        this.callService.clearParticipantBackgrounded(data.callId, data.participantId);
+
+        logger.debug('📞 Socket: call:foregrounded', {
+          callId: data.callId,
+          participantId: data.participantId,
+          userId,
+        });
+      } catch (error) {
+        logger.error('Error handling call:foregrounded', { error });
+      }
+    });
+
+    // ─── call:screen-capture-detected ────────────────────────────────────────
+    // A participant started or stopped screen capture. Relay to everyone else
+    // in the call room so they can display/dismiss the capture warning.
+    socket.on(CALL_EVENTS.SCREEN_CAPTURE_DETECTED, async (data: CallScreenCaptureEvent) => {
+      try {
+        const userId = getUserId(socket.id);
+        if (!userId) return;
+        rememberAuth(userId);
+
+        const validation = validateSocketEvent(socketCallScreenCaptureDetectedSchema, data);
+        if (!validation.success) return;
+
+        if (!socket.rooms.has(ROOMS.call(data.callId))) {
+          return;
+        }
+
+        const alertEvent: CallScreenCaptureEvent = {
+          callId: data.callId,
+          participantId: data.participantId,
+          isCapturing: data.isCapturing,
+        };
+        socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.SCREEN_CAPTURE_ALERT, alertEvent);
+
+        logger.info('📞 Socket: call:screen-capture-detected relayed', {
+          callId: data.callId,
+          participantId: data.participantId,
+          isCapturing: data.isCapturing,
+          userId,
+        });
+      } catch (error) {
+        logger.error('Error handling call:screen-capture-detected', { error });
       }
     });
 

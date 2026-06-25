@@ -229,7 +229,9 @@ export const socketQualityReportSchema = z.object({
     // Cumulative WebRTC byte counters (monotonic). The last report before
     // teardown carries the call totals, persisted to surface "data spent".
     bytesSent: z.number().min(0).optional(),
-    bytesReceived: z.number().min(0).optional()
+    bytesReceived: z.number().min(0).optional(),
+    // TWCC GCC bandwidth estimate (bps). 0 or absent = TWCC not yet active.
+    availableOutgoingBitrateBps: z.number().min(0).optional()
   })
 });
 
@@ -295,3 +297,46 @@ export type SocketReconnectingInput = z.infer<typeof socketReconnectingSchema>;
 export type SocketReconnectedInput = z.infer<typeof socketReconnectedSchema>;
 export type SocketForceLeaveInput = z.infer<typeof socketForceLeaveSchema>;
 export type SocketTranscriptionSegmentInput = z.infer<typeof socketTranscriptionSegmentSchema>;
+
+/**
+ * Socket.IO Event: call:request-ice-servers (fire-and-forget, Client → Server)
+ * Sent by the client near credential expiry to obtain fresh TURN credentials.
+ */
+export const socketRequestIceServersSchema = z.object({
+  callId: objectIdSchema,
+});
+export type SocketRequestIceServersInput = z.infer<typeof socketRequestIceServersSchema>;
+
+/**
+ * Socket.IO Event: call:backgrounded (fire-and-forget, Client → Server)
+ * Emitted when the app enters background while a call is active so the gateway
+ * can extend heartbeat tolerance and skip socket-delivery for ringing.
+ */
+export const socketCallBackgroundedSchema = z.object({
+  callId: objectIdSchema,
+  participantId: z.string().min(1),
+});
+export type SocketCallBackgroundedInput = z.infer<typeof socketCallBackgroundedSchema>;
+
+/**
+ * Socket.IO Event: call:foregrounded (fire-and-forget, Client → Server)
+ * Emitted when the app returns to foreground so the gateway can reset heartbeat
+ * tolerance and resume normal socket delivery for incoming calls.
+ */
+export const socketCallForegroundedSchema = z.object({
+  callId: objectIdSchema,
+  participantId: z.string().min(1),
+});
+export type SocketCallForegroundedInput = z.infer<typeof socketCallForegroundedSchema>;
+
+/**
+ * Socket.IO Event: call:screen-capture-detected (fire-and-forget, Client → Server)
+ * Emitted when UIScreen.isCaptured changes so the gateway can alert other
+ * participants via call:screen-capture-alert.
+ */
+export const socketCallScreenCaptureDetectedSchema = z.object({
+  callId: objectIdSchema,
+  participantId: z.string().min(1),
+  isCapturing: z.boolean(),
+});
+export type SocketCallScreenCaptureDetectedInput = z.infer<typeof socketCallScreenCaptureDetectedSchema>;

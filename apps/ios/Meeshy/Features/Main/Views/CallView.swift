@@ -368,9 +368,13 @@ struct CallView: View {
 
     /// §7.3 — controls auto-hide only on iPhone/iPad video calls, never on Mac
     /// (controls are persistent on desktop), never for audio-only (no video to
-    /// reveal), and never while the effects tray is open.
+    /// reveal), never while the effects tray is open, and never while VoiceOver
+    /// is running (VoiceOver users can't tap the video to reveal hidden controls).
     private var shouldAutoHideControls: Bool {
-        callManager.isVideoEnabled && !showEffectsToolbar && !ProcessInfo.processInfo.isiOSAppOnMac
+        callManager.isVideoEnabled
+            && !showEffectsToolbar
+            && !ProcessInfo.processInfo.isiOSAppOnMac
+            && !UIAccessibility.isVoiceOverRunning
     }
 
     private func toggleControls() {
@@ -426,6 +430,8 @@ struct CallView: View {
                 Capsule()
                     .fill(durationColor.opacity(0.15))
             )
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.updatesFrequently)
 
             // Status indicators
             HStack(spacing: 12) {
@@ -477,6 +483,15 @@ struct CallView: View {
     }
 
     private var connectionQualityColor: Color {
+        // Prefer the RTT+packet-loss stats level (updated every statsIntervalSeconds)
+        // over the binary ICE state for a more accurate real-time quality indicator.
+        if let level = callManager.liveVideoQualityLevel {
+            switch level {
+            case .excellent, .good: return MeeshyColors.success
+            case .fair: return MeeshyColors.warning
+            case .poor, .critical: return MeeshyColors.error
+            }
+        }
         switch callManager.connectionQuality {
         case .connected: return MeeshyColors.success
         case .reconnecting, .checking, .new: return MeeshyColors.warning
@@ -486,6 +501,13 @@ struct CallView: View {
     }
 
     private var connectionQualityAccessibilityLabel: String {
+        if let level = callManager.liveVideoQualityLevel {
+            switch level {
+            case .excellent, .good: return String(localized: "call.quality.good", defaultValue: "Connexion bonne", bundle: .main)
+            case .fair: return String(localized: "call.quality.reconnecting", defaultValue: "Reconnexion", bundle: .main)
+            case .poor, .critical: return String(localized: "call.quality.lost", defaultValue: "Connexion perdue", bundle: .main)
+            }
+        }
         switch callManager.connectionQuality {
         case .connected: return String(localized: "call.quality.good", defaultValue: "Connexion bonne", bundle: .main)
         case .reconnecting, .checking, .new: return String(localized: "call.quality.reconnecting", defaultValue: "Reconnexion", bundle: .main)
@@ -495,6 +517,9 @@ struct CallView: View {
     }
 
     private var isConnectionDegraded: Bool {
+        if let level = callManager.liveVideoQualityLevel {
+            return level == .poor || level == .critical
+        }
         switch callManager.connectionQuality {
         case .disconnected, .failed: return true
         default: return false
@@ -528,6 +553,7 @@ struct CallView: View {
                         .background(.ultraThinMaterial)
                         .clipShape(Capsule())
                         .padding(12)
+                        .accessibilityAddTraits(.updatesFrequently)
                     Spacer()
                 }
                 Spacer()
@@ -564,6 +590,7 @@ struct CallView: View {
                 VStack(spacing: 12) {
                     ProgressView()
                         .tint(.white.opacity(0.5))
+                        .accessibilityHidden(true)
                     Text(videoConnectSlow
                         ? String(localized: "call.video.connecting.slow", defaultValue: "La vidéo prend plus de temps que prévu…", bundle: .main)
                         : String(localized: "call.video.connecting", defaultValue: "Connexion video...", bundle: .main))
@@ -578,6 +605,7 @@ struct CallView: View {
                     }
                 }
                 .padding(.horizontal, 32)
+                .accessibilityElement(children: .combine)
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             // The watchdog runs only while this placeholder is on screen; SwiftUI
@@ -588,6 +616,10 @@ struct CallView: View {
                 try? await Task.sleep(nanoseconds: videoConnectWatchdogSeconds * 1_000_000_000)
                 if !Task.isCancelled {
                     withAnimation(.easeInOut(duration: 0.3)) { videoConnectSlow = true }
+                    UIAccessibility.post(
+                        notification: .announcement,
+                        argument: String(localized: "call.video.connecting.slow", defaultValue: "La vidéo prend plus de temps que prévu…", bundle: .main)
+                    )
                 }
             }
     }
@@ -600,13 +632,16 @@ struct CallView: View {
             Color.black.opacity(0.5)
             VStack(spacing: 14) {
                 avatarCircle(size: 96)
+                    .accessibilityHidden(true)
                 HStack(spacing: 6) {
                     Image(systemName: "video.slash.fill")
                         .font(.system(size: 13, weight: .semibold))
+                        .accessibilityHidden(true)
                     Text(String(localized: "call.video.remoteOff", defaultValue: "Caméra désactivée", bundle: .main))
                         .font(.system(size: 14, weight: .medium))
                 }
                 .foregroundColor(.white.opacity(0.6))
+                .accessibilityElement(children: .combine)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -761,18 +796,24 @@ struct CallView: View {
 
     private var transcriptOverlay: some View {
         let localUserId = AuthManager.shared.currentUser?.id ?? ""
+        let localName = AuthManager.shared.currentUser?.displayName ?? AuthManager.shared.currentUser?.username ?? String(localized: "call.transcript.you", defaultValue: "Vous", bundle: .main)
+        let remoteName = callManager.remoteUsername ?? String(localized: "call.incoming.unknown_caller", defaultValue: "Appel entrant", bundle: .main)
         return VStack(alignment: .leading, spacing: 6) {
             ForEach(transcriptionService.displayedSegments) { segment in
+                let isLocal = segment.speakerId == localUserId
                 HStack(alignment: .top, spacing: 8) {
                     Circle()
-                        .fill(segment.speakerId == localUserId ? MeeshyColors.indigo400 : MeeshyColors.success)
+                        .fill(isLocal ? MeeshyColors.indigo400 : MeeshyColors.success)
                         .frame(width: 8, height: 8)
                         .padding(.top, 6)
+                        .accessibilityHidden(true)
                     Text(segment.text)
                         .font(.system(size: 14, weight: segment.isFinal ? .regular : .light))
                         .foregroundColor(.white)
                         .opacity(segment.isFinal ? 1.0 : 0.7)
+                        .accessibilityLabel("\(isLocal ? localName : remoteName) : \(segment.text)")
                 }
+                .accessibilityElement(children: .combine)
             }
         }
         .padding(12)
@@ -782,6 +823,7 @@ struct CallView: View {
         .padding(.bottom, 100)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         .opacity(showTranscript ? 1 : 0)
+        .accessibilityHidden(!showTranscript)
         .animation(.easeInOut(duration: 0.2), value: showTranscript)
         // PERF-005: tell the transcription service when the panel is visible
         // so it can skip per-frame partial-result work while hidden.
@@ -801,6 +843,7 @@ struct CallView: View {
 
             avatarCircle(size: 100)
                 .opacity(0.6)
+                .accessibilityHidden(true)
 
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                 .font(.system(size: 24, weight: .semibold, design: .rounded))
@@ -1040,6 +1083,11 @@ struct CallView: View {
 
             avatarCircle(size: 100)
         }
+        // Decorative: the remote user's name is shown as a Text element directly
+        // below this avatar in every layout that uses pulsingAvatar. VoiceOver
+        // would otherwise read the first-initial letter from avatarCircle and then
+        // the full name from the adjacent Text, producing a double-read.
+        .accessibilityHidden(true)
     }
 
     private func avatarCircle(size: CGFloat) -> some View {

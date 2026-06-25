@@ -52,34 +52,23 @@ enum MessageDayLabel {
     // MARK: - Helpers
 
     private static func weekdayName(_ date: Date, calendar: Calendar, locale: Locale) -> String {
-        date.formatted(
-            Date.FormatStyle()
-                .weekday(.wide)
-                .calendar(calendar)
-                .locale(locale)
-        ).firstLetterUppercased(locale: locale)
+        var style = Date.FormatStyle.dateTime.weekday(.wide).locale(locale)
+        style.calendar = calendar
+        return date.formatted(style).firstLetterUppercased(locale: locale)
     }
 
     private static func fullDate(_ date: Date, calendar: Calendar, locale: Locale, includeYear: Bool) -> String {
+        var style = Date.FormatStyle.dateTime
+            .weekday(.wide)
+            .day(.defaultDigits)
+            .month(.wide)
+            .locale(locale)
+        style.calendar = calendar
+
         if includeYear {
-            return date.formatted(
-                Date.FormatStyle()
-                    .weekday(.wide)
-                    .day(.defaultDigits)
-                    .month(.wide)
-                    .year(.defaultDigits)
-                    .calendar(calendar)
-                    .locale(locale)
-            ).firstLetterUppercased(locale: locale)
+            return date.formatted(style.year(.defaultDigits)).firstLetterUppercased(locale: locale)
         } else {
-            return date.formatted(
-                Date.FormatStyle()
-                    .weekday(.wide)
-                    .day(.defaultDigits)
-                    .month(.wide)
-                    .calendar(calendar)
-                    .locale(locale)
-            ).firstLetterUppercased(locale: locale)
+            return date.formatted(style).firstLetterUppercased(locale: locale)
         }
     }
 }

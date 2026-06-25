@@ -50,6 +50,24 @@ final class WebRTCServiceTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(client.addIceCandidateCallCount, 1)
     }
 
+    func test_addICECandidate_bufferCap_dropsExcessCandidates() async {
+        // The buffer must never exceed 200 entries. Candidates 201–205 are
+        // silently dropped; after flush, the client receives exactly 200 calls.
+        let (sut, client) = makeSUT()
+        let candidate = IceCandidate(sdpMid: "0", sdpMLineIndex: 0, candidate: "candidate:test")
+        // Overshoot the cap by 5.
+        for _ in 0..<205 {
+            sut.addICECandidate(candidate)
+        }
+        // Trigger flush by setting remote description.
+        let desc = SessionDescription(type: .answer, sdp: "v=0\r\n")
+        await sut.setRemoteDescription(desc)
+        // Give the flush task time to drain the buffer.
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        // Exactly 200 candidates forwarded — not 205.
+        XCTAssertEqual(client.addIceCandidateCallCount, 200)
+    }
+
     // MARK: - Create Offer
 
     func test_createOffer_success_returnsSessionDescription() async {
@@ -138,6 +156,21 @@ final class WebRTCServiceTests: XCTestCase {
 
     // MARK: - Transcription Channel
 
+    // MARK: - TestableWebRTCClient Stats Configuration
+
+    func test_testableClient_statsToReturn_isNilByDefault() async {
+        let (_, client) = makeSUT()
+        let result = await client.getStats()
+        XCTAssertNil(result)
+    }
+
+    func test_testableClient_statsToReturn_returnsConfiguredValue() async {
+        let (_, client) = makeSUT()
+        client.statsToReturn = CallStats(availableOutgoingBitrateBps: 1_500_000)
+        let result = await client.getStats()
+        XCTAssertEqual(result?.availableOutgoingBitrateBps, 1_500_000)
+    }
+
     func test_createTranscriptionChannel_delegatesToClient() {
         let (sut, client) = makeSUT()
         client.createDataChannelResult = true
@@ -161,6 +194,249 @@ final class WebRTCServiceTests: XCTestCase {
             observed = await sut.connectionState
         }
         XCTAssertEqual(observed, .connected)
+    }
+}
+
+// MARK: - adjustBitrate invariants (source-level guards)
+
+/// Source-level guards for the `adjustBitrate` logic that is private and runs
+/// inside a 5-second stats monitor — not exercisable via timing in unit tests.
+/// These guards protect three non-obvious invariants:
+///  1. P1-4: packet-loss MUST use Δlost/Δtotal (not raw cumulative counts).
+///  2. BWE merge: TWCC bandwidth estimate is taken via `min()` with RTT heuristic.
+///  3. Debounce: quality-level flips are suppressed within a 5-second window.
+@MainActor
+final class AdjustBitrateSourceGuardTests: XCTestCase {
+
+    private func webRTCServiceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// P1-4 fix: loss ratio must be computed from snapshot deltas, not cumulative counters.
+    func test_adjustBitrate_usesIncrementalPacketLossRatio() throws {
+        let source = try webRTCServiceSource()
+        XCTAssertTrue(
+            source.contains("stats.packetsLost - (previous?.packetsLost ?? 0)"),
+            "P1-4: adjustBitrate must subtract previous.packetsLost from current to compute Δlost. " +
+            "Using raw cumulative counts causes a single lost packet to read as >100% loss."
+        )
+        XCTAssertTrue(
+            source.contains("stats.inboundPacketsReceived - (previous?.inboundPacketsReceived ?? 0)"),
+            "P1-4: adjustBitrate must subtract previous.inboundPacketsReceived to compute Δreceived."
+        )
+        XCTAssertTrue(
+            source.contains("let lossRatio = denom > 0 ? Double(deltaLost) / Double(denom) : 0"),
+            "P1-4: lossRatio must be Δlost/(Δlost+Δrecv), guarded against division-by-zero (denom > 0)."
+        )
+    }
+
+    /// BWE merge: when TWCC is active, quality level must be min(heuristic, bweLevel).
+    func test_adjustBitrate_mergesBWEWithHeuristicViaMin() throws {
+        let source = try webRTCServiceSource()
+        XCTAssertTrue(
+            source.contains("stats.availableOutgoingBitrateBps > 0"),
+            "BWE gate: TWCC estimate should only be applied when availableOutgoingBitrateBps > 0"
+        )
+        XCTAssertTrue(
+            source.contains("min(heuristicLevel, $0)") || source.contains("min(heuristicLevel,"),
+            "BWE merge: effective quality level must be min(heuristicLevel, bweLevel) — never exceed what either signal permits."
+        )
+    }
+
+    /// Debounce: rapid quality-level oscillations (e.g. network hiccup) must be suppressed.
+    func test_adjustBitrate_debounces5SecondsBetweenLevelChanges() throws {
+        let source = try webRTCServiceSource()
+        XCTAssertTrue(
+            source.contains("qualityLevelDebounceDate"),
+            "Debounce: a qualityLevelDebounceDate timestamp must gate rapid quality-level flips"
+        )
+        XCTAssertTrue(
+            source.contains("< 5.0"),
+            "Debounce: the suppression window must be 5 seconds to avoid thrashing the video encoder"
+        )
+    }
+}
+
+// MARK: - applyVideoQuality source guards
+
+/// `applyVideoQuality` applies critical-tier floors and composes VideoThermalProfile
+/// before calling `applyVideoEncoding`. A regression here silently sends 0-bitrate
+/// to the encoder instead of the safety floor, or drops the thermal composition.
+@MainActor
+final class ApplyVideoQualitySourceGuardTests: XCTestCase {
+
+    private func webRTCServiceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// Critical tier returns 0 from targetVideoBitrate; applyVideoQuality must
+    /// substitute minVideoBitrate so the encoder isn't told to send 0 bps.
+    func test_applyVideoQuality_usesMinVideoBitrateFloorForCriticalTier() throws {
+        let source = try webRTCServiceSource()
+        XCTAssertTrue(
+            source.contains("level.targetVideoBitrate > 0 ? level.targetVideoBitrate : QualityThresholds.minVideoBitrate"),
+            "applyVideoQuality must floor zero targetVideoBitrate with minVideoBitrate — " +
+            "passing 0 to the encoder is undefined behavior and can stall the video track."
+        )
+    }
+
+    /// Zero targetFPS (critical) must fall back to 15 fps, not 0.
+    func test_applyVideoQuality_usesMinFpsFloorForCriticalTier() throws {
+        let source = try webRTCServiceSource()
+        XCTAssertTrue(
+            source.contains("level.targetFPS > 0 ? level.targetFPS : 15"),
+            "applyVideoQuality must floor zero targetFPS to 15 — 0 fps stalls encoding."
+        )
+    }
+
+    /// VideoThermalProfile.apply must be called inside applyVideoQuality
+    /// so thermal state is composited even on a healthy network.
+    func test_applyVideoQuality_compositesThermalProfile() throws {
+        let source = try webRTCServiceSource()
+        XCTAssertTrue(
+            source.contains("VideoThermalProfile.apply("),
+            "applyVideoQuality must compose the network quality with VideoThermalProfile — " +
+            "a hot device should shed load even when the network is excellent."
+        )
+        XCTAssertTrue(
+            source.contains("ProcessInfo.processInfo.thermalState"),
+            "applyVideoQuality must read the live thermalState from ProcessInfo."
+        )
+    }
+
+    /// The final encoding call must use the thermal-adjusted values, not the raw level values.
+    func test_applyVideoQuality_usesTourminalAdjustedValuesForEncoding() throws {
+        let source = try webRTCServiceSource()
+        XCTAssertTrue(
+            source.contains("thermal.bitrateBps") && source.contains("thermal.framerate") && source.contains("thermal.scaleDownBy"),
+            "applyVideoQuality must pass thermal.bitrateBps / .framerate / .scaleDownBy to " +
+            "applyVideoEncoding — using raw level values bypasses the thermal ceiling."
+        )
+    }
+}
+
+// MARK: - Disconnect debounce source guards
+
+/// `scheduleDisconnectEscalation` fires `webRTCServiceDidDisconnect` only after
+/// `disconnectDebounceSeconds` of continuous ICE disconnection — allowing transient
+/// network blips to recover before triggering a full reconnect cycle.
+/// These guards catch a regression that would cost the user their whole call for
+/// a <3.5s packet burst.
+@MainActor
+final class DisconnectDebounceSourceGuardTests: XCTestCase {
+
+    private func webRTCServiceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_scheduleDisconnectEscalation_cancelsExistingTaskBeforeCreating() throws {
+        let src = try webRTCServiceSource()
+        guard let range = src.range(of: "func scheduleDisconnectEscalation()") else {
+            XCTFail("scheduleDisconnectEscalation not found"); return
+        }
+        let end = src.range(of: "\n    }", range: range.upperBound..<src.endIndex)?.upperBound ?? src.endIndex
+        let body = String(src[range.lowerBound..<end])
+        XCTAssertTrue(
+            body.contains("disconnectDebounceTask?.cancel()"),
+            "scheduleDisconnectEscalation must cancel any prior debounce task before arming a new one"
+        )
+    }
+
+    func test_scheduleDisconnectEscalation_usesThresholdConstant() throws {
+        let src = try webRTCServiceSource()
+        XCTAssertTrue(
+            src.contains("QualityThresholds.disconnectDebounceSeconds"),
+            "The debounce duration must reference QualityThresholds.disconnectDebounceSeconds — " +
+            "a hardcoded literal makes the window invisible to tests and impossible to tune"
+        )
+    }
+
+    func test_scheduleDisconnectEscalation_guardsConnectionStateBeforeFiring() throws {
+        let src = try webRTCServiceSource()
+        guard let range = src.range(of: "func scheduleDisconnectEscalation()") else {
+            XCTFail("scheduleDisconnectEscalation not found"); return
+        }
+        let end = src.range(of: "\n    }", range: range.upperBound..<src.endIndex)?.upperBound ?? src.endIndex
+        let body = String(src[range.lowerBound..<end])
+        XCTAssertTrue(
+            body.contains("connectionState == .disconnected"),
+            "Before firing the delegate, the escalation must re-check connectionState == .disconnected — " +
+            "the connection may have recovered during the debounce window"
+        )
+    }
+
+    func test_scheduleDisconnectEscalation_checksCancellationBeforeFiring() throws {
+        let src = try webRTCServiceSource()
+        guard let range = src.range(of: "func scheduleDisconnectEscalation()") else {
+            XCTFail("scheduleDisconnectEscalation not found"); return
+        }
+        let end = src.range(of: "\n    }", range: range.upperBound..<src.endIndex)?.upperBound ?? src.endIndex
+        let body = String(src[range.lowerBound..<end])
+        XCTAssertTrue(
+            body.contains("Task.isCancelled"),
+            "The debounce task must guard Task.isCancelled so a re-arm after ICE reconnection " +
+            "suppresses a stale escalation that was already mid-sleep"
+        )
+    }
+}
+
+// MARK: - Quality delegate source guards
+
+/// `didCollectStats` and `didChangeQualityLevel` are the two delegate callbacks
+/// that carry quality data back to CallManager. They must be called in the right
+/// places and with the right parameters.
+@MainActor
+final class WebRTCQualityDelegateSourceGuardTests: XCTestCase {
+
+    private func webRTCServiceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// `didCollectStats` must be called from the quality monitor with the
+    /// delta-based `packetLossPercent` (not the cumulative ratio) so the gateway
+    /// quality-alert and call-summary message see accurate loss data.
+    func test_qualityMonitor_callsDidCollectStats_withDeltaPacketLoss() throws {
+        let src = try webRTCServiceSource()
+        XCTAssertTrue(
+            src.contains("didCollectStats: stats, level: self.currentQualityLevel, packetLossPercent: packetLossPercent"),
+            "The quality monitor must call delegate?.webRTCService(_:didCollectStats:level:packetLossPercent:) " +
+            "with the delta-computed packetLossPercent"
+        )
+    }
+
+    /// `didChangeQualityLevel` must fire when the quality level transitions so
+    /// CallManager can emit `call:quality-report` to the gateway.
+    func test_adjustBitrate_callsDidChangeQualityLevel_onTransition() throws {
+        let src = try webRTCServiceSource()
+        XCTAssertTrue(
+            src.contains("delegate?.webRTCService(self, didChangeQualityLevel: newLevel, from: previousLevel)"),
+            "When the quality level changes, adjustBitrate must call the didChangeQualityLevel delegate " +
+            "so CallManager can report it to the gateway"
+        )
     }
 }
 
@@ -222,7 +498,8 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
     func switchCamera() async throws {}
     func availableCameras() -> [CameraDeviceOption] { [] }
     func switchToCamera(uniqueID: String) async throws {}
-    func getStats() async -> CallStats? { nil }
+    var statsToReturn: CallStats? = nil
+    func getStats() async -> CallStats? { statsToReturn }
     func createDataChannel(label: String) -> Bool {
         lastDataChannelLabel = label
         return createDataChannelResult

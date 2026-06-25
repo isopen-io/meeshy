@@ -614,9 +614,9 @@ struct MeeshyApp: App {
         switch newPhase {
         case .background:
             if !ConversationAudioCoordinator.sharedForTesting.isPlaying {
-                #if DEBUG
-                MediaSessionCoordinator.shared.testProbe?.deactivateCount += 1
-                #endif
+                // `deactivateForBackground()` owns the `deactivateCount` probe
+                // increment (post `callActive` guard) — do NOT pre-count here or
+                // a single background transition double-counts.
                 await MediaSessionCoordinator.shared.deactivateForBackground()
             }
         default:

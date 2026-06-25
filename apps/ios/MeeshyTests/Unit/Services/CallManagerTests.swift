@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 // MARK: - CallState Tests
@@ -701,6 +702,42 @@ final class CallStatsReducerTests: XCTestCase {
         XCTAssertEqual(stats.outboundPacketsSent, 0)
         XCTAssertNil(stats.codec)
     }
+
+    func test_reduce_parsesAvailableOutgoingBitrateFromCandidatePair() {
+        let stats = CallStats.reduce(entries: [
+            CallStats.RawEntry(id: "cp", type: "candidate-pair",
+                               values: ["currentRoundTripTime": 0.050, "availableOutgoingBitrate": 1_500_000.0])
+        ])
+        XCTAssertEqual(stats.availableOutgoingBitrateBps, 1_500_000)
+    }
+
+    func test_reduce_noAvailableOutgoingBitrate_returnsZero() {
+        let stats = CallStats.reduce(entries: [
+            CallStats.RawEntry(id: "cp", type: "candidate-pair",
+                               values: ["currentRoundTripTime": 0.050])
+        ])
+        XCTAssertEqual(stats.availableOutgoingBitrateBps, 0)
+    }
+
+    func test_videoQualityLevel_fromBwe_excellent() {
+        XCTAssertEqual(VideoQualityLevel.from(availableOutgoingBitrateBps: 2_000_000), .excellent)
+    }
+
+    func test_videoQualityLevel_fromBwe_good() {
+        XCTAssertEqual(VideoQualityLevel.from(availableOutgoingBitrateBps: 1_200_000), .good)
+    }
+
+    func test_videoQualityLevel_fromBwe_fair() {
+        XCTAssertEqual(VideoQualityLevel.from(availableOutgoingBitrateBps: 500_000), .fair)
+    }
+
+    func test_videoQualityLevel_fromBwe_poor() {
+        XCTAssertEqual(VideoQualityLevel.from(availableOutgoingBitrateBps: 200_000), .poor)
+    }
+
+    func test_videoQualityLevel_fromBwe_critical() {
+        XCTAssertEqual(VideoQualityLevel.from(availableOutgoingBitrateBps: 80_000), .critical)
+    }
 }
 
 // MARK: - Call Reliability Policy (§5.8)
@@ -764,6 +801,39 @@ final class CallReliabilityPolicyTests: XCTestCase {
     func test_connecting_failBudgetWins_evenIfRestartNotAttempted() {
         let outcome = Policy.evaluateConnecting(secondsInConnecting: 30, didAttemptRestart: false)
         XCTAssertEqual(outcome, .fail)
+    }
+
+    // --- Reconnecting watchdog (stalled ICE-restart escalation) ---
+    //
+    // A reconnection attempt whose ICE restart silently stalls (offer sent, peer
+    // never answers, no new PC-state callback, no network flap) would otherwise
+    // hang in `.reconnecting` forever — nothing re-arms `attemptReconnection`, so
+    // the 3-attempt cap is never reached. The watchdog escalates once an attempt
+    // overruns its budget; the existing `maxReconnectAttempts` cap then bounds the
+    // total reconnection window and fails the call.
+
+    func test_reconnecting_withinBudget_waits() {
+        let outcome = Policy.evaluateReconnecting(secondsInAttempt: 5, budgetSeconds: 10)
+        XCTAssertEqual(outcome, .waiting)
+    }
+
+    func test_reconnecting_atBudget_retries() {
+        let outcome = Policy.evaluateReconnecting(secondsInAttempt: 10, budgetSeconds: 10)
+        XCTAssertEqual(outcome, .retry)
+    }
+
+    func test_reconnecting_pastBudget_retries() {
+        let outcome = Policy.evaluateReconnecting(secondsInAttempt: 13, budgetSeconds: 10)
+        XCTAssertEqual(outcome, .retry)
+    }
+
+    func test_reconnecting_usesDefaultBudgetFromThresholds() {
+        let justUnder = QualityThresholds.reconnectAttemptBudgetSeconds - 0.1
+        XCTAssertEqual(Policy.evaluateReconnecting(secondsInAttempt: justUnder), .waiting)
+        XCTAssertEqual(
+            Policy.evaluateReconnecting(secondsInAttempt: QualityThresholds.reconnectAttemptBudgetSeconds),
+            .retry
+        )
     }
 }
 
@@ -843,5 +913,137 @@ final class CallCoverPresentationTests: XCTestCase {
         XCTAssertFalse(CallState.shouldPresentFullScreenCover(
             callState: .ended(reason: .local), displayMode: .pip),
             "an ended call that was in PiP must not pop a full-screen cover")
+    }
+}
+
+// MARK: - VideoSurvivalController integration guards
+
+/// Source-level guards for the `VideoSurvivalController` integration in `CallManager`.
+/// The controller is constructed internally (not injectable), so we verify the
+/// wiring via source inspection:
+///   1. `$isVideoSuspended` binding so the @Published var mirrors the controller.
+///   2. `videoSurvivalController.handle(level:userWantsVideo:)` called from the quality monitor.
+///   3. `videoSurvivalController.reset()` called on teardown and camera-off to avoid state leakage.
+@MainActor
+final class VideoSurvivalControllerIntegrationTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// `isVideoSuspended` must mirror the controller's `@Published` so SwiftUI
+    /// views react to survival-triggered video suspension without coupling directly
+    /// to the controller (which is internal to CallManager).
+    func test_isVideoSuspended_isPublishedAndBoundToController() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("@Published private(set) var isVideoSuspended"),
+            "CallManager must expose @Published private(set) var isVideoSuspended for UI binding"
+        )
+        XCTAssertTrue(
+            source.contains("videoSurvivalController.$isVideoSuspended"),
+            "isVideoSuspended must be driven by videoSurvivalController.$isVideoSuspended binding, " +
+            "not set directly, to keep single-source-of-truth"
+        )
+    }
+
+    /// The quality monitor must feed each quality level sample to the controller
+    /// so it can decide when to suspend/resume video based on time-hysteresis.
+    func test_qualityMonitor_feedsLevelToSurvivalController() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("videoSurvivalController.handle(level: level, userWantsVideo:"),
+            "The quality monitor must call videoSurvivalController.handle(level:userWantsVideo:) " +
+            "on every quality sample — omitting this breaks video suspension"
+        )
+    }
+
+    /// On call teardown, the controller must be reset so its hysteresis timers
+    /// don't bleed into the next call.
+    func test_endCallInternal_resetsVideoSurvivalController() throws {
+        let source = try callManagerSource()
+        guard let funcRange = source.range(of: "func endCallInternal") else {
+            XCTFail("endCallInternal not found in CallManager source"); return
+        }
+        let nextMark = source.range(of: "\n    // MARK:", range: funcRange.upperBound..<source.endIndex)?.lowerBound
+                    ?? source.endIndex
+        let body = String(source[funcRange.lowerBound..<nextMark])
+        XCTAssertTrue(
+            body.contains("videoSurvivalController.reset()"),
+            "endCallInternal must call videoSurvivalController.reset() to clear hysteresis timers " +
+            "and isVideoSuspended before the next call can start"
+        )
+    }
+
+    /// When the user toggles the camera off, the controller must be reset so a
+    /// prior degraded-streak timer doesn't immediately trigger suspension when
+    /// video is re-enabled.
+    func test_toggleVideo_off_resetsVideoSurvivalController() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("videoSurvivalController.reset()"),
+            "Disabling the camera must reset videoSurvivalController so stale degradation " +
+            "timers don't fire as soon as video is re-enabled"
+        )
+    }
+}
+
+// MARK: - Prisme Linguistique: preferredCallLanguage (§Transcription Language Resolution)
+
+/// Behavioural tests for `CallManager.preferredCallLanguage(for:)`.
+/// Pure static function: no network, no singletons, no async.
+/// Priority order: systemLanguage > regionalLanguage > "fr" fallback.
+@MainActor
+final class CallManagerPreferredCallLanguageTests: XCTestCase {
+
+    private func makeUser(
+        systemLanguage: String? = nil,
+        regionalLanguage: String? = nil
+    ) -> MeeshyUser {
+        MeeshyUser(id: "u1", username: "testuser",
+                   systemLanguage: systemLanguage,
+                   regionalLanguage: regionalLanguage)
+    }
+
+    func test_nilUser_returnsFrFallback() {
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: nil), "fr")
+    }
+
+    func test_systemLanguagePresent_returnsSystemLanguage() {
+        let user = makeUser(systemLanguage: "en", regionalLanguage: "es")
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "en")
+    }
+
+    func test_systemLanguageNil_regionalPresent_returnsRegionalLanguage() {
+        let user = makeUser(systemLanguage: nil, regionalLanguage: "es")
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "es")
+    }
+
+    func test_bothLanguagesNil_returnsFrFallback() {
+        let user = makeUser(systemLanguage: nil, regionalLanguage: nil)
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "fr")
+    }
+
+    func test_systemLanguagePrioritisedOverRegional() {
+        // Prisme Linguistique: priority 1 (systemLanguage) beats priority 2 (regionalLanguage)
+        let user = makeUser(systemLanguage: "de", regionalLanguage: "fr")
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "de")
+    }
+
+    func test_systemLanguageUsedEvenWhenRegionalIsFrench() {
+        // When both are set, the explicit systemLanguage wins — "fr" regional must not shadow it
+        let user = makeUser(systemLanguage: "zh", regionalLanguage: "fr")
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "zh")
+    }
+
+    func test_onlySystemLanguage_noRegional_returnsSystem() {
+        let user = makeUser(systemLanguage: "ar", regionalLanguage: nil)
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "ar")
     }
 }

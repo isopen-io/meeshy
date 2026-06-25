@@ -581,6 +581,12 @@ public struct SocketIceServer: Decodable, Sendable {
     }
 }
 
+public struct CallIceServersRefreshedData: Decodable, Sendable {
+    public let callId: String
+    public let iceServers: [SocketIceServer]
+    public let ttl: Int
+}
+
 public struct CallOfferData: Decodable, Sendable {
     public let callId: String
     public let conversationId: String
@@ -691,6 +697,14 @@ public struct CallMediaToggleData: Decodable, Sendable {
 public struct CallErrorData: Decodable, Sendable {
     public let code: String?
     public let message: String?
+}
+
+public struct CallQualityAlertData: Decodable, Sendable {
+    public let callId: String
+    public let participantId: String
+    public let metric: String
+    public let value: Double
+    public let threshold: Double
 }
 
 // MARK: - Reaction Sync Event Data
@@ -970,6 +984,8 @@ public protocol MessageSocketProviding: Sendable {
     var callParticipantLeft: PassthroughSubject<CallParticipantData, Never> { get }
     var callMediaToggled: PassthroughSubject<CallMediaToggleData, Never> { get }
     var callError: PassthroughSubject<CallErrorData, Never> { get }
+    var callIceServersRefreshed: PassthroughSubject<CallIceServersRefreshedData, Never> { get }
+    var callQualityAlert: PassthroughSubject<CallQualityAlertData, Never> { get }
     var reactionSynced: PassthroughSubject<ReactionSyncEvent, Never> { get }
     var systemMessageReceived: PassthroughSubject<SystemMessageEvent, Never> { get }
     var mentionCreated: PassthroughSubject<MentionCreatedEvent, Never> { get }
@@ -1004,6 +1020,12 @@ public protocol MessageSocketProviding: Sendable {
     func emitCallEndWithAck(callId: String) async -> Bool
     func emitCallHeartbeat(callId: String)
     func emitCallQualityReport(callId: String, level: String, rtt: Double, packetLoss: Double, bytesSent: Int, bytesReceived: Int)
+    func emitCallReconnecting(callId: String, participantId: String, attempt: Int)
+    func emitCallReconnected(callId: String, participantId: String)
+    func emitRequestIceServers(callId: String)
+    func emitCallBackgrounded(callId: String, participantId: String)
+    func emitCallForegrounded(callId: String, participantId: String)
+    func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool)
 }
 
 // MARK: - Protocol Default-Arg Convenience
@@ -1021,6 +1043,22 @@ public extension MessageSocketProviding {
         callId: String, level: String, rtt: Double, packetLoss: Double,
         bytesSent: Int, bytesReceived: Int
     ) {}
+
+    /// Shim that adds BWE passthrough; mocks can keep the old signature.
+    func emitCallQualityReport(
+        callId: String, level: String, rtt: Double, packetLoss: Double,
+        bytesSent: Int, bytesReceived: Int, availableOutgoingBitrateBps: Int
+    ) {
+        emitCallQualityReport(callId: callId, level: level, rtt: rtt, packetLoss: packetLoss,
+                              bytesSent: bytesSent, bytesReceived: bytesReceived)
+    }
+
+    func emitCallReconnecting(callId: String, participantId: String, attempt: Int) {}
+    func emitCallReconnected(callId: String, participantId: String) {}
+    func emitRequestIceServers(callId: String) {}
+    func emitCallBackgrounded(callId: String, participantId: String) {}
+    func emitCallForegrounded(callId: String, participantId: String) {}
+    func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool) {}
 
     func sendWithAttachments(
         conversationId: String,
@@ -1157,6 +1195,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let callParticipantLeft = PassthroughSubject<CallParticipantData, Never>()
     public let callMediaToggled = PassthroughSubject<CallMediaToggleData, Never>()
     public let callError = PassthroughSubject<CallErrorData, Never>()
+    public let callIceServersRefreshed = PassthroughSubject<CallIceServersRefreshedData, Never>()
+    public let callQualityAlert = PassthroughSubject<CallQualityAlertData, Never>()
 
     // Combine publishers — reactions sync, system, attachments, mentions
     public let reactionSynced = PassthroughSubject<ReactionSyncEvent, Never>()
@@ -1887,11 +1927,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         public let callId: String
         public let mode: String?
         public let iceServers: [SocketIceServer]
+        public let ttl: Int?
 
-        public init(callId: String, mode: String?, iceServers: [SocketIceServer]) {
+        public init(callId: String, mode: String?, iceServers: [SocketIceServer], ttl: Int? = nil) {
             self.callId = callId
             self.mode = mode
             self.iceServers = iceServers
+            self.ttl = ttl
         }
     }
 
@@ -1934,7 +1976,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
                     return
                 }
 
-                continuation.resume(returning: CallInitiateAck(callId: callId, mode: mode, iceServers: servers))
+                let ttl = data["ttl"] as? Int
+                continuation.resume(returning: CallInitiateAck(callId: callId, mode: mode, iceServers: servers, ttl: ttl))
             }
         }
     }
@@ -1945,6 +1988,34 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     public func emitCallLeave(callId: String) {
         socket?.emit("call:leave", ["callId": callId])
+    }
+
+    public func emitRequestIceServers(callId: String) {
+        socket?.emit("call:request-ice-servers", ["callId": callId])
+    }
+
+    /// Informs the gateway the app entered background while a call is active.
+    /// The gateway uses this to switch ringing delivery to VoIP push and extend
+    /// its heartbeat tolerance window.
+    public func emitCallBackgrounded(callId: String, participantId: String) {
+        socket?.emit("call:backgrounded", ["callId": callId, "participantId": participantId])
+    }
+
+    /// Informs the gateway the app returned to foreground during an active call.
+    /// Resets the heartbeat tolerance window and re-enables socket-based ringing.
+    public func emitCallForegrounded(callId: String, participantId: String) {
+        socket?.emit("call:foregrounded", ["callId": callId, "participantId": participantId])
+    }
+
+    /// Notifies the gateway (and, by relay, other participants) that the local
+    /// screen capture state changed. Other participants receive
+    /// `call:screen-capture-alert` so they can display a warning.
+    public func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool) {
+        socket?.emit("call:screen-capture-detected", [
+            "callId": callId,
+            "participantId": participantId,
+            "isCapturing": isCapturing
+        ])
     }
 
     /// Reports whether the app is in the FOREGROUND so the gateway can decide,
@@ -2058,17 +2129,38 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// are cumulative WebRTC counters; `level` is excellent|good|fair|poor.
     public func emitCallQualityReport(
         callId: String, level: String, rtt: Double, packetLoss: Double,
-        bytesSent: Int, bytesReceived: Int
+        bytesSent: Int, bytesReceived: Int, availableOutgoingBitrateBps: Int = 0
     ) {
-        socket?.emit("call:quality-report", [
+        var stats: [String: Any] = [
+            "level": level,
+            "rtt": rtt,
+            "packetLoss": packetLoss,
+            "bytesSent": bytesSent,
+            "bytesReceived": bytesReceived
+        ]
+        if availableOutgoingBitrateBps > 0 {
+            stats["availableOutgoingBitrateBps"] = availableOutgoingBitrateBps
+        }
+        socket?.emit("call:quality-report", ["callId": callId, "stats": stats])
+    }
+
+    /// Notify the gateway that a local ICE restart is in progress (e.g. network
+    /// handoff or connectivity loss). Fire-and-forget. The gateway updates the
+    /// call DB status to `reconnecting` and suppresses premature cleanup.
+    public func emitCallReconnecting(callId: String, participantId: String, attempt: Int) {
+        socket?.emit("call:reconnecting", [
             "callId": callId,
-            "stats": [
-                "level": level,
-                "rtt": rtt,
-                "packetLoss": packetLoss,
-                "bytesSent": bytesSent,
-                "bytesReceived": bytesReceived
-            ]
+            "participantId": participantId,
+            "attempt": attempt
+        ])
+    }
+
+    /// Notify the gateway that the ICE restart completed successfully and the
+    /// call is active again. Fire-and-forget. Resets call DB status to `active`.
+    public func emitCallReconnected(callId: String, participantId: String) {
+        socket?.emit("call:reconnected", [
+            "callId": callId,
+            "participantId": participantId
         ])
     }
 
@@ -2699,6 +2791,20 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(CallErrorData.self, from: data) { [weak self] event in
                 self?.callError.send(event)
+            }
+        }
+
+        socket.on("call:ice-servers-refreshed") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(CallIceServersRefreshedData.self, from: data) { [weak self] event in
+                self?.callIceServersRefreshed.send(event)
+            }
+        }
+
+        socket.on("call:quality-alert") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(CallQualityAlertData.self, from: data) { [weak self] event in
+                self?.callQualityAlert.send(event)
             }
         }
 

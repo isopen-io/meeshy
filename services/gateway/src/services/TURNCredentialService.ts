@@ -62,12 +62,22 @@ export class TURNCredentialService {
     this.turnServers = this.parseTURNServers(turnServersEnv);
 
     // Credential TTL in seconds.
-    // Audit P2-GW-4 — bumped from 3600s to 600s (10 min). A 1-hour window
-    // is excessive for ephemeral TURN credentials; 10 min still covers a
-    // long call (median call < 90s) while sharply reducing the blast
-    // radius of any leak / replay. Operators can override via env if they
-    // need the longer window for long-running calls.
-    this.credentialTTL = parseInt(process.env.TURN_CREDENTIAL_TTL || '600', 10);
+    //
+    // CALL-FIX 2026-06-25 — restored to 24h. The Audit P2-GW-4 value of 600s
+    // (10 min) silently killed any call relayed through TURN: credentials are
+    // minted ONCE at call:initiate / call:join and embed `now + TTL` in the
+    // coturn `use-auth-secret` username. coturn refuses to refresh a relay
+    // allocation past that timestamp, so a call behind symmetric / carrier-grade
+    // NAT (no direct path — common on cellular) lost its relay and tore down
+    // (`disconnected` → ICE restart reusing the SAME expired creds → `failed`)
+    // at ~10 min. The TTL MUST cover the maximum lifetime the server grants an
+    // active call (CallCleanupService MAX_ACTIVE_MS = 2h) — otherwise credential
+    // expiry, not the call itself, decides when it ends. 24h is the coturn
+    // reference window for REST time-limited credentials and leaves ample
+    // headroom above the 2h hard cap. The blast radius of a leaked, per-user,
+    // relay-only credential is bandwidth use on our own TURN server, not data
+    // exposure. Operators can still tighten/loosen via env (must stay ≥ 2h).
+    this.credentialTTL = parseInt(process.env.TURN_CREDENTIAL_TTL || '86400', 10);
 
     // STUN servers (public Google STUN servers)
     this.stunServers = [
@@ -96,15 +106,23 @@ export class TURNCredentialService {
     const servers = serversEnv
       .split(',')
       .filter(s => s.trim())
-      .map(serverStr => {
+      .reduce<TURNServerConfig[]>((acc, serverStr) => {
         const [host, portStr] = serverStr.trim().split(':');
-        const port = portStr ? parseInt(portStr, 10) : 3478;
+        const trimmedHost = host?.trim() ?? '';
+        if (!trimmedHost) {
+          logger.warn('⚠️ TURN server entry has empty host — skipping', { entry: serverStr });
+          return acc;
+        }
 
-        return {
-          host: host.trim(),
-          port: isNaN(port) ? 3478 : port
-        };
-      });
+        const parsedPort = portStr ? parseInt(portStr, 10) : 3478;
+        const port = isNaN(parsedPort) || parsedPort < 1 || parsedPort > 65535 ? 3478 : parsedPort;
+        if (parsedPort !== port) {
+          logger.warn('⚠️ TURN server port out of range [1-65535] — defaulting to 3478', { entry: serverStr, parsedPort });
+        }
+
+        acc.push({ host: trimmedHost, port });
+        return acc;
+      }, []);
 
     return servers;
   }

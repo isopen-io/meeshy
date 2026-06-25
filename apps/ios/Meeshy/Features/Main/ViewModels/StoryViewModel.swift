@@ -528,7 +528,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
 
     // MARK: - Publish Story
 
-    func publishStory(effects: StoryEffects, content: String?, image: UIImage?, originalLanguage: String? = nil, visibility: String = "PUBLIC") async {
+    func publishStory(effects: StoryEffects, content: String?, image: UIImage?, originalLanguage: String? = nil, visibility: String = "FRIENDS") async {
         guard !isPublishing else { return }
         isPublishing = true
         publishError = nil
@@ -589,7 +589,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         loadedImages: [String: UIImage] = [:],
         loadedVideoURLs: [String: URL] = [:],
         originalLanguage: String? = nil,
-        visibility: String = "PUBLIC"
+        visibility: String = "FRIENDS"
     ) async throws {
         let serverOrigin = MeeshyConfig.shared.serverOrigin
         guard let baseURL = URL(string: serverOrigin),
@@ -676,7 +676,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         loadedVideoURLs: [String: URL],
         loadedAudioURLs: [String: URL] = [:],
         originalLanguage: String? = nil,
-        visibility: String = "PUBLIC",
+        visibility: String = "FRIENDS",
         visibilityUserIds: [String] = []
     ) {
         guard activeUpload == nil else { return }

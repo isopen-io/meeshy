@@ -68,7 +68,7 @@ export function registerCoreRoutes(
         op: () => postService.createPost({
           ...parsed.data,
           type: parsed.data.type ?? 'POST',
-          visibility: parsed.data.visibility ?? 'PUBLIC',
+          visibility: parsed.data.visibility ?? (parsed.data.type === 'STORY' ? 'FRIENDS' : 'PUBLIC'),
         }, authContext.registeredUser.id) as Promise<CreatedPost & { id: string }>,
         onDuplicate: async (resultId) => {
           const replayed = await postService.getPostById(resultId, authContext.registeredUser.id);
@@ -154,6 +154,8 @@ export function registerCoreRoutes(
         postCreatedAt: (post as any).createdAt ?? undefined,
         postExpiresAt: (post as any).expiresAt ?? undefined,
         excludeUserIds: mentionedUserIdsForDedup,
+        visibility: (post as any).visibility as string | undefined,
+        visibilityUserIds: (post as any).visibilityUserIds as string[] | undefined,
       }).catch((err: unknown) => {
         fastify.log.error(`[POST /posts] friend content notification fan-out failed: ${err}`);
       });
