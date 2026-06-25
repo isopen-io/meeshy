@@ -2142,9 +2142,7 @@ final class CallManager: ObservableObject {
         // conflicts with the bidirectional voice path (forces the OS to flap
         // between A2DP and HFP, causing periodic ~200ms audio glitches). HFP
         // already covers BT headsets via the SCO bidirectional voice link.
-        // .preferNoInterruptionsFromSystemAlerts (iOS 14.5+) prevents Siri,
-        // low-battery alerts, and other system sounds from ducking the call audio.
-        configuration.categoryOptions = [.allowBluetoothHFP, .duckOthers, .preferNoInterruptionsFromSystemAlerts]
+        configuration.categoryOptions = [.allowBluetoothHFP, .duckOthers]
         let activateNow = !callUsesCallKit
 
         audioSessionQueue.sync {
@@ -2169,6 +2167,11 @@ final class CallManager: ObservableObject {
                 // this would DEACTIVATE the session the ring-sound manager just brought
                 // up. The [AUDIO_FALLBACK] at connect then finds it already active.
                 try session.setConfiguration(configuration, active: activateNow)
+                // Prevent Siri, low-battery, and other system alerts from ducking
+                // or interrupting the call (iOS 14.5+). This is an AVAudioSession
+                // *instance* preference, NOT a CategoryOptions flag — best-effort
+                // (it throws on iOS-app-on-Mac, where it is unsupported).
+                try? session.session.setPrefersNoInterruptionsFromSystemAlerts(true)
                 Logger.calls.info("RTCAudioSession pre-configured — video: \(isVideo), activeNow=\(activateNow)")
             } catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == 4099 {
                 // "Session deactivation failed" — le call précédent a laissé
