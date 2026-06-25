@@ -20,7 +20,7 @@ struct IceCandidate: Codable, Sendable {
     let candidate: String
 }
 
-struct IceServer {
+struct IceServer: Sendable {
     let urls: [String]
     let username: String?
     let credential: String?
@@ -32,7 +32,7 @@ struct IceServer {
     ]
 }
 
-struct MediaTracks {
+struct MediaTracks: Sendable {
     let audioEnabled: Bool
     let videoEnabled: Bool
 }
@@ -338,7 +338,7 @@ protocol WebRTCClientDelegate: AnyObject {
 
 // MARK: - Call End Reason
 
-enum CallEndReason: Equatable {
+enum CallEndReason: Equatable, Sendable {
     case local
     case remote
     case rejected
@@ -498,7 +498,7 @@ enum VideoQualityLevel: String, Comparable, Sendable {
 
 // MARK: - Errors
 
-enum WebRTCError: Error, LocalizedError {
+enum WebRTCError: Error, LocalizedError, Sendable {
     case noPeerConnection
     case failedToCreatePeerConnection
     case failedToCreateSDP
@@ -538,7 +538,7 @@ enum WebRTCError: Error, LocalizedError {
 /// then takes the MORE conservative of the network target and the thermal cap
 /// on each axis. `.nominal` is a strict no-op.
 enum VideoThermalProfile {
-    struct Ceiling: Equatable {
+    struct Ceiling: Equatable, Sendable {
         let bitrateFactor: Double   // multiplies the network bitrate target (≤ 1)
         let maxFramerate: Int       // absolute fps cap
         let minScaleDownBy: Double  // floor on resolution downscale (≥ 1)
