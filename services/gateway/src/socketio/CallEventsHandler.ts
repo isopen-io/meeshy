@@ -1560,6 +1560,12 @@ export class CallEventsHandler {
           return;
         }
 
+        // Anonymous users cannot end calls — they cannot initiate or join them
+        // either (denyAnonymous is checked at initiate/join). This gate prevents
+        // a future bug where an anonymous user that somehow holds a callId
+        // could end someone else's call by guessing or replaying an event.
+        if (denyAnonymous()) { ack?.({ success: false }); return; }
+
         // Rate limiting
         const rateLimitPassed = await checkSocketRateLimit(
           socket, userId, SOCKET_RATE_LIMITS.CALL_LEAVE, this.rateLimiter, CALL_EVENTS.ERROR
