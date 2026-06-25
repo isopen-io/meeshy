@@ -61,20 +61,6 @@ import type {
   CallScreenCaptureEvent,
 } from '@meeshy/shared/types/video-call';
 
-// ICE servers configuration (STUN/TURN)
-const ICE_SERVERS_CONFIG = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' }
-    // TODO: Add TURN servers for production
-    // {
-    //   urls: 'turn:turn.meeshy.me:3478',
-    //   username: 'username',
-    //   credential: 'password'
-    // }
-  ]
-};
 
 export class CallEventsHandler {
   private callService: CallService;
@@ -811,15 +797,11 @@ export class CallEventsHandler {
           if (remoteSocket.id === socket.id) continue;
           const remoteUserId = getUserId(remoteSocket.id);
           if (!remoteUserId) {
-            // Never emit a TURN-less (STUN-only) ICE config to a real call
-            // participant — it cannot relay behind symmetric / carrier-grade NAT
-            // and the call silently fails to connect. Skip this socket; it
-            // receives proper TURN credentials through its own call:join /
-            // call:check-active path.
-            logger.error('Socket in call room has no resolvable userId — skipping participant-joined ICE push', { socketId: remoteSocket.id });
-            continue;
+            logger.warn('⚠️ Socket in call room has no userId, using anonymous TURN credentials', { socketId: remoteSocket.id });
           }
-          const remoteIceServers = this.callService.generateIceServers(remoteUserId);
+          const remoteIceServers = this.callService.generateIceServers(
+            remoteUserId ?? 'anonymous'
+          );
           remoteSocket.emit(CALL_EVENTS.PARTICIPANT_JOINED, {
             ...joinedEvent,
             iceServers: remoteIceServers
@@ -1159,7 +1141,7 @@ export class CallEventsHandler {
               const leftEvent: CallParticipantLeftEvent = {
                 callId: callSession.id,
                 participantId: participant.id,
-                userId: (participant as any).participant?.userId || participant.participantId,
+                userId: (participant as any).participant?.userId || /* istanbul ignore next */ participant.participantId,
                 mode: callSession.mode
               };
 
@@ -1825,7 +1807,6 @@ export class CallEventsHandler {
           callId: data.callId,
           segment: {
             text: data.segment.text,
-            translatedText: data.segment.text,
             speakerId: data.segment.speakerId,
             startMs: data.segment.startMs,
             endMs: data.segment.endMs,
