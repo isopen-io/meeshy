@@ -116,6 +116,11 @@ final class CallManager: ObservableObject {
     @Published private(set) var callDuration: TimeInterval = 0
     @Published private(set) var currentCallId: String?
     @Published private(set) var connectionQuality: PeerConnectionState = .new
+    /// Granular quality level derived from RTT + packet-loss stats (updated every
+    /// `statsIntervalSeconds`). `nil` before the first stats sample arrives.
+    /// Prefer this over `connectionQuality` for the quality dot — it reflects
+    /// the actual media experience, not just the ICE/DTLS connection state.
+    @Published private(set) var liveVideoQualityLevel: VideoQualityLevel? = nil
     @Published var displayMode: CallDisplayMode = .fullScreen
     /// Une fenêtre PiP SYSTÈME (AVPictureInPicture) est affichée. Orthogonal à
     /// `displayMode` : tant qu'il est vrai, la `FloatingCallPillView` in-app est
@@ -2000,6 +2005,7 @@ final class CallManager: ObservableObject {
         deactivateAudioSession()
         callState = .ended(reason: reason)
         connectionQuality = .new
+        liveVideoQualityLevel = nil
         activeCallUUID = nil
         // Audit P2-iOS-1 — drop any pending "busy" incoming call. If a 2nd
         // call arrived while this one was active and got immediately ended
@@ -2706,8 +2712,15 @@ extension CallManager: WebRTCServiceDelegate {
         Task { @MainActor [weak self] in
             guard let self else { return }
             switch self.callState {
-            case .connected, .reconnecting:
+            case .connected:
                 self.attemptReconnection()
+            case .reconnecting:
+                // ICE disconnect during an active restart is expected — ICE can
+                // flap between disconnected/checking while renegotiating. The
+                // in-flight Task already owns the retry loop; firing a second
+                // attemptReconnection() here would advance reconnectAttempt
+                // prematurely and exhaust the budget before the restart completes.
+                Logger.calls.info("WebRTC disconnected during ICE restart — ignoring (reconnect in progress)")
             default:
                 Logger.calls.info("WebRTC disconnected in state: \(String(describing: self.callState))")
             }
@@ -2771,6 +2784,7 @@ extension CallManager: WebRTCServiceDelegate {
     nonisolated func webRTCService(_ service: WebRTCService, didCollectStats stats: CallStats, level: VideoQualityLevel, packetLossPercent: Double) {
         Task { @MainActor [weak self] in
             guard let self, let callId = self.currentCallId else { return }
+            self.liveVideoQualityLevel = level
             MessageSocketManager.shared.emitCallQualityReport(
                 callId: callId,
                 level: Self.connectionQualityLabel(for: level),
@@ -2825,8 +2839,21 @@ extension CallManager: WebRTCServiceDelegate {
             )
         }
 
-        Task { [weak self] in
+        // Exponential backoff: attempt 1 is immediate; attempt N≥2 waits
+        // min(2^(N-1), 4) seconds before restarting ICE. This prevents
+        // rapid-fire retries that exhaust maxReconnectAttempts in <1s when the
+        // peer connection is in a broken state (e.g., signaling socket down).
+        // Matches WhatsApp/FaceTime practice for ICE restart pacing.
+        let attempt = reconnectAttempt
+        let backoffSeconds = attempt > 1 ? min(pow(2.0, Double(attempt - 1)), 4.0) : 0.0
+
+        Task { @MainActor [weak self] in
             guard let self, let callId = self.currentCallId, let userId = self.remoteUserId else { return }
+            if backoffSeconds > 0 {
+                Logger.calls.info("ICE restart attempt \(attempt): backing off \(Int(backoffSeconds))s before retry")
+                try? await Task.sleep(for: .seconds(backoffSeconds))
+                guard !Task.isCancelled, self.callState.isActive else { return }
+            }
             guard let offer = await self.webRTCService.performICERestart() else {
                 Logger.calls.error("ICE restart failed to produce offer")
                 self.attemptReconnection()

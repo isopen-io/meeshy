@@ -477,6 +477,15 @@ struct CallView: View {
     }
 
     private var connectionQualityColor: Color {
+        // Prefer the RTT+packet-loss stats level (updated every statsIntervalSeconds)
+        // over the binary ICE state for a more accurate real-time quality indicator.
+        if let level = callManager.liveVideoQualityLevel {
+            switch level {
+            case .excellent, .good: return MeeshyColors.success
+            case .fair: return MeeshyColors.warning
+            case .poor, .critical: return MeeshyColors.error
+            }
+        }
         switch callManager.connectionQuality {
         case .connected: return MeeshyColors.success
         case .reconnecting, .checking, .new: return MeeshyColors.warning
@@ -486,6 +495,13 @@ struct CallView: View {
     }
 
     private var connectionQualityAccessibilityLabel: String {
+        if let level = callManager.liveVideoQualityLevel {
+            switch level {
+            case .excellent, .good: return String(localized: "call.quality.good", defaultValue: "Connexion bonne", bundle: .main)
+            case .fair: return String(localized: "call.quality.reconnecting", defaultValue: "Reconnexion", bundle: .main)
+            case .poor, .critical: return String(localized: "call.quality.lost", defaultValue: "Connexion perdue", bundle: .main)
+            }
+        }
         switch callManager.connectionQuality {
         case .connected: return String(localized: "call.quality.good", defaultValue: "Connexion bonne", bundle: .main)
         case .reconnecting, .checking, .new: return String(localized: "call.quality.reconnecting", defaultValue: "Reconnexion", bundle: .main)
@@ -495,6 +511,9 @@ struct CallView: View {
     }
 
     private var isConnectionDegraded: Bool {
+        if let level = callManager.liveVideoQualityLevel {
+            return level == .poor || level == .critical
+        }
         switch callManager.connectionQuality {
         case .disconnected, .failed: return true
         default: return false
