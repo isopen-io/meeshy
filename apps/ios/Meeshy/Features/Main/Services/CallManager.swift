@@ -1392,16 +1392,16 @@ final class CallManager: ObservableObject {
             transcriptionService.stopTranscribing()
         } else {
             let localUser = AuthManager.shared.currentUser
-            let localLang = localUser?.systemLanguage ?? localUser?.regionalLanguage ?? "fr"
+            let localLang = CallManager.preferredCallLanguage(for: localUser)
             let localUserId = localUser?.id ?? ""
             let rUserId = remoteUserId ?? ""
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                var remoteLang = "fr"
+                var remoteLang = CallManager.preferredCallLanguage(for: nil)
                 if !rUserId.isEmpty {
                     let cached = await CacheCoordinator.shared.profiles.load(for: rUserId)
                     if let profile = cached.snapshot()?.first {
-                        remoteLang = profile.systemLanguage ?? profile.regionalLanguage ?? "fr"
+                        remoteLang = CallManager.preferredCallLanguage(for: profile)
                     }
                 }
                 self.transcriptionService.startTranscribing(
@@ -2435,6 +2435,13 @@ final class CallManager: ObservableObject {
     static func isPolitePeer(localUserId: String, remoteUserId: String) -> Bool {
         guard !localUserId.isEmpty, !remoteUserId.isEmpty, localUserId != remoteUserId else { return false }
         return localUserId < remoteUserId
+    }
+
+    /// Resolves the preferred transcription/call language for a participant per
+    /// Prisme Linguistique: systemLanguage > regionalLanguage > "fr" fallback.
+    /// Pure + static — no side effects, no async, safe to unit test directly.
+    static func preferredCallLanguage(for user: MeeshyUser?) -> String {
+        user?.systemLanguage ?? user?.regionalLanguage ?? "fr"
     }
 
     // MARK: - Socket Emit Helpers

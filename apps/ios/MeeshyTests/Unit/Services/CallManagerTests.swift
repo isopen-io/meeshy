@@ -845,3 +845,57 @@ final class CallCoverPresentationTests: XCTestCase {
             "an ended call that was in PiP must not pop a full-screen cover")
     }
 }
+
+// MARK: - Prisme Linguistique: preferredCallLanguage (§Transcription Language Resolution)
+
+/// Behavioural tests for `CallManager.preferredCallLanguage(for:)`.
+/// Pure static function: no network, no singletons, no async.
+/// Priority order: systemLanguage > regionalLanguage > "fr" fallback.
+@MainActor
+final class CallManagerPreferredCallLanguageTests: XCTestCase {
+
+    private func makeUser(
+        systemLanguage: String? = nil,
+        regionalLanguage: String? = nil
+    ) -> MeeshyUser {
+        MeeshyUser(id: "u1", username: "testuser",
+                   systemLanguage: systemLanguage,
+                   regionalLanguage: regionalLanguage)
+    }
+
+    func test_nilUser_returnsFrFallback() {
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: nil), "fr")
+    }
+
+    func test_systemLanguagePresent_returnsSystemLanguage() {
+        let user = makeUser(systemLanguage: "en", regionalLanguage: "es")
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "en")
+    }
+
+    func test_systemLanguageNil_regionalPresent_returnsRegionalLanguage() {
+        let user = makeUser(systemLanguage: nil, regionalLanguage: "es")
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "es")
+    }
+
+    func test_bothLanguagesNil_returnsFrFallback() {
+        let user = makeUser(systemLanguage: nil, regionalLanguage: nil)
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "fr")
+    }
+
+    func test_systemLanguagePrioritisedOverRegional() {
+        // Prisme Linguistique: priority 1 (systemLanguage) beats priority 2 (regionalLanguage)
+        let user = makeUser(systemLanguage: "de", regionalLanguage: "fr")
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "de")
+    }
+
+    func test_systemLanguageUsedEvenWhenRegionalIsFrench() {
+        // When both are set, the explicit systemLanguage wins — "fr" regional must not shadow it
+        let user = makeUser(systemLanguage: "zh", regionalLanguage: "fr")
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "zh")
+    }
+
+    func test_onlySystemLanguage_noRegional_returnsSystem() {
+        let user = makeUser(systemLanguage: "ar", regionalLanguage: nil)
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "ar")
+    }
+}
