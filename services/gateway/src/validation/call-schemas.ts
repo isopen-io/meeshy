@@ -306,3 +306,37 @@ export const socketRequestIceServersSchema = z.object({
   callId: objectIdSchema,
 });
 export type SocketRequestIceServersInput = z.infer<typeof socketRequestIceServersSchema>;
+
+/**
+ * Socket.IO Event: call:backgrounded (fire-and-forget, Client → Server)
+ * Emitted when the app enters background while a call is active so the gateway
+ * can extend heartbeat tolerance and skip socket-delivery for ringing.
+ */
+export const socketCallBackgroundedSchema = z.object({
+  callId: objectIdSchema,
+  participantId: z.string().min(1),
+});
+export type SocketCallBackgroundedInput = z.infer<typeof socketCallBackgroundedSchema>;
+
+/**
+ * Socket.IO Event: call:foregrounded (fire-and-forget, Client → Server)
+ * Emitted when the app returns to foreground so the gateway can reset heartbeat
+ * tolerance and resume normal socket delivery for incoming calls.
+ */
+export const socketCallForegroundedSchema = z.object({
+  callId: objectIdSchema,
+  participantId: z.string().min(1),
+});
+export type SocketCallForegroundedInput = z.infer<typeof socketCallForegroundedSchema>;
+
+/**
+ * Socket.IO Event: call:screen-capture-detected (fire-and-forget, Client → Server)
+ * Emitted when UIScreen.isCaptured changes so the gateway can alert other
+ * participants via call:screen-capture-alert.
+ */
+export const socketCallScreenCaptureDetectedSchema = z.object({
+  callId: objectIdSchema,
+  participantId: z.string().min(1),
+  isCapturing: z.boolean(),
+});
+export type SocketCallScreenCaptureDetectedInput = z.infer<typeof socketCallScreenCaptureDetectedSchema>;

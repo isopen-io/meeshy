@@ -100,5 +100,8 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     func emitCallEnd(callId: String) {}
     func emitCallEndWithAck(callId: String) async -> Bool { true }
     func emitCallHeartbeat(callId: String) {}
+    func emitCallBackgrounded(callId: String, participantId: String) {}
+    func emitCallForegrounded(callId: String, participantId: String) {}
+    func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool) {}
     func sendViaSocketFallback(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String) async -> MessageSocketManager.SendMessageAck? { nil }
 }

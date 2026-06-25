@@ -31,7 +31,10 @@ import {
   socketReconnectedSchema,
   socketForceLeaveSchema,
   socketTranscriptionSegmentSchema,
-  socketRequestIceServersSchema
+  socketRequestIceServersSchema,
+  socketCallBackgroundedSchema,
+  socketCallForegroundedSchema,
+  socketCallScreenCaptureDetectedSchema
 } from '../validation/call-schemas';
 import { getSocketRateLimiter, checkSocketRateLimit, SOCKET_RATE_LIMITS } from '../utils/socket-rate-limiter';
 import type {
@@ -55,6 +58,7 @@ import type {
   // need the type-only re-export from video-call.ts which duplicates it).
   CallTranscriptionSegmentEvent,
   CallIceServersRefreshedEvent,
+  CallScreenCaptureEvent,
 } from '@meeshy/shared/types/video-call';
 
 // ICE servers configuration (STUN/TURN)
@@ -1882,6 +1886,89 @@ export class CallEventsHandler {
         });
       } catch (error) {
         logger.error('Error handling call:request-ice-servers', { error });
+      }
+    });
+
+    // ─── call:backgrounded ───────────────────────────────────────────────────
+    // The iOS app signals it is going to background while a call is active.
+    // We flip socket.data.appForeground so the ringing logic knows to use VoIP
+    // push for future incoming calls instead of socket delivery.
+    socket.on(CALL_EVENTS.BACKGROUNDED, async (data: { callId: string; participantId: string }) => {
+      try {
+        const userId = getUserId(socket.id);
+        if (!userId) return;
+        rememberAuth(userId);
+
+        const validation = validateSocketEvent(socketCallBackgroundedSchema, data);
+        if (!validation.success) return;
+
+        socket.data.appForeground = false;
+
+        logger.debug('📞 Socket: call:backgrounded', {
+          callId: data.callId,
+          participantId: data.participantId,
+          userId,
+        });
+      } catch (error) {
+        logger.error('Error handling call:backgrounded', { error });
+      }
+    });
+
+    // ─── call:foregrounded ───────────────────────────────────────────────────
+    // The iOS app has returned to foreground. Reset the flag so future ringing
+    // can be delivered via socket again.
+    socket.on(CALL_EVENTS.FOREGROUNDED, async (data: { callId: string; participantId: string }) => {
+      try {
+        const userId = getUserId(socket.id);
+        if (!userId) return;
+        rememberAuth(userId);
+
+        const validation = validateSocketEvent(socketCallForegroundedSchema, data);
+        if (!validation.success) return;
+
+        socket.data.appForeground = true;
+
+        logger.debug('📞 Socket: call:foregrounded', {
+          callId: data.callId,
+          participantId: data.participantId,
+          userId,
+        });
+      } catch (error) {
+        logger.error('Error handling call:foregrounded', { error });
+      }
+    });
+
+    // ─── call:screen-capture-detected ────────────────────────────────────────
+    // A participant started or stopped screen capture. Relay to everyone else
+    // in the call room so they can display/dismiss the capture warning.
+    socket.on(CALL_EVENTS.SCREEN_CAPTURE_DETECTED, async (data: CallScreenCaptureEvent) => {
+      try {
+        const userId = getUserId(socket.id);
+        if (!userId) return;
+        rememberAuth(userId);
+
+        const validation = validateSocketEvent(socketCallScreenCaptureDetectedSchema, data);
+        if (!validation.success) return;
+
+        if (!socket.rooms.has(ROOMS.call(data.callId))) {
+          return;
+        }
+
+        const alertEvent: CallScreenCaptureEvent = {
+          callId: data.callId,
+          participantId: data.participantId,
+          isCapturing: data.isCapturing,
+        };
+        socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.SCREEN_CAPTURE_ALERT, alertEvent);
+
+        logger.info('📞 Socket: call:screen-capture-detected relayed', {
+          callId: data.callId,
+          participantId: data.participantId,
+          isCapturing: data.isCapturing,
+          userId,
+        });
+      } catch (error) {
+        logger.error('Error handling call:screen-capture-detected', { error });
       }
     });
 

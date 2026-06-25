@@ -1412,8 +1412,8 @@ final class CallManager: ObservableObject {
         if transcriptionService.isTranscribing {
             transcriptionService.stopTranscribing()
         } else {
-            let localLang = "fr"
-            let remoteLang = "fr"
+            let localLang = AuthManager.shared.currentUser?.systemLanguage ?? "fr"
+            let remoteLang = AuthManager.shared.currentUser?.regionalLanguage ?? localLang
             let localUserId = AuthManager.shared.currentUser?.id ?? ""
             let remoteUserId = remoteUserId ?? ""
             transcriptionService.startTranscribing(
@@ -1874,11 +1874,14 @@ final class CallManager: ObservableObject {
                 guard let self else { return }
                 let isCapturing = UIScreen.main.isCaptured
                 Logger.calls.info("Screen capture state changed: \(isCapturing)")
-                // Do NOT relay this via `call:signal` — the gateway signal schema
-                // only accepts offer/answer/ice-candidate/ice-restart and rejects
-                // anything else with `call:error` (INVALID_SIGNAL), which used to
-                // tear the call down. Re-route via a dedicated event if peer
-                // notification of screen capture is ever required.
+                if let callId = self.currentCallId {
+                    let userId = AuthManager.shared.currentUser?.id ?? ""
+                    MessageSocketManager.shared.emitCallScreenCaptureDetected(
+                        callId: callId,
+                        participantId: userId,
+                        isCapturing: isCapturing
+                    )
+                }
             }
         }
     }
@@ -1901,13 +1904,9 @@ final class CallManager: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self, self.currentCallId != nil else { return }
-                // Previously emitted `call:signal type:"backgrounded"` to (try to)
-                // extend the server heartbeat timeout — but the gateway signal
-                // schema rejects it (INVALID_SIGNAL → call:error), which tore the
-                // call down on every screen lock. A real background heartbeat
-                // extension needs a dedicated server handler (follow-up); until
-                // then, emit nothing the schema will reject.
+                guard let self, let callId = self.currentCallId else { return }
+                let userId = AuthManager.shared.currentUser?.id ?? ""
+                MessageSocketManager.shared.emitCallBackgrounded(callId: callId, participantId: userId)
                 Logger.calls.info("Call backgrounded")
             }
         }
@@ -1918,11 +1917,9 @@ final class CallManager: ObservableObject {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                guard let self, self.currentCallId != nil else { return }
-                // See `backgrounded` above: `call:signal type:"foregrounded"` is
-                // rejected by the gateway signal schema (INVALID_SIGNAL) and must
-                // not be emitted. The client-side heartbeat resumes on its own
-                // when the app returns to the foreground.
+                guard let self, let callId = self.currentCallId else { return }
+                let userId = AuthManager.shared.currentUser?.id ?? ""
+                MessageSocketManager.shared.emitCallForegrounded(callId: callId, participantId: userId)
                 Logger.calls.info("Call foregrounded")
             }
         }

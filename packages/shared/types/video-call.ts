@@ -798,6 +798,14 @@ export const CALL_EVENTS = {
   RECONNECTED: 'call:reconnected',
   REQUEST_ICE_SERVERS: 'call:request-ice-servers',
 
+  // Client → Server (fire-and-forget, lifecycle telemetry)
+  BACKGROUNDED: 'call:backgrounded',
+  FOREGROUNDED: 'call:foregrounded',
+  SCREEN_CAPTURE_DETECTED: 'call:screen-capture-detected',
+
+  // Server → Client (peer notification)
+  SCREEN_CAPTURE_ALERT: 'call:screen-capture-alert',
+
   // Server → Client
   INITIATED: 'call:initiated',
   PARTICIPANT_JOINED: 'call:participant-joined',

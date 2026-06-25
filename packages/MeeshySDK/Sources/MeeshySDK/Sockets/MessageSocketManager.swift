@@ -1023,6 +1023,9 @@ public protocol MessageSocketProviding: Sendable {
     func emitCallReconnecting(callId: String, participantId: String, attempt: Int)
     func emitCallReconnected(callId: String, participantId: String)
     func emitRequestIceServers(callId: String)
+    func emitCallBackgrounded(callId: String, participantId: String)
+    func emitCallForegrounded(callId: String, participantId: String)
+    func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool)
 }
 
 // MARK: - Protocol Default-Arg Convenience
@@ -1053,6 +1056,9 @@ public extension MessageSocketProviding {
     func emitCallReconnecting(callId: String, participantId: String, attempt: Int) {}
     func emitCallReconnected(callId: String, participantId: String) {}
     func emitRequestIceServers(callId: String) {}
+    func emitCallBackgrounded(callId: String, participantId: String) {}
+    func emitCallForegrounded(callId: String, participantId: String) {}
+    func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool) {}
 
     func sendWithAttachments(
         conversationId: String,
@@ -1986,6 +1992,30 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     public func emitRequestIceServers(callId: String) {
         socket?.emit("call:request-ice-servers", ["callId": callId])
+    }
+
+    /// Informs the gateway the app entered background while a call is active.
+    /// The gateway uses this to switch ringing delivery to VoIP push and extend
+    /// its heartbeat tolerance window.
+    public func emitCallBackgrounded(callId: String, participantId: String) {
+        socket?.emit("call:backgrounded", ["callId": callId, "participantId": participantId])
+    }
+
+    /// Informs the gateway the app returned to foreground during an active call.
+    /// Resets the heartbeat tolerance window and re-enables socket-based ringing.
+    public func emitCallForegrounded(callId: String, participantId: String) {
+        socket?.emit("call:foregrounded", ["callId": callId, "participantId": participantId])
+    }
+
+    /// Notifies the gateway (and, by relay, other participants) that the local
+    /// screen capture state changed. Other participants receive
+    /// `call:screen-capture-alert` so they can display a warning.
+    public func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool) {
+        socket?.emit("call:screen-capture-detected", [
+            "callId": callId,
+            "participantId": participantId,
+            "isCapturing": isCapturing
+        ])
     }
 
     /// Reports whether the app is in the FOREGROUND so the gateway can decide,
