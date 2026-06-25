@@ -274,3 +274,82 @@ final class VideoQualityLevelComparableTests: XCTestCase {
         XCTAssertEqual(sorted, [.excellent, .good, .fair, .poor, .critical])
     }
 }
+
+// MARK: - VideoQualityLevel encoder targets (drive applyVideoQuality)
+
+/// These three computed properties determine what the video encoder is told to do.
+/// A regression silently misconfigures bitrate/fps/resolution without compile error.
+@MainActor
+final class VideoQualityLevelEncoderTargetsTests: XCTestCase {
+
+    // MARK: targetVideoBitrate
+
+    func test_targetVideoBitrate_excellent_is2500kbps() {
+        XCTAssertEqual(VideoQualityLevel.excellent.targetVideoBitrate, 2_500_000)
+    }
+
+    func test_targetVideoBitrate_good_is1500kbps() {
+        XCTAssertEqual(VideoQualityLevel.good.targetVideoBitrate, 1_500_000)
+    }
+
+    func test_targetVideoBitrate_fair_is800kbps() {
+        XCTAssertEqual(VideoQualityLevel.fair.targetVideoBitrate, 800_000)
+    }
+
+    func test_targetVideoBitrate_poor_is400kbps() {
+        XCTAssertEqual(VideoQualityLevel.poor.targetVideoBitrate, 400_000)
+    }
+
+    func test_targetVideoBitrate_critical_isZero_signalsVideoSuspension() {
+        XCTAssertEqual(VideoQualityLevel.critical.targetVideoBitrate, 0,
+                       "0 signals VideoSurvivalController to suspend the track, not kill it")
+    }
+
+    func test_targetVideoBitrate_strictlyDecreasing() {
+        XCTAssertGreaterThan(VideoQualityLevel.excellent.targetVideoBitrate, VideoQualityLevel.good.targetVideoBitrate)
+        XCTAssertGreaterThan(VideoQualityLevel.good.targetVideoBitrate, VideoQualityLevel.fair.targetVideoBitrate)
+        XCTAssertGreaterThan(VideoQualityLevel.fair.targetVideoBitrate, VideoQualityLevel.poor.targetVideoBitrate)
+        XCTAssertGreaterThan(VideoQualityLevel.poor.targetVideoBitrate, VideoQualityLevel.critical.targetVideoBitrate)
+    }
+
+    // MARK: targetFPS
+
+    func test_targetFPS_excellent_is30() {
+        XCTAssertEqual(VideoQualityLevel.excellent.targetFPS, 30)
+    }
+
+    func test_targetFPS_good_is24() {
+        XCTAssertEqual(VideoQualityLevel.good.targetFPS, 24)
+    }
+
+    func test_targetFPS_fair_is20() {
+        XCTAssertEqual(VideoQualityLevel.fair.targetFPS, 20)
+    }
+
+    func test_targetFPS_poor_is15() {
+        XCTAssertEqual(VideoQualityLevel.poor.targetFPS, 15)
+    }
+
+    func test_targetFPS_critical_isZero_signalsSuspension() {
+        XCTAssertEqual(VideoQualityLevel.critical.targetFPS, 0)
+    }
+
+    // MARK: targetResolutionHeight
+
+    func test_targetResolutionHeight_excellent_and_good_are720p() {
+        XCTAssertEqual(VideoQualityLevel.excellent.targetResolutionHeight, 720)
+        XCTAssertEqual(VideoQualityLevel.good.targetResolutionHeight, 720)
+    }
+
+    func test_targetResolutionHeight_fair_is480p() {
+        XCTAssertEqual(VideoQualityLevel.fair.targetResolutionHeight, 480)
+    }
+
+    func test_targetResolutionHeight_poor_is360p() {
+        XCTAssertEqual(VideoQualityLevel.poor.targetResolutionHeight, 360)
+    }
+
+    func test_targetResolutionHeight_critical_isZero_signalsSuspension() {
+        XCTAssertEqual(VideoQualityLevel.critical.targetResolutionHeight, 0)
+    }
+}
