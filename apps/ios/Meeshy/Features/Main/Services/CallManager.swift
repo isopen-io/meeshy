@@ -227,6 +227,8 @@ final class CallManager: ObservableObject {
     private var lastCallWasOutgoing: Bool = false
     private var callStartDate: Date?
     private var reconnectAttempt = 0
+    /// Periodic refresh of TURN credentials before TTL expiry. Cancelled on call end.
+    private var turnRefreshTask: Task<Void, Never>?
     private var participantJoinedCancellable: AnyCancellable?
     /// Audit P3 — replaces the never-assigned `signalOfferCancellable`
     /// (AnyCancellable, dead) with a properly typed Task slot. Two callers
@@ -587,6 +589,7 @@ final class CallManager: ObservableObject {
                 self.currentCallId = ack.callId
                 Logger.calls.info("[CALL_SETUP] outgoing 1/4 webRTC.configure begin (isVideo=\(isVideo))")
                 self.webRTCService.configure(isVideo: isVideo, iceServers: dynamicServers)
+                self.scheduleTURNCredentialRefresh(ttl: TimeInterval(ack.ttl ?? 480))
                 self.applyNegotiationRole()
                 Logger.calls.info("[CALL_SETUP] outgoing 2/4 configureAudioSession begin")
                 self.configureAudioSession()
@@ -701,6 +704,7 @@ final class CallManager: ObservableObject {
         // so RTCPeerConnection is built with TURN BEFORE the offer is set.
         Logger.calls.info("[CALL_SETUP] incoming 1/4 webRTC.configure begin (isVideo=\(isVideo))")
         webRTCService.configure(isVideo: isVideo, iceServers: iceServers)
+        scheduleTURNCredentialRefresh(ttl: 480)
         applyNegotiationRole()
         Logger.calls.info("[CALL_SETUP] incoming 2/4 configureAudioSession begin")
         configureAudioSession()
@@ -910,6 +914,7 @@ final class CallManager: ObservableObject {
 
         // Auto-join call room + configure WebRTC so SDP offer can be received while ringing
         webRTCService.configure(isVideo: isVideo, iceServers: iceServers)
+        scheduleTURNCredentialRefresh(ttl: 480)
         applyNegotiationRole()
         configureAudioSession()
         startReliabilityMonitor()
@@ -1972,6 +1977,8 @@ final class CallManager: ObservableObject {
         // attachés.
         setupCallTask?.cancel()
         setupCallTask = nil
+        turnRefreshTask?.cancel()
+        turnRefreshTask = nil
         stopHeartbeat()
         stopScreenCaptureMonitoring()
         stopBackgroundMonitoring()
@@ -2335,6 +2342,19 @@ final class CallManager: ObservableObject {
                 guard event.callId == self.currentCallId, event.mediaType == "video" else { return }
                 self.isRemoteVideoEnabled = event.enabled
                 Logger.calls.info("Remote video \(event.enabled ? "enabled" : "disabled") (callId=\(event.callId))")
+            }
+            .store(in: &cancellables)
+
+        socket.callIceServersRefreshed
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self, self.currentCallId == event.callId else { return }
+                let updated = event.iceServers.map { s in
+                    IceServer(urls: s.urls.asArray, username: s.username, credential: s.credential)
+                }
+                self.webRTCService.updateIceServers(updated)
+                Logger.calls.info("TURN credentials refreshed — \(updated.count) ICE servers updated")
+                self.scheduleTURNCredentialRefresh(ttl: TimeInterval(event.ttl))
             }
             .store(in: &cancellables)
     }
@@ -2855,6 +2875,22 @@ extension CallManager: WebRTCServiceDelegate {
             }
             self.emitCallOffer(callId: callId, toUserId: userId, isVideo: self.isVideoEnabled, sdp: offer)
             Logger.calls.info("ICE restart offer sent for call: \(callId)")
+        }
+    }
+
+    // Schedules a TURN credential refresh at 80% of the credential TTL.
+    // Emits `call:request-ice-servers`; gateway responds with `call:ice-servers-refreshed`
+    // which `setupSocketListeners` applies via `webRTCService.updateIceServers`.
+    private func scheduleTURNCredentialRefresh(ttl: TimeInterval) {
+        turnRefreshTask?.cancel()
+        let refreshDelay = ttl * 0.8
+        Logger.calls.info("TURN credential refresh scheduled in \(Int(refreshDelay))s (TTL=\(Int(ttl))s)")
+        turnRefreshTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(refreshDelay))
+            guard !Task.isCancelled, let self, self.callState.isActive,
+                  let callId = self.currentCallId else { return }
+            Logger.calls.info("Requesting fresh TURN credentials for call \(callId)")
+            MessageSocketManager.shared.emitRequestIceServers(callId: callId)
         }
     }
 

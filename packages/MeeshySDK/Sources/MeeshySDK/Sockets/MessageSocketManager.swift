@@ -581,6 +581,12 @@ public struct SocketIceServer: Decodable, Sendable {
     }
 }
 
+public struct CallIceServersRefreshedData: Decodable, Sendable {
+    public let callId: String
+    public let iceServers: [SocketIceServer]
+    public let ttl: Int
+}
+
 public struct CallOfferData: Decodable, Sendable {
     public let callId: String
     public let conversationId: String
@@ -970,6 +976,7 @@ public protocol MessageSocketProviding: Sendable {
     var callParticipantLeft: PassthroughSubject<CallParticipantData, Never> { get }
     var callMediaToggled: PassthroughSubject<CallMediaToggleData, Never> { get }
     var callError: PassthroughSubject<CallErrorData, Never> { get }
+    var callIceServersRefreshed: PassthroughSubject<CallIceServersRefreshedData, Never> { get }
     var reactionSynced: PassthroughSubject<ReactionSyncEvent, Never> { get }
     var systemMessageReceived: PassthroughSubject<SystemMessageEvent, Never> { get }
     var mentionCreated: PassthroughSubject<MentionCreatedEvent, Never> { get }
@@ -1006,6 +1013,7 @@ public protocol MessageSocketProviding: Sendable {
     func emitCallQualityReport(callId: String, level: String, rtt: Double, packetLoss: Double, bytesSent: Int, bytesReceived: Int)
     func emitCallReconnecting(callId: String, participantId: String, attempt: Int)
     func emitCallReconnected(callId: String, participantId: String)
+    func emitRequestIceServers(callId: String)
 }
 
 // MARK: - Protocol Default-Arg Convenience
@@ -1026,6 +1034,7 @@ public extension MessageSocketProviding {
 
     func emitCallReconnecting(callId: String, participantId: String, attempt: Int) {}
     func emitCallReconnected(callId: String, participantId: String) {}
+    func emitRequestIceServers(callId: String) {}
 
     func sendWithAttachments(
         conversationId: String,
@@ -1162,6 +1171,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let callParticipantLeft = PassthroughSubject<CallParticipantData, Never>()
     public let callMediaToggled = PassthroughSubject<CallMediaToggleData, Never>()
     public let callError = PassthroughSubject<CallErrorData, Never>()
+    public let callIceServersRefreshed = PassthroughSubject<CallIceServersRefreshedData, Never>()
 
     // Combine publishers — reactions sync, system, attachments, mentions
     public let reactionSynced = PassthroughSubject<ReactionSyncEvent, Never>()
@@ -1892,11 +1902,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         public let callId: String
         public let mode: String?
         public let iceServers: [SocketIceServer]
+        public let ttl: Int?
 
-        public init(callId: String, mode: String?, iceServers: [SocketIceServer]) {
+        public init(callId: String, mode: String?, iceServers: [SocketIceServer], ttl: Int? = nil) {
             self.callId = callId
             self.mode = mode
             self.iceServers = iceServers
+            self.ttl = ttl
         }
     }
 
@@ -1939,7 +1951,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
                     return
                 }
 
-                continuation.resume(returning: CallInitiateAck(callId: callId, mode: mode, iceServers: servers))
+                let ttl = data["ttl"] as? Int
+                continuation.resume(returning: CallInitiateAck(callId: callId, mode: mode, iceServers: servers, ttl: ttl))
             }
         }
     }
@@ -1950,6 +1963,10 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     public func emitCallLeave(callId: String) {
         socket?.emit("call:leave", ["callId": callId])
+    }
+
+    public func emitRequestIceServers(callId: String) {
+        socket?.emit("call:request-ice-servers", ["callId": callId])
     }
 
     /// Reports whether the app is in the FOREGROUND so the gateway can decide,
@@ -2724,6 +2741,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(CallErrorData.self, from: data) { [weak self] event in
                 self?.callError.send(event)
+            }
+        }
+
+        socket.on("call:ice-servers-refreshed") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(CallIceServersRefreshedData.self, from: data) { [weak self] event in
+                self?.callIceServersRefreshed.send(event)
             }
         }
 

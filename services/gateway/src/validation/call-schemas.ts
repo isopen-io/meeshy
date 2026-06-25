@@ -295,3 +295,12 @@ export type SocketReconnectingInput = z.infer<typeof socketReconnectingSchema>;
 export type SocketReconnectedInput = z.infer<typeof socketReconnectedSchema>;
 export type SocketForceLeaveInput = z.infer<typeof socketForceLeaveSchema>;
 export type SocketTranscriptionSegmentInput = z.infer<typeof socketTranscriptionSegmentSchema>;
+
+/**
+ * Socket.IO Event: call:request-ice-servers (fire-and-forget, Client → Server)
+ * Sent by the client near credential expiry to obtain fresh TURN credentials.
+ */
+export const socketRequestIceServersSchema = z.object({
+  callId: objectIdSchema,
+});
+export type SocketRequestIceServersInput = z.infer<typeof socketRequestIceServersSchema>;

@@ -30,7 +30,8 @@ import {
   socketReconnectingSchema,
   socketReconnectedSchema,
   socketForceLeaveSchema,
-  socketTranscriptionSegmentSchema
+  socketTranscriptionSegmentSchema,
+  socketRequestIceServersSchema
 } from '../validation/call-schemas';
 import { getSocketRateLimiter, checkSocketRateLimit, SOCKET_RATE_LIMITS } from '../utils/socket-rate-limiter';
 import type {
@@ -53,6 +54,7 @@ import type {
   // (the Prisma generated enum is both a value AND a type, so we don't
   // need the type-only re-export from video-call.ts which duplicates it).
   CallTranscriptionSegmentEvent,
+  CallIceServersRefreshedEvent,
 } from '@meeshy/shared/types/video-call';
 
 // ICE servers configuration (STUN/TURN)
@@ -464,7 +466,8 @@ export class CallEventsHandler {
           data: {
             callId: callSession.id,
             mode: callSession.mode,
-            iceServers: initiatorIceServers
+            iceServers: initiatorIceServers,
+            ttl: this.callService.getIceServerTtl(),
           }
         });
 
@@ -1832,6 +1835,49 @@ export class CallEventsHandler {
         });
       } catch (error) {
         logger.error('Error handling transcription segment', { error });
+      }
+    });
+
+    /**
+     * call:request-ice-servers — refresh TURN credentials before TTL expiry.
+     * The client requests this at ~80% of the credential TTL so long calls (>10 min)
+     * always have valid TURN credentials for ICE restart.
+     */
+    socket.on(CALL_EVENTS.REQUEST_ICE_SERVERS, async (data: { callId: string }) => {
+      try {
+        const userId = getUserId(socket.id);
+        if (!userId) return;
+        rememberAuth(userId);
+
+        const validation = validateSocketEvent(socketRequestIceServersSchema, data);
+        if (!validation.success) return;
+
+        // Authorization: socket must be in the call room (joined on call:join).
+        if (!socket.rooms.has(ROOMS.call(data.callId))) {
+          socket.emit(CALL_EVENTS.ERROR, {
+            code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
+            message: 'Not in call room'
+          } as CallError);
+          return;
+        }
+
+        const iceServers = this.callService.generateIceServers(userId);
+        const ttl = this.callService.getIceServerTtl();
+        const refreshedEvent: CallIceServersRefreshedEvent = {
+          callId: data.callId,
+          iceServers,
+          ttl,
+        };
+        socket.emit(CALL_EVENTS.ICE_SERVERS_REFRESHED, refreshedEvent);
+
+        logger.debug('🔐 ICE servers refreshed for call', {
+          callId: data.callId,
+          userId,
+          ttl,
+          serverCount: iceServers.length
+        });
+      } catch (error) {
+        logger.error('Error handling call:request-ice-servers', { error });
       }
     });
 

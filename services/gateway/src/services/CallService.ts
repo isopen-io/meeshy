@@ -216,6 +216,10 @@ export class CallService {
     return this.turnCredentialService.generateCredentials(userId);
   }
 
+  getIceServerTtl(): number {
+    return this.turnCredentialService.getStatus().credentialTTL;
+  }
+
   /**
    * Record a heartbeat from a participant
    */
