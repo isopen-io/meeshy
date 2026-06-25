@@ -179,6 +179,72 @@ final class WebRTCServiceTests: XCTestCase {
     }
 }
 
+// MARK: - adjustBitrate invariants (source-level guards)
+
+/// Source-level guards for the `adjustBitrate` logic that is private and runs
+/// inside a 5-second stats monitor — not exercisable via timing in unit tests.
+/// These guards protect three non-obvious invariants:
+///  1. P1-4: packet-loss MUST use Δlost/Δtotal (not raw cumulative counts).
+///  2. BWE merge: TWCC bandwidth estimate is taken via `min()` with RTT heuristic.
+///  3. Debounce: quality-level flips are suppressed within a 5-second window.
+@MainActor
+final class AdjustBitrateSourceGuardTests: XCTestCase {
+
+    private func webRTCServiceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// P1-4 fix: loss ratio must be computed from snapshot deltas, not cumulative counters.
+    func test_adjustBitrate_usesIncrementalPacketLossRatio() throws {
+        let source = try webRTCServiceSource()
+        XCTAssertTrue(
+            source.contains("stats.packetsLost - (previous?.packetsLost ?? 0)"),
+            "P1-4: adjustBitrate must subtract previous.packetsLost from current to compute Δlost. " +
+            "Using raw cumulative counts causes a single lost packet to read as >100% loss."
+        )
+        XCTAssertTrue(
+            source.contains("stats.inboundPacketsReceived - (previous?.inboundPacketsReceived ?? 0)"),
+            "P1-4: adjustBitrate must subtract previous.inboundPacketsReceived to compute Δreceived."
+        )
+        XCTAssertTrue(
+            source.contains("let lossRatio = denom > 0 ? Double(deltaLost) / Double(denom) : 0"),
+            "P1-4: lossRatio must be Δlost/(Δlost+Δrecv), guarded against division-by-zero (denom > 0)."
+        )
+    }
+
+    /// BWE merge: when TWCC is active, quality level must be min(heuristic, bweLevel).
+    func test_adjustBitrate_mergesBWEWithHeuristicViaMin() throws {
+        let source = try webRTCServiceSource()
+        XCTAssertTrue(
+            source.contains("stats.availableOutgoingBitrateBps > 0"),
+            "BWE gate: TWCC estimate should only be applied when availableOutgoingBitrateBps > 0"
+        )
+        XCTAssertTrue(
+            source.contains("min(heuristicLevel, $0)") || source.contains("min(heuristicLevel,"),
+            "BWE merge: effective quality level must be min(heuristicLevel, bweLevel) — never exceed what either signal permits."
+        )
+    }
+
+    /// Debounce: rapid quality-level oscillations (e.g. network hiccup) must be suppressed.
+    func test_adjustBitrate_debounces5SecondsBetweenLevelChanges() throws {
+        let source = try webRTCServiceSource()
+        XCTAssertTrue(
+            source.contains("qualityLevelDebounceDate"),
+            "Debounce: a qualityLevelDebounceDate timestamp must gate rapid quality-level flips"
+        )
+        XCTAssertTrue(
+            source.contains("< 5.0"),
+            "Debounce: the suppression window must be 5 seconds to avoid thrashing the video encoder"
+        )
+    }
+}
+
 // MARK: - Testable WebRTC Client
 
 private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
