@@ -73,7 +73,12 @@ targets:
     dependencies:
       - target: MeeshyWidgets
       - target: MeeshyNotificationExtension
-      - target: MeeshyShareExtension
+      # MeeshyShareExtension is intentionally NOT embedded yet — see its target
+      # definition below. Embedding it makes `fastlane build_production` fail the
+      # distribution archive ("No profiles for 'me.meeshy.app.share-extension'")
+      # because that bundle id is not registered for signing. Re-add this line
+      # only after the App-ID + App-Group + App-Store profile exist (and the id
+      # is added to Fastfile/Matchfile `app_identifier`).
       - package: MeeshySDK
         product: MeeshySDK
       - package: MeeshySDK
@@ -130,6 +135,18 @@ targets:
   # aucune dépendance SDK. Recâblé 2026-06-24 (présent sur disque mais absent de
   # project.yml → jamais compilé). Info.plist : NSExtensionPrincipalClass
   # (ShareViewController programmatique, pas de storyboard).
+  #
+  # SIGNING PENDING — ce target est DÉFINI mais PAS embarqué dans l'app (retiré
+  # des `dependencies` de Meeshy ci-dessus). Le bundle id
+  # `me.meeshy.app.share-extension` n'est PAS enregistré côté Apple Developer :
+  # `fastlane build_production` échouait l'archive de distribution
+  # ("No profiles for 'me.meeshy.app.share-extension' were found"). Pour finir le
+  # recâblage et l'expédier : (1) enregistrer l'App ID + l'App Group
+  # `group.me.meeshy.apps` dans le portail, (2) ajouter le bundle id à
+  # `app_identifier` dans fastlane/Fastfile (lanes `match`) + fastlane/Matchfile,
+  # (3) `bundle exec fastlane match appstore`, (4) remettre `- target:
+  # MeeshyShareExtension` dans les dependencies de l'app. Tant que ces étapes ne
+  # sont pas faites, le target reste compilable isolément mais hors archive.
   MeeshyShareExtension:
     type: app-extension
     platform: iOS
