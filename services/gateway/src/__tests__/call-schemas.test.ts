@@ -30,7 +30,7 @@ describe('Call Validation Schemas', () => {
           type: 'offer',
           from: 'user-1',
           to: 'user-2',
-          sdp: 'v=0\r\no=- 1234 1 IN IP4 0.0.0.0\r\n',
+          sdp: 'v=0\r\no=- 1234 1 IN IP4 0.0.0.0\r\nm=audio 9 RTP/AVP 0\r\n',
         },
       });
       expect(result.success).toBe(true);
@@ -43,7 +43,7 @@ describe('Call Validation Schemas', () => {
           type: 'ice-restart',
           from: 'user-1',
           to: 'user-2',
-          sdp: 'v=0\r\no=- 5678 2 IN IP4 0.0.0.0\r\n',
+          sdp: 'v=0\r\no=- 5678 2 IN IP4 0.0.0.0\r\nm=audio 9 RTP/AVP 0\r\n',
         },
       });
       expect(result.success).toBe(true);
@@ -125,7 +125,7 @@ describe('Call Validation Schemas', () => {
           type: 'offer',
           from: 'user-1',
           to: 'user-2',
-          sdp: 'v=0\r\no=- 1234 1 IN IP4 0.0.0.0\r\n',
+          sdp: 'v=0\r\no=- 1234 1 IN IP4 0.0.0.0\r\nm=audio 9 RTP/AVP 0\r\n',
           negotiationId: 7,
         },
       });
@@ -155,7 +155,7 @@ describe('Call Validation Schemas', () => {
           type: 'offer',
           from: 'user-1',
           to: 'user-2',
-          sdp: 'v=0\r\n',
+          sdp: 'v=0\r\nm=audio 9 RTP/AVP 0\r\n',
         },
       });
       expect(result.success).toBe(true);
@@ -183,7 +183,7 @@ describe('Call Validation Schemas', () => {
           type: 'offer',
           from: 'user-1',
           to: 'user-2',
-          sdp: 'v=0\r\n',
+          sdp: 'v=0\r\nm=audio 9 RTP/AVP 0\r\n',
           someUndeclaredField: 'value',
         },
       });
