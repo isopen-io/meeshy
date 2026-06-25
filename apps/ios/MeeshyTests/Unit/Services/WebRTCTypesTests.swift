@@ -129,3 +129,94 @@ final class CameraCatalogTests: XCTestCase {
         XCTAssertEqual(options.map(\.displayName), ["Apple Studio", "Zoom Cam"])
     }
 }
+
+// MARK: - VideoQualityLevel factory: RTT + packet-loss heuristic
+
+@MainActor
+final class VideoQualityLevelFromRttTests: XCTestCase {
+
+    func test_excellent_lowRttNoLoss() {
+        XCTAssertEqual(VideoQualityLevel.from(rtt: 50, packetLoss: 0), .excellent)
+    }
+
+    func test_excellent_atBoundary_100ms_1pct() {
+        XCTAssertEqual(VideoQualityLevel.from(rtt: 100, packetLoss: 0.01), .excellent)
+    }
+
+    func test_good_rttDominated() {
+        XCTAssertEqual(VideoQualityLevel.from(rtt: 150, packetLoss: 0), .good)
+    }
+
+    func test_good_lossDominated() {
+        XCTAssertEqual(VideoQualityLevel.from(rtt: 20, packetLoss: 0.02), .good)
+    }
+
+    func test_fair_rttDominated() {
+        XCTAssertEqual(VideoQualityLevel.from(rtt: 250, packetLoss: 0), .fair)
+    }
+
+    func test_fair_lossDominated() {
+        XCTAssertEqual(VideoQualityLevel.from(rtt: 20, packetLoss: 0.04), .fair)
+    }
+
+    func test_poor_rttDominated() {
+        XCTAssertEqual(VideoQualityLevel.from(rtt: 400, packetLoss: 0), .poor)
+    }
+
+    func test_poor_lossDominated() {
+        XCTAssertEqual(VideoQualityLevel.from(rtt: 20, packetLoss: 0.07), .poor)
+    }
+
+    func test_critical_rttDominated() {
+        XCTAssertEqual(VideoQualityLevel.from(rtt: 600, packetLoss: 0), .critical)
+    }
+
+    func test_critical_lossDominated() {
+        XCTAssertEqual(VideoQualityLevel.from(rtt: 20, packetLoss: 0.15), .critical)
+    }
+
+    func test_worstAxisWins_rttExcellentButLossCritical() {
+        XCTAssertEqual(VideoQualityLevel.from(rtt: 30, packetLoss: 0.20), .critical)
+    }
+
+    func test_worstAxisWins_lossGoodButRttCritical() {
+        XCTAssertEqual(VideoQualityLevel.from(rtt: 600, packetLoss: 0.001), .critical)
+    }
+}
+
+// MARK: - VideoQualityLevel Comparable ordering
+
+@MainActor
+final class VideoQualityLevelComparableTests: XCTestCase {
+
+    func test_excellent_isGreaterThan_good() {
+        XCTAssertGreaterThan(VideoQualityLevel.excellent, VideoQualityLevel.good)
+    }
+
+    func test_good_isGreaterThan_fair() {
+        XCTAssertGreaterThan(VideoQualityLevel.good, VideoQualityLevel.fair)
+    }
+
+    func test_fair_isGreaterThan_poor() {
+        XCTAssertGreaterThan(VideoQualityLevel.fair, VideoQualityLevel.poor)
+    }
+
+    func test_poor_isGreaterThan_critical() {
+        XCTAssertGreaterThan(VideoQualityLevel.poor, VideoQualityLevel.critical)
+    }
+
+    func test_min_takesWorseLevel() {
+        XCTAssertEqual(min(VideoQualityLevel.excellent, VideoQualityLevel.fair), .fair)
+        XCTAssertEqual(min(VideoQualityLevel.poor, VideoQualityLevel.good), .poor)
+    }
+
+    func test_min_equalLevels_returnsSame() {
+        XCTAssertEqual(min(VideoQualityLevel.good, VideoQualityLevel.good), .good)
+    }
+
+    func test_sorted_descendingOrder() {
+        let levels: [VideoQualityLevel] = [.critical, .excellent, .fair, .poor, .good]
+        let sorted = levels.sorted(by: >)
+        XCTAssertEqual(sorted, [.excellent, .good, .fair, .poor, .critical])
+    }
+}
