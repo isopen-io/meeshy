@@ -1292,7 +1292,15 @@ struct StoryCardView: View {
                 // commentaires est ouvert et qu'on tape « Répondre » sur un
                 // commentaire, la reply banner apparaît au-dessus de CETTE
                 // rangée de saisie via le binding `replyingToStoryComment`.
-                if !isOwnStory {
+                //
+                // **Auteur de sa propre story** : pas de composer permanent (on
+                // ne répond pas à sa propre story), MAIS il doit pouvoir
+                // répondre aux commentaires reçus. Le composer apparaît donc
+                // dès que `replyingToStoryComment` est posé (tap « Répondre »
+                // dans l'overlay), avec la reply banner, puis se referme à
+                // l'envoi (`sendComment` remet le binding à nil) ou à la
+                // fermeture de la banner (spec user 2026-06-25).
+                if !isOwnStory || replyingToStoryComment != nil {
                     StoryComposerBarView(
                         accentColor: currentGroup?.avatarColor ?? "6366F1",
                         storyId: currentStory?.id,

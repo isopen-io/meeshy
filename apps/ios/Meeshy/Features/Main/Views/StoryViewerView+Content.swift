@@ -1457,7 +1457,16 @@ extension StoryViewerView {
                 // Faire APPARAÎTRE l'universal composer bar : on déclenche le focus
                 // pour ouvrir le clavier immédiatement (spec 2026-06-23) — l'auteur
                 // (et tout viewer) peut répondre sans tap supplémentaire.
-                composerFocusTrigger = true
+                //
+                // Pour l'auteur de sa propre story, le composer n'existe PAS avant
+                // ce tap (cf. condition de rendu `!isOwnStory || replyingToStoryComment`
+                // dans +Canvas) : il est monté dans la même passe que `replyingToStoryComment`.
+                // Or `focusTrigger` est consommé via `onChange`, qui ne fire pas au
+                // montage initial — poser `true` synchroniquement serait ignoré et le
+                // drapeau resterait coincé. On force donc un front false→true sur le
+                // runloop suivant, une fois le composer monté et son `onChange` actif.
+                composerFocusTrigger = false
+                DispatchQueue.main.async { composerFocusTrigger = true }
                 HapticFeedback.light()
             },
             onToggleLike: {
@@ -2012,9 +2021,11 @@ struct StoryActionButton: View {
     var isActive: Bool = false
     var activeColor: Color = .white
     var activeGlow: Color? = nil
-    /// Outline symbol overlaid in `accentOutlineColor` over the glyph when the
-    /// current user has participated (e.g. already reacted) — an accent BORDER
-    /// on the glyph, matching the feed/reel participation indicator.
+    /// Marqueur de participation : non-nil ⇒ le FAB actif dessine son contour
+    /// accent dans `accentOutlineColor` (ex : couleur d'avatar pour le cœur déjà
+    /// réagi) plutôt que dans son `activeGlow`/`activeColor` par défaut. La
+    /// valeur du symbole n'est plus rendue en overlay — seule sa présence
+    /// (non-nil) sélectionne la couleur du contour (cf. `body`).
     var accentOutline: String? = nil
     var accentOutlineColor: Color = .clear
     let action: () -> Void
@@ -2025,46 +2036,39 @@ struct StoryActionButton: View {
         } label: {
             VStack(spacing: 4) {
                 ZStack {
-                    // Outer glow when active
-                    if isActive, let glow = activeGlow {
-                        Circle()
-                            .fill(glow.opacity(0.2))
-                            .frame(width: 52, height: 52)
-                            .blur(radius: 4)
+                    // Plus de cartouche circulaire : style « glyph flottant »
+                    // TikTok/Instagram (spec user 2026-06-25 « supprimer les
+                    // cercles autour des FABs, juste le glyph + ombre »).
+                    //
+                    // FAB ACTIF (l'utilisateur a participé : réaction posée, son
+                    // actif, overlay commentaires/traductions ouvert…) → contour
+                    // accent PRONONCÉ. Le liseré est dessiné en rendant le même
+                    // symbole agrandi en couleur accent JUSTE DERRIÈRE le glyph
+                    // blanc : un contour net qui ressort sur n'importe quel fond
+                    // de story (clair comme foncé), là où l'ancien anneau du chip
+                    // disparaissait. Couleur du contour = couleur de participation
+                    // du bouton (`accentOutlineColor`, ex : couleur d'avatar pour
+                    // le cœur) sinon le glow/accent du bouton.
+                    if isActive {
+                        Image(systemName: icon)
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(accentOutline != nil ? accentOutlineColor : (activeGlow ?? activeColor))
+                            .scaleEffect(1.22)
                     }
-
-                    Circle()
-                        .fill(isActive ? activeColor.opacity(0.15) : Color.white.opacity(0.08))
-                        .overlay(
-                            Circle()
-                                .stroke(
-                                    isActive ?
-                                        AnyShapeStyle(activeColor.opacity(0.4)) :
-                                        AnyShapeStyle(Color.white.opacity(0.15)),
-                                    lineWidth: isActive ? 1 : 0.5
-                                )
-                        )
-                        .frame(width: 46, height: 46)
 
                     Image(systemName: icon)
                         .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(isActive ? activeColor : .white)
+                        .foregroundColor(.white)
                         .adaptiveSymbolBounce(value: isActive)
-                    // Accent border on the glyph when the current user participated.
-                    if let accentOutline {
-                        Image(systemName: accentOutline)
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundColor(accentOutlineColor)
-                    }
                 }
-                // Halo sombre sous l'icône — lisibilité garantie sur N'IMPORTE QUEL
-                // fond de story (clair comme foncé), sans voile ni gros cartouche
-                // (style flottant Instagram/TikTok). Sur fond clair, le `white.opacity(0.08)`
-                // du disque disparaît : c'est ce halo (et celui du label) qui porte le
-                // contraste. Actif → glow coloré (demande user 2026-06-03 : contraste élégant).
+                .frame(width: 46, height: 46)
+                // Halo sous l'icône — lisibilité garantie sur N'IMPORTE QUEL fond
+                // de story (clair comme foncé), sans voile ni cartouche. Inactif →
+                // ombre sombre ; actif → glow coloré plus large qui renforce le
+                // contour accent.
                 .shadow(
-                    color: isActive ? (activeGlow ?? activeColor).opacity(0.45) : .black.opacity(0.55),
-                    radius: isActive ? 8 : 4,
+                    color: isActive ? (activeGlow ?? activeColor).opacity(0.55) : .black.opacity(0.6),
+                    radius: isActive ? 7 : 4,
                     y: isActive ? 0 : 1
                 )
 
