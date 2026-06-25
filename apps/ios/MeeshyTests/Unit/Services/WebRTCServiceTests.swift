@@ -156,6 +156,65 @@ final class WebRTCServiceTests: XCTestCase {
         XCTAssertEqual(result?.sdp, "restart-offer")
     }
 
+    func test_performICERestart_callsRestartIceOnClient() async {
+        let (sut, client) = makeSUT()
+        client.createOfferResult = .success(SessionDescription(type: .offer, sdp: "restart-offer"))
+
+        _ = await sut.performICERestart()
+
+        XCTAssertEqual(client.restartIceCallCount, 1,
+            "performICERestart must signal the peer connection to embed new ICE credentials " +
+            "via restartIce() (IceRestart:true constraint). Omitting this means the ICE " +
+            "re-gather uses old credentials that the remote peer will reject.")
+    }
+
+    func test_performICERestart_clearsStaleCandidateBufferBeforeRestart() async {
+        // Candidates buffered during a failed ICE session belong to the old ufrag/pwd.
+        // After an ICE restart, those stale candidates must be discarded so the flush
+        // that follows the new answer doesn't forward them to the new ICE agent.
+        let (sut, client) = makeSUT()
+        let staleCandidate = IceCandidate(sdpMid: "0", sdpMLineIndex: 0, candidate: "candidate:stale")
+        sut.addICECandidate(staleCandidate)
+        sut.addICECandidate(staleCandidate)
+        client.createOfferResult = .success(SessionDescription(type: .offer, sdp: "restart-offer"))
+
+        _ = await sut.performICERestart()
+
+        // Setting a new remote answer after the restart must flush zero stale candidates.
+        let answer = SessionDescription(type: .answer, sdp: "v=0\r\n")
+        await sut.setRemoteDescription(answer)
+        try? await Task.sleep(nanoseconds: 150_000_000)
+
+        XCTAssertEqual(client.addIceCandidateCallCount, 0,
+            "performICERestart must clear the candidate buffer. " +
+            "Stale candidates from the previous ICE session use old ufrag/pwd that the " +
+            "remote peer will reject, causing the new ICE session to silently fail.")
+    }
+
+    func test_addICECandidate_bufferCap_oldestCandidateIsEvictedFirst() async {
+        // The buffer is a FIFO ring: when full (200), the OLDEST entry is evicted.
+        // This test proves the eviction order by using labelled candidates and
+        // verifying that after one overflow, candidate:0 (oldest) is gone while
+        // candidate:200 (newest) is present.
+        let (sut, client) = makeSUT()
+        for i in 0..<200 {
+            sut.addICECandidate(IceCandidate(sdpMid: "0", sdpMLineIndex: 0, candidate: "candidate:\(i)"))
+        }
+        // One more triggers FIFO eviction of candidate:0
+        sut.addICECandidate(IceCandidate(sdpMid: "0", sdpMLineIndex: 0, candidate: "candidate:200"))
+
+        let answer = SessionDescription(type: .answer, sdp: "v=0\r\n")
+        await sut.setRemoteDescription(answer)
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        XCTAssertEqual(client.addIceCandidateCallCount, 200)
+        XCTAssertEqual(client.addedCandidates.first?.candidate, "candidate:1",
+            "The oldest candidate (candidate:0) must be the evicted one — the buffer " +
+            "must preserve relay candidates that arrive after the initial STUN gather.")
+        XCTAssertEqual(client.addedCandidates.last?.candidate, "candidate:200",
+            "The newest candidate must always be retained by the FIFO ring.")
+    }
+
     // MARK: - Transcription Channel
 
     // MARK: - TestableWebRTCClient Stats Configuration
@@ -501,6 +560,7 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
     var createOfferResult: Result<SessionDescription, Error> = .success(SessionDescription(type: .offer, sdp: "mock"))
     var createAnswerResult: Result<SessionDescription, Error> = .success(SessionDescription(type: .answer, sdp: "mock"))
     var addIceCandidateCallCount = 0
+    private(set) var addedCandidates: [IceCandidate] = []
     var disconnectCallCount = 0
     var lastAudioEnabled: Bool?
     var lastVideoEnabled: Bool?
@@ -518,7 +578,10 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
     func createOffer() async throws -> SessionDescription { try createOfferResult.get() }
     func createAnswer(for offer: SessionDescription) async throws -> SessionDescription { try createAnswerResult.get() }
     func setRemoteAnswer(_ answer: SessionDescription) async throws {}
-    func addIceCandidate(_ candidate: IceCandidate) async throws { addIceCandidateCallCount += 1 }
+    func addIceCandidate(_ candidate: IceCandidate) async throws {
+        addIceCandidateCallCount += 1
+        addedCandidates.append(candidate)
+    }
     func startLocalMedia(type: CallMediaType) async throws {}
     func toggleAudio(_ enabled: Bool) { lastAudioEnabled = enabled }
     func toggleVideo(_ enabled: Bool) { lastVideoEnabled = enabled }
