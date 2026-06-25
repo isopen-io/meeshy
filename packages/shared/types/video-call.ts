@@ -249,6 +249,8 @@ export interface ConnectionQualityStats {
    */
   readonly bytesSent?: number;
   readonly bytesReceived?: number;
+  /** TWCC GCC bandwidth estimate in bps. Present when Transport-CC is active. */
+  readonly availableOutgoingBitrateBps?: number;
 }
 
 // ===== WEBRTC SIGNALING =====

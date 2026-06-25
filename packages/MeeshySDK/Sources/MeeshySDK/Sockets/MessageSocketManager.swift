@@ -1032,6 +1032,15 @@ public extension MessageSocketProviding {
         bytesSent: Int, bytesReceived: Int
     ) {}
 
+    /// Shim that adds BWE passthrough; mocks can keep the old signature.
+    func emitCallQualityReport(
+        callId: String, level: String, rtt: Double, packetLoss: Double,
+        bytesSent: Int, bytesReceived: Int, availableOutgoingBitrateBps: Int
+    ) {
+        emitCallQualityReport(callId: callId, level: level, rtt: rtt, packetLoss: packetLoss,
+                              bytesSent: bytesSent, bytesReceived: bytesReceived)
+    }
+
     func emitCallReconnecting(callId: String, participantId: String, attempt: Int) {}
     func emitCallReconnected(callId: String, participantId: String) {}
     func emitRequestIceServers(callId: String) {}
@@ -2080,18 +2089,19 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// are cumulative WebRTC counters; `level` is excellent|good|fair|poor.
     public func emitCallQualityReport(
         callId: String, level: String, rtt: Double, packetLoss: Double,
-        bytesSent: Int, bytesReceived: Int
+        bytesSent: Int, bytesReceived: Int, availableOutgoingBitrateBps: Int = 0
     ) {
-        socket?.emit("call:quality-report", [
-            "callId": callId,
-            "stats": [
-                "level": level,
-                "rtt": rtt,
-                "packetLoss": packetLoss,
-                "bytesSent": bytesSent,
-                "bytesReceived": bytesReceived
-            ]
-        ])
+        var stats: [String: Any] = [
+            "level": level,
+            "rtt": rtt,
+            "packetLoss": packetLoss,
+            "bytesSent": bytesSent,
+            "bytesReceived": bytesReceived
+        ]
+        if availableOutgoingBitrateBps > 0 {
+            stats["availableOutgoingBitrateBps"] = availableOutgoingBitrateBps
+        }
+        socket?.emit("call:quality-report", ["callId": callId, "stats": stats])
     }
 
     /// Notify the gateway that a local ICE restart is in progress (e.g. network

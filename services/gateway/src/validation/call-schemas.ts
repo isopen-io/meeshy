@@ -229,7 +229,9 @@ export const socketQualityReportSchema = z.object({
     // Cumulative WebRTC byte counters (monotonic). The last report before
     // teardown carries the call totals, persisted to surface "data spent".
     bytesSent: z.number().min(0).optional(),
-    bytesReceived: z.number().min(0).optional()
+    bytesReceived: z.number().min(0).optional(),
+    // TWCC GCC bandwidth estimate (bps). 0 or absent = TWCC not yet active.
+    availableOutgoingBitrateBps: z.number().min(0).optional()
   })
 });
 

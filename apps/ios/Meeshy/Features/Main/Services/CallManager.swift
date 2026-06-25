@@ -2810,7 +2810,8 @@ extension CallManager: WebRTCServiceDelegate {
                 rtt: stats.roundTripTimeMs,
                 packetLoss: packetLossPercent,
                 bytesSent: stats.bandwidth,
-                bytesReceived: stats.bytesReceived
+                bytesReceived: stats.bytesReceived,
+                availableOutgoingBitrateBps: stats.availableOutgoingBitrateBps
             )
 
             // Feed the graceful-degradation survival layer. One sample per quality
