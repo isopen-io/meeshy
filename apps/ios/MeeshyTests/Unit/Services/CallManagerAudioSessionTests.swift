@@ -568,3 +568,128 @@ final class CallManagerVoIPFreshnessTests: XCTestCase {
         )
     }
 }
+
+// MARK: - Call State / isCallActiveFlag Synchronization
+
+@MainActor
+final class CallManagerStateFlagSyncTests: XCTestCase {
+
+    func test_callState_didSet_updatesIsCallActiveFlag() throws {
+        // isCallActiveFlag is a thread-safe mirror of callState.isActive consumed
+        // by SDK socket managers from background threads. The only authoritative
+        // update point MUST be callState.didSet — any direct assignment outside of
+        // this property observer could leave the flag inconsistent with the actor
+        // state (e.g. endCallInternal sets state → .ended but flag stays true →
+        // socket managers keep suppressing reconnect for a terminated call).
+        let source = try callManagerSource()
+
+        guard let publishedRange = source.range(of: "@Published private(set) var callState") else {
+            XCTFail("callState @Published declaration not found")
+            return
+        }
+        let didSetEnd = source.range(of: "\n    @Published",
+                                     range: publishedRange.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        let callStateBlock = String(source[publishedRange.lowerBound..<didSetEnd])
+
+        XCTAssertTrue(
+            callStateBlock.contains("didSet"),
+            "callState must have a didSet observer to keep isCallActiveFlag in sync"
+        )
+        XCTAssertTrue(
+            callStateBlock.contains("CallManager.isCallActiveFlag"),
+            "callState.didSet must update CallManager.isCallActiveFlag so SDK socket managers read a consistent value from background threads"
+        )
+    }
+
+    func test_isCallActiveFlag_noDirectAssignmentOutsideDidSet() throws {
+        // All assignments to isCallActiveFlag must flow through callState.didSet.
+        // A direct `CallManager.isCallActiveFlag = ...` outside of the didSet
+        // would create a race (didSet writes from @MainActor; direct writes from
+        // any context) AND could desync the flag from callState.
+        // Exception: MeeshyApp.swift wires the flag via closure injection (read
+        // path only), and the didSet itself is the write path.
+        let source = try callManagerSource()
+
+        // Count occurrences by splitting on the sentinel and subtracting 1.
+        let needle = "CallManager.isCallActiveFlag = "
+        let assignmentCount = source.components(separatedBy: needle).count - 1
+        XCTAssertEqual(
+            assignmentCount, 1,
+            "isCallActiveFlag must only be set in callState.didSet; found \(assignmentCount) direct assignments in CallManager.swift"
+        )
+    }
+}
+
+// MARK: - Negotiation Epoch Reset
+
+@MainActor
+final class CallManagerNegotiationEpochResetTests: XCTestCase {
+
+    func test_applyNegotiationRole_resetsNegotiationIdToZero() throws {
+        // applyNegotiationRole() is the per-call setup chokepoint for negotiation
+        // state. It MUST reset negotiationId = 0 so a peer with a high epoch from
+        // a prior call does not wrongly discard the new call's first offer (generation
+        // 1 < prior high-water-mark would be stale under isStaleNegotiation).
+        // This is a cross-call epoch pollution guard.
+        let source = try callManagerSource()
+        guard let funcRange = source.range(of: "func applyNegotiationRole()") else {
+            XCTFail("applyNegotiationRole() not found in CallManager.swift")
+            return
+        }
+        let funcEnd = source.range(of: "\n    ", range: funcRange.upperBound..<source.endIndex)
+            .flatMap { source.range(of: "\n    }", range: funcRange.upperBound..<source.endIndex)?.lowerBound }
+            ?? source.endIndex
+        let funcBody = String(source[funcRange.lowerBound..<funcEnd])
+
+        XCTAssertTrue(
+            funcBody.contains("negotiationId = 0"),
+            "applyNegotiationRole() must reset negotiationId = 0 to prevent cross-call epoch pollution"
+        )
+    }
+
+    func test_nextOutgoingNegotiationId_incrementsEpoch() throws {
+        // Each outgoing offer must carry a generation strictly higher than any prior
+        // accepted signal. The ONLY place that bumps the epoch must be
+        // nextOutgoingNegotiationId() — inline incrementing would lose the
+        // high-water-mark guarantee.
+        let source = try callManagerSource()
+        guard let funcRange = source.range(of: "func nextOutgoingNegotiationId()") else {
+            XCTFail("nextOutgoingNegotiationId() not found in CallManager.swift")
+            return
+        }
+        let funcEnd = source.range(of: "\n    }", range: funcRange.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        let funcBody = String(source[funcRange.lowerBound..<funcEnd])
+
+        XCTAssertTrue(
+            funcBody.contains("negotiationId += 1"),
+            "nextOutgoingNegotiationId() must increment negotiationId before returning it"
+        )
+        XCTAssertTrue(
+            funcBody.contains("return negotiationId"),
+            "nextOutgoingNegotiationId() must return the newly incremented negotiationId"
+        )
+    }
+
+    func test_acceptIncomingNegotiation_updatesHighWaterMark() throws {
+        // acceptIncomingNegotiation must advance the local high-water mark to the
+        // incoming generation when it is newer. Without this, a second round of
+        // offers (ICE restart) would be accepted at the same generation as the
+        // initial negotiation — making the two rounds indistinguishable to
+        // isStaleNegotiation.
+        let source = try callManagerSource()
+        guard let funcRange = source.range(of: "func acceptIncomingNegotiation") else {
+            XCTFail("acceptIncomingNegotiation not found in CallManager.swift")
+            return
+        }
+        let funcEnd = source.range(of: "\n    }", range: funcRange.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        let funcBody = String(source[funcRange.lowerBound..<funcEnd])
+
+        XCTAssertTrue(
+            funcBody.contains("negotiationId = max(negotiationId, generation)"),
+            "acceptIncomingNegotiation must advance the high-water mark: negotiationId = max(negotiationId, generation)"
+        )
+    }
+}
