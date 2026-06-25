@@ -242,6 +242,11 @@ final class CallManager: ObservableObject {
     /// cancel it cleanly instead of leaking it for the remaining sleep.
     private var sdpOfferTimeoutTask: Task<Void, Never>?
     private var remoteQualityResetTask: Task<Void, Never>?
+    /// In-flight ICE restart task. Tracked so overlapping `attemptReconnection`
+    /// calls (e.g. watchdog fires while backoff is sleeping) cancel the previous
+    /// attempt before starting the new one — prevents two concurrent restart
+    /// offers from corrupting the perfect-negotiation state machine.
+    private var iceRestartTask: Task<Void, Never>?
     private var pendingRemoteOffer: SessionDescription?
     // P0-3 — ICE candidates generated while the socket is down are buffered
     // here and replayed after the socket reconnects + emitCallJoin fires.
@@ -2054,6 +2059,8 @@ final class CallManager: ObservableObject {
         sdpOfferTimeoutTask = nil
         remoteQualityResetTask?.cancel()
         remoteQualityResetTask = nil
+        iceRestartTask?.cancel()
+        iceRestartTask = nil
         isRemoteQualityDegraded = false
         pendingRemoteOffer = nil
         pendingIceCandidates = []
@@ -2981,7 +2988,11 @@ extension CallManager: WebRTCServiceDelegate {
         let attempt = reconnectAttempt
         let backoffSeconds = attempt > 1 ? min(pow(2.0, Double(attempt - 1)), 4.0) : 0.0
 
-        Task { @MainActor [weak self] in
+        // Cancel any in-flight restart so two concurrent Tasks don't both send an
+        // offer — overlapping offers corrupt the perfect-negotiation state machine
+        // (both peers may enter makingOffer simultaneously with no polite resolution).
+        iceRestartTask?.cancel()
+        iceRestartTask = Task { @MainActor [weak self] in
             guard let self, let callId = self.currentCallId, let userId = self.remoteUserId else { return }
             if backoffSeconds > 0 {
                 Logger.calls.info("ICE restart attempt \(attempt): backing off \(Int(backoffSeconds))s before retry")

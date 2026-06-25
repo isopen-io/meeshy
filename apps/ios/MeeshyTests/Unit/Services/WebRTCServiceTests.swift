@@ -50,9 +50,11 @@ final class WebRTCServiceTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(client.addIceCandidateCallCount, 1)
     }
 
-    func test_addICECandidate_bufferCap_dropsExcessCandidates() async {
-        // The buffer must never exceed 200 entries. Candidates 201–205 are
-        // silently dropped; after flush, the client receives exactly 200 calls.
+    func test_addICECandidate_bufferCap_retainsNewestCandidates() async {
+        // The buffer is a FIFO ring capped at 200: when full, the OLDEST entry is
+        // evicted so the newest (highest-priority) candidate is always preserved.
+        // After inserting 205 candidates the buffer holds the last 200 (#6–#205).
+        // On flush the client receives exactly 200 calls.
         let (sut, client) = makeSUT()
         let candidate = IceCandidate(sdpMid: "0", sdpMLineIndex: 0, candidate: "candidate:test")
         // Overshoot the cap by 5.
@@ -64,7 +66,7 @@ final class WebRTCServiceTests: XCTestCase {
         await sut.setRemoteDescription(desc)
         // Give the flush task time to drain the buffer.
         try? await Task.sleep(nanoseconds: 200_000_000)
-        // Exactly 200 candidates forwarded — not 205.
+        // Exactly 200 candidates forwarded — the 5 oldest were evicted.
         XCTAssertEqual(client.addIceCandidateCallCount, 200)
     }
 
@@ -194,6 +196,53 @@ final class WebRTCServiceTests: XCTestCase {
             observed = await sut.connectionState
         }
         XCTAssertEqual(observed, .connected)
+    }
+}
+
+// MARK: - ICE candidate buffer FIFO source guards
+
+/// Verifies that the ICE candidate buffer uses FIFO eviction (removeFirst) rather
+/// than silently discarding new arrivals. A regression to "return early when full"
+/// means relay candidates gathered after the STUN round-trip are never buffered,
+/// silently killing connectivity on symmetric-NAT networks.
+@MainActor
+final class ICECandidateBufferSourceGuardTests: XCTestCase {
+
+    private func webRTCServiceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// The buffer must evict the OLDEST entry (removeFirst) when full, NOT the
+    /// newest. Discarding new arrivals would strand late-arriving relay candidates
+    /// that are essential for symmetric-NAT traversal.
+    func test_iceCandidateBuffer_usesFirstInFirstOutEviction() throws {
+        let src = try webRTCServiceSource()
+        XCTAssertTrue(
+            src.contains("iceCandidateBuffer.removeFirst()"),
+            "ICE candidate buffer must use FIFO eviction (removeFirst) when full — " +
+            "silently dropping new candidates discards relay candidates that arrive " +
+            "after the initial STUN gather and breaks symmetric-NAT connectivity."
+        )
+    }
+
+    /// The guard must NOT use an early `return` path that discards new candidates
+    /// when the buffer cap is hit.
+    func test_iceCandidateBuffer_doesNotDropNewCandidatesWhenFull() throws {
+        let src = try webRTCServiceSource()
+        guard let addFunc = src.range(of: "func addICECandidate(_ candidate: IceCandidate)") else {
+            XCTFail("addICECandidate function not found in WebRTCService.swift"); return
+        }
+        let body = String(src[addFunc.lowerBound...])
+        XCTAssertFalse(
+            body.contains("return") && body.contains("dropping candidate"),
+            "addICECandidate must not silently drop new candidates — use FIFO eviction instead."
+        )
     }
 }
 

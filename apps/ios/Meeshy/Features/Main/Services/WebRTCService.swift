@@ -147,9 +147,16 @@ final class WebRTCService {
             // each produce host/srflx/relay candidates). Beyond ~200 candidates
             // the ICE agent has already selected a pair; additional ones add no
             // connection value and only bloat memory.
-            guard iceCandidateBuffer.count < 200 else {
-                Logger.webrtc.warning("ICE candidate buffer full (200) — dropping candidate")
-                return
+            //
+            // FIFO eviction: when the buffer is full, evict the OLDEST candidate
+            // rather than discarding the NEW one. Newer candidates are typically
+            // more valuable — they reflect more recently discovered interfaces
+            // (e.g. relay candidates gathered after STUN, or candidates from a
+            // network handoff). Dropping the tail means the freshest paths never
+            // reach the ICE agent.
+            if iceCandidateBuffer.count >= 200 {
+                iceCandidateBuffer.removeFirst()
+                Logger.webrtc.warning("ICE candidate buffer full — evicting oldest to make room")
             }
             iceCandidateBuffer.append(candidate)
             Logger.webrtc.debug("Buffered ICE candidate (no remote description yet), count=\(self.iceCandidateBuffer.count)")
