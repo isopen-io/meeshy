@@ -699,6 +699,14 @@ public struct CallErrorData: Decodable, Sendable {
     public let message: String?
 }
 
+public struct CallQualityAlertData: Decodable, Sendable {
+    public let callId: String
+    public let participantId: String
+    public let metric: String
+    public let value: Double
+    public let threshold: Double
+}
+
 // MARK: - Reaction Sync Event Data
 
 public struct ReactionSyncEvent: Decodable, Sendable {
@@ -977,6 +985,7 @@ public protocol MessageSocketProviding: Sendable {
     var callMediaToggled: PassthroughSubject<CallMediaToggleData, Never> { get }
     var callError: PassthroughSubject<CallErrorData, Never> { get }
     var callIceServersRefreshed: PassthroughSubject<CallIceServersRefreshedData, Never> { get }
+    var callQualityAlert: PassthroughSubject<CallQualityAlertData, Never> { get }
     var reactionSynced: PassthroughSubject<ReactionSyncEvent, Never> { get }
     var systemMessageReceived: PassthroughSubject<SystemMessageEvent, Never> { get }
     var mentionCreated: PassthroughSubject<MentionCreatedEvent, Never> { get }
@@ -1181,6 +1190,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let callMediaToggled = PassthroughSubject<CallMediaToggleData, Never>()
     public let callError = PassthroughSubject<CallErrorData, Never>()
     public let callIceServersRefreshed = PassthroughSubject<CallIceServersRefreshedData, Never>()
+    public let callQualityAlert = PassthroughSubject<CallQualityAlertData, Never>()
 
     // Combine publishers — reactions sync, system, attachments, mentions
     public let reactionSynced = PassthroughSubject<ReactionSyncEvent, Never>()
@@ -2758,6 +2768,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(CallIceServersRefreshedData.self, from: data) { [weak self] event in
                 self?.callIceServersRefreshed.send(event)
+            }
+        }
+
+        socket.on("call:quality-alert") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(CallQualityAlertData.self, from: data) { [weak self] event in
+                self?.callQualityAlert.send(event)
             }
         }
 

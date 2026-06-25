@@ -99,6 +99,11 @@ final class CallManager: ObservableObject {
     /// peer's frozen last frame. 1:1 only — the gateway routes the toggle to the
     /// other participant via `socket.to(room)` so we never see our own echo.
     @Published private(set) var isRemoteVideoEnabled: Bool = true
+    /// Set to `true` when the gateway reports the remote peer has high RTT or packet
+    /// loss (call:quality-alert). Auto-resets after 15 s of silence — sustained poor
+    /// conditions keep resetting the timer, so the indicator stays up as long as
+    /// alerts keep arriving.
+    @Published private(set) var isRemoteQualityDegraded: Bool = false
     @Published var isMuted: Bool = false
 
     /// CALL-FIX 2026-06-06 — whether THIS call drives CallKit. CallKit is only
@@ -236,6 +241,7 @@ final class CallManager: ObservableObject {
     /// timeout; both now store the Task here so `endCallInternal` can
     /// cancel it cleanly instead of leaking it for the remaining sleep.
     private var sdpOfferTimeoutTask: Task<Void, Never>?
+    private var remoteQualityResetTask: Task<Void, Never>?
     private var pendingRemoteOffer: SessionDescription?
     // P0-3 — ICE candidates generated while the socket is down are buffered
     // here and replayed after the socket reconnects + emitCallJoin fires.
@@ -1987,6 +1993,9 @@ final class CallManager: ObservableObject {
         participantJoinedCancellable = nil
         sdpOfferTimeoutTask?.cancel()
         sdpOfferTimeoutTask = nil
+        remoteQualityResetTask?.cancel()
+        remoteQualityResetTask = nil
+        isRemoteQualityDegraded = false
         pendingRemoteOffer = nil
         pendingIceCandidates = []
         thermalMonitor.stopMonitoring()
@@ -2357,6 +2366,30 @@ final class CallManager: ObservableObject {
                 self.scheduleTURNCredentialRefresh(ttl: TimeInterval(event.ttl))
             }
             .store(in: &cancellables)
+
+        // Gateway emits call:quality-alert when the REMOTE peer's RTT or
+        // packet loss exceeds thresholds. Surface this as a transient indicator
+        // so the UI can show "Your contact is experiencing network issues" —
+        // FaceTime-parity. Auto-clears 15 s after the last alert (sustained
+        // poor quality keeps resetting the timer).
+        socket.callQualityAlert
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self, self.currentCallId == event.callId else { return }
+                self.isRemoteQualityDegraded = true
+                Logger.calls.info("Remote quality degraded: metric=\(event.metric) value=\(event.value) (callId=\(event.callId))")
+                self.scheduleRemoteQualityReset()
+            }
+            .store(in: &cancellables)
+    }
+
+    private func scheduleRemoteQualityReset() {
+        remoteQualityResetTask?.cancel()
+        remoteQualityResetTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(15))
+            guard !Task.isCancelled else { return }
+            self?.isRemoteQualityDegraded = false
+        }
     }
 
     // MARK: - Participant Joined (Outgoing Call)
