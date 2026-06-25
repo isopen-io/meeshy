@@ -2049,7 +2049,7 @@ describe('CallEventsHandler', () => {
       const offerB = { callId: CALL_ID, signal: { type: 'offer', from: USER_ID, to: 'tgt', sdp: 'v=0...' } };
 
       // Manually plant an expired entry
-      const nowSpy = jest.spyOn(Date, 'now').mockReturnValueOnce(Date.now() - 100_000);
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValueOnce(Date.now() - 160_000);
       (handler as any).bufferOffer('call-old', offerA);
       nowSpy.mockRestore();
 
@@ -2077,7 +2077,7 @@ describe('CallEventsHandler', () => {
 
       // Buffer an offer from 'caller' to USER_ID, planted as already expired
       const expiredOffer = { callId: CALL_ID, signal: { type: 'offer', from: 'caller', to: USER_ID, sdp: 'v=0...' } };
-      jest.spyOn(Date, 'now').mockReturnValueOnce(Date.now() - 100_000);
+      jest.spyOn(Date, 'now').mockReturnValueOnce(Date.now() - 160_000);
       (handler as any).bufferOffer(CALL_ID, expiredOffer);
       jest.restoreAllMocks();
 

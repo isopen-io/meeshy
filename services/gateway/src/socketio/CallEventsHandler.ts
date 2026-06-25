@@ -87,7 +87,7 @@ export class CallEventsHandler {
    * drops stale epochs via `negotiationId` (§3.5).
    */
   private bufferedOffers = new Map<string, { signal: CallSignalEvent; bufferedAt: number }>();
-  private static readonly OFFER_BUFFER_TTL_MS = 90_000;
+  private static readonly OFFER_BUFFER_TTL_MS = 150_000;
 
   constructor(private prisma: PrismaClient) {
     this.callService = new CallService(prisma);

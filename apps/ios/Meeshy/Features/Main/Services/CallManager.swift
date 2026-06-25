@@ -379,6 +379,16 @@ final class CallManager: ObservableObject {
                 Logger.calls.info("Audio interruption ended without shouldResume — reactivating anyway (call active)")
             }
             audioSessionQueue.sync {
+                // Re-activate the system AVAudioSession first — the interruption
+                // deactivated it, so RTCAudioSession.audioSessionDidActivate is a
+                // no-op until the OS session is active again. Failure here is logged
+                // but we still tell RTCAudioSession to proceed: the next heartbeat
+                // or ICE packet will surface any persistent issue to the user.
+                do {
+                    try AVAudioSession.sharedInstance().setActive(true, options: [])
+                } catch {
+                    Logger.calls.error("AVAudioSession reactivation failed after interruption: \(error.localizedDescription)")
+                }
                 let rtc = RTCAudioSession.sharedInstance()
                 rtc.lockForConfiguration()
                 rtc.audioSessionDidActivate(AVAudioSession.sharedInstance())
@@ -1372,6 +1382,7 @@ final class CallManager: ObservableObject {
             } catch {
                 Logger.calls.error("toggleVideo failed: \(error.localizedDescription)")
                 self.isVideoEnabled = false
+                self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
                 FeedbackToastManager.shared.showError("Impossible d'activer la vidéo")
             }
         }
