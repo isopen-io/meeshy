@@ -55,20 +55,6 @@ import type {
   CallTranscriptionSegmentEvent,
 } from '@meeshy/shared/types/video-call';
 
-// ICE servers configuration (STUN/TURN)
-const ICE_SERVERS_CONFIG = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' }
-    // TODO: Add TURN servers for production
-    // {
-    //   urls: 'turn:turn.meeshy.me:3478',
-    //   username: 'username',
-    //   credential: 'password'
-    // }
-  ]
-};
 
 export class CallEventsHandler {
   private callService: CallService;
@@ -804,11 +790,11 @@ export class CallEventsHandler {
           if (remoteSocket.id === socket.id) continue;
           const remoteUserId = getUserId(remoteSocket.id);
           if (!remoteUserId) {
-            logger.warn('⚠️ Socket in call room has no userId, using STUN-only', { socketId: remoteSocket.id });
+            logger.warn('⚠️ Socket in call room has no userId, using anonymous TURN credentials', { socketId: remoteSocket.id });
           }
-          const remoteIceServers = remoteUserId
-            ? this.callService.generateIceServers(remoteUserId)
-            : ICE_SERVERS_CONFIG.iceServers;
+          const remoteIceServers = this.callService.generateIceServers(
+            remoteUserId ?? 'anonymous'
+          );
           remoteSocket.emit(CALL_EVENTS.PARTICIPANT_JOINED, {
             ...joinedEvent,
             iceServers: remoteIceServers
@@ -1814,7 +1800,6 @@ export class CallEventsHandler {
           callId: data.callId,
           segment: {
             text: data.segment.text,
-            translatedText: data.segment.text,
             speakerId: data.segment.speakerId,
             startMs: data.segment.startMs,
             endMs: data.segment.endMs,

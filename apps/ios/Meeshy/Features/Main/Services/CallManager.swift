@@ -1391,16 +1391,26 @@ final class CallManager: ObservableObject {
         if transcriptionService.isTranscribing {
             transcriptionService.stopTranscribing()
         } else {
-            let localLang = "fr"
-            let remoteLang = "fr"
-            let localUserId = AuthManager.shared.currentUser?.id ?? ""
-            let remoteUserId = remoteUserId ?? ""
-            transcriptionService.startTranscribing(
-                localLanguage: localLang,
-                remoteLanguage: remoteLang,
-                localUserId: localUserId,
-                remoteUserId: remoteUserId
-            )
+            let localUser = AuthManager.shared.currentUser
+            let localLang = localUser?.systemLanguage ?? localUser?.regionalLanguage ?? "fr"
+            let localUserId = localUser?.id ?? ""
+            let rUserId = remoteUserId ?? ""
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                var remoteLang = "fr"
+                if !rUserId.isEmpty {
+                    let cached = await CacheCoordinator.shared.profiles.load(for: rUserId)
+                    if let profile = cached.snapshot()?.first {
+                        remoteLang = profile.systemLanguage ?? profile.regionalLanguage ?? "fr"
+                    }
+                }
+                self.transcriptionService.startTranscribing(
+                    localLanguage: localLang,
+                    remoteLanguage: remoteLang,
+                    localUserId: localUserId,
+                    remoteUserId: rUserId
+                )
+            }
         }
     }
 

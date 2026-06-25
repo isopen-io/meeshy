@@ -713,13 +713,15 @@ export interface CallTranscriptionSegmentEvent {
 
 /**
  * Event: call:translated-segment (Server → Client)
- * Translated transcription segment broadcast to call participants
+ * Transcription segment (with optional translation) broadcast to call participants.
+ * `translatedText` is omitted when ZMQ translation is not enabled or unavailable;
+ * consumers should fall back to displaying `text` in that case.
  */
 export interface CallTranslatedSegmentEvent {
   readonly callId: string;
   readonly segment: {
     readonly text: string;
-    readonly translatedText: string;
+    readonly translatedText?: string;
     readonly speakerId: string;
     readonly startMs: number;
     readonly endMs: number;
