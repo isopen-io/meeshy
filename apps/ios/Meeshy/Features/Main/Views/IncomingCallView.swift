@@ -192,6 +192,7 @@ struct IncomingCallView: View {
                 }
                 .pressable()
                 .accessibilityLabel(String(localized: "call.incoming.decline.label", defaultValue: "Refuser l'appel", bundle: .main))
+                .accessibilityHint(String(localized: "call.incoming.decline.hint", defaultValue: "Décline l'appel entrant", bundle: .main))
 
                 // Accept
                 Button {
@@ -211,6 +212,7 @@ struct IncomingCallView: View {
                 }
                 .pressable()
                 .accessibilityLabel(String(localized: "call.incoming.accept.label", defaultValue: "Accepter l'appel", bundle: .main))
+                .accessibilityHint(String(localized: "call.incoming.accept.hint", defaultValue: "Répond à l'appel entrant", bundle: .main))
             }
         }
     }

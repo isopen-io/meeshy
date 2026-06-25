@@ -426,6 +426,8 @@ struct CallView: View {
                 Capsule()
                     .fill(durationColor.opacity(0.15))
             )
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.updatesFrequently)
 
             // Status indicators
             HStack(spacing: 12) {
@@ -547,6 +549,7 @@ struct CallView: View {
                         .background(.ultraThinMaterial)
                         .clipShape(Capsule())
                         .padding(12)
+                        .accessibilityAddTraits(.updatesFrequently)
                     Spacer()
                 }
                 Spacer()
@@ -609,6 +612,10 @@ struct CallView: View {
                 try? await Task.sleep(nanoseconds: videoConnectWatchdogSeconds * 1_000_000_000)
                 if !Task.isCancelled {
                     withAnimation(.easeInOut(duration: 0.3)) { videoConnectSlow = true }
+                    UIAccessibility.post(
+                        notification: .announcement,
+                        argument: String(localized: "call.video.connecting.slow", defaultValue: "La vidéo prend plus de temps que prévu…", bundle: .main)
+                    )
                 }
             }
     }

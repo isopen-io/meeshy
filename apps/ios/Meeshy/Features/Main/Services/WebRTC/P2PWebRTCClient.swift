@@ -1006,9 +1006,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(15))
                 guard !Task.isCancelled, let self else { break }
-                DispatchQueue.main.async { [weak self] in
-                    self?.sendDataChannelMessage(Data("{\"type\":\"ping\"}".utf8))
-                }
+                self.sendDataChannelMessage(Data("{\"type\":\"ping\"}".utf8))
             }
         }
     }
