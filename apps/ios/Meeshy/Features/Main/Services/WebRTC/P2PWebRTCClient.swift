@@ -68,6 +68,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
 
     private(set) var videoFilterPipeline = VideoFilterPipeline()
     private var transcriptionDataChannel: RTCDataChannel?
+    private var dataChannelPingTask: Task<Void, Never>?
     private let _audioEffectsService: CallAudioEffectsService
 
     var audioEffectsService: CallAudioEffectsServiceProviding? { _audioEffectsService }
@@ -991,6 +992,24 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         channel.sendData(buffer)
     }
 
+    private func startDataChannelPing() {
+        stopDataChannelPing()
+        dataChannelPingTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(15))
+                guard !Task.isCancelled, let self else { break }
+                DispatchQueue.main.async { [weak self] in
+                    self?.sendDataChannelMessage(Data("{\"type\":\"ping\"}".utf8))
+                }
+            }
+        }
+    }
+
+    private func stopDataChannelPing() {
+        dataChannelPingTask?.cancel()
+        dataChannelPingTask = nil
+    }
+
     // MARK: - Audio Effects
 
     func setAudioEffect(_ effect: AudioEffectConfig?) throws {
@@ -1007,6 +1026,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     func disconnect() {
         sessionGeneration += 1
         _audioEffectsService.reset()
+        stopDataChannelPing()
         transcriptionDataChannel?.close()
         transcriptionDataChannel = nil
         videoCapturer?.stopCapture()
@@ -1379,7 +1399,15 @@ extension P2PWebRTCClient: RTCPeerConnectionDelegate {
 
 extension P2PWebRTCClient: RTCDataChannelDelegate {
     nonisolated func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
-        Logger.webrtc.info("DataChannel '\(dataChannel.label)' state: \(dataChannel.readyState.rawValue)")
+        let state = dataChannel.readyState
+        Logger.webrtc.info("DataChannel '\(dataChannel.label)' state: \(state.rawValue)")
+        DispatchQueue.main.async { [weak self] in
+            if state == .open {
+                self?.startDataChannelPing()
+            } else {
+                self?.stopDataChannelPing()
+            }
+        }
     }
 
     nonisolated func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
