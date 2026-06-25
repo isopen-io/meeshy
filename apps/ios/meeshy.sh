@@ -13,6 +13,14 @@ SCHEME="Meeshy"
 PROJECT="Meeshy.xcodeproj"
 DERIVED_DATA="Build"
 
+# Apple Developer Team — required for device code-signing under automatic
+# provisioning (CODE_SIGN_STYLE=Automatic in project.yml). Without it,
+# xcodebuild fails: "Signing for 'Meeshy' requires a development team".
+# Mirrors fastlane's source of truth (Appfile/Matchfile default + Fastfile
+# xcargs DEVELOPMENT_TEAM=D72UK7R5RE) and honours the same FASTLANE_TEAM_ID
+# override. Simulator builds don't sign, so this is only consumed by `device`.
+DEVELOPMENT_TEAM="${FASTLANE_TEAM_ID:-D72UK7R5RE}"
+
 # Xcode GUI SPM package cache — avoids re-cloning on slow networks
 # Auto-detected: finds the latest Meeshy DerivedData with SourcePackages
 XCODE_PKG_CACHE=""
@@ -245,9 +253,12 @@ do_device_deploy_only() {
     # building for device, and the device install ships an inconsistent .app.
     wait_for_existing_build
 
-    local dev_product="$APP_NAME"
-    [ "$CONFIGURATION" = "Debug" ] && dev_product="$APP_NAME Dev"
-    local device_app_path="$DERIVED_DATA/Products/$CONFIGURATION-iphoneos/$dev_product.app"
+    # XcodeGen sets PRODUCT_NAME = $(TARGET_NAME) for every configuration
+    # (project.yml deliberately leaves PRODUCT_NAME unset), so the product is
+    # "Meeshy.app" for both Debug and Release. The legacy "Meeshy Dev" name came
+    # from Configuration/Debug.xcconfig, which is NOT wired into the generated
+    # project (no configFiles: key) and therefore has no effect.
+    local device_app_path="$DERIVED_DATA/Products/$CONFIGURATION-iphoneos/$APP_NAME.app"
     local build_log="/tmp/meeshy_device_build_$$.log"
 
     local ncpu
@@ -276,6 +287,7 @@ do_device_deploy_only() {
         -skipMacroValidation \
         -jobs "$ncpu" \
         ONLY_ACTIVE_ARCH=YES \
+        DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
         CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION=YES \
         build >"$build_log" 2>&1
     local build_rc=$?
@@ -408,14 +420,14 @@ is_app_running() {
 }
 
 app_path() {
-    # Debug config produces "Meeshy Dev.app", Release produces "Meeshy.app"
-    local product_name="$APP_NAME"
-    [ "$CONFIGURATION" = "Debug" ] && product_name="$APP_NAME Dev"
-
+    # XcodeGen sets PRODUCT_NAME = $(TARGET_NAME) for every configuration, so
+    # both Debug and Release produce "Meeshy.app". The old "Meeshy Dev.app"
+    # name lived in Configuration/Debug.xcconfig, which the generated project
+    # never references — see do_device_deploy_only for the same rationale.
     if [ "$PLATFORM" = "mac" ]; then
-        echo "$DERIVED_DATA/Products/$CONFIGURATION-maccatalyst/$product_name.app"
+        echo "$DERIVED_DATA/Products/$CONFIGURATION-maccatalyst/$APP_NAME.app"
     else
-        echo "$DERIVED_DATA/Products/$CONFIGURATION-iphonesimulator/$product_name.app"
+        echo "$DERIVED_DATA/Products/$CONFIGURATION-iphonesimulator/$APP_NAME.app"
     fi
 }
 
