@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 // MARK: - CallState Tests
