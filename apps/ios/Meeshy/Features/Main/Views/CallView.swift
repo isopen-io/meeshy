@@ -564,6 +564,7 @@ struct CallView: View {
                 VStack(spacing: 12) {
                     ProgressView()
                         .tint(.white.opacity(0.5))
+                        .accessibilityHidden(true)
                     Text(videoConnectSlow
                         ? String(localized: "call.video.connecting.slow", defaultValue: "La vidéo prend plus de temps que prévu…", bundle: .main)
                         : String(localized: "call.video.connecting", defaultValue: "Connexion video...", bundle: .main))
@@ -578,6 +579,7 @@ struct CallView: View {
                     }
                 }
                 .padding(.horizontal, 32)
+                .accessibilityElement(children: .combine)
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             // The watchdog runs only while this placeholder is on screen; SwiftUI
@@ -600,13 +602,16 @@ struct CallView: View {
             Color.black.opacity(0.5)
             VStack(spacing: 14) {
                 avatarCircle(size: 96)
+                    .accessibilityHidden(true)
                 HStack(spacing: 6) {
                     Image(systemName: "video.slash.fill")
                         .font(.system(size: 13, weight: .semibold))
+                        .accessibilityHidden(true)
                     Text(String(localized: "call.video.remoteOff", defaultValue: "Caméra désactivée", bundle: .main))
                         .font(.system(size: 14, weight: .medium))
                 }
                 .foregroundColor(.white.opacity(0.6))
+                .accessibilityElement(children: .combine)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -801,6 +806,7 @@ struct CallView: View {
 
             avatarCircle(size: 100)
                 .opacity(0.6)
+                .accessibilityHidden(true)
 
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                 .font(.system(size: 24, weight: .semibold, design: .rounded))
@@ -1040,6 +1046,11 @@ struct CallView: View {
 
             avatarCircle(size: 100)
         }
+        // Decorative: the remote user's name is shown as a Text element directly
+        // below this avatar in every layout that uses pulsingAvatar. VoiceOver
+        // would otherwise read the first-initial letter from avatarCircle and then
+        // the full name from the adjacent Text, producing a double-read.
+        .accessibilityHidden(true)
     }
 
     private func avatarCircle(size: CGFloat) -> some View {
