@@ -1147,6 +1147,44 @@ describe('CallEventsHandler', () => {
       // No call:quality-alert emitted
       expect(ioCalls.length).toBe(0);
     });
+
+    it('emits rtt alert when both RTT and packet loss exceed thresholds (RTT wins)', async () => {
+      mockCallServicePersistCallStats.mockResolvedValue(undefined);
+      const { socket, io } = setupWithSocket();
+
+      await socket._trigger('call:quality-report', {
+        callId: CALL_ID,
+        stats: { rtt: 450, packetLoss: 8, bytesSent: 500, bytesReceived: 500, level: 'poor' },
+      });
+
+      const roomEmit = (io.to as jest.Mock<any>).mock.results[0]?.value?.emit as jest.Mock<any>;
+      expect(roomEmit).toHaveBeenCalledWith(
+        'call:quality-alert',
+        expect.objectContaining({ metric: 'rtt', value: 450, threshold: 300 })
+      );
+    });
+
+    it('does NOT emit quality alert when participant cannot be resolved', async () => {
+      // callSession.findUnique returns null → resolveParticipantIdFromCall returns null
+      mockCallServicePersistCallStats.mockResolvedValue(undefined);
+      const { socket, io } = setupWithSocket({
+        callSession: {
+          findUnique: jest.fn<any>().mockResolvedValue(null),
+          findMany: jest.fn<any>().mockResolvedValue([]),
+          updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+        },
+      });
+
+      await socket._trigger('call:quality-report', {
+        callId: CALL_ID,
+        stats: { rtt: 500, packetLoss: 1, bytesSent: 100, bytesReceived: 100, level: 'poor' },
+      });
+
+      // Stats persisted but no room emit for quality-alert
+      expect(mockCallServicePersistCallStats).toHaveBeenCalled();
+      const ioCalls = (io.to as jest.Mock<any>).mock.calls;
+      expect(ioCalls.length).toBe(0);
+    });
   });
 
   // ── call:reconnecting ────────────────────────────────────────────────────
