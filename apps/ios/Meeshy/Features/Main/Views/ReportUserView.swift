@@ -36,7 +36,7 @@ struct ReportUserView: View {
             Spacer()
 
             Text("\(String(localized: "report.user.title", defaultValue: "Report", bundle: .main)) @\(username)")
-                .font(.system(size: 17, weight: .bold))
+                .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
@@ -47,7 +47,7 @@ struct ReportUserView: View {
                 dismiss()
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 24))
+                    .font(MeeshyFont.relative(24))
                     .foregroundColor(theme.textMuted)
             }
             .accessibilityLabel(String(localized: "common.close", defaultValue: "Close", bundle: .main))
@@ -67,7 +67,7 @@ struct ReportUserView: View {
 
                 if let errorMessage {
                     Text(errorMessage)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(MeeshyFont.relative(13, weight: .medium))
                         .foregroundColor(MeeshyColors.error)
                         .frame(maxWidth: .infinity, alignment: .center)
                 }
@@ -95,7 +95,7 @@ struct ReportUserView: View {
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: reason.icon)
-                                .font(.system(size: 14, weight: .medium))
+                                .font(MeeshyFont.relative(14, weight: .medium))
                                 .foregroundColor(selectedReason == reason ? MeeshyColors.error : MeeshyColors.neutral500)
                                 .frame(width: 28, height: 28)
                                 .background(
@@ -104,14 +104,14 @@ struct ReportUserView: View {
                                 )
 
                             Text(reason.label)
-                                .font(.system(size: 14, weight: .medium))
+                                .font(MeeshyFont.relative(14, weight: .medium))
                                 .foregroundColor(theme.textPrimary)
 
                             Spacer()
 
                             if selectedReason == reason {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 18))
+                                    .font(MeeshyFont.relative(18))
                                     .foregroundColor(MeeshyColors.error)
                             }
                         }
@@ -135,17 +135,17 @@ struct ReportUserView: View {
 
             VStack(spacing: 8) {
                 TextEditor(text: $details)
-                    .font(.system(size: 14, weight: .regular))
+                    .font(MeeshyFont.relative(14, weight: .regular))
                     .foregroundColor(theme.textPrimary)
                     .scrollContentBackground(.hidden)
                     .frame(minHeight: 100, maxHeight: 150)
                     .padding(10)
                     .background(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .fill(theme.surfaceGradient(tint: "3498DB"))
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .stroke(theme.border(tint: "3498DB"), lineWidth: 1)
                     )
                     .adaptiveOnChange(of: details) { _, newValue in
@@ -156,7 +156,7 @@ struct ReportUserView: View {
                     .accessibilityLabel(String(localized: "report.user.details.a11y", defaultValue: "Report details", bundle: .main))
 
                 Text("\(details.count)/500")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(MeeshyFont.relative(11, weight: .medium))
                     .foregroundColor(details.count >= 450 ? MeeshyColors.error : theme.textMuted)
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
@@ -177,13 +177,13 @@ struct ReportUserView: View {
                         .tint(.white)
                 }
                 Text(String(localized: "report.user.submit", defaultValue: "Send report", bundle: .main))
-                    .font(.system(size: 15, weight: .bold))
+                    .font(MeeshyFont.relative(15, weight: .bold))
             }
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .fill(isSubmitting ? MeeshyColors.error.opacity(0.5) : MeeshyColors.error)
             )
         }
@@ -220,10 +220,10 @@ struct ReportUserView: View {
     private func sectionHeader(title: String, icon: String, color: String) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
+                .font(MeeshyFont.relative(12, weight: .semibold))
                 .foregroundColor(Color(hex: color))
             Text(title.uppercased())
-                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: color))
                 .tracking(1.2)
         }
@@ -231,10 +231,10 @@ struct ReportUserView: View {
     }
 
     private func sectionBackground(tint: String) -> some View {
-        RoundedRectangle(cornerRadius: 16)
+        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
             .fill(theme.surfaceGradient(tint: tint))
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .stroke(theme.border(tint: tint), lineWidth: 1)
             )
     }

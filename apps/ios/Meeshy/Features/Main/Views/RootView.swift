@@ -1549,17 +1549,27 @@ struct RootView: View {
                 // Special handling for notifications & pending-request badges
                 Group {
                     if item.icon == "bell.fill" {
-                        ThemedActionButton(icon: item.icon, color: item.color, badge: notificationManager.unreadCount, action: item.action)
+                        ThemedActionButton(
+                            icon: item.icon, color: item.color,
+                            label: item.label, hint: String(localized: "root.menu.item.hint", defaultValue: "Ouvrir cette section"),
+                            badge: notificationManager.unreadCount, action: item.action
+                        )
                     } else if item.icon == "sparkle.magnifyingglass" {
-                        ThemedActionButton(icon: item.icon, color: item.color, badge: FriendshipCache.shared.pendingReceivedCount, action: item.action)
+                        ThemedActionButton(
+                            icon: item.icon, color: item.color,
+                            label: item.label, hint: String(localized: "root.menu.item.hint", defaultValue: "Ouvrir cette section"),
+                            badge: FriendshipCache.shared.pendingReceivedCount, action: item.action
+                        )
                     } else {
-                        ThemedActionButton(icon: item.icon, color: item.color, action: item.action)
+                        ThemedActionButton(
+                            icon: item.icon, color: item.color,
+                            label: item.label, hint: String(localized: "root.menu.item.hint", defaultValue: "Ouvrir cette section"),
+                            action: item.action
+                        )
                     }
                 }
                 .position(x: menuX, y: itemY)
                 .menuAnimation(showMenu: showMenu, delay: Double(index) * 0.04)
-                .accessibilityLabel(item.label)
-                .accessibilityHint(String(localized: "root.menu.item.hint", defaultValue: "Ouvrir cette section"))
             }
         }
         .ignoresSafeArea()

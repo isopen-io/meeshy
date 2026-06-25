@@ -9,6 +9,8 @@ import MeeshyUI
 struct ThemedActionButton: View {
     let icon: String
     let color: String
+    var label: String? = nil
+    var hint: String? = nil
     var badge: Int = 0
     var size: CGFloat = 46
     let action: () -> Void
@@ -64,6 +66,8 @@ struct ThemedActionButton: View {
             }
             .scaleEffect(isPressed ? 0.82 : 1)
         }
+        .accessibilityLabel(label ?? "")
+        .accessibilityHint(hint ?? "")
         .onAppear {
             // Reduce Motion: keep the static base shadow, no breathing glow.
             guard !reduceMotion else { return }

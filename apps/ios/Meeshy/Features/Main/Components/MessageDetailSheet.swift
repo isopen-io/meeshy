@@ -2392,25 +2392,15 @@ struct MessageDetailSheet: View {
     }
 
     private func formatDateFR(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
+        date.formatted(.dateTime.day().month().year().hour().minute())
     }
 
     private func formatTimeFR(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: date)
+        date.formatted(.dateTime.hour().minute())
     }
 
     private func formatDateTimeFR(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
-        formatter.dateFormat = "dd/MM/yyyy HH:mm"
-        return formatter.string(from: date)
+        date.formatted(.dateTime.day().month().year().hour().minute())
     }
 
     private func formatDuration(_ seconds: Int) -> String {
