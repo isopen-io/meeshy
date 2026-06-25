@@ -268,7 +268,15 @@ final class WebRTCService {
         let denom = deltaLost + deltaReceived
         let lossRatio = denom > 0 ? Double(deltaLost) / Double(denom) : 0
 
-        let newLevel = VideoQualityLevel.from(rtt: rtt, packetLoss: lossRatio)
+        // Merge the RTT/loss heuristic with the TWCC GCC bandwidth estimate.
+        // When TWCC is active (bps > 0), GCC has better visibility into the
+        // actual available path capacity than RTT alone. Taking the min of both
+        // ensures we never over-commit beyond what either signal permits.
+        let heuristicLevel = VideoQualityLevel.from(rtt: rtt, packetLoss: lossRatio)
+        let bweLevel: VideoQualityLevel? = stats.availableOutgoingBitrateBps > 0
+            ? VideoQualityLevel.from(availableOutgoingBitrateBps: stats.availableOutgoingBitrateBps)
+            : nil
+        let newLevel = bweLevel.map { min(heuristicLevel, $0) } ?? heuristicLevel
 
         let newBitrate: Int
         if rtt <= QualityThresholds.excellentRTT && lossRatio <= QualityThresholds.excellentPacketLoss {
@@ -282,7 +290,10 @@ final class WebRTCService {
         if newBitrate != currentBitrate {
             currentBitrate = newBitrate
             let lossPct = String(format: "%.1f%%", lossRatio * 100)
-            Logger.webrtc.info("Audio bitrate adjusted to \(newBitrate) bps (RTT: \(rtt)ms, loss: \(lossPct))")
+            let bweMbps = stats.availableOutgoingBitrateBps > 0
+                ? String(format: " bwe=%.1fMbps", Double(stats.availableOutgoingBitrateBps) / 1_000_000)
+                : ""
+            Logger.webrtc.info("Audio bitrate adjusted to \(newBitrate) bps (RTT: \(rtt)ms, loss: \(lossPct)\(bweMbps))")
         }
 
         // §5.6 — a thermal transition must re-apply the encoder ceiling even

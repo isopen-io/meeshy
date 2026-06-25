@@ -73,6 +73,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let conversationClosed = PassthroughSubject<ConversationClosedEvent, Never>()
     let conversationStatsReceived = PassthroughSubject<ConversationStatsEvent, Never>()
     let callSignalOfferReceived = PassthroughSubject<CallAnswerData, Never>()
+    let callQualityAlert = PassthroughSubject<CallQualityAlertData, Never>()
 
     // MARK: - Call Tracking
 

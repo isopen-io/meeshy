@@ -175,7 +175,9 @@ export class CallService {
   private turnCredentialService: TURNCredentialService;
   private heartbeats: Map<string, Map<string, number>> = new Map();
   private ringingTimeouts: Map<string, NodeJS.Timeout> = new Map();
+  private heartbeatDbWriteTimers: Map<string, NodeJS.Timeout> = new Map();
   private readonly RINGING_TIMEOUT_MS = 60_000;   // Phase 1 fix P2 — FaceTime parity
+  private readonly HEARTBEAT_DB_DEBOUNCE_MS = 30_000; // Write at most every 30s per participant
 
   constructor(private prisma: PrismaClient) {
     this.turnCredentialService = new TURNCredentialService();
@@ -216,14 +218,39 @@ export class CallService {
     return this.turnCredentialService.generateCredentials(userId);
   }
 
+  getIceServerTtl(): number {
+    return this.turnCredentialService.getStatus().credentialTTL;
+  }
+
   /**
-   * Record a heartbeat from a participant
+   * Record a heartbeat from a participant. Updates in-memory immediately and
+   * schedules a debounced write to MongoDB (30s) so liveness data survives restarts.
    */
   recordHeartbeat(callId: string, participantId: string): void {
     if (!this.heartbeats.has(callId)) {
       this.heartbeats.set(callId, new Map());
     }
     this.heartbeats.get(callId)!.set(participantId, Date.now());
+
+    const key = `${callId}:${participantId}`;
+    if (!this.heartbeatDbWriteTimers.has(key)) {
+      const timer = setTimeout(() => {
+        this.heartbeatDbWriteTimers.delete(key);
+        void this.persistHeartbeatToDb(callId, participantId);
+      }, this.HEARTBEAT_DB_DEBOUNCE_MS);
+      this.heartbeatDbWriteTimers.set(key, timer);
+    }
+  }
+
+  private async persistHeartbeatToDb(callId: string, participantId: string): Promise<void> {
+    try {
+      await this.prisma.callParticipant.updateMany({
+        where: { callSessionId: callId, participantId, leftAt: null },
+        data: { lastHeartbeatAt: new Date() }
+      });
+    } catch (err) {
+      logger.warn('Failed to persist heartbeat to DB', { callId, participantId, err });
+    }
   }
 
   /**
@@ -234,10 +261,25 @@ export class CallService {
   }
 
   /**
-   * Clear heartbeat tracking for a call
+   * Returns true when at least one heartbeat has been recorded in-memory for
+   * this call. Used by CallCleanupService to distinguish "no data yet" (post-restart)
+   * from "data exists but no stale entries".
+   */
+  hasHeartbeatData(callId: string): boolean {
+    return (this.heartbeats.get(callId)?.size ?? 0) > 0;
+  }
+
+  /**
+   * Clear heartbeat tracking for a call and cancel any pending DB write timers.
    */
   clearHeartbeats(callId: string): void {
     this.heartbeats.delete(callId);
+    for (const [key, timer] of this.heartbeatDbWriteTimers) {
+      if (key.startsWith(`${callId}:`)) {
+        clearTimeout(timer);
+        this.heartbeatDbWriteTimers.delete(key);
+      }
+    }
   }
 
   /**

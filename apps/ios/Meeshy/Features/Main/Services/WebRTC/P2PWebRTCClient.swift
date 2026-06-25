@@ -68,6 +68,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
 
     private(set) var videoFilterPipeline = VideoFilterPipeline()
     private var transcriptionDataChannel: RTCDataChannel?
+    private var dataChannelPingTask: Task<Void, Never>?
     private let _audioEffectsService: CallAudioEffectsService
 
     var audioEffectsService: CallAudioEffectsServiceProviding? { _audioEffectsService }
@@ -353,11 +354,14 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             // DTX: no native API — see comment above; handled via SDP fmtp `usedtx=1`.
             encoding.maxBitrateBps = NSNumber(value: 64_000)
             encoding.minBitrateBps = NSNumber(value: 16_000)
+            // networkPriority = .high → DSCP EF (Expedited Forwarding, 46) for VoIP audio.
+            // Maps to the highest WebRTC pacer priority and signals QoS to the OS network stack.
+            encoding.networkPriority = .high
         }
         audioTransceiver.sender.parameters = params
         let encodingsCount = params.encodings.count
         if encodingsCount > 0 {
-            Logger.webrtc.info("[WEBRTC] audio bitrate range applied via RtpEncodingParameters (max=64kbps, min=16kbps, encodings=\(encodingsCount, privacy: .public))")
+            Logger.webrtc.info("[WEBRTC] audio bitrate range applied via RtpEncodingParameters (max=64kbps, min=16kbps, priority=high encodings=\(encodingsCount, privacy: .public))")
         } else {
             Logger.webrtc.warning("[WEBRTC] audio bitrate NOT applied — encodings array empty")
         }
@@ -417,12 +421,15 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             encoding.maxBitrateBps = NSNumber(value: maxBitrateBps)
             encoding.maxFramerate = NSNumber(value: maxFramerate)
             encoding.scaleResolutionDownBy = NSNumber(value: max(1.0, scaleResolutionDownBy))
+            // networkPriority = .high → DSCP AF41 (Assured Forwarding, 34) for real-time video.
+            // Signals to WebRTC pacer and OS that this stream deserves elevated QoS.
+            encoding.networkPriority = .high
         }
         sender.parameters = params
         let count = params.encodings.count
         if count > 0 {
             let scaleStr = String(format: "%.2f", scaleResolutionDownBy)
-            Logger.webrtc.info("[WEBRTC] video encoding applied (max=\(maxBitrateBps / 1000, privacy: .public)kbps fps=\(maxFramerate, privacy: .public) scale=\(scaleStr, privacy: .public) degradation=maintainFramerate encodings=\(count, privacy: .public))")
+            Logger.webrtc.info("[WEBRTC] video encoding applied (max=\(maxBitrateBps / 1000, privacy: .public)kbps fps=\(maxFramerate, privacy: .public) scale=\(scaleStr, privacy: .public) degradation=maintainFramerate priority=high encodings=\(count, privacy: .public))")
         } else {
             Logger.webrtc.warning("[WEBRTC] video encoding NOT applied — encodings array empty")
         }
@@ -932,7 +939,8 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         let entries: [CallStats.RawEntry] = await withCheckedContinuation { continuation in
             pc.statistics { report in
                 let numericKeys = [
-                    "currentRoundTripTime", "packetsLost", "packetsReceived",
+                    "currentRoundTripTime", "availableOutgoingBitrate",
+                    "packetsLost", "packetsReceived",
                     "packetsSent", "bytesSent", "bytesReceived"
                 ]
                 var parsed: [CallStats.RawEntry] = []
@@ -958,7 +966,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
 
         let result = CallStats.reduce(entries: entries)
         Logger.webrtc.info(
-            "[CALL-DIAG][STATS] sent=\(result.bandwidth)B/\(result.outboundPacketsSent)pkt recvAudio=\(result.inboundAudioPackets)pkt recvVideo=\(result.inboundVideoPackets)pkt rtt=\(result.roundTripTimeMs)ms lost=\(result.packetsLost) codec=\(result.codec ?? "?", privacy: .public)"
+            "[CALL-DIAG][STATS] sent=\(result.bandwidth)B/\(result.outboundPacketsSent)pkt recvAudio=\(result.inboundAudioPackets)pkt recvVideo=\(result.inboundVideoPackets)pkt rtt=\(result.roundTripTimeMs)ms lost=\(result.packetsLost) bwe=\(result.availableOutgoingBitrateBps)bps codec=\(result.codec ?? "?", privacy: .public)"
         )
         return result
     }
@@ -985,6 +993,24 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         channel.sendData(buffer)
     }
 
+    private func startDataChannelPing() {
+        stopDataChannelPing()
+        dataChannelPingTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(15))
+                guard !Task.isCancelled, let self else { break }
+                DispatchQueue.main.async { [weak self] in
+                    self?.sendDataChannelMessage(Data("{\"type\":\"ping\"}".utf8))
+                }
+            }
+        }
+    }
+
+    private func stopDataChannelPing() {
+        dataChannelPingTask?.cancel()
+        dataChannelPingTask = nil
+    }
+
     // MARK: - Audio Effects
 
     func setAudioEffect(_ effect: AudioEffectConfig?) throws {
@@ -1001,6 +1027,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     func disconnect() {
         sessionGeneration += 1
         _audioEffectsService.reset()
+        stopDataChannelPing()
         transcriptionDataChannel?.close()
         transcriptionDataChannel = nil
         videoCapturer?.stopCapture()
@@ -1373,7 +1400,15 @@ extension P2PWebRTCClient: RTCPeerConnectionDelegate {
 
 extension P2PWebRTCClient: RTCDataChannelDelegate {
     nonisolated func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
-        Logger.webrtc.info("DataChannel '\(dataChannel.label)' state: \(dataChannel.readyState.rawValue)")
+        let state = dataChannel.readyState
+        Logger.webrtc.info("DataChannel '\(dataChannel.label)' state: \(state.rawValue)")
+        DispatchQueue.main.async { [weak self] in
+            if state == .open {
+                self?.startDataChannelPing()
+            } else {
+                self?.stopDataChannelPing()
+            }
+        }
     }
 
     nonisolated func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {

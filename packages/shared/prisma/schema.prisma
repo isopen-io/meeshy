@@ -1728,8 +1728,11 @@ model CallParticipant {
   role ParticipantRole @default(participant)
 
   /// Timestamps
-  joinedAt DateTime  @default(now())
-  leftAt   DateTime?
+  joinedAt        DateTime  @default(now())
+  leftAt          DateTime?
+  /// Updated on every heartbeat flush (debounced every 30s). Survives gateway
+  /// restarts so CallCleanupService can detect zombie calls without in-memory state.
+  lastHeartbeatAt DateTime?
 
   /// Media state
   isAudioEnabled Boolean @default(true)

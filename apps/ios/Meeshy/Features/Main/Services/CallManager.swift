@@ -99,6 +99,11 @@ final class CallManager: ObservableObject {
     /// peer's frozen last frame. 1:1 only — the gateway routes the toggle to the
     /// other participant via `socket.to(room)` so we never see our own echo.
     @Published private(set) var isRemoteVideoEnabled: Bool = true
+    /// Set to `true` when the gateway reports the remote peer has high RTT or packet
+    /// loss (call:quality-alert). Auto-resets after 15 s of silence — sustained poor
+    /// conditions keep resetting the timer, so the indicator stays up as long as
+    /// alerts keep arriving.
+    @Published private(set) var isRemoteQualityDegraded: Bool = false
     @Published var isMuted: Bool = false
 
     /// CALL-FIX 2026-06-06 — whether THIS call drives CallKit. CallKit is only
@@ -116,6 +121,8 @@ final class CallManager: ObservableObject {
     @Published private(set) var callDuration: TimeInterval = 0
     @Published private(set) var currentCallId: String?
     @Published private(set) var connectionQuality: PeerConnectionState = .new
+    /// RTT+packet-loss quality level from stats samples; nil until first sample.
+    @Published private(set) var liveVideoQualityLevel: VideoQualityLevel? = nil
     @Published var displayMode: CallDisplayMode = .fullScreen
     /// Une fenêtre PiP SYSTÈME (AVPictureInPicture) est affichée. Orthogonal à
     /// `displayMode` : tant qu'il est vrai, la `FloatingCallPillView` in-app est
@@ -225,6 +232,8 @@ final class CallManager: ObservableObject {
     private var lastCallWasOutgoing: Bool = false
     private var callStartDate: Date?
     private var reconnectAttempt = 0
+    /// Periodic refresh of TURN credentials before TTL expiry. Cancelled on call end.
+    private var turnRefreshTask: Task<Void, Never>?
     private var participantJoinedCancellable: AnyCancellable?
     /// Audit P3 — replaces the never-assigned `signalOfferCancellable`
     /// (AnyCancellable, dead) with a properly typed Task slot. Two callers
@@ -232,6 +241,7 @@ final class CallManager: ObservableObject {
     /// timeout; both now store the Task here so `endCallInternal` can
     /// cancel it cleanly instead of leaking it for the remaining sleep.
     private var sdpOfferTimeoutTask: Task<Void, Never>?
+    private var remoteQualityResetTask: Task<Void, Never>?
     private var pendingRemoteOffer: SessionDescription?
     // P0-3 — ICE candidates generated while the socket is down are buffered
     // here and replayed after the socket reconnects + emitCallJoin fires.
@@ -248,6 +258,7 @@ final class CallManager: ObservableObject {
     private let networkMonitor = NWPathMonitor()
     private let networkQueue = DispatchQueue(label: "me.meeshy.callmanager.network")
     private var lastNetworkPath: NWPath.Status = .satisfied
+    private var lastNetworkInterfaceType: NWInterface.InterfaceType? = nil
     private let thermalMonitor = ThermalStateMonitor()
 
     // CallKit
@@ -591,6 +602,7 @@ final class CallManager: ObservableObject {
                 self.currentCallId = ack.callId
                 Logger.calls.info("[CALL_SETUP] outgoing 1/4 webRTC.configure begin (isVideo=\(isVideo))")
                 self.webRTCService.configure(isVideo: isVideo, iceServers: dynamicServers)
+                self.scheduleTURNCredentialRefresh(ttl: TimeInterval(ack.ttl ?? 480))
                 self.applyNegotiationRole()
                 Logger.calls.info("[CALL_SETUP] outgoing 2/4 configureAudioSession begin")
                 self.configureAudioSession()
@@ -705,6 +717,7 @@ final class CallManager: ObservableObject {
         // so RTCPeerConnection is built with TURN BEFORE the offer is set.
         Logger.calls.info("[CALL_SETUP] incoming 1/4 webRTC.configure begin (isVideo=\(isVideo))")
         webRTCService.configure(isVideo: isVideo, iceServers: iceServers)
+        scheduleTURNCredentialRefresh(ttl: 480)
         applyNegotiationRole()
         Logger.calls.info("[CALL_SETUP] incoming 2/4 configureAudioSession begin")
         configureAudioSession()
@@ -914,6 +927,7 @@ final class CallManager: ObservableObject {
 
         // Auto-join call room + configure WebRTC so SDP offer can be received while ringing
         webRTCService.configure(isVideo: isVideo, iceServers: iceServers)
+        scheduleTURNCredentialRefresh(ttl: 480)
         applyNegotiationRole()
         configureAudioSession()
         startReliabilityMonitor()
@@ -1683,6 +1697,8 @@ final class CallManager: ObservableObject {
         // (immédiat sur RTCPeerConnectionState.connected, §3.2). Le guard évite de
         // relancer durationTask / heartbeat / haptics si re-déclenchée.
         if case .connected = callState { return }
+        let wasReconnecting: Bool
+        if case .reconnecting = callState { wasReconnecting = true } else { wasReconnecting = false }
 
         // §2.3/§6.4 — audio activation is gated on the PLATFORM, not on the
         // fragile `!rtc.isAudioEnabled` heuristic.
@@ -1731,6 +1747,13 @@ final class CallManager: ObservableObject {
         callStartDate = Date()
         callDuration = 0
         reconnectAttempt = 0
+
+        // Notify gateway that the ICE restart succeeded so call DB status is
+        // reset to `active` and the peer sees reconnection as complete.
+        if wasReconnecting, let callId = currentCallId {
+            let userId = AuthManager.shared.currentUser?.id ?? ""
+            MessageSocketManager.shared.emitCallReconnected(callId: callId, participantId: userId)
+        }
         durationTask?.cancel()
         durationTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
@@ -1896,7 +1919,22 @@ final class CallManager: ObservableObject {
                 guard let self else { return }
                 let wasUnsatisfied = self.lastNetworkPath != .satisfied
                 let isNowSatisfied = path.status == .satisfied
+
+                // Detect active interface type (WiFi > cellular > other). Used to
+                // trigger ICE restart on WiFi↔cellular handoff — the path remains
+                // "satisfied" across the transition so status alone is insufficient.
+                let currentInterfaceType: NWInterface.InterfaceType?
+                if path.usesInterfaceType(.wifi) { currentInterfaceType = .wifi }
+                else if path.usesInterfaceType(.cellular) { currentInterfaceType = .cellular }
+                else if path.usesInterfaceType(.wiredEthernet) { currentInterfaceType = .wiredEthernet }
+                else { currentInterfaceType = path.availableInterfaces.first?.type }
+
+                let previousInterfaceType = self.lastNetworkInterfaceType
+                // `previousInterfaceType == nil` means first observation — no actual
+                // interface change happened, so exclude it from the ICE-restart trigger.
+                let interfaceChanged = previousInterfaceType != nil && currentInterfaceType != previousInterfaceType
                 self.lastNetworkPath = path.status
+                self.lastNetworkInterfaceType = currentInterfaceType
 
                 let isInActiveCall: Bool
                 switch self.callState {
@@ -1910,6 +1948,12 @@ final class CallManager: ObservableObject {
                     self.attemptReconnection()
                 } else if wasUnsatisfied && isNowSatisfied {
                     Logger.calls.info("Network recovered during call — performing ICE restart")
+                    self.attemptReconnection()
+                } else if interfaceChanged {
+                    // WiFi ↔ cellular handoff: local IP addresses change, existing ICE
+                    // candidates go stale. Trigger ICE restart so WebRTC negotiates new
+                    // candidates on the active interface and the call stays alive.
+                    Logger.calls.info("Network interface changed to \(String(describing: currentInterfaceType)) — ICE restart for handoff")
                     self.attemptReconnection()
                 }
             }
@@ -1941,6 +1985,8 @@ final class CallManager: ObservableObject {
         // attachés.
         setupCallTask?.cancel()
         setupCallTask = nil
+        turnRefreshTask?.cancel()
+        turnRefreshTask = nil
         stopHeartbeat()
         stopScreenCaptureMonitoring()
         stopBackgroundMonitoring()
@@ -1949,6 +1995,9 @@ final class CallManager: ObservableObject {
         participantJoinedCancellable = nil
         sdpOfferTimeoutTask?.cancel()
         sdpOfferTimeoutTask = nil
+        remoteQualityResetTask?.cancel()
+        remoteQualityResetTask = nil
+        isRemoteQualityDegraded = false
         pendingRemoteOffer = nil
         pendingIceCandidates = []
         thermalMonitor.stopMonitoring()
@@ -1971,6 +2020,7 @@ final class CallManager: ObservableObject {
         deactivateAudioSession()
         callState = .ended(reason: reason)
         connectionQuality = .new
+        liveVideoQualityLevel = nil
         activeCallUUID = nil
         // Audit P2-iOS-1 — drop any pending "busy" incoming call. If a 2nd
         // call arrived while this one was active and got immediately ended
@@ -2313,6 +2363,43 @@ final class CallManager: ObservableObject {
                 Logger.calls.info("Remote video \(event.enabled ? "enabled" : "disabled") (callId=\(event.callId))")
             }
             .store(in: &cancellables)
+
+        socket.callIceServersRefreshed
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self, self.currentCallId == event.callId else { return }
+                let updated = event.iceServers.map { s in
+                    IceServer(urls: s.urls.asArray, username: s.username, credential: s.credential)
+                }
+                self.webRTCService.updateIceServers(updated)
+                Logger.calls.info("TURN credentials refreshed — \(updated.count) ICE servers updated")
+                self.scheduleTURNCredentialRefresh(ttl: TimeInterval(event.ttl))
+            }
+            .store(in: &cancellables)
+
+        // Gateway emits call:quality-alert when the REMOTE peer's RTT or
+        // packet loss exceeds thresholds. Surface this as a transient indicator
+        // so the UI can show "Your contact is experiencing network issues" —
+        // FaceTime-parity. Auto-clears 15 s after the last alert (sustained
+        // poor quality keeps resetting the timer).
+        socket.callQualityAlert
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self, self.currentCallId == event.callId else { return }
+                self.isRemoteQualityDegraded = true
+                Logger.calls.info("Remote quality degraded: metric=\(event.metric) value=\(event.value) (callId=\(event.callId))")
+                self.scheduleRemoteQualityReset()
+            }
+            .store(in: &cancellables)
+    }
+
+    private func scheduleRemoteQualityReset() {
+        remoteQualityResetTask?.cancel()
+        remoteQualityResetTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(15))
+            guard !Task.isCancelled else { return }
+            self?.isRemoteQualityDegraded = false
+        }
     }
 
     // MARK: - Participant Joined (Outgoing Call)
@@ -2684,8 +2771,17 @@ extension CallManager: WebRTCServiceDelegate {
     nonisolated func webRTCServiceDidDisconnect(_ service: WebRTCService) {
         Task { @MainActor [weak self] in
             guard let self else { return }
+            let isFatal = self.webRTCService.connectionState == .failed
+                       || self.webRTCService.connectionState == .closed
             switch self.callState {
-            case .connected, .reconnecting:
+            case .connected:
+                self.attemptReconnection()
+            case .reconnecting where !isFatal:
+                // Transient ICE flap during renegotiation — in-flight Task owns the loop.
+                Logger.calls.info("WebRTC disconnected during ICE restart — ignoring transient flap")
+            case .reconnecting:
+                // Fatal PeerConnection .failed/.closed during ICE restart.
+                Logger.calls.warning("WebRTC fatal disconnect during ICE restart — triggering next attempt")
                 self.attemptReconnection()
             default:
                 Logger.calls.info("WebRTC disconnected in state: \(String(describing: self.callState))")
@@ -2750,13 +2846,15 @@ extension CallManager: WebRTCServiceDelegate {
     nonisolated func webRTCService(_ service: WebRTCService, didCollectStats stats: CallStats, level: VideoQualityLevel, packetLossPercent: Double) {
         Task { @MainActor [weak self] in
             guard let self, let callId = self.currentCallId else { return }
+            self.liveVideoQualityLevel = level
             MessageSocketManager.shared.emitCallQualityReport(
                 callId: callId,
                 level: Self.connectionQualityLabel(for: level),
                 rtt: stats.roundTripTimeMs,
                 packetLoss: packetLossPercent,
                 bytesSent: stats.bandwidth,
-                bytesReceived: stats.bytesReceived
+                bytesReceived: stats.bytesReceived,
+                availableOutgoingBitrateBps: stats.availableOutgoingBitrateBps
             )
 
             // Feed the graceful-degradation survival layer. One sample per quality
@@ -2793,8 +2891,27 @@ extension CallManager: WebRTCServiceDelegate {
         playHaptic(.light)
         Logger.calls.warning("Attempting ICE restart (\(self.reconnectAttempt)/\(QualityThresholds.maxReconnectAttempts))")
 
-        Task { [weak self] in
+        // Notify gateway so it can update call DB status to `reconnecting` and
+        // suppress premature zombie-call cleanup during the ICE restart window.
+        if let callId = currentCallId {
+            let userId = AuthManager.shared.currentUser?.id ?? ""
+            MessageSocketManager.shared.emitCallReconnecting(
+                callId: callId,
+                participantId: userId,
+                attempt: reconnectAttempt
+            )
+        }
+
+        let attempt = reconnectAttempt
+        let backoffSeconds = attempt > 1 ? min(pow(2.0, Double(attempt - 1)), 4.0) : 0.0
+
+        Task { @MainActor [weak self] in
             guard let self, let callId = self.currentCallId, let userId = self.remoteUserId else { return }
+            if backoffSeconds > 0 {
+                Logger.calls.info("ICE restart attempt \(attempt): backing off \(Int(backoffSeconds))s before retry")
+                try? await Task.sleep(for: .seconds(backoffSeconds))
+                guard !Task.isCancelled, self.callState.isActive else { return }
+            }
             guard let offer = await self.webRTCService.performICERestart() else {
                 Logger.calls.error("ICE restart failed to produce offer")
                 self.attemptReconnection()
@@ -2802,6 +2919,22 @@ extension CallManager: WebRTCServiceDelegate {
             }
             self.emitCallOffer(callId: callId, toUserId: userId, isVideo: self.isVideoEnabled, sdp: offer)
             Logger.calls.info("ICE restart offer sent for call: \(callId)")
+        }
+    }
+
+    // Schedules a TURN credential refresh at 80% of the credential TTL.
+    // Emits `call:request-ice-servers`; gateway responds with `call:ice-servers-refreshed`
+    // which `setupSocketListeners` applies via `webRTCService.updateIceServers`.
+    private func scheduleTURNCredentialRefresh(ttl: TimeInterval) {
+        turnRefreshTask?.cancel()
+        let refreshDelay = ttl * 0.8
+        Logger.calls.info("TURN credential refresh scheduled in \(Int(refreshDelay))s (TTL=\(Int(ttl))s)")
+        turnRefreshTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(refreshDelay))
+            guard !Task.isCancelled, let self, self.callState.isActive,
+                  let callId = self.currentCallId else { return }
+            Logger.calls.info("Requesting fresh TURN credentials for call \(callId)")
+            MessageSocketManager.shared.emitRequestIceServers(callId: callId)
         }
     }
 
@@ -2897,6 +3030,21 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
             rtc.audioSessionDidActivate(audioSession)
             rtc.isAudioEnabled = true
             rtc.unlockForConfiguration()
+        }
+
+        // WWDC 2023 (iOS 17+) — ML-based voice isolation reduces ambient noise at the
+        // hardware capture stage, before samples reach WebRTC's software AEC/NS.
+        // The two layers are complementary: Apple's ML suppresses non-voice content
+        // at hardware level; WebRTC's NS then handles any residual digital noise.
+        // Not applied on iOS-app-on-Mac — the AVAudioApplication API is iOS-only and
+        // the Mac code path already uses .default mode (no voice-processing I/O unit).
+        if #available(iOS 17, *), !ProcessInfo.processInfo.isiOSAppOnMac {
+            do {
+                try AVAudioApplication.shared.setPreferredMicrophoneMode(.voiceIsolation)
+                Logger.calls.info("[AUDIO_SESS] Preferred microphone mode set to voice isolation")
+            } catch {
+                Logger.calls.warning("[AUDIO_SESS] Voice isolation unavailable: \(error.localizedDescription)")
+            }
         }
 
         // Audit P2-iOS-2 — `overrideOutputAudioPort` is only honored once

@@ -241,6 +241,22 @@ describe('Call Validation Schemas', () => {
       });
       expect(result.success).toBe(false);
     });
+
+    it('accepts availableOutgoingBitrateBps when present', () => {
+      const result = socketQualityReportSchema.safeParse({
+        callId: validMongoId,
+        stats: { packetLoss: 2.5, rtt: 80, availableOutgoingBitrateBps: 1_500_000 },
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects negative availableOutgoingBitrateBps', () => {
+      const result = socketQualityReportSchema.safeParse({
+        callId: validMongoId,
+        stats: { packetLoss: 2.5, rtt: 80, availableOutgoingBitrateBps: -1 },
+      });
+      expect(result.success).toBe(false);
+    });
   });
 
   describe('socketReconnectingSchema', () => {

@@ -1575,6 +1575,66 @@ describe('CallService - Ringing Timeout & Heartbeat Utilities', () => {
     expect(stale).not.toContain('p-fresh');
     jest.useFakeTimers();
   });
+
+  // hasHeartbeatData
+  it('hasHeartbeatData: returns false when no heartbeats exist for call', () => {
+    expect(callService.hasHeartbeatData('call-no-data')).toBe(false);
+  });
+
+  it('hasHeartbeatData: returns true after at least one heartbeat recorded', () => {
+    callService.recordHeartbeat('call-has-data', 'p-1');
+    expect(callService.hasHeartbeatData('call-has-data')).toBe(true);
+  });
+
+  it('hasHeartbeatData: returns false after clearHeartbeats removes all data', () => {
+    callService.recordHeartbeat('call-clear', 'p-1');
+    callService.clearHeartbeats('call-clear');
+    expect(callService.hasHeartbeatData('call-clear')).toBe(false);
+  });
+
+  // Debounced DB persistence
+  it('recordHeartbeat: schedules a DB write after 30s debounce', async () => {
+    mockPrisma.callParticipant.updateMany.mockResolvedValue({ count: 1 });
+
+    callService.recordHeartbeat('call-db1', 'p-db1');
+
+    // Not written immediately
+    expect(mockPrisma.callParticipant.updateMany).not.toHaveBeenCalled();
+
+    // Advance fake timers past the 30s debounce
+    jest.advanceTimersByTime(31_000);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mockPrisma.callParticipant.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ callSessionId: 'call-db1', participantId: 'p-db1' }),
+        data: expect.objectContaining({ lastHeartbeatAt: expect.any(Date) })
+      })
+    );
+  });
+
+  it('recordHeartbeat: does not schedule duplicate DB writes for same call+participant', () => {
+    callService.recordHeartbeat('call-dup', 'p-1');
+    callService.recordHeartbeat('call-dup', 'p-1');
+    callService.recordHeartbeat('call-dup', 'p-1');
+
+    jest.advanceTimersByTime(31_000);
+
+    // Only one timer was created so only one write
+    expect(mockPrisma.callParticipant.updateMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('clearHeartbeats: cancels pending DB write timer so no write fires', async () => {
+    callService.recordHeartbeat('call-cancel', 'p-1');
+    callService.clearHeartbeats('call-cancel');
+
+    jest.advanceTimersByTime(31_000);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(mockPrisma.callParticipant.updateMany).not.toHaveBeenCalled();
+  });
 });
 
 describe('CallService - updateCallStatus', () => {

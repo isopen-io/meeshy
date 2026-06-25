@@ -701,6 +701,42 @@ final class CallStatsReducerTests: XCTestCase {
         XCTAssertEqual(stats.outboundPacketsSent, 0)
         XCTAssertNil(stats.codec)
     }
+
+    func test_reduce_parsesAvailableOutgoingBitrateFromCandidatePair() {
+        let stats = CallStats.reduce(entries: [
+            CallStats.RawEntry(id: "cp", type: "candidate-pair",
+                               values: ["currentRoundTripTime": 0.050, "availableOutgoingBitrate": 1_500_000.0])
+        ])
+        XCTAssertEqual(stats.availableOutgoingBitrateBps, 1_500_000)
+    }
+
+    func test_reduce_noAvailableOutgoingBitrate_returnsZero() {
+        let stats = CallStats.reduce(entries: [
+            CallStats.RawEntry(id: "cp", type: "candidate-pair",
+                               values: ["currentRoundTripTime": 0.050])
+        ])
+        XCTAssertEqual(stats.availableOutgoingBitrateBps, 0)
+    }
+
+    func test_videoQualityLevel_fromBwe_excellent() {
+        XCTAssertEqual(VideoQualityLevel.from(availableOutgoingBitrateBps: 2_000_000), .excellent)
+    }
+
+    func test_videoQualityLevel_fromBwe_good() {
+        XCTAssertEqual(VideoQualityLevel.from(availableOutgoingBitrateBps: 1_200_000), .good)
+    }
+
+    func test_videoQualityLevel_fromBwe_fair() {
+        XCTAssertEqual(VideoQualityLevel.from(availableOutgoingBitrateBps: 500_000), .fair)
+    }
+
+    func test_videoQualityLevel_fromBwe_poor() {
+        XCTAssertEqual(VideoQualityLevel.from(availableOutgoingBitrateBps: 200_000), .poor)
+    }
+
+    func test_videoQualityLevel_fromBwe_critical() {
+        XCTAssertEqual(VideoQualityLevel.from(availableOutgoingBitrateBps: 80_000), .critical)
+    }
 }
 
 // MARK: - Call Reliability Policy (§5.8)
@@ -843,5 +879,173 @@ final class CallCoverPresentationTests: XCTestCase {
         XCTAssertFalse(CallState.shouldPresentFullScreenCover(
             callState: .ended(reason: .local), displayMode: .pip),
             "an ended call that was in PiP must not pop a full-screen cover")
+    }
+}
+
+// MARK: - Remote Quality Degradation (call:quality-alert FaceTime-parity)
+
+/// Source-level guards for the `isRemoteQualityDegraded` + `scheduleRemoteQualityReset`
+/// pipeline added for FaceTime-parity "remote peer has network issues" indicator.
+/// The gateway emits `call:quality-alert` when RTT>300 ms or packet-loss>5 %.
+/// CallManager must:
+///   1. Subscribe under `subscribeToCallEvents` (Combine, so cleanup is automatic).
+///   2. Filter by `currentCallId == event.callId` before mutating state.
+///   3. Set `isRemoteQualityDegraded = true` and debounce-reset via a cancellable Task.
+///   4. Clear the flag and cancel the reset task on `endCallInternal` (no leaked state).
+@MainActor
+final class RemoteQualityDegradedTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_isRemoteQualityDegraded_isPublished() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("@Published private(set) var isRemoteQualityDegraded: Bool = false"),
+            "isRemoteQualityDegraded must be a @Published private(set) Bool defaulting to false"
+        )
+    }
+
+    func test_remoteQualityResetTask_stored_asCancellable() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("private var remoteQualityResetTask: Task<Void, Never>?"),
+            "A cancellable remoteQualityResetTask must be stored so repeated alerts debounce the reset"
+        )
+    }
+
+    func test_callQualityAlert_subscription_filtersCallId() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("self.currentCallId == event.callId"),
+            "The call:quality-alert subscription must guard `currentCallId == event.callId` to reject stale alerts from prior calls"
+        )
+    }
+
+    func test_scheduleRemoteQualityReset_cancelsExistingTask() throws {
+        let source = try callManagerSource()
+        guard let funcRange = source.range(of: "func scheduleRemoteQualityReset") else {
+            XCTFail("scheduleRemoteQualityReset function not found in CallManager")
+            return
+        }
+        let nextFunc = source.range(of: "\n    private func ", range: funcRange.upperBound..<source.endIndex)?.lowerBound
+                    ?? source.endIndex
+        let body = String(source[funcRange.lowerBound..<nextFunc])
+        XCTAssertTrue(
+            body.contains("remoteQualityResetTask?.cancel()"),
+            "scheduleRemoteQualityReset must cancel any prior Task before creating a new one (debounce)"
+        )
+        XCTAssertTrue(
+            body.contains("Task.sleep(for: .seconds(15))"),
+            "The reset delay must be 15 seconds to match FaceTime-parity spec"
+        )
+        XCTAssertTrue(
+            body.contains("self?.isRemoteQualityDegraded = false"),
+            "scheduleRemoteQualityReset must clear isRemoteQualityDegraded after the delay"
+        )
+    }
+
+    func test_endCallInternal_clearsRemoteQualityState() throws {
+        let source = try callManagerSource()
+        guard let funcRange = source.range(of: "func endCallInternal") else {
+            XCTFail("endCallInternal not found in CallManager")
+            return
+        }
+        let nextMark = source.range(of: "\n    // MARK:", range: funcRange.upperBound..<source.endIndex)?.lowerBound
+                    ?? source.endIndex
+        let body = String(source[funcRange.lowerBound..<nextMark])
+        XCTAssertTrue(
+            body.contains("remoteQualityResetTask?.cancel()"),
+            "endCallInternal must cancel the remote quality reset task to avoid cross-call state"
+        )
+        XCTAssertTrue(
+            body.contains("isRemoteQualityDegraded = false"),
+            "endCallInternal must reset isRemoteQualityDegraded = false so the next call starts clean"
+        )
+    }
+}
+
+// MARK: - VideoSurvivalController integration guards
+
+/// Source-level guards for the `VideoSurvivalController` integration in `CallManager`.
+/// The controller is constructed internally (not injectable), so we verify the
+/// wiring via source inspection:
+///   1. `$isVideoSuspended` binding so the @Published var mirrors the controller.
+///   2. `videoSurvivalController.handle(level:userWantsVideo:)` called from the quality monitor.
+///   3. `videoSurvivalController.reset()` called on teardown and camera-off to avoid state leakage.
+@MainActor
+final class VideoSurvivalControllerIntegrationTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// `isVideoSuspended` must mirror the controller's `@Published` so SwiftUI
+    /// views react to survival-triggered video suspension without coupling directly
+    /// to the controller (which is internal to CallManager).
+    func test_isVideoSuspended_isPublishedAndBoundToController() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("@Published private(set) var isVideoSuspended"),
+            "CallManager must expose @Published private(set) var isVideoSuspended for UI binding"
+        )
+        XCTAssertTrue(
+            source.contains("videoSurvivalController.$isVideoSuspended"),
+            "isVideoSuspended must be driven by videoSurvivalController.$isVideoSuspended binding, " +
+            "not set directly, to keep single-source-of-truth"
+        )
+    }
+
+    /// The quality monitor must feed each quality level sample to the controller
+    /// so it can decide when to suspend/resume video based on time-hysteresis.
+    func test_qualityMonitor_feedsLevelToSurvivalController() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("videoSurvivalController.handle(level: level, userWantsVideo:"),
+            "The quality monitor must call videoSurvivalController.handle(level:userWantsVideo:) " +
+            "on every quality sample — omitting this breaks video suspension"
+        )
+    }
+
+    /// On call teardown, the controller must be reset so its hysteresis timers
+    /// don't bleed into the next call.
+    func test_endCallInternal_resetsVideoSurvivalController() throws {
+        let source = try callManagerSource()
+        guard let funcRange = source.range(of: "func endCallInternal") else {
+            XCTFail("endCallInternal not found in CallManager source"); return
+        }
+        let nextMark = source.range(of: "\n    // MARK:", range: funcRange.upperBound..<source.endIndex)?.lowerBound
+                    ?? source.endIndex
+        let body = String(source[funcRange.lowerBound..<nextMark])
+        XCTAssertTrue(
+            body.contains("videoSurvivalController.reset()"),
+            "endCallInternal must call videoSurvivalController.reset() to clear hysteresis timers " +
+            "and isVideoSuspended before the next call can start"
+        )
+    }
+
+    /// When the user toggles the camera off, the controller must be reset so a
+    /// prior degraded-streak timer doesn't immediately trigger suspension when
+    /// video is re-enabled.
+    func test_toggleVideo_off_resetsVideoSurvivalController() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("videoSurvivalController.reset()"),
+            "Disabling the camera must reset videoSurvivalController so stale degradation " +
+            "timers don't fire as soon as video is re-enabled"
+        )
     }
 }

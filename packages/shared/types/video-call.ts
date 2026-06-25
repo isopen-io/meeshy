@@ -249,6 +249,8 @@ export interface ConnectionQualityStats {
    */
   readonly bytesSent?: number;
   readonly bytesReceived?: number;
+  /** TWCC GCC bandwidth estimate in bps. Present when Transport-CC is active. */
+  readonly availableOutgoingBitrateBps?: number;
 }
 
 // ===== WEBRTC SIGNALING =====
@@ -633,7 +635,7 @@ export interface CallQualityAlertEvent {
  */
 export interface CallInitiateAck {
   readonly success: boolean;
-  readonly data?: { callId: string; mode: CallMode; iceServers: RTCIceServer[] };
+  readonly data?: { callId: string; mode: CallMode; iceServers: RTCIceServer[]; ttl?: number };
   readonly error?: { code: string; message: string };
 }
 
@@ -764,6 +766,15 @@ export interface CallState {
   translations: Map<string, Translation[]>;  // transcriptionId → translations
 }
 
+/**
+ * Server → Client: fresh ICE servers after TTL refresh.
+ */
+export interface CallIceServersRefreshedEvent {
+  readonly callId: string;
+  readonly iceServers: RTCIceServer[];
+  readonly ttl: number;
+}
+
 // ===== SOCKET.IO EVENT NAMES =====
 
 /**
@@ -785,6 +796,7 @@ export const CALL_EVENTS = {
   QUALITY_REPORT: 'call:quality-report',
   RECONNECTING: 'call:reconnecting',
   RECONNECTED: 'call:reconnected',
+  REQUEST_ICE_SERVERS: 'call:request-ice-servers',
 
   // Server → Client
   INITIATED: 'call:initiated',
@@ -800,6 +812,7 @@ export const CALL_EVENTS = {
   /// their devices answers a call, so the rest dismiss their ringing UI.
   ALREADY_ANSWERED: 'call:already-answered',
   QUALITY_ALERT: 'call:quality-alert',
+  ICE_SERVERS_REFRESHED: 'call:ice-servers-refreshed',
 
   // Transcription & Translation (Phase 2/3)
   TRANSCRIPTION: 'call:transcription',
