@@ -3032,20 +3032,16 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
             rtc.unlockForConfiguration()
         }
 
-        // WWDC 2023 (iOS 17+) — ML-based voice isolation reduces ambient noise at the
-        // hardware capture stage, before samples reach WebRTC's software AEC/NS.
-        // The two layers are complementary: Apple's ML suppresses non-voice content
-        // at hardware level; WebRTC's NS then handles any residual digital noise.
-        // Not applied on iOS-app-on-Mac — the AVAudioApplication API is iOS-only and
-        // the Mac code path already uses .default mode (no voice-processing I/O unit).
-        if #available(iOS 17, *), !ProcessInfo.processInfo.isiOSAppOnMac {
-            do {
-                try AVAudioApplication.shared.setPreferredMicrophoneMode(.voiceIsolation)
-                Logger.calls.info("[AUDIO_SESS] Preferred microphone mode set to voice isolation")
-            } catch {
-                Logger.calls.warning("[AUDIO_SESS] Voice isolation unavailable: \(error.localizedDescription)")
-            }
-        }
+        // ML-based Voice Isolation (ambient-noise suppression at the capture stage,
+        // complementing WebRTC's software AEC/NS) is a USER-controlled Mic Mode toggled
+        // in Control Center — iOS exposes NO programmatic setter. The branch originally
+        // called `setPreferredMicrophoneMode(.voiceIsolation)`, which exists on neither
+        // AVAudioApplication nor AVCaptureDevice (compile error). `preferredMicrophoneMode`
+        // / `activeMicrophoneMode` are read-only. Our call path already adopts the Core
+        // Audio AUVoiceIO unit through RTCAudioSession (.voiceChat), so the system surfaces
+        // the Voice Isolation toggle to the user on top of WebRTC's noise suppression — we
+        // can observe their choice but cannot force it.
+        // Ref: developer.apple.com/documentation/avfoundation/system-video-effects-and-microphone-modes
 
         // Audit P2-iOS-2 — `overrideOutputAudioPort` is only honored once
         // RTCAudioSession's audio engine has actually started. Calling it
