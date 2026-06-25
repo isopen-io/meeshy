@@ -783,7 +783,6 @@ final class CallManager: ObservableObject {
     /// suspendue, le device offline, latence réseau).
     @MainActor
     private func checkVoIPCallFreshness(uuid: UUID, callId: String) async {
-        // Récupérer le token JWT pour authentifier la requête.
         guard let token = AuthManager.shared.authToken else {
             Logger.calls.warning("[VOIP_FRESHNESS] no auth token — cannot verify, assuming fresh")
             return
@@ -799,7 +798,6 @@ final class CallManager: ObservableObject {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse else { return }
 
-            // 404 ou autre erreur → push stale, end l'appel
             if httpResponse.statusCode == 404 {
                 Logger.calls.warning("[VOIP_FRESHNESS] callId \(callId) introuvable (404) — push stale, ending phantom call")
                 if activeCallUUID == uuid {
@@ -809,17 +807,14 @@ final class CallManager: ObservableObject {
                 return
             }
 
-            // Parser la réponse pour voir le statut
             guard httpResponse.statusCode == 200,
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let success = json["success"] as? Bool, success,
-                  let callData = json["data"] as? [String: Any],
-                  let status = callData["status"] as? String else {
+                  let envelope = try? JSONDecoder().decode(CallFreshnessResponse.self, from: data),
+                  envelope.success,
+                  let status = envelope.data?.status else {
                 Logger.calls.info("[VOIP_FRESHNESS] response opaque — assuming fresh")
                 return
             }
 
-            // Statuts terminaux = push stale, l'appel est fini
             let terminalStatuses: Set<String> = ["ended", "missed", "rejected", "failed"]
             if terminalStatuses.contains(status.lowercased()) {
                 Logger.calls.warning("[VOIP_FRESHNESS] callId \(callId) status=\(status) (terminal) — push stale, ending phantom call")
@@ -831,9 +826,15 @@ final class CallManager: ObservableObject {
                 Logger.calls.info("[VOIP_FRESHNESS] callId \(callId) status=\(status) — push fresh, continuing")
             }
         } catch {
-            // Network error — on assume fresh (preferable de présenter un
-            // faux appel rare plutôt que de rater un vrai appel).
             Logger.calls.warning("[VOIP_FRESHNESS] check failed (\(error.localizedDescription)) — assuming fresh")
+        }
+    }
+
+    private struct CallFreshnessResponse: Decodable {
+        let success: Bool
+        let data: CallFreshnessData?
+        struct CallFreshnessData: Decodable {
+            let status: String?
         }
     }
 
