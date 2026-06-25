@@ -138,6 +138,21 @@ final class WebRTCServiceTests: XCTestCase {
 
     // MARK: - Transcription Channel
 
+    // MARK: - TestableWebRTCClient Stats Configuration
+
+    func test_testableClient_statsToReturn_isNilByDefault() async {
+        let (_, client) = makeSUT()
+        let result = await client.getStats()
+        XCTAssertNil(result)
+    }
+
+    func test_testableClient_statsToReturn_returnsConfiguredValue() async {
+        let (_, client) = makeSUT()
+        client.statsToReturn = CallStats(availableOutgoingBitrateBps: 1_500_000)
+        let result = await client.getStats()
+        XCTAssertEqual(result?.availableOutgoingBitrateBps, 1_500_000)
+    }
+
     func test_createTranscriptionChannel_delegatesToClient() {
         let (sut, client) = makeSUT()
         client.createDataChannelResult = true
@@ -222,7 +237,8 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
     func switchCamera() async throws {}
     func availableCameras() -> [CameraDeviceOption] { [] }
     func switchToCamera(uniqueID: String) async throws {}
-    func getStats() async -> CallStats? { nil }
+    var statsToReturn: CallStats? = nil
+    func getStats() async -> CallStats? { statsToReturn }
     func createDataChannel(label: String) -> Bool {
         lastDataChannelLabel = label
         return createDataChannelResult
