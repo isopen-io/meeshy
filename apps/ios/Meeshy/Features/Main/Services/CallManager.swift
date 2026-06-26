@@ -492,7 +492,7 @@ final class CallManager: ObservableObject {
 
     private func startMediaServicesResetMonitoring() {
         NotificationCenter.default.addObserver(
-            forName: AVAudioSession.mediaServicesResetNotification,
+            forName: AVAudioSession.mediaServicesWereResetNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
@@ -2182,6 +2182,13 @@ final class CallManager: ObservableObject {
         }
     }
 
+    // MARK: - DTMF Forwarding
+
+    /// Called by `CXPlayDTMFCallAction` to forward CallKit keypad digits to WebRTC.
+    func sendDTMF(digits: String) {
+        webRTCService.sendDTMF(digits: digits)
+    }
+
     // MARK: - Metered Connection Check (M4)
 
     func isOnMeteredConnection() -> Bool {
@@ -3393,7 +3400,7 @@ extension CallManager: WebRTCServiceDelegate {
         // candidates — and they're not re-queued. Re-buffer them so the
         // next reconnect cycle can deliver them.
         guard MessageSocketManager.shared.isConnected else {
-            Logger.calls.warning("flushPendingIceCandidates — socket not connected, re-buffering \(pendingIceCandidates.count) candidate(s)")
+            Logger.calls.warning("flushPendingIceCandidates — socket not connected, re-buffering \(self.pendingIceCandidates.count) candidate(s)")
             return
         }
         let candidates = pendingIceCandidates
@@ -3487,7 +3494,7 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
         // RFC 4733: forward CallKit keypad input to the WebRTC DTMF sender.
         // Enables conference PINs and IVR navigation during active calls.
         // sendDTMF is a no-op when unavailable; fulfill so CallKit doesn't timeout.
-        manager?.webRTCService.sendDTMF(digits: action.digits)
+        manager?.sendDTMF(digits: action.digits)
         action.fulfill()
     }
 
