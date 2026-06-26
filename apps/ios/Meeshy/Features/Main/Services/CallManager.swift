@@ -286,6 +286,10 @@ final class CallManager: ObservableObject {
     /// placeholder instead of a frozen last frame. Cleared on foreground return
     /// or call teardown.
     private var isVideoSuspendedByBackground = false
+    /// `true` while CallKit has placed the call on hold (e.g. incoming cellular
+    /// call). The user's camera intent (`isVideoEnabled`) is preserved so video
+    /// resumes automatically on unhold. Cleared on unhold or call teardown.
+    private var isVideoSuspendedByHold = false
 
     // Network monitoring
     private let networkMonitor = NWPathMonitor()
@@ -549,6 +553,7 @@ final class CallManager: ObservableObject {
             videoSurvivalController.reset()
             isVideoSuspended = false
             isVideoSuspendedByBackground = false
+            isVideoSuspendedByHold = false
             Logger.calls.info("Force-reset .ended → .idle to accept new call")
         }
     }
@@ -2142,6 +2147,34 @@ final class CallManager: ObservableObject {
         }
     }
 
+    // MARK: - CallKit Hold/Unhold
+
+    /// Called by `CXSetHeldCallAction`. Suspends/restores outbound video on hold so
+    /// the peer receives a proper "camera off" signal rather than a frozen frame.
+    /// Mirrors the background-suspension pattern: `isVideoEnabled` (user intent) is
+    /// preserved; video auto-resumes on unhold unless the survival controller or
+    /// background is also suspending it.
+    func handleHold(_ isOnHold: Bool) {
+        guard callState.isActive, let callId = currentCallId else { return }
+        if isOnHold {
+            if isVideoEnabled {
+                isVideoSuspendedByHold = true
+                webRTCService.enableVideo(false)
+                MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: false)
+                Logger.calls.info("CallKit hold — video suspended, peer notified (callId=\(callId))")
+            }
+        } else {
+            if isVideoSuspendedByHold {
+                isVideoSuspendedByHold = false
+                if isVideoEnabled && !isVideoSuspended && !isVideoSuspendedByBackground {
+                    webRTCService.enableVideo(true)
+                    MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: true)
+                    Logger.calls.info("CallKit unhold — video restored, peer notified (callId=\(callId))")
+                }
+            }
+        }
+    }
+
     // MARK: - Metered Connection Check (M4)
 
     func isOnMeteredConnection() -> Bool {
@@ -2296,6 +2329,7 @@ final class CallManager: ObservableObject {
         videoSurvivalController.reset()
         isVideoSuspended = false
         isVideoSuspendedByBackground = false
+        isVideoSuspendedByHold = false
         detachSystemPiP()
         Self.persistCallSummary(stats: lastKnownStats, callId: currentCallId,
                                 duration: callDuration, remote: remoteUsername, reason: reason)
@@ -3405,6 +3439,18 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
             }
         }
         action.fulfill()
+    }
+
+    func provider(_ provider: CXProvider, perform action: CXSetHeldCallAction) {
+        // Fires when a cellular call pre-empts or releases our call. Audio is
+        // already managed by didDeactivate/didActivate; we only handle video here
+        // so the peer receives a proper "camera off" signal instead of a frozen
+        // last frame during the hold.
+        let isOnHold = action.isOnHold
+        Task { @MainActor [weak self] in
+            self?.manager?.handleHold(isOnHold)
+            action.fulfill()
+        }
     }
 
     func provider(_ provider: CXProvider, perform action: CXStartCallAction) {

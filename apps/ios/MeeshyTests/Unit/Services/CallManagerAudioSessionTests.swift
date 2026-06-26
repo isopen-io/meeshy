@@ -1886,3 +1886,137 @@ final class CallManagerScreenCaptureAlertTests: XCTestCase {
             "so they can make an informed privacy decision")
     }
 }
+
+// MARK: - CallKit Hold/Unhold Tests
+
+/// Structural tests verifying that CallKit hold events correctly suspend/restore
+/// video so the peer receives a proper "camera off" signal rather than a frozen
+/// last frame when an incoming cellular call pre-empts the Meeshy call.
+@MainActor
+final class CallManagerHoldTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// CallManager must declare isVideoSuspendedByHold so hold and background
+    /// suspension can be tracked independently without interfering.
+    func test_callManager_declaresIsVideoSuspendedByHold() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("isVideoSuspendedByHold"),
+            "CallManager must declare isVideoSuspendedByHold — independent tracking of " +
+            "hold-originated video suspension prevents unhold from restoring video " +
+            "when background suspension is still active (and vice versa)")
+    }
+
+    /// CallManager must declare handleHold(_:) so CallKitDelegateProxy can
+    /// drive video suspension without duplicating logic inside the delegate.
+    func test_callManager_declaresHandleHold() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("func handleHold(_ isOnHold: Bool)"),
+            "CallManager must declare handleHold(_ isOnHold:) — the CXSetHeldCallAction " +
+            "handler should delegate to this method rather than duplicating suspension " +
+            "logic inside CallKitDelegateProxy")
+    }
+
+    /// handleHold must notify the peer via emitCallToggleVideo on hold so the
+    /// peer's UI switches to the avatar placeholder.
+    func test_handleHold_emitsCallToggleVideoOnHold() throws {
+        let source = try callManagerSource()
+        guard let holdFuncRange = source.range(of: "func handleHold(_ isOnHold: Bool)") else {
+            XCTFail("handleHold not found in CallManager"); return
+        }
+        guard let nextFuncRange = source.range(of: "\n    // MARK:", range: holdFuncRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not isolate handleHold body"); return
+        }
+        let body = String(source[holdFuncRange.upperBound..<nextFuncRange.lowerBound])
+        XCTAssertTrue(
+            body.contains("emitCallToggleVideo"),
+            "handleHold must call emitCallToggleVideo so the remote peer receives the " +
+            "media-toggled event and shows the avatar placeholder during hold")
+        XCTAssertTrue(
+            body.contains("isVideoSuspendedByHold = true"),
+            "handleHold must set isVideoSuspendedByHold = true on hold so that " +
+            "unhold can correctly restore video only if hold was the cause")
+    }
+
+    /// handleHold unhold path must guard on isVideoSuspendedByBackground to avoid
+    /// restoring video when background suspension is still active.
+    func test_handleHold_guardsBackgroundSuspensionOnUnhold() throws {
+        let source = try callManagerSource()
+        guard let holdFuncRange = source.range(of: "func handleHold(_ isOnHold: Bool)") else {
+            XCTFail("handleHold not found in CallManager"); return
+        }
+        guard let nextFuncRange = source.range(of: "\n    // MARK:", range: holdFuncRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not isolate handleHold body"); return
+        }
+        let body = String(source[holdFuncRange.upperBound..<nextFuncRange.lowerBound])
+        XCTAssertTrue(
+            body.contains("!isVideoSuspendedByBackground"),
+            "handleHold unhold path must guard on !isVideoSuspendedByBackground — " +
+            "restoring video while backgrounded would send a false 'camera active' " +
+            "signal to the peer because iOS prevents actual camera capture anyway")
+    }
+
+    /// CallKitDelegateProxy must handle CXSetHeldCallAction and delegate to
+    /// handleHold so video is correctly managed across hold/unhold cycles.
+    func test_callKitDelegateProxy_handlesCXSetHeldCallAction() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("CXSetHeldCallAction"),
+            "CallKitDelegateProxy must implement provider(_:perform:CXSetHeldCallAction) — " +
+            "without this handler a cellular call pre-empting Meeshy leaves video " +
+            "tracks enabled: the peer sees a frozen last frame instead of an avatar")
+        XCTAssertTrue(
+            source.contains("action.isOnHold"),
+            "CXSetHeldCallAction handler must read action.isOnHold to distinguish " +
+            "hold from unhold before delegating to handleHold(_:)")
+        XCTAssertTrue(
+            source.contains("handleHold(isOnHold)"),
+            "CXSetHeldCallAction handler must call handleHold(isOnHold) — logic belongs " +
+            "in CallManager, not in the delegate proxy")
+    }
+
+    /// isVideoSuspendedByHold must be reset in endCallInternal so hold state
+    /// never leaks into the next call.
+    func test_endCallInternal_resetsIsVideoSuspendedByHold() throws {
+        let source = try callManagerSource()
+        guard let endInternalRange = source.range(of: "func endCallInternal(reason:") else {
+            XCTFail("endCallInternal not found"); return
+        }
+        guard let nextFuncRange = source.range(of: "\n    private func ", range: endInternalRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not isolate endCallInternal body"); return
+        }
+        let body = String(source[endInternalRange.upperBound..<nextFuncRange.lowerBound])
+        XCTAssertTrue(
+            body.contains("isVideoSuspendedByHold = false"),
+            "endCallInternal must reset isVideoSuspendedByHold to false — otherwise " +
+            "the hold flag leaks into the next call and prevents video restoration")
+    }
+
+    /// isVideoSuspendedByHold must be reset in resetEndedStateForNewCall so an
+    /// immediate second call after a held call starts with clean state.
+    func test_resetEndedStateForNewCall_resetsIsVideoSuspendedByHold() throws {
+        let source = try callManagerSource()
+        guard let resetRange = source.range(of: "func resetEndedStateForNewCall()") else {
+            XCTFail("resetEndedStateForNewCall not found"); return
+        }
+        guard let nextFuncRange = source.range(of: "\n    func ", range: resetRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not isolate resetEndedStateForNewCall body"); return
+        }
+        let body = String(source[resetRange.upperBound..<nextFuncRange.lowerBound])
+        XCTAssertTrue(
+            body.contains("isVideoSuspendedByHold = false"),
+            "resetEndedStateForNewCall must clear isVideoSuspendedByHold — a new call " +
+            "arriving within the 1.5s settle window after a held+ended call would " +
+            "otherwise inherit stale hold state and suppress the user's camera")
+    }
+}
