@@ -148,12 +148,8 @@ export class CommentReactionHandler {
 
       this.io.to(ROOMS.post(validated.postId)).emit(SERVER_EVENTS.COMMENT_REACTION_ADDED, updateEvent);
 
-      await this._createCommentReactionNotification(
-        validated.commentId,
-        validated.postId,
-        validated.emoji,
-        userId
-      );
+      this._createCommentReactionNotification(validated.commentId, validated.postId, validated.emoji, userId)
+        .catch((err) => this.logger.error('Failed to create comment reaction notification', err));
     } catch (error: unknown) {
       this.logger.error('Failed to add comment reaction', error, { userId: this.socketToUser.get(socket.id) });
       const errorResponse: SocketIOResponse<unknown> = {

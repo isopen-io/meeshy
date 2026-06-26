@@ -201,13 +201,10 @@ export class PostReactionHandler {
       };
       if (callback) callback(successResponse);
 
-      await this.broadcastReactionChange(validated.postId, validated.emoji, 'add', userId, updateEvent);
-
-      await this._createPostReactionNotification(
-        validated.postId,
-        validated.emoji,
-        userId
-      );
+      this.broadcastReactionChange(validated.postId, validated.emoji, 'add', userId, updateEvent)
+        .catch((err) => this.logger.error('Failed to broadcast post reaction-add', err));
+      this._createPostReactionNotification(validated.postId, validated.emoji, userId)
+        .catch((err) => this.logger.error('Failed to create post reaction notification', err));
     } catch (error: unknown) {
       this.logger.error('Failed to add post reaction', error, { userId: this.socketToUser.get(socket.id) });
       const errorResponse: SocketIOResponse<unknown> = {
@@ -295,7 +292,8 @@ export class PostReactionHandler {
       };
       if (callback) callback(successResponse);
 
-      await this.broadcastReactionChange(validated.postId, validated.emoji, 'remove', userId, updateEvent);
+      this.broadcastReactionChange(validated.postId, validated.emoji, 'remove', userId, updateEvent)
+        .catch((err) => this.logger.error('Failed to broadcast post reaction-remove', err));
     } catch (error: unknown) {
       this.logger.error('Failed to remove post reaction', error, { userId: this.socketToUser.get(socket.id) });
       const errorResponse: SocketIOResponse<unknown> = {

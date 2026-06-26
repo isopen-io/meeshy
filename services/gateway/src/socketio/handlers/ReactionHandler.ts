@@ -119,12 +119,12 @@ export class ReactionHandler {
       };
       if (callback) callback(successResponse);
 
-      // Broadcaster l'événement
       if (message) {
-        await this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_ADDED);
+        this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_ADDED)
+          .catch((err) => logger.error('reaction:add broadcast failed', { error: err }));
       }
-
-      await this._createReactionNotification(validated.messageId, validated.emoji, userId, isAnonymous, reaction.id);
+      this._createReactionNotification(validated.messageId, validated.emoji, userId, isAnonymous, reaction.id)
+        .catch((err) => logger.error('reaction:add notification failed', { error: err }));
     } catch (error: unknown) {
       logger.error('reaction:add failed', { error });
       const errorResponse: SocketIOResponse<unknown> = {
@@ -210,7 +210,8 @@ export class ReactionHandler {
       if (callback) callback(successResponse);
 
       if (message) {
-        await this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_REMOVED);
+        this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_REMOVED)
+          .catch((err) => logger.error('reaction:remove broadcast failed', { error: err }));
       }
     } catch (error: unknown) {
       logger.error('reaction:remove failed', { error });
