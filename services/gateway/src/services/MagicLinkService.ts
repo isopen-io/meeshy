@@ -247,7 +247,8 @@ export class MagicLinkService {
               updatedAt: true,
               emailVerifiedAt: true,
               phoneVerifiedAt: true,
-              twoFactorEnabledAt: true
+              twoFactorEnabledAt: true,
+              userPreferences: { select: { application: true } }
             }
           }
         }
@@ -358,8 +359,7 @@ export class MagicLinkService {
         systemLanguage: user.systemLanguage,
         regionalLanguage: user.regionalLanguage,
         customDestinationLanguage: user.customDestinationLanguage,
-        // TODO: Load from UserPreferences.application
-        autoTranslateEnabled: true,
+        autoTranslateEnabled: ((user.userPreferences?.application as Record<string, unknown> | undefined)?.autoTranslateEnabled as boolean | undefined) ?? true,
         isActive: user.isActive,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,

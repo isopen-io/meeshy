@@ -146,8 +146,12 @@ export class UserManagementService {
         systemLanguage: data.systemLanguage || 'en',
         regionalLanguage: data.regionalLanguage || 'en',
         isActive: true,
-        lastActiveAt: new Date()
-        // TODO: Initialize UserPreferences.application when implemented
+        lastActiveAt: new Date(),
+        userPreferences: {
+          create: {
+            application: { autoTranslateEnabled: true }
+          }
+        }
       }
     });
 

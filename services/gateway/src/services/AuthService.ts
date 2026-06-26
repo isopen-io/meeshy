@@ -168,7 +168,8 @@ export class AuthService {
           pendingEmail: true,
           pendingPhoneNumber: true,
           createdAt: true,
-          updatedAt: true
+          updatedAt: true,
+          userPreferences: { select: { application: true } }
         }
       });
 
@@ -1219,8 +1220,7 @@ export class AuthService {
       systemLanguage: user.systemLanguage,
       regionalLanguage: user.regionalLanguage,
       customDestinationLanguage: user.customDestinationLanguage,
-      // TODO: Load from UserPreferences.application
-      autoTranslateEnabled: true,
+      autoTranslateEnabled: ((user.userPreferences?.application as Record<string, unknown> | undefined)?.autoTranslateEnabled as boolean | undefined) ?? true,
       isActive: user.isActive,
       deactivatedAt: user.deactivatedAt,
       createdAt: user.createdAt,
