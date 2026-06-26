@@ -183,23 +183,31 @@ export class PreferencesService {
    * Get encryption preferences for a user
    */
   async getEncryptionPreferences(userId: string): Promise<EncryptionPreferencesDTO> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        signalIdentityKeyPublic: true,
-        signalRegistrationId: true,
-        signalPreKeyBundleVersion: true,
-        lastKeyRotation: true
-      }
-    });
+    const [user, userPrefs] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          signalIdentityKeyPublic: true,
+          signalRegistrationId: true,
+          signalPreKeyBundleVersion: true,
+          lastKeyRotation: true
+        }
+      }),
+      this.prisma.userPreferences.findUnique({
+        where: { userId },
+        select: { application: true },
+      }),
+    ]);
 
     if (!user) {
       throw new Error('User not found');
     }
 
-    // TODO: Load encryptionPreference from UserPreferences.application when implemented
+    const app = (userPrefs?.application ?? {}) as Record<string, unknown>;
+    const encryptionPreference = (app.encryptionPreference as EncryptionPreference | undefined) ?? 'optional';
+
     return {
-      encryptionPreference: 'optional' as EncryptionPreference,
+      encryptionPreference,
       hasSignalKeys: !!user.signalIdentityKeyPublic,
       signalRegistrationId: user.signalRegistrationId,
       signalPreKeyBundleVersion: user.signalPreKeyBundleVersion,
@@ -214,14 +222,24 @@ export class PreferencesService {
     userId: string,
     data: UpdateEncryptionPreferenceDTO
   ): Promise<{ encryptionPreference: EncryptionPreference }> {
-    // Validate preference
     const validPreferences: EncryptionPreference[] = ['disabled', 'optional', 'always'];
     if (!validPreferences.includes(data.encryptionPreference)) {
       throw new Error('Invalid encryption preference. Must be "disabled", "optional", or "always"');
     }
 
-    // TODO: Save encryptionPreference to UserPreferences.application when implemented
-    logger.debug('TODO: Save encryption preference to UserPreferences.application', { encryptionPreference: data.encryptionPreference, userId });
+    const existing = await this.prisma.userPreferences.findUnique({
+      where: { userId },
+      select: { application: true },
+    });
+
+    const current = (existing?.application ?? {}) as Record<string, unknown>;
+    const merged = { ...current, encryptionPreference: data.encryptionPreference };
+
+    await this.prisma.userPreferences.upsert({
+      where: { userId },
+      create: { userId, application: merged as any },
+      update: { application: merged as any },
+    });
 
     return {
       encryptionPreference: data.encryptionPreference

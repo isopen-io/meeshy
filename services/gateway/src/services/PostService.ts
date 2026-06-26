@@ -212,7 +212,7 @@ export class PostService {
         });
       }
 
-      this.triggerStoryTextObjectTranslation(post.id, textObjects);
+      this.triggerStoryTextObjectTranslation(post.id, textObjects, userId).catch(() => {});
     }
 
     // Tracking des URLs brutes du post/story : mapping `url → token` rangé dans
@@ -266,9 +266,9 @@ export class PostService {
         take: 100,
       });
 
-      const targetLanguages: string[] = [...new Set(
+      const targetLanguages: string[] = [...new Set<string>(
         contacts
-          .map((c) => c.user?.systemLanguage ?? undefined)
+          .map((c) => (c.user?.systemLanguage as string | undefined) ?? undefined)
           .filter((l): l is string => !!l && l !== 'en')
       )].slice(0, 10);
 
@@ -380,15 +380,32 @@ export class PostService {
     }
   }
 
-  private triggerStoryTextObjectTranslation(
+  private async triggerStoryTextObjectTranslation(
     postId: string,
-    textObjects: StoryTextObjectRaw[]
-  ): void {
+    textObjects: StoryTextObjectRaw[],
+    authorId: string
+  ): Promise<void> {
     // Envoie les textObjects au pipeline de traduction.
     // La persistence des résultats est gérée par le handler ZMQ Task 15
     // (story_text_object_translation_completed → storyEffects.textObjects[n].translations).
-    // TODO: query audience's actual languages (like triggerStoryTextTranslation does for message content)
-    const allTargetLanguages = this.getActiveTargetLanguages();
+    const contacts = await this.prisma.participant.findMany({
+      where: {
+        conversation: { participants: { some: { userId: authorId } } },
+        userId: { not: authorId },
+      },
+      include: { user: { select: { systemLanguage: true } } },
+      take: 100,
+    });
+
+    const audienceLanguages: string[] = [...new Set<string>(
+      contacts
+        .map((c) => (c.user?.systemLanguage as string | undefined) ?? undefined)
+        .filter((l): l is string => !!l)
+    )].slice(0, 10);
+
+    const allTargetLanguages = audienceLanguages.length > 0
+      ? audienceLanguages
+      : ['en', 'fr', 'es', 'de', 'pt'];
 
     textObjects.forEach((obj, index) => {
       const text = obj.content?.trim();
@@ -418,10 +435,6 @@ export class PostService {
         targetLanguages,
       });
     });
-  }
-
-  private getActiveTargetLanguages(): string[] {
-    return ['en', 'fr', 'es', 'de', 'pt', 'ar', 'zh', 'ja', 'ko', 'ru'];
   }
 
   /// Returns the post if and only if `viewerUserId` is allowed to see it,

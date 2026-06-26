@@ -138,7 +138,7 @@ export class PrivacyPreferencesService {
       });
 
       // Construire le map des valeurs stockées
-      const storedMap = new Map(storedPreferences.map(p => [p.key, p.value]));
+      const storedMap: Map<string, string> = new Map(storedPreferences.map(p => [p.key as string, p.value as string]));
 
       // Construire les préférences avec les valeurs stockées ou les défauts
       const preferences: PrivacyPreferences = {
