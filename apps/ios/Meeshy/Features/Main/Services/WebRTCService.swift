@@ -345,8 +345,8 @@ final class WebRTCService {
     /// congestion gracefully without desyncing the peer.
     private func applyVideoQuality(_ level: VideoQualityLevel) {
         let bitrate = level.targetVideoBitrate > 0 ? level.targetVideoBitrate : QualityThresholds.minVideoBitrate
-        let fps = level.targetFPS > 0 ? level.targetFPS : 15
-        let height = level.targetResolutionHeight > 0 ? level.targetResolutionHeight : 360
+        let fps = level.targetFPS > 0 ? level.targetFPS : QualityThresholds.criticalVideoFloorFPS
+        let height = level.targetResolutionHeight > 0 ? level.targetResolutionHeight : QualityThresholds.criticalVideoFloorHeight
         let scale = max(1.0, 720.0 / Double(height))
         // §5.6 — compose the network-driven target with the device thermal
         // ceiling so a hot device sheds frames/bitrate even when the network is

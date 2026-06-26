@@ -384,6 +384,32 @@ final class QualityThresholdsVideoTests: XCTestCase {
                        "Maximum time to wait for callee to answer before auto-cancelling the call")
     }
 
+    func test_criticalVideoFloorFPS_is15() {
+        // `.critical` VideoQualityLevel returns 0 for targetFPS — applyVideoQuality
+        // falls back to this constant so the encoder never receives 0 fps (which stalls it).
+        // 15 fps mirrors the `.poor` tier and is the lowest FaceTime-comparable rate.
+        XCTAssertEqual(QualityThresholds.criticalVideoFloorFPS, 15,
+                       "Critical tier video floor must be 15 fps (matches .poor tier, avoids encoder stall)")
+    }
+
+    func test_criticalVideoFloorHeight_is360() {
+        // `.critical` VideoQualityLevel returns 0 for targetResolutionHeight —
+        // applyVideoQuality falls back to this constant. Together with
+        // criticalVideoFloorFPS and minVideoBitrate this defines the 360p15 @ 100 kbps floor.
+        XCTAssertEqual(QualityThresholds.criticalVideoFloorHeight, 360,
+                       "Critical tier video floor must be 360p (360p15 @ 100kbps floor)")
+    }
+
+    func test_criticalVideoFloor_tripleConsistent() {
+        // The 360p15 @ 100 kbps floor must be internally consistent:
+        // height 360 + fps 15 + bitrate minVideoBitrate are the three values
+        // documented in applyVideoQuality's comment. A change to one must trigger
+        // review of the others.
+        XCTAssertEqual(QualityThresholds.criticalVideoFloorHeight, 360)
+        XCTAssertEqual(QualityThresholds.criticalVideoFloorFPS, 15)
+        XCTAssertEqual(QualityThresholds.minVideoBitrate, 100_000)
+    }
+
     func test_turnDefaultCredentialTTLSeconds_is480() {
         // TURN credentials issued by the Meeshy gateway default to 480 s. The 80%-TTL
         // refresh fires at 384 s — well before Coturn's 600 s server-side eviction.

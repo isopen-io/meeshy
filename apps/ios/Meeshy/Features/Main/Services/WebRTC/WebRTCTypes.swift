@@ -438,6 +438,15 @@ enum QualityThresholds {
     static let initialVideoBitrate: Int = 500_000
     static let minVideoBitrate: Int = 100_000
     static let maxVideoBitrate: Int = 2_500_000
+    /// Frame-rate floor applied when `VideoQualityLevel.critical.targetFPS == 0`.
+    /// Mirrors the `.poor` tier's fps — keeps video alive at minimum cost rather
+    /// than stalling the encoder with an fps of zero.
+    static let criticalVideoFloorFPS: Int = 15
+    /// Resolution floor (portrait height, pixels) applied when
+    /// `VideoQualityLevel.critical.targetResolutionHeight == 0`.
+    /// Together with `criticalVideoFloorFPS` and `minVideoBitrate` this defines
+    /// the 360p15 @ 100 kbps worst-case floor documented in `applyVideoQuality`.
+    static let criticalVideoFloorHeight: Int = 360
 
     /// Phase 1 fix E6 — RTP gate before transitioning to .connected.
     /// ICE connected does NOT mean media flows: NAT, codec mismatch, audio

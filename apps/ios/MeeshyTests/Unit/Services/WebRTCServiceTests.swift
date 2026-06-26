@@ -292,12 +292,30 @@ final class ApplyVideoQualitySourceGuardTests: XCTestCase {
         )
     }
 
-    /// Zero targetFPS (critical) must fall back to 15 fps, not 0.
+    /// Zero targetFPS (critical) must fall back to `QualityThresholds.criticalVideoFloorFPS`, not 0.
     func test_applyVideoQuality_usesMinFpsFloorForCriticalTier() throws {
         let source = try webRTCServiceSource()
         XCTAssertTrue(
+            source.contains("level.targetFPS > 0 ? level.targetFPS : QualityThresholds.criticalVideoFloorFPS"),
+            "applyVideoQuality must floor zero targetFPS with QualityThresholds.criticalVideoFloorFPS — " +
+            "0 fps stalls encoding; hardcoding 15 creates drift when the constant is tuned."
+        )
+        XCTAssertFalse(
             source.contains("level.targetFPS > 0 ? level.targetFPS : 15"),
-            "applyVideoQuality must floor zero targetFPS to 15 — 0 fps stalls encoding."
+            "applyVideoQuality must not hardcode 15 fps — use QualityThresholds.criticalVideoFloorFPS"
+        )
+    }
+
+    /// Zero targetResolutionHeight (critical) must fall back to `QualityThresholds.criticalVideoFloorHeight`.
+    func test_applyVideoQuality_usesFloorHeightForCriticalTier() throws {
+        let source = try webRTCServiceSource()
+        XCTAssertTrue(
+            source.contains("level.targetResolutionHeight > 0 ? level.targetResolutionHeight : QualityThresholds.criticalVideoFloorHeight"),
+            "applyVideoQuality must floor zero targetResolutionHeight with QualityThresholds.criticalVideoFloorHeight"
+        )
+        XCTAssertFalse(
+            source.contains("level.targetResolutionHeight > 0 ? level.targetResolutionHeight : 360"),
+            "applyVideoQuality must not hardcode 360 — use QualityThresholds.criticalVideoFloorHeight"
         )
     }
 
