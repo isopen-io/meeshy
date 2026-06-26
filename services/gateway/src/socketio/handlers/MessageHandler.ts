@@ -1067,7 +1067,7 @@ export class MessageHandler {
       replyToId: message.replyToId ?? undefined,
       mentionedUserIds: message.mentionedUserIds ?? [],
       timestamp: message.createdAt.getTime(),
-    }).catch(() => {});
+    }).catch(err => handlerLogger.warn('agent event delivery failed (non-blocking)', { messageId: message.id, error: err }));
   }
 
   private _sendError(

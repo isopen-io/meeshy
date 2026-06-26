@@ -107,7 +107,9 @@ export class ConversationHandler {
         });
 
         // Envoyer les stats de conversation
-        await this.sendConversationStatsToSocket(socket, validated.conversationId).catch(() => {});
+        await this.sendConversationStatsToSocket(socket, validated.conversationId).catch(err => {
+          logger.warn('conversation stats broadcast failed (non-blocking)', { conversationId: validated.conversationId, error: err });
+        });
       }
     } catch (error) {
       logger.error('conversation:join failed', { error });
