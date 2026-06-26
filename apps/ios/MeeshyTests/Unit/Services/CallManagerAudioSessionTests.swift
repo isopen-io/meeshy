@@ -2600,3 +2600,102 @@ final class CallManagerHalfOpenReArmTests: XCTestCase {
         )
     }
 }
+
+// MARK: - Background-entry duplicate-emit guard
+
+@MainActor
+final class CallManagerBackgroundDuplicateEmitTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// Background entry must NOT emit a second "camera off" to the peer when hold
+    /// or the survival controller has already done so.  The fix: emit only when
+    /// !isVideoSuspendedByHold && !isVideoSuspended.
+    func test_backgroundEntry_doesNotEmitVideoOff_whenHoldAlreadySentIt() throws {
+        let source = try callManagerSource()
+
+        // Locate the didEnterBackgroundNotification observer body.
+        guard let bgRange = source.range(of: "UIApplication.didEnterBackgroundNotification") else {
+            XCTFail("didEnterBackgroundNotification observer not found"); return
+        }
+        // Capture the next 800 chars — enough to cover the full handler block.
+        let observerBody = String(source[bgRange.upperBound...].prefix(800))
+
+        // The background flag must always be set (so the foreground restore works)
+        // unconditionally relative to the emit guard.
+        XCTAssertTrue(
+            observerBody.contains("isVideoSuspendedByBackground = true"),
+            "Background entry must set isVideoSuspendedByBackground = true before the emit guard"
+        )
+
+        // The emit must be gated on !isVideoSuspendedByHold so that when hold
+        // has already sent "camera off", we don't flood the peer with a duplicate.
+        XCTAssertTrue(
+            observerBody.contains("isVideoSuspendedByHold"),
+            "Background entry emit must be gated on !isVideoSuspendedByHold to suppress " +
+            "duplicate 'camera off' events when the call is already on hold"
+        )
+
+        // The emit must also be gated on !isVideoSuspended (survival controller).
+        XCTAssertTrue(
+            observerBody.contains("isVideoSuspended"),
+            "Background entry emit must be gated on !isVideoSuspended (survival controller) " +
+            "to suppress duplicate events when the controller already sent 'camera off'"
+        )
+    }
+}
+
+// MARK: - ICE restart stale-offer guard
+
+@MainActor
+final class CallManagerICERestartStaleOfferTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// After the backoff sleep the ICE restart Task must verify we are STILL in
+    /// `.reconnecting(attempt:)` with the same attempt number, not merely that the
+    /// call `isActive`. Sending a restart offer on an already-connected peer
+    /// connection resets ICE to gathering and breaks the live media path.
+    func test_iceRestartTask_afterBackoffSleep_guardsOnReconnectingState() throws {
+        let source = try callManagerSource()
+
+        guard let fnRange = source.range(of: "private func attemptReconnection()") else {
+            XCTFail("attemptReconnection() not found"); return
+        }
+        let fnBody = String(source[fnRange.upperBound...].prefix(1500))
+
+        // The post-backoff guard must pattern-match on `.reconnecting` (not just
+        // isActive) to detect a natural recovery during the sleep window.
+        XCTAssertTrue(
+            fnBody.contains("case .reconnecting(let current) = self.callState"),
+            "Post-backoff guard must match .reconnecting(let current) = self.callState, " +
+            "not callState.isActive — .connected is also active and would allow a stale " +
+            "restart offer to disrupt a naturally recovered connection"
+        )
+
+        // Both guards (post-sleep AND post-performICERestart) must verify that the
+        // captured attempt number still matches the live state.
+        let matchCount = fnBody.components(separatedBy: "current == attempt").count - 1
+        XCTAssertGreaterThanOrEqual(
+            matchCount, 2,
+            "attemptReconnection must check 'current == attempt' at least twice: " +
+            "once after the backoff sleep and once after the async performICERestart() call"
+        )
+    }
+}

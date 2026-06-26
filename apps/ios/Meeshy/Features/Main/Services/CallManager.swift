@@ -2123,9 +2123,17 @@ final class CallManager: ObservableObject {
                 // otherwise see a frozen last frame indefinitely. Signal the camera
                 // state change so the peer shows our avatar placeholder instead.
                 if self.isVideoEnabled {
+                    // Always arm the background flag so the foreground-return path
+                    // knows to attempt a restore.
                     self.isVideoSuspendedByBackground = true
-                    MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: false)
-                    Logger.calls.info("Video backgrounded — peer notified (avatar placeholder)")
+                    // Only signal the peer if no other suspension source has already
+                    // sent "camera off" — hold and survival controller each emit their
+                    // own toggle event. A duplicate here produces a spurious
+                    // avatar-flicker round-trip on the remote end with no semantic gain.
+                    if !self.isVideoSuspendedByHold && !self.isVideoSuspended {
+                        MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: false)
+                        Logger.calls.info("Video backgrounded — peer notified (avatar placeholder)")
+                    }
                 }
             }
         }
@@ -3380,11 +3388,28 @@ extension CallManager: WebRTCServiceDelegate {
             if backoffSeconds > 0 {
                 Logger.calls.info("ICE restart attempt \(attempt): backing off \(Int(backoffSeconds))s before retry")
                 try? await Task.sleep(for: .seconds(backoffSeconds))
-                guard !Task.isCancelled, self.callState.isActive else { return }
+                // After sleeping, verify we are still in the same reconnection
+                // attempt. A natural ICE recovery (.connected) or a superseding
+                // attempt (higher attempt number) both make this offer stale.
+                // Sending restartIce() on an already-connected peer connection
+                // resets ICE to gathering state, breaking a healthy call.
+                guard !Task.isCancelled,
+                      case .reconnecting(let current) = self.callState,
+                      current == attempt else { return }
             }
             guard let offer = await self.webRTCService.performICERestart() else {
                 Logger.calls.error("ICE restart failed to produce offer")
                 self.attemptReconnection()
+                return
+            }
+            // Guard again after the async performICERestart() call — natural ICE
+            // recovery may have changed state while the offer was being created.
+            // Emitting a restart offer on a connected peer would re-enter ICE
+            // gathering and interrupt the live media path.
+            guard !Task.isCancelled,
+                  case .reconnecting(let current) = self.callState,
+                  current == attempt else {
+                Logger.calls.info("ICE restart offer discarded — state changed during renegotiation (attempt \(attempt))")
                 return
             }
             self.emitCallOffer(callId: callId, toUserId: userId, isVideo: self.isVideoEnabled, sdp: offer)
