@@ -412,7 +412,7 @@ export class MessageHandler {
           socketId: socket.id,
           clientTimestamp: Date.now()
         }
-      } as any; // Cast needed as MessageRequest uses readonly attachments objects
+      };
 
       const response: MessageResponse = await this.messagingService.handleMessage(
         messageRequest,
@@ -740,8 +740,9 @@ export class MessageHandler {
       }
       // Chain `.to(socketId)` so a single emit fans out to exactly this group's
       // sockets (mirrors the manager's per-language emit).
-      let emitter: any = this.io;
-      for (const sid of group.socketIds) emitter = emitter.to(sid);
+      const [firstSid, ...restSids] = group.socketIds;
+      let emitter: ReturnType<SocketIOServer['to']> = this.io.to(firstSid);
+      for (const sid of restSids) emitter = emitter.to(sid);
       emitter.emit(SERVER_EVENTS.MESSAGE_NEW, filtered);
     }
   }

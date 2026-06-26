@@ -243,13 +243,13 @@ export class MeeshySocketIOManager {
 
     // Initialiser le SocialEventsHandler pour les broadcasts feed
     this.socialEventsHandler = new SocialEventsHandler({
-      io: this.io as any,
+      io: this.io as SocketIOServer,
       prisma: this.prisma,
     });
 
     // Initialiser le LocationHandler pour les événements de partage de localisation
     this.locationHandler = new LocationHandler({
-      io: this.io as any,
+      io: this.io as SocketIOServer,
       prisma: this.prisma,
       connectedUsers: this.connectedUsers,
       socketToUser: this.socketToUser,
@@ -260,7 +260,7 @@ export class MeeshySocketIOManager {
     PostAudioService.init(this.prisma, this.socialEventsHandler);
 
     // Initialiser le StoryTextObjectTranslationService singleton
-    StoryTextObjectTranslationService.init(this.prisma, this.io as any);
+    StoryTextObjectTranslationService.init(this.prisma, this.io as SocketIOServer);
 
     this.authHandler = new AuthHandler({
       prisma: this.prisma,
@@ -1395,9 +1395,11 @@ export class MeeshySocketIOManager {
     }
 
     for (const { socketIds: socketsForLangs, langs } of socketsByLanguageKey.values()) {
+      if (socketsForLangs.length === 0) continue;
       const filtered = filterMessagePayloadForLanguages(payload, [...langs, originalLanguage]);
-      let emitter: any = this.io;
-      for (const socketId of socketsForLangs) emitter = emitter.to(socketId);
+      const [firstSid, ...restSids] = socketsForLangs;
+      let emitter: ReturnType<SocketIOServer['to']> = this.io.to(firstSid);
+      for (const socketId of restSids) emitter = emitter.to(socketId);
       emitter.emit(SERVER_EVENTS.MESSAGE_NEW, filtered);
     }
   }
@@ -1498,14 +1500,8 @@ export class MeeshySocketIOManager {
    */
   private async _broadcastNewMessage(message: Message, conversationId: string, senderSocket?: Socket): Promise<void> {
     try {
-      // Normaliser l'ID de conversation pour le broadcast ET le payload
       const normalizedId = await this.normalizeConversationId(conversationId);
 
-
-      // CORRECTION CRITIQUE: Remplacer message.conversationId par l'ObjectId normalisé
-      // car le message en base peut contenir l'identifier au lieu de l'ObjectId
-      (message as any).conversationId = normalizedId;
-      
       // OPTIMISATION: Récupérer les traductions et déclencher le calcul des stats
       // en parallèle. Les stats ne sont plus embarquées dans le payload
       // message:new — elles sont diffusées via l'event dédié `conversation:stats`.
