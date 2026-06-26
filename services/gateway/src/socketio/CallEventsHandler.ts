@@ -38,6 +38,7 @@ import {
 } from '../validation/call-schemas';
 import { getSocketRateLimiter, checkSocketRateLimit, SOCKET_RATE_LIMITS } from '../utils/socket-rate-limiter';
 import { ZmqTranslationClient } from '../services/zmq-translation';
+import type { TranslationCompletedEvent } from '../services/zmq-translation';
 import type {
   CallInitiateEvent,
   CallInitiatedEvent,
@@ -78,6 +79,13 @@ export class CallEventsHandler {
    */
   private messageBroadcaster: ((message: unknown, conversationId: string) => Promise<void>) | null = null;
   private rateLimiter = getSocketRateLimiter();
+
+  /**
+   * Single-dispatcher pattern: one 'translationCompleted' listener on the ZMQ
+   * client dispatches to per-taskId handlers in O(1). Avoids N×K listeners
+   * accumulating across concurrent call translations.
+   */
+  private pendingTranslationHandlers = new Map<string, (event: TranslationCompletedEvent) => void>();
 
   /**
    * §4.6 — last-offer buffer per call. The signaling relay is otherwise
@@ -189,6 +197,13 @@ export class CallEventsHandler {
 
   setZmqClient(zmqClient: ZmqTranslationClient): void {
     this.zmqClient = zmqClient;
+    zmqClient.on('translationCompleted', (event: TranslationCompletedEvent) => {
+      const handler = this.pendingTranslationHandlers.get(event.taskId);
+      if (handler) {
+        this.pendingTranslationHandlers.delete(event.taskId);
+        handler(event);
+      }
+    });
     logger.info('📢 CallEventsHandler: ZmqTranslationClient initialized');
   }
 
@@ -265,7 +280,7 @@ export class CallEventsHandler {
           return new Promise<void>((resolve) => {
             const TIMEOUT_MS = 10_000;
             const timer = setTimeout(() => {
-              this.zmqClient!.off('translationCompleted', onResult);
+              this.pendingTranslationHandlers.delete(taskId);
               socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.TRANSLATED_SEGMENT, {
                 callId: data.callId,
                 segment: {
@@ -282,10 +297,8 @@ export class CallEventsHandler {
               resolve();
             }, TIMEOUT_MS);
 
-            const onResult = (event: { taskId: string; result: { translatedText: string; targetLanguage: string } }) => {
-              if (event.taskId !== taskId) return;
+            this.pendingTranslationHandlers.set(taskId, (event) => {
               clearTimeout(timer);
-              this.zmqClient!.off('translationCompleted', onResult);
               socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.TRANSLATED_SEGMENT, {
                 callId: data.callId,
                 segment: {
@@ -301,8 +314,7 @@ export class CallEventsHandler {
                 }
               });
               resolve();
-            };
-            this.zmqClient!.on('translationCompleted', onResult);
+            });
           });
         } catch (err) {
           logger.warn('Call transcription translation failed, relaying original', { callId: data.callId, targetLanguage, err });

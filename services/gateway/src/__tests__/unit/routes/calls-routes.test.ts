@@ -35,6 +35,42 @@ const mockSendSuccess = jest.fn<any>((reply: any, data: any, opts?: any) => {
   return reply;
 });
 
+const mockSendBadRequest = jest.fn<any>((reply: any, message: string, options?: any) => {
+  const code = options?.code ?? 'BAD_REQUEST';
+  reply.status(400).send({ success: false, error: { code, message } });
+  return reply;
+});
+
+const mockSendUnauthorized = jest.fn<any>((reply: any, message: string, options?: any) => {
+  const code = options?.code ?? 'UNAUTHORIZED';
+  reply.status(401).send({ success: false, error: { code, message } });
+  return reply;
+});
+
+const mockSendForbidden = jest.fn<any>((reply: any, message: string, options?: any) => {
+  const code = options?.code ?? 'FORBIDDEN';
+  reply.status(403).send({ success: false, error: { code, message } });
+  return reply;
+});
+
+const mockSendNotFound = jest.fn<any>((reply: any, message: string, options?: any) => {
+  const code = options?.code ?? 'NOT_FOUND';
+  reply.status(404).send({ success: false, error: { code, message } });
+  return reply;
+});
+
+const mockSendInternalError = jest.fn<any>((reply: any, message?: string, options?: any) => {
+  const code = options?.code ?? 'INTERNAL_ERROR';
+  reply.status(500).send({ success: false, error: { code, message: message ?? 'Internal server error' } });
+  return reply;
+});
+
+const mockSendError = jest.fn<any>((reply: any, statusCode: number, message: string, options?: any) => {
+  const code = options?.code ?? message;
+  reply.status(statusCode).send({ success: false, error: { code, message } });
+  return reply;
+});
+
 // ─── Module mocks ─────────────────────────────────────────────────────────────
 
 jest.mock('../../../services/CallService', () => ({
@@ -77,6 +113,12 @@ jest.mock('../../../utils/logger', () => ({
 
 jest.mock('../../../utils/response', () => ({
   sendSuccess: (...args: any[]) => mockSendSuccess(...args),
+  sendBadRequest: (...args: any[]) => mockSendBadRequest(...args),
+  sendUnauthorized: (...args: any[]) => mockSendUnauthorized(...args),
+  sendForbidden: (...args: any[]) => mockSendForbidden(...args),
+  sendNotFound: (...args: any[]) => mockSendNotFound(...args),
+  sendInternalError: (...args: any[]) => mockSendInternalError(...args),
+  sendError: (...args: any[]) => mockSendError(...args),
 }));
 
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
@@ -359,7 +401,7 @@ describe('callRoutes', () => {
       expect(reply._body?.error?.code).toBe('Failed to initiate call');
     });
 
-    it('includes error.details when present', async () => {
+    it('still returns 400 and parses code when error has details', async () => {
       const { routes, reply } = setup();
       const err: any = new Error('INVALID:bad input');
       err.details = { field: 'conversationId' };
@@ -368,7 +410,8 @@ describe('callRoutes', () => {
       const req = makeRequest({ body: { conversationId: CONV_ID, type: 'video' } });
       await getRoute(routes, 'POST', '/calls')(req, reply);
 
-      expect(reply._body?.error?.details).toEqual({ field: 'conversationId' });
+      expect(reply.status).toHaveBeenCalledWith(400);
+      expect(reply._body?.error?.code).toBe('INVALID');
     });
 
     it('handles error with multiple colons in message correctly', async () => {

@@ -17,7 +17,7 @@ import { createValidationMiddleware } from '../middleware/validation.js';
 import { ROUTE_RATE_LIMITS } from '../middleware/rate-limit.js';
 import { CallService } from '../services/CallService.js';
 import { logger } from '../utils/logger.js';
-import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../utils/response.js';
+import { sendSuccess, sendError, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../utils/response.js';
 import {
   initiateCallSchema,
   getCallSchema,
@@ -208,7 +208,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         ? errorMessage.split(':').slice(1).join(':').trim()
         : errorMessage;
 
-      return sendBadRequest(reply, message);
+      return sendBadRequest(reply, message, { code: errorCode });
     }
   });
 
@@ -439,7 +439,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       });
 
       if (!membership) {
-        return sendForbidden(reply, 'You do not have access to this call');
+        return sendError(reply, 403, 'You do not have access to this call', { code: 'NOT_A_PARTICIPANT' });
       }
 
       // Only initiator or admin/moderator can end call
@@ -449,7 +449,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         membership.role === 'moderator';
 
       if (!canEndCall) {
-        return sendForbidden(reply, 'Only the call initiator or conversation moderators can end the call');
+        return sendError(reply, 403, 'Only the call initiator or conversation moderators can end the call', { code: 'PERMISSION_DENIED' });
       }
 
       const endParticipantId = authRequest.authContext.participantId || membership?.id;
@@ -749,7 +749,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
           membership?.role === 'admin' || membership?.role === 'moderator';
 
         if (!isModerator) {
-          return sendForbidden(reply, 'You can only leave your own participation');
+          return sendError(reply, 403, 'You can only leave your own participation', { code: 'PERMISSION_DENIED' });
         }
       }
 
@@ -896,7 +896,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       });
 
       if (!membership) {
-        return sendForbidden(reply, 'You are not a member of this conversation');
+        return sendError(reply, 403, 'You are not a member of this conversation', { code: 'NOT_A_PARTICIPANT' });
       }
 
       const callSession = await callService.getActiveCallForConversation(
@@ -979,7 +979,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       const userId = authRequest.authContext.userId;
 
       if (!userId) {
-        return sendUnauthorized(reply, 'Authentication required');
+        return sendUnauthorized(reply, 'Authentication required', { code: 'NOT_AUTHENTICATED' });
       }
 
       logger.info('📞 REST: Getting active call for user (crash recovery)', {
@@ -1015,7 +1015,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       });
 
       if (!activeCall) {
-        return sendNotFound(reply, 'No active call found');
+        return sendNotFound(reply, 'No active call found', { code: 'NO_ACTIVE_CALL' });
       }
 
       return sendSuccess(reply, activeCall);
@@ -1130,7 +1130,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       const userId = authRequest.authContext.userId;
 
       if (!userId) {
-        return sendUnauthorized(reply, 'Authentication required');
+        return sendUnauthorized(reply, 'Authentication required', { code: 'NOT_AUTHENTICATED' });
       }
 
       const parsed = callHistoryQuerySchema.safeParse(request.query);
