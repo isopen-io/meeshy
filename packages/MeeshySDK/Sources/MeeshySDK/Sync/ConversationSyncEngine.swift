@@ -881,7 +881,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             // waiting for the next manual refresh.
             do {
                 let apiConv = try await ConversationService.shared.getById(msg.conversationId)
-                let userId = await currentUserId() ?? ""
+                let userId = await currentUserId()
                 let domainConv = apiConv.toConversation(currentUserId: userId)
                 await cache.conversations.update(for: "list") { conversations in
                     var updated = conversations

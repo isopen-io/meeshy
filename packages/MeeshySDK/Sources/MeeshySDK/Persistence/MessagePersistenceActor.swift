@@ -1766,7 +1766,7 @@ public actor MessagePersistenceActor {
     /// Delete all message records for a conversation (called on 403/access revoked).
     public func deleteAll(conversationId: String) async throws {
         try await dbWriter.write { db in
-            try MessageRecord
+            _ = try MessageRecord
                 .filter(Column("conversationId") == conversationId)
                 .deleteAll(db)
         }

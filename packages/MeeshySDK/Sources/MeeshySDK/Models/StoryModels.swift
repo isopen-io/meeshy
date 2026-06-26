@@ -1303,9 +1303,6 @@ public struct StoryEffects: Codable, Sendable {
         slideDuration = try c.decodeIfPresent(Float.self, forKey: .slideDuration)
         timelineDuration = try c.decodeIfPresent(Double.self, forKey: .timelineDuration)
         clipTransitions = try c.decodeIfPresent([StoryClipTransition].self, forKey: .clipTransitions)
-        musicTrackId = try c.decodeIfPresent(String.self, forKey: .musicTrackId)
-        musicStartTime = try c.decodeIfPresent(TimeInterval.self, forKey: .musicStartTime)
-        musicEndTime = try c.decodeIfPresent(TimeInterval.self, forKey: .musicEndTime)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -1342,9 +1339,6 @@ public struct StoryEffects: Codable, Sendable {
         try c.encodeIfPresent(slideDuration, forKey: .slideDuration)
         try c.encodeIfPresent(timelineDuration, forKey: .timelineDuration)
         try c.encodeIfPresent(clipTransitions, forKey: .clipTransitions)
-        try c.encodeIfPresent(musicTrackId, forKey: .musicTrackId)
-        try c.encodeIfPresent(musicStartTime, forKey: .musicStartTime)
-        try c.encodeIfPresent(musicEndTime, forKey: .musicEndTime)
     }
 
     public var parsedTextStyle: StoryTextStyle? {

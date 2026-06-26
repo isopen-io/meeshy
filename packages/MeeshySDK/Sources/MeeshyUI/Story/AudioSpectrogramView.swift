@@ -107,7 +107,7 @@ struct AudioSpectrogramView: View {
 
     @State private var bins: [[Float]] = []
 
-    nonisolated(unsafe) private static let renderer = AudioSpectrogramRenderer(fftSize: 64, frequencyBands: 32)
+    private nonisolated static let renderer = AudioSpectrogramRenderer(fftSize: 64, frequencyBands: 32)
     private static let trackHeight: CGFloat = 44
 
     var body: some View {

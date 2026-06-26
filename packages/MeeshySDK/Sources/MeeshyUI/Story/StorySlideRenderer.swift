@@ -15,7 +15,7 @@ public enum StorySlideRenderer {
     /// most expensive Core Image object to build (it sets up the GPU render
     /// context) and is documented thread-safe + reusable, yet a new one was
     /// created per filtered slide composite. Build it once.
-    private nonisolated(unsafe) static let filterContext = CIContext()
+    private static let filterContext = CIContext()
 
     /// Render a complete slide composite: background (color/image) + text overlays + foreground images.
     /// Returns nil only if rendering fails (shouldn't happen).

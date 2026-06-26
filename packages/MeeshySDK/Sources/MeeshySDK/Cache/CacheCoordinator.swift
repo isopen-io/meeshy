@@ -665,7 +665,11 @@ public actor CacheCoordinator {
     }
 
     private nonisolated func clearTranslationCacheDB() {
-        try? db.write { db in try TranslationCacheRecord.deleteAll(db) }
+        do {
+            try db.write { db in _ = try TranslationCacheRecord.deleteAll(db) }
+        } catch {
+            logger.error("Failed to clear translation cache table: \(error.localizedDescription)")
+        }
     }
 
     /// Purge ciblée des 3 caches in-memory de traduction/transcription +
