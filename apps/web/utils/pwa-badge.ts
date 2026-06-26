@@ -9,6 +9,7 @@
  * - iOS: ❌ Non supporté
  */
 
+import { logger } from '@/utils/logger';
 import { firebaseChecker } from './firebase-availability-checker';
 
 interface BadgeManagerOptions {
@@ -88,7 +89,7 @@ class PWABadgeManager {
    */
   private log(...args: any[]): void {
     if (this.options.debug) {
-      console.log('[PWABadge]', ...args);
+      logger.info('[PwaBadge]', String(args[0]), args.length > 1 ? { details: args.slice(1) } : undefined);
     }
   }
 

@@ -20,6 +20,7 @@ import {
   Messaging,
   MessagePayload,
 } from 'firebase/messaging';
+import { logger } from '@/utils/logger';
 import {
   getFirebaseConfig,
   getVapidKey,
@@ -71,7 +72,7 @@ class FCMManager {
    */
   private log(...args: any[]): void {
     if (this.options.debug) {
-      console.log('[FCM]', ...args);
+      logger.info('[FcmManager]', String(args[0]), args.length > 1 ? { details: args.slice(1) } : undefined);
     }
   }
 
@@ -79,7 +80,7 @@ class FCMManager {
    * Gestion des erreurs
    */
   private handleError(error: Error, context: string): void {
-    console.error(`[FCM] Error in ${context}:`, error);
+    logger.error('[FcmManager]', `Error in ${context}`, { error });
     this.options.onTokenError?.(error);
   }
 

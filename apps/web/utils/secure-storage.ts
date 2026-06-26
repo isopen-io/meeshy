@@ -12,6 +12,8 @@
  * @version 1.0.0
  */
 
+import { logger } from '@/utils/logger';
+
 /**
  * Storage item with metadata
  */
@@ -137,7 +139,7 @@ export class SecureStorage {
       const decoder = new TextDecoder();
       return decoder.decode(decryptedBytes);
     } catch (error) {
-      console.error('[SecureStorage] Decryption failed:', error);
+      logger.error('[SecureStorage]', 'Decryption failed', { error });
       throw new Error('Decryption failed - key mismatch or corrupted data');
     }
   }
@@ -171,7 +173,7 @@ export class SecureStorage {
       const storage = useSessionStorage ? sessionStorage : localStorage;
       storage.setItem(key, encrypted);
     } catch (error) {
-      console.error('[SecureStorage] Failed to set item:', error);
+      logger.error('[SecureStorage]', 'Failed to set item', { error });
       throw error;
     }
   }
@@ -201,7 +203,7 @@ export class SecureStorage {
 
       // Validate version
       if (item.version !== STORAGE_CONFIG.ENCRYPTION_VERSION) {
-        console.warn('[SecureStorage] Version mismatch, removing old data');
+        logger.warn('[SecureStorage]', 'Version mismatch, removing old data');
         this.removeSecure(key, useSessionStorage);
         return null;
       }
@@ -209,14 +211,14 @@ export class SecureStorage {
       // Validate TTL
       const age = Date.now() - item.timestamp;
       if (age > item.ttl) {
-        console.warn('[SecureStorage] Item expired, removing');
+        logger.warn('[SecureStorage]', 'Item expired, removing');
         this.removeSecure(key, useSessionStorage);
         return null;
       }
 
       return item.data;
     } catch (error) {
-      console.error('[SecureStorage] Failed to get item:', error);
+      logger.error('[SecureStorage]', 'Failed to get item', { error });
       // Remove corrupted data
       this.removeSecure(key, useSessionStorage);
       return null;

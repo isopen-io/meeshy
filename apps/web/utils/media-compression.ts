@@ -3,6 +3,7 @@
  * Compresse automatiquement les fichiers >100MB avant upload
  */
 
+import { logger } from '@/utils/logger';
 import imageCompression from 'browser-image-compression';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
@@ -115,7 +116,7 @@ export async function compressImage(
       lastModified: Date.now(),
     });
   } catch (error) {
-    console.error('Erreur compression image:', error);
+    logger.error('[MediaCompression]', 'Erreur compression image', { error });
     throw new Error(`Compression image échouée: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
@@ -157,7 +158,7 @@ export async function compressVideo(
       onProgress?.(0, 'Préparation de la compression légère...');
       // Pour les très gros fichiers sur Safari, on retourne le fichier original
       // avec un avertissement plutôt que de risquer un crash
-      console.warn('Fichier très volumineux sur Safari/iOS - compression désactivée pour éviter un crash');
+      logger.warn('[MediaCompression]', 'Fichier très volumineux sur Safari/iOS - compression désactivée pour éviter un crash');
       onProgress?.(100, 'Fichier trop volumineux pour compression sur Safari');
       return file;
     }
@@ -214,7 +215,7 @@ export async function compressVideo(
       await ffmpeg.deleteFile(inputFileName);
       await ffmpeg.deleteFile(outputFileName);
     } catch (e) {
-      console.warn('Erreur nettoyage fichiers temporaires FFmpeg:', e);
+      logger.warn('[MediaCompression]', 'Erreur nettoyage fichiers temporaires FFmpeg', { error: e });
     }
 
     onProgress?.(100, 'Compression terminée');
@@ -226,7 +227,7 @@ export async function compressVideo(
       lastModified: Date.now(),
     });
   } catch (error) {
-    console.error('Erreur compression vidéo:', error);
+    logger.error('[MediaCompression]', 'Erreur compression vidéo', { error });
     throw new Error(`Compression vidéo échouée: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
@@ -303,7 +304,7 @@ export async function compressMultipleFiles(
       });
       compressedFiles.push(compressed);
     } catch (error) {
-      console.error(`Erreur compression fichier ${file.name}:`, error);
+      logger.error('[MediaCompression]', `Erreur compression fichier ${file.name}`, { error });
       // En cas d'erreur, garder le fichier original
       compressedFiles.push(file);
       onFileProgress?.(i, 100, `Erreur: ${error instanceof Error ? error.message : 'Unknown'}`);

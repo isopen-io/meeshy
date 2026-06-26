@@ -3,6 +3,7 @@
  * Gestion des notifications push avec Web Push API
  */
 
+import { logger } from '@/utils/logger';
 import { registerServiceWorker } from './service-worker';
 
 /**
@@ -14,7 +15,7 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
   }
 
   const permission = await Notification.requestPermission();
-  console.log('[Push] Permission:', permission);
+  logger.info('[PushNotifications]', 'Permission', { permission });
   return permission;
 }
 
@@ -52,7 +53,7 @@ export async function subscribeToPushNotifications(
     // 2. Demander la permission
     const permission = await requestNotificationPermission();
     if (permission !== 'granted') {
-      console.warn('[Push] Notification permission denied');
+      logger.warn('[PushNotifications]', 'Notification permission denied');
       return null;
     }
 
@@ -60,7 +61,7 @@ export async function subscribeToPushNotifications(
     let subscription = await registration.pushManager.getSubscription();
 
     if (subscription) {
-      console.log('[Push] Already subscribed');
+      logger.info('[PushNotifications]', 'Already subscribed');
       return subscription;
     }
 
@@ -70,10 +71,10 @@ export async function subscribeToPushNotifications(
       applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as unknown as ArrayBuffer,
     });
 
-    console.log('[Push] Subscribed:', subscription.endpoint);
+    logger.info('[PushNotifications]', 'Subscribed', { endpoint: subscription.endpoint });
     return subscription;
   } catch (error) {
-    console.error('[Push] Subscription failed:', error);
+    logger.error('[PushNotifications]', 'Subscription failed', { error });
     return null;
   }
 }
@@ -91,21 +92,21 @@ export async function unsubscribeFromPushNotifications(): Promise<boolean> {
   try {
     const registration = await navigator.serviceWorker.getRegistration();
     if (!registration) {
-      console.warn('[Push] No service worker registration found');
+      logger.warn('[PushNotifications]', 'No service worker registration found');
       return false;
     }
 
     const subscription = await registration.pushManager.getSubscription();
     if (!subscription) {
-      console.warn('[Push] No subscription found');
+      logger.warn('[PushNotifications]', 'No subscription found');
       return false;
     }
 
     const success = await subscription.unsubscribe();
-    console.log('[Push] Unsubscribed:', success);
+    logger.info('[PushNotifications]', 'Unsubscribed', { success });
     return success;
   } catch (error) {
-    console.error('[Push] Unsubscribe failed:', error);
+    logger.error('[PushNotifications]', 'Unsubscribe failed', { error });
     return false;
   }
 }
@@ -128,7 +129,7 @@ export async function getCurrentSubscription(): Promise<PushSubscription | null>
 
     return await registration.pushManager.getSubscription();
   } catch (error) {
-    console.error('[Push] Get subscription failed:', error);
+    logger.error('[PushNotifications]', 'Get subscription failed', { error });
     return null;
   }
 }

@@ -3,6 +3,8 @@
  * Gère l'enregistrement et le cycle de vie des Service Workers
  */
 
+import { logger } from '@/utils/logger';
+
 interface ServiceWorkerRegistrationOptions {
   /**
    * Activer le debug logging
@@ -49,7 +51,7 @@ class ServiceWorkerRegistrationManager {
    */
   private log(...args: any[]): void {
     if (this.options.debug) {
-      console.log('[SW-Registration]', ...args);
+      logger.info('[ServiceWorkerRegistration]', String(args[0]), args.length > 1 ? { details: args.slice(1) } : undefined);
     }
   }
 
@@ -57,7 +59,7 @@ class ServiceWorkerRegistrationManager {
    * Gestion des erreurs
    */
   private handleError(error: Error, context: string): void {
-    console.error(`[SW-Registration] Error in ${context}:`, error);
+    logger.error('[ServiceWorkerRegistration]', `Error in ${context}`, { error });
     this.options.onError?.(error);
   }
 

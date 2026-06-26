@@ -6,6 +6,8 @@
  * Pas de support: Safari, Firefox
  */
 
+import { logger } from '@/utils/logger';
+
 /**
  * Vérifie si l'API Badging est supportée
  */
@@ -24,7 +26,7 @@ export const isBadgingSupported = (): boolean => {
  */
 export async function updateAppBadge(count?: number): Promise<void> {
   if (!isBadgingSupported()) {
-    console.warn('[Badge] Badge API not supported on this browser');
+    logger.warn('[Badge]', 'Badge API not supported on this browser');
     return;
   }
 
@@ -42,7 +44,7 @@ export async function updateAppBadge(count?: number): Promise<void> {
       await nav.setAppBadge(count);
     }
   } catch (error) {
-    console.error('[Badge] Error updating app badge:', error);
+    logger.error('[Badge]', 'Error updating app badge', { error });
   }
 }
 
@@ -57,6 +59,6 @@ export async function clearAppBadge(): Promise<void> {
   try {
     await (navigator as any).clearAppBadge();
   } catch (error) {
-    console.error('[Badge] Error clearing app badge:', error);
+    logger.error('[Badge]', 'Error clearing app badge', { error });
   }
 }

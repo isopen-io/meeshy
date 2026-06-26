@@ -3,6 +3,8 @@
  * Transforme les chemins relatifs en URLs complètes selon l'environnement
  */
 
+import { logger } from '@/utils/logger';
+
 /**
  * Construit l'URL complète d'un attachement à partir d'un chemin relatif ou absolu
  *
@@ -87,7 +89,7 @@ export function buildAttachmentUrl(relativePath: string | null | undefined): str
   }
 
   // Cas improbable - retourner tel quel avec un warning
-  console.warn('[AttachmentURL] Format de chemin inattendu:', relativePath);
+  logger.warn('[AttachmentURL]', 'Format de chemin inattendu', { relativePath });
   return relativePath;
 }
 
@@ -148,7 +150,7 @@ export function extractRelativePath(absoluteUrl: string | null | undefined): str
     if (absoluteUrl.startsWith('/')) {
       return absoluteUrl;
     }
-    console.warn('[AttachmentURL] Impossible d\'extraire le chemin relatif:', absoluteUrl);
+    logger.warn('[AttachmentURL]', 'Impossible d\'extraire le chemin relatif', { absoluteUrl });
     return absoluteUrl;
   }
 }

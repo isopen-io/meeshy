@@ -10,6 +10,8 @@
  * @module firebase-availability-checker
  */
 
+import { logger } from '@/utils/logger';
+
 export type FirebaseStatus = {
   /**
    * Firebase est disponible (clés configurées et init réussie)
@@ -86,10 +88,7 @@ class FirebaseAvailabilityChecker {
           badgeEnabled: false,
           reason: `Firebase credentials missing: ${missing.join(', ')}`,
         };
-        console.warn(
-          '[Firebase] Not configured - Using WebSocket notifications only',
-          '\nMissing:', missing.join(', ')
-        );
+        logger.warn('[FirebaseAvailabilityChecker]', 'Not configured - Using WebSocket notifications only', { missing });
         this.checked = true;
         return this.status;
       }
@@ -124,7 +123,7 @@ class FirebaseAvailabilityChecker {
             badgeEnabled,
             reason: 'Firebase initialized successfully',
           };
-          console.info('[Firebase] Available - Push notifications enabled');
+          logger.info('[FirebaseAvailabilityChecker]', 'Available - Push notifications enabled');
         } catch (error: any) {
           // Firebase déjà initialisé
           if (error.code === 'app/duplicate-app') {
@@ -134,7 +133,7 @@ class FirebaseAvailabilityChecker {
               badgeEnabled,
               reason: 'Firebase already initialized',
             };
-            console.info('[Firebase] Already initialized');
+            logger.info('[FirebaseAvailabilityChecker]', 'Already initialized');
           } else {
             // Erreur de configuration
             throw error;
@@ -150,7 +149,7 @@ class FirebaseAvailabilityChecker {
         };
       }
     } catch (error: any) {
-      console.error('[Firebase] Initialization failed:', error.message);
+      logger.error('[FirebaseAvailabilityChecker]', 'Initialization failed', { message: error.message });
       this.status = {
         available: false,
         pushEnabled: false,
@@ -168,7 +167,7 @@ class FirebaseAvailabilityChecker {
    */
   getStatus(): FirebaseStatus {
     if (!this.checked) {
-      console.warn('[Firebase] Status requested before check - returning unavailable');
+      logger.warn('[FirebaseAvailabilityChecker]', 'Status requested before check - returning unavailable');
       return {
         available: false,
         pushEnabled: false,

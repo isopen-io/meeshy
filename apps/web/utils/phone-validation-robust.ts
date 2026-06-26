@@ -5,6 +5,7 @@
  * en utilisant libphonenumber-js pour respecter les formats internationaux.
  */
 
+import { logger } from '@/utils/logger';
 import { parsePhoneNumber, isValidPhoneNumber, CountryCode, AsYouType } from 'libphonenumber-js';
 
 export interface PhoneValidationResult {
@@ -70,7 +71,7 @@ export function validatePhoneNumber(
     // Seules les vraies erreurs de format doivent être loggées.
     const errorStr = String(error);
     if (!errorStr.includes('TOO_SHORT')) {
-      console.warn('[phone-validation] Parse error:', error);
+      logger.warn('[PhoneValidationRobust]', 'Parse error', { error });
     }
     return {
       isValid: false,
@@ -135,7 +136,7 @@ export function validateInternationalPhone(phoneNumber: string): PhoneValidation
     // Seules les vraies erreurs de format doivent être loggées.
     const errorStr = String(error);
     if (!errorStr.includes('TOO_SHORT')) {
-      console.warn('[phone-validation] Parse error:', error);
+      logger.warn('[PhoneValidationRobust]', 'Parse error', { error });
     }
     return {
       isValid: false,

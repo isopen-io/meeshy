@@ -12,6 +12,7 @@
  * @version 1.0.0
  */
 
+import { logger } from '@/utils/logger';
 import { z } from 'zod';
 import { sanitizeNotification } from './xss-protection';
 import type { Notification } from '@/types/notification';
@@ -164,10 +165,7 @@ export function validateNotificationEvent(data: unknown): ValidationResult<Notif
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      console.error('[Socket Validator] Validation failed:', {
-        errors: error.issues,
-        data
-      });
+      logger.error('[SocketValidator]', 'Validation failed', { errors: error.issues, data });
 
       return {
         success: false,
@@ -175,7 +173,7 @@ export function validateNotificationEvent(data: unknown): ValidationResult<Notif
       };
     }
 
-    console.error('[Socket Validator] Unexpected error:', error);
+    logger.error('[SocketValidator]', 'Unexpected error', { error });
 
     return {
       success: false,
@@ -200,7 +198,7 @@ export function validateNotificationReadEvent(data: unknown): ValidationResult<{
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      console.error('[Socket Validator] Read event validation failed:', error.issues);
+      logger.error('[SocketValidator]', 'Read event validation failed', { errors: error.issues });
 
       return {
         success: false,
@@ -231,7 +229,7 @@ export function validateNotificationDeletedEvent(data: unknown): ValidationResul
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      console.error('[Socket Validator] Deleted event validation failed:', error.issues);
+      logger.error('[SocketValidator]', 'Deleted event validation failed', { errors: error.issues });
 
       return {
         success: false,
@@ -270,7 +268,7 @@ export function validateNotificationCountsEvent(data: unknown): ValidationResult
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      console.error('[Socket Validator] Counts event validation failed:', error.issues);
+      logger.error('[SocketValidator]', 'Counts event validation failed', { errors: error.issues });
 
       return {
         success: false,
@@ -311,7 +309,7 @@ export function validateSocketEvent(
       return validateNotificationCountsEvent(data);
 
     default:
-      console.warn(`[Socket Validator] Unknown event type: ${eventName}`);
+      logger.warn('[SocketValidator]', `Unknown event type: ${eventName}`);
       return {
         success: false,
         error: `Unknown event type: ${eventName}`
@@ -335,7 +333,7 @@ export function createValidatedHandler<T>(
     const result = validateSocketEvent(eventName, data);
 
     if (!result.success) {
-      console.error(`[Socket Validator] ${eventName} validation failed:`, result.error);
+      logger.error('[SocketValidator]', `${eventName} validation failed`, { error: result.error });
       // Don't call handler with invalid data
       return;
     }
@@ -354,7 +352,7 @@ export function createValidatedHandler<T>(
  */
 export function batchValidateNotifications(notifications: unknown[]): Notification[] {
   if (!Array.isArray(notifications)) {
-    console.error('[Socket Validator] Expected array of notifications');
+    logger.error('[SocketValidator]', 'Expected array of notifications');
     return [];
   }
 
@@ -368,12 +366,12 @@ export function batchValidateNotifications(notifications: unknown[]): Notificati
       validated.push(result.data);
     } else {
       invalidCount++;
-      console.warn('[Socket Validator] Invalid notification filtered out:', result.error);
+      logger.warn('[SocketValidator]', 'Invalid notification filtered out', { error: result.error });
     }
   }
 
   if (invalidCount > 0) {
-    console.warn(`[Socket Validator] Filtered ${invalidCount} invalid notifications`);
+    logger.warn('[SocketValidator]', `Filtered ${invalidCount} invalid notifications`);
   }
 
   return validated;
@@ -423,7 +421,7 @@ export function validateNotificationResponse(response: unknown): ValidationResul
     };
   } catch (error) {
     if (error instanceof z.ZodError) {
-      console.error('[Socket Validator] Response validation failed:', error.issues);
+      logger.error('[SocketValidator]', 'Response validation failed', { errors: error.issues });
 
       return {
         success: false,

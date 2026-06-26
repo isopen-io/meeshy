@@ -9,6 +9,7 @@
  * 4. Back Sound Code (background music)
  */
 
+import { logger } from '@/utils/logger';
 import * as Tone from 'tone';
 import { PitchDetector } from 'pitchy';
 import type {
@@ -518,14 +519,14 @@ export class BackSoundProcessor implements AudioEffectProcessor {
       // Wait for buffer to load
       await Tone.loaded();
     } catch (error) {
-      console.error('[BackSoundProcessor] Failed to load sound:', error);
+      logger.error('[BackSoundProcessor]', 'Failed to load sound', { error });
       throw error;
     }
   }
 
   async play(): Promise<void> {
     if (!this.player || !this.player.loaded) {
-      console.warn('[BackSoundProcessor] Player not loaded');
+      logger.warn('[BackSoundProcessor]', 'Player not loaded');
       return;
     }
 

@@ -4,6 +4,8 @@
  * Respecte les préférences utilisateur et le mode DND
  */
 
+import { logger } from '@/utils/logger';
+
 export interface NotificationSoundOptions {
   volume?: number; // 0.0 - 1.0
   duration?: number; // en millisecondes
@@ -27,9 +29,9 @@ class NotificationSoundManager {
     try {
       this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       this.isInitialized = true;
-      console.info('[NotificationSound] AudioContext initialized');
+      logger.info('[NotificationSound]', 'AudioContext initialized');
     } catch (error) {
-      console.error('[NotificationSound] Failed to initialize AudioContext:', error);
+      logger.error('[NotificationSound]', 'Failed to initialize AudioContext', { error });
     }
   }
 
@@ -81,7 +83,7 @@ class NotificationSoundManager {
     if (!this.audioContext) {
       this.initialize();
       if (!this.audioContext) {
-        console.warn('[NotificationSound] AudioContext not available');
+        logger.warn('[NotificationSound]', 'AudioContext not available');
         return;
       }
     }
@@ -126,7 +128,7 @@ class NotificationSoundManager {
         currentTime += duration;
       }
     } catch (error) {
-      console.error('[NotificationSound] Failed to play sound:', error);
+      logger.error('[NotificationSound]', 'Failed to play sound', { error });
     }
   }
 
@@ -142,7 +144,7 @@ class NotificationSoundManager {
    */
   dispose(): void {
     if (this.audioContext) {
-      this.audioContext.close().catch(console.error);
+      this.audioContext.close().catch((err) => logger.error('[NotificationSound]', 'Failed to close AudioContext', { error: err }));
       this.audioContext = null;
       this.isInitialized = false;
     }
@@ -167,7 +169,7 @@ export async function playNotificationSound(
 ): Promise<void> {
   // Vérifier si les sons sont activés
   if (preferences?.soundEnabled === false) {
-    console.debug('[NotificationSound] Sound disabled in preferences');
+    logger.debug('[NotificationSound]', 'Sound disabled in preferences');
     return;
   }
 
@@ -184,14 +186,14 @@ export async function playNotificationSound(
       : currentTime >= dndStartTime || currentTime <= dndEndTime;
 
     if (isDndActive) {
-      console.debug('[NotificationSound] Sound muted (DND mode active)');
+      logger.debug('[NotificationSound]', 'Sound muted (DND mode active)');
       return;
     }
   }
 
   // Vérifier le support
   if (!notificationSoundManager.isSupported()) {
-    console.warn('[NotificationSound] Web Audio API not supported');
+    logger.warn('[NotificationSound]', 'Web Audio API not supported');
     return;
   }
 

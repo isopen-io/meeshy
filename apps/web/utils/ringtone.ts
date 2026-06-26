@@ -4,6 +4,8 @@
  * Supports: Web Audio API (desktop) + HTML Audio fallback (mobile) + Vibration (mobile)
  */
 
+import { logger } from '@/utils/logger';
+
 // Detect iOS Safari
 const isIOSSafari = (): boolean => {
   if (typeof window === 'undefined') return false;
@@ -56,7 +58,7 @@ export class Ringtone {
       this.htmlAudio.load();
 
     } catch (error) {
-      console.error('[Ringtone] Failed to initialize HTML Audio:', error);
+      logger.error('[Ringtone]', 'Failed to initialize HTML Audio', { error });
     }
   }
 
@@ -86,19 +88,19 @@ export class Ringtone {
 
           if (playPromise !== undefined) {
             playPromise.catch((error) => {
-              console.warn('[Ringtone] HTML Audio play blocked (expected on iOS):', error.message);
+              logger.warn('[Ringtone]', 'HTML Audio play blocked (expected on iOS)', { message: error.message });
               // Silently fail - vibration will still work!
             });
           }
         } catch (error) {
-          console.warn('[Ringtone] HTML Audio error:', error);
+          logger.warn('[Ringtone]', 'HTML Audio error', { error });
         }
       } else {
         // Use Web Audio API on desktop
         await this.playWithWebAudio();
       }
     } catch (error) {
-      console.error('[Ringtone] Failed to play:', error);
+      logger.error('[Ringtone]', 'Failed to play', { error });
     }
   }
 
@@ -123,7 +125,7 @@ export class Ringtone {
       // Play ringtone pattern (classic two-tone ring)
       this.playRingPattern();
     } catch (error) {
-      console.error('[Ringtone] Web Audio API failed:', error);
+      logger.error('[Ringtone]', 'Web Audio API failed', { error });
     }
   }
 
@@ -149,7 +151,7 @@ export class Ringtone {
       }, 2000);
 
     } catch (error) {
-      console.warn('[Ringtone] Vibration failed:', error);
+      logger.warn('[Ringtone]', 'Vibration failed', { error });
     }
   }
 
@@ -296,6 +298,6 @@ export async function unlockAudio(): Promise<void> {
       audio.muted = false;
     }
   } catch (error) {
-    console.warn('[Ringtone] Audio unlock failed (may not be needed):', error);
+    logger.warn('[Ringtone]', 'Audio unlock failed (may not be needed)', { error });
   }
 }

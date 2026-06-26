@@ -3,6 +3,8 @@
  * Rassemble toutes les informations utiles sur l'appareil, la configuration et la localisation
  */
 
+import { logger } from '@/utils/logger';
+
 export interface ErrorContext {
   // Informations de base
   timestamp: string;
@@ -284,7 +286,7 @@ export async function sendErrorContext(context: ErrorContext): Promise<boolean> 
     });
     return response.ok;
   } catch (error) {
-    console.error('[Error Context] Failed to send error context:', error);
+    logger.error('[ErrorContextCollector]', 'Failed to send error context', { error });
     return false;
   }
 }

@@ -2,6 +2,7 @@
  * Outil de diagnostic pour déboguer les problèmes de connexion WebSocket
  */
 
+import { logger } from '@/utils/logger';
 import { authManager } from '@/services/auth-manager.service';
 
 export interface WebSocketDiagnostics {
@@ -171,34 +172,7 @@ export function getWebSocketDiagnostics(): WebSocketDiagnostics {
  */
 export function printWebSocketDiagnostics(): void {
   const diagnostics = getWebSocketDiagnostics();
-  
-  console.group('🔍 DIAGNOSTICS WEBSOCKET');
-  
-  console.group('👤 État Utilisateur');
-  if (diagnostics.userState.hasUser) {
-  }
-  console.groupEnd();
-  
-  console.group('🔐 Tokens');
-  if (diagnostics.tokens.hasAuthToken) {
-  }
-  if (diagnostics.tokens.hasSessionToken) {
-  }
-  console.groupEnd();
-  
-  console.group('🔌 État Socket');
-  if (diagnostics.socketState.socketId) {
-  }
-  console.groupEnd();
-  
-  console.group('⚙️ Configuration');
-  console.groupEnd();
-  
-  console.group('💡 Recommandations');
-  diagnostics.recommendations.forEach(rec => console.log(rec));
-  console.groupEnd();
-  
-  console.groupEnd();
+  logger.info('[WebsocketDiagnostics]', 'DIAGNOSTICS WEBSOCKET', { diagnostics });
 }
 
 /**

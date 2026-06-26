@@ -3,6 +3,7 @@
  * Basés sur l'approche éprouvée de BubbleStreamPage
  */
 
+import { logger } from '@/utils/logger';
 import type { User, Message } from '@/types';
 
 // Configuration des limites de messages (doit correspondre aux variables d'environnement)
@@ -126,7 +127,7 @@ export function handleMessageError(
   content: string,
   onRestoreMessage?: (content: string) => void
 ): string {
-  console.error('❌ Erreur lors de l\'envoi du message:', error);
+  logger.error('[MessagingUtils]', 'Erreur lors de l\'envoi du message', { error });
   
   // Restaurer le message en cas d'erreur
   onRestoreMessage?.(content);

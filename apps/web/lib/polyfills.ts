@@ -3,6 +3,8 @@
  * À importer dans le layout principal avant tout autre code
  */
 
+import { logger } from '@/utils/logger';
+
 // Polyfill pour Promise.allSettled (manquant sur certains Android)
 if (typeof Promise.allSettled === 'undefined') {
   Promise.allSettled = function <T>(promises: Iterable<T | PromiseLike<T>>) {
@@ -37,7 +39,7 @@ if (typeof window !== 'undefined') {
     window.localStorage.setItem('__test__', '1');
     window.localStorage.removeItem('__test__');
   } catch {
-    console.warn('[Polyfill] localStorage not available, using in-memory storage');
+    logger.warn('[polyfills]', 'localStorage not available, using in-memory storage');
 
     // Créer un fallback en mémoire
     const memoryStorage: Record<string, string> = {};
@@ -66,7 +68,7 @@ if (typeof window !== 'undefined') {
 
 // Fix pour IntersectionObserver (ancien Android)
 if (typeof IntersectionObserver === 'undefined' && typeof window !== 'undefined') {
-  console.warn('[Polyfill] IntersectionObserver not available');
+  logger.warn('[polyfills]', 'IntersectionObserver not available');
   const StubObserver = class {
     private _callback: IntersectionObserverCallback;
     constructor(callback: IntersectionObserverCallback) {
@@ -97,4 +99,4 @@ if (typeof navigator !== 'undefined' && !('connection' in navigator)) {
   });
 }
 
-console.info('[Polyfills] Polyfills loaded successfully');
+logger.info('[polyfills]', 'Polyfills loaded successfully');

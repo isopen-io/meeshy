@@ -421,7 +421,7 @@ export class IndexedDBKeyStorageAdapter implements KeyStorageAdapter {
 
     return new Promise((resolve, reject) => {
       transaction.oncomplete = () => {
-        console.log('[IndexedDB] Keys imported successfully');
+        logger.info('[IndexedDBKeyStorage]', 'Keys imported successfully');
         resolve();
       };
       transaction.onerror = () => reject(transaction.error);

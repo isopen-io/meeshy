@@ -3,6 +3,7 @@
  * Maintient la compatibilité avec l'API existante
  */
 
+import { logger } from '@/utils/logger';
 import { translationService } from '@/services/translation.service';
 
 // Service de traduction global
@@ -191,7 +192,7 @@ export async function translateMessage(
     
     return translatedText;
   } catch (error) {
-    console.error('❌ Erreur de traduction:', error);
+    logger.error('[Translation]', 'Erreur de traduction', { error });
     
     // En cas d'erreur, essayer avec un modèle de base
     try {
@@ -212,7 +213,7 @@ export async function translateMessage(
       
       return translatedText;
     } catch (fallbackError) {
-      console.error('❌ Échec de la traduction de secours:', fallbackError);
+      logger.error('[Translation]', 'Échec de la traduction de secours', { error: fallbackError });
       throw new Error('Service de traduction indisponible');
     }
   }

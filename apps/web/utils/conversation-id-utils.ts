@@ -3,6 +3,8 @@
  * Clarification : utiliser `id` (ObjectId) pour les API/WebSocket, `identifier` pour l'affichage/URLs
  */
 
+import { logger } from '@/utils/logger';
+
 /**
  * Vérifie si une chaîne est un ObjectId MongoDB valide
  */
@@ -65,7 +67,7 @@ export function getConversationApiId(conversation: any): string {
   }
   
   // Si pas d'ID valide, on a un problème dans les données
-  console.error('❌ getConversationApiId: Pas d\'ObjectId valide trouvé:', conversation);
+  logger.error('[ConversationIdUtils]', 'getConversationApiId: Pas d\'ObjectId valide trouvé', { conversation });
   throw new Error(`Invalid conversation object: missing valid ObjectId. Got: ${JSON.stringify(conversation)}`);
 }
 
@@ -88,6 +90,6 @@ export function getConversationDisplayId(conversation: any): string {
     return conversation.id;
   }
   
-  console.error('❌ getConversationDisplayId: Ni identifier ni ID trouvé:', conversation);
+  logger.error('[ConversationIdUtils]', 'getConversationDisplayId: Ni identifier ni ID trouvé', { conversation });
   throw new Error(`Invalid conversation object: missing identifier and id. Got: ${JSON.stringify(conversation)}`);
 }

@@ -9,6 +9,7 @@
  * - A/B testing
  */
 
+import { logger } from '@/utils/logger';
 import type { ErrorContext } from './error-context-collector';
 
 /**
@@ -79,7 +80,7 @@ export async function trackEvent(
 
     // Log en dev
     if (process.env.NODE_ENV === 'development') {
-      console.log('[Analytics]', eventName, event);
+      logger.info('[UserAnalyticsCollector]', eventName, { event });
     }
 
     // TODO: Envoyer à votre service d'analytics
@@ -89,7 +90,7 @@ export async function trackEvent(
     //   body: JSON.stringify(event),
     // });
   } catch (error) {
-    console.error('[Analytics] Failed to track event:', error);
+    logger.error('[UserAnalyticsCollector]', 'Failed to track event', { error });
   }
 }
 
@@ -182,7 +183,7 @@ export async function profileUser(userId?: string): Promise<UserAnalyticsContext
 
   // Log en dev
   if (process.env.NODE_ENV === 'development') {
-    console.log('[Analytics] User Profile:', { userId, context });
+    logger.info('[UserAnalyticsCollector]', 'User Profile', { userId, context });
   }
 
   // TODO: Envoyer au backend pour stockage

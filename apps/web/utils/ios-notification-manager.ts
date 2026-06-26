@@ -9,6 +9,8 @@
  * - Permissions: Workflow différent d'Android
  */
 
+import { logger } from '@/utils/logger';
+
 interface IOSInfo {
   isIOS: boolean;
   isIPadOS: boolean;
@@ -41,7 +43,7 @@ class IOSNotificationManager {
    */
   private log(...args: any[]): void {
     if (this.debug) {
-      console.log('[iOS-Notifications]', ...args);
+      logger.info('[IosNotificationManager]', String(args[0]), args.length > 1 ? { details: args.slice(1) } : undefined);
     }
   }
 

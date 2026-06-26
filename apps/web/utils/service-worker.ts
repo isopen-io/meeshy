@@ -4,6 +4,8 @@
  * Implémente l'invalidation complète des caches et des données locales.
  */
 
+import { logger } from '@/utils/logger';
+
 /**
  * Enregistre le service worker et initialise la détection de mise à jour.
  */
@@ -18,7 +20,7 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
       updateViaCache: 'none',
     });
 
-    console.log('[SW] Registered:', registration.scope);
+    logger.info('[ServiceWorker]', 'Registered', { scope: registration.scope });
 
     // Détection immédiate au chargement
     if (registration.waiting) {
@@ -42,22 +44,22 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (refreshing) return;
       refreshing = true;
-      console.log('[SW] Controller changed. Reloading app...');
+      logger.info('[ServiceWorker]', 'Controller changed. Reloading app...');
       window.location.reload();
     });
 
     // 1. Vérifier les mises à jour immédiatement au démarrage
-    registration.update().catch(console.warn);
+    registration.update().catch((err) => logger.warn('[ServiceWorker]', 'Update check failed', { error: err }));
 
     // 2. Vérifier les mises à jour quand l'utilisateur revient sur l'onglet (Refocus)
     // C'est un pattern efficace utilisé par beaucoup d'apps (WhatsApp, Slack)
     window.addEventListener('focus', () => {
-      registration.update().catch(console.warn);
+      registration.update().catch((err) => logger.warn('[ServiceWorker]', 'Update check on focus failed', { error: err }));
     });
 
     return registration;
   } catch (error) {
-    console.error('[SW] Registration failed:', error);
+    logger.error('[ServiceWorker]', 'Registration failed', { error });
     return null;
   }
 }
@@ -67,7 +69,7 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
  * Nettoie les caches d'assets ET les données IndexedDB.
  */
 export async function performFullAppInvalidationAndReload(registration: ServiceWorkerRegistration) {
-  console.log('[SW] Starting full application invalidation...');
+  logger.info('[ServiceWorker]', 'Starting full application invalidation...');
 
   try {
     // 0. Déconnecter gracieusement le WebSocket AVANT le reload
@@ -75,16 +77,16 @@ export async function performFullAppInvalidationAndReload(registration: ServiceW
     try {
       const { meeshySocketIOService } = await import('@/services/meeshy-socketio.service');
       meeshySocketIOService.disconnectForUpdate();
-      console.log('[SW] WebSocket gracefully disconnected for update.');
+      logger.info('[ServiceWorker]', 'WebSocket gracefully disconnected for update.');
     } catch (e) {
-      console.warn('[SW] Could not disconnect WebSocket:', e);
+      logger.warn('[ServiceWorker]', 'Could not disconnect WebSocket', { error: e });
     }
 
     // 1. Invalider tous les caches de l'API CacheStorage
     if ('caches' in window) {
       const cacheKeys = await caches.keys();
       await Promise.all(cacheKeys.map(key => caches.delete(key)));
-      console.log('[SW] CacheStorage cleared.');
+      logger.info('[ServiceWorker]', 'CacheStorage cleared.');
     }
 
     // 2. Invalider l'IndexedDB (Données React Query / Meeshy)
@@ -95,8 +97,8 @@ export async function performFullAppInvalidationAndReload(registration: ServiceW
       const dbs = ['keyval-store', 'meeshy-rq-cache'];
       dbs.forEach(dbName => {
         const req = indexedDB.deleteDatabase(dbName);
-        req.onerror = () => console.warn(`[SW] Could not delete DB: ${dbName}`);
-        req.onsuccess = () => console.log(`[SW] Deleted DB: ${dbName}`);
+        req.onerror = () => logger.warn('[ServiceWorker]', `Could not delete DB: ${dbName}`);
+        req.onsuccess = () => logger.info('[ServiceWorker]', `Deleted DB: ${dbName}`);
       });
     }
 
@@ -108,7 +110,7 @@ export async function performFullAppInvalidationAndReload(registration: ServiceW
       window.location.reload();
     }
   } catch (error) {
-    console.error('[SW] Critical error during invalidation:', error);
+    logger.error('[ServiceWorker]', 'Critical error during invalidation', { error });
     // On reload quand même pour essayer de restaurer un état stable
     window.location.reload();
   }
@@ -118,7 +120,7 @@ export async function performFullAppInvalidationAndReload(registration: ServiceW
  * Notifie l'interface via un CustomEvent
  */
 function notifyUpdateAvailable(registration: ServiceWorkerRegistration) {
-  console.log('[SW] New build detected. Waiting for user confirmation.');
+  logger.info('[ServiceWorker]', 'New build detected. Waiting for user confirmation.');
   window.dispatchEvent(
     new CustomEvent('sw-update-available', {
       detail: { registration },

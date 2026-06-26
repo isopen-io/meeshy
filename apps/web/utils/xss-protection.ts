@@ -14,6 +14,8 @@
  * @version 1.0.0
  */
 
+import { logger } from '@/utils/logger';
+
 // Server-side fallback: DOMPurify requires a window object
 // On the server, we'll use a simple regex-based sanitization
 const isBrowser = typeof window !== 'undefined';
@@ -159,7 +161,7 @@ export function sanitizeUrl(
 
   // Enforce max length
   if (trimmed.length > SANITIZE_CONFIG.MAX_URL_LENGTH) {
-    console.warn('[XSS Protection] URL too long, rejected');
+    logger.warn('[XssProtection]', 'URL too long, rejected');
     return null;
   }
 
@@ -168,25 +170,25 @@ export function sanitizeUrl(
 
     // Check protocol
     if (!allowedProtocols.includes(url.protocol)) {
-      console.warn(`[XSS Protection] Invalid protocol: ${url.protocol}`);
+      logger.warn('[XssProtection]', `Invalid protocol: ${url.protocol}`);
       return null;
     }
 
     // Block javascript: protocol (defense in depth)
     if (url.protocol === 'javascript:') {
-      console.error('[XSS Protection] BLOCKED javascript: protocol');
+      logger.error('[XssProtection]', 'BLOCKED javascript: protocol');
       return null;
     }
 
     // Block data: URLs (can contain scripts)
     if (url.protocol === 'data:') {
-      console.warn('[XSS Protection] Blocked data: URL');
+      logger.warn('[XssProtection]', 'Blocked data: URL');
       return null;
     }
 
     return url.toString();
   } catch (error) {
-    console.warn('[XSS Protection] Invalid URL format:', error);
+    logger.warn('[XssProtection]', 'Invalid URL format', { error });
     return null;
   }
 }
@@ -233,7 +235,7 @@ export function sanitizeJson(input: any): any {
   for (const [key, value] of Object.entries(input)) {
     // Block dangerous keys
     if (key.startsWith('__') || key.startsWith('$') || key === 'constructor' || key === 'prototype') {
-      console.warn(`[XSS Protection] Blocked dangerous key: ${key}`);
+      logger.warn('[XssProtection]', `Blocked dangerous key: ${key}`);
       continue;
     }
 

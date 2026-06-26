@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { User } from '@/types';
 import { buildApiUrl } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
@@ -140,7 +141,7 @@ export async function checkAuthStatus(): Promise<AuthState> {
         isAnonymous: false
       };
     } catch (error) {
-      console.error('[AUTH_UTILS] Erreur vérification auth:', error);
+      logger.error('[Auth]', 'Erreur vérification auth', { error });
       return {
         isAuthenticated: false,
         user: null,
@@ -182,7 +183,7 @@ export async function checkAuthStatus(): Promise<AuthState> {
         isAnonymous: false
       };
     } catch (error) {
-      console.error('Erreur vérification session anonyme:', error);
+      logger.error('[Auth]', 'Erreur vérification session anonyme', { error });
       return {
         isAuthenticated: false,
         user: null,

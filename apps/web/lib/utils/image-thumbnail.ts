@@ -3,6 +3,8 @@
  * Utilise Canvas pour réduire la taille et améliorer les performances
  */
 
+import { logger } from '@/utils/logger';
+
 interface ThumbnailOptions {
   maxWidth?: number;
   maxHeight?: number;
@@ -121,7 +123,7 @@ export async function createThumbnailsBatch(
           const thumbnailUrl = await createImageThumbnail(file, options);
           return { fileKey, thumbnailUrl };
         } catch (error) {
-          console.warn('Erreur création miniature:', error);
+          logger.warn('[imageThumbnail]', 'Erreur création miniature', { error });
           return null;
         }
       }

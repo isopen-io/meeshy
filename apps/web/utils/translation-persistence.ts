@@ -2,6 +2,7 @@
  * Utilitaires pour la persistance des traductions de messages
  */
 
+import { logger } from '@/utils/logger';
 import type { Translation } from '@/types';
 
 const STORAGE_KEY_PREFIX = 'meeshy_message_translations_';
@@ -29,7 +30,7 @@ export function saveMessageTranslations(messageId: string, translations: Transla
     
     localStorage.setItem(getStorageKey(messageId), JSON.stringify(data));
   } catch (error) {
-    console.warn('Erreur lors de la sauvegarde des traductions:', error);
+    logger.warn('[TranslationPersistence]', 'Erreur lors de la sauvegarde des traductions', { error });
   }
 }
 
@@ -61,7 +62,7 @@ export function loadMessageTranslations(messageId: string): { translations: Tran
       showingOriginal: data.showingOriginal ?? true
     };
   } catch (error) {
-    console.warn('Erreur lors du chargement des traductions:', error);
+    logger.warn('[TranslationPersistence]', 'Erreur lors du chargement des traductions', { error });
     return null;
   }
 }
@@ -74,7 +75,7 @@ export function removeMessageTranslations(messageId: string): void {
     if (typeof window === 'undefined') return;
     localStorage.removeItem(getStorageKey(messageId));
   } catch (error) {
-    console.warn('Erreur lors de la suppression des traductions:', error);
+    logger.warn('[TranslationPersistence]', 'Erreur lors de la suppression des traductions', { error });
   }
 }
 
@@ -114,7 +115,7 @@ export function cleanupExpiredTranslations(): void {
     if (keysToRemove.length > 0) {
     }
   } catch (error) {
-    console.warn('Erreur lors du nettoyage des traductions:', error);
+    logger.warn('[TranslationPersistence]', 'Erreur lors du nettoyage des traductions', { error });
   }
 }
 
