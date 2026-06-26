@@ -3632,6 +3632,11 @@ extension CallManager: VideoSurvivalActuating {
     private func applySurvivalVideoSend(enabled: Bool) async -> Bool {
         // Only act while the user still wants video and we're in an active call.
         guard isVideoEnabled, let callId = currentCallId else { return false }
+        // Do NOT renegotiate during an ICE restart: the SDP exchange is already
+        // in flight, and overlapping it with a survival-controller downgrade or
+        // resume causes SDP glare. The survival controller will re-evaluate once
+        // the call reaches .connected and stats start flowing again.
+        if case .reconnecting = callState { return false }
         // Do NOT resume video if an OS-level suspension is active: a CallKit hold
         // (cellular pre-emption) or background entry both signal "no camera" to the
         // peer. A network-quality recovery must not override either of those signals

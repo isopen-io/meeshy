@@ -2699,3 +2699,40 @@ final class CallManagerICERestartStaleOfferTests: XCTestCase {
         )
     }
 }
+
+// MARK: - Survival controller ICE-restart guard
+
+@MainActor
+final class CallManagerSurvivalControllerReconnectGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// `applySurvivalVideoSend` must bail out when the call is in `.reconnecting`
+    /// state. During ICE restart the SDP exchange is already in flight; overlapping
+    /// it with a survival-controller renegotiation causes SDP glare that breaks the
+    /// reconnection.
+    func test_applySurvivalVideoSend_guardsAgainstReconnectingState() throws {
+        let source = try callManagerSource()
+
+        guard let fnRange = source.range(of: "private func applySurvivalVideoSend(enabled: Bool) async -> Bool {") else {
+            XCTFail("applySurvivalVideoSend not found"); return
+        }
+        let fnBody = String(source[fnRange.upperBound...].prefix(800))
+
+        // The guard must pattern-match on .reconnecting to detect that an ICE
+        // restart is in progress.
+        XCTAssertTrue(
+            fnBody.contains("case .reconnecting = callState"),
+            "applySurvivalVideoSend must guard 'if case .reconnecting = callState { return false }' " +
+            "to prevent SDP glare when the survival controller fires during ICE restart"
+        )
+    }
+}
