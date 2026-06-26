@@ -1076,6 +1076,13 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         videoFilterDelegate = nil
         localAudioTrack?.isEnabled = false
         localVideoTrack_?.isEnabled = false
+        // Detach sender tracks before close() so libwebrtc releases its
+        // internal track references synchronously. Without this the ObjC
+        // bridge holds a strong reference to RTCMediaStreamTrack until the
+        // RTCPeerConnection object is deallocated, which can outlive the
+        // call if the peerConnection is retained by a pending callback.
+        audioTransceiver?.sender.track = nil
+        videoTransceiver?.sender.track = nil
         peerConnection?.close()
         peerConnection = nil
         localAudioTrack = nil

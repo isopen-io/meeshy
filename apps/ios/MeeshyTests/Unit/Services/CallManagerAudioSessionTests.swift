@@ -1926,6 +1926,44 @@ final class CallManagerHardeningTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
+    /// P2PWebRTCClient.disconnect() must nil the transceiver sender tracks before
+    /// calling peerConnection.close() to release libwebrtc's internal track refs.
+    /// Without this, RTCMediaStreamTrack objects survive until the RTCPeerConnection
+    /// is deallocated, which can happen long after the call ends if a pending
+    /// callback holds a strong reference to it.
+    func test_p2pWebRTCClient_disconnect_nilsTransceiverSenderTracksBeforeClose() throws {
+        let source = try p2pClientSource()
+        guard let disconnectRange = source.range(of: "func disconnect()") else {
+            XCTFail("disconnect() not found in P2PWebRTCClient"); return
+        }
+        guard let closingBrace = source.range(of: "\n    }", range: disconnectRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not isolate disconnect() body"); return
+        }
+        let body = String(source[disconnectRange.upperBound..<closingBrace.lowerBound])
+
+        XCTAssertTrue(
+            body.contains("audioTransceiver?.sender.track = nil"),
+            "disconnect() must nil audioTransceiver.sender.track before close() — " +
+            "libwebrtc holds a strong ref to the track until the peer connection is " +
+            "deallocated, which can outlive the call if a pending callback retains it")
+        XCTAssertTrue(
+            body.contains("videoTransceiver?.sender.track = nil"),
+            "disconnect() must nil videoTransceiver.sender.track before close() — " +
+            "same reasoning as the audio track: explicit nil forces ARC to collect " +
+            "the camera capture pipeline at call teardown, not at some later deinit")
+
+        // Confirm ordering: sender.track nils must appear before peerConnection.close()
+        guard let audioNilIdx = body.range(of: "audioTransceiver?.sender.track = nil"),
+              let closeIdx = body.range(of: "peerConnection?.close()") else {
+            XCTFail("Could not locate both sender.track nil and peerConnection.close() in disconnect() body"); return
+        }
+        XCTAssertTrue(
+            audioNilIdx.upperBound < closeIdx.lowerBound,
+            "audioTransceiver?.sender.track = nil must precede peerConnection?.close() — " +
+            "after close() the sender is stopped; the nil must happen before to ensure " +
+            "the track is detached while the transceiver is still in a valid state")
+    }
+
     /// P2PWebRTCClient.disconnect() must reset pendingIceRestart so the flag
     /// never leaks into the next call and causes a spurious ICE restart offer.
     func test_p2pWebRTCClient_disconnect_resetsPendingIceRestart() throws {
