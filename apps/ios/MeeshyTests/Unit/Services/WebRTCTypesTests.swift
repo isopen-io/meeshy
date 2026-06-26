@@ -890,3 +890,45 @@ final class AddTransportCCTests: XCTestCase {
         )
     }
 }
+
+// MARK: - IceServer TURN URL validation tests
+
+/// Covers the `IceServer.hasTURNURL` property that guards the fault-log
+/// in `P2PWebRTCClient.configure` / `updateIceServers`.
+@MainActor
+final class IceServerTURNValidationTests: XCTestCase {
+
+    func test_hasTURNURL_falseForSTUNOnly() {
+        let server = IceServer(urls: ["stun:stun.l.google.com:19302"], username: nil, credential: nil)
+        XCTAssertFalse(server.hasTURNURL)
+    }
+
+    func test_hasTURNURL_trueForTURN() {
+        let server = IceServer(urls: ["turn:turn.meeshy.me:3478"], username: "user", credential: "pass")
+        XCTAssertTrue(server.hasTURNURL)
+    }
+
+    func test_hasTURNURL_trueForTURNS() {
+        let server = IceServer(urls: ["turns:turn.meeshy.me:5349?transport=tcp"], username: "u", credential: "p")
+        XCTAssertTrue(server.hasTURNURL)
+    }
+
+    func test_hasTURNURL_falseForEmptyURLs() {
+        let server = IceServer(urls: [], username: nil, credential: nil)
+        XCTAssertFalse(server.hasTURNURL)
+    }
+
+    func test_hasTURNURL_trueWhenMixedSTUNAndTURN() {
+        let server = IceServer(
+            urls: ["stun:stun.l.google.com:19302", "turn:turn.meeshy.me:3478"],
+            username: "user",
+            credential: "pass"
+        )
+        XCTAssertTrue(server.hasTURNURL)
+    }
+
+    func test_defaultServers_containsNoTURN() {
+        let hasTURN = IceServer.defaultServers.contains(where: \.hasTURNURL)
+        XCTAssertFalse(hasTURN, "defaultServers are STUN-only fallbacks — the fault-log fires when TURN is absent")
+    }
+}

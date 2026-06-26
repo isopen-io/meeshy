@@ -26,6 +26,10 @@ struct IceServer: Sendable {
     let username: String?
     let credential: String?
 
+    var hasTURNURL: Bool {
+        urls.contains { $0.hasPrefix("turn:") || $0.hasPrefix("turns:") }
+    }
+
     static let defaultServers: [IceServer] = [
         IceServer(urls: ["stun:stun.l.google.com:19302"], username: nil, credential: nil),
         IceServer(urls: ["stun:stun1.l.google.com:19302"], username: nil, credential: nil),

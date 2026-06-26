@@ -147,7 +147,11 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
 
         peerConnection = pc
         sessionGeneration += 1
-        Logger.webrtc.info("Peer connection created with \(iceServers.count) ICE servers")
+        let hasTURN = iceServers.contains(where: \.hasTURNURL)
+        if !hasTURN {
+            Logger.webrtc.fault("No TURN URL in ICE server list — calls through symmetric NAT will fail. Add a TURN server to the gateway TURN credential endpoint.")
+        }
+        Logger.webrtc.info("Peer connection created with \(iceServers.count) ICE servers (hasTURN=\(hasTURN, privacy: .public))")
     }
 
     func updateIceServers(_ iceServers: [IceServer]) {
@@ -161,7 +165,11 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             )
         }
         pc.setConfiguration(config)
-        Logger.webrtc.info("ICE servers updated to \(iceServers.count) servers (no reconnect)")
+        let hasTURN = iceServers.contains(where: \.hasTURNURL)
+        if !hasTURN {
+            Logger.webrtc.fault("updateIceServers: no TURN URL — symmetric NAT calls will fail.")
+        }
+        Logger.webrtc.info("ICE servers updated to \(iceServers.count) servers (hasTURN=\(hasTURN, privacy: .public), no reconnect)")
     }
 
     // §3.4 — store the deterministic polite/impolite role (computed by the
