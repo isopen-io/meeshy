@@ -34,8 +34,10 @@ export class MeeshySocketIOHandler {
     this.socketIOManager = new MeeshySocketIOManager(httpServer, this.prisma, this.translationService);
     await this.socketIOManager.initialize();
 
-    // Ajouter une route pour les statistiques Socket.IO
-    fastify.get('/api/socketio/stats', async (request, reply) => {
+    // Ajouter une route pour les statistiques Socket.IO (admin seulement)
+    fastify.get('/api/socketio/stats', {
+      onRequest: [(fastify as any).authenticate, requireAdmin]
+    }, async (request, reply) => {
       try {
         const stats = this.socketIOManager.getStats();
         reply.send({
