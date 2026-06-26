@@ -422,7 +422,7 @@ class ConversationListViewModel: ObservableObject {
         // → filter + group in one pass → single @Published update (groupedConversations).
         // Eliminates the old 3-broadcast chain ($conversations → $filteredConversations → $groupedConversations).
         Publishers.CombineLatest4($conversations, $searchText, $selectedFilter, $userCategories)
-            .debounce(for: .milliseconds(150), scheduler: DispatchQueue.main)
+            .debounce(for: .milliseconds(16), scheduler: DispatchQueue.main)
             .sink { [weak self] (convs, text, filter, categories) in
                 guard let self else { return }
                 let filtered = Self.filterConversations(convs, searchText: text, filter: filter)
