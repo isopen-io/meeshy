@@ -343,6 +343,21 @@ final class ApplyVideoQualitySourceGuardTests: XCTestCase {
             "applyVideoEncoding — using raw level values bypasses the thermal ceiling."
         )
     }
+
+    func test_qualityLevelDebounce_usesQualityThresholdsConstant() throws {
+        // Regression guard: the quality-level debounce gate in processStats must not
+        // hardcode 5.0 — it must reference QualityThresholds.qualityLevelDebounceSeconds
+        // so future tuning is done in one place.
+        let source = try webRTCServiceSource()
+        XCTAssertTrue(
+            source.contains("qualityLevelDebounceSeconds"),
+            "processStats debounce gate must use QualityThresholds.qualityLevelDebounceSeconds"
+        )
+        XCTAssertFalse(
+            source.contains("< 5.0"),
+            "Hardcoded < 5.0 debounce in processStats — replace with QualityThresholds.qualityLevelDebounceSeconds"
+        )
+    }
 }
 
 // MARK: - Disconnect debounce source guards

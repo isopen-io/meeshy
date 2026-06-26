@@ -550,4 +550,42 @@ final class P2PWebRTCClientPerfectNegotiationTests: XCTestCase {
             "Hardcoded .seconds(15) in startDataChannelPing — replace with QualityThresholds.dataChannelPingIntervalSeconds"
         )
     }
+
+    func test_p2pClient_opusMunge_usesQualityThresholdsConstants() throws {
+        // Regression guard: mungeOpusSDP must not hardcode 64000 / 48000.
+        let source = try p2pClientSource()
+        XCTAssertTrue(
+            source.contains("opusFmtpMaxAverageBitrate"),
+            "mungeOpusSDP must reference QualityThresholds.opusFmtpMaxAverageBitrate"
+        )
+        XCTAssertTrue(
+            source.contains("opusFmtpMaxPlaybackRate"),
+            "mungeOpusSDP must reference QualityThresholds.opusFmtpMaxPlaybackRate"
+        )
+        XCTAssertFalse(
+            source.contains("\"maxaveragebitrate=64000\""),
+            "Hardcoded maxaveragebitrate=64000 in mungeOpusSDP — replace with QualityThresholds.opusFmtpMaxAverageBitrate"
+        )
+        XCTAssertFalse(
+            source.contains("\"maxplaybackrate=48000\""),
+            "Hardcoded maxplaybackrate=48000 in mungeOpusSDP — replace with QualityThresholds.opusFmtpMaxPlaybackRate"
+        )
+    }
+
+    func test_p2pClient_videoBitrateHints_usesQualityThresholdsConstants() throws {
+        // Regression guard: addVideoBitrateHints must not hardcode 2500 / 100.
+        let source = try p2pClientSource()
+        XCTAssertTrue(
+            source.contains("sdpVideoMaxBitrateKbps"),
+            "addVideoBitrateHints must reference QualityThresholds.sdpVideoMaxBitrateKbps"
+        )
+        XCTAssertTrue(
+            source.contains("sdpVideoMinBitrateKbps"),
+            "addVideoBitrateHints must reference QualityThresholds.sdpVideoMinBitrateKbps"
+        )
+        XCTAssertFalse(
+            source.contains("x-google-max-bitrate=2500"),
+            "Hardcoded x-google-max-bitrate=2500 — replace with QualityThresholds.sdpVideoMaxBitrateKbps"
+        )
+    }
 }

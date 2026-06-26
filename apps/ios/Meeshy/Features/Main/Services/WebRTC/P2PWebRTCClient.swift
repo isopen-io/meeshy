@@ -1134,11 +1134,11 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         // 9e663039 — the PT/PT bug was the real cause, not DTX.
         // Reference §3.8 + ADR-4.
         let opusParams = [
-            "maxaveragebitrate=64000",
+            "maxaveragebitrate=\(QualityThresholds.opusFmtpMaxAverageBitrate)",
             "stereo=1",
             "useinbandfec=1",
             "usedtx=1",
-            "maxplaybackrate=48000"
+            "maxplaybackrate=\(QualityThresholds.opusFmtpMaxPlaybackRate)"
         ]
         let paramString = opusParams.joined(separator: ";")
 
@@ -1223,7 +1223,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             if lines[i].hasPrefix("m=") { inVideoSection = false }
             guard inVideoSection && lines[i].hasPrefix("a=fmtp:") else { continue }
             guard !lines[i].contains("x-google-max-bitrate") else { continue }
-            lines[i] += ";x-google-max-bitrate=2500;x-google-min-bitrate=100"
+            lines[i] += ";x-google-max-bitrate=\(QualityThresholds.sdpVideoMaxBitrateKbps);x-google-min-bitrate=\(QualityThresholds.sdpVideoMinBitrateKbps)"
         }
 
         return lines.joined(separator: "\r\n")

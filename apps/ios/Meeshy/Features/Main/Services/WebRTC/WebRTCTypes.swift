@@ -575,6 +575,36 @@ enum QualityThresholds {
     /// auto-resets to healthy. 15 s is long enough to be meaningful without
     /// persisting after a transient blip self-heals.
     static let remoteQualityResetSeconds: TimeInterval = 15
+
+    // MARK: Opus fmtp codec hints (mungeOpusSDP in P2PWebRTCClient)
+
+    /// `maxaveragebitrate` fmtp hint for Opus. 64 kbps matches the
+    /// `defaultBitrate` adaptation target — the SDP hint is the absolute
+    /// encoder ceiling; the RtpEncoding max handles the dynamic range.
+    static let opusFmtpMaxAverageBitrate: Int = 64_000
+    /// `maxplaybackrate` fmtp hint for Opus. 48 kHz = full wideband audio,
+    /// the native sample rate of the Opus codec and WebRTC's internal APM.
+    static let opusFmtpMaxPlaybackRate: Int = 48_000
+
+    // MARK: SDP x-google-bitrate hints (addVideoBitrateHints in P2PWebRTCClient)
+
+    /// `x-google-max-bitrate` hint injected into video fmtp lines. 2 500 kbps
+    /// aligns with `maxVideoBitrate` (2.5 Mbps) — the open-loop encoder ceiling
+    /// when TWCC GCC hasn't yet provided a BWE estimate. Not a hard cap; GCC
+    /// overrides once probing data arrives.
+    static let sdpVideoMaxBitrateKbps: Int = 2_500
+    /// `x-google-min-bitrate` hint injected into video fmtp lines. 100 kbps =
+    /// `minVideoBitrate` expressed in kbps (the SDP hint unit), ensuring the
+    /// encoder never drops below the critical-tier floor on startup.
+    static let sdpVideoMinBitrateKbps: Int = 100
+
+    // MARK: Quality-level debounce (WebRTCService)
+
+    /// Minimum interval between consecutive video quality-level upgrades.
+    /// 5 s prevents thrashing when stats oscillate around a tier boundary —
+    /// a single RTT spike doesn't immediately flip the encoder back to a
+    /// lower tier once it has stabilised. Used in `processStats` debounce gate.
+    static let qualityLevelDebounceSeconds: TimeInterval = 5.0
 }
 
 // MARK: - Video Quality Level (§4.8)

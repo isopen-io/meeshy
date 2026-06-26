@@ -611,3 +611,91 @@ final class QualityThresholdsPiPTests: XCTestCase {
         )
     }
 }
+
+// MARK: - Codec hint constants (Opus fmtp + SDP x-google-bitrate)
+
+@MainActor
+final class QualityThresholdsCodecHintsTests: XCTestCase {
+
+    // MARK: Opus fmtp
+
+    func test_opusFmtpMaxAverageBitrate_is64kbps() {
+        XCTAssertEqual(QualityThresholds.opusFmtpMaxAverageBitrate, 64_000,
+                       "maxaveragebitrate must equal defaultBitrate (64 kbps)")
+    }
+
+    func test_opusFmtpMaxAverageBitrate_equalsDefaultBitrate() {
+        XCTAssertEqual(QualityThresholds.opusFmtpMaxAverageBitrate,
+                       QualityThresholds.defaultBitrate,
+                       "Opus fmtp ceiling must stay in sync with the adaptation defaultBitrate")
+    }
+
+    func test_opusFmtpMaxPlaybackRate_is48kHz() {
+        XCTAssertEqual(QualityThresholds.opusFmtpMaxPlaybackRate, 48_000,
+                       "maxplaybackrate must be 48 000 Hz — native Opus / WebRTC APM sample rate")
+    }
+
+    func test_opusFmtpMaxPlaybackRate_isAboveMaxAverageBitrate() {
+        // maxplaybackrate is a sample rate (Hz), maxaveragebitrate is a bitrate (bps).
+        // They are not the same unit, but the sample rate will always exceed the
+        // bitrate numerically; this catches an accidental value swap between the two.
+        XCTAssertGreaterThan(
+            QualityThresholds.opusFmtpMaxPlaybackRate,
+            QualityThresholds.opusFmtpMaxAverageBitrate,
+            "maxplaybackrate (Hz) should exceed maxaveragebitrate (bps) numerically — value swap guard"
+        )
+    }
+
+    // MARK: SDP x-google-bitrate hints
+
+    func test_sdpVideoMaxBitrateKbps_is2500() {
+        XCTAssertEqual(QualityThresholds.sdpVideoMaxBitrateKbps, 2_500,
+                       "x-google-max-bitrate must be 2 500 kbps (aligns with maxVideoBitrate)")
+    }
+
+    func test_sdpVideoMinBitrateKbps_is100() {
+        XCTAssertEqual(QualityThresholds.sdpVideoMinBitrateKbps, 100,
+                       "x-google-min-bitrate must be 100 kbps (aligns with minVideoBitrate)")
+    }
+
+    func test_sdpVideoHints_maxExceedsMin() {
+        XCTAssertGreaterThan(
+            QualityThresholds.sdpVideoMaxBitrateKbps,
+            QualityThresholds.sdpVideoMinBitrateKbps,
+            "x-google-max-bitrate must exceed x-google-min-bitrate"
+        )
+    }
+
+    func test_sdpVideoMaxBitrateKbps_matchesMaxVideoBitrate_inKbps() {
+        // maxVideoBitrate is in bps; sdpVideoMaxBitrateKbps is in kbps.
+        // The SDP hint must equal maxVideoBitrate / 1000 so GCC's starting
+        // encoder ceiling matches the open-loop cap.
+        XCTAssertEqual(
+            QualityThresholds.sdpVideoMaxBitrateKbps,
+            QualityThresholds.maxVideoBitrate / 1000,
+            "sdpVideoMaxBitrateKbps must equal maxVideoBitrate / 1000"
+        )
+    }
+
+    func test_sdpVideoMinBitrateKbps_matchesMinVideoBitrate_inKbps() {
+        XCTAssertEqual(
+            QualityThresholds.sdpVideoMinBitrateKbps,
+            QualityThresholds.minVideoBitrate / 1000,
+            "sdpVideoMinBitrateKbps must equal minVideoBitrate / 1000"
+        )
+    }
+
+    // MARK: Quality-level debounce
+
+    func test_qualityLevelDebounceSeconds_is5() {
+        XCTAssertEqual(QualityThresholds.qualityLevelDebounceSeconds, 5.0, accuracy: 0.001,
+                       "Quality-level debounce must be 5 s to prevent encoder thrashing on boundary oscillation")
+    }
+
+    func test_qualityLevelDebounceSeconds_inPlausibleRange() {
+        XCTAssertGreaterThan(QualityThresholds.qualityLevelDebounceSeconds, 1.0,
+                             "Below 1 s the debounce becomes ineffective against RTT oscillation")
+        XCTAssertLessThan(QualityThresholds.qualityLevelDebounceSeconds, 30.0,
+                          "Above 30 s quality transitions would lag too far behind actual network changes")
+    }
+}

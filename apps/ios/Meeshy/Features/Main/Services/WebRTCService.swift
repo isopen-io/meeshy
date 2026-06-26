@@ -322,7 +322,7 @@ final class WebRTCService {
         }
 
         let now = Date()
-        if let debounce = qualityLevelDebounceDate, now.timeIntervalSince(debounce) < 5.0 {
+        if let debounce = qualityLevelDebounceDate, now.timeIntervalSince(debounce) < QualityThresholds.qualityLevelDebounceSeconds {
             return
         }
         qualityLevelDebounceDate = now
