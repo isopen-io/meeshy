@@ -337,6 +337,14 @@ struct CallView: View {
                 videoCallLayout
                     .contentShape(Rectangle())
                     .onTapGesture { toggleControls() }
+                    .accessibilityLabel(showControls
+                        ? String(localized: "call.video.hideControls", defaultValue: "Masquer les contrôles", bundle: .main)
+                        : String(localized: "call.video.showControls", defaultValue: "Afficher les contrôles", bundle: .main))
+                    .accessibilityAddTraits(.isButton)
+                    // Controls never auto-hide during VoiceOver (shouldAutoHideControls
+                    // returns false) — this tap element has no meaningful purpose then,
+                    // so hide it from the accessibility tree to avoid confusing VoiceOver.
+                    .accessibilityHidden(!shouldAutoHideControls)
             }
 
             VStack(spacing: 0) {
