@@ -357,9 +357,15 @@ struct PostDetailView: View {
         textZone(post)
 
         // ZONE 2: Story canvas (inline reader) OR standard media
+        //
+        // For a SHARED STORY (a POST that reposts a STORY), the embedded story
+        // canvas is rendered by `repostEmbed` below — so suppress the wrapper's
+        // own media here to avoid showing the same story content twice. Mirrors
+        // the existing text-dedup guards (`if !post.isStory` / `if !isStoryRepost`).
+        let isSharedStory = (post.repost?.type ?? "").uppercased() == "STORY"
         if post.isStory {
             storyCanvasSection(post)
-        } else if post.hasMedia {
+        } else if post.hasMedia, !isSharedStory {
             detailMediaSection(post.media)
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
