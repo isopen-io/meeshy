@@ -2184,3 +2184,257 @@ final class NegotiationEpochResetTests: XCTestCase {
         )
     }
 }
+
+// MARK: - endCallInternal teardown ordering guards
+
+/// Guards the ordering of critical teardown steps in `endCallInternal`. Out-of-order
+/// teardown has caused audio ghosts (audio session deactivated before WebRTC closed
+/// → WebRTC tries to use an inactive session), state mismatches (UI transitions to
+/// `.ended` while WebRTC is still running → reconnection watchdog fires on a closed
+/// call), and TURN credential leaks (refresh task not cancelled → timer fires and
+/// re-arms credentials on a dead call).
+@MainActor
+final class EndCallInternalTeardownOrderTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func endCallInternalBody(in source: String) -> String? {
+        guard let funcRange = source.range(of: "func endCallInternal") else { return nil }
+        let bodyEnd = source.range(of: "\n    // MARK:", range: funcRange.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        return String(source[funcRange.lowerBound..<bodyEnd])
+    }
+
+    /// The TURN credential refresh task must be cancelled in `endCallInternal`.
+    /// Without this, the scheduled refresh fires after teardown, re-registers
+    /// stale ICE credentials, and logs confusing "TURN refreshed for call X"
+    /// messages when no call is active.
+    func test_endCallInternal_cancelsTurnRefreshTask() throws {
+        let source = try callManagerSource()
+        guard let body = endCallInternalBody(in: source) else {
+            XCTFail("endCallInternal not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("turnRefreshTask?.cancel()"),
+            "endCallInternal must cancel turnRefreshTask to stop TURN credential refreshes " +
+            "on a dead call."
+        )
+        XCTAssertTrue(
+            body.contains("turnRefreshTask = nil"),
+            "endCallInternal must nil turnRefreshTask after cancelling to release the Task object."
+        )
+    }
+
+    /// ICE candidates buffered while the socket was down must be cleared in
+    /// `endCallInternal`. Leftover candidates would be flushed on the NEXT call's
+    /// socket reconnect — adding stale candidates to a different peer connection.
+    func test_endCallInternal_clearsPendingIceCandidates() throws {
+        let source = try callManagerSource()
+        guard let body = endCallInternalBody(in: source) else {
+            XCTFail("endCallInternal not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("pendingIceCandidates = []"),
+            "endCallInternal must clear pendingIceCandidates to prevent stale candidates " +
+            "from being flushed to the next call's peer connection."
+        )
+    }
+
+    /// A buffered SDP offer that arrived while the user was deciding to answer
+    /// must be cleared in `endCallInternal`. Without this reset, starting a new
+    /// incoming call immediately reuses the old offer for a different peer.
+    func test_endCallInternal_clearsPendingRemoteOffer() throws {
+        let source = try callManagerSource()
+        guard let body = endCallInternalBody(in: source) else {
+            XCTFail("endCallInternal not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("pendingRemoteOffer = nil"),
+            "endCallInternal must clear pendingRemoteOffer to prevent a stale SDP offer " +
+            "from being applied to the next incoming call."
+        )
+    }
+
+    /// `webRTCService.close()` must be called BEFORE `callState = .ended(reason:)`.
+    /// If the state transitions first, a reactive observer (e.g. the reliability
+    /// monitor's reconnecting watchdog) may fire its final `endCallInternal` while
+    /// WebRTC is still active, sending ICE restart offers on a terminating session.
+    func test_endCallInternal_closesWebRTCBeforeTransitioningToEnded() throws {
+        let source = try callManagerSource()
+        guard let body = endCallInternalBody(in: source) else {
+            XCTFail("endCallInternal not found in CallManager.swift"); return
+        }
+        guard let closeIdx = body.range(of: "webRTCService.close()")?.lowerBound else {
+            XCTFail("webRTCService.close() not found in endCallInternal body"); return
+        }
+        guard let endedIdx = body.range(of: "callState = .ended(reason: reason)")?.lowerBound else {
+            XCTFail("callState = .ended(reason: reason) not found in endCallInternal body"); return
+        }
+        XCTAssertTrue(
+            closeIdx < endedIdx,
+            "webRTCService.close() must precede `callState = .ended` — transitioning state " +
+            "first allows observers to fire while WebRTC is still active."
+        )
+    }
+
+    /// `deactivateAudioSession()` must be called BEFORE `callState = .ended(reason:)`.
+    /// The audio deactivation triggers a CallKit `provider:didDeactivate:` callback
+    /// which in turn resets the RTCAudioSession — this must complete while the call
+    /// is still in an active-teardown state, not after the UI has fully transitioned.
+    func test_endCallInternal_deactivatesAudioBeforeTransitioningToEnded() throws {
+        let source = try callManagerSource()
+        guard let body = endCallInternalBody(in: source) else {
+            XCTFail("endCallInternal not found in CallManager.swift"); return
+        }
+        guard let deactivateIdx = body.range(of: "deactivateAudioSession()")?.lowerBound else {
+            XCTFail("deactivateAudioSession() not found in endCallInternal body"); return
+        }
+        guard let endedIdx = body.range(of: "callState = .ended(reason: reason)")?.lowerBound else {
+            XCTFail("callState = .ended(reason: reason) not found in endCallInternal body"); return
+        }
+        XCTAssertTrue(
+            deactivateIdx < endedIdx,
+            "deactivateAudioSession() must precede `callState = .ended` — the audio deactivation " +
+            "path must complete before the UI observes the terminal state."
+        )
+    }
+}
+
+// MARK: - DTLS-SRTP enforcement guards
+
+/// Guards that the WebRTC peer connection is always created with DTLS-SRTP
+/// mandatory. Without `DtlsSrtpKeyAgreement: true`, WebRTC falls back to
+/// SDES (key negotiation in the SDP plaintext), sending media encryption keys
+/// over the signaling channel — any server that routes the SDP can decrypt
+/// the call audio and video.
+@MainActor
+final class DTLSSRTPEnforcementTests: XCTestCase {
+
+    private func p2pClientSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// The peer connection must require DTLS-SRTP key agreement.
+    /// A missing or `false` value silently falls back to SDES in some WebRTC
+    /// builds, transmitting media keys in the SDP offer/answer.
+    func test_peerConnection_requiresDTLSSRTP() throws {
+        let source = try p2pClientSource()
+        XCTAssertTrue(
+            source.contains("\"DtlsSrtpKeyAgreement\": \"true\""),
+            "P2PWebRTCClient must pass `DtlsSrtpKeyAgreement: true` in RTCMediaConstraints. " +
+            "Without it, some WebRTC builds fall back to SDES key exchange — media keys are " +
+            "sent in the SDP plaintext over the signaling channel."
+        )
+    }
+
+    /// The bundle policy must be `.maxBundle` to minimize the number of transport
+    /// sockets and DTLS handshakes. With fewer transports, there is less surface
+    /// for downgrade attacks and the DTLS connection is established faster.
+    func test_peerConnection_useMaxBundlePolicy() throws {
+        let source = try p2pClientSource()
+        XCTAssertTrue(
+            source.contains("bundlePolicy = .maxBundle"),
+            "P2PWebRTCClient must set bundlePolicy = .maxBundle to multiplex all tracks " +
+            "onto a single DTLS transport — fewer handshakes, smaller attack surface."
+        )
+    }
+
+    /// RTCP must be multiplexed onto the RTP port (rtcpMuxPolicy = .require).
+    /// Without mux, a separate DTLS transport is opened for RTCP — doubling the
+    /// number of ports that need to be traversed and firewalled.
+    func test_peerConnection_requiresRTCPMux() throws {
+        let source = try p2pClientSource()
+        XCTAssertTrue(
+            source.contains("rtcpMuxPolicy = .require"),
+            "P2PWebRTCClient must set rtcpMuxPolicy = .require to avoid opening a separate " +
+            "RTCP transport — extra ports increase NAT traversal complexity and attack surface."
+        )
+    }
+}
+
+// MARK: - Settle-token race guard
+
+/// Guards the settle-token pattern in `endCallInternal` that prevents a new
+/// call from being reset to `.idle` by the deferred cleanup Task of the
+/// preceding call. Without the token check, the following race is possible:
+///   T+0ms  call A ends → endCallInternal schedules 1.5 s idle Task
+///   T+50ms new call B starts → callState = .ringing
+///   T+1500ms Task fires → sees .idle candidate → resets state to .idle
+///   T+1500ms BUG: call B's .ringing is clobbered → UI drops the incoming ring
+@MainActor
+final class SettleTokenRaceGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func endCallInternalBody(in source: String) -> String? {
+        guard let funcRange = source.range(of: "func endCallInternal") else { return nil }
+        let bodyEnd = source.range(of: "\n    // MARK:", range: funcRange.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        return String(source[funcRange.lowerBound..<bodyEnd])
+    }
+
+    /// `endCallInternal` must mint a fresh UUID token and assign it to `settleToken`
+    /// before scheduling the deferred idle transition. The token is how the deferred
+    /// Task knows whether its identity is still current when it fires.
+    func test_endCallInternal_mintsAndStoresSettleToken() throws {
+        let source = try callManagerSource()
+        guard let body = endCallInternalBody(in: source) else {
+            XCTFail("endCallInternal not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("let token = UUID()"),
+            "endCallInternal must mint a UUID settle token — the deferred idle Task uses it " +
+            "to detect whether a new call has taken over before the 1.5 s window expires."
+        )
+        XCTAssertTrue(
+            body.contains("settleToken = token"),
+            "endCallInternal must assign the minted token to `settleToken` so that " +
+            "`resetEndedStateForNewCall` can nil it to cancel the pending idle transition."
+        )
+    }
+
+    /// The deferred idle-transition Task must check that `settleToken == token`
+    /// before resetting state. Without this guard, a new call that started during
+    /// the 1.5 s settle window gets its state clobbered by the old Task.
+    func test_settleTask_guardsOnTokenBeforeResettingToIdle() throws {
+        let source = try callManagerSource()
+        guard let body = endCallInternalBody(in: source) else {
+            XCTFail("endCallInternal not found in CallManager.swift"); return
+        }
+        // The guard must appear inside the deferred Task body, so we look for
+        // the token comparison AND the subsequent .idle assignment together.
+        XCTAssertTrue(
+            body.contains("self.settleToken == token"),
+            "The deferred idle Task in endCallInternal must guard on `settleToken == token` " +
+            "before transitioning to .idle — without this, a new call started within 1.5 s " +
+            "has its state reset by the previous call's cleanup Task."
+        )
+        XCTAssertTrue(
+            body.contains("self.callState = .idle"),
+            "The deferred Task must set callState = .idle when the settle token still matches — " +
+            "this is the terminal cleanup that releases the last call's identity fields."
+        )
+    }
+}
