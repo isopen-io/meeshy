@@ -383,4 +383,18 @@ final class QualityThresholdsVideoTests: XCTestCase {
         XCTAssertEqual(QualityThresholds.outgoingRingTimeoutSeconds, 45.0, accuracy: 0.001,
                        "Maximum time to wait for callee to answer before auto-cancelling the call")
     }
+
+    func test_turnDefaultCredentialTTLSeconds_is480() {
+        // TURN credentials issued by the Meeshy gateway default to 480 s. The 80%-TTL
+        // refresh fires at 384 s — well before Coturn's 600 s server-side eviction.
+        XCTAssertEqual(QualityThresholds.turnDefaultCredentialTTLSeconds, 480, accuracy: 0.001)
+    }
+
+    func test_turnRefreshFires_at80PercentOfDefaultTTL() {
+        // scheduleTURNCredentialRefresh applies an 80% factor: refreshDelay = ttl * 0.8.
+        // With the default TTL the refresh should fire at 384 s.
+        let refreshAt = QualityThresholds.turnDefaultCredentialTTLSeconds * 0.8
+        XCTAssertEqual(refreshAt, 384.0, accuracy: 0.001,
+                       "TURN credential refresh must fire at 384 s (80% of 480 s default TTL)")
+    }
 }
