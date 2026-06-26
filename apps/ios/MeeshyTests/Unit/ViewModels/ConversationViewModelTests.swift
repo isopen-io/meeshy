@@ -1905,6 +1905,55 @@ final class ConversationViewModelTests: XCTestCase {
         }
     }
 
+    // MARK: - mergeIntoMessages duplicate prevention
+
+    /// When a server ACK arrives, the message's display id transitions from
+    /// localId ("cid_123") to serverId ("srv_abc") via toMessage(). Without
+    /// the pendingServerIds guard in mergeIntoMessages, both the old optimistic
+    /// row (id="cid_123") and the acked row (id="srv_abc") survive in messages,
+    /// producing a duplicate bubble. After the fix, only the server-id version
+    /// must remain.
+    func test_mergeIntoMessages_afterServerAck_noDuplicateBubble() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+
+        let tempId = "cid_merge_dedup_test"
+        let serverId = "srv_merge_dedup_test"
+
+        // Seed an optimistic row: localId=tempId, serverId=nil → id=tempId in domain
+        let record = MessageStoreObservationHelper.makeRecord(
+            localId: tempId,
+            conversationId: testConversationId,
+            senderId: testUserId,
+            state: .sending
+        )
+        try await persistence.insertOptimistic(record)
+
+        // Wait for the optimistic message to surface with id=tempId
+        let appeared = await MessageStoreObservationHelper.awaitMessage(in: sut) { $0.id == tempId }
+        XCTAssertNotNil(appeared, "Optimistic row must surface with id=tempId before the ACK")
+
+        // Register the tempId → serverId mapping BEFORE applyEvent (mirrors the
+        // real send path where pendingServerIds is set synchronously before the
+        // async applyEvent task).
+        sut.pendingServerIds[tempId] = serverId
+
+        // Apply serverAck: GRDB row.serverId becomes serverId → toMessage id flips
+        _ = try await persistence.applyEvent(localId: tempId, event: .serverAck(serverId: serverId, at: Date()))
+
+        // Wait until the server-id version surfaces
+        let acked = await MessageStoreObservationHelper.awaitMessage(in: sut) { $0.id == serverId }
+        XCTAssertNotNil(acked, "After ACK the message must surface with id=serverId")
+
+        // The critical assertion: exactly ONE bubble — no duplicate cid_* row
+        let count = sut.messages.filter {
+            $0.id == tempId || $0.id == serverId
+        }.count
+        XCTAssertEqual(count, 1,
+            "mergeIntoMessages must suppress the superseded optimistic row — expected 1 bubble, got \(count)")
+    }
+
     // MARK: - Helpers
 
     private func makeInMemoryPool() throws -> DatabaseQueue {

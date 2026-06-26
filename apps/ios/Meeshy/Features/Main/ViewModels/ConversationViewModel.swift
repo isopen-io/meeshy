@@ -1088,26 +1088,48 @@ class ConversationViewModel: ObservableObject {
     /// socket delivery that raced the REST load). Deduplicates by `id` so a
     /// message received from both the initial REST response and the socket
     /// never appears twice. Result is sorted by `createdAt`.
+    ///
+    /// Duplicate prevention: when a server ACK flips a message's display id from
+    /// localId (e.g. "cid_…") to serverId (e.g. "mongo_…"), `incoming` contains
+    /// the server-id version but the OLD optimistic row is still in `messages`
+    /// under its original id. Without correction, the preserve-logic keeps the
+    /// old row alongside the new one → duplicate bubble. `pendingServerIds`
+    /// maps localId → serverId synchronously before `applyEvent` fires the GRDB
+    /// refresh, so it is always populated in time.
     private func mergeIntoMessages(_ incoming: [Message]) -> [Message] {
         let incomingIds = Set(incoming.map(\.id))
-        let preserved = messages.filter { !incomingIds.contains($0.id) }
+
+        // Detect optimistic rows superseded by a server-ack id-flip:
+        // if pendingServerIds maps msg.id → some id that IS in incoming, the
+        // old optimistic row must not be preserved (it would duplicate the
+        // acked row, which is already in incoming under the server id).
+        let supersededIds = Set(messages.compactMap { msg -> String? in
+            guard let sid = pendingServerIds[msg.id], incomingIds.contains(sid) else { return nil }
+            return msg.id
+        })
+
+        let preserved = messages.filter { !incomingIds.contains($0.id) && !supersededIds.contains($0.id) }
         let result = preserved.isEmpty ? incoming : (incoming + preserved).sorted { $0.createdAt < $1.createdAt }
 
-        // BUG1 diagnostics — this merge is supposed to NEVER drop a displayed row
-        // (it preserves anything not in `incoming`). If this fires, the loss is an
-        // id-identity problem (e.g. an optimistic cid replaced by a serverId so
-        // the "same" message changes id and the old row is neither matched nor
-        // preserved). Logs the count delta + a sample of dropped ids + how many
-        // were in-flight/failed so we can correlate with the send timeline.
+        // Diagnostic: log when a message disappears from the display unexpectedly.
+        // Superseded rows (known id-flip) are EXPECTED drops and logged at info.
+        // Unknown drops are bugs and logged at error.
         let beforeIds = Set(messages.map(\.id))
-        let droppedIds = beforeIds.subtracting(Set(result.map(\.id)))
-        if !droppedIds.isEmpty {
-            let inFlight = messages.filter { droppedIds.contains($0.id) }
-                .filter { m in
-                    let s = String(describing: m.deliveryStatus)
-                    return s.contains("sending") || s.contains("clock") || s.contains("failed") || s.contains("sent") || s.contains("queued")
-                }
-            Logger.messages.error("[ConversationViewModel][BUG1] merge DROPPED \(droppedIds.count) display row(s) before=\(self.messages.count) incoming=\(incoming.count) result=\(result.count) inFlightOrSent=\(inFlight.count) ids=\(droppedIds.sorted().prefix(8).joined(separator: ","))")
+        let resultIds = Set(result.map(\.id))
+        let allDroppedIds = beforeIds.subtracting(resultIds)
+        if !allDroppedIds.isEmpty {
+            let trueDrops = allDroppedIds.subtracting(supersededIds)
+            if !trueDrops.isEmpty {
+                let inFlight = messages.filter { trueDrops.contains($0.id) }
+                    .filter { m in
+                        let s = String(describing: m.deliveryStatus)
+                        return s.contains("sending") || s.contains("clock") || s.contains("failed") || s.contains("sent") || s.contains("queued")
+                    }
+                Logger.messages.error("[ConversationViewModel][BUG1] merge DROPPED \(trueDrops.count) display row(s) before=\(self.messages.count) incoming=\(incoming.count) result=\(result.count) inFlightOrSent=\(inFlight.count) ids=\(trueDrops.sorted().prefix(8).joined(separator: ","))")
+            }
+            if !supersededIds.isEmpty {
+                Logger.messages.info("[ConversationViewModel] merge suppressed \(supersededIds.count) superseded optimistic row(s) after server-ack id-flip ids=\(supersededIds.sorted().prefix(8).joined(separator: ","))")
+            }
         }
         return result
     }
