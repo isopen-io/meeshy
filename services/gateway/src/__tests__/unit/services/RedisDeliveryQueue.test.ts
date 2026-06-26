@@ -562,48 +562,69 @@ describe('RedisDeliveryQueue (Redis path)', () => {
     expect(await queue.size('user-redis')).toBe(0);
   });
 
-  test('drain calls pipeline lrange+del and returns parsed entries', async () => {
+  test('drain uses atomic eval and returns parsed entries', async () => {
     const entry = makePayload({ messageId: 'drain-1' });
-    const serialized = JSON.stringify(entry);
-    const pipeline = makePipeline([[null, [serialized]], [null, 1]]);
-    const redis = makeMockRedis({ pipeline: jest.fn().mockReturnValue(pipeline) });
+    const redis = makeMockRedis({ eval: jest.fn().mockResolvedValue([JSON.stringify(entry)]) });
     const queue = new RedisDeliveryQueue(makeCacheStore(redis));
 
     const result = await queue.drain('user-drain');
 
     expect(result).toHaveLength(1);
     expect(result[0].messageId).toBe('drain-1');
-    expect(pipeline.lrange).toHaveBeenCalled();
-    expect(pipeline.del).toHaveBeenCalled();
+    expect(redis.eval).toHaveBeenCalledWith(
+      expect.stringContaining('LRANGE'),
+      1,
+      expect.stringContaining('user-drain'),
+    );
   });
 
-  test('drain returns [] when pipeline exec returns null results', async () => {
-    const pipeline = makePipeline(null);
-    const redis = makeMockRedis({ pipeline: jest.fn().mockReturnValue(pipeline) });
+  test('drain returns [] when eval returns null', async () => {
+    const redis = makeMockRedis({ eval: jest.fn().mockResolvedValue(null) });
     const queue = new RedisDeliveryQueue(makeCacheStore(redis));
 
     const result = await queue.drain('user-null');
     expect(result).toEqual([]);
   });
 
-  test('drain returns [] when pipeline exec first element is null', async () => {
-    const pipeline = makePipeline([null]);
-    const redis = makeMockRedis({ pipeline: jest.fn().mockReturnValue(pipeline) });
+  test('drain returns [] when eval returns empty array (key did not exist)', async () => {
+    const redis = makeMockRedis({ eval: jest.fn().mockResolvedValue([]) });
     const queue = new RedisDeliveryQueue(makeCacheStore(redis));
 
-    const result = await queue.drain('user-null2');
+    const result = await queue.drain('user-empty');
     expect(result).toEqual([]);
   });
 
-  test('drain throws if pipeline returns an error in results[0]', async () => {
-    const rangeError = new Error('lrange failed');
-    const pipeline = makePipeline([[rangeError, null], [null, 1]]);
-    const redis = makeMockRedis({ pipeline: jest.fn().mockReturnValue(pipeline) });
+  test('drain falls back to memory when eval throws', async () => {
+    const redis = makeMockRedis({ eval: jest.fn().mockRejectedValue(new Error('eval error')) });
     const queue = new RedisDeliveryQueue(makeCacheStore(redis));
 
-    // Redis error → falls back to memory (empty)
+    // eval fails → falls back to memory (empty for this key)
     const result = await queue.drain('user-err');
     expect(result).toEqual([]);
+  });
+
+  test('drain — concurrent callers: second receives empty (atomic semantics)', async () => {
+    const entry = makePayload({ messageId: 'concurrent-msg' });
+    let callCount = 0;
+    const redis = makeMockRedis({
+      eval: jest.fn().mockImplementation(() => {
+        callCount++;
+        return callCount === 1
+          ? Promise.resolve([JSON.stringify(entry)])
+          : Promise.resolve([]);
+      }),
+    });
+    const cacheStore = makeCacheStore(redis);
+    const q1 = new RedisDeliveryQueue(cacheStore);
+    const q2 = new RedisDeliveryQueue(cacheStore);
+
+    const [r1, r2] = await Promise.all([
+      q1.drain('user-concurrent'),
+      q2.drain('user-concurrent'),
+    ]);
+
+    expect([...r1, ...r2]).toHaveLength(1);
+    expect(redis.eval).toHaveBeenCalledTimes(2);
   });
 
   test('peek with limit calls lrange(key, 0, limit-1)', async () => {

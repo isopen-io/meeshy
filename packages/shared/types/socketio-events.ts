@@ -213,6 +213,19 @@ export const SERVER_EVENTS = {
    * Transcription originale prête (avant traductions)
    */
   TRANSCRIPTION_READY: 'audio:transcription-ready',
+  /**
+   * Emitted when a server-side translation attempt (text or audio) has
+   * permanently failed — e.g. the translator service rejected the request
+   * or the ZMQ pipeline returned an error after all retries.  Lets clients
+   * clear any "translating…" spinner and surface a retry affordance
+   * instead of waiting indefinitely for a result that will never arrive.
+   *
+   * Emitted to the conversation room so all participants on any device
+   * receive the failure at the same time.
+   *
+   * Payload: `TranslationFailedEventData`
+   */
+  TRANSLATION_FAILED: 'translation:failed',
 
   /**
    * --- Message pinning ---
@@ -745,6 +758,20 @@ export interface TranscriptionReadyEventData {
   readonly processingTimeMs?: number;
 }
 
+/**
+ * Emitted when a server-side translation attempt has permanently failed.
+ * Lets clients clear any "translating…" spinner and surface a retry
+ * affordance instead of waiting indefinitely for a result that will
+ * never arrive. Emitted to the conversation room so all participants
+ * receive the failure at the same time.
+ */
+export interface TranslationFailedEventData {
+  readonly messageId: string;
+  readonly conversationId: string;
+  readonly error: string;
+  readonly taskId?: string;
+}
+
 // ===== LOCATION SHARING EVENTS =====
 
 export interface LocationShareData {
@@ -1086,6 +1113,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.AUDIO_TRANSLATIONS_PROGRESSIVE]: (data: AudioTranslationsProgressiveEventData) => void;
   [SERVER_EVENTS.AUDIO_TRANSLATIONS_COMPLETED]: (data: AudioTranslationsCompletedEventData) => void;
   [SERVER_EVENTS.TRANSCRIPTION_READY]: (data: TranscriptionReadyEventData) => void;
+  [SERVER_EVENTS.TRANSLATION_FAILED]: (data: TranslationFailedEventData) => void;
 
   // Mentions
   [SERVER_EVENTS.MENTION_CREATED]: (data: MentionCreatedEventData) => void;

@@ -48,6 +48,7 @@ import type {
   SocketIOResponse,
   TranslationEvent,
   MessageType,
+  TranslationFailedEventData,
 } from '@meeshy/shared/types/socketio-events';
 import { CLIENT_EVENTS, SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../services/ConversationStatsService';
@@ -574,6 +575,9 @@ export class MeeshySocketIOManager {
       // Écouter les traductions de textObjects de story
       this.translationService.on('storyTextObjectTranslationCompleted', this._handleStoryTextObjectTranslationCompleted.bind(this));
 
+      // Propager les erreurs de traduction aux clients — empêche les spinners "translating…" permanents
+      this.translationService.on('translationFailed', this._handleTranslationFailed.bind(this));
+
       // Configurer les événements Socket.IO
       this._setupSocketEvents();
 
@@ -857,6 +861,20 @@ export class MeeshySocketIOManager {
       logger.error(`❌ Erreur demande traduction: ${error}`);
       this.stats.errors++;
       socket.emit(SERVER_EVENTS.ERROR, { message: 'Failed to get translation' });
+    }
+  }
+
+  private _handleTranslationFailed(data: TranslationFailedEventData): void {
+    try {
+      const room = ROOMS.conversation(data.conversationId);
+      this.io.to(room).emit(SERVER_EVENTS.TRANSLATION_FAILED, data);
+      logger.warn('translation:failed broadcast', {
+        messageId: data.messageId,
+        conversationId: data.conversationId,
+        error: data.error,
+      });
+    } catch (error) {
+      logger.error('failed to broadcast translation:failed', { data, error });
     }
   }
 

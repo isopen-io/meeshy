@@ -844,6 +844,13 @@ export class MessageTranslationService extends EventEmitter {
     }
 
     this.stats.incrementErrors();
+
+    this.emit('translationFailed', {
+      messageId: data.messageId,
+      conversationId: data.conversationId,
+      error: data.error,
+      taskId: data.taskId,
+    });
   }
 
   // ============================================================================
