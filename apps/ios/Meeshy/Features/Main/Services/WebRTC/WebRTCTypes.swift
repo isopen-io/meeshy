@@ -430,6 +430,24 @@ enum QualityThresholds {
     static let bweFairBps: Int     =   400_000   // 50 % of fair target (800 kbps)
     static let bwePoorBps: Int     =   150_000   // 37.5 % of poor target (400 kbps)
 
+    // MARK: PiP thermal frame-rate ladder
+    // PiP shows a small floating thumbnail — lower fps than the main encoder
+    // is acceptable and significantly reduces GPU/ANE load on a hot device.
+    // Separate from `VideoThermalProfile` (which caps the *main* stream encoder)
+    // so the two ladders can be tuned independently.
+
+    /// Maximum frame rate delivered to the PiP thumbnail when the device is
+    /// thermally nominal or only lightly stressed (.nominal / .fair).
+    static let pipFrameRateDefault: Int = 15
+
+    /// PiP frame rate cap under `.serious` thermal pressure. Still smooth
+    /// enough for speech at 10 fps; saves significant GPU compared to 15.
+    static let pipFrameRateSerious: Int = 10
+
+    /// PiP frame rate cap under `.critical` thermal pressure. Near-slideshow
+    /// but preserves the call without the user losing the remote face entirely.
+    static let pipFrameRateCritical: Int = 8
+
     static let maxBitrate: Int = 128_000
     /// Floor bitrate the adaptation algorithm will proactively target under
     /// severe degradation (24 kbps = speech quality floor for Opus).

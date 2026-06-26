@@ -570,3 +570,44 @@ final class QualityThresholdsSignalingTests: XCTestCase {
         )
     }
 }
+
+// MARK: - PiP Thermal Frame-Rate Ladder
+
+@MainActor
+final class QualityThresholdsPiPTests: XCTestCase {
+
+    func test_pipFrameRateDefault_is15() {
+        XCTAssertEqual(QualityThresholds.pipFrameRateDefault, 15,
+                       "PiP default FPS must be 15 — smooth enough for a small thumbnail")
+    }
+
+    func test_pipFrameRateSerious_is10() {
+        XCTAssertEqual(QualityThresholds.pipFrameRateSerious, 10,
+                       "Under .serious thermal pressure PiP drops to 10 FPS")
+    }
+
+    func test_pipFrameRateCritical_is8() {
+        XCTAssertEqual(QualityThresholds.pipFrameRateCritical, 8,
+                       "Under .critical thermal pressure PiP drops to 8 FPS (near-slideshow, saves heat)")
+    }
+
+    func test_pipFrameRateLadder_isStrictlyDecreasing() {
+        XCTAssertGreaterThan(
+            QualityThresholds.pipFrameRateDefault,
+            QualityThresholds.pipFrameRateSerious,
+            "default FPS must exceed serious FPS"
+        )
+        XCTAssertGreaterThan(
+            QualityThresholds.pipFrameRateSerious,
+            QualityThresholds.pipFrameRateCritical,
+            "serious FPS must exceed critical FPS"
+        )
+    }
+
+    func test_pipFrameRateCritical_isAboveZero() {
+        XCTAssertGreaterThan(
+            QualityThresholds.pipFrameRateCritical, 0,
+            "Even under critical thermal pressure the encoder must deliver at least 1 FPS"
+        )
+    }
+}

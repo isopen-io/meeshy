@@ -441,6 +441,23 @@ final class CallManagerAudioSessionTests: XCTestCase {
             "scheduleRemoteQualityReset must use QualityThresholds.remoteQualityResetSeconds"
         )
     }
+
+    func test_callManager_pipFrameRate_usesQualityThresholdsConstants() throws {
+        // Regression guard: pipFrameRate(for:) must not hardcode 8/10/15 fps.
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("pipFrameRateCritical"),
+            "pipFrameRate(for:) must reference QualityThresholds.pipFrameRateCritical"
+        )
+        XCTAssertTrue(
+            source.contains("pipFrameRateSerious"),
+            "pipFrameRate(for:) must reference QualityThresholds.pipFrameRateSerious"
+        )
+        XCTAssertTrue(
+            source.contains("pipFrameRateDefault"),
+            "pipFrameRate(for:) must reference QualityThresholds.pipFrameRateDefault"
+        )
+    }
 }
 
 // MARK: - P2PWebRTCClient — Perfect Negotiation Source Guards (W3C §3.4)

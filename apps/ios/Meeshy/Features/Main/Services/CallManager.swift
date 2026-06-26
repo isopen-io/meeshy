@@ -1294,9 +1294,9 @@ final class CallManager: ObservableObject {
     /// agressif sous stress). Partagé par la config et le handler thermal.
     private func pipFrameRate(for state: ProcessInfo.ThermalState) -> Int {
         switch state {
-        case .critical: return 8
-        case .serious: return 10
-        default: return 15
+        case .critical: return QualityThresholds.pipFrameRateCritical
+        case .serious: return QualityThresholds.pipFrameRateSerious
+        default: return QualityThresholds.pipFrameRateDefault
         }
     }
 
