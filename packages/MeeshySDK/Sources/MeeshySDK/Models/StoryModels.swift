@@ -1769,7 +1769,18 @@ extension Array where Element == APIPost {
 
         for post in storyPosts {
             let authorId = post.author.id
-            let media: [FeedMedia] = (post.media ?? []).map { m in
+            // A reposted story carries its media / effects / audio on the original
+            // (`repostOf`), not on the repost shell — the shell's own `media` is
+            // empty. Mirror `StoryReaderRepresentable.init(repost:)` so the
+            // full-screen viewer (which renders from `StoryItem.media` /
+            // `storyEffects`) plays the original instead of a blank spinner. The
+            // feed embed already resolves this via `RepostContent`; this aligns the
+            // tray/viewer path. Reported 2026-06-26 « la republication ne joue pas
+            // la story comme si c'était la mienne ».
+            let repostSource = post.repostOf
+            let ownMedia = post.media ?? []
+            let mediaSource: [APIPostMedia] = ownMedia.isEmpty ? (repostSource?.media ?? []) : ownMedia
+            let media: [FeedMedia] = mediaSource.map { m in
                 // Propage `thumbnailUrl` + `thumbHash` du gateway — sinon le
                 // tray (`StoryTrayView.latestStoryThumbnailURL`) tombe sur
                 // `url` (souvent une vidéo) ou sur l'avatar du profil.
@@ -1787,13 +1798,13 @@ extension Array where Element == APIPost {
                 ?? Calendar.current.date(byAdding: .hour, value: 21, to: post.createdAt)
             let totalReactions = post.reactionSummary?.values.reduce(0, +) ?? 0
             let item = StoryItem(id: post.id, content: post.content, media: media,
-                                 storyEffects: post.storyEffects,
+                                 storyEffects: post.storyEffects ?? repostSource?.storyEffects,
                                  createdAt: post.createdAt, expiresAt: effectiveExpiresAt,
                                  repostOfId: post.repostOf?.id,
                                  originalRepostOfId: post.originalRepostOfId,
                                  repostAuthorName: post.repostOf?.author.name,
                                  visibility: post.visibility,
-                                 audioUrl: post.audioUrl,
+                                 audioUrl: post.audioUrl ?? repostSource?.audioUrl,
                                  isViewed: post.isViewedByMe ?? false,
                                  translations: storyTranslations,
                                  reactionCount: totalReactions, commentCount: post.commentCount ?? 0,
