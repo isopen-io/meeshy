@@ -26,19 +26,10 @@ import {
 
 function errorResponse(reply: FastifyReply, error: unknown, statusCode: number = 500) {
   if (error instanceof AudioTranslateError) {
-    return reply.status(statusCode).send({
-      success: false,
-      error: error.code,
-      message: error.message
-    });
+    return sendError(reply, statusCode, error.code, { message: error.message });
   }
-
   const message = error instanceof Error ? error.message : 'Internal server error';
-  return reply.status(statusCode).send({
-    success: false,
-    error: 'INTERNAL_ERROR',
-    message: message
-  });
+  return sendError(reply, statusCode, 'INTERNAL_ERROR', { message });
 }
 
 export function registerAnalysisRoutes(
@@ -532,8 +523,10 @@ export function registerAnalysisRoutes(
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const result = await audioTranslateService.getHealthStatus();
-      const statusCode = result.status === 'healthy' ? 200 : result.status === 'degraded' ? 200 : 503;
-      return reply.status(statusCode).send({ success: true, data: result });
+      if (result.status !== 'healthy' && result.status !== 'degraded') {
+        return sendError(reply, 503, 'Service unavailable');
+      }
+      return sendSuccess(reply, result);
     } catch (error) {
       logger.error('[VoiceRoutes] Get health error:', error);
       return sendError(reply, 503, error instanceof Error ? error.message : 'Unknown error');

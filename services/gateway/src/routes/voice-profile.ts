@@ -15,7 +15,7 @@ import { createUnifiedAuthMiddleware, UnifiedAuthContext, UnifiedAuthRequest} fr
 import { ZMQSingleton } from '../services/ZmqSingleton';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
-import { sendSuccess, sendUnauthorized, sendBadRequest } from '../utils/response';
+import { sendSuccess, sendUnauthorized, sendBadRequest, sendError } from '../utils/response';
 
 const logger = enhancedLogger.child({ module: 'VoiceProfileRoutes' });
 
@@ -127,7 +127,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
     const result = await voiceProfileService.updateConsent(auth.registeredUser.id, consent);
 
     if (!result.success) {
-      return reply.status(400).send(result);
+      return sendBadRequest(reply, result.error ?? 'Request failed', { code: result.errorCode });
     }
 
     return reply.send(result);
@@ -196,7 +196,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
     const result = await voiceProfileService.getConsentStatus(auth.registeredUser.id);
 
     if (!result.success) {
-      return reply.status(400).send(result);
+      return sendBadRequest(reply, result.error ?? 'Request failed', { code: result.errorCode });
     }
 
     return reply.send(result);
@@ -485,7 +485,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
     if (!result.success) {
       const statusCode = result.errorCode === 'CONSENT_REQUIRED' ? 403 :
                          result.errorCode === 'PROFILE_EXISTS' ? 409 : 400;
-      return reply.status(statusCode).send(result);
+      return sendError(reply, statusCode, result.error ?? 'Registration failed', { code: result.errorCode });
     }
 
     return reply.status(201).send(result);
@@ -596,7 +596,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
     if (!result.success) {
       const statusCode = result.errorCode === 'PROFILE_NOT_FOUND' ? 404 :
                          result.errorCode === 'PROFILE_MISMATCH' ? 403 : 400;
-      return reply.status(statusCode).send(result);
+      return sendError(reply, statusCode, result.error ?? 'Update failed', { code: result.errorCode });
     }
 
     return reply.send(result);
@@ -757,7 +757,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
     }
 
     if (!result.success) {
-      return reply.status(400).send(result);
+      return sendBadRequest(reply, result.error ?? 'Request failed', { code: result.errorCode });
     }
 
     // Add exists flag to indicate profile exists
@@ -827,7 +827,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
     const result = await voiceProfileService.deleteProfile(auth.registeredUser.id);
 
     if (!result.success) {
-      return reply.status(400).send(result);
+      return sendBadRequest(reply, result.error ?? 'Request failed', { code: result.errorCode });
     }
 
     return reply.send(result);
