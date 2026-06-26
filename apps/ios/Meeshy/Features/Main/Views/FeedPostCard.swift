@@ -488,14 +488,24 @@ struct FeedPostCard: View {
                         .font(.subheadline.weight(.bold))
                         .foregroundColor(theme.textPrimary)
 
-                    // Repost indicator inline
+                    // Repost indicator inline — compact source attribution right
+                    // after the author pseudo ("a republié de @handle"), so the
+                    // embedded story/quote cell no longer needs a verbose
+                    // "Reposté de @handle" block.
                     if post.repostAuthor != nil {
                         HStack(spacing: 3) {
                             Image(systemName: "arrow.2.squarepath")
                                 .font(.caption2)
                                 .accessibilityHidden(true)
-                            Text(String(localized: "feed.post.reposted", defaultValue: "a republié", bundle: .main))
-                                .font(.caption)
+                            if let handle = post.repost?.authorUsername ?? post.repostAuthor {
+                                Text(String(format: String(localized: "feed.post.reposted_from", defaultValue: "a republié de @%@", bundle: .main), handle))
+                                    .font(.caption)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            } else {
+                                Text(String(localized: "feed.post.reposted", defaultValue: "a republié", bundle: .main))
+                                    .font(.caption)
+                            }
                         }
                         .foregroundColor(theme.textMuted)
                     }
