@@ -5,7 +5,8 @@ import {
   sendSuccess,
   sendForbidden,
   sendNotFound,
-  sendInternalError
+  sendInternalError,
+  sendBadRequest
 } from '../../utils/response.js';
 import { UserRoleEnum } from '@meeshy/shared/types';
 import {
@@ -336,11 +337,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          message: 'Données invalides',
-          errors: error.issues
-        });
+        return sendBadRequest(reply, 'VALIDATION_ERROR', { message: 'Données invalides' });
       }
       logError(fastify.log, 'Create link error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');

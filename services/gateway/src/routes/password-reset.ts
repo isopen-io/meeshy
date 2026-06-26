@@ -385,10 +385,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
       const { token } = request.query as { token: string };
 
       if (!token) {
-        return reply.status(400).send({
-          valid: false,
-          error: 'Token is required'
-        });
+        return sendBadRequest(reply, 'Token is required');
       }
 
       // Hash the token to lookup in database
@@ -447,10 +444,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       fastify.log.error({ err: error }, '[PasswordReset] Error verifying token');
-      return reply.status(500).send({
-        valid: false,
-        error: 'Error verifying token'
-      });
+      return sendInternalError(reply, 'Error verifying token');
     }
   });
 
