@@ -9,7 +9,7 @@ import MeeshySDK
 /// `baseSize` is interpreted in design pixels (1080-référentiel) and projected
 /// through `CanvasGeometry.render(_:)` so stickers retain identical visual
 /// proportions across iPhone and iPad canvases.
-public final class StoryStickerLayer: CALayer, @unchecked Sendable {
+public final class StoryStickerLayer: CALayer {
     public private(set) nonisolated(unsafe) var sticker: StorySticker?
 
     public override nonisolated init() { super.init() }

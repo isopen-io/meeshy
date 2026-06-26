@@ -22,7 +22,7 @@ struct AudioEffectsPanel: View {
         }
         .padding(16)
         .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
         .padding(.horizontal, 16)
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: selectedEffect)
         .onAppear {

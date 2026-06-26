@@ -40,7 +40,6 @@ extension iPadRootView {
                     .environmentObject(conversationViewModel)
                     .environmentObject(router)
                     .environmentObject(statusViewModel)
-                    .environmentObject(StatusBubbleController.shared)
                     .presentationDetents([.medium, .large])
                 }
             }
@@ -50,7 +49,6 @@ extension iPadRootView {
             .sheet(isPresented: $showNewConversation) {
                 NewConversationView()
                     .environmentObject(statusViewModel)
-                    .environmentObject(StatusBubbleController.shared)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
@@ -71,7 +69,6 @@ extension iPadRootView {
                 .environmentObject(statusViewModel)
                 .environmentObject(conversationViewModel)
                 .environmentObject(storyViewerCoordinator)
-                .environmentObject(StatusBubbleController.shared)
                 .presentationDetents([.large, .medium])
                 .presentationDragIndicator(.visible)
             }

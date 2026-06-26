@@ -162,7 +162,7 @@ public struct StoryFilterPicker: View {
 // MARK: - CIFilter Application
 
 public nonisolated struct StoryFilterProcessor {
-    nonisolated(unsafe) private static let context = CIContext()
+    private static let context = CIContext()
     nonisolated(unsafe) private static let cache = NSCache<NSString, UIImage>()
 
     /// Applies `filter` to `image` at `intensity` (0…1). This is the SINGLE

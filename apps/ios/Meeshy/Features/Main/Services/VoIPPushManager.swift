@@ -261,8 +261,18 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         guard let decoded = try? JSONDecoder().decode([SocketIceServer].self, from: data) else {
             return nil
         }
-        return decoded.map { server in
-            IceServer(urls: server.urls.asArray, username: server.username, credential: server.credential)
+        // Credential length guard: TURN credentials from a malformed or hostile
+        // payload could be arbitrarily long, causing memory pressure or overflow
+        // in libwebrtc's auth header construction. Drop any server that exceeds
+        // a generous-but-finite bound (1 KB per field).
+        let maxCredentialLength = 1024
+        return decoded.compactMap { server in
+            guard (server.username?.count ?? 0) <= maxCredentialLength,
+                  (server.credential?.count ?? 0) <= maxCredentialLength else {
+                logger.error("[VOIP] TURN credential too long — dropping ICE server")
+                return nil
+            }
+            return IceServer(urls: server.urls.asArray, username: server.username, credential: server.credential)
         }
     }
 

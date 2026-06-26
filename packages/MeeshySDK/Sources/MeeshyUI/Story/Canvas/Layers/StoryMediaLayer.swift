@@ -41,7 +41,7 @@ public struct DiskCacheImageLoader: StoryMediaImageLoading {
 ///
 /// Position and size live in design space (1080-référentiel) before being projected
 /// through `CanvasGeometry` so output is bit-identical across device sizes.
-public final class StoryMediaLayer: CALayer, @unchecked Sendable {
+public final class StoryMediaLayer: CALayer {
     public private(set) nonisolated(unsafe) var media: StoryMediaObject?
     public private(set) nonisolated(unsafe) weak var avPlayer: AVPlayer?
     public private(set) nonisolated(unsafe) var avPlayerLayer: AVPlayerLayer?

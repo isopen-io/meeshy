@@ -264,7 +264,11 @@ struct UniversalComposerBar: View {
     /// recent-media grid is shown, so it can't clip).
     var attachmentPanelHeight: CGFloat {
         let keyboard = max(keyboardObserver.lastKnownHeight, 260)
-        let contentFloor: CGFloat = onRecentMediaSelected != nil ? 324 : 150
+        // iPad / macOS gets a taller floor so the roomy recent-media grid has
+        // breathing room; iPhone (incl. landscape, also .regular width) keeps the
+        // compact two-row floor since its screen is short.
+        let recentFloor: CGFloat = DeviceLayout.isPad ? 460 : 324
+        let contentFloor: CGFloat = onRecentMediaSelected != nil ? recentFloor : 150
         return max(keyboard, contentFloor)
     }
 

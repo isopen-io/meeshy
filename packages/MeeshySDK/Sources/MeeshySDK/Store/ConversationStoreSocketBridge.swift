@@ -43,7 +43,7 @@ public final class ConversationStoreSocketBridge {
     public init(
         store: ConversationStore = .shared,
         categoryStore: UserCategoryStore = .shared,
-        currentUserId: @escaping @Sendable () async -> String? = { await AuthManager.shared.currentUser?.id }
+        currentUserId: @escaping @Sendable () async -> String? = { AuthManager.shared.currentUser?.id }
     ) {
         self.store = store
         self.categoryStore = categoryStore

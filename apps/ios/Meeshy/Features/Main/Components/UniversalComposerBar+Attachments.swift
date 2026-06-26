@@ -110,7 +110,9 @@ extension UniversalComposerBar {
             }
 
             // Inline recent photos/videos — selectable straight into the
-            // attachment tray, with a leading "+" to open the full library.
+            // attachment tray, with a leading "+" to open the full library. The
+            // strip fills the remaining panel height (iPad shows a roomy
+            // scrollable grid); only hosts WITHOUT it need the trailing spacer.
             if let onRecentMediaSelected {
                 Divider().opacity(0.4).padding(.horizontal, 14)
                 RecentMediaStrip(
@@ -118,9 +120,9 @@ extension UniversalComposerBar {
                     onOpenLibrary: { fire { onPhotoLibrary?() } },
                     onSelect: onRecentMediaSelected
                 )
+            } else {
+                Spacer(minLength: 0)
             }
-
-            Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity)
         .background(

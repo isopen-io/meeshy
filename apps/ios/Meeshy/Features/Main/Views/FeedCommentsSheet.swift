@@ -352,6 +352,7 @@ struct CommentsSheetView: View {
         }
         .presentationDetents([.large, .medium])
         .presentationDragIndicator(.visible)
+        .adaptiveWideSheet()
         .modifier(TranslucentSheetBackground())
         .onAppear {
             SocialSocketManager.shared.joinPostRoom(postId: post.id)

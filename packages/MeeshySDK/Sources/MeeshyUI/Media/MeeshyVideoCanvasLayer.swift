@@ -9,7 +9,7 @@ import Foundation
 /// pure CALayer compositing for performance (backdrop blur MPS, filters,
 /// transforms). This atom keeps that architecture intact while sharing
 /// the AVPlayer wiring with the SwiftUI side (`MeeshyVideoSurface`).
-public final class MeeshyVideoCanvasLayer: CALayer, @unchecked Sendable {
+public final class MeeshyVideoCanvasLayer: CALayer {
 
     /// The AVPlayerLayer that renders the video. Public so callers can
     /// observe `isReadyForDisplay` if needed.

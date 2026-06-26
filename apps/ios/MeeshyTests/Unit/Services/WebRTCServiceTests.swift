@@ -144,6 +144,34 @@ final class WebRTCServiceTests: XCTestCase {
         XCTAssertEqual(client.disconnectCallCount, 1)
     }
 
+    // MARK: - setRemoteDescription return value
+
+    func test_setRemoteDescription_success_returnsTrue() async {
+        let (sut, _) = makeSUT()
+        let desc = SessionDescription(type: .answer, sdp: "v=0\r\n")
+        let result = await sut.setRemoteDescription(desc)
+        XCTAssertTrue(result)
+    }
+
+    func test_setRemoteDescription_whenClientFails_returnsFalse() async {
+        let (sut, client) = makeSUT()
+        client.setRemoteAnswerResult = .failure(WebRTCError.failedToCreateSDP)
+        let desc = SessionDescription(type: .answer, sdp: "v=0\r\n")
+        let result = await sut.setRemoteDescription(desc)
+        XCTAssertFalse(result)
+    }
+
+    func test_setRemoteDescription_whenClientFails_doesNotFlushCandidates() async {
+        let (sut, client) = makeSUT()
+        client.setRemoteAnswerResult = .failure(WebRTCError.failedToCreateSDP)
+        let candidate = IceCandidate(sdpMid: "0", sdpMLineIndex: 0, candidate: "candidate:test")
+        sut.addICECandidate(candidate)
+        let desc = SessionDescription(type: .answer, sdp: "v=0\r\n")
+        await sut.setRemoteDescription(desc)
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertEqual(client.addIceCandidateCallCount, 0)
+    }
+
     // MARK: - ICE Restart
 
     func test_performICERestart_returnsNewOffer() async {
@@ -400,12 +428,30 @@ final class ApplyVideoQualitySourceGuardTests: XCTestCase {
         )
     }
 
-    /// Zero targetFPS (critical) must fall back to 15 fps, not 0.
+    /// Zero targetFPS (critical) must fall back to `QualityThresholds.criticalVideoFloorFPS`, not 0.
     func test_applyVideoQuality_usesMinFpsFloorForCriticalTier() throws {
         let source = try webRTCServiceSource()
         XCTAssertTrue(
+            source.contains("level.targetFPS > 0 ? level.targetFPS : QualityThresholds.criticalVideoFloorFPS"),
+            "applyVideoQuality must floor zero targetFPS with QualityThresholds.criticalVideoFloorFPS — " +
+            "0 fps stalls encoding; hardcoding 15 creates drift when the constant is tuned."
+        )
+        XCTAssertFalse(
             source.contains("level.targetFPS > 0 ? level.targetFPS : 15"),
-            "applyVideoQuality must floor zero targetFPS to 15 — 0 fps stalls encoding."
+            "applyVideoQuality must not hardcode 15 fps — use QualityThresholds.criticalVideoFloorFPS"
+        )
+    }
+
+    /// Zero targetResolutionHeight (critical) must fall back to `QualityThresholds.criticalVideoFloorHeight`.
+    func test_applyVideoQuality_usesFloorHeightForCriticalTier() throws {
+        let source = try webRTCServiceSource()
+        XCTAssertTrue(
+            source.contains("level.targetResolutionHeight > 0 ? level.targetResolutionHeight : QualityThresholds.criticalVideoFloorHeight"),
+            "applyVideoQuality must floor zero targetResolutionHeight with QualityThresholds.criticalVideoFloorHeight"
+        )
+        XCTAssertFalse(
+            source.contains("level.targetResolutionHeight > 0 ? level.targetResolutionHeight : 360"),
+            "applyVideoQuality must not hardcode 360 — use QualityThresholds.criticalVideoFloorHeight"
         )
     }
 
@@ -431,6 +477,21 @@ final class ApplyVideoQualitySourceGuardTests: XCTestCase {
             source.contains("thermal.bitrateBps") && source.contains("thermal.framerate") && source.contains("thermal.scaleDownBy"),
             "applyVideoQuality must pass thermal.bitrateBps / .framerate / .scaleDownBy to " +
             "applyVideoEncoding — using raw level values bypasses the thermal ceiling."
+        )
+    }
+
+    func test_qualityLevelDebounce_usesQualityThresholdsConstant() throws {
+        // Regression guard: the quality-level debounce gate in processStats must not
+        // hardcode 5.0 — it must reference QualityThresholds.qualityLevelDebounceSeconds
+        // so future tuning is done in one place.
+        let source = try webRTCServiceSource()
+        XCTAssertTrue(
+            source.contains("qualityLevelDebounceSeconds"),
+            "processStats debounce gate must use QualityThresholds.qualityLevelDebounceSeconds"
+        )
+        XCTAssertFalse(
+            source.contains("< 5.0"),
+            "Hardcoded < 5.0 debounce in processStats — replace with QualityThresholds.qualityLevelDebounceSeconds"
         )
     }
 }
@@ -506,6 +567,52 @@ final class DisconnectDebounceSourceGuardTests: XCTestCase {
     }
 }
 
+// MARK: - Audio encoding + quality monitor source guards
+
+/// `adjustBitrate` must propagate the new bitrate ceiling to the live audio
+/// sender via `applyAudioEncoding`. Previously the bitrate was computed and
+/// logged but never written to the encoder — adaptation had zero effect.
+/// These guards also verify the quality monitor's nil-stats path uses
+/// `continue` (loop keeps running) rather than `return` (loop exits silently).
+@MainActor
+final class AdjustBitrateAudioEncodingSourceGuardTests: XCTestCase {
+
+    private func webRTCServiceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// The bitrate change branch inside `adjustBitrate` must call
+    /// `client.applyAudioEncoding(maxBitrateBps:)` so the encoder actually
+    /// sheds bandwidth on a degraded link.
+    func test_adjustBitrate_callsApplyAudioEncoding_whenBitrateChanges() throws {
+        let src = try webRTCServiceSource()
+        XCTAssertTrue(
+            src.contains("client.applyAudioEncoding(maxBitrateBps: newBitrate)"),
+            "adjustBitrate must call client.applyAudioEncoding(maxBitrateBps:) when the bitrate changes — " +
+            "omitting this means the audio encoder never actually sheds bandwidth despite the computed level."
+        )
+    }
+
+    /// Quality monitor must use `continue` for the nil-stats path so the
+    /// monitoring loop keeps running after a failed stats read. A `return`
+    /// here silently exits the outer Task and all future ticks are lost.
+    func test_qualityMonitor_usesConinueForNilStats_notReturn() throws {
+        let src = try webRTCServiceSource()
+        // The guard immediately before adjustBitrate must use `continue` not `return`.
+        XCTAssertTrue(
+            src.contains("guard let stats = await self.client.getStats() else { continue }"),
+            "The quality monitor nil-stats guard must use `continue` (skip tick) not `return` (exit loop) — " +
+            "a `return` here kills all future quality monitoring for the call."
+        )
+    }
+}
+
 // MARK: - Quality delegate source guards
 
 /// `didCollectStats` and `didChangeQualityLevel` are the two delegate callbacks
@@ -548,6 +655,83 @@ final class WebRTCQualityDelegateSourceGuardTests: XCTestCase {
     }
 }
 
+// MARK: - ICE candidate + remote SDP input validation source guards
+
+/// These guards verify that `P2PWebRTCClient` rejects malicious or malformed
+/// inputs before passing them to libwebrtc. libwebrtc processes ICE candidate
+/// strings and SDP blobs in C++ without Swift-level bounds checks; a hostile
+/// signaling peer could otherwise trigger parsing errors or OOM inside the
+/// library.
+@MainActor
+final class WebRTCInputValidationSourceGuardTests: XCTestCase {
+
+    private func p2pClientSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// ICE candidate sdpMLineIndex must be validated in the range 0-255 before
+    /// being passed to RTCIceCandidate. A value of -1 is invalid; INT32_MAX would
+    /// cause an assertion failure inside libwebrtc.
+    func test_addIceCandidate_validatesSDPMLineIndexRange() throws {
+        let src = try p2pClientSource()
+        XCTAssertTrue(
+            src.contains("candidate.sdpMLineIndex >= 0") && src.contains("candidate.sdpMLineIndex <= 255"),
+            "addIceCandidate must validate sdpMLineIndex is in 0-255 before creating RTCIceCandidate — " +
+            "an out-of-range value causes an assertion failure inside libwebrtc."
+        )
+    }
+
+    /// sdpMid is a free-form string from a remote peer; a multi-KB sdpMid would
+    /// cause excessive memory allocation inside RTCIceCandidate parsing.
+    func test_addIceCandidate_validatesSdpMidLength() throws {
+        let src = try p2pClientSource()
+        XCTAssertTrue(
+            src.contains("mid.count <= 256"),
+            "addIceCandidate must check sdpMid length <= 256 to prevent oversized strings " +
+            "from a hostile peer reaching libwebrtc."
+        )
+    }
+
+    /// The candidate SDP line (e.g. 'candidate:...') is parsed by libwebrtc in C++.
+    /// A 100 MB candidate line could cause OOM inside the library.
+    func test_addIceCandidate_validatesCandidateLineLength() throws {
+        let src = try p2pClientSource()
+        XCTAssertTrue(
+            src.contains("candidate.candidate.count <= 10_000"),
+            "addIceCandidate must enforce a 10 KB ceiling on the candidate line — " +
+            "libwebrtc has no app-level length guard and processes the string in C++."
+        )
+    }
+
+    /// Remote SDP must be bounded before being passed to RTCSessionDescription.
+    /// A 1 MB+ SDP payload is never legitimate; an unbounded string could cause OOM.
+    func test_setRemoteAnswer_validatesSDPLength() throws {
+        let src = try p2pClientSource()
+        XCTAssertTrue(
+            src.contains("sdp.count <= 1_000_000"),
+            "validateRemoteSDP must reject SDP blobs over 1 MB — passing arbitrarily " +
+            "large strings to RTCSessionDescription risks OOM inside libwebrtc."
+        )
+    }
+
+    /// The mandatory v=0 line is the first indicator that an SDP is well-formed.
+    /// Rejecting SDPs without it provides early defense against garbage payloads.
+    func test_setRemoteAnswer_rejectsSDPMissingVersionLine() throws {
+        let src = try p2pClientSource()
+        XCTAssertTrue(
+            src.contains("sdp.hasPrefix(\"v=0\")"),
+            "validateRemoteSDP must check that the SDP starts with 'v=0' — the mandatory " +
+            "first line. Any SDP that doesn't start with v=0 is malformed."
+        )
+    }
+}
+
 // MARK: - Testable WebRTC Client
 
 private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
@@ -577,7 +761,8 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
     func setNegotiationRole(isPolite: Bool) { lastNegotiationIsPolite = isPolite }
     func createOffer() async throws -> SessionDescription { try createOfferResult.get() }
     func createAnswer(for offer: SessionDescription) async throws -> SessionDescription { try createAnswerResult.get() }
-    func setRemoteAnswer(_ answer: SessionDescription) async throws {}
+    var setRemoteAnswerResult: Result<Void, Error> = .success(())
+    func setRemoteAnswer(_ answer: SessionDescription) async throws { try setRemoteAnswerResult.get() }
     func addIceCandidate(_ candidate: IceCandidate) async throws {
         addIceCandidateCallCount += 1
         addedCandidates.append(candidate)
@@ -607,6 +792,12 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
         applyVideoEncodingCallCount += 1
         lastVideoEncoding = (maxBitrateBps, maxFramerate, scaleResolutionDownBy)
     }
+    private(set) var applyAudioEncodingCallCount = 0
+    private(set) var lastAudioEncodingMaxBitrateBps: Int?
+    func applyAudioEncoding(maxBitrateBps: Int) {
+        applyAudioEncodingCallCount += 1
+        lastAudioEncodingMaxBitrateBps = maxBitrateBps
+    }
     func switchCamera() async throws {}
     func availableCameras() -> [CameraDeviceOption] { [] }
     func switchToCamera(uniqueID: String) async throws {}
@@ -620,6 +811,14 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
     func disconnect() { disconnectCallCount += 1; isConnected = false }
     private(set) var restartIceCallCount = 0
     func restartIce() { restartIceCallCount += 1 }
+    private(set) var applyAudioEncodingCallCount = 0
+    private(set) var lastAudioEncodingMaxBitrateBps: Int?
+    func applyAudioEncoding(maxBitrateBps: Int) {
+        applyAudioEncodingCallCount += 1
+        lastAudioEncodingMaxBitrateBps = maxBitrateBps
+    }
+    func setMaxAudioBitrate(_ bitrate: Int) {}
+    func sendDTMF(digits: String) {}
     func setAudioEffect(_ effect: AudioEffectConfig?) throws {}
     func updateAudioEffectParams(_ config: AudioEffectConfig) throws {}
 }

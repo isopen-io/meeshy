@@ -129,8 +129,8 @@ struct CommentMediaView: View {
         .aspectRatio(aspectRatio, contentMode: .fill)
         .frame(maxWidth: 260, minHeight: 120, maxHeight: 220)
         .clipped()
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .contentShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
+        .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
         .onTapGesture {
             showFullscreen = true
             HapticFeedback.light()
@@ -161,7 +161,7 @@ struct CommentMediaView: View {
             )
         }
         .frame(maxWidth: 260, maxHeight: 220)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
     }
 
     // MARK: - Audio
@@ -180,7 +180,7 @@ struct CommentMediaView: View {
             )
         }
         .frame(maxWidth: 320)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
     }
 
     // MARK: - Fullscreen

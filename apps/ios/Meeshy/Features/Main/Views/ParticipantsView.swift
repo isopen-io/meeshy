@@ -502,14 +502,11 @@ struct ParticipantsView: View {
     }
 
     private func relativeTime(from date: Date) -> String {
-        RelativeTimeFormatter.longString(for: date)
+        date.formatted(.relative(presentation: .numeric))
     }
 
     private func shortDate(_ date: Date) -> String {
-        let isSameYear = Calendar.current.isDate(date, equalTo: Date(), toGranularity: .year)
-        return isSameYear
-            ? date.formatted(.dateTime.day().month(.abbreviated))
-            : date.formatted(.dateTime.day().month(.abbreviated).year(.twoDigits))
+        date.formatted(.dateTime.day().month(.abbreviated).year(.twoDigits))
     }
 
     // MARK: - API Calls

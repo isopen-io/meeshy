@@ -160,6 +160,56 @@ describe('AuthHandler', () => {
       jest.clearAllTimers();
       jest.useRealTimers();
     });
+
+    it('should disconnect socket when JWT user is not found in database', async () => {
+      const mockSocket = createMockSocket({
+        handshake: { auth: { token: 'valid-jwt-token' } }
+      });
+
+      jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue(null);
+
+      await authHandler.handleTokenAuthentication(mockSocket);
+
+      expect(mockSocket.emit).toHaveBeenCalledWith('error', expect.objectContaining({
+        message: expect.stringContaining('not found')
+      }));
+      expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
+      expect(connectedUsers.size).toBe(0);
+    });
+
+    it('should disconnect socket when anonymous session token is not found', async () => {
+      const mockSocket = createMockSocket({
+        handshake: { auth: { sessionToken: 'unknown-session' } }
+      });
+
+      jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue(null);
+
+      await authHandler.handleTokenAuthentication(mockSocket);
+
+      expect(mockSocket.emit).toHaveBeenCalledWith('error', expect.objectContaining({
+        message: expect.stringContaining('not found')
+      }));
+      expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
+      expect(connectedUsers.size).toBe(0);
+    });
+
+    it('should disconnect socket and emit error on unexpected JWT verification failure', async () => {
+      const mockSocket = createMockSocket({
+        handshake: { auth: { token: 'malformed-token' } }
+      });
+
+      jest.spyOn(jwt, 'verify').mockImplementation(() => {
+        throw new Error('invalid signature');
+      });
+
+      await authHandler.handleTokenAuthentication(mockSocket);
+
+      expect(mockSocket.emit).toHaveBeenCalledWith('error', expect.objectContaining({
+        message: 'Authentication failed'
+      }));
+      expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
+      expect(connectedUsers.size).toBe(0);
+    });
   });
 
   describe('handleDisconnection', () => {

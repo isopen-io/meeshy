@@ -1036,7 +1036,7 @@ public struct StoryComposerView: View {
     /// applied at low opacity behind the icon glyph (soft tinted card).
     private func tileAccent(for tool: StoryToolMode) -> Color {
         switch tool {
-        case .media:    return MeeshyColors.coral          // peachy red
+        case .media:    return MeeshyColors.error          // peachy red
         case .audio:    return MeeshyColors.indigo400      // soft lavender
         case .text:     return MeeshyColors.indigo400      // soft lavender
         case .drawing:  return MeeshyColors.success        // mint green
@@ -2163,7 +2163,12 @@ public struct StoryComposerView: View {
     private func addVocalToForeground() {
         guard let url = confirmedMediaAudioURL else { return }
         Task {
-            let samples = (try? await WaveformGenerator.shared.generateSamples(from: url)) ?? []
+            let samples: [Float]
+            do {
+                samples = try await WaveformCache.shared.samples(from: url)
+            } catch {
+                samples = []  // waveform cosmétique : barres plates si l'analyse échoue
+            }
             let asset = AVURLAsset(url: url)
             var mediaDuration: Float?
             if let cmDur = try? await asset.load(.duration) {
@@ -2201,7 +2206,12 @@ public struct StoryComposerView: View {
 
     private func addRecordingToBackground(url: URL) {
         Task {
-            let samples = (try? await WaveformGenerator.shared.generateSamples(from: url)) ?? []
+            let samples: [Float]
+            do {
+                samples = try await WaveformCache.shared.samples(from: url)
+            } catch {
+                samples = []  // waveform cosmétique : barres plates si l'analyse échoue
+            }
             await MainActor.run {
                 if let obj = viewModel.addAudioObject() {
                     viewModel.loadedAudioURLs[obj.id] = url

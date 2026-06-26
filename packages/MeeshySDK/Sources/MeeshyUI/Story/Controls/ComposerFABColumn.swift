@@ -44,7 +44,7 @@ struct ComposerFABColumn: View, Equatable {
         let isActive = activeCategory == category
         let accent: Color = {
             switch category {
-            case .media: return MeeshyColors.coral
+            case .media: return MeeshyColors.error
             case .son: return MeeshyColors.indigo400
             case .text: return MeeshyColors.indigo400
             case .drawing: return MeeshyColors.success
@@ -86,7 +86,7 @@ struct ComposerFABColumn: View, Equatable {
                 }
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Ouvrir l'outil \(category)")
+            .accessibilityLabel("Ouvrir l'outil \(String(describing: category))")
             .accessibilityValue(badge > 0 ? "\(badge) éléments actifs" : "Aucun élément")
             .accessibilityHint(isActive ? "Touchez deux fois pour fermer." : "Touchez deux fois pour ouvrir.")
         }

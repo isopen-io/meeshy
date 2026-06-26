@@ -81,6 +81,7 @@ export class AuthHandler {
     } catch (error) {
       logger.error('erreur authentification automatique', { error });
       socket.emit(SERVER_EVENTS.ERROR, { message: 'Authentication failed' });
+      socket.disconnect(true);
     }
   }
 
@@ -176,6 +177,7 @@ export class AuthHandler {
     } catch (error) {
       logger.error('erreur authentification manuelle', { error });
       socket.emit(SERVER_EVENTS.ERROR, { message: 'Authentication failed' });
+      socket.disconnect(true);
     }
   }
 
@@ -201,6 +203,7 @@ export class AuthHandler {
 
     if (!user) {
       socket.emit(SERVER_EVENTS.ERROR, { message: 'User not found' });
+      socket.disconnect(true);
       return;
     }
 
@@ -277,6 +280,7 @@ export class AuthHandler {
 
     if (!participant) {
       socket.emit(SERVER_EVENTS.ERROR, { message: 'Anonymous session not found' });
+      socket.disconnect(true);
       return;
     }
 

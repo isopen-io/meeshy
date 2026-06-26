@@ -248,6 +248,9 @@ nonisolated final class MockWebRTCClient: WebRTCClientProviding {
     func disconnect() { disconnectCallCount += 1; isConnected = false }
     private(set) var restartIceCallCount = 0
     func restartIce() { restartIceCallCount += 1 }
+    func applyAudioEncoding(maxBitrateBps: Int) {}
+    func setMaxAudioBitrate(_ bitrate: Int) {}
+    func sendDTMF(digits: String) {}
     func setAudioEffect(_ effect: AudioEffectConfig?) throws {}
     func updateAudioEffectParams(_ config: AudioEffectConfig) throws {}
 }
@@ -596,10 +599,10 @@ final class CallManagerEarlyJoinTests: XCTestCase {
     }
 }
 
-// MARK: - CallStats Reducer (§5.7)
+// MARK: - CallStats Reducer — packet-level (§5.7)
 
 @MainActor
-final class CallStatsReducerTests: XCTestCase {
+final class CallStatsPacketReducerTests: XCTestCase {
     private func codec(_ id: String, _ mime: String) -> CallStats.RawEntry {
         CallStats.RawEntry(id: id, type: "codec", mimeType: mime)
     }
@@ -1048,6 +1051,336 @@ final class CallManagerPreferredCallLanguageTests: XCTestCase {
     }
 }
 
+// MARK: - Thermal Critical: Video Downgrade (§5.4 / §5.6)
+
+/// Source-level guard tests ensuring the thermal-critical video-disable path
+/// uses the proper transceiver downgrade + SDP renegotiation rather than a
+/// raw `enableVideo(false)` (track.enabled toggle only).
+///
+/// Root cause prevented: without `downgradeFromVideo()` + `createOffer()`, the
+/// peer's SDP transceiver direction stays `sendRecv` while no video RTP flows
+/// — the peer's decoder never tears down and the avatar placeholder is the
+/// only signal, which is race-prone (media-toggled can arrive before the
+/// thermal state is stable). Mirrors the manual `toggleVideo()` path (§5.4).
+@MainActor
+final class CallManagerThermalVideoDowngradeTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func thermalBody(_ source: String) throws -> String {
+        guard let start = source.range(of: "func thermalStateDidChange") else {
+            XCTFail("thermalStateDidChange not found in CallManager source"); return ""
+        }
+        let end = source.range(of: "\n// MARK:", range: start.upperBound..<source.endIndex)?.lowerBound
+                ?? source.endIndex
+        return String(source[start.lowerBound..<end])
+    }
+
+    func test_thermalCritical_usesDowngradeFromVideo_notEnableVideoFalse() throws {
+        let body = try thermalBody(try callManagerSource())
+        XCTAssertTrue(
+            body.contains("downgradeFromVideo()"),
+            "Thermal-critical video disable must call downgradeFromVideo() to set transceiver " +
+            "direction (not just track.enabled). enableVideo(false) leaves the SDP sendRecv."
+        )
+        XCTAssertFalse(
+            body.contains("enableVideo(false)"),
+            "enableVideo(false) must not be used in the thermal-critical path — it only toggles " +
+            "track.enabled without updating the transceiver direction or triggering renegotiation."
+        )
+    }
+
+    func test_thermalCritical_updatesHasLocalVideoTrack() throws {
+        let body = try thermalBody(try callManagerSource())
+        XCTAssertTrue(
+            body.contains("hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack"),
+            "After downgradeFromVideo(), hasLocalVideoTrack must be synced so the UI (PiP, controls) " +
+            "reflects the absence of a local video track."
+        )
+    }
+
+    func test_thermalCritical_resetsVideoSurvivalController() throws {
+        let body = try thermalBody(try callManagerSource())
+        XCTAssertTrue(
+            body.contains("videoSurvivalController.reset()"),
+            "After a thermal-critical video downgrade, videoSurvivalController must be reset so " +
+            "stale degradation timers don't immediately re-suspend video when it's re-enabled."
+        )
+    }
+
+    func test_thermalCritical_sendsRenegotiationOffer_whenNeeded() throws {
+        let body = try thermalBody(try callManagerSource())
+        XCTAssertTrue(
+            body.contains("needsRenegotiation") && body.contains("emitCallOffer"),
+            "Thermal-critical video downgrade must trigger a renegotiation offer when " +
+            "downgradeFromVideo() returns true, so the peer's SDP direction is updated."
+        )
+    }
+
+    func test_thermalCritical_stillEmitsMediaToggledEvent() throws {
+        let body = try thermalBody(try callManagerSource())
+        XCTAssertTrue(
+            body.contains("emitCallToggleVideo"),
+            "Thermal-critical video downgrade must still emit call:media-toggled so the peer " +
+            "shows the avatar placeholder immediately (before the renegotiation round-trip)."
+        )
+    }
+}
+
+// MARK: - Post-call diagnostics persistence
+
+/// Covers the `CallManager.CallQualitySummary` type, the `lastCallSummary` static
+/// accessor, and `CallStats` Codable conformance. All are pure-value / UserDefaults
+/// level tests — no live WebRTC stack required.
+@MainActor
+final class CallQualitySummaryTests: XCTestCase {
+
+    private let key = CallManager.lastCallSummaryDefaultsKey
+
+    override func setUp() {
+        super.setUp()
+        UserDefaults.standard.removeObject(forKey: key)
+    }
+
+    override func tearDown() {
+        UserDefaults.standard.removeObject(forKey: key)
+        super.tearDown()
+    }
+
+    // MARK: - CallStats Codable round-trip
+
+    func test_callStats_codableRoundTrip_preservesAllFields() throws {
+        let original = CallStats(
+            roundTripTimeMs: 42.5,
+            packetsLost: 3,
+            bandwidth: 95_000,
+            bytesReceived: 120_000,
+            codec: "opus",
+            inboundPacketsReceived: 150,
+            inboundAudioPackets: 100,
+            inboundVideoPackets: 50,
+            outboundPacketsSent: 200,
+            availableOutgoingBitrateBps: 500_000
+        )
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(CallStats.self, from: data)
+        XCTAssertEqual(original, decoded)
+    }
+
+    func test_callStats_codableRoundTrip_nilCodecPreserved() throws {
+        let original = CallStats(codec: nil)
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(CallStats.self, from: data)
+        XCTAssertNil(decoded.codec)
+    }
+
+    // MARK: - CallQualitySummary Codable round-trip
+
+    func test_callQualitySummary_codableRoundTrip_allFieldsPresent() throws {
+        let stats = CallStats(roundTripTimeMs: 75, packetsLost: 1, codec: "H264")
+        let summary = CallManager.CallQualitySummary(
+            callId: "abc123",
+            remoteUser: "alice",
+            durationSeconds: 123.4,
+            endReason: "local",
+            stats: stats
+        )
+        let data = try JSONEncoder().encode(summary)
+        let decoded = try JSONDecoder().decode(CallManager.CallQualitySummary.self, from: data)
+        XCTAssertEqual(decoded.callId, "abc123")
+        XCTAssertEqual(decoded.remoteUser, "alice")
+        XCTAssertEqual(decoded.durationSeconds, 123.4, accuracy: 0.001)
+        XCTAssertEqual(decoded.endReason, "local")
+        XCTAssertEqual(decoded.stats?.roundTripTimeMs, 75)
+        XCTAssertEqual(decoded.stats?.codec, "H264")
+    }
+
+    func test_callQualitySummary_codableRoundTrip_nilStatsPreserved() throws {
+        let summary = CallManager.CallQualitySummary(
+            callId: nil, remoteUser: nil, durationSeconds: 0, endReason: "missed", stats: nil
+        )
+        let data = try JSONEncoder().encode(summary)
+        let decoded = try JSONDecoder().decode(CallManager.CallQualitySummary.self, from: data)
+        XCTAssertNil(decoded.stats)
+        XCTAssertNil(decoded.callId)
+    }
+
+    // MARK: - lastCallSummary UserDefaults accessor
+
+    func test_lastCallSummary_isNil_whenNoDataPersisted() {
+        XCTAssertNil(CallManager.lastCallSummary, "No summary stored yet → accessor must return nil")
+    }
+
+    func test_lastCallSummary_returnsDecodedSummary_afterManualWrite() throws {
+        let summary = CallManager.CallQualitySummary(
+            callId: "xyz", remoteUser: "bob", durationSeconds: 60, endReason: "remote", stats: nil
+        )
+        let data = try JSONEncoder().encode(summary)
+        UserDefaults.standard.set(data, forKey: key)
+
+        let read = CallManager.lastCallSummary
+        XCTAssertEqual(read?.callId, "xyz")
+        XCTAssertEqual(read?.remoteUser, "bob")
+        XCTAssertEqual(read?.endReason, "remote")
+    }
+
+    func test_lastCallSummary_returnsNil_whenDataIsCorrupt() {
+        UserDefaults.standard.set(Data("not-json".utf8), forKey: key)
+        XCTAssertNil(CallManager.lastCallSummary, "Corrupt data must not crash — returns nil")
+    }
+
+    // MARK: - lastCallSummaryDefaultsKey format
+
+    func test_lastCallSummaryDefaultsKey_isStableReversedomainNotation() {
+        XCTAssertEqual(
+            CallManager.lastCallSummaryDefaultsKey,
+            "me.meeshy.lastCallQualitySummary",
+            "Key must remain stable across builds — changing it would orphan persisted summaries")
+    }
+}
+
+// MARK: - Stale-callId Guards (Fix 9 & Fix 10)
+
+/// Source-analysis guards verifying the `self.currentCallId == callId` invariant
+/// is present in every async path that calls `createOffer()` and then
+/// `emitCallOffer()`. These tests prevent regressions where a call that ends
+/// *while* `createOffer()` suspends is wrongly told to `endCallInternal(.failed)`
+/// or emits a stale SDP offer for a dead session.
+@MainActor
+final class CallManagerStaleCallIdGuardTests: XCTestCase {
+
+    private func source() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    // MARK: Fix 9 — thermalStateDidChange renegotiation path
+
+    func test_thermalStateDidChange_renegotiationBlock_hasStaleCallIdGuard() throws {
+        // The thermal-critical branch calls `createOffer()` under `await`. Without a
+        // post-await `self.currentCallId == callId` guard, the offer is emitted for a
+        // call that may have ended during the SDP-creation suspension window.
+        let src = try source()
+
+        guard let thermalRange = src.range(of: "thermalStateDidChange") else {
+            XCTFail("thermalStateDidChange not found in CallManager.swift")
+            return
+        }
+        // Bound to the thermal handler body — up to the next top-level closing brace
+        // that returns to the class scope (heuristic: next `\n    func ` or `\n}`).
+        let searchEnd = src.range(
+            of: "\n    func ",
+            range: thermalRange.upperBound..<src.endIndex
+        )?.lowerBound ?? src.endIndex
+        let thermalBody = String(src[thermalRange.lowerBound..<searchEnd])
+
+        // Must see `let offer = await self.webRTCService.createOffer()` followed by
+        // `, self.currentCallId == callId` (the post-await stale-callId guard).
+        let hasCreateOffer = thermalBody.contains("await self.webRTCService.createOffer()")
+        XCTAssertTrue(hasCreateOffer,
+            "thermalStateDidChange must contain a createOffer() suspension point")
+
+        // The guard must appear as part of the same `if let` chain: the condition
+        // `, self.currentCallId == callId` must follow `let offer = await`.
+        guard let createOfferIdx = thermalBody.range(of: "let offer = await self.webRTCService.createOffer()")?.lowerBound else {
+            XCTFail("createOffer expression not found in thermalStateDidChange body")
+            return
+        }
+        let afterOffer = String(thermalBody[createOfferIdx...])
+        XCTAssertTrue(
+            afterOffer.contains("self.currentCallId == callId"),
+            "Fix 9 regression: thermalStateDidChange renegotiation block must guard " +
+            "`self.currentCallId == callId` after `await createOffer()` to prevent " +
+            "emitting a stale SDP offer for a call that ended during the suspension window."
+        )
+    }
+
+    // MARK: Fix 10 — listenForParticipantJoined nil-offer path
+
+    func test_listenForParticipantJoined_nilOffer_doesNotClobberCleanEnd() throws {
+        // When `createOffer()` returns nil because the call ended while it was
+        // suspended (peerConnection torn down → nil SDP), the old code called
+        // `endCallInternal(.failed)` unconditionally, clobbering the clean end reason.
+        // Fix 10: guard `self.currentCallId == callId` BEFORE calling endCallInternal
+        // on the nil path.
+        let src = try source()
+
+        guard let joinRange = src.range(of: "func listenForParticipantJoined") else {
+            XCTFail("listenForParticipantJoined not found in CallManager.swift")
+            return
+        }
+        let searchEnd = src.range(
+            of: "\n    private func ",
+            range: joinRange.upperBound..<src.endIndex
+        )?.lowerBound ?? src.endIndex
+        let joinBody = String(src[joinRange.lowerBound..<searchEnd])
+
+        // Find the `guard let offer = await …` nil path.
+        guard let guardOfferRange = joinBody.range(of: "guard let offer = await self.webRTCService.createOffer()") else {
+            XCTFail("nil-offer guard not found in listenForParticipantJoined Task body")
+            return
+        }
+        // The code immediately following the guard's else branch must check the callId
+        // before calling endCallInternal — i.e. another `currentCallId == callId` guard.
+        let afterGuard = String(joinBody[guardOfferRange.lowerBound...])
+        XCTAssertTrue(
+            afterGuard.contains("self.currentCallId == callId"),
+            "Fix 10 regression (nil-offer path): listenForParticipantJoined must check " +
+            "`self.currentCallId == callId` before `endCallInternal(.failed(...))` so a " +
+            "call that ended cleanly during createOffer() suspension is not re-ended with .failed."
+        )
+    }
+
+    func test_listenForParticipantJoined_successOffer_hasStaleCallIdGuard() throws {
+        // Even when createOffer() succeeds, the call may have ended during the
+        // suspension. The success path must also guard `currentCallId == callId`
+        // before emitting the offer (duplicate-callId + epoch pollution otherwise).
+        let src = try source()
+
+        guard let joinRange = src.range(of: "func listenForParticipantJoined") else {
+            XCTFail("listenForParticipantJoined not found in CallManager.swift")
+            return
+        }
+        let searchEnd = src.range(
+            of: "\n    private func ",
+            range: joinRange.upperBound..<src.endIndex
+        )?.lowerBound ?? src.endIndex
+        let joinBody = String(src[joinRange.lowerBound..<searchEnd])
+
+        // The success path calls emitCallOffer. Immediately before it there must be
+        // a guard that checks currentCallId == callId.
+        guard let emitIdx = joinBody.range(of: "self.emitCallOffer(callId: callId, toUserId: toUserId")?.lowerBound else {
+            XCTFail("emitCallOffer call not found in listenForParticipantJoined success path")
+            return
+        }
+        // Look for the stale-callId guard between the end of the nil-offer guard block
+        // and emitCallOffer.
+        let beforeEmit = String(joinBody[joinBody.startIndex..<emitIdx])
+        // There should be at least two occurrences of `currentCallId == callId` in the
+        // Task body: one for the nil path, one for the success path.
+        let guardOccurrences = beforeEmit.components(separatedBy: "self.currentCallId == callId").count - 1
+        XCTAssertGreaterThanOrEqual(
+            guardOccurrences, 2,
+            "Fix 10 regression (success path): listenForParticipantJoined must guard " +
+            "`self.currentCallId == callId` on BOTH the nil-offer path AND the success path, " +
+            "before calling emitCallOffer."
+        )
+    }
+}
+
 // MARK: - ICE restart task serialization source guards
 
 /// Guards that `attemptReconnection()` tracks its in-flight Task via
@@ -1126,5 +1459,101 @@ final class ICERestartTaskSerializationTests: XCTestCase {
             body.contains("iceRestartTask = nil"),
             "endCallInternal must nil iceRestartTask after cancelling to release the Task object."
         )
+    }
+}
+
+// MARK: - isCallActiveFlag thread-safety source guard
+
+@MainActor
+final class CallManagerIsCallActiveFlagSourceGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_isCallActiveFlag_isNotUnsafeNonisolated() throws {
+        let src = try callManagerSource()
+        XCTAssertFalse(
+            src.contains("nonisolated(unsafe) static var isCallActiveFlag"),
+            "isCallActiveFlag must NOT use nonisolated(unsafe) — it is read from non-MainActor threads " +
+            "and requires a lock guard (OSAllocatedUnfairLock) to prevent a Swift 6 data race."
+        )
+    }
+
+    func test_isCallActiveFlag_usesOSAllocatedUnfairLock() throws {
+        let src = try callManagerSource()
+        XCTAssertTrue(
+            src.contains("OSAllocatedUnfairLock"),
+            "isCallActiveFlag backing store must use OSAllocatedUnfairLock so concurrent " +
+            "socket-thread reads are serialised against @MainActor writes."
+        )
+    }
+}
+
+// MARK: - CallKit delegate action-fulfillment timing source guards
+
+@MainActor
+final class CallKitActionFulfillmentSourceGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// `CXAnswerCallAction.fulfill()` must appear BEFORE the `Task {` that calls
+    /// `answerCallReady()` — not inside it. The Task is for async media setup;
+    /// the action settlement tells CallKit the call is answered at the UI layer.
+    func test_cxAnswerCallAction_fulfilledBeforeTask() throws {
+        let src = try callManagerSource()
+        guard let answerRange = src.range(of: "perform action: CXAnswerCallAction") else {
+            XCTFail("CXAnswerCallAction handler not found"); return
+        }
+        // Find the end of this function body (next top-level `}` after the function
+        // header). We look for the pattern after the function opening brace.
+        let bodyStart = src[answerRange.upperBound...].firstIndex(of: "{") ?? src.endIndex
+        let bodyFragment = String(src[bodyStart...].prefix(400))
+
+        let fulfillOffset = bodyFragment.range(of: "action.fulfill()")?.lowerBound
+        let taskOffset = bodyFragment.range(of: "Task {")?.lowerBound
+        XCTAssertNotNil(fulfillOffset, "action.fulfill() must exist in CXAnswerCallAction handler")
+        XCTAssertNotNil(taskOffset, "Task { must exist in CXAnswerCallAction handler for async setup")
+        if let f = fulfillOffset, let t = taskOffset {
+            XCTAssertTrue(f < t,
+                "CXAnswerCallAction: action.fulfill() must appear BEFORE Task { — " +
+                "settling inside the Task is async and may never fire if manager is nil or Task is cancelled.")
+        }
+    }
+
+    /// `CXEndCallAction.fulfill()` must appear BEFORE the `Task {` that calls
+    /// `endCall()`. Moving it inside the Task means CallKit may time out the
+    /// action before `endCall()` completes.
+    func test_cxEndCallAction_fulfilledBeforeTask() throws {
+        let src = try callManagerSource()
+        guard let endRange = src.range(of: "perform action: CXEndCallAction") else {
+            XCTFail("CXEndCallAction handler not found"); return
+        }
+        let bodyStart = src[endRange.upperBound...].firstIndex(of: "{") ?? src.endIndex
+        let bodyFragment = String(src[bodyStart...].prefix(500))
+
+        let fulfillOffset = bodyFragment.range(of: "action.fulfill()")?.lowerBound
+        let taskOffset = bodyFragment.range(of: "Task {")?.lowerBound
+        XCTAssertNotNil(fulfillOffset, "action.fulfill() must exist in CXEndCallAction handler")
+        XCTAssertNotNil(taskOffset, "Task { must exist in CXEndCallAction handler for async teardown")
+        if let f = fulfillOffset, let t = taskOffset {
+            XCTAssertTrue(f < t,
+                "CXEndCallAction: action.fulfill() must appear BEFORE Task { — " +
+                "settling inside the Task creates a CallKit timeout window if manager deallocs mid-flight.")
+        }
     }
 }

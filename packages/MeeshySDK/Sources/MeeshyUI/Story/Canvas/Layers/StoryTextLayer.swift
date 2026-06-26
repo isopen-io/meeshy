@@ -11,7 +11,7 @@ import MeeshySDK
 /// `fontSize` is interpreted in design-space pixels (1080-référentiel) and is
 /// scaled through `CanvasGeometry.render(_:)` so two devices of different
 /// physical size show typography at identical visual proportions.
-public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
+public final class StoryTextLayer: CATextLayer {
     public private(set) nonisolated(unsafe) var textObject: StoryTextObject?
 
     /// Backing layer placed behind the text glyphs when `backgroundStyle` is

@@ -151,7 +151,7 @@ struct IncomingCallView: View {
             Text(callManager.isVideoEnabled
                 ? String(localized: "call.incoming.badge.video", defaultValue: "Video", bundle: .main)
                 : String(localized: "call.incoming.badge.audio", defaultValue: "Audio", bundle: .main))
-                .font(.footnote.weight(.semibold))
+                .font(.caption2.weight(.semibold))
         }
         .foregroundColor(MeeshyColors.indigo400)
         .padding(.horizontal, 14)
@@ -186,7 +186,7 @@ struct IncomingCallView: View {
                             .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.error)
 
                         Text(String(localized: "call.incoming.decline", defaultValue: "Refuser", bundle: .main))
-                            .font(.footnote.weight(.medium))
+                            .font(.caption2.weight(.medium))
                             .foregroundColor(MeeshyColors.error)
                     }
                 }
@@ -206,7 +206,7 @@ struct IncomingCallView: View {
                             .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.success)
 
                         Text(String(localized: "call.incoming.accept", defaultValue: "Accepter", bundle: .main))
-                            .font(.footnote.weight(.medium))
+                            .font(.caption2.weight(.medium))
                             .foregroundColor(MeeshyColors.success)
                     }
                 }

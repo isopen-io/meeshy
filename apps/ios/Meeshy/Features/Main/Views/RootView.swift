@@ -410,7 +410,6 @@ struct RootView: View {
         .environmentObject(statusViewModel)
         .environmentObject(conversationViewModel)
         .environmentObject(storyViewerCoordinator)
-        .environmentObject(StatusBubbleController.shared)
         // In-app notification preview: long-press / pull-down on a toast opens
         // the conversation (last messages + simple composer) over the current
         // page. A sheet creates a fresh environment, so the objects the reused
@@ -431,7 +430,6 @@ struct RootView: View {
                 .environmentObject(statusViewModel)
                 .environmentObject(conversationViewModel)
                 .environmentObject(storyViewerCoordinator)
-                .environmentObject(StatusBubbleController.shared)
                 .presentationDetents([.large, .medium])
                 .presentationDragIndicator(.visible)
         }
@@ -728,7 +726,6 @@ struct RootView: View {
                 .environmentObject(conversationViewModel)
                 .environmentObject(router)
                 .environmentObject(statusViewModel)
-                .environmentObject(StatusBubbleController.shared)
                 .presentationDetents([.medium, .large])
             }
         }
@@ -740,7 +737,6 @@ struct RootView: View {
         .sheet(isPresented: $showNewConversation) {
             NewConversationView()
                 .environmentObject(statusViewModel)
-                .environmentObject(StatusBubbleController.shared)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
@@ -1549,17 +1545,27 @@ struct RootView: View {
                 // Special handling for notifications & pending-request badges
                 Group {
                     if item.icon == "bell.fill" {
-                        ThemedActionButton(icon: item.icon, color: item.color, badge: notificationManager.unreadCount, action: item.action)
+                        ThemedActionButton(
+                            icon: item.icon, color: item.color,
+                            label: item.label, hint: String(localized: "root.menu.item.hint", defaultValue: "Ouvrir cette section"),
+                            badge: notificationManager.unreadCount, action: item.action
+                        )
                     } else if item.icon == "sparkle.magnifyingglass" {
-                        ThemedActionButton(icon: item.icon, color: item.color, badge: FriendshipCache.shared.pendingReceivedCount, action: item.action)
+                        ThemedActionButton(
+                            icon: item.icon, color: item.color,
+                            label: item.label, hint: String(localized: "root.menu.item.hint", defaultValue: "Ouvrir cette section"),
+                            badge: FriendshipCache.shared.pendingReceivedCount, action: item.action
+                        )
                     } else {
-                        ThemedActionButton(icon: item.icon, color: item.color, action: item.action)
+                        ThemedActionButton(
+                            icon: item.icon, color: item.color,
+                            label: item.label, hint: String(localized: "root.menu.item.hint", defaultValue: "Ouvrir cette section"),
+                            action: item.action
+                        )
                     }
                 }
                 .position(x: menuX, y: itemY)
                 .menuAnimation(showMenu: showMenu, delay: Double(index) * 0.04)
-                .accessibilityLabel(item.label)
-                .accessibilityHint(String(localized: "root.menu.item.hint", defaultValue: "Ouvrir cette section"))
             }
         }
         .ignoresSafeArea()

@@ -516,11 +516,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
         Task { [weak self] in
             do {
                 let user = try await AuthService.shared.me()
-                await self?.updateUserAfterRevalidation(user, userId: userId)
+                self?.updateUserAfterRevalidation(user, userId: userId)
             } catch let error as MeeshyError {
                 switch error {
                 case .auth:
-                    await self?.requireReauthentication(userId: userId)
+                    self?.requireReauthentication(userId: userId)
                 case .network, .server, .message, .media, .forbidden, .unknown:
                     // Transient — keep session, retry on next 401 / launch.
                     break
@@ -534,7 +534,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
     // MARK: - Handle 401 (called from APIClient during active session)
 
     public func handleUnauthorized() {
-        guard let userId = activeUserId else {
+        guard activeUserId != nil else {
             // No active user at all — nothing to refresh, no state to clear.
             return
         }
@@ -712,11 +712,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
                 guard let newToken = data.token, let newUser = data.user else {
                     throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
                 }
-                await self.applySession(token: newToken, sessionToken: data.sessionToken, user: newUser)
+                self.applySession(token: newToken, sessionToken: data.sessionToken, user: newUser)
                 return newToken
             } catch let error as MeeshyError {
                 if case .auth = error {
-                    await self.requireReauthentication(userId: userId)
+                    self.requireReauthentication(userId: userId)
                 }
                 throw error
             } catch {

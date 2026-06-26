@@ -93,6 +93,27 @@ final class RecentMediaStripModel: ObservableObject {
         }.image
     }
 
+    /// Larger aspect-fit image for the long-press quick-look preview. Reuses
+    /// `.highQualityFormat`, which is single-callback, so the continuation
+    /// resumes exactly once. Videos resolve to their poster frame.
+    func preview(for asset: PHAsset) async -> UIImage? {
+        let options = PHImageRequestOptions()
+        options.deliveryMode = .highQualityFormat
+        options.resizeMode = .fast
+        options.isNetworkAccessAllowed = true
+        options.isSynchronous = false
+        return await withCheckedContinuation { (continuation: CheckedContinuation<ImageBox, Never>) in
+            imageManager.requestImage(
+                for: asset,
+                targetSize: CGSize(width: 1024, height: 1024),
+                contentMode: .aspectFit,
+                options: options
+            ) { image, _ in
+                continuation.resume(returning: ImageBox(image: image))
+            }
+        }.image
+    }
+
     /// Resolves a tapped asset to a `RecentMediaPick`. `.highQualityFormat` /
     /// `requestAVAsset` are single-callback, so each continuation resumes once.
     func resolve(_ asset: PHAsset) async -> RecentMediaPick? {
@@ -162,43 +183,90 @@ struct RecentMediaStrip: View {
     @State private var resolvingId: String?
 
     private let columns = 4
-    private let spacing: CGFloat = 6
+    private let spacing: CGFloat = 8
     private let hPadding: CGFloat = 12
 
-    /// Square cell sized so exactly `columns` fit across the screen width.
-    private var cell: CGFloat {
-        let width = UIScreen.main.bounds.width
-        return ((width - hPadding * 2) - spacing * CGFloat(columns - 1)) / CGFloat(columns)
+    /// iPad / macOS use the roomy vertical grid; iPhone keeps the horizontal
+    /// strip. Keyed on the device idiom (NOT horizontalSizeClass) because a sheet
+    /// on iPad can report a `.compact` width even with ample room — and the
+    /// screen-width cell sizing only misfires on iPad/macOS where the sheet is far
+    /// narrower than the screen.
+    private var usesGridLayout: Bool { DeviceLayout.isPad }
+
+    /// Compact (iPhone): the composer fills the screen width, so the screen is a
+    /// faithful proxy for the container. Regular (iPad / macOS) MUST size from the
+    /// real container width — the comments sheet is far narrower than the screen,
+    /// and sizing four cells off the full screen is exactly what made the old
+    /// strip overflow into the unstructured mess.
+    private var compactCell: CGFloat { cell(forContainerWidth: UIScreen.main.bounds.width) }
+
+    private func cell(forContainerWidth width: CGFloat) -> CGFloat {
+        max(40, ((width - hPadding * 2) - spacing * CGFloat(columns - 1)) / CGFloat(columns))
     }
 
-    /// Recent samples shown before the "open library" tile. Capped so the grid
-    /// reads as two rows of four — seven thumbnails + the trailing tile (the
-    /// 8th cell). Tapping that tile opens the full photo library for the rest.
-    private var samples: [PHAsset] { Array(model.assets.prefix((columns * 2) - 1)) }
+    /// Compact reads as two rows of four (seven thumbnails + the trailing library
+    /// tile). Regular shows a fuller, scrollable grid.
+    private var compactSamples: [PHAsset] { Array(model.assets.prefix((columns * 2) - 1)) }
+    private var regularSamples: [PHAsset] { Array(model.assets.prefix((columns * 6) - 1)) }
 
     var body: some View {
-        let rows = [
-            GridItem(.fixed(cell), spacing: spacing),
-            GridItem(.fixed(cell), spacing: spacing)
-        ]
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyHGrid(rows: rows, spacing: spacing) {
-                ForEach(samples, id: \.localIdentifier) { asset in
-                    RecentMediaCell(
-                        asset: asset,
-                        model: model,
-                        cell: cell,
-                        isResolving: resolvingId == asset.localIdentifier,
-                        onTap: { tap(asset) }
-                    )
+        Group {
+            if usesGridLayout {
+                regularGrid
+            } else {
+                compactStrip
+                    .frame(maxHeight: .infinity, alignment: .top)
+            }
+        }
+        .task { model.load() }
+    }
+
+    /// iPad / macOS — a roomy four-column vertical grid sized to the REAL
+    /// container width, scrollable so every recent item is reachable.
+    private var regularGrid: some View {
+        GeometryReader { geo in
+            let c = cell(forContainerWidth: geo.size.width)
+            let cols = Array(repeating: GridItem(.fixed(c), spacing: spacing), count: columns)
+            ScrollView(.vertical, showsIndicators: false) {
+                LazyVGrid(columns: cols, alignment: .leading, spacing: spacing) {
+                    ForEach(regularSamples, id: \.localIdentifier) { asset in
+                        cellView(asset, size: c)
+                    }
+                    openLibraryTile(c)
                 }
-                // 8th cell — opens the full photo library after the samples.
-                openLibraryTile
+                .padding(.horizontal, hPadding)
+                .padding(.vertical, 10)
+            }
+        }
+    }
+
+    /// iPhone — the original two-row horizontal strip.
+    private var compactStrip: some View {
+        let c = compactCell
+        let rows = [
+            GridItem(.fixed(c), spacing: spacing),
+            GridItem(.fixed(c), spacing: spacing)
+        ]
+        return ScrollView(.horizontal, showsIndicators: false) {
+            LazyHGrid(rows: rows, spacing: spacing) {
+                ForEach(compactSamples, id: \.localIdentifier) { asset in
+                    cellView(asset, size: c)
+                }
+                openLibraryTile(c)
             }
             .padding(.horizontal, hPadding)
             .padding(.vertical, 6)
         }
-        .task { model.load() }
+    }
+
+    private func cellView(_ asset: PHAsset, size: CGFloat) -> some View {
+        RecentMediaCell(
+            asset: asset,
+            model: model,
+            cell: size,
+            isResolving: resolvingId == asset.localIdentifier,
+            onTap: { tap(asset) }
+        )
     }
 
     private func tap(_ asset: PHAsset) {
@@ -212,7 +280,7 @@ struct RecentMediaStrip: View {
         }
     }
 
-    private var openLibraryTile: some View {
+    private func openLibraryTile(_ size: CGFloat) -> some View {
         Button {
             HapticFeedback.light()
             onOpenLibrary()
@@ -232,7 +300,7 @@ struct RecentMediaStrip: View {
                 }
                 .foregroundColor(Color(hex: accentColor))
             }
-            .frame(width: cell, height: cell)
+            .frame(width: size, height: size)
         }
         .accessibilityLabel(String(localized: "composer.a11y.openFullLibrary", defaultValue: "Ouvrir toute la phototh\u{00E8}que", bundle: .main))
     }
@@ -298,6 +366,16 @@ private struct RecentMediaCell: View {
         .accessibilityLabel(asset.mediaType == .video
             ? String(localized: "composer.a11y.recentVideo", defaultValue: "Vid\u{00E9}o r\u{00E9}cente", bundle: .main)
             : String(localized: "composer.a11y.recentPhoto", defaultValue: "Photo r\u{00E9}cente", bundle: .main))
+        .contextMenu {
+            Button(action: onTap) {
+                Label(
+                    String(localized: "composer.recent.add", defaultValue: "Ajouter", bundle: .main),
+                    systemImage: "plus.circle"
+                )
+            }
+        } preview: {
+            RecentMediaPreview(asset: asset, model: model)
+        }
         .task(id: asset.localIdentifier) {
             let px = cell * displayScale
             thumbnail = await model.thumbnail(for: asset, size: CGSize(width: px, height: px))
@@ -308,5 +386,34 @@ private struct RecentMediaCell: View {
         let mins = Int(seconds) / 60
         let secs = Int(seconds) % 60
         return String(format: "%d:%02d", mins, secs)
+    }
+}
+
+// ============================================================================
+// MARK: - RecentMediaPreview (long-press quick look)
+// ============================================================================
+
+/// Large aspect-fit preview shown on long-press of a recent-media cell, via the
+/// system context-menu preview. Lets the user quick-look an asset before adding
+/// it. Videos resolve to their poster frame.
+private struct RecentMediaPreview: View {
+    let asset: PHAsset
+    let model: RecentMediaStripModel
+
+    @State private var image: UIImage?
+
+    var body: some View {
+        ZStack {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+            } else {
+                Color.black.opacity(0.05)
+                ProgressView()
+            }
+        }
+        .frame(width: 300, height: 300)
+        .task { image = await model.preview(for: asset) }
     }
 }
