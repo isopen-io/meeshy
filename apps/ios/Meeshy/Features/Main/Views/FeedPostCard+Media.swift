@@ -273,21 +273,34 @@ extension FeedPostCard {
 
     func videoMediaView(_ media: FeedMedia) -> some View {
         let attachment = media.toMessageAttachment()
-        return VideoAvailabilityResolver(attachment: attachment, autoDownload: true) { availability, onDownload in
-            MeeshyVideoPlayer(
-                attachment: attachment,
-                style: .inline,
-                controls: .inlineDefault,
-                accentColor: accentColor,
-                frame: .card,
-                availability: availability,
-                performance: .inline,
-                onDownload: onDownload,
-                onExpand: { openFullscreen(media) }
-            )
+        // Fill the card width and let the SOURCE aspect ratio drive the height
+        // (mirrors the message-bubble video sizing). The old `.frame(maxWidth:
+        // .infinity)` left the height unbounded, so the player collapsed to a
+        // small intrinsic thumbnail instead of filling the card. Portrait is
+        // capped at 1.6× width so a single clip can't swallow the whole feed.
+        let displayRatio: CGFloat = {
+            guard let w = media.width, let h = media.height, w > 0, h > 0 else { return 16.0 / 9.0 }
+            return max(CGFloat(w) / CGFloat(h), 1.0 / 1.6)
+        }()
+        return GeometryReader { geo in
+            let width = geo.size.width
+            VideoAvailabilityResolver(attachment: attachment, autoDownload: true) { availability, onDownload in
+                MeeshyVideoPlayer(
+                    attachment: attachment,
+                    style: .inline,
+                    controls: .inlineDefault,
+                    accentColor: accentColor,
+                    frame: .card,
+                    availability: availability,
+                    performance: .inline,
+                    onDownload: onDownload,
+                    onExpand: { openFullscreen(media) }
+                )
+            }
+            .frame(width: width, height: width / displayRatio)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
         }
-        .frame(maxWidth: .infinity)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .aspectRatio(displayRatio, contentMode: .fit)
     }
 
     func audioMediaView(_ media: FeedMedia) -> some View {
