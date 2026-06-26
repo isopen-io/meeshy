@@ -1403,10 +1403,10 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         // used inside `allElementsSortedByZ` so the public accessor and
         // the sort agree on the same value.
         let effects = currentEffects
-        if let t = effects.textObjects.first(where: { $0.id == id }) { return t.zIndex ?? 0 }
-        if let m = effects.mediaObjects?.first(where: { $0.id == id }) { return m.zIndex ?? 0 }
+        if let t = effects.textObjects.first(where: { $0.id == id }) { return t.zIndex }
+        if let m = effects.mediaObjects?.first(where: { $0.id == id }) { return m.zIndex }
         if let a = effects.audioPlayerObjects?.first(where: { $0.id == id }) { return a.zIndex ?? 0 }
-        if let s = effects.stickerObjects?.first(where: { $0.id == id }) { return s.zIndex ?? 0 }
+        if let s = effects.stickerObjects?.first(where: { $0.id == id }) { return s.zIndex }
         return 0
     }
 
@@ -1484,16 +1484,16 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         var elements: [AnyCanvasElement] = []
         let effects = currentEffects
         for t in effects.textObjects {
-            elements.append(AnyCanvasElement(id: t.id, elementType: .text, zIndex: zIndexMap[t.id] ?? t.zIndex ?? 0))
+            elements.append(AnyCanvasElement(id: t.id, elementType: .text, zIndex: zIndexMap[t.id] ?? t.zIndex))
         }
         for m in effects.mediaObjects ?? [] {
-            elements.append(AnyCanvasElement(id: m.id, elementType: m.kind == .video ? .video : .image, zIndex: zIndexMap[m.id] ?? m.zIndex ?? 0))
+            elements.append(AnyCanvasElement(id: m.id, elementType: m.kind == .video ? .video : .image, zIndex: zIndexMap[m.id] ?? m.zIndex))
         }
         for a in effects.audioPlayerObjects ?? [] {
             elements.append(AnyCanvasElement(id: a.id, elementType: .audio, zIndex: zIndexMap[a.id] ?? a.zIndex ?? 0))
         }
         for s in effects.stickerObjects ?? [] {
-            elements.append(AnyCanvasElement(id: s.id, elementType: .image, zIndex: zIndexMap[s.id] ?? s.zIndex ?? 0))
+            elements.append(AnyCanvasElement(id: s.id, elementType: .image, zIndex: zIndexMap[s.id] ?? s.zIndex))
         }
         return elements.sorted { $0.zIndex < $1.zIndex }
     }
@@ -1583,7 +1583,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     func evictNonVisibleSlideMedia() {
         let currentSlideId = slides[safe: currentSlideIndex]?.id
         var keepIds = Set<String>()
-        if let id = currentSlideId {
+        if currentSlideId != nil {
             for obj in (currentEffects.mediaObjects ?? []) { keepIds.insert(obj.id) }
             for obj in (currentEffects.audioPlayerObjects ?? []) { keepIds.insert(obj.id) }
         }

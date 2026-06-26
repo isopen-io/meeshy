@@ -58,6 +58,11 @@ final class FeedbackToastManager: ObservableObject {
         present(FeedbackToast(message: message, type: .error))
     }
 
+    func showError(_ message: String, tapAction: @escaping () -> Void) {
+        HapticFeedback.error()
+        present(FeedbackToast(message: message, type: .error, isTappable: true), tapAction: tapAction)
+    }
+
     func showSuccess(_ message: String) {
         HapticFeedback.success()
         present(FeedbackToast(message: message, type: .success))

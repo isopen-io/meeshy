@@ -124,7 +124,7 @@ public final class StoryFilteredLayer: CAMetalLayer {
     /// `cacheLock` and accessed only via the helpers below — never read or
     /// mutated directly from elsewhere.
     nonisolated(unsafe) private static var pipelineCache: [Kind: MTLComputePipelineState] = [:]
-    nonisolated(unsafe) private static let cacheLock = NSLock()
+    private static let cacheLock = NSLock()
 
     /// Pre-compile a single kernel's pipeline so the first `render()` call
     /// that uses it skips the 5–50 ms compilation hit. Idempotent — calling

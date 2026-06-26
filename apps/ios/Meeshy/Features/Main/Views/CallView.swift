@@ -167,6 +167,35 @@ struct CallView: View {
         .onDisappear {
             stopPulseAnimation()
         }
+        .adaptiveOnChange(of: callManager.callState) { _, newState in
+            switch newState {
+            case .connected:
+                UIAccessibility.post(
+                    notification: .announcement,
+                    argument: String(localized: "call.a11y.connected",
+                                    defaultValue: "Appel connecté",
+                                    bundle: .main))
+            case .reconnecting:
+                UIAccessibility.post(
+                    notification: .announcement,
+                    argument: String(localized: "call.a11y.reconnecting",
+                                    defaultValue: "Reconnexion en cours…",
+                                    bundle: .main))
+            default:
+                break
+            }
+        }
+        .adaptiveOnChange(of: callManager.liveVideoQualityLevel) { oldLevel, newLevel in
+            let wasDegraded = oldLevel.map { $0 == .poor || $0 == .critical } ?? false
+            let isDegraded = newLevel.map { $0 == .poor || $0 == .critical } ?? false
+            if isDegraded && !wasDegraded {
+                UIAccessibility.post(
+                    notification: .announcement,
+                    argument: String(localized: "call.a11y.quality.poor",
+                                    defaultValue: "Qualité réseau faible",
+                                    bundle: .main))
+            }
+        }
     }
 
     // MARK: - Background
@@ -233,7 +262,7 @@ struct CallView: View {
 
             // Status text
             Text(String(localized: "call.outgoing.ringing", defaultValue: "Appel en cours...", bundle: .main))
-                .font(.system(size: 16, weight: .medium))
+                .font(.callout.weight(.medium))
                 .foregroundColor(.white.opacity(0.7))
                 .padding(.bottom, 8)
 
@@ -274,7 +303,7 @@ struct CallView: View {
                     .tint(MeeshyColors.indigo400)
                     .accessibilityHidden(true)
                 Text(String(localized: "call.connecting", defaultValue: "Connexion...", bundle: .main))
-                    .font(.system(size: 16, weight: .medium))
+                    .font(.callout.weight(.medium))
                     .foregroundColor(.white.opacity(0.7))
             }
             .accessibilityElement(children: .combine)
@@ -421,7 +450,7 @@ struct CallView: View {
             HStack(spacing: 6) {
                 connectionQualityDot
                 Text(callManager.formattedDuration)
-                    .font(.system(size: 18, weight: .medium).monospacedDigit())
+                    .font(.body.weight(.medium).monospacedDigit())
                     .foregroundColor(durationColor)
             }
             .padding(.horizontal, 16)
@@ -437,6 +466,12 @@ struct CallView: View {
             HStack(spacing: 12) {
                 if callManager.isMuted {
                     statusPill(icon: "mic.slash.fill", text: String(localized: "call.status.muted", defaultValue: "Micro coupe", bundle: .main), color: MeeshyColors.error)
+                }
+                if !callManager.isRemoteAudioEnabled {
+                    statusPill(icon: "mic.slash", text: String(localized: "call.status.peer.muted", defaultValue: "Contact muet", bundle: .main), color: .white.opacity(0.7))
+                }
+                if callManager.isRemoteScreenCapturing {
+                    statusPill(icon: "record.circle", text: String(localized: "call.status.peer.recording", defaultValue: "Enregistrement", bundle: .main), color: MeeshyColors.error)
                 }
                 if callManager.isSpeaker {
                     statusPill(icon: "speaker.wave.3.fill", text: String(localized: "call.status.speaker", defaultValue: "Haut-parleur", bundle: .main), color: MeeshyColors.info)
@@ -470,7 +505,7 @@ struct CallView: View {
                 .tint(.white)
                 .scaleEffect(0.8)
             Text(String(localized: "call.reconnecting", defaultValue: "Reconnexion…", bundle: .main))
-                .font(.system(size: 14, weight: .semibold))
+                .font(.footnote.weight(.semibold))
                 .foregroundColor(.white)
         }
         .padding(.horizontal, 16)
@@ -546,7 +581,7 @@ struct CallView: View {
             VStack {
                 HStack {
                     Text(callManager.formattedDuration)
-                        .font(.system(size: 13, weight: .medium).monospacedDigit())
+                        .font(.caption2.weight(.medium).monospacedDigit())
                         .foregroundColor(.white)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
@@ -594,12 +629,12 @@ struct CallView: View {
                     Text(videoConnectSlow
                         ? String(localized: "call.video.connecting.slow", defaultValue: "La vidéo prend plus de temps que prévu…", bundle: .main)
                         : String(localized: "call.video.connecting", defaultValue: "Connexion video...", bundle: .main))
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.footnote.weight(.medium))
                         .foregroundColor(.white.opacity(videoConnectSlow ? 0.7 : 0.4))
                         .multilineTextAlignment(.center)
                     if videoConnectSlow {
                         Text(String(localized: "call.video.connecting.slow.hint", defaultValue: "L'audio est peut-être déjà actif.", bundle: .main))
-                            .font(.system(size: 12, weight: .regular))
+                            .font(.caption2)
                             .foregroundColor(.white.opacity(0.45))
                             .multilineTextAlignment(.center)
                     }
@@ -638,7 +673,7 @@ struct CallView: View {
                         .font(.system(size: 13, weight: .semibold))
                         .accessibilityHidden(true)
                     Text(String(localized: "call.video.remoteOff", defaultValue: "Caméra désactivée", bundle: .main))
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.footnote.weight(.medium))
                 }
                 .foregroundColor(.white.opacity(0.6))
                 .accessibilityElement(children: .combine)
@@ -656,16 +691,17 @@ struct CallView: View {
 
     private static let pipSize = CGSize(width: 100, height: 140)
 
-    /// Resting center for the PiP in a given container, accounting for safe-ish
-    /// insets (top for the notch/duration badge, bottom for the control bar).
-    private func pipCenter(_ corner: PiPCorner, in container: CGSize) -> CGPoint {
+    /// Resting center for the PiP in a given container, accounting for device
+    /// safe area insets (landscape notch/Dynamic Island cutouts) plus fixed
+    /// clearances for the minimize chevron/badge (top) and control bar (bottom).
+    private func pipCenter(_ corner: PiPCorner, in container: CGSize, safeArea: EdgeInsets = .init()) -> CGPoint {
         let halfW = Self.pipSize.width / 2
         let halfH = Self.pipSize.height / 2
         let margin: CGFloat = 16
-        let topInset: CGFloat = 64      // below the minimize chevron / notch
-        let bottomInset: CGFloat = 160  // above the control bar
-        let leadingX = margin + halfW
-        let trailingX = container.width - margin - halfW
+        let topInset = safeArea.top + QualityThresholds.pipTopClearance
+        let bottomInset = safeArea.bottom + QualityThresholds.pipBottomClearance
+        let leadingX = safeArea.leading + margin + halfW
+        let trailingX = container.width - safeArea.trailing - margin - halfW
         let topY = topInset + halfH
         let bottomY = container.height - bottomInset - halfH
         switch corner {
@@ -677,17 +713,17 @@ struct CallView: View {
     }
 
     /// Nearest corner to a point — used to snap on drag end.
-    private func nearestCorner(to point: CGPoint, in container: CGSize) -> PiPCorner {
+    private func nearestCorner(to point: CGPoint, in container: CGSize, safeArea: EdgeInsets = .init()) -> PiPCorner {
         PiPCorner.allCases.min(by: { a, b in
-            let ca = pipCenter(a, in: container)
-            let cb = pipCenter(b, in: container)
+            let ca = pipCenter(a, in: container, safeArea: safeArea)
+            let cb = pipCenter(b, in: container, safeArea: safeArea)
             return hypot(point.x - ca.x, point.y - ca.y) < hypot(point.x - cb.x, point.y - cb.y)
         }) ?? .topTrailing
     }
 
     private var pipView: some View {
         GeometryReader { geo in
-            let base = pipCenter(pipCorner, in: geo.size)
+            let base = pipCenter(pipCorner, in: geo.size, safeArea: geo.safeAreaInsets)
             // §7.2 — the PiP shows the SECONDARY stream (the opposite of the
             // primary). Swap flips both with one tap.
             videoStream(local: !swapStreams, contentMode: .scaleAspectFill)
@@ -705,7 +741,7 @@ struct CallView: View {
                         .onEnded { value in
                             let dropped = CGPoint(x: base.x + value.translation.width,
                                                   y: base.y + value.translation.height)
-                            let corner = nearestCorner(to: dropped, in: geo.size)
+                            let corner = nearestCorner(to: dropped, in: geo.size, safeArea: geo.safeAreaInsets)
                             withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
                                 pipCorner = corner
                                 pipDragOffset = .zero
@@ -737,7 +773,7 @@ struct CallView: View {
     /// adaptive controller has dropped our outbound video to audio-only.
     private var localVideoSuspendedTile: some View {
         GeometryReader { geo in
-            let base = pipCenter(pipCorner, in: geo.size)
+            let base = pipCenter(pipCorner, in: geo.size, safeArea: geo.safeAreaInsets)
             videoSuspendedTileBody
                 .frame(width: Self.pipSize.width, height: Self.pipSize.height)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -783,10 +819,10 @@ struct CallView: View {
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(MeeshyColors.warning)
                 Text(String(localized: "call.video.suspended", defaultValue: "Vidéo en pause", bundle: .main))
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.caption2.weight(.semibold))
                     .foregroundColor(.white)
                 Text(String(localized: "call.video.suspended.short", defaultValue: "Reprise auto", bundle: .main))
-                    .font(.system(size: 9, weight: .regular))
+                    .font(.caption2)
                     .foregroundColor(.white.opacity(0.7))
             }
         }
@@ -808,7 +844,7 @@ struct CallView: View {
                         .padding(.top, 6)
                         .accessibilityHidden(true)
                     Text(segment.text)
-                        .font(.system(size: 14, weight: segment.isFinal ? .regular : .light))
+                        .font(.callout.weight(segment.isFinal ? .regular : .light))
                         .foregroundColor(.white)
                         .opacity(segment.isFinal ? 1.0 : 0.7)
                         .accessibilityLabel("\(isLocal ? localName : remoteName) : \(segment.text)")
@@ -846,16 +882,16 @@ struct CallView: View {
                 .accessibilityHidden(true)
 
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
-                .font(.system(size: 24, weight: .semibold, design: .rounded))
+                .font(.system(.title3, design: .rounded).weight(.semibold))
                 .foregroundColor(theme.textPrimary.opacity(0.7))
 
             Text(endReasonText(reason))
-                .font(.system(size: 16, weight: .medium))
+                .font(.callout.weight(.medium))
                 .foregroundColor(theme.textMuted)
 
             if callManager.callDuration > 0 {
                 Text(callManager.formattedDuration)
-                    .font(.system(size: 14, weight: .medium).monospacedDigit())
+                    .font(.footnote.weight(.medium).monospacedDigit())
                     .foregroundColor(theme.textMuted.opacity(0.6))
             }
 
@@ -1043,7 +1079,7 @@ struct CallView: View {
                     .foregroundColor(.white.opacity(0.9))
                     .callControlGlass(diameter: 56, isActive: false, tint: .white)
                 Text(String(localized: "call.control.camera.caption", defaultValue: "Caméra", bundle: .main))
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.caption2.weight(.medium))
                     .foregroundColor(theme.textMuted)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
@@ -1118,7 +1154,7 @@ struct CallView: View {
                 .font(.system(size: 12, weight: .semibold))
                 .accessibilityHidden(true)
             Text(callManager.isVideoEnabled ? String(localized: "call.type.video", defaultValue: "Appel vidéo", bundle: .main) : String(localized: "call.type.audio", defaultValue: "Appel audio", bundle: .main))
-                .font(.system(size: 13, weight: .semibold))
+                .font(.caption2.weight(.semibold))
         }
         .foregroundColor(MeeshyColors.indigo400)
         .padding(.horizontal, 14)
@@ -1147,7 +1183,7 @@ struct CallView: View {
                     .callControlGlass(diameter: 56, isActive: isActive, tint: bgColor)
 
                 Text(caption)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.caption2.weight(.medium))
                     .foregroundColor(theme.textMuted)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
@@ -1171,7 +1207,7 @@ struct CallView: View {
                     .callControlGlass(diameter: 64, isActive: hasActiveEffects, tint: MeeshyColors.indigo500)
 
                 Text(String(localized: "call.filters", defaultValue: "Filtres", bundle: .main))
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.caption2.weight(.medium))
                     .foregroundColor(.white.opacity(0.7))
             }
         }
@@ -1190,7 +1226,7 @@ struct CallView: View {
                     .endCallGlass(diameter: 56)
 
                 Text(String(localized: "call.end.caption", defaultValue: "Raccrocher", bundle: .main))
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.caption2.weight(.medium))
                     .foregroundColor(theme.textMuted)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
@@ -1205,10 +1241,10 @@ struct CallView: View {
     private func statusPill(icon: String, text: String, color: Color) -> some View {
         HStack(spacing: 4) {
             Image(systemName: icon)
-                .font(.system(size: 10, weight: .semibold))
+                .font(.caption2.weight(.semibold))
                 .accessibilityHidden(true)
             Text(text)
-                .font(.system(size: 11, weight: .medium))
+                .font(.caption2.weight(.medium))
         }
         .foregroundColor(color)
         .padding(.horizontal, 10)

@@ -74,6 +74,85 @@ final class QualityThresholdsAudioBitrateTests: XCTestCase {
         XCTAssertEqual(QualityThresholds.statsIntervalSeconds, 5.0,
                        "Stats collection cadence — also the minimum gap between quality-level transitions (debounce)")
     }
+
+    func test_videoFairRTT_is200ms() {
+        XCTAssertEqual(QualityThresholds.videoFairRTT, 200.0, accuracy: 0.001,
+                       "RTT boundary between good and fair video tiers (200 ms)")
+    }
+
+    func test_videoPoorRTT_is300ms() {
+        XCTAssertEqual(QualityThresholds.videoPoorRTT, 300.0, accuracy: 0.001,
+                       "RTT boundary between fair and poor video tiers (300 ms)")
+    }
+
+    func test_videoFairPacketLoss_is3percent() {
+        XCTAssertEqual(QualityThresholds.videoFairPacketLoss, 0.03, accuracy: 0.0001,
+                       "Packet-loss boundary between fair and poor video tiers (3 % interval loss)")
+    }
+
+    func test_videoQualityRTTBoundaries_areStrictlyOrdered() {
+        // Guarantees the RTT ladder never inverts so VideoQualityLevel.from(rtt:) cannot
+        // reach an unreachable branch or misclassify a valid RTT sample.
+        XCTAssertLessThan(QualityThresholds.excellentRTT, QualityThresholds.videoFairRTT,
+                          "excellentRTT must be < videoFairRTT")
+        XCTAssertLessThan(QualityThresholds.videoFairRTT, QualityThresholds.videoPoorRTT,
+                          "videoFairRTT must be < videoPoorRTT")
+        XCTAssertLessThan(QualityThresholds.videoPoorRTT, QualityThresholds.poorRTT,
+                          "videoPoorRTT must be < poorRTT (critical boundary)")
+    }
+
+    func test_videoQualityPacketLossBoundaries_areStrictlyOrdered() {
+        XCTAssertLessThan(QualityThresholds.excellentPacketLoss, QualityThresholds.videoFairPacketLoss,
+                          "excellentPacketLoss must be < videoFairPacketLoss")
+        XCTAssertLessThan(QualityThresholds.videoFairPacketLoss, QualityThresholds.goodPacketLoss,
+                          "videoFairPacketLoss must be < goodPacketLoss (poor boundary)")
+        XCTAssertLessThan(QualityThresholds.goodPacketLoss, QualityThresholds.poorPacketLoss,
+                          "goodPacketLoss must be < poorPacketLoss (critical boundary)")
+    }
+
+    func test_bweExcellentBps_is2Mbps() {
+        XCTAssertEqual(QualityThresholds.bweExcellentBps, 2_000_000,
+                       "BWE excellent threshold must be 2 Mbps (80% of 2.5 Mbps target)")
+    }
+
+    func test_bweGoodBps_is1Mbps() {
+        XCTAssertEqual(QualityThresholds.bweGoodBps, 1_000_000,
+                       "BWE good threshold must be 1 Mbps (67% of 1.5 Mbps target)")
+    }
+
+    func test_bweFairBps_is400kbps() {
+        XCTAssertEqual(QualityThresholds.bweFairBps, 400_000,
+                       "BWE fair threshold must be 400 kbps (50% of 800 kbps target)")
+    }
+
+    func test_bwePoorBps_is150kbps() {
+        XCTAssertEqual(QualityThresholds.bwePoorBps, 150_000,
+                       "BWE poor threshold must be 150 kbps (37.5% of 400 kbps target)")
+    }
+
+    func test_bweThresholds_areStrictlyOrdered() {
+        XCTAssertGreaterThan(QualityThresholds.bweExcellentBps, QualityThresholds.bweGoodBps,
+                             "BWE excellent must be > good")
+        XCTAssertGreaterThan(QualityThresholds.bweGoodBps, QualityThresholds.bweFairBps,
+                             "BWE good must be > fair")
+        XCTAssertGreaterThan(QualityThresholds.bweFairBps, QualityThresholds.bwePoorBps,
+                             "BWE fair must be > poor")
+        XCTAssertGreaterThan(QualityThresholds.bwePoorBps, 0,
+                             "BWE poor threshold must be > 0 (reserved for TWCC inactive path)")
+    }
+
+    func test_bweThresholds_belowTargetBitrates() {
+        // BWE thresholds must stay conservatively below each tier's targetVideoBitrate
+        // so audio + RTCP overhead doesn't force a tier downgrade on a healthy network.
+        XCTAssertLessThan(QualityThresholds.bweExcellentBps, VideoQualityLevel.excellent.targetVideoBitrate,
+                          "BWE excellent threshold must be < excellent targetVideoBitrate")
+        XCTAssertLessThan(QualityThresholds.bweGoodBps, VideoQualityLevel.good.targetVideoBitrate,
+                          "BWE good threshold must be < good targetVideoBitrate")
+        XCTAssertLessThan(QualityThresholds.bweFairBps, VideoQualityLevel.fair.targetVideoBitrate,
+                          "BWE fair threshold must be < fair targetVideoBitrate")
+        XCTAssertLessThan(QualityThresholds.bwePoorBps, VideoQualityLevel.poor.targetVideoBitrate,
+                          "BWE poor threshold must be < poor targetVideoBitrate")
+    }
 }
 
 // §5.6 — thermal-aware video encoder ceiling.
@@ -275,6 +354,93 @@ final class VideoQualityLevelComparableTests: XCTestCase {
     }
 }
 
+// MARK: - VideoQualityLevel factory: TWCC GCC bandwidth estimate
+
+/// Covers `VideoQualityLevel.from(availableOutgoingBitrateBps:)`.
+/// The BWE classifier is independent of the RTT/loss heuristic and drives
+/// encoder caps when Transport-CC GCC probing is active.
+@MainActor
+final class VideoQualityLevelFromBWETests: XCTestCase {
+
+    func test_excellent_atExcellentThreshold() {
+        XCTAssertEqual(
+            VideoQualityLevel.from(availableOutgoingBitrateBps: QualityThresholds.bweExcellentBps),
+            .excellent,
+            "Exactly at bweExcellentBps must map to .excellent")
+    }
+
+    func test_excellent_aboveExcellentThreshold() {
+        XCTAssertEqual(
+            VideoQualityLevel.from(availableOutgoingBitrateBps: 3_000_000),
+            .excellent)
+    }
+
+    func test_good_belowExcellent_atGoodThreshold() {
+        XCTAssertEqual(
+            VideoQualityLevel.from(availableOutgoingBitrateBps: QualityThresholds.bweGoodBps),
+            .good,
+            "Between good and excellent thresholds must map to .good")
+    }
+
+    func test_good_betweenExcellentAndGood() {
+        let mid = (QualityThresholds.bweExcellentBps + QualityThresholds.bweGoodBps) / 2
+        XCTAssertEqual(VideoQualityLevel.from(availableOutgoingBitrateBps: mid), .good)
+    }
+
+    func test_fair_atFairThreshold() {
+        XCTAssertEqual(
+            VideoQualityLevel.from(availableOutgoingBitrateBps: QualityThresholds.bweFairBps),
+            .fair,
+            "Exactly at bweFairBps must map to .fair")
+    }
+
+    func test_fair_betweenGoodAndFair() {
+        let mid = (QualityThresholds.bweGoodBps + QualityThresholds.bweFairBps) / 2
+        XCTAssertEqual(VideoQualityLevel.from(availableOutgoingBitrateBps: mid), .fair)
+    }
+
+    func test_poor_atPoorThreshold() {
+        XCTAssertEqual(
+            VideoQualityLevel.from(availableOutgoingBitrateBps: QualityThresholds.bwePoorBps),
+            .poor,
+            "Exactly at bwePoorBps must map to .poor")
+    }
+
+    func test_poor_betweenFairAndPoor() {
+        let mid = (QualityThresholds.bweFairBps + QualityThresholds.bwePoorBps) / 2
+        XCTAssertEqual(VideoQualityLevel.from(availableOutgoingBitrateBps: mid), .poor)
+    }
+
+    func test_critical_belowPoorThreshold() {
+        XCTAssertEqual(
+            VideoQualityLevel.from(availableOutgoingBitrateBps: QualityThresholds.bwePoorBps - 1),
+            .critical,
+            "One bps below bwePoorBps must map to .critical")
+    }
+
+    func test_critical_zeroOrNearZeroBitrate() {
+        XCTAssertEqual(VideoQualityLevel.from(availableOutgoingBitrateBps: 0), .critical,
+            "Zero bps (TWCC not yet active) must map to .critical (not nil — function always returns a level)")
+        XCTAssertEqual(VideoQualityLevel.from(availableOutgoingBitrateBps: 1), .critical)
+    }
+
+    func test_thresholdBoundaries_areStrictlyMonotonic() {
+        // Walking through: 1 → poor → fair → good → excellent must not skip or reverse.
+        XCTAssertLessThan(
+            VideoQualityLevel.from(availableOutgoingBitrateBps: 1),
+            VideoQualityLevel.from(availableOutgoingBitrateBps: QualityThresholds.bwePoorBps))
+        XCTAssertLessThan(
+            VideoQualityLevel.from(availableOutgoingBitrateBps: QualityThresholds.bwePoorBps),
+            VideoQualityLevel.from(availableOutgoingBitrateBps: QualityThresholds.bweFairBps))
+        XCTAssertLessThan(
+            VideoQualityLevel.from(availableOutgoingBitrateBps: QualityThresholds.bweFairBps),
+            VideoQualityLevel.from(availableOutgoingBitrateBps: QualityThresholds.bweGoodBps))
+        XCTAssertLessThan(
+            VideoQualityLevel.from(availableOutgoingBitrateBps: QualityThresholds.bweGoodBps),
+            VideoQualityLevel.from(availableOutgoingBitrateBps: QualityThresholds.bweExcellentBps))
+    }
+}
+
 // MARK: - VideoQualityLevel encoder targets (drive applyVideoQuality)
 
 /// These three computed properties determine what the video encoder is told to do.
@@ -382,5 +548,719 @@ final class QualityThresholdsVideoTests: XCTestCase {
     func test_outgoingRingTimeoutSeconds_is45() {
         XCTAssertEqual(QualityThresholds.outgoingRingTimeoutSeconds, 45.0, accuracy: 0.001,
                        "Maximum time to wait for callee to answer before auto-cancelling the call")
+    }
+
+    func test_criticalVideoFloorFPS_is15() {
+        // `.critical` VideoQualityLevel returns 0 for targetFPS — applyVideoQuality
+        // falls back to this constant so the encoder never receives 0 fps (which stalls it).
+        // 15 fps mirrors the `.poor` tier and is the lowest FaceTime-comparable rate.
+        XCTAssertEqual(QualityThresholds.criticalVideoFloorFPS, 15,
+                       "Critical tier video floor must be 15 fps (matches .poor tier, avoids encoder stall)")
+    }
+
+    func test_criticalVideoFloorHeight_is360() {
+        // `.critical` VideoQualityLevel returns 0 for targetResolutionHeight —
+        // applyVideoQuality falls back to this constant. Together with
+        // criticalVideoFloorFPS and minVideoBitrate this defines the 360p15 @ 100 kbps floor.
+        XCTAssertEqual(QualityThresholds.criticalVideoFloorHeight, 360,
+                       "Critical tier video floor must be 360p (360p15 @ 100kbps floor)")
+    }
+
+    func test_criticalVideoFloor_tripleConsistent() {
+        // The 360p15 @ 100 kbps floor must be internally consistent:
+        // height 360 + fps 15 + bitrate minVideoBitrate are the three values
+        // documented in applyVideoQuality's comment. A change to one must trigger
+        // review of the others.
+        XCTAssertEqual(QualityThresholds.criticalVideoFloorHeight, 360)
+        XCTAssertEqual(QualityThresholds.criticalVideoFloorFPS, 15)
+        XCTAssertEqual(QualityThresholds.minVideoBitrate, 100_000)
+    }
+
+    func test_turnDefaultCredentialTTLSeconds_is480() {
+        // TURN credentials issued by the Meeshy gateway default to 480 s. The 80%-TTL
+        // refresh fires at 384 s — well before Coturn's 600 s server-side eviction.
+        XCTAssertEqual(QualityThresholds.turnDefaultCredentialTTLSeconds, 480, accuracy: 0.001)
+    }
+
+    func test_turnRefreshFires_at80PercentOfDefaultTTL() {
+        // scheduleTURNCredentialRefresh applies an 80% factor: refreshDelay = ttl * 0.8.
+        // With the default TTL the refresh should fire at 384 s.
+        let refreshAt = QualityThresholds.turnDefaultCredentialTTLSeconds * 0.8
+        XCTAssertEqual(refreshAt, 384.0, accuracy: 0.001,
+                       "TURN credential refresh must fire at 384 s (80% of 480 s default TTL)")
+    }
+}
+
+// MARK: - Signalling & Call-Lifecycle Timer Constants
+
+/// Guards the five new timing constants extracted from hardcoded literals in
+/// CallManager and P2PWebRTCClient. Each test pins the expected value and
+/// confirms it sits within a plausible range — a large-value typo (e.g. 300
+/// instead of 30) would both fail the exact-value assertion and the range guard.
+@MainActor
+final class QualityThresholdsSignalingTests: XCTestCase {
+
+    func test_sdpOfferTimeoutSeconds_is30() {
+        XCTAssertEqual(QualityThresholds.sdpOfferTimeoutSeconds, 30.0, accuracy: 0.001,
+                       "SDP offer timeout must be 30 s — matches the gateway's offer-expiry window")
+    }
+
+    func test_sdpOfferTimeoutSeconds_inPlausibleRange() {
+        XCTAssertGreaterThan(QualityThresholds.sdpOfferTimeoutSeconds, 10,
+                             "Below 10 s is too aggressive on slow cellular")
+        XCTAssertLessThan(QualityThresholds.sdpOfferTimeoutSeconds, 60,
+                          "Above 60 s exceeds the gateway hard cap — call would appear hung to the user")
+    }
+
+    func test_callEndSettleSeconds_is1point5() {
+        XCTAssertEqual(QualityThresholds.callEndSettleSeconds, 1.5, accuracy: 0.001,
+                       "Call-end settle window must be 1.5 s so the UI can read final stats")
+    }
+
+    func test_callEndSettleSeconds_inPlausibleRange() {
+        XCTAssertGreaterThan(QualityThresholds.callEndSettleSeconds, 0.5,
+                             "Below 0.5 s is too short for final stats to be delivered via socket")
+        XCTAssertLessThan(QualityThresholds.callEndSettleSeconds, 5.0,
+                          "Above 5 s makes the post-call screen feel slow")
+    }
+
+    func test_voipFreshnessTimeoutSeconds_is4() {
+        XCTAssertEqual(QualityThresholds.voipFreshnessTimeoutSeconds, 4.0, accuracy: 0.001,
+                       "VoIP push freshness HTTP timeout must be 4 s")
+    }
+
+    func test_voipFreshnessTimeoutSeconds_inPlausibleRange() {
+        XCTAssertGreaterThan(QualityThresholds.voipFreshnessTimeoutSeconds, 1.0,
+                             "Below 1 s will time-out on DNS-heavy cellular handoffs")
+        XCTAssertLessThan(QualityThresholds.voipFreshnessTimeoutSeconds, 10.0,
+                          "Above 10 s risks blocking CallKit and triggering a watchdog kill")
+    }
+
+    func test_dataChannelPingIntervalSeconds_is15() {
+        XCTAssertEqual(QualityThresholds.dataChannelPingIntervalSeconds, 15.0, accuracy: 0.001,
+                       "Data-channel ping must fire every 15 s (TURN server minimum activity)")
+    }
+
+    func test_remoteQualityResetSeconds_is15() {
+        XCTAssertEqual(QualityThresholds.remoteQualityResetSeconds, 15.0, accuracy: 0.001,
+                       "Remote-quality-degraded badge auto-resets after 15 s")
+    }
+
+    func test_dataChannelPing_lessThanOrEqualToRemoteQualityReset() {
+        // If the ping fires less frequently than the quality-reset timer, a brief
+        // outage is detected but the badge may reset before the next ping confirms
+        // recovery. Keeping ping ≤ reset ensures at least one heartbeat has fired.
+        XCTAssertLessThanOrEqual(
+            QualityThresholds.dataChannelPingIntervalSeconds,
+            QualityThresholds.remoteQualityResetSeconds,
+            "Ping interval must be ≤ quality-reset window so recovery is confirmed before the badge clears"
+        )
+    }
+}
+
+// MARK: - PiP Thermal Frame-Rate Ladder
+
+@MainActor
+final class QualityThresholdsPiPTests: XCTestCase {
+
+    func test_pipFrameRateDefault_is15() {
+        XCTAssertEqual(QualityThresholds.pipFrameRateDefault, 15,
+                       "PiP default FPS must be 15 — smooth enough for a small thumbnail")
+    }
+
+    func test_pipFrameRateSerious_is10() {
+        XCTAssertEqual(QualityThresholds.pipFrameRateSerious, 10,
+                       "Under .serious thermal pressure PiP drops to 10 FPS")
+    }
+
+    func test_pipFrameRateCritical_is8() {
+        XCTAssertEqual(QualityThresholds.pipFrameRateCritical, 8,
+                       "Under .critical thermal pressure PiP drops to 8 FPS (near-slideshow, saves heat)")
+    }
+
+    func test_pipFrameRateLadder_isStrictlyDecreasing() {
+        XCTAssertGreaterThan(
+            QualityThresholds.pipFrameRateDefault,
+            QualityThresholds.pipFrameRateSerious,
+            "default FPS must exceed serious FPS"
+        )
+        XCTAssertGreaterThan(
+            QualityThresholds.pipFrameRateSerious,
+            QualityThresholds.pipFrameRateCritical,
+            "serious FPS must exceed critical FPS"
+        )
+    }
+
+    func test_pipFrameRateCritical_isAboveZero() {
+        XCTAssertGreaterThan(
+            QualityThresholds.pipFrameRateCritical, 0,
+            "Even under critical thermal pressure the encoder must deliver at least 1 FPS"
+        )
+    }
+}
+
+// MARK: - PiP layout clearance constants
+
+/// Guards the two fixed clearances added on top of safe-area insets when
+/// computing the PiP thumbnail resting position in landscape/portrait.
+@MainActor
+final class QualityThresholdsPiPLayoutTests: XCTestCase {
+
+    func test_pipTopClearance_is20() {
+        XCTAssertEqual(QualityThresholds.pipTopClearance, 20,
+                       "Fixed clearance above safe area top — minimize chevron + badge room")
+    }
+
+    func test_pipBottomClearance_is130() {
+        XCTAssertEqual(QualityThresholds.pipBottomClearance, 130,
+                       "Fixed clearance above safe area bottom — call control bar room (~120 pt)")
+    }
+
+    func test_pipTopClearance_isPositive() {
+        XCTAssertGreaterThan(QualityThresholds.pipTopClearance, 0,
+                             "PiP must always sit below the top safe area edge")
+    }
+
+    func test_pipBottomClearance_isPositive() {
+        XCTAssertGreaterThan(QualityThresholds.pipBottomClearance, 0,
+                             "PiP must always sit above the bottom safe area edge")
+    }
+
+    func test_pipBottomClearance_exceedsTopClearance() {
+        XCTAssertGreaterThan(QualityThresholds.pipBottomClearance,
+                             QualityThresholds.pipTopClearance,
+                             "Control bar clearance must exceed chevron clearance — control bar is taller")
+    }
+}
+
+// MARK: - Codec hint constants (Opus fmtp + SDP x-google-bitrate)
+
+@MainActor
+final class QualityThresholdsCodecHintsTests: XCTestCase {
+
+    // MARK: Opus fmtp
+
+    func test_opusFmtpMaxAverageBitrate_is64kbps() {
+        XCTAssertEqual(QualityThresholds.opusFmtpMaxAverageBitrate, 64_000,
+                       "maxaveragebitrate must equal defaultBitrate (64 kbps)")
+    }
+
+    func test_opusFmtpMaxAverageBitrate_equalsDefaultBitrate() {
+        XCTAssertEqual(QualityThresholds.opusFmtpMaxAverageBitrate,
+                       QualityThresholds.defaultBitrate,
+                       "Opus fmtp ceiling must stay in sync with the adaptation defaultBitrate")
+    }
+
+    func test_opusFmtpMaxPlaybackRate_is48kHz() {
+        XCTAssertEqual(QualityThresholds.opusFmtpMaxPlaybackRate, 48_000,
+                       "maxplaybackrate must be 48 000 Hz — native Opus / WebRTC APM sample rate")
+    }
+
+    func test_opusFmtpMaxPlaybackRate_isAboveMaxAverageBitrate() {
+        // maxplaybackrate is a sample rate (Hz), maxaveragebitrate is a bitrate (bps).
+        // They are not the same unit, but the sample rate will always exceed the
+        // bitrate numerically; this catches an accidental value swap between the two.
+        XCTAssertGreaterThan(
+            QualityThresholds.opusFmtpMaxPlaybackRate,
+            QualityThresholds.opusFmtpMaxAverageBitrate,
+            "maxplaybackrate (Hz) should exceed maxaveragebitrate (bps) numerically — value swap guard"
+        )
+    }
+
+    // MARK: SDP x-google-bitrate hints
+
+    func test_sdpVideoMaxBitrateKbps_is2500() {
+        XCTAssertEqual(QualityThresholds.sdpVideoMaxBitrateKbps, 2_500,
+                       "x-google-max-bitrate must be 2 500 kbps (aligns with maxVideoBitrate)")
+    }
+
+    func test_sdpVideoMinBitrateKbps_is100() {
+        XCTAssertEqual(QualityThresholds.sdpVideoMinBitrateKbps, 100,
+                       "x-google-min-bitrate must be 100 kbps (aligns with minVideoBitrate)")
+    }
+
+    func test_sdpVideoHints_maxExceedsMin() {
+        XCTAssertGreaterThan(
+            QualityThresholds.sdpVideoMaxBitrateKbps,
+            QualityThresholds.sdpVideoMinBitrateKbps,
+            "x-google-max-bitrate must exceed x-google-min-bitrate"
+        )
+    }
+
+    func test_sdpVideoMaxBitrateKbps_matchesMaxVideoBitrate_inKbps() {
+        // maxVideoBitrate is in bps; sdpVideoMaxBitrateKbps is in kbps.
+        // The SDP hint must equal maxVideoBitrate / 1000 so GCC's starting
+        // encoder ceiling matches the open-loop cap.
+        XCTAssertEqual(
+            QualityThresholds.sdpVideoMaxBitrateKbps,
+            QualityThresholds.maxVideoBitrate / 1000,
+            "sdpVideoMaxBitrateKbps must equal maxVideoBitrate / 1000"
+        )
+    }
+
+    func test_sdpVideoMinBitrateKbps_matchesMinVideoBitrate_inKbps() {
+        XCTAssertEqual(
+            QualityThresholds.sdpVideoMinBitrateKbps,
+            QualityThresholds.minVideoBitrate / 1000,
+            "sdpVideoMinBitrateKbps must equal minVideoBitrate / 1000"
+        )
+    }
+
+    // MARK: Quality-level debounce
+
+    func test_qualityLevelDebounceSeconds_is5() {
+        XCTAssertEqual(QualityThresholds.qualityLevelDebounceSeconds, 5.0, accuracy: 0.001,
+                       "Quality-level debounce must be 5 s to prevent encoder thrashing on boundary oscillation")
+    }
+
+    func test_qualityLevelDebounceSeconds_inPlausibleRange() {
+        XCTAssertGreaterThan(QualityThresholds.qualityLevelDebounceSeconds, 1.0,
+                             "Below 1 s the debounce becomes ineffective against RTT oscillation")
+        XCTAssertLessThan(QualityThresholds.qualityLevelDebounceSeconds, 30.0,
+                          "Above 30 s quality transitions would lag too far behind actual network changes")
+    }
+}
+
+// MARK: - ICE pool + Video Survival hysteresis
+
+@MainActor
+final class QualityThresholdsVideoSurvivalTests: XCTestCase {
+
+    func test_iceCandidatePoolSize_is4() {
+        XCTAssertEqual(QualityThresholds.iceCandidatePoolSize, 4,
+                       "ICE pool of 4 covers host+srflx+2×relay without over-provisioning")
+    }
+
+    func test_iceCandidatePoolSize_isPositive() {
+        XCTAssertGreaterThan(QualityThresholds.iceCandidatePoolSize, 0,
+                             "ICE pool must be non-zero or pre-warming is disabled")
+    }
+
+    func test_videoSurvivalSuspendAfterSeconds_is6() {
+        XCTAssertEqual(QualityThresholds.videoSurvivalSuspendAfterSeconds, 6.0, accuracy: 0.001,
+                       "Suspend trigger must be 6 s to absorb cellular handoff spikes")
+    }
+
+    func test_videoSurvivalResumeAfterSeconds_is10() {
+        XCTAssertEqual(QualityThresholds.videoSurvivalResumeAfterSeconds, 10.0, accuracy: 0.001,
+                       "Resume trigger must be 10 s — longer than suspend to dampen oscillation")
+    }
+
+    func test_videoSurvivalResumeAfter_exceedsSuspendAfter() {
+        // Resume requires a longer settled-good window than suspend requires a
+        // settled-degraded window. This avoids camera-renegotiation churn when the
+        // link oscillates around the tier boundary.
+        XCTAssertGreaterThan(
+            QualityThresholds.videoSurvivalResumeAfterSeconds,
+            QualityThresholds.videoSurvivalSuspendAfterSeconds,
+            "resumeAfter must exceed suspendAfter to prevent camera-renegotiation thrashing"
+        )
+    }
+
+    func test_videoSurvivalSuspendAfter_inPlausibleRange() {
+        XCTAssertGreaterThan(QualityThresholds.videoSurvivalSuspendAfterSeconds, 2.0,
+                             "Below 2 s the controller reacts to transient spikes — too aggressive")
+        XCTAssertLessThan(QualityThresholds.videoSurvivalSuspendAfterSeconds, 30.0,
+                          "Above 30 s the user waits too long for audio-only relief on a dead link")
+    }
+}
+
+// MARK: - Signalling retry constants
+
+@MainActor
+final class QualityThresholdsSignalRetryTests: XCTestCase {
+
+    func test_signalRetryInitialDelaySeconds_isHalfSecond() {
+        XCTAssertEqual(QualityThresholds.signalRetryInitialDelaySeconds, 0.5, accuracy: 0.001,
+                       "Initial retry delay must be 500 ms — absorbs transient socket jitter without blocking CallKit")
+    }
+
+    func test_signalOfferMaxAttempts_is3() {
+        XCTAssertEqual(QualityThresholds.signalOfferMaxAttempts, 3,
+                       "Offer retry cap must be 3 attempts (500ms + 1s + 2s backoff = 3.5s window)")
+    }
+
+    func test_signalAnswerTotalAttempts_is4() {
+        XCTAssertEqual(QualityThresholds.signalAnswerTotalAttempts, 4,
+                       "Answer total must be 4 (1 inline + 3 background retries to match offer budget)")
+    }
+
+    func test_signalAnswerTotalAttempts_exceedsOffer() {
+        // Answer gets one extra attempt (the inline attempt before CXAnswerCallAction.fulfill)
+        // which does NOT count against the retry budget. So total = offer + 1 to match call budget.
+        XCTAssertEqual(
+            QualityThresholds.signalAnswerTotalAttempts,
+            QualityThresholds.signalOfferMaxAttempts + 1,
+            "signalAnswerTotalAttempts must be signalOfferMaxAttempts + 1 (inline attempt + same retry budget)"
+        )
+    }
+
+    func test_signalRetryInitialDelay_inPlausibleRange() {
+        XCTAssertGreaterThan(QualityThresholds.signalRetryInitialDelaySeconds, 0.1,
+                             "Below 100 ms retries would spam the server on slow links")
+        XCTAssertLessThan(QualityThresholds.signalRetryInitialDelaySeconds, 5.0,
+                          "Above 5 s a 3-attempt window would block the call setup for > 15 s")
+    }
+
+    func test_signalOfferMaxAttempts_isAtLeast2() {
+        XCTAssertGreaterThanOrEqual(QualityThresholds.signalOfferMaxAttempts, 2,
+                                    "At least 2 offer attempts needed for gateway retry semantics to apply")
+    }
+}
+
+// MARK: - SDP extmap ID allocation (RFC 5285 §4.2)
+
+@MainActor
+final class QualityThresholdsExtmapTests: XCTestCase {
+
+    func test_extmapStartId_is5() {
+        XCTAssertEqual(QualityThresholds.extmapStartId, 5,
+                       "extmap allocation starts at 5 (IDs 1–4 reserved for libwebrtc built-ins)")
+    }
+
+    func test_extmapMaxId_is14() {
+        XCTAssertEqual(QualityThresholds.extmapMaxId, 14,
+                       "RFC 5285 §4.2: 1-byte extmap header IDs are limited to 1..14")
+    }
+
+    func test_extmapMaxId_exceedsStartId() {
+        XCTAssertGreaterThan(
+            QualityThresholds.extmapMaxId,
+            QualityThresholds.extmapStartId,
+            "maxId must exceed startId to have a valid search range"
+        )
+    }
+
+    func test_extmapCapacity_isAtLeast4Slots() {
+        // Ensure there are enough IDs between startId and maxId for typical WebRTC
+        // use (Transport-CC, ABS-send-time, video orientation, dependency-desc).
+        let capacity = QualityThresholds.extmapMaxId - QualityThresholds.extmapStartId + 1
+        XCTAssertGreaterThanOrEqual(capacity, 4,
+                                    "Must have at least 4 extmap slots available for standard WebRTC extensions")
+    }
+}
+
+// MARK: - addTransportCC exhaustion guard (functional)
+
+@MainActor
+final class AddTransportCCTests: XCTestCase {
+
+    func test_addTransportCC_isNoop_whenAlreadyPresent() {
+        let sdpWithCC = "a=extmap:5 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01\r\n"
+        let result = P2PWebRTCClient.addTransportCC(sdpWithCC)
+        XCTAssertEqual(result, sdpWithCC, "addTransportCC must not inject a duplicate when the URI is already present")
+    }
+
+    func test_addTransportCC_skipsInjection_whenAllIDsExhausted() {
+        // Build an SDP that has all IDs from extmapStartId through extmapMaxId occupied.
+        let start = QualityThresholds.extmapStartId
+        let max = QualityThresholds.extmapMaxId
+        let occupiedLines = (start...max).map { id in
+            "a=extmap:\(id) urn:ietf:params:rtp-hdrext:dummy-\(id)"
+        }.joined(separator: "\r\n")
+        let sdp = "m=audio 9 UDP/TLS/RTP/SAVPF 111\r\n\(occupiedLines)\r\na=rtpmap:111 opus/48000/2\r\n"
+        let result = P2PWebRTCClient.addTransportCC(sdp)
+        let ccURI = "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01"
+        XCTAssertFalse(
+            result.contains(ccURI),
+            "When all 1-byte extmap IDs (\(start)–\(max)) are exhausted, addTransportCC must not inject (no 2-byte header)"
+        )
+    }
+
+    func test_addTransportCC_picksFirstAvailableID() {
+        // ID 5 is taken; Transport-CC must land on ID 6.
+        let sdp = "m=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=extmap:5 urn:ietf:params:rtp-hdrext:ssrc-audio-level\r\na=rtpmap:111 opus/48000/2\r\n"
+        let result = P2PWebRTCClient.addTransportCC(sdp)
+        XCTAssertTrue(
+            result.contains("a=extmap:6 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01"),
+            "When extmapStartId (5) is taken, Transport-CC must be assigned ID 6"
+        )
+    }
+}
+
+// MARK: - IceServer TURN URL validation tests
+
+/// Covers the `IceServer.hasTURNURL` property that guards the fault-log
+/// in `P2PWebRTCClient.configure` / `updateIceServers`.
+@MainActor
+final class IceServerTURNValidationTests: XCTestCase {
+
+    func test_hasTURNURL_falseForSTUNOnly() {
+        let server = IceServer(urls: ["stun:stun.l.google.com:19302"], username: nil, credential: nil)
+        XCTAssertFalse(server.hasTURNURL)
+    }
+
+    func test_hasTURNURL_trueForTURN() {
+        let server = IceServer(urls: ["turn:turn.meeshy.me:3478"], username: "user", credential: "pass")
+        XCTAssertTrue(server.hasTURNURL)
+    }
+
+    func test_hasTURNURL_trueForTURNS() {
+        let server = IceServer(urls: ["turns:turn.meeshy.me:5349?transport=tcp"], username: "u", credential: "p")
+        XCTAssertTrue(server.hasTURNURL)
+    }
+
+    func test_hasTURNURL_falseForEmptyURLs() {
+        let server = IceServer(urls: [], username: nil, credential: nil)
+        XCTAssertFalse(server.hasTURNURL)
+    }
+
+    func test_hasTURNURL_trueWhenMixedSTUNAndTURN() {
+        let server = IceServer(
+            urls: ["stun:stun.l.google.com:19302", "turn:turn.meeshy.me:3478"],
+            username: "user",
+            credential: "pass"
+        )
+        XCTAssertTrue(server.hasTURNURL)
+    }
+
+    func test_defaultServers_containsNoTURN() {
+        let hasTURN = IceServer.defaultServers.contains(where: \.hasTURNURL)
+        XCTAssertFalse(hasTURN, "defaultServers are STUN-only fallbacks — the fault-log fires when TURN is absent")
+    }
+}
+
+// MARK: - CallStats.reduce() unit tests
+
+/// Pure function coverage for `CallStats.reduce(entries:)`.
+/// The reducer is the canonical path from an `RTCStatisticsReport` to the
+/// structured `CallStats` consumed by `VideoSurvivalPolicy` and the in-call
+/// HUD. Tests run without a live `RTCPeerConnection` — the whole point of
+/// `RawEntry`.
+@MainActor
+final class CallStatsReducerTests: XCTestCase {
+
+    // MARK: - Helpers
+
+    private func candidatePair(rtt: Double = 0, bitrate: Double = 0) -> CallStats.RawEntry {
+        CallStats.RawEntry(
+            id: "CP01",
+            type: "candidate-pair",
+            kind: nil,
+            codecId: nil,
+            mimeType: nil,
+            values: [
+                "currentRoundTripTime": rtt,
+                "availableOutgoingBitrate": bitrate
+            ]
+        )
+    }
+
+    private func inboundRTP(id: String = "I01", kind: String = "audio", packets: Double = 10,
+                            lost: Double = 0, bytes: Double = 0, codecId: String? = nil) -> CallStats.RawEntry {
+        CallStats.RawEntry(
+            id: id,
+            type: "inbound-rtp",
+            kind: kind,
+            codecId: codecId,
+            mimeType: nil,
+            values: [
+                "packetsReceived": packets,
+                "packetsLost": lost,
+                "bytesReceived": bytes
+            ]
+        )
+    }
+
+    private func outboundRTP(packets: Double = 20, bytes: Double = 0) -> CallStats.RawEntry {
+        CallStats.RawEntry(
+            id: "O01",
+            type: "outbound-rtp",
+            kind: nil,
+            codecId: nil,
+            mimeType: nil,
+            values: ["packetsSent": packets, "bytesSent": bytes]
+        )
+    }
+
+    private func codec(id: String, mimeType: String) -> CallStats.RawEntry {
+        CallStats.RawEntry(
+            id: id,
+            type: "codec",
+            kind: nil,
+            codecId: nil,
+            mimeType: mimeType,
+            values: [:]
+        )
+    }
+
+    // MARK: - Empty / zero baseline
+
+    func test_reduce_emptyEntries_returnsZeroStats() {
+        let result = CallStats.reduce(entries: [])
+        XCTAssertEqual(result.roundTripTimeMs, 0)
+        XCTAssertEqual(result.packetsLost, 0)
+        XCTAssertEqual(result.bandwidth, 0)
+        XCTAssertEqual(result.bytesReceived, 0)
+        XCTAssertNil(result.codec)
+        XCTAssertEqual(result.inboundPacketsReceived, 0)
+        XCTAssertEqual(result.inboundAudioPackets, 0)
+        XCTAssertEqual(result.inboundVideoPackets, 0)
+        XCTAssertEqual(result.outboundPacketsSent, 0)
+        XCTAssertEqual(result.availableOutgoingBitrateBps, 0)
+    }
+
+    // MARK: - candidate-pair
+
+    func test_reduce_candidatePair_rttConvertedFromSecondsToMilliseconds() {
+        let stats = CallStats.reduce(entries: [candidatePair(rtt: 0.05)])
+        XCTAssertEqual(stats.roundTripTimeMs, 50, accuracy: 0.001,
+            "RTT in stats is seconds; reducer must multiply × 1000 → ms")
+    }
+
+    func test_reduce_candidatePair_availableOutgoingBitrateCaptured() {
+        let stats = CallStats.reduce(entries: [candidatePair(bitrate: 500_000)])
+        XCTAssertEqual(stats.availableOutgoingBitrateBps, 500_000)
+    }
+
+    func test_reduce_candidatePair_zeroRTT_whenKeyAbsent() {
+        let entry = CallStats.RawEntry(id: "CP", type: "candidate-pair", kind: nil,
+                                      codecId: nil, mimeType: nil, values: [:])
+        let stats = CallStats.reduce(entries: [entry])
+        XCTAssertEqual(stats.roundTripTimeMs, 0)
+    }
+
+    // MARK: - inbound-rtp per kind
+
+    func test_reduce_inboundRTP_audioKind_incrementsAudioPackets() {
+        let stats = CallStats.reduce(entries: [inboundRTP(kind: "audio", packets: 42)])
+        XCTAssertEqual(stats.inboundAudioPackets, 42)
+        XCTAssertEqual(stats.inboundVideoPackets, 0)
+        XCTAssertEqual(stats.inboundPacketsReceived, 42)
+    }
+
+    func test_reduce_inboundRTP_videoKind_incrementsVideoPackets() {
+        let stats = CallStats.reduce(entries: [inboundRTP(kind: "video", packets: 30)])
+        XCTAssertEqual(stats.inboundVideoPackets, 30)
+        XCTAssertEqual(stats.inboundAudioPackets, 0)
+        XCTAssertEqual(stats.inboundPacketsReceived, 30)
+    }
+
+    func test_reduce_inboundRTP_nilKind_countsAsAudio() {
+        let entry = CallStats.RawEntry(
+            id: "I01", type: "inbound-rtp", kind: nil,
+            codecId: nil, mimeType: nil,
+            values: ["packetsReceived": 15]
+        )
+        let stats = CallStats.reduce(entries: [entry])
+        XCTAssertEqual(stats.inboundAudioPackets, 15,
+            "nil kind must fall through to the audio bucket (else branch in kind == 'video')")
+        XCTAssertEqual(stats.inboundVideoPackets, 0)
+    }
+
+    func test_reduce_multipleInboundRTP_packetsAreSummed() {
+        let entries: [CallStats.RawEntry] = [
+            inboundRTP(id: "I01", kind: "audio", packets: 10),
+            inboundRTP(id: "I02", kind: "audio", packets: 5),
+            inboundRTP(id: "I03", kind: "video", packets: 20),
+        ]
+        let stats = CallStats.reduce(entries: entries)
+        XCTAssertEqual(stats.inboundAudioPackets, 15)
+        XCTAssertEqual(stats.inboundVideoPackets, 20)
+        XCTAssertEqual(stats.inboundPacketsReceived, 35)
+    }
+
+    func test_reduce_inboundRTP_packetsLostSummed() {
+        let entries: [CallStats.RawEntry] = [
+            inboundRTP(id: "I01", kind: "audio", lost: 3),
+            inboundRTP(id: "I02", kind: "video", lost: 7),
+        ]
+        let stats = CallStats.reduce(entries: entries)
+        XCTAssertEqual(stats.packetsLost, 10)
+    }
+
+    func test_reduce_inboundRTP_bytesReceivedSummed() {
+        let entries: [CallStats.RawEntry] = [
+            inboundRTP(id: "I01", kind: "audio", bytes: 1000),
+            inboundRTP(id: "I02", kind: "video", bytes: 4000),
+        ]
+        let stats = CallStats.reduce(entries: entries)
+        XCTAssertEqual(stats.bytesReceived, 5000)
+    }
+
+    // MARK: - outbound-rtp
+
+    func test_reduce_outboundRTP_packetsSentExtracted() {
+        let stats = CallStats.reduce(entries: [outboundRTP(packets: 99)])
+        XCTAssertEqual(stats.outboundPacketsSent, 99)
+    }
+
+    func test_reduce_outboundRTP_bytesSentStoredInBandwidth() {
+        let stats = CallStats.reduce(entries: [outboundRTP(bytes: 8000)])
+        XCTAssertEqual(stats.bandwidth, 8000,
+            "bandwidth stores bytesSent from outbound-rtp entries")
+    }
+
+    // MARK: - Codec resolution
+
+    func test_reduce_codec_resolvedFromCodecId_audioOpus() {
+        let entries: [CallStats.RawEntry] = [
+            inboundRTP(kind: "audio", codecId: "COT01_111"),
+            codec(id: "COT01_111", mimeType: "audio/opus"),
+        ]
+        let stats = CallStats.reduce(entries: entries)
+        XCTAssertEqual(stats.codec, "opus",
+            "Codec name is the last path component after '/' in mimeType")
+    }
+
+    func test_reduce_codec_resolvedFromCodecId_videoH264() {
+        let entries: [CallStats.RawEntry] = [
+            inboundRTP(kind: "video", codecId: "COT02_102"),
+            codec(id: "COT02_102", mimeType: "video/H264"),
+        ]
+        let stats = CallStats.reduce(entries: entries)
+        XCTAssertEqual(stats.codec, "H264")
+    }
+
+    func test_reduce_codec_nilWhenCodecIdAbsent() {
+        let stats = CallStats.reduce(entries: [inboundRTP(kind: "audio")])
+        XCTAssertNil(stats.codec,
+            "No codecId on inbound-rtp entry → codec must be nil, not the mimeType")
+    }
+
+    func test_reduce_codec_nilWhenCodecIdNotInTable() {
+        let entries: [CallStats.RawEntry] = [
+            inboundRTP(kind: "audio", codecId: "MISSING"),
+            codec(id: "COT01_111", mimeType: "audio/opus"),
+        ]
+        let stats = CallStats.reduce(entries: entries)
+        XCTAssertNil(stats.codec,
+            "codecId that has no matching 'codec' entry in the same report → nil")
+    }
+
+    func test_reduce_codec_usesFirstInboundRTPCodecId() {
+        // When multiple inbound-rtp entries have different codecIds, the first wins.
+        let entries: [CallStats.RawEntry] = [
+            inboundRTP(id: "I01", kind: "audio", codecId: "C_opus"),
+            inboundRTP(id: "I02", kind: "video", codecId: "C_h264"),
+            codec(id: "C_opus", mimeType: "audio/opus"),
+            codec(id: "C_h264", mimeType: "video/H264"),
+        ]
+        let stats = CallStats.reduce(entries: entries)
+        XCTAssertEqual(stats.codec, "opus",
+            "primaryCodecId is set by the first inbound-rtp entry that has a non-nil codecId")
+    }
+
+    // MARK: - Combined scenario
+
+    func test_reduce_fullReport_allFieldsCorrect() {
+        let entries: [CallStats.RawEntry] = [
+            candidatePair(rtt: 0.08, bitrate: 250_000),
+            inboundRTP(id: "IA", kind: "audio", packets: 50, lost: 2, bytes: 10_000, codecId: "C1"),
+            inboundRTP(id: "IV", kind: "video", packets: 100, lost: 5, bytes: 80_000),
+            outboundRTP(packets: 120, bytes: 95_000),
+            codec(id: "C1", mimeType: "audio/opus"),
+        ]
+        let stats = CallStats.reduce(entries: entries)
+        XCTAssertEqual(stats.roundTripTimeMs, 80, accuracy: 0.001)
+        XCTAssertEqual(stats.availableOutgoingBitrateBps, 250_000)
+        XCTAssertEqual(stats.inboundAudioPackets, 50)
+        XCTAssertEqual(stats.inboundVideoPackets, 100)
+        XCTAssertEqual(stats.inboundPacketsReceived, 150)
+        XCTAssertEqual(stats.packetsLost, 7)
+        XCTAssertEqual(stats.bytesReceived, 90_000)
+        XCTAssertEqual(stats.outboundPacketsSent, 120)
+        XCTAssertEqual(stats.bandwidth, 95_000)
+        XCTAssertEqual(stats.codec, "opus")
     }
 }

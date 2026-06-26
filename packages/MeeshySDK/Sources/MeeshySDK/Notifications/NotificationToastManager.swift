@@ -194,7 +194,11 @@ public final class NotificationToastManager: ObservableObject {
             return
         }
         conversationReadTasks[conversationId] = Task { [weak self] in
-            try? await NotificationService.shared.markConversationRead(conversationId: conversationId)
+            do {
+                try await NotificationService.shared.markConversationRead(conversationId: conversationId)
+            } catch {
+                logger.error("Failed to mark conversation \(conversationId) read: \(error.localizedDescription)")
+            }
             await self?.refreshUnreadCount()
             self?.lastConversationReadAt[conversationId] = Date()
             self?.conversationReadTasks[conversationId] = nil

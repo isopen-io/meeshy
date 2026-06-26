@@ -590,13 +590,13 @@ public struct UserProfileSheet: View {
             .padding(.vertical, compact ? 10 : 14)
             .background(
                 LinearGradient(
-                    colors: [MeeshyColors.pink, MeeshyColors.cyan],
+                    colors: [MeeshyColors.indigo500, MeeshyColors.indigo400],
                     startPoint: .leading,
                     endPoint: .trailing
                 )
             )
             .clipShape(RoundedRectangle(cornerRadius: compact ? 20 : 14))
-            .shadow(color: MeeshyColors.pink.opacity(0.3), radius: compact ? 4 : 8, y: compact ? 2 : 4)
+            .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: compact ? 4 : 8, y: compact ? 2 : 4)
         }
         .pressable()
     }

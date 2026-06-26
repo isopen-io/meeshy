@@ -77,6 +77,46 @@ final class VoIPPushManagerTests: XCTestCase {
         XCTAssertNil(VoIPPushManager.parseIceServers(42))
     }
 
+    func test_parseIceServers_tooLongUsername_dropsServer() {
+        let longUsername = String(repeating: "x", count: 1025)
+        let json = """
+        [{"urls":"turn:turn.meeshy.me:3478","username":"\(longUsername)","credential":"abc=="}]
+        """
+        let result = VoIPPushManager.parseIceServers(json)
+        XCTAssertEqual(result?.count, 0, "Server with oversized username must be dropped.")
+    }
+
+    func test_parseIceServers_tooLongCredential_dropsServer() {
+        let longCredential = String(repeating: "y", count: 1025)
+        let json = """
+        [{"urls":"turn:turn.meeshy.me:3478","username":"u","credential":"\(longCredential)"}]
+        """
+        let result = VoIPPushManager.parseIceServers(json)
+        XCTAssertEqual(result?.count, 0, "Server with oversized credential must be dropped.")
+    }
+
+    func test_parseIceServers_exactlyMaxLengthCredential_keepsServer() {
+        let maxCredential = String(repeating: "z", count: 1024)
+        let json = """
+        [{"urls":"turn:turn.meeshy.me:3478","username":"u","credential":"\(maxCredential)"}]
+        """
+        let result = VoIPPushManager.parseIceServers(json)
+        XCTAssertEqual(result?.count, 1, "Server with credential at exactly 1024 chars must be kept.")
+    }
+
+    func test_parseIceServers_mixedValidAndOversizedServers_returnsOnlyValid() {
+        let longCredential = String(repeating: "y", count: 1025)
+        let json = """
+        [
+          {"urls":"turn:valid:3478","username":"u","credential":"ok"},
+          {"urls":"turn:bad:3478","username":"u","credential":"\(longCredential)"}
+        ]
+        """
+        let result = VoIPPushManager.parseIceServers(json)
+        XCTAssertEqual(result?.count, 1)
+        XCTAssertEqual(result?.first?.urls.first, "turn:valid:3478")
+    }
+
     // MARK: - resolveCallerName priorities
 
     func test_resolveCallerName_prefersDisplayNameOverUsername() {

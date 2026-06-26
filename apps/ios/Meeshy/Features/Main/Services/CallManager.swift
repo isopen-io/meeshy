@@ -87,18 +87,41 @@ final class CallManager: ObservableObject {
             if active && !oldValue.isActive {
                 PlaybackCoordinator.shared.stopAll()
             }
+
+            // Keep the screen on for the duration of the call (ringing →
+            // connecting → connected). Without this, the device's auto-lock
+            // timer fires during the call — catastrophic for video calls.
+            // Restore immediately when the call ends.
+            UIApplication.shared.isIdleTimerDisabled = active
+
+            // Proximity sensor: enable during audio-only calls so the screen
+            // dims when held to the ear (battery + accidental-tap prevention).
+            // Disabled for video calls (user must see the remote camera) and
+            // cleared when no call is active.
+            updateProximityMonitoring()
         }
     }
     @Published private(set) var transcriptionService = CallTranscriptionService()
     @Published private(set) var remoteUserId: String?
     @Published private(set) var remoteUsername: String?
-    @Published var isVideoEnabled: Bool = false
+    @Published var isVideoEnabled: Bool = false {
+        didSet { if isVideoEnabled != oldValue { updateProximityMonitoring() } }
+    }
     /// P0-3 — the REMOTE peer's camera state, driven by `call:media-toggled`.
     /// Defaults to `true` (assume on) and flips to `false` when the peer turns
     /// its camera off, so the UI can show an avatar placeholder instead of the
     /// peer's frozen last frame. 1:1 only — the gateway routes the toggle to the
     /// other participant via `socket.to(room)` so we never see our own echo.
     @Published private(set) var isRemoteVideoEnabled: Bool = true
+    /// `false` when the remote peer has muted their microphone (call:media-toggled
+    /// audioType=="audio"). Drives the mute indicator in the call UI so the local
+    /// user knows why the remote peer sounds silent. Resets to `true` on call end.
+    @Published private(set) var isRemoteAudioEnabled: Bool = true
+    /// `true` when the remote peer is actively screen-capturing this call
+    /// (call:screen-capture-alert with isCapturing==true). Drives a privacy warning
+    /// banner in CallView. Resets to `false` on call end to prevent leaking state
+    /// into subsequent calls.
+    @Published private(set) var isRemoteScreenCapturing: Bool = false
     /// Set to `true` when the gateway reports the remote peer has high RTT or packet
     /// loss (call:quality-alert). Auto-resets after 15 s of silence — sustained poor
     /// conditions keep resetting the timer, so the indicator stays up as long as
@@ -123,6 +146,10 @@ final class CallManager: ObservableObject {
     @Published private(set) var connectionQuality: PeerConnectionState = .new
     /// RTT+packet-loss quality level from stats samples; nil until first sample.
     @Published private(set) var liveVideoQualityLevel: VideoQualityLevel? = nil
+    /// Most-recent stats snapshot collected during the active call. Updated every
+    /// `QualityThresholds.statsIntervalSeconds`; nil before the first sample.
+    /// Persisted to UserDefaults at call teardown for post-call diagnostics.
+    private(set) var lastKnownStats: CallStats?
     @Published var displayMode: CallDisplayMode = .fullScreen
     /// Une fenêtre PiP SYSTÈME (AVPictureInPicture) est affichée. Orthogonal à
     /// `displayMode` : tant qu'il est vrai, la `FloatingCallPillView` in-app est
@@ -178,7 +205,7 @@ final class CallManager: ObservableObject {
     /// referencing CallManager or hopping to the MainActor. Used to suppress
     /// `forceReconnect()` mid-call (token rotation / re-auth) so the WebRTC
     /// signaling socket is never torn down during a call.
-    private static let _isCallActiveLock = OSAllocatedUnfairLock(initialState: false)
+    private nonisolated(unsafe) static let _isCallActiveLock = OSAllocatedUnfairLock(initialState: false)
     /// Thread-safe read/write. Written only from @MainActor (callState.didSet);
     /// read from non-isolated socket-manager closures — guarded by an unfair lock
     /// so concurrent reads never observe a torn write.
@@ -248,7 +275,22 @@ final class CallManager: ObservableObject {
     /// timeout; both now store the Task here so `endCallInternal` can
     /// cancel it cleanly instead of leaking it for the remaining sleep.
     private var sdpOfferTimeoutTask: Task<Void, Never>?
+    /// Tracks the at-most-one in-flight offer retry loop so `endCallInternal`
+    /// can cancel it promptly instead of waiting for the settle window to expire.
+    /// A new offer supersedes the previous one via the generation guard inside
+    /// `emitOfferWithRetry`, but cancelling the Task is cheaper than sleeping.
+    private var offerRetryTask: Task<Void, Never>?
+    /// Same as `offerRetryTask` for the SDP answer backoff path.
+    private var answerRetryTask: Task<Void, Never>?
+    /// Tracks the in-flight toggleVideo Task. Cancelled when a rapid second tap arrives
+    /// so the later intent always wins and `isVideoEnabled` stays consistent with WebRTC.
+    private var videoToggleTask: Task<Void, Never>?
     private var remoteQualityResetTask: Task<Void, Never>?
+    /// In-flight ICE restart task. Tracked so overlapping `attemptReconnection`
+    /// calls (e.g. watchdog fires while backoff is sleeping) cancel the previous
+    /// attempt before starting the new one — prevents two concurrent restart
+    /// offers from corrupting the perfect-negotiation state machine.
+    private var iceRestartTask: Task<Void, Never>?
     private var voipFreshnessTask: Task<Void, Never>?
     private var pendingRemoteOffer: SessionDescription?
     // P0-3 — ICE candidates generated while the socket is down are buffered
@@ -261,6 +303,16 @@ final class CallManager: ObservableObject {
     private var screenCaptureObserver: NSObjectProtocol?
     private var backgroundObserver: NSObjectProtocol?
     private var foregroundObserver: NSObjectProtocol?
+    /// `true` while the app is in the background during a video call. iOS
+    /// enforces camera suspension in the background (privacy); we set this flag
+    /// and send `call:media-toggled false` so the peer shows our avatar
+    /// placeholder instead of a frozen last frame. Cleared on foreground return
+    /// or call teardown.
+    private var isVideoSuspendedByBackground = false
+    /// `true` while CallKit has placed the call on hold (e.g. incoming cellular
+    /// call). The user's camera intent (`isVideoEnabled`) is preserved so video
+    /// resumes automatically on unhold. Cleared on unhold or call teardown.
+    private var isVideoSuspendedByHold = false
 
     // Network monitoring
     private let networkMonitor = NWPathMonitor()
@@ -330,6 +382,7 @@ final class CallManager: ObservableObject {
         startNetworkMonitoring()
         startAudioInterruptionMonitoring()
         startAudioRouteChangeMonitoring()
+        startMediaServicesResetMonitoring()
         Logger.calls.info("CallManager initialized")
     }
 
@@ -399,6 +452,7 @@ final class CallManager: ObservableObject {
                     try AVAudioSession.sharedInstance().setActive(true, options: [])
                 } catch {
                     Logger.calls.error("AVAudioSession reactivation failed after interruption: \(error.localizedDescription)")
+                    return
                 }
                 let rtc = RTCAudioSession.sharedInstance()
                 rtc.lockForConfiguration()
@@ -453,6 +507,48 @@ final class CallManager: ObservableObject {
         }
     }
 
+    private func startMediaServicesResetMonitoring() {
+        NotificationCenter.default.addObserver(
+            forName: AVAudioSession.mediaServicesWereResetNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.handleMediaServicesReset()
+            }
+        }
+    }
+
+    @MainActor
+    private func handleMediaServicesReset() {
+        guard callState.isActive else { return }
+        Logger.calls.fault("AVAudioSession media services reset during call — rebuilding audio stack")
+        // The media server process crashed and restarted. All session state is
+        // gone. Reconstruct: reconfigure RTCAudioSession (category / mode /
+        // options), then notify libwebrtc that the session cycled so it
+        // restarts its audio I/O unit. Re-apply the speaker route last, once
+        // the engine is live again.
+        configureAudioSession()
+        audioSessionQueue.async { [weak self] in
+            guard let self else { return }
+            do {
+                try AVAudioSession.sharedInstance().setActive(true, options: [])
+            } catch {
+                Logger.calls.error("AVAudioSession reactivation after media-services reset failed: \(error.localizedDescription)")
+            }
+            let rtc = RTCAudioSession.sharedInstance()
+            rtc.lockForConfiguration()
+            rtc.audioSessionDidDeactivate(AVAudioSession.sharedInstance())
+            rtc.audioSessionDidActivate(AVAudioSession.sharedInstance())
+            rtc.isAudioEnabled = true
+            rtc.unlockForConfiguration()
+        }
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(200))
+            self?.applySpeakerRoute()
+        }
+    }
+
     private var callKitDelegate: CallKitDelegateProxy?
 
     // MARK: - Outgoing Call
@@ -474,10 +570,14 @@ final class CallManager: ObservableObject {
             callDuration = 0
             isVideoEnabled = false
             isRemoteVideoEnabled = true
+            isRemoteAudioEnabled = true
+            isRemoteScreenCapturing = false
             isMuted = false
             isSpeaker = false
             videoSurvivalController.reset()
             isVideoSuspended = false
+            isVideoSuspendedByBackground = false
+            isVideoSuspendedByHold = false
             Logger.calls.info("Force-reset .ended → .idle to accept new call")
         }
     }
@@ -623,7 +723,7 @@ final class CallManager: ObservableObject {
                 self.currentCallId = ack.callId
                 Logger.calls.info("[CALL_SETUP] outgoing 1/4 webRTC.configure begin (isVideo=\(isVideo))")
                 self.webRTCService.configure(isVideo: isVideo, iceServers: dynamicServers)
-                self.scheduleTURNCredentialRefresh(ttl: TimeInterval(ack.ttl ?? 480))
+                self.scheduleTURNCredentialRefresh(ttl: TimeInterval(ack.ttl ?? Int(QualityThresholds.turnDefaultCredentialTTLSeconds)))
                 self.applyNegotiationRole()
                 Logger.calls.info("[CALL_SETUP] outgoing 2/4 configureAudioSession begin")
                 self.configureAudioSession()
@@ -643,6 +743,23 @@ final class CallManager: ObservableObject {
                     self.isVideoEnabled = false
                     try? await self.webRTCService.startLocalMedia(isVideo: false)
                     guard self.activeCallUUID == uuid else { return }
+                } catch WebRTCError.cameraPermissionDenied {
+                    // Camera denied — degrade to audio-only. Ending the call here would
+                    // be wrong: the user still expects to talk even without video.
+                    // Surface an actionable toast so they can open Settings mid-call.
+                    Logger.calls.warning("[CALL_SETUP] camera permission denied — degrading to audio-only")
+                    guard self.activeCallUUID == uuid else { return }
+                    self.isVideoEnabled = false
+                    try? await self.webRTCService.startLocalMedia(isVideo: false)
+                    guard self.activeCallUUID == uuid else { return }
+                    FeedbackToastManager.shared.showError(
+                        String(localized: "call.video.permission.denied",
+                               defaultValue: "Caméra : accès refusé — toucher pour ouvrir les Paramètres",
+                               bundle: .main)
+                    ) {
+                        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                        UIApplication.shared.open(url)
+                    }
                 } catch {
                     Logger.calls.error("startLocalMedia failed: \(error.localizedDescription)")
                     if self.activeCallUUID == uuid {
@@ -739,7 +856,7 @@ final class CallManager: ObservableObject {
         // so RTCPeerConnection is built with TURN BEFORE the offer is set.
         Logger.calls.info("[CALL_SETUP] incoming 1/4 webRTC.configure begin (isVideo=\(isVideo))")
         webRTCService.configure(isVideo: isVideo, iceServers: iceServers)
-        scheduleTURNCredentialRefresh(ttl: 480)
+        scheduleTURNCredentialRefresh(ttl: QualityThresholds.turnDefaultCredentialTTLSeconds)
         applyNegotiationRole()
         Logger.calls.info("[CALL_SETUP] incoming 2/4 configureAudioSession begin")
         configureAudioSession()
@@ -768,6 +885,18 @@ final class CallManager: ObservableObject {
                 Logger.calls.warning("Simulator video unsupported — continuing audio-only")
                 self.isVideoEnabled = false
                 try? await self.webRTCService.startLocalMedia(isVideo: false)
+            } catch WebRTCError.cameraPermissionDenied {
+                Logger.calls.warning("[CALL_SETUP] camera permission denied on incoming — degrading to audio-only")
+                self.isVideoEnabled = false
+                try? await self.webRTCService.startLocalMedia(isVideo: false)
+                FeedbackToastManager.shared.showError(
+                    String(localized: "call.video.permission.denied",
+                           defaultValue: "Caméra : accès refusé — toucher pour ouvrir les Paramètres",
+                           bundle: .main)
+                ) {
+                    guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                    UIApplication.shared.open(url)
+                }
             } catch is CancellationError {
                 // L'appel s'est terminé pendant startCapture (P2PWebRTCClient
                 // a déjà éteint la caméra orpheline) — pas un échec media.
@@ -802,7 +931,7 @@ final class CallManager: ObservableObject {
         let urlString = "\(MeeshyConfig.shared.apiBaseURL)/calls/\(callId)"
         guard let url = URL(string: urlString) else { return }
 
-        var request = URLRequest(url: url, timeoutInterval: 4.0)
+        var request = URLRequest(url: url, timeoutInterval: QualityThresholds.voipFreshnessTimeoutSeconds)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
@@ -950,7 +1079,7 @@ final class CallManager: ObservableObject {
 
         // Auto-join call room + configure WebRTC so SDP offer can be received while ringing
         webRTCService.configure(isVideo: isVideo, iceServers: iceServers)
-        scheduleTURNCredentialRefresh(ttl: 480)
+        scheduleTURNCredentialRefresh(ttl: QualityThresholds.turnDefaultCredentialTTLSeconds)
         applyNegotiationRole()
         configureAudioSession()
         startReliabilityMonitor()
@@ -975,6 +1104,18 @@ final class CallManager: ObservableObject {
                 Logger.calls.warning("Simulator video unsupported — continuing audio-only")
                 self.isVideoEnabled = false
                 try? await self.webRTCService.startLocalMedia(isVideo: false)
+            } catch WebRTCError.cameraPermissionDenied {
+                Logger.calls.warning("[CALL_SETUP] camera permission denied on incoming — degrading to audio-only")
+                self.isVideoEnabled = false
+                try? await self.webRTCService.startLocalMedia(isVideo: false)
+                FeedbackToastManager.shared.showError(
+                    String(localized: "call.video.permission.denied",
+                           defaultValue: "Caméra : accès refusé — toucher pour ouvrir les Paramètres",
+                           bundle: .main)
+                ) {
+                    guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                    UIApplication.shared.open(url)
+                }
             } catch is CancellationError {
                 // L'appel s'est terminé pendant startCapture (P2PWebRTCClient
                 // a déjà éteint la caméra orpheline) — pas un échec media :
@@ -1021,7 +1162,12 @@ final class CallManager: ObservableObject {
                 // createAnswer (called concurrently with emitCallJoin).
                 await self.localMediaTask?.value
                 guard let answer = await self.webRTCService.createAnswer(from: sdp) else {
+                    guard self.currentCallId == callId else { return }
                     self.endCallInternal(reason: .failed("Failed to create SDP answer"))
+                    return
+                }
+                guard self.currentCallId == callId else {
+                    Logger.calls.info("[CALL] late-offer answer discarded: call ended during createAnswer")
                     return
                 }
                 await self.emitCallAnswer(callId: callId, toUserId: userId, sdp: answer)
@@ -1037,7 +1183,12 @@ final class CallManager: ObservableObject {
             Task { [weak self] in
                 guard let self else { return }
                 guard let answer = await self.webRTCService.createAnswer(from: sdp) else {
+                    guard self.currentCallId == callId else { return }
                     Logger.calls.error("Failed to answer mid-call renegotiation offer for call: \(callId)")
+                    return
+                }
+                guard self.currentCallId == callId else {
+                    Logger.calls.info("[CALL] renegotiation answer discarded: call ended during createAnswer")
                     return
                 }
                 await self.emitCallAnswer(callId: callId, toUserId: userId, sdp: answer)
@@ -1085,7 +1236,12 @@ final class CallManager: ObservableObject {
                 // (emitCallJoin is now decoupled from startLocalMedia).
                 await self.localMediaTask?.value
                 guard let answer = await self.webRTCService.createAnswer(from: remoteOffer) else {
+                    guard self.currentCallId == callId else { return }
                     self.endCallInternal(reason: .failed("Failed to create SDP answer"))
+                    return
+                }
+                guard self.currentCallId == callId else {
+                    Logger.calls.info("[CALL] buffered-offer answer discarded: call ended during createAnswer")
                     return
                 }
                 await self.emitCallAnswer(callId: callId, toUserId: userId, sdp: answer)
@@ -1093,14 +1249,14 @@ final class CallManager: ObservableObject {
                 Logger.calls.info("Call answered with buffered SDP offer: \(callId)")
             }
         } else {
-            // SDP offer not yet received — wait for it via handleSignalOffer with 30s timeout
+            // SDP offer not yet received — wait for it via handleSignalOffer with timeout
             Logger.calls.info("Call answered but SDP offer not yet received, waiting: \(callId)")
             sdpOfferTimeoutTask?.cancel()
             sdpOfferTimeoutTask = Task { @MainActor [weak self] in
-                try? await Task.sleep(for: .seconds(30))
+                try? await Task.sleep(for: .seconds(QualityThresholds.sdpOfferTimeoutSeconds))
                 guard let self, !Task.isCancelled else { return }
                 guard case .connecting = self.callState, self.currentCallId == callId else { return }
-                Logger.calls.error("SDP offer timeout after 30s for call: \(callId)")
+                Logger.calls.error("SDP offer timeout for call: \(callId)")
                 self.endCallInternal(reason: .failed(String(localized: "call.error.timeout")))
             }
         }
@@ -1124,7 +1280,12 @@ final class CallManager: ObservableObject {
             // (10s+), so awaiting camera/mic warmup here is safe.
             await self.localMediaTask?.value
             guard let answer = await self.webRTCService.createAnswer(from: remoteOffer) else {
+                guard self.currentCallId == callId else { return }
                 self.endCallInternal(reason: .failed("Failed to create SDP answer"))
+                return
+            }
+            guard self.currentCallId == callId else {
+                Logger.calls.info("[CALL] CallKit answer discarded: call ended during createAnswer")
                 return
             }
             // PERF-004: await the gateway ACK (3s) so when answerCallReady
@@ -1136,10 +1297,10 @@ final class CallManager: ObservableObject {
             Logger.calls.info("Call answered (CallKit), awaiting SDP offer: \(callId)")
             sdpOfferTimeoutTask?.cancel()
             sdpOfferTimeoutTask = Task { @MainActor [weak self] in
-                try? await Task.sleep(for: .seconds(30))
+                try? await Task.sleep(for: .seconds(QualityThresholds.sdpOfferTimeoutSeconds))
                 guard let self, !Task.isCancelled else { return }
                 guard case .connecting = self.callState, self.currentCallId == callId else { return }
-                Logger.calls.error("SDP offer timeout after 30s for call: \(callId)")
+                Logger.calls.error("SDP offer timeout for call: \(callId)")
                 self.endCallInternal(reason: .failed(String(localized: "call.error.timeout")))
             }
         }
@@ -1303,9 +1464,9 @@ final class CallManager: ObservableObject {
     /// agressif sous stress). Partagé par la config et le handler thermal.
     private func pipFrameRate(for state: ProcessInfo.ThermalState) -> Int {
         switch state {
-        case .critical: return 8
-        case .serious: return 10
-        default: return 15
+        case .critical: return QualityThresholds.pipFrameRateCritical
+        case .serious: return QualityThresholds.pipFrameRateSerious
+        default: return QualityThresholds.pipFrameRateDefault
         }
     }
 
@@ -1319,6 +1480,12 @@ final class CallManager: ObservableObject {
         // diverged, only a call hangup recovered it.
         isMuted.toggle()
         webRTCService.muteAudio(isMuted)
+        // Broadcast the new mute state so the remote peer can update its
+        // "muted" indicator. This must fire regardless of CallKit path (the
+        // guard below returns early for Mac / foreground in-app calls).
+        if let callId = currentCallId {
+            MessageSocketManager.shared.emitCallToggleAudio(callId: callId, enabled: !isMuted)
+        }
 
         // CALL-FIX 2026-06-06 (macOS) — `CXSetMutedCallAction` fails on iOS-app-on-Mac
         // (CallKit requesttransaction error 4) and the rollback below then UNDOES the
@@ -1359,9 +1526,16 @@ final class CallManager: ObservableObject {
     /// case). Replaces the old track.enabled flip, which left the upgrade
     /// invisible to the peer (no transceiver / no renegotiation).
     func toggleVideo() {
+        videoToggleTask?.cancel()
         let target = !isVideoEnabled
-        Task { [weak self] in
-            guard let self else { return }
+        // Optimistic update: reflect intent immediately so rapid double-taps
+        // read the new isVideoEnabled value and don't launch a duplicate toggle.
+        // The tracked videoToggleTask ensures the later intent always wins:
+        // if a second tap cancels this Task, the cancelled path does not update
+        // any state — the second Task's result is authoritative.
+        isVideoEnabled = target
+        videoToggleTask = Task { @MainActor [weak self] in
+            guard let self, !Task.isCancelled else { return }
             do {
                 let needsRenegotiation: Bool
                 if target {
@@ -1369,7 +1543,7 @@ final class CallManager: ObservableObject {
                 } else {
                     needsRenegotiation = await self.webRTCService.downgradeFromVideo()
                 }
-                self.isVideoEnabled = target
+                guard !Task.isCancelled else { return }
                 self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
 
                 // User intent is authoritative: forget any survival state so the
@@ -1384,15 +1558,37 @@ final class CallManager: ObservableObject {
 
                 // Renegotiate so the peer actually starts/stops receiving our
                 // video stream (a track.enabled flip alone never reaches it).
+                // Guard post-await: if the call ended while createOffer() was
+                // building the SDP, currentCallId is nil — don't emit a stale
+                // offer for a dead call (mirrors applySurvivalVideoSend).
                 if needsRenegotiation,
                    let callId = self.currentCallId,
                    let userId = self.remoteUserId,
-                   let offer = await self.webRTCService.createOffer() {
+                   let offer = await self.webRTCService.createOffer(),
+                   self.currentCallId == callId {
                     self.emitCallOffer(callId: callId, toUserId: userId, isVideo: target, sdp: offer)
                     Logger.calls.info("[CALL] A/V switch renegotiation offer sent (video=\(target))")
                 }
                 HapticFeedback.light()
+            } catch WebRTCError.cameraPermissionDenied {
+                guard !Task.isCancelled else { return }
+                Logger.calls.error("toggleVideo failed: camera permission denied — prompting settings redirect")
+                self.isVideoEnabled = false
+                self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
+                // Show a tappable error so the user can open Settings to grant
+                // camera access without ending the audio-only call. The toast's
+                // tap action is the primary affordance; the message text says "tap"
+                // so screen-reader users also know the toast is actionable.
+                FeedbackToastManager.shared.showError(
+                    String(localized: "call.video.permission.denied",
+                           defaultValue: "Caméra : accès refusé — toucher pour ouvrir les Paramètres",
+                           bundle: .main)
+                ) {
+                    guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                    UIApplication.shared.open(url)
+                }
             } catch {
+                guard !Task.isCancelled else { return }
                 Logger.calls.error("toggleVideo failed: \(error.localizedDescription)")
                 self.isVideoEnabled = false
                 self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
@@ -1737,6 +1933,11 @@ final class CallManager: ObservableObject {
                 case .reconnecting(let attempt):
                     connectingSince = nil
                     connectedSince = nil
+                    // Re-arm half-open detection for the new connection period.
+                    // Without this, an ICE restart that produces an asymmetric path
+                    // (outbound OK but inbound broken) would skip the health check
+                    // and silently stay `.connected` with no incoming audio/video.
+                    halfOpenSettled = false
                     didAttemptConnectingRestart = false
                     // Restart the budget clock whenever a new attempt begins (any
                     // reconnection trigger advanced the counter).
@@ -1812,18 +2013,28 @@ final class CallManager: ObservableObject {
 
         // CALL-FIX 2026-06-06 — call established: stop ringback/ringtone + play the
         // "connected" cue. transitionToConnected is idempotent (guarded above) so
-        // the cue plays exactly once.
+        // the cue plays exactly once. On a reconnect (wasReconnecting=true) the
+        // ringback is already stopped, the cue already played, and the timer is
+        // already running — replaying the cue or resetting the timer mid-call
+        // would be a jarring UX regression.
         ringbackPlayer.stop()
         ringbackPlayer.stopRingtone()
-        ringbackPlayer.playConnected()
+        if !wasReconnecting {
+            ringbackPlayer.playConnected()
+        }
         callState = .connected
         // Audio session was configured ONCE at peer-connection setup; CallKit
         // drives activation via provider:didActivate:, which is the single
         // place that flips RTCAudioSession.isAudioEnabled.
-        playHaptic(.heavy)
+        // On reconnect use a lighter haptic — the user is mid-call, not initiating.
+        playHaptic(wasReconnecting ? .light : .heavy)
         startScreenCaptureMonitoring()
-        callStartDate = Date()
-        callDuration = 0
+        // Preserve the call start time and running duration on reconnect so the
+        // timer does not reset to 0:00 mid-call after an ICE restart.
+        if !wasReconnecting {
+            callStartDate = Date()
+            callDuration = 0
+        }
         reconnectAttempt = 0
 
         // Notify gateway that the ICE restart succeeded so call DB status is
@@ -1852,7 +2063,10 @@ final class CallManager: ObservableObject {
         // timer when CXAnswerCallAction is fulfilled — calling
         // reportOutgoingCall here would silently no-op and leave the
         // Recents entry with zero duration.
-        if lastCallWasOutgoing, let uuid = activeCallUUID {
+        // Guard on !wasReconnecting: calling this again after an ICE restart
+        // resets CallKit's own timer in Recents/History, making the displayed
+        // call duration shorter than the actual elapsed time.
+        if !wasReconnecting, lastCallWasOutgoing, let uuid = activeCallUUID {
             callProvider.reportOutgoingCall(with: uuid, connectedAt: Date())
         }
     }
@@ -1951,6 +2165,23 @@ final class CallManager: ObservableObject {
                 let userId = AuthManager.shared.currentUser?.id ?? ""
                 MessageSocketManager.shared.emitCallBackgrounded(callId: callId, participantId: userId)
                 Logger.calls.info("Call backgrounded")
+                // iOS enforces camera suspension when the app is in the background
+                // (privacy protection — enforced at the OS level). The peer would
+                // otherwise see a frozen last frame indefinitely. Signal the camera
+                // state change so the peer shows our avatar placeholder instead.
+                if self.isVideoEnabled {
+                    // Always arm the background flag so the foreground-return path
+                    // knows to attempt a restore.
+                    self.isVideoSuspendedByBackground = true
+                    // Only signal the peer if no other suspension source has already
+                    // sent "camera off" — hold and survival controller each emit their
+                    // own toggle event. A duplicate here produces a spurious
+                    // avatar-flicker round-trip on the remote end with no semantic gain.
+                    if !self.isVideoSuspendedByHold && !self.isVideoSuspended {
+                        MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: false)
+                        Logger.calls.info("Video backgrounded — peer notified (avatar placeholder)")
+                    }
+                }
             }
         }
 
@@ -1964,6 +2195,19 @@ final class CallManager: ObservableObject {
                 let userId = AuthManager.shared.currentUser?.id ?? ""
                 MessageSocketManager.shared.emitCallForegrounded(callId: callId, participantId: userId)
                 Logger.calls.info("Call foregrounded")
+                // Restore the peer's camera-active signal if we suspended it on
+                // background entry. Guard on ALL suspension sources:
+                // • isVideoSuspended — survival controller dropped to audio-only
+                // • isVideoSuspendedByHold — CallKit hold still active (cellular
+                //   pre-emption): foregrounding does NOT lift a hold, so we must
+                //   not falsely signal "camera active" to the peer
+                if self.isVideoSuspendedByBackground {
+                    self.isVideoSuspendedByBackground = false
+                    if self.isVideoEnabled && !self.isVideoSuspended && !self.isVideoSuspendedByHold {
+                        MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: true)
+                        Logger.calls.info("Video foregrounded — peer notified (camera restored)")
+                    }
+                }
             }
         }
     }
@@ -1977,6 +2221,41 @@ final class CallManager: ObservableObject {
             NotificationCenter.default.removeObserver(observer)
             foregroundObserver = nil
         }
+    }
+
+    // MARK: - CallKit Hold/Unhold
+
+    /// Called by `CXSetHeldCallAction`. Suspends/restores outbound video on hold so
+    /// the peer receives a proper "camera off" signal rather than a frozen frame.
+    /// Mirrors the background-suspension pattern: `isVideoEnabled` (user intent) is
+    /// preserved; video auto-resumes on unhold unless the survival controller or
+    /// background is also suspending it.
+    func handleHold(_ isOnHold: Bool) {
+        guard callState.isActive, let callId = currentCallId else { return }
+        if isOnHold {
+            if isVideoEnabled {
+                isVideoSuspendedByHold = true
+                webRTCService.enableVideo(false)
+                MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: false)
+                Logger.calls.info("CallKit hold — video suspended, peer notified (callId=\(callId))")
+            }
+        } else {
+            if isVideoSuspendedByHold {
+                isVideoSuspendedByHold = false
+                if isVideoEnabled && !isVideoSuspended && !isVideoSuspendedByBackground {
+                    webRTCService.enableVideo(true)
+                    MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: true)
+                    Logger.calls.info("CallKit unhold — video restored, peer notified (callId=\(callId))")
+                }
+            }
+        }
+    }
+
+    // MARK: - DTMF Forwarding
+
+    /// Called by `CXPlayDTMFCallAction` to forward CallKit keypad digits to WebRTC.
+    func sendDTMF(digits: String) {
+        webRTCService.sendDTMF(digits: digits)
     }
 
     // MARK: - Metered Connection Check (M4)
@@ -2036,6 +2315,46 @@ final class CallManager: ObservableObject {
         networkMonitor.start(queue: networkQueue)
     }
 
+    // MARK: - Post-call diagnostics persistence
+
+    /// UserDefaults key for the last persisted call quality summary.
+    static let lastCallSummaryDefaultsKey = "me.meeshy.lastCallQualitySummary"
+
+    /// Lightweight call quality summary persisted to UserDefaults at call teardown.
+    /// Survives app termination so quality issues are debuggable after the fact.
+    struct CallQualitySummary: Codable, Sendable {
+        let callId: String?
+        let remoteUser: String?
+        let durationSeconds: TimeInterval
+        let endReason: String
+        let stats: CallStats?
+    }
+
+    /// Returns the last persisted call summary from a previous call (or the
+    /// current session, if already torn down). Nil when no call has been made yet.
+    static var lastCallSummary: CallQualitySummary? {
+        guard let data = UserDefaults.standard.data(forKey: lastCallSummaryDefaultsKey) else { return nil }
+        return try? JSONDecoder().decode(CallQualitySummary.self, from: data)
+    }
+
+    private static func persistCallSummary(
+        stats: CallStats?,
+        callId: String?,
+        duration: TimeInterval,
+        remote: String?,
+        reason: CallEndReason
+    ) {
+        let summary = CallQualitySummary(
+            callId: callId,
+            remoteUser: remote,
+            durationSeconds: duration,
+            endReason: String(describing: reason),
+            stats: stats
+        )
+        guard let data = try? JSONEncoder().encode(summary) else { return }
+        UserDefaults.standard.set(data, forKey: lastCallSummaryDefaultsKey)
+    }
+
     private func endCallInternal(reason: CallEndReason) {
         // CALL-FIX 2026-06-06 — stop any ringing loop + play the "ended" cue, but
         // ONLY if the call was actually active (ringing/connecting/connected). The
@@ -2070,8 +2389,16 @@ final class CallManager: ObservableObject {
         participantJoinedCancellable = nil
         sdpOfferTimeoutTask?.cancel()
         sdpOfferTimeoutTask = nil
+        offerRetryTask?.cancel()
+        offerRetryTask = nil
+        answerRetryTask?.cancel()
+        answerRetryTask = nil
+        videoToggleTask?.cancel()
+        videoToggleTask = nil
         remoteQualityResetTask?.cancel()
         remoteQualityResetTask = nil
+        iceRestartTask?.cancel()
+        iceRestartTask = nil
         voipFreshnessTask?.cancel()
         voipFreshnessTask = nil
         isRemoteQualityDegraded = false
@@ -2090,9 +2417,16 @@ final class CallManager: ObservableObject {
         // vidéo potentiellement suspendu — violation du contrat documenté de
         // `VideoSurvivalControlling.reset()`.
         isRemoteVideoEnabled = true
+        isRemoteAudioEnabled = true
+        isRemoteScreenCapturing = false
         videoSurvivalController.reset()
         isVideoSuspended = false
+        isVideoSuspendedByBackground = false
+        isVideoSuspendedByHold = false
         detachSystemPiP()
+        Self.persistCallSummary(stats: lastKnownStats, callId: currentCallId,
+                                duration: callDuration, remote: remoteUsername, reason: reason)
+        lastKnownStats = nil
         webRTCService.close()
         deactivateAudioSession()
         callState = .ended(reason: reason)
@@ -2122,7 +2456,7 @@ final class CallManager: ObservableObject {
         let token = UUID()
         settleToken = token
         Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(1500))
+            try? await Task.sleep(for: .seconds(QualityThresholds.callEndSettleSeconds))
             guard let self else { return }
             guard self.settleToken == token else { return }
             if case .ended = self.callState {
@@ -2254,6 +2588,15 @@ final class CallManager: ObservableObject {
                 Logger.calls.error("Audio route change failed: \(error.localizedDescription)")
             }
         }
+    }
+
+    private func updateProximityMonitoring() {
+        // Enable proximity monitoring only during audio-only active calls. The
+        // sensor dims the screen (and blocks touch) when the phone is pressed to
+        // the ear — essential for voice calls, harmful during video (blocks the
+        // remote face). iOS handles dimming automatically once monitoring is on.
+        let shouldMonitor = callState.isActive && !isVideoEnabled
+        UIDevice.current.isProximityMonitoringEnabled = shouldMonitor
     }
 
     private func deactivateAudioSession() {
@@ -2417,8 +2760,49 @@ final class CallManager: ObservableObject {
                 guard let self else { return }
                 guard self.callState.isActive, let callId = self.currentCallId else { return }
                 Logger.calls.info("Socket reconnected — re-joining call room \(callId)")
-                MessageSocketManager.shared.emitCallJoin(callId: callId)
-                self.flushPendingIceCandidates()
+                // Await the gateway's ACK before sending room-scoped events.
+                // call:join is async server-side (DB lookup + socket.join); if we
+                // fire call:request-ice-servers or call:toggle-video immediately the
+                // gateway's `socket.rooms.has(ROOMS.call(callId))` guard fails and
+                // those events are silently dropped.
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    let joined = await MessageSocketManager.shared.emitCallJoinWithAck(callId: callId)
+                    guard self.callState.isActive, self.currentCallId == callId else { return }
+                    if !joined {
+                        Logger.calls.warning("Socket reconnect — call:join ACK timed out (callId=\(callId)), proceeding anyway")
+                    }
+                    self.flushPendingIceCandidates()
+                    // Re-sync video state with the peer. The gateway resets the peer's
+                    // call:media-toggled view when our socket disconnects; after reconnect
+                    // the peer defaults to assuming our camera is on, which is wrong if we
+                    // toggled video off, the survival controller suspended it, or we are
+                    // backgrounded. Compute the effective state from all three sources.
+                    if self.isVideoEnabled {
+                        let effectiveVideoOn = !self.isVideoSuspended
+                            && !self.isVideoSuspendedByBackground
+                            && !self.isVideoSuspendedByHold
+                        MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: effectiveVideoOn)
+                        Logger.calls.info("Socket reconnect — re-syncing video state to peer (effectiveVideoOn=\(effectiveVideoOn))")
+                    }
+                    // Re-sync audio mute state. The gateway resets per-participant
+                    // media state when a socket disconnects; the peer defaults to
+                    // assuming our mic is live, which is wrong if we were muted.
+                    // Always emit (even when !isMuted) to overwrite any stale state.
+                    MessageSocketManager.shared.emitCallToggleAudio(callId: callId, enabled: !self.isMuted)
+                    Logger.calls.info("Socket reconnect — re-syncing audio mute state to peer (isMuted=\(self.isMuted))")
+                    // Request fresh TURN credentials after reconnect. The socket may
+                    // have been down long enough for our credentials to approach
+                    // expiry (TTL=480s, refresh at 80%=384s — a 96-second window
+                    // of vulnerability). Cancel the periodic scheduler first so the
+                    // old deadline doesn't fire while the fresh response is in flight,
+                    // causing duplicate requests. The response re-arms the scheduler
+                    // at the new TTL via `call:ice-servers-refreshed`.
+                    self.turnRefreshTask?.cancel()
+                    self.turnRefreshTask = nil
+                    MessageSocketManager.shared.emitRequestIceServers(callId: callId)
+                    Logger.calls.info("Socket reconnect — requesting fresh TURN credentials for call \(callId)")
+                }
             }
             .store(in: &cancellables)
 
@@ -2447,9 +2831,27 @@ final class CallManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self else { return }
-                guard event.callId == self.currentCallId, event.mediaType == "video" else { return }
-                self.isRemoteVideoEnabled = event.enabled
-                Logger.calls.info("Remote video \(event.enabled ? "enabled" : "disabled") (callId=\(event.callId))")
+                guard event.callId == self.currentCallId else { return }
+                switch event.mediaType {
+                case "video":
+                    self.isRemoteVideoEnabled = event.enabled
+                    Logger.calls.info("Remote video \(event.enabled ? "enabled" : "disabled") (callId=\(event.callId))")
+                case "audio":
+                    self.isRemoteAudioEnabled = event.enabled
+                    Logger.calls.info("Remote audio \(event.enabled ? "enabled" : "muted") (callId=\(event.callId))")
+                default:
+                    break
+                }
+            }
+            .store(in: &cancellables)
+
+        socket.callScreenCaptureAlert
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self else { return }
+                guard event.callId == self.currentCallId else { return }
+                self.isRemoteScreenCapturing = event.isCapturing
+                Logger.calls.info("Remote screen capture \(event.isCapturing ? "started" : "stopped") (callId=\(event.callId))")
             }
             .store(in: &cancellables)
 
@@ -2485,7 +2887,7 @@ final class CallManager: ObservableObject {
     private func scheduleRemoteQualityReset() {
         remoteQualityResetTask?.cancel()
         remoteQualityResetTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(15))
+            try? await Task.sleep(for: .seconds(QualityThresholds.remoteQualityResetSeconds))
             guard !Task.isCancelled else { return }
             self?.isRemoteQualityDegraded = false
         }
@@ -2523,7 +2925,15 @@ final class CallManager: ObservableObject {
             Task { [weak self] in
                 guard let self else { return }
                 guard let offer = await self.webRTCService.createOffer() else {
+                    // Post-await guard: if the call ended while createOffer() was
+                    // building the SDP, peerConnection is nil → nil return.
+                    // Don't clobber a clean end with .failed.
+                    guard self.currentCallId == callId else { return }
                     self.endCallInternal(reason: .failed("Failed to create offer"))
+                    return
+                }
+                guard self.currentCallId == callId else {
+                    Logger.calls.info("[CALL] participant-joined offer discarded: call ended during createOffer")
                     return
                 }
                 self.emitCallOffer(callId: callId, toUserId: toUserId, isVideo: isVideo, sdp: offer)
@@ -2634,7 +3044,8 @@ final class CallManager: ObservableObject {
         // Fire-and-forget dropped it silently on socket churn; the gateway
         // buffer/replay (§4.6) is the *backstop* for a target not-yet-in-room,
         // but the EMITTER must also retry when its own socket lost the frame.
-        Task { [weak self] in
+        offerRetryTask?.cancel()
+        offerRetryTask = Task { [weak self] in
             await self?.emitOfferWithRetry(callId: callId, payload: payload, generation: generation)
         }
     }
@@ -2643,10 +3054,10 @@ final class CallManager: ObservableObject {
     /// if the call ended or a newer negotiation superseded this offer (epoch),
     /// so a stale retry never lands on the peer after a renegotiation.
     private func emitOfferWithRetry(callId: String, payload: [String: Any], generation: Int) async {
-        let maxAttempts = 3
-        var delayMs: UInt64 = 500
+        let maxAttempts = QualityThresholds.signalOfferMaxAttempts
+        var delay: TimeInterval = QualityThresholds.signalRetryInitialDelaySeconds
         for attempt in 1...maxAttempts {
-            guard currentCallId == callId, generation >= negotiationId else {
+            guard !Task.isCancelled, currentCallId == callId, generation >= negotiationId else {
                 Logger.calls.info("[CALL-DIAG] offer gen=\(generation) superseded/cancelled — stop retry")
                 return
             }
@@ -2659,8 +3070,8 @@ final class CallManager: ObservableObject {
             }
             Logger.calls.warning("[CALL-DIAG] offer ACK timed out (attempt \(attempt)/\(maxAttempts)) call=\(callId)")
             if attempt < maxAttempts {
-                try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
-                delayMs *= 2
+                try? await Task.sleep(for: .seconds(delay))
+                delay *= 2
             }
         }
         Logger.calls.error("[CALL-DIAG] offer never ACK'd after \(maxAttempts) attempts — relying on gateway replay (§4.6)")
@@ -2692,7 +3103,8 @@ final class CallManager: ObservableObject {
         // gateway dedupes the duplicate by `negotiationId` (§3.5), so a re-sent
         // answer never causes glare.
         Logger.calls.warning("[CALL-DIAG] answer ACK timed out (attempt 1) call=\(callId) — retrying in background")
-        Task { [weak self] in
+        answerRetryTask?.cancel()
+        answerRetryTask = Task { [weak self] in
             await self?.emitAnswerRetry(callId: callId, payload: payload, generation: generation)
         }
         return false
@@ -2703,15 +3115,16 @@ final class CallManager: ObservableObject {
     /// ended or a newer negotiation superseded this answer (epoch), so a stale
     /// answer never lands on the peer after a renegotiation.
     private func emitAnswerRetry(callId: String, payload: [String: Any], generation: Int) async {
-        var delayMs: UInt64 = 500
-        for attempt in 2...4 {
-            guard currentCallId == callId, generation >= negotiationId else {
+        var delay: TimeInterval = QualityThresholds.signalRetryInitialDelaySeconds
+        let total = QualityThresholds.signalAnswerTotalAttempts
+        for attempt in 2...total {
+            guard !Task.isCancelled, currentCallId == callId, generation >= negotiationId else {
                 Logger.calls.info("[CALL-DIAG] answer gen=\(generation) superseded/cancelled — stop retry")
                 return
             }
-            try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
-            delayMs *= 2
-            guard currentCallId == callId, generation >= negotiationId else { return }
+            try? await Task.sleep(for: .seconds(delay))
+            delay *= 2
+            guard !Task.isCancelled, currentCallId == callId, generation >= negotiationId else { return }
             let acked = await MessageSocketManager.shared.emitCallSignalWithAck(
                 callId: callId, type: "answer", payload: payload
             )
@@ -2719,9 +3132,9 @@ final class CallManager: ObservableObject {
                 Logger.calls.info("[CALL-DIAG] answer ACK'd on attempt \(attempt)")
                 return
             }
-            Logger.calls.warning("[CALL-DIAG] answer ACK timed out (attempt \(attempt)/4) call=\(callId)")
+            Logger.calls.warning("[CALL-DIAG] answer ACK timed out (attempt \(attempt)/\(total)) call=\(callId)")
         }
-        Logger.calls.error("[CALL-DIAG] answer never ACK'd after 4 attempts — relying on gateway replay (§4.6)")
+        Logger.calls.error("[CALL-DIAG] answer never ACK'd after \(total) attempts — relying on gateway replay (§4.6)")
     }
 
     // Audit P3 — `toUserId` was accepted by the previous signature and
@@ -2760,10 +3173,30 @@ extension CallManager: ThermalStateMonitorDelegate {
                 Logger.calls.warning("Thermal critical — disabled all filters (video + audio)")
                 if self.isVideoEnabled {
                     self.isVideoEnabled = false
-                    self.webRTCService.enableVideo(false)
+                    // §5.4 — use downgradeFromVideo (sets transceiver direction +
+                    // stops capture) rather than enableVideo(false) (track.enabled
+                    // only). Without the direction change the peer's SDP still
+                    // advertises sendRecv and the RTP session stays open, which
+                    // means the peer's decoder never tears down and the "camera off"
+                    // media-toggled is the only signal it gets — race-prone and
+                    // semantically wrong. Mirror the manual toggleVideo() path.
+                    let needsRenegotiation = await self.webRTCService.downgradeFromVideo()
+                    self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
+                    self.videoSurvivalController.reset()
                     // P0-3 — signal the peer (avatar placeholder, not a frozen frame).
                     if let callId = self.currentCallId {
                         MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: false)
+                    }
+                    // Renegotiate so the peer's SDP transceiver direction matches
+                    // the video downgrade (media-toggled alone does not update the
+                    // remote offer's m-sections).
+                    if needsRenegotiation,
+                       let callId = self.currentCallId,
+                       let userId = self.remoteUserId,
+                       let offer = await self.webRTCService.createOffer(),
+                       self.currentCallId == callId {
+                        self.emitCallOffer(callId: callId, toUserId: userId, isVideo: false, sdp: offer)
+                        Logger.calls.warning("Thermal critical — SDP renegotiation offer emitted (video downgrade)")
                     }
                     Logger.calls.warning("Thermal critical — disabled video")
                 }
@@ -2807,8 +3240,16 @@ extension CallManager: WebRTCServiceDelegate {
                 )
                 Logger.calls.debug("Sent ICE candidate for call: \(callId)")
             } else {
-                self.pendingIceCandidates.append(["callId": callId, "payload": payload])
-                Logger.calls.debug("Buffered ICE candidate (socket down) for call: \(callId)")
+                // Cap the buffer: ICE can generate 50+ candidates in a single
+                // restart round.  Candidates beyond the cap are for transports
+                // we'll never relay anyway (stale ICE generation) and would
+                // only bloat the flush on reconnect.
+                if self.pendingIceCandidates.count < QualityThresholds.maxPendingIceCandidates {
+                    self.pendingIceCandidates.append(["callId": callId, "payload": payload])
+                    Logger.calls.debug("Buffered ICE candidate (socket down) for call: \(callId)")
+                } else {
+                    Logger.calls.warning("ICE candidate buffer full (\(QualityThresholds.maxPendingIceCandidates)) — dropping candidate for call: \(callId)")
+                }
             }
         }
     }
@@ -2942,6 +3383,17 @@ extension CallManager: WebRTCServiceDelegate {
     nonisolated func webRTCService(_ service: WebRTCService, didCollectStats stats: CallStats, level: VideoQualityLevel, packetLossPercent: Double) {
         Task { @MainActor [weak self] in
             guard let self, let callId = self.currentCallId else { return }
+            // Always update cumulative stats for the call summary: byte counters
+            // grow through ICE restart and the final snapshot must be fresh.
+            self.lastKnownStats = stats
+            // During ICE restart (.reconnecting) and initial setup (.connecting)
+            // the RTP stream is paused: Δlost and Δreceived are both zero, so
+            // RTT=0 and loss=0 — which reads as ".excellent" quality. Reporting
+            // that level to the UI, the gateway, or the survival controller while
+            // the call shows "Reconnecting…" misleads users and resets the survival
+            // controller's degraded-streak timer prematurely. Gate all reporting
+            // on callState == .connected.
+            guard case .connected = self.callState else { return }
             self.liveVideoQualityLevel = level
             MessageSocketManager.shared.emitCallQualityReport(
                 callId: callId,
@@ -3001,16 +3453,37 @@ extension CallManager: WebRTCServiceDelegate {
         let attempt = reconnectAttempt
         let backoffSeconds = attempt > 1 ? min(pow(2.0, Double(attempt - 1)), 4.0) : 0.0
 
-        Task { @MainActor [weak self] in
+        // Cancel any in-flight restart so two concurrent Tasks don't both send an
+        // offer — overlapping offers corrupt the perfect-negotiation state machine
+        // (both peers may enter makingOffer simultaneously with no polite resolution).
+        iceRestartTask?.cancel()
+        iceRestartTask = Task { @MainActor [weak self] in
             guard let self, let callId = self.currentCallId, let userId = self.remoteUserId else { return }
             if backoffSeconds > 0 {
                 Logger.calls.info("ICE restart attempt \(attempt): backing off \(Int(backoffSeconds))s before retry")
                 try? await Task.sleep(for: .seconds(backoffSeconds))
-                guard !Task.isCancelled, self.callState.isActive else { return }
+                // After sleeping, verify we are still in the same reconnection
+                // attempt. A natural ICE recovery (.connected) or a superseding
+                // attempt (higher attempt number) both make this offer stale.
+                // Sending restartIce() on an already-connected peer connection
+                // resets ICE to gathering state, breaking a healthy call.
+                guard !Task.isCancelled,
+                      case .reconnecting(let current) = self.callState,
+                      current == attempt else { return }
             }
             guard let offer = await self.webRTCService.performICERestart() else {
                 Logger.calls.error("ICE restart failed to produce offer")
                 self.attemptReconnection()
+                return
+            }
+            // Guard again after the async performICERestart() call — natural ICE
+            // recovery may have changed state while the offer was being created.
+            // Emitting a restart offer on a connected peer would re-enter ICE
+            // gathering and interrupt the live media path.
+            guard !Task.isCancelled,
+                  case .reconnecting(let current) = self.callState,
+                  current == attempt else {
+                Logger.calls.info("ICE restart offer discarded — state changed during renegotiation (attempt \(attempt))")
                 return
             }
             self.emitCallOffer(callId: callId, toUserId: userId, isVideo: self.isVideoEnabled, sdp: offer)
@@ -3031,7 +3504,9 @@ extension CallManager: WebRTCServiceDelegate {
             Logger.calls.warning("TURN refresh TTL too short (\(Int(ttl))s) — skipping reschedule")
             return
         }
-        let refreshDelay = ttl * 0.8
+        // Guard against zero/negative TTL (malformed gateway response): a delay of
+        // ≤0 would schedule an immediate refresh on every tick, hammering the gateway.
+        let refreshDelay = max(QualityThresholds.turnMinRefreshDelaySeconds, ttl * 0.8)
         Logger.calls.info("TURN credential refresh scheduled in \(Int(refreshDelay))s (TTL=\(Int(ttl))s)")
         turnRefreshTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(refreshDelay))
@@ -3047,6 +3522,14 @@ extension CallManager: WebRTCServiceDelegate {
     // already re-admitted us to the call room before forwarding candidates.
     private func flushPendingIceCandidates() {
         guard !pendingIceCandidates.isEmpty else { return }
+        // Guard socket liveness: if the socket dropped again between the
+        // reconnect event and this flush, the gateway never receives the
+        // candidates — and they're not re-queued. Re-buffer them so the
+        // next reconnect cycle can deliver them.
+        guard MessageSocketManager.shared.isConnected else {
+            Logger.calls.warning("flushPendingIceCandidates — socket not connected, re-buffering \(self.pendingIceCandidates.count) candidate(s)")
+            return
+        }
         let candidates = pendingIceCandidates
         pendingIceCandidates = []
         Logger.calls.info("Flushing \(candidates.count) buffered ICE candidate(s) after socket reconnect")
@@ -3122,10 +3605,30 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
         action.fulfill()
     }
 
+    func provider(_ provider: CXProvider, perform action: CXSetHeldCallAction) {
+        // Fires when a cellular call pre-empts or releases our call. Audio is
+        // already managed by didDeactivate/didActivate; we only handle video here
+        // so the peer receives a proper "camera off" signal instead of a frozen
+        // last frame during the hold.
+        let isOnHold = action.isOnHold
+        Task { @MainActor [weak self] in
+            self?.manager?.handleHold(isOnHold)
+            action.fulfill()
+        }
+    }
+
     func provider(_ provider: CXProvider, perform action: CXStartCallAction) {
         // The outgoing call path is initiated by the user's UI tap; CallManager
         // builds the WebRTC stack asynchronously. Fulfilling immediately here is
         // safe because we don't await any media setup from this delegate.
+        action.fulfill()
+    }
+
+    func provider(_ provider: CXProvider, perform action: CXPlayDTMFCallAction) {
+        // RFC 4733: forward CallKit keypad input to the WebRTC DTMF sender.
+        // Enables conference PINs and IVR navigation during active calls.
+        // sendDTMF is a no-op when unavailable; fulfill so CallKit doesn't timeout.
+        manager?.sendDTMF(digits: action.digits)
         action.fulfill()
     }
 
@@ -3218,6 +3721,17 @@ extension CallManager: VideoSurvivalActuating {
     private func applySurvivalVideoSend(enabled: Bool) async -> Bool {
         // Only act while the user still wants video and we're in an active call.
         guard isVideoEnabled, let callId = currentCallId else { return false }
+        // Do NOT renegotiate during an ICE restart: the SDP exchange is already
+        // in flight, and overlapping it with a survival-controller downgrade or
+        // resume causes SDP glare. The survival controller will re-evaluate once
+        // the call reaches .connected and stats start flowing again.
+        if case .reconnecting = callState { return false }
+        // Do NOT resume video if an OS-level suspension is active: a CallKit hold
+        // (cellular pre-emption) or background entry both signal "no camera" to the
+        // peer. A network-quality recovery must not override either of those signals
+        // — the peer would see a false "camera active" even though iOS is either
+        // blocking camera access or has suspended capture for the held call.
+        if enabled && (isVideoSuspendedByHold || isVideoSuspendedByBackground) { return false }
         do {
             let needsRenegotiation: Bool
             if enabled {
@@ -3247,6 +3761,25 @@ extension CallManager: VideoSurvivalActuating {
                 Logger.calls.info("[CALL] survival A/V switch offer sent (video=\(enabled))")
             }
             return true
+        } catch WebRTCError.cameraPermissionDenied where enabled {
+            // Camera permission was revoked while the call was live.  The
+            // survival controller would otherwise keep retrying on every
+            // recovery cycle (each returning false → revert → retry next streak).
+            // Permanently disable video to stop the loop: set isVideoEnabled=false
+            // so the survival controller's next tick returns .initial immediately
+            // (it guards on `userWantsVideo`). Then surface the Settings toast.
+            Logger.calls.error("[CALL] survival resume failed: camera permission denied — permanently disabling video")
+            isVideoEnabled = false
+            videoSurvivalController.reset()
+            FeedbackToastManager.shared.showError(
+                String(localized: "call.video.permission.denied",
+                       defaultValue: "Caméra : accès refusé — toucher pour ouvrir les Paramètres",
+                       bundle: .main)
+            ) {
+                guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                UIApplication.shared.open(url)
+            }
+            return false
         } catch {
             Logger.calls.error("survival video \(enabled ? "resume" : "suspend") failed: \(error.localizedDescription)")
             return false

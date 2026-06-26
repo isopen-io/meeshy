@@ -56,7 +56,7 @@ public struct BackgroundTransform: Sendable, Equatable {
 ///
 /// Uses `nonisolated` inits to interop with `CALayer`'s nonisolated initializers
 /// (MeeshyUI module applies `defaultIsolation(MainActor)`).
-public final class StoryBackgroundLayer: CALayer, @unchecked Sendable {
+public final class StoryBackgroundLayer: CALayer {
     public enum Kind: Sendable {
         case solidColor(UIColor)
         case gradient(colors: [UIColor], direction: GradientDirection)

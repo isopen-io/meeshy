@@ -9,9 +9,9 @@ public enum FeedbackToastType {
 
     public var color: Color {
         switch self {
-        case .success: return MeeshyColors.green
-        case .error: return MeeshyColors.coral
-        case .info: return MeeshyColors.cyan
+        case .success: return MeeshyColors.success
+        case .error: return MeeshyColors.error
+        case .info: return MeeshyColors.indigo400
         }
     }
 

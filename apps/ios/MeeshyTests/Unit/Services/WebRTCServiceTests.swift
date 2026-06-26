@@ -50,9 +50,11 @@ final class WebRTCServiceTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(client.addIceCandidateCallCount, 1)
     }
 
-    func test_addICECandidate_bufferCap_dropsExcessCandidates() async {
-        // The buffer must never exceed 200 entries. Candidates 201–205 are
-        // silently dropped; after flush, the client receives exactly 200 calls.
+    func test_addICECandidate_bufferCap_retainsNewestCandidates() async {
+        // The buffer is a FIFO ring capped at 200: when full, the OLDEST entry is
+        // evicted so the newest (highest-priority) candidate is always preserved.
+        // After inserting 205 candidates the buffer holds the last 200 (#6–#205).
+        // On flush the client receives exactly 200 calls.
         let (sut, client) = makeSUT()
         let candidate = IceCandidate(sdpMid: "0", sdpMLineIndex: 0, candidate: "candidate:test")
         // Overshoot the cap by 5.
@@ -64,7 +66,7 @@ final class WebRTCServiceTests: XCTestCase {
         await sut.setRemoteDescription(desc)
         // Give the flush task time to drain the buffer.
         try? await Task.sleep(nanoseconds: 200_000_000)
-        // Exactly 200 candidates forwarded — not 205.
+        // Exactly 200 candidates forwarded — the 5 oldest were evicted.
         XCTAssertEqual(client.addIceCandidateCallCount, 200)
     }
 
@@ -151,7 +153,7 @@ final class WebRTCServiceTests: XCTestCase {
         XCTAssertTrue(result)
     }
 
-    func test_setRemoteDescription_failure_returnsFalse() async {
+    func test_setRemoteDescription_whenClientFails_returnsFalse() async {
         let (sut, client) = makeSUT()
         client.setRemoteAnswerResult = .failure(WebRTCError.failedToCreateSDP)
         let desc = SessionDescription(type: .answer, sdp: "v=0\r\n")
@@ -159,15 +161,14 @@ final class WebRTCServiceTests: XCTestCase {
         XCTAssertFalse(result)
     }
 
-    func test_setRemoteDescription_failure_doesNotSetHasRemoteDescription() async {
+    func test_setRemoteDescription_whenClientFails_doesNotFlushCandidates() async {
         let (sut, client) = makeSUT()
         client.setRemoteAnswerResult = .failure(WebRTCError.failedToCreateSDP)
-        let desc = SessionDescription(type: .answer, sdp: "v=0\r\n")
-        _ = await sut.setRemoteDescription(desc)
-        // Verify ICE candidates are not flushed (hasRemoteDescription stays false).
         let candidate = IceCandidate(sdpMid: "0", sdpMLineIndex: 0, candidate: "candidate:test")
         sut.addICECandidate(candidate)
-        try? await Task.sleep(nanoseconds: 100_000_000)
+        let desc = SessionDescription(type: .answer, sdp: "v=0\r\n")
+        await sut.setRemoteDescription(desc)
+        try? await Task.sleep(nanoseconds: 200_000_000)
         XCTAssertEqual(client.addIceCandidateCallCount, 0)
     }
 
@@ -181,6 +182,37 @@ final class WebRTCServiceTests: XCTestCase {
 
         XCTAssertNotNil(result)
         XCTAssertEqual(result?.sdp, "restart-offer")
+    }
+
+    func test_performICERestart_callsRestartIceOnClient() async {
+        let (sut, client) = makeSUT()
+        client.createOfferResult = .success(SessionDescription(type: .offer, sdp: "restart-offer"))
+        _ = await sut.performICERestart()
+        XCTAssertEqual(client.restartIceCallCount, 1)
+    }
+
+    func test_performICERestart_clearsStaleCandidateBufferBeforeRestart() async {
+        let (sut, client) = makeSUT()
+        for i in 0..<3 {
+            sut.addICECandidate(IceCandidate(sdpMid: "0", sdpMLineIndex: 0, candidate: "candidate:\(i)"))
+        }
+        _ = await sut.performICERestart()
+        let desc = SessionDescription(type: .answer, sdp: "v=0\r\n")
+        await sut.setRemoteDescription(desc)
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertEqual(client.addIceCandidateCallCount, 0)
+    }
+
+    func test_addICECandidate_bufferCap_oldestCandidateIsEvictedFirst() async {
+        let (sut, client) = makeSUT()
+        for i in 0...200 {
+            sut.addICECandidate(IceCandidate(sdpMid: "0", sdpMLineIndex: 0, candidate: "candidate:\(i)"))
+        }
+        let desc = SessionDescription(type: .answer, sdp: "v=0\r\n")
+        await sut.setRemoteDescription(desc)
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertEqual(client.addIceCandidateCallCount, 200)
+        XCTAssertEqual(client.addedCandidates.first?.candidate, "candidate:1")
     }
 
     // MARK: - Transcription Channel
@@ -321,12 +353,30 @@ final class ApplyVideoQualitySourceGuardTests: XCTestCase {
         )
     }
 
-    /// Zero targetFPS (critical) must fall back to 15 fps, not 0.
+    /// Zero targetFPS (critical) must fall back to `QualityThresholds.criticalVideoFloorFPS`, not 0.
     func test_applyVideoQuality_usesMinFpsFloorForCriticalTier() throws {
         let source = try webRTCServiceSource()
         XCTAssertTrue(
+            source.contains("level.targetFPS > 0 ? level.targetFPS : QualityThresholds.criticalVideoFloorFPS"),
+            "applyVideoQuality must floor zero targetFPS with QualityThresholds.criticalVideoFloorFPS — " +
+            "0 fps stalls encoding; hardcoding 15 creates drift when the constant is tuned."
+        )
+        XCTAssertFalse(
             source.contains("level.targetFPS > 0 ? level.targetFPS : 15"),
-            "applyVideoQuality must floor zero targetFPS to 15 — 0 fps stalls encoding."
+            "applyVideoQuality must not hardcode 15 fps — use QualityThresholds.criticalVideoFloorFPS"
+        )
+    }
+
+    /// Zero targetResolutionHeight (critical) must fall back to `QualityThresholds.criticalVideoFloorHeight`.
+    func test_applyVideoQuality_usesFloorHeightForCriticalTier() throws {
+        let source = try webRTCServiceSource()
+        XCTAssertTrue(
+            source.contains("level.targetResolutionHeight > 0 ? level.targetResolutionHeight : QualityThresholds.criticalVideoFloorHeight"),
+            "applyVideoQuality must floor zero targetResolutionHeight with QualityThresholds.criticalVideoFloorHeight"
+        )
+        XCTAssertFalse(
+            source.contains("level.targetResolutionHeight > 0 ? level.targetResolutionHeight : 360"),
+            "applyVideoQuality must not hardcode 360 — use QualityThresholds.criticalVideoFloorHeight"
         )
     }
 
@@ -352,6 +402,21 @@ final class ApplyVideoQualitySourceGuardTests: XCTestCase {
             source.contains("thermal.bitrateBps") && source.contains("thermal.framerate") && source.contains("thermal.scaleDownBy"),
             "applyVideoQuality must pass thermal.bitrateBps / .framerate / .scaleDownBy to " +
             "applyVideoEncoding — using raw level values bypasses the thermal ceiling."
+        )
+    }
+
+    func test_qualityLevelDebounce_usesQualityThresholdsConstant() throws {
+        // Regression guard: the quality-level debounce gate in processStats must not
+        // hardcode 5.0 — it must reference QualityThresholds.qualityLevelDebounceSeconds
+        // so future tuning is done in one place.
+        let source = try webRTCServiceSource()
+        XCTAssertTrue(
+            source.contains("qualityLevelDebounceSeconds"),
+            "processStats debounce gate must use QualityThresholds.qualityLevelDebounceSeconds"
+        )
+        XCTAssertFalse(
+            source.contains("< 5.0"),
+            "Hardcoded < 5.0 debounce in processStats — replace with QualityThresholds.qualityLevelDebounceSeconds"
         )
     }
 }
@@ -604,6 +669,7 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
     var createOfferResult: Result<SessionDescription, Error> = .success(SessionDescription(type: .offer, sdp: "mock"))
     var createAnswerResult: Result<SessionDescription, Error> = .success(SessionDescription(type: .answer, sdp: "mock"))
     var addIceCandidateCallCount = 0
+    private(set) var addedCandidates: [IceCandidate] = []
     var disconnectCallCount = 0
     var lastAudioEnabled: Bool?
     var lastVideoEnabled: Bool?
@@ -622,7 +688,10 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
     func createAnswer(for offer: SessionDescription) async throws -> SessionDescription { try createAnswerResult.get() }
     var setRemoteAnswerResult: Result<Void, Error> = .success(())
     func setRemoteAnswer(_ answer: SessionDescription) async throws { try setRemoteAnswerResult.get() }
-    func addIceCandidate(_ candidate: IceCandidate) async throws { addIceCandidateCallCount += 1 }
+    func addIceCandidate(_ candidate: IceCandidate) async throws {
+        addIceCandidateCallCount += 1
+        addedCandidates.append(candidate)
+    }
     func startLocalMedia(type: CallMediaType) async throws {}
     func toggleAudio(_ enabled: Bool) { lastAudioEnabled = enabled }
     func toggleVideo(_ enabled: Bool) { lastVideoEnabled = enabled }
@@ -667,6 +736,14 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
     func disconnect() { disconnectCallCount += 1; isConnected = false }
     private(set) var restartIceCallCount = 0
     func restartIce() { restartIceCallCount += 1 }
+    private(set) var applyAudioEncodingCallCount = 0
+    private(set) var lastAudioEncodingMaxBitrateBps: Int?
+    func applyAudioEncoding(maxBitrateBps: Int) {
+        applyAudioEncodingCallCount += 1
+        lastAudioEncodingMaxBitrateBps = maxBitrateBps
+    }
+    func setMaxAudioBitrate(_ bitrate: Int) {}
+    func sendDTMF(digits: String) {}
     func setAudioEffect(_ effect: AudioEffectConfig?) throws {}
     func updateAudioEffectParams(_ config: AudioEffectConfig) throws {}
 }

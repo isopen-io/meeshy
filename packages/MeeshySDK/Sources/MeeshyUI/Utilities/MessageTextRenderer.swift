@@ -106,7 +106,6 @@ public enum MessageTextRenderer {
     /// Returns NSRanges suitable for AttributedString highlighting.
     public static func highlightRanges(in text: String, term: String) -> [NSRange] {
         guard !term.isEmpty else { return [] }
-        let ns = text as NSString
         let lowered = text.lowercased()
         let termLower = term.lowercased()
         var ranges: [NSRange] = []
@@ -462,7 +461,7 @@ public enum MessageTextRenderer {
             guard intersection.length > 0 else { continue }
             let localStart = intersection.location - charOffset
             let localNS = NSRange(location: localStart, length: intersection.length)
-            guard let swiftRange = Range(localNS, in: segmentText) else { continue }
+            guard Range(localNS, in: segmentText) != nil else { continue }
             let attrRange = attr.index(attr.startIndex, offsetByCharacters: localStart)..<attr.index(attr.startIndex, offsetByCharacters: localStart + intersection.length)
             attr[attrRange].backgroundColor = Color.yellow.opacity(0.4)
         }

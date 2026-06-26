@@ -55,7 +55,7 @@ public final class BlockService: ObservableObject, BlockServiceProviding, @unche
             endpoint: "/users/\(userId)/block",
             body: [String: String]()
         )
-        await MainActor.run { blockedUserIds.insert(userId) }
+        await MainActor.run { _ = blockedUserIds.insert(userId) }
     }
 
     // MARK: - Unblock
@@ -64,7 +64,7 @@ public final class BlockService: ObservableObject, BlockServiceProviding, @unche
         let _ = try await api.delete(
             endpoint: "/users/\(userId)/block"
         )
-        await MainActor.run { blockedUserIds.remove(userId) }
+        await MainActor.run { _ = blockedUserIds.remove(userId) }
     }
 
     // MARK: - List

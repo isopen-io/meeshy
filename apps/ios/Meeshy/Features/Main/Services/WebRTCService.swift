@@ -154,9 +154,16 @@ final class WebRTCService {
             // each produce host/srflx/relay candidates). Beyond ~200 candidates
             // the ICE agent has already selected a pair; additional ones add no
             // connection value and only bloat memory.
-            guard iceCandidateBuffer.count < 200 else {
-                Logger.webrtc.warning("ICE candidate buffer full (200) — dropping candidate")
-                return
+            //
+            // FIFO eviction: when the buffer is full, evict the OLDEST candidate
+            // rather than discarding the NEW one. Newer candidates are typically
+            // more valuable — they reflect more recently discovered interfaces
+            // (e.g. relay candidates gathered after STUN, or candidates from a
+            // network handoff). Dropping the tail means the freshest paths never
+            // reach the ICE agent.
+            if iceCandidateBuffer.count >= 200 {
+                iceCandidateBuffer.removeFirst()
+                Logger.webrtc.warning("ICE candidate buffer full — evicting oldest to make room")
             }
             iceCandidateBuffer.append(candidate)
             Logger.webrtc.debug("Buffered ICE candidate (no remote description yet), count=\(self.iceCandidateBuffer.count)")
@@ -165,6 +172,11 @@ final class WebRTCService {
         Task {
             do {
                 try await client.addIceCandidate(candidate)
+            } catch WebRTCError.noPeerConnection {
+                // Expected after call teardown: peerConnection is nil once
+                // disconnect() runs. Log at debug to avoid error noise in
+                // post-call candidate drains.
+                Logger.webrtc.debug("ICE candidate discarded — peer connection already torn down")
             } catch {
                 Logger.webrtc.error("Failed to add ICE candidate: \(error.localizedDescription)")
             }
@@ -278,6 +290,7 @@ final class WebRTCService {
     func stopQualityMonitor() {
         qualityMonitorTask?.cancel()
         qualityMonitorTask = nil
+        lastStats = nil
     }
 
     private func adjustBitrate(basedOn stats: CallStats, previous: CallStats?) {
@@ -319,7 +332,7 @@ final class WebRTCService {
             let bweMbps = stats.availableOutgoingBitrateBps > 0
                 ? String(format: " bwe=%.1fMbps", Double(stats.availableOutgoingBitrateBps) / 1_000_000)
                 : ""
-            Logger.webrtc.info("Audio bitrate adjusted to \(newBitrate) bps (RTT: \(rtt)ms, loss: \(lossPct)\(bweMbps))")
+            Logger.webrtc.info("Audio bitrate adjusted to \(newBitrate / 1000)kbps (RTT: \(rtt)ms, loss: \(lossPct)\(bweMbps))")
         }
 
         // §5.6 — a thermal transition must re-apply the encoder ceiling even
@@ -336,7 +349,7 @@ final class WebRTCService {
         }
 
         let now = Date()
-        if let debounce = qualityLevelDebounceDate, now.timeIntervalSince(debounce) < 5.0 {
+        if let debounce = qualityLevelDebounceDate, now.timeIntervalSince(debounce) < QualityThresholds.qualityLevelDebounceSeconds {
             return
         }
         qualityLevelDebounceDate = now
@@ -359,8 +372,8 @@ final class WebRTCService {
     /// congestion gracefully without desyncing the peer.
     private func applyVideoQuality(_ level: VideoQualityLevel) {
         let bitrate = level.targetVideoBitrate > 0 ? level.targetVideoBitrate : QualityThresholds.minVideoBitrate
-        let fps = level.targetFPS > 0 ? level.targetFPS : 15
-        let height = level.targetResolutionHeight > 0 ? level.targetResolutionHeight : 360
+        let fps = level.targetFPS > 0 ? level.targetFPS : QualityThresholds.criticalVideoFloorFPS
+        let height = level.targetResolutionHeight > 0 ? level.targetResolutionHeight : QualityThresholds.criticalVideoFloorHeight
         let scale = max(1.0, 720.0 / Double(height))
         // §5.6 — compose the network-driven target with the device thermal
         // ceiling so a hot device sheds frames/bitrate even when the network is
@@ -387,6 +400,10 @@ final class WebRTCService {
     func sendTranscription(_ message: DataChannelTranscriptionMessage) {
         guard let data = try? JSONEncoder().encode(message) else { return }
         client.sendDataChannelMessage(data)
+    }
+
+    func sendDTMF(digits: String) {
+        client.sendDTMF(digits: digits)
     }
 
     // MARK: - Audio Effects
@@ -449,6 +466,9 @@ final class WebRTCService {
                 if Task.isCancelled { break }
                 do {
                     try await self.client.addIceCandidate(candidate)
+                } catch WebRTCError.noPeerConnection {
+                    Logger.webrtc.debug("Buffered ICE candidate discarded — peer connection torn down mid-flush")
+                    break
                 } catch {
                     Logger.webrtc.error("Failed to add buffered ICE candidate: \(error.localizedDescription)")
                 }

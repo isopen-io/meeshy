@@ -2495,7 +2495,7 @@ public actor OfflineQueue {
     public func deleteForTesting(clientMessageId cmid: String) async throws {
         guard let pool = outboxPool else { throw OfflineQueueError.poolNotConfigured }
         try await pool.write { db in
-            try OutboxRecord
+            _ = try OutboxRecord
                 .filter(Column("clientMessageId") == cmid)
                 .deleteAll(db)
         }

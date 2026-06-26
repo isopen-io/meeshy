@@ -91,7 +91,7 @@ public actor LinkPreviewFetcher {
     /// building one is expensive (it compiles the link-detection rules), so
     /// creating one per `firstURL` call — i.e. per text bubble's `BubbleContent`
     /// build, which runs per cell on scroll — was real CPU. Build it once.
-    private nonisolated(unsafe) static let linkDetector: NSDataDetector? =
+    private nonisolated static let linkDetector: NSDataDetector? =
         try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
 
     public nonisolated static func firstURL(in text: String) -> String? {

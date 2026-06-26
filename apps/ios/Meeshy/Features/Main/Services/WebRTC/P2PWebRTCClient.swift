@@ -28,6 +28,12 @@ private enum WebRTCSharedFactory {
     }()
 }
 
+// `@unchecked Sendable` contract: every property mutation is serialised on the
+// main queue — callers arrive via @MainActor (WebRTCService / CallManager), and
+// RTCPeerConnectionDelegate callbacks are `nonisolated` + dispatch to
+// DispatchQueue.main.async before touching state (see MARK: RTCPeerConnectionDelegate).
+// `@MainActor` on the class is not viable: WebRTC's signaling_thread / network_thread
+// call the @objc delegate thunks off-main; Swift 6 would assert isolation and crash.
 final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendable {
     weak var delegate: (any WebRTCClientDelegate)?
 
@@ -69,6 +75,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     private(set) var videoFilterPipeline = VideoFilterPipeline()
     private var transcriptionDataChannel: RTCDataChannel?
     private var dataChannelPingTask: Task<Void, Never>?
+    private var toggleVideoTask: Task<Void, Never>?
     private let _audioEffectsService: CallAudioEffectsService
 
     var audioEffectsService: CallAudioEffectsServiceProviding? { _audioEffectsService }
@@ -124,7 +131,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         // resolving as soon as setConfiguration runs, so ICE checks can begin
         // immediately after the SDP answer is sent — typically shaving 200–400ms
         // off the connect time on cellular.
-        config.iceCandidatePoolSize = 4
+        config.iceCandidatePoolSize = Int32(QualityThresholds.iceCandidatePoolSize)
 
         let constraints = RTCMediaConstraints(
             mandatoryConstraints: nil,
@@ -141,7 +148,11 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
 
         peerConnection = pc
         sessionGeneration += 1
-        Logger.webrtc.info("Peer connection created with \(iceServers.count) ICE servers")
+        let hasTURN = iceServers.contains(where: \.hasTURNURL)
+        if !hasTURN {
+            Logger.webrtc.fault("No TURN URL in ICE server list — calls through symmetric NAT will fail. Add a TURN server to the gateway TURN credential endpoint.")
+        }
+        Logger.webrtc.info("Peer connection created with \(iceServers.count) ICE servers (hasTURN=\(hasTURN, privacy: .public))")
     }
 
     func updateIceServers(_ iceServers: [IceServer]) {
@@ -155,7 +166,11 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             )
         }
         pc.setConfiguration(config)
-        Logger.webrtc.info("ICE servers updated to \(iceServers.count) servers (no reconnect)")
+        let hasTURN = iceServers.contains(where: \.hasTURNURL)
+        if !hasTURN {
+            Logger.webrtc.fault("updateIceServers: no TURN URL — symmetric NAT calls will fail.")
+        }
+        Logger.webrtc.info("ICE servers updated to \(iceServers.count) servers (hasTURN=\(hasTURN, privacy: .public), no reconnect)")
     }
 
     // §3.4 — store the deterministic polite/impolite role (computed by the
@@ -226,6 +241,17 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         Logger.webrtc.warning("[WEBRTC] simulator detected — skipping video capture (audio-only fallback)")
         throw WebRTCError.simulatorVideoUnsupported
         #else
+
+        // Guard early: if the user has denied camera access, AVCaptureSession
+        // silently fails to start (no throw, no frames) — leaving the local
+        // PiP black and the call in a confused video-enabled state with no
+        // camera. Throw a typed error before we build the track so CallManager
+        // can surface an actionable "open Settings" message instead.
+        let cameraAuth = AVCaptureDevice.authorizationStatus(for: .video)
+        guard cameraAuth != .denied && cameraAuth != .restricted else {
+            Logger.webrtc.error("[WEBRTC] camera access \(cameraAuth == .denied ? "denied" : "restricted") — throwing cameraPermissionDenied")
+            throw WebRTCError.cameraPermissionDenied
+        }
 
         Logger.webrtc.info("[WEBRTC] videoSource begin")
         let videoSource = factory.videoSource()
@@ -352,16 +378,18 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         let params = audioTransceiver.sender.parameters
         for encoding in params.encodings {
             // DTX: no native API — see comment above; handled via SDP fmtp `usedtx=1`.
-            encoding.maxBitrateBps = NSNumber(value: 64_000)
-            encoding.minBitrateBps = NSNumber(value: 16_000)
+            encoding.maxBitrateBps = NSNumber(value: QualityThresholds.defaultBitrate)
+            encoding.minBitrateBps = NSNumber(value: QualityThresholds.audioCodecFloorBitrateBps)
             // networkPriority = .high → DSCP EF (Expedited Forwarding, 46) for VoIP audio.
             // Maps to the highest WebRTC pacer priority and signals QoS to the OS network stack.
             encoding.networkPriority = .high
         }
         audioTransceiver.sender.parameters = params
         let encodingsCount = params.encodings.count
+        let maxKbps = QualityThresholds.defaultBitrate / 1000
+        let minKbps = QualityThresholds.audioCodecFloorBitrateBps / 1000
         if encodingsCount > 0 {
-            Logger.webrtc.info("[WEBRTC] audio bitrate range applied via RtpEncodingParameters (max=64kbps, min=16kbps, priority=high encodings=\(encodingsCount, privacy: .public))")
+            Logger.webrtc.info("[WEBRTC] audio bitrate range applied via RtpEncodingParameters (max=\(maxKbps, privacy: .public)kbps, min=\(minKbps, privacy: .public)kbps, priority=high, encodings=\(encodingsCount, privacy: .public))")
         } else {
             Logger.webrtc.warning("[WEBRTC] audio bitrate NOT applied — encodings array empty")
         }
@@ -433,6 +461,17 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         } else {
             Logger.webrtc.warning("[WEBRTC] video encoding NOT applied — encodings array empty")
         }
+    }
+
+    func setMaxAudioBitrate(_ bitrate: Int) {
+        guard let at = audioTransceiver else { return }
+        let params = at.sender.parameters
+        guard !params.encodings.isEmpty else { return }
+        for encoding in params.encodings {
+            encoding.maxBitrateBps = NSNumber(value: bitrate)
+        }
+        at.sender.parameters = params
+        Logger.webrtc.info("[WEBRTC] audio max bitrate updated to \(bitrate / 1000, privacy: .public)kbps")
     }
 
     /// Adjusts the audio sender's max bitrate at runtime. Called by the
@@ -812,8 +851,15 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         // even though the encoder is fed disabled frames. Stopping the
         // capturer frees ~80–150 mA on iPhone 13. On re-enable we restart
         // the capturer with the same camera/format/fps as the initial start.
-        Task { [weak self] in
-            guard let self else { return }
+        //
+        // Cancel any in-flight capturer task from a prior toggle so only the
+        // most-recent intent races to the camera. The pending task is cancelled
+        // before it starts (isCancelled check at entry); if it has already
+        // suspended inside startCapture/stopCapture it finishes atomically —
+        // the new task then runs after and leaves the camera in the correct state.
+        toggleVideoTask?.cancel()
+        toggleVideoTask = Task { [weak self] in
+            guard let self, !Task.isCancelled else { return }
             if enabled {
                 await self.restartCapturerIfStopped()
             } else {
@@ -896,8 +942,20 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             return
         }
         let fps = targetFrameRate(for: format)
+        // Capture the session generation before the async suspension point.
+        // If disconnect() is called while startCapture is in flight (0.5–3 s
+        // warm-up window), `sessionGeneration` is incremented and the post-await
+        // check detects the stale context — stopping the orphan capturer via
+        // the local reference before returning, mirroring the identical guard
+        // in buildLocalVideoTrackAndStartCapture.
+        let generation = sessionGeneration
         do {
             try await capturer.startCapture(with: camera, format: format, fps: fps)
+            if generation != sessionGeneration {
+                Logger.webrtc.warning("[WEBRTC] session changed during capturer restart — stopping orphan capture")
+                await capturer.stopCapture()
+                return
+            }
             Logger.webrtc.info("[WEBRTC] capturer restarted on toggleVideo(true) (\(fps)fps)")
         } catch {
             Logger.webrtc.error("[WEBRTC] capturer restart failed: \(error.localizedDescription)")
@@ -923,9 +981,20 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             throw WebRTCError.noCameraFormatAvailable
         }
 
+        // Capture the session generation before either async suspension point
+        // (stopCapture + startCapture). If disconnect() fires in the stop→start
+        // window the generation token mismatch stops the orphan capturer via the
+        // local reference, matching the identical guard in buildLocalVideoTrackAndStartCapture
+        // and restartCapturerIfStopped.
+        let generation = sessionGeneration
         await capturer.stopCapture()
         let fps = targetFrameRate(for: selectedFormat)
         try await capturer.startCapture(with: camera, format: selectedFormat, fps: fps)
+        if generation != sessionGeneration {
+            Logger.webrtc.warning("[WEBRTC] session changed during camera switch — stopping orphan capture")
+            await capturer.stopCapture()
+            return
+        }
         Logger.webrtc.info("Switched to \(self.usingFrontCamera ? "front" : "back") camera")
     }
 
@@ -968,9 +1037,18 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         guard let selectedFormat = selectFormat(for: camera) else {
             throw WebRTCError.noCameraFormatAvailable
         }
+        // Same session-generation guard as switchCamera / restartCapturerIfStopped:
+        // if disconnect() fires during the stop→start window, abort and stop the
+        // orphan capturer rather than leaving the camera LED on with no shutdown path.
+        let generation = sessionGeneration
         await capturer.stopCapture()
         let fps = targetFrameRate(for: selectedFormat)
         try await capturer.startCapture(with: camera, format: selectedFormat, fps: fps)
+        if generation != sessionGeneration {
+            Logger.webrtc.warning("[WEBRTC] session changed during camera switch (by ID) — stopping orphan capture")
+            await capturer.stopCapture()
+            return
+        }
         usingFrontCamera = (camera.position == .front)
         Logger.webrtc.info("[WEBRTC] switched to camera \(camera.localizedName, privacy: .public)")
     }
@@ -1039,11 +1117,20 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         channel.sendData(buffer)
     }
 
+    func sendDTMF(digits: String) {
+        guard let sender = audioTransceiver?.sender.dtmfSender, sender.canInsertDtmf else {
+            Logger.webrtc.warning("DTMF unavailable — no DTMF sender or not established")
+            return
+        }
+        sender.insertDtmf(digits, duration: 100, interToneGap: 70)
+        Logger.webrtc.info("DTMF: sending '\(digits)'")
+    }
+
     private func startDataChannelPing() {
         stopDataChannelPing()
         dataChannelPingTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(15))
+                try? await Task.sleep(for: .seconds(QualityThresholds.dataChannelPingIntervalSeconds))
                 guard !Task.isCancelled, let self else { break }
                 self.sendDataChannelMessage(Data("{\"type\":\"ping\"}".utf8))
             }
@@ -1071,6 +1158,8 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     func disconnect() {
         sessionGeneration += 1
         _audioEffectsService.reset()
+        toggleVideoTask?.cancel()
+        toggleVideoTask = nil
         stopDataChannelPing()
         transcriptionDataChannel?.close()
         transcriptionDataChannel = nil
@@ -1080,6 +1169,13 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         videoFilterDelegate = nil
         localAudioTrack?.isEnabled = false
         localVideoTrack_?.isEnabled = false
+        // Detach sender tracks before close() so libwebrtc releases its
+        // internal track references synchronously. Without this the ObjC
+        // bridge holds a strong reference to RTCMediaStreamTrack until the
+        // RTCPeerConnection object is deallocated, which can outlive the
+        // call if the peerConnection is retained by a pending callback.
+        audioTransceiver?.sender.track = nil
+        videoTransceiver?.sender.track = nil
         peerConnection?.close()
         peerConnection = nil
         localAudioTrack = nil
@@ -1089,6 +1185,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         audioTransceiver = nil
         videoTransceiver = nil
         videoCapturer = nil
+        pendingIceRestart = false
         Logger.webrtc.info("Peer connection disconnected and cleaned up")
     }
 
@@ -1147,9 +1244,13 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         // est alors appelé en fps=120, ce qui produit `FigCaptureSourceRemote
         // err=-17281` (kCMIOHardwareDeviceUnsupportedFormatError) sur certains
         // devices et gaspille batterie/CPU sur tous.
-        let target: Float64 = 30
+        // Ceiling derived from VideoConfig.hd720p30 so the camera picker and the
+        // encoding config stay in sync when the preset is updated.
+        let targetFPS = Float64(VideoConfig.hd720p30.maxFrameRate)
+        let maxW = Int32(VideoConfig.hd720p30.maxResolution.width)
+        let maxH = Int32(VideoConfig.hd720p30.maxResolution.height)
         let supports30fps: (AVCaptureDevice.Format) -> Bool = { f in
-            f.videoSupportedFrameRateRanges.contains { $0.minFrameRate <= target && target <= $0.maxFrameRate }
+            f.videoSupportedFrameRateRanges.contains { $0.minFrameRate <= targetFPS && targetFPS <= $0.maxFrameRate }
         }
 
         let supported = RTCCameraVideoCapturer.supportedFormats(for: device)
@@ -1161,14 +1262,14 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
 
         if let format = sorted.last(where: { f in
             let d = CMVideoFormatDescriptionGetDimensions(f.formatDescription)
-            return d.width <= 1280 && d.height <= 720 && supports30fps(f)
+            return d.width <= maxW && d.height <= maxH && supports30fps(f)
         }) {
             return format
         }
 
         if let format = sorted.last(where: { f in
             let d = CMVideoFormatDescriptionGetDimensions(f.formatDescription)
-            return d.width <= 1280 && d.height <= 720
+            return d.width <= maxW && d.height <= maxH
         }) {
             return format
         }
@@ -1187,11 +1288,11 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         // 9e663039 — the PT/PT bug was the real cause, not DTX.
         // Reference §3.8 + ADR-4.
         let opusParams = [
-            "maxaveragebitrate=64000",
+            "maxaveragebitrate=\(QualityThresholds.opusFmtpMaxAverageBitrate)",
             "stereo=1",
             "useinbandfec=1",
             "usedtx=1",
-            "maxplaybackrate=48000"
+            "maxplaybackrate=\(QualityThresholds.opusFmtpMaxPlaybackRate)"
         ]
         let paramString = opusParams.joined(separator: ";")
 
@@ -1244,8 +1345,15 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             if let id = Int(cleanID) { usedExtmapIDs.insert(id) }
         }
 
-        var extID = 5
+        var extID = QualityThresholds.extmapStartId
         while usedExtmapIDs.contains(extID) { extID += 1 }
+        guard extID <= QualityThresholds.extmapMaxId else {
+            // All 1-byte IDs exhausted — IDs ≥15 require the 2-byte extmap
+            // form (RFC 5285 §4.2) which not all peers handle. Do not inject
+            // rather than risk an invalid SDP.
+            Logger.webrtc.fault("[WEBRTC] extmap ID exhausted (IDs \(QualityThresholds.extmapStartId)–\(QualityThresholds.extmapMaxId) all taken) — Transport-CC not injected into SDP")
+            return sdp
+        }
         let extmapLine = "a=extmap:\(extID) \(transportCCURI)"
 
         for i in 0..<lines.count where lines[i].hasPrefix("m=audio ") || lines[i].hasPrefix("m=video ") {
@@ -1276,7 +1384,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             if lines[i].hasPrefix("m=") { inVideoSection = false }
             guard inVideoSection && lines[i].hasPrefix("a=fmtp:") else { continue }
             guard !lines[i].contains("x-google-max-bitrate") else { continue }
-            lines[i] += ";x-google-max-bitrate=2500;x-google-min-bitrate=100"
+            lines[i] += ";x-google-max-bitrate=\(QualityThresholds.sdpVideoMaxBitrateKbps);x-google-min-bitrate=\(QualityThresholds.sdpVideoMinBitrateKbps)"
         }
 
         return lines.joined(separator: "\r\n")
@@ -1505,6 +1613,7 @@ final class P2PWebRTCClient: WebRTCClientProviding {
     func toggleAudio(_ enabled: Bool) {}
     func toggleVideo(_ enabled: Bool) {}
     func applyVideoEncoding(maxBitrateBps: Int, maxFramerate: Int, scaleResolutionDownBy: Double) {}
+    func setMaxAudioBitrate(_ bitrate: Int) {}
     var hasLocalVideoTrack: Bool { false }
     func enableLocalVideo() async throws -> Bool { throw WebRTCError.notSupported }
     func disableLocalVideo() async -> Bool { false }
@@ -1514,6 +1623,7 @@ final class P2PWebRTCClient: WebRTCClientProviding {
     func getStats() async -> CallStats? { nil }
     func createDataChannel(label: String) -> Bool { false }
     func sendDataChannelMessage(_ data: Data) {}
+    func sendDTMF(digits: String) {}
     func disconnect() {}
 
     var audioEffectsService: CallAudioEffectsServiceProviding? { nil }

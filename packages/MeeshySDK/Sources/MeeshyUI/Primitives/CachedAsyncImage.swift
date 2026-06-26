@@ -154,7 +154,7 @@ public struct CachedAsyncImage<Placeholder: View>: View {
         isLoading = true; hasFailed = false
         let loaded: UIImage?
         if let targetSize {
-            let maxPixel = await Self.pixelSize(for: targetSize)
+            let maxPixel = Self.pixelSize(for: targetSize)
             loaded = await CacheCoordinator.shared.images.image(for: resolved, maxPixelSize: maxPixel)
         } else {
             loaded = await CacheCoordinator.shared.images.image(for: resolved)
@@ -254,7 +254,7 @@ public struct CachedAvatarImage: View {
         guard let currentUrlString, !currentUrlString.isEmpty else { return }
         let resolved = MeeshyConfig.resolveMediaURL(currentUrlString)?.absoluteString ?? currentUrlString
         if image != nil && DiskCacheStore.cachedImage(for: resolved) != nil { return }
-        let maxPixel = await Self.pixelSize(for: size)
+        let maxPixel = Self.pixelSize(for: size)
         if let loaded = await CacheCoordinator.shared.images.image(for: resolved, maxPixelSize: maxPixel) {
             if self.urlString == currentUrlString {
                 withAnimation(.easeIn(duration: 0.15)) { self.image = loaded }
@@ -504,7 +504,7 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         }
         let loaded: UIImage?
         if let targetSize {
-            let maxPixel = await Self.pixelSize(for: targetSize)
+            let maxPixel = Self.pixelSize(for: targetSize)
             loaded = await CacheCoordinator.shared.images.image(for: resolved, maxPixelSize: maxPixel)
         } else {
             loaded = await CacheCoordinator.shared.images.image(for: resolved)

@@ -107,11 +107,17 @@ struct CallEffectsOverlay: View {
                 }
 
                 Text(label)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.caption2.weight(.medium))
                     .foregroundColor(.secondary)
             }
         }
         .pressable()
+        .accessibilityValue(isActive
+            ? String(localized: "accessibility.state.on", defaultValue: "Activé", bundle: .main)
+            : String(localized: "accessibility.state.off", defaultValue: "Désactivé", bundle: .main))
+        .accessibilityHint(activePanel == panel
+            ? String(localized: "call.effects.panel.hint.close", defaultValue: "Ferme le panneau", bundle: .main)
+            : String(localized: "call.effects.panel.hint.open", defaultValue: "Ouvre le panneau", bundle: .main))
     }
 
     // MARK: - Dismiss

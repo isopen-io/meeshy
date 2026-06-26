@@ -87,7 +87,6 @@ struct iPadRootView: View {
             .environmentObject(statusViewModel)
             .environmentObject(conversationViewModel)
             .environmentObject(storyViewerCoordinator)
-            .environmentObject(StatusBubbleController.shared)
             // Propagate story viewer presentation state — same role as
             // RootView (cf. ConnectionBanner sync pill chevauchement fix
             // 2026-05-27).

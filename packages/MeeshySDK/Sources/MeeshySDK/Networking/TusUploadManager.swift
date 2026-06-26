@@ -166,11 +166,11 @@ public actor TusUploadManager {
         let mime = result.mimeType
         let store: DiskCacheStore?
         if mime.hasPrefix("image/") {
-            store = await CacheCoordinator.shared.images
+            store = CacheCoordinator.shared.images
         } else if mime.hasPrefix("video/") {
-            store = await CacheCoordinator.shared.video
+            store = CacheCoordinator.shared.video
         } else if mime.hasPrefix("audio/") {
-            store = await CacheCoordinator.shared.audio
+            store = CacheCoordinator.shared.audio
         } else {
             store = nil
         }
