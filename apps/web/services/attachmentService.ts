@@ -45,7 +45,7 @@ export class AttachmentService {
       size: f.size,
       type: f.type,
       lastModified: f.lastModified
-    })));
+    }))});
 
     const formData = new FormData();
     let totalFormDataSize = 0;
