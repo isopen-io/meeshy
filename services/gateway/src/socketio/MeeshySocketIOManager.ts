@@ -1008,11 +1008,6 @@ export class MeeshySocketIOManager {
         const clientCount = roomClients ? roomClients.size : 0;
         
         
-        // Log des clients dans la room pour debug
-        if (clientCount > 0 && roomClients) {
-          const clientSocketIds = Array.from(roomClients);
-        }
-        
         this.io.to(roomName).emit(SERVER_EVENTS.MESSAGE_TRANSLATION, translationData);
         this.stats.translations_sent += clientCount;
         
@@ -1031,31 +1026,8 @@ export class MeeshySocketIOManager {
           }
         }
         
-        if (directSendCount > 0) {
-        }
       }
-      
-      // Envoyer les notifications de traduction pour les utilisateurs non connectés
-      if (conversationIdForBroadcast) {
-        setImmediate(async () => {
-          try {
-            // Construire les traductions pour les trois langues de base
-            const translations: { fr?: string; en?: string; es?: string } = {};
-            if (targetLanguage === 'fr') {
-              translations.fr = result.translatedText;
-            } else if (targetLanguage === 'en') {
-              translations.en = result.translatedText;
-            } else if (targetLanguage === 'es') {
-              translations.es = result.translatedText;
-            }
-            
-            // Note: Les notifications de traduction sont gérées directement dans routes/notifications.ts
-          } catch (error) {
-            logger.error(`❌ Erreur envoi notification traduction ${result.messageId}:`, error);
-          }
-        });
-      }
-      
+
     } catch (error) {
       logger.error(`❌ Erreur envoi traduction: ${error}`);
       this.stats.errors++;
