@@ -124,7 +124,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         // resolving as soon as setConfiguration runs, so ICE checks can begin
         // immediately after the SDP answer is sent — typically shaving 200–400ms
         // off the connect time on cellular.
-        config.iceCandidatePoolSize = 4
+        config.iceCandidatePoolSize = QualityThresholds.iceCandidatePoolSize
 
         let constraints = RTCMediaConstraints(
             mandatoryConstraints: nil,

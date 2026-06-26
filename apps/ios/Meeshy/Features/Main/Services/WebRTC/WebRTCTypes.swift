@@ -605,6 +605,29 @@ enum QualityThresholds {
     /// a single RTT spike doesn't immediately flip the encoder back to a
     /// lower tier once it has stabilised. Used in `processStats` debounce gate.
     static let qualityLevelDebounceSeconds: TimeInterval = 5.0
+
+    // MARK: ICE candidate pool (P2PWebRTCClient — PERF-003)
+
+    /// Number of ICE candidates pre-gathered before the SDP exchange completes.
+    /// 4 = host + srflx + 2×relay; covers the dual-STUN + single-TURN topology
+    /// without over-provisioning. Pre-warming starts as soon as `setConfiguration`
+    /// runs, shaving 200–400ms off connect time on cellular.
+    static let iceCandidatePoolSize: Int = 4
+
+    // MARK: Video survival hysteresis (VideoSurvivalPolicy)
+
+    /// How long a call must stay at `.poor` / `.critical` quality continuously
+    /// before the survival controller drops to audio-only. 6 s absorbs transient
+    /// spikes (cellular handoff, brief congestion) without prematurely killing
+    /// video while the link is still likely to recover on its own.
+    static let videoSurvivalSuspendAfterSeconds: TimeInterval = 6
+
+    /// How long a call must stay at `.excellent` / `.good` quality continuously
+    /// before the survival controller re-enables outbound video. Intentionally
+    /// longer than `videoSurvivalSuspendAfterSeconds` (6 s): re-acquiring the
+    /// camera + renegotiating is expensive, so we require the link to have
+    /// clearly settled before committing.
+    static let videoSurvivalResumeAfterSeconds: TimeInterval = 10
 }
 
 // MARK: - Video Quality Level (§4.8)

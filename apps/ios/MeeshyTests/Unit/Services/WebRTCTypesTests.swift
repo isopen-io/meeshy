@@ -699,3 +699,47 @@ final class QualityThresholdsCodecHintsTests: XCTestCase {
                           "Above 30 s quality transitions would lag too far behind actual network changes")
     }
 }
+
+// MARK: - ICE pool + Video Survival hysteresis
+
+@MainActor
+final class QualityThresholdsVideoSurvivalTests: XCTestCase {
+
+    func test_iceCandidatePoolSize_is4() {
+        XCTAssertEqual(QualityThresholds.iceCandidatePoolSize, 4,
+                       "ICE pool of 4 covers host+srflx+2×relay without over-provisioning")
+    }
+
+    func test_iceCandidatePoolSize_isPositive() {
+        XCTAssertGreaterThan(QualityThresholds.iceCandidatePoolSize, 0,
+                             "ICE pool must be non-zero or pre-warming is disabled")
+    }
+
+    func test_videoSurvivalSuspendAfterSeconds_is6() {
+        XCTAssertEqual(QualityThresholds.videoSurvivalSuspendAfterSeconds, 6.0, accuracy: 0.001,
+                       "Suspend trigger must be 6 s to absorb cellular handoff spikes")
+    }
+
+    func test_videoSurvivalResumeAfterSeconds_is10() {
+        XCTAssertEqual(QualityThresholds.videoSurvivalResumeAfterSeconds, 10.0, accuracy: 0.001,
+                       "Resume trigger must be 10 s — longer than suspend to dampen oscillation")
+    }
+
+    func test_videoSurvivalResumeAfter_exceedsSuspendAfter() {
+        // Resume requires a longer settled-good window than suspend requires a
+        // settled-degraded window. This avoids camera-renegotiation churn when the
+        // link oscillates around the tier boundary.
+        XCTAssertGreaterThan(
+            QualityThresholds.videoSurvivalResumeAfterSeconds,
+            QualityThresholds.videoSurvivalSuspendAfterSeconds,
+            "resumeAfter must exceed suspendAfter to prevent camera-renegotiation thrashing"
+        )
+    }
+
+    func test_videoSurvivalSuspendAfter_inPlausibleRange() {
+        XCTAssertGreaterThan(QualityThresholds.videoSurvivalSuspendAfterSeconds, 2.0,
+                             "Below 2 s the controller reacts to transient spikes — too aggressive")
+        XCTAssertLessThan(QualityThresholds.videoSurvivalSuspendAfterSeconds, 30.0,
+                          "Above 30 s the user waits too long for audio-only relief on a dead link")
+    }
+}

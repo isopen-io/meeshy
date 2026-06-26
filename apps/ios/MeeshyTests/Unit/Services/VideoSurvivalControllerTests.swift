@@ -306,3 +306,35 @@ final class VideoSurvivalControllerTests: XCTestCase {
         XCTAssertTrue(sut.isVideoSuspended)
     }
 }
+
+// MARK: - VideoSurvivalPolicy default-init regression guards
+
+@MainActor
+final class VideoSurvivalPolicySourceGuardTests: XCTestCase {
+
+    private func videoSurvivalSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/VideoSurvivalController.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_videoSurvivalPolicy_suspendAfter_usesQualityThresholdsConstant() throws {
+        let source = try videoSurvivalSource()
+        XCTAssertTrue(
+            source.contains("videoSurvivalSuspendAfterSeconds"),
+            "VideoSurvivalPolicy.init suspendAfter default must reference QualityThresholds.videoSurvivalSuspendAfterSeconds"
+        )
+    }
+
+    func test_videoSurvivalPolicy_resumeAfter_usesQualityThresholdsConstant() throws {
+        let source = try videoSurvivalSource()
+        XCTAssertTrue(
+            source.contains("videoSurvivalResumeAfterSeconds"),
+            "VideoSurvivalPolicy.init resumeAfter default must reference QualityThresholds.videoSurvivalResumeAfterSeconds"
+        )
+    }
+}
