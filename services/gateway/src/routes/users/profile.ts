@@ -181,7 +181,7 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         }
       }
 
-      const updatedUser = await withMutationLog({
+      const updatedUser = await withMutationLog<any>({
         request,
         fastify,
         userId: userId!,
