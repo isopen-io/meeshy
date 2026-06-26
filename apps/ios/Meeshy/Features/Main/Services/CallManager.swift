@@ -285,6 +285,9 @@ final class CallManager: ObservableObject {
     /// Tracks the in-flight toggleVideo Task. Cancelled when a rapid second tap arrives
     /// so the later intent always wins and `isVideoEnabled` stays consistent with WebRTC.
     private var videoToggleTask: Task<Void, Never>?
+    /// Tracks the in-flight hold/unhold video Task so a rapid hold→unhold sequence
+    /// cancels the previous operation rather than running both concurrently.
+    private var holdVideoTask: Task<Void, Never>?
     private var remoteQualityResetTask: Task<Void, Never>?
     /// In-flight ICE restart task. Tracked so overlapping `attemptReconnection`
     /// calls (e.g. watchdog fires while backoff is sleeping) cancel the previous
@@ -2163,7 +2166,8 @@ final class CallManager: ObservableObject {
         if isOnHold {
             if isVideoEnabled {
                 isVideoSuspendedByHold = true
-                Task { [weak self] in _ = await self?.webRTCService.downgradeFromVideo() }
+                holdVideoTask?.cancel()
+                holdVideoTask = Task { [weak self] in _ = await self?.webRTCService.downgradeFromVideo() }
                 MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: false)
                 Logger.calls.info("CallKit hold — video suspended, peer notified (callId=\(callId))")
             }
@@ -2171,7 +2175,8 @@ final class CallManager: ObservableObject {
             if isVideoSuspendedByHold {
                 isVideoSuspendedByHold = false
                 if isVideoEnabled && !isVideoSuspended && !isVideoSuspendedByBackground {
-                    Task { [weak self] in _ = try? await self?.webRTCService.upgradeToVideo() }
+                    holdVideoTask?.cancel()
+                    holdVideoTask = Task { [weak self] in _ = try? await self?.webRTCService.upgradeToVideo() }
                     MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: true)
                     Logger.calls.info("CallKit unhold — video restored, peer notified (callId=\(callId))")
                 }
@@ -2323,6 +2328,8 @@ final class CallManager: ObservableObject {
         answerRetryTask = nil
         videoToggleTask?.cancel()
         videoToggleTask = nil
+        holdVideoTask?.cancel()
+        holdVideoTask = nil
         remoteQualityResetTask?.cancel()
         remoteQualityResetTask = nil
         iceRestartTask?.cancel()

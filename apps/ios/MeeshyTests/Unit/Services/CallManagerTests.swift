@@ -1564,6 +1564,67 @@ final class CallKitActionFulfillmentSourceGuardTests: XCTestCase {
     }
 }
 
+// MARK: - handleHold tracked task guard
+
+@MainActor
+final class HandleHoldTaskTrackingTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_holdVideoTask_propertyExists() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("private var holdVideoTask: Task<Void, Never>?"),
+            "handleHold must store its video tasks in holdVideoTask to allow cancellation on rapid hold→unhold"
+        )
+    }
+
+    func test_handleHold_cancelsPreviousTask_beforeCreatingNew() throws {
+        let source = try callManagerSource()
+        guard let funcRange = source.range(of: "func handleHold") else {
+            XCTFail("handleHold not found"); return
+        }
+        let nextFunc = [
+            source.range(of: "\n    func ", range: funcRange.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: funcRange.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: funcRange.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        let body = String(source[funcRange.lowerBound..<nextFunc])
+
+        guard let cancelRange = body.range(of: "holdVideoTask?.cancel()"),
+              let assignRange = body.range(of: "holdVideoTask = Task") else {
+            XCTFail("handleHold must cancel then assign holdVideoTask"); return
+        }
+        XCTAssertLessThan(
+            cancelRange.lowerBound,
+            assignRange.lowerBound,
+            "holdVideoTask?.cancel() must appear before holdVideoTask = Task to prevent concurrent hold/unhold video operations"
+        )
+    }
+
+    func test_endCallInternal_cancelsHoldVideoTask() throws {
+        let source = try callManagerSource()
+        guard let funcRange = source.range(of: "func endCallInternal") else {
+            XCTFail("endCallInternal not found"); return
+        }
+        let nextMark = source.range(of: "\n    // MARK:", range: funcRange.upperBound..<source.endIndex)?.lowerBound
+                    ?? source.endIndex
+        let body = String(source[funcRange.lowerBound..<nextMark])
+        XCTAssertTrue(
+            body.contains("holdVideoTask?.cancel()"),
+            "endCallInternal must cancel holdVideoTask to avoid dangling video ops after call teardown"
+        )
+    }
+}
+
 // MARK: - VoIP Push Freshness (Bug D) source guards
 
 @MainActor
