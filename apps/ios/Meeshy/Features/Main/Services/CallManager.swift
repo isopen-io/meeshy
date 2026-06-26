@@ -87,12 +87,26 @@ final class CallManager: ObservableObject {
             if active && !oldValue.isActive {
                 PlaybackCoordinator.shared.stopAll()
             }
+
+            // Keep the screen on for the duration of the call (ringing →
+            // connecting → connected). Without this, the device's auto-lock
+            // timer fires during the call — catastrophic for video calls.
+            // Restore immediately when the call ends.
+            UIApplication.shared.isIdleTimerDisabled = active
+
+            // Proximity sensor: enable during audio-only calls so the screen
+            // dims when held to the ear (battery + accidental-tap prevention).
+            // Disabled for video calls (user must see the remote camera) and
+            // cleared when no call is active.
+            updateProximityMonitoring()
         }
     }
     @Published private(set) var transcriptionService = CallTranscriptionService()
     @Published private(set) var remoteUserId: String?
     @Published private(set) var remoteUsername: String?
-    @Published var isVideoEnabled: Bool = false
+    @Published var isVideoEnabled: Bool = false {
+        didSet { if isVideoEnabled != oldValue { updateProximityMonitoring() } }
+    }
     /// P0-3 — the REMOTE peer's camera state, driven by `call:media-toggled`.
     /// Defaults to `true` (assume on) and flips to `false` when the peer turns
     /// its camera off, so the UI can show an avatar placeholder instead of the
@@ -2281,6 +2295,15 @@ final class CallManager: ObservableObject {
                 Logger.calls.error("Audio route change failed: \(error.localizedDescription)")
             }
         }
+    }
+
+    private func updateProximityMonitoring() {
+        // Enable proximity monitoring only during audio-only active calls. The
+        // sensor dims the screen (and blocks touch) when the phone is pressed to
+        // the ear — essential for voice calls, harmful during video (blocks the
+        // remote face). iOS handles dimming automatically once monitoring is on.
+        let shouldMonitor = callState.isActive && !isVideoEnabled
+        UIDevice.current.isProximityMonitoringEnabled = shouldMonitor
     }
 
     private func deactivateAudioSession() {

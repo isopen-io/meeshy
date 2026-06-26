@@ -750,3 +750,100 @@ final class CallEffectsOverlayAccessibilityTests: XCTestCase {
         )
     }
 }
+
+// MARK: - Idle timer + proximity sensor management
+
+/// Source-analysis guards ensuring the screen-on / proximity-sensor contract
+/// is maintained. A regression here causes:
+///   • No idle-timer disable → screen auto-locks mid-call (catastrophic for video).
+///   • No proximity sensor → audio-only calls drain battery + allow accidental taps.
+@MainActor
+final class CallManagerIdleTimerProximityTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    // MARK: - Idle timer (screen-on during calls)
+
+    func test_idleTimerDisable_isBoundToCallStateIsActive() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("isIdleTimerDisabled = active"),
+            "The idle timer must be set to 'active' in callState.didSet — screens must not auto-lock during calls")
+    }
+
+    func test_idleTimerDisable_isSetInCallStateDidSet() throws {
+        let source = try callManagerSource()
+        // Verify the idle timer assignment lives in callState's didSet block, not elsewhere.
+        // Heuristic: the assignment must appear before the closing brace of the first didSet.
+        let didSetRange = source.range(of: "didSet {")
+        XCTAssertNotNil(didSetRange, "callState must have a didSet block")
+        let afterDidSet = String(source[didSetRange!.upperBound...])
+        let firstBrace = afterDidSet.range(of: "isIdleTimerDisabled")
+        XCTAssertNotNil(firstBrace,
+            "isIdleTimerDisabled must be set somewhere in or after callState.didSet")
+    }
+
+    func test_idleTimerDisable_usesSharedApplication() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("UIApplication.shared.isIdleTimerDisabled"),
+            "Must use UIApplication.shared.isIdleTimerDisabled — not a local toggle")
+    }
+
+    // MARK: - Proximity sensor (audio-only calls)
+
+    func test_proximityMonitoring_enabledByUpdateProximityMonitoring() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("UIDevice.current.isProximityMonitoringEnabled"),
+            "Proximity monitoring must be managed via UIDevice.current.isProximityMonitoringEnabled")
+    }
+
+    func test_proximityMonitoring_helperIsCalledFromCallStateDidSet() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("updateProximityMonitoring()"),
+            "updateProximityMonitoring() must be called from callState.didSet so the sensor " +
+            "tracks call lifecycle automatically")
+    }
+
+    func test_proximityMonitoring_helperIsCalledFromIsVideoEnabledDidSet() throws {
+        let source = try callManagerSource()
+        // The isVideoEnabled.didSet must call updateProximityMonitoring so that mid-call
+        // video toggle flips the proximity sensor on/off.
+        let videoEnabledDidSet = source.range(of: "isVideoEnabled != oldValue")
+        XCTAssertNotNil(videoEnabledDidSet,
+            "isVideoEnabled.didSet must guard on value change before calling updateProximityMonitoring")
+        let afterGuard = String(source[videoEnabledDidSet!.upperBound...])
+        XCTAssertTrue(
+            afterGuard.hasPrefix(" { updateProximityMonitoring()") ||
+            afterGuard.hasPrefix("{ updateProximityMonitoring("),
+            "isVideoEnabled.didSet must call updateProximityMonitoring() on change")
+    }
+
+    func test_proximityMonitoring_isDisabledDuringVideoCall() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("!isVideoEnabled"),
+            "updateProximityMonitoring must guard on !isVideoEnabled: proximity must be OFF during video calls")
+    }
+
+    func test_updateProximityMonitoring_guardsBothActiveAndVideoState() throws {
+        let source = try callManagerSource()
+        // The helper must check BOTH conditions: call active AND audio-only.
+        let helperRange = source.range(of: "private func updateProximityMonitoring()")
+        XCTAssertNotNil(helperRange, "updateProximityMonitoring() helper must exist")
+        let helperBody = String(source[helperRange!.upperBound...])
+        XCTAssertTrue(
+            helperBody.contains("isActive") && helperBody.contains("!isVideoEnabled"),
+            "updateProximityMonitoring must evaluate BOTH callState.isActive AND !isVideoEnabled")
+    }
+}
