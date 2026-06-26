@@ -146,6 +146,7 @@ public struct UserProfileSheet: View {
         .onReceive(FriendshipCache.shared.objectWillChange) { _ in
             resolveConnectionStatus()
         }
+        .adaptiveWideSheet()
     }
 
     /// Layout shown when the current user blocked the target — no tabs, just
