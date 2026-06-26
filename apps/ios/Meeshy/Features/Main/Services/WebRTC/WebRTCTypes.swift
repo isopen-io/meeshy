@@ -475,6 +475,13 @@ enum QualityThresholds {
     /// Picked at 45s to align with WhatsApp/FaceTime UX while leaving 15s
     /// headroom under the gateway's hard cap.
     static let outgoingRingTimeoutSeconds: TimeInterval = 45.0
+
+    /// Default TURN credential TTL (seconds) used when the signalling path does
+    /// not carry an explicit `ttl` field (VoIP push, socket-only incoming). The
+    /// 80%-of-TTL refresh fires at 384 s — well before any standard TURN server
+    /// eviction window (Coturn default 600 s; Meeshy gateway issues 480 s by
+    /// default so credentials stay valid for the first 96 s after refresh).
+    static let turnDefaultCredentialTTLSeconds: TimeInterval = 480
 }
 
 // MARK: - Video Quality Level (§4.8)

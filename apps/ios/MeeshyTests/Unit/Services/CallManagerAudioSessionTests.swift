@@ -273,4 +273,114 @@ final class CallManagerAudioSessionTests: XCTestCase {
             "Use webRTCService.upgradeToVideo() / webRTCService.downgradeFromVideo() instead."
         )
     }
+
+    // MARK: - TURN Credential TTL
+
+    func test_callManager_turnCredentialRefresh_usesQualityThresholdsConstant() throws {
+        // Regression guard: all scheduleTURNCredentialRefresh call sites must use
+        // QualityThresholds.turnDefaultCredentialTTLSeconds, not a bare literal 480.
+        // The constant is the single source of truth for the default TURN TTL so the
+        // 80%-TTL refresh timing can be tuned in one place across outgoing ACK path,
+        // incoming VoIP push path, and incoming CallKit path.
+        let source = try callManagerSource()
+
+        XCTAssertTrue(
+            source.contains("turnDefaultCredentialTTLSeconds"),
+            "CallManager must reference QualityThresholds.turnDefaultCredentialTTLSeconds — " +
+            "not a hardcoded TTL literal — so the default TURN credential lifetime is tunable."
+        )
+        XCTAssertFalse(
+            source.contains("scheduleTURNCredentialRefresh(ttl: 480)"),
+            "scheduleTURNCredentialRefresh must not be called with the bare literal 480. " +
+            "Use QualityThresholds.turnDefaultCredentialTTLSeconds."
+        )
+    }
+
+    // MARK: - Negotiation Epoch Guards (§3.5)
+
+    func test_callManager_emitOfferWithRetry_hasEpochGuard() throws {
+        // §3.5 regression guard: emitOfferWithRetry must guard `generation >= negotiationId`
+        // on every retry attempt. Without this check a background retry could deliver an
+        // SDP offer that belongs to a superseded negotiation, causing SDP glare on the peer
+        // that has already moved to a newer epoch.
+        let source = try callManagerSource()
+
+        guard let fnRange = source.range(of: "private func emitOfferWithRetry(") else {
+            XCTFail("emitOfferWithRetry not found in CallManager.swift"); return
+        }
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        XCTAssertTrue(
+            fnBody.contains("generation >= negotiationId"),
+            "emitOfferWithRetry must guard `generation >= negotiationId` — drops retries " +
+            "superseded by a newer negotiation epoch (§3.5)."
+        )
+    }
+
+    func test_callManager_emitAnswerRetry_hasEpochGuard() throws {
+        // §3.5 regression guard: emitAnswerRetry must guard `generation >= negotiationId`.
+        // An un-ACK'd answer in flight at the time of a renegotiation must not be
+        // re-delivered — it belongs to the old epoch and would confuse the peer's JSEP
+        // state machine. The gateway dedupes by negotiationId (§3.5) but the client-side
+        // guard avoids the unnecessary network round-trip.
+        let source = try callManagerSource()
+
+        guard let fnRange = source.range(of: "private func emitAnswerRetry(") else {
+            XCTFail("emitAnswerRetry not found in CallManager.swift"); return
+        }
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        XCTAssertTrue(
+            fnBody.contains("generation >= negotiationId"),
+            "emitAnswerRetry must guard `generation >= negotiationId` — drops retries " +
+            "superseded by a newer negotiation epoch (§3.5)."
+        )
+    }
+
+    func test_callManager_isStaleNegotiation_isPureStaticFunction() throws {
+        // §3.5 regression guard: isStaleNegotiation must remain `static func` — pure
+        // epoch comparison rule with no side effects or instance state. If it becomes an
+        // instance method the rule is no longer directly testable in isolation and hidden
+        // dependencies on singleton state could corrupt the symmetric polite/impolite
+        // negotiation invariant.
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("static func isStaleNegotiation(incoming: Int, highWaterMark: Int)"),
+            "isStaleNegotiation must be declared `static func` — pure epoch rule (§3.5), no side effects."
+        )
+    }
+
+    func test_callManager_isPolitePeer_isPureStaticFunction() throws {
+        // §3.4 regression guard: isPolitePeer must stay a pure static func. Both peers
+        // derive the same polite/impolite role from the lexicographic order of their userIds
+        // WITHOUT exchanging extra signals. Making it async or instance-bound would break
+        // this symmetric, deterministic invariant.
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("static func isPolitePeer(localUserId: String, remoteUserId: String)"),
+            "isPolitePeer must be declared `static func` — deterministic symmetric role (§3.4)."
+        )
+    }
+
+    func test_callManager_negotiationId_resetPerCall_inApplyNegotiationRole() throws {
+        // §3.5 regression guard: negotiationId must be reset to 0 inside applyNegotiationRole().
+        // CallManager is a process-wide singleton. If the epoch is not zeroed at call start,
+        // a peer with a higher generation counter from a prior call would wrongly drop the new
+        // call's first offer (gen 1 < old high-water mark N) — causing a one-way silent call.
+        let source = try callManagerSource()
+
+        guard let fnRange = source.range(of: "private func applyNegotiationRole()") else {
+            XCTFail("applyNegotiationRole not found in CallManager.swift"); return
+        }
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 600, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        XCTAssertTrue(
+            fnBody.contains("negotiationId = 0"),
+            "applyNegotiationRole must reset negotiationId = 0 — CallManager singleton must " +
+            "not carry a prior call's epoch into the next call (§3.5)."
+        )
+    }
 }
