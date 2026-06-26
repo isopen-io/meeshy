@@ -1497,7 +1497,7 @@ export class CallEventsHandler {
           this.callService.clearRingingTimeout(data.callId);
           // §4.6 — negotiation complete, the buffered offer is no longer needed.
           this.clearBufferedOffer(data.callId);
-          await this.callService.updateCallStatus(data.callId, CallStatus.active).catch(() => {});
+          await this.callService.updateCallStatus(data.callId, CallStatus.active).catch((err) => logger.warn('call:status update failed (active on answer)', { callId: data.callId, err }));
         }
 
         ack?.({ success: true });
@@ -1890,7 +1890,7 @@ export class CallEventsHandler {
         const membership = await this.resolveParticipantIdFromCall(userId, data.callId);
         if (!membership) return;
 
-        await this.callService.updateCallStatus(data.callId, CallStatus.reconnecting).catch(() => {});
+        await this.callService.updateCallStatus(data.callId, CallStatus.reconnecting).catch((err) => logger.warn('call:status update failed (reconnecting)', { callId: data.callId, err }));
 
         logger.info('Call reconnecting', {
           callId: data.callId,
@@ -1918,7 +1918,7 @@ export class CallEventsHandler {
         const membership = await this.resolveParticipantIdFromCall(userId, data.callId);
         if (!membership) return;
 
-        await this.callService.updateCallStatus(data.callId, CallStatus.active).catch(() => {});
+        await this.callService.updateCallStatus(data.callId, CallStatus.active).catch((err) => logger.warn('call:status update failed (active on reconnect)', { callId: data.callId, err }));
 
         logger.info('Call reconnected', {
           callId: data.callId,

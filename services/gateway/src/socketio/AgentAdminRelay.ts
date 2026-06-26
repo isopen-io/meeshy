@@ -82,7 +82,7 @@ export class AgentAdminRelay {
     if (!this.subscriber) return;
     const subscriber = this.subscriber;
     this.subscriber = null;
-    await subscriber.unsubscribe(AGENT_ADMIN_EVENT_CHANNEL).catch(() => {});
-    await subscriber.quit().catch(() => {});
+    await subscriber.unsubscribe(AGENT_ADMIN_EVENT_CHANNEL).catch((err) => logger.debug('AgentAdminRelay: unsubscribe error on stop', { err }));
+    await subscriber.quit().catch((err) => logger.debug('AgentAdminRelay: quit error on stop', { err }));
   }
 }
