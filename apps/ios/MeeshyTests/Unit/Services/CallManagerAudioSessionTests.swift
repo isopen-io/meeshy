@@ -480,6 +480,48 @@ final class CallManagerAudioSessionTests: XCTestCase {
             "Hardcoded nanoseconds: delayMs — replace with Task.sleep(for: .seconds(...))"
         )
     }
+
+    // MARK: - Stats-tick quality gate during ICE restart
+
+    func test_didCollectStats_gatesQualityReportingOnConnectedState() throws {
+        // Regression guard: didCollectStats must gate liveVideoQualityLevel,
+        // emitCallQualityReport, and videoSurvivalController.handle on
+        // callState == .connected.
+        //
+        // WHY: during ICE restart (.reconnecting) and initial setup (.connecting),
+        // the RTP stream pauses. Both Δlost and Δreceived are zero, so the
+        // adjustBitrate() heuristic reads RTT=0 and loss=0% — both below the
+        // "excellent" threshold. Without the guard:
+        //   • liveVideoQualityLevel flips to .excellent while the UI shows "Reconnecting…"
+        //   • The gateway receives a spurious "excellent" quality report with rtt=0
+        //   • The survival controller resets its degraded-streak timer prematurely
+        //     (thinks the link recovered, delaying the next audio-only fallback)
+        let source = try callManagerSource()
+
+        guard let fnRange = source.range(of: "func webRTCService(_ service: WebRTCService, didCollectStats stats: CallStats") else {
+            XCTFail("didCollectStats not found in CallManager.swift"); return
+        }
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 2000, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        XCTAssertTrue(
+            fnBody.contains("case .connected = self.callState"),
+            "didCollectStats must guard quality reporting on `case .connected = self.callState` " +
+            "— RTT=0/loss=0 during ICE restart produces a spurious .excellent quality reading."
+        )
+        // lastKnownStats must be updated BEFORE the guard so cumulative byte
+        // totals accumulate through reconnection and reach the call summary.
+        guard let lastKnownRange = fnBody.range(of: "self.lastKnownStats = stats"),
+              let guardRange = fnBody.range(of: "case .connected = self.callState") else {
+            XCTFail("lastKnownStats assignment or connected guard not found in didCollectStats"); return
+        }
+        XCTAssertLessThan(
+            lastKnownRange.lowerBound,
+            guardRange.lowerBound,
+            "lastKnownStats must be updated before the callState guard — " +
+            "byte counters must accumulate through ICE restart for the call summary."
+        )
+    }
 }
 
 // MARK: - P2PWebRTCClient — Perfect Negotiation Source Guards (W3C §3.4)

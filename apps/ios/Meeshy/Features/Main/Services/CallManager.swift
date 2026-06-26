@@ -3323,8 +3323,18 @@ extension CallManager: WebRTCServiceDelegate {
     nonisolated func webRTCService(_ service: WebRTCService, didCollectStats stats: CallStats, level: VideoQualityLevel, packetLossPercent: Double) {
         Task { @MainActor [weak self] in
             guard let self, let callId = self.currentCallId else { return }
-            self.liveVideoQualityLevel = level
+            // Always update cumulative stats for the call summary: byte counters
+            // grow through ICE restart and the final snapshot must be fresh.
             self.lastKnownStats = stats
+            // During ICE restart (.reconnecting) and initial setup (.connecting)
+            // the RTP stream is paused: Δlost and Δreceived are both zero, so
+            // RTT=0 and loss=0 — which reads as ".excellent" quality. Reporting
+            // that level to the UI, the gateway, or the survival controller while
+            // the call shows "Reconnecting…" misleads users and resets the survival
+            // controller's degraded-streak timer prematurely. Gate all reporting
+            // on callState == .connected.
+            guard case .connected = self.callState else { return }
+            self.liveVideoQualityLevel = level
             MessageSocketManager.shared.emitCallQualityReport(
                 callId: callId,
                 level: Self.connectionQualityLabel(for: level),
