@@ -107,7 +107,7 @@ export class CallEventsHandler {
           this.bufferedOffers.delete(key);
         }
       }
-    }, 60_000);
+    }, 60_000).unref();
   }
 
   /** Release the periodic cleanup interval. Call when shutting down the handler. */
