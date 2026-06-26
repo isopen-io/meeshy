@@ -703,6 +703,23 @@ final class CallManager: ObservableObject {
                     self.isVideoEnabled = false
                     try? await self.webRTCService.startLocalMedia(isVideo: false)
                     guard self.activeCallUUID == uuid else { return }
+                } catch WebRTCError.cameraPermissionDenied {
+                    // Camera denied — degrade to audio-only. Ending the call here would
+                    // be wrong: the user still expects to talk even without video.
+                    // Surface an actionable toast so they can open Settings mid-call.
+                    Logger.calls.warning("[CALL_SETUP] camera permission denied — degrading to audio-only")
+                    guard self.activeCallUUID == uuid else { return }
+                    self.isVideoEnabled = false
+                    try? await self.webRTCService.startLocalMedia(isVideo: false)
+                    guard self.activeCallUUID == uuid else { return }
+                    FeedbackToastManager.shared.showError(
+                        String(localized: "call.video.permission.denied",
+                               defaultValue: "Caméra : accès refusé — toucher pour ouvrir les Paramètres",
+                               bundle: .main)
+                    ) {
+                        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                        UIApplication.shared.open(url)
+                    }
                 } catch {
                     Logger.calls.error("startLocalMedia failed: \(error.localizedDescription)")
                     if self.activeCallUUID == uuid {
@@ -827,6 +844,18 @@ final class CallManager: ObservableObject {
                 Logger.calls.warning("Simulator video unsupported — continuing audio-only")
                 self.isVideoEnabled = false
                 try? await self.webRTCService.startLocalMedia(isVideo: false)
+            } catch WebRTCError.cameraPermissionDenied {
+                Logger.calls.warning("[CALL_SETUP] camera permission denied on incoming — degrading to audio-only")
+                self.isVideoEnabled = false
+                try? await self.webRTCService.startLocalMedia(isVideo: false)
+                FeedbackToastManager.shared.showError(
+                    String(localized: "call.video.permission.denied",
+                           defaultValue: "Caméra : accès refusé — toucher pour ouvrir les Paramètres",
+                           bundle: .main)
+                ) {
+                    guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                    UIApplication.shared.open(url)
+                }
             } catch is CancellationError {
                 // L'appel s'est terminé pendant startCapture (P2PWebRTCClient
                 // a déjà éteint la caméra orpheline) — pas un échec media.
@@ -1034,6 +1063,18 @@ final class CallManager: ObservableObject {
                 Logger.calls.warning("Simulator video unsupported — continuing audio-only")
                 self.isVideoEnabled = false
                 try? await self.webRTCService.startLocalMedia(isVideo: false)
+            } catch WebRTCError.cameraPermissionDenied {
+                Logger.calls.warning("[CALL_SETUP] camera permission denied on incoming — degrading to audio-only")
+                self.isVideoEnabled = false
+                try? await self.webRTCService.startLocalMedia(isVideo: false)
+                FeedbackToastManager.shared.showError(
+                    String(localized: "call.video.permission.denied",
+                           defaultValue: "Caméra : accès refusé — toucher pour ouvrir les Paramètres",
+                           bundle: .main)
+                ) {
+                    guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                    UIApplication.shared.open(url)
+                }
             } catch is CancellationError {
                 // L'appel s'est terminé pendant startCapture (P2PWebRTCClient
                 // a déjà éteint la caméra orpheline) — pas un échec media :

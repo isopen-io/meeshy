@@ -1228,3 +1228,129 @@ final class CallManagerSocketReconnectVideoTests: XCTestCase {
             "to compute the effective video-on/off state for the peer")
     }
 }
+
+// MARK: - Camera Permission Denied — All Call Entry Points
+
+/// AVCaptureSession silently fails to start when the user has denied camera
+/// access in iOS Settings: no throw, no frames, black PiP.  Every path that
+/// calls `startLocalMedia(isVideo: true)` must catch `cameraPermissionDenied`
+/// and degrade to audio-only rather than leaving the call in an inconsistent
+/// video-enabled-but-no-camera state.
+///
+/// Four entry points in CallManager:
+///   1. toggleVideo()             — mid-call camera toggle
+///   2. setupCallTask (outgoing)  — caller side during call setup
+///   3. VoIP push incoming        — callee side from PKPushPayload
+///   4. Socket incoming           — callee side from socket notification:incoming-call
+@MainActor
+final class CallManagerCameraPermissionTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_cameraPermissionDenied_handledIn_toggleVideo() throws {
+        let source = try callManagerSource()
+        guard let fnRange = source.range(of: "func toggleVideo(") else {
+            XCTFail("toggleVideo() not found in CallManager.swift"); return
+        }
+        let fnBody = String(source[fnRange.upperBound...])
+        XCTAssertTrue(
+            fnBody.contains("WebRTCError.cameraPermissionDenied"),
+            "toggleVideo() must catch cameraPermissionDenied to degrade gracefully " +
+            "to audio-only when the user has revoked camera permission mid-call")
+    }
+
+    func test_cameraPermissionDenied_handledIn_outgoingCallSetup() throws {
+        let source = try callManagerSource()
+        guard let setupRange = source.range(of: "setupCallTask") else {
+            XCTFail("setupCallTask not found in CallManager.swift"); return
+        }
+        let afterSetup = String(source[setupRange.upperBound...])
+        XCTAssertTrue(
+            afterSetup.contains("WebRTCError.cameraPermissionDenied"),
+            "outgoing call setupCallTask must catch cameraPermissionDenied — " +
+            "a denied camera should not abort the call, only degrade to audio-only")
+    }
+
+    func test_cameraPermissionDenied_handledIn_voipPushIncoming() throws {
+        let source = try callManagerSource()
+        // VoIP push path enters via reportIncomingVoIPCall (PKPushRegistry delegate → CallKit)
+        guard let voipRange = source.range(of: "func reportIncomingVoIPCall(") else {
+            XCTFail("reportIncomingVoIPCall not found in CallManager.swift"); return
+        }
+        let afterVoip = String(source[voipRange.upperBound...])
+        XCTAssertTrue(
+            afterVoip.contains("WebRTCError.cameraPermissionDenied"),
+            "VoIP push incoming call path must catch cameraPermissionDenied — " +
+            "a user answering an incoming call without camera permission must still " +
+            "connect audio-only, not silently hang or fail")
+    }
+
+    func test_cameraPermissionDenied_handledIn_socketIncoming() throws {
+        let source = try callManagerSource()
+        // Socket-based incoming calls arrive via handleIncomingCallNotification
+        // (called from handleIncomingOffer, which is the socket:notification path)
+        guard let socketRange = source.range(of: "func handleIncomingCallNotification(") else {
+            XCTFail("handleIncomingCallNotification not found in CallManager.swift"); return
+        }
+        let afterSocket = String(source[socketRange.upperBound...])
+        XCTAssertTrue(
+            afterSocket.contains("WebRTCError.cameraPermissionDenied"),
+            "socket incoming call path must catch cameraPermissionDenied — " +
+            "receiver with denied camera must still join audio-only without user-visible failure")
+    }
+
+    func test_cameraPermissionDenied_showsSettingsToast_inToggleVideo() throws {
+        let source = try callManagerSource()
+        guard let fnRange = source.range(of: "func toggleVideo(") else {
+            XCTFail("toggleVideo() not found"); return
+        }
+        let fnBody = String(source[fnRange.upperBound...])
+        // Within the cameraPermissionDenied catch, the toast must be tappable
+        // and open Settings — the tap action is the primary remediation UX.
+        XCTAssertTrue(
+            fnBody.contains("openSettingsURLString"),
+            "toggleVideo() cameraPermissionDenied handler must show a tappable toast " +
+            "that deep-links to App Settings so the user can grant camera access")
+    }
+
+    func test_webRTCTypes_declaresCameraPermissionDeniedError() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/WebRTCTypes.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(
+            source.contains("case cameraPermissionDenied"),
+            "WebRTCError must declare cameraPermissionDenied so CallManager can " +
+            "catch it specifically and provide an actionable recovery path")
+    }
+
+    func test_p2pWebRTCClient_checksPermissionBeforeBuildingTrack() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(
+            source.contains("AVCaptureDevice.authorizationStatus(for: .video)"),
+            "P2PWebRTCClient must check AVCaptureDevice.authorizationStatus before " +
+            "building the local video track — AVCaptureSession silently fails with " +
+            "denied permission, so the guard must come first and throw a typed error")
+        XCTAssertTrue(
+            source.contains("throw WebRTCError.cameraPermissionDenied"),
+            "P2PWebRTCClient must throw cameraPermissionDenied (not silently proceed) " +
+            "when camera access is .denied or .restricted")
+    }
+}
