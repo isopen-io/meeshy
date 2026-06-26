@@ -220,7 +220,11 @@ public actor LinkPreviewFetcher {
     /// Compiled HTML-metadata regexes, keyed by pattern. The set of patterns is
     /// fixed (title / og:* tags) yet `regexFirstCapture` recompiled each one on
     /// every link-preview fetch — wasted (off-main) CPU. Compile each once.
-    private nonisolated(unsafe) static let htmlMetaRegexCache = NSCache<NSString, NSRegularExpression>()
+    private nonisolated(unsafe) static let htmlMetaRegexCache: NSCache<NSString, NSRegularExpression> = {
+        let c = NSCache<NSString, NSRegularExpression>()
+        c.countLimit = 50
+        return c
+    }()
 
     private static func regexFirstCapture(in html: String, pattern: String) -> String? {
         let regex: NSRegularExpression
