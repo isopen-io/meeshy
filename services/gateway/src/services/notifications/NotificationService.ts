@@ -1840,6 +1840,10 @@ export class NotificationService {
 
     const excludeSet = new Set(params.excludeUserIds ?? []);
     const excerpt = params.excerpt ? this.truncateMessage(params.excerpt) : '';
+    // Vignette du contenu publié → rendue in-app + attachée au push iOS. Le
+    // mediaType explicite de l'appelant prime ; sinon on le dérive du média.
+    const media = await this.resolvePostMedia(params.postId);
+    const mediaType = params.mediaType ?? media?.mediaType;
 
     const visibility = params.visibility ?? 'PUBLIC';
     const visibilityUserIds = params.visibilityUserIds ?? [];
@@ -1899,13 +1903,17 @@ export class NotificationService {
             postId: params.postId,
             ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
             ...(params.postExpiresAt ? { postExpiresAt: new Date(params.postExpiresAt).toISOString() } : {}),
+            ...(media?.thumbnailUrl
+              ? { firstAttachmentUrl: media.thumbnailUrl, firstAttachmentMimeType: media.thumbnailMimeType }
+              : {}),
           },
           metadata: {
             action: 'view_post',
             postId: params.postId,
             contentType: params.contentType,
             excerpt,
-            ...(params.mediaType ? { mediaType: params.mediaType } : {}),
+            ...(mediaType ? { mediaType } : {}),
+            ...(media?.thumbnailUrl ? { postThumbnailUrl: media.thumbnailUrl } : {}),
           } as any,
         })
       );
@@ -2261,12 +2269,24 @@ export class NotificationService {
 
     const lang = await this.resolveRecipientLang(params.postAuthorId);
     const reactPostType = params.postType === 'STORY' ? 'STORY' : params.postType === 'STATUS' ? 'STATUS' : 'POST';
+    const subtitlePostType = params.postType ?? 'POST';
+
+    // Détail du contenu réagi : extrait texte si présent, sinon vignette/résumé
+    // média (« Votre story · 📷 Photo ») — le destinataire identifie QUEL
+    // contenu sans ouvrir l'app, et le push iOS attache la miniature.
+    const trimmedPreview = params.postPreview?.trim() ?? '';
+    const media = await this.resolvePostMedia(params.postId);
+    const subtitle = this.buildOwnerSubtitleWithDetail(lang, subtitlePostType, {
+      textPreview: trimmedPreview,
+      mediaType: media?.mediaType,
+    });
 
     return this.createNotification({
       userId: params.postAuthorId,
       type,
       priority: 'normal',
       content: notificationString(lang, 'reaction.post', { emoji: params.emoji, postType: reactPostType }),
+      subtitle,
       lang,
 
       actor: {
@@ -2280,6 +2300,9 @@ export class NotificationService {
         postId: params.postId,
         ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
         ...(params.postExpiresAt ? { postExpiresAt: new Date(params.postExpiresAt).toISOString() } : {}),
+        ...(media?.thumbnailUrl
+          ? { firstAttachmentUrl: media.thumbnailUrl, firstAttachmentMimeType: media.thumbnailMimeType }
+          : {}),
       },
 
       metadata: {
@@ -2287,9 +2310,11 @@ export class NotificationService {
         postId: params.postId,
         emoji: params.emoji,
         postType: params.postType || 'POST',
-        ...(params.postPreview?.trim()
-          ? { postPreview: this.truncateMessage(params.postPreview.trim()) }
+        ...(trimmedPreview !== ''
+          ? { postPreview: this.truncateMessage(trimmedPreview) }
           : {}),
+        ...(media ? { mediaType: media.mediaType } : {}),
+        ...(media?.thumbnailUrl ? { postThumbnailUrl: media.thumbnailUrl } : {}),
       },
     });
   }
@@ -2325,11 +2350,14 @@ export class NotificationService {
     // le texte du commentaire. Le destinataire sait QUOI a été commenté sans
     // ouvrir l'app. Libellé localisé (Prisme-first) — plus de français codé en dur.
     const lang = await this.resolveRecipientLang(params.postAuthorId);
-    const label = notificationString(lang, 'comment.subtitleOwner', { postType: params.postType ?? 'POST' });
     const trimmedPostPreview = params.postPreview?.trim() ?? '';
-    const subtitle = trimmedPostPreview !== ''
-      ? `${label} : « ${this.truncateMessage(trimmedPostPreview)} »`
-      : label;
+    // Cible du commentaire : extrait texte du post si présent, sinon résumé
+    // média (« Votre publication · 📷 Photo ») + vignette poussée au push iOS.
+    const media = await this.resolvePostMedia(params.postId);
+    const subtitle = this.buildOwnerSubtitleWithDetail(lang, params.postType ?? 'POST', {
+      textPreview: trimmedPostPreview,
+      mediaType: media?.mediaType,
+    });
 
     return this.createNotification({
       userId: params.postAuthorId,
@@ -2350,6 +2378,9 @@ export class NotificationService {
         postId: params.postId,
         ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
         ...(params.postExpiresAt ? { postExpiresAt: new Date(params.postExpiresAt).toISOString() } : {}),
+        ...(media?.thumbnailUrl
+          ? { firstAttachmentUrl: media.thumbnailUrl, firstAttachmentMimeType: media.thumbnailMimeType }
+          : {}),
       },
 
       metadata: {
@@ -2361,6 +2392,8 @@ export class NotificationService {
         ...(trimmedPostPreview !== ''
           ? { postPreview: this.truncateMessage(trimmedPostPreview) }
           : {}),
+        ...(media ? { mediaType: media.mediaType } : {}),
+        ...(media?.thumbnailUrl ? { postThumbnailUrl: media.thumbnailUrl } : {}),
       },
     });
   }
@@ -2393,9 +2426,10 @@ export class NotificationService {
 
     const lang = await this.resolveRecipientLang(params.postAuthorId);
     const trimmedPostPreview = params.postPreview?.trim() ?? '';
+    const media = await this.resolvePostMedia(params.originalPostId);
     const subtitle = trimmedPostPreview !== ''
       ? `« ${this.truncateMessage(trimmedPostPreview)} »`
-      : undefined;
+      : (this.mediaSummaryString(lang, media?.mediaType) || undefined);
 
     return this.createNotification({
       userId: params.postAuthorId,
@@ -2418,6 +2452,9 @@ export class NotificationService {
         postId: params.originalPostId,
         ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
         ...(params.postExpiresAt ? { postExpiresAt: new Date(params.postExpiresAt).toISOString() } : {}),
+        ...(media?.thumbnailUrl
+          ? { firstAttachmentUrl: media.thumbnailUrl, firstAttachmentMimeType: media.thumbnailMimeType }
+          : {}),
       },
 
       metadata: {
@@ -2428,6 +2465,8 @@ export class NotificationService {
         ...(trimmedPostPreview !== ''
           ? { postPreview: this.truncateMessage(trimmedPostPreview) }
           : {}),
+        ...(media ? { mediaType: media.mediaType } : {}),
+        ...(media?.thumbnailUrl ? { postThumbnailUrl: media.thumbnailUrl } : {}),
       },
     });
   }
@@ -2467,6 +2506,8 @@ export class NotificationService {
     const trimmedParent = params.parentCommentPreview?.trim() ?? '';
     // POST_NOUN_CAP gère REEL distinctement (« Réel ») → pas de mapping vers POST.
     const subtitle = notificationString(lang, 'comment.subtitleBare', { postType: params.postType ?? 'POST' });
+    // Vignette du contenu portant le commentaire → attachée au push iOS.
+    const media = await this.resolvePostMedia(params.postId);
 
     return this.createNotification({
       userId: params.commentAuthorId,
@@ -2487,6 +2528,9 @@ export class NotificationService {
         postId: params.postId,
         ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
         ...(params.postExpiresAt ? { postExpiresAt: new Date(params.postExpiresAt).toISOString() } : {}),
+        ...(media?.thumbnailUrl
+          ? { firstAttachmentUrl: media.thumbnailUrl, firstAttachmentMimeType: media.thumbnailMimeType }
+          : {}),
       },
 
       metadata: {
@@ -2498,6 +2542,8 @@ export class NotificationService {
         ...(trimmedParent !== ''
           ? { parentCommentPreview: this.truncateMessage(trimmedParent) }
           : {}),
+        ...(media ? { mediaType: media.mediaType } : {}),
+        ...(media?.thumbnailUrl ? { postThumbnailUrl: media.thumbnailUrl } : {}),
       },
     });
   }
@@ -2528,6 +2574,8 @@ export class NotificationService {
     const subtitle = trimmedPreview !== ''
       ? `« ${this.truncateMessage(trimmedPreview)} »`
       : undefined;
+    // Vignette du post portant le commentaire → attachée au push iOS.
+    const media = await this.resolvePostMedia(params.postId);
 
     return this.createNotification({
       userId: params.commentAuthorId,
@@ -2546,6 +2594,9 @@ export class NotificationService {
 
       context: {
         postId: params.postId,
+        ...(media?.thumbnailUrl
+          ? { firstAttachmentUrl: media.thumbnailUrl, firstAttachmentMimeType: media.thumbnailMimeType }
+          : {}),
       },
 
       metadata: {
@@ -2556,6 +2607,7 @@ export class NotificationService {
         ...(trimmedPreview !== ''
           ? { commentPreview: this.truncateMessage(trimmedPreview) }
           : {}),
+        ...(media?.thumbnailUrl ? { postThumbnailUrl: media.thumbnailUrl } : {}),
       },
     });
   }
@@ -3105,6 +3157,87 @@ export class NotificationService {
       return message;
     }
     return words.slice(0, maxWords).join(' ') + '...';
+  }
+
+  /**
+   * Résout le 1er média d'un post → nature + miniature pour enrichir la
+   * notification : la ligne in-app rend la vignette, le push iOS l'attache
+   * (UNNotificationAttachment). Pour image on attache le fichier lui-même ;
+   * pour vidéo/audio on attache la miniature générée (toujours une image).
+   *
+   * Défensif : retourne `null` (au lieu de jeter) si le modèle `postMedia`
+   * est absent (tests) ou si le post n'a pas de média visuel — l'appelant
+   * retombe alors sur le rendu texte seul.
+   */
+  private async resolvePostMedia(postId: string): Promise<{
+    mediaType: 'image' | 'video' | 'audio';
+    thumbnailUrl?: string;
+    thumbnailMimeType?: string;
+  } | null> {
+    try {
+      const media = await this.prisma.postMedia.findFirst({
+        where: { postId },
+        orderBy: { order: 'asc' },
+        select: { mimeType: true, fileUrl: true, thumbnailUrl: true },
+      });
+      if (!media) return null;
+
+      const mime = (media.mimeType ?? '').toLowerCase();
+      const mediaType = mime.startsWith('image/') ? 'image'
+        : mime.startsWith('video/') ? 'video'
+          : mime.startsWith('audio/') ? 'audio'
+            : null;
+      if (!mediaType) return null;
+
+      // Vignette poussée au client/iOS : toujours une image téléchargeable.
+      // Image → le fichier ; vidéo/audio → la miniature générée (si présente).
+      const rawThumb = mediaType === 'image'
+        ? (media.fileUrl || media.thumbnailUrl || undefined)
+        : (media.thumbnailUrl || undefined);
+      const thumbnailUrl = rawThumb ? this.toPublicMediaUrl(rawThumb) : undefined;
+      const thumbnailMimeType = thumbnailUrl
+        ? (mediaType === 'image' ? (media.mimeType ?? 'image/jpeg') : 'image/jpeg')
+        : undefined;
+
+      return { mediaType, thumbnailUrl, thumbnailMimeType };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Absolutise une URL média relative pour qu'elle soit téléchargeable par
+   *  l'extension de notification iOS (qui n'a pas de base configurée). */
+  private toPublicMediaUrl(url: string): string {
+    if (/^https?:\/\//i.test(url)) return url;
+    const base = (process.env.API_PUBLIC_URL || 'https://gate.meeshy.me').replace(/\/$/, '');
+    return `${url.startsWith('/') ? base : `${base}/`}${url}`;
+  }
+
+  /**
+   * Sous-titre « Votre {entité} » enrichi du détail du contenu visé : l'extrait
+   * texte (« Votre story : « … » ») ou, à défaut, un résumé média localisé
+   * (« Votre story · 📷 Photo »). Source unique pour réactions / partages —
+   * aligné sur le wording des commentaires. SANS date (le client l'append).
+   */
+  private buildOwnerSubtitleWithDetail(
+    lang: string,
+    postType: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL',
+    detail: { textPreview?: string; mediaType?: 'image' | 'video' | 'audio' },
+  ): string {
+    const label = notificationString(lang, 'comment.subtitleOwner', { postType });
+    const text = detail.textPreview?.trim();
+    if (text) return `${label} : « ${this.truncateMessage(text)} »`;
+    const mediaSummary = this.mediaSummaryString(lang, detail.mediaType);
+    return mediaSummary ? `${label} · ${mediaSummary}` : label;
+  }
+
+  /** Résumé média localisé (« 📷 Photo » / « 🎬 Vidéo » / « 🎵 Audio ») ou ''. */
+  private mediaSummaryString(lang: string, mediaType?: 'image' | 'video' | 'audio'): string {
+    const key: NotificationStringKey | null = mediaType === 'image' ? 'attachment.photo'
+      : mediaType === 'video' ? 'attachment.video'
+        : mediaType === 'audio' ? 'attachment.audio'
+          : null;
+    return key ? notificationString(lang, key) : '';
   }
 
   // ==============================================

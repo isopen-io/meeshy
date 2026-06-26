@@ -32,6 +32,9 @@ public struct NotificationRowView: View {
                 iconView
                 contentView
                 Spacer(minLength: 4)
+                if let thumb = notification.postThumbnailURLString {
+                    postThumbnail(thumb)
+                }
                 timestampView
             }
             .padding(.horizontal, 16)
@@ -119,6 +122,25 @@ public struct NotificationRowView: View {
                     .padding(.top, 1)
             }
         }
+    }
+
+    // MARK: - Post thumbnail
+
+    /// Vignette du contenu social lié (post/story/réel) — donne le contexte
+    /// visuel de CE qui a été commenté / réagi, sans ouvrir l'app. 44×44,
+    /// coins arrondis, alignée sur l'avatar en tête de ligne.
+    private func postThumbnail(_ urlString: String) -> some View {
+        CachedAsyncImage(url: urlString, targetSize: CGSize(width: 44, height: 44)) {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(accentColor.opacity(0.12))
+        }
+        .frame(width: 44, height: 44)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(theme.textMuted.opacity(0.15), lineWidth: 0.5)
+        )
+        .accessibilityHidden(true)
     }
 
     // MARK: - Timestamp
