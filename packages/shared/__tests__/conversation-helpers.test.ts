@@ -584,4 +584,35 @@ describe('generateDefaultConversationTitle — name edge cases', () => {
     expect(result).toBe('Doe');
     expect(result.startsWith(' ')).toBe(false);
   });
+
+  it('2-member: uses lastName when no displayName or username', () => {
+    const members = [
+      { id: 'me' },
+      { id: 'a', lastName: 'Smith' },
+      { id: 'b', firstName: 'Alice' },
+    ];
+    const result = generateDefaultConversationTitle(members as any, 'me');
+    expect(result).toBe('Smith, Alice');
+  });
+
+  it('2-member: combines firstName and lastName when no displayName or username', () => {
+    const members = [
+      { id: 'me' },
+      { id: 'a', firstName: 'John', lastName: 'Smith' },
+      { id: 'b', firstName: 'Alice', lastName: 'Jones' },
+    ];
+    const result = generateDefaultConversationTitle(members as any, 'me');
+    expect(result).toBe('John Smith, Alice Jones');
+  });
+
+  it('3+ member: uses lastName fallback for display name', () => {
+    const members = [
+      { id: 'me' },
+      { id: 'a', lastName: 'Smith' },
+      { id: 'b', firstName: 'Alice' },
+      { id: 'c', username: 'charlie' },
+    ];
+    const result = generateDefaultConversationTitle(members as any, 'me');
+    expect(result).toBe('Smith, Alice and 1 other(s)');
+  });
 });

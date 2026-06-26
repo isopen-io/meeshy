@@ -246,17 +246,20 @@ export function generateDefaultConversationTitle(
     return 'Unknown User';
   }
   
+  const resolveName = (m: { displayName?: string; username?: string; firstName?: string; lastName?: string }): string => {
+    const fullName = [m.firstName, m.lastName]
+      .filter((p): p is string => !!p && p.trim().length > 0)
+      .map(p => p.trim())
+      .join(' ');
+    return m.displayName?.trim() || m.username?.trim() || fullName || 'Unknown User';
+  };
+
   if (otherMembers.length === 2) {
-    const names = otherMembers.map(m => 
-      m.displayName || m.username || m.firstName || 'Unknown User'
-    );
-    return names.join(', ');
+    return otherMembers.map(resolveName).join(', ');
   }
-  
+
   // 3+ membres
-  const firstTwo = otherMembers.slice(0, 2).map(m => 
-    m.displayName || m.username || m.firstName || 'Unknown User'
-  );
+  const firstTwo = otherMembers.slice(0, 2).map(resolveName);
   return `${firstTwo.join(', ')} and ${otherMembers.length - 2} other(s)`;
 }
 
