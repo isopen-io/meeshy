@@ -1015,6 +1015,15 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         channel.sendData(buffer)
     }
 
+    func sendDTMF(digits: String) {
+        guard let sender = audioTransceiver?.sender.dtmfSender, sender.canInsertDtmf else {
+            Logger.webrtc.warning("DTMF unavailable — no DTMF sender or not established")
+            return
+        }
+        sender.insertDtmf(digits, duration: 100, interToneGap: 70)
+        Logger.webrtc.info("DTMF: sending '\(digits)'")
+    }
+
     private func startDataChannelPing() {
         stopDataChannelPing()
         dataChannelPingTask = Task { [weak self] in
@@ -1486,6 +1495,7 @@ final class P2PWebRTCClient: WebRTCClientProviding {
     func getStats() async -> CallStats? { nil }
     func createDataChannel(label: String) -> Bool { false }
     func sendDataChannelMessage(_ data: Data) {}
+    func sendDTMF(digits: String) {}
     func disconnect() {}
 
     var audioEffectsService: CallAudioEffectsServiceProviding? { nil }

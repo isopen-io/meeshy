@@ -375,6 +375,10 @@ final class WebRTCService {
         client.sendDataChannelMessage(data)
     }
 
+    func sendDTMF(digits: String) {
+        client.sendDTMF(digits: digits)
+    }
+
     // MARK: - Audio Effects
 
     func setAudioEffect(_ effect: AudioEffectConfig?) {

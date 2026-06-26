@@ -3185,6 +3185,14 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
         action.fulfill()
     }
 
+    func provider(_ provider: CXProvider, perform action: CXPlayDTMFCallAction) {
+        // RFC 4733: forward CallKit keypad input to the WebRTC DTMF sender.
+        // Enables conference PINs and IVR navigation during active calls.
+        // sendDTMF is a no-op when unavailable; fulfill so CallKit doesn't timeout.
+        manager?.webRTCService.sendDTMF(digits: action.digits)
+        action.fulfill()
+    }
+
     func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
         // CallKit owns AVAudioSession lifecycle; we ONLY bridge it to libwebrtc.
         // DO NOT call audioSession.setActive(true) here — CallKit already did.

@@ -338,6 +338,12 @@ protocol WebRTCClientProviding: AnyObject {
     func getStats() async -> CallStats?
     func createDataChannel(label: String) -> Bool
     func sendDataChannelMessage(_ data: Data)
+    /// RFC 4733 DTMF: forward digits to the audio transceiver's RTCDTMFSender.
+    /// Called from `CXPlayDTMFCallAction` when the user presses digits in the
+    /// CallKit keypad (e.g. conference PIN, IVR navigation). No-op when the
+    /// audio transceiver's DTMF sender is unavailable or the connection is not
+    /// established. Valid characters: 0-9, A-D, *, #, comma (2 s pause).
+    func sendDTMF(digits: String)
     func disconnect()
 
     var audioEffectsService: CallAudioEffectsServiceProviding? { get }

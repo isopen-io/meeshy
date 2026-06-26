@@ -847,3 +847,66 @@ final class CallManagerIdleTimerProximityTests: XCTestCase {
             "updateProximityMonitoring must evaluate BOTH callState.isActive AND !isVideoEnabled")
     }
 }
+
+// MARK: - DTMF forwarding via CallKit keypad
+
+/// Source-analysis guards ensuring `CXPlayDTMFCallAction` is handled and forwards
+/// digits to WebRTC via `sendDTMF`. Without this, the CallKit keypad appears but
+/// pressing digits has no effect — conference PINs and IVR navigation are broken.
+@MainActor
+final class CallManagerDTMFTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func webRTCTypesSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/WebRTCTypes.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_dtmfHandler_isImplemented_inCallKitDelegate() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("CXPlayDTMFCallAction"),
+            "CXPlayDTMFCallAction must be handled — without it the CallKit keypad sends no tones")
+    }
+
+    func test_dtmfHandler_forwardsDigitsToWebRTCService() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("sendDTMF(digits: action.digits)"),
+            "CXPlayDTMFCallAction handler must forward action.digits to webRTCService.sendDTMF")
+    }
+
+    func test_dtmfHandler_fulfillsAction() throws {
+        let source = try callManagerSource()
+        let handlerRange = source.range(of: "CXPlayDTMFCallAction")
+        XCTAssertNotNil(handlerRange)
+        let afterHandler = String(source[handlerRange!.upperBound...])
+        let nextHandlerBoundary = afterHandler.range(of: "func provider")?.lowerBound
+            ?? afterHandler.endIndex
+        let handlerBody = String(afterHandler[..<nextHandlerBoundary])
+        XCTAssertTrue(
+            handlerBody.contains("action.fulfill()"),
+            "CXPlayDTMFCallAction handler must call action.fulfill() so CallKit does not timeout")
+    }
+
+    func test_sendDTMF_isInWebRTCClientProvidingProtocol() throws {
+        let source = try webRTCTypesSource()
+        XCTAssertTrue(
+            source.contains("func sendDTMF(digits: String)"),
+            "sendDTMF must be declared in WebRTCClientProviding protocol so mocks can stub it")
+    }
+}
