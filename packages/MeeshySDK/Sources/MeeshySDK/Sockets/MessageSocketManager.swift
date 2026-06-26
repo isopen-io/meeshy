@@ -707,6 +707,15 @@ public struct CallQualityAlertData: Decodable, Sendable {
     public let threshold: Double
 }
 
+/// Received when the remote peer starts or stops screen-capturing the call.
+/// The gateway relays `call:screen-capture-alert` to the OTHER participant
+/// only (socket.to(room)) — every event we receive reflects the remote peer.
+public struct CallScreenCaptureAlertData: Decodable, Sendable {
+    public let callId: String
+    public let participantId: String
+    public let isCapturing: Bool
+}
+
 // MARK: - Reaction Sync Event Data
 
 public struct ReactionSyncEvent: Decodable, Sendable {
@@ -986,6 +995,7 @@ public protocol MessageSocketProviding: Sendable {
     var callError: PassthroughSubject<CallErrorData, Never> { get }
     var callIceServersRefreshed: PassthroughSubject<CallIceServersRefreshedData, Never> { get }
     var callQualityAlert: PassthroughSubject<CallQualityAlertData, Never> { get }
+    var callScreenCaptureAlert: PassthroughSubject<CallScreenCaptureAlertData, Never> { get }
     var reactionSynced: PassthroughSubject<ReactionSyncEvent, Never> { get }
     var systemMessageReceived: PassthroughSubject<SystemMessageEvent, Never> { get }
     var mentionCreated: PassthroughSubject<MentionCreatedEvent, Never> { get }
@@ -1008,6 +1018,7 @@ public protocol MessageSocketProviding: Sendable {
     func sendViaSocketFallback(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String) async -> MessageSocketManager.SendMessageAck?
     func emitCallInitiate(conversationId: String, isVideo: Bool) async throws -> MessageSocketManager.CallInitiateAck
     func emitCallJoin(callId: String)
+    func emitCallJoinWithAck(callId: String) async -> Bool
     func emitCallLeave(callId: String)
     func emitAppForeground(_ foreground: Bool)
     func addAttachmentReaction(attachmentId: String, messageId: String, emoji: String)
@@ -1055,6 +1066,7 @@ public extension MessageSocketProviding {
 
     func emitCallReconnecting(callId: String, participantId: String, attempt: Int) {}
     func emitCallReconnected(callId: String, participantId: String) {}
+    func emitCallJoinWithAck(callId: String) async -> Bool { false }
     func emitRequestIceServers(callId: String) {}
     func emitCallBackgrounded(callId: String, participantId: String) {}
     func emitCallForegrounded(callId: String, participantId: String) {}
@@ -1197,6 +1209,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let callError = PassthroughSubject<CallErrorData, Never>()
     public let callIceServersRefreshed = PassthroughSubject<CallIceServersRefreshedData, Never>()
     public let callQualityAlert = PassthroughSubject<CallQualityAlertData, Never>()
+    public let callScreenCaptureAlert = PassthroughSubject<CallScreenCaptureAlertData, Never>()
 
     // Combine publishers — reactions sync, system, attachments, mentions
     public let reactionSynced = PassthroughSubject<ReactionSyncEvent, Never>()
@@ -1341,6 +1354,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             .reconnectWait(1),
             .reconnectWaitMax(16),
             .reconnectAttempts(-1),
+            .sessionDelegate(CertificatePinningDelegate()),
         ])
 
         socket = manager?.defaultSocket
@@ -1366,6 +1380,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             .reconnectWait(1),
             .reconnectWaitMax(16),
             .reconnectAttempts(-1),
+            .sessionDelegate(CertificatePinningDelegate()),
         ])
 
         socket = manager?.defaultSocket
@@ -1984,6 +1999,26 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     public func emitCallJoin(callId: String) {
         socket?.emit("call:join", ["callId": callId])
+    }
+
+    /// ACK-aware join: emits `call:join` and awaits gateway confirmation (3 s
+    /// timeout). Returns `true` when the gateway has put the socket in the call
+    /// room. Use this on socket reconnect before sending room-scoped events
+    /// (call:request-ice-servers, call:toggle-video) — the gateway guards those
+    /// with `socket.rooms.has(ROOMS.call(callId))` which is only true after the
+    /// async joinCall() DB work completes and socket.join() runs.
+    public func emitCallJoinWithAck(callId: String) async -> Bool {
+        guard let socket else { return false }
+        let payload: [String: Any] = ["callId": callId]
+        return await withCheckedContinuation { continuation in
+            var resumed = false
+            socket.emitWithAck("call:join", payload).timingOut(after: 3) { items in
+                guard !resumed else { return }
+                resumed = true
+                let success = (items.first as? [String: Any])?["success"] as? Bool ?? false
+                continuation.resume(returning: success)
+            }
+        }
     }
 
     public func emitCallLeave(callId: String) {
@@ -2805,6 +2840,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(CallQualityAlertData.self, from: data) { [weak self] event in
                 self?.callQualityAlert.send(event)
+            }
+        }
+
+        socket.on("call:screen-capture-alert") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(CallScreenCaptureAlertData.self, from: data) { [weak self] event in
+                self?.callScreenCaptureAlert.send(event)
             }
         }
 

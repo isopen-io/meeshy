@@ -20,7 +20,7 @@ final class CallEmitSourceGuardTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager.swift")
+            .appendingPathComponent("Sources/MeeshySDK/Sockets/MessageSocketManager.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 

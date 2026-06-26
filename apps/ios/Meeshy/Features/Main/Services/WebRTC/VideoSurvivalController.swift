@@ -63,7 +63,8 @@ struct VideoSurvivalPolicy {
     /// require the link to have clearly settled to avoid oscillation.
     let resumeAfter: TimeInterval
 
-    init(suspendAfter: TimeInterval = 6, resumeAfter: TimeInterval = 10) {
+    init(suspendAfter: TimeInterval = QualityThresholds.videoSurvivalSuspendAfterSeconds,
+         resumeAfter: TimeInterval = QualityThresholds.videoSurvivalResumeAfterSeconds) {
         self.suspendAfter = suspendAfter
         self.resumeAfter = resumeAfter
     }
