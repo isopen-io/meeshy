@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { sendInternalError } from '../utils/response';
+import { sendSuccess, sendInternalError } from '../utils/response';
 
 const ACHIEVEMENT_THRESHOLDS = {
   polyglotte: { field: 'languagesUsed', threshold: 5, icon: 'globe', color: '#3498DB' },
@@ -132,7 +132,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
       try {
         const userId = request.user!.userId;
         const stats = await computeUserStats(fastify.prisma, userId);
-        return { success: true, data: stats };
+        return sendSuccess(reply, stats);
       } catch (error) {
         fastify.log.error({ error }, 'Error fetching user stats');
         return sendInternalError(reply, 'Failed to fetch user stats');
@@ -212,7 +212,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
           messages: count,
         }));
 
-        return { success: true, data: timeline };
+        return sendSuccess(reply, timeline);
       } catch (error) {
         fastify.log.error({ error }, 'Error fetching user timeline');
         return sendInternalError(reply, 'Failed to fetch user timeline');
@@ -245,7 +245,7 @@ export async function userStatsRoutes(fastify: FastifyInstance) {
       try {
         const userId = request.user!.userId;
         const { achievements } = await computeUserStats(fastify.prisma, userId);
-        return { success: true, data: achievements };
+        return sendSuccess(reply, achievements);
       } catch (error) {
         fastify.log.error({ error }, 'Error fetching achievements');
         return sendInternalError(reply, 'Failed to fetch achievements');

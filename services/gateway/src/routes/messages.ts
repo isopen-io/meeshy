@@ -509,10 +509,6 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       }
 
       if (status === 'read') {
-        // TODO: Cette route utilise l'ancien système de MessageStatus
-        // Elle devrait être remplacée par /conversations/:conversationId/mark-as-read
-        // Pour l'instant, on utilise le MessageReadStatusService avec le nouveau système
-
         const { MessageReadStatusService } = await import('../services/MessageReadStatusService.js');
         const readStatusService = new MessageReadStatusService(prisma);
 

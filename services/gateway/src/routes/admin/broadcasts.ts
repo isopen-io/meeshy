@@ -65,17 +65,11 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
         fastify.prisma.adminBroadcast.count({ where }),
       ]);
 
-      return reply.send({
-        success: true,
-        data: {
-          broadcasts,
-          pagination: {
-            total,
-            offset: offsetNum,
-            limit: limitNum,
-            hasMore: offsetNum + limitNum < total,
-          },
-        },
+      return sendPaginatedSuccess(reply, broadcasts, {
+        total,
+        offset: offsetNum,
+        limit: limitNum,
+        hasMore: offsetNum + limitNum < total,
       });
     } catch (error: any) {
       logger.error('Error listing broadcasts');
