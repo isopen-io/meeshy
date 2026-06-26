@@ -212,7 +212,7 @@ export class PostService {
         });
       }
 
-      this.triggerStoryTextObjectTranslation(post.id, textObjects);
+      this.triggerStoryTextObjectTranslation(post.id, textObjects, userId).catch(() => {});
     }
 
     // Tracking des URLs brutes du post/story : mapping `url → token` rangé dans
@@ -380,15 +380,31 @@ export class PostService {
     }
   }
 
-  private triggerStoryTextObjectTranslation(
+  private async triggerStoryTextObjectTranslation(
     postId: string,
-    textObjects: StoryTextObjectRaw[]
-  ): void {
-    // Envoie les textObjects au pipeline de traduction.
-    // La persistence des résultats est gérée par le handler ZMQ Task 15
-    // (story_text_object_translation_completed → storyEffects.textObjects[n].translations).
-    // TODO: query audience's actual languages (like triggerStoryTextTranslation does for message content)
-    const allTargetLanguages = this.getActiveTargetLanguages();
+    textObjects: StoryTextObjectRaw[],
+    authorId: string
+  ): Promise<void> {
+    // Resolve target languages from the author's contacts — same strategy as
+    // triggerStoryTextTranslation for message content.
+    const contacts = await this.prisma.participant.findMany({
+      where: {
+        conversation: { participants: { some: { userId: authorId } } },
+        userId: { not: authorId },
+      },
+      include: { user: { select: { systemLanguage: true } } },
+      take: 100,
+    });
+
+    const contactLanguages = [...new Set(
+      contacts
+        .map((c) => c.user?.systemLanguage ?? undefined)
+        .filter((l): l is string => !!l)
+    )].slice(0, 10);
+
+    const allTargetLanguages = contactLanguages.length > 0
+      ? contactLanguages
+      : this.getActiveTargetLanguages();
 
     textObjects.forEach((obj, index) => {
       const text = obj.content?.trim();
