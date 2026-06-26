@@ -179,8 +179,8 @@ describe('ParticipantsService', () => {
       await participantsService.getParticipants(conversationId);
 
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[ParticipantsService]'),
-        error
+        expect.stringContaining('[Participants]'),
+        { error }
       );
       consoleSpy.mockRestore();
     });
