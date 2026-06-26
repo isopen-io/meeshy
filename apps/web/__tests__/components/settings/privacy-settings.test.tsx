@@ -71,10 +71,11 @@ jest.mock('sonner', () => ({
   },
 }));
 
-// Mock de l'API service pour l'export de données
+// Mock de l'API service pour l'export et la suppression de données
 jest.mock('@/services/api.service', () => ({
   apiService: {
     getBlob: jest.fn().mockResolvedValue(new Blob(['{}'], { type: 'application/json' })),
+    delete: jest.fn().mockResolvedValue({ success: true, data: { message: 'Confirmation email sent' } }),
   },
 }));
 
@@ -247,7 +248,7 @@ describe('PrivacySettings', () => {
 
     it('supprime les donnees au clic sur Confirmer', async () => {
       const { SoundFeedback } = require('@/hooks/use-accessibility');
-      const { toast } = require('sonner');
+      const { apiService } = require('@/services/api.service');
 
       render(<PrivacySettings />);
 
@@ -261,7 +262,10 @@ describe('PrivacySettings', () => {
 
       await waitFor(() => {
         expect(SoundFeedback.playClick).toHaveBeenCalled();
-        expect(mockRefetch).toHaveBeenCalled();
+        expect(apiService.delete).toHaveBeenCalledWith(
+          '/api/v1/me/delete-account',
+          { confirmationPhrase: 'SUPPRIMER MON COMPTE' }
+        );
       });
     });
   });

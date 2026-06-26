@@ -98,23 +98,23 @@ export function PrivacySettings() {
   };
 
   /**
-   * Suppression de toutes les données utilisateur
-   * TODO: Implémenter via API backend
+   * Initie la suppression du compte via /api/v1/me/delete-account (GDPR).
+   * Le backend envoie un email de confirmation — la suppression effective
+   * n'intervient qu'après validation par l'utilisateur dans l'email.
    */
   const handleDeleteAllData = async () => {
     SoundFeedback.playClick();
 
     try {
-      // TODO: Appeler l'API de suppression de compte
-      // await apiService.delete('/api/v1/me/account');
-
-      // Pour l'instant, on refetch juste
-      await refetch();
+      await apiService.delete('/api/v1/me/delete-account', {
+        confirmationPhrase: 'SUPPRIMER MON COMPTE',
+      });
 
       SoundFeedback.playSuccess();
-      toast.success(t('privacy.dataDeleted', 'Données supprimées'));
+      toast.success(t('privacy.deleteRequestSent', 'Un email de confirmation a été envoyé'));
     } catch (_err) {
-      toast.error(t('privacy.deleteError'));
+      SoundFeedback.playError?.();
+      toast.error(t('privacy.deleteError', 'Erreur lors de la demande de suppression'));
     }
   };
 

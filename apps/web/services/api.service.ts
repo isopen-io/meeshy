@@ -253,8 +253,8 @@ class ApiService {
     return this.request<T>(endpoint, { method: 'PATCH', body: data ? JSON.stringify(data) : undefined });
   }
 
-  async delete<T>(endpoint: string): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, { method: 'DELETE' });
+  async delete<T>(endpoint: string, data?: unknown): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, { method: 'DELETE', body: data ? JSON.stringify(data) : undefined });
   }
 
   async uploadFile<T>(endpoint: string, file: File, additionalData?: Record<string, unknown>): Promise<ApiResponse<T>> {
