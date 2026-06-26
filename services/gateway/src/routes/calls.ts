@@ -317,13 +317,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
 
       const statusCode = errorCode === 'CALL_NOT_FOUND' ? 404 : 400;
 
-      return reply.status(statusCode).send({
-        success: false,
-        error: {
-          code: errorCode,
-          message
-        }
-      });
+      return sendError(reply, statusCode, message, { code: errorCode });
     }
   });
 
@@ -467,13 +461,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
 
       const statusCode = errorCode === 'CALL_NOT_FOUND' ? 404 : 400;
 
-      return reply.status(statusCode).send({
-        success: false,
-        error: {
-          code: errorCode,
-          message
-        }
-      });
+      return sendError(reply, statusCode, message, { code: errorCode });
     }
   });
 
@@ -619,13 +607,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
 
       const statusCode = errorCode === 'CALL_NOT_FOUND' ? 404 : 400;
 
-      return reply.status(statusCode).send({
-        success: false,
-        error: {
-          code: errorCode,
-          message
-        }
-      });
+      return sendError(reply, statusCode, message, { code: errorCode });
     }
   });
 
@@ -772,13 +754,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
 
       const statusCode = errorCode === 'CALL_NOT_FOUND' ? 404 : 400;
 
-      return reply.status(statusCode).send({
-        success: false,
-        error: {
-          code: errorCode,
-          message
-        }
-      });
+      return sendError(reply, statusCode, message, { code: errorCode });
     }
   });
 
