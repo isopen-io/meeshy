@@ -37,6 +37,7 @@ import {
   socketCallScreenCaptureDetectedSchema
 } from '../validation/call-schemas';
 import { getSocketRateLimiter, checkSocketRateLimit, SOCKET_RATE_LIMITS } from '../utils/socket-rate-limiter';
+import { ZmqTranslationClient } from '../services/zmq-translation';
 import type {
   CallInitiateEvent,
   CallInitiatedEvent,
@@ -67,6 +68,7 @@ export class CallEventsHandler {
   private callService: CallService;
   private notificationService: NotificationService | null = null;
   private pushService: PushNotificationService | null = null;
+  private zmqClient: ZmqTranslationClient | null = null;
   /**
    * P3 — broadcaster for the call-summary system message. Injected by the
    * socket manager (which owns `broadcastMessage`) so this handler can post a
@@ -185,12 +187,141 @@ export class CallEventsHandler {
     logger.info('📢 CallEventsHandler: PushNotificationService initialized');
   }
 
+  setZmqClient(zmqClient: ZmqTranslationClient): void {
+    this.zmqClient = zmqClient;
+    logger.info('📢 CallEventsHandler: ZmqTranslationClient initialized');
+  }
+
   /**
    * P3 — inject the conversation message broadcaster (the manager's
    * `broadcastMessage`). Enables posting the call-summary system message.
    */
   setMessageBroadcaster(broadcaster: (message: unknown, conversationId: string) => Promise<void>): void {
     this.messageBroadcaster = broadcaster;
+  }
+
+  /**
+   * Translates a final transcription segment to each active participant's
+   * preferred language and emits a `TRANSLATED_SEGMENT` event per language.
+   * Only fires for final segments (isFinal=true) to avoid flooding ZMQ.
+   * Falls back to emitting the original text if translation fails.
+   */
+  private async translateAndEmitSegment(
+    socket: Socket,
+    data: CallTranscriptionSegmentEvent,
+    speakerUserId: string
+  ): Promise<void> {
+    const activeParticipants = await this.prisma.callParticipant.findMany({
+      where: { callSessionId: data.callId, leftAt: null },
+      select: {
+        participant: {
+          select: {
+            userId: true,
+            user: { select: { systemLanguage: true } }
+          }
+        }
+      }
+    });
+
+    const targetLanguages: string[] = [
+      ...new Set<string>(
+        activeParticipants
+          .filter(p => p.participant.userId !== speakerUserId)
+          .map(p => (p.participant.user?.systemLanguage as string | undefined) ?? 'fr')
+          .filter((lang): lang is string => typeof lang === 'string' && lang !== data.segment.language)
+      )
+    ];
+
+    if (targetLanguages.length === 0) {
+      socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.TRANSLATED_SEGMENT, {
+        callId: data.callId,
+        segment: {
+          text: data.segment.text,
+          speakerId: data.segment.speakerId,
+          startMs: data.segment.startMs,
+          endMs: data.segment.endMs,
+          isFinal: data.segment.isFinal,
+          sourceLanguage: data.segment.language,
+          targetLanguage: data.segment.language,
+          confidence: data.segment.confidence
+        }
+      });
+      return;
+    }
+
+    await Promise.allSettled(
+      targetLanguages.map(async (targetLanguage) => {
+        try {
+          const taskId = await this.zmqClient!.translateText(
+            data.segment.text,
+            data.segment.language,
+            targetLanguage,
+            `call-${data.callId}-${data.segment.startMs}`,
+            data.callId
+          );
+
+          logger.debug('Call transcription segment translation requested', { callId: data.callId, taskId, targetLanguage });
+
+          return new Promise<void>((resolve) => {
+            const TIMEOUT_MS = 10_000;
+            const timer = setTimeout(() => {
+              this.zmqClient!.off('translationCompleted', onResult);
+              socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.TRANSLATED_SEGMENT, {
+                callId: data.callId,
+                segment: {
+                  text: data.segment.text,
+                  speakerId: data.segment.speakerId,
+                  startMs: data.segment.startMs,
+                  endMs: data.segment.endMs,
+                  isFinal: data.segment.isFinal,
+                  sourceLanguage: data.segment.language,
+                  targetLanguage,
+                  confidence: data.segment.confidence
+                }
+              });
+              resolve();
+            }, TIMEOUT_MS);
+
+            const onResult = (event: { taskId: string; result: { translatedText: string; targetLanguage: string } }) => {
+              if (event.taskId !== taskId) return;
+              clearTimeout(timer);
+              this.zmqClient!.off('translationCompleted', onResult);
+              socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.TRANSLATED_SEGMENT, {
+                callId: data.callId,
+                segment: {
+                  text: data.segment.text,
+                  translatedText: event.result.translatedText,
+                  speakerId: data.segment.speakerId,
+                  startMs: data.segment.startMs,
+                  endMs: data.segment.endMs,
+                  isFinal: data.segment.isFinal,
+                  sourceLanguage: data.segment.language,
+                  targetLanguage,
+                  confidence: data.segment.confidence
+                }
+              });
+              resolve();
+            };
+            this.zmqClient!.on('translationCompleted', onResult);
+          });
+        } catch (err) {
+          logger.warn('Call transcription translation failed, relaying original', { callId: data.callId, targetLanguage, err });
+          socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.TRANSLATED_SEGMENT, {
+            callId: data.callId,
+            segment: {
+              text: data.segment.text,
+              speakerId: data.segment.speakerId,
+              startMs: data.segment.startMs,
+              endMs: data.segment.endMs,
+              isFinal: data.segment.isFinal,
+              sourceLanguage: data.segment.language,
+              targetLanguage,
+              confidence: data.segment.confidence
+            }
+          });
+        }
+      })
+    );
   }
 
   /**
@@ -1804,30 +1935,23 @@ export class CallEventsHandler {
         const metadata = callSession.metadata as CallTranscriptionSegmentEvent['segment'] extends unknown ? Record<string, unknown> | null : never;
         const translationEnabled = metadata && typeof metadata === 'object' && 'translationEnabled' in metadata && metadata.translationEnabled === true;
 
-        if (translationEnabled) {
-          // TODO: Forward to ZMQ translator for NLLB translation
-          // ZmqSingleton.getInstance().send({ type: 'call-transcription', ...data })
-          logger.debug('Transcription segment forwarded for translation', {
+        if (translationEnabled && this.zmqClient && data.segment.isFinal) {
+          await this.translateAndEmitSegment(socket, data, userId);
+        } else {
+          socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.TRANSLATED_SEGMENT, {
             callId: data.callId,
-            speakerId: data.segment.speakerId,
-            language: data.segment.language,
-            isFinal: data.segment.isFinal
+            segment: {
+              text: data.segment.text,
+              speakerId: data.segment.speakerId,
+              startMs: data.segment.startMs,
+              endMs: data.segment.endMs,
+              isFinal: data.segment.isFinal,
+              sourceLanguage: data.segment.language,
+              targetLanguage: data.segment.language,
+              confidence: data.segment.confidence
+            }
           });
         }
-
-        socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.TRANSLATED_SEGMENT, {
-          callId: data.callId,
-          segment: {
-            text: data.segment.text,
-            speakerId: data.segment.speakerId,
-            startMs: data.segment.startMs,
-            endMs: data.segment.endMs,
-            isFinal: data.segment.isFinal,
-            sourceLanguage: data.segment.language,
-            targetLanguage: data.segment.language,
-            confidence: data.segment.confidence
-          }
-        });
 
         logger.debug('Transcription segment relayed', {
           callId: data.callId,

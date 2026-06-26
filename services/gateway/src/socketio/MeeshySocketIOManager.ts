@@ -573,6 +573,9 @@ export class MeeshySocketIOManager {
       // Initialiser le service de notifications pour CallEventsHandler
       this.callEventsHandler.setNotificationService(this.notificationService);
       this.callEventsHandler.setPushNotificationService(pushService);
+      if (zmqClient) {
+        this.callEventsHandler.setZmqClient(zmqClient);
+      }
 
       // Écouter les événements de transcription seule prêtes
       this.translationService.on('transcriptionReady', this._handleTranscriptionReady.bind(this));
