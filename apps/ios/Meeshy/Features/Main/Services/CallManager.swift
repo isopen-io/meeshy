@@ -3019,6 +3019,14 @@ extension CallManager: WebRTCServiceDelegate {
     // which `setupSocketListeners` applies via `webRTCService.updateIceServers`.
     private func scheduleTURNCredentialRefresh(ttl: TimeInterval) {
         turnRefreshTask?.cancel()
+        // Guard against a malformed or zero TTL from the gateway — a 0-second
+        // delay would cause an immediate re-request, hammering the gateway in a
+        // tight loop. Minimum 60 s is a reasonable floor; the expected value is
+        // 480 s (8 min) or the TURN server's credential lifetime.
+        guard ttl >= 60 else {
+            Logger.calls.warning("TURN refresh TTL too short (\(Int(ttl))s) — skipping reschedule")
+            return
+        }
         let refreshDelay = ttl * 0.8
         Logger.calls.info("TURN credential refresh scheduled in \(Int(refreshDelay))s (TTL=\(Int(ttl))s)")
         turnRefreshTask = Task { @MainActor [weak self] in
