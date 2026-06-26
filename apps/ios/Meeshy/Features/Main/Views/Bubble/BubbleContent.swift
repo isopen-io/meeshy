@@ -32,26 +32,45 @@ struct BubbleContent: Equatable {
         /// audio tracks of the message (empty when the mix has no audio).
         case mixed(visual: [MeeshyMessageAttachment], audio: [MeeshyMessageAttachment], nonMedia: [MeeshyMessageAttachment])
 
-        // TODO(Task14): expand equality to cover mutation-prone fields (thumbnailUrl,
-        // isBlurred, viewOnceCount, width/height, duration, fileUrl) — id-only comparison
-        // will miss server-side updates that should invalidate the bubble cache.
         static func == (lhs: Attachments, rhs: Attachments) -> Bool {
             switch (lhs, rhs) {
             case (.none, .none):
                 return true
             case (.visualGrid(let a), .visualGrid(let b)):
-                return a.map(\.id) == b.map(\.id)
+                guard a.map(\.id) == b.map(\.id) else { return false }
+                return zip(a, b).allSatisfy { Self.attachmentsHaveSameState($0.0, $0.1) }
             case (.audio(let a), .audio(let b)):
-                return a.map(\.id) == b.map(\.id)
+                guard a.map(\.id) == b.map(\.id) else { return false }
+                return zip(a, b).allSatisfy { Self.attachmentsHaveSameState($0.0, $0.1) }
             case (.nonMedia(let a), .nonMedia(let b)):
                 return a.map(\.id) == b.map(\.id)
             case (.mixed(let av, let aa, let an), .mixed(let bv, let ba, let bn)):
-                return av.map(\.id) == bv.map(\.id)
-                    && aa.map(\.id) == ba.map(\.id)
-                    && an.map(\.id) == bn.map(\.id)
+                guard av.map(\.id) == bv.map(\.id),
+                      aa.map(\.id) == ba.map(\.id),
+                      an.map(\.id) == bn.map(\.id) else { return false }
+                return zip(av, bv).allSatisfy { Self.attachmentsHaveSameState($0.0, $0.1) }
+                    && zip(aa, ba).allSatisfy { Self.attachmentsHaveSameState($0.0, $0.1) }
             default:
                 return false
             }
+        }
+
+        /// Compares mutation-prone server-side fields that can change after initial delivery
+        /// (thumbnail generation, blur reveal, view-once, per-image reactions, media metadata).
+        /// Called only when IDs already match, so identity is not re-checked here.
+        private static func attachmentsHaveSameState(
+            _ a: MeeshyMessageAttachment,
+            _ b: MeeshyMessageAttachment
+        ) -> Bool {
+            a.thumbnailUrl == b.thumbnailUrl
+                && a.fileUrl == b.fileUrl
+                && a.isBlurred == b.isBlurred
+                && a.viewOnceCount == b.viewOnceCount
+                && a.duration == b.duration
+                && a.width == b.width
+                && a.height == b.height
+                && a.reactionSummary == b.reactionSummary
+                && a.currentUserReactions == b.currentUserReactions
         }
     }
 
@@ -91,18 +110,17 @@ struct BubbleContent: Equatable {
         let reference: ReplyReference
         let isStory: Bool
 
-        // TODO(Task14): expand equality to cover the remaining story-side mutations
-        // (attachmentThumbnailUrl, storyThumbnailUrl, storyReactionCount,
-        // storyCommentCount) — still misses late thumbnail/counter updates.
-        // `moodEmoji` + `storyPublishedAt` ARE compared: a mood citation's emoji/date
-        // can change (optimistic→server echo) while messageId+previewText stay equal,
-        // so this outer gate must not short-circuit the inner BubbleQuotedReply.
         static func == (lhs: Reply, rhs: Reply) -> Bool {
             lhs.reference.messageId == rhs.reference.messageId
                 && lhs.reference.previewText == rhs.reference.previewText
                 && lhs.isStory == rhs.isStory
                 && lhs.reference.moodEmoji == rhs.reference.moodEmoji
                 && lhs.reference.storyPublishedAt == rhs.reference.storyPublishedAt
+                && lhs.reference.attachmentThumbnailUrl == rhs.reference.attachmentThumbnailUrl
+                && lhs.reference.storyThumbnailUrl == rhs.reference.storyThumbnailUrl
+                && lhs.reference.storyReactionCount == rhs.reference.storyReactionCount
+                && lhs.reference.storyCommentCount == rhs.reference.storyCommentCount
+                && lhs.reference.storyShareCount == rhs.reference.storyShareCount
         }
     }
 
