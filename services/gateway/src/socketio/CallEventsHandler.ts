@@ -69,6 +69,8 @@ export class CallEventsHandler {
   private notificationService: NotificationService | null = null;
   private pushService: PushNotificationService | null = null;
   private zmqClient: ZmqTranslationClient | null = null;
+  /** Periodic sweep handle for `bufferedOffers` TTL eviction. */
+  private bufferCleanupInterval: ReturnType<typeof setInterval> | null = null;
   /**
    * P3 — broadcaster for the call-summary system message. Injected by the
    * socket manager (which owns `broadcastMessage`) so this handler can post a
@@ -94,6 +96,26 @@ export class CallEventsHandler {
 
   constructor(private prisma: PrismaClient) {
     this.callService = new CallService(prisma);
+    // Defensive TTL sweep: runs every 60s to evict stale offer entries whose
+    // call ended via a path that skipped clearBufferedOffer (error branches,
+    // GC teardown). Complements the inline sweep in bufferOffer which only
+    // runs when a new offer arrives.
+    this.bufferCleanupInterval = setInterval(() => {
+      const now = Date.now();
+      for (const [key, entry] of this.bufferedOffers) {
+        if (now - entry.bufferedAt > CallEventsHandler.OFFER_BUFFER_TTL_MS) {
+          this.bufferedOffers.delete(key);
+        }
+      }
+    }, 60_000);
+  }
+
+  /** Release the periodic cleanup interval. Call when shutting down the handler. */
+  destroy(): void {
+    if (this.bufferCleanupInterval !== null) {
+      clearInterval(this.bufferCleanupInterval);
+      this.bufferCleanupInterval = null;
+    }
   }
 
   /** §4.6 — store the latest offer for a call, sweeping expired entries. */
@@ -249,10 +271,33 @@ export class CallEventsHandler {
       return;
     }
 
+    // Capture zmqClient once so TypeScript can narrow the type and inner
+    // lambdas don't need force-unwrap (zmqClient could theoretically be
+    // cleared between the outer check in handleTranscriptionSegment and the
+    // async Promise execution inside Promise.allSettled).
+    const zmqClient = this.zmqClient;
+    if (!zmqClient) {
+      logger.warn('[CallEventsHandler] translateAndEmitSegment called without zmqClient — relaying original', { callId: data.callId });
+      socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.TRANSLATED_SEGMENT, {
+        callId: data.callId,
+        segment: {
+          text: data.segment.text,
+          speakerId: data.segment.speakerId,
+          startMs: data.segment.startMs,
+          endMs: data.segment.endMs,
+          isFinal: data.segment.isFinal,
+          sourceLanguage: data.segment.language,
+          targetLanguage: data.segment.language,
+          confidence: data.segment.confidence
+        }
+      });
+      return;
+    }
+
     await Promise.allSettled(
       targetLanguages.map(async (targetLanguage) => {
         try {
-          const taskId = await this.zmqClient!.translateText(
+          const taskId = await zmqClient.translateText(
             data.segment.text,
             data.segment.language,
             targetLanguage,
@@ -265,7 +310,7 @@ export class CallEventsHandler {
           return new Promise<void>((resolve) => {
             const TIMEOUT_MS = 10_000;
             const timer = setTimeout(() => {
-              this.zmqClient!.off('translationCompleted', onResult);
+              zmqClient.off('translationCompleted', onResult);
               socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.TRANSLATED_SEGMENT, {
                 callId: data.callId,
                 segment: {
@@ -285,7 +330,7 @@ export class CallEventsHandler {
             const onResult = (event: { taskId: string; result: { translatedText: string; targetLanguage: string } }) => {
               if (event.taskId !== taskId) return;
               clearTimeout(timer);
-              this.zmqClient!.off('translationCompleted', onResult);
+              zmqClient.off('translationCompleted', onResult);
               socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.TRANSLATED_SEGMENT, {
                 callId: data.callId,
                 segment: {
@@ -302,7 +347,7 @@ export class CallEventsHandler {
               });
               resolve();
             };
-            this.zmqClient!.on('translationCompleted', onResult);
+            zmqClient.on('translationCompleted', onResult);
           });
         } catch (err) {
           logger.warn('Call transcription translation failed, relaying original', { callId: data.callId, targetLanguage, err });

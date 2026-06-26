@@ -372,7 +372,15 @@ extension VoIPPushManager: PKPushRegistryDelegate {
                 body: body
             )
             let record = VoIPTokenRecord(token: token, at: now)
-            try? await tokenStore.save(token: token, at: now)
+            do {
+                try await tokenStore.save(token: token, at: now)
+            } catch {
+                // Keychain write failure is not fatal — the token is already
+                // registered server-side and the in-memory cooldown snapshot
+                // (`lastRegisteredRecord`) prevents a duplicate next-cycle POST.
+                // Log at error level so Crashlytics captures the OSStatus.
+                logger.error("VoIP token keychain save failed (non-fatal): \(error.localizedDescription, privacy: .public)")
+            }
             lastRegisteredRecord = record
             pendingTokenToRegister = nil
             logger.info("VoIP token registered with backend (env=\(PushNotificationManager.apnsEnvironment))")

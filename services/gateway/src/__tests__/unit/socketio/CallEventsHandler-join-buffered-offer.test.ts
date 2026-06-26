@@ -39,6 +39,7 @@ jest.mock('../../../services/PushNotificationService', () => ({
 
 jest.mock('../../../middleware/validation', () => ({
   validateSocketEvent: jest.fn(),
+
   isValidationFailure: jest.fn((r) => !r.success),
 }));
 
@@ -56,6 +57,8 @@ jest.mock('../../../utils/socket-rate-limiter', () => ({
   SOCKET_RATE_LIMITS: {
     MESSAGE_SEND: { maxRequests: 20, windowMs: 60000, keyPrefix: 'socket:message:send' },
     CALL_LEAVE: { maxRequests: 20, windowMs: 60000, keyPrefix: 'socket:call:leave' },
+    CALL_JOIN: { maxRequests: 20, windowMs: 60000, keyPrefix: 'socket:call:join' },
+    CALL_SIGNAL: { maxRequests: 60, windowMs: 60000, keyPrefix: 'socket:call:signal' },
   },
 }));
 
