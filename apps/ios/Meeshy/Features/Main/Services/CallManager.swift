@@ -117,6 +117,11 @@ final class CallManager: ObservableObject {
     /// audioType=="audio"). Drives the mute indicator in the call UI so the local
     /// user knows why the remote peer sounds silent. Resets to `true` on call end.
     @Published private(set) var isRemoteAudioEnabled: Bool = true
+    /// `true` when the remote peer is actively screen-capturing this call
+    /// (call:screen-capture-alert with isCapturing==true). Drives a privacy warning
+    /// banner in CallView. Resets to `false` on call end to prevent leaking state
+    /// into subsequent calls.
+    @Published private(set) var isRemoteScreenCapturing: Bool = false
     /// Set to `true` when the gateway reports the remote peer has high RTT or packet
     /// loss (call:quality-alert). Auto-resets after 15 s of silence — sustained poor
     /// conditions keep resetting the timer, so the indicator stays up as long as
@@ -538,6 +543,7 @@ final class CallManager: ObservableObject {
             isVideoEnabled = false
             isRemoteVideoEnabled = true
             isRemoteAudioEnabled = true
+            isRemoteScreenCapturing = false
             isMuted = false
             isSpeaker = false
             videoSurvivalController.reset()
@@ -2286,6 +2292,7 @@ final class CallManager: ObservableObject {
         // `VideoSurvivalControlling.reset()`.
         isRemoteVideoEnabled = true
         isRemoteAudioEnabled = true
+        isRemoteScreenCapturing = false
         videoSurvivalController.reset()
         isVideoSuspended = false
         isVideoSuspendedByBackground = false
@@ -2704,6 +2711,16 @@ final class CallManager: ObservableObject {
                 default:
                     break
                 }
+            }
+            .store(in: &cancellables)
+
+        socket.callScreenCaptureAlert
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self else { return }
+                guard event.callId == self.currentCallId else { return }
+                self.isRemoteScreenCapturing = event.isCapturing
+                Logger.calls.info("Remote screen capture \(event.isCapturing ? "started" : "stopped") (callId=\(event.callId))")
             }
             .store(in: &cancellables)
 

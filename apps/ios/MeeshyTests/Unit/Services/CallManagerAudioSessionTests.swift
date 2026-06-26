@@ -1761,3 +1761,128 @@ final class CallManagerJoinRaceTests: XCTestCase {
             "hanging indefinitely if the gateway is slow or the call has already ended")
     }
 }
+
+// MARK: - Remote screen capture alert tests
+
+/// Guards the end-to-end path for notifying the local user when the remote peer
+/// starts or stops capturing the call screen. The gateway relays call:screen-capture-alert
+/// to the other participant — without an SDK subscriber and a CallManager property the
+/// signal arrives and is silently discarded.
+@MainActor
+final class CallManagerScreenCaptureAlertTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func socketManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func callViewSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/CallView.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// CallManager must declare isRemoteScreenCapturing so the call UI can
+    /// display a privacy warning when the remote peer is recording.
+    func test_callManager_declaresIsRemoteScreenCapturing() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("isRemoteScreenCapturing"),
+            "CallManager must declare isRemoteScreenCapturing — the remote peer's " +
+            "call:screen-capture-alert events must drive a published property so " +
+            "CallView can show a privacy warning without polling")
+    }
+
+    /// CallManager must subscribe to socket.callScreenCaptureAlert to receive
+    /// the event from the SDK and update isRemoteScreenCapturing.
+    func test_callManager_subscribesToScreenCaptureAlert() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("socket.callScreenCaptureAlert"),
+            "CallManager must subscribe to socket.callScreenCaptureAlert — " +
+            "without a sink the call:screen-capture-alert event from the gateway " +
+            "is silently discarded and isRemoteScreenCapturing is never updated")
+    }
+
+    /// isRemoteScreenCapturing must be reset to false in endCallInternal so the
+    /// recording indicator does not leak into the next call.
+    func test_endCallInternal_resetsIsRemoteScreenCapturing() throws {
+        let source = try callManagerSource()
+        guard let endInternalRange = source.range(of: "func endCallInternal(reason:") else {
+            XCTFail("endCallInternal not found"); return
+        }
+        guard let nextFuncRange = source.range(of: "\n    private func ", range: endInternalRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not isolate endCallInternal body"); return
+        }
+        let body = String(source[endInternalRange.upperBound..<nextFuncRange.lowerBound])
+        XCTAssertTrue(
+            body.contains("isRemoteScreenCapturing = false"),
+            "endCallInternal must reset isRemoteScreenCapturing to false — otherwise " +
+            "the recording warning stays visible at the start of the next call even " +
+            "though the new remote peer may not be capturing")
+    }
+
+    /// The SDK protocol must declare callScreenCaptureAlert so any conforming
+    /// mock automatically satisfies the requirement.
+    func test_messageSocketProviding_declaresCallScreenCaptureAlert() throws {
+        let source = try socketManagerSource()
+        guard let protocolRange = source.range(of: "public protocol MessageSocketProviding") else {
+            XCTFail("MessageSocketProviding not found"); return
+        }
+        guard let endBraceRange = source.range(of: "}", range: protocolRange.upperBound..<source.endIndex) else {
+            XCTFail("Closing brace of MessageSocketProviding not found"); return
+        }
+        let protocolBody = String(source[protocolRange.upperBound..<endBraceRange.lowerBound])
+        XCTAssertTrue(
+            protocolBody.contains("callScreenCaptureAlert"),
+            "MessageSocketProviding must declare callScreenCaptureAlert publisher so " +
+            "CallManager can subscribe to screen-capture-alert events without accessing " +
+            "the concrete MessageSocketManager type directly")
+    }
+
+    /// The SDK must register a socket.on listener for call:screen-capture-alert
+    /// and publish received events via callScreenCaptureAlert.
+    func test_messageSocketManager_listensForScreenCaptureAlert() throws {
+        let source = try socketManagerSource()
+        XCTAssertTrue(
+            source.contains("\"call:screen-capture-alert\""),
+            "MessageSocketManager must register a socket.on(\"call:screen-capture-alert\") " +
+            "listener — the gateway relays this event to the remote participant but " +
+            "without a listener the iOS client never sees it")
+        XCTAssertTrue(
+            source.contains("callScreenCaptureAlert.send"),
+            "MessageSocketManager must forward decoded call:screen-capture-alert events " +
+            "via callScreenCaptureAlert.send() so CallManager's Combine sink fires")
+    }
+
+    /// CallView must check isRemoteScreenCapturing to display a recording indicator.
+    func test_callView_showsRecordingIndicator() throws {
+        let source = try callViewSource()
+        XCTAssertTrue(
+            source.contains("isRemoteScreenCapturing"),
+            "CallView must check isRemoteScreenCapturing to display a recording warning " +
+            "pill — the local user must know when the remote peer is capturing the call " +
+            "so they can make an informed privacy decision")
+    }
+}

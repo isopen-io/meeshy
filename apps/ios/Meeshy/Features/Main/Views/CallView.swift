@@ -470,6 +470,9 @@ struct CallView: View {
                 if !callManager.isRemoteAudioEnabled {
                     statusPill(icon: "mic.slash", text: String(localized: "call.status.peer.muted", defaultValue: "Contact muet", bundle: .main), color: .white.opacity(0.7))
                 }
+                if callManager.isRemoteScreenCapturing {
+                    statusPill(icon: "record.circle", text: String(localized: "call.status.peer.recording", defaultValue: "Enregistrement", bundle: .main), color: MeeshyColors.error)
+                }
                 if callManager.isSpeaker {
                     statusPill(icon: "speaker.wave.3.fill", text: String(localized: "call.status.speaker", defaultValue: "Haut-parleur", bundle: .main), color: MeeshyColors.info)
                 }
