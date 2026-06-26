@@ -500,7 +500,7 @@ export class CallEventsHandler {
               leftAt: p.leftAt,
               isAudioEnabled: p.isAudioEnabled,
               isVideoEnabled: p.isVideoEnabled,
-              connectionQuality: (p.connectionQuality as ConnectionQuality | null),
+              connectionQuality: (p.connectionQuality as unknown as ConnectionQuality | null),
               username: p.participant?.user?.username || p.participant?.displayName,
               displayName: p.participant?.displayName || p.participant?.user?.displayName,
               avatar: p.participant?.user?.avatar || p.participant?.avatar
@@ -618,7 +618,7 @@ export class CallEventsHandler {
             leftAt: p.leftAt,
             isAudioEnabled: p.isAudioEnabled,
             isVideoEnabled: p.isVideoEnabled,
-            connectionQuality: (p.connectionQuality as ConnectionQuality | null),
+            connectionQuality: (p.connectionQuality as unknown as ConnectionQuality | null),
             username: p.participant?.user?.username || p.participant?.displayName,
             displayName: p.participant?.displayName || p.participant?.user?.displayName,
             avatar: p.participant?.user?.avatar || p.participant?.avatar
@@ -950,7 +950,7 @@ export class CallEventsHandler {
             leftAt: participant.leftAt,
             isAudioEnabled: participant.isAudioEnabled,
             isVideoEnabled: participant.isVideoEnabled,
-            connectionQuality: (participant.connectionQuality as ConnectionQuality | null),
+            connectionQuality: (participant.connectionQuality as unknown as ConnectionQuality | null),
             username: participant.participant?.user?.username || participant.participant?.displayName,
             displayName: participant.participant?.displayName || participant.participant?.user?.displayName,
             avatar: participant.participant?.user?.avatar || participant.participant?.avatar
