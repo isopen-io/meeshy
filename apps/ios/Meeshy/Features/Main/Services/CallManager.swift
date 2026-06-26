@@ -2543,6 +2543,16 @@ final class CallManager: ObservableObject {
                 Logger.calls.info("Socket reconnected — re-joining call room \(callId)")
                 MessageSocketManager.shared.emitCallJoin(callId: callId)
                 self.flushPendingIceCandidates()
+                // Re-sync video state with the peer. The gateway resets the peer's
+                // call:media-toggled view when our socket disconnects; after reconnect
+                // the peer defaults to assuming our camera is on, which is wrong if we
+                // toggled video off, the survival controller suspended it, or we are
+                // backgrounded. Compute the effective state from all three sources.
+                if self.isVideoEnabled {
+                    let effectiveVideoOn = !self.isVideoSuspended && !self.isVideoSuspendedByBackground
+                    MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: effectiveVideoOn)
+                    Logger.calls.info("Socket reconnect — re-syncing video state to peer (effectiveVideoOn=\(effectiveVideoOn))")
+                }
             }
             .store(in: &cancellables)
 

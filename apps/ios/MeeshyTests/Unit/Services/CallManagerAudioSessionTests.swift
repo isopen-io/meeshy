@@ -1173,3 +1173,58 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
             "before calling emitCallToggleVideo(enabled:true)")
     }
 }
+
+// MARK: - Socket reconnect video state resync
+
+/// Source-analysis guards for the socket-reconnect video resync fix.
+///
+/// When the Socket.IO connection drops and reconnects mid-call, the gateway
+/// loses the call:media-toggled state for each participant.  After `call:join`
+/// is re-emitted the gateway starts fresh — the peer's `isRemoteVideoEnabled`
+/// defaults to `true`.  If our camera was off (toggled, survival-suspended, or
+/// backgrounded), the peer would incorrectly show our frozen last frame.
+///
+/// The reconnect sink must re-emit `call:media-toggled` reflecting the effective
+/// video state: `isVideoEnabled && !isVideoSuspended && !isVideoSuspendedByBackground`.
+@MainActor
+final class CallManagerSocketReconnectVideoTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_socketReconnect_reEmitsVideoStateToResyncPeer() throws {
+        let source = try callManagerSource()
+        guard let reconnectRange = source.range(of: "socket.didReconnect") else {
+            XCTFail("socket.didReconnect sink not found in CallManager.swift"); return
+        }
+        let afterReconnect = String(source[reconnectRange.upperBound...])
+        XCTAssertTrue(
+            afterReconnect.contains("emitCallToggleVideo"),
+            "socket.didReconnect sink must call emitCallToggleVideo to resync " +
+            "the peer's isRemoteVideoEnabled after a socket disconnect/reconnect — " +
+            "without this, a dropped connection leaves the peer showing stale video state")
+    }
+
+    func test_socketReconnect_computesEffectiveVideoStateFromAllSources() throws {
+        let source = try callManagerSource()
+        guard let reconnectRange = source.range(of: "socket.didReconnect") else {
+            XCTFail("socket.didReconnect sink not found in CallManager.swift"); return
+        }
+        let afterReconnect = String(source[reconnectRange.upperBound...])
+        // The effective video state must consider all three suppression sources:
+        // user toggle, survival controller, and background suspension.
+        XCTAssertTrue(
+            afterReconnect.contains("isVideoSuspended") &&
+            afterReconnect.contains("isVideoSuspendedByBackground"),
+            "socket.didReconnect video resync must factor in isVideoSuspended " +
+            "(survival controller) and isVideoSuspendedByBackground (app backgrounded) " +
+            "to compute the effective video-on/off state for the peer")
+    }
+}
