@@ -1485,3 +1485,79 @@ final class CallManagerIceCandidateBufferTests: XCTestCase {
             "paths valid for the next ICE restart.")
     }
 }
+
+// MARK: - Mute state broadcast tests
+
+final class CallManagerMuteStateTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// toggleMute() must emit call:toggle-audio so the remote peer can show a
+    /// mute indicator. Without it, the remote UI always thinks our mic is live.
+    func test_toggleMute_emitsCallToggleAudio() throws {
+        let source = try callManagerSource()
+        guard let toggleMuteRange = source.range(of: "func toggleMute()") else {
+            XCTFail("toggleMute() not found in CallManager.swift"); return
+        }
+        // Find the closing brace of toggleMute by scanning forward.
+        let afterToggleMute = String(source[toggleMuteRange.upperBound...])
+        guard let nextFuncRange = afterToggleMute.range(of: "\n    func ") else {
+            XCTFail("Could not isolate toggleMute body"); return
+        }
+        let body = String(afterToggleMute[..<nextFuncRange.lowerBound])
+        XCTAssertTrue(
+            body.contains("emitCallToggleAudio"),
+            "toggleMute() must call emitCallToggleAudio to broadcast mute state — " +
+            "WebRTC track muting silences audio locally, but the remote peer needs " +
+            "call:toggle-audio to display a mute indicator in its UI")
+    }
+
+    /// The emitCallToggleAudio call must pass `enabled: !isMuted` — enabled=false
+    /// means muted, enabled=true means live microphone.
+    func test_toggleMute_emitsAudioEnabled_asInverseOfIsMuted() throws {
+        let source = try callManagerSource()
+        guard let toggleMuteRange = source.range(of: "func toggleMute()") else {
+            XCTFail("toggleMute() not found"); return
+        }
+        let afterToggleMute = String(source[toggleMuteRange.upperBound...])
+        guard let nextFuncRange = afterToggleMute.range(of: "\n    func ") else {
+            XCTFail("Could not isolate toggleMute body"); return
+        }
+        let body = String(afterToggleMute[..<nextFuncRange.lowerBound])
+        XCTAssertTrue(
+            body.contains("enabled: !isMuted"),
+            "emitCallToggleAudio in toggleMute() must pass `enabled: !isMuted` — " +
+            "the gateway's `enabled` field means 'audio is on', which is the logical " +
+            "inverse of the local isMuted flag")
+    }
+
+    /// socket.didReconnect must re-sync audio mute state. On reconnect the gateway
+    /// resets participant media and the peer assumes our mic is live, which is wrong
+    /// if we were muted when the socket dropped.
+    func test_socketReconnect_resyncsAudioMuteState() throws {
+        let source = try callManagerSource()
+        guard let reconnectRange = source.range(of: "socket.didReconnect") else {
+            XCTFail("socket.didReconnect sink not found"); return
+        }
+        // Scan to the matching .store(in: block to isolate just this sink body.
+        let afterReconnect = String(source[reconnectRange.upperBound...])
+        guard let storeRange = afterReconnect.range(of: ".store(in: &cancellables)") else {
+            XCTFail("Could not find .store after socket.didReconnect"); return
+        }
+        let sinkBody = String(afterReconnect[..<storeRange.lowerBound])
+        XCTAssertTrue(
+            sinkBody.contains("emitCallToggleAudio"),
+            "socket.didReconnect must re-emit call:toggle-audio to restore the " +
+            "remote peer's view of our mute state — the gateway resets per-participant " +
+            "media when a socket disconnects, so without a re-sync the peer always " +
+            "assumes our mic is live after reconnect")
+    }
+}

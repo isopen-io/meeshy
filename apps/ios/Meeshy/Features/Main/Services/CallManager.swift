@@ -1419,6 +1419,12 @@ final class CallManager: ObservableObject {
         // diverged, only a call hangup recovered it.
         isMuted.toggle()
         webRTCService.muteAudio(isMuted)
+        // Broadcast the new mute state so the remote peer can update its
+        // "muted" indicator. This must fire regardless of CallKit path (the
+        // guard below returns early for Mac / foreground in-app calls).
+        if let callId = currentCallId {
+            MessageSocketManager.shared.emitCallToggleAudio(callId: callId, enabled: !isMuted)
+        }
 
         // CALL-FIX 2026-06-06 (macOS) — `CXSetMutedCallAction` fails on iOS-app-on-Mac
         // (CallKit requesttransaction error 4) and the rollback below then UNDOES the
@@ -2626,6 +2632,12 @@ final class CallManager: ObservableObject {
                     MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: effectiveVideoOn)
                     Logger.calls.info("Socket reconnect — re-syncing video state to peer (effectiveVideoOn=\(effectiveVideoOn))")
                 }
+                // Re-sync audio mute state. The gateway resets per-participant
+                // media state when a socket disconnects; the peer defaults to
+                // assuming our mic is live, which is wrong if we were muted.
+                // Always emit (even when !isMuted) to overwrite any stale state.
+                MessageSocketManager.shared.emitCallToggleAudio(callId: callId, enabled: !self.isMuted)
+                Logger.calls.info("Socket reconnect — re-syncing audio mute state to peer (isMuted=\(self.isMuted))")
                 // Request fresh TURN credentials after reconnect. The socket may
                 // have been down long enough for our credentials to approach
                 // expiry (TTL=480s, refresh at 80%=384s — a 96-second window
