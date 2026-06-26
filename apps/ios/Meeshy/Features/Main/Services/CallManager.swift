@@ -793,7 +793,7 @@ final class CallManager: ObservableObject {
         let urlString = "\(MeeshyConfig.shared.apiBaseURL)/calls/\(callId)"
         guard let url = URL(string: urlString) else { return }
 
-        var request = URLRequest(url: url, timeoutInterval: 4.0)
+        var request = URLRequest(url: url, timeoutInterval: QualityThresholds.voipFreshnessTimeoutSeconds)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
@@ -1084,14 +1084,14 @@ final class CallManager: ObservableObject {
                 Logger.calls.info("Call answered with buffered SDP offer: \(callId)")
             }
         } else {
-            // SDP offer not yet received — wait for it via handleSignalOffer with 30s timeout
+            // SDP offer not yet received — wait for it via handleSignalOffer with timeout
             Logger.calls.info("Call answered but SDP offer not yet received, waiting: \(callId)")
             sdpOfferTimeoutTask?.cancel()
             sdpOfferTimeoutTask = Task { @MainActor [weak self] in
-                try? await Task.sleep(for: .seconds(30))
+                try? await Task.sleep(for: .seconds(QualityThresholds.sdpOfferTimeoutSeconds))
                 guard let self, !Task.isCancelled else { return }
                 guard case .connecting = self.callState, self.currentCallId == callId else { return }
-                Logger.calls.error("SDP offer timeout after 30s for call: \(callId)")
+                Logger.calls.error("SDP offer timeout for call: \(callId)")
                 self.endCallInternal(reason: .failed(String(localized: "call.error.timeout")))
             }
         }
@@ -1127,10 +1127,10 @@ final class CallManager: ObservableObject {
             Logger.calls.info("Call answered (CallKit), awaiting SDP offer: \(callId)")
             sdpOfferTimeoutTask?.cancel()
             sdpOfferTimeoutTask = Task { @MainActor [weak self] in
-                try? await Task.sleep(for: .seconds(30))
+                try? await Task.sleep(for: .seconds(QualityThresholds.sdpOfferTimeoutSeconds))
                 guard let self, !Task.isCancelled else { return }
                 guard case .connecting = self.callState, self.currentCallId == callId else { return }
-                Logger.calls.error("SDP offer timeout after 30s for call: \(callId)")
+                Logger.calls.error("SDP offer timeout for call: \(callId)")
                 self.endCallInternal(reason: .failed(String(localized: "call.error.timeout")))
             }
         }
@@ -2102,7 +2102,7 @@ final class CallManager: ObservableObject {
         let token = UUID()
         settleToken = token
         Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(1500))
+            try? await Task.sleep(for: .seconds(QualityThresholds.callEndSettleSeconds))
             guard let self else { return }
             guard self.settleToken == token else { return }
             if case .ended = self.callState {
@@ -2465,7 +2465,7 @@ final class CallManager: ObservableObject {
     private func scheduleRemoteQualityReset() {
         remoteQualityResetTask?.cancel()
         remoteQualityResetTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(15))
+            try? await Task.sleep(for: .seconds(QualityThresholds.remoteQualityResetSeconds))
             guard !Task.isCancelled else { return }
             self?.isRemoteQualityDegraded = false
         }

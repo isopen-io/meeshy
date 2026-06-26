@@ -398,3 +398,70 @@ final class QualityThresholdsVideoTests: XCTestCase {
                        "TURN credential refresh must fire at 384 s (80% of 480 s default TTL)")
     }
 }
+
+// MARK: - Signalling & Call-Lifecycle Timer Constants
+
+/// Guards the five new timing constants extracted from hardcoded literals in
+/// CallManager and P2PWebRTCClient. Each test pins the expected value and
+/// confirms it sits within a plausible range — a large-value typo (e.g. 300
+/// instead of 30) would both fail the exact-value assertion and the range guard.
+@MainActor
+final class QualityThresholdsSignalingTests: XCTestCase {
+
+    func test_sdpOfferTimeoutSeconds_is30() {
+        XCTAssertEqual(QualityThresholds.sdpOfferTimeoutSeconds, 30.0, accuracy: 0.001,
+                       "SDP offer timeout must be 30 s — matches the gateway's offer-expiry window")
+    }
+
+    func test_sdpOfferTimeoutSeconds_inPlausibleRange() {
+        XCTAssertGreaterThan(QualityThresholds.sdpOfferTimeoutSeconds, 10,
+                             "Below 10 s is too aggressive on slow cellular")
+        XCTAssertLessThan(QualityThresholds.sdpOfferTimeoutSeconds, 60,
+                          "Above 60 s exceeds the gateway hard cap — call would appear hung to the user")
+    }
+
+    func test_callEndSettleSeconds_is1point5() {
+        XCTAssertEqual(QualityThresholds.callEndSettleSeconds, 1.5, accuracy: 0.001,
+                       "Call-end settle window must be 1.5 s so the UI can read final stats")
+    }
+
+    func test_callEndSettleSeconds_inPlausibleRange() {
+        XCTAssertGreaterThan(QualityThresholds.callEndSettleSeconds, 0.5,
+                             "Below 0.5 s is too short for final stats to be delivered via socket")
+        XCTAssertLessThan(QualityThresholds.callEndSettleSeconds, 5.0,
+                          "Above 5 s makes the post-call screen feel slow")
+    }
+
+    func test_voipFreshnessTimeoutSeconds_is4() {
+        XCTAssertEqual(QualityThresholds.voipFreshnessTimeoutSeconds, 4.0, accuracy: 0.001,
+                       "VoIP push freshness HTTP timeout must be 4 s")
+    }
+
+    func test_voipFreshnessTimeoutSeconds_inPlausibleRange() {
+        XCTAssertGreaterThan(QualityThresholds.voipFreshnessTimeoutSeconds, 1.0,
+                             "Below 1 s will time-out on DNS-heavy cellular handoffs")
+        XCTAssertLessThan(QualityThresholds.voipFreshnessTimeoutSeconds, 10.0,
+                          "Above 10 s risks blocking CallKit and triggering a watchdog kill")
+    }
+
+    func test_dataChannelPingIntervalSeconds_is15() {
+        XCTAssertEqual(QualityThresholds.dataChannelPingIntervalSeconds, 15.0, accuracy: 0.001,
+                       "Data-channel ping must fire every 15 s (TURN server minimum activity)")
+    }
+
+    func test_remoteQualityResetSeconds_is15() {
+        XCTAssertEqual(QualityThresholds.remoteQualityResetSeconds, 15.0, accuracy: 0.001,
+                       "Remote-quality-degraded badge auto-resets after 15 s")
+    }
+
+    func test_dataChannelPing_lessThanOrEqualToRemoteQualityReset() {
+        // If the ping fires less frequently than the quality-reset timer, a brief
+        // outage is detected but the badge may reset before the next ping confirms
+        // recovery. Keeping ping ≤ reset ensures at least one heartbeat has fired.
+        XCTAssertLessThanOrEqual(
+            QualityThresholds.dataChannelPingIntervalSeconds,
+            QualityThresholds.remoteQualityResetSeconds,
+            "Ping interval must be ≤ quality-reset window so recovery is confirmed before the badge clears"
+        )
+    }
+}

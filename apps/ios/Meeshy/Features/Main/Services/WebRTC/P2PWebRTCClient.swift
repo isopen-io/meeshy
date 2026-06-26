@@ -1003,7 +1003,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         stopDataChannelPing()
         dataChannelPingTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(15))
+                try? await Task.sleep(for: .seconds(QualityThresholds.dataChannelPingIntervalSeconds))
                 guard !Task.isCancelled, let self else { break }
                 self.sendDataChannelMessage(Data("{\"type\":\"ping\"}".utf8))
             }

@@ -482,6 +482,31 @@ enum QualityThresholds {
     /// eviction window (Coturn default 600 s; Meeshy gateway issues 480 s by
     /// default so credentials stay valid for the first 96 s after refresh).
     static let turnDefaultCredentialTTLSeconds: TimeInterval = 480
+
+    /// How long to wait for an SDP offer after the callee answers before
+    /// treating the call as timed-out and failing it. Covers worst-case
+    /// signalling round-trips on bad cellular (NAT traversal + server hop).
+    /// Matches the gateway's own offer-expiry window.
+    static let sdpOfferTimeoutSeconds: TimeInterval = 30
+
+    /// Settle window after `callState` transitions to `.ended` before the
+    /// call identity (callId / remoteUserId / callDuration) is cleared.
+    /// Gives the UI time to read final stats before teardown completes.
+    static let callEndSettleSeconds: TimeInterval = 1.5
+
+    /// HTTP timeout for the VoIP push freshness check (GET /calls/:id).
+    /// 4 s absorbs worst-case DNS + TLS + gateway response while still
+    /// failing fast enough to avoid blocking CallKit for a stale push.
+    static let voipFreshnessTimeoutSeconds: TimeInterval = 4.0
+
+    /// How often the data-channel keep-alive ping fires. 15 s matches the
+    /// TURN server's minimum activity requirement (Coturn refreshTimeout).
+    static let dataChannelPingIntervalSeconds: TimeInterval = 15
+
+    /// How long a remote-quality-degraded badge stays visible before it
+    /// auto-resets to healthy. 15 s is long enough to be meaningful without
+    /// persisting after a transient blip self-heals.
+    static let remoteQualityResetSeconds: TimeInterval = 15
 }
 
 // MARK: - Video Quality Level (§4.8)

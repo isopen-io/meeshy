@@ -383,4 +383,154 @@ final class CallManagerAudioSessionTests: XCTestCase {
             "not carry a prior call's epoch into the next call (§3.5)."
         )
     }
+
+    // MARK: - SDP Offer Timeout — QualityThresholds usage
+
+    func test_callManager_sdpOfferTimeout_usesQualityThresholdsConstant() throws {
+        // Regression guard: SDP offer timeout must reference the QualityThresholds constant,
+        // not a hardcoded literal. A hardcoded `30` here would silently desync from the
+        // gateway's offer-expiry window if the constant is tuned in future.
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("sdpOfferTimeoutSeconds"),
+            "sdpOfferTimeoutTask must use QualityThresholds.sdpOfferTimeoutSeconds, not a literal"
+        )
+        XCTAssertFalse(
+            source.contains("Task.sleep(for: .seconds(30))"),
+            "Hardcoded .seconds(30) in sdpOfferTimeoutTask — replace with QualityThresholds.sdpOfferTimeoutSeconds"
+        )
+    }
+
+    // MARK: - Call-End Settle — QualityThresholds usage
+
+    func test_callManager_callEndSettle_usesQualityThresholdsConstant() throws {
+        // Regression guard: the call-end settle timer must not hardcode 1500 milliseconds.
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("callEndSettleSeconds"),
+            "Call-end settle must use QualityThresholds.callEndSettleSeconds, not a literal"
+        )
+        XCTAssertFalse(
+            source.contains(".milliseconds(1500)"),
+            "Hardcoded .milliseconds(1500) found — replace with QualityThresholds.callEndSettleSeconds"
+        )
+    }
+
+    // MARK: - VoIP Freshness Timeout — QualityThresholds usage
+
+    func test_callManager_voipFreshness_usesQualityThresholdsConstant() throws {
+        // Regression guard: URLRequest timeout in checkVoIPCallFreshness must not be hardcoded.
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("voipFreshnessTimeoutSeconds"),
+            "checkVoIPCallFreshness URLRequest must use QualityThresholds.voipFreshnessTimeoutSeconds"
+        )
+        XCTAssertFalse(
+            source.contains("timeoutInterval: 4.0"),
+            "Hardcoded timeoutInterval: 4.0 — replace with QualityThresholds.voipFreshnessTimeoutSeconds"
+        )
+    }
+
+    // MARK: - Remote Quality Reset — QualityThresholds usage
+
+    func test_callManager_remoteQualityReset_usesQualityThresholdsConstant() throws {
+        // Regression guard: scheduleRemoteQualityReset must not hardcode the reset window.
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("remoteQualityResetSeconds"),
+            "scheduleRemoteQualityReset must use QualityThresholds.remoteQualityResetSeconds"
+        )
+    }
+}
+
+// MARK: - P2PWebRTCClient — Perfect Negotiation Source Guards (W3C §3.4)
+
+/// Source-level guards for the perfect-negotiation implementation in P2PWebRTCClient.swift.
+/// These tests verify that the three critical §3.4 flags and glare-resolution paths are
+/// present and have not been accidentally deleted. They complement the functional tests in
+/// CallManagerTests.swift by targeting the WebRTC client layer directly.
+@MainActor
+final class P2PWebRTCClientPerfectNegotiationTests: XCTestCase {
+
+    private func p2pClientSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_p2pClient_makingOffer_flagExists() throws {
+        // §3.4: `makingOffer` must be true only while we're building+setting the local
+        // offer description. Without it, the polite peer can't detect offer glare.
+        let source = try p2pClientSource()
+        XCTAssertTrue(
+            source.contains("private var makingOffer"),
+            "P2PWebRTCClient must declare `private var makingOffer` for §3.4 perfect negotiation"
+        )
+    }
+
+    func test_p2pClient_ignoreOffer_flagExists() throws {
+        // §3.4: `ignoreOffer` signals the impolite peer to discard a colliding remote offer.
+        let source = try p2pClientSource()
+        XCTAssertTrue(
+            source.contains("private var ignoreOffer"),
+            "P2PWebRTCClient must declare `private var ignoreOffer` for §3.4 glare detection"
+        )
+    }
+
+    func test_p2pClient_isSettingRemoteAnswerPending_flagExists() throws {
+        // §3.4: `isSettingRemoteAnswerPending` prevents the polite peer from treating
+        // answer-application as offer-ready, avoiding a spurious second rollback.
+        let source = try p2pClientSource()
+        XCTAssertTrue(
+            source.contains("private var isSettingRemoteAnswerPending"),
+            "P2PWebRTCClient must declare `private var isSettingRemoteAnswerPending` for §3.4"
+        )
+    }
+
+    func test_p2pClient_politeRollback_isImplemented() throws {
+        // §3.4: the polite peer must roll back its local offer on glare by setting a
+        // `.rollback` session description before applying the remote offer.
+        let source = try p2pClientSource()
+        XCTAssertTrue(
+            source.contains(".rollback"),
+            "P2PWebRTCClient must implement polite-peer rollback (RTCSessionDescription type .rollback) for §3.4"
+        )
+    }
+
+    func test_p2pClient_impoliteIgnoreOffer_setsFlag() throws {
+        // §3.4: when the impolite peer detects glare it must set `ignoreOffer = true` and
+        // throw (not silently continue), so the remote description is never applied.
+        let source = try p2pClientSource()
+        XCTAssertTrue(
+            source.contains("ignoreOffer = true") || source.contains("ignoreOffer=true"),
+            "P2PWebRTCClient must set ignoreOffer = true when the impolite peer detects offer glare"
+        )
+    }
+
+    func test_p2pClient_offerIgnoredError_isThrown() throws {
+        // §3.4: the impolite peer must throw when it ignores a colliding offer so the
+        // `handleSignalOffer` call site can log the drop without crashing the call.
+        let source = try p2pClientSource()
+        XCTAssertTrue(
+            source.contains("WebRTCError.offerIgnored"),
+            "P2PWebRTCClient must throw WebRTCError.offerIgnored when impolite peer ignores a glare offer"
+        )
+    }
+
+    func test_p2pClient_dataChannelPing_usesQualityThresholdsConstant() throws {
+        // Regression guard: startDataChannelPing must not hardcode the 15 s interval.
+        let source = try p2pClientSource()
+        XCTAssertTrue(
+            source.contains("dataChannelPingIntervalSeconds"),
+            "startDataChannelPing must use QualityThresholds.dataChannelPingIntervalSeconds"
+        )
+        XCTAssertFalse(
+            source.contains("Task.sleep(for: .seconds(15))"),
+            "Hardcoded .seconds(15) in startDataChannelPing — replace with QualityThresholds.dataChannelPingIntervalSeconds"
+        )
+    }
 }
