@@ -932,3 +932,248 @@ final class IceServerTURNValidationTests: XCTestCase {
         XCTAssertFalse(hasTURN, "defaultServers are STUN-only fallbacks — the fault-log fires when TURN is absent")
     }
 }
+
+// MARK: - CallStats.reduce() unit tests
+
+/// Pure function coverage for `CallStats.reduce(entries:)`.
+/// The reducer is the canonical path from an `RTCStatisticsReport` to the
+/// structured `CallStats` consumed by `VideoSurvivalPolicy` and the in-call
+/// HUD. Tests run without a live `RTCPeerConnection` — the whole point of
+/// `RawEntry`.
+@MainActor
+final class CallStatsReducerTests: XCTestCase {
+
+    // MARK: - Helpers
+
+    private func candidatePair(rtt: Double = 0, bitrate: Double = 0) -> CallStats.RawEntry {
+        CallStats.RawEntry(
+            id: "CP01",
+            type: "candidate-pair",
+            kind: nil,
+            codecId: nil,
+            mimeType: nil,
+            values: [
+                "currentRoundTripTime": rtt,
+                "availableOutgoingBitrate": bitrate
+            ]
+        )
+    }
+
+    private func inboundRTP(id: String = "I01", kind: String = "audio", packets: Double = 10,
+                            lost: Double = 0, bytes: Double = 0, codecId: String? = nil) -> CallStats.RawEntry {
+        CallStats.RawEntry(
+            id: id,
+            type: "inbound-rtp",
+            kind: kind,
+            codecId: codecId,
+            mimeType: nil,
+            values: [
+                "packetsReceived": packets,
+                "packetsLost": lost,
+                "bytesReceived": bytes
+            ]
+        )
+    }
+
+    private func outboundRTP(packets: Double = 20, bytes: Double = 0) -> CallStats.RawEntry {
+        CallStats.RawEntry(
+            id: "O01",
+            type: "outbound-rtp",
+            kind: nil,
+            codecId: nil,
+            mimeType: nil,
+            values: ["packetsSent": packets, "bytesSent": bytes]
+        )
+    }
+
+    private func codec(id: String, mimeType: String) -> CallStats.RawEntry {
+        CallStats.RawEntry(
+            id: id,
+            type: "codec",
+            kind: nil,
+            codecId: nil,
+            mimeType: mimeType,
+            values: [:]
+        )
+    }
+
+    // MARK: - Empty / zero baseline
+
+    func test_reduce_emptyEntries_returnsZeroStats() {
+        let result = CallStats.reduce(entries: [])
+        XCTAssertEqual(result.roundTripTimeMs, 0)
+        XCTAssertEqual(result.packetsLost, 0)
+        XCTAssertEqual(result.bandwidth, 0)
+        XCTAssertEqual(result.bytesReceived, 0)
+        XCTAssertNil(result.codec)
+        XCTAssertEqual(result.inboundPacketsReceived, 0)
+        XCTAssertEqual(result.inboundAudioPackets, 0)
+        XCTAssertEqual(result.inboundVideoPackets, 0)
+        XCTAssertEqual(result.outboundPacketsSent, 0)
+        XCTAssertEqual(result.availableOutgoingBitrateBps, 0)
+    }
+
+    // MARK: - candidate-pair
+
+    func test_reduce_candidatePair_rttConvertedFromSecondsToMilliseconds() {
+        let stats = CallStats.reduce(entries: [candidatePair(rtt: 0.05)])
+        XCTAssertEqual(stats.roundTripTimeMs, 50, accuracy: 0.001,
+            "RTT in stats is seconds; reducer must multiply × 1000 → ms")
+    }
+
+    func test_reduce_candidatePair_availableOutgoingBitrateCaptured() {
+        let stats = CallStats.reduce(entries: [candidatePair(bitrate: 500_000)])
+        XCTAssertEqual(stats.availableOutgoingBitrateBps, 500_000)
+    }
+
+    func test_reduce_candidatePair_zeroRTT_whenKeyAbsent() {
+        let entry = CallStats.RawEntry(id: "CP", type: "candidate-pair", kind: nil,
+                                      codecId: nil, mimeType: nil, values: [:])
+        let stats = CallStats.reduce(entries: [entry])
+        XCTAssertEqual(stats.roundTripTimeMs, 0)
+    }
+
+    // MARK: - inbound-rtp per kind
+
+    func test_reduce_inboundRTP_audioKind_incrementsAudioPackets() {
+        let stats = CallStats.reduce(entries: [inboundRTP(kind: "audio", packets: 42)])
+        XCTAssertEqual(stats.inboundAudioPackets, 42)
+        XCTAssertEqual(stats.inboundVideoPackets, 0)
+        XCTAssertEqual(stats.inboundPacketsReceived, 42)
+    }
+
+    func test_reduce_inboundRTP_videoKind_incrementsVideoPackets() {
+        let stats = CallStats.reduce(entries: [inboundRTP(kind: "video", packets: 30)])
+        XCTAssertEqual(stats.inboundVideoPackets, 30)
+        XCTAssertEqual(stats.inboundAudioPackets, 0)
+        XCTAssertEqual(stats.inboundPacketsReceived, 30)
+    }
+
+    func test_reduce_inboundRTP_nilKind_countsAsAudio() {
+        let entry = CallStats.RawEntry(
+            id: "I01", type: "inbound-rtp", kind: nil,
+            codecId: nil, mimeType: nil,
+            values: ["packetsReceived": 15]
+        )
+        let stats = CallStats.reduce(entries: [entry])
+        XCTAssertEqual(stats.inboundAudioPackets, 15,
+            "nil kind must fall through to the audio bucket (else branch in kind == 'video')")
+        XCTAssertEqual(stats.inboundVideoPackets, 0)
+    }
+
+    func test_reduce_multipleInboundRTP_packetsAreSummed() {
+        let entries: [CallStats.RawEntry] = [
+            inboundRTP(id: "I01", kind: "audio", packets: 10),
+            inboundRTP(id: "I02", kind: "audio", packets: 5),
+            inboundRTP(id: "I03", kind: "video", packets: 20),
+        ]
+        let stats = CallStats.reduce(entries: entries)
+        XCTAssertEqual(stats.inboundAudioPackets, 15)
+        XCTAssertEqual(stats.inboundVideoPackets, 20)
+        XCTAssertEqual(stats.inboundPacketsReceived, 35)
+    }
+
+    func test_reduce_inboundRTP_packetsLostSummed() {
+        let entries: [CallStats.RawEntry] = [
+            inboundRTP(id: "I01", kind: "audio", lost: 3),
+            inboundRTP(id: "I02", kind: "video", lost: 7),
+        ]
+        let stats = CallStats.reduce(entries: entries)
+        XCTAssertEqual(stats.packetsLost, 10)
+    }
+
+    func test_reduce_inboundRTP_bytesReceivedSummed() {
+        let entries: [CallStats.RawEntry] = [
+            inboundRTP(id: "I01", kind: "audio", bytes: 1000),
+            inboundRTP(id: "I02", kind: "video", bytes: 4000),
+        ]
+        let stats = CallStats.reduce(entries: entries)
+        XCTAssertEqual(stats.bytesReceived, 5000)
+    }
+
+    // MARK: - outbound-rtp
+
+    func test_reduce_outboundRTP_packetsSentExtracted() {
+        let stats = CallStats.reduce(entries: [outboundRTP(packets: 99)])
+        XCTAssertEqual(stats.outboundPacketsSent, 99)
+    }
+
+    func test_reduce_outboundRTP_bytesSentStoredInBandwidth() {
+        let stats = CallStats.reduce(entries: [outboundRTP(bytes: 8000)])
+        XCTAssertEqual(stats.bandwidth, 8000,
+            "bandwidth stores bytesSent from outbound-rtp entries")
+    }
+
+    // MARK: - Codec resolution
+
+    func test_reduce_codec_resolvedFromCodecId_audioOpus() {
+        let entries: [CallStats.RawEntry] = [
+            inboundRTP(kind: "audio", codecId: "COT01_111"),
+            codec(id: "COT01_111", mimeType: "audio/opus"),
+        ]
+        let stats = CallStats.reduce(entries: entries)
+        XCTAssertEqual(stats.codec, "opus",
+            "Codec name is the last path component after '/' in mimeType")
+    }
+
+    func test_reduce_codec_resolvedFromCodecId_videoH264() {
+        let entries: [CallStats.RawEntry] = [
+            inboundRTP(kind: "video", codecId: "COT02_102"),
+            codec(id: "COT02_102", mimeType: "video/H264"),
+        ]
+        let stats = CallStats.reduce(entries: entries)
+        XCTAssertEqual(stats.codec, "H264")
+    }
+
+    func test_reduce_codec_nilWhenCodecIdAbsent() {
+        let stats = CallStats.reduce(entries: [inboundRTP(kind: "audio")])
+        XCTAssertNil(stats.codec,
+            "No codecId on inbound-rtp entry → codec must be nil, not the mimeType")
+    }
+
+    func test_reduce_codec_nilWhenCodecIdNotInTable() {
+        let entries: [CallStats.RawEntry] = [
+            inboundRTP(kind: "audio", codecId: "MISSING"),
+            codec(id: "COT01_111", mimeType: "audio/opus"),
+        ]
+        let stats = CallStats.reduce(entries: entries)
+        XCTAssertNil(stats.codec,
+            "codecId that has no matching 'codec' entry in the same report → nil")
+    }
+
+    func test_reduce_codec_usesFirstInboundRTPCodecId() {
+        // When multiple inbound-rtp entries have different codecIds, the first wins.
+        let entries: [CallStats.RawEntry] = [
+            inboundRTP(id: "I01", kind: "audio", codecId: "C_opus"),
+            inboundRTP(id: "I02", kind: "video", codecId: "C_h264"),
+            codec(id: "C_opus", mimeType: "audio/opus"),
+            codec(id: "C_h264", mimeType: "video/H264"),
+        ]
+        let stats = CallStats.reduce(entries: entries)
+        XCTAssertEqual(stats.codec, "opus",
+            "primaryCodecId is set by the first inbound-rtp entry that has a non-nil codecId")
+    }
+
+    // MARK: - Combined scenario
+
+    func test_reduce_fullReport_allFieldsCorrect() {
+        let entries: [CallStats.RawEntry] = [
+            candidatePair(rtt: 0.08, bitrate: 250_000),
+            inboundRTP(id: "IA", kind: "audio", packets: 50, lost: 2, bytes: 10_000, codecId: "C1"),
+            inboundRTP(id: "IV", kind: "video", packets: 100, lost: 5, bytes: 80_000),
+            outboundRTP(packets: 120, bytes: 95_000),
+            codec(id: "C1", mimeType: "audio/opus"),
+        ]
+        let stats = CallStats.reduce(entries: entries)
+        XCTAssertEqual(stats.roundTripTimeMs, 80, accuracy: 0.001)
+        XCTAssertEqual(stats.availableOutgoingBitrateBps, 250_000)
+        XCTAssertEqual(stats.inboundAudioPackets, 50)
+        XCTAssertEqual(stats.inboundVideoPackets, 100)
+        XCTAssertEqual(stats.inboundPacketsReceived, 150)
+        XCTAssertEqual(stats.packetsLost, 7)
+        XCTAssertEqual(stats.bytesReceived, 90_000)
+        XCTAssertEqual(stats.outboundPacketsSent, 120)
+        XCTAssertEqual(stats.bandwidth, 95_000)
+        XCTAssertEqual(stats.codec, "opus")
+    }
+}
