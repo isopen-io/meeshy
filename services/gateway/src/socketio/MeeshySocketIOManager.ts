@@ -3,7 +3,7 @@
  * Gestion des connexions, conversations et traductions en temps réel
  */
 
-import { Server as SocketIOServer } from 'socket.io';
+import { Server as SocketIOServer, type Socket } from 'socket.io';
 import { Server as HTTPServer } from 'http';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService, MessageData } from '../services/message-translation/MessageTranslationService';
@@ -357,7 +357,7 @@ export class MeeshySocketIOManager {
     this.deliveryQueue = queue;
   }
 
-  private async _drainPendingMessages(socket: any, userId: string): Promise<void> {
+  private async _drainPendingMessages(socket: Socket, userId: string): Promise<void> {
     if (!this.deliveryQueue) return;
     try {
       const pending = await this.deliveryQueue.drain(userId);
@@ -442,7 +442,7 @@ export class MeeshySocketIOManager {
    * Permet au client de seed son store sans attendre qu'un changement d'état arrive
    * (closes la faille "ne se met jamais à jour" sur les contacts déjà connectés).
    */
-  private async _emitPresenceSnapshot(socket: any, userId: string, isAnonymous: boolean): Promise<void> {
+  private async _emitPresenceSnapshot(socket: Socket, userId: string, isAnonymous: boolean): Promise<void> {
     try {
       const cached = this.presenceSnapshotCache.get(userId);
       if (cached && Date.now() - cached.cachedAt < this.PRESENCE_SNAPSHOT_CACHE_TTL_MS) {
@@ -512,6 +512,16 @@ export class MeeshySocketIOManager {
       this.presenceSnapshotCache.set(userId, { users, cachedAt: Date.now() });
       socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users });
       logger.info(`📸 [PRESENCE_SNAPSHOT] ${users.length} contacts sent to ${userId} (${users.filter(u => u.isOnline).length} online)`);
+
+      // Drain offline delivery queue — replay any messages that arrived while
+      // the user was disconnected (enqueued in _broadcastNewMessage). Called
+      // here (post-authentication, post-room-join) so the socket is already in
+      // the right conversation rooms when replayed messages arrive.
+      if (!isAnonymous) {
+        this._drainPendingMessages(socket, userId).catch(err => {
+          logger.warn('Failed to drain pending messages on connect', { userId, error: err });
+        });
+      }
     } catch (error) {
       logger.error('❌ [PRESENCE_SNAPSHOT] Failed to build snapshot', error);
     }
@@ -806,7 +816,7 @@ export class MeeshySocketIOManager {
   }
 
 
-  private async _handleTranslationRequest(socket: any, data: { messageId: string; targetLanguage: string }) {
+  private async _handleTranslationRequest(socket: Socket, data: { messageId: string; targetLanguage: string }) {
     try {
       const userId = this.socketToUser.get(socket.id);
       if (!userId) {
@@ -1514,7 +1524,7 @@ export class MeeshySocketIOManager {
    * 
    * OPTIMISATION: Le calcul des stats est fait de manière asynchrone (non-bloquant)
    */
-  private async _broadcastNewMessage(message: Message, conversationId: string, senderSocket?: any): Promise<void> {
+  private async _broadcastNewMessage(message: Message, conversationId: string, senderSocket?: Socket): Promise<void> {
     try {
       // Normaliser l'ID de conversation pour le broadcast ET le payload
       const normalizedId = await this.normalizeConversationId(conversationId);
