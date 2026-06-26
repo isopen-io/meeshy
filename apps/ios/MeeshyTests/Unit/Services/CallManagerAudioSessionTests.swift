@@ -2432,3 +2432,58 @@ final class CallManagerVideoToggleConcurrencyTests: XCTestCase {
             "cannot run after the call has torn down, re-activating the camera")
     }
 }
+
+// MARK: - Socket-reconnect video re-sync correctness
+
+/// Source-analysis guards ensuring the video state re-synced to the peer on
+/// socket reconnect accounts for ALL suspension sources: survival controller,
+/// background, AND CallKit hold. Before this fix, a hold-suspended call that
+/// survived a socket reconnect would incorrectly report video as active to the
+/// peer while iOS was blocking camera access.
+@MainActor
+final class CallManagerReconnectVideoSyncTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_reconnectVideoSync_includesHoldSuspensionGuard() throws {
+        let source = try callManagerSource()
+        // Locate the socket-reconnect handler's effectiveVideoOn computation.
+        // It must include all three suspension sources to be correct.
+        guard let reconnectRange = source.range(of: "Socket reconnect — re-syncing video state") else {
+            XCTFail("reconnect video sync log not found"); return
+        }
+        // Walk back to find the effectiveVideoOn assignment.
+        let beforeLog = String(source[..<reconnectRange.lowerBound])
+        guard let assignRange = beforeLog.range(of: "effectiveVideoOn", options: .backwards) else {
+            XCTFail("effectiveVideoOn not found before reconnect log"); return
+        }
+        // Take the line containing the assignment and a few lines after it.
+        let fromAssign = String(source[assignRange.lowerBound...])
+        guard let endLineRange = fromAssign.range(of: "\n") else {
+            XCTFail("Could not find end of effectiveVideoOn expression"); return
+        }
+        // Expand to capture multi-line expressions (up to 5 lines).
+        let exprLines = String(fromAssign.prefix(
+            fromAssign.distance(from: fromAssign.startIndex, to: endLineRange.upperBound) + 200
+        ))
+        XCTAssertTrue(
+            exprLines.contains("isVideoSuspendedByHold"),
+            "Socket-reconnect effectiveVideoOn must check isVideoSuspendedByHold — " +
+            "a held call whose socket reconnects would otherwise falsely signal " +
+            "\"camera active\" to the peer while iOS blocks camera access")
+        XCTAssertTrue(
+            exprLines.contains("isVideoSuspendedByBackground"),
+            "Socket-reconnect effectiveVideoOn must also check isVideoSuspendedByBackground")
+        XCTAssertTrue(
+            exprLines.contains("isVideoSuspended"),
+            "Socket-reconnect effectiveVideoOn must also check isVideoSuspended (survival controller)")
+    }
+}

@@ -2716,7 +2716,9 @@ final class CallManager: ObservableObject {
                     // toggled video off, the survival controller suspended it, or we are
                     // backgrounded. Compute the effective state from all three sources.
                     if self.isVideoEnabled {
-                        let effectiveVideoOn = !self.isVideoSuspended && !self.isVideoSuspendedByBackground
+                        let effectiveVideoOn = !self.isVideoSuspended
+                            && !self.isVideoSuspendedByBackground
+                            && !self.isVideoSuspendedByHold
                         MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: effectiveVideoOn)
                         Logger.calls.info("Socket reconnect — re-syncing video state to peer (effectiveVideoOn=\(effectiveVideoOn))")
                     }
