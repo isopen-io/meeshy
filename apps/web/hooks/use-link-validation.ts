@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import type { ConversationLink as BaseConversationLink } from '@meeshy/shared/types';
 import { buildApiUrl } from '@/lib/config';
 import { usersService } from '@/services/users.service';
+import { logger } from '@/utils/logger';
 
 export interface ConversationLink extends BaseConversationLink {
   requireAccount?: boolean;
@@ -38,7 +39,7 @@ export function useLinkValidation(linkId: string) {
           setLinkError(errorResult.message || 'Erreur lors du chargement du lien');
         }
       } catch (error) {
-        console.error('Erreur initialisation:', error);
+        logger.error('[useLinkValidation]', 'Erreur initialisation', { error });
         setLinkError('Erreur lors du chargement du lien');
       } finally {
         setIsLoading(false);
@@ -90,7 +91,7 @@ export function useUsernameValidation(username: string) {
           setUsernameCheckStatus('idle');
         }
       } catch (error) {
-        console.error('Erreur vérification username:', error);
+        logger.error('[useLinkValidation]', 'Erreur vérification username', { error });
         setUsernameCheckStatus('idle');
       }
     }, 500);
@@ -117,13 +118,13 @@ async function fetchAndStoreCreatorAffiliateToken(creatorId: string) {
         document.cookie = `meeshy_affiliate_token=${affiliateToken}; max-age=${30 * 24 * 60 * 60}; path=/; samesite=lax`;
 
         if (process.env.NODE_ENV === 'development') {
-          console.log(`[JOIN] Token d'affiliation du créateur stocké: ${affiliateToken.substring(0, 10)}...`);
+          logger.info('[useLinkValidation]', "Token d'affiliation du créateur stocké", { data: affiliateToken.substring(0, 10) });
         }
       }
     }
   } catch (error) {
     if (process.env.NODE_ENV === 'development') {
-      console.error('[JOIN] Erreur récupération token affiliation:', error);
+      logger.error('[useLinkValidation]', 'Erreur récupération token affiliation', { error });
     }
   }
 }

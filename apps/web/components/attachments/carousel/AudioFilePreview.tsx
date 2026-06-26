@@ -7,6 +7,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Play, Pause, Loader2, CheckCircle } from 'lucide-react';
 import { AudioFilePreviewProps } from './types';
+import { logger } from '@/utils/logger';
 
 export const AudioFilePreview = React.memo(function AudioFilePreview({
   file,
@@ -58,7 +59,7 @@ export const AudioFilePreview = React.memo(function AudioFilePreview({
         setIsPlayingAudio(false);
       } else {
         audioRef.current.play().catch(error => {
-          console.error('Error playing audio:', error);
+          logger.error('[AudioFilePreview]', 'Error playing audio:', { error });
         });
         setIsPlayingAudio(true);
       }

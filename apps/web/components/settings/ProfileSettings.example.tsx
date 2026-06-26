@@ -13,6 +13,7 @@ import { PrivacySettings } from '@/components/settings/privacy-settings';
 import { EncryptionSettings } from '@/components/settings/encryption-settings';
 import { useRouter } from 'next/navigation';
 import { useI18n } from '@/hooks/use-i18n';
+import { logger } from '@/utils/logger';
 
 export function SettingsPageExample() {
   const router = useRouter();
@@ -49,7 +50,7 @@ export function SettingsPageExample() {
           <UserSettings
             user={null} // Will be fetched from useAuth inside the component
             onUserUpdate={(user) => {
-              console.log('User updated:', user);
+              logger.info('[ProfileSettings]', 'User updated:', { data: user });
             }}
           />
         </TabsContent>

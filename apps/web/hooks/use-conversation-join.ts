@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { buildApiUrl } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
+import { logger } from '@/utils/logger';
 import type { AnonymousFormData } from './use-join-flow';
 
 export function useConversationJoin(linkId: string) {
@@ -76,7 +77,7 @@ export function useConversationJoin(linkId: string) {
         return result.suggestedNickname;
       }
     } catch (error) {
-      console.error('Erreur connexion anonyme:', error);
+      logger.error('[useConversationJoin]', 'Erreur connexion anonyme', { error });
       toast.error('Erreur de connexion');
     } finally {
       setIsJoining(false);
@@ -106,7 +107,7 @@ export function useConversationJoin(linkId: string) {
       }
 
       if (authToken) {
-        console.log('[JOIN] Envoi requête POST à:', `${buildApiUrl('/conversations/join')}/${linkId}`);
+        logger.info('[useConversationJoin]', 'Envoi requête POST à', { data: `${buildApiUrl('/conversations/join')}/${linkId}` });
 
         const response = await fetch(`${buildApiUrl('/conversations/join')}/${linkId}`, {
           method: 'POST',
@@ -115,31 +116,31 @@ export function useConversationJoin(linkId: string) {
           }
         });
 
-        console.log('[JOIN] Statut réponse:', response.status);
+        logger.info('[useConversationJoin]', 'Statut réponse', { data: response.status });
 
         if (response.ok) {
           const result = await response.json();
-          console.log('[JOIN] Réponse complète du backend:', JSON.stringify(result, null, 2));
-          console.log('[JOIN] result.data:', result.data);
-          console.log('[JOIN] result.data?.conversationId:', result.data?.conversationId);
+          logger.info('[useConversationJoin]', 'Réponse complète du backend', { data: result });
+          logger.info('[useConversationJoin]', 'result.data', { data: result.data });
+          logger.info('[useConversationJoin]', 'result.data?.conversationId', { data: result.data?.conversationId });
 
           if (!result.data?.conversationId) {
-            console.error('[JOIN] conversationId manquant dans la réponse:', result);
+            logger.error('[useConversationJoin]', 'conversationId manquant dans la réponse', { error: result });
             toast.error('Erreur: ID de conversation manquant');
             return;
           }
 
           toast.success('Redirection...');
-          console.log('[JOIN] Redirection vers:', `/conversations/${result.data.conversationId}`);
+          logger.info('[useConversationJoin]', 'Redirection vers', { data: `/conversations/${result.data.conversationId}` });
           router.push(`/conversations/${result.data.conversationId}`);
         } else {
           const error = await response.json();
-          console.error('[JOIN_CONVERSATION] Erreur POST /conversations/join:', response.status, error);
+          logger.error('[useConversationJoin]', 'Erreur POST /conversations/join', { error: { status: response.status, ...error } });
           toast.error(error.message || 'Erreur lors de la connexion');
         }
       }
     } catch (error) {
-      console.error('[JOIN_CONVERSATION] Erreur jointure:', error);
+      logger.error('[useConversationJoin]', 'Erreur jointure', { error });
       toast.error('Erreur de connexion');
     } finally {
       setIsJoining(false);

@@ -11,6 +11,7 @@ import { adminService } from '@/services/admin.service';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
 import { TableSkeleton, StatCardSkeleton } from '@/components/admin/TableSkeleton';
+import { logger } from '@/utils/logger';
 
 const getStatusBadge = (status: string, t: (key: string) => string) => {
   switch (status) {
@@ -76,7 +77,7 @@ export default function AdminBroadcastsPage() {
         }
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des broadcasts:', error);
+      logger.error('[AdminBroadcasts]', 'Erreur lors du chargement des broadcasts:', { error });
       toast.error(t('broadcasts.loadError'));
       setBroadcasts([]);
     } finally {
@@ -103,7 +104,7 @@ export default function AdminBroadcastsPage() {
       toast.success(t('broadcasts.deleteSuccess'));
       loadBroadcasts(false);
     } catch (error) {
-      console.error('Erreur suppression broadcast:', error);
+      logger.error('[AdminBroadcasts]', 'Erreur suppression broadcast:', { error });
       toast.error(t('broadcasts.deleteError'));
     }
   };

@@ -11,6 +11,7 @@ import { useI18n } from '@/hooks/use-i18n';
 import { SoundFeedback } from '@/hooks/use-accessibility';
 import { buildApiUrl } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
+import { logger } from '@/utils/logger';
 
 export function PasswordSettings() {
 
@@ -106,7 +107,7 @@ export function PasswordSettings() {
         confirmPassword: '',
       });
     } catch (error) {
-      console.error('Erreur lors du changement de mot de passe:', error);
+      logger.error('[PasswordSettings]', 'Erreur lors du changement de mot de passe', { error });
       toast.error(error instanceof Error ? error.message : t('security.password.errors.updateFailed'));
     } finally {
       setIsLoading(false);

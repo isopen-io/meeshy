@@ -15,6 +15,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
 import { adminService, AnonymousUser } from '@/services/admin.service';
+import { logger } from '@/utils/logger';
 
 export default function AdminAnonymousUsersPage() {
   const router = useRouter();
@@ -51,7 +52,7 @@ export default function AdminAnonymousUsersPage() {
         setCurrentPage(1);
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des utilisateurs anonymes:', error);
+      logger.error('[AdminAnonymousUsers]', 'Erreur lors du chargement des utilisateurs anonymes:', { error });
       toast.error(t('anonUsers.loadError'));
     } finally {
       setLoading(false);

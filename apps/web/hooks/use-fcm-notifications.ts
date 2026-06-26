@@ -11,6 +11,7 @@ import { iosNotifications } from '@/utils/ios-notification-manager';
 import { pushTokenService } from '@/services/push-token.service';
 import { swRegistration } from '@/utils/service-worker-registration';
 import { firebaseChecker } from '@/utils/firebase-availability-checker';
+import { logger } from '@/utils/logger';
 
 interface UseFCMNotificationsOptions {
   /**
@@ -75,7 +76,7 @@ export function useFCMNotifications(options: UseFCMNotificationsOptions = {}) {
    */
   const log = useCallback((...args: any[]) => {
     if (debug) {
-      console.log('[useFCMNotifications]', ...args);
+      logger.info('[useFCMNotifications]', String(args[0]), args.length > 1 ? { data: args.slice(1) } : undefined);
     }
   }, [debug]);
 

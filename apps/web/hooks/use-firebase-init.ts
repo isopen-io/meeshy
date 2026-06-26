@@ -14,6 +14,7 @@
 
 import { useEffect, useState } from 'react';
 import { firebaseChecker, FirebaseStatus } from '@/utils/firebase-availability-checker';
+import { logger } from '@/utils/logger';
 
 /**
  * Hook pour vérifier Firebase au démarrage de l'app
@@ -64,16 +65,12 @@ export function useFirebaseInit() {
                 '\n- PWA badges:', result.badgeEnabled ? 'Enabled' : 'Disabled'
               );
             } else {
-              console.warn(
-                '%c[Meeshy] Firebase not configured - Using WebSocket notifications only',
-                'color: orange; font-weight: bold;',
-                '\nReason:', result.reason
-              );
+              logger.warn('[useFirebaseInit]', 'Firebase not configured - Using WebSocket notifications only', { data: result.reason });
             }
           }
         }
       } catch (err) {
-        console.error('[Firebase Init] Check failed:', err);
+        logger.error('[useFirebaseInit]', 'Check failed', { error: err });
         if (mounted) {
           // En cas d'erreur ou timeout, continuer sans Firebase
           setStatus({

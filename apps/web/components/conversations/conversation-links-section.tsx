@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { logger } from '@/utils/logger';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -90,7 +91,7 @@ export function ConversationLinksSection({ conversationId }: ConversationLinksSe
         if (result.success) {
           setLinks(result.data || []);
         } else {
-          console.error('Erreur lors du chargement des liens:', result.error);
+          logger.error('[ConversationLinksSection]', 'Erreur lors du chargement des liens:', { error: result.error });
           setLinks([]);
         }
       } else if (response.status === 401) {
@@ -99,11 +100,11 @@ export function ConversationLinksSection({ conversationId }: ConversationLinksSe
         setLinks([]);
       } else {
         const errorData = await response.json().catch(() => ({}));
-        console.error('Erreur lors du chargement des liens:', response.status, errorData.error || 'Erreur inconnue');
+        logger.error('[ConversationLinksSection]', 'Erreur lors du chargement des liens:', { data: { status: response.status, error: errorData.error || 'Erreur inconnue' } });
         setLinks([]);
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des liens:', error);
+      logger.error('[ConversationLinksSection]', 'Erreur lors du chargement des liens:', { error });
       setLinks([]);
     } finally {
       setIsLoading(false);

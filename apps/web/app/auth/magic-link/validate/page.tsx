@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, Suspense } from 'react';
+import { logger } from '@/utils/logger';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
@@ -104,7 +105,7 @@ function MagicLinkValidateContent() {
           setErrorMessage(response.error || t('magicLink.validate.errors.invalidToken'));
         }
       } catch (error) {
-        console.error('[MagicLink] Erreur de validation:', error);
+        logger.error('[MagicLinkValidate]', 'Erreur de validation', { error });
         setState('error');
         setErrorMessage(t('magicLink.validate.errors.networkError'));
       }

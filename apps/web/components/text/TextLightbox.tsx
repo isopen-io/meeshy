@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useI18n } from '@/hooks/use-i18n';
+import { logger } from '@/utils/logger';
 import { X, Download, Copy, Check, WrapText, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -78,7 +79,7 @@ export const TextLightbox: React.FC<TextLightboxProps> = ({
         const text = await response.text();
         setContent(text);
       } catch (error) {
-        console.error('Error loading text file:', error);
+        logger.error('[TextLightbox]', 'Error loading text file', { error });
         setHasError(true);
       } finally {
         setIsLoading(false);
@@ -193,7 +194,7 @@ export const TextLightbox: React.FC<TextLightboxProps> = ({
       toast.success(tViewers('text.copied'));
       setTimeout(() => setIsCopied(false), 2000);
     } catch (error) {
-      console.error('Error copying:', error);
+      logger.error('[TextLightbox]', 'Error copying', { error });
       toast.error(tViewers('text.copyError'));
     }
   };

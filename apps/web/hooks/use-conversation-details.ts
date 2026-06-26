@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { conversationsService } from '@/services/conversations.service';
 import { toast } from 'sonner';
+import { logger } from '@/utils/logger';
 import type { Conversation, User } from '@meeshy/shared/types';
 import { useI18n } from './use-i18n';
 
@@ -57,7 +58,7 @@ export function useConversationDetails(
       setIsEditingName(false);
       toast.success(t('conversationDetails.nameUpdated'));
     } catch (error: any) {
-      console.error('Error updating conversation name:', error);
+      logger.error('[useConversationDetails]', 'Error updating conversation name', { error });
 
       let errorMessage = t('conversationDetails.updateError');
       if (error.status === 409) errorMessage = t('conversationDetails.conversationExists');
@@ -89,7 +90,7 @@ export function useConversationDetails(
       setIsEditingDescription(false);
       toast.success(t('conversationDetails.descriptionUpdated', 'Description updated successfully'));
     } catch (error: any) {
-      console.error('Error updating conversation description:', error);
+      logger.error('[useConversationDetails]', 'Error updating conversation description', { error });
 
       let errorMessage = t('conversationDetails.updateError');
       if (error.status === 403) errorMessage = t('conversationDetails.noPermissionToModify');

@@ -8,6 +8,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { translationService, type TranslationResult } from '@/services/translation.service';
 import type { Message, TranslatedMessage, User } from '@/types';
+import { logger } from '@/utils/logger';
 
 interface TranslationOptions {
   useCache?: boolean;
@@ -76,7 +77,7 @@ export const useMessageTranslation = () => {
       
       const errorMessage = error instanceof Error ? error.message : 'Erreur de traduction';
       setState({ isTranslating: false, error: errorMessage });
-      console.error('Translation error:', error);
+      logger.error('[useMessageTranslation]', 'Translation error', { error });
       return null;
     }
   }, []);
@@ -109,7 +110,7 @@ export const useMessageTranslation = () => {
         translationModel: 'api-service'
       } as TranslatedMessage;
     } catch (error) {
-      console.error('Message translation error:', error);
+      logger.error('[useMessageTranslation]', 'Message translation error', { error });
       return null;
     }
   }, [translateText]);
@@ -135,7 +136,7 @@ export const useMessageTranslation = () => {
         });
       }
     } catch (error) {
-      console.error('Error loading translation stats:', error);
+      logger.error('[useMessageTranslation]', 'Error loading translation stats', { error });
     }
   }, []);
 
@@ -146,7 +147,7 @@ export const useMessageTranslation = () => {
         lastUsed: newStats.lastUsed?.toISOString()
       }));
     } catch (error) {
-      console.error('Error saving translation stats:', error);
+      logger.error('[useMessageTranslation]', 'Error saving translation stats', { error });
     }
   }, []);
 

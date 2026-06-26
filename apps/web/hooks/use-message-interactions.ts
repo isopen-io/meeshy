@@ -4,6 +4,7 @@ import { useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 import type { Message } from '@meeshy/shared/types/conversation';
 import type { ConversationType } from '@meeshy/shared/types';
+import { logger } from '@/utils/logger';
 import { formatFullDate } from '@/utils/date-format';
 import { useCurrentInterfaceLanguage } from '@/stores/language-store';
 import { getUserDisplayName } from '@/utils/user-display-name';
@@ -129,7 +130,7 @@ export function useMessageInteractions({
       await navigator.clipboard.writeText(contentToCopy);
       toast.success(t('messageCopied'));
     } catch (error) {
-      console.error('Failed to copy message:', error);
+      logger.error('[useMessageInteractions]', 'Failed to copy message', { error });
       toast.error(t('copyFailed'));
     }
   }, [conversationId, message, t, locale]);
@@ -155,7 +156,7 @@ export function useMessageInteractions({
       await navigator.clipboard.writeText(messageUrl);
       toast.success(t('linkCopied') || 'Lien copié !');
     } catch (error) {
-      console.error('Failed to copy message link:', error);
+      logger.error('[useMessageInteractions]', 'Failed to copy message link', { error });
       toast.error(t('copyFailed'));
     }
   }, [conversationId, message.id, t]);

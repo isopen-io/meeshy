@@ -13,6 +13,7 @@ import { useState, useCallback } from 'react';
 import { useMessageTranslation } from '@/hooks/useMessageTranslation';
 import { getLanguageInfo } from '@meeshy/shared/types';
 import type { User } from '@meeshy/shared/types';
+import { logger } from '@/utils/logger';
 
 interface UseStreamTranslationOptions {
   user: User;
@@ -84,7 +85,7 @@ export function useStreamTranslation({
     // Mettre à jour le message avec les nouvelles traductions
     updateMessage(messageId, (prevMessage) => {
       if (!prevMessage) {
-        console.warn('⚠️ [useStreamTranslation] Message introuvable:', messageId);
+        logger.warn('[useStreamTranslation]', '⚠️ Message introuvable', { data: messageId });
         return prevMessage;
       }
 
@@ -97,7 +98,7 @@ export function useStreamTranslation({
         const content = newTranslation.translatedContent || newTranslation.content;
 
         if (!targetLang || !content) {
-          console.warn('🚫 [useStreamTranslation] Traduction invalide:', newTranslation);
+          logger.warn('[useStreamTranslation]', '🚫 Traduction invalide', { data: newTranslation });
           return;
         }
 

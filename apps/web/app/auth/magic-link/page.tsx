@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, Suspense } from 'react';
+import { logger } from '@/utils/logger';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -99,7 +100,7 @@ function MagicLinkPageContent() {
         setTokenError(result.error || t('magicLink.validate.error.description', 'This magic link is invalid or has expired'));
       }
     } catch (err) {
-      console.error('[MagicLink] Token validation error:', err);
+      logger.error('[MagicLink]', 'Token validation error', { error: err });
       setTokenError(t('magicLink.errors.requestFailed', 'Failed to send magic link'));
     } finally {
       setIsValidatingToken(false);
@@ -189,7 +190,7 @@ function MagicLinkPageContent() {
         toast.success(t('magicLink.success.emailSent'));
       }
     } catch (error) {
-      console.error('[MagicLink] Erreur:', error);
+      logger.error('[MagicLink]', 'Erreur', { error });
       setIsEmailSent(true);
       setCountdown(MAGIC_LINK_EXPIRY_SECONDS);
     } finally {
@@ -222,7 +223,7 @@ function MagicLinkPageContent() {
       setCountdown(MAGIC_LINK_EXPIRY_SECONDS);
       toast.success(t('magicLink.checkEmail.resent'));
     } catch (error) {
-      console.error('[MagicLink] Erreur de renvoi:', error);
+      logger.error('[MagicLink]', 'Erreur de renvoi', { error });
       toast.error(t('magicLink.errors.requestFailed'));
     } finally {
       setIsResending(false);

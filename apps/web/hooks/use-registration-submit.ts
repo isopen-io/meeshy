@@ -8,6 +8,7 @@ import { buildApiUrl, API_ENDPOINTS } from '@/lib/config';
 import type { WizardFormData } from './use-registration-wizard';
 import type { User } from '@/types';
 import type { JoinConversationResponse } from '@/types/frontend';
+import { logger } from '@/utils/logger';
 
 export interface PhoneOwnerInfo {
   maskedDisplayName: string;
@@ -118,7 +119,7 @@ export function useRegistrationSubmit({
         });
         localStorage.removeItem('meeshy_affiliate_token');
       } catch (affiliateError) {
-        console.error('[REGISTRATION] Affiliate registration error:', affiliateError);
+        logger.error('[useRegistrationSubmit]', 'Affiliate registration error', { error: affiliateError });
       }
     }
 
@@ -158,7 +159,7 @@ export function useRegistrationSubmit({
 
       await completeRegistrationAndRedirect(result.user!, result.token!);
     } catch (error) {
-      console.error('[REGISTRATION] Error without phone:', error);
+      logger.error('[useRegistrationSubmit]', 'Error without phone', { error });
       toast.error('Registration failed');
       setIsLoading(false);
     }
@@ -196,7 +197,7 @@ export function useRegistrationSubmit({
 
       await completeRegistrationAndRedirect(result.user!, result.token!);
     } catch (error) {
-      console.error('[REGISTRATION] Error with phone transfer:', error);
+      logger.error('[useRegistrationSubmit]', 'Error with phone transfer', { error });
       toast.error('Registration failed');
       setIsLoading(false);
     }

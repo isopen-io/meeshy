@@ -11,6 +11,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { logger } from '@/utils/logger';
 
 interface BotProtectionConfig {
   /** Minimum time in ms before form can be submitted (default: 2000ms) */
@@ -135,7 +136,7 @@ export function useBotProtection(config: BotProtectionConfig = {}): BotProtectio
 
     // Check 1: Honeypot field should be empty
     if (honeypotValue.trim() !== '') {
-      console.warn('[BotProtection] Honeypot field filled - likely bot');
+      logger.warn('[BotProtection]', 'Honeypot field filled - likely bot');
       return {
         isHuman: false,
         botError: 'Une erreur est survenue. Veuillez réessayer.',
@@ -144,7 +145,7 @@ export function useBotProtection(config: BotProtectionConfig = {}): BotProtectio
 
     // Check 2: Form submitted too quickly
     if (currentTimeElapsed < minSubmitTime) {
-      console.warn(`[BotProtection] Form submitted too fast (${currentTimeElapsed}ms < ${minSubmitTime}ms)`);
+      logger.warn('[BotProtection]', 'Form submitted too fast', { data: { currentTimeElapsed, minSubmitTime } });
       return {
         isHuman: false,
         botError: 'Veuillez patienter quelques secondes avant de soumettre le formulaire.',
@@ -153,7 +154,7 @@ export function useBotProtection(config: BotProtectionConfig = {}): BotProtectio
 
     // Check 3: JavaScript verification
     if (!jsVerified) {
-      console.warn('[BotProtection] JavaScript not verified');
+      logger.warn('[BotProtection]', 'JavaScript not verified');
       return {
         isHuman: false,
         botError: 'Veuillez activer JavaScript pour continuer.',

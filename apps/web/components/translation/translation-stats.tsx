@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Zap, Globe } from 'lucide-react';
 import { useI18n } from '@/hooks/use-i18n';
+import { logger } from '@/utils/logger';
 
 interface SimpleStats {
   totalTranslations: number;
@@ -30,7 +31,7 @@ export function TranslationStats() {
           });
         }
       } catch (error) {
-        console.error('Erreur lors du chargement des statistiques:', error);
+        logger.error('[TranslationStats]', 'Erreur lors du chargement des statistiques:', { error });
       }
     };
 

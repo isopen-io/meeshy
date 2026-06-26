@@ -5,6 +5,7 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { useShallow } from 'zustand/react/shallow';
+import { logger } from '@/utils/logger';
 
 interface AppNotification {
   id: string;
@@ -106,7 +107,7 @@ export const useAppStore = create<AppStore>()(
             set({ isInitialized: true });
 
           } catch (error) {
-            console.error('[APP_STORE] Initialization error:', error);
+            logger.error('[APP_STORE]', 'Initialization error', { error });
             get().addNotification({
               type: 'error',
               title: 'Initialization Error',

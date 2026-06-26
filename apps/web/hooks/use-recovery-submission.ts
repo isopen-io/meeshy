@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { magicLinkService } from '@/services/magic-link.service';
 import { phonePasswordResetService } from '@/services/phone-password-reset.service';
 import type { RecoveryMethod } from './use-recovery-flow';
+import { logger } from '@/utils/logger';
 
 interface UseRecoverySubmissionProps {
   setIsLoading: (loading: boolean) => void;
@@ -46,9 +47,9 @@ export function useRecoverySubmission({
     setError(null);
 
     try {
-      console.log('[AccountRecovery] Sending magic link request for:', email.trim());
+      logger.info('[useRecoverySubmission]', 'Sending magic link request for', { data: email.trim() });
       const result = await magicLinkService.requestMagicLink(email.trim(), true);
-      console.log('[AccountRecovery] Magic link response:', result);
+      logger.info('[useRecoverySubmission]', 'Magic link response', { data: result });
 
       if (result.success) {
         setStoredEmail(email.trim());
@@ -56,7 +57,7 @@ export function useRecoverySubmission({
         toast.success(t('magicLink.success.title') || 'Magic Link envoyé !');
         setStep('success');
       } else {
-        console.error('[AccountRecovery] Magic link error:', result.error);
+        logger.error('[useRecoverySubmission]', 'Magic link error', { error: result.error });
         if (result.error === 'RATE_LIMITED') {
           setError(t('magicLink.errors.rateLimited') || 'Trop de tentatives. Veuillez réessayer dans environ une heure.');
         } else {
@@ -64,7 +65,7 @@ export function useRecoverySubmission({
         }
       }
     } catch (err) {
-      console.error('[AccountRecovery] Magic link exception:', err);
+      logger.error('[useRecoverySubmission]', 'Magic link exception', { error: err });
       setError(err instanceof Error ? err.message : t('magicLink.errors.requestFailed'));
     } finally {
       setIsLoading(false);

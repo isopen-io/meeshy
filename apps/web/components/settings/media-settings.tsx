@@ -27,6 +27,7 @@ import { AudioSettings } from './audio-settings';
 import { VideoSettings } from './VideoSettings';
 import { DocumentSettings } from './DocumentSettings';
 import { useI18n } from '@/hooks/use-i18n';
+import { logger } from '@/utils/logger';
 
 const STORAGE_KEY = 'meeshy:media-settings:accordion-state';
 
@@ -76,7 +77,7 @@ export function MediaSettings() {
       const saved = localStorage.getItem(STORAGE_KEY);
       return saved ? JSON.parse(saved) : [];
     } catch (error) {
-      console.error('[MediaSettings] Error loading accordion state:', error);
+      logger.error('[MediaSettings]', 'Error loading accordion state:', { error });
       return [];
     }
   });
@@ -88,7 +89,7 @@ export function MediaSettings() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(openSections));
     } catch (error) {
-      console.error('[MediaSettings] Error saving accordion state:', error);
+      logger.error('[MediaSettings]', 'Error saving accordion state:', { error });
     }
   }, [openSections]);
 

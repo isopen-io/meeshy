@@ -14,6 +14,7 @@
 'use client';
 
 import { useCallback, useRef } from 'react';
+import { logger } from '@/utils/logger';
 
 /**
  * Options de configuration pour le prefetch
@@ -58,10 +59,10 @@ export function usePrefetch(
     loader()
       .then(() => {
         loadedRef.current = true;
-        console.log('[Prefetch] Component loaded successfully');
+        logger.info('[usePrefetch]', 'Component loaded successfully');
       })
       .catch(err => {
-        console.error('[Prefetch] Failed to load component:', err);
+        logger.error('[usePrefetch]', 'Failed to load component', { error: err });
       });
   }, [loader]);
 
@@ -76,11 +77,11 @@ export function usePrefetch(
       .then(res => {
         if (res.ok) {
           dataLoadedRef.current = true;
-          console.log('[Prefetch] Data loaded successfully:', dataUrl);
+          logger.info('[usePrefetch]', 'Data loaded successfully', { data: dataUrl });
         }
       })
       .catch(err => {
-        console.error('[Prefetch] Failed to load data:', err);
+        logger.error('[usePrefetch]', 'Failed to load data', { error: err });
       });
   }, [prefetchData, dataUrl]);
 
@@ -193,7 +194,7 @@ export function usePrefetchImage(imageUrls: string[], delay = 100) {
       img.src = url;
       img.onload = () => {
         loadedRef.current.add(url);
-        console.log('[Prefetch] Image loaded:', url);
+        logger.info('[usePrefetch]', 'Image loaded', { data: url });
       };
     });
   }, [imageUrls]);

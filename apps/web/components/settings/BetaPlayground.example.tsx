@@ -222,6 +222,7 @@ export default function BetaPlaygroundPage() {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ThemeSettings } from '@/components/settings/theme-settings';
 import { NotificationSettings } from '@/components/settings/notification-settings';
+import { logger } from '@/utils/logger';
 
 export function SettingsPageWithBetaTab() {
   return (
@@ -283,7 +284,7 @@ export function ConditionalBetaPlayground() {
 export function BetaPlaygroundWithAnalytics() {
   // Tracker l'utilisation des features beta
   const _trackBetaUsage = (feature: string, action: string) => {
-    console.log(`Beta Feature Used: ${feature} - ${action}`);
+    logger.info('[BetaPlayground]', 'Beta Feature Used', { feature, action });
     // Intégrer votre système d'analytics ici
     // analytics.track('beta_feature_used', { feature, action });
   };

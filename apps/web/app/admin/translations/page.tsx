@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
 import { StatsGrid, TimeSeriesChart, DonutChart, StatItem, TimeSeriesDataPoint, DonutDataPoint } from '@/components/admin/Charts';
 import { TableSkeleton, StatCardSkeleton } from '@/components/admin/TableSkeleton';
+import { logger } from '@/utils/logger';
 
 interface Translation {
   id: string;
@@ -144,7 +145,7 @@ export default function AdminTranslationsPage() {
         setTotalPages(1);
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des traductions:', error);
+      logger.error('[AdminTranslations]', 'Erreur lors du chargement des traductions:', { error });
       toast.error(t('translationsPage.loadError'));
     } finally {
       setLoading(false);

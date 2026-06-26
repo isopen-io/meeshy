@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, RefObject } from 'react';
+import { logger } from '@/utils/logger';
 
 export function useFullscreen(containerRef: RefObject<HTMLDivElement>) {
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -20,7 +21,7 @@ export function useFullscreen(containerRef: RefObject<HTMLDivElement>) {
         } else if (element.msRequestFullscreen) {
           await element.msRequestFullscreen();
         } else {
-          console.warn('Fullscreen API non supporté sur ce navigateur');
+          logger.warn('[useFullscreen]', 'Fullscreen API non supporté sur ce navigateur');
           return;
         }
         setIsFullscreen(true);
@@ -38,7 +39,7 @@ export function useFullscreen(containerRef: RefObject<HTMLDivElement>) {
         setIsFullscreen(false);
       }
     } catch (error) {
-      console.error('Erreur plein écran:', error);
+      logger.error('[useFullscreen]', 'Erreur plein écran', { error });
     }
   }, [isFullscreen, containerRef]);
 

@@ -24,6 +24,7 @@ import type {
   VoicePreviewSample,
   VoiceProfileDetails,
 } from '@meeshy/shared/types/voice-api';
+import { logger } from '@/utils/logger';
 
 // Dynamic imports for code splitting
 import dynamic from 'next/dynamic';
@@ -258,7 +259,7 @@ export function VoiceProfileSettings() {
         await loadProfile();
       }
     } catch (err: unknown) {
-      console.error('[VoiceProfile] Error creating profile:', err);
+      logger.error('[VoiceProfileSettings]', '[VoiceProfile] Error creating profile', { error: err });
       toast.error(t('voiceProfile.create.error', 'Erreur lors de la création du profil'));
     } finally {
       setIsCreatingProfile(false);

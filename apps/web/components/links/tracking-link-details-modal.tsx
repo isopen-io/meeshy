@@ -22,6 +22,7 @@ import type { TrackingLink } from '@meeshy/shared/types/tracking-link';
 import { getTrackingLinkStats } from '@/services/tracking-links';
 import { useI18n } from '@/hooks/useI18n';
 import { toast } from 'sonner';
+import { logger } from '@/utils/logger';
 
 interface TrackingLinkDetailsModalProps {
   link: TrackingLink;
@@ -50,7 +51,7 @@ export function TrackingLinkDetailsModal({
       const data = await getTrackingLinkStats(link.token);
       setStats(data);
     } catch (error) {
-      console.error('Erreur lors du chargement des statistiques:', error);
+      logger.error('[TrackingLinkDetailsModal]', 'Erreur lors du chargement des statistiques:', { error });
       toast.error(t('tracking.errors.statsFailed'));
     } finally {
       setIsLoading(false);

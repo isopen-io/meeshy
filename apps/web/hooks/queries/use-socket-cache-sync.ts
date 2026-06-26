@@ -11,6 +11,7 @@ import type { TranslationEvent } from '@meeshy/shared/types';
 import type { SocketIOTranslation } from '@meeshy/shared/types/attachment-audio';
 import type { AudioTranslationReadyEventData } from '@meeshy/shared/types/socketio-events';
 import type { OptimisticMessage } from '@/utils/optimistic-message';
+import { logger } from '@/utils/logger';
 
 function isOptimisticMessage(m: Message): m is OptimisticMessage {
   return '_tempId' in m;
@@ -253,7 +254,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
               });
             })
             .catch((err: unknown) => {
-              console.warn('[SOCKET_SYNC] Failed to fetch missing conversation:', err);
+              logger.warn('[useSocketCacheSync]', 'Failed to fetch missing conversation', { data: err });
             });
         }
       }

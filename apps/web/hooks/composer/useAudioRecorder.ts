@@ -8,6 +8,7 @@
 'use client';
 
 import { useState, useCallback, useRef } from 'react';
+import { logger } from '@/utils/logger';
 
 interface AudioBlobData {
   blob: Blob;
@@ -49,35 +50,32 @@ interface UseAudioRecorderReturn {
  * Sur Safari, les blobs créés par MediaRecorder peuvent causer "WebKitBlobResource error 1"
  */
 async function createSafariSafeFile(blob: Blob, filename: string, mimeType: string): Promise<File> {
-  console.log('🔧 [createSafariSafeFile] Input:', {
-    blobSize: blob.size,
-    blobType: blob.type,
-    targetMimeType: mimeType,
-    filename
+  logger.info('[useAudioRecorder]', 'createSafariSafeFile Input', {
+    data: { blobSize: blob.size, blobType: blob.type, targetMimeType: mimeType, filename }
   });
 
   if (blob.size === 0) {
-    console.error('❌ [createSafariSafeFile] ERROR: Input blob has size 0!');
+    logger.error('[useAudioRecorder]', 'createSafariSafeFile ERROR: Input blob has size 0');
     throw new Error('Cannot create file from empty blob');
   }
 
   try {
     if (typeof blob.arrayBuffer === 'function') {
       const arrayBuffer = await blob.arrayBuffer();
-      console.log('🔧 [createSafariSafeFile] ArrayBuffer created:', { byteLength: arrayBuffer.byteLength });
+      logger.info('[useAudioRecorder]', 'createSafariSafeFile ArrayBuffer created', { data: { byteLength: arrayBuffer.byteLength } });
 
       if (arrayBuffer.byteLength === 0) {
-        console.error('❌ [createSafariSafeFile] ERROR: ArrayBuffer is empty');
+        logger.error('[useAudioRecorder]', 'createSafariSafeFile ERROR: ArrayBuffer is empty');
         throw new Error('ArrayBuffer conversion resulted in empty data');
       }
 
       const materializedBlob = new Blob([arrayBuffer], { type: mimeType });
       const file = new File([materializedBlob], filename, { type: mimeType, lastModified: Date.now() });
 
-      console.log('🔧 [createSafariSafeFile] Final file:', { name: file.name, size: file.size, type: file.type });
+      logger.info('[useAudioRecorder]', 'createSafariSafeFile Final file', { data: { name: file.name, size: file.size, type: file.type } });
 
       if (file.size === 0) {
-        console.error('❌ [createSafariSafeFile] ERROR: Final file has size 0!');
+        logger.error('[useAudioRecorder]', 'createSafariSafeFile ERROR: Final file has size 0');
         throw new Error('File creation resulted in empty file');
       }
 
@@ -86,8 +84,8 @@ async function createSafariSafeFile(blob: Blob, filename: string, mimeType: stri
 
     throw new Error('blob.arrayBuffer not available');
   } catch (error) {
-    console.warn('⚠️ [createSafariSafeFile] Method 1 failed:', error);
-    console.log('🔧 [createSafariSafeFile] Trying FileReader fallback...');
+    logger.warn('[useAudioRecorder]', 'createSafariSafeFile Method 1 failed', { data: error });
+    logger.info('[useAudioRecorder]', 'createSafariSafeFile Trying FileReader fallback...');
 
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -95,7 +93,7 @@ async function createSafariSafeFile(blob: Blob, filename: string, mimeType: stri
       reader.onload = () => {
         try {
           const arrayBuffer = reader.result as ArrayBuffer;
-          console.log('🔧 [createSafariSafeFile] FileReader success:', { byteLength: arrayBuffer.byteLength });
+          logger.info('[useAudioRecorder]', 'createSafariSafeFile FileReader success', { data: { byteLength: arrayBuffer.byteLength } });
 
           if (arrayBuffer.byteLength === 0) {
             reject(new Error('FileReader produced empty ArrayBuffer'));
@@ -105,7 +103,7 @@ async function createSafariSafeFile(blob: Blob, filename: string, mimeType: stri
           const materializedBlob = new Blob([arrayBuffer], { type: mimeType });
           const file = new File([materializedBlob], filename, { type: mimeType, lastModified: Date.now() });
 
-          console.log('🔧 [createSafariSafeFile] FileReader final file:', { name: file.name, size: file.size, type: file.type });
+          logger.info('[useAudioRecorder]', 'createSafariSafeFile FileReader final file', { data: { name: file.name, size: file.size, type: file.type } });
 
           if (file.size === 0) {
             reject(new Error('FileReader file creation resulted in empty file'));
@@ -119,7 +117,7 @@ async function createSafariSafeFile(blob: Blob, filename: string, mimeType: stri
       };
 
       reader.onerror = () => {
-        console.error('❌ [createSafariSafeFile] FileReader error:', reader.error);
+        logger.error('[useAudioRecorder]', 'createSafariSafeFile FileReader error', { error: reader.error });
         reject(reader.error || new Error('FileReader failed'));
       };
 
@@ -165,12 +163,14 @@ export function useAudioRecorder({
 
   // Handler pour l'enregistrement terminé
   const handleAudioRecordingComplete = useCallback(async (audioBlob: Blob, duration: number, metadata?: any) => {
-    console.log('🎵 [useAudioRecorder] Audio recording complete:', {
-      duration,
-      hasMetadata: !!metadata,
-      metadata: metadata,
-      hasAudioEffectsTimeline: !!metadata?.audioEffectsTimeline,
-      audioEffectsTimelineEvents: metadata?.audioEffectsTimeline?.events?.length || 0
+    logger.info('[useAudioRecorder]', 'Audio recording complete', {
+      data: {
+        duration,
+        hasMetadata: !!metadata,
+        metadata: metadata,
+        hasAudioEffectsTimeline: !!metadata?.audioEffectsTimeline,
+        audioEffectsTimelineEvents: metadata?.audioEffectsTimeline?.events?.length || 0
+      }
     });
 
     const blobData = { blob: audioBlob, duration };
@@ -192,10 +192,12 @@ export function useAudioRecorder({
       setShowAudioRecorder(false);
       setIsRecording(false);
 
-      console.log('📤 [useAudioRecorder] Preparing to upload audio with metadata:', {
-        filename,
-        metadataArray: metadata ? [metadata] : undefined,
-        hasTimeline: !!metadata?.audioEffectsTimeline
+      logger.info('[useAudioRecorder]', 'Preparing to upload audio with metadata', {
+        data: {
+          filename,
+          metadataArray: metadata ? [metadata] : undefined,
+          hasTimeline: !!metadata?.audioEffectsTimeline
+        }
       });
 
       // Upload le fichier

@@ -16,6 +16,7 @@ import { AlertCircle, Info, Shield } from 'lucide-react';
 import { useState, useCallback, useMemo } from 'react';
 import type { ConsentViolation } from '@/types/preferences';
 import { useI18n } from '@/hooks/use-i18n';
+import { logger } from '@/utils/logger';
 
 // ===== TYPES =====
 
@@ -183,7 +184,7 @@ export function ConsentDialog({
       await onConsent(consents);
       onOpenChange(false);
     } catch (err) {
-      console.error('[ConsentDialog] Error submitting consents:', err);
+      logger.error('[ConsentDialog]', 'Error submitting consents:', { error: err });
       setError(
         err instanceof Error
           ? err.message

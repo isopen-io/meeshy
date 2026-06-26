@@ -12,6 +12,7 @@ import { MessageSquare, ArrowLeft, Search, Filter, Calendar, User, Globe, FileTe
 import { adminService } from '@/services/admin.service';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
+import { logger } from '@/utils/logger';
 
 interface Message {
   id: string;
@@ -115,7 +116,7 @@ export default function AdminMessagesPage() {
         setTotalPages(1);
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des messages:', error);
+      logger.error('[AdminMessages]', 'Erreur lors du chargement des messages:', { error });
       toast.error(t('messages.loadError'));
     } finally {
       setLoading(false);

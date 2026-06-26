@@ -29,6 +29,7 @@ import { useI18n } from '@/hooks/use-i18n';
 import { useReducedMotion } from '@/hooks/use-accessibility';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import type { MessagePreference } from '@meeshy/shared/types/preferences';
+import { logger } from '@/utils/logger';
 
 const DEFAULT_PREFERENCES: MessagePreference = {
   sendOnEnter: true,
@@ -76,7 +77,7 @@ export function MessageSettings() {
         setPreferences(prev => ({ ...prev, ...prefs }));
       }
     } catch (err: unknown) {
-      console.error('[MessageSettings] Error loading preferences:', err);
+      logger.error('[MessageSettings]', '[MessageSettings] Error loading preferences', { error: err });
       setError(err.message || t('messages.loadError', 'Erreur lors du chargement des préférences'));
     } finally {
       setLoading(false);
@@ -109,7 +110,7 @@ export function MessageSettings() {
         throw new Error(response.message || 'Erreur lors de l\'enregistrement');
       }
     } catch (err: unknown) {
-      console.error('[MessageSettings] Error saving preferences:', err);
+      logger.error('[MessageSettings]', '[MessageSettings] Error saving preferences', { error: err });
       setPreferences(previousPrefs);
       toast.error(err.message || t('messages.saveError', 'Erreur lors de l\'enregistrement'));
     } finally {

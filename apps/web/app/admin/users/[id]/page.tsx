@@ -41,6 +41,7 @@ import { UserPostsSection } from '@/components/admin/user-detail/UserPostsSectio
 import { UserMediaSection } from '@/components/admin/user-detail/UserMediaSection';
 import { UserReportsSection } from '@/components/admin/user-detail/UserReportsSection';
 import { UserReportedMessagesSection } from '@/components/admin/user-detail/UserReportedMessagesSection';
+import { logger } from '@/utils/logger';
 
 interface AdminApiResponse<T> {
   success: boolean;
@@ -88,7 +89,7 @@ export default function UserDetailPage() {
         setRoleEdit(prev => ({ ...prev, role: userData.role }));
       }
     } catch (error) {
-      console.error('Erreur chargement utilisateur:', error);
+      logger.error('[AdminUserDetail]', 'Erreur chargement utilisateur:', { error });
       toast.error(t('usersDetail.errorLoadingUser'));
       router.push('/admin/users');
     } finally {

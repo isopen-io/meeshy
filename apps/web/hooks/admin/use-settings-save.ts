@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { ConfigSetting } from '@/types/admin-settings';
+import { logger } from '@/utils/logger';
 
 interface UseSettingsSaveReturn {
   isSaving: boolean;
@@ -33,7 +34,7 @@ export function useSettingsSave(): UseSettingsSaveReturn {
           }));
 
         // TODO: Implement API call to save settings
-        console.log('Saving settings:', payload);
+        logger.info('[useSettingsSave]', 'Saving settings', { data: payload });
 
         // Simulate API call
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -47,7 +48,7 @@ export function useSettingsSave(): UseSettingsSaveReturn {
         );
 
         if (requiresRestart) {
-          console.warn('Some settings require server restart to take effect');
+          logger.warn('[useSettingsSave]', 'Some settings require server restart to take effect');
         }
       } catch (error) {
         const message =

@@ -32,6 +32,7 @@ import {
 import { PermissionsService } from '@/services/permissions.service';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
+import { logger } from '@/utils/logger';
 import { useCurrentInterfaceLanguage } from '@/stores/language-store';
 import { preloadRouteModules } from '@/lib/lazy-components';
 import {
@@ -74,7 +75,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
       toast.success(t('logoutSuccess'));
       // La redirection se fait automatiquement dans la fonction logout
     } catch (error) {
-      console.error('Erreur déconnexion:', error);
+      logger.error('[AdminLayout]', 'Erreur déconnexion:', { error });
       toast.error(t('logoutError'));
     }
   };

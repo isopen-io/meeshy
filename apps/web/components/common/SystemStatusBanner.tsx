@@ -6,6 +6,7 @@ import { useConnectionStatus } from '@/hooks/use-connection-status';
 import { useI18n } from '@/hooks/useI18n';
 import { Button } from '@/components/ui/button';
 import { activateWaitingServiceWorker } from '@/utils/service-worker';
+import { logger } from '@/utils/logger';
 
 export const SystemStatusBanner = memo(function SystemStatusBanner() {
   const { isOnline } = useConnectionStatus();

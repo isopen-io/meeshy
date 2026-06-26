@@ -8,6 +8,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { useSocketIOMessaging } from './use-socketio-messaging';
+import { logger } from '@/utils/logger';
 import { useFailedMessagesStore } from '@/stores/failed-messages-store';
 import { 
   validateMessageContent, 
@@ -204,7 +205,7 @@ export function useMessaging(options: UseMessagingOptions = {}): UseMessagingRet
     clientMessageId?: string,
   ): Promise<boolean> => {
     if (!conversationId || !currentUserId) {
-      console.error('[MESSAGING] Cannot send message: missing conversationId or currentUserId');
+      logger.error('[useMessaging]', 'Cannot send message: missing conversationId or currentUserId');
       return false;
     }
 

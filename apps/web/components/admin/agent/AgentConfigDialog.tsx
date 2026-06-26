@@ -31,6 +31,7 @@ import { conversationsCrudService } from '@/services/conversations/crud.service'
 import type { Conversation } from '@meeshy/shared/types';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
+import { logger } from '@/utils/logger';
 
 interface AgentConfigDialogProps {
   open: boolean;
@@ -105,7 +106,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
           setAvailableTopics(res.data);
         }
       })
-      .catch((err) => console.error('[AgentConfigDialog] Failed to load topics:', err));
+      .catch((err) => logger.error('[AgentConfigDialog]', 'Failed to load topics:', { error: err }));
     return () => { cancelled = true; };
   }, []);
 

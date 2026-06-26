@@ -17,6 +17,9 @@ import { useI18n } from '@/hooks/use-i18n';
 import { SoundFeedback } from '@/hooks/use-accessibility';
 import { usePreferences } from '@/hooks/use-preferences';
 import type { PrivacyPreference } from '@/types/preferences';
+import { logger } from '@/utils/logger';
+import { apiService } from '@/services/api.service';
+import { useAuth } from '@/hooks/use-auth';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,6 +34,7 @@ import {
 
 export function PrivacySettings() {
   const { t } = useI18n('settings');
+  const { logout } = useAuth();
 
   // Hook de préférences avec React Query (optimistic updates automatiques)
   const {
@@ -43,7 +47,7 @@ export function PrivacySettings() {
     refetch,
   } = usePreferences<'privacy'>('privacy', {
     onConsentRequired: (violations) => {
-      console.warn('[PrivacySettings] Consentement requis:', violations);
+      logger.warn('[PrivacySettings]', 'Consentement requis:', { data: violations });
     },
   });
 
@@ -69,7 +73,7 @@ export function PrivacySettings() {
       await updatePreferences({ [key]: value });
     } catch (err) {
       // L'erreur est déjà gérée par le hook
-      console.error('[PrivacySettings] Erreur update:', err);
+      logger.error('[PrivacySettings]', 'Erreur update:', { error: err });
     }
   };
 
@@ -108,15 +112,16 @@ export function PrivacySettings() {
     SoundFeedback.playClick();
 
     try {
-      // TODO: Appeler l'API de suppression de compte
-      // await apiService.delete('/api/v1/me/account');
-
-      // Pour l'instant, on refetch juste
-      await refetch();
-
+      await apiService.request('/me/delete-account', {
+        method: 'DELETE',
+        body: JSON.stringify({ confirmationPhrase: 'SUPPRIMER MON COMPTE' }),
+        headers: { 'Content-Type': 'application/json' },
+      });
       SoundFeedback.playSuccess();
-      toast.success(t('privacy.dataDeleted', 'Données supprimées'));
-    } catch (_err) {
+      toast.success(t('privacy.dataDeleted', 'Compte supprimé avec succès'));
+      logout();
+    } catch (err) {
+      logger.error('[PrivacySettings]', 'Erreur lors de la suppression du compte', { error: err });
       toast.error(t('privacy.deleteError'));
     }
   };

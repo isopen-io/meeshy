@@ -14,6 +14,7 @@ import { Share2, Copy, Plus } from 'lucide-react';
 import { buildApiUrl } from '@/lib/config';
 import { useI18n } from '@/hooks/useI18n';
 import { authManager } from '@/services/auth-manager.service';
+import { logger } from '@/utils/logger';
 
 interface AffiliateToken {
   id: string;
@@ -86,7 +87,7 @@ export function ShareAffiliateModal({ isOpen, onClose, userLanguage }: ShareAffi
         setTokens(data.data || []);
       }
     } catch (error) {
-      console.error('Erreur chargement tokens:', error);
+      logger.error('[ShareAffiliateModal]', 'Erreur chargement tokens:', { error });
       toast.error(t('errorLoadingTokens'));
     } finally {
       setIsLoading(false);
@@ -130,7 +131,7 @@ export function ShareAffiliateModal({ isOpen, onClose, userLanguage }: ShareAffi
         return false;
       }
     } catch (error) {
-      console.error('Erreur création token:', error);
+      logger.error('[ShareAffiliateModal]', 'Erreur création token:', { error });
       toast.error(t('errorCreatingToken'));
       return false;
     } finally {
@@ -151,7 +152,7 @@ export function ShareAffiliateModal({ isOpen, onClose, userLanguage }: ShareAffi
       await navigator.clipboard.writeText(text);
       toast.success(t('linkCopied'));
     } catch (error) {
-      console.error('Erreur copie:', error);
+      logger.error('[ShareAffiliateModal]', 'Erreur copie:', { error });
       toast.error(t('errorCopying'));
     }
   };
@@ -174,7 +175,7 @@ export function ShareAffiliateModal({ isOpen, onClose, userLanguage }: ShareAffi
         onClose(); // Fermer la modale après partage
       } catch (error) {
         if (error instanceof Error && error.name !== 'AbortError') {
-          console.error('Erreur partage natif:', error);
+          logger.error('[ShareAffiliateModal]', 'Erreur partage natif:', { error });
           toast.error(t('errorSharing'));
         }
         // Le message est déjà copié, donc on peut fermer la modale

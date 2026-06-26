@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { logger } from '@/utils/logger';
 import {
   Activity,
   Share2,
@@ -327,7 +328,7 @@ export function UserActivitySection({ userId }: { userId: string }) {
           setData(response.data.data);
         }
       } catch (err) {
-        console.error('Error fetching user activity:', err);
+        logger.error('[UserActivitySection]', 'Error fetching user activity:', { error: err });
         setError(t('usersDetail.loadError'));
       } finally {
         setLoading(false);

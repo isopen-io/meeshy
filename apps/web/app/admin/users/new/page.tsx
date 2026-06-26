@@ -11,6 +11,7 @@ import { ArrowLeft, UserPlus, Save, AlertCircle } from 'lucide-react';
 import { apiService } from '@/services/api.service';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
+import { logger } from '@/utils/logger';
 
 export default function NewUserPage() {
   const router = useRouter();
@@ -99,7 +100,7 @@ export default function NewUserPage() {
         router.push('/admin/users');
       }
     } catch (error: unknown) {
-      console.error('Erreur création utilisateur:', error);
+      logger.error('[AdminUsersNew]', 'Erreur création utilisateur:', { error });
       toast.error(error.message || t('users.newUser.toastError'));
     } finally {
       setLoading(false);

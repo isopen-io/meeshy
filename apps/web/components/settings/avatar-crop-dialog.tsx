@@ -11,6 +11,7 @@ import { getCroppedImg, cleanupObjectUrl } from '@/utils/image-crop';
 import { RotateCw, ZoomIn, Loader2 } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
 import { useReducedMotion, SoundFeedback } from '@/hooks/use-accessibility';
+import { logger } from '@/utils/logger';
 
 interface AvatarCropDialogProps {
   open: boolean;
@@ -95,7 +96,7 @@ export function AvatarCropDialog({
       // Appeler le callback avec le fichier recadré
       onCropComplete(file);
     } catch (error) {
-      console.error('Erreur lors du recadrage:', error);
+      logger.error('[AvatarCropDialog]', 'Erreur lors du recadrage:', { error });
     } finally {
       setIsProcessing(false);
     }

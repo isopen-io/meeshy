@@ -6,6 +6,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { User } from '@/types';
 import { usersService } from '@/services';
 import { toast } from 'sonner';
+import { logger } from '@/utils/logger';
 
 /** @deprecated Use FriendRequest from '@/types/contacts' */
 interface FriendRequest {
@@ -93,7 +94,7 @@ export function useContactsFiltering(
       const users = await usersService.searchUsers(query);
       setSearchResults(Array.isArray(users) ? users : []);
     } catch (error) {
-      console.error('[CONTACTS] Erreur lors de la recherche:', error);
+      logger.error('[useContactsFiltering]', 'Erreur lors de la recherche', { error });
       toast.error(t('errors.searchError'));
       setSearchResults([]);
     }

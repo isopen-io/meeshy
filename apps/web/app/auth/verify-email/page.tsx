@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useState, useEffect, useCallback } from 'react';
+import { logger } from '@/utils/logger';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useI18n } from '@/hooks/useI18n';
 import { LargeLogo } from '@/components/branding';
@@ -125,7 +126,7 @@ function VerifyEmailContent() {
 
       try {
         const apiUrl = buildApiUrl('/auth/verify-email');
-        console.log('[VERIFY_EMAIL] Appel API:', apiUrl);
+        logger.info('[VerifyEmail]', 'Appel API', { data: apiUrl });
 
         const response = await fetch(apiUrl, {
           method: 'POST',
@@ -133,17 +134,17 @@ function VerifyEmailContent() {
           body: JSON.stringify({ token, email }),
         });
 
-        console.log('[VERIFY_EMAIL] Réponse HTTP:', response.status);
+        logger.info('[VerifyEmail]', 'Réponse HTTP', { data: response.status });
 
         const data = await response.json();
 
         if (response.ok && data.success) {
-          console.log('[VERIFY_EMAIL] ✅ Email vérifié avec succès');
+          logger.info('[VerifyEmail]', 'Email vérifié avec succès');
           setIsVerified(true);
 
           // Gérer le cas où l'email était déjà vérifié
           if (data.data?.alreadyVerified) {
-            console.log('[VERIFY_EMAIL] ℹ️ Email déjà vérifié le:', data.data.verifiedAt);
+            logger.info('[VerifyEmail]', 'Email déjà vérifié', { data: data.data.verifiedAt });
             setAlreadyVerified(true);
             setVerifiedAt(data.data.verifiedAt);
             toast.info(getText('verifyEmail.alreadyVerified', 'Votre email est déjà vérifié !'));
@@ -152,11 +153,11 @@ function VerifyEmailContent() {
             toast.success(getText('verifyEmail.success', 'Email vérifié avec succès !'));
           }
         } else {
-          console.error('[VERIFY_EMAIL] ❌ Échec:', data.error);
+          logger.error('[VerifyEmail]', 'Échec vérification', { data: data.error });
           setError(data.error || getText('verifyEmail.errors.verificationFailed', 'La vérification a échoué.'));
         }
       } catch (err) {
-        console.error('[VERIFY_EMAIL] Erreur réseau:', err);
+        logger.error('[VerifyEmail]', 'Erreur réseau', { error: err });
         setError(getText('verifyEmail.errors.networkError', 'Erreur de connexion. Veuillez réessayer.'));
       } finally {
         setIsVerifying(false);
@@ -173,7 +174,7 @@ function VerifyEmailContent() {
     setIsResending(true);
     try {
       const apiUrl = buildApiUrl('/auth/resend-verification');
-      console.log('[VERIFY_EMAIL] Renvoi à:', apiUrl);
+      logger.info('[VerifyEmail]', 'Renvoi email', { data: apiUrl });
 
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -189,7 +190,7 @@ function VerifyEmailContent() {
         toast.error(data.error || getText('verifyEmail.errors.resendFailed', 'Impossible d\'envoyer l\'email.'));
       }
     } catch (err) {
-      console.error('[VERIFY_EMAIL] Erreur renvoi:', err);
+      logger.error('[VerifyEmail]', 'Erreur renvoi', { error: err });
       toast.error(getText('verifyEmail.errors.networkError', 'Erreur de connexion.'));
     } finally {
       setIsResending(false);

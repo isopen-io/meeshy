@@ -17,6 +17,7 @@ import { useResolvedTheme } from '@/hooks/use-resolved-theme';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
+import { logger } from '@/utils/logger';
 
 interface TextViewerProps {
   attachment: UploadedAttachmentResponse;
@@ -62,7 +63,7 @@ export const TextViewer: React.FC<TextViewerProps> = ({
         const text = await response.text();
         setContent(text);
       } catch (error) {
-        console.error('Erreur chargement fichier texte:', error);
+        logger.error('[TextViewer]', 'Erreur chargement fichier texte', { error });
         setHasError(true);
         setErrorMessage(t('text.loadError'));
       } finally {
@@ -80,7 +81,7 @@ export const TextViewer: React.FC<TextViewerProps> = ({
       toast.success(t('text.copied'));
       setTimeout(() => setIsCopied(false), 2000);
     } catch (error) {
-      console.error('Erreur copie:', error);
+      logger.error('[TextViewer]', 'Erreur copie', { error });
       toast.error(t('text.copyError'));
     }
   };

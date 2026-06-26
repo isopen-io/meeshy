@@ -7,6 +7,7 @@ import { Flag, Loader2 } from 'lucide-react';
 import { apiService } from '@/services/api.service';
 import { useI18n } from '@/hooks/use-i18n';
 import { useCurrentInterfaceLanguage } from '@/stores/language-store';
+import { logger } from '@/utils/logger';
 
 interface AdminUserReport {
   id: string;
@@ -102,7 +103,7 @@ export function UserReportsSection({ userId }: { userId: string }) {
       setOffset(nextOffset + page.length);
       setError(null);
     } catch (err) {
-      console.error('Error fetching user reports:', err);
+      logger.error('[UserReportsSection]', 'Error fetching user reports:', { error: err });
       setError(t('usersDetail.loadError'));
     } finally {
       if (replace) setLoading(false); else setLoadingMore(false);

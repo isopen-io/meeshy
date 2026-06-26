@@ -11,6 +11,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Attachment } from '@meeshy/shared/types';
+import { logger } from '@/utils/logger';
 
 interface UseStreamUIOptions {
   messages: any[];
@@ -116,7 +117,7 @@ export function useStreamUI({
         }, 2000);
 
       } else {
-        console.warn('⚠️ Message non trouvé dans le DOM:', messageId);
+        logger.warn('[useStreamUI]', '⚠️ Message non trouvé dans le DOM', { data: messageId });
       }
     }, 300);
   }, []);

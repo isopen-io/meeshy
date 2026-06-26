@@ -24,6 +24,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { logger } from '@/utils/logger';
 
 // Helper to detect anonymous users
 function isAnonymousUser(user: unknown): user is Participant {
@@ -70,7 +71,7 @@ export function TagsManager({ conversationId, currentUser, onTagsUpdated }: Tags
         allPrefs.forEach(p => p.tags.forEach(tag => uniqueTags.add(tag)));
         setAllUserTags(Array.from(uniqueTags).sort());
       } catch (error) {
-        console.error('Error loading tags:', error);
+        logger.error('[TagsManager]', 'Error loading tags:', { error });
         setLocalTags([]);
         setAllUserTags([]);
       } finally {
@@ -104,7 +105,7 @@ export function TagsManager({ conversationId, currentUser, onTagsUpdated }: Tags
 
       onTagsUpdated?.();
     } catch (error) {
-      console.error('Error adding tag:', error);
+      logger.error('[TagsManager]', 'Error adding tag:', { error });
       toast.error(t('conversationDetails.tagAddError'));
       setLocalTags(localTags);
     }
@@ -119,7 +120,7 @@ export function TagsManager({ conversationId, currentUser, onTagsUpdated }: Tags
       toast.success(t('conversationDetails.tagRemoved'));
       onTagsUpdated?.();
     } catch (error) {
-      console.error('Error removing tag:', error);
+      logger.error('[TagsManager]', 'Error removing tag:', { error });
       toast.error(t('conversationDetails.tagRemoveError'));
       setLocalTags([...localTags, tagToRemove]);
     }

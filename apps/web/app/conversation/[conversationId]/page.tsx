@@ -1,5 +1,6 @@
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { logger } from '@/utils/logger';
 import { buildApiUrl } from '@/lib/config';
 import { isValidObjectId } from '@/utils/conversation-id-utils';
 import RedirectMessage from './RedirectMessage';

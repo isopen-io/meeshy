@@ -29,6 +29,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { apiService } from '@/services/api.service';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
+import { logger } from '@/utils/logger';
 
 interface TrackingLinkAdmin {
   id: string;
@@ -120,7 +121,7 @@ export default function AdminTrackingLinksPage() {
         setLinksTotal(response.data.total || 0);
       }
     } catch (error) {
-      console.error('Error loading tracking links:', error);
+      logger.error('[AdminTrackingLinks]', 'Error loading tracking links:', { error });
       toast.error(t('trackingLinks.loadError'));
     } finally {
       setLinksLoading(false);
@@ -214,7 +215,7 @@ export default function AdminTrackingLinksPage() {
         setClicksTotal(response.data.total || 0);
       }
     } catch (error) {
-      console.error('Error loading clicks:', error);
+      logger.error('[AdminTrackingLinks]', 'Error loading clicks:', { error });
       toast.error(t('trackingLinks.clicksLoadError'));
     } finally {
       setClicksLoading(false);

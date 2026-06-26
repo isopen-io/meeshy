@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLanguageStore } from '@/stores';
+import { logger } from '@/utils/logger';
 
 // Cache global pour éviter de recharger les mêmes fichiers
 // Bounded: 2 locales × ~25 namespaces = ~50 max entries in practice.
@@ -89,7 +90,7 @@ export function useI18n(namespace: string = 'common', options: UseI18nOptions = 
       
       return translations;
     } catch (error) {
-      console.error(`[i18n] ❌ Failed to load translations for ${locale}/${ns}:`, error);
+      logger.error('[usei18n]', `Failed to load translations for ${locale}/${ns}`, { error });
       
       // Si on est déjà sur le fallback, retourner un objet vide
       if (locale === fallbackLocale) {
@@ -102,7 +103,7 @@ export function useI18n(namespace: string = 'common', options: UseI18nOptions = 
         const fallbackTranslations = fallbackData.default || fallbackData;
         return fallbackTranslations;
       } catch (fallbackError) {
-        console.error(`[i18n] Failed to load fallback translations for ${fallbackLocale}/${ns}:`, fallbackError);
+        logger.error('[usei18n]', `Failed to load fallback translations for ${fallbackLocale}/${ns}`, { error: fallbackError });
         return {};
       }
     }
@@ -150,7 +151,7 @@ export function useI18n(namespace: string = 'common', options: UseI18nOptions = 
 
     // Debug: afficher l'état des translations seulement si elles sont censées être chargées
     if (shouldWarn && Object.keys(translations).length === 0) {
-      console.warn(`[i18n] Translations object is empty for namespace "${namespace}"`);
+      logger.warn('[usei18n]', `Translations object is empty for namespace "${namespace}"`);
     }
 
     // Naviguer dans l'objet de traductions en utilisant la clé avec points
@@ -163,10 +164,12 @@ export function useI18n(namespace: string = 'common', options: UseI18nOptions = 
       } else {
         // Clé non trouvée - retourner le fallback ou la clé elle-même
         if (shouldWarn && !fallback) {
-          console.warn(`[i18n] Missing translation key: ${namespace}.${key}`, {
-            translationsKeys: Object.keys(translations),
-            lookingFor: k,
-            currentValue: value
+          logger.warn('[usei18n]', `Missing translation key: ${namespace}.${key}`, {
+            data: {
+              translationsKeys: Object.keys(translations),
+              lookingFor: k,
+              currentValue: value
+            }
           });
         }
         return fallback || key;
@@ -176,7 +179,7 @@ export function useI18n(namespace: string = 'common', options: UseI18nOptions = 
     // Si la valeur n'est pas une string, retourner le fallback ou la clé
     if (typeof value !== 'string') {
       if (process.env.NODE_ENV === 'development' && !fallback) {
-        console.warn(`[i18n] Translation key "${namespace}.${key}" is not a string:`, value);
+        logger.warn('[usei18n]', `Translation key "${namespace}.${key}" is not a string`, { data: value });
       }
       return fallback || key;
     }
@@ -203,7 +206,7 @@ export function useI18n(namespace: string = 'common', options: UseI18nOptions = 
       } else {
         // Clé non trouvée
         if (process.env.NODE_ENV === 'development') {
-          console.warn(`[i18n] Missing translation array key: ${namespace}.${key}`);
+          logger.warn('[usei18n]', `Missing translation array key: ${namespace}.${key}`);
         }
         return [];
       }
@@ -216,7 +219,7 @@ export function useI18n(namespace: string = 'common', options: UseI18nOptions = 
     
     // Si ce n'est pas un tableau, retourner un tableau vide
     if (process.env.NODE_ENV === 'development') {
-      console.warn(`[i18n] Translation key "${namespace}.${key}" is not an array:`, value);
+      logger.warn('[usei18n]', `Translation key "${namespace}.${key}" is not an array`, { data: value });
     }
     return [];
   }, [translations, namespace]);

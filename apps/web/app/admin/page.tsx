@@ -25,6 +25,7 @@ import { getDefaultPermissions } from '@/utils/user-adapter';
 import { authManager } from '@/services/auth-manager.service';
 import { useI18n } from '@/hooks/use-i18n';
 import { useCurrentInterfaceLanguage } from '@/stores/language-store';
+import { logger } from '@/utils/logger';
 
 interface _UserCapabilities {
   role: string;
@@ -56,7 +57,7 @@ const AdminDashboard: React.FC = () => {
         toast.success(t('dashboard.statsRefreshed'));
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des statistiques admin:', error);
+      logger.error('[AdminDashboard]', 'Erreur lors du chargement des statistiques admin:', { error });
       toast.error(t('dashboard.loadError'));
     }
   };
@@ -79,7 +80,7 @@ const AdminDashboard: React.FC = () => {
           }),
           // Charger les stats admin en parallèle
           adminService.getDashboardStats().catch(error => {
-            console.error('Erreur lors du chargement des statistiques admin:', error);
+            logger.error('[AdminDashboard]', 'Erreur lors du chargement des statistiques admin:', { error });
             return null; // Retourner null en cas d'erreur pour ne pas bloquer le chargement user
           })
         ]);
@@ -137,7 +138,7 @@ const AdminDashboard: React.FC = () => {
         }
 
       } catch (error) {
-        console.error('Erreur lors du chargement des données admin:', error);
+        logger.error('[AdminDashboard]', 'Erreur lors du chargement des données admin:', { error });
         toast.error(t('dashboard.loadError'));
         router.push('/dashboard');
       } finally {

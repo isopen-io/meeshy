@@ -14,6 +14,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
 import { MermaidDiagram } from '@/components/markdown/MermaidDiagram';
 import { useI18n } from '@/hooks/useI18n';
+import { logger } from '@/utils/logger';
 
 interface MarkdownLightboxProps {
   attachment: UploadedAttachmentResponse | null;
@@ -52,7 +53,7 @@ export const MarkdownLightbox: React.FC<MarkdownLightboxProps> = ({
         const text = await response.text();
         setContent(text);
       } catch (error) {
-        console.error('Erreur chargement markdown:', error);
+        logger.error('[MarkdownLightbox]', 'Erreur chargement markdown', { error });
         setHasError(true);
       } finally {
         setIsLoading(false);

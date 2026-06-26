@@ -9,6 +9,7 @@ import { useAppStore } from './app-store';
 import { useAuthStore } from './auth-store';
 import { useLanguageStore } from './language-store';
 import { useUserPreferencesStore } from './user-preferences-store';
+import { logger } from '@/utils/logger';
 
 interface StoreInitializerProps {
   children: ReactNode;
@@ -55,7 +56,7 @@ export function StoreInitializer({ children }: StoreInitializerProps) {
         }
         
       } catch (error) {
-        console.error('[STORE_INITIALIZER] Store initialization failed:', error);
+        logger.error('[STORE_INITIALIZER]', 'Store initialization failed', { error });
         useAppStore.getState().addNotification({
           type: 'error',
           title: 'Initialization Error',

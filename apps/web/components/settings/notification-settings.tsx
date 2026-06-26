@@ -39,6 +39,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { usePreferences } from '@/hooks/use-preferences';
 import type { NotificationPreference } from '@meeshy/shared/types/preferences';
 import { NOTIFICATION_PREFERENCE_DEFAULTS } from '@meeshy/shared/types/preferences';
+import { logger } from '@/utils/logger';
 
 /**
  * Validation DND: startTime doit être différent de endTime
@@ -72,7 +73,7 @@ export function NotificationSettings() {
     updatePreferences,
   } = usePreferences<'notification'>('notification', {
     onError: (error) => {
-      console.error('[NotificationSettings] Error:', error);
+      logger.error('[NotificationSettings]', '[NotificationSettings] Error', { error });
       toast.error('message' in error ? error.message : 'Erreur lors de la sauvegarde');
     },
     onSuccess: () => {

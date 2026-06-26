@@ -7,6 +7,7 @@ import { usersService } from '@/services/users.service';
 import { useI18n } from '@/hooks/useI18n';
 import { toast } from 'sonner';
 import { NewConversationData } from '../types';
+import { logger } from '@/utils/logger';
 
 export function useConversationSelection(currentUser: User | null, isOpen: boolean) {
   const { t } = useI18n('modals');
@@ -37,7 +38,7 @@ export function useConversationSelection(currentUser: User | null, isOpen: boole
       );
       setConversations(linkableConversations);
     } catch (error) {
-      console.error('Error loading conversations:', error);
+      logger.error('[useConversationSelection]', 'Error loading conversations:', { error });
       toast.error(t('createLinkModal.errors.searchError'));
     } finally {
       setIsLoadingConversations(false);
@@ -57,7 +58,7 @@ export function useConversationSelection(currentUser: User | null, isOpen: boole
         const users = await usersService.searchUsers(trimmedQuery);
         setAvailableUsers(users);
       } catch (error) {
-        console.error('Error searching users:', error);
+        logger.error('[useConversationSelection]', 'Error searching users:', { error });
       } finally {
         setIsLoadingUsers(false);
       }
@@ -79,7 +80,7 @@ export function useConversationSelection(currentUser: User | null, isOpen: boole
       );
       setConversations(linkableResults);
     } catch (error) {
-      console.error('Error searching conversations:', error);
+      logger.error('[useConversationSelection]', 'Error searching conversations:', { error });
     } finally {
       setIsLoadingConversations(false);
     }

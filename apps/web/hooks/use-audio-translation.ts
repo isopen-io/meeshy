@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { logger } from '@/utils/logger';
 import type { SocketIOTranslatedAudio, AttachmentTranslations } from '@meeshy/shared/types';
 import type { AudioTranslationEventData } from '@meeshy/shared/types/socketio-events';
 import { toSocketIOTranslation } from '@meeshy/shared/types';
@@ -328,7 +329,7 @@ export function useAudioTranslation({
       }, 60000);
 
     } catch (error: any) {
-      console.error('[useAudioTranslation] Transcription request failed:', error);
+      logger.error('[useAudioTranslation]', 'Transcription request failed', { error });
       setIsTranscribing(false);
 
       if (error?.status === 403) {
@@ -382,7 +383,7 @@ export function useAudioTranslation({
       }, 120000);
 
     } catch (error: any) {
-      console.error('[useAudioTranslation] Translation request failed:', error);
+      logger.error('[useAudioTranslation]', 'Translation request failed', { error });
       setIsTranslating(false);
 
       if (error?.status === 403) {

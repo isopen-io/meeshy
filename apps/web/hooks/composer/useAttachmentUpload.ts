@@ -9,6 +9,7 @@
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
+import { logger } from '@/utils/logger';
 import { AttachmentService } from '@/services/attachmentService';
 import { compressMultipleFiles, needsCompression } from '@/utils/media-compression';
 import { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
@@ -205,7 +206,7 @@ export function useAttachmentUpload({
           allUploadedAttachments.push(...attachments);
         }
       } catch (error) {
-        console.error(`❌ Batch ${i + 1} upload error:`, error);
+        logger.error('[useAttachmentUpload]', `Batch ${i + 1} upload error`, { error });
       }
 
       uploadedCount += batch.length;
@@ -234,7 +235,7 @@ export function useAttachmentUpload({
     if (files.length === 0) return;
 
     const totalSize = files.reduce((sum, f) => sum + f.size, 0);
-    console.log(`📎 Traitement de ${files.length} fichier(s) (${(totalSize / (1024 * 1024)).toFixed(1)}MB)`);
+    logger.info('[useAttachmentUpload]', `Traitement de ${files.length} fichier(s) (${(totalSize / (1024 * 1024)).toFixed(1)}MB)`);
 
     // Filtrer les doublons
     const existingFileSignatures = new Set([
@@ -246,7 +247,7 @@ export function useAttachmentUpload({
       const signature = getFileSignature(file);
       const isDuplicate = existingFileSignatures.has(signature);
       if (isDuplicate) {
-        console.log(`❌ DOUBLON: ${file.name}`);
+        logger.info('[useAttachmentUpload]', `DOUBLON: ${file.name}`);
       }
       return !isDuplicate;
     });
@@ -267,7 +268,7 @@ export function useAttachmentUpload({
     // Validation des fichiers vides
     const emptyFiles = uniqueFiles.filter(f => f.size === 0);
     if (emptyFiles.length > 0) {
-      console.error('❌ Fichiers vides détectés:', emptyFiles.map(f => f.name));
+      logger.error('[useAttachmentUpload]', 'Fichiers vides détectés', { data: emptyFiles.map(f => f.name) });
       toast.error(`Fichier(s) vide(s) détecté(s): ${emptyFiles.map(f => f.name).join(', ')}`);
       const nonEmptyFiles = uniqueFiles.filter(f => f.size > 0);
       if (nonEmptyFiles.length === 0) {
@@ -281,7 +282,7 @@ export function useAttachmentUpload({
     const newTotalAttachments = currentTotalAttachments + uniqueFiles.length;
 
     if (newTotalAttachments > maxAttachments) {
-      console.log(`❌ Limite dépassée: ${newTotalAttachments}/${maxAttachments} attachements`);
+      logger.info('[useAttachmentUpload]', `Limite dépassée: ${newTotalAttachments}/${maxAttachments} attachements`);
       setAttemptedCount(newTotalAttachments);
       setShowAttachmentLimitModal(true);
       return;
@@ -290,7 +291,7 @@ export function useAttachmentUpload({
     // Valider les fichiers
     const validation = AttachmentService.validateFiles(uniqueFiles);
     if (!validation.valid) {
-      console.error('❌ Validation échouée:', validation.errors);
+      logger.error('[useAttachmentUpload]', 'Validation échouée', { error: validation.errors });
       validation.errors.forEach(error => {
         toast.error(error);
       });
@@ -300,7 +301,7 @@ export function useAttachmentUpload({
     // Compression si nécessaire
     const filesToCompress = uniqueFiles.filter(f => needsCompression(f));
     if (filesToCompress.length > 0) {
-      console.log(`🗜️ ${filesToCompress.length} fichier(s) nécessite(nt) une compression`);
+      logger.info('[useAttachmentUpload]', `${filesToCompress.length} fichier(s) nécessite(nt) une compression`);
       setIsCompressing(true);
       setCompressionProgress({});
 
@@ -320,7 +321,7 @@ export function useAttachmentUpload({
           toast.success(`Compression réussie ! ${(savedSize / (1024 * 1024)).toFixed(1)}MB économisés`);
         }
       } catch (error) {
-        console.error('❌ Erreur compression:', error);
+        logger.error('[useAttachmentUpload]', 'Erreur compression', { error });
         toast.error('Erreur lors de la compression, fichiers originaux utilisés');
       } finally {
         setIsCompressing(false);
@@ -334,7 +335,7 @@ export function useAttachmentUpload({
 
     try {
       if (uniqueFiles.length > batchSize) {
-        console.log(`📦 Upload en batches: ${uniqueFiles.length} fichiers (${Math.ceil(uniqueFiles.length / batchSize)} batches)`);
+        logger.info('[useAttachmentUpload]', `Upload en batches: ${uniqueFiles.length} fichiers (${Math.ceil(uniqueFiles.length / batchSize)} batches)`);
         await uploadFilesInBatches(uniqueFiles, additionalMetadata);
       } else {
         const response = await AttachmentService.uploadFiles(
@@ -346,7 +347,7 @@ export function useAttachmentUpload({
             if (percentage % 25 === 0) {
               const totalSizeMB = total / (1024 * 1024);
               if (totalSizeMB > 50) {
-                console.log(`📊 ${percentage}% - ${(loaded / (1024 * 1024)).toFixed(1)}/${totalSizeMB.toFixed(1)}MB`);
+                logger.info('[useAttachmentUpload]', `${percentage}% - ${(loaded / (1024 * 1024)).toFixed(1)}/${totalSizeMB.toFixed(1)}MB`);
               }
             }
           }
@@ -355,14 +356,14 @@ export function useAttachmentUpload({
         // Support both { attachments: [...] } and { data: { attachments: [...] } } response formats
         const attachments = response.attachments || (response as any).data?.attachments;
         if (response.success && attachments) {
-          console.log(`✅ Upload réussi: ${attachments.length} fichier(s)`);
+          logger.info('[useAttachmentUpload]', `Upload réussi: ${attachments.length} fichier(s)`);
           setUploadedAttachments(prev => [...prev, ...attachments]);
         } else {
-          console.warn('⚠️ Upload sans succès:', response);
+          logger.warn('[useAttachmentUpload]', 'Upload sans succès', { data: response });
         }
       }
     } catch (error) {
-      console.error('❌ Upload error:', error);
+      logger.error('[useAttachmentUpload]', 'Upload error', { error });
       if (error instanceof Error) {
         toast.error(`Upload failed: ${error.message}`);
       } else {
@@ -389,7 +390,7 @@ export function useAttachmentUpload({
         setUploadedAttachments(prev => [...prev, response.attachment]);
       }
     } catch (error) {
-      console.error('❌ Erreur création text attachment:', error);
+      logger.error('[useAttachmentUpload]', 'Erreur création text attachment', { error });
       setSelectedFiles(prev => prev.slice(0, -1));
     } finally {
       setIsUploading(false);
@@ -404,7 +405,7 @@ export function useAttachmentUpload({
       try {
         await AttachmentService.deleteAttachment(attachmentToDelete.id, token);
       } catch (error) {
-        console.error('❌ Erreur suppression attachment:', error);
+        logger.error('[useAttachmentUpload]', 'Erreur suppression attachment', { error });
         toast.error('Impossible de supprimer le fichier');
         return;
       }
@@ -455,7 +456,7 @@ export function useAttachmentUpload({
     if (files.length > 0) {
       const totalSize = files.reduce((sum, f) => sum + f.size, 0);
       const sizeMB = (totalSize / (1024 * 1024)).toFixed(1);
-      console.log(`📱 Fichier(s) sélectionné(s): ${files.map(f => f.name).join(', ')} (${sizeMB}MB)`);
+      logger.info('[useAttachmentUpload]', `Fichier(s) sélectionné(s): ${files.map(f => f.name).join(', ')} (${sizeMB}MB)`);
 
       if (totalSize > 50 * 1024 * 1024) {
         toast.info(`Préparation de ${files.length} fichier(s) (${sizeMB}MB)...`, { duration: 2000 });

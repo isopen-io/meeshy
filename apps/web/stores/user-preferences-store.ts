@@ -7,6 +7,7 @@ import type {
   NotificationPreference,
   PrivacyPreference,
 } from '@meeshy/shared/types/preferences';
+import { logger } from '@/utils/logger';
 
 export type { EncryptionPreference } from '@meeshy/shared/types';
 
@@ -191,7 +192,7 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
           await get().syncAll();
           set({ isInitialized: true, lastSyncedAt: new Date().toISOString() });
         } catch (error) {
-          console.error('[UserPreferencesStore] Initialization error:', error);
+          logger.error('[UserPreferencesStore]', 'Initialization error', { error });
           set({ error: 'Failed to load preferences', isInitialized: true });
         } finally {
           set({ isLoading: false });
@@ -233,7 +234,7 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
             }
           }
         } catch (error) {
-          console.error('[UserPreferencesStore] Error syncing notifications:', error);
+          logger.error('[UserPreferencesStore]', 'Error syncing notifications', { error });
         }
       },
 
@@ -270,7 +271,7 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
             }
           }
         } catch (error) {
-          console.error('[UserPreferencesStore] Error syncing encryption:', error);
+          logger.error('[UserPreferencesStore]', 'Error syncing encryption', { error });
         }
       },
 
@@ -306,7 +307,7 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
           }
         } catch (error) {
           // Privacy endpoint might not exist yet - use defaults
-          console.warn('[UserPreferencesStore] Privacy endpoint not available, using defaults');
+          logger.warn('[UserPreferencesStore]', 'Privacy endpoint not available, using defaults');
         }
       },
 
@@ -339,7 +340,7 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
             throw new Error('Failed to update notification preferences');
           }
         } catch (error) {
-          console.error('[UserPreferencesStore] Error updating notifications:', error);
+          logger.error('[UserPreferencesStore]', 'Error updating notifications', { error });
           throw error;
         }
       },
@@ -380,7 +381,7 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
             throw new Error('Failed to update encryption preferences');
           }
         } catch (error) {
-          console.error('[UserPreferencesStore] Error updating encryption:', error);
+          logger.error('[UserPreferencesStore]', 'Error updating encryption', { error });
           throw error;
         }
       },
@@ -415,7 +416,7 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
             throw new Error('Failed to update privacy preferences');
           }
         } catch (error) {
-          console.error('[UserPreferencesStore] Error updating privacy:', error);
+          logger.error('[UserPreferencesStore]', 'Error updating privacy', { error });
           throw error;
         }
       },

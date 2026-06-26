@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { pwaBadge } from '@/utils/pwa-badge';
 import { useNotificationsManagerRQ } from '@/hooks/queries/use-notifications-manager-rq';
+import { logger } from '@/utils/logger';
 
 interface UsePWABadgeOptions {
   autoSync?: boolean;
@@ -22,7 +23,7 @@ export function usePWABadge(options: UsePWABadgeOptions = {}) {
     const isSupported = pwaBadge.isSupported();
 
     if (debug) {
-      console.log('[usePWABadge] Badge API supported:', isSupported);
+      logger.info('[usePWABadge]', 'Badge API supported', { data: isSupported });
     }
 
     if (isSupported) {
@@ -45,7 +46,7 @@ export function usePWABadge(options: UsePWABadgeOptions = {}) {
       }
 
       if (debug) {
-        console.log('[usePWABadge] Syncing badge:', unreadCount);
+        logger.info('[usePWABadge]', 'Syncing badge', { data: unreadCount });
       }
 
       const success = await pwaBadge.setCount(unreadCount);

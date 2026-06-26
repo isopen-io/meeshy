@@ -9,6 +9,7 @@ import { getDefaultPermissions } from '@/utils/user-adapter';
 
 import { authManager } from '@/services/auth-manager.service';
 import { useI18n } from '@/hooks/use-i18n';
+import { logger } from '@/utils/logger';
 
 interface DebugInfo {
   token: string | null;
@@ -71,7 +72,7 @@ const AdminDebug: React.FC = () => {
         });
 
       } catch (error) {
-        console.error('Failed to load debug info:', error);
+        logger.error('[AdminDebug]', 'Failed to load debug info:', { error });
       } finally {
         setLoading(false);
       }

@@ -13,6 +13,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { MentionAutocomplete } from '@/components/common/MentionAutocomplete';
 import { detectMentionAtCursor } from '@meeshy/shared/types/mention';
 import { getCursorPosition, adjustPositionForViewport } from '@/lib/cursor-position';
+import { logger } from '@/utils/logger';
 
 const DEFAULT_LANGUAGE = 'fr';
 const TRANSLATION_LANGUAGES = SUPPORTED_LANGUAGES.filter(l => l.supportsTranslation);

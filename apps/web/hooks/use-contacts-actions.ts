@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { authManager } from '@/services/auth-manager.service';
 import { buildApiUrl } from '@/lib/config';
 import { User } from '@/types';
+import { logger } from '@/utils/logger';
 
 /** @deprecated Use useFriendRequestsV2 from @/hooks/v2 */
 export function useContactsActions(
@@ -64,7 +65,7 @@ export function useContactsActions(
         throw new Error(error.error || t('errors.conversationCreationError'));
       }
     } catch (error) {
-      console.error('Erreur lors de la création de la conversation:', error);
+      logger.error('[useContactsActions]', 'Erreur lors de la création de la conversation', { error });
       toast.error(error instanceof Error ? error.message : t('errors.conversationCreationError'));
     }
   }, [router, t, getUserDisplayName]);
@@ -91,7 +92,7 @@ export function useContactsActions(
         toast.error(error.error || t('errors.updateError'));
       }
     } catch (error) {
-      console.error('Erreur friend request:', error);
+      logger.error('[useContactsActions]', 'Erreur friend request', { error });
       toast.error(t('errors.updateError'));
     }
   }, [t, onRefresh]);
@@ -118,7 +119,7 @@ export function useContactsActions(
         toast.error(error.error || t('errors.sendError'));
       }
     } catch (error) {
-      console.error('Erreur envoi friend request:', error);
+      logger.error('[useContactsActions]', 'Erreur envoi friend request', { error });
       toast.error(t('errors.sendError'));
     }
   }, [t]);
@@ -143,7 +144,7 @@ export function useContactsActions(
         toast.error(error.error || t('errors.updateError'));
       }
     } catch (error) {
-      console.error('Erreur annulation friend request:', error);
+      logger.error('[useContactsActions]', 'Erreur annulation friend request', { error });
       toast.error(t('errors.updateError'));
     }
   }, [t]);

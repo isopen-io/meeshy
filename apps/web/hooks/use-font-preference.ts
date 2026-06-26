@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { authManager } from '@/services/auth-manager.service';
 import { FontFamily, getFontConfig } from '@/lib/fonts';
 import { buildApiUrl } from '@/lib/config';
+import { logger } from '@/utils/logger';
 
 const FONT_PREFERENCE_KEY = 'font-family';
 const DEFAULT_FONT_ID: FontFamily = 'nunito';
@@ -64,13 +65,13 @@ export function useFontPreference() {
               }
             }
           } catch (backendError) {
-            console.warn('Could not load font preference from backend:', backendError);
+            logger.warn('[useFontPreference]', 'Could not load font preference from backend', { data: backendError });
             // Continuer avec la police locale ou par défaut
           }
         }
 
       } catch (err) {
-        console.error('Error loading font preference:', err);
+        logger.error('[useFontPreference]', 'Error loading font preference', { error: err });
         setError('Erreur lors du chargement des préférences de police');
         setCurrentFont(DEFAULT_FONT_ID);
         applyFontToDocument(DEFAULT_FONT_ID);
@@ -148,17 +149,17 @@ export function useFontPreference() {
             });
 
             if (!response.ok) {
-              console.warn('Could not save font preference to backend');
+              logger.warn('[useFontPreference]', 'Could not save font preference to backend');
             }
           } catch (backendError) {
-            console.warn('Backend save failed:', backendError);
+            logger.warn('[useFontPreference]', 'Backend save failed', { data: backendError });
             // L'erreur n'est pas critique car nous avons le localStorage
           }
         }
       }
 
     } catch (err) {
-      console.error('Error changing font:', err);
+      logger.error('[useFontPreference]', 'Error changing font', { error: err });
       setError(err instanceof Error ? err.message : 'Erreur lors du changement de police');
     }
   }, [applyFontToDocument]);

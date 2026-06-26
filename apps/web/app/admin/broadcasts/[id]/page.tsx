@@ -11,6 +11,7 @@ import { adminService } from '@/services/admin.service';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
 import { StatCardSkeleton } from '@/components/admin/TableSkeleton';
+import { logger } from '@/utils/logger';
 
 export default function BroadcastDetailPage() {
   const router = useRouter();
@@ -48,7 +49,7 @@ export default function BroadcastDetailPage() {
         }
       }
     } catch (error) {
-      console.error('Erreur chargement broadcast:', error);
+      logger.error('[AdminBroadcastDetail]', 'Erreur chargement broadcast:', { error });
       toast.error(t('broadcasts.detailLoadError'));
     } finally {
       setLoading(false);
@@ -73,7 +74,7 @@ export default function BroadcastDetailPage() {
           }
         }
       } catch (error) {
-        console.error('Erreur polling broadcast:', error);
+        logger.error('[AdminBroadcastDetail]', 'Erreur polling broadcast:', { error });
       }
     }, 3000);
     return () => clearInterval(interval);
@@ -91,7 +92,7 @@ export default function BroadcastDetailPage() {
       const data = res.data?.data || res.data;
       if (data) setBroadcast(data);
     } catch (error) {
-      console.error('Erreur envoi broadcast:', error);
+      logger.error('[AdminBroadcastDetail]', 'Erreur envoi broadcast:', { error });
       toast.error(t('broadcasts.detailSendError'));
     } finally {
       setSending(false);
@@ -105,7 +106,7 @@ export default function BroadcastDetailPage() {
       toast.success(t('broadcasts.detailDeleteSuccess'));
       router.push('/admin/broadcasts');
     } catch (error) {
-      console.error('Erreur suppression broadcast:', error);
+      logger.error('[AdminBroadcastDetail]', 'Erreur suppression broadcast:', { error });
       toast.error(t('broadcasts.detailDeleteError'));
     }
   };
@@ -116,7 +117,7 @@ export default function BroadcastDetailPage() {
       toast.success(t('broadcasts.detailPreviewStarted'));
       loadBroadcast();
     } catch (error) {
-      console.error('Erreur preview:', error);
+      logger.error('[AdminBroadcastDetail]', 'Erreur preview:', { error });
       toast.error(t('broadcasts.detailPreviewError'));
     }
   };
@@ -127,7 +128,7 @@ export default function BroadcastDetailPage() {
       toast.success(t('broadcasts.detailRetryStarted'));
       loadBroadcast();
     } catch (error) {
-      console.error('Erreur retry:', error);
+      logger.error('[AdminBroadcastDetail]', 'Erreur retry:', { error });
       toast.error(t('broadcasts.detailRetryError'));
     }
   };

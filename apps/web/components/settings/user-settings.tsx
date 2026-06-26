@@ -40,6 +40,7 @@ import { usePhoneValidation } from '@/hooks/use-phone-validation';
 import { COUNTRY_CODES, resolveCountry, flagForCountry, formatPhoneWithDialCode } from '@/constants/countries';
 import type { CountryCode } from 'libphonenumber-js';
 import { invalidateAuthCache } from '@/hooks/use-auth';
+import { logger } from '@/utils/logger';
 
 interface UserSettingsProps {
   user: UserType | null;
@@ -241,7 +242,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
       onUserUpdate(updatedUser);
       toast.success(t('profile.actions.languageUpdated', 'Langue mise à jour'));
     } catch (error) {
-      console.error('Error updating language:', error);
+      logger.error('[UserSettings]', 'Error updating language', { error });
       toast.error(error instanceof Error ? error.message : t('profile.actions.updateError'));
 
       // Rollback optimistic update
@@ -349,7 +350,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
       setShowAvatarDialog(false);
       setAvatarPreview(null);
     } catch (error) {
-      console.error('Erreur lors de l\'upload:', error);
+      logger.error('[UserSettings]', 'Erreur lors de l\'upload', { error });
       toast.error(error instanceof Error ? error.message : t('profile.avatar.uploadError', 'Erreur lors de l\'upload de l\'avatar'));
     } finally {
       setIsUploadingAvatar(false);
@@ -410,7 +411,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
         toast.error(data.error || t('profile.username.error', 'Erreur lors du changement'));
       }
     } catch (error) {
-      console.error('Error changing username:', error);
+      logger.error('[UserSettings]', 'Error changing username', { error });
       toast.error(t('profile.username.error', 'Erreur lors du changement'));
     } finally {
       setIsChangingUsername(false);
@@ -454,7 +455,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
         toast.error(data.error || t('profile.email.error', 'Erreur lors du changement'));
       }
     } catch (error) {
-      console.error('Error initiating email change:', error);
+      logger.error('[UserSettings]', 'Error initiating email change', { error });
       toast.error(t('profile.email.error', 'Erreur lors du changement'));
     } finally {
       setIsSavingEmail(false);
@@ -494,7 +495,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
         toast.error(data.error || t('profile.phone.error', 'Erreur lors du changement'));
       }
     } catch (error) {
-      console.error('Error initiating phone change:', error);
+      logger.error('[UserSettings]', 'Error initiating phone change', { error });
       toast.error(t('profile.phone.error', 'Erreur lors du changement'));
     } finally {
       setIsSavingPhone(false);
@@ -542,7 +543,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
         toast.error(data.error || t('profile.phone.verifyError', 'Code invalide ou expiré'));
       }
     } catch (error) {
-      console.error('Error verifying phone change:', error);
+      logger.error('[UserSettings]', 'Error verifying phone change', { error });
       toast.error(t('profile.phone.verifyError', 'Erreur lors de la vérification'));
     } finally {
       setIsVerifyingPhone(false);
@@ -564,7 +565,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
             setUsernameSuggestions(data.data.suggestions);
           }
         } catch (error) {
-          console.error('Error loading username suggestions:', error);
+          logger.error('[UserSettings]', 'Error loading username suggestions', { error });
         }
       } else {
         setUsernameSuggestions([]);
@@ -624,7 +625,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
               }
             }
           } catch (refreshError) {
-            console.error('Error refreshing user data:', refreshError);
+            logger.error('[UserSettings]', 'Error refreshing user data', { error: refreshError });
             // Même si le rechargement échoue, on informe l'utilisateur que l'email est vérifié
           }
         } else {
@@ -632,7 +633,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
         }
       }
     } catch (error) {
-      console.error('Error resending email verification:', error);
+      logger.error('[UserSettings]', 'Error resending email verification', { error });
       toast.error(t('profile.verification.email.error', 'Erreur lors de l\'envoi'));
     } finally {
       setIsResendingEmail(false);
@@ -669,7 +670,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
         toast.error(data.error || t('profile.email.resendError', 'Erreur lors du renvoi de l\'email'));
       }
     } catch (error) {
-      console.error('Error resending pending email verification:', error);
+      logger.error('[UserSettings]', 'Error resending pending email verification', { error });
       toast.error(t('profile.email.resendError', 'Erreur lors du renvoi de l\'email'));
     } finally {
       setIsResendingPendingEmail(false);
@@ -704,7 +705,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
         toast.error(data.error || t('profile.verification.phone.sendError', 'Erreur lors de l\'envoi du code'));
       }
     } catch (error) {
-      console.error('Error sending phone code:', error);
+      logger.error('[UserSettings]', 'Error sending phone code', { error });
       toast.error(t('profile.verification.phone.sendError', 'Erreur lors de l\'envoi du code'));
     } finally {
       setIsSendingPhoneCode(false);
@@ -755,7 +756,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
         toast.error(data.error || t('profile.verification.phone.verifyError', 'Code invalide ou expiré'));
       }
     } catch (error) {
-      console.error('Error verifying phone code:', error);
+      logger.error('[UserSettings]', 'Error verifying phone code', { error });
       toast.error(t('profile.verification.phone.verifyError', 'Erreur lors de la vérification'));
     } finally {
       setIsVerifyingPhone(false);
@@ -796,7 +797,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
       onUserUpdate(updatedUser);
       toast.success(t('profile.actions.profileUpdated'));
     } catch (error) {
-      console.error('Erreur lors de la mise à jour:', error);
+      logger.error('[UserSettings]', 'Erreur lors de la mise à jour', { error });
       toast.error(error instanceof Error ? error.message : t('profile.actions.updateError'));
     } finally {
       setIsLoading(false);
@@ -877,7 +878,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
         confirmPassword: '',
       });
     } catch (error) {
-      console.error('Password change error:', error);
+      logger.error('[UserSettings]', 'Password change error', { error });
       toast.error(error instanceof Error ? error.message : t('security.password.errors.updateFailed'));
     } finally {
       setIsPasswordLoading(false);

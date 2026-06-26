@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import type { Message } from '@meeshy/shared/types/conversation';
 import { useReactionsQuery } from '@/hooks/queries/use-reactions-query';
 import { useI18n } from '@/hooks/useI18n';
+import { logger } from '@/utils/logger';
 
 interface ReactionSelectionMessageViewProps {
   message: Message;

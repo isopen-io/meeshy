@@ -15,6 +15,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { useBotProtection } from '@/hooks/use-bot-protection';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { logger } from '@/utils/logger';
 
 interface ForgotPasswordFormProps {
   className?: string;
@@ -115,7 +116,7 @@ export function ForgotPasswordForm({ className, onSuccess }: ForgotPasswordFormP
         router.push('/forgot-password/check-email');
       }
     } catch (error) {
-      console.error('[ForgotPasswordForm] Error requesting reset:', error);
+      logger.error('[ForgotPasswordForm]', '[ForgotPasswordForm] Error requesting reset', { error });
       const errorMessage =
         error instanceof Error
           ? error.message

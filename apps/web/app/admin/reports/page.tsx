@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
 import { StatsGrid, TimeSeriesChart, DonutChart, StatItem, TimeSeriesDataPoint, DonutDataPoint } from '@/components/admin/Charts';
 import { TableSkeleton, StatCardSkeleton } from '@/components/admin/TableSkeleton';
+import { logger } from '@/utils/logger';
 
 interface Report {
   id: string;
@@ -177,7 +178,7 @@ export default function AdminReportsPage() {
       setTotalPages(Math.ceil(filteredReports.length / pageSize));
 
     } catch (error) {
-      console.error('Erreur lors du chargement des signalements:', error);
+      logger.error('[AdminReports]', 'Erreur lors du chargement des signalements:', { error });
       toast.error(t('reports.loadError'));
     } finally {
       setLoading(false);

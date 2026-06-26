@@ -8,6 +8,7 @@
 'use client';
 
 import { useCallback, useRef, useEffect } from 'react';
+import { logger } from '@/utils/logger';
 
 interface UseTextareaAutosizeOptions {
   /** Hauteur minimale en pixels */
@@ -51,7 +52,7 @@ export function useTextareaAutosize({
       try {
         textareaRef.current.style.height = `${minHeight}px`;
       } catch (error) {
-        console.warn('Error initializing textarea:', error);
+        logger.warn('[useTextareaAutosize]', 'Error initializing textarea', { data: error });
       }
     }
   }, [minHeight]);
@@ -113,7 +114,7 @@ export function useTextareaAutosize({
       // Auto-scroll vers la fin pendant la frappe
       textarea.scrollTop = textarea.scrollHeight;
     } catch (error) {
-      console.warn('Error resizing textarea:', error);
+      logger.warn('[useTextareaAutosize]', 'Error resizing textarea', { data: error });
     }
   }, [minHeight, maxHeight]);
 
@@ -124,7 +125,7 @@ export function useTextareaAutosize({
         textareaRef.current.style.height = `${minHeight}px`;
         textareaRef.current.style.overflowY = 'hidden';
       } catch (error) {
-        console.warn('Error resetting textarea:', error);
+        logger.warn('[useTextareaAutosize]', 'Error resetting textarea', { data: error });
       }
     }
 

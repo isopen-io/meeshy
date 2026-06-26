@@ -18,6 +18,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { webSocketService } from '@/services/websocket.service';
 import type { Message, TranslationEvent, TypingEvent, UserStatusEvent } from '@/types';
+import { logger } from '@/utils/logger';
 
 export interface UseWebSocketOptions {
   conversationId?: string | null;
@@ -132,7 +133,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
     clientMessageId?: string,
   ): Promise<boolean> => {
     if (!conversationId) {
-      console.error('❌ [HOOK] Pas de conversationId');
+      logger.error('[useWebSocket]', 'Pas de conversationId');
       return false;
     }
 
@@ -159,7 +160,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
     clientMessageId?: string,
   ): Promise<boolean> => {
     if (!conversationId) {
-      console.error('❌ [HOOK] Pas de conversationId');
+      logger.error('[useWebSocket]', 'Pas de conversationId');
       return false;
     }
 

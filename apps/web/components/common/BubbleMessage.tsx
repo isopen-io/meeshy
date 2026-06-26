@@ -20,6 +20,7 @@ import { ReportMessageView } from './bubble-message/ReportMessageView';
 import { formatRelativeDate } from '@/utils/date-format';
 import { hasModeratorPrivileges } from '@meeshy/shared/types/role-types';
 import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
+import { logger } from '@/utils/logger';
 
 interface BubbleMessageProps {
   message: Message & {

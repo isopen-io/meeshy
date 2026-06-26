@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
 import { TableSkeleton, StatCardSkeleton } from '@/components/admin/TableSkeleton';
 import { useCurrentInterfaceLanguage } from '@/stores/language-store';
+import { logger } from '@/utils/logger';
 
 export default function AdminUsersPage() {
   const router = useRouter();
@@ -80,7 +81,7 @@ export default function AdminUsersPage() {
         setTotalPages(Math.max(1, Math.ceil(total / pageSize)));
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des données utilisateurs:', error);
+      logger.error('[AdminUsers]', 'Erreur lors du chargement des données utilisateurs:', { error });
       toast.error(t('usersList.loadError'));
       setUsers([]);
     } finally {

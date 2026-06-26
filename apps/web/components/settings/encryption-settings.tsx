@@ -19,6 +19,7 @@ import {
 import { useAuthStore } from '@/stores/auth-store';
 import { useReducedMotion, SoundFeedback } from '@/hooks/use-accessibility';
 import { TwoFactorSettings } from './TwoFactorSettings';
+import { logger } from '@/utils/logger';
 
 export function EncryptionSettings() {
   const { t } = useI18n('settings');
@@ -94,7 +95,7 @@ export function EncryptionSettings() {
       setHasChanges(false);
       toast.success(t('encryption.actions.preferencesUpdated'));
     } catch (error) {
-      console.error('Error saving encryption preference:', error);
+      logger.error('[EncryptionSettings]', 'Error saving encryption preference:', { error });
       toast.error(t('encryption.errors.updateFailed'));
     } finally {
       setSaving(false);
@@ -118,7 +119,7 @@ export function EncryptionSettings() {
         toast.success(t('encryption.status.keysGenerated'));
       }
     } catch (error) {
-      console.error('Error generating keys:', error);
+      logger.error('[EncryptionSettings]', 'Error generating keys:', { error });
       if (error instanceof Error) {
         toast.error(error.message || t('encryption.errors.generateFailed'));
       } else {

@@ -14,6 +14,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { generateLinkName } from '@/utils/link-name-generator';
 import { conversationsService } from '@/services/conversations.service';
 import { authManager } from '@/services/auth-manager.service';
+import { logger } from '@/utils/logger';
 
 interface CreateLinkButtonProps {
   conversationId?: string; // ID de la conversation (optionnel, détecté depuis l'URL sinon)
@@ -199,11 +200,11 @@ export function CreateLinkButton({
         onLinkCreated?.();
       } else {
         const error = await response.json();
-        console.error('Erreur API:', error);
+        logger.error('[CreateLinkButton]', 'Erreur API:', { error });
         toast.error(error.message || t('createLinkButton.error'));
       }
     } catch (error) {
-      console.error('Erreur création lien:', error);
+      logger.error('[CreateLinkButton]', 'Erreur création lien:', { error });
       toast.error(t('createLinkButton.error'));
     } finally {
       setIsCreating(false);
@@ -244,7 +245,7 @@ export function CreateLinkButton({
         setPendingConversationId(currentConversationId);
         setIsQuickConfigModalOpen(true);
       } catch (error) {
-        console.error('Erreur récupération conversation:', error);
+        logger.error('[CreateLinkButton]', 'Erreur récupération conversation:', { error });
         toast.error(t('conversations.createLinkButton.fetchError'));
       }
     } else {

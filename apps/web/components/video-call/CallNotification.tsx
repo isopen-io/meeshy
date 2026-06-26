@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useI18n } from '@/hooks/useI18n';
 import type { CallInitiatedEvent } from '@meeshy/shared/types/video-call';
+import { logger } from '@/utils/logger';
 
 interface CallNotificationProps {
   call: CallInitiatedEvent;
@@ -29,7 +30,7 @@ export function CallNotification({ call, onAccept, onReject }: CallNotificationP
       ringtoneRef.current = getRingtone();
       ringtoneRef.current.play();
     }).catch((error) => {
-      console.warn('[CallNotification] Could not play ringtone:', error);
+      logger.warn('[CallNotification]', 'Could not play ringtone', { error });
     });
 
     // Cleanup on unmount

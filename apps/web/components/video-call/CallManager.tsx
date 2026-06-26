@@ -101,7 +101,7 @@ export function CallManager() {
    * Handle incoming call
    */
   const handleIncomingCall = useCallback(async (event: CallInitiatedEvent) => {
-    console.log('🔔 [CallManager] call:initiated event received', {
+    logger.info('[CallManager]', 'call:initiated event received', {
       callId: event.callId,
       initiator: event.initiator,
       participants: event.participants,
@@ -112,7 +112,6 @@ export function CallManager() {
 
     // Wait for user to be loaded
     if (!user) {
-      console.error('❌ [CallManager] User not loaded yet - ignoring call:initiated');
       logger.warn('[CallManager]', 'User not loaded yet - ignoring call:initiated');
       // Toast métier désactivé - utiliser le système de notifications v2
       return;
@@ -127,7 +126,7 @@ export function CallManager() {
 
     // Check if current user is the initiator
     const isInitiator = user.id === event.initiator.userId;
-    console.log('🔍 [CallManager] isInitiator check:', {
+    logger.debug('[CallManager]', 'isInitiator check', {
       currentUserId: user.id,
       initiatorId: event.initiator.userId,
       isInitiator
@@ -163,7 +162,7 @@ export function CallManager() {
       // Toast métier désactivé - utiliser le système de notifications v2
     } else {
       // I am being called - show notification
-      console.log('📞 [CallManager] Setting incomingCall state - should show CallNotification', {
+      logger.debug('[CallManager]', 'Setting incomingCall state - should show CallNotification', {
         callId: event.callId,
         from: event.initiator.username
       });

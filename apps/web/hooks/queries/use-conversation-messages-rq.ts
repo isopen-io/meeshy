@@ -20,6 +20,7 @@ import { messagesService } from '@/services/conversations/messages.service';
 import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
 import type { Message, User } from '@meeshy/shared/types';
 import type { OptimisticMessage } from '@/utils/optimistic-message';
+import { logger } from '@/utils/logger';
 export type { OptimisticMessage } from '@/utils/optimistic-message';
 
 function isOptimisticMessage(m: Message): m is OptimisticMessage {
@@ -466,7 +467,7 @@ export function useConversationMessagesRQ(
     if (!conversationId) return;
     // Own-message invariant: server response must preserve senderId consistency
     if (currentUser && serverMessage.senderId !== currentUser.id) {
-      console.warn('[replaceOptimisticMessage] senderId mismatch — server:', serverMessage.senderId, 'user:', currentUser.id);
+      logger.warn('[useConversationMessagesRq]', 'senderId mismatch', { data: { server: serverMessage.senderId, user: currentUser.id } });
     }
     queryClient.setQueryData(queryKey, (old: typeof data) => {
       if (!old) return old;

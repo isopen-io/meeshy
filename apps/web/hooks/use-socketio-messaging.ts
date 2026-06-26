@@ -12,6 +12,7 @@ import { authManager } from '@/services/auth-manager.service';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import type { Message, User, TypingEvent, UserStatusEvent, TranslationEvent } from '@/types';
 import type { TranslationFailedEventData } from '@meeshy/shared/types/socketio-events';
+import { logger } from '@/utils/logger';
 
 export interface UseSocketIOMessagingOptions {
   conversationId?: string | null;
@@ -197,7 +198,7 @@ export function useSocketIOMessaging(options: UseSocketIOMessagingOptions = {}) 
     forwardedFromConversationId?: string,
   ) => {
     if (!conversationId) {
-      console.error('[useSocketIOMessaging] Pas de conversationId');
+      logger.error('[useSocketIOMessaging]', 'Pas de conversationId');
       return { success: false } as const;
     }
 

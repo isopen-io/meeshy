@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useState, useRef, useEffect } from 'react';
+import { logger } from '@/utils/logger';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useI18n } from '@/hooks/useI18n';
 import { LargeLogo } from '@/components/branding';
@@ -214,7 +215,7 @@ function VerifyPhoneContent() {
 
     try {
       const apiUrl = buildApiUrl('/auth/send-phone-code');
-      console.log('[VERIFY_PHONE] Envoi du code à:', apiUrl);
+      logger.info('[VerifyPhone]', 'Envoi du code', { data: apiUrl });
 
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -225,16 +226,16 @@ function VerifyPhoneContent() {
       const data = await response.json();
 
       if (response.ok && data.success) {
-        console.log('[VERIFY_PHONE] ✅ Code envoyé');
+        logger.info('[VerifyPhone]', 'Code envoyé');
         toast.success(t('verifyPhone.codeSent') || 'Code envoyé par SMS !');
         setStep('verify');
         setCountdown(60); // 60 secondes avant renvoi
       } else {
-        console.error('[VERIFY_PHONE] ❌ Échec:', data.error);
+        logger.error('[VerifyPhone]', 'Échec envoi code', { data: data.error });
         setError(data.error || t('verifyPhone.errors.sendFailed') || 'Impossible d\'envoyer le code.');
       }
     } catch (err) {
-      console.error('[VERIFY_PHONE] Erreur réseau:', err);
+      logger.error('[VerifyPhone]', 'Erreur réseau', { error: err });
       setError(t('verifyPhone.errors.networkError') || 'Erreur de connexion.');
     } finally {
       setIsSending(false);
@@ -252,7 +253,7 @@ function VerifyPhoneContent() {
 
     try {
       const apiUrl = buildApiUrl('/auth/verify-phone');
-      console.log('[VERIFY_PHONE] Vérification du code');
+      logger.info('[VerifyPhone]', 'Vérification du code');
 
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -263,16 +264,16 @@ function VerifyPhoneContent() {
       const data = await response.json();
 
       if (response.ok && data.success) {
-        console.log('[VERIFY_PHONE] ✅ Téléphone vérifié');
+        logger.info('[VerifyPhone]', 'Téléphone vérifié');
         toast.success(t('verifyPhone.success') || 'Numéro vérifié avec succès !');
         setStep('success');
       } else {
-        console.error('[VERIFY_PHONE] ❌ Code invalide:', data.error);
+        logger.error('[VerifyPhone]', 'Code invalide', { data: data.error });
         setError(data.error || t('verifyPhone.errors.invalidCode') || 'Code invalide ou expiré.');
         setCode(''); // Reset le code
       }
     } catch (err) {
-      console.error('[VERIFY_PHONE] Erreur réseau:', err);
+      logger.error('[VerifyPhone]', 'Erreur réseau', { error: err });
       setError(t('verifyPhone.errors.networkError') || 'Erreur de connexion.');
     } finally {
       setIsVerifying(false);

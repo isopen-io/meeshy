@@ -13,6 +13,7 @@ import {
   PhoneValidationResult
 } from '@/utils/phone-validation-robust';
 import { buildApiUrl } from '@/lib/config';
+import { logger } from '@/utils/logger';
 
 export type PhoneValidationStatus = 'idle' | 'checking' | 'valid' | 'invalid' | 'exists';
 
@@ -112,7 +113,7 @@ export function usePhoneValidation({
         }
       }
     } catch (error) {
-      console.error('Erreur vérification disponibilité téléphone:', error);
+      logger.error('[usePhoneValidation]', 'Erreur vérification disponibilité téléphone', { error });
       // En cas d'erreur réseau, considérer comme valide côté client
       setStatus('valid');
       setErrorMessage('');

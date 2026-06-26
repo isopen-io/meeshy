@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useContext, createContext, ReactNode } from 'react';
+import { logger } from '@/utils/logger';
 
 // Types pour les vues de message
 export type MessageViewMode = 'normal' | 'reaction' | 'language' | 'edit' | 'delete' | 'report';
@@ -46,7 +47,7 @@ export function MessageViewProvider({ children }: { children: ReactNode }) {
       // Vérifier si transition autorisée
       const currentMode = prev?.messageId === messageId ? prev.mode : 'normal';
       if (!canTransition(currentMode, mode)) {
-        console.warn(`Transition not allowed: ${currentMode} -> ${mode}`);
+        logger.warn('[useMessageViewState]', `Transition not allowed: ${currentMode} -> ${mode}`);
         return prev;
       }
 

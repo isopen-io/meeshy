@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { anonymousChatService } from '@/services/anonymous-chat.service';
 import { toast } from 'sonner';
+import { logger } from '@/utils/logger';
 
 export interface AnonymousMessage {
   id: string;
@@ -64,7 +65,7 @@ export function useAnonymousMessages(linkId: string) {
       
       setHasMore(result.hasMore || false);
     } catch (error) {
-      console.error('Erreur chargement messages anonymes:', error);
+      logger.error('[useAnonymousMessages]', 'Erreur chargement messages anonymes', { error });
       setError(error instanceof Error ? error.message : 'Erreur lors du chargement des messages');
       toast.error('Erreur lors du chargement des messages');
     } finally {
@@ -101,9 +102,9 @@ export function useAnonymousMessages(linkId: string) {
       
       return true;
     } catch (error) {
-      console.error('Erreur envoi message anonyme:', error);
+      logger.error('[useAnonymousMessages]', 'Erreur envoi message anonyme', { error });
       const errorMessage = error instanceof Error ? error.message : 'Erreur lors de l\'envoi du message';
-      console.error(errorMessage);
+      logger.error('[useAnonymousMessages]', errorMessage);
       return false;
     }
   }, []);
@@ -125,7 +126,7 @@ export function useAnonymousMessages(linkId: string) {
         return chatData;
       }
     } catch (error) {
-      console.error('Erreur rafraîchissement session:', error);
+      logger.error('[useAnonymousMessages]', 'Erreur rafraîchissement session', { error });
       setError('Session expirée');
     }
     return null;
@@ -139,7 +140,7 @@ export function useAnonymousMessages(linkId: string) {
       setHasMore(true);
       setError(null);
     } catch (error) {
-      console.error('Erreur lors de la fermeture de session:', error);
+      logger.error('[useAnonymousMessages]', 'Erreur lors de la fermeture de session', { error });
     }
   }, []);
 

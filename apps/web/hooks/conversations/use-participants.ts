@@ -10,6 +10,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { logger } from '@/utils/logger';
 import { conversationsService } from '@/services/conversations.service';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { useUserStore } from '@/stores/user-store';
@@ -168,7 +169,7 @@ export function useParticipants({ conversationId }: UseParticipantsOptions): Use
       setParticipants(uniqueParticipants);
       setTotalCount(participantsData.totalCount);
     } catch (error) {
-      console.error('[useParticipants] ❌ Erreur chargement participants:', error);
+      logger.error('[useParticipants]', 'Erreur chargement participants', { error });
       setParticipants([]);
     } finally {
       setIsLoading(false);

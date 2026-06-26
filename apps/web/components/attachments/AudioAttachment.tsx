@@ -7,6 +7,7 @@
 import React, { useMemo } from 'react';
 import { Attachment } from '@meeshy/shared/types/attachment';
 import { SimpleAudioPlayer } from '@/components/audio/SimpleAudioPlayer';
+import { logger } from '@/utils/logger';
 
 export interface AudioAttachmentProps {
   attachment: Attachment;
@@ -35,7 +36,7 @@ export const AudioAttachment = React.memo(function AudioAttachment({
     // Si pas de texte, ne pas retourner de transcription
     if (!text) {
       if (process.env.NODE_ENV === 'development') {
-        console.warn('🎵 [AudioAttachment] Transcription sans texte:', transcription);
+        logger.warn('[AudioAttachment]', '🎵 [AudioAttachment] Transcription sans texte:', { transcription });
       }
       return undefined;
     }
@@ -53,7 +54,7 @@ export const AudioAttachment = React.memo(function AudioAttachment({
     };
 
     if (process.env.NODE_ENV === 'development') {
-      console.log('🎵 [AudioAttachment] Transcription extraite:', {
+      logger.info('[AudioAttachment]', '🎵 [AudioAttachment] Transcription extraite:', {
         text: result.text.substring(0, 50) + '...',
         language: result.language,
         confidence: result.confidence,
@@ -71,7 +72,7 @@ export const AudioAttachment = React.memo(function AudioAttachment({
   const initialTranslations = useMemo(() => {
     if (attachment.translations && Object.keys(attachment.translations).length > 0) {
       if (process.env.NODE_ENV === 'development') {
-        console.log('🎵 [AudioAttachment] Traductions audio:', {
+        logger.info('[AudioAttachment]', '🎵 [AudioAttachment] Traductions audio:', {
           languages: Object.keys(attachment.translations),
           details: attachment.translations
         });

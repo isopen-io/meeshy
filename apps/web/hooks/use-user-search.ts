@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { usersService } from '@/services/users.service';
 import { useI18n } from '@/hooks/useI18n';
 import type { User } from '@/types';
+import { logger } from '@/utils/logger';
 
 interface UseUserSearchReturn {
   availableUsers: User[];
@@ -39,7 +40,7 @@ export function useUserSearch(
       );
       setAvailableUsers(filteredUsers);
     } catch (error) {
-      console.error('Erreur recherche utilisateurs:', error);
+      logger.error('[useUserSearch]', 'Erreur recherche utilisateurs', { error });
       toast.error(t('createConversationModal.errors.searchError'));
     } finally {
       setIsLoading(false);

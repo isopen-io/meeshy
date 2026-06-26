@@ -9,6 +9,7 @@ import { getUserInitials } from '@/lib/avatar-utils';
 import { mentionsService } from '@/services/mentions.service';
 import type { MentionSuggestion } from '@meeshy/shared/types/mention';
 import { useI18n } from '@/hooks/useI18n';
+import { logger } from '@/utils/logger';
 
 interface MentionAutocompleteProps {
   conversationId: string;

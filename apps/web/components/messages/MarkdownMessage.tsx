@@ -15,6 +15,7 @@ import rehypeSanitize from 'rehype-sanitize';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { MermaidDiagram } from '@/components/markdown/MermaidDiagram';
+import { logger } from '@/utils/logger';
 
 interface MarkdownMessageProps {
   content: string;
@@ -287,7 +288,7 @@ export const MarkdownMessage: React.FC<MarkdownMessageProps> = ({
               }
             }
           } catch (error) {
-            console.error('Error handling tracking link click:', error);
+            logger.error('[MarkdownMessage]', 'Error handling tracking link click:', { error });
             const fallbackUrl = linkPart.type === 'mshy-link' ? linkPart.trackingUrl! : href;
             const newWindow = window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
             if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {

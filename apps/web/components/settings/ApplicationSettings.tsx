@@ -51,6 +51,7 @@ import { API_CONFIG } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
 import { useReducedMotion, SoundFeedback } from '@/hooks/use-accessibility';
 import { useI18n } from '@/hooks/use-i18n';
+import { logger } from '@/utils/logger';
 type ApplicationPreference = Record<string, unknown>;
 
 // Accent colors configuration
@@ -144,7 +145,7 @@ export function ApplicationSettings() {
           }
         }
       } catch (error) {
-        console.error('Error loading application preferences:', error);
+        logger.error('[ApplicationSettings]', 'Error loading application preferences:', { error });
       } finally {
         setLoading(false);
       }
@@ -180,7 +181,7 @@ export function ApplicationSettings() {
         toast.error(errorData.message || t('errors.updateSettings', 'Error saving settings'));
       }
     } catch (error) {
-      console.error('Error saving preferences:', error);
+      logger.error('[ApplicationSettings]', 'Error saving preferences:', { error });
       toast.error(t('errors.updateSettings', 'Network error'));
     } finally {
       setSaving(false);

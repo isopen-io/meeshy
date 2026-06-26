@@ -21,6 +21,7 @@ import { AttachmentService } from '../../services/attachmentService';
 import { useI18n } from '@/hooks/useI18n';
 import { toast } from 'sonner';
 import { buildAttachmentUrl } from '@/utils/attachment-url';
+import { logger } from '@/utils/logger';
 
 interface AttachmentGalleryProps {
   conversationId: string;
@@ -104,7 +105,7 @@ export function AttachmentGallery({
       toast.success(t('gallery.deleteSuccess'));
       setShowDeleteConfirm(false);
     } catch (error) {
-      console.error('Erreur suppression attachment:', error);
+      logger.error('[AttachmentGallery]', 'Erreur suppression attachment:', { error });
       toast.error(t('gallery.deleteError'));
     } finally {
       setIsDeleting(false);
@@ -233,7 +234,7 @@ export function AttachmentGallery({
           }
         }
       } catch (error) {
-        console.error('Erreur chargement attachments:', error);
+        logger.error('[AttachmentGallery]', 'Erreur chargement attachments:', { error });
       } finally {
         setLoading(false);
       }

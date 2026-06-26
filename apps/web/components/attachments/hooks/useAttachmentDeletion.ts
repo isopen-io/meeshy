@@ -9,6 +9,7 @@ import { Attachment } from '@meeshy/shared/types/attachment';
 import { AttachmentService } from '@/services/attachmentService';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
+import { logger } from '@/utils/logger';
 
 export interface AttachmentDeletionState {
   attachmentToDelete: Attachment | null;
@@ -46,7 +47,7 @@ export function useAttachmentDeletion({
       toast.success(t('gallery.deleteSuccess'));
       setAttachmentToDelete(null);
     } catch (error) {
-      console.error('Erreur suppression attachment:', error);
+      logger.error('[useAttachmentDeletion]', 'Erreur suppression attachment:', { error });
       toast.error(t('gallery.deleteError'));
     } finally {
       setIsDeleting(false);

@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import type { Conversation, User } from '@meeshy/shared/types';
 import { isGlobalAdmin, hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-types';
 import { useI18n } from './use-i18n';
+import { logger } from '@/utils/logger';
 
 /**
  * Hook for managing conversation participants
@@ -36,7 +37,7 @@ export function useParticipantManagement(
       await conversationsService.removeParticipant(conversation.id, userId);
       toast.success(t('conversationDetails.participantRemoved'));
     } catch (error) {
-      console.error('Error removing participant:', error);
+      logger.error('[useParticipantManagement]', 'Error removing participant', { error });
       toast.error(t('conversationDetails.removeParticipantError'));
     } finally {
       setIsLoading(false);

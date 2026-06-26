@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Cpu, Languages, Mic, Volume2, Zap, AlertCircle, CheckCircle2, Loader2, Play, Square } from 'lucide-react';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
+import { logger } from '@/utils/logger';
 
 // Types pour les capacités du navigateur
 interface BrowserCapabilities {
@@ -149,7 +150,7 @@ export function BetaPlayground() {
           caps.webLLM = available?.available === 'readily';
         }
       } catch (error) {
-        console.log('[BetaPlayground] Web LLM not available:', error);
+        logger.info('[BetaPlayground]', 'Web LLM not available:', { data: error });
       }
 
       // Vérifier Translation API
@@ -162,7 +163,7 @@ export function BetaPlayground() {
           caps.translation = canTranslate === 'readily';
         }
       } catch (error) {
-        console.log('[BetaPlayground] Translation API not available:', error);
+        logger.info('[BetaPlayground]', 'Translation API not available:', { data: error });
       }
 
       // Vérifier Web Speech API (Reconnaissance vocale)
@@ -204,7 +205,7 @@ export function BetaPlayground() {
         if (data.translationInput) setTranslationInput(data.translationInput);
         if (data.ttsInput) setTtsInput(data.ttsInput);
       } catch (error) {
-        console.error('[BetaPlayground] Error loading saved state:', error);
+        logger.error('[BetaPlayground]', 'Error loading saved state:', { error });
       }
     }
   }, []);
@@ -352,7 +353,7 @@ export function BetaPlayground() {
       };
 
       recognition.onerror = (event: Event) => {
-        console.error('[BetaPlayground] Speech recognition error:', event);
+        logger.error('[BetaPlayground]', 'Speech recognition error:', { error: event });
         setTranscriptionMetrics({
           latency: 0,
           status: 'error',

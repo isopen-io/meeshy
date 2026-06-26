@@ -141,27 +141,20 @@ export class FirebaseNotificationService {
     }
 
     try {
-      // 2. Récupérer le FCM token de l'utilisateur depuis la DB
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { id: true }
+      // 2. Retrieve all FCM push tokens for this user (multi-device support)
+      const pushTokens = await this.prisma.pushToken.findMany({
+        where: { userId, type: 'fcm' },
+        select: { id: true, token: true }
       });
 
-      if (!user) {
-        logger.debug(`[Notifications] User ${userId} not found for FCM push`);
+      const tokens = pushTokens.map(t => t.token).filter(Boolean);
+      if (tokens.length === 0) {
+        logger.debug(`[Notifications] No FCM tokens for user ${userId}`);
         return false;
       }
 
-      // TODO: Récupérer le fcmToken réel quand le champ existera
-      const fcmToken = null;
-
-      if (!fcmToken) {
-        return false;
-      }
-
-      // 3. Préparer le message Firebase
-      const message = {
-        token: fcmToken,
+      // 3. Build the multicast message
+      const messagePayload = {
         notification: {
           title: notification.title,
           body: notification.content
@@ -187,29 +180,42 @@ export class FirebaseNotificationService {
               badge: 1
             }
           }
-        }
+        },
+        tokens
       };
 
-      // 4. Envoyer via Firebase (avec timeout)
-      await Promise.race([
-        admin.messaging().send(message),
+      // 4. Send to all devices with timeout
+      const sendResult = await Promise.race([
+        admin.messaging().sendEachForMulticast(messagePayload),
         new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Firebase timeout')), 5000)
         )
-      ]);
+      ]) as { responses: Array<{ success: boolean; error?: { code?: string } }> };
 
-      logger.debug(`[Notifications] ✅ Firebase push sent successfully to ${userId}`);
-      return true;
+      // 5. Prune stale tokens that are no longer registered
+      const staleTokenIds: string[] = [];
+      sendResult.responses.forEach((resp, idx) => {
+        if (
+          !resp.success &&
+          (resp.error?.code === 'messaging/invalid-registration-token' ||
+            resp.error?.code === 'messaging/registration-token-not-registered')
+        ) {
+          const tokenRecord = pushTokens[idx];
+          if (tokenRecord) staleTokenIds.push(tokenRecord.id);
+        }
+      });
 
-    } catch (error: any) {
-      // Logger l'erreur mais NE PAS crasher
-      if (error.code === 'messaging/invalid-registration-token' ||
-          error.code === 'messaging/registration-token-not-registered') {
-        logger.debug(`[Notifications] Invalid FCM token for user ${userId}, skipping`);
-      } else {
-        logger.error(`[Notifications] Firebase push failed for user ${userId}:`, error.message);
+      if (staleTokenIds.length > 0) {
+        await this.prisma.pushToken.deleteMany({ where: { id: { in: staleTokenIds } } }).catch(() => {});
+        logger.debug(`[Notifications] Pruned ${staleTokenIds.length} stale FCM token(s) for user ${userId}`);
       }
 
+      const successCount = sendResult.responses.filter(r => r.success).length;
+      logger.debug(`[Notifications] FCM push: ${successCount}/${tokens.length} delivered for user ${userId}`);
+      return successCount > 0;
+
+    } catch (error: any) {
+      logger.error(`[Notifications] Firebase push failed for user ${userId}:`, error.message);
       return false;
     }
   }

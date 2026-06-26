@@ -3,6 +3,8 @@
  * Utilise l'API Vibration du navigateur
  */
 
+import { logger } from '@/utils/logger';
+
 export type HapticPattern = 'light' | 'medium' | 'heavy' | 'success' | 'error' | 'warning';
 
 interface HapticPatterns {
@@ -30,7 +32,7 @@ export const useHapticFeedback = () => {
     try {
       navigator.vibrate(vibrationPattern);
     } catch (error) {
-      console.warn('Haptic feedback not supported:', error);
+      logger.warn('[useHapticFeedback]', 'Haptic feedback not supported', { error });
     }
   };
 
@@ -42,7 +44,7 @@ export const useHapticFeedback = () => {
     try {
       navigator.vibrate(duration);
     } catch (error) {
-      console.warn('Haptic feedback not supported:', error);
+      logger.warn('[useHapticFeedback]', 'Haptic feedback not supported', { error });
     }
   };
 
@@ -54,7 +56,7 @@ export const useHapticFeedback = () => {
     try {
       navigator.vibrate(0);
     } catch (error) {
-      console.warn('Haptic feedback not supported:', error);
+      logger.warn('[useHapticFeedback]', 'Haptic feedback not supported', { error });
     }
   };
 

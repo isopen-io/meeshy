@@ -19,6 +19,7 @@ import { buildApiUrl } from '@/lib/config';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
 import { authManager } from '@/services/auth-manager.service';
+import { logger } from '@/utils/logger';
 
 interface EditTrackingLinkModalProps {
   isOpen: boolean;
@@ -80,7 +81,7 @@ export function EditTrackingLinkModal({
         const data = await response.json();
         setTokenAvailability(data.data.available ? 'available' : 'unavailable');
       } catch (error) {
-        console.error('Error checking token:', error);
+        logger.error('[EditTrackingLinkModal]', 'Error checking token:', { error });
         setTokenAvailability('idle');
       } finally {
         setIsCheckingToken(false);
@@ -156,7 +157,7 @@ export function EditTrackingLinkModal({
       onSuccess();
       onClose();
     } catch (error) {
-      console.error('Error updating tracking link:', error);
+      logger.error('[EditTrackingLinkModal]', 'Error updating tracking link:', { error });
       toast.error(error instanceof Error ? error.message : t('tracking.edit.errors.updateFailed'));
     } finally {
       setIsSubmitting(false);

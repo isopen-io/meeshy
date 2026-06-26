@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
 import { MermaidDiagram } from '@/components/markdown/MermaidDiagram';
 import { useI18n } from '@/hooks/useI18n';
+import { logger } from '@/utils/logger';
 
 // ======================
 // Dynamic Import for Syntax Highlighter (~150KB saved)
@@ -85,7 +86,7 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
         const text = await response.text();
         setContent(text);
       } catch (error) {
-        console.error('Markdown load error:', error);
+        logger.error('[MarkdownViewer]', 'Markdown load error', { error });
         setHasError(true);
       } finally {
         setIsLoading(false);

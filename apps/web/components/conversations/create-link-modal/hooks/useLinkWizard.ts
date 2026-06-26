@@ -10,6 +10,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { User, Conversation } from '@meeshy/shared/types';
 import { TOTAL_WIZARD_STEPS } from '../constants';
 import { LinkSettings, NewConversationData } from '../types';
+import { logger } from '@/utils/logger';
 
 interface UseLinkWizardOptions {
   isOpen: boolean;
@@ -181,11 +182,11 @@ export function useLinkWizard({
         }
       } else {
         const error = await response.json();
-        console.error('[CREATE_LINK_V2] API Error:', error);
+        logger.error('[useLinkWizard]', 'API Error:', { error });
         toast.error(error.message || `Erreur lors de la génération du lien (${response.status})`);
       }
     } catch (error) {
-      console.error('[CREATE_LINK_V2] Error generating link:', error);
+      logger.error('[useLinkWizard]', 'Error generating link:', { error });
       toast.error(error instanceof Error ? error.message : 'Erreur lors de la génération du lien');
     } finally {
       setIsCreating(false);

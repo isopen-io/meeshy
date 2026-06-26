@@ -15,6 +15,7 @@ import { useSettingsValidation } from '@/hooks/admin/use-settings-validation';
 import { useSettingsSave } from '@/hooks/admin/use-settings-save';
 import { configSections } from '@/config/admin-settings-config';
 import { Loader2 } from 'lucide-react';
+import { logger } from '@/utils/logger';
 
 /**
  * Dynamic imports for settings sections
@@ -130,14 +131,14 @@ export default function AdminSettingsPage() {
 
   const handleSave = async () => {
     if (!isValid) {
-      console.error('Validation errors detected');
+      logger.error('[AdminSettings]', 'Validation errors detected');
       return;
     }
 
     try {
       await saveSettings(settings);
     } catch (error) {
-      console.error('Failed to save settings:', error);
+      logger.error('[AdminSettings]', 'Failed to save settings:', { error });
     }
   };
 

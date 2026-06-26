@@ -35,6 +35,7 @@ import { adminService } from '@/services/admin.service';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
 import { ConfirmDialog } from '@/components/admin/ConfirmDialog';
+import { logger } from '@/utils/logger';
 
 interface ShareLink {
   id: string;
@@ -110,7 +111,7 @@ export default function AdminShareLinksPage() {
         setTotalPages(1);
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des liens de partage:', error);
+      logger.error('[ShareLinksAdmin]', 'Erreur lors du chargement des liens de partage', { error });
       toast.error(t('shareLinks.loadError'));
     } finally {
       setLoading(false);
@@ -153,13 +154,13 @@ export default function AdminShareLinksPage() {
   };
 
   const handleDeleteLink = async () => {
+    if (!deleteDialog.linkId) return;
     try {
-      // TODO: Implement actual delete API call
-      // await adminService.deleteShareLink(deleteDialog.linkId);
+      await adminService.deleteShareLink(deleteDialog.linkId);
       toast.success(t('shareLinks.deleteSuccess'));
       loadShareLinks();
     } catch (error) {
-      console.error('Erreur lors de la suppression du lien:', error);
+      logger.error('[ShareLinksAdmin]', 'Erreur lors de la suppression du lien', { error });
       toast.error(t('shareLinks.deleteError'));
     }
   };

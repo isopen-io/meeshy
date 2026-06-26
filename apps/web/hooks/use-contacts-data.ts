@@ -8,6 +8,7 @@ import { usersService, type ParticipantsFilters } from '@/services';
 import { toast } from 'sonner';
 import { authManager } from '@/services/auth-manager.service';
 import { buildApiUrl } from '@/lib/config';
+import { logger } from '@/utils/logger';
 /** @deprecated Use FriendRequest from '@/types/contacts' */
 interface LegacyFriendRequest {
   id: string;
@@ -80,7 +81,7 @@ export function useContactsData(t: (key: string) => string) {
 
       setContacts(contactsData);
     } catch (error) {
-      console.error('Erreur lors du chargement des contacts:', error);
+      logger.error('[useContactsData]', 'Erreur lors du chargement des contacts', { error });
       toast.error(t('errors.loadContactsError'));
       setContacts([]);
     } finally {
@@ -102,7 +103,7 @@ export function useContactsData(t: (key: string) => string) {
         setFriendRequests(data.data || []);
       }
     } catch (error) {
-      console.error('Erreur chargement friend requests:', error);
+      logger.error('[useContactsData]', 'Erreur chargement friend requests', { error });
     }
   }, []);
 
@@ -120,7 +121,7 @@ export function useContactsData(t: (key: string) => string) {
         setAffiliateRelations(data.data?.referrals || []);
       }
     } catch (error) {
-      console.error('Erreur chargement relations affiliation:', error);
+      logger.error('[useContactsData]', 'Erreur chargement relations affiliation', { error });
     }
   }, []);
 

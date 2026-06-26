@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import type { BrowserTranscription, VoiceProfileSegment } from '@meeshy/shared/types/voice-api';
+import { logger } from '@/utils/logger';
 
 // Constants
 const MIN_RECORDING_SECONDS = 10;
@@ -185,7 +186,7 @@ export function useVoiceRecording({
         };
 
         recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-          console.warn('[VoiceRecording] Speech recognition error:', event.error);
+          logger.warn('[useVoiceRecording]', 'Speech recognition error', { data: event.error });
         };
 
         (recognition as any)._startTime = Date.now();
@@ -229,7 +230,7 @@ export function useVoiceRecording({
       }, 100);
 
     } catch (err) {
-      console.error('[VoiceRecording] Error starting recording:', err);
+      logger.error('[useVoiceRecording]', 'Error starting recording', { error: err });
       toast.error('Impossible d\'accéder au microphone');
     }
   }, [sourceLanguage, playRecordingStart, stopRecording, onRecordingComplete]);

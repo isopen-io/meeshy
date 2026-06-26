@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { apiService } from '@/services/api.service';
 import MediaManager from '@/utils/media-manager';
+import { logger } from '@/utils/logger';
 
 /**
  * AudioManager - Gestionnaire global pour coordonner la lecture audio
@@ -148,23 +149,21 @@ export function useAudioPlayback({
           try {
             const url = new URL(audioUrl);
             apiPath = url.pathname;
-            console.log('🎵 [useAudioPlayback] URL complète → pathname:', {
-              fullUrl: audioUrl,
-              pathname: apiPath
+            logger.info('[useAudioPlayback]', 'URL complète → pathname', {
+              data: { fullUrl: audioUrl, pathname: apiPath }
             });
           } catch {
             // Si parsing échoue, utiliser tel quel
-            console.log('🎵 [useAudioPlayback] Parsing URL échoué, utilisation directe:', audioUrl);
+            logger.info('[useAudioPlayback]', 'Parsing URL échoué, utilisation directe', { data: audioUrl });
           }
         } else {
-          console.log('🎵 [useAudioPlayback] URL relative utilisée directement:', apiPath);
+          logger.info('[useAudioPlayback]', 'URL relative utilisée directement', { data: apiPath });
         }
 
-        console.log('🎵 [useAudioPlayback] Chargement audio via apiService.getBlob:', apiPath);
+        logger.info('[useAudioPlayback]', 'Chargement audio via apiService.getBlob', { data: apiPath });
         const blob = await apiService.getBlob(apiPath);
-        console.log('✅ [useAudioPlayback] Audio chargé avec succès:', {
-          blobSize: `${(blob.size / 1024).toFixed(1)} KB`,
-          blobType: blob.type
+        logger.info('[useAudioPlayback]', 'Audio chargé avec succès', {
+          data: { blobSize: `${(blob.size / 1024).toFixed(1)} KB`, blobType: blob.type }
         });
 
         if (!isMounted) {
@@ -181,7 +180,7 @@ export function useAudioPlayback({
 
         setIsLoading(false);
       } catch (error: any) {
-        console.error('❌ [useAudioPlayback] Failed to load audio:', {
+        logger.error('[useAudioPlayback]', 'Failed to load audio', {
           error,
           status: error?.status,
           code: error?.code,
@@ -199,16 +198,16 @@ export function useAudioPlayback({
 
         if (error?.status === 404) {
           setErrorMessage('Fichier audio introuvable');
-          console.error('❌ [useAudioPlayback] 404: Fichier introuvable sur le serveur');
+          logger.error('[useAudioPlayback]', '404: Fichier introuvable sur le serveur');
         } else if (error?.status === 500) {
           setErrorMessage('Erreur serveur');
-          console.error('❌ [useAudioPlayback] 500: Erreur serveur');
+          logger.error('[useAudioPlayback]', '500: Erreur serveur');
         } else if (error?.code === 'TIMEOUT') {
           setErrorMessage('Timeout - fichier trop volumineux');
-          console.error('❌ [useAudioPlayback] Timeout');
+          logger.error('[useAudioPlayback]', 'Timeout');
         } else {
           setErrorMessage('Erreur de chargement');
-          console.error('❌ [useAudioPlayback] Erreur générique');
+          logger.error('[useAudioPlayback]', 'Erreur générique');
         }
       }
     };

@@ -1,6 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
+import { logger } from '@/utils/logger';
 import { useEffect, useRef, useState } from 'react';
 import { LinkConversationService, type LinkConversationData } from '@/services/link-conversation.service';
 import { BubbleStreamPage } from '@/components/common/bubble-stream-page';

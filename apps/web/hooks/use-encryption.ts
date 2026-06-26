@@ -8,6 +8,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { logger } from '@/utils/logger';
 import { SharedEncryptionService } from '@meeshy/shared/encryption';
 import { webCryptoAdapter } from '@/lib/encryption/adapters/web-crypto-adapter';
 import { indexedDBKeyStorageAdapter } from '@/lib/encryption/adapters/indexeddb-key-storage-adapter';
@@ -141,11 +142,11 @@ export function useEncryption(): UseEncryptionReturn {
       await serviceRef.current.initialize(userId);
       currentUserIdRef.current = userId;
       setIsReady(true);
-      console.log('[useEncryption] Initialized for user:', userId);
+      logger.info('[useEncryption]', 'Initialized for user', { data: userId });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to initialize encryption';
       setError(errorMessage);
-      console.error('[useEncryption] Initialization failed:', err);
+      logger.error('[useEncryption]', 'Initialization failed', { error: err });
       throw err;
     } finally {
       setIsInitializing(false);
@@ -161,7 +162,7 @@ export function useEncryption(): UseEncryptionReturn {
     mode?: EncryptionMode
   ): Promise<EncryptedPayload | null> => {
     if (!isReady) {
-      console.warn('[useEncryption] Service not initialized, cannot encrypt');
+      logger.warn('[useEncryption]', 'Service not initialized, cannot encrypt');
       return null;
     }
 
@@ -190,7 +191,7 @@ export function useEncryption(): UseEncryptionReturn {
 
       return encrypted;
     } catch (err) {
-      console.error('[useEncryption] Encryption failed:', err);
+      logger.error('[useEncryption]', 'Encryption failed', { error: err });
       throw err;
     }
   }, [isReady]);
@@ -209,7 +210,7 @@ export function useEncryption(): UseEncryptionReturn {
     try {
       return await serviceRef.current.decryptMessage(payload, senderUserId);
     } catch (err) {
-      console.error('[useEncryption] Decryption failed:', err);
+      logger.error('[useEncryption]', 'Decryption failed', { error: err });
       throw err;
     }
   }, [isReady]);
@@ -312,7 +313,7 @@ export function useEncryption(): UseEncryptionReturn {
     contextCacheRef.current.clear();
     currentUserIdRef.current = null;
     setIsReady(false);
-    console.log('[useEncryption] Keys cleared');
+    logger.info('[useEncryption]', 'Keys cleared');
   }, []);
 
   /**

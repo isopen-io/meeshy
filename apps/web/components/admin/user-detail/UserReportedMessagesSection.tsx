@@ -8,6 +8,7 @@ import { apiService } from '@/services/api.service';
 import { useI18n } from '@/hooks/use-i18n';
 import { useCurrentInterfaceLanguage } from '@/stores/language-store';
 import { ReportStatusBadge, ReportTypeBadge, formatReportDate } from './UserReportsSection';
+import { logger } from '@/utils/logger';
 
 interface ReportedMessage {
   id: string;
@@ -65,7 +66,7 @@ export function UserReportedMessagesSection({ userId }: { userId: string }) {
       setOffset(nextOffset + page.length);
       setError(null);
     } catch (err) {
-      console.error('Error fetching user reported messages:', err);
+      logger.error('[UserReportedMessagesSection]', 'Error fetching user reported messages:', { error: err });
       setError(t('usersDetail.loadError'));
     } finally {
       if (replace) setLoading(false); else setLoadingMore(false);

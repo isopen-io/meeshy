@@ -15,6 +15,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { logger } from '@/utils/logger';
 
 function isAnonymousUser(user: unknown): user is Participant {
   return user && (user.type === 'anonymous' || 'sessionToken' in user || 'shareLinkId' in user);
@@ -51,7 +52,7 @@ export function CustomizationManager({ conversationId, currentUser, onPreference
         setCustomName(prefs?.customName || '');
         setReaction(prefs?.reaction || '');
       } catch (error) {
-        console.error('Error loading customization preferences:', error);
+        logger.error('[CustomizationManager]', 'Error loading customization preferences:', { error });
       } finally {
         setIsLoading(false);
       }
@@ -68,7 +69,7 @@ export function CustomizationManager({ conversationId, currentUser, onPreference
       toast.success(t('conversationDetails.customNameSaved'));
       onPreferencesUpdated?.();
     } catch (error) {
-      console.error('Error saving custom name:', error);
+      logger.error('[CustomizationManager]', 'Error saving custom name:', { error });
       toast.error(t('conversationDetails.customNameError'));
     }
   };
@@ -82,7 +83,7 @@ export function CustomizationManager({ conversationId, currentUser, onPreference
       toast.success(t('conversationDetails.reactionSaved'));
       onPreferencesUpdated?.();
     } catch (error) {
-      console.error('Error saving reaction:', error);
+      logger.error('[CustomizationManager]', 'Error saving reaction:', { error });
       toast.error(t('conversationDetails.reactionError'));
     }
   };

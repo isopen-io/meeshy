@@ -15,6 +15,7 @@ import { messageService } from '@/services/message.service';
 import { useReplyStore } from '@/stores/reply-store';
 import type { Message, User } from '@meeshy/shared/types';
 import { getEffectiveRole } from '@meeshy/shared/types/role-types';
+import { logger } from '@/utils/logger';
 
 interface UseStreamMessagesOptions {
   conversationId: string;
@@ -68,7 +69,7 @@ export function useStreamMessages({
       await refreshMessages();
       toast.success(tCommon('messages.messageModified'));
     } catch (error) {
-      console.error('Erreur lors de la modification du message:', error);
+      logger.error('[useStreamMessages]', 'Erreur lors de la modification du message', { error });
       toast.error(tCommon('messages.modifyError'));
       throw error;
     }
@@ -82,7 +83,7 @@ export function useStreamMessages({
       await refreshMessages();
       toast.success(tCommon('messages.messageDeleted'));
     } catch (error) {
-      console.error('Erreur lors de la suppression du message:', error);
+      logger.error('[useStreamMessages]', 'Erreur lors de la suppression du message', { error });
       toast.error(tCommon('messages.deleteError'));
       throw error;
     }

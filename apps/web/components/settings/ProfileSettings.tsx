@@ -40,6 +40,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { SoundFeedback } from '@/hooks/use-accessibility';
 import { buildApiUrl } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
+import { logger } from '@/utils/logger';
 
 interface ProfileSettingsProps {
   onAccountDeleted?: () => void;
@@ -125,7 +126,7 @@ export function ProfileSettings({ onAccountDeleted }: ProfileSettingsProps) {
       toast.success(t('profile.account.email.codeSent', 'Verification code sent to your new email'));
       setEmailStep('verify');
     } catch (error) {
-      console.error('Email change request error:', error);
+      logger.error('[ProfileSettings]', 'Email change request error', { error });
       toast.error(error instanceof Error ? error.message : t('profile.account.email.errors.requestFailed', 'Failed to request email change'));
     } finally {
       setIsEmailLoading(false);
@@ -165,7 +166,7 @@ export function ProfileSettings({ onAccountDeleted }: ProfileSettingsProps) {
       // Refresh user data
       window.location.reload();
     } catch (error) {
-      console.error('Email verification error:', error);
+      logger.error('[ProfileSettings]', 'Email verification error', { error });
       toast.error(error instanceof Error ? error.message : t('profile.account.email.errors.verifyFailed', 'Failed to verify email'));
     } finally {
       setIsEmailLoading(false);
@@ -190,7 +191,7 @@ export function ProfileSettings({ onAccountDeleted }: ProfileSettingsProps) {
       const data = await response.json();
       setUsernameAvailable(data.available === true);
     } catch (error) {
-      console.error('Username check error:', error);
+      logger.error('[ProfileSettings]', 'Username check error', { error });
       setUsernameAvailable(null);
     }
   };
@@ -246,7 +247,7 @@ export function ProfileSettings({ onAccountDeleted }: ProfileSettingsProps) {
       // Refresh user data
       window.location.reload();
     } catch (error) {
-      console.error('Username update error:', error);
+      logger.error('[ProfileSettings]', 'Username update error', { error });
       toast.error(error instanceof Error ? error.message : t('profile.account.username.errors.updateFailed', 'Failed to update username'));
     } finally {
       setIsUsernameLoading(false);
@@ -329,7 +330,7 @@ export function ProfileSettings({ onAccountDeleted }: ProfileSettingsProps) {
         confirmPassword: '',
       });
     } catch (error) {
-      console.error('Password change error:', error);
+      logger.error('[ProfileSettings]', 'Password change error', { error });
       toast.error(error instanceof Error ? error.message : t('security.password.errors.updateFailed'));
     } finally {
       setIsPasswordLoading(false);
@@ -387,7 +388,7 @@ export function ProfileSettings({ onAccountDeleted }: ProfileSettingsProps) {
         onAccountDeleted();
       }
     } catch (error) {
-      console.error('Account deletion error:', error);
+      logger.error('[ProfileSettings]', 'Account deletion error', { error });
       toast.error(error instanceof Error ? error.message : t('profile.account.delete.errors.deleteFailed', 'Failed to delete account'));
     } finally {
       setIsDeleting(false);

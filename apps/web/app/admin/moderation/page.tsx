@@ -29,6 +29,7 @@ import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
 import { StatsGrid, TimeSeriesChart, DonutChart, type StatItem } from '@/components/admin/Charts';
 import { StatCardSkeleton, TableSkeleton } from '@/components/admin/TableSkeleton';
+import { logger } from '@/utils/logger';
 
 interface ModerationAction {
   id: string;
@@ -166,7 +167,7 @@ export default function AdminModerationPage() {
 
       setActions(mockActions);
     } catch (error) {
-      console.error('Erreur lors du chargement des données de modération:', error);
+      logger.error('[AdminModeration]', 'Erreur lors du chargement des données de modération:', { error });
       toast.error(t('moderation.loadError'));
     } finally {
       setLoading(false);

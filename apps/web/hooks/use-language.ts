@@ -10,6 +10,7 @@ import { detectBestInterfaceLanguage, getUserPreferredLanguage } from '@/utils/l
 import { getBestMatchingLocale, detectUserPreferredLocale, type Locale } from '@/lib/i18n';
 import { useI18n } from './useI18n';
 import { INTERFACE_LANGUAGES } from '@/types/frontend';
+import { logger } from '@/utils/logger';
 
 export interface TranslatedLanguage {
   code: string;
@@ -89,7 +90,7 @@ export function useLanguage(): UseLanguageReturn {
         
         return bestInterfaceLanguage || userPreferredLanguage || 'en';
       } catch (error) {
-        console.error('[LANGUAGE_DETECTION] Error detecting user language:', error);
+        logger.error('[useLanguage]', 'Error detecting user language', { error });
         return 'en';
       }
     }, []
@@ -121,7 +122,7 @@ export function useLanguage(): UseLanguageReturn {
       setDetectedInterfaceLanguage(bestLanguage);
       setIsDetectionComplete(true);
     } catch (error) {
-      console.error('[LANGUAGE_DETECTION] Error detecting interface language:', error);
+      logger.error('[useLanguage]', 'Error detecting interface language', { error });
       setDetectedInterfaceLanguage('en');
       setIsDetectionComplete(true);
     }

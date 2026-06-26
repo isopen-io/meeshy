@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useState, useEffect } from 'react';
+import { logger } from '@/utils/logger';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -87,7 +88,7 @@ function CheckEmailContent() {
         },
       });
     } catch (error) {
-      console.error('[CheckEmailPage] Error rendering CAPTCHA:', error);
+      logger.error('[ForgotPasswordCheckEmail]', 'Error rendering CAPTCHA', { error });
     }
   };
 
@@ -131,7 +132,7 @@ function CheckEmailContent() {
         setCaptchaToken('');
       }
     } catch (error) {
-      console.error('[CheckEmailPage] Error resending email:', error);
+      logger.error('[ForgotPasswordCheckEmail]', 'Error resending email', { error });
       toast.error(
         t('checkEmail.errors.resendFailed', "Failed to resend email. Please try again.")
       );

@@ -13,6 +13,7 @@ import { PhoneField } from './PhoneField';
 import { PasswordField } from './PasswordField';
 import { LanguageSelectorField } from './LanguageSelector';
 import { FormFooter } from './FormFooter';
+import { logger } from '@/utils/logger';
 
 interface RegisterFormProps {
   onSuccess?: (user: User, token: string) => void;
@@ -29,7 +30,7 @@ export function RegisterForm({
   onJoinSuccess,
   formPrefix = 'register'
 }: RegisterFormProps) {
-  console.log('[RegisterForm] Component render', { linkId, formPrefix });
+  logger.info('[RegisterForm]', '[RegisterForm] Component render', { linkId, formPrefix });
   const { t } = useI18n('auth');
   const {
     formData,

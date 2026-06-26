@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
+import { logger } from '@/utils/logger';
 import { conversationsService } from '@/services/conversations.service';
 import { useI18n } from '@/hooks/useI18n';
 import type { User } from '@/types';
@@ -83,20 +84,22 @@ export function useConversationCreation(): UseConversationCreationReturn {
         requestBody.communityId = selectedCommunity;
       }
 
-      console.log('🔍 [CreateConversation] Request body:', JSON.stringify(requestBody, null, 2));
+      logger.info('[useConversationCreation]', 'Request body', { data: requestBody });
 
       const conversation = await conversationsService.createConversation(requestBody);
 
-      console.log('✅ [CreateConversation] Conversation créée avec succès:', conversation);
+      logger.info('[useConversationCreation]', 'Conversation créée avec succès', { data: conversation });
       toast.success(t('createConversationModal.success.conversationCreated'));
 
       return conversation;
     } catch (error: any) {
-      console.error('❌ [CreateConversation] Erreur lors de la création:', {
-        message: error?.message,
-        status: error?.status,
-        data: error?.data,
-        error
+      logger.error('[useConversationCreation]', 'Erreur lors de la création', {
+        data: {
+          message: error?.message,
+          status: error?.status,
+          data: error?.data,
+          error
+        }
       });
 
       if (error?.data?.message) {

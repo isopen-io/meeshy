@@ -9,6 +9,7 @@
 
 import { useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
+import { logger } from '@/utils/logger';
 import { messageService } from '@/services/message.service';
 import { sanitizeText } from '@/utils/xss-protection';
 import type { Message, Attachment } from '@meeshy/shared/types';
@@ -87,7 +88,7 @@ export function useMessageActions({
 
       toast.success(t('messages.messageEdited') || 'Message edited');
     } catch (error) {
-      console.error('Edit error:', error);
+      logger.error('[useMessageActions]', 'Edit error', { error });
       toast.error(t('messages.editError') || 'Edit failed');
 
       // Rollback: recharger les messages
@@ -109,7 +110,7 @@ export function useMessageActions({
 
       toast.success(t('messages.messageDeleted') || 'Message deleted');
     } catch (error) {
-      console.error('Delete error:', error);
+      logger.error('[useMessageActions]', 'Delete error', { error });
       toast.error(t('messages.deleteError') || 'Delete failed');
 
       // Rollback

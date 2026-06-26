@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiService } from '@/services/api.service';
 import type { ConversationType } from '@meeshy/shared/types';
+import { logger } from '@/utils/logger';
 
 interface UseIdentifierValidationReturn {
   identifierAvailable: boolean | null;
@@ -65,7 +66,7 @@ export function useIdentifierValidation(
         setIdentifierAvailable(null);
       }
     } catch (error) {
-      console.error('Erreur vérification identifier:', error);
+      logger.error('[useIdentifierValidation]', 'Erreur vérification identifier', { error });
       setIdentifierAvailable(null);
     } finally {
       setIsCheckingIdentifier(false);

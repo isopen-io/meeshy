@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { logger } from '@/utils/logger';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -196,7 +197,7 @@ export function ConversationParticipantsDrawer({
         }));
         setBackendSearchResults(mappedResults);
       } catch (error) {
-        console.error('Erreur lors de la recherche des participants:', error);
+        logger.error('[ConversationParticipantsDrawer]', 'Erreur lors de la recherche des participants:', { error });
         setBackendSearchResults(null);
       } finally {
         setIsFilterSearching(false);
@@ -219,10 +220,10 @@ export function ConversationParticipantsDrawer({
       try {
         const users = await usersService.searchUsers(searchQuery);
         const userList = Array.isArray(users) ? users : [];
-        console.log('[ParticipantsDrawer] Platform search results:', { extracted: userList.length, users: userList });
+        logger.info('[ConversationParticipantsDrawer]', 'Platform search results:', { data: { extracted: userList.length, users: userList } });
         setPlatformResults(users);
       } catch (error) {
-        console.error('Erreur lors de la recherche d\'utilisateurs:', error);
+        logger.error('[ConversationParticipantsDrawer]', 'Erreur lors de la recherche d\'utilisateurs:', { error });
         setPlatformResults([]);
       } finally {
         setIsPlatformSearching(false);
@@ -281,7 +282,7 @@ export function ConversationParticipantsDrawer({
       onParticipantRemoved?.(userId);
       toast.success(t('conversationDetails.participantRemovedSuccess'));
     } catch (error) {
-      console.error('Erreur lors de la suppression du participant:', error);
+      logger.error('[ConversationParticipantsDrawer]', 'Erreur lors de la suppression du participant:', { error });
       toast.error(t('conversationDetails.removeParticipantError'));
     } finally {
       setIsLoading(false);
@@ -298,7 +299,7 @@ export function ConversationParticipantsDrawer({
 
       toast.success(t('participants.roleUpdated', { role: t(`participants.roles.${newRole.toUpperCase()}`) }));
     } catch (error: unknown) {
-      console.error('Erreur lors de la mise à jour du rôle:', error);
+      logger.error('[ConversationParticipantsDrawer]', 'Erreur lors de la mise à jour du rôle:', { error });
       toast.error(error.message || t('participants.roleError'));
     } finally {
       setIsLoading(false);
@@ -359,7 +360,7 @@ export function ConversationParticipantsDrawer({
       setSearchQuery('');
       setPlatformResults([]);
     } catch (error: unknown) {
-      console.error('Erreur lors de l\'ajout du participant:', error);
+      logger.error('[ConversationParticipantsDrawer]', 'Erreur lors de l\'ajout du participant:', { error });
       toast.error(error.message || t('participants.addError'));
     } finally {
       setIsLoading(false);

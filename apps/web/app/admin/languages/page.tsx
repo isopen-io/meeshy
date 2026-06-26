@@ -23,6 +23,7 @@ import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
 import { StatsGrid, TimeSeriesChart, DonutChart, type StatItem } from '@/components/admin/Charts';
 import { StatCardSkeleton } from '@/components/admin/TableSkeleton';
+import { logger } from '@/utils/logger';
 
 interface LanguageData {
   topLanguages: Array<{
@@ -120,7 +121,7 @@ export default function AdminLanguagesPage() {
         });
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des statistiques de langues:', error);
+      logger.error('[AdminLanguages]', 'Erreur lors du chargement des statistiques de langues:', { error });
       toast.error(t('languages.loadError'));
     } finally {
       setLoading(false);

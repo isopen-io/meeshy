@@ -11,6 +11,7 @@ import {
   LOCALE_COOKIE_NAME,
   isSupportedLocale,
 } from '@/lib/i18n/locale-config';
+import { logger } from '@/utils/logger';
 
 /**
  * Mirrors the chosen interface language into a cookie so the SERVER can read it
@@ -79,7 +80,7 @@ export const useLanguageStore = create<LanguageStore>()(
         setInterfaceLanguage: (language: string) => {
           if (!get().isLanguageSupported(language)) {
             if (process.env.NODE_ENV === 'development') {
-              console.warn(`[LANGUAGE_STORE] Unsupported interface language: ${language}`);
+              logger.warn('[LANGUAGE_STORE]', 'Unsupported interface language', { data: language });
             }
             return;
           }

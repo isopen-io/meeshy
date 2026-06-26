@@ -11,6 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
 import { useI18n } from '@/hooks/useI18n';
+import { logger } from '@/utils/logger';
 
 interface ConversationPickerProps {
   selectedId: string | null;
@@ -38,7 +39,7 @@ export function ConversationPicker({ selectedId, onSelect, onClear, label, place
       const conv = await conversationsCrudService.getConversation(selectedId);
       setSelectedConversation(conv);
     } catch (err) {
-      console.error('Error fetching selected conversation:', err);
+      logger.error('[ConversationPicker]', 'Error fetching selected conversation:', { error: err });
     }
   }, [selectedId]);
 
@@ -56,7 +57,7 @@ export function ConversationPicker({ selectedId, onSelect, onClear, label, place
       const response = await conversationsCrudService.searchConversations(query);
       setResults(response || []);
     } catch (err) {
-      console.error('Error searching conversations:', err);
+      logger.error('[ConversationPicker]', 'Error searching conversations:', { error: err });
     } finally {
       setLoading(false);
     }

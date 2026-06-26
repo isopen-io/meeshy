@@ -26,6 +26,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { toast } from 'sonner';
 import { buildApiUrl } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
+import { logger } from '@/utils/logger';
 
 interface LinkEditModalProps {
   link: ConversationLink;
@@ -94,7 +95,7 @@ export function LinkEditModal({ link, isOpen, onClose, onUpdate }: LinkEditModal
         toast.error(error.message || t('errors.updateFailed'));
       }
     } catch (error) {
-      console.error('Erreur lors de la mise à jour:', error);
+      logger.error('[LinkEditModal]', 'Erreur lors de la mise à jour:', { error });
       toast.error(t('errors.updateFailed'));
     } finally {
       setIsLoading(false);

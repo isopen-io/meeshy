@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
-import { sendPaginatedSuccess, sendUnauthorized, sendForbidden, sendInternalError } from '../../utils/response.js';
+import { sendPaginatedSuccess, sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
 import { permissionsService } from './services/PermissionsService';
 import {
   type UserRole,
@@ -611,6 +611,68 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       logError(fastify.log, 'Get admin share links error:', error);
+      return sendInternalError(reply, 'Erreur interne du serveur');
+    }
+  });
+
+  // Admin: delete any share link by linkId
+  fastify.delete('/share-links/:linkId', {
+    onRequest: [fastify.authenticate, requireAdmin],
+    schema: {
+      description: 'Admin: permanently delete any share link. Requires canManageConversations permission.',
+      tags: ['admin'],
+      summary: 'Admin delete share link',
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['linkId'],
+        properties: {
+          linkId: { type: 'string', description: 'Public link identifier (mshy_*)' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: { message: { type: 'string' } }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      const user = authContext.registeredUser;
+      const permissions = permissionsService.getUserPermissions(user.role as UserRole);
+
+      if (!permissions.canManageConversations) {
+        return sendForbidden(reply, 'Permission insuffisante pour supprimer les liens de partage');
+      }
+
+      const { linkId } = request.params as { linkId: string };
+
+      const link = await fastify.prisma.conversationShareLink.findFirst({
+        where: { linkId },
+        select: { id: true }
+      });
+
+      if (!link) {
+        return sendNotFound(reply, 'Lien non trouvé');
+      }
+
+      await fastify.prisma.conversationShareLink.delete({ where: { id: link.id } });
+
+      return sendSuccess(reply, { message: 'Lien supprimé avec succès' });
+    } catch (error) {
+      logError(fastify.log, 'Admin delete share link error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });

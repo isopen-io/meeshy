@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import type { User } from '@/types';
 import { authManager } from '@/services/auth-manager.service';
 import { buildApiUrl } from '@/lib/config';
+import { logger } from '@/utils/logger';
 
 export function useGroupModal(currentUserId?: string) {
   const [groupName, setGroupName] = useState('');
@@ -46,11 +47,11 @@ export function useGroupModal(currentUserId?: string) {
           );
           setAvailableUsers(users);
         } else {
-          console.error('API error:', response.status, response.statusText);
+          logger.error('[useGroupModal]', 'API error', { data: { status: response.status, statusText: response.statusText } });
           toast.error('Error loading users');
         }
       } catch (error) {
-        console.error('Error loading users:', error);
+        logger.error('[useGroupModal]', 'Error loading users', { error });
         toast.error('Error loading users');
       } finally {
         setIsLoadingUsers(false);
@@ -114,7 +115,7 @@ export function useGroupModal(currentUserId?: string) {
         return null;
       }
     } catch (error) {
-      console.error('Error creating group:', error);
+      logger.error('[useGroupModal]', 'Error creating group', { error });
       toast.error('Error creating group');
       return null;
     } finally {

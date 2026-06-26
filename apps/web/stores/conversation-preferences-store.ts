@@ -17,6 +17,7 @@ import { create } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import { userPreferencesService } from '@/services/user-preferences.service';
 import type { UserConversationPreferences, UserConversationCategory } from '@meeshy/shared/types/user-preferences';
+import { logger } from '@/utils/logger';
 
 interface ConversationPreferencesState {
   // Preferences map by conversation ID
@@ -89,7 +90,7 @@ export const useConversationPreferencesStore = create<ConversationPreferencesSta
           isInitialized: true,
         });
       } catch (error) {
-        console.error('[ConversationPreferencesStore] Initialization error:', error);
+        logger.error('[ConversationPreferencesStore]', 'Initialization error', { error });
         set({ error: 'Failed to load preferences', isInitialized: true });
       } finally {
         set({ isLoading: false });
@@ -283,7 +284,7 @@ export const useConversationPreferencesStore = create<ConversationPreferencesSta
         });
         set({ preferencesMap: map });
       } catch (error) {
-        console.error('[ConversationPreferencesStore] Error refreshing preferences:', error);
+        logger.error('[ConversationPreferencesStore]', 'Error refreshing preferences', { error });
       }
     },
 
@@ -292,7 +293,7 @@ export const useConversationPreferencesStore = create<ConversationPreferencesSta
         const categories = await userPreferencesService.getCategories();
         set({ categories: categories.sort((a, b) => a.order - b.order) });
       } catch (error) {
-        console.error('[ConversationPreferencesStore] Error refreshing categories:', error);
+        logger.error('[ConversationPreferencesStore]', 'Error refreshing categories', { error });
       }
     },
   })

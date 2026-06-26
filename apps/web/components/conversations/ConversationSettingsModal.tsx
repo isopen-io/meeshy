@@ -77,6 +77,7 @@ import {
   LanguageIndicators,
   SidebarLanguageHeader,
 } from '@/lib/bubble-stream-modules';
+import { logger } from '@/utils/logger';
 
 // Hooks
 import { useConversationStats } from '@/hooks/use-conversation-stats';
@@ -290,7 +291,7 @@ export function ConversationSettingsModal({
         setTags([...prefs.tags]);
       }
     } catch (error) {
-      console.error('Erreur chargement préférences:', error);
+      logger.error('[ConversationSettingsModal]', 'Erreur chargement préférences:', { error });
     } finally {
       setIsLoadingPrefs(false);
     }
@@ -328,7 +329,7 @@ export function ConversationSettingsModal({
 
       toast.success(t('conversationDetails.preferencesSaved'));
     } catch (error) {
-      console.error('Erreur sauvegarde préférences:', error);
+      logger.error('[ConversationSettingsModal]', 'Erreur sauvegarde préférences:', { error });
       toast.error(t('conversationDetails.preferencesError'));
     } finally {
       setIsSavingPrefs(false);
@@ -354,7 +355,7 @@ export function ConversationSettingsModal({
       setIsEditingTitle(false);
       toast.success(t('conversationDetails.nameUpdated'));
     } catch (error) {
-      console.error('Erreur sauvegarde titre:', error);
+      logger.error('[ConversationSettingsModal]', 'Erreur sauvegarde titre:', { error });
       toast.error(t('conversationDetails.updateError'));
     } finally {
       setIsSavingTitle(false);
@@ -385,7 +386,7 @@ export function ConversationSettingsModal({
       setIsEditingDescription(false);
       toast.success(t('conversationDetails.descriptionUpdated'));
     } catch (error) {
-      console.error('Erreur sauvegarde description:', error);
+      logger.error('[ConversationSettingsModal]', 'Erreur sauvegarde description:', { error });
       toast.error(t('conversationDetails.descriptionError'));
     } finally {
       setIsSavingDescription(false);
@@ -416,7 +417,7 @@ export function ConversationSettingsModal({
         throw new Error('Upload failed');
       }
     } catch (error) {
-      console.error('Error uploading image:', error);
+      logger.error('[ConversationSettingsModal]', 'Error uploading image:', { error });
       toast.error(t('conversationDetails.imageUploadError'));
     } finally {
       setIsUploadingImage(false);
@@ -441,7 +442,7 @@ export function ConversationSettingsModal({
         throw new Error('Upload failed');
       }
     } catch (error) {
-      console.error('Error uploading banner:', error);
+      logger.error('[ConversationSettingsModal]', 'Error uploading banner:', { error });
       toast.error(t('conversationDetails.bannerError'));
     } finally {
       setIsUploadingBanner(false);

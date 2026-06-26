@@ -10,6 +10,7 @@ import { ArrowLeft, Save, Eye } from 'lucide-react';
 import { adminService } from '@/services/admin.service';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
+import { logger } from '@/utils/logger';
 
 const LANGUAGES = [
   { code: 'en', label: 'English' },
@@ -114,7 +115,7 @@ export default function NewBroadcastPage() {
       toast.success(t('broadcasts.newDraftSaved'));
       router.push('/admin/broadcasts');
     } catch (error) {
-      console.error('Erreur sauvegarde brouillon:', error);
+      logger.error('[AdminBroadcastsNew]', 'Erreur sauvegarde brouillon:', { error });
       toast.error(t('broadcasts.newSaveError'));
     } finally {
       setSaving(false);
@@ -136,7 +137,7 @@ export default function NewBroadcastPage() {
       toast.success(t('broadcasts.newTranslationStarted'));
       router.push(`/admin/broadcasts/${broadcastId}`);
     } catch (error) {
-      console.error('Erreur preview:', error);
+      logger.error('[AdminBroadcastsNew]', 'Erreur preview:', { error });
       toast.error(t('broadcasts.newPreviewError'));
     } finally {
       setPreviewing(false);

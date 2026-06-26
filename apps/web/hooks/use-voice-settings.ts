@@ -5,6 +5,7 @@ import { apiService } from '@/services/api.service';
 import { DEFAULT_VOICE_CLONING_SETTINGS } from '@meeshy/shared/types/voice-api';
 import type { VoiceCloningUserSettings } from '@meeshy/shared/types/voice-api';
 import { toast } from 'sonner';
+import { logger } from '@/utils/logger';
 
 interface UseVoiceSettingsReturn {
   // State
@@ -53,7 +54,7 @@ export function useVoiceSettings(): UseVoiceSettingsReturn {
         setHasUnsavedChanges(false);
       }
     } catch (err) {
-      console.error('[VoiceSettings] Error loading cloning settings:', err);
+      logger.error('[useVoiceSettings]', 'Error loading cloning settings', { error: err });
       toast.error('Failed to load voice settings');
     }
   }, []);
@@ -84,7 +85,7 @@ export function useVoiceSettings(): UseVoiceSettingsReturn {
         toast.error('Failed to save settings');
       }
     } catch (err) {
-      console.error('[VoiceSettings] Error saving settings:', err);
+      logger.error('[useVoiceSettings]', 'Error saving settings', { error: err });
       toast.error('Failed to save settings');
     } finally {
       setIsSavingSettings(false);

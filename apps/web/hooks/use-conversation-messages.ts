@@ -10,6 +10,7 @@ import { authManager } from '@/services/auth-manager.service';
 import { apiService } from '@/services/api.service';
 import { debounce } from '@/utils/debounce';
 import type { User, Message } from '@meeshy/shared/types';
+import { logger } from '@/utils/logger';
 
 export interface ConversationMessagesOptions {
   limit?: number;
@@ -261,7 +262,7 @@ export function useConversationMessages(
         return; // Requête annulée, ne pas afficher d'erreur
       }
       
-      console.error('Erreur lors du chargement des messages:', error);
+      logger.error('[useConversationMessages]', 'Erreur lors du chargement des messages', { error });
       setError(error.message || 'Erreur lors du chargement des messages');
     } finally {
       setIsLoading(false);
@@ -336,7 +337,7 @@ export function useConversationMessages(
   const updateMessage = useCallback((messageId: string, updates: Partial<Message> | ((prev: Message) => Message)) => {
     const index = messagesIndexMapRef.current.get(messageId);
     if (index === undefined) {
-      console.warn(`[updateMessage] Message ${messageId} not found in index`);
+      logger.warn('[useConversationMessages]', `Message ${messageId} not found in index`);
       return;
     }
 
@@ -364,7 +365,7 @@ export function useConversationMessages(
     // Attendre que le DOM soit prêt avec un délai
     const timer = setTimeout(() => {
       if (!actualContainerRef.current) {
-        console.warn('[useConversationMessages] Container ref not available after 100ms delay');
+        logger.warn('[useConversationMessages]', 'Container ref not available after 100ms delay');
         return;
       }
 

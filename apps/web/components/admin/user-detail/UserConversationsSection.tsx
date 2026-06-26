@@ -7,6 +7,7 @@ import { MessageSquare, Users, Clock, Loader2, ShieldCheck, X } from 'lucide-rea
 import { apiService } from '@/services/api.service';
 import { useI18n } from '@/hooks/use-i18n';
 import { useCurrentInterfaceLanguage } from '@/stores/language-store';
+import { logger } from '@/utils/logger';
 
 interface ParticipantUser {
   id: string;
@@ -126,7 +127,7 @@ function GroupMembersModal({ conversation, onClose }: { conversation: AdminUserC
       setHasMore(pagination?.hasMore ?? false);
       setOffset(nextOffset + page.length);
     } catch (err) {
-      console.error('Error fetching conversation participants:', err);
+      logger.error('[UserConversationsSection]', 'Error fetching conversation participants:', { error: err });
     } finally {
       if (replace) setLoading(false); else setLoadingMore(false);
     }
@@ -223,7 +224,7 @@ export function UserConversationsSection({ userId }: { userId: string }) {
       setOffset(nextOffset + page.length);
       setError(null);
     } catch (err) {
-      console.error('Error fetching user conversations:', err);
+      logger.error('[UserConversationsSection]', 'Error fetching user conversations:', { error: err });
       setError(t('usersDetail.loadError'));
     } finally {
       if (replace) setLoading(false); else setLoadingMore(false);

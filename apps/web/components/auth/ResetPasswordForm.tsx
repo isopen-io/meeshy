@@ -15,6 +15,7 @@ import { PasswordRequirementsChecklist } from './PasswordRequirementsChecklist';
 import { useI18n } from '@/hooks/useI18n';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { logger } from '@/utils/logger';
 
 interface ResetPasswordFormProps {
   token: string;
@@ -73,7 +74,7 @@ export function ResetPasswordForm({ token, className, onSuccess }: ResetPassword
           );
         }
       } catch (error) {
-        console.error('[ResetPasswordForm] Error verifying token:', error);
+        logger.error('[ResetPasswordForm]', '[ResetPasswordForm] Error verifying token', { error });
         setTokenValid(false);
         setLocalError(
           t('resetPassword.errors.verificationFailed', 'Failed to verify reset token')
@@ -183,7 +184,7 @@ export function ResetPasswordForm({ token, className, onSuccess }: ResetPassword
         toast.error(errorMessage);
       }
     } catch (error) {
-      console.error('[ResetPasswordForm] Error resetting password:', error);
+      logger.error('[ResetPasswordForm]', '[ResetPasswordForm] Error resetting password', { error });
       const errorMessage =
         error instanceof Error
           ? error.message

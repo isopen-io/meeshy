@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { Conversation } from '@meeshy/shared/types';
 import type { UserConversationPreferences, UserConversationCategory } from '@meeshy/shared/types/user-preferences';
+import { logger } from '@/utils/logger';
 
 interface ConversationGroup {
   type: 'pinned' | 'category' | 'uncategorized';
@@ -98,7 +99,7 @@ export function useConversationSorting({
     // Ajouter les conversations avec categoryId orphelin dans uncategorized
     conversationsByCategory.forEach((convs, categoryId) => {
       if (!displayedCategoryIds.has(categoryId)) {
-        console.warn('[useConversationSorting] Found orphaned conversations with missing category:', categoryId);
+        logger.warn('[useConversationSorting]', 'Found orphaned conversations with missing category:', { data: categoryId });
         uncategorized.push(...convs);
       }
     });

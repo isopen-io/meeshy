@@ -28,6 +28,7 @@ import { createTrackingLink, copyTrackingLinkToClipboard } from '@/services/trac
 import { conversationsService } from '@/services/conversations.service';
 import type { Conversation } from '@meeshy/shared/types';
 import type { CreateTrackingLinkRequest } from '@meeshy/shared/types/tracking-link';
+import { logger } from '@/utils/logger';
 
 interface CreateTrackingLinkModalProps {
   isOpen: boolean;
@@ -75,7 +76,7 @@ export function CreateTrackingLinkModal({
       const conversationsData = await conversationsService.getConversations();
       setConversations(conversationsData.conversations || []);
     } catch (error) {
-      console.error('Erreur lors du chargement des conversations:', error);
+      logger.error('[CreateTrackingLinkModal]', 'Erreur lors du chargement des conversations:', { error });
     } finally {
       setIsLoadingConversations(false);
     }
@@ -141,7 +142,7 @@ export function CreateTrackingLinkModal({
         toast.success(t('tracking.success.createdNoCopy'));
       }
     } catch (error) {
-      console.error('Erreur lors de la création du lien de tracking:', error);
+      logger.error('[CreateTrackingLinkModal]', 'Erreur lors de la création du lien de tracking:', { error });
       toast.error(t('tracking.errors.createFailed'));
     } finally {
       setIsCreating(false);

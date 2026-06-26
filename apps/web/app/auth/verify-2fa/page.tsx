@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, Suspense } from 'react';
+import { logger } from '@/utils/logger';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
@@ -194,7 +195,7 @@ function Verify2FAPageContent() {
         setIsLoading(false);
       }
     } catch (error) {
-      console.error('[2FA] Erreur de vérification:', error);
+      logger.error('[Verify2FA]', 'Erreur de vérification', { error });
       setError(t('login.errors.networkError'));
       setIsLoading(false);
     }

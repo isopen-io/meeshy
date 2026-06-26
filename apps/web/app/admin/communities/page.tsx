@@ -33,6 +33,7 @@ import { StatsGrid, TimeSeriesChart, DonutChart, StatItem, TimeSeriesDataPoint, 
 import { TableSkeleton, StatCardSkeleton } from '@/components/admin/TableSkeleton';
 
 import type { Community as BaseCommunity } from '@meeshy/shared/types';
+import { logger } from '@/utils/logger';
 
 type Community = BaseCommunity & {
   readonly creator?: {
@@ -99,7 +100,7 @@ export default function AdminCommunitiesPage() {
         setTotalPages(1);
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des communautés:', error);
+      logger.error('[AdminCommunities]', 'Erreur lors du chargement des communautés:', { error });
       toast.error(t('communities.loadError'));
     } finally {
       setLoading(false);

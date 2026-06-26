@@ -12,6 +12,7 @@ import { X, Download, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw } fro
 import { motion, AnimatePresence } from 'framer-motion';
 import { Attachment, formatFileSize } from '@meeshy/shared/types/attachment';
 import { Button } from '../ui/button';
+import { logger } from '@/utils/logger';
 
 interface ImageLightboxProps {
   images: Attachment[];
@@ -60,7 +61,7 @@ export function ImageLightbox({ images, initialIndex, isOpen, onClose }: ImageLi
     if (isOpen && images && images.length > 0 && currentIndex >= 0 && currentIndex < images.length) {
       const img = images[currentIndex];
       if (!img.fileUrl) {
-        console.error('[ImageLightbox] Image sans URL:', img);
+        logger.error('[ImageLightbox]', 'Image sans URL:', { img });
         onClose();
       }
     }
@@ -242,7 +243,7 @@ export function ImageLightbox({ images, initialIndex, isOpen, onClose }: ImageLi
                 onClose();
               }}
               onError={(_e) => {
-                console.error('[ImageLightbox] Erreur chargement image:', currentImage.fileUrl);
+                logger.error('[ImageLightbox]', 'Erreur chargement image:', { fileUrl: currentImage.fileUrl });
                 setImageError(true);
               }}
               draggable={false}

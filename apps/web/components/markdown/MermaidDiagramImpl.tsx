@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState, Component, ErrorInfo, ReactNode } f
 import mermaid from 'mermaid';
 import { useI18n } from '@/hooks/useI18n';
 import { useResolvedTheme, type ResolvedTheme } from '@/hooks/use-resolved-theme';
+import { logger } from '@/utils/logger';
 
 export interface MermaidDiagramProps {
   chart: string;
@@ -31,7 +32,7 @@ class MermaidErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('MermaidErrorBoundary a capturé une erreur:', error, errorInfo);
+    logger.error('[MermaidDiagramImpl]', 'MermaidErrorBoundary a capturé une erreur', { error, errorInfo });
   }
 
   render() {

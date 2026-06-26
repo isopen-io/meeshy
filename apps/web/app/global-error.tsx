@@ -7,6 +7,7 @@
  */
 
 import { useEffect } from 'react';
+import { logger } from '@/utils/logger';
 import { AlertTriangle, RefreshCw, Wifi, WifiOff } from 'lucide-react';
 
 export default function GlobalError({

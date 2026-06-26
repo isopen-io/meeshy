@@ -14,6 +14,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { AlertCircle, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/hooks/useI18n';
+import { logger } from '@/utils/logger';
 
 interface FeatureGateProps {
   feature: 'passwordReset'; // Add more features as needed
@@ -50,7 +51,7 @@ export function FeatureGate({
   useEffect(() => {
     // If feature is disabled and we should redirect (not show message)
     if (!isEnabled && !showMessage) {
-      console.warn(`[FeatureGate] Feature "${feature}" is disabled. Redirecting to ${redirectTo}`);
+      logger.warn('[FeatureGate]', `[FeatureGate] Feature "${feature}" is disabled. Redirecting to ${redirectTo}`);
       router.push(redirectTo);
     }
   }, [isEnabled, showMessage, feature, redirectTo, router]);

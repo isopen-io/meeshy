@@ -8,6 +8,7 @@
 import { useState, useCallback } from 'react';
 import { conversationsService } from '@/services/conversations.service';
 import { useUserStore } from '@/stores/user-store';
+import { logger } from '@/utils/logger';
 
 /**
  * Hook de rafraîchissement manuel du statut (fallback si WebSocket down)
@@ -43,7 +44,7 @@ export function useManualStatusRefresh(conversationId: string | null) {
       const participants = await conversationsService.getParticipants(conversationId);
       setParticipants(participants);
     } catch (error) {
-      console.error('[ManualStatusRefresh] Error refreshing participants:', error);
+      logger.error('[useManualStatusRefresh]', 'Error refreshing participants', { error });
       throw error; // Laisser l'appelant gérer l'erreur
     } finally {
       setIsRefreshing(false);

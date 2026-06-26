@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Image as ImageIcon, Video, Music, FileText, Loader2 } from 'lucide-react';
 import { apiService } from '@/services/api.service';
 import { useI18n } from '@/hooks/use-i18n';
+import { logger } from '@/utils/logger';
 
 interface AdminUserMedia {
   id: string;
@@ -78,7 +79,7 @@ export function UserMediaSection({ userId }: { userId: string }) {
       setOffset(nextOffset + page.length);
       setError(null);
     } catch (err) {
-      console.error('Error fetching user media:', err);
+      logger.error('[UserMediaSection]', 'Error fetching user media:', { error: err });
       setError(t('usersDetail.loadError'));
     } finally {
       if (replace) setLoading(false); else setLoadingMore(false);

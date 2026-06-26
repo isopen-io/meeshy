@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { buildApiUrl } from '@/lib/config';
 import { getEmailValidationError } from '@meeshy/shared/utils/email-validator';
 import type { TFunction } from '@/hooks/useI18n';
+import { logger } from '@/utils/logger';
 
 const AVAILABILITY_CHECK_DEBOUNCE = 2000;
 
@@ -93,7 +94,7 @@ export function useFieldValidation({ value, disabled, t, type }: UseFieldValidat
         }
       }
     } catch (error) {
-      console.error(`Erreur vérification ${type}:`, error);
+      logger.error('[useFieldValidation]', `Erreur vérification ${type}`, { error });
       // Erreur réseau (pas de réponse) - définir comme invalide
       setStatus('invalid');
       setErrorMessage(t('register.errors.networkError'));

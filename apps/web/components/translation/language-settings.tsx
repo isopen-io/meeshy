@@ -14,6 +14,7 @@ import { Globe, Languages, Target } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
 import { buildApiUrl } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
+import { logger } from '@/utils/logger';
 
 interface LanguageSettingsProps {
   user: UserType | null;
@@ -80,7 +81,7 @@ export function LanguageSettings({ user, onUserUpdate }: LanguageSettingsProps) 
       onUserUpdate(updatedUser);
       toast.success(responseData.message || t('translation.actions.settingsUpdated'));
     } catch (err) {
-      console.error('Erreur lors de la mise à jour des paramètres de langue:', err);
+      logger.error('[LanguageSettings]', 'Erreur lors de la mise à jour des paramètres de langue:', { error: err });
       toast.error(err instanceof Error ? err.message : t('translation.actions.updateError'));
     } finally {
       setIsLoading(false);

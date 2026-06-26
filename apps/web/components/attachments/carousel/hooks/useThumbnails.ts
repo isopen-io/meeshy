@@ -4,6 +4,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { createThumbnailsBatch, isLowEndDevice } from '@/lib/utils/image-thumbnail';
+import { logger } from '@/utils/logger';
 
 export function useThumbnails(files: File[]) {
   const [thumbnails, setThumbnails] = useState<Map<string, string>>(new Map());
@@ -56,7 +57,7 @@ export function useThumbnails(files: File[]) {
           });
         }
       } catch (error) {
-        console.error('Erreur génération miniatures:', error);
+        logger.error('[useThumbnails]', 'Erreur génération miniatures:', { error });
       } finally {
         if (!isCancelled) {
           setIsGeneratingThumbnails(false);

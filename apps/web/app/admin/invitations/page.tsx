@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
 import { StatsGrid, TimeSeriesChart, DonutChart, StatItem, TimeSeriesDataPoint, DonutDataPoint } from '@/components/admin/Charts';
 import { TableSkeleton, StatCardSkeleton } from '@/components/admin/TableSkeleton';
+import { logger } from '@/utils/logger';
 
 interface Invitation {
   id: string;
@@ -202,7 +203,7 @@ export default function AdminInvitationsPage() {
       setTotalPages(Math.ceil(filteredInvitations.length / pageSize));
 
     } catch (error) {
-      console.error('Erreur lors du chargement des invitations:', error);
+      logger.error('[AdminInvitations]', 'Erreur lors du chargement des invitations:', { error });
       toast.error(t('invitations.loadError'));
     } finally {
       setLoading(false);

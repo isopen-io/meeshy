@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { logger } from '@/utils/logger';
 
 // Chemin du fichier de log (dans le dossier logs à la racine du projet frontend)
 const LOG_DIR = path.join(process.cwd(), 'logs');
@@ -15,7 +16,7 @@ const LOG_FILE = path.join(LOG_DIR, 'client-errors.log');
 /**
  * Écrit une erreur dans le fichier de log avec contexte complet
  */
-async function logToFile(errorData: unknown) {
+async function logToFile(errorData: Record<string, unknown>) {
   try {
     // Créer le dossier logs s'il n'existe pas
     await fs.mkdir(LOG_DIR, { recursive: true });
@@ -65,18 +66,17 @@ async function logToFile(errorData: unknown) {
     const logLine = JSON.stringify(logEntry) + '\n';
     await fs.appendFile(LOG_FILE, logLine, 'utf-8');
 
-    console.info(`[Client Error] Logged to file with full context: ${LOG_FILE}`);
+    logger.info('[ApiClientError]', 'Logged client error to file', { file: LOG_FILE });
   } catch (fileError) {
-    console.error('[Client Error] Failed to write to log file:', fileError);
-    // Continue même si l'écriture échoue
+    logger.error('[ApiClientError]', 'Failed to write to log file', { error: fileError });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body = await request.json() as Record<string, unknown>;
 
-    const errorData = {
+    const errorData: Record<string, unknown> = {
       timestamp: body.timestamp || new Date().toISOString(),
       url: body.url,
       message: body.message,
@@ -85,15 +85,13 @@ export async function POST(request: NextRequest) {
       digest: body.digest,
     };
 
-    // Logger dans la console pour debugging immédiat
-    console.error('[Client Error]', errorData);
+    logger.error('[ApiClientError]', 'Client-side error reported', { data: errorData });
 
-    // Logger dans le fichier pour analyse ultérieure
     await logToFile(errorData);
 
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error) {
-    console.error('[Client Error API] Failed to log error:', error);
+    logger.error('[ApiClientError]', 'Failed to log client error', { error });
     return NextResponse.json(
       { success: false, error: 'Failed to log error' },
       { status: 500 }

@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import type { Message } from '@meeshy/shared/types';
 import { useI18n } from '@/hooks/useI18n';
+import { logger } from '@/utils/logger';
 
 interface ReportMessageViewProps {
   message: Message;

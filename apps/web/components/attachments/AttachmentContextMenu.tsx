@@ -21,6 +21,7 @@ import { toast } from 'sonner';
 import { Attachment } from '@meeshy/shared/types';
 import { createPortal } from 'react-dom';
 import { useI18n } from '@/hooks/useI18n';
+import { logger } from '@/utils/logger';
 
 export interface AttachmentContextMenuProps {
   attachment: Attachment;
@@ -80,7 +81,7 @@ export function AttachmentContextMenu({
       setShowDeleteConfirm(false);
       onClose();
     } catch (error) {
-      console.error('Erreur suppression attachment:', error);
+      logger.error('[AttachmentContextMenu]', 'Erreur suppression attachment:', { error });
       toast.error(t('contextMenu.deleteError'));
     } finally {
       setIsDeleting(false);

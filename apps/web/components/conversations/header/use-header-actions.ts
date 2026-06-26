@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
+import { logger } from '@/utils/logger';
 import { AttachmentService } from '@/services/attachmentService';
 import { conversationsService } from '@/services/conversations.service';
 
@@ -29,7 +30,7 @@ export function useHeaderActions(conversationId: string, t: (key: string, fallba
         throw new Error('Upload failed');
       }
     } catch (error) {
-      console.error('Erreur lors de l\'upload de l\'image:', error);
+      logger.error('[useHeaderActions]', 'Erreur lors de l\'upload de l\'image:', { error });
       toast.error(t('conversationHeader.imageUploadError', 'Error uploading image'));
     } finally {
       setIsUploadingImage(false);
@@ -54,7 +55,7 @@ export function useHeaderActions(conversationId: string, t: (key: string, fallba
       if (error.name === 'AbortError') {
         return;
       }
-      console.error('Erreur lors du partage:', error);
+      logger.error('[useHeaderActions]', 'Erreur lors du partage:', { error });
       toast.error(t('conversationHeader.linkCopyError', 'Error copying link'));
     }
   }, [conversationId, t]);

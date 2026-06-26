@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { authManager } from '@/services/auth-manager.service';
 import { anonymousChatService } from '@/services/anonymous-chat.service';
+import { logger } from '@/utils/logger';
 
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -26,7 +27,7 @@ export function useAnonymousSession({ enabled = false, linkId }: UseAnonymousSes
       try {
         await anonymousChatService.refreshSession();
       } catch (error) {
-        console.error('[useAnonymousSession] Session refresh failed:', error);
+        logger.error('[useAnonymousSession]', 'Session refresh failed', { error });
       }
     };
 

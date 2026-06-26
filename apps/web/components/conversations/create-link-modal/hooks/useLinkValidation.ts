@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { authManager } from '@/services/auth-manager.service';
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/config';
 import { LinkIdentifierStatus } from '../types';
+import { logger } from '@/utils/logger';
 
 export function useLinkValidation(linkIdentifier: string) {
   const [linkIdentifierCheckStatus, setLinkIdentifierCheckStatus] =
@@ -47,7 +48,7 @@ export function useLinkValidation(linkIdentifier: string) {
           setLinkIdentifierCheckStatus('idle');
         }
       } catch (error) {
-        console.error('Error checking link identifier:', error);
+        logger.error('[useLinkValidation]', 'Error checking link identifier:', { error });
         setLinkIdentifierCheckStatus('idle');
       }
     }, 500);

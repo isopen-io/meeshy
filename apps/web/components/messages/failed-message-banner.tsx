@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { useFailedMessagesStore, type FailedMessage } from '@/stores/failed-messages-store';
 import { useI18n } from '@/hooks/useI18n';
 import { toast } from 'sonner';
+import { logger } from '@/utils/logger';
 
 interface FailedMessageBannerProps {
   conversationId: string;
@@ -48,7 +49,7 @@ export function FailedMessageBanner({
         toast.error(t('bubbleStream.retryFailed', 'Échec du renvoi. Cliquez pour restaurer le message.'));
       }
     } catch (error) {
-      console.error('Erreur lors du renvoi:', error);
+      logger.error('[FailedMessageBanner]', 'Erreur lors du renvoi:', { error });
       toast.error(t('bubbleStream.retryError', 'Erreur lors du renvoi'));
     } finally {
       setRetryingId(null);

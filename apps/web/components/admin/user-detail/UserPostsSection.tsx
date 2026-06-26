@@ -7,6 +7,7 @@ import { FileText, Heart, MessageCircle, Eye, Clock, Loader2, Image as ImageIcon
 import { apiService } from '@/services/api.service';
 import { useI18n } from '@/hooks/use-i18n';
 import { useCurrentInterfaceLanguage } from '@/stores/language-store';
+import { logger } from '@/utils/logger';
 
 interface AdminPostMedia {
   id: string;
@@ -89,7 +90,7 @@ export function UserPostsSection({ userId }: { userId: string }) {
       setOffset(nextOffset + page.length);
       setError(null);
     } catch (err) {
-      console.error('Error fetching user posts:', err);
+      logger.error('[UserPostsSection]', 'Error fetching user posts:', { error: err });
       setError(t('usersDetail.loadError'));
     } finally {
       if (replace) setLoading(false); else setLoadingMore(false);

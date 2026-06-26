@@ -6,6 +6,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { logger } from '@/utils/logger';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // REDUCED MOTION HOOK
@@ -65,7 +66,7 @@ export const SoundFeedback = {
       try {
         this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       } catch (e) {
-        console.warn('[SoundFeedback] Web Audio API not supported');
+        logger.warn('[SoundFeedback]', 'Web Audio API not supported');
         return null;
       }
     }

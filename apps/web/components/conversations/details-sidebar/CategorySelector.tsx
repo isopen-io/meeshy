@@ -23,6 +23,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { logger } from '@/utils/logger';
 
 function isAnonymousUser(user: unknown): user is Participant {
   return user && (user.type === 'anonymous' || 'sessionToken' in user || 'shareLinkId' in user);
@@ -69,7 +70,7 @@ export function CategorySelector({ conversationId, currentUser, onCategoryUpdate
         });
         setCategories(sortedCats);
       } catch (error) {
-        console.error('Error loading categories:', error);
+        logger.error('[CategorySelector]', 'Error loading categories:', { error });
         setCategories([]);
         setSelectedCategoryId(null);
       } finally {
@@ -89,7 +90,7 @@ export function CategorySelector({ conversationId, currentUser, onCategoryUpdate
       toast.success(t(categoryId ? 'conversationDetails.categoryAssigned' : 'conversationDetails.categoryRemoved'));
       onCategoryUpdated?.();
     } catch (error) {
-      console.error('Error updating category:', error);
+      logger.error('[CategorySelector]', 'Error updating category:', { error });
       toast.error(t('conversationDetails.categoryUpdateError'));
       setSelectedCategoryId(selectedCategoryId);
     }
@@ -112,12 +113,12 @@ export function CategorySelector({ conversationId, currentUser, onCategoryUpdate
         toast.success(t('conversationDetails.categoryCreated'));
         onCategoryUpdated?.();
       } catch (updateError) {
-        console.error('Error assigning category after creation:', updateError);
+        logger.error('[CategorySelector]', 'Error assigning category after creation:', { error: updateError });
         setSelectedCategoryId(null);
         toast.error(t('conversationDetails.categoryUpdateError'));
       }
     } catch (error) {
-      console.error('Error creating category:', error);
+      logger.error('[CategorySelector]', 'Error creating category:', { error });
       toast.error(t('conversationDetails.categoryCreateError'));
     }
   };
@@ -139,7 +140,7 @@ export function CategorySelector({ conversationId, currentUser, onCategoryUpdate
       toast.success(t('conversationDetails.categoryUpdated'));
       onCategoryUpdated?.();
     } catch (error) {
-      console.error('Error updating category:', error);
+      logger.error('[CategorySelector]', 'Error updating category:', { error });
       toast.error(t('conversationDetails.categoryUpdateError'));
     }
   };
@@ -161,7 +162,7 @@ export function CategorySelector({ conversationId, currentUser, onCategoryUpdate
       toast.success(t('conversationDetails.categoryDeleted'));
       onCategoryUpdated?.();
     } catch (error) {
-      console.error('Error deleting category:', error);
+      logger.error('[CategorySelector]', 'Error deleting category:', { error });
       toast.error(t('conversationDetails.categoryDeleteError'));
     }
   };

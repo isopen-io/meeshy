@@ -14,6 +14,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
+import { logger } from '@/utils/logger';
 import type {
   ReactionAggregation,
   ReactionSync,
@@ -84,7 +85,7 @@ export function useMessageReactions({
       // Demander la synchronisation via WebSocket
       const socket = meeshySocketIOService.getSocket();
       if (!socket) {
-        console.error('❌ [useMessageReactions] Socket non connecté');
+        logger.error('[useMessageReactions]', 'Socket non connecté');
         throw new Error('Socket not connected');
       }
 
@@ -104,7 +105,7 @@ export function useMessageReactions({
         }
       );
     } catch (err) {
-      console.error('❌ [useMessageReactions] Erreur refreshReactions:', err);
+      logger.error('[useMessageReactions]', 'Erreur refreshReactions', { error: err });
       setError(err instanceof Error ? err.message : 'Failed to refresh reactions');
     } finally {
       setIsLoading(false);
@@ -169,7 +170,7 @@ export function useMessageReactions({
       // Envoyer au serveur
       const socket = meeshySocketIOService.getSocket();
       if (!socket) {
-        console.error('❌ [useMessageReactions] Socket not connected');
+        logger.error('[useMessageReactions]', 'Socket not connected');
         throw new Error('Socket not connected');
       }
 
@@ -184,7 +185,7 @@ export function useMessageReactions({
               resolve(true);
             } else {
               // Revert optimistic update
-              console.error('❌ [useMessageReactions] Server returned error:', response.error);
+              logger.error('[useMessageReactions]', 'Server returned error', { error: response.error });
               setError(response.error || 'Failed to add reaction');
 
               // Afficher l'erreur à l'utilisateur
@@ -203,7 +204,7 @@ export function useMessageReactions({
         );
       });
     } catch (err) {
-      console.error('❌ [useMessageReactions] Error adding reaction:', err);
+      logger.error('[useMessageReactions]', 'Error adding reaction', { error: err });
       setError(err instanceof Error ? err.message : 'Failed to add reaction');
       refreshReactions(); // Revert
       return false;
@@ -265,7 +266,7 @@ export function useMessageReactions({
         );
       });
     } catch (err) {
-      console.error('Error removing reaction:', err);
+      logger.error('[useMessageReactions]', 'Error removing reaction', { error: err });
       setError(err instanceof Error ? err.message : 'Failed to remove reaction');
       refreshReactions(); // Revert
       return false;

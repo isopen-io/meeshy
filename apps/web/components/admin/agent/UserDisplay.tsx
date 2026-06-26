@@ -6,6 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { usersService } from '@/services/users.service';
 import type { SocketIOUser as User } from '@meeshy/shared/types';
 import { cn } from '@/lib/utils';
+import { logger } from '@/utils/logger';
 
 interface UserDisplayProps {
   userId?: string;
@@ -28,7 +29,7 @@ export function UserDisplay({ userId, user: initialUser, showUsername = true, cl
             setUser(res.data);
           }
         })
-        .catch(err => console.error('Error fetching user profile:', err))
+        .catch(err => logger.error('[UserDisplay]', 'Error fetching user profile:', { error: err }))
         .finally(() => setLoading(false));
     }
   }, [userId, initialUser]);

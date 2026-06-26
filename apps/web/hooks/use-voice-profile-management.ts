@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react';
 import { apiService, TIMEOUT_VOICE_PROFILE } from '@/services/api.service';
 import type { VoiceProfileDetails, VoiceProfileConsentRequest } from '@meeshy/shared/types/voice-api';
 import { toast } from 'sonner';
+import { logger } from '@/utils/logger';
 
 interface UseVoiceProfileManagementReturn {
   // State
@@ -34,12 +35,12 @@ export function useVoiceProfileManagement(): UseVoiceProfileManagementReturn {
   const [hasVoiceCloningConsent, setHasVoiceCloningConsent] = useState(false);
 
   const loadProfile = useCallback(async () => {
-    console.log('[VoiceProfile] loadProfile called');
+    logger.info('[useVoiceProfileManagement]', 'loadProfile called');
     setIsLoading(true);
     try {
       // Charger le profil (inclut maintenant les consentements)
       const profileRes = await apiService.get<{ success: boolean; data: VoiceProfileDetails }>('/voice/profile');
-      console.log('[VoiceProfile] API response:', profileRes);
+      logger.info('[useVoiceProfileManagement]', 'API response', { data: profileRes });
 
       // L'API retourne { success, data: { success, data: {...} } }
       // apiService wrappe la réponse, donc on doit accéder à profileRes.data.data
@@ -47,8 +48,8 @@ export function useVoiceProfileManagement(): UseVoiceProfileManagementReturn {
       const profileData = rawData as VoiceProfileDetails;
 
       if (profileRes.success && profileData) {
-        console.log('[VoiceProfile] Profile data:', profileData);
-        console.log('[VoiceProfile] consentStatus:', profileData.consentStatus);
+        logger.info('[useVoiceProfileManagement]', 'Profile data', { data: profileData });
+        logger.info('[useVoiceProfileManagement]', 'consentStatus', { data: profileData.consentStatus });
 
         // Set profile only if it exists
         if (profileData.exists) {
@@ -61,17 +62,17 @@ export function useVoiceProfileManagement(): UseVoiceProfileManagementReturn {
         if (profileData.consentStatus) {
           const hasRecording = !!profileData.consentStatus.voiceRecordingConsentAt;
           const hasCloning = !!profileData.consentStatus.voiceCloningEnabledAt;
-          console.log('[VoiceProfile] Setting consents:', { hasRecording, hasCloning });
+          logger.info('[useVoiceProfileManagement]', 'Setting consents', { data: { hasRecording, hasCloning } });
           setHasConsent(hasRecording);
           setHasVoiceCloningConsent(hasCloning);
         } else {
-          console.log('[VoiceProfile] No consentStatus in response!');
+          logger.info('[useVoiceProfileManagement]', 'No consentStatus in response!');
         }
       } else {
-        console.log('[VoiceProfile] Response not successful or no data:', profileRes);
+        logger.info('[useVoiceProfileManagement]', 'Response not successful or no data', { data: profileRes });
       }
     } catch (err: any) {
-      console.error('[VoiceProfile] Error loading:', err);
+      logger.error('[useVoiceProfileManagement]', 'Error loading', { error: err });
       toast.error('Failed to load voice profile');
     } finally {
       setIsLoading(false);
@@ -86,7 +87,7 @@ export function useVoiceProfileManagement(): UseVoiceProfileManagementReturn {
         toast.success('Voice recording consent granted');
       }
     } catch (err) {
-      console.error('[VoiceProfile] Error granting consent:', err);
+      logger.error('[useVoiceProfileManagement]', 'Error granting consent', { error: err });
       toast.error('Failed to grant consent');
     }
   }, []);
@@ -100,7 +101,7 @@ export function useVoiceProfileManagement(): UseVoiceProfileManagementReturn {
         await loadProfile();
       }
     } catch (err) {
-      console.error('[VoiceProfile] Error deleting profile:', err);
+      logger.error('[useVoiceProfileManagement]', 'Error deleting profile', { error: err });
       toast.error('Failed to delete voice profile');
     }
   }, [loadProfile]);
@@ -115,7 +116,7 @@ export function useVoiceProfileManagement(): UseVoiceProfileManagementReturn {
         await loadProfile();
       }
     } catch (err) {
-      console.error('[VoiceProfile] Error enabling voice cloning:', err);
+      logger.error('[useVoiceProfileManagement]', 'Error enabling voice cloning', { error: err });
       toast.error('Failed to enable voice cloning');
     }
   }, [loadProfile]);
@@ -130,7 +131,7 @@ export function useVoiceProfileManagement(): UseVoiceProfileManagementReturn {
         await loadProfile();
       }
     } catch (err) {
-      console.error('[VoiceProfile] Error disabling voice cloning:', err);
+      logger.error('[useVoiceProfileManagement]', 'Error disabling voice cloning', { error: err });
       toast.error('Failed to disable voice cloning');
     }
   }, [loadProfile]);

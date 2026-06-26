@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useDebouncedCallback } from 'use-debounce';
+import { logger } from '@/utils/logger';
 
 interface UseDraftAutosaveProps {
   conversationId?: string;
@@ -42,7 +43,7 @@ export const useDraftAutosave = ({
 
       setDraft(parsed.content);
     } catch (error) {
-      console.error('Failed to restore draft:', error);
+      logger.error('[useDraftAutosave]', 'Failed to restore draft', { error });
       if (storageKey) {
         localStorage.removeItem(storageKey);
       }
@@ -66,7 +67,7 @@ export const useDraftAutosave = ({
 
       localStorage.setItem(storageKey, JSON.stringify(data));
     } catch (error) {
-      console.error('Failed to save draft:', error);
+      logger.error('[useDraftAutosave]', 'Failed to save draft', { error });
     }
   }, DEBOUNCE_DELAY_MS);
 

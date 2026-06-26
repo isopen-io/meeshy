@@ -20,6 +20,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
+import { logger } from '@/utils/logger';
 import { buildApiUrl } from '@/lib/config';
 import { safeExternalUrl } from '@/utils/safe-redirect';
 import { assignLocation, replaceLocation } from '@/lib/navigate';
