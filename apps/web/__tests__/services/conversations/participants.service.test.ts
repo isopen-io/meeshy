@@ -174,15 +174,17 @@ describe('ParticipantsService', () => {
     it('should log error on failure', async () => {
       const error = new Error('Server error');
       mockApi.get.mockRejectedValue(error);
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+      const { logger } = await import('@/utils/logger');
+      const loggerSpy = jest.spyOn(logger, 'error').mockImplementation(() => {});
 
       await participantsService.getParticipants(conversationId);
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[ParticipantsService]'),
-        error
+      expect(loggerSpy).toHaveBeenCalledWith(
+        '[Participants]',
+        'Erreur lors de la récupération des participants',
+        { error }
       );
-      consoleSpy.mockRestore();
+      loggerSpy.mockRestore();
     });
 
     it('should return empty array when response.data.data is null', async () => {

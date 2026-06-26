@@ -618,7 +618,7 @@ describe('ConnectionService', () => {
 
       svc.setupConnectionListeners();
 
-      expect(localSocket.on).toHaveBeenCalledTimes(5);
+      expect(localSocket.on).toHaveBeenCalledTimes(6);
     });
 
     it('on connect: sets connected=true, calls autoJoinCallback, emits status', () => {
