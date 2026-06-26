@@ -1503,11 +1503,16 @@ final class CallKitActionFulfillmentSourceGuardTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
+    /// `CXAnswerCallAction.fulfill()` must appear BEFORE the `Task {` that calls
+    /// `answerCallReady()` — not inside it. The Task is for async media setup;
+    /// the action settlement tells CallKit the call is answered at the UI layer.
     func test_cxAnswerCallAction_fulfilledBeforeTask() throws {
         let src = try callManagerSource()
         guard let answerRange = src.range(of: "perform action: CXAnswerCallAction") else {
             XCTFail("CXAnswerCallAction handler not found"); return
         }
+        // Find the end of this function body (next top-level `}` after the function
+        // header). We look for the pattern after the function opening brace.
         let bodyStart = src[answerRange.upperBound...].firstIndex(of: "{") ?? src.endIndex
         let bodyFragment = String(src[bodyStart...].prefix(400))
 
@@ -1522,6 +1527,9 @@ final class CallKitActionFulfillmentSourceGuardTests: XCTestCase {
         }
     }
 
+    /// `CXEndCallAction.fulfill()` must appear BEFORE the `Task {` that calls
+    /// `endCall()`. Moving it inside the Task means CallKit may time out the
+    /// action before `endCall()` completes.
     func test_cxEndCallAction_fulfilledBeforeTask() throws {
         let src = try callManagerSource()
         guard let endRange = src.range(of: "perform action: CXEndCallAction") else {

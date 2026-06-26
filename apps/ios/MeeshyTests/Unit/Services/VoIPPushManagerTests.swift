@@ -223,6 +223,40 @@ final class VoIPPushManagerTests: XCTestCase {
         withExtendedLifetime(sut) {}
     }
 
+    // MARK: - parseIceServers credential length guard (security S1-1)
+
+    func test_parseIceServers_credentialTooLong_dropsServer() {
+        let longCredential = String(repeating: "x", count: 1025)
+        let json = "[{\"urls\":\"turn:turn.example.com\",\"username\":\"user\",\"credential\":\"\(longCredential)\"}]"
+        let result = VoIPPushManager.parseIceServers(json)
+        XCTAssertTrue(result?.isEmpty ?? true,
+            "A TURN credential exceeding 1024 chars must be silently dropped to prevent " +
+            "memory pressure in libwebrtc's auth header construction.")
+    }
+
+    func test_parseIceServers_usernameTooLong_dropsServer() {
+        let longUsername = String(repeating: "u", count: 1025)
+        let json = "[{\"urls\":\"turn:turn.example.com\",\"username\":\"\(longUsername)\",\"credential\":\"secret\"}]"
+        let result = VoIPPushManager.parseIceServers(json)
+        XCTAssertTrue(result?.isEmpty ?? true,
+            "A TURN username exceeding 1024 chars must be dropped.")
+    }
+
+    func test_parseIceServers_validCredentials_areKept() {
+        let json = "[{\"urls\":\"turn:turn.example.com\",\"username\":\"user\",\"credential\":\"secret\"}]"
+        let result = VoIPPushManager.parseIceServers(json)
+        XCTAssertEqual(result?.count, 1,
+            "An ICE server with valid-length credentials must be retained.")
+    }
+
+    func test_parseIceServers_mixedValidity_dropsOnlyInvalidServer() {
+        let longCredential = String(repeating: "x", count: 1025)
+        let json = "[{\"urls\":\"stun:stun.example.com\",\"username\":null,\"credential\":null},{\"urls\":\"turn:turn.example.com\",\"username\":\"user\",\"credential\":\"\(longCredential)\"}]"
+        let result = VoIPPushManager.parseIceServers(json)
+        XCTAssertEqual(result?.count, 1,
+            "Only the server with an oversized credential should be dropped; the valid STUN server must survive.")
+    }
+
     /// Idempotence guard: when the keychain already holds a matching token
     /// inside the cooldown window, calling `registerToken` is a no-op.
     /// This test asserts via the debug snapshot since the actual POST flow
