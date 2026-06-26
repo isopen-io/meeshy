@@ -2253,7 +2253,7 @@ final class CallManager: ObservableObject {
 
     // MARK: - DTMF Forwarding
 
-    /// Called by `CXPlayDTMFCallAction` to forward CallKit keypad digits to WebRTC.
+    /// Forwards CallKit keypad digits to the WebRTC layer.
     func sendDTMF(digits: String) {
         webRTCService.sendDTMF(digits: digits)
     }
@@ -2496,10 +2496,9 @@ final class CallManager: ObservableObject {
         configuration.mode = ProcessInfo.processInfo.isiOSAppOnMac
             ? AVAudioSession.Mode.default.rawValue
             : (isVideo ? AVAudioSession.Mode.videoChat : AVAudioSession.Mode.voiceChat).rawValue
-        // PERF-010: drop .allowBluetoothA2DP. A2DP is an output-only profile and
-        // conflicts with the bidirectional voice path (forces the OS to flap
-        // between A2DP and HFP, causing periodic ~200ms audio glitches). HFP
-        // already covers BT headsets via the SCO bidirectional voice link.
+        // PERF-010: use HFP exclusively for Bluetooth headsets. A2DP (output-only)
+        // conflicts with bidirectional voice — the OS flaps profiles causing ~200ms
+        // glitches. HFP covers BT headsets via the SCO bidirectional voice link.
         // .preferNoInterruptionsFromSystemAlerts = 0x100 (iOS 14.5+) is API_UNAVAILABLE(macos);
         // the macOS AVAudioSession shim for "Designed for iPad" builds omits it entirely.
         // Use raw value to avoid SDK symbol resolution by the compiler; skip on Mac.
@@ -3173,13 +3172,9 @@ extension CallManager: ThermalStateMonitorDelegate {
                 Logger.calls.warning("Thermal critical — disabled all filters (video + audio)")
                 if self.isVideoEnabled {
                     self.isVideoEnabled = false
-                    // §5.4 — use downgradeFromVideo (sets transceiver direction +
-                    // stops capture) rather than enableVideo(false) (track.enabled
-                    // only). Without the direction change the peer's SDP still
-                    // advertises sendRecv and the RTP session stays open, which
-                    // means the peer's decoder never tears down and the "camera off"
-                    // media-toggled is the only signal it gets — race-prone and
-                    // semantically wrong. Mirror the manual toggleVideo() path.
+                    // §5.4 — use downgradeFromVideo: sets transceiver direction +
+                    // stops capture so the peer's SDP m-section is renegotiated
+                    // (sendRecv → recvOnly). Mirrors the manual toggleVideo() path.
                     let needsRenegotiation = await self.webRTCService.downgradeFromVideo()
                     self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
                     self.videoSurvivalController.reset()
@@ -3453,20 +3448,12 @@ extension CallManager: WebRTCServiceDelegate {
         let attempt = reconnectAttempt
         let backoffSeconds = attempt > 1 ? min(pow(2.0, Double(attempt - 1)), 4.0) : 0.0
 
-        // Cancel any in-flight restart so two concurrent Tasks don't both send an
-        // offer — overlapping offers corrupt the perfect-negotiation state machine
-        // (both peers may enter makingOffer simultaneously with no polite resolution).
         iceRestartTask?.cancel()
         iceRestartTask = Task { @MainActor [weak self] in
             guard let self, let callId = self.currentCallId, let userId = self.remoteUserId else { return }
             if backoffSeconds > 0 {
                 Logger.calls.info("ICE restart attempt \(attempt): backing off \(Int(backoffSeconds))s before retry")
                 try? await Task.sleep(for: .seconds(backoffSeconds))
-                // After sleeping, verify we are still in the same reconnection
-                // attempt. A natural ICE recovery (.connected) or a superseding
-                // attempt (higher attempt number) both make this offer stale.
-                // Sending restartIce() on an already-connected peer connection
-                // resets ICE to gathering state, breaking a healthy call.
                 guard !Task.isCancelled,
                       case .reconnecting(let current) = self.callState,
                       current == attempt else { return }
@@ -3565,27 +3552,11 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
     }
 
     func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
-        // Diagnostic — `CXEndCallAction` is the only path through which the
-        // system asks us to hang up. It fires from:
-        //   1. Lock-screen / in-call "End" button taps (user action),
-        //   2. our own `callController.request(CXEndCallAction)` call from
-        //      `endCall()` (loop-back: we asked CallKit to end the call,
-        //      not the other way around),
-        //   3. CallKit autonomously deciding an outgoing call is stuck
-        //      (e.g. no `reportOutgoingCall(_:startedConnectingAt:)` within
-        //      its internal grace window) — this is the case we suspect for
-        //      the "calls drop after 2-4 seconds" symptom.
-        // Logging the call's UUID and current state here distinguishes (1)/(3)
-        // from the in-app loop-back: in (2), `callState` is already `.ended`
-        // by the time this delegate fires because `endCall()` calls
-        // `endCallInternal` BEFORE requesting the transaction, so the log
-        // will show `state=ended(.local)`. In (1)/(3), state is still
-        // `.ringing` / `.offering` / `.connecting` / `.connected`.
-        // CallKit requires fulfill() to be called synchronously before the
-        // delegate method returns. Settling the action from inside a Task
-        // means CallKit may time out the action if the manager hop is delayed.
+        // CallKit requires fulfill() synchronously before the delegate returns.
         action.fulfill()
         Task { @MainActor [weak self] in
+            // Diagnostic: log UUID + state to distinguish user tap (1), our own
+            // endCall() loop-back (2), and CallKit autonomous timeout (3).
             let stateAtEntry = self?.manager?.callState
             Logger.calls.info(
                 "CallKit -> CXEndCallAction received (callUUID=\(action.callUUID), state=\(String(describing: stateAtEntry)))"

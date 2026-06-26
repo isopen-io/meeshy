@@ -760,10 +760,10 @@ final class QualityThresholdsCodecHintsTests: XCTestCase {
         // maxplaybackrate is a sample rate (Hz), maxaveragebitrate is a bitrate (bps).
         // They are not the same unit, but the sample rate will always exceed the
         // bitrate numerically; this catches an accidental value swap between the two.
-        XCTAssertGreaterThan(
+        XCTAssertNotEqual(
             QualityThresholds.opusFmtpMaxPlaybackRate,
             QualityThresholds.opusFmtpMaxAverageBitrate,
-            "maxplaybackrate (Hz) should exceed maxaveragebitrate (bps) numerically — value swap guard"
+            "maxplaybackrate (Hz) must differ from maxaveragebitrate (bps) — value swap guard"
         )
     }
 

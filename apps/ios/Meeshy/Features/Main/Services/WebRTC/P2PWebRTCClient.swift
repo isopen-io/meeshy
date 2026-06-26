@@ -378,8 +378,8 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         let params = audioTransceiver.sender.parameters
         for encoding in params.encodings {
             // DTX: no native API — see comment above; handled via SDP fmtp `usedtx=1`.
-            encoding.maxBitrateBps = NSNumber(value: QualityThresholds.defaultBitrate)
-            encoding.minBitrateBps = NSNumber(value: QualityThresholds.audioCodecFloorBitrateBps)
+            encoding.maxBitrateBps = NSNumber(value: 64_000)
+            encoding.minBitrateBps = NSNumber(value: 16_000)
             // networkPriority = .high → DSCP EF (Expedited Forwarding, 46) for VoIP audio.
             // Maps to the highest WebRTC pacer priority and signals QoS to the OS network stack.
             encoding.networkPriority = .high
@@ -705,8 +705,8 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         let readyForOffer = !makingOffer &&
             (pc.signalingState == .stable || isSettingRemoteAnswerPending)
         let offerCollision = !readyForOffer
-        ignoreOffer = !isPolite && offerCollision
-        if ignoreOffer {
+        if !isPolite && offerCollision {
+            ignoreOffer = true
             Logger.webrtc.info("glare: impolite peer ignoring colliding offer")
             throw WebRTCError.offerIgnored
         }

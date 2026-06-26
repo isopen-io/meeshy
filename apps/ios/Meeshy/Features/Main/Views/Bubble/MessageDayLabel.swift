@@ -58,18 +58,11 @@ enum MessageDayLabel {
     }
 
     private static func fullDate(_ date: Date, calendar: Calendar, locale: Locale, includeYear: Bool) -> String {
-        var style = Date.FormatStyle.dateTime
-            .weekday(.wide)
-            .day(.defaultDigits)
-            .month(.wide)
-            .locale(locale)
-        style.calendar = calendar
-
-        if includeYear {
-            return date.formatted(style.year(.defaultDigits)).firstLetterUppercased(locale: locale)
-        } else {
-            return date.formatted(style).firstLetterUppercased(locale: locale)
-        }
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.calendar = calendar
+        formatter.dateFormat = includeYear ? "EEEE d MMMM yyyy" : "EEEE d MMMM"
+        return formatter.string(from: date).firstLetterUppercased(locale: locale)
     }
 }
 
