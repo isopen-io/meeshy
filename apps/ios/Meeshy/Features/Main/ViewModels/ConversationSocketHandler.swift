@@ -92,16 +92,20 @@ final class ConversationSocketHandler {
     private var recentMessageIds: Set<String> = []
     private var recentMessageIdOrder: [String] = []
 
-    // Typing emission state — all protected by @MainActor isolation; no
-    // nonisolated(unsafe) needed. Timer callbacks hop to MainActor via
-    // `Task { @MainActor [weak self] in ... }` before touching these.
-    private var typingTimer: Timer?
-    private var typingIdleTimer: Timer?
-    private var isEmittingTyping = false
+    // Typing emission state. `nonisolated(unsafe)` is REQUIRED (not cosmetic):
+    // the nonisolated `deinit` invalidates these timers for cleanup, and under
+    // Swift 6 strict concurrency a nonisolated deinit cannot touch MainActor-
+    // isolated, non-Sendable stored properties (`Timer` is non-Sendable). At
+    // deallocation `self` is uniquely referenced, so there is no actual data
+    // race — the unsafe assertion is sound. Timer callbacks still hop to the
+    // MainActor via `Task { @MainActor [weak self] in ... }` before mutating.
+    nonisolated(unsafe) private var typingTimer: Timer?
+    nonisolated(unsafe) private var typingIdleTimer: Timer?
+    nonisolated(unsafe) private var isEmittingTyping = false
     private static let typingDebounceInterval: TimeInterval = 3.0
     private static let typingReemitInterval: TimeInterval = 3.0
     private static let typingSafetyTimeout: TimeInterval = 15.0
-    private var typingSafetyTimers: [String: Timer] = [:]
+    nonisolated(unsafe) private var typingSafetyTimers: [String: Timer] = [:]
 
     /// `true` une fois `activate()` exécuté (instance réelle, installée par
     /// `@StateObject`). SwiftUI alloue EAGER un `ConversationViewModel`
