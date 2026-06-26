@@ -33,7 +33,6 @@ import { useConversationStats } from '@/hooks/use-conversation-stats';
 import { DetailsHeader } from './details-sidebar/DetailsHeader';
 import { DescriptionSection } from './details-sidebar/DescriptionSection';
 import { ConversationImageUploadDialog } from './conversation-image-upload-dialog';
-import { logger } from '@/utils/logger';
 
 // Lazy-loaded components (below the fold)
 const ActiveUsersSection = lazy(() =>

@@ -85,7 +85,7 @@ export default function ProfilePage({ params }: ProfilePageProps) {
       const response = await usersService.getUserProfile(userId);
       setUser(response.data ?? null);
     } catch (error) {
-      console.error('Error loading profile:', error);
+      logger.error('[UserProfile]', 'Error loading profile', { error });
       toast.error(t('userNotFound'));
     }
   }, [userId, t]);
@@ -96,7 +96,7 @@ export default function ProfilePage({ params }: ProfilePageProps) {
       const response = await usersService.getUserStats(userId);
       setStats(response.data ?? null);
     } catch (error) {
-      console.error('Error loading stats:', error);
+      logger.error('[UserProfile]', 'Error loading stats', { error });
     }
   }, [userId]);
 
@@ -114,7 +114,7 @@ export default function ProfilePage({ params }: ProfilePageProps) {
         setFriendRequests(data.data || []);
       }
     } catch (error) {
-      console.error('Error loading friend requests:', error);
+      logger.error('[UserProfile]', 'Error loading friend requests', { error });
     }
   }, []);
 
@@ -148,7 +148,7 @@ export default function ProfilePage({ params }: ProfilePageProps) {
 
   const handleStartConversation = async () => {
     if (!user || !currentUser) {
-      console.warn('[ProfilePage] Missing user data:', { user: !!user, currentUser: !!currentUser });
+      logger.warn('[UserProfile]', 'Missing user data', { data: { user: !!user, currentUser: !!currentUser } });
       return;
     }
 
@@ -179,7 +179,7 @@ export default function ProfilePage({ params }: ProfilePageProps) {
       router.push(`/conversations/${response.id}`);
       toast.success(t('success.conversationCreated'));
     } catch (error) {
-      console.error('Error creating conversation:', error);
+      logger.error('[UserProfile]', 'Error creating conversation', { error });
       toast.error(t('errors.conversationCreationFailed'));
     }
   };
@@ -212,7 +212,7 @@ export default function ProfilePage({ params }: ProfilePageProps) {
         toast.error(error.error || t('errors.sendFriendRequestFailed'));
       }
     } catch (error) {
-      console.error('Error sending friend request:', error);
+      logger.error('[UserProfile]', 'Error sending friend request', { error });
       toast.error(t('errors.sendFriendRequestFailed'));
     }
   };
@@ -241,7 +241,7 @@ export default function ProfilePage({ params }: ProfilePageProps) {
         toast.error(error.error || t('errors.cancelFriendRequestFailed'));
       }
     } catch (error) {
-      console.error('Error cancelling friend request:', error);
+      logger.error('[UserProfile]', 'Error cancelling friend request', { error });
       toast.error(t('errors.cancelFriendRequestFailed'));
     }
   };

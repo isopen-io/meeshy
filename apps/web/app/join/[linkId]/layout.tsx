@@ -37,7 +37,7 @@ export async function generateMetadata({ params }: JoinLayoutProps): Promise<Met
       next: { revalidate: 300 }, // Cache 5 minutes
       cache: 'no-store' // Éviter les problèmes de cache pendant le développement
     }).catch(err => {
-      console.error('[generateMetadata] Fetch error:', err);
+      logger.error('[JoinLayout]', 'Fetch error', { error: err });
       return null;
     });
 
@@ -90,7 +90,7 @@ export async function generateMetadata({ params }: JoinLayoutProps): Promise<Met
     // Fallback metadata si l'appel API échoue
     return buildFallbackMetadata(locale, frontendUrl);
   } catch (error) {
-    console.error('[generateMetadata] Erreur critique:', error);
+    logger.error('[JoinLayout]', 'Erreur critique', { error });
     // Fallback metadata en cas d'erreur critique (même si params échoue)
     return buildFallbackMetadata(locale, frontendUrl);
   }

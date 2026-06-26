@@ -126,7 +126,7 @@ export default function TrackingLinkDetailsPage() {
 
       setStats(transformedStats);
     } catch (error) {
-      console.error('Erreur lors du chargement des statistiques:', error);
+      logger.error('[TrackedLink]', 'Erreur lors du chargement des statistiques', { error });
 
       // Vérifier le type d'erreur
       const errorMessage = error instanceof Error ? error.message : String(error);

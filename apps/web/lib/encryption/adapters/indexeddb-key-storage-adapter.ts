@@ -7,6 +7,7 @@
 
 import type { KeyStorageAdapter } from '@meeshy/shared/encryption/encryption-service';
 import type { EncryptionMode } from '@meeshy/shared/types/encryption';
+import { logger } from '@/utils/logger';
 
 const DB_NAME = 'meeshy_encryption';
 const DB_VERSION = 1;
@@ -61,13 +62,13 @@ export class IndexedDBKeyStorageAdapter implements KeyStorageAdapter {
       const request = indexedDB.open(DB_NAME, DB_VERSION);
 
       request.onerror = () => {
-        console.error('Failed to open IndexedDB:', request.error);
+        logger.error('[IndexedDBKeyStorage]', 'Failed to open IndexedDB', { error: request.error });
         reject(request.error);
       };
 
       request.onsuccess = () => {
         this.db = request.result;
-        console.log('[IndexedDB] Opened successfully');
+        logger.info('[IndexedDBKeyStorage]', 'Opened successfully');
         resolve();
       };
 
@@ -94,7 +95,7 @@ export class IndexedDBKeyStorageAdapter implements KeyStorageAdapter {
           db.createObjectStore(USER_KEYS_STORE, { keyPath: 'userId' });
         }
 
-        console.log('[IndexedDB] Schema upgraded');
+        logger.info('[IndexedDBKeyStorage]', 'Schema upgraded');
       };
     });
 
@@ -276,7 +277,7 @@ export class IndexedDBKeyStorageAdapter implements KeyStorageAdapter {
       transaction.objectStore(USER_KEYS_STORE).clear();
 
       transaction.oncomplete = () => {
-        console.log('[IndexedDB] All encryption keys cleared');
+        logger.info('[IndexedDBKeyStorage]', 'All encryption keys cleared');
         resolve();
       };
       transaction.onerror = () => reject(transaction.error);

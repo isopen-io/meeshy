@@ -3,6 +3,8 @@
  * Compatible iOS, Android et tous les navigateurs modernes
  */
 
+import { logger } from '@/utils/logger';
+
 export type ClipboardMessages = {
   success?: string;
   manualSelectHint?: string;
@@ -92,7 +94,7 @@ export async function copyToClipboard(
 
     return { success: false, message: msg.unavailable };
   } catch (error) {
-    console.warn('Erreur lors de la copie:', error);
+    logger.warn('[clipboard]', 'Erreur lors de la copie', { error });
     return { success: false, message: msg.error };
   }
 }

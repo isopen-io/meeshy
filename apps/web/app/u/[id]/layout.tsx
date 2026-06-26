@@ -82,7 +82,7 @@ export async function generateMetadata({ params }: UserProfileLayoutProps): Prom
     // Silently fail if backend is not accessible during SSR (common in dev)
     // Only log in development mode
     if (process.env.NODE_ENV === 'development') {
-      console.warn('[Metadata] Unable to fetch user profile, using fallback metadata:', error instanceof Error ? error.message : 'Unknown error');
+      logger.warn('[UserProfileLayout]', 'Unable to fetch user profile, using fallback metadata', { data: error instanceof Error ? error.message : 'Unknown error' });
     }
   }
 

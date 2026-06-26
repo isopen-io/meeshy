@@ -1,4 +1,5 @@
 import type { BrowserTranscription, VoiceProfileSegment, VoicePreviewSample } from '@meeshy/shared/types/voice-api';
+import { logger } from '@/utils/logger';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -119,9 +120,9 @@ export const saveRecordingToStorage = async (recording: StoredRecording): Promis
       tx.onerror = () => reject(tx.error);
     });
     db.close();
-    console.log('[VoiceProfile] Recording saved to IndexedDB');
+    logger.info('[voiceProfileUtils]', 'Recording saved to IndexedDB');
   } catch (err) {
-    console.error('[VoiceProfile] Error saving recording to IndexedDB:', err);
+    logger.error('[voiceProfileUtils]', 'Error saving recording to IndexedDB', { error: err });
   }
 };
 
@@ -137,11 +138,11 @@ export const loadRecordingFromStorage = async (): Promise<StoredRecording | null
     });
     db.close();
     if (result) {
-      console.log('[VoiceProfile] Recording loaded from IndexedDB, saved at:', result.savedAt);
+      logger.info('[voiceProfileUtils]', 'Recording loaded from IndexedDB', { data: { savedAt: result.savedAt } });
     }
     return result;
   } catch (err) {
-    console.error('[VoiceProfile] Error loading recording from IndexedDB:', err);
+    logger.error('[voiceProfileUtils]', 'Error loading recording from IndexedDB', { error: err });
     return null;
   }
 };
@@ -157,9 +158,9 @@ export const clearRecordingFromStorage = async (): Promise<void> => {
       tx.onerror = () => reject(tx.error);
     });
     db.close();
-    console.log('[VoiceProfile] Recording cleared from IndexedDB');
+    logger.info('[voiceProfileUtils]', 'Recording cleared from IndexedDB');
   } catch (err) {
-    console.error('[VoiceProfile] Error clearing recording from IndexedDB:', err);
+    logger.error('[voiceProfileUtils]', 'Error clearing recording from IndexedDB', { error: err });
   }
 };
 
@@ -195,9 +196,9 @@ export const saveVoicePreviewsToStorage = async (
       tx.onerror = () => reject(tx.error);
     });
     db.close();
-    console.log('[VoiceProfile] Voice previews saved to IndexedDB');
+    logger.info('[voiceProfileUtils]', 'Voice previews saved to IndexedDB');
   } catch (err) {
-    console.error('[VoiceProfile] Error saving voice previews to IndexedDB:', err);
+    logger.error('[voiceProfileUtils]', 'Error saving voice previews to IndexedDB', { error: err });
   }
 };
 
@@ -213,10 +214,10 @@ export const loadVoicePreviewsFromStorage = async (userId: string): Promise<Stor
       request.onerror = () => reject(request.error);
     });
     db.close();
-    console.log('[VoiceProfile] Voice previews loaded from IndexedDB:', result.length);
+    logger.info('[voiceProfileUtils]', 'Voice previews loaded from IndexedDB', { data: { count: result.length } });
     return result;
   } catch (err) {
-    console.error('[VoiceProfile] Error loading voice previews from IndexedDB:', err);
+    logger.error('[voiceProfileUtils]', 'Error loading voice previews from IndexedDB', { error: err });
     return [];
   }
 };
@@ -242,9 +243,9 @@ export const clearVoicePreviewsFromStorage = async (userId: string): Promise<voi
       tx.onerror = () => reject(tx.error);
     });
     db.close();
-    console.log('[VoiceProfile] Voice previews cleared from IndexedDB');
+    logger.info('[voiceProfileUtils]', 'Voice previews cleared from IndexedDB');
   } catch (err) {
-    console.error('[VoiceProfile] Error clearing voice previews from IndexedDB:', err);
+    logger.error('[voiceProfileUtils]', 'Error clearing voice previews from IndexedDB', { error: err });
   }
 };
 

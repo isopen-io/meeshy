@@ -45,6 +45,7 @@ import { LoadingState } from '@/components/common/LoadingStates';
 // Services et utils
 import { getAuthToken } from '@/utils/token-utils';
 import { conversationsService } from '@/services';
+import { logger } from '@/utils/logger';
 import { detectLanguage } from '@/utils/language-detection';
 import { getMaxMessageLength } from '@/lib/constants/languages';
 
@@ -120,7 +121,7 @@ export function BubbleStreamPage({
   useEffect(() => {
     if (messages.length > 0 && messages[0].conversationId) {
       conversationObjectIdRef.current = messages[0].conversationId;
-      console.log('🔍 [BubbleStreamPage] Conversation ObjectId updated:', messages[0].conversationId);
+      logger.info('[BubbleStreamPage]', 'Conversation ObjectId updated', { conversationId: messages[0].conversationId });
     }
   }, [messages]);
 
@@ -229,27 +230,26 @@ export function BubbleStreamPage({
     // car normalizedConvId retourne l'identifier "meeshy", pas l'ObjectId MongoDB
     const currentConversationObjectId = conversationObjectIdRef.current;
 
-    console.log('🔍 [BubbleStreamPage] handleNewMessage called', {
+    logger.info('[BubbleStreamPage]', 'handleNewMessage called', {
       messageConvId: message.conversationId,
       currentConversationObjectId,
       conversationIdentifier: conversationId,
       willFilter: currentConversationObjectId && message.conversationId !== currentConversationObjectId,
       messageContent: message.content?.substring(0, 50),
       messageSender: (message.sender as unknown)?.username || message.sender?.displayName,
-      attachments: message.attachments,
       attachmentCount: message.attachments?.length ?? 0,
       messageType: message.messageType,
     });
 
     // Filtrer si on a déjà chargé des messages ET que le message ne correspond pas
     if (currentConversationObjectId && message.conversationId !== currentConversationObjectId) {
-      console.log('⚠️ [BubbleStreamPage] Message filtered out - different conversation');
+      logger.info('[BubbleStreamPage]', 'Message filtered out - different conversation');
       return;
     }
 
-    console.log('✅ [BubbleStreamPage] Adding message to feed');
+    logger.info('[BubbleStreamPage]', 'Adding message to feed');
     const wasAdded = addMessage(message);
-    console.log('✅ [BubbleStreamPage] addMessage returned:', wasAdded);
+    logger.info('[BubbleStreamPage]', 'addMessage returned', { wasAdded });
 
     // Scroll automatique pour les nouveaux messages
     // senderId is a Participant ID, compare via sender.userId or sender.user.id
@@ -330,7 +330,7 @@ export function BubbleStreamPage({
 
   // Écouter la conversation active pour les notifications
   useEffect(() => {
-    console.log('🔍 [BubbleStreamPage] normalizedConversationId changed:', {
+    logger.info('[BubbleStreamPage]', 'normalizedConversationId changed', {
       normalizedConversationId,
       conversationId,
     });
@@ -378,7 +378,7 @@ export function BubbleStreamPage({
           const onlineUsers = await conversationsService.getParticipants(normalizedConversationId, { onlineOnly: true });
           setActiveUsersDeduped(onlineUsers);
         } catch (error) {
-          console.error('Erreur chargement utilisateurs actifs:', error);
+          logger.error('[BubbleStreamPage]', 'Erreur chargement utilisateurs actifs', { error });
         }
       };
       loadPromises.push(loadActiveUsers());
@@ -387,7 +387,7 @@ export function BubbleStreamPage({
     Promise.all(loadPromises)
       .then(() => setHasLoadedMessages(true))
       .catch(error => {
-        console.error('Erreur chargement parallèle:', error);
+        logger.error('[BubbleStreamPage]', 'Erreur chargement parallèle', { error });
         setHasLoadedMessages(true);
       });
   }, [conversationId, hasLoadedMessages, activeUsers.length, isAnonymousMode, normalizedConversationId, refreshMessages, setActiveUsersDeduped]);
@@ -489,7 +489,7 @@ export function BubbleStreamPage({
       }
 
     } catch (error) {
-      console.error('Erreur envoi message:', error);
+      logger.error('[BubbleStreamPage]', 'Erreur envoi message', { error });
       toast.error(tCommon('messages.sendError'));
       setNewMessage(messageContent);
     }

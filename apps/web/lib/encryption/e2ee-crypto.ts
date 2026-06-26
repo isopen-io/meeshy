@@ -15,6 +15,7 @@ import type { EncryptedPayload, EncryptionMode } from '@meeshy/shared/types/encr
 import { webCryptoAdapter } from './adapters/web-crypto-adapter';
 import { indexedDBKeyStorageAdapter } from './adapters/indexeddb-key-storage-adapter';
 import type { EncryptionHandlers } from '@/services/socketio/types';
+import { logger } from '@/utils/logger';
 
 let serviceInstance: SharedEncryptionService | null = null;
 let initializedUserId: string | null = null;
@@ -57,7 +58,7 @@ async function encrypt(content: string, conversationId: string): Promise<Encrypt
   try {
     return await service.encryptMessage(content, conversationId, mode);
   } catch (error) {
-    console.error('[E2EECrypto] Encryption failed:', error);
+    logger.error('[E2EECrypto]', 'Encryption failed', { error });
     return null;
   }
 }

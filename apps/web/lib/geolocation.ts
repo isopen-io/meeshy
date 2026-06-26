@@ -1,3 +1,5 @@
+import { logger } from '@/utils/logger';
+
 type GeolocationData = {
   city: string;
   country: string;
@@ -64,10 +66,10 @@ export async function requestBrowserGeolocation(): Promise<GeolocationData | nul
       const position = await getBrowserPosition();
       const geo = await reverseGeocode(position.coords.latitude, position.coords.longitude);
       cachedGeo = geo;
-      console.log('[GEOLOCATION] Captured:', geo.city, geo.countryCode);
+      logger.info('[geolocation]', 'Captured', { data: { city: geo.city, countryCode: geo.countryCode } });
       return geo;
     } catch (error) {
-      console.log('[GEOLOCATION] Not available:', (error as Error).message);
+      logger.info('[geolocation]', 'Not available', { data: { message: (error as Error).message } });
       return null;
     } finally {
       pendingRequest = null;

@@ -399,7 +399,7 @@ export default function LinksPage() {
         toast.error(t('errors.deleteFailed'));
       }
     } catch (error) {
-      console.error('Erreur lors de la suppression:', error);
+      logger.error('[LinksPage]', 'Erreur lors de la suppression', { error });
       toast.error(t('errors.deleteFailed'));
     }
   };
@@ -431,7 +431,7 @@ export default function LinksPage() {
       }
       loadLinks();
     } catch (error) {
-      console.error('Erreur lors du basculement:', error);
+      logger.error('[LinksPage]', 'Erreur lors du basculement', { error });
       toast.error(t('tracking.errors.deactivateFailed'));
     }
   };
@@ -445,7 +445,7 @@ export default function LinksPage() {
       toast.success(t('tracking.success.deleted'));
       loadLinks();
     } catch (error) {
-      console.error('Erreur lors de la suppression:', error);
+      logger.error('[LinksPage]', 'Erreur lors de la suppression', { error });
       toast.error(t('tracking.errors.deleteFailed'));
     }
   };

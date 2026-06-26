@@ -62,7 +62,7 @@ function ProfilePageContent() {
       setUser(response.data ?? null);
       setUserOnlineStatus(response.data?.isOnline ?? false);
     } catch (error) {
-      console.error('Error loading profile:', error);
+      logger.error('[UserPage]', 'Error loading profile', { error });
       toast.error(t('errors.loadProfileError'));
     } finally {
       setIsLoading(false);

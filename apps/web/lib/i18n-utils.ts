@@ -3,6 +3,7 @@
  */
 
 import { TranslationParams, TranslationModule, SupportedLanguage } from '@/types/i18n';
+import { logger } from '@/utils/logger';
 
 /**
  * Interpolate parameters in a translation string
@@ -148,7 +149,7 @@ export function getTranslationWithFallback(
   }
 
   // Final fallback: return the key itself
-  console.warn(`[I18N] Translation not found for key: ${fullKey}`);
+  logger.warn('[i18nUtils]', 'Translation not found', { data: { key: fullKey } });
   return fullKey;
 }
 
@@ -164,7 +165,7 @@ export async function loadTranslationModule(
     const translations = await import(`@/locales/${language}/${module}.json`);
     return translations.default || translations;
   } catch (error) {
-    console.error(`[I18N] Failed to load module ${module} for language ${language}:`, error);
+    logger.error('[i18nUtils]', 'Failed to load module', { error, data: { module, language } });
     
     // Fallback to English if not already trying English
     if (language !== 'en') {
@@ -172,7 +173,7 @@ export async function loadTranslationModule(
         const enTranslations = await import(`@/locales/en/${module}.json`);
         return enTranslations.default || enTranslations;
       } catch (enError) {
-        console.error(`[I18N] Failed to load fallback EN module ${module}:`, enError);
+        logger.error('[i18nUtils]', 'Failed to load fallback EN module', { error: enError, data: { module } });
       }
     }
     
@@ -192,7 +193,7 @@ export function saveLanguagePreference(language: SupportedLanguage): void {
   try {
     localStorage.setItem(I18N_STORAGE_KEY, language);
   } catch (error) {
-    console.error('[I18N] Failed to save language preference:', error);
+    logger.error('[i18nUtils]', 'Failed to save language preference', { error });
   }
 }
 
@@ -204,7 +205,7 @@ export function loadLanguagePreference(): SupportedLanguage | null {
     const saved = localStorage.getItem(I18N_STORAGE_KEY);
     return saved as SupportedLanguage | null;
   } catch (error) {
-    console.error('[I18N] Failed to load language preference:', error);
+    logger.error('[i18nUtils]', 'Failed to load language preference', { error });
     return null;
   }
 }

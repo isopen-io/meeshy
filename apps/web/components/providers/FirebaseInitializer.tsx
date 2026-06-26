@@ -10,6 +10,7 @@
 
 import { useEffect } from 'react';
 import { useFirebaseInit } from '@/hooks/use-firebase-init';
+import { logger } from '@/utils/logger';
 
 /**
  * Composant pour initialiser Firebase au démarrage de l'app
@@ -22,19 +23,15 @@ export function FirebaseInitializer() {
     // Afficher un message uniquement en développement
     if (!loading && process.env.NODE_ENV === 'development') {
       if (status.available) {
-        console.info(
-          '%c[Meeshy] Firebase initialized successfully',
-          'color: green; font-weight: bold; font-size: 12px;',
-          '\n  Push notifications:', status.pushEnabled ? '✅ Enabled' : '❌ Disabled',
-          '\n  PWA badges:', status.badgeEnabled ? '✅ Enabled' : '❌ Disabled'
-        );
+        logger.info('[FirebaseInitializer]', 'Firebase initialized successfully', {
+          pushNotifications: status.pushEnabled ? 'Enabled' : 'Disabled',
+          pwaBadges: status.badgeEnabled ? 'Enabled' : 'Disabled',
+        });
       } else {
-        console.info(
-          '%c[Meeshy] Running without Firebase',
-          'color: orange; font-weight: bold; font-size: 12px;',
-          '\n  Mode: WebSocket notifications only',
-          '\n  Reason:', status.reason || 'Firebase not configured'
-        );
+        logger.info('[FirebaseInitializer]', 'Running without Firebase', {
+          mode: 'WebSocket notifications only',
+          reason: status.reason || 'Firebase not configured',
+        });
       }
     }
   }, [loading, status]);

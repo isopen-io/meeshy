@@ -3,6 +3,7 @@
  */
 
 import { buildApiUrl } from './config';
+import { logger } from '@/utils/logger';
 
 export interface ShareLinkOptions {
   type: 'affiliate' | 'conversation' | 'join' | 'default';
@@ -73,7 +74,7 @@ export async function generateShareMetadata(options: ShareLinkOptions): Promise<
       return await response.json();
     }
   } catch (error) {
-    console.error('Erreur génération métadonnées:', error);
+    logger.error('[shareUtils]', 'Erreur génération métadonnées', { error });
   }
 
   // Fallback vers des métadonnées par défaut
@@ -112,7 +113,7 @@ export async function shareLink(
     }
   } catch (error) {
     if (error instanceof Error && error.name !== 'AbortError') {
-      console.error('Erreur lors du partage:', error);
+      logger.error('[shareUtils]', 'Erreur lors du partage', { error });
       throw error;
     }
     return false;
@@ -127,7 +128,7 @@ export async function validateAffiliateToken(token: string): Promise<boolean> {
     const response = await fetch(buildApiUrl(`/affiliate/validate/${token}`));
     return response.ok;
   } catch (error) {
-    console.error('Erreur validation token affiliation:', error);
+    logger.error('[shareUtils]', 'Erreur validation token affiliation', { error });
     return false;
   }
 }
@@ -140,7 +141,7 @@ export async function validateConversationLink(linkId: string): Promise<boolean>
     const response = await fetch(buildApiUrl(`/links/${linkId}/info`));
     return response.ok;
   } catch (error) {
-    console.error('Erreur validation lien conversation:', error);
+    logger.error('[shareUtils]', 'Erreur validation lien conversation', { error });
     return false;
   }
 }
@@ -170,7 +171,7 @@ export async function getShareStats(linkId: string): Promise<{
       return data.data;
     }
   } catch (error) {
-    console.error('Erreur récupération statistiques:', error);
+    logger.error('[shareUtils]', 'Erreur récupération statistiques', { error });
   }
 
   return null;

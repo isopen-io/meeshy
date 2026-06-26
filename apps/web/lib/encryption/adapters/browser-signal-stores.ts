@@ -5,6 +5,7 @@
  * Implements Signal Protocol stores using IndexedDB for persistent storage.
  */
 
+import { logger } from '@/utils/logger';
 import {
   ProtocolAddress,
   IdentityKeyPair,
@@ -191,7 +192,7 @@ export class BrowserIdentityKeyStore extends IdentityKeyStore {
     db.close();
 
     if (changed) {
-      console.warn(`Identity key changed for ${address.name()}:${address.deviceId()}`);
+      logger.warn('[BrowserSignalStores]', 'Identity key changed', { data: { address: `${address.name()}:${address.deviceId()}` } });
     }
 
     return changed;
