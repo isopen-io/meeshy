@@ -82,7 +82,15 @@ final class StatusBubbleController: ObservableObject {
 // MARK: - View Modifier
 
 private struct StatusBubbleOverlayModifier: ViewModifier {
-    @EnvironmentObject private var controller: StatusBubbleController
+    // `StatusBubbleController` is a `.shared` singleton, so reference it
+    // directly instead of via `@EnvironmentObject`. The environment-object
+    // form is fatal ("No ObservableObject of type … found") whenever
+    // `.withStatusBubble()` is evaluated outside the injected ancestor chain —
+    // notably inside a sheet's `PresentationHostingController`, which does NOT
+    // inherit the presenter's `.environmentObject(...)`. Several sheets apply
+    // `.withStatusBubble()` (ConversationInfoSheet, ForwardPickerSheet,
+    // FeedCommentsSheet, …) without re-injecting, which crashed on present.
+    @StateObject private var controller = StatusBubbleController.shared
 
     func body(content: Content) -> some View {
         ZStack {
