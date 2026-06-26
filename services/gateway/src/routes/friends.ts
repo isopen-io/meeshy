@@ -2,7 +2,7 @@ import { validatePagination } from '../utils/pagination';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../utils/logger';
-import { sendSuccess, sendPaginatedSuccess, sendBadRequest, sendForbidden, sendNotFound, sendConflict, sendInternalError } from '../utils/response.js';
+import { sendSuccess, sendPaginatedSuccess, sendBadRequest, sendNotFound, sendConflict, sendInternalError } from '../utils/response.js';
 import type { NotificationService } from '../services/notifications/NotificationService';
 import { withMutationLog } from '../utils/withMutationLog';
 import {
@@ -593,11 +593,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          message: 'Donnees invalides',
-          errors: error.issues
-        });
+        return sendBadRequest(reply, 'Donnees invalides');
       }
 
       logError(fastify.log, 'Update friend request error:', error);

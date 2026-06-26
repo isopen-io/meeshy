@@ -16,7 +16,7 @@ import { getEncryptionService } from '../services/EncryptionService';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/auth';
 import { createSignalProtocolRateLimitConfig } from '../middleware/rate-limiter';
 import { enhancedLogger } from '../utils/logger-enhanced';
-import { sendSuccess, sendInternalError, sendNotFound, sendForbidden, sendBadRequest } from '../utils/response.js';
+import { sendSuccess, sendInternalError, sendNotFound, sendForbidden, sendBadRequest, sendError } from '../utils/response.js';
 import {
   errorResponseSchema,
   signalPreKeyBundleSchema,
@@ -223,7 +223,11 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
         // Validate params
         const paramsResult = UserIdParamsSchema.safeParse(request.params);
         if (!paramsResult.success) {
-          return sendBadRequest(reply, 'Invalid request parameters');
+          return reply.status(400).send({
+            success: false,
+            error: 'Invalid request parameters',
+            details: paramsResult.error.issues,
+          });
         }
         const { userId: targetUserId } = paramsResult.data;
 
@@ -386,11 +390,7 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
 
         const bodyResult = EstablishSessionBodySchema.safeParse(request.body);
         if (!bodyResult.success) {
-          return reply.status(400).send({
-            success: false,
-            error: 'Invalid request body',
-            details: bodyResult.error.issues,
-          });
+          return sendBadRequest(reply, 'Invalid request body');
         }
         const { recipientUserId, conversationId } = bodyResult.data;
 
@@ -465,13 +465,7 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
             conversationId,
           });
 
-          return reply.status(503).send({
-            success: false,
-            error: {
-              code: 'E2EE_UNAVAILABLE',
-              message: 'End-to-end encryption is not available on this server',
-            },
-          });
+          return sendError(reply, 503, 'End-to-end encryption is not available on this server');
         }
 
         // Full Signal Protocol session establishment

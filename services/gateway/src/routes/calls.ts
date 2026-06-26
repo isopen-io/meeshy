@@ -17,7 +17,7 @@ import { createValidationMiddleware } from '../middleware/validation.js';
 import { ROUTE_RATE_LIMITS } from '../middleware/rate-limit.js';
 import { CallService } from '../services/CallService.js';
 import { logger } from '../utils/logger.js';
-import { sendSuccess } from '../utils/response.js';
+import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../utils/response.js';
 import {
   initiateCallSchema,
   getCallSchema,
@@ -208,14 +208,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         ? errorMessage.split(':').slice(1).join(':').trim()
         : errorMessage;
 
-      return reply.status(400).send({
-        success: false,
-        error: {
-          code: errorCode,
-          message,
-          details: error.details || undefined
-        }
-      });
+      return sendBadRequest(reply, message);
     }
   });
 
@@ -446,13 +439,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       });
 
       if (!membership) {
-        return reply.status(403).send({
-          success: false,
-          error: {
-            code: 'NOT_A_PARTICIPANT',
-            message: 'You do not have access to this call'
-          }
-        });
+        return sendForbidden(reply, 'You do not have access to this call');
       }
 
       // Only initiator or admin/moderator can end call
@@ -462,13 +449,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         membership.role === 'moderator';
 
       if (!canEndCall) {
-        return reply.status(403).send({
-          success: false,
-          error: {
-            code: 'PERMISSION_DENIED',
-            message: 'Only the call initiator or conversation moderators can end the call'
-          }
-        });
+        return sendForbidden(reply, 'Only the call initiator or conversation moderators can end the call');
       }
 
       const endParticipantId = authRequest.authContext.participantId || membership?.id;
@@ -768,13 +749,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
           membership?.role === 'admin' || membership?.role === 'moderator';
 
         if (!isModerator) {
-          return reply.status(403).send({
-            success: false,
-            error: {
-              code: 'PERMISSION_DENIED',
-              message: 'You can only leave your own participation'
-            }
-          });
+          return sendForbidden(reply, 'You can only leave your own participation');
         }
       }
 
@@ -921,13 +896,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       });
 
       if (!membership) {
-        return reply.status(403).send({
-          success: false,
-          error: {
-            code: 'NOT_A_PARTICIPANT',
-            message: 'You are not a member of this conversation'
-          }
-        });
+        return sendForbidden(reply, 'You are not a member of this conversation');
       }
 
       const callSession = await callService.getActiveCallForConversation(
@@ -938,13 +907,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
     } catch (error: any) {
       logger.error('❌ REST: Error getting active call', error);
 
-      return reply.status(500).send({
-        success: false,
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: 'Failed to get active call'
-        }
-      });
+      return sendInternalError(reply, 'Failed to get active call');
     }
   });
 
@@ -1016,13 +979,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       const userId = authRequest.authContext.userId;
 
       if (!userId) {
-        return reply.status(401).send({
-          success: false,
-          error: {
-            code: 'NOT_AUTHENTICATED',
-            message: 'Authentication required'
-          }
-        });
+        return sendUnauthorized(reply, 'Authentication required');
       }
 
       logger.info('📞 REST: Getting active call for user (crash recovery)', {
@@ -1058,26 +1015,14 @@ export default async function callRoutes(fastify: FastifyInstance) {
       });
 
       if (!activeCall) {
-        return reply.status(404).send({
-          success: false,
-          error: {
-            code: 'NO_ACTIVE_CALL',
-            message: 'No active call found'
-          }
-        });
+        return sendNotFound(reply, 'No active call found');
       }
 
       return sendSuccess(reply, activeCall);
     } catch (error: any) {
       logger.error('❌ REST: Error getting active call for user', error);
 
-      return reply.status(500).send({
-        success: false,
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: 'Failed to get active call'
-        }
-      });
+      return sendInternalError(reply, 'Failed to get active call');
     }
   });
 
@@ -1185,13 +1130,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       const userId = authRequest.authContext.userId;
 
       if (!userId) {
-        return reply.status(401).send({
-          success: false,
-          error: {
-            code: 'NOT_AUTHENTICATED',
-            message: 'Authentication required'
-          }
-        });
+        return sendUnauthorized(reply, 'Authentication required');
       }
 
       const parsed = callHistoryQuerySchema.safeParse(request.query);
@@ -1206,13 +1145,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       });
     } catch (error: any) {
       logger.error('❌ REST: Error listing call history', error);
-      return reply.status(500).send({
-        success: false,
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: 'Failed to get call history'
-        }
-      });
+      return sendInternalError(reply, 'Failed to get call history');
     }
   });
 }

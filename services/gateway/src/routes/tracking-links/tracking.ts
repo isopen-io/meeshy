@@ -22,7 +22,7 @@ import {
   detectOS,
   detectDevice
 } from './types';
-import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
+import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendPaginatedSuccess, sendError } from '../../utils/response';
 
 /**
  * Routes de suivi et analytics des liens de tracking
@@ -97,17 +97,11 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
       }
 
       if (!trackingLink.isActive) {
-        return reply.status(410).send({
-          success: false,
-          error: 'Ce lien n\'est plus actif'
-        });
+        return sendError(reply, 410, 'Ce lien n\'est plus actif');
       }
 
       if (trackingLink.expiresAt && new Date() > trackingLink.expiresAt) {
-        return reply.status(410).send({
-          success: false,
-          error: 'Ce lien a expiré'
-        });
+        return sendError(reply, 410, 'Ce lien a expiré');
       }
 
       const ipAddress = (request.headers['x-forwarded-for'] as string)?.split(',')[0].trim() ||
@@ -309,11 +303,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Données invalides',
-          details: error.issues
-        });
+        return sendBadRequest(reply, 'Données invalides');
       }
 
       if (error instanceof Error) {
@@ -321,16 +311,10 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
           return sendNotFound(reply, 'Lien de tracking non trouvé');
         }
         if (error.message === 'Tracking link is inactive') {
-          return reply.status(410).send({
-            success: false,
-            error: 'Ce lien n\'est plus actif'
-          });
+          return sendError(reply, 410, 'Ce lien n\'est plus actif');
         }
         if (error.message === 'Tracking link has expired') {
-          return reply.status(410).send({
-            success: false,
-            error: 'Ce lien a expiré'
-          });
+          return sendError(reply, 410, 'Ce lien a expiré');
         }
       }
 
@@ -561,11 +545,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Paramètres invalides',
-          details: error.issues
-        });
+        return sendBadRequest(reply, 'Paramètres invalides');
       }
       logError(fastify.log, 'Get tracking link stats error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');

@@ -24,7 +24,7 @@ import { authUserCacheKey } from '../../middleware/auth';
 import { getCacheStore } from '../../services/CacheStore';
 import { withMutationLog } from '../../utils/withMutationLog';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
-import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
+import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 
 const logger = enhancedLogger.child({ module: 'UserProfileRoutes' });
 
@@ -181,7 +181,7 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         }
       }
 
-      const updatedUser = await withMutationLog<any>({
+      const updatedUser = await withMutationLog({
         request,
         fastify,
         userId: userId!,
@@ -246,11 +246,7 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       if (error instanceof z.ZodError) {
         const userId = authContext?.userId || 'unknown';
         fastify.log.error(`[PROFILE_UPDATE] Validation error for user ${userId}: ${JSON.stringify(error.issues)}`);
-        return reply.status(400).send({
-          success: false,
-          error: 'Invalid data',
-          details: error.issues
-        });
+        return sendBadRequest(reply, 'Invalid data');
       }
 
       logError(fastify.log, 'Update user profile error:', error);
@@ -360,11 +356,7 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
     } catch (error: unknown) {
       if (error instanceof z.ZodError) {
         fastify.log.error(`[AVATAR_UPDATE] Validation error: ${JSON.stringify(error.issues)}`);
-        return reply.status(400).send({
-          success: false,
-          error: 'Invalid image format',
-          details: error.issues
-        });
+        return sendBadRequest(reply, 'Invalid image format');
       }
 
       logError(fastify.log, 'Update user avatar error:', error);
@@ -467,11 +459,7 @@ export async function updateUserBanner(fastify: FastifyInstance) {
     } catch (error: unknown) {
       if (error instanceof z.ZodError) {
         fastify.log.error(`[BANNER_UPDATE] Validation error: ${JSON.stringify(error.issues)}`);
-        return reply.status(400).send({
-          success: false,
-          error: 'Invalid image format',
-          details: error.issues
-        });
+        return sendBadRequest(reply, 'Invalid image format');
       }
 
       logError(fastify.log, 'Update user banner error:', error);
@@ -570,11 +558,7 @@ export async function updateUserPassword(fastify: FastifyInstance) {
 
     } catch (error: unknown) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          error: error.issues[0]?.message || 'Invalid data',
-          details: error.issues
-        });
+        return sendBadRequest(reply, error.issues[0]?.message || 'Invalid data');
       }
 
       logError(fastify.log, 'Update password error:', error);
@@ -696,11 +680,7 @@ export async function updateUsername(fastify: FastifyInstance) {
 
         if (daysSinceLastChange < RATE_LIMIT_DAYS) {
           const nextChangeAllowedAt = new Date(lastChange.getTime() + RATE_LIMIT_DAYS * 24 * 60 * 60 * 1000);
-          return reply.status(429).send({
-            success: false,
-            error: `Username change limited to once every ${RATE_LIMIT_DAYS} days`,
-            nextChangeAllowedAt: nextChangeAllowedAt.toISOString()
-          });
+          return sendError(reply, 429, `Username change limited to once every ${RATE_LIMIT_DAYS} days`);
         }
       }
 
@@ -742,11 +722,7 @@ export async function updateUsername(fastify: FastifyInstance) {
 
     } catch (error: unknown) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          error: error.issues[0]?.message || 'Invalid data',
-          details: error.issues
-        });
+        return sendBadRequest(reply, error.issues[0]?.message || 'Invalid data');
       }
 
       logError(fastify.log, 'Update username error:', error);
@@ -945,8 +921,7 @@ export async function getUserById(fastify: FastifyInstance) {
           deactivatedAt: true,
           createdAt: true,
           updatedAt: true,
-          voiceModel: { select: voiceModelSelect },
-          userPreferences: { select: { application: true } }
+          voiceModel: { select: voiceModelSelect }
         }
       });
 
@@ -957,11 +932,10 @@ export async function getUserById(fastify: FastifyInstance) {
 
       fastify.log.info(`[USER_PROFILE] User found: ${user.username} (${user.id})`);
 
-      const userPrefs = (user as any).userPreferences as { application: unknown } | null | undefined;
-      const userApp = (userPrefs?.application as Record<string, unknown> | undefined);
       const publicUserProfile = {
         ...withVoiceFields(user),
-        autoTranslateEnabled: (userApp?.autoTranslateEnabled as boolean | undefined) ?? true,
+        // TODO: Load from UserPreferences.application
+        autoTranslateEnabled: true,
         email: '',
         phoneNumber: undefined,
         permissions: undefined,

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
 import { logError } from '../utils/logger';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { sendSuccess, sendNotFound, sendForbidden, sendBadRequest, sendUnauthorized } from '../utils/response.js';
+import { sendSuccess, sendNotFound, sendForbidden, sendBadRequest, sendInternalError } from '../utils/response.js';
 
 // Schémas de validation
 const TranslateRequestSchema = z.object({
@@ -335,7 +335,11 @@ export async function translationRoutes(fastify: FastifyInstance) {
 
         // SECURITY: E2EE messages cannot be translated by the server
         if (existingMessage.encryptionMode === 'e2ee') {
-          return sendBadRequest(reply, 'End-to-end encrypted messages cannot be translated by the server', { code: 'E2EE_NOT_TRANSLATABLE' });
+          return reply.status(400).send({
+            success: false,
+            error: 'E2EE_NOT_TRANSLATABLE',
+            message: 'End-to-end encrypted messages cannot be translated by the server'
+          });
         }
 
         // Vérifier l'accès (optionnel, selon vos besoins)
@@ -427,7 +431,11 @@ export async function translationRoutes(fastify: FastifyInstance) {
         // Créer les données du message
         const senderId = request.user?.userId;
         if (!senderId) {
-          return sendUnauthorized(reply, 'Authentication required for new message translation');
+          return reply.status(401).send({
+            success: false,
+            error: 'AUTH_REQUIRED',
+            message: 'Authentication required for new message translation'
+          });
         }
 
         // Resolve the user's participantId in this conversation
@@ -567,11 +575,7 @@ export async function translationRoutes(fastify: FastifyInstance) {
       const { text } = request.body;
 
       if (!text || text.length === 0) {
-        return reply.status(400).send({
-          success: false,
-          error: 'VALIDATION_ERROR',
-          message: 'Text is required'
-        });
+        return sendBadRequest(reply, 'Text is required');
       }
 
       // Détection simple basée sur des patterns
@@ -599,11 +603,7 @@ export async function translationRoutes(fastify: FastifyInstance) {
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown language detection error';
       logError(request.log, 'Language detection error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'DETECTION_ERROR',
-        message: errorMessage
-      });
+      return sendInternalError(reply, errorMessage);
     }
   });
 
