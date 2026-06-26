@@ -1191,15 +1191,7 @@ export class MeeshySocketIOManager {
    * Helper générique pour broadcaster les événements de traduction audio.
    */
   private async _broadcastTranslationEvent(
-    data: {
-      taskId: string;
-      messageId: string;
-      attachmentId: string;
-      language: string;
-      translatedAudio: any;
-      phase?: string;
-      transcription?: any;
-    },
+    data: AudioTranslationEventData & { taskId?: string; phase?: string; transcription?: unknown },
     eventName: string,
     eventConstant:
       | typeof SERVER_EVENTS.AUDIO_TRANSLATION_READY
@@ -1256,8 +1248,8 @@ export class MeeshySocketIOManager {
           id: data.translatedAudio.id || `${data.attachmentId}_${data.language}`,
           targetLanguage: data.translatedAudio.targetLanguage || data.language,
           url: data.translatedAudio.url,
-          transcription: data.translatedAudio.translatedText || data.translatedAudio.transcription || '',
-          durationMs: data.translatedAudio.durationMs || data.translatedAudio.duration || 0,
+          transcription: (data.translatedAudio as unknown as { translatedText?: string }).translatedText || data.translatedAudio.transcription || '',
+          durationMs: data.translatedAudio.durationMs || (data.translatedAudio as unknown as { duration?: number }).duration || 0,
           format: data.translatedAudio.format || 'mp3',
           cloned: data.translatedAudio.cloned || false,
           quality: data.translatedAudio.quality || 0,
@@ -1310,15 +1302,7 @@ export class MeeshySocketIOManager {
     }
 
     await this._broadcastTranslationEvent(
-      {
-        taskId: data.taskId,
-        messageId: data.messageId,
-        attachmentId: data.attachmentId,
-        language: data.language || data.translatedAudio.targetLanguage,
-        translatedAudio: data.translatedAudio,
-        transcription: data.transcription,
-        phase: data.phase
-      },
+      data,
       'audioTranslationReady',
       SERVER_EVENTS.AUDIO_TRANSLATION_READY,
       '🎯'
