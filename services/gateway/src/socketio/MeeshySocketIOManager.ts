@@ -1517,7 +1517,7 @@ export class MeeshySocketIOManager {
             // `message.translations` est déjà le champ JSON MongoDB — éviter un findUnique redondant
             return transformTranslationsToArray(
               message.id,
-              (message as any).translations as Record<string, any>
+              message.translations as unknown as Record<string, import('../utils/translation-transformer').MessageTranslationJSON>
             );
           } catch (error) {
             logger.warn(`⚠️ [DEBUG] Erreur transformation traductions pour ${message.id}:`, error);
@@ -1548,93 +1548,76 @@ export class MeeshySocketIOManager {
 
       // Construire le payload de message pour broadcast - compatible avec les types existants
       // CORRECTION CRITIQUE: Utiliser l'ObjectId normalisé pour cohérence client-serveur
-      const s = message.sender as any;
+      const senderParticipant = message.sender;
       // CORRECTION senderId: message.senderId = participant ID, mais les clients comparent
       // senderId avec leur userId. On expose sender.userId (= User.id) en priorité.
-      const resolvedSenderId = s?.userId || s?.user?.id || message.senderId || undefined;
+      const resolvedSenderId = senderParticipant?.userId || senderParticipant?.user?.id || message.senderId || undefined;
       const messagePayload = {
         id: message.id,
         conversationId: normalizedId,  // ← FIX: Toujours utiliser l'ObjectId normalisé
         senderId: resolvedSenderId,
         content: message.content,
         originalLanguage: message.originalLanguage || 'fr',
-        originalContent: (message as any).originalContent || message.content,
+        originalContent: (message as unknown as Record<string, unknown>)['originalContent'] as string | undefined || message.content,
         messageType: (message.messageType || 'text') as MessageType,
-        // Message origin (user/system/...) so clients render system notices
-        // (e.g. call summaries) in real time, not only after a REST reload.
-        messageSource: (message as any).messageSource || undefined,
-        // Structured per-type payload (call-summary facts for system messages)
-        metadata: (message as any).metadata || undefined,
+        messageSource: message.messageSource || undefined,
+        metadata: message.metadata || undefined,
         isEdited: Boolean(message.isEdited),
         deletedAt: message.deletedAt || undefined,
-        isBlurred: Boolean((message as any).isBlurred),
-        isViewOnce: Boolean((message as any).isViewOnce),
-        effectFlags: (message as any).effectFlags ?? 0,
-        expiresAt: (message as any).expiresAt || undefined,
+        isBlurred: Boolean(message.isBlurred),
+        isViewOnce: Boolean(message.isViewOnce),
+        effectFlags: (message as unknown as Record<string, unknown>)['effectFlags'] ?? 0,
+        expiresAt: message.expiresAt || undefined,
         createdAt: message.createdAt || new Date(),
         updatedAt: message.updatedAt || new Date(),
-        // CORRECTION CRITIQUE: Inclure validatedMentions pour rendre les mentions cliquables en temps réel
-        validatedMentions: (message as any).validatedMentions || [],
-        // CORRECTION CRITIQUE: Inclure les traductions dans le payload
+        validatedMentions: message.validatedMentions ?? [],
         translations: messageTranslations,
-        // Unified Participant sender
-        sender: message.sender ? (() => {
-          const s = message.sender as any;
-          const u = s.user;
-          return {
-            id: s.id,
-            displayName: s.nickname || s.displayName,
-            avatar: s.avatar || u?.avatar,
-            type: s.type,
-            userId: s.userId,
-            username: u?.username,
-            firstName: u?.firstName || '',
-            lastName: u?.lastName || '',
-          };
-        })() : undefined,
-        // CORRECTION: Inclure les attachments dans le payload avec metadata brut
-        attachments: (message as any).attachments || [],
-        // CORRECTION: Inclure l'objet replyTo complet ET replyToId
+        sender: senderParticipant ? {
+          id: senderParticipant.id,
+          displayName: senderParticipant.nickname || senderParticipant.displayName,
+          avatar: senderParticipant.avatar || senderParticipant.user?.avatar,
+          type: senderParticipant.type,
+          userId: senderParticipant.userId,
+          username: senderParticipant.user?.username,
+          firstName: senderParticipant.user?.firstName || '',
+          lastName: senderParticipant.user?.lastName || '',
+        } : undefined,
+        attachments: message.attachments ?? [],
         replyToId: message.replyToId || undefined,
-        replyTo: (message as any).replyTo ? {
-          id: (message as any).replyTo.id,
+        replyTo: message.replyTo ? {
+          id: message.replyTo.id,
           conversationId: normalizedId,
-          senderId: (message as any).replyTo.senderId || undefined,
-          content: (message as any).replyTo.content,
-          originalLanguage: (message as any).replyTo.originalLanguage || 'fr',
-          messageType: ((message as any).replyTo.messageType || 'text') as MessageType,
-          createdAt: (message as any).replyTo.createdAt || new Date(),
-          sender: (message as any).replyTo.sender ? {
-            id: (message as any).replyTo.sender.id,
-            displayName: (message as any).replyTo.sender.nickname || (message as any).replyTo.sender.displayName,
-            avatar: (message as any).replyTo.sender.avatar,
-            type: (message as any).replyTo.sender.type,
-            userId: (message as any).replyTo.sender.userId,
-            username: (message as any).replyTo.sender.user?.username,
-            firstName: (message as any).replyTo.sender.user?.firstName || '',
-            lastName: (message as any).replyTo.sender.user?.lastName || '',
+          senderId: message.replyTo.senderId || undefined,
+          content: message.replyTo.content,
+          originalLanguage: message.replyTo.originalLanguage || 'fr',
+          messageType: (message.replyTo.messageType || 'text') as MessageType,
+          createdAt: message.replyTo.createdAt || new Date(),
+          sender: message.replyTo.sender ? {
+            id: message.replyTo.sender.id,
+            displayName: message.replyTo.sender.nickname || message.replyTo.sender.displayName,
+            avatar: message.replyTo.sender.avatar,
+            type: message.replyTo.sender.type,
+            userId: message.replyTo.sender.userId,
+            username: message.replyTo.sender.user?.username,
+            firstName: message.replyTo.sender.user?.firstName || '',
+            lastName: message.replyTo.sender.user?.lastName || '',
           } : undefined
         } : undefined,
       };
 
-      // DEBUG: Log pour vérifier les attachments et metadata
-      if ((message as any).attachments && (message as any).attachments.length > 0) {
+      if (message.attachments && message.attachments.length > 0) {
+        const first = message.attachments[0] as unknown as Record<string, unknown>;
+        const firstMeta = typeof first['metadata'] === 'object' && first['metadata'] ? first['metadata'] as Record<string, unknown> : null;
         logger.info('🔍 [WEBSOCKET] Broadcasting message avec attachments:', {
           messageId: message.id,
-          attachmentCount: (message as any).attachments.length,
+          attachmentCount: message.attachments.length,
           firstAttachment: {
-            id: (message as any).attachments[0].id,
-            hasMetadata: !!(message as any).attachments[0].metadata,
-            metadata: (message as any).attachments[0].metadata,
-            metadataType: typeof (message as any).attachments[0].metadata,
-            metadataKeys: (message as any).attachments[0].metadata ? Object.keys((message as any).attachments[0].metadata) : []
+            id: first['id'],
+            hasMetadata: !!firstMeta,
+            metadata: firstMeta,
+            metadataType: typeof first['metadata'],
+            metadataKeys: firstMeta ? Object.keys(firstMeta) : []
           },
-          payloadAttachments: messagePayload.attachments,
-          payloadFirstAttachment: messagePayload.attachments && messagePayload.attachments[0] ? {
-            id: messagePayload.attachments[0].id,
-            hasMetadata: !!(messagePayload.attachments[0] as any).metadata,
-            metadataKeys: (messagePayload.attachments[0] as any).metadata ? Object.keys((messagePayload.attachments[0] as any).metadata) : []
-          } : null
         });
       }
 
@@ -1660,7 +1643,7 @@ export class MeeshySocketIOManager {
       }
 
       // 2b. Emit mention:created to each mentioned user's personal room
-      const mentions = (message as any).validatedMentions as Array<{ participantId?: string; userId?: string; username?: string }> | undefined;
+      const mentions = message.validatedMentions as unknown as Array<{ participantId?: string; userId?: string; username?: string }> | undefined;
       if (mentions && mentions.length > 0) {
         for (const mention of mentions) {
           const targetUserId = mention.userId;
@@ -1671,7 +1654,7 @@ export class MeeshySocketIOManager {
               senderId: message.senderId,
               mentionedUserId: targetUserId,
               mentionedParticipantId: mention.participantId,
-              content: (message as any).content,
+              content: message.content,
               timestamp: new Date().toISOString(),
             });
           }
@@ -1767,9 +1750,9 @@ export class MeeshySocketIOManager {
   public async broadcastMessage(message: Message, conversationId: string): Promise<void> {
     const messageWithTimestamp = {
       ...message,
-      timestamp: (message as any).createdAt || (message as any).timestamp || new Date()
-    } as any;
-    await this._broadcastNewMessage(messageWithTimestamp, conversationId);
+      timestamp: message.createdAt || (message as unknown as { timestamp?: Date })['timestamp'] || new Date()
+    };
+    await this._broadcastNewMessage(messageWithTimestamp as Message, conversationId);
   }
 
 
@@ -1952,7 +1935,7 @@ export class MeeshySocketIOManager {
 
       // Broadcast to all members (translation arrives asynchronously via translationReady event)
       // Note: Notifications are already triggered inside messagingService.handleMessage -> processor.triggerAllNotifications
-      const messageWithTimestamp = { ...result.data, timestamp: result.data.createdAt } as any;
+      const messageWithTimestamp = { ...result.data, timestamp: result.data.createdAt } as Message;
       await this._broadcastNewMessage(messageWithTimestamp, response.conversationId);
 
       logger.info(`[Agent] Response sent — conv=${response.conversationId} user=${response.asUserId} type=${response.metadata.agentType} msgId=${result.data.id}`);
