@@ -35,10 +35,12 @@ const mockAuthManager = {
 
 const mockGetConversationApiId = jest.fn().mockReturnValue('conv-api-id');
 const mockTriggerManualUpdateCheck = jest.fn();
+const mockAuthRefreshToken = jest.fn().mockResolvedValue({});
 
 const SERVER_EVENTS_MOCK = {
   AUTHENTICATED: 'authenticated',
   ERROR: 'error',
+  AUTH_TOKEN_EXPIRED: 'auth:token-expired',
   MESSAGE_NEW: 'message:new',
   MESSAGE_EDITED: 'message:edited',
   MESSAGE_DELETED: 'message:deleted',
@@ -86,10 +88,17 @@ jest.mock('@/services/auth-manager.service', () => ({
   },
 }));
 
+jest.mock('@/services/auth.service', () => ({
+  authService: {
+    refreshToken: (...args: unknown[]) => mockAuthRefreshToken(...args),
+  },
+}));
+
 jest.mock('@meeshy/shared/types/socketio-events', () => ({
   SERVER_EVENTS: {
     AUTHENTICATED: 'authenticated',
     ERROR: 'error',
+    AUTH_TOKEN_EXPIRED: 'auth:token-expired',
     MESSAGE_NEW: 'message:new',
     MESSAGE_EDITED: 'message:edited',
     MESSAGE_DELETED: 'message:deleted',
@@ -605,7 +614,7 @@ describe('ConnectionService', () => {
       expect(mockSocket.on).not.toHaveBeenCalled();
     });
 
-    it('registers 5 socket event handlers', () => {
+    it('registers 6 socket event handlers', () => {
       const eventHandlers: Record<string, (...args: unknown[]) => void> = {};
       const localSocket = {
         ...mockSocket,
@@ -618,7 +627,7 @@ describe('ConnectionService', () => {
 
       svc.setupConnectionListeners();
 
-      expect(localSocket.on).toHaveBeenCalledTimes(5);
+      expect(localSocket.on).toHaveBeenCalledTimes(6);
     });
 
     it('on connect: sets connected=true, calls autoJoinCallback, emits status', () => {
@@ -839,6 +848,88 @@ describe('ConnectionService', () => {
         '[Socket] connection error',
         expect.objectContaining({ errorMessage: 'server error' })
       );
+    });
+
+    describe('on AUTH_TOKEN_EXPIRED', () => {
+      it('refreshes token, updates socket.auth, and calls reconnect() on success', async () => {
+        const eventHandlers: Record<string, (...args: unknown[]) => void> = {};
+        const localSocket = {
+          ...mockSocket,
+          auth: { token: 'old-token' },
+          on: jest.fn((event: string, handler: (...args: unknown[]) => void) => {
+            eventHandlers[event] = handler;
+          }),
+        };
+
+        mockAuthRefreshToken.mockResolvedValue({});
+        mockAuthManager.getAuthToken.mockReturnValue('new-token');
+
+        const svc = new ConnectionService();
+        (svc as any).state.socket = localSocket;
+        const reconnectSpy = jest.spyOn(svc, 'reconnect').mockImplementation(() => {});
+        svc.setupConnectionListeners();
+
+        eventHandlers[SERVER_EVENTS_MOCK.AUTH_TOKEN_EXPIRED]();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(mockAuthRefreshToken).toHaveBeenCalledTimes(1);
+        expect(localSocket.auth).toEqual({ token: 'new-token' });
+        expect(reconnectSpy).toHaveBeenCalledTimes(1);
+      });
+
+      it('does not update socket.auth when no new token returned after refresh', async () => {
+        const eventHandlers: Record<string, (...args: unknown[]) => void> = {};
+        const localSocket = {
+          ...mockSocket,
+          auth: { token: 'old-token' },
+          on: jest.fn((event: string, handler: (...args: unknown[]) => void) => {
+            eventHandlers[event] = handler;
+          }),
+        };
+
+        mockAuthRefreshToken.mockResolvedValue({});
+        mockAuthManager.getAuthToken.mockReturnValue(null);
+
+        const svc = new ConnectionService();
+        (svc as any).state.socket = localSocket;
+        jest.spyOn(svc, 'reconnect').mockImplementation(() => {});
+        svc.setupConnectionListeners();
+
+        eventHandlers[SERVER_EVENTS_MOCK.AUTH_TOKEN_EXPIRED]();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(localSocket.auth).toEqual({ token: 'old-token' });
+      });
+
+      it('logs warn and does not reconnect when refreshToken fails', async () => {
+        const eventHandlers: Record<string, (...args: unknown[]) => void> = {};
+        const localSocket = {
+          ...mockSocket,
+          on: jest.fn((event: string, handler: (...args: unknown[]) => void) => {
+            eventHandlers[event] = handler;
+          }),
+        };
+
+        mockAuthRefreshToken.mockRejectedValue(new Error('network error'));
+
+        const svc = new ConnectionService();
+        (svc as any).state.socket = localSocket;
+        const reconnectSpy = jest.spyOn(svc, 'reconnect').mockImplementation(() => {});
+        svc.setupConnectionListeners();
+
+        eventHandlers[SERVER_EVENTS_MOCK.AUTH_TOKEN_EXPIRED]();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(reconnectSpy).not.toHaveBeenCalled();
+        expect(mockLogger.warn).toHaveBeenCalledWith(
+          '[Socket]',
+          'token refresh failed after auth:token-expired',
+          expect.objectContaining({ err: expect.any(Error) })
+        );
+      });
     });
   });
 

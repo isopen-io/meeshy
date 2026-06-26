@@ -400,6 +400,7 @@ export class SocketIOOrchestrator {
           if (idx !== -1) {
             this.pendingMessages.splice(idx, 1);
             this.pendingMessageTimeouts.delete(resolvedClientMessageId);
+            logger.warn('[SocketIOOrchestrator]', 'Message queue timeout, message discarded');
             resolve({ success: false });
           }
         }, this.MESSAGE_QUEUE_TIMEOUT);
@@ -407,16 +408,6 @@ export class SocketIOOrchestrator {
 
         this.pendingMessages.push(pending);
         logger.debug('[SocketIOOrchestrator]', `Message queued (${this.pendingMessages.length} in queue)`);
-
-        // Set a timeout to reject if not sent within MESSAGE_QUEUE_TIMEOUT
-        setTimeout(() => {
-          const index = this.pendingMessages.indexOf(pending);
-          if (index !== -1) {
-            this.pendingMessages.splice(index, 1);
-            logger.warn('[SocketIOOrchestrator]', 'Message queue timeout, message discarded');
-            resolve({ success: false });
-          }
-        }, this.MESSAGE_QUEUE_TIMEOUT);
       });
     }
 
