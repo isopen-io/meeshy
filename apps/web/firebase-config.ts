@@ -6,6 +6,7 @@
 
 import { FirebaseOptions, FirebaseApp, getApps, initializeApp } from 'firebase/app';
 import { firebaseChecker } from '@/utils/firebase-availability-checker';
+import { logger } from '@/utils/logger';
 
 /**
  * Configuration Firebase par environnement
@@ -44,11 +45,7 @@ export function getFirebaseConfig(): FirebaseOptions {
   const missingFields = requiredFields.filter(field => !config[field]);
 
   if (missingFields.length > 0) {
-    console.warn(
-      '[Firebase] Missing configuration fields:',
-      missingFields.join(', '),
-      '\nPush notifications will not be available.'
-    );
+    logger.warn('[FirebaseConfig]', 'Missing configuration fields - push notifications will not be available', { data: missingFields.join(', ') });
   }
 
   return config;
@@ -154,7 +151,7 @@ export function getFirebaseApp(): FirebaseApp | null {
     const config = getFirebaseConfig();
     return initializeApp(config);
   } catch (error) {
-    console.error('[Firebase Config] Failed to get/initialize app:', error);
+    logger.error('[FirebaseConfig]', 'Failed to get/initialize app', { error });
     return null;
   }
 }

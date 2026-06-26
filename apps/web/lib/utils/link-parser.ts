@@ -3,6 +3,7 @@
  */
 
 import { buildApiUrl } from '../config';
+import { logger } from '@/utils/logger';
 
 import { authManager } from '@/services/auth-manager.service';
 
@@ -206,7 +207,7 @@ export async function createTrackingLink(
       trackingLink: data.data.trackingLink,
     };
   } catch (error) {
-    console.error('Error creating tracking link:', error);
+    logger.error('[LinkParser]', 'Error creating tracking link', { error });
     return {
       success: false,
       error: 'Erreur réseau lors de la création du lien de tracking',
@@ -281,7 +282,7 @@ export async function recordTrackingLinkClick(
       originalUrl: data.data.originalUrl,
     };
   } catch (error) {
-    console.error('Error recording tracking link click:', error);
+    logger.error('[LinkParser]', 'Error recording tracking link click', { error });
     return {
       success: false,
       error: 'Erreur réseau lors de l\'enregistrement du clic',

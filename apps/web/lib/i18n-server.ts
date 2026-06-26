@@ -4,6 +4,7 @@
  */
 
 import { headers, cookies } from 'next/headers';
+import { logger } from '@/utils/logger';
 
 // Type for translation function
 export type TFunction = (key: string, params?: Record<string, string | number>) => string;
@@ -80,7 +81,7 @@ export async function loadTranslations(
 
     return translations;
   } catch (error) {
-    console.error(`[i18n-server] Failed to load ${locale}/${namespace}:`, error);
+    logger.error('[i18nServer]', `Failed to load ${locale}/${namespace}`, { error });
 
     // Try fallback locale
     if (locale !== DEFAULT_LOCALE) {

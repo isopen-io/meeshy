@@ -35,7 +35,7 @@ export function useFirebaseInit() {
 
     async function checkFirebase() {
       try {
-        console.info('[Firebase Init] Checking Firebase availability...');
+        logger.info('[useFirebaseInit]', 'Checking Firebase availability...');
 
         // Timeout de 5 secondes pour éviter les blocages sur connexions lentes
         const timeoutPromise = new Promise<FirebaseStatus>((_, reject) => {
@@ -58,12 +58,7 @@ export function useFirebaseInit() {
           // Log du résultat en dev
           if (process.env.NODE_ENV === 'development') {
             if (result.available) {
-              console.info(
-                '%c[Meeshy] Firebase available',
-                'color: green; font-weight: bold;',
-                '\n- Push notifications:', result.pushEnabled ? 'Enabled' : 'Disabled',
-                '\n- PWA badges:', result.badgeEnabled ? 'Enabled' : 'Disabled'
-              );
+              logger.info('[useFirebaseInit]', 'Firebase available', { data: { pushEnabled: result.pushEnabled, badgeEnabled: result.badgeEnabled } });
             } else {
               logger.warn('[useFirebaseInit]', 'Firebase not configured - Using WebSocket notifications only', { data: result.reason });
             }
