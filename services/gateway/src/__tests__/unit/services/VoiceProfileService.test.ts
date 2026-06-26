@@ -74,6 +74,10 @@ const mockPrisma = {
   },
   participant: {
     findFirst: jest.fn() as jest.Mock<any>
+  },
+  userPreferences: {
+    findUnique: jest.fn() as jest.Mock<any>,
+    upsert: jest.fn() as jest.Mock<any>
   }
 };
 
@@ -1549,6 +1553,8 @@ describe('VoiceProfileService', () => {
       const mockUser = createMockUser();
       mockPrisma.user.findUnique.mockResolvedValue(mockUser);
       mockPrisma.userVoiceModel.create.mockResolvedValue(createMockVoiceModel());
+      mockPrisma.userPreferences.findUnique.mockResolvedValue(null);
+      mockPrisma.userPreferences.upsert.mockResolvedValue({});
       mockZmqClient.sendVoiceProfileRequest.mockImplementation(async () => {
         setTimeout(() => {
           mockZmqClient.emit('voiceProfileAnalyzeResult', createMockZmqAnalyzeResult());
@@ -1615,6 +1621,87 @@ describe('VoiceProfileService', () => {
 
       // Nothing to save, but registration still succeeds
       expect(result.success).toBe(true);
+    });
+
+    it('should persist voice cloning settings to UserPreferences.audio', async () => {
+      setupRegisterProfileMocks();
+
+      await service.registerProfile('user-123', {
+        audioData: 'base64-audio',
+        audioFormat: 'wav',
+        voiceCloningSettings: {
+          voiceCloningTemperature: 1.5,
+          voiceCloningQualityPreset: 'balanced'
+        }
+      });
+
+      expect(mockPrisma.userPreferences.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { userId: 'user-123' },
+          create: expect.objectContaining({
+            userId: 'user-123',
+            audio: expect.objectContaining({
+              voiceCloningTemperature: 1.5,
+              voiceCloningQualityPreset: 'balanced'
+            })
+          }),
+          update: expect.objectContaining({
+            audio: expect.objectContaining({
+              voiceCloningTemperature: 1.5,
+              voiceCloningQualityPreset: 'balanced'
+            })
+          })
+        })
+      );
+    });
+
+    it('should merge voice cloning settings with existing UserPreferences.audio', async () => {
+      const mockUser = createMockUser();
+      mockPrisma.user.findUnique.mockResolvedValue(mockUser);
+      mockPrisma.userVoiceModel.create.mockResolvedValue(createMockVoiceModel());
+      mockPrisma.userPreferences.findUnique.mockResolvedValue({
+        audio: { voiceCloningExaggeration: 0.5, someOtherSetting: 'value' }
+      });
+      mockPrisma.userPreferences.upsert.mockResolvedValue({});
+      mockZmqClient.sendVoiceProfileRequest.mockImplementation(async () => {
+        setTimeout(() => {
+          mockZmqClient.emit('voiceProfileAnalyzeResult', createMockZmqAnalyzeResult());
+        }, 10);
+      });
+
+      await service.registerProfile('user-123', {
+        audioData: 'base64-audio',
+        audioFormat: 'wav',
+        voiceCloningSettings: {
+          voiceCloningTemperature: 1.2
+        }
+      });
+
+      expect(mockPrisma.userPreferences.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: expect.objectContaining({
+            audio: expect.objectContaining({
+              voiceCloningExaggeration: 0.5,
+              someOtherSetting: 'value',
+              voiceCloningTemperature: 1.2
+            })
+          })
+        })
+      );
+    });
+
+    it('should not call userPreferences.upsert when only invalid preset provided', async () => {
+      setupRegisterProfileMocks();
+
+      await service.registerProfile('user-123', {
+        audioData: 'base64-audio',
+        audioFormat: 'wav',
+        voiceCloningSettings: {
+          voiceCloningQualityPreset: 'invalid_preset' as any
+        }
+      });
+
+      expect(mockPrisma.userPreferences.upsert).not.toHaveBeenCalled();
     });
   });
 

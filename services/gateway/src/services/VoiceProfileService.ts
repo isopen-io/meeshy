@@ -576,11 +576,18 @@ export class VoiceProfileService extends EventEmitter {
           }
         }
 
-        // TODO: Save voice cloning settings to UserPreferences.audio JSON
-        // These settings (temperature, topP, qualityPreset) need to be migrated
         if (Object.keys(updateData).length > 0) {
-          logger.info('[VoiceProfileService] Voice cloning settings to save:', updateData);
-          logger.warn('[VoiceProfileService] Voice cloning settings storage not yet migrated to UserPreferences');
+          const existingPrefs = await this.prisma.userPreferences.findUnique({
+            where: { userId },
+            select: { audio: true },
+          });
+          const currentAudio = (existingPrefs?.audio ?? {}) as Record<string, unknown>;
+          const mergedAudio = { ...currentAudio, ...updateData };
+          await this.prisma.userPreferences.upsert({
+            where: { userId },
+            create: { userId, audio: mergedAudio as any },
+            update: { audio: mergedAudio as any },
+          });
         }
       }
 
