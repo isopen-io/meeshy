@@ -1245,3 +1245,137 @@ final class CallQualitySummaryTests: XCTestCase {
             "Key must remain stable across builds — changing it would orphan persisted summaries")
     }
 }
+
+// MARK: - Stale-callId Guards (Fix 9 & Fix 10)
+
+/// Source-analysis guards verifying the `self.currentCallId == callId` invariant
+/// is present in every async path that calls `createOffer()` and then
+/// `emitCallOffer()`. These tests prevent regressions where a call that ends
+/// *while* `createOffer()` suspends is wrongly told to `endCallInternal(.failed)`
+/// or emits a stale SDP offer for a dead session.
+@MainActor
+final class CallManagerStaleCallIdGuardTests: XCTestCase {
+
+    private func source() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    // MARK: Fix 9 — thermalStateDidChange renegotiation path
+
+    func test_thermalStateDidChange_renegotiationBlock_hasStaleCallIdGuard() throws {
+        // The thermal-critical branch calls `createOffer()` under `await`. Without a
+        // post-await `self.currentCallId == callId` guard, the offer is emitted for a
+        // call that may have ended during the SDP-creation suspension window.
+        let src = try source()
+
+        guard let thermalRange = src.range(of: "thermalStateDidChange") else {
+            XCTFail("thermalStateDidChange not found in CallManager.swift")
+            return
+        }
+        // Bound to the thermal handler body — up to the next top-level closing brace
+        // that returns to the class scope (heuristic: next `\n    func ` or `\n}`).
+        let searchEnd = src.range(
+            of: "\n    func ",
+            range: thermalRange.upperBound..<src.endIndex
+        )?.lowerBound ?? src.endIndex
+        let thermalBody = String(src[thermalRange.lowerBound..<searchEnd])
+
+        // Must see `let offer = await self.webRTCService.createOffer()` followed by
+        // `, self.currentCallId == callId` (the post-await stale-callId guard).
+        let hasCreateOffer = thermalBody.contains("await self.webRTCService.createOffer()")
+        XCTAssertTrue(hasCreateOffer,
+            "thermalStateDidChange must contain a createOffer() suspension point")
+
+        // The guard must appear as part of the same `if let` chain: the condition
+        // `, self.currentCallId == callId` must follow `let offer = await`.
+        guard let createOfferIdx = thermalBody.range(of: "let offer = await self.webRTCService.createOffer()")?.lowerBound else {
+            XCTFail("createOffer expression not found in thermalStateDidChange body")
+            return
+        }
+        let afterOffer = String(thermalBody[createOfferIdx...])
+        XCTAssertTrue(
+            afterOffer.contains("self.currentCallId == callId"),
+            "Fix 9 regression: thermalStateDidChange renegotiation block must guard " +
+            "`self.currentCallId == callId` after `await createOffer()` to prevent " +
+            "emitting a stale SDP offer for a call that ended during the suspension window."
+        )
+    }
+
+    // MARK: Fix 10 — listenForParticipantJoined nil-offer path
+
+    func test_listenForParticipantJoined_nilOffer_doesNotClobberCleanEnd() throws {
+        // When `createOffer()` returns nil because the call ended while it was
+        // suspended (peerConnection torn down → nil SDP), the old code called
+        // `endCallInternal(.failed)` unconditionally, clobbering the clean end reason.
+        // Fix 10: guard `self.currentCallId == callId` BEFORE calling endCallInternal
+        // on the nil path.
+        let src = try source()
+
+        guard let joinRange = src.range(of: "func listenForParticipantJoined") else {
+            XCTFail("listenForParticipantJoined not found in CallManager.swift")
+            return
+        }
+        let searchEnd = src.range(
+            of: "\n    private func ",
+            range: joinRange.upperBound..<src.endIndex
+        )?.lowerBound ?? src.endIndex
+        let joinBody = String(src[joinRange.lowerBound..<searchEnd])
+
+        // Find the `guard let offer = await …` nil path.
+        guard let guardOfferRange = joinBody.range(of: "guard let offer = await self.webRTCService.createOffer()") else {
+            XCTFail("nil-offer guard not found in listenForParticipantJoined Task body")
+            return
+        }
+        // The code immediately following the guard's else branch must check the callId
+        // before calling endCallInternal — i.e. another `currentCallId == callId` guard.
+        let afterGuard = String(joinBody[guardOfferRange.lowerBound...])
+        XCTAssertTrue(
+            afterGuard.contains("self.currentCallId == callId"),
+            "Fix 10 regression (nil-offer path): listenForParticipantJoined must check " +
+            "`self.currentCallId == callId` before `endCallInternal(.failed(...))` so a " +
+            "call that ended cleanly during createOffer() suspension is not re-ended with .failed."
+        )
+    }
+
+    func test_listenForParticipantJoined_successOffer_hasStaleCallIdGuard() throws {
+        // Even when createOffer() succeeds, the call may have ended during the
+        // suspension. The success path must also guard `currentCallId == callId`
+        // before emitting the offer (duplicate-callId + epoch pollution otherwise).
+        let src = try source()
+
+        guard let joinRange = src.range(of: "func listenForParticipantJoined") else {
+            XCTFail("listenForParticipantJoined not found in CallManager.swift")
+            return
+        }
+        let searchEnd = src.range(
+            of: "\n    private func ",
+            range: joinRange.upperBound..<src.endIndex
+        )?.lowerBound ?? src.endIndex
+        let joinBody = String(src[joinRange.lowerBound..<searchEnd])
+
+        // The success path calls emitCallOffer. Immediately before it there must be
+        // a guard that checks currentCallId == callId.
+        guard let emitIdx = joinBody.range(of: "self.emitCallOffer(callId: callId, toUserId: toUserId")?.lowerBound else {
+            XCTFail("emitCallOffer call not found in listenForParticipantJoined success path")
+            return
+        }
+        // Look for the stale-callId guard between the end of the nil-offer guard block
+        // and emitCallOffer.
+        let beforeEmit = String(joinBody[joinBody.startIndex..<emitIdx])
+        // There should be at least two occurrences of `currentCallId == callId` in the
+        // Task body: one for the nil path, one for the success path.
+        let guardOccurrences = beforeEmit.components(separatedBy: "self.currentCallId == callId").count - 1
+        XCTAssertGreaterThanOrEqual(
+            guardOccurrences, 2,
+            "Fix 10 regression (success path): listenForParticipantJoined must guard " +
+            "`self.currentCallId == callId` on BOTH the nil-offer path AND the success path, " +
+            "before calling emitCallOffer."
+        )
+    }
+}

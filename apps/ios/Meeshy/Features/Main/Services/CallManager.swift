@@ -2878,7 +2878,15 @@ final class CallManager: ObservableObject {
             Task { [weak self] in
                 guard let self else { return }
                 guard let offer = await self.webRTCService.createOffer() else {
+                    // Post-await guard: if the call ended while createOffer() was
+                    // building the SDP, peerConnection is nil → nil return.
+                    // Don't clobber a clean end with .failed.
+                    guard self.currentCallId == callId else { return }
                     self.endCallInternal(reason: .failed("Failed to create offer"))
+                    return
+                }
+                guard self.currentCallId == callId else {
+                    Logger.calls.info("[CALL] participant-joined offer discarded: call ended during createOffer")
                     return
                 }
                 self.emitCallOffer(callId: callId, toUserId: toUserId, isVideo: isVideo, sdp: offer)
@@ -3138,7 +3146,8 @@ extension CallManager: ThermalStateMonitorDelegate {
                     if needsRenegotiation,
                        let callId = self.currentCallId,
                        let userId = self.remoteUserId,
-                       let offer = await self.webRTCService.createOffer() {
+                       let offer = await self.webRTCService.createOffer(),
+                       self.currentCallId == callId {
                         self.emitCallOffer(callId: callId, toUserId: userId, isVideo: false, sdp: offer)
                         Logger.calls.warning("Thermal critical — SDP renegotiation offer emitted (video downgrade)")
                     }
