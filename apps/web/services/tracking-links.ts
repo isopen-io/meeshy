@@ -3,6 +3,7 @@
  */
 
 import { buildApiUrl } from '@/lib/config';
+import { logger } from '@/utils/logger';
 import { authManager } from '@/services/auth-manager.service';
 import type {
   TrackingLink,
@@ -229,7 +230,7 @@ export async function copyTrackingLinkToClipboard(shortUrl: string): Promise<boo
     await navigator.clipboard.writeText(shortUrl);
     return true;
   } catch (error) {
-    console.error('Erreur lors de la copie dans le presse-papiers:', error);
+    logger.error('[TrackingLinks]', 'Erreur lors de la copie dans le presse-papiers', { error });
     return false;
   }
 }

@@ -26,6 +26,7 @@ import type {
 } from '@/types';
 import { SERVER_EVENTS, CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { authManager } from './auth-manager.service';
+import { logger } from '@/utils/logger';
 
 class WebSocketService {
   private static instance: WebSocketService | null = null;
@@ -145,7 +146,7 @@ class WebSocketService {
         // Notifier les listeners d'authentification
         this.authListeners.forEach(listener => listener());
       } else {
-        console.error('❌ [WS] Auth échouée:', response?.error);
+        logger.error('[WS]', 'Auth échouée', { error: response?.error });
         toast.error('Échec authentification');
       }
     });
@@ -205,7 +206,7 @@ class WebSocketService {
     });
 
     this.socket.on(SERVER_EVENTS.ERROR, (error: unknown) => {
-      console.error('❌ [WS] Erreur:', error);
+      logger.error('[WS]', 'Erreur socket', { error });
     });
   }
 
@@ -238,13 +239,13 @@ class WebSocketService {
    */
   public joinConversation(conversationId: string): void {
     if (!this.socket?.connected) {
-      console.warn('⚠️ [WS] Socket non connecté, join mis en attente');
+      logger.warn('[WS]', 'Socket non connecté, join mis en attente');
       this.pendingJoinConversationId = conversationId;
       return;
     }
 
     if (!this.isAuthenticated) {
-      console.warn('⚠️ [WS] Socket connecté mais pas encore authentifié, join mis en attente');
+      logger.warn('[WS]', 'Socket connecté mais pas encore authentifié, join mis en attente');
       this.pendingJoinConversationId = conversationId;
       return;
     }
@@ -284,7 +285,7 @@ class WebSocketService {
     clientMessageId?: string,
   ): Promise<boolean> {
     if (!this.socket?.connected) {
-      console.error('❌ [WS] Socket non connecté');
+      logger.error('[WS]', 'Socket non connecté');
       toast.error('Connexion perdue, reconnexion...');
       this.reconnect();
       return false;
@@ -295,7 +296,7 @@ class WebSocketService {
     return new Promise((resolve) => {
 
       const timeout = setTimeout(() => {
-        console.error('❌ [WS] Timeout envoi message');
+        logger.error('[WS]', 'Timeout envoi message');
         resolve(false);
       }, 10000);
 
@@ -311,7 +312,7 @@ class WebSocketService {
         if (response?.success) {
           resolve(true);
         } else {
-          console.error('❌ [WS] Échec envoi:', response?.error);
+          logger.error('[WS]', 'Échec envoi', { error: response?.error });
           toast.error(response?.error || 'Échec envoi message');
           resolve(false);
         }
@@ -331,7 +332,7 @@ class WebSocketService {
     clientMessageId?: string,
   ): Promise<boolean> {
     if (!this.socket?.connected) {
-      console.error('❌ [WS] Socket non connecté');
+      logger.error('[WS]', 'Socket non connecté');
       toast.error('Connexion perdue');
       this.reconnect();
       return false;
@@ -352,7 +353,7 @@ class WebSocketService {
         if (response?.success) {
           resolve(true);
         } else {
-          console.error('❌ [WS] Échec envoi attachments:', response?.error);
+          logger.error('[WS]', 'Échec envoi attachments', { error: response?.error });
           toast.error(response?.error || 'Échec envoi');
           resolve(false);
         }
@@ -365,7 +366,7 @@ class WebSocketService {
    */
   public async editMessage(messageId: string, content: string): Promise<boolean> {
     if (!this.socket?.connected) {
-      console.error('❌ [WS] Socket non connecté');
+      logger.error('[WS]', 'Socket non connecté');
       return false;
     }
     
@@ -374,7 +375,7 @@ class WebSocketService {
         if (response?.success) {
           resolve(true);
         } else {
-          console.error('❌ [WS] Échec édition:', response?.error);
+          logger.error('[WS]', 'Échec édition', { error: response?.error });
           toast.error(response?.error || 'Échec édition');
           resolve(false);
         }
@@ -387,7 +388,7 @@ class WebSocketService {
    */
   public async deleteMessage(messageId: string): Promise<boolean> {
     if (!this.socket?.connected) {
-      console.error('❌ [WS] Socket non connecté');
+      logger.error('[WS]', 'Socket non connecté');
       return false;
     }
     
@@ -396,7 +397,7 @@ class WebSocketService {
         if (response?.success) {
           resolve(true);
         } else {
-          console.error('❌ [WS] Échec suppression:', response?.error);
+          logger.error('[WS]', 'Échec suppression', { error: response?.error });
           toast.error(response?.error || 'Échec suppression');
           resolve(false);
         }

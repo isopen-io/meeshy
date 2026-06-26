@@ -9,6 +9,7 @@
 'use client';
 
 import { SERVER_EVENTS, CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { logger } from '@/utils/logger';
 import type { TypingEvent } from '@/types';
 import type {
   TypedSocket,
@@ -127,7 +128,7 @@ export class TypingService {
    */
   startTyping(socket: TypedSocket | null, conversationId: string): void {
     if (!socket || !socket.connected) {
-      console.warn('[TypingService] Socket not available');
+      logger.warn('[TypingService]', 'Socket not available');
       return;
     }
     const now = Date.now();
@@ -144,7 +145,7 @@ export class TypingService {
    */
   stopTyping(socket: TypedSocket | null, conversationId: string): void {
     if (!socket || !socket.connected) {
-      console.warn('[TypingService] Socket not available');
+      logger.warn('[TypingService]', 'Socket not available');
       return;
     }
     this.lastStartEmitAt.delete(conversationId);

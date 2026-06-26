@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 /**
  * Service pour la gestion des messages
  * Gère l'édition et la suppression des messages
@@ -52,7 +53,7 @@ export class MessageService {
 
       return data;
     } catch (error) {
-      console.error('Erreur lors de la modification du message:', error);
+      logger.error('[Service]', 'Erreur lors de la modification du message', { error });
       throw error;
     }
   }
@@ -88,7 +89,7 @@ export class MessageService {
 
       return data;
     } catch (error) {
-      console.error('Erreur lors de la suppression du message:', error);
+      logger.error('[Service]', 'Erreur lors de la suppression du message', { error });
       throw error;
     }
   }
