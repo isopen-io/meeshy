@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError, logger } from '../utils/logger';
-import { sendSuccess, sendBadRequest, sendNotFound } from '../utils/response.js';
+import { sendSuccess, sendBadRequest, sendNotFound, sendInternalError } from '../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { resolveConversationId } from '../utils/conversation-id-cache';
 import type { UnifiedAuthRequest } from '../middleware/auth';
@@ -306,11 +306,7 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
 
         if (!existingMessage) {
           logger.warn(`[Translation] Message ${validatedData.message_id} not found`);
-          return reply.status(404).send({
-            success: false,
-            error: 'Message not found',
-            errorCode: 'MESSAGE_NOT_FOUND'
-          });
+          return sendNotFound(reply, 'Message not found', { code: 'MESSAGE_NOT_FOUND' });
         }
 
 
@@ -387,19 +383,10 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
       logError(logger, '[Translation] Request validation error:', error);
 
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Invalid request data',
-          errorCode: 'VALIDATION_ERROR',
-          details: error.issues
-        });
+        return sendBadRequest(reply, 'Invalid request data', { code: 'VALIDATION_ERROR' });
       }
 
-      return reply.status(500).send({
-        success: false,
-        error: errorMessage,
-        errorCode: 'INTERNAL_ERROR'
-      });
+      return sendInternalError(reply, errorMessage, { code: 'INTERNAL_ERROR' });
     }
   });
 
@@ -436,11 +423,7 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
       }
     } catch (error) {
       logError(logger, '[Translation] Status retrieval error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Failed to get translation status',
-        errorCode: 'STATUS_ERROR'
-      });
+      return sendInternalError(reply, 'Failed to get translation status', { code: 'STATUS_ERROR' });
     }
   });
 
@@ -488,11 +471,7 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
       });
 
       if (!conversation) {
-        return reply.status(404).send({
-          success: false,
-          error: `Conversation with identifier '${identifier}' not found`,
-          errorCode: 'CONVERSATION_NOT_FOUND'
-        });
+        return sendNotFound(reply, `Conversation with identifier '${identifier}' not found`, { code: 'CONVERSATION_NOT_FOUND' });
       }
 
       return sendSuccess(reply, {
@@ -508,11 +487,7 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
 
     } catch (error) {
       logError(logger, '[Translation] Conversation retrieval error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Internal server error',
-        errorCode: 'INTERNAL_ERROR'
-      });
+      return sendInternalError(reply, 'Internal server error');
     }
   });
 
