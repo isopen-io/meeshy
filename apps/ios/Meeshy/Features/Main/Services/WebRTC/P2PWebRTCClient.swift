@@ -1195,8 +1195,15 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             if let id = Int(cleanID) { usedExtmapIDs.insert(id) }
         }
 
-        var extID = 5
+        var extID = QualityThresholds.extmapStartId
         while usedExtmapIDs.contains(extID) { extID += 1 }
+        guard extID <= QualityThresholds.extmapMaxId else {
+            // All 1-byte IDs exhausted — IDs ≥15 require the 2-byte extmap
+            // form (RFC 5285 §4.2) which not all peers handle. Do not inject
+            // rather than risk an invalid SDP.
+            Logger.webrtc.fault("[WEBRTC] extmap ID exhausted (IDs \(QualityThresholds.extmapStartId)–\(QualityThresholds.extmapMaxId) all taken) — Transport-CC not injected into SDP")
+            return sdp
+        }
         let extmapLine = "a=extmap:\(extID) \(transportCCURI)"
 
         for i in 0..<lines.count where lines[i].hasPrefix("m=audio ") || lines[i].hasPrefix("m=video ") {

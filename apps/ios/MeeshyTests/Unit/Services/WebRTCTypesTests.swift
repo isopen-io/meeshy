@@ -786,3 +786,73 @@ final class QualityThresholdsSignalRetryTests: XCTestCase {
                                     "At least 2 offer attempts needed for gateway retry semantics to apply")
     }
 }
+
+// MARK: - SDP extmap ID allocation (RFC 5285 §4.2)
+
+@MainActor
+final class QualityThresholdsExtmapTests: XCTestCase {
+
+    func test_extmapStartId_is5() {
+        XCTAssertEqual(QualityThresholds.extmapStartId, 5,
+                       "extmap allocation starts at 5 (IDs 1–4 reserved for libwebrtc built-ins)")
+    }
+
+    func test_extmapMaxId_is14() {
+        XCTAssertEqual(QualityThresholds.extmapMaxId, 14,
+                       "RFC 5285 §4.2: 1-byte extmap header IDs are limited to 1..14")
+    }
+
+    func test_extmapMaxId_exceedsStartId() {
+        XCTAssertGreaterThan(
+            QualityThresholds.extmapMaxId,
+            QualityThresholds.extmapStartId,
+            "maxId must exceed startId to have a valid search range"
+        )
+    }
+
+    func test_extmapCapacity_isAtLeast4Slots() {
+        // Ensure there are enough IDs between startId and maxId for typical WebRTC
+        // use (Transport-CC, ABS-send-time, video orientation, dependency-desc).
+        let capacity = QualityThresholds.extmapMaxId - QualityThresholds.extmapStartId + 1
+        XCTAssertGreaterThanOrEqual(capacity, 4,
+                                    "Must have at least 4 extmap slots available for standard WebRTC extensions")
+    }
+}
+
+// MARK: - addTransportCC exhaustion guard (functional)
+
+@MainActor
+final class AddTransportCCTests: XCTestCase {
+
+    func test_addTransportCC_isNoop_whenAlreadyPresent() {
+        let sdpWithCC = "a=extmap:5 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01\r\n"
+        let result = P2PWebRTCClient.addTransportCC(sdpWithCC)
+        XCTAssertEqual(result, sdpWithCC, "addTransportCC must not inject a duplicate when the URI is already present")
+    }
+
+    func test_addTransportCC_skipsInjection_whenAllIDsExhausted() {
+        // Build an SDP that has all IDs from extmapStartId through extmapMaxId occupied.
+        let start = QualityThresholds.extmapStartId
+        let max = QualityThresholds.extmapMaxId
+        let occupiedLines = (start...max).map { id in
+            "a=extmap:\(id) urn:ietf:params:rtp-hdrext:dummy-\(id)"
+        }.joined(separator: "\r\n")
+        let sdp = "m=audio 9 UDP/TLS/RTP/SAVPF 111\r\n\(occupiedLines)\r\na=rtpmap:111 opus/48000/2\r\n"
+        let result = P2PWebRTCClient.addTransportCC(sdp)
+        let ccURI = "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01"
+        XCTAssertFalse(
+            result.contains(ccURI),
+            "When all 1-byte extmap IDs (\(start)–\(max)) are exhausted, addTransportCC must not inject (no 2-byte header)"
+        )
+    }
+
+    func test_addTransportCC_picksFirstAvailableID() {
+        // ID 5 is taken; Transport-CC must land on ID 6.
+        let sdp = "m=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=extmap:5 urn:ietf:params:rtp-hdrext:ssrc-audio-level\r\na=rtpmap:111 opus/48000/2\r\n"
+        let result = P2PWebRTCClient.addTransportCC(sdp)
+        XCTAssertTrue(
+            result.contains("a=extmap:6 http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01"),
+            "When extmapStartId (5) is taken, Transport-CC must be assigned ID 6"
+        )
+    }
+}

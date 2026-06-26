@@ -645,6 +645,21 @@ enum QualityThresholds {
     /// can be fulfilled promptly), then retries 2…4 in the background via
     /// `emitAnswerRetry`. Matches the offer budget so neither side starves.
     static let signalAnswerTotalAttempts: Int = 4
+
+    // MARK: SDP extmap ID allocation (RFC 5285 §4.2)
+
+    /// First extmap ID tried when injecting Transport-CC into the SDP.
+    /// IDs 1–4 are typically consumed by libwebrtc's own extensions (MID,
+    /// RID, audio level, abs-send-time). Starting at 5 avoids collisions
+    /// without scanning the full extmap list.
+    static let extmapStartId: Int = 5
+
+    /// Maximum valid extmap ID for the 1-byte header form (RFC 5285 §4.2).
+    /// IDs 15+ require the 2-byte header form, which not all implementations
+    /// support. If IDs 5–14 are exhausted (10 occupied slots — extremely
+    /// unlikely in a real WebRTC SDP), the extension is not injected and
+    /// a fault is logged rather than emitting an invalid 15+ ID.
+    static let extmapMaxId: Int = 14
 }
 
 // MARK: - Video Quality Level (§4.8)
