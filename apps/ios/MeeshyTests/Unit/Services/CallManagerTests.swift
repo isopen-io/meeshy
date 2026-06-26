@@ -1131,3 +1131,115 @@ final class CallManagerThermalVideoDowngradeTests: XCTestCase {
         )
     }
 }
+
+// MARK: - Post-call diagnostics persistence
+
+/// Covers the `CallManager.CallQualitySummary` type, the `lastCallSummary` static
+/// accessor, and `CallStats` Codable conformance. All are pure-value / UserDefaults
+/// level tests — no live WebRTC stack required.
+@MainActor
+final class CallQualitySummaryTests: XCTestCase {
+
+    private let key = CallManager.lastCallSummaryDefaultsKey
+
+    override func setUp() {
+        super.setUp()
+        UserDefaults.standard.removeObject(forKey: key)
+    }
+
+    override func tearDown() {
+        UserDefaults.standard.removeObject(forKey: key)
+        super.tearDown()
+    }
+
+    // MARK: - CallStats Codable round-trip
+
+    func test_callStats_codableRoundTrip_preservesAllFields() throws {
+        let original = CallStats(
+            roundTripTimeMs: 42.5,
+            packetsLost: 3,
+            bandwidth: 95_000,
+            bytesReceived: 120_000,
+            codec: "opus",
+            inboundPacketsReceived: 150,
+            inboundAudioPackets: 100,
+            inboundVideoPackets: 50,
+            outboundPacketsSent: 200,
+            availableOutgoingBitrateBps: 500_000
+        )
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(CallStats.self, from: data)
+        XCTAssertEqual(original, decoded)
+    }
+
+    func test_callStats_codableRoundTrip_nilCodecPreserved() throws {
+        let original = CallStats(codec: nil)
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(CallStats.self, from: data)
+        XCTAssertNil(decoded.codec)
+    }
+
+    // MARK: - CallQualitySummary Codable round-trip
+
+    func test_callQualitySummary_codableRoundTrip_allFieldsPresent() throws {
+        let stats = CallStats(roundTripTimeMs: 75, packetsLost: 1, codec: "H264")
+        let summary = CallManager.CallQualitySummary(
+            callId: "abc123",
+            remoteUser: "alice",
+            durationSeconds: 123.4,
+            endReason: "local",
+            stats: stats
+        )
+        let data = try JSONEncoder().encode(summary)
+        let decoded = try JSONDecoder().decode(CallManager.CallQualitySummary.self, from: data)
+        XCTAssertEqual(decoded.callId, "abc123")
+        XCTAssertEqual(decoded.remoteUser, "alice")
+        XCTAssertEqual(decoded.durationSeconds, 123.4, accuracy: 0.001)
+        XCTAssertEqual(decoded.endReason, "local")
+        XCTAssertEqual(decoded.stats?.roundTripTimeMs, 75)
+        XCTAssertEqual(decoded.stats?.codec, "H264")
+    }
+
+    func test_callQualitySummary_codableRoundTrip_nilStatsPreserved() throws {
+        let summary = CallManager.CallQualitySummary(
+            callId: nil, remoteUser: nil, durationSeconds: 0, endReason: "missed", stats: nil
+        )
+        let data = try JSONEncoder().encode(summary)
+        let decoded = try JSONDecoder().decode(CallManager.CallQualitySummary.self, from: data)
+        XCTAssertNil(decoded.stats)
+        XCTAssertNil(decoded.callId)
+    }
+
+    // MARK: - lastCallSummary UserDefaults accessor
+
+    func test_lastCallSummary_isNil_whenNoDataPersisted() {
+        XCTAssertNil(CallManager.lastCallSummary, "No summary stored yet → accessor must return nil")
+    }
+
+    func test_lastCallSummary_returnsDecodedSummary_afterManualWrite() throws {
+        let summary = CallManager.CallQualitySummary(
+            callId: "xyz", remoteUser: "bob", durationSeconds: 60, endReason: "remote", stats: nil
+        )
+        let data = try JSONEncoder().encode(summary)
+        UserDefaults.standard.set(data, forKey: key)
+
+        let read = CallManager.lastCallSummary
+        XCTAssertEqual(read?.callId, "xyz")
+        XCTAssertEqual(read?.remoteUser, "bob")
+        XCTAssertEqual(read?.endReason, "remote")
+    }
+
+    func test_lastCallSummary_returnsNil_whenDataIsCorrupt() {
+        UserDefaults.standard.set(Data("not-json".utf8), forKey: key)
+        XCTAssertNil(CallManager.lastCallSummary, "Corrupt data must not crash — returns nil")
+    }
+
+    // MARK: - lastCallSummaryDefaultsKey format
+
+    func test_lastCallSummaryDefaultsKey_isStableReversedomainNotation() {
+        XCTAssertEqual(
+            CallManager.lastCallSummaryDefaultsKey,
+            "me.meeshy.lastCallQualitySummary",
+            "Key must remain stable across builds — changing it would orphan persisted summaries")
+    }
+}

@@ -62,7 +62,7 @@ enum PeerConnectionState: String, Sendable {
 
 // MARK: - Call Stats
 
-struct CallStats: Equatable, Sendable {
+struct CallStats: Equatable, Sendable, Codable {
     let roundTripTimeMs: Double
     let packetsLost: Int
     let bandwidth: Int

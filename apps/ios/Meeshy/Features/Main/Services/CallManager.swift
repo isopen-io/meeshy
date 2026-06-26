@@ -123,6 +123,10 @@ final class CallManager: ObservableObject {
     @Published private(set) var connectionQuality: PeerConnectionState = .new
     /// RTT+packet-loss quality level from stats samples; nil until first sample.
     @Published private(set) var liveVideoQualityLevel: VideoQualityLevel? = nil
+    /// Most-recent stats snapshot collected during the active call. Updated every
+    /// `QualityThresholds.statsIntervalSeconds`; nil before the first sample.
+    /// Persisted to UserDefaults at call teardown for post-call diagnostics.
+    private(set) var lastKnownStats: CallStats?
     @Published var displayMode: CallDisplayMode = .fullScreen
     /// Une fenêtre PiP SYSTÈME (AVPictureInPicture) est affichée. Orthogonal à
     /// `displayMode` : tant qu'il est vrai, la `FloatingCallPillView` in-app est
@@ -2018,6 +2022,46 @@ final class CallManager: ObservableObject {
         networkMonitor.start(queue: networkQueue)
     }
 
+    // MARK: - Post-call diagnostics persistence
+
+    /// UserDefaults key for the last persisted call quality summary.
+    static let lastCallSummaryDefaultsKey = "me.meeshy.lastCallQualitySummary"
+
+    /// Lightweight call quality summary persisted to UserDefaults at call teardown.
+    /// Survives app termination so quality issues are debuggable after the fact.
+    struct CallQualitySummary: Codable, Sendable {
+        let callId: String?
+        let remoteUser: String?
+        let durationSeconds: TimeInterval
+        let endReason: String
+        let stats: CallStats?
+    }
+
+    /// Returns the last persisted call summary from a previous call (or the
+    /// current session, if already torn down). Nil when no call has been made yet.
+    static var lastCallSummary: CallQualitySummary? {
+        guard let data = UserDefaults.standard.data(forKey: lastCallSummaryDefaultsKey) else { return nil }
+        return try? JSONDecoder().decode(CallQualitySummary.self, from: data)
+    }
+
+    private static func persistCallSummary(
+        stats: CallStats?,
+        callId: String?,
+        duration: TimeInterval,
+        remote: String?,
+        reason: CallEndReason
+    ) {
+        let summary = CallQualitySummary(
+            callId: callId,
+            remoteUser: remote,
+            durationSeconds: duration,
+            endReason: String(describing: reason),
+            stats: stats
+        )
+        guard let data = try? JSONEncoder().encode(summary) else { return }
+        UserDefaults.standard.set(data, forKey: lastCallSummaryDefaultsKey)
+    }
+
     private func endCallInternal(reason: CallEndReason) {
         // CALL-FIX 2026-06-06 — stop any ringing loop + play the "ended" cue, but
         // ONLY if the call was actually active (ringing/connecting/connected). The
@@ -2073,6 +2117,9 @@ final class CallManager: ObservableObject {
         videoSurvivalController.reset()
         isVideoSuspended = false
         detachSystemPiP()
+        Self.persistCallSummary(stats: lastKnownStats, callId: currentCallId,
+                                duration: callDuration, remote: remoteUsername, reason: reason)
+        lastKnownStats = nil
         webRTCService.close()
         deactivateAudioSession()
         callState = .ended(reason: reason)
@@ -2943,6 +2990,7 @@ extension CallManager: WebRTCServiceDelegate {
         Task { @MainActor [weak self] in
             guard let self, let callId = self.currentCallId else { return }
             self.liveVideoQualityLevel = level
+            self.lastKnownStats = stats
             MessageSocketManager.shared.emitCallQualityReport(
                 callId: callId,
                 level: Self.connectionQualityLabel(for: level),
