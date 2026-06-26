@@ -988,5 +988,22 @@ final class ConversationSocketHandler {
                 }
             }
             .store(in: &cancellables)
+
+        // Foreground backfill: if the socket stayed connected while the app was
+        // backgrounded (APNs / NSE delivered messages but the socket never
+        // disconnected), `didReconnect` never fires and those messages won't be
+        // fetched. Subscribe to willEnterForeground as a second trigger so the
+        // watermark sync runs regardless of reconnect state.
+        NotificationCenter.default
+            .publisher(for: UIApplication.willEnterForegroundNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                Task { [weak self] in
+                    await self?.delegate?.syncMissedMessages()
+                    await PendingStatusQueue.shared.flush()
+                }
+            }
+            .store(in: &cancellables)
     }
 }
