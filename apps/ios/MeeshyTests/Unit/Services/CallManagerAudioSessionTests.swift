@@ -974,3 +974,62 @@ final class CallManagerMediaServicesResetTests: XCTestCase {
             "observer is live for the full singleton lifetime")
     }
 }
+
+// MARK: - VoiceOver announcements for call state changes
+
+/// Source-analysis guards ensuring VoiceOver users are notified of critical
+/// call state transitions. Without these announcements, a VoiceOver user has
+/// no way to know when the call connects, reconnects, or degrades.
+@MainActor
+final class CallViewVoiceOverAnnouncementTests: XCTestCase {
+
+    private func callViewSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/CallView.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_voiceOver_announcesCallConnected() throws {
+        let source = try callViewSource()
+        XCTAssertTrue(
+            source.contains("call.a11y.connected"),
+            "CallView must post a UIAccessibility .announcement when the call connects " +
+            "so VoiceOver users know the call is live")
+    }
+
+    func test_voiceOver_announcesReconnecting() throws {
+        let source = try callViewSource()
+        XCTAssertTrue(
+            source.contains("call.a11y.reconnecting"),
+            "CallView must post a UIAccessibility .announcement when the call enters " +
+            "reconnecting state so VoiceOver users know audio may be interrupted")
+    }
+
+    func test_voiceOver_announcesQualityDegraded() throws {
+        let source = try callViewSource()
+        XCTAssertTrue(
+            source.contains("call.a11y.quality.poor"),
+            "CallView must post a UIAccessibility .announcement when quality drops " +
+            "to poor/critical so VoiceOver users can decide to move to a better signal")
+    }
+
+    func test_voiceOver_usesAdaptiveOnChange_forCallState() throws {
+        let source = try callViewSource()
+        XCTAssertTrue(
+            source.contains("adaptiveOnChange(of: callManager.callState)"),
+            "VoiceOver announcements must be driven by adaptiveOnChange so they " +
+            "fire only on transitions, not on every body re-evaluation")
+    }
+
+    func test_voiceOver_usesAdaptiveOnChange_forQualityLevel() throws {
+        let source = try callViewSource()
+        XCTAssertTrue(
+            source.contains("adaptiveOnChange(of: callManager.liveVideoQualityLevel)"),
+            "Quality VoiceOver announcement must use adaptiveOnChange so it " +
+            "only fires when the quality tier actually changes")
+    }
+}

@@ -167,6 +167,35 @@ struct CallView: View {
         .onDisappear {
             stopPulseAnimation()
         }
+        .adaptiveOnChange(of: callManager.callState) { _, newState in
+            switch newState {
+            case .connected:
+                UIAccessibility.post(
+                    notification: .announcement,
+                    argument: String(localized: "call.a11y.connected",
+                                    defaultValue: "Appel connecté",
+                                    bundle: .main))
+            case .reconnecting:
+                UIAccessibility.post(
+                    notification: .announcement,
+                    argument: String(localized: "call.a11y.reconnecting",
+                                    defaultValue: "Reconnexion en cours…",
+                                    bundle: .main))
+            default:
+                break
+            }
+        }
+        .adaptiveOnChange(of: callManager.liveVideoQualityLevel) { oldLevel, newLevel in
+            let wasDegraded = oldLevel.map { $0 == .poor || $0 == .critical } ?? false
+            let isDegraded = newLevel.map { $0 == .poor || $0 == .critical } ?? false
+            if isDegraded && !wasDegraded {
+                UIAccessibility.post(
+                    notification: .announcement,
+                    argument: String(localized: "call.a11y.quality.poor",
+                                    defaultValue: "Qualité réseau faible",
+                                    bundle: .main))
+            }
+        }
     }
 
     // MARK: - Background
