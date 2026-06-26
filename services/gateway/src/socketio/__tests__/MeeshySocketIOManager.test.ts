@@ -1514,6 +1514,52 @@ describe('MeeshySocketIOManager', () => {
       expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.MENTION_CREATED, expect.anything());
     });
 
+    it('emits CONVERSATION_UPDATED to every participant user room for real-time list re-sort', async () => {
+      const msg = makeMessage({
+        conversationId: 'conv-123456789012',
+        senderId: 'part-sender',
+        content: 'hello list',
+      });
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      // sender + one recipient: both should receive CONVERSATION_UPDATED so their
+      // own conversation list re-sorts (parity with MessageHandler.broadcastNewMessage)
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-sender', userId: 'user-sender', joinedAt: new Date() },
+        { id: 'part-recipient', userId: 'user-recipient', joinedAt: new Date() },
+      ]);
+
+      await manager.broadcastMessage(msg, 'conv-123456789012');
+
+      expect(ioState.to).toHaveBeenCalledWith(ROOMS.user('user-recipient'));
+      expect(ioState.to).toHaveBeenCalledWith(ROOMS.user('user-sender'));
+      expect(ioState.toEmit).toHaveBeenCalledWith(
+        SERVER_EVENTS.CONVERSATION_UPDATED,
+        expect.objectContaining({
+          conversationId: 'conv-123456789012',
+          lastMessageId: msg.id,
+          lastMessagePreview: 'hello list',
+        })
+      );
+    });
+
+    it('does NOT emit CONVERSATION_UNREAD_UPDATED to the sender (sender has no unread of own message)', async () => {
+      const msg = makeMessage({ conversationId: 'conv-123456789012', senderId: 'part-sender' });
+      prisma.conversation.findUnique.mockResolvedValue(null);
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-sender', userId: 'user-sender', joinedAt: new Date() },
+        { id: 'part-recipient', userId: 'user-recipient', joinedAt: new Date() },
+      ]);
+
+      await manager.broadcastMessage(msg, 'conv-123456789012');
+
+      // 2 participants (sender + recipient): unread fires for the recipient only.
+      // The sender is filtered out, so exactly ONE unread emit is expected.
+      const unreadCalls = ioState.toEmit.mock.calls.filter(
+        (c: unknown[]) => c[0] === SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED
+      );
+      expect(unreadCalls.length).toBe(1);
+    });
+
     it('enqueues message for offline users when deliveryQueue present', async () => {
       const fakeQueue = {
         enqueue: jest.fn().mockResolvedValue(undefined),

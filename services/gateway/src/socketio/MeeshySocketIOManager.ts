@@ -1618,20 +1618,43 @@ export class MeeshySocketIOManager {
 
       const roomClients = this.io.sockets.adapter.rooms.get(room);
 
-      // 3. Mettre à jour le unreadCount pour tous les participants (sauf l'expéditeur)
-      // Cela permet d'incrémenter le badge en temps réel pour les conversations non ouvertes
+      // 3. Synchronisation temps réel de la liste des conversations. Deux signaux
+      //    par destinataire, partageant une SEULE requête participants :
+      //    - CONVERSATION_UPDATED (bump lastMessageAt) → liste se re-trie et les
+      //      conversations toutes neuves apparaissent même quand MESSAGE_NEW
+      //      n'atteint aucun socket hors de ROOMS.conversation(id). Émis à TOUS
+      //      les participants (expéditeur inclus — sa propre liste remonte aussi).
+      //    - CONVERSATION_UNREAD_UPDATED (badge) → destinataires uniquement
+      //      (l'expéditeur n'a pas de non-lu sur son propre message).
+      //    Parité avec MessageHandler.broadcastNewMessage (chemin socket).
       try {
         const senderId = message.senderId;
         if (senderId) {
-          // Récupérer tous les participants de la conversation (Participant model)
-          const participants = await this.prisma.participant.findMany({
+          // Une seule requête : superset (id + userId + joinedAt) pour les deux signaux
+          const allParticipants = await this.prisma.participant.findMany({
             where: {
               conversationId: normalizedId,
-              isActive: true,
-              id: { not: senderId }
+              isActive: true
             },
             select: { id: true, userId: true, joinedAt: true }
           });
+
+          // CONVERSATION_UPDATED → room user de CHAQUE participant (re-tri liste)
+          const updatePayload = {
+            conversationId: normalizedId,
+            lastMessageAt: message.createdAt || new Date(),
+            lastMessageId: message.id,
+            lastMessagePreview: message.content,
+            senderId: message.senderId,
+            updatedAt: new Date().toISOString()
+          };
+          for (const p of allParticipants) {
+            if (!p.userId) continue;
+            this.io.to(ROOMS.user(p.userId)).emit(SERVER_EVENTS.CONVERSATION_UPDATED, updatePayload);
+          }
+
+          // Badge non-lu → destinataires uniquement (exclure l'expéditeur in-process)
+          const participants = allParticipants.filter((p) => p.id !== senderId);
 
           // Calculer le unreadCount pour tous les participants en batch (1 query au lieu de N)
           const { MessageReadStatusService } = await import('../services/MessageReadStatusService.js');
@@ -1667,8 +1690,8 @@ export class MeeshySocketIOManager {
             }
           }
         }
-      } catch (unreadError) {
-        logger.warn('⚠️ [UNREAD_COUNT] Erreur calcul unreadCount (non-bloquant):', unreadError);
+      } catch (syncError) {
+        logger.warn('⚠️ [CONV_SYNC] Erreur sync liste conversations (non-bloquant):', syncError);
       }
 
       // Envoyer les notifications de message pour les utilisateurs non connectés à la conversation
