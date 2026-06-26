@@ -49,6 +49,8 @@ import type {
   TranslationEvent,
   MessageType,
   TranslationFailedEventData,
+  AudioTranslationFailedEventData,
+  TranscriptionFailedEventData,
 } from '@meeshy/shared/types/socketio-events';
 import { CLIENT_EVENTS, SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../services/ConversationStatsService';
@@ -577,6 +579,8 @@ export class MeeshySocketIOManager {
 
       // Propager les erreurs de traduction aux clients — empêche les spinners "translating…" permanents
       this.translationService.on('translationFailed', this._handleTranslationFailed.bind(this));
+      this.translationService.on('audioTranslationError', this._handleAudioTranslationFailed.bind(this));
+      this.translationService.on('transcriptionError', this._handleTranscriptionFailed.bind(this));
 
       // Configurer les événements Socket.IO
       this._setupSocketEvents();
@@ -875,6 +879,72 @@ export class MeeshySocketIOManager {
       });
     } catch (error) {
       logger.error('failed to broadcast translation:failed', { data, error });
+    }
+  }
+
+  private async _handleAudioTranslationFailed(data: {
+    taskId?: string;
+    messageId: string;
+    attachmentId: string;
+    error: string;
+    errorCode?: string;
+  }): Promise<void> {
+    try {
+      const msg = await this.prisma.message.findUnique({
+        where: { id: data.messageId },
+        select: { conversationId: true },
+      });
+      if (!msg) return;
+      const payload: AudioTranslationFailedEventData = {
+        messageId: data.messageId,
+        attachmentId: data.attachmentId,
+        conversationId: msg.conversationId,
+        error: data.error,
+        errorCode: data.errorCode,
+        taskId: data.taskId,
+      };
+      this.io.to(ROOMS.conversation(msg.conversationId)).emit(SERVER_EVENTS.AUDIO_TRANSLATION_FAILED, payload);
+      logger.warn('audio:translation-failed broadcast', {
+        messageId: data.messageId,
+        attachmentId: data.attachmentId,
+        conversationId: msg.conversationId,
+        error: data.error,
+      });
+    } catch (error) {
+      logger.error('failed to broadcast audio:translation-failed', { data, error });
+    }
+  }
+
+  private async _handleTranscriptionFailed(data: {
+    taskId?: string;
+    messageId: string;
+    attachmentId: string;
+    error: string;
+    errorCode?: string;
+  }): Promise<void> {
+    try {
+      const msg = await this.prisma.message.findUnique({
+        where: { id: data.messageId },
+        select: { conversationId: true },
+      });
+      if (!msg) return;
+      const payload: TranscriptionFailedEventData = {
+        messageId: data.messageId,
+        attachmentId: data.attachmentId,
+        conversationId: msg.conversationId,
+        error: data.error,
+        errorCode: data.errorCode,
+        taskId: data.taskId,
+      };
+      this.io.to(ROOMS.conversation(msg.conversationId)).emit(SERVER_EVENTS.TRANSCRIPTION_FAILED, payload);
+      logger.warn('audio:transcription-failed broadcast', {
+        messageId: data.messageId,
+        attachmentId: data.attachmentId,
+        conversationId: msg.conversationId,
+        error: data.error,
+      });
+    } catch (error) {
+      logger.error('failed to broadcast audio:transcription-failed', { data, error });
     }
   }
 

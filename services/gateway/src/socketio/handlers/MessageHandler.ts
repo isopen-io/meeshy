@@ -1035,7 +1035,8 @@ export class MessageHandler {
         select: { id: true },
       });
       return users.map((u) => u.id);
-    } catch {
+    } catch (error) {
+      handlerLogger.warn('mention user lookup failed (mentions skipped)', { usernames, error });
       return [];
     }
   }

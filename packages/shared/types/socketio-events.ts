@@ -226,6 +226,23 @@ export const SERVER_EVENTS = {
    * Payload: `TranslationFailedEventData`
    */
   TRANSLATION_FAILED: 'translation:failed',
+  /**
+   * Emitted when audio translation processing has permanently failed for a
+   * specific attachment (ZMQ translator returned an error code after all
+   * retries). Lets clients clear any "processing…" spinner on the audio
+   * bubble and surface a retry affordance.
+   *
+   * Payload: `AudioTranslationFailedEventData`
+   */
+  AUDIO_TRANSLATION_FAILED: 'audio:translation-failed',
+  /**
+   * Emitted when audio transcription has permanently failed for a specific
+   * attachment. Lets clients render a "transcription unavailable" state
+   * rather than keeping the transcript placeholder visible forever.
+   *
+   * Payload: `TranscriptionFailedEventData`
+   */
+  TRANSCRIPTION_FAILED: 'audio:transcription-failed',
 
   /**
    * --- Message pinning ---
@@ -772,6 +789,24 @@ export interface TranslationFailedEventData {
   readonly taskId?: string;
 }
 
+export interface AudioTranslationFailedEventData {
+  readonly messageId: string;
+  readonly attachmentId: string;
+  readonly conversationId: string;
+  readonly error: string;
+  readonly errorCode?: string;
+  readonly taskId?: string;
+}
+
+export interface TranscriptionFailedEventData {
+  readonly messageId: string;
+  readonly attachmentId: string;
+  readonly conversationId: string;
+  readonly error: string;
+  readonly errorCode?: string;
+  readonly taskId?: string;
+}
+
 // ===== LOCATION SHARING EVENTS =====
 
 export interface LocationShareData {
@@ -1114,6 +1149,8 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.AUDIO_TRANSLATIONS_COMPLETED]: (data: AudioTranslationsCompletedEventData) => void;
   [SERVER_EVENTS.TRANSCRIPTION_READY]: (data: TranscriptionReadyEventData) => void;
   [SERVER_EVENTS.TRANSLATION_FAILED]: (data: TranslationFailedEventData) => void;
+  [SERVER_EVENTS.AUDIO_TRANSLATION_FAILED]: (data: AudioTranslationFailedEventData) => void;
+  [SERVER_EVENTS.TRANSCRIPTION_FAILED]: (data: TranscriptionFailedEventData) => void;
 
   // Mentions
   [SERVER_EVENTS.MENTION_CREATED]: (data: MentionCreatedEventData) => void;

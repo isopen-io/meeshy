@@ -412,7 +412,12 @@ export class AuthHandler {
       logger.error('error checking/leaving active calls on disconnect', { userId: userIdOrToken, error });
     }
 
-    this.connectedUsers.delete(userIdOrToken);
+    // Guard: a new socket may have reconnected while async cleanup was in progress.
+    // Only delete the connectedUsers entry if no new sockets exist for this user.
+    const stillHasSockets = (this.userSockets.get(userIdOrToken)?.size ?? 0) > 0;
+    if (!stillHasSockets) {
+      this.connectedUsers.delete(userIdOrToken);
+    }
 
     try {
       if (isAnonymous) {
