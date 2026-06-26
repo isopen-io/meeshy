@@ -941,9 +941,20 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             throw WebRTCError.noCameraFormatAvailable
         }
 
+        // Capture the session generation before either async suspension point
+        // (stopCapture + startCapture). If disconnect() fires in the stop→start
+        // window the generation token mismatch stops the orphan capturer via the
+        // local reference, matching the identical guard in buildLocalVideoTrackAndStartCapture
+        // and restartCapturerIfStopped.
+        let generation = sessionGeneration
         await capturer.stopCapture()
         let fps = targetFrameRate(for: selectedFormat)
         try await capturer.startCapture(with: camera, format: selectedFormat, fps: fps)
+        if generation != sessionGeneration {
+            Logger.webrtc.warning("[WEBRTC] session changed during camera switch — stopping orphan capture")
+            await capturer.stopCapture()
+            return
+        }
         Logger.webrtc.info("Switched to \(self.usingFrontCamera ? "front" : "back") camera")
     }
 
@@ -986,9 +997,18 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         guard let selectedFormat = selectFormat(for: camera) else {
             throw WebRTCError.noCameraFormatAvailable
         }
+        // Same session-generation guard as switchCamera / restartCapturerIfStopped:
+        // if disconnect() fires during the stop→start window, abort and stop the
+        // orphan capturer rather than leaving the camera LED on with no shutdown path.
+        let generation = sessionGeneration
         await capturer.stopCapture()
         let fps = targetFrameRate(for: selectedFormat)
         try await capturer.startCapture(with: camera, format: selectedFormat, fps: fps)
+        if generation != sessionGeneration {
+            Logger.webrtc.warning("[WEBRTC] session changed during camera switch (by ID) — stopping orphan capture")
+            await capturer.stopCapture()
+            return
+        }
         usingFrontCamera = (camera.position == .front)
         Logger.webrtc.info("[WEBRTC] switched to camera \(camera.localizedName, privacy: .public)")
     }

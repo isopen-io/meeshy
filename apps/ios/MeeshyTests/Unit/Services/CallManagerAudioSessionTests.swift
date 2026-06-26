@@ -723,6 +723,54 @@ final class P2PWebRTCClientPerfectNegotiationTests: XCTestCase {
             "restartCapturerIfStopped must compare generation after startCapture to detect a call-end during warm-up"
         )
     }
+
+    func test_p2pClient_switchCamera_hasSessionGenerationGuard() throws {
+        // Regression guard: switchCamera() calls stopCapture then startCapture —
+        // two sequential async suspensions. A disconnect() that fires in the
+        // stop→start window increments sessionGeneration; without the post-start
+        // generation check the camera restarts after teardown (LED stays on, no
+        // shutdown path). The guard matches buildLocalVideoTrackAndStartCapture
+        // and restartCapturerIfStopped.
+        let source = try p2pClientSource()
+
+        guard let fnRange = source.range(of: "func switchCamera() async throws {") else {
+            XCTFail("switchCamera not found in P2PWebRTCClient.swift"); return
+        }
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        XCTAssertTrue(
+            fnBody.contains("let generation = sessionGeneration"),
+            "switchCamera must capture sessionGeneration before the stop→start async window"
+        )
+        XCTAssertTrue(
+            fnBody.contains("generation != sessionGeneration"),
+            "switchCamera must compare generation after startCapture to detect a call-end during the switch"
+        )
+    }
+
+    func test_p2pClient_switchToCamera_hasSessionGenerationGuard() throws {
+        // Regression guard: switchToCamera(uniqueID:) has the same stop→start race
+        // as switchCamera(). A disconnect() in the async window leaves the capturer
+        // restarted on a different device after teardown — the session-generation
+        // token detects this and stops the orphan via the local reference.
+        let source = try p2pClientSource()
+
+        guard let fnRange = source.range(of: "func switchToCamera(uniqueID: String) async throws {") else {
+            XCTFail("switchToCamera(uniqueID:) not found in P2PWebRTCClient.swift"); return
+        }
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1200, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        XCTAssertTrue(
+            fnBody.contains("let generation = sessionGeneration"),
+            "switchToCamera(uniqueID:) must capture sessionGeneration before the stop→start async window"
+        )
+        XCTAssertTrue(
+            fnBody.contains("generation != sessionGeneration"),
+            "switchToCamera(uniqueID:) must compare generation after startCapture to detect a call-end during the switch"
+        )
+    }
 }
 
 // MARK: - CallView PiP Landscape Safe Area Source Guards

@@ -1524,10 +1524,14 @@ final class CallManager: ObservableObject {
 
                 // Renegotiate so the peer actually starts/stops receiving our
                 // video stream (a track.enabled flip alone never reaches it).
+                // Guard post-await: if the call ended while createOffer() was
+                // building the SDP, currentCallId is nil — don't emit a stale
+                // offer for a dead call (mirrors applySurvivalVideoSend).
                 if needsRenegotiation,
                    let callId = self.currentCallId,
                    let userId = self.remoteUserId,
-                   let offer = await self.webRTCService.createOffer() {
+                   let offer = await self.webRTCService.createOffer(),
+                   self.currentCallId == callId {
                     self.emitCallOffer(callId: callId, toUserId: userId, isVideo: target, sdp: offer)
                     Logger.calls.info("[CALL] A/V switch renegotiation offer sent (video=\(target))")
                 }
