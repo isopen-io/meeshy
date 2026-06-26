@@ -18,23 +18,19 @@ const mockSendSuccess = jest.fn<any>((reply: any, data: any) => {
   return reply;
 });
 const mockSendUnauthorized = jest.fn<any>((reply: any, msg: any) => {
-  reply.statusCode = 401;
-  reply._body = { success: false, error: msg };
+  reply.status(401).send({ success: false, error: msg });
   return reply;
 });
 const mockSendNotFound = jest.fn<any>((reply: any, msg: any) => {
-  reply.statusCode = 404;
-  reply._body = { success: false, error: msg };
+  reply.status(404).send({ success: false, error: msg });
   return reply;
 });
 const mockSendBadRequest = jest.fn<any>((reply: any, msg: any) => {
-  reply.statusCode = 400;
-  reply._body = { success: false, error: msg };
+  reply.status(400).send({ success: false, error: msg });
   return reply;
 });
 const mockSendInternalError = jest.fn<any>((reply: any, msg: any) => {
-  reply.statusCode = 500;
-  reply._body = { success: false, error: msg };
+  reply.status(500).send({ success: false, error: msg });
   return reply;
 });
 

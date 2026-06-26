@@ -348,6 +348,7 @@ describe('CommentReactionHandler', () => {
       mockReactionService.createUpdateEvent.mockResolvedValue(sampleUpdateEvent);
 
       await handler.handleAddReaction(socket as any, data, callback);
+      await new Promise(process.nextTick); // flush fire-and-forget notification promise
 
       // notification called with same userId as reactor — notification service should skip
       // We verify the notification service was called (it decides internally to skip)
@@ -394,6 +395,7 @@ describe('CommentReactionHandler', () => {
       mockReactionService.createUpdateEvent.mockResolvedValue(reactorUpdateEvent);
 
       await crossUserHandler.handleAddReaction(socket as any, data, callback);
+      await new Promise(process.nextTick); // flush fire-and-forget notification promise
 
       expect(mockNotificationService.createCommentReactionNotification).toHaveBeenCalledTimes(1);
       expect(mockNotificationService.createCommentReactionNotification).toHaveBeenCalledWith(
