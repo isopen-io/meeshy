@@ -301,6 +301,19 @@ export const adminService = {
   },
 
   /**
+   * Supprime un lien de partage (DELETE /api/v1/links/:linkId)
+   */
+  async deleteShareLink(linkId: string): Promise<ApiResponse<any>> {
+    try {
+      const response = await apiService.delete<any>(`/api/v1/links/${linkId}`);
+      return response;
+    } catch (error) {
+      console.error('Erreur lors de la suppression du lien de partage:', error);
+      throw error;
+    }
+  },
+
+  /**
    * Récupère les classements selon différents critères
    */
   async getRankings(entityType: string, criterion: string, period: string, limit: number = 50): Promise<ApiResponse<any>> {

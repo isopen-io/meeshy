@@ -153,9 +153,10 @@ export default function AdminShareLinksPage() {
   };
 
   const handleDeleteLink = async () => {
+    if (!deleteDialog.linkId) return;
     try {
-      // TODO: Implement actual delete API call
-      // await adminService.deleteShareLink(deleteDialog.linkId);
+      await adminService.deleteShareLink(deleteDialog.linkId);
+      setDeleteDialog({ open: false, linkId: null });
       toast.success(t('shareLinks.deleteSuccess'));
       loadShareLinks();
     } catch (error) {
