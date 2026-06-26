@@ -354,6 +354,93 @@ final class VideoQualityLevelComparableTests: XCTestCase {
     }
 }
 
+// MARK: - VideoQualityLevel factory: TWCC GCC bandwidth estimate
+
+/// Covers `VideoQualityLevel.from(availableOutgoingBitrateBps:)`.
+/// The BWE classifier is independent of the RTT/loss heuristic and drives
+/// encoder caps when Transport-CC GCC probing is active.
+@MainActor
+final class VideoQualityLevelFromBWETests: XCTestCase {
+
+    func test_excellent_atExcellentThreshold() {
+        XCTAssertEqual(
+            VideoQualityLevel.from(availableOutgoingBitrateBps: QualityThresholds.bweExcellentBps),
+            .excellent,
+            "Exactly at bweExcellentBps must map to .excellent")
+    }
+
+    func test_excellent_aboveExcellentThreshold() {
+        XCTAssertEqual(
+            VideoQualityLevel.from(availableOutgoingBitrateBps: 3_000_000),
+            .excellent)
+    }
+
+    func test_good_belowExcellent_atGoodThreshold() {
+        XCTAssertEqual(
+            VideoQualityLevel.from(availableOutgoingBitrateBps: QualityThresholds.bweGoodBps),
+            .good,
+            "Between good and excellent thresholds must map to .good")
+    }
+
+    func test_good_betweenExcellentAndGood() {
+        let mid = (QualityThresholds.bweExcellentBps + QualityThresholds.bweGoodBps) / 2
+        XCTAssertEqual(VideoQualityLevel.from(availableOutgoingBitrateBps: mid), .good)
+    }
+
+    func test_fair_atFairThreshold() {
+        XCTAssertEqual(
+            VideoQualityLevel.from(availableOutgoingBitrateBps: QualityThresholds.bweFairBps),
+            .fair,
+            "Exactly at bweFairBps must map to .fair")
+    }
+
+    func test_fair_betweenGoodAndFair() {
+        let mid = (QualityThresholds.bweGoodBps + QualityThresholds.bweFairBps) / 2
+        XCTAssertEqual(VideoQualityLevel.from(availableOutgoingBitrateBps: mid), .fair)
+    }
+
+    func test_poor_atPoorThreshold() {
+        XCTAssertEqual(
+            VideoQualityLevel.from(availableOutgoingBitrateBps: QualityThresholds.bwePoorBps),
+            .poor,
+            "Exactly at bwePoorBps must map to .poor")
+    }
+
+    func test_poor_betweenFairAndPoor() {
+        let mid = (QualityThresholds.bweFairBps + QualityThresholds.bwePoorBps) / 2
+        XCTAssertEqual(VideoQualityLevel.from(availableOutgoingBitrateBps: mid), .poor)
+    }
+
+    func test_critical_belowPoorThreshold() {
+        XCTAssertEqual(
+            VideoQualityLevel.from(availableOutgoingBitrateBps: QualityThresholds.bwePoorBps - 1),
+            .critical,
+            "One bps below bwePoorBps must map to .critical")
+    }
+
+    func test_critical_zeroOrNearZeroBitrate() {
+        XCTAssertEqual(VideoQualityLevel.from(availableOutgoingBitrateBps: 0), .critical,
+            "Zero bps (TWCC not yet active) must map to .critical (not nil — function always returns a level)")
+        XCTAssertEqual(VideoQualityLevel.from(availableOutgoingBitrateBps: 1), .critical)
+    }
+
+    func test_thresholdBoundaries_areStrictlyMonotonic() {
+        // Walking through: 1 → poor → fair → good → excellent must not skip or reverse.
+        XCTAssertLessThan(
+            VideoQualityLevel.from(availableOutgoingBitrateBps: 1),
+            VideoQualityLevel.from(availableOutgoingBitrateBps: QualityThresholds.bwePoorBps))
+        XCTAssertLessThan(
+            VideoQualityLevel.from(availableOutgoingBitrateBps: QualityThresholds.bwePoorBps),
+            VideoQualityLevel.from(availableOutgoingBitrateBps: QualityThresholds.bweFairBps))
+        XCTAssertLessThan(
+            VideoQualityLevel.from(availableOutgoingBitrateBps: QualityThresholds.bweFairBps),
+            VideoQualityLevel.from(availableOutgoingBitrateBps: QualityThresholds.bweGoodBps))
+        XCTAssertLessThan(
+            VideoQualityLevel.from(availableOutgoingBitrateBps: QualityThresholds.bweGoodBps),
+            VideoQualityLevel.from(availableOutgoingBitrateBps: QualityThresholds.bweExcellentBps))
+    }
+}
+
 // MARK: - VideoQualityLevel encoder targets (drive applyVideoQuality)
 
 /// These three computed properties determine what the video encoder is told to do.
