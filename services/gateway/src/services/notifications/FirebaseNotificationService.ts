@@ -141,27 +141,19 @@ export class FirebaseNotificationService {
     }
 
     try {
-      // 2. Récupérer le FCM token de l'utilisateur depuis la DB
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { id: true }
+      // 2. Récupérer les FCM tokens actifs de l'utilisateur (multi-device)
+      const fcmTokens = await this.prisma.pushToken.findMany({
+        where: { userId, type: 'fcm', isActive: true },
+        select: { id: true, token: true }
       });
 
-      if (!user) {
-        logger.debug(`[Notifications] User ${userId} not found for FCM push`);
+      if (fcmTokens.length === 0) {
+        logger.debug(`[Notifications] No active FCM tokens for user ${userId}`);
         return false;
       }
 
-      // TODO: Récupérer le fcmToken réel quand le champ existera
-      const fcmToken = null;
-
-      if (!fcmToken) {
-        return false;
-      }
-
-      // 3. Préparer le message Firebase
-      const message = {
-        token: fcmToken,
+      // 3. Préparer le payload Firebase commun
+      const messagePayload = {
         notification: {
           title: notification.title,
           body: notification.content
@@ -190,16 +182,21 @@ export class FirebaseNotificationService {
         }
       };
 
-      // 4. Envoyer via Firebase (avec timeout)
-      await Promise.race([
-        admin.messaging().send(message),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Firebase timeout')), 5000)
+      // 4. Envoyer à tous les devices (avec timeout par envoi)
+      const results = await Promise.allSettled(
+        fcmTokens.map(({ token }) =>
+          Promise.race([
+            admin.messaging().send({ ...messagePayload, token }),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('Firebase timeout')), 5000)
+            )
+          ])
         )
-      ]);
+      );
 
-      logger.debug(`[Notifications] ✅ Firebase push sent successfully to ${userId}`);
-      return true;
+      const succeeded = results.filter(r => r.status === 'fulfilled').length;
+      logger.debug(`[Notifications] ✅ Firebase push sent to ${succeeded}/${fcmTokens.length} devices for user ${userId}`);
+      return succeeded > 0;
 
     } catch (error: any) {
       // Logger l'erreur mais NE PAS crasher
