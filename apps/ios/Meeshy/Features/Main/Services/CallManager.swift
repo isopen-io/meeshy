@@ -3357,7 +3357,9 @@ extension CallManager: WebRTCServiceDelegate {
     // which `setupSocketListeners` applies via `webRTCService.updateIceServers`.
     private func scheduleTURNCredentialRefresh(ttl: TimeInterval) {
         turnRefreshTask?.cancel()
-        let refreshDelay = ttl * 0.8
+        // Guard against zero/negative TTL (malformed gateway response): a delay of
+        // ≤0 would schedule an immediate refresh on every tick, hammering the gateway.
+        let refreshDelay = max(QualityThresholds.turnMinRefreshDelaySeconds, ttl * 0.8)
         Logger.calls.info("TURN credential refresh scheduled in \(Int(refreshDelay))s (TTL=\(Int(ttl))s)")
         turnRefreshTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(refreshDelay))
@@ -3373,6 +3375,14 @@ extension CallManager: WebRTCServiceDelegate {
     // already re-admitted us to the call room before forwarding candidates.
     private func flushPendingIceCandidates() {
         guard !pendingIceCandidates.isEmpty else { return }
+        // Guard socket liveness: if the socket dropped again between the
+        // reconnect event and this flush, the gateway never receives the
+        // candidates — and they're not re-queued. Re-buffer them so the
+        // next reconnect cycle can deliver them.
+        guard MessageSocketManager.shared.isConnected else {
+            Logger.calls.warning("flushPendingIceCandidates — socket not connected, re-buffering \(pendingIceCandidates.count) candidate(s)")
+            return
+        }
         let candidates = pendingIceCandidates
         pendingIceCandidates = []
         Logger.calls.info("Flushing \(candidates.count) buffered ICE candidate(s) after socket reconnect")

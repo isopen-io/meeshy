@@ -580,6 +580,11 @@ enum QualityThresholds {
     /// default so credentials stay valid for the first 96 s after refresh).
     static let turnDefaultCredentialTTLSeconds: TimeInterval = 480
 
+    /// Minimum delay (seconds) before a TURN credential refresh, regardless of
+    /// the TTL reported by the gateway. Guards against a malformed TTL=0 response
+    /// that would otherwise trigger an immediate refresh on every call tick.
+    static let turnMinRefreshDelaySeconds: TimeInterval = 30
+
     /// How long to wait for an SDP offer after the callee answers before
     /// treating the call as timed-out and failing it. Covers worst-case
     /// signalling round-trips on bad cellular (NAT traversal + server hop).

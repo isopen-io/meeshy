@@ -1887,6 +1887,111 @@ final class CallManagerScreenCaptureAlertTests: XCTestCase {
     }
 }
 
+// MARK: - ICE / TURN Hardening Tests
+
+/// Source-analysis tests for the three reliability fixes:
+/// (1) pendingIceRestart cleared on P2PWebRTCClient.disconnect(),
+/// (2) TURN TTL zero guard,
+/// (3) flushPendingIceCandidates socket liveness check.
+@MainActor
+final class CallManagerHardeningTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func p2pClientSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func webRTCTypesSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/WebRTCTypes.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// P2PWebRTCClient.disconnect() must reset pendingIceRestart so the flag
+    /// never leaks into the next call and causes a spurious ICE restart offer.
+    func test_p2pWebRTCClient_disconnect_resetsPendingIceRestart() throws {
+        let source = try p2pClientSource()
+        guard let disconnectRange = source.range(of: "func disconnect()") else {
+            XCTFail("disconnect() not found in P2PWebRTCClient"); return
+        }
+        guard let closingBrace = source.range(of: "\n    }", range: disconnectRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not isolate disconnect() body"); return
+        }
+        let body = String(source[disconnectRange.upperBound..<closingBrace.lowerBound])
+        XCTAssertTrue(
+            body.contains("pendingIceRestart = false"),
+            "P2PWebRTCClient.disconnect() must reset pendingIceRestart — without this " +
+            "a stale flag from a prior ICE restart persists into the next call and " +
+            "causes the first offer to unnecessarily request an ICE restart")
+    }
+
+    /// scheduleTURNCredentialRefresh must clamp TTL to at least
+    /// turnMinRefreshDelaySeconds so a malformed TTL=0 from the gateway never
+    /// schedules an immediate refresh that would hammer the signalling server.
+    func test_scheduleTURNCredentialRefresh_clampsZeroTTL() throws {
+        let source = try callManagerSource()
+        guard let methodRange = source.range(of: "func scheduleTURNCredentialRefresh(ttl:") else {
+            XCTFail("scheduleTURNCredentialRefresh not found"); return
+        }
+        guard let closingBrace = source.range(of: "\n    }", range: methodRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not isolate scheduleTURNCredentialRefresh body"); return
+        }
+        let body = String(source[methodRange.upperBound..<closingBrace.lowerBound])
+        XCTAssertTrue(
+            body.contains("turnMinRefreshDelaySeconds"),
+            "scheduleTURNCredentialRefresh must clamp via QualityThresholds.turnMinRefreshDelaySeconds " +
+            "— a TTL=0 response would otherwise schedule a 0-second refresh that fires " +
+            "immediately on every credential event, hammering the gateway")
+    }
+
+    /// QualityThresholds must declare turnMinRefreshDelaySeconds so the TURN
+    /// clamp has a named, testable constant rather than a magic number.
+    func test_qualityThresholds_declaresTurnMinRefreshDelaySeconds() throws {
+        let source = try webRTCTypesSource()
+        XCTAssertTrue(
+            source.contains("turnMinRefreshDelaySeconds"),
+            "QualityThresholds must declare turnMinRefreshDelaySeconds — magic numbers " +
+            "in the refresh clamp are untestable and easy to change by accident")
+    }
+
+    /// flushPendingIceCandidates must guard on socket liveness before emitting.
+    /// A second socket drop between reconnect and flush causes silent ICE loss.
+    func test_flushPendingIceCandidates_guardsSocketLiveness() throws {
+        let source = try callManagerSource()
+        guard let flushRange = source.range(of: "func flushPendingIceCandidates()") else {
+            XCTFail("flushPendingIceCandidates not found"); return
+        }
+        guard let closingBrace = source.range(of: "\n    }", range: flushRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not isolate flushPendingIceCandidates body"); return
+        }
+        let body = String(source[flushRange.upperBound..<closingBrace.lowerBound])
+        XCTAssertTrue(
+            body.contains("isConnected"),
+            "flushPendingIceCandidates must check MessageSocketManager.shared.isConnected " +
+            "before emitting — if the socket dropped again between the reconnect event " +
+            "and the flush, candidates are sent to a closed transport and silently lost")
+    }
+}
+
 // MARK: - CallKit Hold/Unhold Tests
 
 /// Structural tests verifying that CallKit hold events correctly suspend/restore

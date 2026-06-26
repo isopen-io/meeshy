@@ -1085,6 +1085,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         audioTransceiver = nil
         videoTransceiver = nil
         videoCapturer = nil
+        pendingIceRestart = false
         Logger.webrtc.info("Peer connection disconnected and cleaned up")
     }
 
