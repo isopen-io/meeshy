@@ -567,18 +567,24 @@ public final class StoryMediaLayer: CALayer {
             // foreground apparaissent/disparaissent selon leur fenêtre. Seule la
             // vidéo de FOND boucle pour remplir la durée de la slide.
             player.actionAtItemEnd = .pause
+            // `self` (StoryMediaLayer) est `nonisolated` donc non-Sendable : on le
+            // capture via un local `nonisolated(unsafe) weak` pour satisfaire le
+            // contrôle Sendable du bloc `@Sendable` de l'observer. Sûr car le bloc
+            // fire toujours sur `queue: .main` — mêmes garanties main-thread que
+            // les accès `isHidden`/`CATransaction` qui suivent.
+            nonisolated(unsafe) weak var weakSelf = self
             loopObserver = NotificationCenter.default.addObserver(
                 forName: .AVPlayerItemDidPlayToEndTime,
                 object: player.currentItem,
                 queue: .main
-            ) { [weak self, weak player] _ in
+            ) { [weak player] _ in
                 player?.pause()
                 // Masque sans animation implicite (le rebuild 60 Hz réutilise
                 // ce même layer via le StoryRendererCache, donc l'état masqué
                 // persiste jusqu'au changement de slide).
                 CATransaction.begin()
                 CATransaction.setDisableActions(true)
-                self?.isHidden = true
+                weakSelf?.isHidden = true
                 CATransaction.commit()
             }
         }
