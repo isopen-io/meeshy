@@ -271,7 +271,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
       if (shareLink.requireAccount) {
         return reply.status(403).send({
           success: false,
-          message: 'Un compte est requis pour rejoindre cette conversation',
+          error: 'Un compte est requis pour rejoindre cette conversation',
           requiresAccount: true
         });
       }
@@ -585,24 +585,15 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
       }) : null;
 
       if (!shareLink) {
-        return reply.status(410).send({
-          success: false,
-          message: 'Le lien a ete desactive'
-        });
+        return sendError(reply, 410, 'Le lien a ete desactive');
       }
 
       if (!shareLink.isActive) {
-        return reply.status(410).send({
-          success: false,
-          message: 'Le lien a ete desactive'
-        });
+        return sendError(reply, 410, 'Le lien a ete desactive');
       }
 
       if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {
-        return reply.status(410).send({
-          success: false,
-          message: 'Le lien a expire'
-        });
+        return sendError(reply, 410, 'Le lien a expire');
       }
 
       await fastify.prisma.participant.update({
@@ -884,24 +875,15 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
 
       // Verifications de base
       if (!shareLink.isActive) {
-        return reply.status(410).send({
-          success: false,
-          message: 'Ce lien n\'est plus actif'
-        });
+        return sendError(reply, 410, 'Ce lien n\'est plus actif');
       }
 
       if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {
-        return reply.status(410).send({
-          success: false,
-          message: 'Ce lien a expire'
-        });
+        return sendError(reply, 410, 'Ce lien a expire');
       }
 
       if (shareLink.maxUses && shareLink.currentUses >= shareLink.maxUses) {
-        return reply.status(410).send({
-          success: false,
-          message: 'Ce lien a atteint sa limite d\'utilisation'
-        });
+        return sendError(reply, 410, 'Ce lien a atteint sa limite d\'utilisation');
       }
 
       // Recuperer les statistiques de la conversation
