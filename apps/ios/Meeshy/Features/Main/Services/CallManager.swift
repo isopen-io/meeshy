@@ -2740,10 +2740,29 @@ extension CallManager: ThermalStateMonitorDelegate {
                 Logger.calls.warning("Thermal critical — disabled all filters (video + audio)")
                 if self.isVideoEnabled {
                     self.isVideoEnabled = false
-                    self.webRTCService.enableVideo(false)
+                    // §5.4 — use downgradeFromVideo (sets transceiver direction +
+                    // stops capture) rather than enableVideo(false) (track.enabled
+                    // only). Without the direction change the peer's SDP still
+                    // advertises sendRecv and the RTP session stays open, which
+                    // means the peer's decoder never tears down and the "camera off"
+                    // media-toggled is the only signal it gets — race-prone and
+                    // semantically wrong. Mirror the manual toggleVideo() path.
+                    let needsRenegotiation = await self.webRTCService.downgradeFromVideo()
+                    self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
+                    self.videoSurvivalController.reset()
                     // P0-3 — signal the peer (avatar placeholder, not a frozen frame).
                     if let callId = self.currentCallId {
                         MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: false)
+                    }
+                    // Renegotiate so the peer's SDP transceiver direction matches
+                    // the video downgrade (media-toggled alone does not update the
+                    // remote offer's m-sections).
+                    if needsRenegotiation,
+                       let callId = self.currentCallId,
+                       let userId = self.remoteUserId,
+                       let offer = await self.webRTCService.createOffer() {
+                        self.emitCallOffer(callId: callId, toUserId: userId, isVideo: false, sdp: offer)
+                        Logger.calls.warning("Thermal critical — SDP renegotiation offer emitted (video downgrade)")
                     }
                     Logger.calls.warning("Thermal critical — disabled video")
                 }

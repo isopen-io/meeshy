@@ -1047,3 +1047,87 @@ final class CallManagerPreferredCallLanguageTests: XCTestCase {
         XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "ar")
     }
 }
+
+// MARK: - Thermal Critical: Video Downgrade (§5.4 / §5.6)
+
+/// Source-level guard tests ensuring the thermal-critical video-disable path
+/// uses the proper transceiver downgrade + SDP renegotiation rather than a
+/// raw `enableVideo(false)` (track.enabled toggle only).
+///
+/// Root cause prevented: without `downgradeFromVideo()` + `createOffer()`, the
+/// peer's SDP transceiver direction stays `sendRecv` while no video RTP flows
+/// — the peer's decoder never tears down and the avatar placeholder is the
+/// only signal, which is race-prone (media-toggled can arrive before the
+/// thermal state is stable). Mirrors the manual `toggleVideo()` path (§5.4).
+@MainActor
+final class CallManagerThermalVideoDowngradeTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func thermalBody(_ source: String) throws -> String {
+        guard let start = source.range(of: "func thermalStateDidChange") else {
+            XCTFail("thermalStateDidChange not found in CallManager source"); return ""
+        }
+        let end = source.range(of: "\n// MARK:", range: start.upperBound..<source.endIndex)?.lowerBound
+                ?? source.endIndex
+        return String(source[start.lowerBound..<end])
+    }
+
+    func test_thermalCritical_usesDowngradeFromVideo_notEnableVideoFalse() throws {
+        let body = try thermalBody(try callManagerSource())
+        XCTAssertTrue(
+            body.contains("downgradeFromVideo()"),
+            "Thermal-critical video disable must call downgradeFromVideo() to set transceiver " +
+            "direction (not just track.enabled). enableVideo(false) leaves the SDP sendRecv."
+        )
+        XCTAssertFalse(
+            body.contains("enableVideo(false)"),
+            "enableVideo(false) must not be used in the thermal-critical path — it only toggles " +
+            "track.enabled without updating the transceiver direction or triggering renegotiation."
+        )
+    }
+
+    func test_thermalCritical_updatesHasLocalVideoTrack() throws {
+        let body = try thermalBody(try callManagerSource())
+        XCTAssertTrue(
+            body.contains("hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack"),
+            "After downgradeFromVideo(), hasLocalVideoTrack must be synced so the UI (PiP, controls) " +
+            "reflects the absence of a local video track."
+        )
+    }
+
+    func test_thermalCritical_resetsVideoSurvivalController() throws {
+        let body = try thermalBody(try callManagerSource())
+        XCTAssertTrue(
+            body.contains("videoSurvivalController.reset()"),
+            "After a thermal-critical video downgrade, videoSurvivalController must be reset so " +
+            "stale degradation timers don't immediately re-suspend video when it's re-enabled."
+        )
+    }
+
+    func test_thermalCritical_sendsRenegotiationOffer_whenNeeded() throws {
+        let body = try thermalBody(try callManagerSource())
+        XCTAssertTrue(
+            body.contains("needsRenegotiation") && body.contains("emitCallOffer"),
+            "Thermal-critical video downgrade must trigger a renegotiation offer when " +
+            "downgradeFromVideo() returns true, so the peer's SDP direction is updated."
+        )
+    }
+
+    func test_thermalCritical_stillEmitsMediaToggledEvent() throws {
+        let body = try thermalBody(try callManagerSource())
+        XCTAssertTrue(
+            body.contains("emitCallToggleVideo"),
+            "Thermal-critical video downgrade must still emit call:media-toggled so the peer " +
+            "shows the avatar placeholder immediately (before the renegotiation round-trip)."
+        )
+    }
+}
