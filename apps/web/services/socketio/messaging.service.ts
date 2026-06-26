@@ -298,7 +298,8 @@ export class MessagingService {
             }
           }
         } catch (encryptionError) {
-          console.error('[MessagingService] Encryption failed:', encryptionError);
+          logger.error('[MessagingService]', 'Encryption failed — aborting send to prevent plaintext leak', { conversationId });
+          throw encryptionError;
         }
       }
 
