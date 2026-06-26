@@ -1,19 +1,37 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "notification.audio_voice_message.body" : {
+      "comment" : "Push body fallback for an audio-only message when the gateway body is empty (E2EE caption).",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "🎵 Message vocal"
+          }
+        }
+      }
+    },
     "notification.encrypted_message" : {
       "extractionState" : "manual",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رسالة مشفرة"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verschlüsselte Nachricht"
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Encrypted message"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Message chiffr\u00E9"
           }
         },
         "es" : {
@@ -22,16 +40,10 @@
             "value" : "Mensaje cifrado"
           }
         },
-        "de" : {
+        "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Verschl\u00FCsselte Nachricht"
-          }
-        },
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "\u0631\u0633\u0627\u0644\u0629 \u0645\u0634\u0641\u0631\u0629"
+            "value" : "Message chiffré"
           }
         },
         "pt" : {
@@ -43,54 +55,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "\u52A0\u5BC6\u6D88\u606F"
-          }
-        }
-      }
-    },
-    "notification.view_once_message" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "View-once message"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Message \u00E9ph\u00E9m\u00E8re"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mensaje de una sola vista"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Einmal-Nachricht"
-          }
-        },
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "\u0631\u0633\u0627\u0644\u0629 \u0644\u0644\u0639\u0631\u0636 \u0645\u0631\u0629 \u0648\u0627\u062D\u062F\u0629"
-          }
-        },
-        "pt" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mensagem tempor\u00E1ria"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "\u9605\u540E\u5373\u711A\u6D88\u606F"
+            "value" : "加密消息"
           }
         }
       }
@@ -98,22 +63,10 @@
     "notification.hidden_message" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : {
+        "ar" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hidden message"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Message masqu\u00E9"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mensaje oculto"
+            "value" : "رسالة مخفية"
           }
         },
         "de" : {
@@ -122,10 +75,22 @@
             "value" : "Versteckte Nachricht"
           }
         },
-        "ar" : {
+        "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "\u0631\u0633\u0627\u0644\u0629 \u0645\u062E\u0641\u064A\u0629"
+            "value" : "Hidden message"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mensaje oculto"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Message masqué"
           }
         },
         "pt" : {
@@ -137,7 +102,54 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "\u9690\u85CF\u6D88\u606F"
+            "value" : "隐藏消息"
+          }
+        }
+      }
+    },
+    "notification.view_once_message" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رسالة للعرض مرة واحدة"
+          }
+        },
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einmal-Nachricht"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View-once message"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mensaje de una sola vista"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Message éphémère"
+          }
+        },
+        "pt" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mensagem temporária"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阅后即焚消息"
           }
         }
       }
