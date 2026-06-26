@@ -219,6 +219,7 @@ jest.mock('../handlers/StatusHandler', () => ({
       handleTypingStop: jest.fn().mockResolvedValue(undefined),
       invalidateIdentityCache: jest.fn(),
       clearTypingThrottle: jest.fn(),
+      broadcastTypingStopOnDisconnect: jest.fn(),
     };
     return mockStatusHandlerInstance;
   }),
@@ -912,6 +913,36 @@ describe('MeeshySocketIOManager', () => {
       socket._handlers['disconnect']('transport close');
       expect(mockStatusHandlerInstance.invalidateIdentityCache).toHaveBeenCalledWith('user-d3');
       expect(mockStatusHandlerInstance.clearTypingThrottle).toHaveBeenCalledWith('user-d3');
+    });
+
+    it('broadcasts typing stop for all active conversations on disconnect', () => {
+      const socket = makeSocket('sock-d3-typing');
+      (manager as any).socketToUser.set('sock-d3-typing', 'user-d3-typing');
+      triggerConnection(socket);
+      socket._handlers['disconnect']('transport close');
+      expect(mockStatusHandlerInstance.broadcastTypingStopOnDisconnect).toHaveBeenCalledWith(
+        'user-d3-typing',
+        expect.any(Function)
+      );
+    });
+
+    it('broadcasts typing stop before invalidating identity cache on disconnect', () => {
+      const callOrder: string[] = [];
+      mockStatusHandlerInstance.broadcastTypingStopOnDisconnect.mockImplementation(() => {
+        callOrder.push('broadcastTypingStop');
+      });
+      mockStatusHandlerInstance.invalidateIdentityCache.mockImplementation(() => {
+        callOrder.push('invalidateIdentityCache');
+      });
+
+      const socket = makeSocket('sock-d3-order');
+      (manager as any).socketToUser.set('sock-d3-order', 'user-d3-order');
+      triggerConnection(socket);
+      socket._handlers['disconnect']('transport close');
+
+      const broadcastIndex = callOrder.indexOf('broadcastTypingStop');
+      const invalidateIndex = callOrder.indexOf('invalidateIdentityCache');
+      expect(broadcastIndex).toBeLessThan(invalidateIndex);
     });
 
     it('deletes presenceSnapshotCache entry on disconnect', () => {
