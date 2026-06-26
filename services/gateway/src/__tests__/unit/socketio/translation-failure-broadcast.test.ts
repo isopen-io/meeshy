@@ -35,7 +35,7 @@ function makeIo() {
 function makePrisma(conversationId: string | null) {
   return {
     message: {
-      findUnique: jest.fn<() => Promise<{ conversationId: string } | null>>().mockResolvedValue(
+      findUnique: jest.fn<(args: unknown) => Promise<{ conversationId: string } | null>>().mockResolvedValue(
         conversationId !== null ? { conversationId } : null
       ),
     },

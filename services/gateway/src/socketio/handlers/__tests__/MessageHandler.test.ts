@@ -1655,7 +1655,7 @@ describe('MessageHandler', () => {
 
     it('uses username as displayName fallback when displayName is null (?? branch, line 260)', async () => {
       const { agentClient, handler: h } = buildAgentDeps({
-        sender: { id: PARTICIPANT_ID, userId: USER_ID, displayName: null, username: 'alice_u' }
+        sender: { id: PARTICIPANT_ID, userId: USER_ID, displayName: null, username: 'alice_u', user: { username: 'alice_u' } }
       });
 
       await h.handleMessageSend(socket, makeValidSendData(), callback);

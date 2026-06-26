@@ -54,10 +54,9 @@ jest.mock('../../services/CallService', () => ({
 }));
 
 const mockValidateSocketEvent = jest.fn() as jest.Mock<any>;
-const mockIsValidationFailure = jest.fn((r: any) => !r.success) as jest.Mock<any>;
 jest.mock('../../middleware/validation', () => ({
   validateSocketEvent: (...a: unknown[]) => mockValidateSocketEvent(...a),
-  isValidationFailure: (...a: unknown[]) => mockIsValidationFailure(...a),
+  isValidationFailure: (result: { success: boolean }) => !result.success,
 }));
 
 const mockCheckSocketRateLimit = jest.fn() as jest.Mock<any>;
