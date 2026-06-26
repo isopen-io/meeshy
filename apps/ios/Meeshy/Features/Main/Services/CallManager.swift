@@ -249,6 +249,7 @@ final class CallManager: ObservableObject {
     /// cancel it cleanly instead of leaking it for the remaining sleep.
     private var sdpOfferTimeoutTask: Task<Void, Never>?
     private var remoteQualityResetTask: Task<Void, Never>?
+    private var voipFreshnessTask: Task<Void, Never>?
     private var pendingRemoteOffer: SessionDescription?
     // P0-3 — ICE candidates generated while the socket is down are buffered
     // here and replayed after the socket reconnects + emitCallJoin fires.
@@ -728,7 +729,8 @@ final class CallManager: ObservableObject {
         // disparaît, l'entrée Recents reste neutre.
         let capturedUuid = uuid
         let capturedCallId = callId
-        Task { [weak self] in
+        voipFreshnessTask?.cancel()
+        voipFreshnessTask = Task { [weak self] in
             await self?.checkVoIPCallFreshness(uuid: capturedUuid, callId: capturedCallId)
         }
 
@@ -2070,6 +2072,8 @@ final class CallManager: ObservableObject {
         sdpOfferTimeoutTask = nil
         remoteQualityResetTask?.cancel()
         remoteQualityResetTask = nil
+        voipFreshnessTask?.cancel()
+        voipFreshnessTask = nil
         isRemoteQualityDegraded = false
         pendingRemoteOffer = nil
         pendingIceCandidates = []
