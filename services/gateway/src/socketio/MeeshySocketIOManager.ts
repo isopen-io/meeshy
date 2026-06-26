@@ -51,6 +51,7 @@ import type {
   TranslationFailedEventData,
   AudioTranslationFailedEventData,
   TranscriptionFailedEventData,
+  AudioTranslationEventData,
 } from '@meeshy/shared/types/socketio-events';
 import { CLIENT_EVENTS, SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../services/ConversationStatsService';
@@ -1317,7 +1318,7 @@ export class MeeshySocketIOManager {
    * Gère un événement de traduction audio unique (1 seule langue demandée).
    * Format unifié: translatedAudio (singulier) — cohérent avec progressive/completed.
    */
-  private async _handleAudioTranslationReady(data: any) {
+  private async _handleAudioTranslationReady(data: AudioTranslationEventData & { taskId?: string; transcription?: unknown; phase?: string }) {
     if (!data.translatedAudio) {
       logger.error(`❌ [SocketIOManager] _handleAudioTranslationReady: translatedAudio manquant`, {
         keys: Object.keys(data),
@@ -1346,7 +1347,7 @@ export class MeeshySocketIOManager {
    * Gère un événement de traduction progressive (multi-langues, pas la dernière).
    * Format unifié: translatedAudio (singulier).
    */
-  private async _handleAudioTranslationsProgressive(data: any) {
+  private async _handleAudioTranslationsProgressive(data: AudioTranslationEventData & { taskId?: string; phase?: string }) {
     await this._broadcastTranslationEvent(
       data,
       'audioTranslationsProgressive',
@@ -1359,7 +1360,7 @@ export class MeeshySocketIOManager {
    * Gère un événement de dernière traduction terminée (multi-langues).
    * Format unifié: translatedAudio (singulier).
    */
-  private async _handleAudioTranslationsCompleted(data: any) {
+  private async _handleAudioTranslationsCompleted(data: AudioTranslationEventData & { taskId?: string; phase?: string }) {
     await this._broadcastTranslationEvent(
       data,
       'audioTranslationsCompleted',
