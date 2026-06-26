@@ -523,4 +523,65 @@ describe('resolveUserTranslationLanguages', () => {
   it('does not include empty strings', () => {
     expect(resolveUserTranslationLanguages({ systemLanguage: '' })).toEqual(['fr']);
   });
+
+  it('deduplicates when systemLanguage equals regionalLanguage', () => {
+    expect(
+      resolveUserTranslationLanguages({ systemLanguage: 'en', regionalLanguage: 'en' })
+    ).toEqual(['en']);
+  });
+
+  it('trims whitespace-only values', () => {
+    expect(resolveUserTranslationLanguages({ systemLanguage: '  ' })).toEqual(['fr']);
+  });
+});
+
+describe('canEditMessage — role case insensitivity', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2024-03-15T12:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const oldMessage = new Date('2024-03-14T12:00:00Z');
+
+  it('allows admin with lowercase role (DB may store lowercase)', () => {
+    expect(canEditMessage(oldMessage, 'admin')).toEqual({ canEdit: true });
+  });
+
+  it('allows moderator with lowercase role', () => {
+    expect(canEditMessage(oldMessage, 'moderator')).toEqual({ canEdit: true });
+  });
+
+  it('allows bigboss with mixed-case role', () => {
+    expect(canEditMessage(oldMessage, 'BigBoss')).toEqual({ canEdit: true });
+  });
+
+  it('allows creator with lowercase role', () => {
+    expect(canEditMessage(oldMessage, 'creator')).toEqual({ canEdit: true });
+  });
+});
+
+describe('generateDefaultConversationTitle — name edge cases', () => {
+  it('builds fullName from firstName only without trailing space', () => {
+    const members = [
+      { id: 'me' },
+      { id: 'other', firstName: 'John' },
+    ];
+    const result = generateDefaultConversationTitle(members as any, 'me');
+    expect(result).toBe('John');
+    expect(result.endsWith(' ')).toBe(false);
+  });
+
+  it('builds fullName from lastName only without leading space', () => {
+    const members = [
+      { id: 'me' },
+      { id: 'other', lastName: 'Doe' },
+    ];
+    const result = generateDefaultConversationTitle(members as any, 'me');
+    expect(result).toBe('Doe');
+    expect(result.startsWith(' ')).toBe(false);
+  });
 });

@@ -40,6 +40,9 @@ export class StatusHandler {
   private identityCache = new Map<string, CachedIdentity>();
   private typingThrottleMap = new Map<string, number>();
   private static readonly TYPING_THROTTLE_MS = 2_000;
+  private static readonly TYPING_THROTTLE_TTL_MS = 30_000;
+  private static readonly TYPING_THROTTLE_CLEANUP_SIZE = 1_000;
+  private typingThrottleCleanupTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(deps: StatusHandlerDependencies) {
     this.prisma = deps.prisma;
@@ -47,6 +50,22 @@ export class StatusHandler {
     this.privacyPreferencesService = deps.privacyPreferencesService;
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
+    this.typingThrottleCleanupTimer = setInterval(() => this._evictStaleThrottleEntries(), 30_000);
+    if (this.typingThrottleCleanupTimer.unref) this.typingThrottleCleanupTimer.unref();
+  }
+
+  destroy(): void {
+    if (this.typingThrottleCleanupTimer !== null) {
+      clearInterval(this.typingThrottleCleanupTimer);
+      this.typingThrottleCleanupTimer = null;
+    }
+  }
+
+  private _evictStaleThrottleEntries(): void {
+    const stale = Date.now() - StatusHandler.TYPING_THROTTLE_TTL_MS;
+    for (const [k, ts] of this.typingThrottleMap) {
+      if (ts < stale) this.typingThrottleMap.delete(k);
+    }
   }
 
   invalidateIdentityCache(userId: string): void {
@@ -114,11 +133,8 @@ export class StatusHandler {
       const lastEmitAt = this.typingThrottleMap.get(throttleKey) ?? 0;
       if (now - lastEmitAt < StatusHandler.TYPING_THROTTLE_MS) return;
       this.typingThrottleMap.set(throttleKey, now);
-      if (this.typingThrottleMap.size > 10_000) {
-        const stale = now - StatusHandler.TYPING_THROTTLE_MS * 10;
-        for (const [k, ts] of this.typingThrottleMap) {
-          if (ts < stale) this.typingThrottleMap.delete(k);
-        }
+      if (this.typingThrottleMap.size > StatusHandler.TYPING_THROTTLE_CLEANUP_SIZE) {
+        this._evictStaleThrottleEntries();
       }
 
       const room = ROOMS.conversation(normalizedId);

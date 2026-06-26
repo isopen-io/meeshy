@@ -564,4 +564,41 @@ describe('StatusHandler', () => {
       expect(throttleMap.size).toBe(1);
     });
   });
+
+  // ── destroy / periodic eviction ──────────────────────────────────────────────
+
+  describe('destroy', () => {
+    it('clears the periodic cleanup timer without throwing', () => {
+      const handler = makeHandler();
+      expect(() => handler.destroy()).not.toThrow();
+      expect(() => handler.destroy()).not.toThrow(); // idempotent
+    });
+  });
+
+  describe('_evictStaleThrottleEntries (via size-triggered cleanup)', () => {
+    it('removes entries older than TTL when map exceeds cleanup threshold', async () => {
+      jest.useFakeTimers();
+      const CLEANUP_SIZE = (StatusHandler as any).TYPING_THROTTLE_CLEANUP_SIZE as number;
+      const TTL_MS = (StatusHandler as any).TYPING_THROTTLE_TTL_MS as number;
+
+      const handler = makeHandler();
+      const throttleMap = (handler as any).typingThrottleMap as Map<string, number>;
+
+      const now = Date.now();
+      const staleTs = now - TTL_MS - 1_000;
+
+      // Fill past the cleanup threshold with stale entries
+      for (let i = 0; i < CLEANUP_SIZE + 1; i++) {
+        throttleMap.set(`user-${i}:conv`, staleTs);
+      }
+
+      // Trigger the cleanup by calling handleTypingStart which sets a fresh entry
+      // and then invokes _evictStaleThrottleEntries if size > threshold.
+      // Call it directly to avoid full async chain:
+      (handler as any)._evictStaleThrottleEntries();
+
+      // All stale entries should be gone
+      expect(throttleMap.size).toBe(0);
+    });
+  });
 });

@@ -1313,7 +1313,9 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     private func scheduleReconnectWithBackoff() {
         reconnectTask?.cancel()
-        let jittered = reconnectDelay * (0.8 + Double.random(in: 0...0.4))
+        // Cap BEFORE applying jitter so the jittered value never exceeds the 60s maximum.
+        let capped = min(reconnectDelay, 60)
+        let jittered = capped * (0.8 + Double.random(in: 0...0.4))
         let delay = jittered
         let attempt = reconnectAttempts
         Logger.socket.info("MessageSocket: backoff reconnect attempt=\(attempt) delay=\(delay, format: .fixed(precision: 2))s")
