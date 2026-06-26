@@ -17,6 +17,7 @@ import { useI18n } from '@/hooks/use-i18n';
 import { SoundFeedback } from '@/hooks/use-accessibility';
 import { usePreferences } from '@/hooks/use-preferences';
 import type { PrivacyPreference } from '@/types/preferences';
+import { apiService } from '@/services/api.service';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -74,30 +75,26 @@ export function PrivacySettings() {
   };
 
   /**
-   * Export des données utilisateur (placeholder)
+   * Export des données utilisateur via /api/v1/me/export (GDPR)
    */
-  const exportData = () => {
+  const exportData = async () => {
     SoundFeedback.playClick();
 
-    // TODO: Implémenter l'export réel via API
-    const userData = {
-      profile: 'Données de profil...',
-      messages: 'Données de messages...',
-      translations: 'Cache de traduction...',
-      settings: 'Paramètres utilisateur...',
-      exportedAt: new Date().toISOString(),
-    };
+    try {
+      const blob = await apiService.getBlob('/api/v1/me/export?format=json&types=profile,messages,contacts');
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `meeshy-data-export-${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
 
-    const blob = new Blob([JSON.stringify(userData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `meeshy-data-export-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-
-    SoundFeedback.playSuccess();
-    toast.success(t('privacy.dataExported', 'Données exportées avec succès'));
+      SoundFeedback.playSuccess();
+      toast.success(t('privacy.dataExported', 'Données exportées avec succès'));
+    } catch {
+      SoundFeedback.playError?.();
+      toast.error(t('privacy.exportFailed', "Échec de l'export de données"));
+    }
   };
 
   /**

@@ -71,6 +71,13 @@ jest.mock('sonner', () => ({
   },
 }));
 
+// Mock de l'API service pour l'export de données
+jest.mock('@/services/api.service', () => ({
+  apiService: {
+    getBlob: jest.fn().mockResolvedValue(new Blob(['{}'], { type: 'application/json' })),
+  },
+}));
+
 // Mock URL.createObjectURL et revokeObjectURL
 const mockCreateObjectURL = jest.fn(() => 'blob:test-url');
 const mockRevokeObjectURL = jest.fn();
@@ -172,7 +179,7 @@ describe('PrivacySettings', () => {
       expect(screen.getByText(/Exporter les donn/)).toBeInTheDocument();
     });
 
-    it('exporte les donnees au clic', () => {
+    it('exporte les donnees au clic', async () => {
       const { SoundFeedback } = require('@/hooks/use-accessibility');
       const { toast } = require('sonner');
 
@@ -192,11 +199,14 @@ describe('PrivacySettings', () => {
       fireEvent.click(screen.getByText(/Exporter les donn/));
 
       expect(SoundFeedback.playClick).toHaveBeenCalled();
-      expect(mockCreateObjectURL).toHaveBeenCalled();
-      expect(mockClick).toHaveBeenCalled();
-      expect(mockRevokeObjectURL).toHaveBeenCalled();
-      expect(SoundFeedback.playSuccess).toHaveBeenCalled();
-      expect(toast.success).toHaveBeenCalledWith('Données exportées avec succès');
+
+      await waitFor(() => {
+        expect(mockCreateObjectURL).toHaveBeenCalled();
+        expect(mockClick).toHaveBeenCalled();
+        expect(mockRevokeObjectURL).toHaveBeenCalled();
+        expect(SoundFeedback.playSuccess).toHaveBeenCalled();
+        expect(toast.success).toHaveBeenCalledWith('Données exportées avec succès');
+      });
 
       jest.restoreAllMocks();
     });
