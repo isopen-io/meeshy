@@ -183,6 +183,12 @@ describe('PreferencesService', () => {
         service.updateNotificationPreferences('user-123', { dndEnabled: true })
       ).rejects.toThrow('dndStartTime and dndEndTime are required');
     });
+
+    it('should validate DND end time format', async () => {
+      await expect(
+        service.updateNotificationPreferences('user-123', { dndEndTime: 'not-a-time' })
+      ).rejects.toThrow('Invalid dndEndTime format');
+    });
   });
 
   describe('resetNotificationPreferences', () => {
@@ -363,6 +369,27 @@ describe('PreferencesService', () => {
         service.updateThemePreferences('user-123', { fontFamily: 'invalid' as any })
       ).rejects.toThrow('Invalid font family');
     });
+
+    it('should validate font size', async () => {
+      await expect(
+        service.updateThemePreferences('user-123', { fontSize: 'huge' as any })
+      ).rejects.toThrow('Invalid font size');
+    });
+  });
+
+  describe('resetThemePreferences', () => {
+    it('should delete theme preferences', async () => {
+      mockPrisma.userPreference.deleteMany.mockResolvedValue({ count: 4 });
+
+      await service.resetThemePreferences('user-123');
+
+      expect(mockPrisma.userPreference.deleteMany).toHaveBeenCalledWith({
+        where: {
+          userId: 'user-123',
+          key: { in: ['theme', 'font-family', 'font-size', 'compact-mode'] }
+        }
+      });
+    });
   });
 
   // ============================================================================
@@ -411,6 +438,29 @@ describe('PreferencesService', () => {
         where: { id: 'user-123' },
         data: { systemLanguage: 'es' }
       });
+    });
+
+    it('should update auto-translate preference', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({
+        systemLanguage: 'en',
+        regionalLanguage: 'en',
+        customDestinationLanguage: null
+      });
+      mockPrisma.userPreference.findUnique.mockResolvedValue({ value: 'true' });
+      mockPrisma.userPreference.upsert.mockResolvedValue({});
+
+      const result = await service.updateLanguagePreferences('user-123', {
+        autoTranslate: true
+      });
+
+      expect(mockPrisma.userPreference.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { userId_key: { userId: 'user-123', key: 'auto-translate' } },
+          create: expect.objectContaining({ value: 'true' }),
+          update: { value: 'true' }
+        })
+      );
+      expect(result.autoTranslate).toBe(true);
     });
   });
 
