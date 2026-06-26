@@ -119,6 +119,7 @@ export class MessageTranslationService extends EventEmitter {
     this.zmqClient.removeAllListeners('audioProcessError');
     this.zmqClient.removeAllListeners('voiceTranslationCompleted');
     this.zmqClient.removeAllListeners('voiceTranslationFailed');
+    this.zmqClient.removeAllListeners('translationReady');
 
     // Enregistrer les nouveaux listeners
     // Each handler is async — wrap with safeZmqHandler so an unhandled rejection
