@@ -800,8 +800,24 @@ export class MeeshySocketIOManager {
         logger.debug('socket disconnect', { socketId: socket.id, reason });
         const disconnectedUserId = this.socketToUser.get(socket.id);
         if (disconnectedUserId) {
+          // Drain active typing state BEFORE invalidating cache: broadcasts
+          // typing:stop to every conversation the user was typing in so
+          // clients clear the indicator immediately (vs waiting up to 15s for
+          // their safety timer). drainActiveTypingState also clears the
+          // throttle map entries, superseding the old clearTypingThrottle call.
+          const { conversationIds, identity } = this.statusHandler.drainActiveTypingState(disconnectedUserId);
+          if (conversationIds.length > 0 && identity) {
+            for (const convId of conversationIds) {
+              this.io.to(ROOMS.conversation(convId)).emit(SERVER_EVENTS.TYPING_STOP, {
+                userId: disconnectedUserId,
+                username: identity.username,
+                displayName: identity.displayName,
+                conversationId: convId,
+                isTyping: false
+              });
+            }
+          }
           this.statusHandler.invalidateIdentityCache(disconnectedUserId);
-          this.statusHandler.clearTypingThrottle(disconnectedUserId);
           // Invalider le snapshot de présence pour forcer un recalcul à la prochaine connexion
           this.presenceSnapshotCache.delete(disconnectedUserId);
           // Nettoyage du rate limiter in-memory (keyed by userId — purge si dernier socket)
