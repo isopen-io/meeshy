@@ -142,6 +142,35 @@ final class WebRTCServiceTests: XCTestCase {
         XCTAssertEqual(client.disconnectCallCount, 1)
     }
 
+    // MARK: - setRemoteDescription return value
+
+    func test_setRemoteDescription_success_returnsTrue() async {
+        let (sut, _) = makeSUT()
+        let desc = SessionDescription(type: .answer, sdp: "v=0\r\n")
+        let result = await sut.setRemoteDescription(desc)
+        XCTAssertTrue(result)
+    }
+
+    func test_setRemoteDescription_failure_returnsFalse() async {
+        let (sut, client) = makeSUT()
+        client.setRemoteAnswerResult = .failure(WebRTCError.failedToCreateSDP)
+        let desc = SessionDescription(type: .answer, sdp: "v=0\r\n")
+        let result = await sut.setRemoteDescription(desc)
+        XCTAssertFalse(result)
+    }
+
+    func test_setRemoteDescription_failure_doesNotSetHasRemoteDescription() async {
+        let (sut, client) = makeSUT()
+        client.setRemoteAnswerResult = .failure(WebRTCError.failedToCreateSDP)
+        let desc = SessionDescription(type: .answer, sdp: "v=0\r\n")
+        _ = await sut.setRemoteDescription(desc)
+        // Verify ICE candidates are not flushed (hasRemoteDescription stays false).
+        let candidate = IceCandidate(sdpMid: "0", sdpMLineIndex: 0, candidate: "candidate:test")
+        sut.addICECandidate(candidate)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertEqual(client.addIceCandidateCallCount, 0)
+    }
+
     // MARK: - ICE Restart
 
     func test_performICERestart_returnsNewOffer() async {
@@ -398,6 +427,52 @@ final class DisconnectDebounceSourceGuardTests: XCTestCase {
     }
 }
 
+// MARK: - Audio encoding + quality monitor source guards
+
+/// `adjustBitrate` must propagate the new bitrate ceiling to the live audio
+/// sender via `applyAudioEncoding`. Previously the bitrate was computed and
+/// logged but never written to the encoder — adaptation had zero effect.
+/// These guards also verify the quality monitor's nil-stats path uses
+/// `continue` (loop keeps running) rather than `return` (loop exits silently).
+@MainActor
+final class AdjustBitrateAudioEncodingSourceGuardTests: XCTestCase {
+
+    private func webRTCServiceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// The bitrate change branch inside `adjustBitrate` must call
+    /// `client.applyAudioEncoding(maxBitrateBps:)` so the encoder actually
+    /// sheds bandwidth on a degraded link.
+    func test_adjustBitrate_callsApplyAudioEncoding_whenBitrateChanges() throws {
+        let src = try webRTCServiceSource()
+        XCTAssertTrue(
+            src.contains("client.applyAudioEncoding(maxBitrateBps: newBitrate)"),
+            "adjustBitrate must call client.applyAudioEncoding(maxBitrateBps:) when the bitrate changes — " +
+            "omitting this means the audio encoder never actually sheds bandwidth despite the computed level."
+        )
+    }
+
+    /// Quality monitor must use `continue` for the nil-stats path so the
+    /// monitoring loop keeps running after a failed stats read. A `return`
+    /// here silently exits the outer Task and all future ticks are lost.
+    func test_qualityMonitor_usesConinueForNilStats_notReturn() throws {
+        let src = try webRTCServiceSource()
+        // The guard immediately before adjustBitrate must use `continue` not `return`.
+        XCTAssertTrue(
+            src.contains("guard let stats = await self.client.getStats() else { continue }"),
+            "The quality monitor nil-stats guard must use `continue` (skip tick) not `return` (exit loop) — " +
+            "a `return` here kills all future quality monitoring for the call."
+        )
+    }
+}
+
 // MARK: - Quality delegate source guards
 
 /// `didCollectStats` and `didChangeQualityLevel` are the two delegate callbacks
@@ -468,7 +543,8 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
     func setNegotiationRole(isPolite: Bool) { lastNegotiationIsPolite = isPolite }
     func createOffer() async throws -> SessionDescription { try createOfferResult.get() }
     func createAnswer(for offer: SessionDescription) async throws -> SessionDescription { try createAnswerResult.get() }
-    func setRemoteAnswer(_ answer: SessionDescription) async throws {}
+    var setRemoteAnswerResult: Result<Void, Error> = .success(())
+    func setRemoteAnswer(_ answer: SessionDescription) async throws { try setRemoteAnswerResult.get() }
     func addIceCandidate(_ candidate: IceCandidate) async throws { addIceCandidateCallCount += 1 }
     func startLocalMedia(type: CallMediaType) async throws {}
     func toggleAudio(_ enabled: Bool) { lastAudioEnabled = enabled }
@@ -494,6 +570,12 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
     func applyVideoEncoding(maxBitrateBps: Int, maxFramerate: Int, scaleResolutionDownBy: Double) {
         applyVideoEncodingCallCount += 1
         lastVideoEncoding = (maxBitrateBps, maxFramerate, scaleResolutionDownBy)
+    }
+    private(set) var applyAudioEncodingCallCount = 0
+    private(set) var lastAudioEncodingMaxBitrateBps: Int?
+    func applyAudioEncoding(maxBitrateBps: Int) {
+        applyAudioEncodingCallCount += 1
+        lastAudioEncodingMaxBitrateBps = maxBitrateBps
     }
     func switchCamera() async throws {}
     func availableCameras() -> [CameraDeviceOption] { [] }

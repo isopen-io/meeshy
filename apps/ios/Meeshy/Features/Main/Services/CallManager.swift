@@ -1508,7 +1508,16 @@ final class CallManager: ObservableObject {
         guard acceptIncomingNegotiation(generation) else { return }
         Task { @MainActor [weak self] in
             guard let self else { return }
-            await self.webRTCService.setRemoteDescription(sdp)
+            let success = await self.webRTCService.setRemoteDescription(sdp)
+            guard self.currentCallId == callId else { return }
+            // A peer connection without a remote description will never produce
+            // media even if ICE connects — fail fast instead of letting the call
+            // hang silently in `.offering` / `.connecting`.
+            guard success else {
+                Logger.calls.error("Failed to apply remote answer for call \(callId) — ending call")
+                self.endCallInternal(reason: .failed(String(localized: "call.error.sdp")))
+                return
+            }
             // Phase 1 fix E5: now that remote answer is applied, ICE
             // checking starts. Transition .offering → .connecting.
             // The single source of truth for `.connected` remains

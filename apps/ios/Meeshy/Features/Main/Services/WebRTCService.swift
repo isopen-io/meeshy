@@ -129,14 +129,21 @@ final class WebRTCService {
         }
     }
 
-    func setRemoteDescription(_ description: SessionDescription) async {
+    /// Apply the remote answer/description. Returns `true` on success, `false` on
+    /// failure. Callers that are part of the call-setup path should end the call on
+    /// `false` — a peer connection without a remote description will never produce
+    /// media even if ICE connects, so continuing silently leads to a silent call.
+    @discardableResult
+    func setRemoteDescription(_ description: SessionDescription) async -> Bool {
         do {
             try await client.setRemoteAnswer(description)
             hasRemoteDescription = true
             flushBufferedCandidates()
             Logger.webrtc.info("Set remote description: \(description.type.rawValue)")
+            return true
         } catch {
             Logger.webrtc.error("Failed to set remote description: \(error.localizedDescription)")
+            return false
         }
     }
 
@@ -238,27 +245,31 @@ final class WebRTCService {
     func startQualityMonitor() {
         stopQualityMonitor()
         let interval = QualityThresholds.statsIntervalSeconds
+        // The outer Task inherits @MainActor isolation (created from a @MainActor
+        // method), so all state mutations inside are actor-safe without an extra
+        // nested Task { @MainActor in }. The previous nested-Task pattern had a
+        // subtle bug: `guard let stats … else { return }` returned from the INNER
+        // task, not the outer loop — monitoring silently resumed. Here, `continue`
+        // correctly skips the tick without exiting the loop.
         qualityMonitorTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(interval))
                 if Task.isCancelled { break }
-                await Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    guard let stats = await self.client.getStats() else { return }
-                    let previous = self.lastStats
-                    self.lastStats = stats
-                    self.adjustBitrate(basedOn: stats, previous: previous)
-                    // Interval packet-loss % from cumulative-counter deltas (same
-                    // formula as adjustBitrate) — reported alongside cumulative
-                    // data usage + current quality to the gateway so the
-                    // call-summary message can show "data spent · quality" and
-                    // loss alerts can fire.
-                    let deltaLost = max(0, stats.packetsLost - (previous?.packetsLost ?? 0))
-                    let deltaReceived = max(0, stats.inboundPacketsReceived - (previous?.inboundPacketsReceived ?? 0))
-                    let denom = deltaLost + deltaReceived
-                    let packetLossPercent = denom > 0 ? Double(deltaLost) / Double(denom) * 100 : 0
-                    self.delegate?.webRTCService(self, didCollectStats: stats, level: self.currentQualityLevel, packetLossPercent: packetLossPercent)
-                }.value
+                guard let self else { return }
+                guard let stats = await self.client.getStats() else { continue }
+                let previous = self.lastStats
+                self.lastStats = stats
+                self.adjustBitrate(basedOn: stats, previous: previous)
+                // Interval packet-loss % from cumulative-counter deltas (same
+                // formula as adjustBitrate) — reported alongside cumulative
+                // data usage + current quality to the gateway so the
+                // call-summary message can show "data spent · quality" and
+                // loss alerts can fire.
+                let deltaLost = max(0, stats.packetsLost - (previous?.packetsLost ?? 0))
+                let deltaReceived = max(0, stats.inboundPacketsReceived - (previous?.inboundPacketsReceived ?? 0))
+                let denom = deltaLost + deltaReceived
+                let packetLossPercent = denom > 0 ? Double(deltaLost) / Double(denom) * 100 : 0
+                self.delegate?.webRTCService(self, didCollectStats: stats, level: self.currentQualityLevel, packetLossPercent: packetLossPercent)
             }
         }
         Logger.webrtc.info("Quality monitor started (interval: \(interval)s, task-based)")
@@ -301,6 +312,9 @@ final class WebRTCService {
 
         if newBitrate != currentBitrate {
             currentBitrate = newBitrate
+            // Apply the new ceiling to the live audio sender so the encoder
+            // actually sheds bandwidth — previously this was only logged.
+            client.applyAudioEncoding(maxBitrateBps: newBitrate)
             let lossPct = String(format: "%.1f%%", lossRatio * 100)
             let bweMbps = stats.availableOutgoingBitrateBps > 0
                 ? String(format: " bwe=%.1fMbps", Double(stats.availableOutgoingBitrateBps) / 1_000_000)

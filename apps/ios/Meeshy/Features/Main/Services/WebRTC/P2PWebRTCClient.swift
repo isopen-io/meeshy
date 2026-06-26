@@ -435,6 +435,26 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         }
     }
 
+    /// Adjusts the audio sender's max bitrate at runtime. Called by the
+    /// quality-adaptation loop when the network tier changes (e.g. poor link
+    /// drops from 64 kbps to 24 kbps so audio competes less with video).
+    /// The min bitrate floor (16 kbps) set in `applyAudioCodecPreferences`
+    /// is preserved — only the ceiling is modified.
+    func applyAudioEncoding(maxBitrateBps: Int) {
+        guard let sender = audioTransceiver?.sender else { return }
+        let params = sender.parameters
+        for encoding in params.encodings {
+            encoding.maxBitrateBps = NSNumber(value: maxBitrateBps)
+        }
+        sender.parameters = params
+        let count = params.encodings.count
+        if count > 0 {
+            Logger.webrtc.info("[WEBRTC] audio encoding applied (max=\(maxBitrateBps / 1000, privacy: .public)kbps encodings=\(count, privacy: .public))")
+        } else {
+            Logger.webrtc.warning("[WEBRTC] audio encoding NOT applied — encodings array empty")
+        }
+    }
+
     /// Selects a capture device for a desired logical position. On iPhone/iPad the
     /// front/back cameras report `.front`/`.back`. On **iOS-app-on-Mac** the
     /// built-in / Continuity / USB cameras report `.unspecified`, so a strict
