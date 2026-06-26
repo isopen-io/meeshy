@@ -441,7 +441,7 @@ describe('SessionService', () => {
 
       mockPrisma.userSession.create.mockResolvedValueOnce(mockSession);
       mockPrisma.userSession.findMany.mockResolvedValueOnce(existingSessions);
-      mockPrisma.userSession.update.mockResolvedValue({ count: 1 });
+      mockPrisma.userSession.updateMany.mockResolvedValue({ count: 1 });
 
       const input: CreateSessionInput = {
         userId: mockUserId,
@@ -461,11 +461,10 @@ describe('SessionService', () => {
         orderBy: { lastActivityAt: 'asc' }
       });
 
-      // Should have invalidated the oldest session (first one in sorted array)
-      // session-0 is the oldest because it has the smallest lastActivityAt
-      expect(mockPrisma.userSession.update).toHaveBeenCalled();
-      const updateCall = mockPrisma.userSession.update.mock.calls[0][0];
-      expect(updateCall.where.id).toBe('session-0');
+      // Should have invalidated the oldest session via updateMany
+      expect(mockPrisma.userSession.updateMany).toHaveBeenCalled();
+      const updateCall = mockPrisma.userSession.updateMany.mock.calls[0][0];
+      expect(updateCall.where.id.in).toContain('session-0');
       expect(updateCall.data.isValid).toBe(false);
       expect(updateCall.data.invalidatedAt).toBeInstanceOf(Date);
       expect(updateCall.data.invalidatedReason).toBe('session_limit_exceeded');

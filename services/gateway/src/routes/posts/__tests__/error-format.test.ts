@@ -235,7 +235,7 @@ describe('posts routes — error response format', () => {
   // ── comments.ts ───────────────────────────────────────────────────────────
 
   it('comments: should return structured error on 401 when no auth (POST /posts/:id/comments)', async () => {
-    const resp = await unauthApp.inject({ method: 'POST', url: '/posts/abc123/comments', body: {} });
+    const resp = await unauthApp.inject({ method: 'POST', url: '/posts/507f1f77bcf86cd799439011/comments', body: {} });
     expect(resp.statusCode).toBe(401);
     const body: ErrorBody = resp.json();
     assertErrorShape(body);
@@ -243,7 +243,7 @@ describe('posts routes — error response format', () => {
   });
 
   it('comments: should return structured error on 400 for missing content (POST /posts/:id/comments)', async () => {
-    const resp = await authApp.inject({ method: 'POST', url: '/posts/abc123/comments', body: {} });
+    const resp = await authApp.inject({ method: 'POST', url: '/posts/507f1f77bcf86cd799439011/comments', body: {} });
     expect(resp.statusCode).toBe(400);
     const body: ErrorBody = resp.json();
     assertErrorShape(body);
@@ -253,7 +253,7 @@ describe('posts routes — error response format', () => {
   it('comments: should return structured error on 404 for unknown post (POST /posts/:id/comments)', async () => {
     const resp = await authApp.inject({
       method: 'POST',
-      url: '/posts/nonexistent123456789012/comments',
+      url: '/posts/507f1f77bcf86cd799439099/comments',
       body: { content: 'hello' },
     });
     expect(resp.statusCode).toBe(404);

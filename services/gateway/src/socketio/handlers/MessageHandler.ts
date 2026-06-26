@@ -678,7 +678,7 @@ export class MessageHandler {
       // room, so an online recipient outside the conversation never triggers
       // mark-as-received and the sender stays stuck at a single checkmark.
       this._autoDeliverToOnlineRecipients(message, normalizedId).catch((err) => {
-        handlerLogger.warn('auto-deliver background failure', { error: err });
+        handlerLogger.error('auto-deliver background failure', { error: err });
       });
     } catch (error) {
       handlerLogger.error('broadcastNewMessage failed', { error });

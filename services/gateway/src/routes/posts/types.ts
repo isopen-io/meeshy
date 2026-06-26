@@ -332,6 +332,14 @@ export interface SingleResponse<T> {
 // FASTIFY TYPE AUGMENTATION
 // ============================================
 
+export const PostParamsSchema = z.object({
+  postId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid post ID'),
+});
+
+export const CommentParamsSchema = PostParamsSchema.extend({
+  commentId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid comment ID'),
+});
+
 export interface PostParams {
   postId: string;
 }

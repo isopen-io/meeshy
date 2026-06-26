@@ -558,10 +558,11 @@ async function enforceSessionLimit(userId: string): Promise<void> {
 
   if (sessions.length > MAX_SESSIONS_PER_USER) {
     const sessionsToRemove = sessions.slice(0, sessions.length - MAX_SESSIONS_PER_USER);
-
-    for (const session of sessionsToRemove) {
-      await invalidateSession(session.id, 'session_limit_exceeded');
-    }
+    const idsToRemove = sessionsToRemove.map((s) => s.id);
+    await db.userSession.updateMany({
+      where: { id: { in: idsToRemove } },
+      data: { isValid: false, invalidatedAt: new Date(), invalidatedReason: 'session_limit_exceeded' },
+    });
   }
 }
 

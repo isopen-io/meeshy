@@ -538,7 +538,7 @@ describe('MessageTranslationService - Conversation Languages Integration', () =>
     }
 
     for (const user of testUsers) {
-      await prisma.userFeature.deleteMany({
+      await prisma.userPreferences.deleteMany({
         where: { userId: user.id }
       }).catch(() => {});
       await prisma.user.delete({
@@ -575,13 +575,6 @@ describe('MessageTranslationService - Conversation Languages Integration', () =>
     });
     testUsers.push(user1);
 
-    await prisma.userFeature.create({
-      data: {
-        userId: user1.id,
-        autoTranslateEnabled: true
-      }
-    });
-
     const user2 = await prisma.user.create({
       data: {
         username: `lang-test-2-${Date.now()}`,
@@ -592,13 +585,6 @@ describe('MessageTranslationService - Conversation Languages Integration', () =>
       }
     });
     testUsers.push(user2);
-
-    await prisma.userFeature.create({
-      data: {
-        userId: user2.id,
-        autoTranslateEnabled: true
-      }
-    });
 
     // Create conversation
     testConversation = await prisma.conversation.create({

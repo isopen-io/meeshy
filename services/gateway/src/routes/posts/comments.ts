@@ -4,7 +4,8 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostCommentService } from '../../services/PostCommentService';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import { PostAudioService } from '../../services/posts/PostAudioService';
-import { CreateCommentSchema, FeedQuerySchema, LikeSchema, PostParams, CommentParams } from './types';
+import { CreateCommentSchema, FeedQuerySchema, LikeSchema, PostParams, CommentParams, PostParamsSchema, CommentParamsSchema } from './types';
+import { validateParams } from '../../validation/helpers.js';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response';
 import { resolveMentionedUsers, MentionService } from '../../services/MentionService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
@@ -36,6 +37,7 @@ export function registerCommentRoutes(
   // GET /posts/:postId/comments — Top-level comments, cursor-paginated
   fastify.get('/posts/:postId/comments', {
     preValidation: [requiredAuth],
+    preHandler: [validateParams(PostParamsSchema)],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
       const { postId } = request.params;
@@ -68,6 +70,7 @@ export function registerCommentRoutes(
   // GET /posts/:postId/comments/:commentId/replies — Replies to a comment
   fastify.get('/posts/:postId/comments/:commentId/replies', {
     preValidation: [requiredAuth],
+    preHandler: [validateParams(CommentParamsSchema)],
   }, async (request: FastifyRequest<{ Params: CommentParams }>, reply: FastifyReply) => {
     try {
       const { commentId } = request.params;
@@ -100,6 +103,7 @@ export function registerCommentRoutes(
   // POST /posts/:postId/comments — Add a comment
   fastify.post('/posts/:postId/comments', {
     preValidation: [requiredAuth],
+    preHandler: [validateParams(PostParamsSchema)],
     config: { rateLimit: createPostRouteRateLimitConfig('comment') },
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
@@ -305,6 +309,7 @@ export function registerCommentRoutes(
   // POST /posts/:postId/comments/:commentId/like — Like a comment
   fastify.post('/posts/:postId/comments/:commentId/like', {
     preValidation: [requiredAuth],
+    preHandler: [validateParams(CommentParamsSchema)],
   }, async (request: FastifyRequest<{ Params: CommentParams }>, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -361,6 +366,7 @@ export function registerCommentRoutes(
   // DELETE /posts/:postId/comments/:commentId/like — Unlike a comment
   fastify.delete('/posts/:postId/comments/:commentId/like', {
     preValidation: [requiredAuth],
+    preHandler: [validateParams(CommentParamsSchema)],
   }, async (request: FastifyRequest<{ Params: CommentParams }>, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -387,6 +393,7 @@ export function registerCommentRoutes(
   // DELETE /posts/:postId/comments/:commentId — Delete a comment
   fastify.delete('/posts/:postId/comments/:commentId', {
     preValidation: [requiredAuth],
+    preHandler: [validateParams(CommentParamsSchema)],
   }, async (request: FastifyRequest<{ Params: CommentParams }>, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
