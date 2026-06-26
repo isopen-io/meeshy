@@ -192,6 +192,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
   const {
     addTranslatingState,
     removeTranslatingState,
+    clearMessageTranslatingState,
     isTranslating,
     usedLanguages,
     addUsedLanguages,
@@ -316,6 +317,13 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     [removeTranslatingState, addUsedLanguages]
   );
 
+  const onTranslationFailed = useCallback(
+    (data: { messageId: string }) => {
+      clearMessageTranslatingState(data.messageId);
+    },
+    [clearMessageTranslatingState]
+  );
+
   const onUserTyping = useCallback(
     (userId: string, _username: string, _isTyping: boolean, typingConversationId: string) => {
       if (!user || userId === user.id) return;
@@ -331,6 +339,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
       currentUser: user || undefined,
       onUserTyping,
       onTranslation,
+      onTranslationFailed,
     });
 
   // Typing indicators

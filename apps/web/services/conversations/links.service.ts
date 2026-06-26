@@ -4,6 +4,7 @@
  */
 
 import { apiService } from '../api.service';
+import { logger } from '@/utils/logger';
 import { conversationsCrudService } from './crud.service';
 import { generateLinkName } from '@/utils/link-name-generator';
 import { authManager } from '../auth-manager.service';
@@ -43,7 +44,7 @@ export class LinksService {
             isPublic: !linkData?.maxUses
           });
         } catch (error) {
-          console.warn('Impossible de récupérer les détails de la conversation pour générer le nom du lien:', error);
+          logger.warn('[Links]', 'Impossible de récupérer les détails de la conversation pour générer le nom du lien', { error });
           linkName = 'Lien d\'invitation';
         }
       }

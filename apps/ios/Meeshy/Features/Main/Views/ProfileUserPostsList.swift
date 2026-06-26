@@ -93,14 +93,6 @@ struct ProfileUserPostsList: View {
         .padding(.top, 8)
         .padding(.bottom, 24)
         .task { await viewModel.loadInitial() }
-        // FeedPostCard ends its body with `.withStatusBubble()`, which reads
-        // `@EnvironmentObject StatusBubbleController`. That object is injected at
-        // the RootView/iPadRootView level but does NOT reliably propagate across
-        // the `.sheet` boundary into UserProfileSheet — so without this the Postes
-        // tab crashes with `EnvironmentObject.error()` (SIGTRAP) the moment a card
-        // lays out. Re-injecting the shared singleton here is idempotent and adds
-        // no new re-render dependency (FeedPostCard already observes it).
-        .environmentObject(StatusBubbleController.shared)
         .sheet(item: $shareableLink) { link in
             ShareSheet(activityItems: [link.url])
                 .presentationDetents([.medium, .large])

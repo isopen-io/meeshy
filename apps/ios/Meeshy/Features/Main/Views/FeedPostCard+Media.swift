@@ -272,22 +272,7 @@ extension FeedPostCard {
     }
 
     func videoMediaView(_ media: FeedMedia) -> some View {
-        let attachment = media.toMessageAttachment()
-        return VideoAvailabilityResolver(attachment: attachment, autoDownload: true) { availability, onDownload in
-            MeeshyVideoPlayer(
-                attachment: attachment,
-                style: .inline,
-                controls: .inlineDefault,
-                accentColor: accentColor,
-                frame: .card,
-                availability: availability,
-                performance: .inline,
-                onDownload: onDownload,
-                onExpand: { openFullscreen(media) }
-            )
-        }
-        .frame(maxWidth: .infinity)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        FeedVideoMediaCell(media: media, accentColor: accentColor, onExpand: { openFullscreen(media) })
     }
 
     func audioMediaView(_ media: FeedMedia) -> some View {
@@ -407,4 +392,60 @@ extension FeedPostCard {
                 )
         )
     }
+}
+
+// MARK: - Feed video cell (fills the card width, aspect-ratio driven height)
+
+/// A post-card video that ALWAYS fills the card width with a height derived
+/// from the source ratio. The previous `.aspectRatio(_, .fit)` collapsed the
+/// width whenever the surrounding layout proposed a bounded height (portrait
+/// clips ended up tiny and centred). Here the real card width is measured via a
+/// background `GeometryReader` (no layout hijack) and the height is set
+/// explicitly to `width / ratio`, so the width is never the free dimension.
+private struct FeedVideoMediaCell: View {
+    let media: FeedMedia
+    let accentColor: String
+    let onExpand: () -> Void
+
+    @State private var measuredWidth: CGFloat = 0
+
+    /// Source ratio (width / height), portrait capped at 1.6× width so a single
+    /// clip can't swallow the whole feed.
+    private var ratio: CGFloat {
+        guard let w = media.width, let h = media.height, w > 0, h > 0 else { return 16.0 / 9.0 }
+        return max(CGFloat(w) / CGFloat(h), 1.0 / 1.6)
+    }
+
+    var body: some View {
+        let attachment = media.toMessageAttachment()
+        VideoAvailabilityResolver(attachment: attachment, autoDownload: true) { availability, onDownload in
+            MeeshyVideoPlayer(
+                attachment: attachment,
+                style: .inline,
+                controls: .inlineDefault,
+                accentColor: accentColor,
+                frame: .card,
+                availability: availability,
+                performance: .inline,
+                onDownload: onDownload,
+                onExpand: onExpand
+            )
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: measuredWidth > 0 ? measuredWidth / ratio : nil)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(key: FeedVideoWidthKey.self, value: geo.size.width)
+            }
+        )
+        .onPreferenceChange(FeedVideoWidthKey.self) { width in
+            if width > 0, abs(width - measuredWidth) > 0.5 { measuredWidth = width }
+        }
+    }
+}
+
+private struct FeedVideoWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }

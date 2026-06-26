@@ -106,3 +106,71 @@ final class CertificatePinningTests: XCTestCase {
         nil
     }
 }
+
+// MARK: - CertificatePinningDelegate wiring tests
+
+/// These tests cover the observable API surface of ``CertificatePinningDelegate``
+/// that is reachable without a live TLS handshake. The `.unconfigured` fault-log
+/// path (``didWarnUnconfigured``) is private state; we validate its trigger
+/// condition indirectly through ``CertificatePinning.evaluate`` (already covered
+/// in ``CertificatePinningTests``), which must return `.unconfigured` whenever
+/// the pin set is empty.
+final class CertificatePinningDelegateInitTests: XCTestCase {
+
+    func test_delegate_canBeCreatedWithCustomProviders() {
+        nonisolated(unsafe) var pinSetCallCount = 0
+        nonisolated(unsafe) var hostCallCount = 0
+
+        let delegate = CertificatePinningDelegate(
+            pinSetProvider: { pinSetCallCount += 1; return ["abc123"] },
+            pinnedHostProvider: { hostCallCount += 1; return "gate.meeshy.me" }
+        )
+
+        // No calls are made at init time — providers are lazy.
+        XCTAssertEqual(pinSetCallCount, 0)
+        XCTAssertEqual(hostCallCount, 0)
+        // Suppress "unused" warning while keeping the reference alive.
+        _ = delegate
+    }
+
+    func test_delegate_isSendable() {
+        // Compile-time check: CertificatePinningDelegate must satisfy Sendable so
+        // it can cross actor boundaries (URLSession calls delegate on arbitrary threads).
+        func requiresSendable<T: Sendable>(_: T) {}
+        let delegate = CertificatePinningDelegate(
+            pinSetProvider: { [] },
+            pinnedHostProvider: { "gate.meeshy.me" }
+        )
+        requiresSendable(delegate)
+    }
+
+    func test_evaluate_emptyPinSet_triggersUnconfiguredPath() {
+        // When the pin set is empty, evaluate returns .unconfigured — this is the
+        // exact condition that activates the didWarnUnconfigured fault log in
+        // CertificatePinningDelegate.urlSession(_:didReceive:).
+        let result = CertificatePinning.evaluate(chain: [], against: [])
+        XCTAssertEqual(result, .unconfigured,
+            "Empty pin set must produce .unconfigured, which is the fault-log trigger condition")
+    }
+
+    func test_evaluate_nonEmptyPinSet_withEmptyChain_doesNotReturnUnconfigured() {
+        let result = CertificatePinning.evaluate(
+            chain: [],
+            against: ["AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="]
+        )
+        XCTAssertNotEqual(result, .unconfigured,
+            "Non-empty pin set with unreadable chain must not return .unconfigured")
+    }
+
+    func test_socketBaseURL_hostMatchesAPIBaseURL_host() {
+        // The Socket.IO session delegate uses the same CertificatePinningDelegate
+        // default init as the REST URLSession. For the pin set to cover WebSocket
+        // connections, the socket host must equal the API host (verified here).
+        let apiHost = URL(string: MeeshyConfig.shared.apiBaseURL)?.host
+        let socketHost = SocketConfig.baseURL?.host
+        XCTAssertNotNil(apiHost, "apiBaseURL must contain a resolvable host")
+        XCTAssertNotNil(socketHost, "socketBaseURL must contain a resolvable host")
+        XCTAssertEqual(apiHost, socketHost,
+            "Socket host must equal API host so CertificatePinningDelegate covers both connections")
+    }
+}

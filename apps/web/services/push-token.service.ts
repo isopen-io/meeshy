@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 /**
  * Push Token Service
  * Gère la synchronisation des tokens FCM avec le backend
@@ -37,7 +38,7 @@ class PushTokenService {
    */
   private log(...args: any[]): void {
     if (process.env.NODE_ENV === 'development') {
-      console.log('[PushTokenService]', ...args);
+      logger.info('[PushToken]', ...args);
     }
   }
 
@@ -98,7 +99,7 @@ class PushTokenService {
 
       return response.data;
     } catch (error) {
-      console.error('[PushTokenService] Registration error:', error);
+      logger.error('[PushToken]', 'Registration error', { error });
 
       if (axios.isAxiosError(error)) {
         return {
@@ -152,7 +153,7 @@ class PushTokenService {
 
       return response.data;
     } catch (error) {
-      console.error('[PushTokenService] Deletion error:', error);
+      logger.error('[PushToken]', 'Deletion error', { error });
 
       if (axios.isAxiosError(error)) {
         return {

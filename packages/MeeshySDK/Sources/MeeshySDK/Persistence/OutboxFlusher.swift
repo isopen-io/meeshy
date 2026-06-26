@@ -1,5 +1,8 @@
 import Foundation
 import GRDB
+import os
+
+private let outboxFlusherLog = Logger(subsystem: "me.meeshy.sdk", category: "outbox-flusher")
 
 public protocol OutboxDispatching: Sendable {
     func dispatch(_ record: OutboxRecord) async throws
@@ -195,8 +198,12 @@ public actor OutboxFlusher {
         do {
             try await dispatcher.dispatch(current)
             let idToDelete = current.id
-            try? await pool.write { db in
-                try OutboxRecord.deleteOne(db, key: idToDelete)
+            do {
+                try await pool.write { db in
+                    _ = try OutboxRecord.deleteOne(db, key: idToDelete)
+                }
+            } catch {
+                outboxFlusherLog.error("Post-dispatch outbox delete failed for \(idToDelete, privacy: .public): \(error.localizedDescription, privacy: .public) — record may re-dispatch")
             }
             // A7+A8 — drop any local file the payload referenced. On the
             // happy path, MessagePersistenceActor.adoptSDKLevel already

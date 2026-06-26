@@ -121,24 +121,26 @@ export class MessageTranslationService extends EventEmitter {
     this.zmqClient.removeAllListeners('voiceTranslationFailed');
 
     // Enregistrer les nouveaux listeners
-    this.zmqClient.on('translationCompleted', this._handleTranslationCompleted.bind(this));
-    this.zmqClient.on('translationError', this._handleTranslationError.bind(this));
-    this.zmqClient.on('audioProcessCompleted', this._handleAudioProcessCompleted.bind(this));
-    this.zmqClient.on('audioProcessError', this._handleAudioProcessError.bind(this));
-    this.zmqClient.on('transcriptionCompleted', this._handleTranscriptionOnlyCompleted.bind(this));
-    this.zmqClient.on('transcriptionReady', this._handleTranscriptionReady.bind(this));  // Transcription prête (avant traduction)
+    // Each handler is async — wrap with safeZmqHandler so an unhandled rejection
+    // in one language's pipeline never crashes the whole translation service.
+    this.zmqClient.on('translationCompleted', this._safeZmqHandler('translationCompleted', this._handleTranslationCompleted));
+    this.zmqClient.on('translationError', this._safeZmqHandler('translationError', this._handleTranslationError));
+    this.zmqClient.on('audioProcessCompleted', this._safeZmqHandler('audioProcessCompleted', this._handleAudioProcessCompleted));
+    this.zmqClient.on('audioProcessError', this._safeZmqHandler('audioProcessError', this._handleAudioProcessError));
+    this.zmqClient.on('transcriptionCompleted', this._safeZmqHandler('transcriptionCompleted', this._handleTranscriptionOnlyCompleted));
+    this.zmqClient.on('transcriptionReady', this._safeZmqHandler('transcriptionReady', this._handleTranscriptionReady));
 
     // Événements de traduction progressifs avec contexte sémantique
-    this.zmqClient.on('audioTranslationReady', this._handleAudioTranslationReady.bind(this));  // Traduction unique (1 langue)
-    this.zmqClient.on('audioTranslationsProgressive', this._handleAudioTranslationsProgressive.bind(this));  // Traduction progressive (multi-langues)
-    this.zmqClient.on('audioTranslationsCompleted', this._handleAudioTranslationsCompleted.bind(this));  // Dernière traduction (multi-langues)
+    this.zmqClient.on('audioTranslationReady', this._safeZmqHandler('audioTranslationReady', this._handleAudioTranslationReady));
+    this.zmqClient.on('audioTranslationsProgressive', this._safeZmqHandler('audioTranslationsProgressive', this._handleAudioTranslationsProgressive));
+    this.zmqClient.on('audioTranslationsCompleted', this._safeZmqHandler('audioTranslationsCompleted', this._handleAudioTranslationsCompleted));
 
     // DEPRECATED: conservé pour rétrocompatibilité
-    this.zmqClient.on('translationReady', this._handleTranslationReady.bind(this));
+    this.zmqClient.on('translationReady', this._safeZmqHandler('translationReady', this._handleTranslationReady));
 
-    this.zmqClient.on('transcriptionError', this._handleTranscriptionOnlyError.bind(this));
-    this.zmqClient.on('voiceTranslationCompleted', this._handleVoiceTranslationCompleted.bind(this));
-    this.zmqClient.on('voiceTranslationFailed', this._handleVoiceTranslationFailed.bind(this));
+    this.zmqClient.on('transcriptionError', this._safeZmqHandler('transcriptionError', this._handleTranscriptionOnlyError));
+    this.zmqClient.on('voiceTranslationCompleted', this._safeZmqHandler('voiceTranslationCompleted', this._handleVoiceTranslationCompleted));
+    this.zmqClient.on('voiceTranslationFailed', this._safeZmqHandler('voiceTranslationFailed', this._handleVoiceTranslationFailed));
 
     // Story text object translation — forward to MeeshySocketIOManager
     this.zmqClient.on('storyTextObjectTranslationCompleted', (event: { postId: string; textObjectIndex: number; translations: Record<string, string> }) => {
@@ -752,9 +754,24 @@ export class MessageTranslationService extends EventEmitter {
     }
   }
 
-  private async _handleTranslationCompleted(data: { 
-    taskId: string; 
-    result: TranslationResult; 
+  /**
+   * Wraps an async ZMQ event handler so that a thrown exception or rejected
+   * promise is caught and logged instead of propagating as an unhandled
+   * rejection that would silently kill the translation pipeline.
+   * EventEmitter.emit() does NOT await Promises — without this guard any
+   * async error inside a listener would go unhandled.
+   */
+  private _safeZmqHandler<T>(event: string, handler: (data: T) => Promise<void>): (data: T) => void {
+    return (data: T) => {
+      handler.call(this, data).catch((error: unknown) => {
+        logger.error(`ZMQ handler error for event "${event}"`, { error });
+      });
+    };
+  }
+
+  private async _handleTranslationCompleted(data: {
+    taskId: string;
+    result: TranslationResult;
     targetLanguage: string;
     metadata?: any;
   }) {
@@ -827,6 +844,13 @@ export class MessageTranslationService extends EventEmitter {
     }
 
     this.stats.incrementErrors();
+
+    this.emit('translationFailed', {
+      messageId: data.messageId,
+      conversationId: data.conversationId,
+      error: data.error,
+      taskId: data.taskId,
+    });
   }
 
   // ============================================================================

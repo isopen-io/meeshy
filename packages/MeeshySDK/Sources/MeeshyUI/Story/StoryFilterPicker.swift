@@ -162,8 +162,13 @@ public struct StoryFilterPicker: View {
 // MARK: - CIFilter Application
 
 public nonisolated struct StoryFilterProcessor {
-    nonisolated(unsafe) private static let context = CIContext()
-    nonisolated(unsafe) private static let cache = NSCache<NSString, UIImage>()
+    private static let context = CIContext()
+    nonisolated(unsafe) private static let cache: NSCache<NSString, UIImage> = {
+        let c = NSCache<NSString, UIImage>()
+        c.countLimit = 50
+        c.totalCostLimit = 20 * 1024 * 1024
+        return c
+    }()
 
     /// Applies `filter` to `image` at `intensity` (0…1). This is the SINGLE
     /// source of truth for the story filter look — shared by the composer
@@ -238,7 +243,8 @@ public nonisolated struct StoryFilterProcessor {
             return image
         }
         let result = UIImage(cgImage: cgImage, scale: image.scale, orientation: image.imageOrientation)
-        cache.setObject(result, forKey: cacheKey)
+        let pixelCost = Int(result.size.width * result.size.height * result.scale * result.scale) * 4
+        cache.setObject(result, forKey: cacheKey, cost: pixelCost)
         return result
     }
 }

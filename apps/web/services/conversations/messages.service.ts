@@ -4,6 +4,7 @@
  */
 
 import { apiService } from '../api.service';
+import { logger } from '@/utils/logger';
 import { transformersService } from './transformers.service';
 import type {
   Message,
@@ -73,7 +74,7 @@ export class MessagesService {
       this.pendingRequests.delete(requestKey);
 
       if (!response.data?.success || !Array.isArray(response.data?.data)) {
-        console.warn('⚠️ Structure de réponse inattendue:', response.data);
+        logger.warn('[Messages]', 'Structure de réponse inattendue', { data: response.data });
         return MessagesService.EMPTY_MESSAGES_RESPONSE;
       }
 
@@ -96,7 +97,7 @@ export class MessagesService {
         throw new Error('REQUEST_CANCELLED');
       }
 
-      console.error('❌ Erreur lors du chargement des messages:', error);
+      logger.error('[Messages]', 'Erreur lors du chargement des messages', { error });
       return MessagesService.EMPTY_MESSAGES_RESPONSE;
     }
   }

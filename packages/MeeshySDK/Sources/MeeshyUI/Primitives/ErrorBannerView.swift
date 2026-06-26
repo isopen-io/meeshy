@@ -58,8 +58,8 @@ public struct ErrorBannerView: View {
         .background(
             LinearGradient(
                 colors: [
-                    MeeshyColors.coral,
-                    MeeshyColors.pink
+                    MeeshyColors.error,
+                    MeeshyColors.indigo500
                 ],
                 startPoint: .leading,
                 endPoint: .trailing
@@ -67,7 +67,7 @@ public struct ErrorBannerView: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
         .shadow(
-            color: MeeshyColors.coral.opacity(MeeshyShadow.medium.opacity),
+            color: MeeshyColors.error.opacity(MeeshyShadow.medium.opacity),
             radius: MeeshyShadow.medium.radius,
             y: MeeshyShadow.medium.y
         )

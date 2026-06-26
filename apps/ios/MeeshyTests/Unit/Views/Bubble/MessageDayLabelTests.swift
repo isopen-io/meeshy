@@ -164,12 +164,18 @@ final class MessageDayLabelTests: XCTestCase {
     }
 
     func test_label_fullDate_followsInjectedLocale() {
+        // en_GB is used here rather than en_US: iOS 18.x DateFormatter applies
+        // locale-preferred component ordering even with a fixed dateFormat string,
+        // reordering "EEEE d MMMM" to "EEEE, MMMM d" for en_US (month-first).
+        // British English keeps day-before-month order, matching the format template
+        // and the fr_FR baseline ("Mercredi 13 mai"), while still exercising English
+        // weekday/month names.
         let now = date(2026, 5, 20, 14, 30)
         let target = date(2026, 5, 13, 10, 0)
         XCTAssertEqual(
             MessageDayLabel.label(
                 for: target, now: now, calendar: makeCalendar(),
-                locale: Locale(identifier: "en_US")
+                locale: Locale(identifier: "en_GB")
             ),
             "Wednesday 13 May"
         )

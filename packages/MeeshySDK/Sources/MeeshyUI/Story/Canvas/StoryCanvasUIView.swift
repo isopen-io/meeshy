@@ -3294,10 +3294,10 @@ public final class StoryCanvasUIView: UIView {
     }
 
     func bringForward(id: String) {
-        var elements = slide.effects.textObjects.map { ($0.id, $0.zIndex ?? 0) }
-        elements += (slide.effects.mediaObjects ?? []).map { ($0.id, $0.zIndex ?? 0) }
+        var elements = slide.effects.textObjects.map { ($0.id, $0.zIndex) }
+        elements += (slide.effects.mediaObjects ?? []).map { ($0.id, $0.zIndex) }
         elements += (slide.effects.audioPlayerObjects ?? []).map { ($0.id, $0.zIndex ?? 0) }
-        elements += (slide.effects.stickerObjects ?? []).map { ($0.id, $0.zIndex ?? 0) }
+        elements += (slide.effects.stickerObjects ?? []).map { ($0.id, $0.zIndex) }
         
         elements.sort { $0.1 < $1.1 }
         
@@ -3321,10 +3321,10 @@ public final class StoryCanvasUIView: UIView {
     }
 
     func sendBackward(id: String) {
-        var elements = slide.effects.textObjects.map { ($0.id, $0.zIndex ?? 0) }
-        elements += (slide.effects.mediaObjects ?? []).map { ($0.id, $0.zIndex ?? 0) }
+        var elements = slide.effects.textObjects.map { ($0.id, $0.zIndex) }
+        elements += (slide.effects.mediaObjects ?? []).map { ($0.id, $0.zIndex) }
         elements += (slide.effects.audioPlayerObjects ?? []).map { ($0.id, $0.zIndex ?? 0) }
-        elements += (slide.effects.stickerObjects ?? []).map { ($0.id, $0.zIndex ?? 0) }
+        elements += (slide.effects.stickerObjects ?? []).map { ($0.id, $0.zIndex) }
         
         elements.sort { $0.1 < $1.1 }
         

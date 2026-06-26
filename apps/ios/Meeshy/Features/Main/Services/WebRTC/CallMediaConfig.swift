@@ -37,8 +37,8 @@ public struct AudioConfig: Sendable {
 
     public static let `default` = AudioConfig(
         dtx: true,
-        maxBitrateBps: 64_000,
-        minBitrateBps: 16_000
+        maxBitrateBps: QualityThresholds.defaultBitrate,
+        minBitrateBps: QualityThresholds.audioCodecFloorBitrateBps
     )
 }
 

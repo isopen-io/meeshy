@@ -1,4 +1,5 @@
 import { buildApiUrl } from '@/lib/config';
+import { logger } from '@/utils/logger';
 import { authManager } from './auth-manager.service';
 
 // Interface pour la demande de Magic Link
@@ -131,7 +132,7 @@ class MagicLinkService {
       const data = await response.json();
       return data;
     } catch (error) {
-      console.error('[MagicLink] Erreur lors de la demande:', error);
+      logger.error('[MagicLink]', 'Erreur lors de la demande', { error });
       return {
         success: false,
         error: 'Erreur de connexion au serveur',
@@ -172,7 +173,7 @@ class MagicLinkService {
 
       return data;
     } catch (error) {
-      console.error('[MagicLink] Erreur lors de la validation:', error);
+      logger.error('[MagicLink]', 'Erreur lors de la validation', { error });
       return {
         success: false,
         error: 'Erreur de connexion au serveur',

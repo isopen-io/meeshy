@@ -160,6 +160,56 @@ describe('AuthHandler', () => {
       jest.clearAllTimers();
       jest.useRealTimers();
     });
+
+    it('should disconnect socket when JWT user is not found in database', async () => {
+      const mockSocket = createMockSocket({
+        handshake: { auth: { token: 'valid-jwt-token' } }
+      });
+
+      jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue(null);
+
+      await authHandler.handleTokenAuthentication(mockSocket);
+
+      expect(mockSocket.emit).toHaveBeenCalledWith('error', expect.objectContaining({
+        message: expect.stringContaining('not found')
+      }));
+      expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
+      expect(connectedUsers.size).toBe(0);
+    });
+
+    it('should disconnect socket when anonymous session token is not found', async () => {
+      const mockSocket = createMockSocket({
+        handshake: { auth: { sessionToken: 'unknown-session' } }
+      });
+
+      jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue(null);
+
+      await authHandler.handleTokenAuthentication(mockSocket);
+
+      expect(mockSocket.emit).toHaveBeenCalledWith('error', expect.objectContaining({
+        message: expect.stringContaining('not found')
+      }));
+      expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
+      expect(connectedUsers.size).toBe(0);
+    });
+
+    it('should disconnect socket and emit error on unexpected JWT verification failure', async () => {
+      const mockSocket = createMockSocket({
+        handshake: { auth: { token: 'malformed-token' } }
+      });
+
+      jest.spyOn(jwt, 'verify').mockImplementation(() => {
+        throw new Error('invalid signature');
+      });
+
+      await authHandler.handleTokenAuthentication(mockSocket);
+
+      expect(mockSocket.emit).toHaveBeenCalledWith('error', expect.objectContaining({
+        message: 'Authentication failed'
+      }));
+      expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
+      expect(connectedUsers.size).toBe(0);
+    });
   });
 
   describe('handleDisconnection', () => {
@@ -273,6 +323,57 @@ describe('AuthHandler', () => {
 
       expect(connectedUsers.has('user-123')).toBe(false);
       expect(socketToUser.has('socket-123')).toBe(false);
+    });
+
+    it('should call leaveCall with correct args for each active call participation', async () => {
+      (mockPrisma.callParticipant.findMany as jest.Mock).mockResolvedValue([
+        { callSessionId: 'call-1', participantId: 'participant-a' },
+        { callSessionId: 'call-2', participantId: 'participant-b' }
+      ]);
+
+      socketToUser.set('socket-123', 'user-123');
+      connectedUsers.set('user-123', {
+        id: 'user-123',
+        socketId: 'socket-123',
+        isAnonymous: false,
+        language: 'en'
+      });
+      userSockets.set('user-123', new Set(['socket-123']));
+
+      await authHandler.handleDisconnection(createMockSocket());
+
+      expect(mockCallService.leaveCall).toHaveBeenCalledTimes(2);
+      expect(mockCallService.leaveCall).toHaveBeenCalledWith({
+        callId: 'call-1',
+        userId: 'user-123',
+        participantId: 'participant-a'
+      });
+      expect(mockCallService.leaveCall).toHaveBeenCalledWith({
+        callId: 'call-2',
+        userId: 'user-123',
+        participantId: 'participant-b'
+      });
+      // Maps cleaned despite leaving calls
+      expect(connectedUsers.has('user-123')).toBe(false);
+      expect(socketToUser.has('socket-123')).toBe(false);
+    });
+
+    it('should not call leaveCall when there are no active call participations', async () => {
+      (mockPrisma.callParticipant.findMany as jest.Mock).mockResolvedValue([]);
+
+      socketToUser.set('socket-123', 'user-123');
+      connectedUsers.set('user-123', {
+        id: 'user-123',
+        socketId: 'socket-123',
+        isAnonymous: false,
+        language: 'en'
+      });
+      userSockets.set('user-123', new Set(['socket-123']));
+
+      await authHandler.handleDisconnection(createMockSocket());
+
+      expect(mockCallService.leaveCall).not.toHaveBeenCalled();
+      expect(connectedUsers.has('user-123')).toBe(false);
     });
   });
 });

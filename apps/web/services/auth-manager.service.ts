@@ -3,6 +3,7 @@
  */
 
 import type { User } from '@/types';
+import { logger } from '@/utils/logger';
 import { AUTH_STORAGE_KEYS, SESSION_STORAGE_KEYS } from '@/constants/auth';
 
 // Re-export constants for backward compatibility
@@ -184,7 +185,7 @@ class AuthManager {
       } catch (e) {}
 
     } catch (error) {
-      console.error('[AUTH_MANAGER] Error clearing sessions:', error);
+      logger.error('[AuthManager]', 'Error clearing sessions', { error });
     }
   }
 

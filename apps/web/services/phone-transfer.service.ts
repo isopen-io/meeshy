@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 /**
  * Phone Transfer Service
  * Frontend service for phone number transfer during registration
@@ -157,7 +158,7 @@ class PhoneTransferService {
         maskedOwnerInfo: data.data?.maskedOwnerInfo,
       };
     } catch (error) {
-      console.error('[PhoneTransferService] Error in initiateTransfer:', error);
+      logger.error('[PhoneTransfer]', 'Error in initiateTransfer', { error });
       return {
         success: false,
         error: getErrorMessage('internal_error'),
@@ -200,7 +201,7 @@ class PhoneTransferService {
         transferId: data.data?.transferId,
       };
     } catch (error) {
-      console.error('[PhoneTransferService] Error in initiateTransferForRegistration:', error);
+      logger.error('[PhoneTransfer]', 'Error in initiateTransferForRegistration', { error });
       return {
         success: false,
         error: getErrorMessage('internal_error'),
@@ -242,7 +243,7 @@ class PhoneTransferService {
         transferToken: data.data?.transferToken,
       };
     } catch (error) {
-      console.error('[PhoneTransferService] Error in verifyTransferForRegistration:', error);
+      logger.error('[PhoneTransfer]', 'Error in verifyTransferForRegistration', { error });
       return {
         success: false,
         error: getErrorMessage('internal_error'),
@@ -281,7 +282,7 @@ class PhoneTransferService {
         transferred: data.data?.transferred,
       };
     } catch (error) {
-      console.error('[PhoneTransferService] Error in verifyAndTransfer:', error);
+      logger.error('[PhoneTransfer]', 'Error in verifyAndTransfer', { error });
       return {
         success: false,
         error: getErrorMessage('internal_error'),
@@ -317,7 +318,7 @@ class PhoneTransferService {
         success: true,
       };
     } catch (error) {
-      console.error('[PhoneTransferService] Error in resendCode:', error);
+      logger.error('[PhoneTransfer]', 'Error in resendCode', { error });
       return {
         success: false,
         error: getErrorMessage('internal_error'),
@@ -343,7 +344,7 @@ class PhoneTransferService {
       const data = await response.json();
       return { success: data.success || false };
     } catch (error) {
-      console.error('[PhoneTransferService] Error in cancelTransfer:', error);
+      logger.error('[PhoneTransfer]', 'Error in cancelTransfer', { error });
       return { success: false };
     }
   }

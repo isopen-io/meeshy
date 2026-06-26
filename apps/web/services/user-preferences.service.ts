@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { apiService } from './api.service';
 import type {
   UserConversationPreferences,
@@ -109,7 +110,7 @@ export class UserPreferencesService {
       if (error.status === 404) {
         return null;
       }
-      console.error('Erreur lors de la récupération des préférences:', error);
+      logger.error('[UserPreferences]', 'Erreur lors de la récupération des préférences', { error });
       throw error;
     }
   }
@@ -140,7 +141,7 @@ export class UserPreferencesService {
 
       return preferences;
     } catch (error) {
-      console.error('Erreur lors de la récupération de toutes les préférences:', error);
+      logger.error('[UserPreferences]', 'Erreur lors de la récupération de toutes les préférences', { error });
       return [];
     }
   }
@@ -170,7 +171,7 @@ export class UserPreferencesService {
 
       return preferences;
     } catch (error) {
-      console.error('Erreur lors de la mise à jour des préférences:', error);
+      logger.error('[UserPreferences]', 'Erreur lors de la mise à jour des préférences', { error });
       throw error;
     }
   }
@@ -185,7 +186,7 @@ export class UserPreferencesService {
       // Invalider le cache pour cette conversation
       this.preferencesCache.delete(conversationId);
     } catch (error) {
-      console.error('Erreur lors de la suppression des préférences:', error);
+      logger.error('[UserPreferences]', 'Erreur lors de la suppression des préférences', { error });
       throw error;
     }
   }
@@ -234,7 +235,7 @@ export class UserPreferencesService {
       const updatedTags = [...currentTags, tag];
       return this.updateTags(conversationId, updatedTags);
     } catch (error) {
-      console.error('Erreur lors de l\'ajout du tag:', error);
+      logger.error('[UserPreferences]', "Erreur lors de l'ajout du tag", { error });
       throw error;
     }
   }
@@ -250,7 +251,7 @@ export class UserPreferencesService {
 
       return this.updateTags(conversationId, updatedTags);
     } catch (error) {
-      console.error('Erreur lors de la suppression du tag:', error);
+      logger.error('[UserPreferences]', 'Erreur lors de la suppression du tag', { error });
       throw error;
     }
   }
@@ -304,7 +305,7 @@ export class UserPreferencesService {
       // Invalider le cache
       this.invalidateCache();
     } catch (error) {
-      console.error('Erreur lors du réordonnancement:', error);
+      logger.error('[UserPreferences]', 'Erreur lors du réordonnancement', { error });
       throw error;
     }
   }
@@ -338,7 +339,7 @@ export class UserPreferencesService {
 
       return categories;
     } catch (error) {
-      console.error('Erreur lors de la récupération des catégories:', error);
+      logger.error('[UserPreferences]', 'Erreur lors de la récupération des catégories', { error });
       return [];
     }
   }
@@ -362,7 +363,7 @@ export class UserPreferencesService {
       if (error.status === 404) {
         return null;
       }
-      console.error('Erreur lors de la récupération de la catégorie:', error);
+      logger.error('[UserPreferences]', 'Erreur lors de la récupération de la catégorie', { error });
       throw error;
     }
   }
@@ -390,7 +391,7 @@ export class UserPreferencesService {
 
       return category;
     } catch (error) {
-      console.error('Erreur lors de la création de la catégorie:', error);
+      logger.error('[UserPreferences]', 'Erreur lors de la création de la catégorie', { error });
       throw error;
     }
   }
@@ -419,7 +420,7 @@ export class UserPreferencesService {
 
       return category;
     } catch (error) {
-      console.error('Erreur lors de la mise à jour de la catégorie:', error);
+      logger.error('[UserPreferences]', 'Erreur lors de la mise à jour de la catégorie', { error });
       throw error;
     }
   }
@@ -435,7 +436,7 @@ export class UserPreferencesService {
       this.categoriesCache = null;
       this.invalidateCache();
     } catch (error) {
-      console.error('Erreur lors de la suppression de la catégorie:', error);
+      logger.error('[UserPreferences]', 'Erreur lors de la suppression de la catégorie', { error });
       throw error;
     }
   }
@@ -465,7 +466,7 @@ export class UserPreferencesService {
       // Invalider le cache
       this.categoriesCache = null;
     } catch (error) {
-      console.error('Erreur lors du réordonnancement des catégories:', error);
+      logger.error('[UserPreferences]', 'Erreur lors du réordonnancement des catégories', { error });
       throw error;
     }
   }

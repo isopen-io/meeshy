@@ -89,10 +89,10 @@ struct SectionHeaderView: View {
             .padding(.vertical, 10)
             .padding(.horizontal, 12)
             .background(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(isDropTarget ? Color(hex: section.color).opacity(isDark ? 0.15 : 0.1) : (isExpanded ? Color(hex: section.color).opacity(0.04) : Color.clear))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .stroke(
                                 isDropTarget ? Color(hex: section.color).opacity(0.5) : Color.clear,
                                 lineWidth: 2
@@ -356,7 +356,7 @@ struct ThemedCommunityCard: View, Equatable {
             .padding(8)
         }
         .frame(width: 130, height: 110)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
         .scaleEffect(isPressed ? 0.95 : 1)
         .contentShape(Rectangle())
         .onTapGesture {

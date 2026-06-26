@@ -4,6 +4,7 @@
  */
 
 import type { MemberRoleType } from '@meeshy/shared/types/role-types';
+import { logger } from '@/utils/logger';
 import { apiService } from '../api.service';
 import type {
   ParticipantsFilters,
@@ -62,7 +63,7 @@ export class ParticipantsService {
 
       return response.data?.data ?? [];
     } catch (error) {
-      console.error('[ParticipantsService] Erreur lors de la récupération des participants:', error);
+      logger.error('[Participants]', 'Erreur lors de la récupération des participants', { error });
       return [];
     }
   }
@@ -90,7 +91,7 @@ export class ParticipantsService {
 
       return response.data?.data ?? [];
     } catch (error) {
-      console.error('[ParticipantsService] Erreur lors de la recherche des participants:', error);
+      logger.error('[Participants]', 'Erreur lors de la recherche des participants', { error });
       return [];
     }
   }
@@ -132,7 +133,7 @@ export class ParticipantsService {
 
         // Sécurité: arrêter après 10 pages max (1000 participants)
         if (allParticipants.length >= 1000) {
-          console.warn('[ParticipantsService] Limite de 1000 participants atteinte');
+          logger.warn('[Participants]', 'Limite de 1000 participants atteinte');
           break;
         }
       }
@@ -154,7 +155,7 @@ export class ParticipantsService {
         totalCount
       };
     } catch (error) {
-      console.error('Erreur lors de la récupération de tous les participants:', error);
+      logger.error('[Participants]', 'Erreur lors de la récupération de tous les participants', { error });
       return {
         authenticatedParticipants: [],
         anonymousParticipants: []

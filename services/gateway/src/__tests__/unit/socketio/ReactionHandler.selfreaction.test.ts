@@ -27,6 +27,7 @@ jest.mock('../../../validation/socket-event-schemas', () => ({
 
 jest.mock('../../../middleware/validation', () => ({
   validateSocketEvent: jest.fn(),
+  isValidationFailure: jest.fn((r) => !r.success),
 }));
 
 jest.mock('../../../utils/logger-enhanced', () => ({

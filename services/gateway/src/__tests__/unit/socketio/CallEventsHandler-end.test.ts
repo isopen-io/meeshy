@@ -40,6 +40,7 @@ jest.mock('../../../services/PushNotificationService', () => ({
 
 jest.mock('../../../middleware/validation', () => ({
   validateSocketEvent: jest.fn(),
+  isValidationFailure: jest.fn((r) => !r.success),
 }));
 
 const mockCheckRateLimit = jest.fn<any>().mockResolvedValue(true);
@@ -394,6 +395,48 @@ describe('CallEventsHandler — call:end handler', () => {
       expect(directEmit).toHaveBeenCalledWith(
         CALL_EVENTS.ERROR,
         expect.objectContaining({ code: 'NOT_AUTHENTICATED' })
+      );
+    });
+
+    it('acks { success: false }', () => {
+      expect(ack).toHaveBeenCalledWith({ success: false });
+    });
+
+    it('does NOT call endCall', () => {
+      expect(mockEndCall).not.toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // M3 security: anonymous user (session-token) must be denied via denyAnonymous
+  // -------------------------------------------------------------------------
+
+  describe('anonymous user: getUserInfo returns isAnonymous=true', () => {
+    let directEmit: jest.MockedFunction<any>;
+    let ack: jest.MockedFunction<any>;
+
+    beforeEach(async () => {
+      const prisma = makePrisma();
+      const { socket, handlers, directEmit: d } = makeSocket();
+      directEmit = d;
+      const { io } = makeIo();
+      ack = jest.fn<any>();
+
+      const handler = new CallEventsHandler(prisma);
+      // Session-token user has a valid userId but isAnonymous flag is true
+      handler.setupCallEvents(
+        socket as any,
+        io,
+        () => CALLER_ID,
+        () => ({ id: CALLER_ID, isAnonymous: true })
+      );
+      await handlers[CALL_EVENTS.END](END_DATA, ack);
+    });
+
+    it('emits PERMISSION_DENIED to the socket', () => {
+      expect(directEmit).toHaveBeenCalledWith(
+        CALL_EVENTS.ERROR,
+        expect.objectContaining({ code: CALL_ERROR_CODES.PERMISSION_DENIED })
       );
     });
 

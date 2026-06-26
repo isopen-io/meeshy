@@ -32,6 +32,7 @@ jest.mock('../../../services/PushNotificationService', () => ({
 
 jest.mock('../../../middleware/validation', () => ({
   validateSocketEvent: jest.fn(),
+  isValidationFailure: jest.fn((r) => !r.success),
 }));
 
 const mockCheckLimit = jest.fn<() => Promise<boolean>>().mockResolvedValue(true);

@@ -17,7 +17,7 @@ import { PushNotificationService } from '../services/PushNotificationService';
 import { logger } from '../utils/logger';
 import { CALL_EVENTS, CALL_ERROR_CODES } from '@meeshy/shared/types/video-call';
 import { ROOMS } from '@meeshy/shared/types/socketio-events';
-import { validateSocketEvent } from '../middleware/validation';
+import { validateSocketEvent, isValidationFailure } from '../middleware/validation';
 import {
   socketInitiateCallSchema,
   socketJoinCallSchema,
@@ -37,6 +37,7 @@ import {
   socketCallScreenCaptureDetectedSchema
 } from '../validation/call-schemas';
 import { getSocketRateLimiter, checkSocketRateLimit, SOCKET_RATE_LIMITS } from '../utils/socket-rate-limiter';
+import { ZmqTranslationClient } from '../services/zmq-translation';
 import type {
   CallInitiateEvent,
   CallInitiatedEvent,
@@ -53,6 +54,7 @@ import type {
   CallReconnectedEvent,
   CallInitiateAck,
   CallJoinAck,
+  ConnectionQuality,
   // CallEndReason imported as value from @meeshy/shared/prisma/client above
   // (the Prisma generated enum is both a value AND a type, so we don't
   // need the type-only re-export from video-call.ts which duplicates it).
@@ -66,6 +68,7 @@ export class CallEventsHandler {
   private callService: CallService;
   private notificationService: NotificationService | null = null;
   private pushService: PushNotificationService | null = null;
+  private zmqClient: ZmqTranslationClient | null = null;
   /**
    * P3 — broadcaster for the call-summary system message. Injected by the
    * socket manager (which owns `broadcastMessage`) so this handler can post a
@@ -184,12 +187,141 @@ export class CallEventsHandler {
     logger.info('📢 CallEventsHandler: PushNotificationService initialized');
   }
 
+  setZmqClient(zmqClient: ZmqTranslationClient): void {
+    this.zmqClient = zmqClient;
+    logger.info('📢 CallEventsHandler: ZmqTranslationClient initialized');
+  }
+
   /**
    * P3 — inject the conversation message broadcaster (the manager's
    * `broadcastMessage`). Enables posting the call-summary system message.
    */
   setMessageBroadcaster(broadcaster: (message: unknown, conversationId: string) => Promise<void>): void {
     this.messageBroadcaster = broadcaster;
+  }
+
+  /**
+   * Translates a final transcription segment to each active participant's
+   * preferred language and emits a `TRANSLATED_SEGMENT` event per language.
+   * Only fires for final segments (isFinal=true) to avoid flooding ZMQ.
+   * Falls back to emitting the original text if translation fails.
+   */
+  private async translateAndEmitSegment(
+    socket: Socket,
+    data: CallTranscriptionSegmentEvent,
+    speakerUserId: string
+  ): Promise<void> {
+    const activeParticipants = await this.prisma.callParticipant.findMany({
+      where: { callSessionId: data.callId, leftAt: null },
+      select: {
+        participant: {
+          select: {
+            userId: true,
+            user: { select: { systemLanguage: true } }
+          }
+        }
+      }
+    });
+
+    const targetLanguages: string[] = [
+      ...new Set<string>(
+        activeParticipants
+          .filter(p => p.participant.userId !== speakerUserId)
+          .map(p => (p.participant.user?.systemLanguage as string | undefined) ?? 'fr')
+          .filter((lang): lang is string => typeof lang === 'string' && lang !== data.segment.language)
+      )
+    ];
+
+    if (targetLanguages.length === 0) {
+      socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.TRANSLATED_SEGMENT, {
+        callId: data.callId,
+        segment: {
+          text: data.segment.text,
+          speakerId: data.segment.speakerId,
+          startMs: data.segment.startMs,
+          endMs: data.segment.endMs,
+          isFinal: data.segment.isFinal,
+          sourceLanguage: data.segment.language,
+          targetLanguage: data.segment.language,
+          confidence: data.segment.confidence
+        }
+      });
+      return;
+    }
+
+    await Promise.allSettled(
+      targetLanguages.map(async (targetLanguage) => {
+        try {
+          const taskId = await this.zmqClient!.translateText(
+            data.segment.text,
+            data.segment.language,
+            targetLanguage,
+            `call-${data.callId}-${data.segment.startMs}`,
+            data.callId
+          );
+
+          logger.debug('Call transcription segment translation requested', { callId: data.callId, taskId, targetLanguage });
+
+          return new Promise<void>((resolve) => {
+            const TIMEOUT_MS = 10_000;
+            const timer = setTimeout(() => {
+              this.zmqClient!.off('translationCompleted', onResult);
+              socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.TRANSLATED_SEGMENT, {
+                callId: data.callId,
+                segment: {
+                  text: data.segment.text,
+                  speakerId: data.segment.speakerId,
+                  startMs: data.segment.startMs,
+                  endMs: data.segment.endMs,
+                  isFinal: data.segment.isFinal,
+                  sourceLanguage: data.segment.language,
+                  targetLanguage,
+                  confidence: data.segment.confidence
+                }
+              });
+              resolve();
+            }, TIMEOUT_MS);
+
+            const onResult = (event: { taskId: string; result: { translatedText: string; targetLanguage: string } }) => {
+              if (event.taskId !== taskId) return;
+              clearTimeout(timer);
+              this.zmqClient!.off('translationCompleted', onResult);
+              socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.TRANSLATED_SEGMENT, {
+                callId: data.callId,
+                segment: {
+                  text: data.segment.text,
+                  translatedText: event.result.translatedText,
+                  speakerId: data.segment.speakerId,
+                  startMs: data.segment.startMs,
+                  endMs: data.segment.endMs,
+                  isFinal: data.segment.isFinal,
+                  sourceLanguage: data.segment.language,
+                  targetLanguage,
+                  confidence: data.segment.confidence
+                }
+              });
+              resolve();
+            };
+            this.zmqClient!.on('translationCompleted', onResult);
+          });
+        } catch (err) {
+          logger.warn('Call transcription translation failed, relaying original', { callId: data.callId, targetLanguage, err });
+          socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.TRANSLATED_SEGMENT, {
+            callId: data.callId,
+            segment: {
+              text: data.segment.text,
+              speakerId: data.segment.speakerId,
+              startMs: data.segment.startMs,
+              endMs: data.segment.endMs,
+              isFinal: data.segment.isFinal,
+              sourceLanguage: data.segment.language,
+              targetLanguage,
+              confidence: data.segment.confidence
+            }
+          });
+        }
+      })
+    );
   }
 
   /**
@@ -275,7 +407,7 @@ export class CallEventsHandler {
           where: { userId, isActive: true },
           select: { conversationId: true }
         });
-        const convIds = myConvs.map((p: any) => p.conversationId);
+        const convIds = myConvs.map(p => p.conversationId);
         if (convIds.length === 0) return;
         const ringingWindowStart = new Date(Date.now() - 60_000);
         const activeCalls = await this.prisma.callSession.findMany({
@@ -288,19 +420,21 @@ export class CallEventsHandler {
           },
           select: { id: true }
         });
-        const callIds = activeCalls.map((c: any) => c.id);
+        const callIds = activeCalls.map(c => c.id);
         const myParticipants = callIds.length > 0
           ? await this.prisma.callParticipant.findMany({
               where: { callSessionId: { in: callIds }, participant: { userId } }
             })
           : [];
-        const myParticipantMap = new Map(myParticipants.map((p: any) => [p.callSessionId, p]));
+        const myParticipantMap = new Map<string, { leftAt: Date | null }>(
+          myParticipants.map(p => [p.callSessionId as string, p as { leftAt: Date | null }])
+        );
         for (const c of activeCalls) {
           const myPart = myParticipantMap.get(c.id);
           if (myPart?.leftAt) continue;
 
           const full = await this.callService.getCallSession(c.id);
-          const callType: 'audio' | 'video' = (full.metadata as any)?.type === 'video' ? 'video' : 'audio';
+          const callType: 'audio' | 'video' = (full.metadata as { type?: string } | null)?.type === 'video' ? 'video' : 'audio';
           const event: CallInitiatedEvent = {
             callId: full.id,
             conversationId: full.conversationId,
@@ -312,7 +446,7 @@ export class CallEventsHandler {
               displayName: full.initiator.displayName || undefined,
               avatar: full.initiator.avatar
             },
-            participants: full.participants.map((p: any) => ({
+            participants: full.participants.map(p => ({
               id: p.id,
               callSessionId: p.callSessionId,
               userId: p.participant?.userId || p.participantId,
@@ -321,7 +455,7 @@ export class CallEventsHandler {
               leftAt: p.leftAt,
               isAudioEnabled: p.isAudioEnabled,
               isVideoEnabled: p.isVideoEnabled,
-              connectionQuality: p.connectionQuality as any,
+              connectionQuality: (p.connectionQuality as ConnectionQuality | null),
               username: p.participant?.user?.username || p.participant?.displayName,
               displayName: p.participant?.displayName || p.participant?.user?.displayName,
               avatar: p.participant?.user?.avatar || p.participant?.avatar
@@ -366,12 +500,13 @@ export class CallEventsHandler {
 
         // CVE-006: Validate input data
         const validation = validateSocketEvent(socketInitiateCallSchema, data);
-        if (!validation.success) {
+        if (isValidationFailure(validation)) {
+          const { error: validationError, details: validationDetails } = validation;
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.VALIDATION_ERROR,
-            message: (validation as any).error,
-            details: (validation as any).details
-          } as any);
+            message: validationError,
+            details: validationDetails ? { issues: validationDetails } : undefined
+          } as CallError);
           return;
         }
 
@@ -398,7 +533,7 @@ export class CallEventsHandler {
           initiatorId: userId,
           participantId,
           type: data.type,
-          settings: data.settings as any
+          settings: data.settings ? { screenShareEnabled: data.settings.screenShareEnabled } : undefined
         });
 
         // CRITICAL: Initiator must join the call room to receive participant-joined events
@@ -417,7 +552,7 @@ export class CallEventsHandler {
         // ce champ explicite, l'iOS recevait `mode: 'p2p'` et décidait
         // toujours `isVideo = false` → CallKit affichait l'incoming call en
         // audio même quand l'appelant voulait un appel vidéo.
-        const callType: 'audio' | 'video' = (callSession.metadata as any)?.type === 'video' ? 'video' : 'audio';
+        const callType: 'audio' | 'video' = (callSession.metadata as { type?: string } | null)?.type === 'video' ? 'video' : 'audio';
         const initiatedEvent: CallInitiatedEvent = {
           callId: callSession.id,
           conversationId: data.conversationId,
@@ -429,7 +564,7 @@ export class CallEventsHandler {
             displayName: callSession.initiator.displayName || undefined,
             avatar: callSession.initiator.avatar
           },
-          participants: callSession.participants.map((p: any) => ({
+          participants: callSession.participants.map(p => ({
             id: p.id,
             callSessionId: p.callSessionId,
             userId: p.participant?.userId || p.participantId,
@@ -438,7 +573,7 @@ export class CallEventsHandler {
             leftAt: p.leftAt,
             isAudioEnabled: p.isAudioEnabled,
             isVideoEnabled: p.isVideoEnabled,
-            connectionQuality: p.connectionQuality as any,
+            connectionQuality: (p.connectionQuality as ConnectionQuality | null),
             username: p.participant?.user?.username || p.participant?.displayName,
             displayName: p.participant?.displayName || p.participant?.user?.displayName,
             avatar: p.participant?.user?.avatar || p.participant?.avatar
@@ -696,12 +831,13 @@ export class CallEventsHandler {
 
         // CVE-006: Validate input data
         const validation = validateSocketEvent(socketJoinCallSchema, data);
-        if (!validation.success) {
+        if (isValidationFailure(validation)) {
+          const { error: validationError, details: validationDetails } = validation;
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.VALIDATION_ERROR,
-            message: (validation as any).error,
-            details: (validation as any).details
-          } as any);
+            message: validationError,
+            details: validationDetails ? { issues: validationDetails } : undefined
+          } as CallError);
           return;
         }
 
@@ -750,7 +886,7 @@ export class CallEventsHandler {
 
         // Get the participant that just joined
         const participant = callSession.participants.find(
-          (p: any) => ((p.participant?.userId || p.participantId) === userId) && !p.leftAt
+          p => ((p.participant?.userId || p.participantId) === userId) && !p.leftAt
         );
 
         if (!participant) {
@@ -758,28 +894,27 @@ export class CallEventsHandler {
         }
 
         // Prepare event data
-        const pAny = participant as any;
         const joinedEvent: CallParticipantJoinedEvent = {
           callId: callSession.id,
           participant: {
             id: participant.id,
             callSessionId: participant.callSessionId,
-            userId: pAny.participant?.userId || participant.participantId,
+            userId: participant.participant?.userId || participant.participantId,
             role: participant.role,
             joinedAt: participant.joinedAt,
             leftAt: participant.leftAt,
             isAudioEnabled: participant.isAudioEnabled,
             isVideoEnabled: participant.isVideoEnabled,
-            connectionQuality: participant.connectionQuality as any,
-            username: pAny.participant?.user?.username || pAny.participant?.displayName,
-            displayName: pAny.participant?.displayName || pAny.participant?.user?.displayName,
-            avatar: pAny.participant?.user?.avatar || pAny.participant?.avatar
+            connectionQuality: (participant.connectionQuality as ConnectionQuality | null),
+            username: participant.participant?.user?.username || participant.participant?.displayName,
+            displayName: participant.participant?.displayName || participant.participant?.user?.displayName,
+            avatar: participant.participant?.user?.avatar || participant.participant?.avatar
           },
           mode: callSession.mode
         };
 
         // ACK with call session and ICE servers (with time-limited TURN credentials)
-        ack?.({ success: true, data: { callSession: callSession as any, iceServers } });
+        ack?.({ success: true, data: { callSession: callSession as unknown as CallJoinAck['data']['callSession'], iceServers } });
 
         // Broadcast to all OTHER call participants with per-user TURN credentials (§3.4)
         // The caller needs iceServers from this event to configure WebRTC before creating SDP offer
@@ -817,15 +952,35 @@ export class CallEventsHandler {
         // client (stale offers dropped via negotiationId).
         // Match the same identity the relay uses to resolve `signal.to`:
         // the participant's real userId (registered) or participantId (anon).
-        const joinerParticipantId = (participant as any).participant?.userId || participant.participantId;
+        const joinerParticipantId = participant.participant?.userId || participant.participantId;
         const replayOffer = this.bufferedOfferFor(data.callId, userId, joinerParticipantId);
         if (replayOffer) {
-          socket.emit(CALL_EVENTS.SIGNAL, replayOffer);
-          logger.info('📦 [CALL] Replayed buffered offer on (re)join', {
-            callId: data.callId,
-            to: userId,
-            type: replayOffer.signal.type
-          });
+          // C2 — verify the offer sender is still an active participant before
+          // replaying. If the sender left between buffering and this join, the
+          // offer is stale: replaying it would expose the departed sender's
+          // identity to the joining participant and trigger a dead negotiation
+          // (answer sent to nobody). callSession is already in scope from joinCall.
+          const senderId = replayOffer.signal.from;
+          const senderActive = callSession.participants.some(
+            (p: any) => !p.leftAt && (
+              (p.participant?.userId ?? p.participantId) === senderId ||
+              p.participantId === senderId
+            )
+          );
+          if (senderActive) {
+            socket.emit(CALL_EVENTS.SIGNAL, replayOffer);
+            logger.info('📦 [CALL] Replayed buffered offer on (re)join', {
+              callId: data.callId,
+              to: userId,
+              type: replayOffer.signal.type
+            });
+          } else {
+            this.clearBufferedOffer(data.callId);
+            logger.info('📦 [CALL] Buffered offer sender no longer active — dropped', {
+              callId: data.callId,
+              type: replayOffer.signal.type
+            });
+          }
         }
 
         // Audit P1-27 — notify the joining user's OTHER devices that the
@@ -893,12 +1048,13 @@ export class CallEventsHandler {
 
         // CVE-006: Validate input data
         const validation = validateSocketEvent(socketLeaveCallSchema, data);
-        if (!validation.success) {
+        if (isValidationFailure(validation)) {
+          const { error: validationError, details: validationDetails } = validation;
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.VALIDATION_ERROR,
-            message: (validation as any).error,
-            details: (validation as any).details
-          } as any);
+            message: validationError,
+            details: validationDetails ? { issues: validationDetails } : undefined
+          } as CallError);
           return;
         }
 
@@ -911,7 +1067,7 @@ export class CallEventsHandler {
         // Find participant before leaving
         const callBefore = await this.callService.getCallSession(data.callId);
         const participant = callBefore.participants.find(
-          (p: any) => ((p.participant?.userId || p.participantId) === userId) && !p.leftAt
+          p => ((p.participant?.userId || p.participantId) === userId) && !p.leftAt
         );
 
         if (!participant) {
@@ -938,7 +1094,7 @@ export class CallEventsHandler {
         const leftEvent: CallParticipantLeftEvent = {
           callId: callSession.id,
           participantId: participant.id,
-          userId: (participant as any).participant?.userId || participant.participantId,
+          userId: participant.participant?.userId || participant.participantId,
           mode: callSession.mode
         };
 
@@ -948,7 +1104,7 @@ export class CallEventsHandler {
         logger.info('📤 Broadcasting call:participant-left event', {
           callId: data.callId,
           participantId: participant.id,
-          userId: (participant as any).participant?.userId || participant.participantId,
+          userId: participant.participant?.userId || participant.participantId,
           remainingParticipants: callSession.participants.filter(p => !p.leftAt).length,
           roomName: ROOMS.call(data.callId),
           socketsInRoom: socketsInRoom.length,
@@ -1054,12 +1210,13 @@ export class CallEventsHandler {
         // Audit P1-22 — Validate conversationId is a valid ObjectId before
         // running an unbounded `findMany` against the conversation_id index.
         const validation = validateSocketEvent(socketForceLeaveSchema, data);
-        if (!validation.success) {
+        if (isValidationFailure(validation)) {
+          const { error: validationError, details: validationDetails } = validation;
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.VALIDATION_ERROR,
-            message: (validation as any).error,
-            details: (validation as any).details
-          } as any);
+            message: validationError,
+            details: validationDetails ? { issues: validationDetails } : undefined
+          } as CallError);
           return;
         }
 
@@ -1143,7 +1300,7 @@ export class CallEventsHandler {
               const leftEvent: CallParticipantLeftEvent = {
                 callId: callSession.id,
                 participantId: participant.id,
-                userId: (participant as any).participant?.userId || /* istanbul ignore next */ participant.participantId,
+                userId: participant.participant?.userId || /* istanbul ignore next */ participant.participantId,
                 mode: callSession.mode
               };
 
@@ -1218,17 +1375,18 @@ export class CallEventsHandler {
 
         // CVE-001 & CVE-006: Validate signal data structure and size
         const validation = validateSocketEvent(socketSignalSchema, data);
-        if (!validation.success) {
+        if (isValidationFailure(validation)) {
+          const { error: validationError, details: validationDetails } = validation;
           logger.warn('Invalid WebRTC signal', {
             userId,
-            error: (validation as any).error,
-            details: (validation as any).details
+            error: validationError,
+            details: validationDetails ? { issues: validationDetails } : undefined
           });
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.INVALID_SIGNAL,
-            message: (validation as any).error,
-            details: (validation as any).details
-          } as any);
+            message: validationError,
+            details: validationDetails ? { issues: validationDetails } : undefined
+          } as CallError);
           return;
         }
 
@@ -1244,7 +1402,7 @@ export class CallEventsHandler {
         // CVE-001: Verify sender is actually a participant in the call
         const callSession = await this.callService.getCallSession(data.callId);
         const senderParticipant = callSession.participants.find(
-          (p: any) => ((p.participant?.userId || p.participantId) === userId) && !p.leftAt
+          p => ((p.participant?.userId || p.participantId) === userId) && !p.leftAt
         );
 
         if (!senderParticipant) {
@@ -1275,7 +1433,7 @@ export class CallEventsHandler {
 
         // CVE-001: Find and validate target participant
         const targetParticipant = callSession.participants.find(
-          (p: any) => ((p.participant?.userId || p.participantId) === data.signal.to) && !p.leftAt
+          p => ((p.participant?.userId || p.participantId) === data.signal.to) && !p.leftAt
         );
 
         if (!targetParticipant) {
@@ -1292,7 +1450,7 @@ export class CallEventsHandler {
 
         // TARGETED EMIT: Forward signal ONLY to the target participant's sockets
         // Resolves target userId to their socketIds within the call room
-        const targetUserId = (targetParticipant as any).participant?.userId || targetParticipant.participantId;
+        const targetUserId = targetParticipant.participant?.userId || targetParticipant.participantId;
         const targetSocketIds = await this.resolveTargetSockets(io, data.callId, targetUserId, getUserId);
 
         if (targetSocketIds.length === 0) {
@@ -1389,12 +1547,13 @@ export class CallEventsHandler {
 
         // CVE-006: Validate input data
         const validation = validateSocketEvent(socketMediaToggleSchema, data);
-        if (!validation.success) {
+        if (isValidationFailure(validation)) {
+          const { error: validationError, details: validationDetails } = validation;
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.VALIDATION_ERROR,
-            message: (validation as any).error,
-            details: (validation as any).details
-          } as any);
+            message: validationError,
+            details: validationDetails ? { issues: validationDetails } : undefined
+          } as CallError);
           return;
         }
 
@@ -1480,12 +1639,13 @@ export class CallEventsHandler {
 
         // CVE-006: Validate input data
         const validation = validateSocketEvent(socketMediaToggleSchema, data);
-        if (!validation.success) {
+        if (isValidationFailure(validation)) {
+          const { error: validationError, details: validationDetails } = validation;
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.VALIDATION_ERROR,
-            message: (validation as any).error,
-            details: (validation as any).details
-          } as any);
+            message: validationError,
+            details: validationDetails ? { issues: validationDetails } : undefined
+          } as CallError);
           return;
         }
 
@@ -1560,6 +1720,12 @@ export class CallEventsHandler {
           return;
         }
 
+        // Anonymous users cannot end calls — they cannot initiate or join them
+        // either (denyAnonymous is checked at initiate/join). This gate prevents
+        // a future bug where an anonymous user that somehow holds a callId
+        // could end someone else's call by guessing or replaying an event.
+        if (denyAnonymous()) { ack?.({ success: false }); return; }
+
         // Rate limiting
         const rateLimitPassed = await checkSocketRateLimit(
           socket, userId, SOCKET_RATE_LIMITS.CALL_LEAVE, this.rateLimiter, CALL_EVENTS.ERROR
@@ -1568,11 +1734,12 @@ export class CallEventsHandler {
 
         // Validate
         const validation = validateSocketEvent(socketEndCallSchema, data);
-        if (!validation.success) {
+        if (isValidationFailure(validation)) {
+          const { error: validationError } = validation;
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.VALIDATION_ERROR,
-            message: (validation as any).error
-          } as any);
+            message: validationError
+          } as CallError);
           ack?.({ success: false });
           return;
         }
@@ -1794,30 +1961,23 @@ export class CallEventsHandler {
         const metadata = callSession.metadata as CallTranscriptionSegmentEvent['segment'] extends unknown ? Record<string, unknown> | null : never;
         const translationEnabled = metadata && typeof metadata === 'object' && 'translationEnabled' in metadata && metadata.translationEnabled === true;
 
-        if (translationEnabled) {
-          // TODO: Forward to ZMQ translator for NLLB translation
-          // ZmqSingleton.getInstance().send({ type: 'call-transcription', ...data })
-          logger.debug('Transcription segment forwarded for translation', {
+        if (translationEnabled && this.zmqClient && data.segment.isFinal) {
+          await this.translateAndEmitSegment(socket, data, userId);
+        } else {
+          socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.TRANSLATED_SEGMENT, {
             callId: data.callId,
-            speakerId: data.segment.speakerId,
-            language: data.segment.language,
-            isFinal: data.segment.isFinal
+            segment: {
+              text: data.segment.text,
+              speakerId: data.segment.speakerId,
+              startMs: data.segment.startMs,
+              endMs: data.segment.endMs,
+              isFinal: data.segment.isFinal,
+              sourceLanguage: data.segment.language,
+              targetLanguage: data.segment.language,
+              confidence: data.segment.confidence
+            }
           });
         }
-
-        socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.TRANSLATED_SEGMENT, {
-          callId: data.callId,
-          segment: {
-            text: data.segment.text,
-            speakerId: data.segment.speakerId,
-            startMs: data.segment.startMs,
-            endMs: data.segment.endMs,
-            isFinal: data.segment.isFinal,
-            sourceLanguage: data.segment.language,
-            targetLanguage: data.segment.language,
-            confidence: data.segment.confidence
-          }
-        });
 
         logger.debug('Transcription segment relayed', {
           callId: data.callId,
@@ -1991,7 +2151,7 @@ export class CallEventsHandler {
             socketId: socket.id,
             userId,
             count: activeParticipations.length,
-            callIds: activeParticipations.map((p: any) => p.callSessionId)
+            callIds: activeParticipations.map(p => p.callSessionId)
           });
         }
 
@@ -2189,7 +2349,7 @@ export class CallEventsHandler {
       // initiateCall) instead of hardcoding 'video'. Misclassified
       // notifications confuse users about what they actually missed.
       const inferredCallType: 'audio' | 'video' =
-        ((callSession.metadata as any)?.type === 'video' ? 'video' : 'audio');
+        ((callSession.metadata as { type?: string } | null)?.type === 'video' ? 'video' : 'audio');
       for (const participantId of unrespondedParticipants) {
         await this.notificationService.createMissedCallNotification({
           recipientUserId: participantId,

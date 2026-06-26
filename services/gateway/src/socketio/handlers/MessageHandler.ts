@@ -255,18 +255,13 @@ export class MessageHandler {
           id: message.id,
           conversationId: message.conversationId,
           senderId: message.senderId,
-          senderDisplayName: (message as unknown as Record<string, unknown>).sender
-            ? ((message as unknown as Record<string, unknown>).sender as Record<string, unknown>)?.displayName as string | undefined
-              ?? ((message as unknown as Record<string, unknown>).sender as Record<string, unknown>)?.username as string | undefined
-            : undefined,
-          senderUsername: (message as unknown as Record<string, unknown>).sender
-            ? ((message as unknown as Record<string, unknown>).sender as Record<string, unknown>)?.username as string | undefined
-            : undefined,
+          senderDisplayName: message.sender?.displayName ?? message.sender?.user?.username,
+          senderUsername: message.sender?.user?.username,
           content: message.content,
           originalLanguage: message.originalLanguage,
           replyToId: message.replyToId,
           mentionedUserIds: await this._resolveMentionUserIds(
-            ((message as never)['validatedMentions'] as string[]) ?? []
+            (message.validatedMentions as string[] | undefined) ?? []
           ),
           createdAt: message.createdAt,
         });
@@ -412,7 +407,7 @@ export class MessageHandler {
           socketId: socket.id,
           clientTimestamp: Date.now()
         }
-      } as any; // Cast needed as MessageRequest uses readonly attachments objects
+      };
 
       const response: MessageResponse = await this.messagingService.handleMessage(
         messageRequest,
@@ -439,23 +434,18 @@ export class MessageHandler {
           id: message.id,
           conversationId: message.conversationId,
           senderId: message.senderId,
-          senderDisplayName: (message as unknown as Record<string, unknown>).sender
-            ? ((message as unknown as Record<string, unknown>).sender as Record<string, unknown>)?.displayName as string | undefined
-              ?? ((message as unknown as Record<string, unknown>).sender as Record<string, unknown>)?.username as string | undefined
-            : undefined,
-          senderUsername: (message as unknown as Record<string, unknown>).sender
-            ? ((message as unknown as Record<string, unknown>).sender as Record<string, unknown>)?.username as string | undefined
-            : undefined,
+          senderDisplayName: message.sender?.displayName ?? message.sender?.user?.username,
+          senderUsername: message.sender?.user?.username,
           content: message.content,
           originalLanguage: message.originalLanguage,
           replyToId: message.replyToId,
           mentionedUserIds: await this._resolveMentionUserIds(
-            ((message as never)['validatedMentions'] as string[]) ?? []
+            (message.validatedMentions as string[] | undefined) ?? []
           ),
           createdAt: message.createdAt,
         });
 
-        const msgAttachments = (message as unknown as Record<string, unknown>).attachments as Array<Record<string, unknown>> | undefined;
+        const msgAttachments = message.attachments as unknown as Array<Record<string, unknown>> | undefined;
         const attachmentTypes = (msgAttachments ?? []).map((a: Record<string, unknown>) => {
           const mime = (a.mimeType as string) ?? '';
           if (mime.startsWith('image/')) return 'image';
@@ -541,7 +531,7 @@ export class MessageHandler {
       // l'expiration du post. Hissé en `postReplyTo` top-level. Fallback live
       // legacy via lookup du post.
       if (message.storyReplyToId) {
-        const fromSnapshot = postReplyToFromMetadata((message as never)['metadata']);
+        const fromSnapshot = postReplyToFromMetadata(message.metadata);
         if (fromSnapshot) {
           (messagePayload as Record<string, unknown>).postReplyTo = fromSnapshot;
         } else {
@@ -566,7 +556,7 @@ export class MessageHandler {
       // en top-level (miroir de `postReplyTo`) — `_buildMessagePayload` n'embarque
       // pas `metadata`. Le destinataire rend le lien (texte + façade vidéo) vers
       // `/l/<token>` (capture + redirection) en gardant l'URL/aperçu.
-      const rawMetadata = (message as never)['metadata'];
+      const rawMetadata = message.metadata;
       if (rawMetadata && typeof rawMetadata === 'object') {
         const tl = (rawMetadata as Record<string, unknown>).trackingLinks;
         if (Array.isArray(tl) && tl.length > 0) {
@@ -594,8 +584,7 @@ export class MessageHandler {
       // the underlying user (null for anonymous). For anonymous sends we
       // fall back to the previous senderSocket-only path since there is
       // no user-level room to broadcast into.
-      const senderParticipant = (message as unknown as { sender?: { userId?: string | null } }).sender;
-      const senderUserId = senderParticipant?.userId ?? null;
+      const senderUserId = message.sender?.userId ?? null;
 
       // Bandwidth sprint Phase B1 — per-recipient language filtering of the
       // `message:new` broadcast. The payload carries every translation; each
@@ -740,8 +729,9 @@ export class MessageHandler {
       }
       // Chain `.to(socketId)` so a single emit fans out to exactly this group's
       // sockets (mirrors the manager's per-language emit).
-      let emitter: any = this.io;
-      for (const sid of group.socketIds) emitter = emitter.to(sid);
+      const [firstSid, ...restSids] = group.socketIds;
+      let emitter: ReturnType<SocketIOServer['to']> = this.io.to(firstSid);
+      for (const sid of restSids) emitter = emitter.to(sid);
       emitter.emit(SERVER_EVENTS.MESSAGE_NEW, filtered);
     }
   }
@@ -883,9 +873,8 @@ export class MessageHandler {
    * (messages tout juste créés → null, messages re-broadcastés après traduction → objet).
    */
   private async _getMessageTranslations(message: Message): Promise<unknown[]> {
-    const inMemory = (message as unknown as Record<string, unknown>).translations;
-    if (inMemory !== undefined) {
-      return this._parseTranslations(inMemory);
+    if (message.translations !== undefined) {
+      return this._parseTranslations(message.translations);
     }
     const msg = await this.prisma.message.findUnique({
       where: { id: message.id },
@@ -913,8 +902,8 @@ export class MessageHandler {
     translations: unknown[]
   ): unknown {
     // Build a backward-compatible sender object from Participant
-    const senderParticipant = (message as unknown as Record<string, unknown>).sender as Record<string, unknown> | undefined;
-    const senderUser = senderParticipant?.user as Record<string, unknown> | undefined;
+    const senderParticipant = message.sender;
+    const senderUser = senderParticipant?.user;
 
     return {
       id: message.id,
@@ -929,16 +918,16 @@ export class MessageHandler {
       // a été perdu (crash app après le send, multi-device). Le caller
       // `broadcastNewMessage` strip ce champ pour les autres
       // participants (`delete broadcastPayload.clientMessageId`).
-      clientMessageId: (message as never)['clientMessageId'] || undefined,
-      isBlurred: Boolean((message as never)['isBlurred']),
-      isViewOnce: Boolean((message as never)['isViewOnce']),
-      maxViewOnceCount: (message as never)['maxViewOnceCount'] ?? undefined,
-      effectFlags: (message as never)['effectFlags'] ?? 0,
-      expiresAt: (message as never)['expiresAt'] || undefined,
-      isEdited: Boolean((message as never)['isEdited']),
-      deletedAt: (message as never)['deletedAt'] || undefined,
+      clientMessageId: (message as unknown as Record<string, unknown>)['clientMessageId'] || undefined,
+      isBlurred: Boolean(message.isBlurred),
+      isViewOnce: Boolean(message.isViewOnce),
+      maxViewOnceCount: message.maxViewOnceCount ?? undefined,
+      effectFlags: (message as unknown as Record<string, unknown>)['effectFlags'] ?? 0,
+      expiresAt: message.expiresAt || undefined,
+      isEdited: Boolean(message.isEdited),
+      deletedAt: message.deletedAt || undefined,
       createdAt: message.createdAt,
-      validatedMentions: (message as never)['validatedMentions'] || [],
+      validatedMentions: message.validatedMentions ?? [],
       translations,
       // Unified sender from Participant
       sender: senderParticipant ? {
@@ -954,7 +943,7 @@ export class MessageHandler {
       } : undefined,
       attachments: this._serializeAttachmentsField(message),
       replyToId: message.replyToId,
-      replyTo: (message as never)['replyTo'],
+      replyTo: message.replyTo,
       // Réponse à un post : `postReplyTo` (snapshot figé) est ajouté par
       // `broadcastNewMessage` après ce build, en miroir de `forwardedFrom`.
       storyReplyToId: message.storyReplyToId || undefined,
@@ -982,7 +971,7 @@ export class MessageHandler {
    * explicitly select them.
    */
   private _serializeAttachmentsField(message: Message): unknown[] {
-    const raw = (message as unknown as Record<string, unknown>).attachments;
+    const raw = message.attachments;
     if (!Array.isArray(raw)) return [];
     return raw.map((att) => serializeAttachmentForSocket(att as Record<string, unknown>));
   }
@@ -1035,7 +1024,8 @@ export class MessageHandler {
         select: { id: true },
       });
       return users.map((u) => u.id);
-    } catch {
+    } catch (error) {
+      handlerLogger.warn('mention user lookup failed (mentions skipped)', { usernames, error });
       return [];
     }
   }
@@ -1065,7 +1055,7 @@ export class MessageHandler {
       replyToId: message.replyToId ?? undefined,
       mentionedUserIds: message.mentionedUserIds ?? [],
       timestamp: message.createdAt.getTime(),
-    }).catch(() => {});
+    }).catch(err => handlerLogger.warn('agent event delivery failed (non-blocking)', { messageId: message.id, error: err }));
   }
 
   private _sendError(
