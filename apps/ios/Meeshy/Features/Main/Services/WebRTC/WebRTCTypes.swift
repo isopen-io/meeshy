@@ -389,13 +389,36 @@ enum CallDisplayMode: Sendable {
 // MARK: - Quality Thresholds
 
 enum QualityThresholds {
+    // MARK: Audio bitrate tier boundaries (used by adjustBitrate in WebRTCService)
+
+    /// RTT at or below this value → excellent audio quality (max bitrate).
     static let excellentRTT: Double = 100
+    /// RTT at or below this value → good audio quality (default bitrate). Above → min bitrate.
     static let goodRTT: Double = 250
+    /// RTT above this value → critical video tier (severe congestion).
     static let poorRTT: Double = 500
 
     static let excellentPacketLoss: Double = 0.01
     static let goodPacketLoss: Double = 0.05
     static let poorPacketLoss: Double = 0.10
+
+    // MARK: Video quality tier boundaries (used by VideoQualityLevel.from(rtt:packetLoss:))
+    // Note: excellentRTT (100), poorRTT (500), excellentPacketLoss (0.01),
+    // goodPacketLoss (0.05), and poorPacketLoss (0.10) are shared across both
+    // audio and video classification; the two intermediate video boundaries below
+    // are video-specific.
+
+    /// RTT boundary between good and fair video quality tiers.
+    /// Above this → at most .fair; at or below → may be .good or .excellent.
+    static let videoFairRTT: Double = 200
+
+    /// RTT boundary between fair and poor video quality tiers.
+    /// Above this → at most .poor; at or below → may be .fair or better.
+    static let videoPoorRTT: Double = 300
+
+    /// Packet-loss boundary between fair and poor video quality.
+    /// Above this → at most .poor; at or below → may be .fair or better.
+    static let videoFairPacketLoss: Double = 0.03
 
     static let maxBitrate: Int = 128_000
     /// Floor bitrate the adaptation algorithm will proactively target under
@@ -580,10 +603,10 @@ enum VideoQualityLevel: String, Comparable, Sendable {
     }
 
     static func from(rtt: Double, packetLoss: Double) -> VideoQualityLevel {
-        if rtt > 500 || packetLoss > 0.10 { return .critical }
-        if rtt > 300 || packetLoss > 0.05 { return .poor }
-        if rtt > 200 || packetLoss > 0.03 { return .fair }
-        if rtt > 100 || packetLoss > 0.01 { return .good }
+        if rtt > QualityThresholds.poorRTT || packetLoss > QualityThresholds.poorPacketLoss { return .critical }
+        if rtt > QualityThresholds.videoPoorRTT || packetLoss > QualityThresholds.goodPacketLoss { return .poor }
+        if rtt > QualityThresholds.videoFairRTT || packetLoss > QualityThresholds.videoFairPacketLoss { return .fair }
+        if rtt > QualityThresholds.excellentRTT || packetLoss > QualityThresholds.excellentPacketLoss { return .good }
         return .excellent
     }
 

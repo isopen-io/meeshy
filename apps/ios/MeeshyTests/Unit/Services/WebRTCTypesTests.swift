@@ -74,6 +74,41 @@ final class QualityThresholdsAudioBitrateTests: XCTestCase {
         XCTAssertEqual(QualityThresholds.statsIntervalSeconds, 5.0,
                        "Stats collection cadence — also the minimum gap between quality-level transitions (debounce)")
     }
+
+    func test_videoFairRTT_is200ms() {
+        XCTAssertEqual(QualityThresholds.videoFairRTT, 200.0, accuracy: 0.001,
+                       "RTT boundary between good and fair video tiers (200 ms)")
+    }
+
+    func test_videoPoorRTT_is300ms() {
+        XCTAssertEqual(QualityThresholds.videoPoorRTT, 300.0, accuracy: 0.001,
+                       "RTT boundary between fair and poor video tiers (300 ms)")
+    }
+
+    func test_videoFairPacketLoss_is3percent() {
+        XCTAssertEqual(QualityThresholds.videoFairPacketLoss, 0.03, accuracy: 0.0001,
+                       "Packet-loss boundary between fair and poor video tiers (3 % interval loss)")
+    }
+
+    func test_videoQualityRTTBoundaries_areStrictlyOrdered() {
+        // Guarantees the RTT ladder never inverts so VideoQualityLevel.from(rtt:) cannot
+        // reach an unreachable branch or misclassify a valid RTT sample.
+        XCTAssertLessThan(QualityThresholds.excellentRTT, QualityThresholds.videoFairRTT,
+                          "excellentRTT must be < videoFairRTT")
+        XCTAssertLessThan(QualityThresholds.videoFairRTT, QualityThresholds.videoPoorRTT,
+                          "videoFairRTT must be < videoPoorRTT")
+        XCTAssertLessThan(QualityThresholds.videoPoorRTT, QualityThresholds.poorRTT,
+                          "videoPoorRTT must be < poorRTT (critical boundary)")
+    }
+
+    func test_videoQualityPacketLossBoundaries_areStrictlyOrdered() {
+        XCTAssertLessThan(QualityThresholds.excellentPacketLoss, QualityThresholds.videoFairPacketLoss,
+                          "excellentPacketLoss must be < videoFairPacketLoss")
+        XCTAssertLessThan(QualityThresholds.videoFairPacketLoss, QualityThresholds.goodPacketLoss,
+                          "videoFairPacketLoss must be < goodPacketLoss (poor boundary)")
+        XCTAssertLessThan(QualityThresholds.goodPacketLoss, QualityThresholds.poorPacketLoss,
+                          "goodPacketLoss must be < poorPacketLoss (critical boundary)")
+    }
 }
 
 // §5.6 — thermal-aware video encoder ceiling.
