@@ -158,6 +158,11 @@ final class WebRTCService {
         Task {
             do {
                 try await client.addIceCandidate(candidate)
+            } catch WebRTCError.noPeerConnection {
+                // Expected after call teardown: peerConnection is nil once
+                // disconnect() runs. Log at debug to avoid error noise in
+                // post-call candidate drains.
+                Logger.webrtc.debug("ICE candidate discarded — peer connection already torn down")
             } catch {
                 Logger.webrtc.error("Failed to add ICE candidate: \(error.localizedDescription)")
             }
@@ -444,6 +449,9 @@ final class WebRTCService {
                 if Task.isCancelled { break }
                 do {
                     try await self.client.addIceCandidate(candidate)
+                } catch WebRTCError.noPeerConnection {
+                    Logger.webrtc.debug("Buffered ICE candidate discarded — peer connection torn down mid-flush")
+                    break
                 } catch {
                     Logger.webrtc.error("Failed to add buffered ICE candidate: \(error.localizedDescription)")
                 }
