@@ -1,5 +1,6 @@
 import { Metadata } from 'next';
 import { ReactNode } from 'react';
+import { logger } from '@/utils/logger';
 import { buildApiUrl } from '@/lib/config';
 import { getServerLocale } from '@/lib/i18n/server-locale';
 import { composeMetadata, getMetadataPage, interpolate, pageString } from '@/lib/i18n/metadata';

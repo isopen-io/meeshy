@@ -3,6 +3,7 @@ import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import sharp from 'sharp';
+import { logger } from '@/utils/logger';
 
 export async function POST(request: NextRequest) {
   try {

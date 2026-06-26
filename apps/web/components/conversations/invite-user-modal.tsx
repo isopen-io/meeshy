@@ -19,6 +19,7 @@ import { toast } from 'sonner';
 import { apiService } from '@/services/api.service';
 import { getUserInitials } from '@/utils/user';
 import { useI18n } from '@/hooks/useI18n';
+import { logger } from '@/utils/logger';
 
 interface InviteUserModalProps {
   isOpen: boolean;
@@ -64,7 +65,7 @@ export function InviteUserModal({
         toast.error(t('inviteModal.searchError'));
       }
     } catch (error) {
-      console.error('Erreur lors de la recherche:', error);
+      logger.error('[InviteUserModal]', 'Erreur lors de la recherche:', { error });
       toast.error(t('inviteModal.searchError'));
     } finally {
       setIsSearching(false);
@@ -127,7 +128,7 @@ export function InviteUserModal({
       }
 
     } catch (error) {
-      console.error('Erreur lors de l\'invitation:', error);
+      logger.error('[InviteUserModal]', 'Erreur lors de l\'invitation:', { error });
       toast.error(t('inviteModal.inviteError'));
     } finally {
       setIsInviting(false);

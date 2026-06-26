@@ -54,7 +54,7 @@ export const EditMessageView = memo(function EditMessageView({
 
   // Debug: Log conversationId availability
   useEffect(() => {
-    console.log('[EditMessageView] conversationId sources:', {
+    logger.info('[EditMessageView]', 'conversationId sources', {
       fromProp: conversationId,
       fromMessage: (message as unknown).conversationId,
       effective: effectiveConversationId,
@@ -109,14 +109,14 @@ export const EditMessageView = memo(function EditMessageView({
     // Debug: log detection result
     if (mentionDetection) {
       if (!isValidObjectId) {
-        console.warn('[EditMessageView] Mention detected but conversationId invalid:', {
+        logger.warn('[EditMessageView]', 'Mention detected but conversationId invalid', {
           conversationId: effectiveConversationId,
           isValid: isValidObjectId,
           messageId: message.id,
           query: mentionDetection.query
         });
       } else {
-        console.log('[EditMessageView] Mention detected with valid conversationId:', {
+        logger.info('[EditMessageView]', 'Mention detected with valid conversationId', {
           conversationId: effectiveConversationId,
           query: mentionDetection.query,
           messageId: message.id
@@ -147,10 +147,10 @@ export const EditMessageView = memo(function EditMessageView({
         setMentionQuery(mentionDetection.query);
         setMentionCursorStart(mentionDetection.start);
         setShowMentionAutocomplete(true);
-        console.log('[EditMessageView] Opening autocomplete for query:', mentionDetection.query);
+        logger.info('[EditMessageView]', 'Opening autocomplete for query', { query: mentionDetection.query });
       } else {
         // Query invalide (caractères spéciaux ou trop longue) → fermer l'autocomplete
-        console.log('[EditMessageView] Invalid query, closing autocomplete:', mentionDetection.query);
+        logger.info('[EditMessageView]', 'Invalid query, closing autocomplete', { query: mentionDetection.query });
         setShowMentionAutocomplete(false);
         setMentionQuery('');
       }
@@ -167,7 +167,7 @@ export const EditMessageView = memo(function EditMessageView({
       await onSave(message.id, content.trim(), selectedLanguage);
     } catch (error) {
       // Error handled by parent component
-      console.error('Failed to save message:', error);
+      logger.error('[EditMessageView]', 'Failed to save message', { error });
     }
   }, [hasChanges, content, onSave, message.id, selectedLanguage]);
 

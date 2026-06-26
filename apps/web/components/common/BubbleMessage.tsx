@@ -222,7 +222,7 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
       toast.success(t('reportSuccess'));
       exitMode();
     } catch (error) {
-      console.error('Erreur lors du signalement:', error);
+      logger.error('[BubbleMessage]', 'Erreur lors du signalement', { error });
       toast.error(t('reportError'));
     }
   }, [exitMode, t]);

@@ -45,7 +45,7 @@ export function MentionAutocomplete({
     // Si ce n'est pas le cas (ex: "meeshy"), ne pas appeler l'API
     const isValidObjectId = /^[a-f\d]{24}$/i.test(conversationId);
     if (!isValidObjectId) {
-      console.log('[MentionAutocomplete] conversationId invalide:', conversationId);
+      logger.info('[MentionAutocomplete]', 'conversationId invalide', { conversationId });
       setSuggestions([]);
       return;
     }
@@ -64,7 +64,7 @@ export function MentionAutocomplete({
         setSuggestions([]);
       }
     } catch (err) {
-      console.error('[MentionAutocomplete] Error fetching suggestions:', err);
+      logger.error('[MentionAutocomplete]', 'Error fetching suggestions', { error: err });
       setError('Failed to load suggestions');
       setSuggestions([]);
     } finally {

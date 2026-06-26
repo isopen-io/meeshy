@@ -10,6 +10,7 @@ import { useAudioEffectsTimeline, type InitialEffectState } from '@/hooks/use-au
 import { AudioEffectsCarousel } from '@/components/video-calls/AudioEffectsCarousel';
 import type { AudioEffectType } from '@meeshy/shared/types/video-call';
 import type { AudioEffectsTimeline } from '@meeshy/shared/types/audio-effects-timeline';
+import { logger } from '@/utils/logger';
 
 // Types
 interface AudioMetadata {
@@ -238,7 +239,7 @@ export const AudioRecorderWithEffects = forwardRef<AudioRecorderWithEffectsRef, 
 
       // Attendre TOUJOURS que useAudioEffects initialise le stream de sortie
       // Cela permet d'activer les effets PENDANT l'enregistrement
-      console.log('🎭 [AudioRecorder] Waiting for processedAudioStream to be ready...');
+      logger.debug('[AudioRecorderWithEffects]', 'Waiting for processedAudioStream to be ready');
 
       const maxWaitTime = 3000; // 3 secondes maximum
       const checkInterval = 100; // Vérifier toutes les 100ms
@@ -252,7 +253,7 @@ export const AudioRecorderWithEffects = forwardRef<AudioRecorderWithEffectsRef, 
 
         // Vérifier si processedAudioStream existe et a des audio tracks
         if (currentProcessedStream && currentProcessedStream.getAudioTracks().length > 0) {
-          console.log('✅ [AudioRecorder] processedAudioStream is ready!', {
+          logger.debug('[AudioRecorderWithEffects]', 'processedAudioStream is ready', {
             tracks: currentProcessedStream.getAudioTracks().length,
             waitTime: Date.now() - startWait
           });
@@ -267,7 +268,7 @@ export const AudioRecorderWithEffects = forwardRef<AudioRecorderWithEffectsRef, 
       // Si après le timeout le stream n'est pas prêt, avertir et utiliser le stream brut
       if (streamToRecord === newRawStream) {
         const currentProcessedStream = processedAudioStreamRef.current;
-        console.warn('⚠️ [AudioRecorder] processedAudioStream not ready after 3s, using raw stream', {
+        logger.warn('[AudioRecorderWithEffects]', 'processedAudioStream not ready after 3s, using raw stream', {
           processedAudioStreamExists: !!currentProcessedStream,
           audioTracksCount: currentProcessedStream?.getAudioTracks().length || 0
         });
@@ -289,9 +290,9 @@ export const AudioRecorderWithEffects = forwardRef<AudioRecorderWithEffectsRef, 
             splitter.connect(merger, 0, 1);
             merger.connect(dest);
             streamToRecord = dest.stream;
-            console.log('🔊 [AudioRecorder] Mono raw stream upmixed to stereo for iOS');
+            logger.info('[AudioRecorderWithEffects]', 'Mono raw stream upmixed to stereo for iOS');
           } catch (e) {
-            console.warn('⚠️ [AudioRecorder] Failed to upmix mono stream, recording in mono', e);
+            logger.warn('[AudioRecorderWithEffects]', 'Failed to upmix mono stream, recording in mono', { error: e });
           }
         }
       }

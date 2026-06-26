@@ -16,7 +16,7 @@ export const SystemStatusBanner = memo(function SystemStatusBanner() {
 
   useEffect(() => {
     const handleUpdateAvailable = (event: unknown) => {
-      console.log('[Banner] Update available event received');
+      logger.info('[SystemStatusBanner]', 'Update available event received');
       setUpdateRegistration(event.detail.registration);
       setDismissedUpdate(false);
     };
@@ -29,7 +29,7 @@ export const SystemStatusBanner = memo(function SystemStatusBanner() {
 
   const handleUpdate = useCallback(() => {
     if (updateRegistration) {
-      console.log('[Banner] Triggering update...');
+      logger.info('[SystemStatusBanner]', 'Triggering update');
       activateWaitingServiceWorker(updateRegistration);
     }
   }, [updateRegistration]);

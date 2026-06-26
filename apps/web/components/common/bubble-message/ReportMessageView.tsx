@@ -76,7 +76,7 @@ export const ReportMessageView = memo(function ReportMessageView({
       await onReport(message.id, reportType, reason.trim());
     } catch (error) {
       // Error handled by parent component
-      console.error('Failed to report message:', error);
+      logger.error('[ReportMessageView]', 'Failed to report message', { error });
     }
   }, [canSubmit, reportType, reason, onReport, message.id]);
 

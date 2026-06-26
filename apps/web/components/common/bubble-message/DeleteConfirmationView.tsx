@@ -42,7 +42,7 @@ export const DeleteConfirmationView = memo(function DeleteConfirmationView({
       await onConfirm(message.id);
     } catch (error) {
       // Error handled by parent component
-      console.error('Failed to delete message:', error);
+      logger.error('[DeleteConfirmationView]', 'Failed to delete message', { error });
     }
   }, [onConfirm, message.id]);
 

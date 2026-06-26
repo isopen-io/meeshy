@@ -22,6 +22,7 @@ import {
   getConversationCreatedDate
 } from './conversation-utils';
 import { formatLastMessage } from './message-formatting';
+import { logger } from '@/utils/logger';
 
 interface ConversationItemProps {
   conversation: Conversation;

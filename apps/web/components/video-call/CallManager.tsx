@@ -231,7 +231,7 @@ export function CallManager() {
         removeRemoteStream(userIdForCleanup);
         removePeerConnection(userIdForCleanup);
       } else {
-        console.warn('⚠️ [CallManager] No userId or anonymousId for cleanup!', event);
+        logger.warn('[CallManager]', 'No userId or anonymousId for cleanup', { event });
       }
 
       // Remove participant from call (tracked by database participantId)
@@ -443,7 +443,7 @@ export function CallManager() {
       // Debug listener for call events
       debugListenerRef = (eventName: string, ...args: unknown[]) => {
         if (eventName.startsWith('call:')) {
-          console.log('📡 [CallManager] Socket event:', eventName, args);
+          logger.debug('[CallManager]', 'Socket event', { eventName, args });
         }
       };
       socket.onAny(debugListenerRef);
@@ -457,7 +457,7 @@ export function CallManager() {
       socket.on(SERVER_EVENTS.CALL_MEDIA_TOGGLED, (data: unknown) => handleMediaToggleRef.current(data));
       socket.on(SERVER_EVENTS.CALL_ERROR, (data: unknown) => handleCallErrorRef.current(data));
 
-      console.log('✅ [CallManager] All call listeners registered', {
+      logger.info('[CallManager]', 'All call listeners registered', {
         socketId: socket.id,
         userId: user?.id,
         listenersCount: 6
@@ -533,7 +533,7 @@ export function CallManager() {
   }, [isInCall, reset, clearCallTimeout]);
 
   if (process.env.NODE_ENV === 'development') {
-    console.log('[CallManager] Rendering:', {
+    logger.debug('[CallManager]', 'Rendering', {
       incomingCall: !!incomingCall,
       incomingCallId: incomingCall?.callId,
       isInCall,

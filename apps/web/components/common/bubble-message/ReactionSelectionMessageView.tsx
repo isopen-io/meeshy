@@ -168,7 +168,7 @@ export const ReactionSelectionMessageView = memo(function ReactionSelectionMessa
       // Le parent gérera la fermeture via exitMode()
       onSelectReaction(emoji);
     } catch (error) {
-      console.error('Failed to add reaction:', error);
+      logger.error('[ReactionSelectionMessageView]', 'Failed to add reaction', { error });
       // En cas d'erreur, on ferme quand même après un délai
       setTimeout(() => {
         onSelectReaction(emoji);

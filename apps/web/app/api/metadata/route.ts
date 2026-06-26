@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/utils/logger';
 import { getOgImageUrl } from '@/lib/og-images';
 import { buildApiUrl } from '@/lib/config';
 

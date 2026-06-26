@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
+import { logger } from '@/utils/logger';
 import {
   useConversationPreferencesStore,
   useConversationPreference,
@@ -96,7 +97,7 @@ export function useHeaderPreferences(conversationId: string, currentUser: unknow
       await togglePinAction(conversationId, newPinnedState);
       toast.success(t(newPinnedState ? 'conversationHeader.pinned' : 'conversationHeader.unpinned'));
     } catch (error) {
-      console.error('Error toggling pin:', error);
+      logger.error('[useHeaderPreferences]', 'Error toggling pin:', { error });
       toast.error(t('conversationHeader.pinError'));
     }
   }, [conversationId, preferences.isPinned, togglePinAction, t]);
@@ -107,7 +108,7 @@ export function useHeaderPreferences(conversationId: string, currentUser: unknow
       await toggleMuteAction(conversationId, newMutedState);
       toast.success(t(newMutedState ? 'conversationHeader.muted' : 'conversationHeader.unmuted'));
     } catch (error) {
-      console.error('Error toggling mute:', error);
+      logger.error('[useHeaderPreferences]', 'Error toggling mute:', { error });
       toast.error(t('conversationHeader.muteError'));
     }
   }, [conversationId, preferences.isMuted, toggleMuteAction, t]);
@@ -118,7 +119,7 @@ export function useHeaderPreferences(conversationId: string, currentUser: unknow
       await toggleArchiveAction(conversationId, newArchivedState);
       toast.success(t(newArchivedState ? 'conversationHeader.archived' : 'conversationHeader.unarchived'));
     } catch (error) {
-      console.error('Error toggling archive:', error);
+      logger.error('[useHeaderPreferences]', 'Error toggling archive:', { error });
       toast.error(t('conversationHeader.archiveError'));
     }
   }, [conversationId, preferences.isArchived, toggleArchiveAction, t]);
