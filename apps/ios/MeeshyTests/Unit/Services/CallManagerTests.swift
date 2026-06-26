@@ -1563,3 +1563,282 @@ final class CallKitActionFulfillmentSourceGuardTests: XCTestCase {
         }
     }
 }
+
+// MARK: - VoIP Push Freshness (Bug D) source guards
+
+@MainActor
+final class VoIPFreshnessSourceGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func freshnessBody(in source: String) -> String? {
+        guard let range = source.range(of: "func checkVoIPCallFreshness") else { return nil }
+        let nextFunc = source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound
+                    ?? source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound
+                    ?? source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound
+                    ?? source.endIndex
+        return String(source[range.lowerBound..<nextFunc])
+    }
+
+    func test_freshness_404_endsCallWithMissed() throws {
+        let source = try callManagerSource()
+        guard let body = freshnessBody(in: source) else {
+            XCTFail("checkVoIPCallFreshness not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("statusCode == 404"),
+            "Bug D: freshness check must handle 404 (call not found on server)"
+        )
+        guard let notFoundRange = body.range(of: "statusCode == 404") else { return }
+        let segment = String(body[notFoundRange.lowerBound...].prefix(300))
+        XCTAssertTrue(
+            segment.contains("reason: .unanswered"),
+            "Bug D: 404 path must report the phantom call as .unanswered to CX (not .failed)"
+        )
+        XCTAssertTrue(
+            segment.contains("reason: .missed"),
+            "Bug D: 404 path must end the call internally with .missed (not .failed)"
+        )
+    }
+
+    func test_freshness_terminalStatuses_areComplete() throws {
+        let source = try callManagerSource()
+        guard let body = freshnessBody(in: source) else {
+            XCTFail("checkVoIPCallFreshness not found"); return
+        }
+        XCTAssertTrue(body.contains("\"ended\""), "Bug D: 'ended' must be in the terminal status set")
+        XCTAssertTrue(body.contains("\"missed\""), "Bug D: 'missed' must be in the terminal status set")
+        XCTAssertTrue(body.contains("\"rejected\""), "Bug D: 'rejected' must be in the terminal status set")
+        XCTAssertTrue(body.contains("\"failed\""), "Bug D: 'failed' must be in the terminal status set")
+    }
+
+    func test_freshness_opaque_response_assumesFresh() throws {
+        let source = try callManagerSource()
+        guard let body = freshnessBody(in: source) else {
+            XCTFail("checkVoIPCallFreshness not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("assuming fresh"),
+            "Bug D: opaque / non-200 response must be treated as fresh (fail-open) to avoid false phantom-call teardowns"
+        )
+    }
+
+    func test_freshness_liveness_guard_before_endCall() throws {
+        let source = try callManagerSource()
+        guard let body = freshnessBody(in: source) else {
+            XCTFail("checkVoIPCallFreshness not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("activeCallUUID == uuid"),
+            "Bug D: freshness check must guard on activeCallUUID == uuid before ending call to avoid tearing down a new call"
+        )
+        guard let guardRange = body.range(of: "activeCallUUID == uuid"),
+              let endRange = body.range(of: "endCallInternal(reason: .missed)") else { return }
+        XCTAssertLessThan(
+            guardRange.lowerBound,
+            endRange.lowerBound,
+            "Bug D: liveness guard must appear before endCallInternal(.missed)"
+        )
+    }
+
+    func test_freshness_uses_configuredTimeout() throws {
+        let source = try callManagerSource()
+        guard let body = freshnessBody(in: source) else {
+            XCTFail("checkVoIPCallFreshness not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("voipFreshnessTimeoutSeconds"),
+            "Bug D: freshness check must use QualityThresholds.voipFreshnessTimeoutSeconds (not a magic number)"
+        )
+    }
+
+    func test_freshness_voipFreshnessTimeout_isReasonable() {
+        XCTAssertGreaterThan(
+            QualityThresholds.voipFreshnessTimeoutSeconds, 0,
+            "voipFreshnessTimeoutSeconds must be positive"
+        )
+        XCTAssertLessThanOrEqual(
+            QualityThresholds.voipFreshnessTimeoutSeconds, 10,
+            "voipFreshnessTimeoutSeconds must be ≤10s — a slow freshness check delays the CallKit UI"
+        )
+    }
+}
+
+// MARK: - endCurrentAndAnswerPending race condition guard
+
+@MainActor
+final class EndCurrentAndAnswerPendingTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(of signature: String, in source: String) -> String? {
+        guard let range = source.range(of: signature) else { return nil }
+        let nextFunc = [
+            source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<nextFunc])
+    }
+
+    func test_endCurrentAndAnswerPending_hasSettleDelay() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCurrentAndAnswerPending", in: source) else {
+            XCTFail("endCurrentAndAnswerPending not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("Task.sleep"),
+            "endCurrentAndAnswerPending must sleep before routing the pending call to allow the previous call's " +
+            "socket/WebRTC teardown to complete (avoids endCallInternal racing with handleIncomingCallNotification)"
+        )
+    }
+
+    func test_endCurrentAndAnswerPending_clearsPendingInsideTask() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCurrentAndAnswerPending", in: source) else {
+            XCTFail("endCurrentAndAnswerPending not found"); return
+        }
+        guard let taskRange = body.range(of: "Task {") else {
+            XCTFail("Task { not found in endCurrentAndAnswerPending"); return
+        }
+        let insideTask = String(body[taskRange.lowerBound...])
+        XCTAssertTrue(
+            insideTask.contains("pendingIncomingCall = nil"),
+            "pendingIncomingCall must be cleared INSIDE the Task, after handleIncomingCallNotification, " +
+            "to avoid a second endCurrentAndAnswerPending() racing with the first"
+        )
+    }
+
+    func test_endCurrentAndAnswerPending_guardsPendingBeforeEndCall() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCurrentAndAnswerPending", in: source) else {
+            XCTFail("endCurrentAndAnswerPending not found"); return
+        }
+        guard let guardRange = body.range(of: "guard let pending = pendingIncomingCall"),
+              let endCallRange = body.range(of: "endCall()") else {
+            XCTFail("Expected guard + endCall in endCurrentAndAnswerPending"); return
+        }
+        XCTAssertLessThan(
+            guardRange.lowerBound,
+            endCallRange.lowerBound,
+            "endCurrentAndAnswerPending must guard that a pending call exists before ending the current call"
+        )
+    }
+}
+
+// MARK: - performLocalMediaStart deduplication guard
+
+@MainActor
+final class LocalMediaStartHelperTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(of signature: String, in source: String) -> String? {
+        guard let range = source.range(of: signature) else { return nil }
+        let nextFunc = [
+            source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<nextFunc])
+    }
+
+    func test_performLocalMediaStart_helperExists() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("func performLocalMediaStart(isVideo: Bool, callId: String)"),
+            "CallManager must have a private performLocalMediaStart(isVideo:callId:) helper to avoid triplication"
+        )
+    }
+
+    func test_performLocalMediaStart_handlesCancellationError() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func performLocalMediaStart", in: source) else {
+            XCTFail("performLocalMediaStart not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("CancellationError"),
+            "performLocalMediaStart must catch CancellationError — media warmup can be cancelled when a call ends mid-flight"
+        )
+    }
+
+    func test_performLocalMediaStart_degradesOnSimulatorVideoUnsupported() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func performLocalMediaStart", in: source) else {
+            XCTFail("performLocalMediaStart not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("simulatorVideoUnsupported"),
+            "performLocalMediaStart must handle simulatorVideoUnsupported and fall back to audio-only"
+        )
+        XCTAssertTrue(
+            body.contains("isVideoEnabled = false"),
+            "performLocalMediaStart must set isVideoEnabled = false on video degradation"
+        )
+    }
+
+    func test_callers_useHelper_notInlineDoCatch() throws {
+        let source = try callManagerSource()
+
+        let methods = [
+            "func startCall(",
+            "func reportIncomingVoIPCall(",
+            "func handleIncomingCallNotification(",
+        ]
+        for method in methods {
+            guard let body = functionBody(of: method, in: source) else {
+                XCTFail("\(method) not found"); continue
+            }
+            XCTAssertFalse(
+                body.contains("catch WebRTCError.simulatorVideoUnsupported"),
+                "\(method) must not inline the simulatorVideoUnsupported catch — use performLocalMediaStart"
+            )
+            XCTAssertTrue(
+                body.contains("performLocalMediaStart"),
+                "\(method) must delegate to performLocalMediaStart"
+            )
+        }
+    }
+
+    func test_performLocalMediaStart_hasLivenessGuardBeforeEndCall() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func performLocalMediaStart", in: source) else {
+            XCTFail("performLocalMediaStart not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("currentCallId == callId"),
+            "performLocalMediaStart must guard on currentCallId == callId before mutating state or ending the call"
+        )
+        guard let guardRange = body.range(of: "currentCallId == callId"),
+              let endCallRange = body.range(of: "endCallInternal(") else { return }
+        XCTAssertLessThan(
+            guardRange.lowerBound,
+            endCallRange.lowerBound,
+            "Liveness guard must appear before endCallInternal in performLocalMediaStart"
+        )
+    }
+}
