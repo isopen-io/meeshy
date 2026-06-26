@@ -651,8 +651,15 @@ describe('CallEventsHandler', () => {
       );
       await callerSocket._trigger('call:signal', offerSignal); // buffers the offer
 
-      // Step 2: USER_ID joins — buffered offer is replayed to this socket
-      const joinSession = makeCallSession({ participants: [makeParticipant()] });
+      // Step 2: USER_ID joins — buffered offer is replayed to this socket.
+      // Both the offer sender ('caller-user', still active) and the joiner
+      // must be present so the C2 sender-active check passes.
+      const joinSession = makeCallSession({
+        participants: [
+          makeParticipant({ participant: { userId: 'caller-user', displayName: null, user: {} } }),
+          makeParticipant(),
+        ],
+      });
       mockCallServiceJoinCall.mockResolvedValue({ callSession: joinSession, iceServers: [] });
       await socket._trigger('call:join', validData);
 
