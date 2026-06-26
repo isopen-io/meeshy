@@ -352,16 +352,18 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         let params = audioTransceiver.sender.parameters
         for encoding in params.encodings {
             // DTX: no native API — see comment above; handled via SDP fmtp `usedtx=1`.
-            encoding.maxBitrateBps = NSNumber(value: 64_000)
-            encoding.minBitrateBps = NSNumber(value: 16_000)
+            encoding.maxBitrateBps = NSNumber(value: QualityThresholds.defaultBitrate)
+            encoding.minBitrateBps = NSNumber(value: QualityThresholds.audioCodecFloorBitrateBps)
             // networkPriority = .high → DSCP EF (Expedited Forwarding, 46) for VoIP audio.
             // Maps to the highest WebRTC pacer priority and signals QoS to the OS network stack.
             encoding.networkPriority = .high
         }
         audioTransceiver.sender.parameters = params
         let encodingsCount = params.encodings.count
+        let maxKbps = QualityThresholds.defaultBitrate / 1000
+        let minKbps = QualityThresholds.audioCodecFloorBitrateBps / 1000
         if encodingsCount > 0 {
-            Logger.webrtc.info("[WEBRTC] audio bitrate range applied via RtpEncodingParameters (max=64kbps, min=16kbps, priority=high encodings=\(encodingsCount, privacy: .public))")
+            Logger.webrtc.info("[WEBRTC] audio bitrate range applied via RtpEncodingParameters (max=\(maxKbps, privacy: .public)kbps, min=\(minKbps, privacy: .public)kbps, priority=high, encodings=\(encodingsCount, privacy: .public))")
         } else {
             Logger.webrtc.warning("[WEBRTC] audio bitrate NOT applied — encodings array empty")
         }

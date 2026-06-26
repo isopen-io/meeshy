@@ -398,8 +398,16 @@ enum QualityThresholds {
     static let poorPacketLoss: Double = 0.10
 
     static let maxBitrate: Int = 128_000
+    /// Floor bitrate the adaptation algorithm will proactively target under
+    /// severe degradation (24 kbps = speech quality floor for Opus).
     static let minBitrate: Int = 24_000
     static let defaultBitrate: Int = 64_000
+    /// SDP-level absolute codec minimum set in `RTCRtpEncodingParameters`.
+    /// Lower than `minBitrate` so the encoder can survive an extreme network
+    /// event even after the adaptation algorithm has already reduced to 24 kbps.
+    /// Source of truth for both `P2PWebRTCClient` audio encoding and
+    /// `AudioConfig.default.minBitrateBps` in `CallMediaConfig`.
+    static let audioCodecFloorBitrateBps: Int = 16_000
 
     // Audit P2-iOS-12 — bumped from 3s to 5s. RTCPeerConnection.statistics
     // walks the entire stats graph (~5–10ms CPU per call); 5s is the

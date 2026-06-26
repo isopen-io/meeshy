@@ -6,9 +6,23 @@ final class CallMediaConfigTests: XCTestCase {
 
     func test_default_audioConfig_hasOpusBitrateRange() {
         let config = CallMediaConfig()
-        XCTAssertEqual(config.audio.maxBitrateBps, 64_000)
-        XCTAssertEqual(config.audio.minBitrateBps, 16_000)
+        XCTAssertEqual(config.audio.maxBitrateBps, QualityThresholds.defaultBitrate,
+                       "max audio bitrate must equal QualityThresholds.defaultBitrate")
+        XCTAssertEqual(config.audio.minBitrateBps, QualityThresholds.audioCodecFloorBitrateBps,
+                       "min audio bitrate must equal QualityThresholds.audioCodecFloorBitrateBps")
         XCTAssertTrue(config.audio.dtx)
+    }
+
+    func test_default_audioConfig_minBelowAdaptationFloor() {
+        // The SDP codec floor must be strictly below the adaptation algorithm's floor
+        // (minBitrate). This allows the encoder to survive extreme network conditions
+        // even after the adaptation algorithm has already descended to its own floor.
+        XCTAssertLessThan(
+            QualityThresholds.audioCodecFloorBitrateBps,
+            QualityThresholds.minBitrate,
+            "SDP codec floor (\(QualityThresholds.audioCodecFloorBitrateBps)) must be < " +
+            "adaptation floor (\(QualityThresholds.minBitrate))"
+        )
     }
 
     func test_default_video_isNil() {
