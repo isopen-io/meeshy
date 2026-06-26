@@ -4,6 +4,7 @@ import { logError, logger } from '../utils/logger';
 import { sendSuccess, sendBadRequest, sendNotFound } from '../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { resolveConversationId } from '../utils/conversation-id-cache';
+import { createUnifiedAuthMiddleware, type UnifiedAuthRequest } from '../middleware/auth.js';
 
 // ===== SCHEMAS DE VALIDATION =====
 const TranslateRequestSchema = z.object({
@@ -261,6 +262,8 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
     throw new Error('MessagingService not provided to translation routes');
   }
 
+  const optionalAuth = createUnifiedAuthMiddleware(fastify.prisma, { requireAuth: false, allowAnonymous: true });
+
 
   // ===== ROUTE PRINCIPALE NON-BLOQUANTE =====
   fastify.post<{ Body: TranslateRequest }>('/translate', {
@@ -284,10 +287,12 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
           ...errorResponseSchema
         }
       }
-    }
+    },
+    preValidation: [optionalAuth],
   }, async (request: FastifyRequest<{ Body: TranslateRequest }>, reply: FastifyReply) => {
     try {
       const validatedData = TranslateRequestSchema.parse(request.body);
+      const authContext = (request as UnifiedAuthRequest).authContext;
 
 
       // ===== CAS 1: RETRADUCTION D'UN MESSAGE EXISTANT =====
@@ -356,7 +361,7 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
           content: validatedData.text,
           originalLanguage: validatedData.source_language || 'auto',
           messageType: 'text',
-          isAnonymous: false, // TODO: Detecter depuis l'auth
+          isAnonymous: authContext?.isAnonymous ?? false,
           anonymousDisplayName: undefined
         };
 
@@ -364,7 +369,7 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
         // DECLENCHEMENT NON-BLOQUANT - pas d'await !
         messagingService.handleMessage(
           messageRequest,
-          'system' // TODO: Recuperer l'ID utilisateur depuis l'auth
+          authContext?.userId ?? 'system'
         ).catch((error: any) => {
           logger.error(`[Translation] Async message processing error: ${error.message}`);
         });

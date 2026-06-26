@@ -211,22 +211,37 @@ describe('PreferencesService', () => {
         lastKeyRotation: new Date()
       };
 
-      const mockUserFeature = {
-        encryptionPreference: 'optional'
-      };
-
       mockPrisma.user.findUnique.mockResolvedValue(mockUser);
-      mockPrisma.userFeature.findUnique.mockResolvedValue(mockUserFeature);
+      mockPrisma.userPreferences.findUnique.mockResolvedValue({
+        application: { encryptionPreference: 'always' }
+      });
 
       const result = await service.getEncryptionPreferences('user-123');
 
       expect(result).toEqual({
-        encryptionPreference: 'optional',
+        encryptionPreference: 'always',
         hasSignalKeys: true,
         signalRegistrationId: 12345,
         signalPreKeyBundleVersion: 1,
         lastKeyRotation: mockUser.lastKeyRotation
       });
+    });
+
+    it('should return default optional preference when no application prefs stored', async () => {
+      const mockUser = {
+        signalIdentityKeyPublic: null,
+        signalRegistrationId: null,
+        signalPreKeyBundleVersion: null,
+        lastKeyRotation: null
+      };
+
+      mockPrisma.user.findUnique.mockResolvedValue(mockUser);
+      mockPrisma.userPreferences.findUnique.mockResolvedValue(null);
+
+      const result = await service.getEncryptionPreferences('user-123');
+
+      expect(result.encryptionPreference).toBe('optional');
+      expect(result.hasSignalKeys).toBe(false);
     });
 
     it('should throw error if user not found', async () => {
@@ -239,14 +254,39 @@ describe('PreferencesService', () => {
   });
 
   describe('updateEncryptionPreference', () => {
-    it('should update encryption preference', async () => {
+    it('should persist and return the updated preference', async () => {
+      mockPrisma.userPreferences.findUnique.mockResolvedValue(null);
+      mockPrisma.userPreferences.upsert.mockResolvedValue({});
+
       const result = await service.updateEncryptionPreference('user-123', {
         encryptionPreference: 'always'
       });
 
-      // TODO: Le service ne sauvegarde pas encore, il retourne juste la valeur
       expect(result).toEqual({ encryptionPreference: 'always' });
-      // Pas d'appel à la base de données pour l'instant (TODO dans le service)
+      expect(mockPrisma.userPreferences.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { userId: 'user-123' },
+          create: expect.objectContaining({ userId: 'user-123', application: expect.objectContaining({ encryptionPreference: 'always' }) }),
+          update: expect.objectContaining({ application: expect.objectContaining({ encryptionPreference: 'always' }) }),
+        })
+      );
+    });
+
+    it('should merge encryptionPreference into existing application prefs', async () => {
+      mockPrisma.userPreferences.findUnique.mockResolvedValue({
+        application: { theme: 'dark', encryptionPreference: 'optional' }
+      });
+      mockPrisma.userPreferences.upsert.mockResolvedValue({});
+
+      await service.updateEncryptionPreference('user-123', {
+        encryptionPreference: 'disabled'
+      });
+
+      expect(mockPrisma.userPreferences.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: { application: { theme: 'dark', encryptionPreference: 'disabled' } },
+        })
+      );
     });
 
     it('should validate encryption preference value', async () => {

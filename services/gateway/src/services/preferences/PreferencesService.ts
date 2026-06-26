@@ -197,9 +197,15 @@ export class PreferencesService {
       throw new Error('User not found');
     }
 
-    // TODO: Load encryptionPreference from UserPreferences.application when implemented
+    const userPrefs = await this.prisma.userPreferences.findUnique({
+      where: { userId },
+      select: { application: true },
+    });
+    const application = (userPrefs?.application ?? {}) as Record<string, unknown>;
+    const encryptionPreference = (application.encryptionPreference as EncryptionPreference | undefined) ?? 'optional';
+
     return {
-      encryptionPreference: 'optional' as EncryptionPreference,
+      encryptionPreference,
       hasSignalKeys: !!user.signalIdentityKeyPublic,
       signalRegistrationId: user.signalRegistrationId,
       signalPreKeyBundleVersion: user.signalPreKeyBundleVersion,
@@ -220,8 +226,18 @@ export class PreferencesService {
       throw new Error('Invalid encryption preference. Must be "disabled", "optional", or "always"');
     }
 
-    // TODO: Save encryptionPreference to UserPreferences.application when implemented
-    logger.debug('TODO: Save encryption preference to UserPreferences.application', { encryptionPreference: data.encryptionPreference, userId });
+    const existing = await this.prisma.userPreferences.findUnique({
+      where: { userId },
+      select: { application: true },
+    });
+    const current = (existing?.application ?? {}) as Record<string, unknown>;
+    const merged = { ...current, encryptionPreference: data.encryptionPreference };
+
+    await this.prisma.userPreferences.upsert({
+      where: { userId },
+      create: { userId, application: merged as any },
+      update: { application: merged as any },
+    });
 
     return {
       encryptionPreference: data.encryptionPreference
