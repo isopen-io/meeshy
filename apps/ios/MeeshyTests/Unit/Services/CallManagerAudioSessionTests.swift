@@ -2362,3 +2362,73 @@ final class CallManagerAudioInterruptionHardeningTests: XCTestCase {
             "which would produce incorrect packet-loss deltas in the first quality sample")
     }
 }
+
+// MARK: - Video toggle concurrency safety
+
+/// Source-analysis guards ensuring rapid video-toggle taps cannot leave
+/// `isVideoEnabled` desynchronised from the WebRTC track state. Without a
+/// tracked task slot, a second tap cancels nothing: if the upgrade finishes
+/// AFTER the downgrade, the user's camera is streaming but `isVideoEnabled`
+/// reads `false` — a silent privacy violation.
+@MainActor
+final class CallManagerVideoToggleConcurrencyTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_toggleVideo_cancelsExistingTaskBeforeStartingNew() throws {
+        let source = try callManagerSource()
+        guard let toggleRange = source.range(of: "func toggleVideo()") else {
+            XCTFail("toggleVideo not found"); return
+        }
+        guard let nextFuncRange = source.range(of: "\n    func ", range: toggleRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not isolate toggleVideo body"); return
+        }
+        let body = String(source[toggleRange.upperBound..<nextFuncRange.lowerBound])
+        XCTAssertTrue(
+            body.contains("videoToggleTask?.cancel()"),
+            "toggleVideo must cancel the previous videoToggleTask before starting — " +
+            "without this a second tap can't preempt a slow upgrade, leaving the camera " +
+            "streaming with isVideoEnabled=false")
+    }
+
+    func test_toggleVideo_checksTaskCancellationAfterAwait() throws {
+        let source = try callManagerSource()
+        guard let toggleRange = source.range(of: "func toggleVideo()") else {
+            XCTFail("toggleVideo not found"); return
+        }
+        guard let nextFuncRange = source.range(of: "\n    func ", range: toggleRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not isolate toggleVideo body"); return
+        }
+        let body = String(source[toggleRange.upperBound..<nextFuncRange.lowerBound])
+        // Must have at least two isCancelled checks (before and after the await).
+        let checkCount = body.components(separatedBy: "Task.isCancelled").count - 1
+        XCTAssertGreaterThanOrEqual(
+            checkCount, 2,
+            "toggleVideo must check Task.isCancelled both before and after the async " +
+            "upgrade/downgrade await — a single check only prevents starting, not " +
+            "acting on a stale result from a superseded intent")
+    }
+
+    func test_endCallInternal_cancelsVideoToggleTask() throws {
+        let source = try callManagerSource()
+        guard let endCallRange = source.range(of: "func endCallInternal(") else {
+            XCTFail("endCallInternal not found"); return
+        }
+        guard let nextFuncRange = source.range(of: "\n    func ", range: endCallRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not isolate endCallInternal body"); return
+        }
+        let body = String(source[endCallRange.upperBound..<nextFuncRange.lowerBound])
+        XCTAssertTrue(
+            body.contains("videoToggleTask?.cancel()"),
+            "endCallInternal must cancel videoToggleTask so an in-flight upgrade " +
+            "cannot run after the call has torn down, re-activating the camera")
+    }
+}

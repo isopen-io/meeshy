@@ -275,6 +275,9 @@ final class CallManager: ObservableObject {
     private var offerRetryTask: Task<Void, Never>?
     /// Same as `offerRetryTask` for the SDP answer backoff path.
     private var answerRetryTask: Task<Void, Never>?
+    /// Tracks the in-flight toggleVideo Task. Cancelled when a rapid second tap arrives
+    /// so the later intent always wins and `isVideoEnabled` stays consistent with WebRTC.
+    private var videoToggleTask: Task<Void, Never>?
     private var remoteQualityResetTask: Task<Void, Never>?
     private var pendingRemoteOffer: SessionDescription?
     // P0-3 — ICE candidates generated while the socket is down are buffered
@@ -1489,13 +1492,16 @@ final class CallManager: ObservableObject {
     /// case). Replaces the old track.enabled flip, which left the upgrade
     /// invisible to the peer (no transceiver / no renegotiation).
     func toggleVideo() {
+        videoToggleTask?.cancel()
         let target = !isVideoEnabled
         // Optimistic update: reflect intent immediately so rapid double-taps
         // read the new isVideoEnabled value and don't launch a duplicate toggle.
-        // Error paths below revert to false (or the previous state) on failure.
+        // The tracked videoToggleTask ensures the later intent always wins:
+        // if a second tap cancels this Task, the cancelled path does not update
+        // any state — the second Task's result is authoritative.
         isVideoEnabled = target
-        Task { [weak self] in
-            guard let self else { return }
+        videoToggleTask = Task { @MainActor [weak self] in
+            guard let self, !Task.isCancelled else { return }
             do {
                 let needsRenegotiation: Bool
                 if target {
@@ -1503,6 +1509,7 @@ final class CallManager: ObservableObject {
                 } else {
                     needsRenegotiation = await self.webRTCService.downgradeFromVideo()
                 }
+                guard !Task.isCancelled else { return }
                 self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
 
                 // User intent is authoritative: forget any survival state so the
@@ -1526,6 +1533,7 @@ final class CallManager: ObservableObject {
                 }
                 HapticFeedback.light()
             } catch WebRTCError.cameraPermissionDenied {
+                guard !Task.isCancelled else { return }
                 Logger.calls.error("toggleVideo failed: camera permission denied — prompting settings redirect")
                 self.isVideoEnabled = false
                 self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
@@ -1542,6 +1550,7 @@ final class CallManager: ObservableObject {
                     UIApplication.shared.open(url)
                 }
             } catch {
+                guard !Task.isCancelled else { return }
                 Logger.calls.error("toggleVideo failed: \(error.localizedDescription)")
                 self.isVideoEnabled = false
                 self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
@@ -2325,6 +2334,8 @@ final class CallManager: ObservableObject {
         offerRetryTask = nil
         answerRetryTask?.cancel()
         answerRetryTask = nil
+        videoToggleTask?.cancel()
+        videoToggleTask = nil
         remoteQualityResetTask?.cancel()
         remoteQualityResetTask = nil
         isRemoteQualityDegraded = false
