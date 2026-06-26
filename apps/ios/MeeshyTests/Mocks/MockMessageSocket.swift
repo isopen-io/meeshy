@@ -42,6 +42,9 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let audioTranslationReady = PassthroughSubject<AudioTranslationEvent, Never>()
     let audioTranslationProgressive = PassthroughSubject<AudioTranslationEvent, Never>()
     let audioTranslationCompleted = PassthroughSubject<AudioTranslationEvent, Never>()
+    let translationFailed = PassthroughSubject<TranslationFailedEvent, Never>()
+    let audioTranslationFailed = PassthroughSubject<AudioTranslationFailedEvent, Never>()
+    let transcriptionFailed = PassthroughSubject<TranscriptionFailedEvent, Never>()
     let didReconnect = PassthroughSubject<Void, Never>()
     let notificationReceived = PassthroughSubject<SocketNotificationEvent, Never>()
     let conversationNew = PassthroughSubject<ConversationNewEvent, Never>()
@@ -190,6 +193,12 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         callJoinCallCount += 1
     }
 
+    var callJoinWithAckResult: Bool = true
+    func emitCallJoinWithAck(callId: String) async -> Bool {
+        callJoinCallCount += 1
+        return callJoinWithAckResult
+    }
+
     func emitCallLeave(callId: String) {
         callLeaveCallCount += 1
     }
@@ -243,6 +252,11 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     func emitCallHeartbeat(callId: String) {
         callHeartbeatCallCount += 1
     }
+
+    func emitCallQualityReport(callId: String, level: String, rtt: Double, packetLoss: Double, bytesSent: Int, bytesReceived: Int) {}
+    func emitCallReconnecting(callId: String, participantId: String, attempt: Int) {}
+    func emitCallReconnected(callId: String, participantId: String) {}
+    func emitRequestIceServers(callId: String) {}
 
     func emitCallBackgrounded(callId: String, participantId: String) {
         callBackgroundedCallCount += 1

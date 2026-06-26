@@ -41,6 +41,9 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let audioTranslationReady = PassthroughSubject<AudioTranslationEvent, Never>()
     let audioTranslationProgressive = PassthroughSubject<AudioTranslationEvent, Never>()
     let audioTranslationCompleted = PassthroughSubject<AudioTranslationEvent, Never>()
+    let translationFailed = PassthroughSubject<TranslationFailedEvent, Never>()
+    let audioTranslationFailed = PassthroughSubject<AudioTranslationFailedEvent, Never>()
+    let transcriptionFailed = PassthroughSubject<TranscriptionFailedEvent, Never>()
     let didReconnect = PassthroughSubject<Void, Never>()
     let notificationReceived = PassthroughSubject<SocketNotificationEvent, Never>()
     let conversationNew = PassthroughSubject<ConversationNewEvent, Never>()
@@ -92,6 +95,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         MessageSocketManager.CallInitiateAck(callId: "mock-call-id", mode: "audio", iceServers: [])
     }
     func emitCallJoin(callId: String) {}
+    func emitCallJoinWithAck(callId: String) async -> Bool { true }
     func emitCallLeave(callId: String) {}
     func emitAppForeground(_ foreground: Bool) {}
     func addAttachmentReaction(attachmentId: String, messageId: String, emoji: String) {}
@@ -103,6 +107,10 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     func emitCallEnd(callId: String) {}
     func emitCallEndWithAck(callId: String) async -> Bool { true }
     func emitCallHeartbeat(callId: String) {}
+    func emitCallQualityReport(callId: String, level: String, rtt: Double, packetLoss: Double, bytesSent: Int, bytesReceived: Int) {}
+    func emitCallReconnecting(callId: String, participantId: String, attempt: Int) {}
+    func emitCallReconnected(callId: String, participantId: String) {}
+    func emitRequestIceServers(callId: String) {}
     func emitCallBackgrounded(callId: String, participantId: String) {}
     func emitCallForegrounded(callId: String, participantId: String) {}
     func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool) {}
