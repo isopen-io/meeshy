@@ -188,7 +188,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
       });
 
       // Always return 200 OK with generic message (prevents email enumeration)
-      return reply.status(200).send(result);
+      return sendSuccess(reply, undefined, { message: result.message });
 
     } catch (error) {
       if (error instanceof z.ZodError) {

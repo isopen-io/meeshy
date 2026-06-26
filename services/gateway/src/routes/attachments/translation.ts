@@ -204,11 +204,7 @@ export async function registerTranslationRoutes(
                             result.errorCode === 'ACCESS_DENIED' ? 403 :
                             result.errorCode === 'NOT_IMPLEMENTED' ? 501 :
                             400;
-          return reply.status(statusCode).send({
-            success: false,
-            error: result.errorCode,
-            message: result.error
-          });
+          return sendError(reply, statusCode, result.errorCode ?? 'Translation failed', { message: result.error });
         }
 
         return sendSuccess(reply, result.data);
