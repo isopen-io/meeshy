@@ -220,6 +220,7 @@ jest.mock('../handlers/StatusHandler', () => ({
       handleTypingStop: jest.fn().mockResolvedValue(undefined),
       invalidateIdentityCache: jest.fn(),
       clearTypingThrottle: jest.fn(),
+      drainActiveTypingState: jest.fn().mockReturnValue({ conversationIds: [], identity: null }),
     };
     return mockStatusHandlerInstance;
   }),
@@ -911,8 +912,8 @@ describe('MeeshySocketIOManager', () => {
       (manager as any).socketToUser.set('sock-d3', 'user-d3');
       triggerConnection(socket);
       socket._handlers['disconnect']('transport close');
+      expect(mockStatusHandlerInstance.drainActiveTypingState).toHaveBeenCalledWith('user-d3');
       expect(mockStatusHandlerInstance.invalidateIdentityCache).toHaveBeenCalledWith('user-d3');
-      expect(mockStatusHandlerInstance.clearTypingThrottle).toHaveBeenCalledWith('user-d3');
     });
 
     it('deletes presenceSnapshotCache entry on disconnect', () => {

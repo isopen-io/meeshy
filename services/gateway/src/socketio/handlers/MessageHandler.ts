@@ -483,24 +483,26 @@ export class MessageHandler {
         (where) => this.prisma.conversation.findUnique({ where, select: { id: true, identifier: true } })
       );
 
-      // Récupérer traductions et déclencher le calcul des stats en parallèle.
-      // Les stats ne sont plus embarquées dans le payload message:new — elles
-      // sont diffusées via l'event dédié `conversation:stats`. L'appel
-      // updateOnNewMessage reste pour son side-effect (cache stats).
-      const [translations] = await Promise.allSettled([
-        this._getMessageTranslations(message),
-        conversationStatsService.updateOnNewMessage(
-          this.prisma,
-          conversationId,
-          message.originalLanguage || 'fr',
-          () => Array.from(this.connectedUsers.values()).map((u) => u.id)
-        )
-      ]);
+      // Fire stats update as true fire-and-forget: it is a non-critical
+      // DB side-effect (cache warm-up for `conversation:stats`) and must
+      // not block the emit. Previously awaited via Promise.allSettled which
+      // added the full stats write latency (~10–50ms) to every broadcast.
+      conversationStatsService.updateOnNewMessage(
+        this.prisma,
+        conversationId,
+        message.originalLanguage || 'fr',
+        () => Array.from(this.connectedUsers.values()).map((u) => u.id)
+      ).catch(error => handlerLogger.warn('stats update error', { error }));
+
+      // Translations are part of the payload — await them separately so
+      // the stats write no longer gates the emit (fast path when
+      // message.translations is already on the object; DB fallback otherwise).
+      const messageTranslations = await this._getMessageTranslations(message).catch(() => []);
 
       const messagePayload: unknown = this._buildMessagePayload(
         message,
         normalizedId,
-        translations.status === 'fulfilled' ? translations.value : []
+        messageTranslations
       );
 
       // Enrichir avec les détails du forward si applicable
