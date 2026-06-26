@@ -535,6 +535,10 @@ final class CallManager: ObservableObject {
                 try AVAudioSession.sharedInstance().setActive(true, options: [])
             } catch {
                 Logger.calls.error("AVAudioSession reactivation after media-services reset failed: \(error.localizedDescription)")
+                // Do not proceed: telling RTCAudioSession the session is active when
+                // setActive(true) just failed would corrupt the WebRTC audio state.
+                // The next ICE heartbeat or user action will surface the failure.
+                return
             }
             let rtc = RTCAudioSession.sharedInstance()
             rtc.lockForConfiguration()
@@ -544,7 +548,7 @@ final class CallManager: ObservableObject {
             rtc.unlockForConfiguration()
         }
         Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(200))
+            try? await Task.sleep(for: .seconds(QualityThresholds.mediaServicesResetSpeakerDelaySeconds))
             self?.applySpeakerRoute()
         }
     }
