@@ -172,13 +172,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       }
 
       // Erreur générique avec détails en dev
-      const isDev = process.env.NODE_ENV !== 'production';
-      reply.status(500).send({
-        success: false,
-        error: isDev ? errorMessage : 'Erreur lors de la création du compte',
-        code: 'REGISTRATION_ERROR',
-        ...(isDev && { details: errorStack })
-      });
+      return sendInternalError(reply, 'Erreur lors de la création du compte');
     }
   });
 

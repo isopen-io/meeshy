@@ -10,7 +10,7 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { ConsentValidationService } from '../../../services/ConsentValidationService';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { withMutationLog } from '../../../utils/withMutationLog';
-import { sendSuccess, sendUnauthorized, sendInternalError } from '../../../utils/response.js';
+import { sendSuccess, sendUnauthorized, sendForbidden, sendInternalError } from '../../../utils/response.js';
 
 type PreferenceCategory =
   | 'privacy'
@@ -154,12 +154,7 @@ export function createPreferenceRouter<T>(
           );
 
           if (consentViolations.length > 0) {
-            return reply.status(403).send({
-              success: false,
-              error: 'CONSENT_REQUIRED',
-              message: 'Missing required consents for requested preferences',
-              violations: consentViolations
-            });
+            return sendForbidden(reply, 'Missing required consents for requested preferences');
           }
 
           // Idempotent via clientMutationId. The MutationLog row keys
@@ -276,12 +271,7 @@ export function createPreferenceRouter<T>(
           );
 
           if (consentViolations.length > 0) {
-            return reply.status(403).send({
-              success: false,
-              error: 'CONSENT_REQUIRED',
-              message: 'Missing required consents for requested preferences',
-              violations: consentViolations
-            });
+            return sendForbidden(reply, 'Missing required consents for requested preferences');
           }
 
           // Idempotent via clientMutationId — same reasoning as PUT.

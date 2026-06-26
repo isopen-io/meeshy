@@ -10,7 +10,7 @@ import { messageAttachmentSchema, errorResponseSchema } from '@meeshy/shared/typ
 import type { AttachmentParams, TranslateBody, TranscribeBody } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
-import { sendSuccess, sendUnauthorized, sendNotFound, sendBadRequest, sendInternalError } from '../../utils/response.js';
+import { sendSuccess, sendUnauthorized, sendNotFound, sendBadRequest, sendInternalError, sendError } from '../../utils/response.js';
 
 const logger = enhancedLogger.child({ module: 'AttachmentTranslationRoutes' });
 
@@ -148,11 +148,7 @@ export async function registerTranslationRoutes(
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         if (!translateService) {
-          return reply.status(503).send({
-            success: false,
-            error: 'SERVICE_UNAVAILABLE',
-            message: 'Translation service not available'
-          });
+          return sendError(reply, 503, 'Translation service not available');
         }
 
         const authContext = (request as UnifiedAuthRequest).authContext;

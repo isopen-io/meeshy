@@ -15,20 +15,10 @@ import {
 } from './types';
 
 function errorResponse(reply: FastifyReply, error: unknown, statusCode: number = 500) {
-  if (error instanceof AudioTranslateError) {
-    return reply.status(statusCode).send({
-      success: false,
-      error: error.code,
-      message: error.message
-    });
-  }
-
-  const message = error instanceof Error ? error.message : 'Internal server error';
-  return reply.status(statusCode).send({
-    success: false,
-    error: 'INTERNAL_ERROR',
-    message: message
-  });
+  const message = error instanceof AudioTranslateError
+    ? error.message
+    : error instanceof Error ? error.message : 'Internal server error';
+  return sendError(reply, statusCode, message);
 }
 
 export function registerTranslationRoutes(

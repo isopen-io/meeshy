@@ -188,11 +188,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Données invalides',
-          details: error.issues
-        });
+        return sendBadRequest(reply, 'Données invalides');
       }
       if (error instanceof Error && error.message === 'Token already exists') {
         return sendConflict(reply, 'Ce token existe déjà');
