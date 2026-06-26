@@ -440,14 +440,15 @@ final class StoryModelsTests: XCTestCase {
         visibility: String? = "PUBLIC",
         audioUrl: String? = nil,
         repostOfId: String? = nil,
-        originalRepostOfId: String? = nil
+        originalRepostOfId: String? = nil,
+        repostMedia: [APIPostMedia]? = nil
     ) -> APIPost {
         let author = APIAuthor(id: "author-1", username: "alice", displayName: "Alice", avatar: nil)
         let repostOf: APIRepostOf? = repostOfId.map { rid in
             APIRepostOf(
                 id: rid, type: "STORY", content: nil, originalLanguage: nil, translations: nil,
                 storyEffects: nil, audioUrl: nil, moodEmoji: nil, originalRepostOfId: nil,
-                author: author, media: nil, createdAt: Date(), likeCount: nil,
+                author: author, media: repostMedia, createdAt: Date(), likeCount: nil,
                 commentCount: nil, isQuote: nil
             )
         }
@@ -494,6 +495,24 @@ final class StoryModelsTests: XCTestCase {
         XCTAssertEqual(firstStory?.originalRepostOfId, "root-1")
         XCTAssertEqual(firstStory?.visibility, "PUBLIC")
         XCTAssertEqual(firstStory?.audioUrl, "/api/v1/attachments/file/audio.mp3")
+    }
+
+    func test_repostedStory_inheritsMedia_fromRepostOf_forViewerPlayback() throws {
+        // A reposted story's own `media` is empty — the playable media lives on
+        // `repostOf`. The full-screen viewer renders from `StoryItem.media`, so
+        // `toStoryGroups` must inherit it from `repostOf` (otherwise the viewer
+        // shows a blank spinner while the feed embed plays fine). Regression guard
+        // for the 2026-06-26 report « la republication ne joue pas la story ».
+        let mediaJSON = """
+        [{"id": "m1", "mimeType": "video/mp4", "fileUrl": "https://cdn.meeshy/story.mp4"}]
+        """.data(using: .utf8)!
+        let repostMedia = try JSONDecoder().decode([APIPostMedia].self, from: mediaJSON)
+        let post = makeAPIPost(id: "repost-1", type: "STORY", repostOfId: "orig-1", repostMedia: repostMedia)
+
+        let story = [post].toStoryGroups().first?.stories.first
+        XCTAssertEqual(
+            story?.media.first?.url, "https://cdn.meeshy/story.mp4",
+            "Reposted story must inherit the original's media from repostOf so the full-screen viewer plays it")
     }
 
     func test_StoryItem_publicVisibility_isCurrentStoryIsPublic() {
