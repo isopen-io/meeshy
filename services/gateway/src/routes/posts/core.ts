@@ -82,13 +82,13 @@ export function registerCoreRoutes(
         const postType = parsed.data.type ?? 'POST';
         const broadcastPost = hoistTrackingLinks(post) as unknown as Post;
         if (postType === 'STORY') {
-          socialEvents.broadcastStoryCreated(broadcastPost, authContext.registeredUser.id).catch(() => {});
+          socialEvents.broadcastStoryCreated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn('[POST /posts]: broadcast story created failed', err));
         } else if (postType === 'STATUS') {
-          socialEvents.broadcastStatusCreated(broadcastPost, authContext.registeredUser.id).catch(() => {});
+          socialEvents.broadcastStatusCreated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn('[POST /posts]: broadcast status created failed', err));
         } else {
           // U1 — echo the request cmid so an offline author reconciles its
           // optimistic temp post (keyed by cmid) with this server post.
-          socialEvents.broadcastPostCreated(broadcastPost, authContext.registeredUser.id, request.clientMutationId).catch(() => {});
+          socialEvents.broadcastPostCreated(broadcastPost, authContext.registeredUser.id, request.clientMutationId).catch((err) => fastify.log.warn('[POST /posts]: broadcast post created failed', err));
         }
       }
 
@@ -106,7 +106,7 @@ export function registerCoreRoutes(
             parsed.data.content,
             parsed.data.originalLanguage ?? (post as any).originalLanguage,
             authContext.registeredUser.id,
-          ).catch(() => {});
+          ).catch((err) => fastify.log.warn('[POST /posts]: translate post failed', err));
         } catch {
           // PostTranslationService not initialized — skip silently
         }
@@ -269,11 +269,11 @@ export function registerCoreRoutes(
       if (socialEvents) {
         const updatedPostType = (post as any).type as string;
         if (updatedPostType === 'STORY') {
-          socialEvents.broadcastStoryUpdated(post as any, authContext.registeredUser.id).catch(() => {});
+          socialEvents.broadcastStoryUpdated(post as any, authContext.registeredUser.id).catch((err) => fastify.log.warn('[PUT /posts/:postId]: broadcast story updated failed', err));
         } else if (updatedPostType === 'STATUS') {
-          socialEvents.broadcastStatusUpdated(post as any, authContext.registeredUser.id).catch(() => {});
+          socialEvents.broadcastStatusUpdated(post as any, authContext.registeredUser.id).catch((err) => fastify.log.warn('[PUT /posts/:postId]: broadcast status updated failed', err));
         } else {
-          socialEvents.broadcastPostUpdated(post as any, authContext.registeredUser.id).catch(() => {});
+          socialEvents.broadcastPostUpdated(post as any, authContext.registeredUser.id).catch((err) => fastify.log.warn('[PUT /posts/:postId]: broadcast post updated failed', err));
         }
       }
 
@@ -312,11 +312,11 @@ export function registerCoreRoutes(
       const socialEvents = fastify.socialEvents;
       if (socialEvents) {
         if (result.type === 'STATUS') {
-          socialEvents.broadcastStatusDeleted(postId, authContext.registeredUser.id, result.visibility, (result as any).visibilityUserIds ?? []).catch(() => {});
+          socialEvents.broadcastStatusDeleted(postId, authContext.registeredUser.id, result.visibility, (result as any).visibilityUserIds ?? []).catch((err) => fastify.log.warn('[DELETE /posts/:postId]: broadcast status deleted failed', err));
         } else if (result.type === 'STORY') {
-          socialEvents.broadcastStoryDeleted(postId, authContext.registeredUser.id).catch(() => {});
+          socialEvents.broadcastStoryDeleted(postId, authContext.registeredUser.id).catch((err) => fastify.log.warn('[DELETE /posts/:postId]: broadcast story deleted failed', err));
         } else {
-          socialEvents.broadcastPostDeleted(postId, authContext.registeredUser.id).catch(() => {});
+          socialEvents.broadcastPostDeleted(postId, authContext.registeredUser.id).catch((err) => fastify.log.warn('[DELETE /posts/:postId]: broadcast post deleted failed', err));
         }
       }
 
