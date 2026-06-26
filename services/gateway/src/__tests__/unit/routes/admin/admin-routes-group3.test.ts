@@ -254,8 +254,8 @@ describe('broadcastRoutes', () => {
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
       expect(body.success).toBe(true);
-      expect(body.data.broadcasts).toHaveLength(2);
-      expect(body.data.pagination.total).toBe(2);
+      expect(body.data).toHaveLength(2);
+      expect(body.pagination.total).toBe(2);
     });
 
     it('returns 200 for BIGBOSS role', async () => {
@@ -289,8 +289,8 @@ describe('broadcastRoutes', () => {
       const res = await app.inject({ method: 'GET', url: '/?offset=10&limit=5' });
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
-      expect(body.data.pagination.offset).toBe(10);
-      expect(body.data.pagination.limit).toBe(5);
+      expect(body.pagination.offset).toBe(10);
+      expect(body.pagination.limit).toBe(5);
     });
 
     it('hasMore is true when more items exist beyond current page', async () => {
@@ -299,7 +299,7 @@ describe('broadcastRoutes', () => {
 
       const res = await app.inject({ method: 'GET', url: '/?offset=0&limit=1' });
       const body = JSON.parse(res.body);
-      expect(body.data.pagination.hasMore).toBe(true);
+      expect(body.pagination.hasMore).toBe(true);
     });
 
     it('returns 500 when DB throws', async () => {
