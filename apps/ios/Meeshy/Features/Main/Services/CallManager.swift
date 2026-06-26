@@ -2623,8 +2623,8 @@ final class CallManager: ObservableObject {
     /// if the call ended or a newer negotiation superseded this offer (epoch),
     /// so a stale retry never lands on the peer after a renegotiation.
     private func emitOfferWithRetry(callId: String, payload: [String: Any], generation: Int) async {
-        let maxAttempts = 3
-        var delayMs: UInt64 = 500
+        let maxAttempts = QualityThresholds.signalOfferMaxAttempts
+        var delay: TimeInterval = QualityThresholds.signalRetryInitialDelaySeconds
         for attempt in 1...maxAttempts {
             guard currentCallId == callId, generation >= negotiationId else {
                 Logger.calls.info("[CALL-DIAG] offer gen=\(generation) superseded/cancelled — stop retry")
@@ -2639,8 +2639,8 @@ final class CallManager: ObservableObject {
             }
             Logger.calls.warning("[CALL-DIAG] offer ACK timed out (attempt \(attempt)/\(maxAttempts)) call=\(callId)")
             if attempt < maxAttempts {
-                try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
-                delayMs *= 2
+                try? await Task.sleep(for: .seconds(delay))
+                delay *= 2
             }
         }
         Logger.calls.error("[CALL-DIAG] offer never ACK'd after \(maxAttempts) attempts — relying on gateway replay (§4.6)")
@@ -2683,14 +2683,15 @@ final class CallManager: ObservableObject {
     /// ended or a newer negotiation superseded this answer (epoch), so a stale
     /// answer never lands on the peer after a renegotiation.
     private func emitAnswerRetry(callId: String, payload: [String: Any], generation: Int) async {
-        var delayMs: UInt64 = 500
-        for attempt in 2...4 {
+        var delay: TimeInterval = QualityThresholds.signalRetryInitialDelaySeconds
+        let total = QualityThresholds.signalAnswerTotalAttempts
+        for attempt in 2...total {
             guard currentCallId == callId, generation >= negotiationId else {
                 Logger.calls.info("[CALL-DIAG] answer gen=\(generation) superseded/cancelled — stop retry")
                 return
             }
-            try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
-            delayMs *= 2
+            try? await Task.sleep(for: .seconds(delay))
+            delay *= 2
             guard currentCallId == callId, generation >= negotiationId else { return }
             let acked = await MessageSocketManager.shared.emitCallSignalWithAck(
                 callId: callId, type: "answer", payload: payload
@@ -2699,9 +2700,9 @@ final class CallManager: ObservableObject {
                 Logger.calls.info("[CALL-DIAG] answer ACK'd on attempt \(attempt)")
                 return
             }
-            Logger.calls.warning("[CALL-DIAG] answer ACK timed out (attempt \(attempt)/4) call=\(callId)")
+            Logger.calls.warning("[CALL-DIAG] answer ACK timed out (attempt \(attempt)/\(total)) call=\(callId)")
         }
-        Logger.calls.error("[CALL-DIAG] answer never ACK'd after 4 attempts — relying on gateway replay (§4.6)")
+        Logger.calls.error("[CALL-DIAG] answer never ACK'd after \(total) attempts — relying on gateway replay (§4.6)")
     }
 
     // Audit P3 — `toUserId` was accepted by the previous signature and

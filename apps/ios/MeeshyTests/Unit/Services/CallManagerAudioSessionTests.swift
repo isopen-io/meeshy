@@ -458,6 +458,28 @@ final class CallManagerAudioSessionTests: XCTestCase {
             "pipFrameRate(for:) must reference QualityThresholds.pipFrameRateDefault"
         )
     }
+
+    func test_callManager_signalRetry_usesQualityThresholdsConstants() throws {
+        // Regression guard: emitOfferWithRetry / emitAnswerRetry must not hardcode
+        // the initial delay (500 ms) or attempt counts (3, 4).
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("signalRetryInitialDelaySeconds"),
+            "emitOfferWithRetry / emitAnswerRetry must use QualityThresholds.signalRetryInitialDelaySeconds"
+        )
+        XCTAssertTrue(
+            source.contains("signalOfferMaxAttempts"),
+            "emitOfferWithRetry must use QualityThresholds.signalOfferMaxAttempts"
+        )
+        XCTAssertTrue(
+            source.contains("signalAnswerTotalAttempts"),
+            "emitAnswerRetry must use QualityThresholds.signalAnswerTotalAttempts"
+        )
+        XCTAssertFalse(
+            source.contains("nanoseconds: delayMs"),
+            "Hardcoded nanoseconds: delayMs — replace with Task.sleep(for: .seconds(...))"
+        )
+    }
 }
 
 // MARK: - P2PWebRTCClient — Perfect Negotiation Source Guards (W3C §3.4)

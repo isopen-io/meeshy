@@ -743,3 +743,46 @@ final class QualityThresholdsVideoSurvivalTests: XCTestCase {
                           "Above 30 s the user waits too long for audio-only relief on a dead link")
     }
 }
+
+// MARK: - Signalling retry constants
+
+@MainActor
+final class QualityThresholdsSignalRetryTests: XCTestCase {
+
+    func test_signalRetryInitialDelaySeconds_isHalfSecond() {
+        XCTAssertEqual(QualityThresholds.signalRetryInitialDelaySeconds, 0.5, accuracy: 0.001,
+                       "Initial retry delay must be 500 ms — absorbs transient socket jitter without blocking CallKit")
+    }
+
+    func test_signalOfferMaxAttempts_is3() {
+        XCTAssertEqual(QualityThresholds.signalOfferMaxAttempts, 3,
+                       "Offer retry cap must be 3 attempts (500ms + 1s + 2s backoff = 3.5s window)")
+    }
+
+    func test_signalAnswerTotalAttempts_is4() {
+        XCTAssertEqual(QualityThresholds.signalAnswerTotalAttempts, 4,
+                       "Answer total must be 4 (1 inline + 3 background retries to match offer budget)")
+    }
+
+    func test_signalAnswerTotalAttempts_exceedsOffer() {
+        // Answer gets one extra attempt (the inline attempt before CXAnswerCallAction.fulfill)
+        // which does NOT count against the retry budget. So total = offer + 1 to match call budget.
+        XCTAssertEqual(
+            QualityThresholds.signalAnswerTotalAttempts,
+            QualityThresholds.signalOfferMaxAttempts + 1,
+            "signalAnswerTotalAttempts must be signalOfferMaxAttempts + 1 (inline attempt + same retry budget)"
+        )
+    }
+
+    func test_signalRetryInitialDelay_inPlausibleRange() {
+        XCTAssertGreaterThan(QualityThresholds.signalRetryInitialDelaySeconds, 0.1,
+                             "Below 100 ms retries would spam the server on slow links")
+        XCTAssertLessThan(QualityThresholds.signalRetryInitialDelaySeconds, 5.0,
+                          "Above 5 s a 3-attempt window would block the call setup for > 15 s")
+    }
+
+    func test_signalOfferMaxAttempts_isAtLeast2() {
+        XCTAssertGreaterThanOrEqual(QualityThresholds.signalOfferMaxAttempts, 2,
+                                    "At least 2 offer attempts needed for gateway retry semantics to apply")
+    }
+}

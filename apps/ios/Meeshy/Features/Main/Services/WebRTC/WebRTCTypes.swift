@@ -628,6 +628,23 @@ enum QualityThresholds {
     /// camera + renegotiating is expensive, so we require the link to have
     /// clearly settled before committing.
     static let videoSurvivalResumeAfterSeconds: TimeInterval = 10
+
+    // MARK: Signalling retry (emitOfferWithRetry / emitAnswerRetry)
+
+    /// Starting backoff delay for SDP offer/answer ACK retries. Doubles on each
+    /// successive attempt (500ms → 1s → 2s) — §4.6 bounded exponential backoff.
+    static let signalRetryInitialDelaySeconds: TimeInterval = 0.5
+
+    /// Total SDP offer transmission attempts (including the first). 3 attempts
+    /// with 500ms/1s/2s backoff give the socket up to 3.5s total window before
+    /// the gateway replay buffer takes over.
+    static let signalOfferMaxAttempts: Int = 3
+
+    /// Total SDP answer transmission attempts (including the inline attempt 1).
+    /// The callee's answer path runs attempt 1 inline (so `CXAnswerCallAction`
+    /// can be fulfilled promptly), then retries 2…4 in the background via
+    /// `emitAnswerRetry`. Matches the offer budget so neither side starves.
+    static let signalAnswerTotalAttempts: Int = 4
 }
 
 // MARK: - Video Quality Level (§4.8)
