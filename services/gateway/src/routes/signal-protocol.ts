@@ -223,11 +223,7 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
         // Validate params
         const paramsResult = UserIdParamsSchema.safeParse(request.params);
         if (!paramsResult.success) {
-          return reply.status(400).send({
-            success: false,
-            error: 'Invalid request parameters',
-            details: paramsResult.error.issues,
-          });
+          return sendBadRequest(reply, 'Invalid request parameters');
         }
         const { userId: targetUserId } = paramsResult.data;
 

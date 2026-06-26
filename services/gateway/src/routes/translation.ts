@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
 import { logError } from '../utils/logger';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { sendSuccess, sendNotFound, sendForbidden, sendBadRequest } from '../utils/response.js';
+import { sendSuccess, sendNotFound, sendForbidden, sendBadRequest, sendUnauthorized } from '../utils/response.js';
 
 // Schémas de validation
 const TranslateRequestSchema = z.object({
@@ -335,11 +335,7 @@ export async function translationRoutes(fastify: FastifyInstance) {
 
         // SECURITY: E2EE messages cannot be translated by the server
         if (existingMessage.encryptionMode === 'e2ee') {
-          return reply.status(400).send({
-            success: false,
-            error: 'E2EE_NOT_TRANSLATABLE',
-            message: 'End-to-end encrypted messages cannot be translated by the server'
-          });
+          return sendBadRequest(reply, 'End-to-end encrypted messages cannot be translated by the server', { code: 'E2EE_NOT_TRANSLATABLE' });
         }
 
         // Vérifier l'accès (optionnel, selon vos besoins)
@@ -431,11 +427,7 @@ export async function translationRoutes(fastify: FastifyInstance) {
         // Créer les données du message
         const senderId = request.user?.userId;
         if (!senderId) {
-          return reply.status(401).send({
-            success: false,
-            error: 'AUTH_REQUIRED',
-            message: 'Authentication required for new message translation'
-          });
+          return sendUnauthorized(reply, 'Authentication required for new message translation');
         }
 
         // Resolve the user's participantId in this conversation

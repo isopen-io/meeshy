@@ -93,9 +93,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       const body = createLinkSchema.parse(request.body);
 
       if (!isRegisteredUser(request.authContext)) {
-        return reply.status(403).send({
-          error: 'Utilisateur enregistré requis pour créer un lien'
-        });
+        return sendForbidden(reply, 'Utilisateur enregistré requis pour créer un lien');
       }
 
       const user = request.authContext.registeredUser!;

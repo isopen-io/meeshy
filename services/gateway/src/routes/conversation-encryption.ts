@@ -179,14 +179,7 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
 
         // Check if encryption is already enabled (immutable)
         if (conversation.encryptionEnabledAt) {
-          return reply.status(400).send({
-            success: false,
-            error: 'Encryption already enabled for this conversation (cannot be changed)',
-            data: {
-              currentMode: conversation.encryptionMode,
-              enabledAt: conversation.encryptionEnabledAt
-            }
-          });
+          return sendBadRequest(reply, 'Encryption already enabled for this conversation (cannot be changed)');
         }
 
         // Check permission to enable encryption

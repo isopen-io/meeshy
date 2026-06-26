@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { logError } from '../utils/logger';
-import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../utils/response';
+import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendError } from '../utils/response';
 import {
   errorResponseSchema,
   anonymousParticipantSchema,
@@ -231,31 +231,19 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
 
       // 2. Verifications de validite du lien
       if (!shareLink.isActive) {
-        return reply.status(410).send({
-          success: false,
-          message: 'Ce lien n\'est plus actif'
-        });
+        return sendError(reply, 410, 'Ce lien n\'est plus actif');
       }
 
       if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {
-        return reply.status(410).send({
-          success: false,
-          message: 'Ce lien a expire'
-        });
+        return sendError(reply, 410, 'Ce lien a expire');
       }
 
       if (shareLink.maxUses && shareLink.currentUses >= shareLink.maxUses) {
-        return reply.status(410).send({
-          success: false,
-          message: 'Ce lien a atteint sa limite d\'utilisation'
-        });
+        return sendError(reply, 410, 'Ce lien a atteint sa limite d\'utilisation');
       }
 
       if (shareLink.maxConcurrentUsers && shareLink.currentConcurrentUsers >= shareLink.maxConcurrentUsers) {
-        return reply.status(429).send({
-          success: false,
-          message: 'Nombre maximum d\'utilisateurs concurrent atteint'
-        });
+        return sendError(reply, 429, 'Nombre maximum d\'utilisateurs concurrent atteint');
       }
 
       // 3. Verifications de securite/restrictions
