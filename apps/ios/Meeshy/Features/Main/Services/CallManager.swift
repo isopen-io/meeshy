@@ -3482,6 +3482,25 @@ extension CallManager: VideoSurvivalActuating {
                 Logger.calls.info("[CALL] survival A/V switch offer sent (video=\(enabled))")
             }
             return true
+        } catch WebRTCError.cameraPermissionDenied where enabled {
+            // Camera permission was revoked while the call was live.  The
+            // survival controller would otherwise keep retrying on every
+            // recovery cycle (each returning false → revert → retry next streak).
+            // Permanently disable video to stop the loop: set isVideoEnabled=false
+            // so the survival controller's next tick returns .initial immediately
+            // (it guards on `userWantsVideo`). Then surface the Settings toast.
+            Logger.calls.error("[CALL] survival resume failed: camera permission denied — permanently disabling video")
+            isVideoEnabled = false
+            videoSurvivalController.reset()
+            FeedbackToastManager.shared.showError(
+                String(localized: "call.video.permission.denied",
+                       defaultValue: "Caméra : accès refusé — toucher pour ouvrir les Paramètres",
+                       bundle: .main)
+            ) {
+                guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                UIApplication.shared.open(url)
+            }
+            return false
         } catch {
             Logger.calls.error("survival video \(enabled ? "resume" : "suspend") failed: \(error.localizedDescription)")
             return false
