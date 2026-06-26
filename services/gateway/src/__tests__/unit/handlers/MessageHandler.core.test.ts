@@ -2626,9 +2626,9 @@ describe('MessageHandler — branch coverage boosters', () => {
     const agentSendEvent: any = jest.fn(async () => {});
     const agentClient = { sendEvent: agentSendEvent };
 
-    // Message with sender.displayName = null, sender.username = 'alice_user'
+    // Message with sender.displayName = null, sender.user.username = 'alice_user'
     const messagingService = makeMockMessagingService({
-      sender: { id: 'p1', userId: 'user-1', displayName: null, username: 'alice_user', avatar: null },
+      sender: { id: 'p1', userId: 'user-1', displayName: null, username: 'alice_user', avatar: null, user: { username: 'alice_user' } },
     });
     const prisma = makeMockPrisma({
       participant: { findMany: jest.fn(async () => []) },

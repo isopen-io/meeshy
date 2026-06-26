@@ -439,19 +439,14 @@ describe('RedisDeliveryQueue (memory capacity limits)', () => {
 // ---------------------------------------------------------------------------
 
 describe('RedisDeliveryQueue (branch gap-fill)', () => {
-  test('drain — falls back to memory when pipeline result has a rangeError', async () => {
+  test('drain — falls back to memory when eval throws (legacy: rangeError path)', async () => {
     const entry = makePayload({ messageId: 'range-err-fallback' });
-    const pipeline = makePipeline();
-    pipeline.exec.mockResolvedValue([
-      [new Error('lrange error'), null],
-      [null, 1],
-    ]);
-    const redis = makeMockRedis({ pipeline: jest.fn().mockReturnValue(pipeline) });
+    const redis = makeMockRedis({ eval: jest.fn().mockRejectedValue(new Error('eval error')) });
 
     const cacheStore: any = { getNativeClient: jest.fn() };
     cacheStore.getNativeClient
       .mockReturnValueOnce(null) // enqueue → memory
-      .mockReturnValue(redis);   // drain → Redis rangeError → memory fallback
+      .mockReturnValue(redis);   // drain → eval throws → memory fallback
 
     const queue = new RedisDeliveryQueue(cacheStore);
     await queue.enqueue('user-r', entry);
@@ -461,11 +456,8 @@ describe('RedisDeliveryQueue (branch gap-fill)', () => {
     expect(drained[0].messageId).toBe('range-err-fallback');
   });
 
-  test('drain — returns empty when pipeline results[0] is null', async () => {
-    const pipeline = makePipeline();
-    // results is truthy but results[0] is null → early return []
-    pipeline.exec.mockResolvedValue([null, [null, 1]]);
-    const redis = makeMockRedis({ pipeline: jest.fn().mockReturnValue(pipeline) });
+  test('drain — returns empty when eval returns non-array (null)', async () => {
+    const redis = makeMockRedis({ eval: jest.fn().mockResolvedValue(null) });
     const queue = new RedisDeliveryQueue(makeCacheStore(redis));
 
     expect(await queue.drain('user-r')).toEqual([]);
