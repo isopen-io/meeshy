@@ -357,6 +357,33 @@ public struct AudioTranslationEvent: Codable, Sendable {
     public let processingTimeMs: Int?
 }
 
+// MARK: - Translation / Audio / Transcription Failure Events
+
+public struct TranslationFailedEvent: Codable, Sendable {
+    public let messageId: String
+    public let conversationId: String
+    public let error: String
+    public let taskId: String?
+}
+
+public struct AudioTranslationFailedEvent: Codable, Sendable {
+    public let messageId: String
+    public let attachmentId: String
+    public let conversationId: String
+    public let error: String
+    public let errorCode: String?
+    public let taskId: String?
+}
+
+public struct TranscriptionFailedEvent: Codable, Sendable {
+    public let messageId: String
+    public let attachmentId: String
+    public let conversationId: String
+    public let error: String
+    public let errorCode: String?
+    public let taskId: String?
+}
+
 public struct ReadStatusSummary: Decodable, Sendable {
     public let totalMembers: Int
     public let deliveredCount: Int
@@ -963,6 +990,9 @@ public protocol MessageSocketProviding: Sendable {
     var audioTranslationReady: PassthroughSubject<AudioTranslationEvent, Never> { get }
     var audioTranslationProgressive: PassthroughSubject<AudioTranslationEvent, Never> { get }
     var audioTranslationCompleted: PassthroughSubject<AudioTranslationEvent, Never> { get }
+    var translationFailed: PassthroughSubject<TranslationFailedEvent, Never> { get }
+    var audioTranslationFailed: PassthroughSubject<AudioTranslationFailedEvent, Never> { get }
+    var transcriptionFailed: PassthroughSubject<TranscriptionFailedEvent, Never> { get }
     var didReconnect: PassthroughSubject<Void, Never> { get }
     var notificationReceived: PassthroughSubject<SocketNotificationEvent, Never> { get }
     /// Fired when the gateway emits SERVER_EVENTS.CONVERSATION_NEW (a fresh
@@ -1176,6 +1206,9 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let audioTranslationReady = PassthroughSubject<AudioTranslationEvent, Never>()
     public let audioTranslationProgressive = PassthroughSubject<AudioTranslationEvent, Never>()
     public let audioTranslationCompleted = PassthroughSubject<AudioTranslationEvent, Never>()
+    public let translationFailed = PassthroughSubject<TranslationFailedEvent, Never>()
+    public let audioTranslationFailed = PassthroughSubject<AudioTranslationFailedEvent, Never>()
+    public let transcriptionFailed = PassthroughSubject<TranscriptionFailedEvent, Never>()
 
     // Combine publisher — reconnection (fires after successful reconnect)
     public let didReconnect = PassthroughSubject<Void, Never>()
@@ -2461,6 +2494,29 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(AudioTranslationEvent.self, from: data) { [weak self] event in
                 self?.audioTranslationCompleted.send(event)
+            }
+        }
+
+        // --- Translation / audio / transcription failure events ---
+
+        socket.on("translation:failed") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(TranslationFailedEvent.self, from: data) { [weak self] event in
+                self?.translationFailed.send(event)
+            }
+        }
+
+        socket.on("audio:translation-failed") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(AudioTranslationFailedEvent.self, from: data) { [weak self] event in
+                self?.audioTranslationFailed.send(event)
+            }
+        }
+
+        socket.on("audio:transcription-failed") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(TranscriptionFailedEvent.self, from: data) { [weak self] event in
+                self?.transcriptionFailed.send(event)
             }
         }
 
