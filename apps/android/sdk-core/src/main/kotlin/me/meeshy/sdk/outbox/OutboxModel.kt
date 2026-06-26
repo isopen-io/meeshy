@@ -13,6 +13,7 @@ public enum class OutboxKind {
     UPDATE_CONVERSATION_PREFS,
     UPDATE_PROFILE,
     UPDATE_SETTINGS,
+    PUBLISH_STORY,
 }
 
 /** Lifecycle of an outbox row; a succeeded mutation is deleted, never flagged. */
@@ -41,6 +42,7 @@ public object OutboxLanes {
     public const val CONVERSATION_PREFS: String = "conversationPrefs"
     public const val PRESENCE: String = "presence"
     public const val SOCIAL: String = "social"
+    public const val STORY: String = "story"
     public const val PROFILE: String = "profile"
     public const val SETTINGS: String = "settings"
 }

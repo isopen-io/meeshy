@@ -337,6 +337,13 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       trailing unseen dots, cap 5 + overflow "+", hidden for single-story rings,
       accent active / muted inactive, `StoryRing.unviewedCount`) ;
       progression d'upload + retry/cancel pending (`:feature:stories` `StoryTray`)
+- [~] **Text story composer + publish** done (`StoryComposerDraft` pure publish-gate +
+      `toCreateStoryRequest` mapping, `StoryComposerViewModel` optimistic publish, accent
+      `StoryComposerScreen` reached from the tray's add affordance via route `story_composer`).
+      Publishes through the **shared durable outbox** (`OutboxKind.PUBLISH_STORY` on its own
+      `story` lane → `OutboxFlushWorker` → `POST /posts`), surpassing iOS's dedicated queue:
+      survives process death / offline, auto-retries, no head-of-line block on messages.
+      Pending: multi-slide canvas / media / text styling below.
 - [ ] Multi-slide composer (≤10 slides; add/remove/duplicate/reorder; slide mini-preview strip)
 - [ ] 9:16 canvas with pinch-zoom + drag-pan; FAB + bottom-band toolbar (Contenu/Effets)
 - [ ] Text elements (≤5/slide): style (bold/italic/handwriting/typewriter/neon/retro), colour,
@@ -354,8 +361,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Per-element + per-slide duration; background designation toggle (1 visual + 1 audio/slide)
 - [ ] Repost flow: clone source story + locked attribution badge
 - [ ] Draft save/restore with media persistence + lost-media detection / re-capture prompt
-- [ ] Preview before publish; RAW background publish-all; offline publish queue + pending badge
-- [ ] Visibility selection (Public / Friends / Private)
+- [~] Offline publish queue done (durable outbox `PUBLISH_STORY` lane, auto-retry on
+      reconnect via `OutboxFlushWorker`); preview-before-publish, RAW background publish-all
+      and the tray pending badge still pending.
+- [x] Visibility selection (Public / Friends / Community / Private) — accent `FilterChip` row
+      in the composer; wire value carried on `StoryVisibility.wire` → `CreateStoryRequest.visibility`.
 - [ ] thumbHash blur-placeholder generation per slide
 - [ ] **V2 timeline editor**: multi-track, Quick + Pro modes, size-class adaptive, zoomable
 - [ ] Clip add / move / trim / split / delete with full undo/redo (command stack, FIFO 50, persisted)

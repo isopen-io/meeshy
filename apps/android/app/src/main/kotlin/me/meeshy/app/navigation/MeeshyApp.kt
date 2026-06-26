@@ -44,6 +44,7 @@ import me.meeshy.app.feed.FeedScreen
 import me.meeshy.app.notifications.NotificationsScreen
 import me.meeshy.app.profile.ProfileScreen
 import me.meeshy.app.settings.SettingsScreen
+import me.meeshy.app.stories.StoryComposerScreen
 import me.meeshy.app.stories.StoryTray
 import me.meeshy.app.stories.StoryViewerScreen
 import me.meeshy.app.stories.StoryViewerViewModel
@@ -66,6 +67,7 @@ object Routes {
     const val PROFILE_DEEP_LINK = "meeshy://$PROFILE_USER"
     const val STORY_VIEWER = "story/{${StoryViewerViewModel.USER_ID_ARG}}"
     const val STORY_DEEP_LINK = "meeshy://$STORY_VIEWER"
+    const val STORY_COMPOSER = "story_composer"
 
     fun chat(conversationId: String): String = "chat/$conversationId"
     fun profile(userId: String): String = "profile/$userId"
@@ -192,6 +194,7 @@ fun MeeshyApp() {
                     header = {
                         StoryTray(
                             onOpenStory = { userId -> navController.navigate(Routes.story(userId)) },
+                            onAddStory = { navController.navigate(Routes.STORY_COMPOSER) },
                         )
                     },
                 )
@@ -260,6 +263,9 @@ fun MeeshyApp() {
                 ),
             ) {
                 StoryViewerScreen(onClose = { navController.popBackStack() })
+            }
+            composable(Routes.STORY_COMPOSER) {
+                StoryComposerScreen(onClose = { navController.popBackStack() })
             }
         }
     }

@@ -1,6 +1,7 @@
 package me.meeshy.sdk.story
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.StoryDao
 import me.meeshy.core.database.dao.SyncMetaDao
@@ -12,12 +13,19 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.StoryViewer
 import me.meeshy.sdk.model.toStoryViewer
+import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CreateCommentRequest
+import me.meeshy.sdk.net.api.CreateStoryRequest
 import me.meeshy.sdk.net.api.RepostPostRequest
 import me.meeshy.sdk.net.api.StoryApi
 import me.meeshy.sdk.net.api.StoryLikeRequest
 import me.meeshy.sdk.net.apiCall
+import me.meeshy.sdk.outbox.OutboxKind
+import me.meeshy.sdk.outbox.OutboxLanes
+import me.meeshy.sdk.outbox.OutboxMutation
+import me.meeshy.sdk.outbox.OutboxRepository
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -28,6 +36,7 @@ class StoryRepository @Inject constructor(
     database: MeeshyDatabase,
     storyDao: StoryDao,
     syncMetaDao: SyncMetaDao,
+    private val outboxRepository: OutboxRepository,
 ) {
     private val cacheSource = StoryCacheSource(
         database = database,
@@ -82,6 +91,25 @@ class StoryRepository @Inject constructor(
 
     suspend fun fetchPost(id: String): NetworkResult<ApiPost> =
         apiCall { storyApi.fetchPost(id) }
+
+    /**
+     * Durably enqueues a story publish on the outbox (ARCHITECTURE.md §5): the
+     * request is persisted and delivered by `OutboxFlushWorker` on its own
+     * [OutboxLanes.STORY] lane, so a slow upload never head-of-line-blocks
+     * messages and the publish survives process death / offline. Each publish is
+     * an independent row keyed by a fresh temp id (no coalescing across stories).
+     *
+     * @return the queued row's `cmid` (drives optimistic-rollback observation).
+     */
+    suspend fun enqueuePublish(request: CreateStoryRequest): String? =
+        outboxRepository.enqueue(
+            OutboxMutation(
+                kind = OutboxKind.PUBLISH_STORY,
+                lane = OutboxLanes.STORY,
+                targetId = "pending_${UUID.randomUUID()}",
+                payload = MeeshyApi.json.encodeToString(request),
+            ),
+        )
 
     /**
      * Fetches the viewers of a story (with their optional reaction), mapping the

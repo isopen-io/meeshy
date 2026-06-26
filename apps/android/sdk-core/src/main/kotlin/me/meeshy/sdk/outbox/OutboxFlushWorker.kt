@@ -18,8 +18,10 @@ import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.AddReactionRequest
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.net.api.ConversationPreferencesUpdate
+import me.meeshy.sdk.net.api.CreateStoryRequest
 import me.meeshy.sdk.net.api.EditMessageRequest
 import me.meeshy.sdk.net.api.MessageApi
+import me.meeshy.sdk.net.api.PostApi
 import me.meeshy.sdk.net.api.ReactionApi
 import me.meeshy.sdk.net.apiCall
 import timber.log.Timber
@@ -41,6 +43,7 @@ class OutboxFlushWorker @AssistedInject constructor(
     private val messageApi: MessageApi,
     private val reactionApi: ReactionApi,
     private val conversationApi: ConversationApi,
+    private val postApi: PostApi,
     private val json: Json,
 ) : CoroutineWorker(context, params) {
 
@@ -60,6 +63,7 @@ class OutboxFlushWorker @AssistedInject constructor(
             OutboxLanes.CONVERSATION_PREFS,
             OutboxLanes.PRESENCE,
             OutboxLanes.SOCIAL,
+            OutboxLanes.STORY,
             OutboxLanes.PROFILE,
             OutboxLanes.SETTINGS,
         )
@@ -145,6 +149,14 @@ class OutboxFlushWorker @AssistedInject constructor(
                 mentionsOnly = prefs.mentionsOnly,
             )
             when (apiCall { conversationApi.updatePreferences(row.targetId, body) }) {
+                is NetworkResult.Success -> SendResult.Success
+                is NetworkResult.Failure -> SendResult.TransientFailure
+            }
+        },
+        OutboxKind.PUBLISH_STORY to MutationSender { row ->
+            val req = runCatching { json.decodeFromString<CreateStoryRequest>(row.payload) }
+                .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
+            when (apiCall { postApi.createStory(req) }) {
                 is NetworkResult.Success -> SendResult.Success
                 is NetworkResult.Failure -> SendResult.TransientFailure
             }
