@@ -366,12 +366,22 @@ public final class ReaderAudioMixer {
             // inférée comme valeur de retour (`() -> Task`), incompatible avec
             // le type `@Sendable () -> Void` attendu par `scheduleFile`.
             _ = Task { @MainActor [weak self] in
-                guard let self, let entry = self.entries[audioId], entry.node.isPlaying else { return }
-                entry.node.scheduleFile(entry.file, at: nil, completionHandler: nil)
+                self?.rescheduleLoopedEntry(audioId)
             }
         } : nil
 
         entry.node.scheduleFile(entry.file, at: scheduleAt, completionHandler: completion)
+    }
+
+    /// Ré-arme la lecture d'un node loopé depuis le completion handler de la
+    /// passe précédente. **Synchrone à dessein** (et non `async`) : appeler
+    /// `scheduleFile(_:at:completionHandler:)` hors d'un contexte `async` évite
+    /// le diagnostic « consider using asynchronous alternative ». L'overload
+    /// `async` suspendrait jusqu'à la FIN de lecture du segment — incompatible
+    /// avec le ré-armement fire-and-forget requis pour boucler sans gap audible.
+    private func rescheduleLoopedEntry(_ audioId: String) {
+        guard let entry = entries[audioId], entry.node.isPlaying else { return }
+        entry.node.scheduleFile(entry.file, at: nil, completionHandler: nil)
     }
 
     /// Schedule fade-in and fade-out volume ramps. node.volume is sampled by
