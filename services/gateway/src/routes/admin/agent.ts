@@ -978,7 +978,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
             await cache.set(key, JSON.stringify(profiles));
             profilesCleaned++;
           }
-        } catch { /* skip malformed */ }
+        } catch (parseErr) { fastify.log.debug({ key, parseErr }, '[AgentReset] Skipping malformed cache entry'); }
       }
 
       const cooldownKeys = await cache.keys(`agent:cooldown:*:${userId}`);

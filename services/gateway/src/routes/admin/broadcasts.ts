@@ -72,7 +72,7 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
         hasMore: offsetNum + limitNum < total,
       });
     } catch (error: any) {
-      logger.error('Error listing broadcasts');
+      logger.error('Error listing broadcasts', error);
       return sendInternalError(reply, 'Erreur lors de la recuperation des broadcasts');
     }
   });
@@ -130,7 +130,7 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
 
       return sendSuccess(reply, broadcast, { statusCode: 201 });
     } catch (error: any) {
-      logger.error('Error creating broadcast');
+      logger.error('Error creating broadcast', error);
       return sendInternalError(reply, 'Erreur lors de la creation du broadcast');
     }
   });
@@ -156,7 +156,7 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
 
       return sendSuccess(reply, broadcast);
     } catch (error: any) {
-      logger.error('Error fetching broadcast');
+      logger.error('Error fetching broadcast', error);
       return sendInternalError(reply, 'Erreur lors de la recuperation du broadcast');
     }
   });
@@ -206,7 +206,7 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
 
       return sendSuccess(reply, broadcast);
     } catch (error: any) {
-      logger.error('Error updating broadcast');
+      logger.error('Error updating broadcast', error);
       return sendInternalError(reply, 'Erreur lors de la mise a jour du broadcast');
     }
   });
@@ -332,7 +332,7 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
         broadcast: updatedBroadcast,
       });
     } catch (error: any) {
-      logger.error('Error previewing broadcast');
+      logger.error('Error previewing broadcast', error);
       return sendInternalError(reply, 'Erreur lors de la preview du broadcast');
     }
   });
@@ -390,12 +390,12 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       const emailService = new EmailService();
       const job = new BroadcastSenderJob(fastify.prisma, emailService);
       job.execute(id).catch((err: any) => {
-        logger.error(`Broadcast job failed for id=${id}: ${err.message}`);
+        logger.error(`Broadcast job failed for id=${id}`, err);
       });
 
       return sendSuccess(reply, undefined, { message: 'Envoi en cours' });
     } catch (error: any) {
-      logger.error('Error sending broadcast');
+      logger.error('Error sending broadcast', error);
       return sendInternalError(reply, 'Erreur lors du lancement de l\'envoi du broadcast');
     }
   });
@@ -445,7 +445,7 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
 
       return sendSuccess(reply, undefined, { message: 'Broadcast supprime' });
     } catch (error: any) {
-      logger.error('Error deleting broadcast');
+      logger.error('Error deleting broadcast', error);
       return sendInternalError(reply, 'Erreur lors de la suppression du broadcast');
     }
   });
