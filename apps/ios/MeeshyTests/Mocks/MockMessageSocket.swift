@@ -76,6 +76,9 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let callQualityAlert = PassthroughSubject<CallQualityAlertData, Never>()
     let callIceServersRefreshed = PassthroughSubject<CallIceServersRefreshedData, Never>()
     let callScreenCaptureAlert = PassthroughSubject<CallScreenCaptureAlertData, Never>()
+    let translationFailed = PassthroughSubject<TranslationFailedEvent, Never>()
+    let audioTranslationFailed = PassthroughSubject<AudioTranslationFailedEvent, Never>()
+    let transcriptionFailed = PassthroughSubject<TranscriptionFailedEvent, Never>()
 
     // MARK: - Call Tracking
 
