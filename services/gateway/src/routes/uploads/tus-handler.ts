@@ -124,7 +124,7 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
         await fs.rename(sourcePath, destPath);
       } catch {
         await fs.copyFile(sourcePath, destPath);
-        await fs.unlink(sourcePath).catch(() => {});
+        await fs.unlink(sourcePath).catch((err) => logger.debug('tus: temp file unlink failed after copy', { sourcePath, err }));
       }
 
       const fileSize = upload.size || 0;

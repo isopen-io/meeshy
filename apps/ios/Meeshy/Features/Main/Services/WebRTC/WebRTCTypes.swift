@@ -706,6 +706,14 @@ enum QualityThresholds {
     /// unlikely in a real WebRTC SDP), the extension is not injected and
     /// a fault is logged rather than emitting an invalid 15+ ID.
     static let extmapMaxId: Int = 14
+
+    /// Delay after rebuilding the audio stack following an AVAudioSession
+    /// media-services reset before re-applying the speaker route.  The
+    /// RTCAudioSession I/O unit needs a short stabilisation window once
+    /// `audioSessionDidActivate` has been called; attempting `overrideOutputAudioPort`
+    /// too early (< ~100 ms) can silently fail on some hardware.
+    /// 200 ms is conservative but avoids the race on all tested devices.
+    static let mediaServicesResetSpeakerDelaySeconds: TimeInterval = 0.2
 }
 
 // MARK: - Video Quality Level (§4.8)

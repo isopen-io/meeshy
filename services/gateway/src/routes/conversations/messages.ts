@@ -887,7 +887,7 @@ export function registerMessagesRoutes(
       // hot-path (GET messages). Gardé derrière LOG_AUDIO_DIAG=true — OFF par
       // défaut en prod. La boucle entière est court-circuitée quand désactivé.
       if (process.env.LOG_AUDIO_DIAG === 'true' && messages.length > 0) {
-        logger.info(`🔍 [CONVERSATIONS] Chargement de ${messages.length} messages pour conversation ${conversationId}`);
+        logger.debug(`audio-diag: loading ${messages.length} messages for conversation ${conversationId}`);
 
         // Compter les messages avec attachments audio
         let audioAttachmentCount = 0;
@@ -921,9 +921,9 @@ export function registerMessagesRoutes(
                     speakerAnalysisInfo = ' | ⚠️ AUCUN speakerAnalysis';
                   }
 
-                  logger.info(`📝 [CONVERSATIONS] Message ${msg.id} - Audio transcription: attachmentId=${att.id}, text="${transcriptionText}", lang=${att.transcription.language}, confidence=${att.transcription.confidence}, source=${att.transcription.source}, model=${att.transcription.model}, durationMs=${att.transcription.durationMs || att.transcription.audioDurationMs}, segments=${att.transcription.segments?.length || 0}, speakerCount=${att.transcription.speakerCount}, hasTranslations=${!!att.translations}${speakerAnalysisInfo}`);
+                  logger.debug(`audio-diag: msg=${msg.id} attachmentId=${att.id} text="${transcriptionText}" lang=${att.transcription.language} confidence=${att.transcription.confidence} source=${att.transcription.source} model=${att.transcription.model} durationMs=${att.transcription.durationMs || att.transcription.audioDurationMs} segments=${att.transcription.segments?.length || 0} speakerCount=${att.transcription.speakerCount} hasTranslations=${!!att.translations}${speakerAnalysisInfo}`);
                 } else {
-                  logger.info(`⚠️ [CONVERSATIONS] Message ${msg.id} - Audio SANS transcription: attachmentId=${att.id}, mimeType=${att.mimeType}, fileUrl=${att.fileUrl}`);
+                  logger.debug(`audio-diag: msg=${msg.id} attachmentId=${att.id} no-transcription mimeType=${att.mimeType}`);
                 }
 
                 // Vérifier les traductions audio (champ V2: translations au lieu de translatedAudios)

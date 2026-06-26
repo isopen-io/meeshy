@@ -393,8 +393,8 @@ final class AdjustBitrateSourceGuardTests: XCTestCase {
             "Debounce: a qualityLevelDebounceDate timestamp must gate rapid quality-level flips"
         )
         XCTAssertTrue(
-            source.contains("< 5.0"),
-            "Debounce: the suppression window must be 5 seconds to avoid thrashing the video encoder"
+            source.contains("qualityLevelDebounceSeconds"),
+            "Debounce: the suppression window must gate on QualityThresholds.qualityLevelDebounceSeconds (5s) to avoid thrashing the video encoder — not a hardcoded literal (see test_qualityLevelDebounce_usesQualityThresholdsConstant)"
         )
     }
 }

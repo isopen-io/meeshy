@@ -1092,7 +1092,7 @@ describe('MessagingService', () => {
       expect((payload as any).content).toBe('[Encrypted]');
     });
 
-    it('aborts send and returns failure when encrypt throws (plaintext leak protection)', async () => {
+    it('aborts send when encrypt throws to prevent plaintext leak', async () => {
       const handlers = makeEncryptionHandlers({
         getConversationMode: jest.fn().mockResolvedValue('aes-256-gcm'),
         encrypt: jest.fn().mockRejectedValue(new Error('encrypt failed')),
@@ -1107,7 +1107,6 @@ describe('MessagingService', () => {
       });
 
       const result = await svc.sendMessage(socket as unknown as TypedSocket, makeSendOptions());
-      // Encryption failure causes the send to abort — the message is NOT sent in plaintext.
       expect(result.success).toBe(false);
       expect(socket.emit).not.toHaveBeenCalled();
     });

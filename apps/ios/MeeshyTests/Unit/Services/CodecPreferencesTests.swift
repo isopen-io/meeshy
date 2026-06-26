@@ -313,12 +313,12 @@ final class CodecPreferencesTests: XCTestCase {
         let source = try String(contentsOf: url, encoding: .utf8)
 
         XCTAssertTrue(
-            source.contains("encoding.maxBitrateBps = NSNumber(value: 64_000)"),
-            "audio bitrate cap must be set via RTCRtpEncodingParameters.maxBitrateBps"
+            source.contains("encoding.maxBitrateBps = NSNumber(value: QualityThresholds.defaultBitrate)"),
+            "audio bitrate cap must be set via RTCRtpEncodingParameters.maxBitrateBps (QualityThresholds.defaultBitrate = 64 kbps)"
         )
         XCTAssertTrue(
-            source.contains("encoding.minBitrateBps = NSNumber(value: 16_000)"),
-            "audio bitrate floor must be set via RTCRtpEncodingParameters.minBitrateBps"
+            source.contains("encoding.minBitrateBps = NSNumber(value: QualityThresholds.audioCodecFloorBitrateBps)"),
+            "audio bitrate floor must be set via RTCRtpEncodingParameters.minBitrateBps (QualityThresholds.audioCodecFloorBitrateBps = 16 kbps)"
         )
         XCTAssertTrue(
             source.contains("\"usedtx=1\""),

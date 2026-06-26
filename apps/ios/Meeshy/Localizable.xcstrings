@@ -9765,6 +9765,41 @@
         }
       }
     },
+    "call.error.sdp" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verbindungsaushandlung fehlgeschlagen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't establish the call connection"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo establecer la conexión de la llamada"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Impossible d'établir la connexion de l'appel"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Não foi possível estabelecer a conexão da chamada"
+          }
+        }
+      }
+    },
     "call.error.timeout" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -9901,41 +9936,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Chamada de voz"
-          }
-        }
-      }
-    },
-    "call.interlocutor" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Gesprächspartner"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Interlocutor"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Interlocutor"
-          }
-        },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Interlocuteur"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Interlocutor"
           }
         }
       }
@@ -31359,19 +31359,6 @@
         }
       }
     },
-    "call.transcript.you": {
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Du"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "You"
     "widget.unreadMessages.title" : {
       "extractionState" : "stale",
       "localizations" : {

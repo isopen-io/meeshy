@@ -300,43 +300,43 @@ describe('isDNDActive', () => {
   });
 
   it('returns true for normal DND when current time is within range', () => {
-    vi.setSystemTime(new Date('2026-01-15T15:00:00Z'));
+    vi.setSystemTime(new Date(2026, 0, 15, 15, 0, 0));
     const prefs = makePrefs({ dndEnabled: true, dndStartTime: '14:00', dndEndTime: '16:00' });
     expect(isDNDActive(prefs)).toBe(true);
   });
 
   it('returns false for normal DND when current time is outside range', () => {
-    vi.setSystemTime(new Date('2026-01-15T12:00:00Z'));
+    vi.setSystemTime(new Date(2026, 0, 15, 12, 0, 0));
     const prefs = makePrefs({ dndEnabled: true, dndStartTime: '14:00', dndEndTime: '16:00' });
     expect(isDNDActive(prefs)).toBe(false);
   });
 
   it('returns false for normal DND when current time equals end time (exclusive)', () => {
-    vi.setSystemTime(new Date('2026-01-15T16:00:00Z'));
+    vi.setSystemTime(new Date(2026, 0, 15, 16, 0, 0));
     const prefs = makePrefs({ dndEnabled: true, dndStartTime: '14:00', dndEndTime: '16:00' });
     expect(isDNDActive(prefs)).toBe(false);
   });
 
   it('returns true for overnight DND when current time is after start (e.g. 23:00)', () => {
-    vi.setSystemTime(new Date('2026-01-15T23:00:00Z'));
+    vi.setSystemTime(new Date(2026, 0, 15, 23, 0, 0));
     const prefs = makePrefs({ dndEnabled: true, dndStartTime: '22:00', dndEndTime: '08:00' });
     expect(isDNDActive(prefs)).toBe(true);
   });
 
   it('returns true for overnight DND when current time is before end (e.g. 07:00)', () => {
-    vi.setSystemTime(new Date('2026-01-15T07:00:00Z'));
+    vi.setSystemTime(new Date(2026, 0, 15, 7, 0, 0));
     const prefs = makePrefs({ dndEnabled: true, dndStartTime: '22:00', dndEndTime: '08:00' });
     expect(isDNDActive(prefs)).toBe(true);
   });
 
   it('returns false for overnight DND when current time is midday', () => {
-    vi.setSystemTime(new Date('2026-01-15T12:00:00Z'));
+    vi.setSystemTime(new Date(2026, 0, 15, 12, 0, 0));
     const prefs = makePrefs({ dndEnabled: true, dndStartTime: '22:00', dndEndTime: '08:00' });
     expect(isDNDActive(prefs)).toBe(false);
   });
 
   it('returns true for overnight DND at exactly start time', () => {
-    vi.setSystemTime(new Date('2026-01-15T22:00:00Z'));
+    vi.setSystemTime(new Date(2026, 0, 15, 22, 0, 0));
     const prefs = makePrefs({ dndEnabled: true, dndStartTime: '22:00', dndEndTime: '08:00' });
     expect(isDNDActive(prefs)).toBe(true);
   });
@@ -430,7 +430,7 @@ describe('isNotificationTypeEnabled', () => {
 describe('shouldSendNotification', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-01-15T12:00:00Z'));
+    vi.setSystemTime(new Date(2026, 0, 15, 12, 0, 0));
   });
 
   afterEach(() => {
