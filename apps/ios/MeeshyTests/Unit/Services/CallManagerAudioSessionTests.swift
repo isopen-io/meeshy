@@ -2736,3 +2736,65 @@ final class CallManagerSurvivalControllerReconnectGuardTests: XCTestCase {
         )
     }
 }
+
+// MARK: - Dynamic audio bitrate adaptation
+
+@MainActor
+final class WebRTCServiceAudioBitrateAdaptationTests: XCTestCase {
+
+    private func webRTCServiceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func webRTCTypesSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/WebRTCTypes.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// `adjustBitrate` must call `client.setMaxAudioBitrate` when the computed
+    /// bitrate tier changes, so the Opus encoder ceiling is tightened under
+    /// congestion — not just tracked in a dead `currentBitrate` variable.
+    func test_adjustBitrate_callsSetMaxAudioBitrate_whenBitrateChanges() throws {
+        let source = try webRTCServiceSource()
+
+        guard let fnRange = source.range(of: "private func adjustBitrate(") else {
+            XCTFail("adjustBitrate not found in WebRTCService"); return
+        }
+        let fnBody = String(source[fnRange.upperBound...].prefix(1000))
+
+        XCTAssertTrue(
+            fnBody.contains("client.setMaxAudioBitrate("),
+            "adjustBitrate must call client.setMaxAudioBitrate() when currentBitrate changes. " +
+            "Tracking currentBitrate without applying it leaves the Opus ceiling at the initial " +
+            "64 kbps regardless of congestion — audio fills available bandwidth when it should yield."
+        )
+    }
+
+    /// The `WebRTCClientProviding` protocol must declare `setMaxAudioBitrate`
+    /// so all conformers (real + stub) implement it.
+    func test_webRTCClientProviding_declaresSetMaxAudioBitrate() throws {
+        let source = try webRTCTypesSource()
+
+        guard let protocolRange = source.range(of: "protocol WebRTCClientProviding:") else {
+            XCTFail("WebRTCClientProviding protocol not found"); return
+        }
+        let protocolBody = String(source[protocolRange.upperBound...].prefix(2000))
+
+        XCTAssertTrue(
+            protocolBody.contains("setMaxAudioBitrate"),
+            "WebRTCClientProviding must declare setMaxAudioBitrate so the protocol " +
+            "enforces the implementation across P2PWebRTCClient and test stubs"
+        )
+    }
+}

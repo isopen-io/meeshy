@@ -302,11 +302,15 @@ final class WebRTCService {
 
         if newBitrate != currentBitrate {
             currentBitrate = newBitrate
+            // Apply the new ceiling to the live Opus encoder so GCC has less
+            // headroom to fill under congestion — tighter ceiling means less
+            // audio competes with loss-recovery traffic on a degraded path.
+            client.setMaxAudioBitrate(newBitrate)
             let lossPct = String(format: "%.1f%%", lossRatio * 100)
             let bweMbps = stats.availableOutgoingBitrateBps > 0
                 ? String(format: " bwe=%.1fMbps", Double(stats.availableOutgoingBitrateBps) / 1_000_000)
                 : ""
-            Logger.webrtc.info("Audio bitrate adjusted to \(newBitrate) bps (RTT: \(rtt)ms, loss: \(lossPct)\(bweMbps))")
+            Logger.webrtc.info("Audio bitrate adjusted to \(newBitrate / 1000)kbps (RTT: \(rtt)ms, loss: \(lossPct)\(bweMbps))")
         }
 
         // §5.6 — a thermal transition must re-apply the encoder ceiling even
