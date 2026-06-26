@@ -94,7 +94,7 @@ export function registerInteractionRoutes(
           }, post.authorId,
             (post as { visibility?: string }).visibility ?? 'PUBLIC',
             (post as { visibilityUserIds?: string[] }).visibilityUserIds ?? [],
-          ).catch((err) => fastify.log.warn('[POST /posts/:postId/like]: broadcast post liked failed', err));
+          ).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/like]: broadcast post liked failed'));
         }
       }
 
@@ -110,7 +110,7 @@ export function registerInteractionRoutes(
           postPreview: (post as { content?: string | null }).content?.slice(0, 80) ?? undefined,
           postCreatedAt: (post as { createdAt?: Date | string | null }).createdAt ?? undefined,
           postExpiresAt: (post as { expiresAt?: Date | string | null }).expiresAt ?? undefined,
-        }).catch((err) => fastify.log.warn('[POST /posts/:postId/like]: notify post like failed', err));
+        }).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/like]: notify post like failed'));
       }
 
       return sendSuccess(reply, { liked: true, reactionSummary: post.reactionSummary });
@@ -182,7 +182,7 @@ export function registerInteractionRoutes(
           }, post.authorId,
             (post as { visibility?: string }).visibility ?? 'PUBLIC',
             (post as { visibilityUserIds?: string[] }).visibilityUserIds ?? [],
-          ).catch((err) => fastify.log.warn('[DELETE /posts/:postId/like]: broadcast post unliked failed', err));
+          ).catch((err) => fastify.log.warn({ err }, '[DELETE /posts/:postId/like]: broadcast post unliked failed'));
         }
       }
 
@@ -264,7 +264,7 @@ export function registerInteractionRoutes(
       // éviter de rejouer la requête à chaque impression répétée du feed.
       // Fire-and-forget : ne bloque pas la réponse, émet `notification:counts`.
       if (isNewView) {
-        fastify.notificationService.markPostNotificationsAsRead(viewerId, postId).catch((err) => fastify.log.warn('[POST /posts/:postId/view]: mark post notifications as read failed', err));
+        fastify.notificationService.markPostNotificationsAsRead(viewerId, postId).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/view]: mark post notifications as read failed'));
       }
 
       // If this is a story, broadcast the view to the story author
@@ -695,7 +695,7 @@ export function registerInteractionRoutes(
         socialEvents.broadcastPostReposted({
           originalPostId: postId,
           repost: repost as unknown as Post,
-        }, authContext.registeredUser.id).catch((err) => fastify.log.warn('[POST /posts/:postId/repost]: broadcast post reposted failed', err));
+        }, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/repost]: broadcast post reposted failed'));
       }
 
       // Notify original post author
@@ -712,7 +712,7 @@ export function registerInteractionRoutes(
             postPreview: (original as { content?: string | null }).content?.slice(0, 80) ?? undefined,
             postCreatedAt: (original as { createdAt?: Date | string | null }).createdAt ?? undefined,
             postExpiresAt: (original as { expiresAt?: Date | string | null }).expiresAt ?? undefined,
-          }).catch((err) => fastify.log.warn('[POST /posts/:postId/repost]: notify post repost failed', err));
+          }).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/repost]: notify post repost failed'));
         }
       }
 
