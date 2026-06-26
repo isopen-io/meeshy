@@ -1033,3 +1033,104 @@ final class CallViewVoiceOverAnnouncementTests: XCTestCase {
             "only fires when the quality tier actually changes")
     }
 }
+
+// MARK: - Background video suspension — peer notification
+
+/// Source-analysis guards ensuring that when the app enters the background during
+/// a video call, the remote peer receives a `call:media-toggled false` signal so
+/// it shows our avatar placeholder instead of a frozen last frame.  Without this:
+///   • The peer sees a motionless frozen frame while the app is backgrounded.
+///   • When we return to the foreground, the peer doesn't know the camera resumed.
+@MainActor
+final class CallManagerBackgroundVideoTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_backgroundMonitor_declaresVideoSuspendedByBackgroundFlag() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("isVideoSuspendedByBackground"),
+            "CallManager must declare isVideoSuspendedByBackground to track camera suspension " +
+            "caused by backgrounding — distinguishes from user-driven video toggle")
+    }
+
+    func test_backgroundObserver_emitsToggleVideoFalse_whenVideoActive() throws {
+        let source = try callManagerSource()
+        guard let bgRange = source.range(of: "didEnterBackgroundNotification") else {
+            XCTFail("didEnterBackgroundNotification observer not found in CallManager.swift"); return
+        }
+        let afterBg = String(source[bgRange.upperBound...])
+        guard let blockEnd = afterBg.range(of: "foregroundObserver = NotificationCenter")?.lowerBound else {
+            XCTFail("Could not find foregroundObserver boundary"); return
+        }
+        let bgBlock = String(afterBg[..<blockEnd])
+        XCTAssertTrue(
+            bgBlock.contains("isVideoEnabled") && bgBlock.contains("emitCallToggleVideo") &&
+            bgBlock.contains("enabled: false"),
+            "didEnterBackground handler must guard on isVideoEnabled and call " +
+            "emitCallToggleVideo(callId:enabled:false) so the peer shows the avatar placeholder")
+    }
+
+    func test_backgroundObserver_setsIsVideoSuspendedByBackgroundFlag() throws {
+        let source = try callManagerSource()
+        guard let bgRange = source.range(of: "didEnterBackgroundNotification") else {
+            XCTFail("didEnterBackgroundNotification observer not found"); return
+        }
+        let afterBg = String(source[bgRange.upperBound...])
+        guard let blockEnd = afterBg.range(of: "foregroundObserver = NotificationCenter")?.lowerBound else {
+            XCTFail("Could not find foregroundObserver boundary"); return
+        }
+        let bgBlock = String(afterBg[..<blockEnd])
+        XCTAssertTrue(
+            bgBlock.contains("isVideoSuspendedByBackground = true"),
+            "didEnterBackground handler must set isVideoSuspendedByBackground = true so the " +
+            "foreground handler can distinguish a background-caused suspension from a user toggle")
+    }
+
+    func test_foregroundObserver_emitsToggleVideoTrue_whenVideoStillEnabled() throws {
+        let source = try callManagerSource()
+        guard let fgRange = source.range(of: "willEnterForegroundNotification") else {
+            XCTFail("willEnterForegroundNotification observer not found"); return
+        }
+        let afterFg = String(source[fgRange.upperBound...])
+        XCTAssertTrue(
+            afterFg.contains("isVideoSuspendedByBackground") &&
+            afterFg.contains("emitCallToggleVideo") &&
+            afterFg.contains("enabled: true"),
+            "willEnterForeground handler must check isVideoSuspendedByBackground and call " +
+            "emitCallToggleVideo(callId:enabled:true) when the user still wants video — " +
+            "restores the avatar placeholder to the live camera feed at the peer")
+    }
+
+    func test_foregroundObserver_clearsFlag_unconditionally() throws {
+        let source = try callManagerSource()
+        guard let fgRange = source.range(of: "willEnterForegroundNotification") else {
+            XCTFail("willEnterForegroundNotification observer not found"); return
+        }
+        let afterFg = String(source[fgRange.upperBound...])
+        XCTAssertTrue(
+            afterFg.contains("isVideoSuspendedByBackground = false"),
+            "willEnterForeground handler must clear isVideoSuspendedByBackground = false " +
+            "regardless of whether video was restored — prevents stale flag on next background cycle")
+    }
+
+    func test_endCallInternal_resetsVideoSuspendedByBackgroundFlag() throws {
+        let source = try callManagerSource()
+        guard let teardownRange = source.range(of: "private func endCallInternal(reason:") else {
+            XCTFail("endCallInternal not found in CallManager.swift"); return
+        }
+        let teardownBody = String(source[teardownRange.upperBound...])
+        XCTAssertTrue(
+            teardownBody.contains("isVideoSuspendedByBackground = false"),
+            "endCallInternal must reset isVideoSuspendedByBackground = false so the flag " +
+            "does not bleed into the next call (singleton lifecycle)")
+    }
+}

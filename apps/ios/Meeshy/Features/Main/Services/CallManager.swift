@@ -271,6 +271,12 @@ final class CallManager: ObservableObject {
     private var screenCaptureObserver: NSObjectProtocol?
     private var backgroundObserver: NSObjectProtocol?
     private var foregroundObserver: NSObjectProtocol?
+    /// `true` while the app is in the background during a video call. iOS
+    /// enforces camera suspension in the background (privacy); we set this flag
+    /// and send `call:media-toggled false` so the peer shows our avatar
+    /// placeholder instead of a frozen last frame. Cleared on foreground return
+    /// or call teardown.
+    private var isVideoSuspendedByBackground = false
 
     // Network monitoring
     private let networkMonitor = NWPathMonitor()
@@ -531,6 +537,7 @@ final class CallManager: ObservableObject {
             isSpeaker = false
             videoSurvivalController.reset()
             isVideoSuspended = false
+            isVideoSuspendedByBackground = false
             Logger.calls.info("Force-reset .ended → .idle to accept new call")
         }
     }
@@ -1994,6 +2001,15 @@ final class CallManager: ObservableObject {
                 let userId = AuthManager.shared.currentUser?.id ?? ""
                 MessageSocketManager.shared.emitCallBackgrounded(callId: callId, participantId: userId)
                 Logger.calls.info("Call backgrounded")
+                // iOS enforces camera suspension when the app is in the background
+                // (privacy protection — enforced at the OS level). The peer would
+                // otherwise see a frozen last frame indefinitely. Signal the camera
+                // state change so the peer shows our avatar placeholder instead.
+                if self.isVideoEnabled {
+                    self.isVideoSuspendedByBackground = true
+                    MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: false)
+                    Logger.calls.info("Video backgrounded — peer notified (avatar placeholder)")
+                }
             }
         }
 
@@ -2007,6 +2023,16 @@ final class CallManager: ObservableObject {
                 let userId = AuthManager.shared.currentUser?.id ?? ""
                 MessageSocketManager.shared.emitCallForegrounded(callId: callId, participantId: userId)
                 Logger.calls.info("Call foregrounded")
+                // Restore the peer's camera-active signal if we suspended it on
+                // background entry. Only re-signal if the user's intent is still
+                // "video on" (they may have toggled it while we were backgrounded).
+                if self.isVideoSuspendedByBackground {
+                    self.isVideoSuspendedByBackground = false
+                    if self.isVideoEnabled {
+                        MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: true)
+                        Logger.calls.info("Video foregrounded — peer notified (camera restored)")
+                    }
+                }
             }
         }
     }
@@ -2173,6 +2199,7 @@ final class CallManager: ObservableObject {
         isRemoteVideoEnabled = true
         videoSurvivalController.reset()
         isVideoSuspended = false
+        isVideoSuspendedByBackground = false
         detachSystemPiP()
         Self.persistCallSummary(stats: lastKnownStats, callId: currentCallId,
                                 duration: callDuration, remote: remoteUsername, reason: reason)
