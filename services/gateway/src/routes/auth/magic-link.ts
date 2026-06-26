@@ -148,10 +148,10 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       // If the signature itself is invalid (tampered), jwt.verify will still throw.
       let decoded: { userId?: string; username?: string; role?: string } | null = null;
       try {
-        decoded = jwt.verify(token, authService['jwtSecret'], { ignoreExpiration: true }) as any;
+        decoded = jwt.verify(token, authService['jwtSecret'], { ignoreExpiration: true }) as { userId?: string; username?: string; role?: string };
       } catch {
         // Signature invalid — decoded stays null; will be rejected below unless sessionToken covers it.
-        decoded = jwt.decode(token) as any;
+        decoded = jwt.decode(token) as { userId?: string; username?: string; role?: string } | null;
       }
 
       let activeSession: { id: string; userId: string; expiresAt: Date } | null = null;

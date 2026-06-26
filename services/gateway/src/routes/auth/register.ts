@@ -67,6 +67,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
     try {
       const validatedData = validateSchema(AuthSchemas.register, request.body, 'register') as RegisterData & {
         phoneTransferToken?: string;
+        skipPhoneConflictCheck?: boolean;
       };
 
       const requestContext = await getRequestContext(request);
@@ -83,7 +84,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
 
         logger.info('Phone transfer token valid');
         phoneTransferValidated = true;
-        (validatedData as any).skipPhoneConflictCheck = true;
+        validatedData.skipPhoneConflictCheck = true;
       }
 
       const result = await authService.register(validatedData as RegisterData, requestContext);
@@ -140,7 +141,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       }
 
       const token = authService.generateToken(user);
-      const permissions = authService.getUserPermissions(user as any);
+      const permissions = authService.getUserPermissions(user);
 
       return sendSuccess(reply, {
         user: formatUserResponse(user, permissions),
