@@ -1969,7 +1969,10 @@ final class CallManager: ObservableObject {
         // timer when CXAnswerCallAction is fulfilled — calling
         // reportOutgoingCall here would silently no-op and leave the
         // Recents entry with zero duration.
-        if lastCallWasOutgoing, let uuid = activeCallUUID {
+        // Guard on !wasReconnecting: calling this again after an ICE restart
+        // resets CallKit's own timer in Recents/History, making the displayed
+        // call duration shorter than the actual elapsed time.
+        if !wasReconnecting, lastCallWasOutgoing, let uuid = activeCallUUID {
             callProvider.reportOutgoingCall(with: uuid, connectedAt: Date())
         }
     }
