@@ -31372,6 +31372,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "You"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tú"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Você"
+          }
+        }
+      }
+    },
     "widget.unreadMessages.title" : {
       "extractionState" : "stale",
       "localizations" : {
