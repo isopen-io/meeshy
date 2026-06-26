@@ -422,6 +422,9 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { id } = request.params as { id: string };
+      if (!/^[0-9a-fA-F]{24}$/.test(id)) {
+        return sendBadRequest(reply, 'Invalid user ID format');
+      }
       const body = updateFriendRequestSchema.parse(request.body);
       const userId = request.user!.userId;
 
@@ -649,6 +652,9 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { id } = request.params as { id: string };
+      if (!/^[0-9a-fA-F]{24}$/.test(id)) {
+        return sendBadRequest(reply, 'Invalid user ID format');
+      }
       const userId = request.user!.userId;
 
       // Verifier que la demande existe et appartient a l'utilisateur (envoyee ou recue)

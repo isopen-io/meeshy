@@ -10,7 +10,7 @@ import {
   notificationSchema,
   errorResponseSchema,
 } from '@meeshy/shared/types/api-schemas';
-import { sendSuccess, sendNotFound, sendForbidden, sendInternalError } from '../utils/response';
+import { sendSuccess, sendBadRequest, sendNotFound, sendForbidden, sendInternalError } from '../utils/response';
 
 export async function notificationRoutes(fastify: FastifyInstance) {
   const notificationService = fastify.notificationService;
@@ -191,6 +191,9 @@ export async function notificationRoutes(fastify: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         const { id } = request.params as { id: string };
+        if (!/^[0-9a-fA-F]{24}$/.test(id)) {
+          return sendBadRequest(reply, 'Invalid notification ID format');
+        }
         const userId = request.user!.userId;
 
         // Vérifier que la notification appartient à l'utilisateur
@@ -302,6 +305,9 @@ export async function notificationRoutes(fastify: FastifyInstance) {
       try {
         const userId = request.user!.userId;
         const { conversationId } = request.params as { conversationId: string };
+        if (!/^[0-9a-fA-F]{24}$/.test(conversationId)) {
+          return sendBadRequest(reply, 'Invalid conversation ID format');
+        }
 
         const count = await notificationService.markConversationNotificationsAsRead(
           userId,
@@ -413,6 +419,9 @@ export async function notificationRoutes(fastify: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         const { id } = request.params as { id: string };
+        if (!/^[0-9a-fA-F]{24}$/.test(id)) {
+          return sendBadRequest(reply, 'Invalid notification ID format');
+        }
         const userId = request.user!.userId;
 
         // Vérifier que la notification appartient à l'utilisateur
