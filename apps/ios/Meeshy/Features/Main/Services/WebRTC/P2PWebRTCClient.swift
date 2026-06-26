@@ -705,7 +705,11 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         let readyForOffer = !makingOffer &&
             (pc.signalingState == .stable || isSettingRemoteAnswerPending)
         let offerCollision = !readyForOffer
-        ignoreOffer = !isPolite && offerCollision
+        if !isPolite && offerCollision {
+            ignoreOffer = true
+        } else {
+            ignoreOffer = false
+        }
         if ignoreOffer {
             Logger.webrtc.info("glare: impolite peer ignoring colliding offer")
             throw WebRTCError.offerIgnored

@@ -942,6 +942,8 @@ public enum ConnectionState: Equatable, Sendable {
 // MARK: - Protocol
 
 public protocol MessageSocketProviding: Sendable {
+    func emitCallJoinWithAck(callId: String) async -> Bool
+    var callScreenCaptureAlert: PassthroughSubject<CallScreenCaptureAlertData, Never> { get }
     var messageReceived: PassthroughSubject<APIMessage, Never> { get }
     var messageEdited: PassthroughSubject<APIMessage, Never> { get }
     var messageDeleted: PassthroughSubject<MessageDeletedEvent, Never> { get }
@@ -1025,7 +1027,6 @@ public protocol MessageSocketProviding: Sendable {
     var callError: PassthroughSubject<CallErrorData, Never> { get }
     var callIceServersRefreshed: PassthroughSubject<CallIceServersRefreshedData, Never> { get }
     var callQualityAlert: PassthroughSubject<CallQualityAlertData, Never> { get }
-    var callScreenCaptureAlert: PassthroughSubject<CallScreenCaptureAlertData, Never> { get }
     var reactionSynced: PassthroughSubject<ReactionSyncEvent, Never> { get }
     var systemMessageReceived: PassthroughSubject<SystemMessageEvent, Never> { get }
     var mentionCreated: PassthroughSubject<MentionCreatedEvent, Never> { get }
@@ -1048,7 +1049,6 @@ public protocol MessageSocketProviding: Sendable {
     func sendViaSocketFallback(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String) async -> MessageSocketManager.SendMessageAck?
     func emitCallInitiate(conversationId: String, isVideo: Bool) async throws -> MessageSocketManager.CallInitiateAck
     func emitCallJoin(callId: String)
-    func emitCallJoinWithAck(callId: String) async -> Bool
     func emitCallLeave(callId: String)
     func emitAppForeground(_ foreground: Bool)
     func addAttachmentReaction(attachmentId: String, messageId: String, emoji: String)

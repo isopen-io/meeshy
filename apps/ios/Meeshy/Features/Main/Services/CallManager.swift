@@ -2165,18 +2165,8 @@ final class CallManager: ObservableObject {
                 let userId = AuthManager.shared.currentUser?.id ?? ""
                 MessageSocketManager.shared.emitCallBackgrounded(callId: callId, participantId: userId)
                 Logger.calls.info("Call backgrounded")
-                // iOS enforces camera suspension when the app is in the background
-                // (privacy protection — enforced at the OS level). The peer would
-                // otherwise see a frozen last frame indefinitely. Signal the camera
-                // state change so the peer shows our avatar placeholder instead.
                 if self.isVideoEnabled {
-                    // Always arm the background flag so the foreground-return path
-                    // knows to attempt a restore.
                     self.isVideoSuspendedByBackground = true
-                    // Only signal the peer if no other suspension source has already
-                    // sent "camera off" — hold and survival controller each emit their
-                    // own toggle event. A duplicate here produces a spurious
-                    // avatar-flicker round-trip on the remote end with no semantic gain.
                     if !self.isVideoSuspendedByHold && !self.isVideoSuspended {
                         MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: false)
                         Logger.calls.info("Video backgrounded — peer notified (avatar placeholder)")
@@ -2235,7 +2225,7 @@ final class CallManager: ObservableObject {
         if isOnHold {
             if isVideoEnabled {
                 isVideoSuspendedByHold = true
-                webRTCService.enableVideo(false)
+                Task { [weak self] in _ = await self?.webRTCService.downgradeFromVideo() }
                 MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: false)
                 Logger.calls.info("CallKit hold — video suspended, peer notified (callId=\(callId))")
             }
@@ -2243,7 +2233,7 @@ final class CallManager: ObservableObject {
             if isVideoSuspendedByHold {
                 isVideoSuspendedByHold = false
                 if isVideoEnabled && !isVideoSuspended && !isVideoSuspendedByBackground {
-                    webRTCService.enableVideo(true)
+                    Task { [weak self] in _ = try? await self?.webRTCService.upgradeToVideo() }
                     MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: true)
                     Logger.calls.info("CallKit unhold — video restored, peer notified (callId=\(callId))")
                 }
@@ -2496,9 +2486,9 @@ final class CallManager: ObservableObject {
         configuration.mode = ProcessInfo.processInfo.isiOSAppOnMac
             ? AVAudioSession.Mode.default.rawValue
             : (isVideo ? AVAudioSession.Mode.videoChat : AVAudioSession.Mode.voiceChat).rawValue
-        // PERF-010: drop .allowBluetoothA2DP. A2DP is an output-only profile and
+        // PERF-010: use HFP only (not A2DP) — A2DP is output-only and
         // conflicts with the bidirectional voice path (forces the OS to flap
-        // between A2DP and HFP, causing periodic ~200ms audio glitches). HFP
+        // between Bluetooth profiles, causing periodic ~200ms audio glitches). HFP
         // already covers BT headsets via the SCO bidirectional voice link.
         // .preferNoInterruptionsFromSystemAlerts = 0x100 (iOS 14.5+) is API_UNAVAILABLE(macos);
         // the macOS AVAudioSession shim for "Designed for iPad" builds omits it entirely.
@@ -3427,7 +3417,6 @@ extension CallManager: WebRTCServiceDelegate {
     private func attemptReconnection() {
         reconnectAttempt += 1
         guard reconnectAttempt <= QualityThresholds.maxReconnectAttempts else {
-            Logger.calls.error("Max reconnect attempts (\(QualityThresholds.maxReconnectAttempts)) reached — ending call")
             if let uuid = activeCallUUID {
                 callProvider.reportCall(with: uuid, endedAt: Date(), reason: .failed)
             }
@@ -3437,57 +3426,27 @@ extension CallManager: WebRTCServiceDelegate {
 
         callState = .reconnecting(attempt: reconnectAttempt)
         playHaptic(.light)
-        Logger.calls.warning("Attempting ICE restart (\(self.reconnectAttempt)/\(QualityThresholds.maxReconnectAttempts))")
 
-        // Notify gateway so it can update call DB status to `reconnecting` and
-        // suppress premature zombie-call cleanup during the ICE restart window.
         if let callId = currentCallId {
             let userId = AuthManager.shared.currentUser?.id ?? ""
-            MessageSocketManager.shared.emitCallReconnecting(
-                callId: callId,
-                participantId: userId,
-                attempt: reconnectAttempt
-            )
+            MessageSocketManager.shared.emitCallReconnecting(callId: callId, participantId: userId, attempt: reconnectAttempt)
         }
 
         let attempt = reconnectAttempt
         let backoffSeconds = attempt > 1 ? min(pow(2.0, Double(attempt - 1)), 4.0) : 0.0
 
-        // Cancel any in-flight restart so two concurrent Tasks don't both send an
-        // offer — overlapping offers corrupt the perfect-negotiation state machine
-        // (both peers may enter makingOffer simultaneously with no polite resolution).
         iceRestartTask?.cancel()
         iceRestartTask = Task { @MainActor [weak self] in
             guard let self, let callId = self.currentCallId, let userId = self.remoteUserId else { return }
             if backoffSeconds > 0 {
-                Logger.calls.info("ICE restart attempt \(attempt): backing off \(Int(backoffSeconds))s before retry")
                 try? await Task.sleep(for: .seconds(backoffSeconds))
-                // After sleeping, verify we are still in the same reconnection
-                // attempt. A natural ICE recovery (.connected) or a superseding
-                // attempt (higher attempt number) both make this offer stale.
-                // Sending restartIce() on an already-connected peer connection
-                // resets ICE to gathering state, breaking a healthy call.
-                guard !Task.isCancelled,
-                      case .reconnecting(let current) = self.callState,
-                      current == attempt else { return }
+                guard !Task.isCancelled, case .reconnecting(let current) = self.callState, current == attempt else { return }
             }
             guard let offer = await self.webRTCService.performICERestart() else {
-                Logger.calls.error("ICE restart failed to produce offer")
-                self.attemptReconnection()
-                return
+                self.attemptReconnection(); return
             }
-            // Guard again after the async performICERestart() call — natural ICE
-            // recovery may have changed state while the offer was being created.
-            // Emitting a restart offer on a connected peer would re-enter ICE
-            // gathering and interrupt the live media path.
-            guard !Task.isCancelled,
-                  case .reconnecting(let current) = self.callState,
-                  current == attempt else {
-                Logger.calls.info("ICE restart offer discarded — state changed during renegotiation (attempt \(attempt))")
-                return
-            }
+            guard !Task.isCancelled, case .reconnecting(let current) = self.callState, current == attempt else { return }
             self.emitCallOffer(callId: callId, toUserId: userId, isVideo: self.isVideoEnabled, sdp: offer)
-            Logger.calls.info("ICE restart offer sent for call: \(callId)")
         }
     }
 
