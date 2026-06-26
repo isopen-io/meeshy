@@ -945,7 +945,8 @@ export async function getUserById(fastify: FastifyInstance) {
           deactivatedAt: true,
           createdAt: true,
           updatedAt: true,
-          voiceModel: { select: voiceModelSelect }
+          voiceModel: { select: voiceModelSelect },
+          userPreferences: { select: { application: true } }
         }
       });
 
@@ -955,11 +956,11 @@ export async function getUserById(fastify: FastifyInstance) {
       }
 
       fastify.log.info(`[USER_PROFILE] User found: ${user.username} (${user.id})`);
+      const application = (user.userPreferences?.application ?? {}) as Record<string, unknown>;
 
       const publicUserProfile = {
         ...withVoiceFields(user),
-        // TODO: Load from UserPreferences.application
-        autoTranslateEnabled: true,
+        autoTranslateEnabled: typeof application.autoTranslateEnabled === 'boolean' ? application.autoTranslateEnabled : true,
         email: '',
         phoneNumber: undefined,
         permissions: undefined,
