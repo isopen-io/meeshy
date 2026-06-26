@@ -610,4 +610,19 @@ final class P2PWebRTCClientPerfectNegotiationTests: XCTestCase {
             "Hardcoded x-google-max-bitrate=2500 — replace with QualityThresholds.sdpVideoMaxBitrateKbps"
         )
     }
+
+    func test_p2pClient_cameraFormat_referencesVideoConfigPreset() throws {
+        // Regression guard: selectFormat(for:) must derive its resolution and fps
+        // ceiling from VideoConfig.hd720p30 — hardcoding 1280/720/30 would drift
+        // if the preset is ever updated.
+        let source = try p2pClientSource()
+        XCTAssertTrue(
+            source.contains("VideoConfig.hd720p30.maxResolution"),
+            "selectFormat(for:) must reference VideoConfig.hd720p30.maxResolution for width/height ceiling"
+        )
+        XCTAssertTrue(
+            source.contains("VideoConfig.hd720p30.maxFrameRate"),
+            "selectFormat(for:) must reference VideoConfig.hd720p30.maxFrameRate for fps ceiling"
+        )
+    }
 }

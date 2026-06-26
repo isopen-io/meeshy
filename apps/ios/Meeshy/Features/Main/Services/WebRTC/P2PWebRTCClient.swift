@@ -1094,9 +1094,13 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         // est alors appelé en fps=120, ce qui produit `FigCaptureSourceRemote
         // err=-17281` (kCMIOHardwareDeviceUnsupportedFormatError) sur certains
         // devices et gaspille batterie/CPU sur tous.
-        let target: Float64 = 30
+        // Ceiling derived from VideoConfig.hd720p30 so the camera picker and the
+        // encoding config stay in sync when the preset is updated.
+        let targetFPS = Float64(VideoConfig.hd720p30.maxFrameRate)
+        let maxW = Int32(VideoConfig.hd720p30.maxResolution.width)
+        let maxH = Int32(VideoConfig.hd720p30.maxResolution.height)
         let supports30fps: (AVCaptureDevice.Format) -> Bool = { f in
-            f.videoSupportedFrameRateRanges.contains { $0.minFrameRate <= target && target <= $0.maxFrameRate }
+            f.videoSupportedFrameRateRanges.contains { $0.minFrameRate <= targetFPS && targetFPS <= $0.maxFrameRate }
         }
 
         let supported = RTCCameraVideoCapturer.supportedFormats(for: device)
@@ -1108,14 +1112,14 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
 
         if let format = sorted.last(where: { f in
             let d = CMVideoFormatDescriptionGetDimensions(f.formatDescription)
-            return d.width <= 1280 && d.height <= 720 && supports30fps(f)
+            return d.width <= maxW && d.height <= maxH && supports30fps(f)
         }) {
             return format
         }
 
         if let format = sorted.last(where: { f in
             let d = CMVideoFormatDescriptionGetDimensions(f.formatDescription)
-            return d.width <= 1280 && d.height <= 720
+            return d.width <= maxW && d.height <= maxH
         }) {
             return format
         }
