@@ -736,12 +736,6 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
     func disconnect() { disconnectCallCount += 1; isConnected = false }
     private(set) var restartIceCallCount = 0
     func restartIce() { restartIceCallCount += 1 }
-    private(set) var applyAudioEncodingCallCount = 0
-    private(set) var lastAudioEncodingMaxBitrateBps: Int?
-    func applyAudioEncoding(maxBitrateBps: Int) {
-        applyAudioEncodingCallCount += 1
-        lastAudioEncodingMaxBitrateBps = maxBitrateBps
-    }
     func setMaxAudioBitrate(_ bitrate: Int) {}
     func sendDTMF(digits: String) {}
     func setAudioEffect(_ effect: AudioEffectConfig?) throws {}
