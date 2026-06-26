@@ -1047,3 +1047,110 @@ final class CallManagerPreferredCallLanguageTests: XCTestCase {
         XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "ar")
     }
 }
+
+// MARK: - isCallActiveFlag thread-safety source guard
+
+/// `isCallActiveFlag` is read from non-MainActor socket-manager closures and
+/// written from @MainActor (callState.didSet). Using `nonisolated(unsafe)` on a
+/// plain Bool is a Swift 6 data-race: a read on a socket thread concurrent with
+/// a MainActor write can observe a torn value. The fix wraps the backing store
+/// in `OSAllocatedUnfairLock` so get/set are atomic.
+@MainActor
+final class CallManagerIsCallActiveFlagSourceGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_isCallActiveFlag_isNotUnsafeNonisolated() throws {
+        let src = try callManagerSource()
+        XCTAssertFalse(
+            src.contains("nonisolated(unsafe) static var isCallActiveFlag"),
+            "isCallActiveFlag must NOT use nonisolated(unsafe) — it is read from non-MainActor threads " +
+            "and requires a lock guard (OSAllocatedUnfairLock) to prevent a Swift 6 data race."
+        )
+    }
+
+    func test_isCallActiveFlag_usesOSAllocatedUnfairLock() throws {
+        let src = try callManagerSource()
+        XCTAssertTrue(
+            src.contains("OSAllocatedUnfairLock"),
+            "isCallActiveFlag backing store must use OSAllocatedUnfairLock so concurrent " +
+            "socket-thread reads are serialised against @MainActor writes."
+        )
+    }
+}
+
+// MARK: - CallKit delegate action-fulfillment timing source guards
+
+/// CallKit's `CXAnswerCallAction` and `CXEndCallAction` MUST be fulfilled (or
+/// failed) synchronously before the delegate method returns. Settling them from
+/// inside a `Task { @MainActor }` is asynchronous: if the Task is delayed,
+/// cancelled, or the weak manager is nil the action is never settled and CallKit
+/// kills the call with error 3 (timeout). These guards verify the pattern is
+/// correct after the 2026-06-26 fix.
+@MainActor
+final class CallKitActionFulfillmentSourceGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// `CXAnswerCallAction.fulfill()` must appear BEFORE the `Task {` that calls
+    /// `answerCallReady()` — not inside it. The Task is for async media setup;
+    /// the action settlement tells CallKit the call is answered at the UI layer.
+    func test_cxAnswerCallAction_fulfilledBeforeTask() throws {
+        let src = try callManagerSource()
+        guard let answerRange = src.range(of: "perform action: CXAnswerCallAction") else {
+            XCTFail("CXAnswerCallAction handler not found"); return
+        }
+        // Find the end of this function body (next top-level `}` after the function
+        // header). We look for the pattern after the function opening brace.
+        let bodyStart = src[answerRange.upperBound...].firstIndex(of: "{") ?? src.endIndex
+        let bodyFragment = String(src[bodyStart...].prefix(400))
+
+        let fulfillOffset = bodyFragment.range(of: "action.fulfill()")?.lowerBound
+        let taskOffset = bodyFragment.range(of: "Task {")?.lowerBound
+        XCTAssertNotNil(fulfillOffset, "action.fulfill() must exist in CXAnswerCallAction handler")
+        XCTAssertNotNil(taskOffset, "Task { must exist in CXAnswerCallAction handler for async setup")
+        if let f = fulfillOffset, let t = taskOffset {
+            XCTAssertTrue(f < t,
+                "CXAnswerCallAction: action.fulfill() must appear BEFORE Task { — " +
+                "settling inside the Task is async and may never fire if manager is nil or Task is cancelled.")
+        }
+    }
+
+    /// `CXEndCallAction.fulfill()` must appear BEFORE the `Task {` that calls
+    /// `endCall()`. Moving it inside the Task means CallKit may time out the
+    /// action before `endCall()` completes.
+    func test_cxEndCallAction_fulfilledBeforeTask() throws {
+        let src = try callManagerSource()
+        guard let endRange = src.range(of: "perform action: CXEndCallAction") else {
+            XCTFail("CXEndCallAction handler not found"); return
+        }
+        let bodyStart = src[endRange.upperBound...].firstIndex(of: "{") ?? src.endIndex
+        let bodyFragment = String(src[bodyStart...].prefix(500))
+
+        let fulfillOffset = bodyFragment.range(of: "action.fulfill()")?.lowerBound
+        let taskOffset = bodyFragment.range(of: "Task {")?.lowerBound
+        XCTAssertNotNil(fulfillOffset, "action.fulfill() must exist in CXEndCallAction handler")
+        XCTAssertNotNil(taskOffset, "Task { must exist in CXEndCallAction handler for async teardown")
+        if let f = fulfillOffset, let t = taskOffset {
+            XCTAssertTrue(f < t,
+                "CXEndCallAction: action.fulfill() must appear BEFORE Task { — " +
+                "settling inside the Task creates a CallKit timeout window if manager deallocs mid-flight.")
+        }
+    }
+}

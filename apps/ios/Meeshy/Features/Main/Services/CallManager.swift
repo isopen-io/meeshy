@@ -178,7 +178,14 @@ final class CallManager: ObservableObject {
     /// referencing CallManager or hopping to the MainActor. Used to suppress
     /// `forceReconnect()` mid-call (token rotation / re-auth) so the WebRTC
     /// signaling socket is never torn down during a call.
-    nonisolated(unsafe) static var isCallActiveFlag: Bool = false
+    private static let _isCallActiveLock = OSAllocatedUnfairLock(initialState: false)
+    /// Thread-safe read/write. Written only from @MainActor (callState.didSet);
+    /// read from non-isolated socket-manager closures — guarded by an unfair lock
+    /// so concurrent reads never observe a torn write.
+    nonisolated static var isCallActiveFlag: Bool {
+        get { _isCallActiveLock.withLock { $0 } }
+        set { _isCallActiveLock.withLock { $0 = newValue } }
+    }
 
     // MARK: - Internal
 
@@ -3052,9 +3059,13 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
     }
 
     func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
+        // CallKit requires fulfill()/fail() to be called synchronously before
+        // the delegate method returns. Calling fulfill() from inside a Task
+        // violates this contract — if the manager is nil or the task is
+        // cancelled, the action is never settled and CallKit times out the call.
+        action.fulfill()
         Task { @MainActor [weak self] in
             await self?.manager?.answerCallReady()
-            action.fulfill()
         }
     }
 
@@ -3075,13 +3086,16 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
         // `endCallInternal` BEFORE requesting the transaction, so the log
         // will show `state=ended(.local)`. In (1)/(3), state is still
         // `.ringing` / `.offering` / `.connecting` / `.connected`.
+        // CallKit requires fulfill() to be called synchronously before the
+        // delegate method returns. Settling the action from inside a Task
+        // means CallKit may time out the action if the manager hop is delayed.
+        action.fulfill()
         Task { @MainActor [weak self] in
             let stateAtEntry = self?.manager?.callState
             Logger.calls.info(
                 "CallKit -> CXEndCallAction received (callUUID=\(action.callUUID), state=\(String(describing: stateAtEntry)))"
             )
             self?.manager?.endCall()
-            action.fulfill()
         }
     }
 
