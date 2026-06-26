@@ -981,23 +981,11 @@ export class MessageTranslationService extends EventEmitter {
         durationMs: data.transcription.durationMs || attachment.duration || 0
       };
 
-      // DEBUG: Vérifier la structure des segments
-      if (data.transcription.segments && data.transcription.segments.length > 0) {
-        const firstSeg = data.transcription.segments[0];
-        logger.info(`✅ Transcription: ${data.transcription.segments.length} segments | Premier: text="${firstSeg.text}" (${typeof firstSeg.text}), startMs=${firstSeg.startMs} (${typeof firstSeg.startMs}), endMs=${firstSeg.endMs}, speakerId=${firstSeg.speakerId}, voiceSim=${firstSeg.voiceSimilarityScore}, conf=${firstSeg.confidence}`);
-      } else {
-        logger.warn(`⚠️ Transcription SANS segments!`);
+      if (!data.transcription.segments || data.transcription.segments.length === 0) {
+        logger.warn('Transcription received without segments');
       }
 
-      // DEBUG: Vérifier les infos de diarisation
-      if (data.transcription.speakerCount) {
-        const speakersInfo = data.transcription.speakerAnalysis
-          ? data.transcription.speakerAnalysis.speakers.map((sp: any) => `${sp.sid}(primary=${sp.isPrimary}, score=${sp.voiceSimilarityScore})`).join(', ')
-          : 'N/A';
-        logger.info(`🎤 Diarisation: ${data.transcription.speakerCount} locuteur(s) | primary=${data.transcription.primarySpeakerId} | senderIdentified=${data.transcription.senderVoiceIdentified} | senderSpeaker=${data.transcription.senderSpeakerId} | speakers=[${speakersInfo}]`);
-      }
-
-      logger.info(`✅ Transcription sauvegardée: ${data.transcription.language}`);
+      logger.info(`Transcription saved: ${data.transcription.language} (${data.transcription.segments?.length ?? 0} segments)`);
 
       // 3. Construire les NOUVELLES entrées de traduction (sauvegarde fichiers
       // incluse). Le merge avec l'existant + l'update sont faits SOUS MUTEX
@@ -1021,7 +1009,7 @@ export class MessageTranslationService extends EventEmitter {
         const audioBinary = translatedAudio._audioBinary;
         const audioBase64 = translatedAudio.audioDataBase64;
 
-        logger.info(`   🔍 [DEBUG] Audio ${translatedAudio.targetLanguage}: _audioBinary=${!!audioBinary} (${audioBinary?.length || 0}B), audioBase64=${!!audioBase64}`);
+        logger.debug(`Audio payload: ${translatedAudio.targetLanguage} binary=${!!audioBinary} (${audioBinary?.length ?? 0}B) base64=${!!audioBase64}`);
 
         if (audioBinary || audioBase64) {
           try {
@@ -1592,7 +1580,7 @@ export class MessageTranslationService extends EventEmitter {
       const audioBinary = data.translatedAudio._audioBinary;
       const audioBase64 = data.translatedAudio.audioDataBase64;
 
-      logger.info(`   🔍 [DEBUG] Audio ${data.language}: _audioBinary=${!!audioBinary} (${audioBinary?.length || 0}B), audioBase64=${!!audioBase64}`);
+      logger.debug(`Audio payload: ${data.language} binary=${!!audioBinary} (${audioBinary?.length ?? 0}B) base64=${!!audioBase64}`);
 
       if (audioBinary || audioBase64) {
         try {
