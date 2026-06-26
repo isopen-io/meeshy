@@ -1092,7 +1092,7 @@ describe('MessagingService', () => {
       expect((payload as any).content).toBe('[Encrypted]');
     });
 
-    it('continues without encryption when encrypt throws', async () => {
+    it('aborts send when encrypt throws to prevent plaintext leak', async () => {
       const handlers = makeEncryptionHandlers({
         getConversationMode: jest.fn().mockResolvedValue('aes-256-gcm'),
         encrypt: jest.fn().mockRejectedValue(new Error('encrypt failed')),
@@ -1107,7 +1107,7 @@ describe('MessagingService', () => {
       });
 
       const result = await svc.sendMessage(socket as unknown as TypedSocket, makeSendOptions());
-      expect(result.success).toBe(true);
+      expect(result.success).toBe(false);
     });
 
     it('skips encryption when mode is null', async () => {
