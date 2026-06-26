@@ -124,14 +124,14 @@ final class BubbleReplyEqualityTests: XCTestCase {
                 messageId: messageId,
                 authorName: "Alice",
                 previewText: previewText,
+                attachmentThumbnailUrl: attachmentThumbnailUrl,
                 isStoryReply: isStory,
                 storyPublishedAt: storyPublishedAt,
                 storyReactionCount: storyReactionCount,
                 storyCommentCount: storyCommentCount,
                 storyShareCount: storyShareCount,
                 storyThumbnailUrl: storyThumbnailUrl,
-                moodEmoji: moodEmoji,
-                attachmentThumbnailUrl: attachmentThumbnailUrl
+                moodEmoji: moodEmoji
             ),
             isStory: isStory
         )
@@ -198,8 +198,8 @@ final class BubbleAttachmentsEqualityTests: XCTestCase {
             id: id,
             mimeType: "image/jpeg",
             fileUrl: fileUrl,
-            isBlurred: isBlurred,
             viewOnceCount: viewOnceCount,
+            isBlurred: isBlurred,
             width: width,
             height: height,
             thumbnailUrl: thumbnailUrl,
