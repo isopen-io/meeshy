@@ -4,6 +4,7 @@ import { logError, logger } from '../utils/logger';
 import { sendSuccess, sendBadRequest, sendNotFound } from '../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { resolveConversationId } from '../utils/conversation-id-cache';
+import type { UnifiedAuthRequest } from '../middleware/auth';
 
 // ===== SCHEMAS DE VALIDATION =====
 const TranslateRequestSchema = z.object({
@@ -264,6 +265,7 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
 
   // ===== ROUTE PRINCIPALE NON-BLOQUANTE =====
   fastify.post<{ Body: TranslateRequest }>('/translate', {
+    preHandler: [(req: FastifyRequest, rep: FastifyReply) => fastify.authenticate(req, rep)],
     schema: {
       description: 'Translate text asynchronously with non-blocking behavior. This endpoint submits a translation request and returns immediately with a "processing" status. The actual translation happens asynchronously in the background. Use the GET /status/:messageId/:language endpoint to check translation status and retrieve the result. Supports both new message translation and retranslation of existing messages.',
       tags: ['translation'],
@@ -287,6 +289,7 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
     }
   }, async (request: FastifyRequest<{ Body: TranslateRequest }>, reply: FastifyReply) => {
     try {
+      const authContext = (request as UnifiedAuthRequest).authContext;
       const validatedData = TranslateRequestSchema.parse(request.body);
 
 
@@ -356,15 +359,16 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
           content: validatedData.text,
           originalLanguage: validatedData.source_language || 'auto',
           messageType: 'text',
-          isAnonymous: false, // TODO: Detecter depuis l'auth
-          anonymousDisplayName: undefined
+          isAnonymous: authContext.isAnonymous ?? false,
+          anonymousDisplayName: authContext.isAnonymous ? authContext.displayName : undefined
         };
 
+        const senderId = authContext.userId;
 
         // DECLENCHEMENT NON-BLOQUANT - pas d'await !
         messagingService.handleMessage(
           messageRequest,
-          'system' // TODO: Recuperer l'ID utilisateur depuis l'auth
+          senderId
         ).catch((error: any) => {
           logger.error(`[Translation] Async message processing error: ${error.message}`);
         });
