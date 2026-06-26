@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Erreur lors de l\'upload de l\'avatar:', error);
+    logger.error('[ApiUploadAvatar]', 'Erreur lors de l\'upload de l\'avatar', { error });
     return NextResponse.json(
       { success: false, error: 'Erreur interne du serveur' },
       { status: 500 }

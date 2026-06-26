@@ -178,7 +178,7 @@ export default function LinksPage() {
         await fetchShareLinks();
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des liens:', error);
+      logger.error('[LinksPage]', 'Erreur lors du chargement des liens', { error });
       toast.error(t('errors.loadFailed'));
     } finally {
       setIsLoading(false);
@@ -217,7 +217,7 @@ export default function LinksPage() {
         setTrackingLinksOffset(offset + (data.data?.trackingLinks?.length || 0));
       }
     } catch (error) {
-      console.error('[Links Page] Erreur lors du chargement des liens trackés:', error);
+      logger.error('[LinksPage]', 'Erreur lors du chargement des liens trackés', { error });
       // Ne pas afficher d'erreur si c'est juste les liens trackés qui échouent
       if (!append) {
         setTrackingLinks([]); // S'assurer que trackingLinks est un tableau vide en cas d'erreur
@@ -348,7 +348,7 @@ export default function LinksPage() {
         toast.error(t('errors.toggleFailed'));
       }
     } catch (error) {
-      console.error('Erreur lors du basculement:', error);
+      logger.error('[LinksPage]', 'Erreur lors du basculement', { error });
       toast.error(t('errors.toggleFailed'));
     }
   };
@@ -376,7 +376,7 @@ export default function LinksPage() {
         toast.error(t('errors.extendFailed'));
       }
     } catch (error) {
-      console.error('Erreur lors de la prolongation:', error);
+      logger.error('[LinksPage]', 'Erreur lors de la prolongation', { error });
       toast.error(t('errors.extendFailed'));
     }
   };

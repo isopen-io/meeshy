@@ -12,6 +12,7 @@ import { RotateCw, ZoomIn, Loader2, Upload, Camera } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
 import { validateAvatarFile } from '@/utils/avatar-upload';
 import { toast } from 'sonner';
+import { logger } from '@/utils/logger';
 
 interface ConversationImageUploadDialogProps {
   open: boolean;
@@ -131,7 +132,7 @@ export function ConversationImageUploadDialog({
       // Appeler le callback avec le fichier recadré
       onImageUploaded(file);
     } catch (error) {
-      console.error('Erreur lors du recadrage:', error);
+      logger.error('[ConversationImageUploadDialog]', 'Erreur lors du recadrage:', { error });
       toast.error(t('conversationImage.processingError', 'Error processing image'));
     } finally {
       setIsProcessing(false);

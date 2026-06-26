@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useMemo } from 'react';
+import { logger } from '@/utils/logger';
 import { Archive, Users, MessageSquare, Grid3x3, Heart } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
@@ -49,7 +50,7 @@ export function CommunityCarousel({
 
     // Vérifier que conversations est un tableau valide
     if (!Array.isArray(conversations)) {
-      console.warn('[CommunityCarousel] ⚠️ Conversations is not an array:', conversations);
+      logger.warn('[CommunityCarousel]', 'Conversations is not an array:', { data: conversations });
       return result;
     }
 

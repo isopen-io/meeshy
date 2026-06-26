@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Play, Pause } from 'lucide-react';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
 import MediaManager from '@/utils/media-manager';
+import { logger } from '@/utils/logger';
 
 interface CompactVideoPlayerProps {
   attachment: UploadedAttachmentResponse;
@@ -76,7 +77,7 @@ export const CompactVideoPlayer: React.FC<CompactVideoPlayerProps> = ({
         setIsPlaying(true);
       }
     } catch (error) {
-      console.error('CompactVideoPlayer: Play error', error);
+      logger.error('[CompactVideoPlayer]', 'Play error', { error });
     }
   };
 

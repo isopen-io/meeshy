@@ -46,6 +46,7 @@ import { useSocketCacheSync, useInvalidateOnReconnect } from '@/hooks/queries';
 import { useAutoRetryFailedMessages } from '@/hooks/use-auto-retry-failed-messages';
 import { useFCMNotifications } from '@/hooks/use-fcm-notifications';
 import { FeatureErrorBoundary } from '@/components/ui/FeatureErrorBoundary';
+import { logger } from '@/utils/logger';
 
 import type { Conversation } from '@meeshy/shared/types';
 import type { FailedMessage } from '@/stores/failed-messages-store';
@@ -380,7 +381,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
           return [directConversation, ...prev];
         });
       } catch (error) {
-        console.error(`[ConversationLayout-${instanceId}] Erreur chargement direct:`, error);
+        logger.error('[ConversationLayout]', 'Erreur chargement direct:', { error });
       }
     },
     [setConversations, instanceId]
@@ -443,7 +444,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     loadPromises.push(loadParticipants(targetId));
 
     Promise.all(loadPromises).catch(error => {
-      console.error(`[ConversationLayout-${instanceId}] Erreur chargement parallèle:`, error);
+      logger.error('[ConversationLayout]', 'Erreur chargement parallèle:', { error });
     });
   }, [
     selectedConversationId,
@@ -500,7 +501,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
                 )
               );
             })
-            .catch(console.error);
+            .catch((error) => logger.error('[ConversationLayout]', 'Mark as read failed', { error }));
         }, 500);
       }
     };
@@ -669,10 +670,10 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
               )
             );
           })
-          .catch(console.error);
+          .catch((error) => logger.error('[ConversationLayout]', 'Mark as read after send failed', { error }));
       }
     } catch (error) {
-      console.error('[ConversationLayout] Send error:', error);
+      logger.error('[ConversationLayout]', 'Send error:', { error });
       markMessageFailed(optimistic._tempId);
     }
   }, [
@@ -817,7 +818,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
         );
         return result?.success ?? false;
       } catch (error) {
-        console.error('[ConversationLayout] Erreur lors du renvoi:', error);
+        logger.error('[ConversationLayout]', 'Erreur lors du renvoi:', { error });
         return false;
       }
     },

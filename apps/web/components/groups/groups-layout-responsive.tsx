@@ -31,6 +31,7 @@ import { buildApiUrl, API_ENDPOINTS } from '@/lib/config';
 import { cn } from '@/lib/utils';
 import { generateCommunityIdentifier, sanitizeCommunityIdentifier } from '@/utils/community-identifier';
 import { authManager } from '@/services/auth-manager.service';
+import { logger } from '@/utils/logger';
 
 interface GroupsLayoutResponsiveProps {
   selectedGroupIdentifier?: string;
@@ -132,13 +133,13 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
         // global ApiService layer owns the refresh flow and the session
         // is only cleared by explicit user logout. Show an empty list
         // and let the user retry.
-        console.warn('Groups API returned 401 — keeping session, showing empty list');
+        logger.warn('[GroupsLayoutResponsive]', 'Groups API returned 401 — keeping session, showing empty list');
         setGroups([]);
       } else {
-        console.error('Groups API error:', response.status, response.statusText);
+        logger.error('[GroupsLayoutResponsive]', 'Groups API error', { status: response.status, statusText: response.statusText });
       }
     } catch (error) {
-      console.error('Erreur chargement groupes:', error);
+      logger.error('[GroupsLayoutResponsive]', 'Erreur chargement groupes', { error });
       toast.error(tGroups('groups.errors.loadError'));
     } finally {
       setIsLoading(false);
@@ -165,11 +166,11 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
           setShowGroupsList(false);
         }
       } else {
-        console.error('Erreur chargement détails groupe');
+        logger.error('[GroupsLayoutResponsive]', 'Erreur chargement détails groupe');
         toast.error(tGroups('groups.errors.loadingGroupError'));
       }
     } catch (error) {
-      console.error('Erreur:', error);
+      logger.error('[GroupsLayoutResponsive]', 'Erreur chargement détails groupe', { error });
       toast.error(tGroups('groups.errors.loadingGroupError'));
     }
   }, [isMobile]);
@@ -218,7 +219,7 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
         setIdentifierAvailable(result.available);
       }
     } catch (error) {
-      console.error('Erreur lors de la vérification de l\'identifiant:', error);
+      logger.error('[GroupsLayoutResponsive]', 'Erreur lors de la vérification de l\'identifiant', { error });
     } finally {
       setIsCheckingIdentifier(false);
     }
@@ -237,7 +238,7 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
         setCopiedIdentifier(null);
       }, 2000);
     } catch (error) {
-      console.error('[Groups] Error copying identifier:', error);
+      logger.error('[GroupsLayoutResponsive]', 'Error copying identifier', { error });
       toast.error(tGroups('errors.copyError'));
     }
   }, [tGroups]);
@@ -292,7 +293,7 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
         toast.error(error.message || tGroups('errors.createError'));
       }
     } catch (error) {
-      console.error('[Groups] Error creating community:', error);
+      logger.error('[GroupsLayoutResponsive]', 'Error creating community', { error });
       toast.error(tGroups('errors.createError'));
     }
   }, [newGroupName, newGroupDescription, newGroupIdentifier, newGroupIsPrivate, identifierAvailable, tGroups]);

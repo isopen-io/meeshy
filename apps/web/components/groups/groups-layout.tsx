@@ -22,6 +22,7 @@ import { Users } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Group } from '@meeshy/shared/types';
 import { cn } from '@/lib/utils';
+import { logger } from '@/utils/logger';
 
 // Hooks customs
 import { useGroupsResponsive } from '@/hooks/use-groups-responsive';
@@ -178,7 +179,7 @@ export function GroupsLayout({ selectedGroupIdentifier }: GroupsLayoutProps) {
           setCopiedIdentifier(null);
         }, 2000);
       } catch (error) {
-        console.error('[Groups] Error copying identifier:', error);
+        logger.error('[GroupsLayout]', 'Error copying identifier', { error });
         toast.error(tGroups('errors.copyError'));
       }
     },

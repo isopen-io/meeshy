@@ -9,6 +9,7 @@ import type { Conversation, User, Message } from '@meeshy/shared/types';
 import { useI18n } from '@/hooks/use-i18n';
 import { copyToClipboard } from '@/lib/clipboard';
 import { toast } from 'sonner';
+import { logger } from '@/utils/logger';
 import { AttachmentService } from '@/services/attachmentService';
 import { conversationsService } from '@/services/conversations.service';
 import {
@@ -32,6 +33,7 @@ import { useConversationStats } from '@/hooks/use-conversation-stats';
 import { DetailsHeader } from './details-sidebar/DetailsHeader';
 import { DescriptionSection } from './details-sidebar/DescriptionSection';
 import { ConversationImageUploadDialog } from './conversation-image-upload-dialog';
+import { logger } from '@/utils/logger';
 
 // Lazy-loaded components (below the fold)
 const ActiveUsersSection = lazy(() =>
@@ -167,7 +169,7 @@ export function ConversationDetailsSidebar({
         throw new Error('Upload failed');
       }
     } catch (error) {
-      console.error('Error uploading image:', error);
+      logger.error('[ConversationDetailsSidebar]', 'Error uploading image:', { error });
       toast.error(t('conversationDetails.imageUploadError', 'Error uploading image'));
     } finally {
       setIsUploadingImage(false);

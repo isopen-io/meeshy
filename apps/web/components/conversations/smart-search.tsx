@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { logger } from '@/utils/logger';
 import { Button } from '@/components/ui/button';
 import { User } from '@/types';
 import { Search, Clock, Users, Star } from 'lucide-react';
@@ -31,7 +32,7 @@ export function SmartSearch({
       try {
         setRecentSearches(JSON.parse(saved));
       } catch (error) {
-        console.error('Error loading recent searches:', error);
+        logger.error('[SmartSearch]', 'Error loading recent searches:', { error });
       }
     }
   }, []);

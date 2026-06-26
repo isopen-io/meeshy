@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { cn } from '@/lib/utils';
 import { getLanguageColor } from './theme';
+import { logger } from '@/utils/logger';
 
 // ============================================================================
 // Types
@@ -305,7 +306,7 @@ export function MediaAudioCard({
       setDuration(0);
       audio.load();
       if (wasPlaying) {
-        audio.play().catch(console.error);
+        audio.play().catch((error) => logger.error('[MediaAudioCard]', 'Audio play failed', { error }));
       }
     }
   }, [selectedTranslation?.audioSrc]);
@@ -320,7 +321,7 @@ export function MediaAudioCard({
     if (isPlaying) {
       audio.pause();
     } else {
-      audio.play().catch(console.error);
+      audio.play().catch((error) => logger.error('[MediaAudioCard]', 'Audio play failed', { error }));
     }
   }, [isPlaying]);
 

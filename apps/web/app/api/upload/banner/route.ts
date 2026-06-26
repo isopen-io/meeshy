@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    console.error('Erreur lors de l\'upload de la bannière:', error);
+    logger.error('[ApiUploadBanner]', 'Erreur lors de l\'upload de la bannière', { error });
     return NextResponse.json(
       { success: false, error: 'Erreur interne du serveur' },
       { status: 500 }

@@ -5,6 +5,7 @@ import { Tooltip } from './Tooltip';
 import { useMentions } from '@/hooks/composer/useMentions';
 import { MentionAutocomplete } from '@/components/common/MentionAutocomplete';
 import { useI18n } from '@/hooks/use-i18n';
+import { logger } from '@/utils/logger';
 
 export interface Attachment {
   id: string;
@@ -294,7 +295,7 @@ export const MessageComposer = forwardRef<
         setRecordingDuration((prev) => prev + 1);
       }, 1000);
     } catch (error) {
-      console.error('Erreur accès microphone:', error);
+      logger.error('[MessageComposer]', 'Erreur accès microphone', { error });
     }
   }, [recordingDuration, onVoiceRecord]);
 
@@ -312,7 +313,7 @@ export const MessageComposer = forwardRef<
 
   const requestLocation = useCallback(() => {
     if (!navigator.geolocation) {
-      console.error('Géolocalisation non supportée');
+      logger.error('[MessageComposer]', 'Géolocalisation non supportée');
       return;
     }
 
@@ -331,7 +332,7 @@ export const MessageComposer = forwardRef<
         onLocationRequest?.();
       },
       (error) => {
-        console.error('Erreur géolocalisation:', error);
+        logger.error('[MessageComposer]', 'Erreur géolocalisation', { error });
       }
     );
   }, [onLocationRequest]);

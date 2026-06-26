@@ -32,6 +32,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { LanguageFlagSelector } from '@/components/translation/language-flag-selector';
 import { LanguageSelector } from '@/components/translation/language-selector';
 import { useLanguageStore, useUser } from '@/stores';
+import { logger } from '@/utils/logger';
 
 interface HeaderProps {
   mode?: 'landing' | 'chat' | 'default';
@@ -86,7 +87,7 @@ export function Header({
       }
       router.push('/');
     } catch (error) {
-      console.error('Logout error:', error);
+      logger.error('[Header]', 'Logout error', { error });
     }
   };
 
@@ -95,7 +96,7 @@ export function Header({
       navigator.share({
         title: conversationTitle || 'Meeshy Conversation',
         url: shareLink,
-      }).catch(console.error);
+      }).catch((error) => logger.error('[Header]', 'Share failed', { error }));
     } else if (shareLink) {
       navigator.clipboard.writeText(shareLink);
     }
@@ -248,7 +249,7 @@ export function Header({
                         title: 'Meeshy',
                         text: shareText,
                         url: shareUrl
-                      }).catch(console.error);
+                      }).catch((error) => logger.error('[Header]', 'Share failed', { error }));
                     } else {
                       navigator.clipboard.writeText(`${shareText}\n\n${shareUrl}`);
                     }
@@ -295,7 +296,7 @@ export function Header({
                         title: 'Meeshy',
                         text: shareText,
                         url: shareUrl
-                      }).catch(console.error);
+                      }).catch((error) => logger.error('[Header]', 'Share failed', { error }));
                     } else {
                       navigator.clipboard.writeText(`${shareText}\n\n${shareUrl}`);
                     }
@@ -505,7 +506,7 @@ export function Header({
                           title: 'Meeshy',
                           text: shareText,
                           url: shareUrl
-                        }).catch(console.error);
+                        }).catch((error) => logger.error('[Header]', 'Share failed', { error }));
                       } else {
                         navigator.clipboard.writeText(`${shareText}\n\n${shareUrl}`);
                       }
@@ -574,7 +575,7 @@ export function Header({
                           title: 'Meeshy',
                           text: shareText,
                           url: shareUrl
-                        }).catch(console.error);
+                        }).catch((error) => logger.error('[Header]', 'Share failed', { error }));
                       } else {
                         navigator.clipboard.writeText(`${shareText}\n\n${shareUrl}`);
                       }

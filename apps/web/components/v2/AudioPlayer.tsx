@@ -3,6 +3,7 @@
 import { HTMLAttributes, useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
+import { logger } from '@/utils/logger';
 
 export interface AudioPlayerProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onPlay' | 'onPause'> {
   /** Audio source URL */
@@ -181,7 +182,7 @@ export function AudioPlayer({
     if (isPlaying) {
       audio.pause();
     } else {
-      audio.play().catch(console.error);
+      audio.play().catch((error) => logger.error('[AudioPlayer]', 'Audio play failed', { error }));
     }
   }, [isPlaying]);
 

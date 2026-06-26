@@ -41,6 +41,7 @@ import { useUser, useIsAuthChecking } from '@/stores';
 import { useAuth } from '@/hooks/use-auth';
 import { useTheme, useAppActions } from '@/stores/app-store';
 import { authManager } from '@/services/auth-manager.service';
+import { logger } from '@/utils/logger';
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -105,7 +106,7 @@ export function DashboardLayout({
             headers: { Authorization: `Bearer ${token}` }
           });
         } catch (error) {
-          console.error('Erreur API déconnexion:', error);
+          logger.error('[DashboardLayout]', 'Erreur API déconnexion', { error });
           // Continuer même si l'API échoue
         }
       }
@@ -114,7 +115,7 @@ export function DashboardLayout({
       logout();
       toast.success(t('auth.logoutSuccess'));
     } catch (error) {
-      console.error('Erreur déconnexion:', error);
+      logger.error('[DashboardLayout]', 'Erreur déconnexion', { error });
       toast.error(t('auth.logoutError'));
       // En cas d'erreur, forcer la redirection quand même
       logout();

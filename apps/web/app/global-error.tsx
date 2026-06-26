@@ -38,14 +38,10 @@ export default function GlobalError({
     // Importer dynamiquement le collecteur (evite les erreurs SSR)
     import('@/utils/error-context-collector').then(({ collectErrorContext, sendErrorContext }) => {
       const context = collectErrorContext(error);
-      console.error('[Global Error] Complete context:', context);
+      logger.error('[GlobalError]', 'Complete context', { context });
       sendErrorContext(context).catch(() => {});
     }).catch((_err) => {
-      console.error('[Global Error] Fallback:', {
-        message: error.message,
-        stack: error.stack,
-        digest: error.digest,
-      });
+      logger.error('[GlobalError]', 'Fallback', { message: error.message, stack: error.stack, digest: error.digest });
     });
   }, [error]);
 

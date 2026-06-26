@@ -7,6 +7,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useI18n } from '@/hooks/use-i18n';
+import { logger } from '@/utils/logger';
 import { createPortal } from 'react-dom';
 import {
   X,
@@ -140,7 +141,7 @@ export function VideoLightbox({
         setIsPlaying(true);
       }
     } catch (error) {
-      console.error('Erreur de lecture vidéo:', error);
+      logger.error('[VideoLightbox]', 'Erreur de lecture vidéo', { error });
     }
   }, [isPlaying]);
 
@@ -181,7 +182,7 @@ export function VideoLightbox({
           /* istanbul ignore next -- legacy IE/Edge fullscreen API; unreachable when standard requestFullscreen exists */
           await element.msRequestFullscreen();
         } else {
-          console.warn('Fullscreen API non supporté sur ce navigateur');
+          logger.warn('[VideoLightbox]', 'Fullscreen API non supporté sur ce navigateur');
           return;
         }
         setIsFullscreen(true);
@@ -204,7 +205,7 @@ export function VideoLightbox({
       }
     } catch (error) {
       /* istanbul ignore next -- fullscreen API errors are browser-level; not reproducible in JSDOM */
-      console.error('Erreur plein écran:', error);
+      logger.error('[VideoLightbox]', 'Erreur plein écran', { error });
     }
   }, []);
 

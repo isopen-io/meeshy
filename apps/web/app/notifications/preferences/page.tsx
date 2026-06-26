@@ -92,7 +92,7 @@ function NotificationPreferencesContent() {
           }
         }
       } catch (error) {
-        console.error('Error loading preferences:', error);
+        logger.error('[NotificationPreferences]', 'Error loading preferences', { error });
       } finally {
         setLoading(false);
       }
@@ -128,7 +128,7 @@ function NotificationPreferencesContent() {
         toast.error(errorData.message || t('notifPrefs.saveError'));
       }
     } catch (error) {
-      console.error('Error saving preferences:', error);
+      logger.error('[NotificationPreferences]', 'Error saving preferences', { error });
       toast.error(t('notifPrefs.networkError'));
     } finally {
       setSaving(false);

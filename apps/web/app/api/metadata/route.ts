@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(metadata);
   } catch (error) {
-    console.error('Erreur génération métadonnées:', error);
+    logger.error('[ApiMetadata]', 'Erreur génération métadonnées', { error });
     return NextResponse.json(generateDefaultMetadata(), { status: 500 });
   }
 }
@@ -74,7 +74,7 @@ async function generateAffiliateMetadata(
       }
     }
   } catch (error) {
-    console.error('Erreur validation token affiliation:', error);
+    logger.error('[ApiMetadata]', 'Erreur validation token affiliation', { error });
   }
 
   return generateDefaultMetadata(frontendUrl);
@@ -109,7 +109,7 @@ async function generateConversationMetadata(
       }
     }
   } catch (error) {
-    console.error('Erreur récupération conversation:', error);
+    logger.error('[ApiMetadata]', 'Erreur récupération conversation', { error });
   }
 
   return generateDefaultMetadata(frontendUrl);
@@ -144,7 +144,7 @@ async function generateJoinMetadata(
       }
     }
   } catch (error) {
-    console.error('Erreur récupération lien jointure:', error);
+    logger.error('[ApiMetadata]', 'Erreur récupération lien jointure', { error });
   }
 
   return generateDefaultMetadata(frontendUrl);

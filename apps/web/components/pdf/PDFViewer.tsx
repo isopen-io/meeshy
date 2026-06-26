@@ -15,6 +15,7 @@ import {
 import { Button } from '@/components/ui/button';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
 import { useI18n } from '@/hooks/useI18n';
+import { logger } from '@/utils/logger';
 
 // Chargement dynamique pour éviter les erreurs SSR
 const Document = dynamic(
@@ -72,7 +73,7 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
   };
 
   const onDocumentLoadError = (error: Error) => {
-    console.error('Erreur chargement PDF:', error);
+    logger.error('[PDFViewer]', 'Erreur chargement PDF', { error });
     setHasError(true);
     setErrorMessage(t('pdf.loadError'));
     setIsLoading(false);

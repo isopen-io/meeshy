@@ -441,7 +441,7 @@ export default function TrackingLinkPage() {
         cancelBeacon();
         setState('error');
       } catch (err) {
-        console.error('[TrackingLink] Error:', err);
+        logger.error('[LinkRedirect]', 'Error', { error: err });
         if (!cancelled) setState('error');
       }
     }

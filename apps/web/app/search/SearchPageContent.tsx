@@ -110,7 +110,7 @@ export function SearchPageContent() {
         setFriendRequests(data.data || []);
       }
     } catch (error) {
-      console.error('Erreur chargement friend requests:', error);
+      logger.error('[SearchPageContent]', 'Erreur chargement friend requests', { error });
     }
   };
 
@@ -170,7 +170,7 @@ export function SearchPageContent() {
       setCommunities(communitiesData);
 
     } catch (error) {
-      console.error('Erreur lors de la recherche:', error);
+      logger.error('[SearchPageContent]', 'Erreur lors de la recherche', { error });
       toast.error(t('toasts.searchError'));
     } finally {
       setLoading(false);
@@ -250,7 +250,7 @@ export function SearchPageContent() {
         toast.error(error.error || t('toasts.requestError'));
       }
     } catch (error) {
-      console.error('Erreur:', error);
+      logger.error('[SearchPageContent]', 'Erreur', { error });
       toast.error(t('toasts.requestError'));
     }
   };
@@ -273,7 +273,7 @@ export function SearchPageContent() {
         toast.error(t('toasts.cancelError'));
       }
     } catch (error) {
-      console.error('Erreur:', error);
+      logger.error('[SearchPageContent]', 'Erreur', { error });
       toast.error(t('toasts.cancelError'));
     }
   };
@@ -318,7 +318,7 @@ export function SearchPageContent() {
         toast.error(t('toasts.conversationError'));
       }
     } catch (error) {
-      console.error('Erreur:', error);
+      logger.error('[SearchPageContent]', 'Erreur', { error });
       toast.error(t('toasts.conversationError'));
     }
   };
@@ -342,7 +342,7 @@ export function SearchPageContent() {
         toast.error(t('toasts.joinError'));
       }
     } catch (error) {
-      console.error('Erreur:', error);
+      logger.error('[SearchPageContent]', 'Erreur', { error });
       toast.error(t('toasts.joinAttemptError'));
     }
   };

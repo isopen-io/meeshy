@@ -3,6 +3,7 @@
 import React, { useMemo, useCallback } from 'react';
 import { ExternalLink, Link2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { logger } from '@/utils/logger';
 import {
   parseMessageLinks,
   recordTrackingLinkClick,
@@ -61,7 +62,7 @@ export function MessageWithLinks({
               window.location.href = result.originalUrl;
             }
           } else {
-            console.error('Failed to record tracking link click:', result.error);
+            logger.error('[MessageWithLinks]', 'Failed to record tracking link click', { error: result.error });
             // Fallback: ouvrir le lien de tracking directement
             const fallbackUrl = part.type === 'mshy-link' ? part.trackingUrl! : part.content;
             const newWindow = window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
@@ -70,7 +71,7 @@ export function MessageWithLinks({
             }
           }
         } catch (error) {
-          console.error('Error handling tracking link click:', error);
+          logger.error('[MessageWithLinks]', 'Error handling tracking link click', { error });
           // Fallback: ouvrir le lien de tracking directement
           const fallbackUrl = part.type === 'mshy-link' ? part.trackingUrl! : part.content;
           const newWindow = window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
@@ -222,7 +223,7 @@ export function TrackingLink({
           }
           onClickTracked?.();
         } else {
-          console.error('Failed to record tracking link click:', result.error);
+          logger.error('[MessageWithLinks]', 'Failed to record tracking link click', { error: result.error });
           const fallbackUrl = `https://meeshy.me/l/${token}`;
           const newWindow = window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
           if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
@@ -230,7 +231,7 @@ export function TrackingLink({
           }
         }
       } catch (error) {
-        console.error('Error handling tracking link click:', error);
+        logger.error('[MessageWithLinks]', 'Error handling tracking link click', { error });
         const fallbackUrl = `https://meeshy.me/l/${token}`;
         const newWindow = window.open(fallbackUrl, '_blank', 'noopener,noreferrer');
         if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {

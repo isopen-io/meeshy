@@ -319,7 +319,7 @@ export const AudioRecorderWithEffects = forwardRef<AudioRecorderWithEffectsRef, 
         // Utiliser la ref pour éviter le problème de closure
         const audioEffectsTimeline = stopTrackingRef.current?.();
 
-        console.log('🎬 [AudioRecorder] Recording stopped - Timeline data:', {
+        logger.debug('[AudioRecorderWithEffects]', 'Recording stopped - Timeline data', {
           hasTimeline: !!audioEffectsTimeline,
           timelineEvents: audioEffectsTimeline?.events?.length || 0,
           timelineData: audioEffectsTimeline,
@@ -373,7 +373,7 @@ export const AudioRecorderWithEffects = forwardRef<AudioRecorderWithEffectsRef, 
               durationSource = 'blob (verified)';
             } else {
               durationSource = 'timer (blob mismatch)';
-              console.warn('⚠️ [AudioRecorder] Blob duration differs from timer:', {
+              logger.warn('[AudioRecorderWithEffects]', 'Blob duration differs from timer', {
                 timerMs: timerDurationMs,
                 blobMs: blobDurationMs,
                 differenceMs
@@ -381,7 +381,7 @@ export const AudioRecorderWithEffects = forwardRef<AudioRecorderWithEffectsRef, 
             }
           }
         } catch (error) {
-          console.warn('⚠️ [AudioRecorder] Failed to extract duration from blob, using timer:', error);
+          logger.warn('[AudioRecorderWithEffects]', 'Failed to extract duration from blob, using timer', { error });
           durationSource = 'timer (blob extraction failed)';
         }
 
@@ -396,7 +396,7 @@ export const AudioRecorderWithEffects = forwardRef<AudioRecorderWithEffectsRef, 
           ? Math.round((blob.size * 8) / finalDurationSec) // bits per second
           : 0;
 
-        console.log('⏱️ [AudioRecorderWithEffects] Duration calculation:', {
+        logger.debug('[AudioRecorderWithEffects]', 'Duration calculation', {
           recordingTimeState: recordingTime,
           timerDurationMs,
           blobDurationMs,
@@ -418,7 +418,7 @@ export const AudioRecorderWithEffects = forwardRef<AudioRecorderWithEffectsRef, 
           ...(audioEffectsTimeline && { audioEffectsTimeline }),
         };
 
-        console.log('📦 [AudioRecorder] Metadata prepared for upload:', {
+        logger.debug('[AudioRecorderWithEffects]', 'Metadata prepared for upload', {
           metadata,
           hasAudioEffectsTimeline: !!metadata.audioEffectsTimeline,
           audioEffectsTimelineEvents: metadata.audioEffectsTimeline?.events?.length || 0,
@@ -441,7 +441,7 @@ export const AudioRecorderWithEffects = forwardRef<AudioRecorderWithEffectsRef, 
         params: state.enabled ? state.params : undefined,
       }));
 
-      console.log('🎬 [AudioRecorder] Starting tracking with initial effects:', {
+      logger.debug('[AudioRecorderWithEffects]', 'Starting tracking with initial effects', {
         initialEffects: initialEffects.filter(e => e.enabled),
         totalEffects: initialEffects.filter(e => e.enabled).length
       });
@@ -549,7 +549,7 @@ export const AudioRecorderWithEffects = forwardRef<AudioRecorderWithEffectsRef, 
 
     // Vérifier qu'on a un état précédent (normalement initialisé dans startRecording)
     if (!previousEffectsStateRef.current) {
-      console.warn('⚠️ [AudioRecorder] No previous state, skipping tracking');
+      logger.warn('[AudioRecorderWithEffects]', 'No previous state, skipping tracking');
       return;
     }
 
@@ -565,18 +565,18 @@ export const AudioRecorderWithEffects = forwardRef<AudioRecorderWithEffectsRef, 
       if (currentEffect.enabled !== previousEffect.enabled) {
         if (currentEffect.enabled) {
           // Effet activé
-          console.log('✅ [AudioRecorder] Effect activated:', currentEffect.type);
+          logger.debug('[AudioRecorderWithEffects]', 'Effect activated', { type: currentEffect.type });
           recordActivationRef.current?.(currentEffect.type);
         } else {
           // Effet désactivé
-          console.log('❌ [AudioRecorder] Effect deactivated:', currentEffect.type);
+          logger.debug('[AudioRecorderWithEffects]', 'Effect deactivated', { type: currentEffect.type });
           recordDeactivationRef.current?.(currentEffect.type);
         }
       }
       // Détection changement de paramètres (seulement si l'effet est actif)
       else if (currentEffect.enabled && JSON.stringify(currentEffect.params) !== JSON.stringify(previousEffect.params)) {
         // Paramètres modifiés
-        console.log('🔧 [AudioRecorder] Effect params updated:', {
+        logger.debug('[AudioRecorderWithEffects]', 'Effect params updated', {
           type: currentEffect.type,
           params: currentEffect.params
         });

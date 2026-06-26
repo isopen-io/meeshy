@@ -7,6 +7,7 @@ import { Bell, MessageSquare, Users, Settings, Globe, Phone } from 'lucide-react
 import { notificationSocketIO } from '@/services/notification-socketio.singleton';
 import { NotificationTypeEnum } from '@/types/notification';
 import type { Notification } from '@/types/notification';
+import { logger } from '@/utils/logger';
 
 export function NotificationTest() {
   const createTestNotification = (
@@ -62,7 +63,7 @@ export function NotificationTest() {
 
     // Simuler la réception d'une notification via Socket.IO
     // Le hook useNotificationsManagerRQ écoute ces événements et affichera automatiquement le toast
-    console.log('[NotificationTest] Simulating notification:', testNotification);
+    logger.info('[NotificationTest]', 'Simulating notification', { notification: testNotification });
 
     // Émettre directement via le callback des listeners
     const callbacks = (notificationSocketIO as unknown).notificationCallbacks;

@@ -14,6 +14,7 @@ import { MessageSquare, ChevronDown, Plus, Clock } from 'lucide-react';
 import { conversationsService } from '@/services';
 import { Conversation } from '@meeshy/shared/types';
 import { useI18n } from '@/hooks/useI18n';
+import { logger } from '@/utils/logger';
 
 interface ConversationDropdownProps {
   userId: string;
@@ -70,7 +71,7 @@ export function ConversationDropdown({
       const convs = await conversationsService.getConversationsWithUser(userId);
       setConversations(convs);
     } catch (error) {
-      console.error('Erreur lors du chargement des conversations:', error);
+      logger.error('[ConversationDropdown]', 'Erreur lors du chargement des conversations', { error });
     } finally {
       setLoading(false);
     }

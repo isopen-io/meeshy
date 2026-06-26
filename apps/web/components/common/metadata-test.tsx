@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { logger } from '@/utils/logger';
 
 export function MetadataTest() {
   const [url, setUrl] = useState('http://localhost:3100/signup/affiliate/aff_1760904438255_6g0t8ovvkpc');
@@ -18,7 +19,7 @@ export function MetadataTest() {
       const data = await response.json();
       setMetadata(data);
     } catch (error) {
-      console.error('Erreur test métadonnées:', error);
+      logger.error('[MetadataTest]', 'Erreur test métadonnées', { error });
     } finally {
       setLoading(false);
     }
@@ -43,7 +44,7 @@ export function MetadataTest() {
         html: html.substring(0, 2000) + '...'
       });
     } catch (error) {
-      console.error('Erreur test page:', error);
+      logger.error('[MetadataTest]', 'Erreur test page', { error });
     } finally {
       setLoading(false);
     }

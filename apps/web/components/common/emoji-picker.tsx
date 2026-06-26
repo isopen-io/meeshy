@@ -4,6 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/hooks/use-i18n';
+import { logger } from '@/utils/logger';
 import { Search, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -305,7 +306,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
       const updated = [emoji, ...frequent.filter((e: string) => e !== emoji)].slice(0, 8);
       localStorage.setItem('meeshy-frequent-emojis', JSON.stringify(updated));
     } catch (error) {
-      console.error('Erreur sauvegarde emojis fréquents:', error);
+      logger.error('[EmojiPicker]', 'Erreur sauvegarde emojis fréquents', { error });
     }
   };
 

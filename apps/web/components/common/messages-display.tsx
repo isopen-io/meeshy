@@ -9,6 +9,7 @@ import { FailedMessageBar } from '@/components/messages/FailedMessageBar';
 import { messageTranslationService } from '@/services/message-translation.service';
 import { useFixRadixZIndex } from '@/hooks/use-fix-z-index';
 import { useI18n } from '@/hooks/useI18n';
+import { logger } from '@/utils/logger';
 import type { User, Message, MessageWithTranslations, ConversationType, TranslationModel } from '@meeshy/shared/types';
 
 interface MessagesDisplayProps {
@@ -168,7 +169,7 @@ export const MessagesDisplay = memo(function MessagesDisplay({
       // L'état sera désactivé dans le callback onTranslation quand la traduction arrivera
 
     } catch (error) {
-      console.error('Erreur traduction forcée:', error);
+      logger.error('[MessagesDisplay]', 'Erreur traduction forcée', { error });
       
       // Marquer l'erreur
       setMessageDisplayStates(prev => ({

@@ -63,7 +63,7 @@ export async function generateMetadata({ params }: ConversationPageProps): Promi
       }
     }
   } catch (error) {
-    console.error('Erreur génération métadonnées conversation:', error);
+    logger.error('[ConversationPage]', 'Erreur génération métadonnées conversation', { error });
   }
 
   // Si la conversation n'existe pas

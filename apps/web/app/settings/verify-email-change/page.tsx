@@ -76,7 +76,7 @@ export default function VerifyEmailChangePage() {
         }
       }
     } catch (error) {
-      console.error('Error verifying email change:', error);
+      logger.error('[VerifyEmailChange]', 'Error verifying email change', { error });
       setStatus('error');
       setErrorMessage(t('emailChange.verify.networkError', 'Erreur de connexion'));
     }

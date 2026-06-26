@@ -33,6 +33,7 @@ import {
 import { toast } from 'sonner';
 import { copyToClipboard } from '@/lib/clipboard';
 import { useI18n } from '@/hooks/useI18n';
+import { logger } from '@/utils/logger';
 
 interface LinkSummaryModalProps {
   isOpen: boolean;
@@ -73,7 +74,7 @@ export function LinkSummaryModal({
       toast.success(t('linkConfiguration.successMessages.linkCopied'));
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
-      console.error('Erreur lors de la copie:', error);
+      logger.error('[LinkSummaryModal]', 'Erreur lors de la copie:', { error });
       toast.error(t('linkConfiguration.errors.copyFailed'));
     }
   };

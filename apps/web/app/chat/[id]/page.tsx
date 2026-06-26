@@ -97,7 +97,7 @@ export default function ChatLinkPage() {
 
         setConversationData(data);
       } catch (err) {
-        console.error('Failed to load conversation:', err);
+        logger.error('[ChatPage]', 'Failed to load conversation', { error: err });
         setError(t('errors.loadError'));
       } finally {
         setIsLoading(false);

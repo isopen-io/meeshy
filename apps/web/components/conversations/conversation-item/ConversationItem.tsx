@@ -71,7 +71,7 @@ export const ConversationItem = memo(function ConversationItem({
       await togglePin(conversation.id, !localIsPinned);
       toast.success(localIsPinned ? t('conversationHeader.unpinned') : t('conversationHeader.pinned'));
     } catch (error) {
-      console.error('Error toggling pin:', error);
+      logger.error('[ConversationItem]', 'Error toggling pin:', { error });
       toast.error(t('conversationHeader.pinError'));
     }
   }, [conversation.id, localIsPinned, togglePin]);
@@ -82,7 +82,7 @@ export const ConversationItem = memo(function ConversationItem({
       await toggleMute(conversation.id, !localIsMuted);
       toast.success(localIsMuted ? t('conversationHeader.unmuted') : t('conversationHeader.muted'));
     } catch (error) {
-      console.error('Error toggling mute:', error);
+      logger.error('[ConversationItem]', 'Error toggling mute:', { error });
       toast.error(t('conversationHeader.muteError'));
     }
   }, [conversation.id, localIsMuted, toggleMute]);
@@ -93,7 +93,7 @@ export const ConversationItem = memo(function ConversationItem({
       await toggleArchive(conversation.id, !localIsArchived);
       toast.success(localIsArchived ? t('conversationHeader.unarchived') : t('conversationHeader.archived'));
     } catch (error) {
-      console.error('Error toggling archive:', error);
+      logger.error('[ConversationItem]', 'Error toggling archive:', { error });
       toast.error(t('conversationHeader.archiveError'));
     }
   }, [conversation.id, localIsArchived, toggleArchive]);
@@ -105,7 +105,7 @@ export const ConversationItem = memo(function ConversationItem({
       await setReaction(conversation.id, newReaction);
       toast.success(newReaction ? t('conversationDetails.reactionAdded').replace('{emoji}', emoji) : t('conversationDetails.reactionRemoved'));
     } catch (error) {
-      console.error('Error setting reaction:', error);
+      logger.error('[ConversationItem]', 'Error setting reaction:', { error });
       toast.error(t('conversationDetails.reactionError'));
     }
   }, [conversation.id, localReaction, setReaction]);
@@ -134,7 +134,7 @@ export const ConversationItem = memo(function ConversationItem({
       if (error.name === 'AbortError') {
         return;
       }
-      console.error('Error sharing:', error);
+      logger.error('[ConversationItem]', 'Error sharing:', { error });
       toast.error(t('conversationHeader.linkCopyError'));
     }
   }, [conversation.id, t]);
