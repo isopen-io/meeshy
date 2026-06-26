@@ -637,6 +637,19 @@ export class MessageHandler {
       }
       handlerLogger.debug('message:new emitted', { conversationId: normalizedId, messageId: message.id, senderUserId: senderUserId ?? 'anon' });
 
+      // Single participant query shared between CONVERSATION_UPDATED and
+      // CONVERSATION_UNREAD_UPDATED to avoid a duplicate DB round-trip.
+      // The superset select (id + userId + joinedAt) satisfies both callers.
+      let sharedParticipants: { id: string; userId: string | null; joinedAt: Date }[] = [];
+      try {
+        sharedParticipants = await this.prisma.participant.findMany({
+          where: { conversationId: normalizedId, isActive: true },
+          select: { id: true, userId: true, joinedAt: true }
+        });
+      } catch (err) {
+        handlerLogger.warn('participant fetch failed — skipping CONVERSATION_UPDATED + unread', { error: err });
+      }
+
       // Notify each participant's user room that the conversation has
       // been updated (lastMessageAt advanced) so their conversation
       // list can re-sort and surface this conversation at the top in
@@ -645,11 +658,7 @@ export class MessageHandler {
       // conversation list open elsewhere never receives a signal —
       // the row stays at its old position until a manual refresh,
       // and brand-new DMs never appear in the list at all.
-      try {
-        const participants = await this.prisma.participant.findMany({
-          where: { conversationId: normalizedId, isActive: true },
-          select: { userId: true }
-        });
+      if (sharedParticipants.length > 0) {
         const updatePayload = {
           conversationId: normalizedId,
           lastMessageAt: message.createdAt,
@@ -658,20 +667,18 @@ export class MessageHandler {
           senderId: message.senderId,
           updatedAt: new Date().toISOString()
         };
-        for (const p of participants) {
+        for (const p of sharedParticipants) {
           if (!p.userId) continue;
           this.io.to(ROOMS.user(p.userId)).emit(
             SERVER_EVENTS.CONVERSATION_UPDATED,
             updatePayload
           );
         }
-        handlerLogger.debug('conversation:updated emitted', { conversationId: normalizedId, recipients: participants.filter((p) => p.userId).length });
-      } catch (err) {
-        handlerLogger.warn('conversation:updated emit failed', { error: err });
+        handlerLogger.debug('conversation:updated emitted', { conversationId: normalizedId, recipients: sharedParticipants.filter((p) => p.userId).length });
       }
 
-      // Mettre à jour unread counts
-      await this._updateUnreadCounts(message, normalizedId);
+      // Mettre à jour unread counts (re-uses the participant list already fetched above)
+      await this._updateUnreadCounts(message, normalizedId, sharedParticipants);
 
       // Auto-mark delivered for online recipients so the sender's checkmark
       // upgrades from "sent" (✓) to "delivered" (✓✓ gray) immediately, even
@@ -982,20 +989,27 @@ export class MessageHandler {
    * Met à jour les unread counts pour tous les participants
    * Uses Participant model instead of ConversationMember
    */
-  private async _updateUnreadCounts(message: Message, conversationId: string): Promise<void> {
+  private async _updateUnreadCounts(
+    message: Message,
+    conversationId: string,
+    preloadedParticipants?: { id: string; userId: string | null; joinedAt: Date }[]
+  ): Promise<void> {
     try {
       const senderId = message.senderId;
       if (!senderId) return;
 
-      // Get all active participants except the sender (include joinedAt for batch count floor)
-      const participants = await this.prisma.participant.findMany({
+      // Reuse the participant list already fetched by the caller when available
+      // (avoids a second DB round-trip inside broadcastNewMessage). Fall back to
+      // a fresh query when called standalone (e.g. from _broadcastNewMessage).
+      const allParticipants = preloadedParticipants ?? await this.prisma.participant.findMany({
         where: {
           conversationId,
           isActive: true,
-          id: { not: senderId }
         },
         select: { id: true, userId: true, joinedAt: true }
       });
+      // Filter out the sender — unread counts are for recipients only
+      const participants = allParticipants.filter((p) => p.id !== senderId);
 
       // Batch: 1 cursor query + N parallel counts instead of 3N sequential queries
       const unreadCounts = await this.readStatusService.getUnreadCountsForParticipants(
