@@ -133,6 +133,16 @@ describe('normalizeConversationId', () => {
     const result = await normalizeConversationId('error-convo', mockFind);
     expect(result).toBe('error-convo');
   });
+
+  it('returns cached result on second call without hitting DB again', async () => {
+    mockFind.mockResolvedValueOnce({ id: 'resolved-cached', identifier: 'cached-convo' });
+    await normalizeConversationId('cached-convo', mockFind);
+    mockFind.mockReset();
+
+    const second = await normalizeConversationId('cached-convo', mockFind);
+    expect(second).toBe('resolved-cached');
+    expect(mockFind).not.toHaveBeenCalled();
+  });
 });
 
 describe('buildParticipantDisplayName', () => {
