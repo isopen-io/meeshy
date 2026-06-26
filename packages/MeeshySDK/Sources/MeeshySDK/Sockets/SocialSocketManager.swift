@@ -1132,7 +1132,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     /// queue preserves arrival order; the handler still lands on main. (The small
     /// reaction handlers keep using `decoder` on main — separate instance, no
     /// cross-queue sharing.)
-    private nonisolated(unsafe) static let offMainDecoder = JSONDecoder()
+    private static let offMainDecoder = JSONDecoder()
     private static let decodeQueue = DispatchQueue(label: "me.meeshy.social-socket.decode", qos: .userInitiated)
 
     private nonisolated func decode<T: Decodable & Sendable>(_ type: T.Type, from data: [Any], handler: @escaping @Sendable (T) -> Void) {
