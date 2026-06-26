@@ -268,6 +268,13 @@ final class CallManager: ObservableObject {
     /// timeout; both now store the Task here so `endCallInternal` can
     /// cancel it cleanly instead of leaking it for the remaining sleep.
     private var sdpOfferTimeoutTask: Task<Void, Never>?
+    /// Tracks the at-most-one in-flight offer retry loop so `endCallInternal`
+    /// can cancel it promptly instead of waiting for the settle window to expire.
+    /// A new offer supersedes the previous one via the generation guard inside
+    /// `emitOfferWithRetry`, but cancelling the Task is cheaper than sleeping.
+    private var offerRetryTask: Task<Void, Never>?
+    /// Same as `offerRetryTask` for the SDP answer backoff path.
+    private var answerRetryTask: Task<Void, Never>?
     private var remoteQualityResetTask: Task<Void, Never>?
     private var pendingRemoteOffer: SessionDescription?
     // P0-3 — ICE candidates generated while the socket is down are buffered
@@ -2306,6 +2313,10 @@ final class CallManager: ObservableObject {
         participantJoinedCancellable = nil
         sdpOfferTimeoutTask?.cancel()
         sdpOfferTimeoutTask = nil
+        offerRetryTask?.cancel()
+        offerRetryTask = nil
+        answerRetryTask?.cancel()
+        answerRetryTask = nil
         remoteQualityResetTask?.cancel()
         remoteQualityResetTask = nil
         isRemoteQualityDegraded = false
@@ -2939,7 +2950,8 @@ final class CallManager: ObservableObject {
         // Fire-and-forget dropped it silently on socket churn; the gateway
         // buffer/replay (§4.6) is the *backstop* for a target not-yet-in-room,
         // but the EMITTER must also retry when its own socket lost the frame.
-        Task { [weak self] in
+        offerRetryTask?.cancel()
+        offerRetryTask = Task { [weak self] in
             await self?.emitOfferWithRetry(callId: callId, payload: payload, generation: generation)
         }
     }
@@ -2951,7 +2963,7 @@ final class CallManager: ObservableObject {
         let maxAttempts = QualityThresholds.signalOfferMaxAttempts
         var delay: TimeInterval = QualityThresholds.signalRetryInitialDelaySeconds
         for attempt in 1...maxAttempts {
-            guard currentCallId == callId, generation >= negotiationId else {
+            guard !Task.isCancelled, currentCallId == callId, generation >= negotiationId else {
                 Logger.calls.info("[CALL-DIAG] offer gen=\(generation) superseded/cancelled — stop retry")
                 return
             }
@@ -2997,7 +3009,8 @@ final class CallManager: ObservableObject {
         // gateway dedupes the duplicate by `negotiationId` (§3.5), so a re-sent
         // answer never causes glare.
         Logger.calls.warning("[CALL-DIAG] answer ACK timed out (attempt 1) call=\(callId) — retrying in background")
-        Task { [weak self] in
+        answerRetryTask?.cancel()
+        answerRetryTask = Task { [weak self] in
             await self?.emitAnswerRetry(callId: callId, payload: payload, generation: generation)
         }
         return false
@@ -3011,13 +3024,13 @@ final class CallManager: ObservableObject {
         var delay: TimeInterval = QualityThresholds.signalRetryInitialDelaySeconds
         let total = QualityThresholds.signalAnswerTotalAttempts
         for attempt in 2...total {
-            guard currentCallId == callId, generation >= negotiationId else {
+            guard !Task.isCancelled, currentCallId == callId, generation >= negotiationId else {
                 Logger.calls.info("[CALL-DIAG] answer gen=\(generation) superseded/cancelled — stop retry")
                 return
             }
             try? await Task.sleep(for: .seconds(delay))
             delay *= 2
-            guard currentCallId == callId, generation >= negotiationId else { return }
+            guard !Task.isCancelled, currentCallId == callId, generation >= negotiationId else { return }
             let acked = await MessageSocketManager.shared.emitCallSignalWithAck(
                 callId: callId, type: "answer", payload: payload
             )

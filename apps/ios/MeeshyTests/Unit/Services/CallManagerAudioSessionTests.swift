@@ -1990,6 +1990,56 @@ final class CallManagerHardeningTests: XCTestCase {
             "before emitting — if the socket dropped again between the reconnect event " +
             "and the flush, candidates are sent to a closed transport and silently lost")
     }
+
+    /// CallManager must track the offer retry Task so endCallInternal can cancel it.
+    /// Without tracking, the retry loop continues emitting into a dead call room
+    /// during the 1.5s settle window when currentCallId still matches.
+    func test_callManager_tracksOfferRetryTask() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("offerRetryTask"),
+            "CallManager must declare offerRetryTask — the SDP offer backoff loop runs " +
+            "in an untracked Task that cannot be cancelled by endCallInternal, allowing " +
+            "stale SDP offers to reach the gateway during the call settle window")
+    }
+
+    /// endCallInternal must cancel the offer retry task.
+    func test_endCallInternal_cancelsOfferRetryTask() throws {
+        let source = try callManagerSource()
+        guard let endInternalRange = source.range(of: "func endCallInternal(reason:") else {
+            XCTFail("endCallInternal not found"); return
+        }
+        guard let nextFuncRange = source.range(of: "\n    private func ", range: endInternalRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not isolate endCallInternal body"); return
+        }
+        let body = String(source[endInternalRange.upperBound..<nextFuncRange.lowerBound])
+        XCTAssertTrue(
+            body.contains("offerRetryTask?.cancel()"),
+            "endCallInternal must cancel offerRetryTask — otherwise the backoff loop " +
+            "continues emitting SDP offers to a torn-down call room for the duration " +
+            "of the 1.5s settle window where currentCallId is still non-nil")
+        XCTAssertTrue(
+            body.contains("answerRetryTask?.cancel()"),
+            "endCallInternal must cancel answerRetryTask — same reasoning as offerRetryTask")
+    }
+
+    /// emitOfferWithRetry must check Task.isCancelled so cancellation from
+    /// endCallInternal exits the loop without waiting for the next sleep cycle.
+    func test_emitOfferWithRetry_checksCancellation() throws {
+        let source = try callManagerSource()
+        guard let methodRange = source.range(of: "func emitOfferWithRetry(") else {
+            XCTFail("emitOfferWithRetry not found"); return
+        }
+        guard let closingBrace = source.range(of: "\n    }", range: methodRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not isolate emitOfferWithRetry body"); return
+        }
+        let body = String(source[methodRange.upperBound..<closingBrace.lowerBound])
+        XCTAssertTrue(
+            body.contains("Task.isCancelled"),
+            "emitOfferWithRetry must check Task.isCancelled — the generation guard alone " +
+            "only catches cancellation AFTER waking from sleep; Task.isCancelled exits " +
+            "immediately when the task was cancelled while the sleep was ongoing")
+    }
 }
 
 // MARK: - CallKit Hold/Unhold Tests
