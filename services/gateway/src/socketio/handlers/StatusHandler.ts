@@ -50,7 +50,8 @@ export class StatusHandler {
   }
 
   invalidateIdentityCache(userId: string): void {
-    this.identityCache.delete(userId);
+    this.identityCache.delete(`user:${userId}`);
+    this.identityCache.delete(`anon:${userId}`);
   }
 
   clearTypingThrottle(userId: string): void {

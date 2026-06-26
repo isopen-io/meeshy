@@ -201,6 +201,23 @@ describe('ReactionHandler', () => {
 
       expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'db down' }));
     });
+
+    it('returns generic error message when thrown value is not an Error instance', async () => {
+      const { handler } = buildHandler({
+        reactionService: { addReaction: jest.fn<any>().mockRejectedValue('string error'), createUpdateEvent: jest.fn<any>() },
+      });
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, callback);
+
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Failed to add reaction' }));
+    });
+
+    it('does not throw when no callback provided on happy path', async () => {
+      const { handler } = buildHandler();
+
+      await expect(handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' })).resolves.toBeUndefined();
+    });
   });
 
   // ── handleReactionRemove ─────────────────────────────────────────────────
@@ -213,6 +230,25 @@ describe('ReactionHandler', () => {
       await handler.handleReactionRemove(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, callback);
 
       expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+    });
+
+    it('returns schema error when validation fails', async () => {
+      (validateSocketEvent as jest.Mock<any>).mockReturnValueOnce({ success: false, error: 'emoji required' });
+      const { handler } = buildHandler();
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionRemove(makeSocket(), { messageId: MESSAGE_ID, emoji: '' }, callback);
+
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'emoji required' });
+    });
+
+    it('returns error when participant cannot be resolved (optimistic messageId)', async () => {
+      const { handler } = buildHandler();
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionRemove(makeSocket(), { messageId: 'cid_optimistic', emoji: '👍' }, callback);
+
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Could not resolve participant' }));
     });
 
     it('returns error when removeReaction returns false (reaction not found)', async () => {
@@ -235,6 +271,36 @@ describe('ReactionHandler', () => {
       expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
       expect(io.to).toHaveBeenCalled();
     });
+
+    it('returns error on service exception (Error instance)', async () => {
+      const { handler } = buildHandler({
+        reactionService: { removeReaction: jest.fn<any>().mockRejectedValue(new Error('remove failed')), createUpdateEvent: jest.fn<any>() },
+      });
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionRemove(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, callback);
+
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'remove failed' }));
+    });
+
+    it('returns generic error message when thrown value is not an Error instance', async () => {
+      const { handler } = buildHandler({
+        reactionService: { removeReaction: jest.fn<any>().mockRejectedValue('plain string error'), createUpdateEvent: jest.fn<any>() },
+      });
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionRemove(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, callback);
+
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Failed to remove reaction' }));
+    });
+
+    it('does not throw when no callback provided on error', async () => {
+      const { handler } = buildHandler({
+        reactionService: { removeReaction: jest.fn<any>().mockRejectedValue(new Error('boom')), createUpdateEvent: jest.fn<any>() },
+      });
+
+      await expect(handler.handleReactionRemove(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' })).resolves.toBeUndefined();
+    });
   });
 
   // ── handleReactionSync ───────────────────────────────────────────────────
@@ -247,6 +313,15 @@ describe('ReactionHandler', () => {
       await handler.handleReactionSync(makeSocket(), MESSAGE_ID, callback);
 
       expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+    });
+
+    it('returns error when participant cannot be resolved (optimistic messageId)', async () => {
+      const { handler } = buildHandler();
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionSync(makeSocket(), 'cid_optimistic', callback);
+
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Could not resolve participant' }));
     });
 
     it('returns success with reaction list on happy path', async () => {
@@ -270,6 +345,41 @@ describe('ReactionHandler', () => {
       await handler.handleReactionSync(makeSocket(), MESSAGE_ID, callback);
 
       expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'timeout' }));
+    });
+
+    it('returns generic error message when thrown value is not an Error instance', async () => {
+      const { handler } = buildHandler({
+        reactionService: { getMessageReactions: jest.fn<any>().mockRejectedValue('plain string'), addReaction: jest.fn(), removeReaction: jest.fn(), createUpdateEvent: jest.fn() },
+      });
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionSync(makeSocket(), MESSAGE_ID, callback);
+
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Failed to sync reactions' }));
+    });
+
+    it('does not throw when no callback provided on error', async () => {
+      const { handler } = buildHandler({
+        reactionService: { getMessageReactions: jest.fn<any>().mockRejectedValue(new Error('boom')), addReaction: jest.fn(), removeReaction: jest.fn(), createUpdateEvent: jest.fn() },
+      });
+
+      await expect(handler.handleReactionSync(makeSocket(), MESSAGE_ID)).resolves.toBeUndefined();
+    });
+  });
+
+  // ── _createReactionNotification error swallow ────────────────────────────
+
+  describe('notification error handling', () => {
+    it('swallows notifyReactionAdded rejection without propagating to caller', async () => {
+      const { notifyReactionAdded } = require('../../../services/notifications/reactionNotify');
+      (notifyReactionAdded as jest.Mock<any>).mockRejectedValueOnce(new Error('push service down'));
+
+      const { handler } = buildHandler();
+      const callback = jest.fn<any>();
+
+      await expect(handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, callback)).resolves.toBeUndefined();
+      // Callback still reported success — notification failure is fire-and-forget
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
   });
 });

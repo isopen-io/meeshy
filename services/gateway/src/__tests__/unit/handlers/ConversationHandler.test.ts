@@ -1,0 +1,327 @@
+/**
+ * Unit tests for ConversationHandler.
+ * Covers conversation:join (validation, membership checks, ban, left, success),
+ * conversation:leave, and sendConversationStatsToSocket.
+ */
+
+jest.mock('@meeshy/shared/types/socketio-events', () => ({
+  SERVER_EVENTS: {
+    CONVERSATION_JOINED: 'conversation:joined',
+    CONVERSATION_LEFT: 'conversation:left',
+    CONVERSATION_JOIN_ERROR: 'conversation:join-error',
+    CONVERSATION_STATS: 'conversation:stats',
+    ERROR: 'error',
+  },
+  ROOMS: {
+    conversation: (id: string) => `conversation:${id}`,
+  },
+}));
+
+jest.mock('../../../utils/logger-enhanced', () => ({
+  enhancedLogger: {
+    child: () => ({ error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() }),
+  },
+}));
+
+jest.mock('../../../middleware/validation', () => ({
+  validateSocketEvent: jest.fn((_schema: unknown, data: unknown) => ({ success: true, data })),
+}));
+
+jest.mock('../../../validation/socket-event-schemas', () => ({
+  SocketConversationJoinSchema: {},
+  SocketConversationLeaveSchema: {},
+}));
+
+jest.mock('../../../services/ConversationStatsService', () => ({
+  conversationStatsService: {
+    updateOnNewMessage: jest.fn().mockResolvedValue(null),
+  },
+}));
+
+import { ConversationHandler } from '../../../socketio/handlers/ConversationHandler';
+import { validateSocketEvent } from '../../../middleware/validation';
+import { conversationStatsService } from '../../../services/ConversationStatsService';
+import type { ConversationHandlerDependencies } from '../../../socketio/handlers/ConversationHandler';
+
+const mockedValidate = validateSocketEvent as jest.Mock;
+const mockedStats = conversationStatsService.updateOnNewMessage as jest.Mock;
+
+const CONV_ID = 'cccccc000000000000000003';
+const USER_ID = 'user-xyz';
+const SOCKET_ID = 'socket-abc';
+
+// ─── Fakes ────────────────────────────────────────────────────────────────────
+
+function makeSocket() {
+  const join = jest.fn().mockResolvedValue(undefined);
+  const leave = jest.fn().mockResolvedValue(undefined);
+  const emit = jest.fn();
+  return { id: SOCKET_ID, join, leave, emit };
+}
+
+function makePrisma(overrides: Partial<{
+  conversationFindUnique: unknown;
+  participantFindFirst: unknown;
+}> = {}) {
+  return {
+    conversation: {
+      findUnique: jest.fn().mockResolvedValue(
+        overrides.conversationFindUnique !== undefined
+          ? overrides.conversationFindUnique
+          : null
+      ),
+    },
+    participant: {
+      findFirst: jest.fn().mockResolvedValue(
+        overrides.participantFindFirst !== undefined
+          ? overrides.participantFindFirst
+          : { id: 'part-1', bannedAt: null, leftAt: null, isActive: true }
+      ),
+    },
+  } as any;
+}
+
+function makeConnectedUsers() {
+  const map = new Map<string, unknown>();
+  map.set(USER_ID, { id: USER_ID, isAnonymous: false, language: 'fr' });
+  return map;
+}
+
+function makeSocketToUser() {
+  const map = new Map<string, string>();
+  map.set(SOCKET_ID, USER_ID);
+  return map;
+}
+
+function makeDeps(overrides: Partial<{
+  prisma: ReturnType<typeof makePrisma>;
+  connectedUsers: Map<string, unknown>;
+  socketToUser: Map<string, string>;
+}> = {}): ConversationHandlerDependencies {
+  return {
+    prisma: (overrides.prisma ?? makePrisma()) as any,
+    connectedUsers: (overrides.connectedUsers ?? makeConnectedUsers()) as any,
+    socketToUser: overrides.socketToUser ?? makeSocketToUser(),
+  };
+}
+
+const JOIN_PAYLOAD = { conversationId: CONV_ID };
+const LEAVE_PAYLOAD = { conversationId: CONV_ID };
+
+// ─── Tests ────────────────────────────────────────────────────────────────────
+
+describe('ConversationHandler', () => {
+
+  beforeEach(() => {
+    mockedValidate.mockImplementation((_schema, data) => ({ success: true, data }));
+    mockedStats.mockResolvedValue(null);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  // ─── handleConversationJoin: validation guard ──────────────────────────────
+
+  describe('handleConversationJoin — validation guard', () => {
+    it('emits conversation:join-error when validation fails', async () => {
+      mockedValidate.mockReturnValue({ success: false, error: 'invalid' });
+      const deps = makeDeps();
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+      await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
+      expect(socket.emit).toHaveBeenCalledWith('conversation:join-error', expect.objectContaining({
+        reason: 'invalid_payload',
+      }));
+      expect(socket.join).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── handleConversationJoin: membership checks ────────────────────────────
+
+  describe('handleConversationJoin — membership checks', () => {
+    it('emits not_a_member error when participant is not found', async () => {
+      const prisma = makePrisma({ participantFindFirst: null });
+      const deps = makeDeps({ prisma });
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+      await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
+      expect(socket.emit).toHaveBeenCalledWith('conversation:join-error', expect.objectContaining({
+        reason: 'not_a_member',
+      }));
+    });
+
+    it('emits banned error when participant is banned', async () => {
+      const prisma = makePrisma({ participantFindFirst: { id: 'p1', bannedAt: new Date(), leftAt: null, isActive: true } });
+      const deps = makeDeps({ prisma });
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+      await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
+      expect(socket.emit).toHaveBeenCalledWith('conversation:join-error', expect.objectContaining({
+        reason: 'banned',
+      }));
+    });
+
+    it('emits no_longer_member error when participant leftAt is set', async () => {
+      const prisma = makePrisma({ participantFindFirst: { id: 'p1', bannedAt: null, leftAt: new Date(), isActive: true } });
+      const deps = makeDeps({ prisma });
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+      await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
+      expect(socket.emit).toHaveBeenCalledWith('conversation:join-error', expect.objectContaining({
+        reason: 'no_longer_member',
+      }));
+    });
+
+    it('emits no_longer_member error when participant isActive is false', async () => {
+      const prisma = makePrisma({ participantFindFirst: { id: 'p1', bannedAt: null, leftAt: null, isActive: false } });
+      const deps = makeDeps({ prisma });
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+      await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
+      expect(socket.emit).toHaveBeenCalledWith('conversation:join-error', expect.objectContaining({
+        reason: 'no_longer_member',
+      }));
+    });
+  });
+
+  // ─── handleConversationJoin: success path ─────────────────────────────────
+
+  describe('handleConversationJoin — success', () => {
+    it('joins the socket to the conversation room', async () => {
+      const deps = makeDeps();
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+      await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
+      expect(socket.join).toHaveBeenCalledWith(`conversation:${CONV_ID}`);
+    });
+
+    it('emits conversation:joined event after joining', async () => {
+      const deps = makeDeps();
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+      await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
+      expect(socket.emit).toHaveBeenCalledWith('conversation:joined', {
+        conversationId: CONV_ID,
+        userId: USER_ID,
+      });
+    });
+
+    it('joins room even when socket user is not authenticated (no participant check)', async () => {
+      const deps = makeDeps({ socketToUser: new Map() });
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+      await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
+      expect(socket.join).toHaveBeenCalledWith(`conversation:${CONV_ID}`);
+      expect(socket.emit).not.toHaveBeenCalledWith('conversation:joined', expect.anything());
+    });
+
+    it('emits conversation:stats when stats service returns data', async () => {
+      const stats = { memberCount: 5, onlineCount: 2 };
+      mockedStats.mockResolvedValue(stats);
+      const deps = makeDeps();
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+      await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
+      expect(socket.emit).toHaveBeenCalledWith('conversation:stats', expect.objectContaining({ stats }));
+    });
+
+    it('does not emit conversation:stats when stats service returns null', async () => {
+      mockedStats.mockResolvedValue(null);
+      const deps = makeDeps();
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+      await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
+      expect(socket.emit).not.toHaveBeenCalledWith('conversation:stats', expect.anything());
+    });
+  });
+
+  // ─── handleConversationJoin: error handling ───────────────────────────────
+
+  describe('handleConversationJoin — error handling', () => {
+    it('emits server_error when an unexpected error is thrown', async () => {
+      const prisma = makePrisma();
+      prisma.participant.findFirst.mockRejectedValue(new Error('DB down'));
+      const deps = makeDeps({ prisma });
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+      await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
+      expect(socket.emit).toHaveBeenCalledWith('conversation:join-error', expect.objectContaining({
+        reason: 'server_error',
+      }));
+    });
+  });
+
+  // ─── handleConversationLeave ──────────────────────────────────────────────
+
+  describe('handleConversationLeave', () => {
+    it('leaves the conversation room', async () => {
+      const deps = makeDeps();
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+      await handler.handleConversationLeave(socket as any, LEAVE_PAYLOAD);
+      expect(socket.leave).toHaveBeenCalledWith(`conversation:${CONV_ID}`);
+    });
+
+    it('emits conversation:left when socket user is authenticated', async () => {
+      const deps = makeDeps();
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+      await handler.handleConversationLeave(socket as any, LEAVE_PAYLOAD);
+      expect(socket.emit).toHaveBeenCalledWith('conversation:left', {
+        conversationId: CONV_ID,
+        userId: USER_ID,
+      });
+    });
+
+    it('does not emit conversation:left when socket user is not authenticated', async () => {
+      const deps = makeDeps({ socketToUser: new Map() });
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+      await handler.handleConversationLeave(socket as any, LEAVE_PAYLOAD);
+      expect(socket.emit).not.toHaveBeenCalledWith('conversation:left', expect.anything());
+    });
+
+    it('emits error event when validation fails', async () => {
+      mockedValidate.mockReturnValue({ success: false, error: 'bad-schema' });
+      const deps = makeDeps();
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+      await handler.handleConversationLeave(socket as any, LEAVE_PAYLOAD);
+      expect(socket.emit).toHaveBeenCalledWith('error', expect.objectContaining({ message: 'bad-schema' }));
+      expect(socket.leave).not.toHaveBeenCalled();
+    });
+
+  });
+
+  // ─── sendConversationStatsToSocket ────────────────────────────────────────
+
+  describe('sendConversationStatsToSocket', () => {
+    it('emits conversation:stats when stats are available', async () => {
+      const stats = { memberCount: 10 };
+      mockedStats.mockResolvedValue(stats);
+      const deps = makeDeps();
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+      await handler.sendConversationStatsToSocket(socket as any, CONV_ID);
+      expect(socket.emit).toHaveBeenCalledWith('conversation:stats', { conversationId: CONV_ID, stats });
+    });
+
+    it('does not emit when stats service returns null', async () => {
+      mockedStats.mockResolvedValue(null);
+      const deps = makeDeps();
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+      await handler.sendConversationStatsToSocket(socket as any, CONV_ID);
+      expect(socket.emit).not.toHaveBeenCalled();
+    });
+
+    it('does not throw when stats service throws', async () => {
+      mockedStats.mockRejectedValue(new Error('stats error'));
+      const deps = makeDeps();
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+      await expect(handler.sendConversationStatsToSocket(socket as any, CONV_ID)).resolves.toBeUndefined();
+    });
+  });
+});

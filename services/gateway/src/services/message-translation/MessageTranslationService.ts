@@ -119,6 +119,7 @@ export class MessageTranslationService extends EventEmitter {
     this.zmqClient.removeAllListeners('audioProcessError');
     this.zmqClient.removeAllListeners('voiceTranslationCompleted');
     this.zmqClient.removeAllListeners('voiceTranslationFailed');
+    this.zmqClient.removeAllListeners('translationReady');
 
     // Enregistrer les nouveaux listeners
     // Each handler is async — wrap with safeZmqHandler so an unhandled rejection
@@ -981,7 +982,9 @@ export class MessageTranslationService extends EventEmitter {
         durationMs: data.transcription.durationMs || attachment.duration || 0
       };
 
-      if (data.transcription.segments && data.transcription.segments.length > 0) {
+      if (!data.transcription.segments || data.transcription.segments.length === 0) {
+        logger.warn('Transcription received without segments');
+      } else {
         logger.debug(`Transcription: ${data.transcription.segments.length} segments, lang=${data.transcription.language}`);
       }
 

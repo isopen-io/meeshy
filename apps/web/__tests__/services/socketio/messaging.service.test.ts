@@ -1108,6 +1108,7 @@ describe('MessagingService', () => {
 
       const result = await svc.sendMessage(socket as unknown as TypedSocket, makeSendOptions());
       expect(result.success).toBe(false);
+      expect(socket.emit).not.toHaveBeenCalled();
     });
 
     it('skips encryption when mode is null', async () => {

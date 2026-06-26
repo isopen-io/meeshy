@@ -1090,17 +1090,25 @@ class ConversationViewModel: ObservableObject {
     /// never appears twice. Result is sorted by `createdAt`.
     private func mergeIntoMessages(_ incoming: [Message]) -> [Message] {
         let incomingIds = Set(incoming.map(\.id))
-        let preserved = messages.filter { !incomingIds.contains($0.id) }
+        // Preserve in-memory messages not yet in the incoming GRDB snapshot, EXCEPT
+        // optimistic rows whose server-acked counterpart is already present: keeping
+        // them would produce a duplicate bubble (temp-X + server-Y for the same msg).
+        let preserved = messages.filter { msg in
+            guard !incomingIds.contains(msg.id) else { return false }
+            if let serverId = pendingServerIds[msg.id] { return !incomingIds.contains(serverId) }
+            return true
+        }
         let result = preserved.isEmpty ? incoming : (incoming + preserved).sorted { $0.createdAt < $1.createdAt }
 
-        // BUG1 diagnostics — this merge is supposed to NEVER drop a displayed row
-        // (it preserves anything not in `incoming`). If this fires, the loss is an
-        // id-identity problem (e.g. an optimistic cid replaced by a serverId so
-        // the "same" message changes id and the old row is neither matched nor
-        // preserved). Logs the count delta + a sample of dropped ids + how many
-        // were in-flight/failed so we can correlate with the send timeline.
+        // Diagnostic: detect rows that disappeared without a known server-ack reconciliation.
+        // Drops caused by pendingServerIds reconciliation (temp→server swap) are expected
+        // and excluded from the error log.
         let beforeIds = Set(messages.map(\.id))
-        let droppedIds = beforeIds.subtracting(Set(result.map(\.id)))
+        let resultIds = Set(result.map(\.id))
+        let droppedIds = beforeIds.subtracting(resultIds).filter { tempId in
+            guard let serverId = pendingServerIds[tempId] else { return true }
+            return !resultIds.contains(serverId)
+        }
         if !droppedIds.isEmpty {
             let inFlight = messages.filter { droppedIds.contains($0.id) }
                 .filter { m in
