@@ -75,6 +75,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     private(set) var videoFilterPipeline = VideoFilterPipeline()
     private var transcriptionDataChannel: RTCDataChannel?
     private var dataChannelPingTask: Task<Void, Never>?
+    private var toggleVideoTask: Task<Void, Never>?
     private let _audioEffectsService: CallAudioEffectsService
 
     var audioEffectsService: CallAudioEffectsServiceProviding? { _audioEffectsService }
@@ -130,7 +131,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         // resolving as soon as setConfiguration runs, so ICE checks can begin
         // immediately after the SDP answer is sent — typically shaving 200–400ms
         // off the connect time on cellular.
-        config.iceCandidatePoolSize = QualityThresholds.iceCandidatePoolSize
+        config.iceCandidatePoolSize = Int32(QualityThresholds.iceCandidatePoolSize)
 
         let constraints = RTCMediaConstraints(
             mandatoryConstraints: nil,
@@ -810,8 +811,15 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         // even though the encoder is fed disabled frames. Stopping the
         // capturer frees ~80–150 mA on iPhone 13. On re-enable we restart
         // the capturer with the same camera/format/fps as the initial start.
-        Task { [weak self] in
-            guard let self else { return }
+        //
+        // Cancel any in-flight capturer task from a prior toggle so only the
+        // most-recent intent races to the camera. The pending task is cancelled
+        // before it starts (isCancelled check at entry); if it has already
+        // suspended inside startCapture/stopCapture it finishes atomically —
+        // the new task then runs after and leaves the camera in the correct state.
+        toggleVideoTask?.cancel()
+        toggleVideoTask = Task { [weak self] in
+            guard let self, !Task.isCancelled else { return }
             if enabled {
                 await self.restartCapturerIfStopped()
             } else {
@@ -894,8 +902,20 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             return
         }
         let fps = targetFrameRate(for: format)
+        // Capture the session generation before the async suspension point.
+        // If disconnect() is called while startCapture is in flight (0.5–3 s
+        // warm-up window), `sessionGeneration` is incremented and the post-await
+        // check detects the stale context — stopping the orphan capturer via
+        // the local reference before returning, mirroring the identical guard
+        // in buildLocalVideoTrackAndStartCapture.
+        let generation = sessionGeneration
         do {
             try await capturer.startCapture(with: camera, format: format, fps: fps)
+            if generation != sessionGeneration {
+                Logger.webrtc.warning("[WEBRTC] session changed during capturer restart — stopping orphan capture")
+                await capturer.stopCapture()
+                return
+            }
             Logger.webrtc.info("[WEBRTC] capturer restarted on toggleVideo(true) (\(fps)fps)")
         } catch {
             Logger.webrtc.error("[WEBRTC] capturer restart failed: \(error.localizedDescription)")
@@ -1078,6 +1098,8 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     func disconnect() {
         sessionGeneration += 1
         _audioEffectsService.reset()
+        toggleVideoTask?.cancel()
+        toggleVideoTask = nil
         stopDataChannelPing()
         transcriptionDataChannel?.close()
         transcriptionDataChannel = nil

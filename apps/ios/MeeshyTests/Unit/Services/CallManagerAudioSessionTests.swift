@@ -667,6 +667,62 @@ final class P2PWebRTCClientPerfectNegotiationTests: XCTestCase {
             "selectFormat(for:) must reference VideoConfig.hd720p30.maxFrameRate for fps ceiling"
         )
     }
+
+    func test_p2pClient_toggleVideo_cancelsStaleTask() throws {
+        // Regression guard: toggleVideo must cancel any in-flight capturer task from
+        // a prior toggle before spawning a new one. Without this, a rapid off→on
+        // sequence leaves both tasks in flight — if disconnect() fires while the
+        // startCapture task is suspended the old stopCapture task can run after
+        // startCapture completes, leaving the camera stopped with LED off but
+        // `videoCapturer` still pointing at a running session.
+        //
+        // Structural invariants:
+        //  1. `toggleVideoTask` property exists (task reference is stored)
+        //  2. `toggleVideoTask?.cancel()` is called before the new task is created
+        //  3. The new task checks `!Task.isCancelled` before starting camera work
+        let source = try p2pClientSource()
+
+        XCTAssertTrue(
+            source.contains("private var toggleVideoTask: Task<Void, Never>?"),
+            "P2PWebRTCClient must declare `private var toggleVideoTask` to track the in-flight capturer task"
+        )
+        XCTAssertTrue(
+            source.contains("toggleVideoTask?.cancel()"),
+            "toggleVideo must cancel the previous task before spawning a new one — prevents stale task races"
+        )
+        XCTAssertTrue(
+            source.contains("!Task.isCancelled"),
+            "The toggleVideoTask body must check !Task.isCancelled before performing camera operations"
+        )
+    }
+
+    func test_p2pClient_restartCapturerIfStopped_hasSessionGenerationGuard() throws {
+        // Regression guard: restartCapturerIfStopped must capture sessionGeneration
+        // before `await capturer.startCapture(...)` and compare it after, stopping
+        // the orphan capturer if the call ended (disconnect() increments the token)
+        // during the 0.5–3 s camera warm-up window.
+        //
+        // Without this guard, a call that ends during toggleVideo(true) leaves the
+        // capturer running with `videoCapturer == nil` — there is no path that will
+        // ever stop the LED. The pattern mirrors `buildLocalVideoTrackAndStartCapture`
+        // which already has the generation check.
+        let source = try p2pClientSource()
+
+        guard let fnRange = source.range(of: "private func restartCapturerIfStopped()") else {
+            XCTFail("restartCapturerIfStopped not found in P2PWebRTCClient.swift"); return
+        }
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1200, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        XCTAssertTrue(
+            fnBody.contains("let generation = sessionGeneration"),
+            "restartCapturerIfStopped must capture sessionGeneration before the startCapture await"
+        )
+        XCTAssertTrue(
+            fnBody.contains("generation != sessionGeneration"),
+            "restartCapturerIfStopped must compare generation after startCapture to detect a call-end during warm-up"
+        )
+    }
 }
 
 // MARK: - CallView PiP Landscape Safe Area Source Guards
