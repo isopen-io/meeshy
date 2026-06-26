@@ -1903,3 +1903,284 @@ final class LocalMediaStartHelperTests: XCTestCase {
         )
     }
 }
+
+// MARK: - Audio interruption always-reactivate guard
+
+/// Verifies that `handleAudioInterruption` ALWAYS re-enables the RTCAudioSession
+/// when an interruption ends, regardless of whether iOS includes the
+/// `.shouldResume` option hint. iOS frequently omits this hint after alarms,
+/// Siri, and GSM calls — relying on it as a gate leaves calls permanently silent.
+@MainActor
+final class AudioInterruptionReactivationTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func interruptionHandlerBody(in source: String) -> String? {
+        guard let range = source.range(of: "func handleAudioInterruption(") else { return nil }
+        let bodyEnd = [
+            source.range(of: "\n    @MainActor\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<bodyEnd])
+    }
+
+    /// `isAudioEnabled = true` must appear OUTSIDE the `shouldResume` branch so
+    /// it runs unconditionally when the interruption ends.
+    func test_handleAudioInterruption_ended_alwaysEnablesRTC_notGatedOnShouldResume() throws {
+        let source = try callManagerSource()
+        guard let body = interruptionHandlerBody(in: source) else {
+            XCTFail("handleAudioInterruption not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("rtc.isAudioEnabled = true"),
+            "handleAudioInterruption must re-enable RTCAudioSession when interruption ends — " +
+            "iOS omits shouldResume after alarms/Siri/GSM calls, so reactivation cannot be gated on the hint"
+        )
+        // Verify reactivation is UNCONDITIONAL (not inside the `.shouldResume` conditional block).
+        // The `.shouldResume` branch only affects logging; the `audioSessionQueue.async` block
+        // with `isAudioEnabled = true` must fall outside it.
+        guard let shouldResumeRange = body.range(of: "shouldResume") else {
+            XCTFail("shouldResume check not found — expected conditional log for diagnostic purposes"); return
+        }
+        guard let enableRange = body.range(of: "rtc.isAudioEnabled = true") else {
+            XCTFail("rtc.isAudioEnabled = true not found"); return
+        }
+        // `audioSessionQueue.async` (the reactivation block) must start AFTER the
+        // shouldResume conditional log, not inside it.
+        guard let asyncRange = body.range(of: "audioSessionQueue.async") else {
+            XCTFail("audioSessionQueue.async not found — interruption handler must use the audio session queue"); return
+        }
+        XCTAssertGreaterThan(
+            asyncRange.lowerBound,
+            shouldResumeRange.lowerBound,
+            "The audioSessionQueue.async reactivation block must follow (not nest inside) the shouldResume log"
+        )
+        XCTAssertGreaterThan(
+            enableRange.lowerBound,
+            shouldResumeRange.lowerBound,
+            "rtc.isAudioEnabled = true must appear after the shouldResume check, confirming it is unconditional"
+        )
+    }
+
+    /// The handler must call `rtc.audioSessionDidActivate` before enabling audio,
+    /// because RTCAudioSession requires the system AVAudioSession to be active first.
+    func test_handleAudioInterruption_ended_bridgesSystemSessionBeforeEnabling() throws {
+        let source = try callManagerSource()
+        guard let body = interruptionHandlerBody(in: source) else {
+            XCTFail("handleAudioInterruption not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("audioSessionDidActivate"),
+            "handleAudioInterruption must call rtc.audioSessionDidActivate(AVAudioSession.sharedInstance()) " +
+            "to bridge the system session back into WebRTC before setting isAudioEnabled = true"
+        )
+        guard let bridgeRange = body.range(of: "audioSessionDidActivate"),
+              let enableRange = body.range(of: "isAudioEnabled = true") else { return }
+        XCTAssertLessThan(
+            bridgeRange.lowerBound,
+            enableRange.lowerBound,
+            "audioSessionDidActivate must be called before isAudioEnabled = true — " +
+            "enabling audio before the bridge causes WebRTC to try to use a deactivated session"
+        )
+    }
+
+    /// The handler must guard `callState.isActive` to avoid reactivating the audio
+    /// session for a notification that arrives after the call has ended.
+    func test_handleAudioInterruption_guardsCallStateIsActive() throws {
+        let source = try callManagerSource()
+        guard let body = interruptionHandlerBody(in: source) else {
+            XCTFail("handleAudioInterruption not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("callState.isActive"),
+            "handleAudioInterruption must guard callState.isActive — " +
+            "the notification can arrive after the call has ended"
+        )
+    }
+}
+
+// MARK: - Audio route change state reconciliation guard
+
+/// Verifies that `handleAudioRouteChange` correctly reconciles the `isSpeaker`
+/// flag when the audio route changes externally (Bluetooth connect/disconnect).
+@MainActor
+final class AudioRouteChangeStateReconciliationTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func routeChangeHandlerBody(in source: String) -> String? {
+        guard let range = source.range(of: "func handleAudioRouteChange(") else { return nil }
+        let bodyEnd = [
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    @MainActor\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<bodyEnd])
+    }
+
+    /// When a new device (Bluetooth, headset) becomes available, `isSpeaker` must
+    /// be set to false — iOS automatically routes audio to the new device, and the
+    /// UI must reflect that the built-in speaker is no longer active.
+    func test_handleAudioRouteChange_newDeviceAvailable_setsSpeakerFalse() throws {
+        let source = try callManagerSource()
+        guard let body = routeChangeHandlerBody(in: source) else {
+            XCTFail("handleAudioRouteChange not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("newDeviceAvailable"),
+            "handleAudioRouteChange must handle the .newDeviceAvailable case"
+        )
+        XCTAssertTrue(
+            body.contains("isSpeaker = false"),
+            "handleAudioRouteChange must set isSpeaker = false when a new audio device connects — " +
+            "iOS routes to the new device automatically and the UI speaker button must reflect this"
+        )
+    }
+
+    /// When a device is removed (Bluetooth disconnect, headset unplug), iOS routes
+    /// back to the built-in receiver. We must re-apply the current `isSpeaker`
+    /// preference so `applySpeakerRoute` ensures the correct output port is set.
+    func test_handleAudioRouteChange_oldDeviceUnavailable_reappliesSpeakerRoute() throws {
+        let source = try callManagerSource()
+        guard let body = routeChangeHandlerBody(in: source) else {
+            XCTFail("handleAudioRouteChange not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("oldDeviceUnavailable"),
+            "handleAudioRouteChange must handle the .oldDeviceUnavailable case"
+        )
+        guard let oldDeviceRange = body.range(of: "oldDeviceUnavailable") else { return }
+        let afterOldDevice = String(body[oldDeviceRange.upperBound...])
+        XCTAssertTrue(
+            afterOldDevice.contains("applySpeakerRoute()"),
+            "handleAudioRouteChange must call applySpeakerRoute() after a device becomes unavailable — " +
+            "this re-applies the user's speaker preference to the newly-selected built-in route"
+        )
+    }
+
+    /// The `.override` case (our own `overrideOutputAudioPort` call) must NOT
+    /// call `applySpeakerRoute()` again — doing so would create an infinite loop
+    /// (applySpeakerRoute → override → routeChange → applySpeakerRoute → …).
+    func test_handleAudioRouteChange_override_doesNotCallApplySpeakerRoute() throws {
+        let source = try callManagerSource()
+        guard let body = routeChangeHandlerBody(in: source) else {
+            XCTFail("handleAudioRouteChange not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("override"),
+            "handleAudioRouteChange must handle the .override case"
+        )
+        guard let overrideRange = body.range(of: "case .override") else {
+            XCTFail(".override case not found"); return
+        }
+        // Find the end of the .override case block (the `default:` label or next case).
+        let afterOverride = String(body[overrideRange.upperBound...])
+        let boundaries = [
+            afterOverride.range(of: "\n        case ")?.lowerBound,
+            afterOverride.range(of: "\n        default:")?.lowerBound,
+        ].compactMap { $0 }.min()
+        guard let endIdx = boundaries else { return }
+        let overrideBlock = String(afterOverride[afterOverride.startIndex..<endIdx])
+        XCTAssertFalse(
+            overrideBlock.contains("applySpeakerRoute()"),
+            ".override case must not call applySpeakerRoute() — doing so creates a " +
+            "recursive route-change loop (override fires a routeChange notification)"
+        )
+    }
+}
+
+// MARK: - applyNegotiationRole epoch reset guard
+
+/// Verifies that `applyNegotiationRole` resets the negotiation epoch (negotiationId)
+/// to zero at the start of each call. Without this reset, a lingering high-water
+/// mark from the previous call would cause the first offer of the new call to be
+/// rejected as "stale" — silently breaking call setup.
+@MainActor
+final class NegotiationEpochResetTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(of signature: String, in source: String) -> String? {
+        guard let range = source.range(of: signature) else { return nil }
+        let nextBoundary = [
+            source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    @MainActor\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<nextBoundary])
+    }
+
+    /// `applyNegotiationRole` must reset `negotiationId` to 0 so the new call
+    /// starts from a clean epoch. If it did not reset, a negotiationId of (say) 5
+    /// from the last call would reject any offer with generation < 5 as stale.
+    func test_applyNegotiationRole_resetsNegotiationIdToZero() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func applyNegotiationRole()", in: source) else {
+            XCTFail("applyNegotiationRole not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("negotiationId = 0"),
+            "applyNegotiationRole must reset negotiationId to 0 — without this reset, a " +
+            "high-water mark from the previous call rejects the first offer of the new call"
+        )
+    }
+
+    /// `applyNegotiationRole` must be called from the call setup paths so the
+    /// epoch is always clean at the start of any call.
+    func test_applyNegotiationRole_isCalledFromStartCall() throws {
+        let source = try callManagerSource()
+        guard let startCallRange = source.range(of: "func startCall(") else {
+            XCTFail("startCall not found"); return
+        }
+        let bodyEnd = [
+            source.range(of: "\n    func ", range: startCallRange.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: startCallRange.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        let startCallBody = String(source[startCallRange.lowerBound..<bodyEnd])
+        XCTAssertTrue(
+            startCallBody.contains("applyNegotiationRole()"),
+            "startCall must call applyNegotiationRole() to reset the epoch for the new outgoing call"
+        )
+    }
+
+    /// The `acceptIncomingNegotiation` function must advance the high-water mark
+    /// when accepting a signal, so stale duplicates from a churned socket are
+    /// rejected by `isStaleNegotiation`.
+    func test_acceptIncomingNegotiation_advancesHighWaterMark() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func acceptIncomingNegotiation(", in: source) else {
+            XCTFail("acceptIncomingNegotiation not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("negotiationId = max(negotiationId, generation)"),
+            "acceptIncomingNegotiation must advance negotiationId to max(current, incoming) so " +
+            "stale signals from a churned socket buffer are rejected as generations < highWaterMark"
+        )
+    }
+}
