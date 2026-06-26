@@ -515,6 +515,83 @@ final class WebRTCQualityDelegateSourceGuardTests: XCTestCase {
     }
 }
 
+// MARK: - ICE candidate + remote SDP input validation source guards
+
+/// These guards verify that `P2PWebRTCClient` rejects malicious or malformed
+/// inputs before passing them to libwebrtc. libwebrtc processes ICE candidate
+/// strings and SDP blobs in C++ without Swift-level bounds checks; a hostile
+/// signaling peer could otherwise trigger parsing errors or OOM inside the
+/// library.
+@MainActor
+final class WebRTCInputValidationSourceGuardTests: XCTestCase {
+
+    private func p2pClientSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// ICE candidate sdpMLineIndex must be validated in the range 0-255 before
+    /// being passed to RTCIceCandidate. A value of -1 is invalid; INT32_MAX would
+    /// cause an assertion failure inside libwebrtc.
+    func test_addIceCandidate_validatesSDPMLineIndexRange() throws {
+        let src = try p2pClientSource()
+        XCTAssertTrue(
+            src.contains("candidate.sdpMLineIndex >= 0") && src.contains("candidate.sdpMLineIndex <= 255"),
+            "addIceCandidate must validate sdpMLineIndex is in 0-255 before creating RTCIceCandidate — " +
+            "an out-of-range value causes an assertion failure inside libwebrtc."
+        )
+    }
+
+    /// sdpMid is a free-form string from a remote peer; a multi-KB sdpMid would
+    /// cause excessive memory allocation inside RTCIceCandidate parsing.
+    func test_addIceCandidate_validatesSdpMidLength() throws {
+        let src = try p2pClientSource()
+        XCTAssertTrue(
+            src.contains("mid.count <= 256"),
+            "addIceCandidate must check sdpMid length <= 256 to prevent oversized strings " +
+            "from a hostile peer reaching libwebrtc."
+        )
+    }
+
+    /// The candidate SDP line (e.g. 'candidate:...') is parsed by libwebrtc in C++.
+    /// A 100 MB candidate line could cause OOM inside the library.
+    func test_addIceCandidate_validatesCandidateLineLength() throws {
+        let src = try p2pClientSource()
+        XCTAssertTrue(
+            src.contains("candidate.candidate.count <= 10_000"),
+            "addIceCandidate must enforce a 10 KB ceiling on the candidate line — " +
+            "libwebrtc has no app-level length guard and processes the string in C++."
+        )
+    }
+
+    /// Remote SDP must be bounded before being passed to RTCSessionDescription.
+    /// A 1 MB+ SDP payload is never legitimate; an unbounded string could cause OOM.
+    func test_setRemoteAnswer_validatesSDPLength() throws {
+        let src = try p2pClientSource()
+        XCTAssertTrue(
+            src.contains("sdp.count <= 1_000_000"),
+            "validateRemoteSDP must reject SDP blobs over 1 MB — passing arbitrarily " +
+            "large strings to RTCSessionDescription risks OOM inside libwebrtc."
+        )
+    }
+
+    /// The mandatory v=0 line is the first indicator that an SDP is well-formed.
+    /// Rejecting SDPs without it provides early defense against garbage payloads.
+    func test_setRemoteAnswer_rejectsSDPMissingVersionLine() throws {
+        let src = try p2pClientSource()
+        XCTAssertTrue(
+            src.contains("sdp.hasPrefix(\"v=0\")"),
+            "validateRemoteSDP must check that the SDP starts with 'v=0' — the mandatory " +
+            "first line. Any SDP that doesn't start with v=0 is malformed."
+        )
+    }
+}
+
 // MARK: - Testable WebRTC Client
 
 private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
