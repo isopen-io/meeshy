@@ -3580,6 +3580,12 @@ extension CallManager: VideoSurvivalActuating {
     private func applySurvivalVideoSend(enabled: Bool) async -> Bool {
         // Only act while the user still wants video and we're in an active call.
         guard isVideoEnabled, let callId = currentCallId else { return false }
+        // Do NOT resume video if an OS-level suspension is active: a CallKit hold
+        // (cellular pre-emption) or background entry both signal "no camera" to the
+        // peer. A network-quality recovery must not override either of those signals
+        // — the peer would see a false "camera active" even though iOS is either
+        // blocking camera access or has suspended capture for the held call.
+        if enabled && (isVideoSuspendedByHold || isVideoSuspendedByBackground) { return false }
         do {
             let needsRenegotiation: Bool
             if enabled {

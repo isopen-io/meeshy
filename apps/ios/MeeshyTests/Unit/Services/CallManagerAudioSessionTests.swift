@@ -2080,6 +2080,62 @@ final class CallManagerHardeningTests: XCTestCase {
     }
 }
 
+// MARK: - VideoSurvivalController × Hold/Background Interaction Tests
+
+/// Source-analysis tests verifying that VideoSurvivalController cannot re-enable
+/// video during a CallKit hold or when the app is backgrounded.
+@MainActor
+final class CallManagerSurvivalHoldInteractionTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// applySurvivalVideoSend(enabled: true) must guard on isVideoSuspendedByHold.
+    /// A network-quality recovery must not emit "camera active" to the peer while
+    /// the call is held — the peer would see incorrect camera state.
+    func test_applySurvivalVideoSend_guardsHoldOnResume() throws {
+        let source = try callManagerSource()
+        guard let methodRange = source.range(of: "func applySurvivalVideoSend(enabled: Bool) async -> Bool") else {
+            XCTFail("applySurvivalVideoSend not found"); return
+        }
+        guard let closingBrace = source.range(of: "\n    }", range: methodRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not isolate applySurvivalVideoSend body"); return
+        }
+        let body = String(source[methodRange.upperBound..<closingBrace.lowerBound])
+        XCTAssertTrue(
+            body.contains("isVideoSuspendedByHold"),
+            "applySurvivalVideoSend resume path must check isVideoSuspendedByHold — " +
+            "VideoSurvivalController's network-quality recovery must not override a " +
+            "CallKit hold: emitting 'camera active' while on hold lies to the peer")
+    }
+
+    /// applySurvivalVideoSend(enabled: true) must guard on isVideoSuspendedByBackground.
+    /// iOS blocks camera access in the background; restoring video from a quality
+    /// recovery would emit a false "camera active" signal while no frames are produced.
+    func test_applySurvivalVideoSend_guardsBackgroundOnResume() throws {
+        let source = try callManagerSource()
+        guard let methodRange = source.range(of: "func applySurvivalVideoSend(enabled: Bool) async -> Bool") else {
+            XCTFail("applySurvivalVideoSend not found"); return
+        }
+        guard let closingBrace = source.range(of: "\n    }", range: methodRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not isolate applySurvivalVideoSend body"); return
+        }
+        let body = String(source[methodRange.upperBound..<closingBrace.lowerBound])
+        XCTAssertTrue(
+            body.contains("isVideoSuspendedByBackground"),
+            "applySurvivalVideoSend resume path must check isVideoSuspendedByBackground — " +
+            "iOS blocks camera access in the background; a network recovery restoring " +
+            "video would send a false 'camera active' signal with no frames produced")
+    }
+}
+
 // MARK: - CallKit Hold/Unhold Tests
 
 /// Structural tests verifying that CallKit hold events correctly suspend/restore
