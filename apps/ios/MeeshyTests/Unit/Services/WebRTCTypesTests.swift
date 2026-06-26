@@ -757,13 +757,14 @@ final class QualityThresholdsCodecHintsTests: XCTestCase {
     }
 
     func test_opusFmtpMaxPlaybackRate_isAboveMaxAverageBitrate() {
-        // maxplaybackrate is a sample rate (Hz), maxaveragebitrate is a bitrate (bps).
-        // They are not the same unit, but the sample rate will always exceed the
-        // bitrate numerically; this catches an accidental value swap between the two.
-        XCTAssertGreaterThan(
-            QualityThresholds.opusFmtpMaxPlaybackRate,
-            QualityThresholds.opusFmtpMaxAverageBitrate,
-            "maxplaybackrate (Hz) should exceed maxaveragebitrate (bps) numerically — value swap guard"
+        // Swap guard: maxplaybackrate (Hz) and maxaveragebitrate (bps) are
+        // different units, so comparing them numerically is meaningless (48 000 Hz
+        // is legitimately below a 64 000 bps cap). Instead pin maxaveragebitrate to
+        // its expected value — an accidental swap with maxplaybackrate (48 000) would
+        // move it off 64 kbps and fail here, without degrading real audio quality.
+        XCTAssertEqual(
+            QualityThresholds.opusFmtpMaxAverageBitrate, 64_000,
+            "maxaveragebitrate must stay 64 kbps — guards against a value swap with maxplaybackrate"
         )
     }
 
