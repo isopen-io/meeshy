@@ -2556,3 +2556,47 @@ final class CallManagerForegroundRestoreHoldGuardTests: XCTestCase {
         )
     }
 }
+
+// MARK: - Reliability monitor half-open re-arm after reconnect
+
+/// Guards the invariant that `halfOpenSettled` is reset when the call
+/// enters `.reconnecting`. Without the reset, an ICE restart that produces
+/// an asymmetric path (outbound OK, inbound silent) skips the half-open
+/// health check and stays `.connected` with no incoming audio/video.
+@MainActor
+final class CallManagerHalfOpenReArmTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_reliabilityMonitor_reconnectingBranch_resetsHalfOpenSettled() throws {
+        let source = try callManagerSource()
+
+        // Locate the `.reconnecting` branch inside `startReliabilityMonitor`.
+        guard let monitorRange = source.range(of: "private func startReliabilityMonitor()") else {
+            XCTFail("startReliabilityMonitor not found"); return
+        }
+        // The reconnecting branch is a `case .reconnecting` inside the monitor body.
+        let monitorBody = String(source[monitorRange.upperBound...])
+        guard let reconnectingRange = monitorBody.range(of: "case .reconnecting(let attempt):") else {
+            XCTFail(".reconnecting case not found inside startReliabilityMonitor"); return
+        }
+        // Capture enough of the branch body to see the reset.
+        let branchBody = String(monitorBody[reconnectingRange.upperBound...].prefix(600))
+
+        XCTAssertTrue(
+            branchBody.contains("halfOpenSettled = false"),
+            ".reconnecting branch must reset halfOpenSettled = false so the " +
+            "half-open health check re-runs after each ICE restart reconnect. " +
+            "Without this, a post-reconnect asymmetric path (outbound OK, inbound " +
+            "silent) would bypass detection and stay .connected indefinitely."
+        )
+    }
+}

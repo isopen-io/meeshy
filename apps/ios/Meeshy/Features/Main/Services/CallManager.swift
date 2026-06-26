@@ -1886,6 +1886,11 @@ final class CallManager: ObservableObject {
                 case .reconnecting(let attempt):
                     connectingSince = nil
                     connectedSince = nil
+                    // Re-arm half-open detection for the new connection period.
+                    // Without this, an ICE restart that produces an asymmetric path
+                    // (outbound OK but inbound broken) would skip the health check
+                    // and silently stay `.connected` with no incoming audio/video.
+                    halfOpenSettled = false
                     didAttemptConnectingRestart = false
                     // Restart the budget clock whenever a new attempt begins (any
                     // reconnection trigger advanced the counter).
