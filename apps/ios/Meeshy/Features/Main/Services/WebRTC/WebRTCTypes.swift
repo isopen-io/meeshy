@@ -769,6 +769,9 @@ enum WebRTCError: Error, LocalizedError, Sendable {
     case notSupported
     case simulatorVideoUnsupported
     case offerIgnored
+    /// The user has denied camera access in iOS Settings. The call can continue
+    /// as audio-only; the user must re-grant permission to enable video.
+    case cameraPermissionDenied
 
     var errorDescription: String? {
         switch self {
@@ -783,6 +786,8 @@ enum WebRTCError: Error, LocalizedError, Sendable {
             "Use a real device for video calls."
         case .offerIgnored:
             "Colliding offer ignored by the impolite peer (perfect negotiation glare)"
+        case .cameraPermissionDenied:
+            "Camera access denied. Enable it in Settings → Meeshy → Camera."
         }
     }
 }

@@ -1451,6 +1451,22 @@ final class CallManager: ObservableObject {
                     Logger.calls.info("[CALL] A/V switch renegotiation offer sent (video=\(target))")
                 }
                 HapticFeedback.light()
+            } catch WebRTCError.cameraPermissionDenied {
+                Logger.calls.error("toggleVideo failed: camera permission denied — prompting settings redirect")
+                self.isVideoEnabled = false
+                self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
+                // Show a tappable error so the user can open Settings to grant
+                // camera access without ending the audio-only call. The toast's
+                // tap action is the primary affordance; the message text says "tap"
+                // so screen-reader users also know the toast is actionable.
+                FeedbackToastManager.shared.showError(
+                    String(localized: "call.video.permission.denied",
+                           defaultValue: "Caméra : accès refusé — toucher pour ouvrir les Paramètres",
+                           bundle: .main)
+                ) {
+                    guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                    UIApplication.shared.open(url)
+                }
             } catch {
                 Logger.calls.error("toggleVideo failed: \(error.localizedDescription)")
                 self.isVideoEnabled = false

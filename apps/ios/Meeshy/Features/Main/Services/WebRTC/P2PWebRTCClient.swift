@@ -241,6 +241,17 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         throw WebRTCError.simulatorVideoUnsupported
         #else
 
+        // Guard early: if the user has denied camera access, AVCaptureSession
+        // silently fails to start (no throw, no frames) — leaving the local
+        // PiP black and the call in a confused video-enabled state with no
+        // camera. Throw a typed error before we build the track so CallManager
+        // can surface an actionable "open Settings" message instead.
+        let cameraAuth = AVCaptureDevice.authorizationStatus(for: .video)
+        guard cameraAuth != .denied && cameraAuth != .restricted else {
+            Logger.webrtc.error("[WEBRTC] camera access \(cameraAuth == .denied ? "denied" : "restricted") — throwing cameraPermissionDenied")
+            throw WebRTCError.cameraPermissionDenied
+        }
+
         Logger.webrtc.info("[WEBRTC] videoSource begin")
         let videoSource = factory.videoSource()
         Logger.webrtc.info("[WEBRTC] videoTrack begin")
