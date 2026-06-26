@@ -1485,49 +1485,31 @@ export class MeeshySocketIOManager {
     try {
       const normalizedId = await this.normalizeConversationId(conversationId);
 
-      // OPTIMISATION: Récupérer les traductions et déclencher le calcul des stats
-      // en parallèle. Les stats ne sont plus embarquées dans le payload
-      // message:new — elles sont diffusées via l'event dédié `conversation:stats`.
-      // L'appel reste pour son side-effect (update du cache stats).
+      // Translation transform is synchronous (field reshape from MongoDB JSON object
+      // to array). Call directly — no DB query, no await needed.
       let messageTranslations: any[] = [];
-
-      // Lancer les 2 requêtes en parallèle
-      const [translationsResult, statsResult] = await Promise.allSettled([
-        // Utiliser les traductions déjà présentes sur l'objet message (pas de query DB)
-        (async () => {
-          if (!message.id) return [];
-          try {
-            // `message.translations` est déjà le champ JSON MongoDB — éviter un findUnique redondant
-            return transformTranslationsToArray(
-              message.id,
-              message.translations as unknown as Record<string, import('../utils/translation-transformer').MessageTranslationJSON>
-            );
-          } catch (error) {
-            logger.warn(`Translation transform failed for message ${message.id}`, { error });
-            return [];
-          }
-        })(),
-        // OPTIMISATION: Calculer les stats de manière asynchrone
-        // Si c'est long, le broadcast du message ne sera pas bloqué
-        conversationStatsService.updateOnNewMessage(
-          this.prisma,
-          conversationId,  // Utiliser l'ID original (ObjectId) pour Prisma
-          message.originalLanguage || 'fr',
-          () => this.getConnectedUsers()
-        ).catch(error => {
-          logger.warn(`⚠️ [PERF] Erreur calcul stats (non-bloquant): ${error}`);
-          return null; // Continuer même si les stats échouent
-        })
-      ]);
-
-      // Extraire les résultats
-      if (translationsResult.status === 'fulfilled') {
-        messageTranslations = translationsResult.value;
+      if (message.id) {
+        try {
+          messageTranslations = transformTranslationsToArray(
+            message.id,
+            message.translations as unknown as Record<string, import('../utils/translation-transformer').MessageTranslationJSON>
+          );
+        } catch (error) {
+          logger.warn(`Translation transform failed for message ${message.id}`, { error });
+        }
       }
 
-      if (statsResult.status !== 'fulfilled') {
-        logger.warn(`⚠️ [PERF] Calcul stats échoué (non-bloquant), cache non rafraîchi`);
-      }
+      // Fire stats update as true fire-and-forget — it is a non-critical DB side-effect
+      // (cache warm-up for `conversation:stats`). Previously awaited via Promise.allSettled,
+      // which blocked the broadcast by the full duration of the MongoDB write (~10–50ms).
+      conversationStatsService.updateOnNewMessage(
+        this.prisma,
+        conversationId,
+        message.originalLanguage || 'fr',
+        () => this.getConnectedUsers()
+      ).catch(error => {
+        logger.warn(`⚠️ [PERF] Erreur calcul stats (non-bloquant): ${error}`);
+      });
 
       // Construire le payload de message pour broadcast - compatible avec les types existants
       // CORRECTION CRITIQUE: Utiliser l'ObjectId normalisé pour cohérence client-serveur
