@@ -324,5 +324,56 @@ describe('AuthHandler', () => {
       expect(connectedUsers.has('user-123')).toBe(false);
       expect(socketToUser.has('socket-123')).toBe(false);
     });
+
+    it('should call leaveCall with correct args for each active call participation', async () => {
+      (mockPrisma.callParticipant.findMany as jest.Mock).mockResolvedValue([
+        { callSessionId: 'call-1', participantId: 'participant-a' },
+        { callSessionId: 'call-2', participantId: 'participant-b' }
+      ]);
+
+      socketToUser.set('socket-123', 'user-123');
+      connectedUsers.set('user-123', {
+        id: 'user-123',
+        socketId: 'socket-123',
+        isAnonymous: false,
+        language: 'en'
+      });
+      userSockets.set('user-123', new Set(['socket-123']));
+
+      await authHandler.handleDisconnection(createMockSocket());
+
+      expect(mockCallService.leaveCall).toHaveBeenCalledTimes(2);
+      expect(mockCallService.leaveCall).toHaveBeenCalledWith({
+        callId: 'call-1',
+        userId: 'user-123',
+        participantId: 'participant-a'
+      });
+      expect(mockCallService.leaveCall).toHaveBeenCalledWith({
+        callId: 'call-2',
+        userId: 'user-123',
+        participantId: 'participant-b'
+      });
+      // Maps cleaned despite leaving calls
+      expect(connectedUsers.has('user-123')).toBe(false);
+      expect(socketToUser.has('socket-123')).toBe(false);
+    });
+
+    it('should not call leaveCall when there are no active call participations', async () => {
+      (mockPrisma.callParticipant.findMany as jest.Mock).mockResolvedValue([]);
+
+      socketToUser.set('socket-123', 'user-123');
+      connectedUsers.set('user-123', {
+        id: 'user-123',
+        socketId: 'socket-123',
+        isAnonymous: false,
+        language: 'en'
+      });
+      userSockets.set('user-123', new Set(['socket-123']));
+
+      await authHandler.handleDisconnection(createMockSocket());
+
+      expect(mockCallService.leaveCall).not.toHaveBeenCalled();
+      expect(connectedUsers.has('user-123')).toBe(false);
+    });
   });
 });
