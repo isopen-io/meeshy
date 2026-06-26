@@ -2136,15 +2136,14 @@ final class CallManager: ObservableObject {
                 MessageSocketManager.shared.emitCallForegrounded(callId: callId, participantId: userId)
                 Logger.calls.info("Call foregrounded")
                 // Restore the peer's camera-active signal if we suspended it on
-                // background entry. Guard on BOTH user intent (isVideoEnabled) AND
-                // the survival controller: if a poor network caused the survival
-                // controller to suspend video before we backgrounded, it already
-                // sent call:media-toggled false and isVideoSuspended is true —
-                // emitting true here would falsely signal "camera active" to the
-                // peer while we're still not sending frames.
+                // background entry. Guard on ALL suspension sources:
+                // • isVideoSuspended — survival controller dropped to audio-only
+                // • isVideoSuspendedByHold — CallKit hold still active (cellular
+                //   pre-emption): foregrounding does NOT lift a hold, so we must
+                //   not falsely signal "camera active" to the peer
                 if self.isVideoSuspendedByBackground {
                     self.isVideoSuspendedByBackground = false
-                    if self.isVideoEnabled && !self.isVideoSuspended {
+                    if self.isVideoEnabled && !self.isVideoSuspended && !self.isVideoSuspendedByHold {
                         MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: true)
                         Logger.calls.info("Video foregrounded — peer notified (camera restored)")
                     }

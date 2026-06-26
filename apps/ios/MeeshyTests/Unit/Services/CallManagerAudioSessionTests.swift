@@ -2487,3 +2487,72 @@ final class CallManagerReconnectVideoSyncTests: XCTestCase {
             "Socket-reconnect effectiveVideoOn must also check isVideoSuspended (survival controller)")
     }
 }
+
+// MARK: - Background/Foreground video restore hold guard
+
+/// Guards the foreground-return video-restore path against the
+/// "background while held" scenario:
+///
+///   1. Video call on hold  → `isVideoSuspendedByHold = true`
+///   2. App backgrounds     → `isVideoSuspendedByBackground = true`
+///   3. App foregrounds     → MUST NOT emit call:media-toggled(true)
+///                            because the call is STILL held
+///
+/// Without the `isVideoSuspendedByHold` guard the peer would receive
+/// a false "camera active" signal while iOS blocks camera access.
+@MainActor
+final class CallManagerForegroundRestoreHoldGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_foregroundRestore_guardsOnHoldSuspension() throws {
+        let source = try callManagerSource()
+
+        // Locate the willEnterForeground observer body.
+        guard let fgRange = source.range(of: "willEnterForegroundNotification") else {
+            XCTFail("willEnterForegroundNotification observer not found"); return
+        }
+        // Scan forward to find the isVideoSuspendedByBackground guard block.
+        let afterFg = String(source[fgRange.upperBound...])
+        guard let bgFlagRange = afterFg.range(of: "isVideoSuspendedByBackground") else {
+            XCTFail("isVideoSuspendedByBackground not found in foreground observer"); return
+        }
+        // Capture the restore guard expression (up to 400 chars covers multi-line &&).
+        let restoreExpr = String(afterFg[bgFlagRange.lowerBound...].prefix(400))
+
+        XCTAssertTrue(
+            restoreExpr.contains("isVideoSuspendedByHold"),
+            "Foreground-return video restore must check isVideoSuspendedByHold — " +
+            "foregrounding does not lift a CallKit hold, so the peer must not receive " +
+            "a false call:media-toggled(true) while the call is still held."
+        )
+    }
+
+    func test_foregroundRestore_guardsOnSurvivalControllerSuspension() throws {
+        // Belt-and-suspenders: confirm the existing isVideoSuspended guard is still
+        // present after the hold guard was added (regressions are easy here).
+        let source = try callManagerSource()
+
+        guard let fgRange = source.range(of: "willEnterForegroundNotification") else {
+            XCTFail("willEnterForegroundNotification observer not found"); return
+        }
+        let afterFg = String(source[fgRange.upperBound...])
+        guard let bgFlagRange = afterFg.range(of: "isVideoSuspendedByBackground") else {
+            XCTFail("isVideoSuspendedByBackground not found in foreground observer"); return
+        }
+        let restoreExpr = String(afterFg[bgFlagRange.lowerBound...].prefix(400))
+
+        XCTAssertTrue(
+            restoreExpr.contains("isVideoSuspended"),
+            "Foreground-return video restore must still check isVideoSuspended (survival controller)."
+        )
+    }
+}
