@@ -298,6 +298,28 @@ struct MessageDetailSheet: View {
             }
             DispatchQueue.main.async { externalTabSelection?.wrappedValue = nil }
         }
+        .onReceive(
+            MessageSocketManager.shared.translationFailed
+                .filter { $0.messageId == message.id }
+                .receive(on: DispatchQueue.main)
+        ) { _ in
+            translatingLanguages = []
+        }
+        .onReceive(
+            MessageSocketManager.shared.audioTranslationFailed
+                .filter { $0.messageId == message.id }
+                .receive(on: DispatchQueue.main)
+        ) { _ in
+            translatingAudioLanguages = []
+        }
+        .onReceive(
+            MessageSocketManager.shared.transcriptionFailed
+                .filter { $0.messageId == message.id }
+                .receive(on: DispatchQueue.main)
+        ) { _ in
+            translatingLanguages = []
+            translatingAudioLanguages = []
+        }
     }
 
     // MARK: - Unified Grid
