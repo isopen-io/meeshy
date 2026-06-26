@@ -28,6 +28,12 @@ private enum WebRTCSharedFactory {
     }()
 }
 
+// `@unchecked Sendable` contract: every property mutation is serialised on the
+// main queue — callers arrive via @MainActor (WebRTCService / CallManager), and
+// RTCPeerConnectionDelegate callbacks are `nonisolated` + dispatch to
+// DispatchQueue.main.async before touching state (see MARK: RTCPeerConnectionDelegate).
+// `@MainActor` on the class is not viable: WebRTC's signaling_thread / network_thread
+// call the @objc delegate thunks off-main; Swift 6 would assert isolation and crash.
 final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendable {
     weak var delegate: (any WebRTCClientDelegate)?
 
