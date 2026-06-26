@@ -197,6 +197,10 @@ export class ConnectionService {
     socket.on(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, () => {
       logger.info('[Socket]', 'auth token expired — refreshing and reconnecting');
       authService.refreshToken().then(() => {
+        const newToken = authManager.getAuthToken();
+        if (newToken && this.state.socket) {
+          (this.state.socket as any).auth = { token: newToken };
+        }
         this.reconnect();
       }).catch((err) => {
         logger.warn('[Socket]', 'token refresh failed after auth:token-expired', { err });

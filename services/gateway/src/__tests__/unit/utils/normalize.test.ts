@@ -12,15 +12,18 @@
  * Run with: npm test -- normalize.test.ts
  */
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect } from '@jest/globals';
 import {
   normalizeEmail,
   normalizePhoneNumber,
+  normalizePhoneWithCountry,
   normalizeUsername,
   capitalizeName,
   normalizeDisplayName,
   normalizeUserData,
-  UserDataToNormalize
+  looksLikePhoneNumber,
+  validatePhoneNumber,
+  type UserDataToNormalize
 } from '../../../utils/normalize';
 
 describe('normalizeEmail', () => {
@@ -579,6 +582,96 @@ describe('normalizeUserData', () => {
       expect(result.lastName).toBe('Doe');
       expect(result.displayName).toBe('John Doe');
     });
+  });
+});
+
+describe('looksLikePhoneNumber', () => {
+  it('returns false for empty string', () => {
+    expect(looksLikePhoneNumber('')).toBe(false);
+  });
+
+  it('returns false for whitespace-only string', () => {
+    expect(looksLikePhoneNumber('   ')).toBe(false);
+  });
+
+  it('returns false for email address (contains @)', () => {
+    expect(looksLikePhoneNumber('user@example.com')).toBe(false);
+  });
+
+  it('returns true for international phone with + prefix', () => {
+    expect(looksLikePhoneNumber('+33612345678')).toBe(true);
+  });
+
+  it('returns true for phone with spaces and parens', () => {
+    expect(looksLikePhoneNumber('+1 (555) 123-4567')).toBe(true);
+  });
+
+  it('returns false for string with fewer than 6 digits', () => {
+    expect(looksLikePhoneNumber('12345')).toBe(false);
+  });
+
+  it('returns false for alphabetic string', () => {
+    expect(looksLikePhoneNumber('username')).toBe(false);
+  });
+});
+
+describe('normalizePhoneWithCountry', () => {
+  it('returns null for empty string', () => {
+    expect(normalizePhoneWithCountry('')).toBeNull();
+  });
+
+  it('returns null for whitespace-only input', () => {
+    expect(normalizePhoneWithCountry('   ')).toBeNull();
+  });
+
+  it('returns null for unparseable string', () => {
+    expect(normalizePhoneWithCountry('not-a-number')).toBeNull();
+  });
+
+  it('parses a French number with default country', () => {
+    const result = normalizePhoneWithCountry('0612345678', 'FR');
+    expect(result).not.toBeNull();
+    expect(result?.phoneNumber).toBe('+33612345678');
+    expect(result?.countryCode).toBe('FR');
+    expect(result?.isValid).toBe(true);
+  });
+
+  it('parses an E.164 number without default country', () => {
+    const result = normalizePhoneWithCountry('+15551234567');
+    expect(result).not.toBeNull();
+    expect(result?.phoneNumber).toBe('+15551234567');
+  });
+
+  it('returns nationalNumber field', () => {
+    const result = normalizePhoneWithCountry('+33612345678');
+    expect(result?.nationalNumber).toBeDefined();
+    expect(typeof result?.nationalNumber).toBe('string');
+  });
+});
+
+describe('validatePhoneNumber', () => {
+  it('returns false for empty string', () => {
+    expect(validatePhoneNumber('')).toBe(false);
+  });
+
+  it('returns false for whitespace-only input', () => {
+    expect(validatePhoneNumber('   ')).toBe(false);
+  });
+
+  it('returns true for valid international number', () => {
+    expect(validatePhoneNumber('+33612345678')).toBe(true);
+  });
+
+  it('returns true for valid national number with country code', () => {
+    expect(validatePhoneNumber('0612345678', 'FR')).toBe(true);
+  });
+
+  it('returns false for obviously invalid number', () => {
+    expect(validatePhoneNumber('+00000000000')).toBe(false);
+  });
+
+  it('returns false for non-numeric string', () => {
+    expect(validatePhoneNumber('abc')).toBe(false);
   });
 });
 

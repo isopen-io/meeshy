@@ -718,22 +718,17 @@ describe('SocketIOOrchestrator', () => {
       );
     });
 
-    it('second timeout resolves message when first timeout entry was removed from map', async () => {
+    it('registers exactly one timeout per queued message (no duplicate timeout leak)', async () => {
       const orchestrator = SocketIOOrchestrator.getInstance();
       mockConnGetSocket.mockReturnValue(null);
 
-      const sendPromise = orchestrator.sendMessage('conv-1', 'second-timeout-msg');
+      const sendPromise = orchestrator.sendMessage('conv-1', 'single-timeout-msg');
 
-      // Remove the first timeout from pendingMessageTimeouts (simulating it was cleared externally)
-      // but WITHOUT calling clearTimeout — so the second timeout will fire when the first is gone
-      const pendingMessageTimeoutsMap = (orchestrator as any).pendingMessageTimeouts as Map<string, any>;
-      const firstTimeoutId = pendingMessageTimeoutsMap.get('cid_generated');
-      if (firstTimeoutId !== undefined) {
-        clearTimeout(firstTimeoutId);
-        pendingMessageTimeoutsMap.delete('cid_generated');
-      }
+      const pendingMessageTimeoutsMap = (orchestrator as any).pendingMessageTimeouts as Map<string, unknown>;
+      expect(pendingMessageTimeoutsMap.size).toBe(1);
+      expect(pendingMessageTimeoutsMap.has('cid_generated')).toBe(true);
 
-      // Advance time so the second timeout fires with the message still in the queue
+      // Advance time past MESSAGE_QUEUE_TIMEOUT — the single tracked timeout fires
       jest.advanceTimersByTime(130000);
 
       const result = await sendPromise;
@@ -742,6 +737,8 @@ describe('SocketIOOrchestrator', () => {
         '[SocketIOOrchestrator]',
         'Message queue timeout, message discarded'
       );
+      // After timeout fires, entry is removed from the map
+      expect(pendingMessageTimeoutsMap.size).toBe(0);
     });
 
     it('discards message in processPendingMessages when timestamp is expired', async () => {
@@ -1118,26 +1115,22 @@ describe('SocketIOOrchestrator', () => {
       expect(result.success).toBe(false);
     });
 
-    it('second setTimeout resolves with failure when first timeout was cleared externally', async () => {
+    it('tracked timeout fires exactly once and removes its entry from pendingMessageTimeouts', async () => {
       const orchestrator = SocketIOOrchestrator.getInstance();
       mockConnGetSocket.mockReturnValue(null);
-      mockGenerateClientMessageId.mockReturnValue('cid-second-timeout');
+      mockGenerateClientMessageId.mockReturnValue('cid-single-timeout');
 
-      const promise = orchestrator.sendMessage('conv-1', 'second-timeout-msg');
+      const promise = orchestrator.sendMessage('conv-1', 'single-timeout-msg');
 
-      // Clear the first (per-message) timeout so it won't fire and remove the message
       const pendingMessageTimeouts: Map<string, ReturnType<typeof setTimeout>> = (orchestrator as any).pendingMessageTimeouts;
-      const firstTimeoutId = pendingMessageTimeouts.get('cid-second-timeout');
-      if (firstTimeoutId !== undefined) {
-        clearTimeout(firstTimeoutId);
-        pendingMessageTimeouts.delete('cid-second-timeout');
-      }
+      expect(pendingMessageTimeouts.has('cid-single-timeout')).toBe(true);
 
-      // Now advance timers so the second setTimeout fires with the message still in queue
       jest.advanceTimersByTime(120001);
 
       const result = await promise;
       expect(result.success).toBe(false);
+      // Tracked entry is cleaned up after timeout fires
+      expect(pendingMessageTimeouts.has('cid-single-timeout')).toBe(false);
     });
 
     it('passes all optional fields to messagingService.sendMessage', async () => {
