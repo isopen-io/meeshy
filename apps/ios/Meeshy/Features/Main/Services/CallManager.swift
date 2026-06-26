@@ -2610,6 +2610,15 @@ final class CallManager: ObservableObject {
                     MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: effectiveVideoOn)
                     Logger.calls.info("Socket reconnect — re-syncing video state to peer (effectiveVideoOn=\(effectiveVideoOn))")
                 }
+                // Request fresh TURN credentials after reconnect. The socket may
+                // have been down long enough for our credentials to approach
+                // expiry (TTL=480s, refresh at 80%=384s — a 96-second window
+                // of vulnerability). Proactively requesting here ensures the
+                // next ICE restart uses valid relay credentials.  The response
+                // arrives via `call:ice-servers-refreshed` and also re-arms the
+                // periodic scheduler at the new TTL.
+                MessageSocketManager.shared.emitRequestIceServers(callId: callId)
+                Logger.calls.info("Socket reconnect — requesting fresh TURN credentials for call \(callId)")
             }
             .store(in: &cancellables)
 
@@ -3018,8 +3027,16 @@ extension CallManager: WebRTCServiceDelegate {
                 )
                 Logger.calls.debug("Sent ICE candidate for call: \(callId)")
             } else {
-                self.pendingIceCandidates.append(["callId": callId, "payload": payload])
-                Logger.calls.debug("Buffered ICE candidate (socket down) for call: \(callId)")
+                // Cap the buffer: ICE can generate 50+ candidates in a single
+                // restart round.  Candidates beyond the cap are for transports
+                // we'll never relay anyway (stale ICE generation) and would
+                // only bloat the flush on reconnect.
+                if self.pendingIceCandidates.count < QualityThresholds.maxPendingIceCandidates {
+                    self.pendingIceCandidates.append(["callId": callId, "payload": payload])
+                    Logger.calls.debug("Buffered ICE candidate (socket down) for call: \(callId)")
+                } else {
+                    Logger.calls.warning("ICE candidate buffer full (\(QualityThresholds.maxPendingIceCandidates)) — dropping candidate for call: \(callId)")
+                }
             }
         }
     }

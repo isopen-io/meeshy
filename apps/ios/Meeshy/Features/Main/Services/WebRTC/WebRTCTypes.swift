@@ -500,6 +500,12 @@ enum QualityThresholds {
     /// 5s timeout absorbs worst-case without false positives.
     static let heartbeatAckTimeoutSeconds: TimeInterval = 5.0
     static let maxReconnectAttempts: Int = 3
+    /// Hard cap on the ICE candidate buffer maintained while the socket is
+    /// down.  ICE can generate 50+ candidates per gathering round (host +
+    /// STUN server-reflexive + TURN relayed × UDP/TCP); beyond this cap
+    /// candidates are dropped since they belong to a stale ICE generation
+    /// that the remote won't honour after reconnect anyway.
+    static let maxPendingIceCandidates: Int = 50
 
     /// §3.2 — debounce before treating `RTCPeerConnectionState.disconnected`
     /// as a reconnect trigger. ICE produces transient `.disconnected` blips

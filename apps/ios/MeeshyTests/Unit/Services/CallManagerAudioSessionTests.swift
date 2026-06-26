@@ -1354,3 +1354,78 @@ final class CallManagerCameraPermissionTests: XCTestCase {
             "when camera access is .denied or .restricted")
     }
 }
+
+// MARK: - ICE Candidate Buffer & TURN Refresh on Reconnect
+
+/// Guards two production-grade reliability fixes:
+///
+/// 1. **ICE candidate buffer cap** — `pendingIceCandidates` is filled while
+///    the socket is down. Without a cap, aggressive trickle-ICE (50+ candidates
+///    per restart) can fill unboundedly, then flood the signalling channel on
+///    reconnect with stale candidates that belong to a superseded ICE generation.
+///
+/// 2. **TURN refresh on socket reconnect** — the periodic scheduler fires at
+///    80% of the 480 s TTL (384 s).  If the socket was down for the remaining
+///    20% (96 s), TURN credentials approach expiry before a refresh can fire.
+///    After reconnect, proactively requesting fresh credentials ensures the
+///    next ICE restart uses valid relay paths.
+@MainActor
+final class CallManagerIceCandidateBufferTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func webRTCTypesSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/WebRTCTypes.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_pendingIceCandidatesBuffer_hasOverflowGuard() throws {
+        let source = try callManagerSource()
+        guard let appendRange = source.range(of: "pendingIceCandidates.append") else {
+            XCTFail("pendingIceCandidates.append not found in CallManager.swift"); return
+        }
+        let contextStart = source.index(appendRange.lowerBound, offsetBy: -300, limitedBy: source.startIndex) ?? source.startIndex
+        let contextStr = String(source[contextStart ..< appendRange.upperBound])
+        XCTAssertTrue(
+            contextStr.contains("maxPendingIceCandidates") || contextStr.contains("count <"),
+            "pendingIceCandidates.append must be guarded by an overflow check — " +
+            "unbounded growth during extended socket outages floods signalling on reconnect " +
+            "with stale candidates from a superseded ICE generation")
+    }
+
+    func test_qualityThresholds_declaresMaxPendingIceCandidates() throws {
+        let source = try webRTCTypesSource()
+        XCTAssertTrue(
+            source.contains("maxPendingIceCandidates"),
+            "QualityThresholds must declare maxPendingIceCandidates so the cap value " +
+            "is co-located with other thresholds and documented alongside the rationale")
+    }
+
+    func test_socketReconnect_requestsFreshTURNCredentials() throws {
+        let source = try callManagerSource()
+        guard let reconnectRange = source.range(of: "socket.didReconnect") else {
+            XCTFail("socket.didReconnect sink not found in CallManager.swift"); return
+        }
+        let afterReconnect = String(source[reconnectRange.upperBound...])
+        XCTAssertTrue(
+            afterReconnect.contains("emitRequestIceServers"),
+            "socket.didReconnect sink must call emitRequestIceServers after rejoining " +
+            "the call room — the socket may have been down long enough for TURN " +
+            "credentials to approach expiry (TTL=480s, refresh fires at 384s, " +
+            "leaving a 96s vulnerability window). Proactive refresh keeps relay " +
+            "paths valid for the next ICE restart.")
+    }
+}
