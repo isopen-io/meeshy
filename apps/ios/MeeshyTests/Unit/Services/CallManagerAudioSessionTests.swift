@@ -2943,3 +2943,289 @@ final class WebRTCServiceAudioBitrateAdaptationTests: XCTestCase {
         )
     }
 }
+
+// MARK: - Media Services Reset — setActive guard
+
+/// Source-analysis guards for the media-services-reset recovery path.
+///
+/// When the iOS media server process crashes, `handleMediaServicesReset` must:
+///   1. Call `setActive(true)` to bring AVAudioSession back online.
+///   2. Only proceed to `audioSessionDidActivate` if `setActive` succeeded.
+///   3. Use `QualityThresholds.mediaServicesResetSpeakerDelaySeconds` for the
+///      post-rebuild speaker-route delay — no hardcoded literal.
+///
+/// The asymmetry between the interruption handler and the media-services reset
+/// handler was a real bug: the interruption handler returned early on setActive
+/// failure, but the media-services reset handler continued anyway, incorrectly
+/// telling WebRTC the audio session was active when it wasn't.
+@MainActor
+final class CallManagerMediaServicesResetSetActiveGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func webRTCTypesSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/WebRTCTypes.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// `handleMediaServicesReset` must return early when `setActive(true)` throws,
+    /// matching the interruption handler.  Proceeding to `audioSessionDidActivate`
+    /// after a failed activation tells WebRTC the session is live when it is not,
+    /// causing libwebrtc's audio I/O unit to run against an inactive session and
+    /// silently produce silence — or, worse, trigger an AVAudioSession fault that
+    /// kills the next audio operation mid-call.
+    func test_handleMediaServicesReset_returnsEarlyOnSetActiveFailure() throws {
+        let source = try callManagerSource()
+
+        guard let handlerRange = source.range(of: "private func handleMediaServicesReset()") else {
+            XCTFail("handleMediaServicesReset not found in CallManager.swift"); return
+        }
+        let endIdx = source.index(handlerRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[handlerRange.lowerBound ..< endIdx])
+
+        // The error block for setActive must contain a `return` so the queued
+        // work that follows (audioSessionDidActivate, etc.) is skipped.
+        guard let errorRange = fnBody.range(of: "AVAudioSession reactivation after media-services reset failed") else {
+            XCTFail("setActive error log not found inside handleMediaServicesReset"); return
+        }
+        let errorEnd = fnBody.index(errorRange.upperBound, offsetBy: 200, limitedBy: fnBody.endIndex) ?? fnBody.endIndex
+        let errorBlock = String(fnBody[errorRange.lowerBound ..< errorEnd])
+
+        XCTAssertTrue(
+            errorBlock.contains("return"),
+            "handleMediaServicesReset must `return` after logging the setActive error — " +
+            "calling audioSessionDidActivate when the session is not active corrupts " +
+            "WebRTC audio state and cannot be undone without a full stack teardown."
+        )
+    }
+
+    /// `handleMediaServicesReset` must guard on the result of `setActive(true)`
+    /// BEFORE calling `audioSessionDidActivate`, mirroring the interruption handler.
+    /// The interruption handler has long had this guard; this test prevents it from
+    /// being dropped from the media-services reset path.
+    func test_handleMediaServicesReset_setActiveIsGuardedBeforeDidActivate() throws {
+        let source = try callManagerSource()
+
+        guard let handlerRange = source.range(of: "private func handleMediaServicesReset()") else {
+            XCTFail("handleMediaServicesReset not found in CallManager.swift"); return
+        }
+        let endIdx = source.index(handlerRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[handlerRange.lowerBound ..< endIdx])
+
+        guard let setActiveRange = fnBody.range(of: "setActive(true"),
+              let didActivateRange = fnBody.range(of: "audioSessionDidActivate") else {
+            XCTFail("setActive or audioSessionDidActivate not found in handleMediaServicesReset"); return
+        }
+        XCTAssertLessThan(
+            setActiveRange.lowerBound,
+            didActivateRange.lowerBound,
+            "setActive(true) must appear BEFORE audioSessionDidActivate in " +
+            "handleMediaServicesReset — the session must be active before WebRTC " +
+            "is told to use it."
+        )
+    }
+
+    /// The speaker-route re-application delay must use the named constant rather
+    /// than a hardcoded millisecond literal.  The constant serves as documentation
+    /// (the 200 ms stabilisation requirement lives at one site) and allows the
+    /// CI hardware-specific threshold to be tuned without hunting for literals.
+    func test_handleMediaServicesReset_speakerDelay_usesQualityThresholdsConstant() throws {
+        let source = try callManagerSource()
+
+        guard let handlerRange = source.range(of: "private func handleMediaServicesReset()") else {
+            XCTFail("handleMediaServicesReset not found in CallManager.swift"); return
+        }
+        let endIdx = source.index(handlerRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[handlerRange.lowerBound ..< endIdx])
+
+        XCTAssertTrue(
+            fnBody.contains("mediaServicesResetSpeakerDelaySeconds"),
+            "handleMediaServicesReset speaker delay must use " +
+            "QualityThresholds.mediaServicesResetSpeakerDelaySeconds — a hardcoded " +
+            "literal makes the stabilisation window invisible to reviewers and " +
+            "impossible to tune without a code search."
+        )
+        XCTAssertFalse(
+            fnBody.contains(".milliseconds(200)"),
+            "handleMediaServicesReset must not hardcode .milliseconds(200) — " +
+            "use QualityThresholds.mediaServicesResetSpeakerDelaySeconds instead."
+        )
+    }
+
+    /// `QualityThresholds` must declare `mediaServicesResetSpeakerDelaySeconds` so
+    /// the constant is co-located with other call thresholds and its rationale is
+    /// visible to future reviewers.
+    func test_qualityThresholds_declaresMediaServicesResetSpeakerDelay() throws {
+        let source = try webRTCTypesSource()
+        XCTAssertTrue(
+            source.contains("mediaServicesResetSpeakerDelaySeconds"),
+            "QualityThresholds must declare mediaServicesResetSpeakerDelaySeconds — " +
+            "centralised constants are the project convention for all tunable durations."
+        )
+    }
+}
+
+// MARK: - Network Path Monitor — WiFi ↔ Cellular Handoff
+
+/// Source-analysis guards for the `NWPathMonitor` integration that detects
+/// network-interface changes mid-call and triggers ICE restart.
+///
+/// Without these guards a regression could re-introduce silent call drops on
+/// WiFi → cellular handoff (a common scenario when a user walks away from a
+/// WiFi AP): the call-state machine would stay `.connected`, audio would stop
+/// flowing (old ICE candidates went stale), and no automatic recovery would fire.
+@MainActor
+final class CallManagerNetworkMonitorSourceGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// `CallManager` must use `NWPathMonitor` — not a timer or socket-event
+    /// heuristic — to detect network changes.  NWPathMonitor fires synchronously
+    /// on the kernel network-change event (< 1 ms latency) whereas a poll-based
+    /// approach delays ICE restart by up to one poll interval.
+    func test_callManager_usesNWPathMonitor() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("NWPathMonitor"),
+            "CallManager must use NWPathMonitor to detect interface changes — " +
+            "a poll-based fallback delays ICE restart by up to one poll interval, " +
+            "causing several seconds of silence on WiFi → cellular handoff."
+        )
+    }
+
+    /// The monitor must track the current interface type so a WiFi ↔ cellular
+    /// transition can be distinguished from a same-interface route change (e.g.
+    /// channel switch on the same WiFi AP).  Without tracking the previous
+    /// interface type, every path update that stays on the same interface would
+    /// trigger a needless ICE restart.
+    func test_callManager_tracksLastNetworkInterfaceType() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("lastNetworkInterfaceType"),
+            "CallManager must store lastNetworkInterfaceType to detect WiFi ↔ cellular " +
+            "handoff — comparing the new interface type to the previous one is the only " +
+            "way to distinguish a real handoff from a same-interface route change."
+        )
+    }
+
+    /// An interface change while a call is active must trigger ICE restart
+    /// (`attemptReconnection`).  Without this, a WiFi → cellular switch leaves
+    /// the call silently dead: the local IP address changes so all existing ICE
+    /// candidates become unreachable, but the call state stays `.connected`.
+    func test_callManager_interfaceChange_triggersIceRestart() throws {
+        let source = try callManagerSource()
+
+        guard let pathHandlerRange = source.range(of: "networkMonitor.pathUpdateHandler") else {
+            XCTFail("networkMonitor.pathUpdateHandler not found in CallManager.swift"); return
+        }
+        // Scan forward far enough to cover the full handler block.
+        let endIdx = source.index(pathHandlerRange.lowerBound, offsetBy: 2000, limitedBy: source.endIndex) ?? source.endIndex
+        let handlerBody = String(source[pathHandlerRange.lowerBound ..< endIdx])
+
+        XCTAssertTrue(
+            handlerBody.contains("interfaceChanged"),
+            "networkMonitor.pathUpdateHandler must detect interface changes — " +
+            "set a local `interfaceChanged` flag when the active interface type changes."
+        )
+        XCTAssertTrue(
+            handlerBody.contains("attemptReconnection"),
+            "networkMonitor.pathUpdateHandler must call attemptReconnection() on an " +
+            "interface change — stale ICE candidates from the old interface require a " +
+            "full ICE restart to re-negotiate valid candidates on the new interface."
+        )
+    }
+
+    /// Network loss (path.status != .satisfied) during an active call must also
+    /// trigger reconnection, not wait for the heartbeat timeout.  The monitor
+    /// fires within 1 ms of the OS detecting the outage; waiting for heartbeat
+    /// expiry (30 s) delays recovery by up to 30 seconds on a short network blip.
+    func test_callManager_networkLoss_triggersReconnection() throws {
+        let source = try callManagerSource()
+
+        guard let pathHandlerRange = source.range(of: "networkMonitor.pathUpdateHandler") else {
+            XCTFail("networkMonitor.pathUpdateHandler not found in CallManager.swift"); return
+        }
+        let endIdx = source.index(pathHandlerRange.lowerBound, offsetBy: 2000, limitedBy: source.endIndex) ?? source.endIndex
+        let handlerBody = String(source[pathHandlerRange.lowerBound ..< endIdx])
+
+        XCTAssertTrue(
+            handlerBody.contains("path.status != .satisfied") || handlerBody.contains("status != .satisfied"),
+            "networkMonitor.pathUpdateHandler must detect path.status != .satisfied " +
+            "and trigger reconnection immediately — waiting for heartbeat expiry " +
+            "delays recovery on a brief network outage by up to 30 seconds."
+        )
+    }
+
+    /// Network recovery (path was unsatisfied, now satisfied) must also trigger
+    /// ICE restart.  Without this, a call that survives a brief network outage
+    /// stays in the reconnecting/failed state even after connectivity returns.
+    func test_callManager_networkRecovery_triggersIceRestart() throws {
+        let source = try callManagerSource()
+
+        guard let pathHandlerRange = source.range(of: "networkMonitor.pathUpdateHandler") else {
+            XCTFail("networkMonitor.pathUpdateHandler not found in CallManager.swift"); return
+        }
+        let endIdx = source.index(pathHandlerRange.lowerBound, offsetBy: 2000, limitedBy: source.endIndex) ?? source.endIndex
+        let handlerBody = String(source[pathHandlerRange.lowerBound ..< endIdx])
+
+        XCTAssertTrue(
+            handlerBody.contains("wasUnsatisfied") && handlerBody.contains("isNowSatisfied"),
+            "networkMonitor.pathUpdateHandler must detect wasUnsatisfied && isNowSatisfied " +
+            "to trigger ICE restart on network recovery — without this the call stays " +
+            "in `.reconnecting` even after full connectivity is restored."
+        )
+    }
+
+    /// The monitor must guard on call state before triggering reconnection.
+    /// Firing ICE restart while idle (e.g. on app launch in an elevator) wastes
+    /// CPU and corrupts the `pendingIceCandidates` buffer for the next call.
+    func test_callManager_networkMonitor_guardsOnCallActive() throws {
+        let source = try callManagerSource()
+
+        guard let pathHandlerRange = source.range(of: "networkMonitor.pathUpdateHandler") else {
+            XCTFail("networkMonitor.pathUpdateHandler not found in CallManager.swift"); return
+        }
+        let endIdx = source.index(pathHandlerRange.lowerBound, offsetBy: 2000, limitedBy: source.endIndex) ?? source.endIndex
+        let handlerBody = String(source[pathHandlerRange.lowerBound ..< endIdx])
+
+        XCTAssertTrue(
+            handlerBody.contains("isInActiveCall") || handlerBody.contains("callState.isActive"),
+            "networkMonitor.pathUpdateHandler must guard on call-active state before " +
+            "triggering reconnection — firing ICE restart while idle wastes CPU and " +
+            "can corrupt the pendingIceCandidates buffer for the next call."
+        )
+    }
+
+    /// The monitor must be started with a dedicated `DispatchQueue` (not `.main`)
+    /// so path-update callbacks don't block the MainActor while the OS resolves
+    /// the route change (which can take several ms on cellular).
+    func test_callManager_networkMonitor_startsOnDedicatedQueue() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("networkMonitor.start(queue:"),
+            "NWPathMonitor must be started with a dedicated queue — not .main — " +
+            "so path-update callbacks don't block the main thread during route resolution."
+        )
+    }
+}
