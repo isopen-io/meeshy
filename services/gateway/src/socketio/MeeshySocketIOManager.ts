@@ -1507,7 +1507,7 @@ export class MeeshySocketIOManager {
               message.translations as unknown as Record<string, import('../utils/translation-transformer').MessageTranslationJSON>
             );
           } catch (error) {
-            logger.warn(`⚠️ [DEBUG] Erreur transformation traductions pour ${message.id}:`, error);
+            logger.warn(`Translation transform failed for message ${message.id}`, { error });
             return [];
           }
         })(),
