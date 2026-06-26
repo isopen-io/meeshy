@@ -375,5 +375,385 @@ describe('AuthHandler', () => {
       expect(mockCallService.leaveCall).not.toHaveBeenCalled();
       expect(connectedUsers.has('user-123')).toBe(false);
     });
+
+    it('should call updateAnonymousOnlineStatus for anonymous user on disconnect', async () => {
+      socketToUser.set('socket-123', 'anon-123');
+      connectedUsers.set('anon-123', {
+        id: 'anon-123',
+        socketId: 'socket-123',
+        isAnonymous: true,
+        language: 'en'
+      });
+      userSockets.set('anon-123', new Set(['socket-123']));
+
+      await authHandler.handleDisconnection(createMockSocket({ id: 'socket-123' }));
+
+      expect(mockMaintenanceService.updateAnonymousOnlineStatus).toHaveBeenCalledWith('anon-123', false, true);
+      expect(mockMaintenanceService.updateUserOnlineStatus).not.toHaveBeenCalled();
+      expect(connectedUsers.has('anon-123')).toBe(false);
+    });
+
+    it('should still clean maps when updateUserOnlineStatus throws', async () => {
+      socketToUser.set('socket-123', 'user-123');
+      connectedUsers.set('user-123', {
+        id: 'user-123',
+        socketId: 'socket-123',
+        isAnonymous: false,
+        language: 'en'
+      });
+      userSockets.set('user-123', new Set(['socket-123']));
+      mockMaintenanceService.updateUserOnlineStatus.mockRejectedValue(new Error('service down'));
+
+      await authHandler.handleDisconnection(createMockSocket());
+
+      expect(connectedUsers.has('user-123')).toBe(false);
+      expect(socketToUser.has('socket-123')).toBe(false);
+    });
+  });
+
+  describe('handleTokenAuthentication — emitPresenceSnapshot and _joinUserConversations', () => {
+    it('should join socket to conversation rooms returned by participant.findMany', async () => {
+      const mockSocket = createMockSocket({
+        handshake: { auth: { token: 'valid-jwt-token' } }
+      });
+      jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
+        id: 'user-123',
+        systemLanguage: 'en',
+        regionalLanguage: null,
+        customDestinationLanguage: null,
+        deviceLocale: null
+      } as any);
+      jest.spyOn((mockPrisma as any).participant, 'findMany').mockResolvedValue([
+        { conversationId: 'conv-aaa' },
+        { conversationId: 'conv-bbb' }
+      ]);
+
+      await authHandler.handleTokenAuthentication(mockSocket);
+
+      expect(mockSocket.join).toHaveBeenCalledWith('conversation:conv-aaa');
+      expect(mockSocket.join).toHaveBeenCalledWith('conversation:conv-bbb');
+    });
+
+    it('should not throw when participant.findMany fails in _joinUserConversations', async () => {
+      const mockSocket = createMockSocket({
+        handshake: { auth: { token: 'valid-jwt-token' } }
+      });
+      jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
+        id: 'user-123',
+        systemLanguage: 'en',
+        regionalLanguage: null,
+        customDestinationLanguage: null,
+        deviceLocale: null
+      } as any);
+      jest.spyOn((mockPrisma as any).participant, 'findMany').mockRejectedValue(new Error('DB error'));
+
+      // Should not throw despite DB error — _joinUserConversations swallows it
+      await expect(authHandler.handleTokenAuthentication(mockSocket)).resolves.toBeUndefined();
+      expect(connectedUsers.size).toBe(1);
+    });
+
+    it('should invoke emitPresenceSnapshot after JWT auto-auth', async () => {
+      const mockEmitPresenceSnapshot = jest.fn().mockResolvedValue(undefined);
+      const handlerWithSnapshot = new AuthHandler({
+        prisma: mockPrisma,
+        statusService: mockStatusService,
+        maintenanceService: mockMaintenanceService,
+        callService: mockCallService,
+        connectedUsers,
+        socketToUser,
+        userSockets,
+        emitPresenceSnapshot: mockEmitPresenceSnapshot
+      });
+
+      const mockSocket = createMockSocket({
+        handshake: { auth: { token: 'valid-jwt-token' } }
+      });
+      jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
+        id: 'user-123',
+        systemLanguage: 'en',
+        regionalLanguage: null,
+        customDestinationLanguage: null,
+        deviceLocale: null
+      } as any);
+
+      await handlerWithSnapshot.handleTokenAuthentication(mockSocket);
+      await Promise.resolve();
+
+      expect(mockEmitPresenceSnapshot).toHaveBeenCalledWith(mockSocket, 'user-123', false);
+    });
+
+    it('should invoke emitPresenceSnapshot after anonymous token auth', async () => {
+      const mockEmitPresenceSnapshot = jest.fn().mockResolvedValue(undefined);
+      const handlerWithSnapshot = new AuthHandler({
+        prisma: mockPrisma,
+        statusService: mockStatusService,
+        maintenanceService: mockMaintenanceService,
+        callService: mockCallService,
+        connectedUsers,
+        socketToUser,
+        userSockets,
+        emitPresenceSnapshot: mockEmitPresenceSnapshot
+      });
+
+      const mockSocket = createMockSocket({
+        handshake: { auth: { sessionToken: 'anon-session-token' } }
+      });
+      jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
+        id: 'anon-123',
+        displayName: 'Anonymous',
+        language: 'en',
+        conversationId: 'conv-123'
+      } as any);
+
+      await handlerWithSnapshot.handleTokenAuthentication(mockSocket);
+      await Promise.resolve();
+
+      expect(mockEmitPresenceSnapshot).toHaveBeenCalledWith(mockSocket, 'anon-123', true);
+    });
+
+    it('should emit error when JWT_SECRET is not configured', async () => {
+      const savedSecret = process.env.JWT_SECRET;
+      delete process.env.JWT_SECRET;
+
+      const mockSocket = createMockSocket({
+        handshake: { auth: { token: 'some-jwt-token' } }
+      });
+
+      // Restore the real jwt.verify so the code path runs correctly
+      jest.restoreAllMocks();
+
+      await authHandler.handleTokenAuthentication(mockSocket);
+
+      process.env.JWT_SECRET = savedSecret;
+
+      expect(mockSocket.emit).toHaveBeenCalledWith('error', expect.objectContaining({
+        message: 'Authentication failed'
+      }));
+      expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
+    });
+  });
+
+  describe('handleTokenAuthentication — TokenExpiredError', () => {
+    it('should emit AUTH_TOKEN_EXPIRED and disconnect when JWT is expired', async () => {
+      const mockSocket = createMockSocket({
+        handshake: { auth: { token: 'expired-jwt-token' } }
+      });
+
+      jest.spyOn(jwt, 'verify').mockImplementation(() => {
+        throw new jwt.TokenExpiredError('jwt expired', new Date());
+      });
+
+      await authHandler.handleTokenAuthentication(mockSocket);
+
+      expect(mockSocket.emit).toHaveBeenCalledWith('auth:token-expired', expect.objectContaining({
+        code: 'token_expired'
+      }));
+      expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
+      expect(connectedUsers.size).toBe(0);
+    });
+  });
+
+  describe('handleManualAuthentication', () => {
+    it('should authenticate registered user with valid userId', async () => {
+      const mockSocket = createMockSocket();
+      jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
+        id: 'user-123',
+        systemLanguage: 'en',
+        regionalLanguage: null,
+        customDestinationLanguage: null,
+        deviceLocale: null
+      } as any);
+
+      await authHandler.handleManualAuthentication(mockSocket, { userId: 'user-123' });
+
+      expect(connectedUsers.size).toBe(1);
+      expect(socketToUser.get('socket-123')).toBe('user-123');
+      expect(mockSocket.emit).toHaveBeenCalledWith('authenticated', expect.objectContaining({
+        success: true,
+        user: expect.objectContaining({ id: 'user-123', isAnonymous: false })
+      }));
+      expect(mockMaintenanceService.updateUserOnlineStatus).toHaveBeenCalledWith('user-123', true, true);
+    });
+
+    it('should authenticate anonymous user with sessionToken', async () => {
+      const mockSocket = createMockSocket();
+      jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
+        id: 'anon-123',
+        displayName: 'Anonymous',
+        language: 'fr',
+        conversationId: 'conv-456'
+      } as any);
+
+      await authHandler.handleManualAuthentication(mockSocket, { sessionToken: 'anon-session-token' });
+
+      expect(connectedUsers.size).toBe(1);
+      expect(socketToUser.get('socket-123')).toBe('anon-123');
+      expect(mockSocket.emit).toHaveBeenCalledWith('authenticated', expect.objectContaining({
+        success: true,
+        user: expect.objectContaining({ id: 'anon-123', isAnonymous: true })
+      }));
+    });
+
+    it('should emit error when neither userId nor sessionToken is provided', async () => {
+      const mockSocket = createMockSocket();
+
+      await authHandler.handleManualAuthentication(mockSocket, {});
+
+      expect(mockSocket.emit).toHaveBeenCalledWith('error', expect.objectContaining({
+        message: expect.any(String)
+      }));
+      expect(connectedUsers.size).toBe(0);
+    });
+
+    it('should emit error when user is not found in DB', async () => {
+      const mockSocket = createMockSocket();
+      jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue(null);
+
+      await authHandler.handleManualAuthentication(mockSocket, { userId: 'nonexistent-user' });
+
+      expect(mockSocket.emit).toHaveBeenCalledWith('error', expect.objectContaining({
+        message: expect.stringContaining('not found')
+      }));
+      expect(connectedUsers.size).toBe(0);
+    });
+
+    it('should emit AUTH_TOKEN_EXPIRED and disconnect on TokenExpiredError', async () => {
+      const mockSocket = createMockSocket();
+      jest.spyOn(mockPrisma.user, 'findUnique').mockRejectedValue(
+        new jwt.TokenExpiredError('jwt expired', new Date())
+      );
+
+      await authHandler.handleManualAuthentication(mockSocket, { userId: 'user-123' });
+
+      expect(mockSocket.emit).toHaveBeenCalledWith('auth:token-expired', expect.objectContaining({
+        code: 'token_expired'
+      }));
+      expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
+    });
+
+    it('should emit error and disconnect on general unexpected error', async () => {
+      const mockSocket = createMockSocket();
+      jest.spyOn(mockPrisma.user, 'findUnique').mockRejectedValue(new Error('database down'));
+
+      await authHandler.handleManualAuthentication(mockSocket, { userId: 'user-123' });
+
+      expect(mockSocket.emit).toHaveBeenCalledWith('error', expect.objectContaining({
+        message: 'Authentication failed'
+      }));
+      expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
+    });
+
+    it('should use provided language over systemLanguage for registered user', async () => {
+      const mockSocket = createMockSocket();
+      jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
+        id: 'user-123',
+        systemLanguage: 'en',
+        regionalLanguage: null,
+        customDestinationLanguage: null,
+        deviceLocale: null
+      } as any);
+
+      await authHandler.handleManualAuthentication(mockSocket, { userId: 'user-123', language: 'es' });
+
+      expect(connectedUsers.get('user-123')?.language).toBe('es');
+    });
+
+    it('should invoke emitPresenceSnapshot after registering user', async () => {
+      const mockEmitPresenceSnapshot = jest.fn().mockResolvedValue(undefined);
+      const handlerWithSnapshot = new AuthHandler({
+        prisma: mockPrisma,
+        statusService: mockStatusService,
+        maintenanceService: mockMaintenanceService,
+        callService: mockCallService,
+        connectedUsers,
+        socketToUser,
+        userSockets,
+        emitPresenceSnapshot: mockEmitPresenceSnapshot
+      });
+
+      const mockSocket = createMockSocket();
+      jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
+        id: 'user-123',
+        systemLanguage: 'en',
+        regionalLanguage: null,
+        customDestinationLanguage: null,
+        deviceLocale: null
+      } as any);
+
+      await handlerWithSnapshot.handleManualAuthentication(mockSocket, { userId: 'user-123' });
+
+      // emitPresenceSnapshot is fire-and-forget (.catch) — flush microtasks
+      await Promise.resolve();
+      expect(mockEmitPresenceSnapshot).toHaveBeenCalledWith(mockSocket, 'user-123', false);
+    });
+  });
+
+  describe('handleHeartbeat', () => {
+    it('should return early when socket is not in socketToUser map', async () => {
+      const mockSocket = createMockSocket({ id: 'unknown-socket' });
+
+      await authHandler.handleHeartbeat(mockSocket);
+
+      expect(mockStatusService.updateLastSeen).not.toHaveBeenCalled();
+      expect(mockPrisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('should return early when user is not in connectedUsers map', async () => {
+      socketToUser.set('socket-123', 'user-123');
+      // connectedUsers intentionally empty
+
+      await authHandler.handleHeartbeat(createMockSocket());
+
+      expect(mockStatusService.updateLastSeen).not.toHaveBeenCalled();
+    });
+
+    it('should update lastSeen and DB lastActiveAt for registered user', async () => {
+      socketToUser.set('socket-123', 'user-123');
+      connectedUsers.set('user-123', {
+        id: 'user-123',
+        socketId: 'socket-123',
+        isAnonymous: false,
+        language: 'en'
+      });
+
+      await authHandler.handleHeartbeat(createMockSocket());
+
+      expect(mockStatusService.updateLastSeen).toHaveBeenCalledWith('user-123', false);
+      expect(mockPrisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'user-123' },
+          data: { lastActiveAt: expect.any(Date) }
+        })
+      );
+    });
+
+    it('should update lastSeen but skip DB update for anonymous user', async () => {
+      socketToUser.set('socket-123', 'anon-123');
+      connectedUsers.set('anon-123', {
+        id: 'anon-123',
+        socketId: 'socket-123',
+        isAnonymous: true,
+        language: 'fr'
+      });
+
+      await authHandler.handleHeartbeat(createMockSocket());
+
+      expect(mockStatusService.updateLastSeen).toHaveBeenCalledWith('anon-123', true);
+      expect(mockPrisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('should not throw when prisma.user.update fails (best-effort)', async () => {
+      socketToUser.set('socket-123', 'user-123');
+      connectedUsers.set('user-123', {
+        id: 'user-123',
+        socketId: 'socket-123',
+        isAnonymous: false,
+        language: 'en'
+      });
+      (mockPrisma.user.update as jest.Mock).mockRejectedValue(new Error('DB timeout'));
+
+      await expect(authHandler.handleHeartbeat(createMockSocket())).resolves.toBeUndefined();
+      expect(mockStatusService.updateLastSeen).toHaveBeenCalledWith('user-123', false);
+    });
   });
 });
