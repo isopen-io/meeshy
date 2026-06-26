@@ -268,7 +268,7 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
     // pagination. The serial queue + single reused decoder are race-free; the value
     // is smuggled back through an unchecked box so callers keep plain `Decodable`
     // (non-Sendable) response types.
-    private nonisolated(unsafe) static let offMainDecoder: JSONDecoder = {
+    private static let offMainDecoder: JSONDecoder = {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()

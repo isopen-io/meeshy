@@ -2875,7 +2875,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// Shared, pre-configured decoder. Used ONLY on `decodeQueue` (serial), so a
     /// single reused instance is race-free and avoids allocating a decoder plus
     /// wiring its date strategy on every realtime event.
-    private nonisolated(unsafe) static let socketDecoder: JSONDecoder = {
+    private static let socketDecoder: JSONDecoder = {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
