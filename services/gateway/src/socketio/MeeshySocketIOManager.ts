@@ -1090,13 +1090,7 @@ export class MeeshySocketIOManager {
         return;
       }
 
-      logger.info(`📝 [SocketIOManager] ======== DIFFUSION TRANSCRIPTION VERS CLIENTS ========`);
-      logger.info(`📝 [SocketIOManager] Transcription ready pour message ${data.messageId}, attachment ${data.attachmentId}`);
-      logger.info(`   📝 Transcription ID: ${data.transcription.id}`);
-      logger.info(`   📝 Texte: "${data.transcription.text?.substring(0, 100)}..."`);
-      logger.info(`   📝 Langue: ${data.transcription.language}`);
-      logger.info(`   📝 Confiance: ${data.transcription.confidence}`);
-      logger.info(`   📝 Segments: ${data.transcription.segments?.length || 0} segments`);
+      logger.debug(`transcription:ready msg=${data.messageId} attach=${data.attachmentId} lang=${data.transcription.language} segments=${data.transcription.segments?.length ?? 0}`);
 
       // Récupérer la conversation du message pour broadcast
       let conversationId: string | null = null;
@@ -1121,7 +1115,7 @@ export class MeeshySocketIOManager {
       const roomClients = this.io.sockets.adapter.rooms.get(roomName);
       const clientCount = roomClients ? roomClients.size : 0;
 
-      logger.info(`📢 [SocketIOManager] Diffusion transcription vers room ${roomName} (${clientCount} clients)`);
+      logger.debug(`transcription:ready room=${roomName} clients=${clientCount}`);
 
       // Préparer les données au format TranscriptionReadyEventData
       const transcriptionData = {
@@ -1133,17 +1127,14 @@ export class MeeshySocketIOManager {
       };
 
       // Diffuser dans la room de conversation
-      logger.info(`📡 [SocketIOManager] Émission événement '${SERVER_EVENTS.TRANSCRIPTION_READY}' vers room '${roomName}' (${clientCount} clients)`);
       this.io.to(roomName).emit(SERVER_EVENTS.TRANSCRIPTION_READY, transcriptionData);
+      logger.info('transcription:ready broadcast', { messageId: data.messageId, attachmentId: data.attachmentId, conversationId: normalizedId, lang: data.transcription.language });
 
       // Generic attachment-updated delta : clients atomically replace the
       // attachment in their store and refresh derived metadata
       // (transcription dictionaries, audio language listings) without a
       // round-trip. See spec 2026-05-25-audio-instant-render-and-attachment-size-design.md.
       await this._broadcastAttachmentUpdated(data.attachmentId, data.messageId, normalizedId);
-
-      logger.info(`✅ [SocketIOManager] ======== ÉVÉNEMENT TRANSCRIPTION DIFFUSÉ ========`);
-      logger.info(`✅ [SocketIOManager] Transcription diffusée vers ${clientCount} client(s)`);
 
     } catch (error) {
       logger.error(`❌ [SocketIOManager] Erreur envoi transcription:`, error);
@@ -1203,10 +1194,7 @@ export class MeeshySocketIOManager {
     logPrefix: string
   ) {
     try {
-      logger.info(`${logPrefix} [SocketIOManager] ======== DIFFUSION TRADUCTION VERS CLIENTS ========`);
-      logger.info(`${logPrefix} [SocketIOManager] Translation ready pour message ${data.messageId}, attachment ${data.attachmentId}`);
-      logger.info(`   🔊 Langue: ${data.language || 'UNDEFINED'}`);
-      logger.info(`   📝 Segments: ${data.translatedAudio?.segments?.length || 0}`);
+      logger.debug(`${logPrefix} audio-translation:ready msg=${data.messageId} attach=${data.attachmentId} lang=${data.language} segments=${data.translatedAudio?.segments?.length ?? 0}`);
 
       // Récupérer la conversation du message pour broadcast
       let conversationId: string | null = null;
@@ -1231,7 +1219,7 @@ export class MeeshySocketIOManager {
       const roomClients = this.io.sockets.adapter.rooms.get(roomName);
       const clientCount = roomClients ? roomClients.size : 0;
 
-      logger.info(`📢 [SocketIOManager] Diffusion traduction ${data.language} vers room ${roomName} (${clientCount} clients)`);
+      logger.debug(`audio-translation:ready room=${roomName} clients=${clientCount} lang=${data.language}`);
 
       // Vérifier que translatedAudio existe
       if (!data.translatedAudio) {
@@ -1263,27 +1251,19 @@ export class MeeshySocketIOManager {
         processingTimeMs: data.phase ? undefined : 0
       };
 
-      // Vérification et log des segments
-      if (translationData.translatedAudio.segments && translationData.translatedAudio.segments.length > 0) {
-        logger.info(`   ✅ Segments inclus: ${translationData.translatedAudio.segments.length}`);
-        const firstSeg = translationData.translatedAudio.segments[0];
-        logger.info(`   📝 Premier segment: "${firstSeg.text}" (${firstSeg.startMs}ms-${firstSeg.endMs}ms, speaker=${firstSeg.speakerId}, score=${firstSeg.voiceSimilarityScore})`);
-      } else {
-        logger.warn(`   ⚠️ Aucun segment dans translatedAudio!`);
+      if (!translationData.translatedAudio.segments?.length) {
+        logger.debug(`audio-translation:ready no segments lang=${data.language} msg=${data.messageId}`);
       }
 
       // Diffuser dans la room de conversation
-      logger.info(`📡 [SocketIOManager] Émission événement '${eventConstant}' vers room '${roomName}' (${clientCount} clients)`);
       this.io.to(roomName).emit(eventConstant, translationData);
+      logger.info('audio-translation:ready broadcast', { messageId: data.messageId, attachmentId: data.attachmentId, conversationId: normalizedId, lang: data.language });
 
       // Generic attachment-updated delta : same rationale as the
       // transcription-ready branch. Clients receive the FULL re-serialized
       // attachment (with the freshly-added translation language merged into
       // `translations`) and refresh their derived state atomically.
       await this._broadcastAttachmentUpdated(data.attachmentId, data.messageId, normalizedId);
-
-      logger.info(`✅ [SocketIOManager] ======== ÉVÉNEMENT TRADUCTION DIFFUSÉ ========`);
-      logger.info(`✅ [SocketIOManager] Traduction ${data.language} diffusée vers ${clientCount} client(s)`);
 
     } catch (error) {
       logger.error(`❌ [SocketIOManager] Erreur envoi traduction:`, error);
@@ -1595,17 +1575,7 @@ export class MeeshySocketIOManager {
       if (message.attachments && message.attachments.length > 0) {
         const first = message.attachments[0] as unknown as Record<string, unknown>;
         const firstMeta = typeof first['metadata'] === 'object' && first['metadata'] ? first['metadata'] as Record<string, unknown> : null;
-        logger.info('🔍 [WEBSOCKET] Broadcasting message avec attachments:', {
-          messageId: message.id,
-          attachmentCount: message.attachments.length,
-          firstAttachment: {
-            id: first['id'],
-            hasMetadata: !!firstMeta,
-            metadata: firstMeta,
-            metadataType: typeof first['metadata'],
-            metadataKeys: firstMeta ? Object.keys(firstMeta) : []
-          },
-        });
+        logger.debug(`message:new broadcast messageId=${message.id} attachments=${message.attachments.length}`);
       }
 
       // COMPORTEMENT SIMPLE ET FIABLE DE L'ANCIENNE MÉTHODE
