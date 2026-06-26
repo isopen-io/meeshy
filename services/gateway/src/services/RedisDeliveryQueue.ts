@@ -6,6 +6,15 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 
 const logger = enhancedLogger.child({ module: 'RedisDeliveryQueue' });
 
+// Atomically read-all + delete in a single Redis round-trip.
+// Using eval (Lua) instead of pipeline prevents duplicate delivery
+// when two workers race to drain the same key simultaneously.
+const DRAIN_LUA = `
+local entries = redis.call('LRANGE', KEYS[1], 0, -1)
+redis.call('DEL', KEYS[1])
+return entries
+`.trim();
+
 function queueKey(userId: string): string {
   return `${DELIVERY_QUEUE_PREFIX}${userId}`;
 }
@@ -59,16 +68,9 @@ export class RedisDeliveryQueue {
     if (redis) {
       try {
         const key = queueKey(userId);
-        const pipeline = redis.pipeline();
-        pipeline.lrange(key, 0, -1);
-        pipeline.del(key);
-        const results = await pipeline.exec();
+        const rawEntries = await redis.eval(DRAIN_LUA, 1, key);
 
-        if (!results || !results[0]) return [];
-
-        const [rangeError, rawEntries] = results[0];
-        if (rangeError) throw rangeError;
-
+        if (!Array.isArray(rawEntries)) return [];
         return (rawEntries as string[]).map(raw => JSON.parse(raw) as QueuedMessagePayload);
       } catch (error) {
         logger.warn('Redis drain failed, falling back to memory', { userId, error });

@@ -157,7 +157,9 @@ export class AuthHandler {
 
         try {
           socket.join('conversation:any');
-        } catch {}
+        } catch (error) {
+          logger.debug('failed to join conversation:any room (manual auth)', { userId: user.id, error });
+        }
 
         socket.emit(SERVER_EVENTS.AUTHENTICATED, {
           success: true,
@@ -238,7 +240,9 @@ export class AuthHandler {
 
     try {
       socket.join('conversation:any');
-    } catch {}
+    } catch (error) {
+      logger.debug('failed to join conversation:any room (JWT auth)', { userId: user.id, error });
+    }
 
     socket.emit(SERVER_EVENTS.AUTHENTICATED, {
       success: true,
@@ -309,7 +313,13 @@ export class AuthHandler {
 
     try {
       socket.join(ROOMS.conversation(participant.conversationId));
-    } catch {}
+    } catch (error) {
+      logger.warn('failed to join conversation room for anonymous user — messages may not be received', {
+        anonymousId: socketUser.id,
+        conversationId: participant.conversationId,
+        error,
+      });
+    }
 
     socket.emit(SERVER_EVENTS.AUTHENTICATED, {
       success: true,
@@ -431,7 +441,9 @@ export class AuthHandler {
           data: { lastActiveAt: new Date() }
         });
       }
-    } catch {}
+    } catch (error) {
+      logger.debug('heartbeat DB update failed (best-effort)', { userId: userIdOrToken, error });
+    }
   }
 
   private async _joinUserConversations(socket: Socket, userId: string, isAnonymous: boolean): Promise<void> {
