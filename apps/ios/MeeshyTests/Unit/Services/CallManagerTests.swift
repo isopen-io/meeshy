@@ -599,10 +599,10 @@ final class CallManagerEarlyJoinTests: XCTestCase {
     }
 }
 
-// MARK: - CallStats Reducer (§5.7)
+// MARK: - CallStats Reducer — packet-level (§5.7)
 
 @MainActor
-final class CallStatsReducerTests: XCTestCase {
+final class CallStatsPacketReducerTests: XCTestCase {
     private func codec(_ id: String, _ mime: String) -> CallStats.RawEntry {
         CallStats.RawEntry(id: id, type: "codec", mimeType: mime)
     }
