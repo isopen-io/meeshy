@@ -132,23 +132,33 @@ export class UserManagementService {
     // Hash du mot de passe
     const hashedPassword = await bcrypt.hash(data.password, 10);
 
-    const user = await this.prisma.user.create({
-      data: {
-        username: data.username,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        email: data.email,
-        password: hashedPassword,
-        displayName: data.displayName,
-        bio: data.bio || '',
-        phoneNumber: data.phoneNumber,
-        role: (data.role || 'USER') as UserRole,
-        systemLanguage: data.systemLanguage || 'en',
-        regionalLanguage: data.regionalLanguage || 'en',
-        isActive: true,
-        lastActiveAt: new Date()
-        // TODO: Initialize UserPreferences.application when implemented
-      }
+    const user = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: {
+          username: data.username,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          email: data.email,
+          password: hashedPassword,
+          displayName: data.displayName,
+          bio: data.bio || '',
+          phoneNumber: data.phoneNumber,
+          role: (data.role || 'USER') as UserRole,
+          systemLanguage: data.systemLanguage || 'en',
+          regionalLanguage: data.regionalLanguage || 'en',
+          isActive: true,
+          lastActiveAt: new Date()
+        }
+      });
+
+      await tx.userPreferences.create({
+        data: {
+          userId: created.id,
+          application: { autoTranslateEnabled: true, encryptionPreference: 'e2ee' }
+        }
+      });
+
+      return created;
     });
 
     return user as unknown as FullUser;

@@ -58,15 +58,24 @@ function makePrisma(methods: Partial<{
   create: jest.Mock;
   update: jest.Mock;
   count: jest.Mock;
+  userPreferencesCreate: jest.Mock;
 }> = {}) {
+  const userPreferencesCreate = methods.userPreferencesCreate ?? jest.fn().mockResolvedValue({});
+  const userCreate = methods.create ?? jest.fn();
+  const txClient = {
+    user: { create: userCreate },
+    userPreferences: { create: userPreferencesCreate },
+  };
   return {
     user: {
       findMany: methods.findMany ?? jest.fn(),
       findUnique: methods.findUnique ?? jest.fn(),
-      create: methods.create ?? jest.fn(),
+      create: userCreate,
       update: methods.update ?? jest.fn(),
       count: methods.count ?? jest.fn(),
     },
+    userPreferences: { create: userPreferencesCreate },
+    $transaction: jest.fn().mockImplementation(async (fn: (tx: typeof txClient) => Promise<unknown>) => fn(txClient)),
   } as unknown as PrismaClient;
 }
 
@@ -388,6 +397,26 @@ describe('UserManagementService.createUser', () => {
 
     const callData = (create.mock.calls[0] as any[])[0].data;
     expect(callData.systemLanguage).toBe('en');
+  });
+
+  it('initializes UserPreferences with application defaults', async () => {
+    const user = makeUser();
+    const create = jest.fn().mockResolvedValue(user);
+    const userPreferencesCreate = jest.fn().mockResolvedValue({});
+    const svc = makeService(makePrisma({ create, userPreferencesCreate }));
+
+    await svc.createUser({
+      username: 'bob', firstName: 'B', lastName: 'B',
+      email: 'bob@ex.com', password: 'pw',
+      displayName: null, bio: null, phoneNumber: null,
+    }, 'creator');
+
+    expect(userPreferencesCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        userId: user.id,
+        application: expect.objectContaining({ autoTranslateEnabled: true }),
+      }),
+    });
   });
 });
 
