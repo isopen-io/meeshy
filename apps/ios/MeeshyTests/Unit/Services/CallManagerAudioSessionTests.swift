@@ -932,8 +932,8 @@ final class CallManagerMediaServicesResetTests: XCTestCase {
     func test_mediaServicesReset_observerIsRegistered() throws {
         let source = try callManagerSource()
         XCTAssertTrue(
-            source.contains("AVAudioSession.mediaServicesResetNotification"),
-            "mediaServicesResetNotification must be observed — a media server crash otherwise " +
+            source.contains("AVAudioSession.mediaServicesWereResetNotification"),
+            "mediaServicesWereResetNotification must be observed — a media server crash otherwise " +
             "silences the call permanently")
     }
 
@@ -2267,5 +2267,98 @@ final class CallManagerHoldTests: XCTestCase {
             "resetEndedStateForNewCall must clear isVideoSuspendedByHold — a new call " +
             "arriving within the 1.5s settle window after a held+ended call would " +
             "otherwise inherit stale hold state and suppress the user's camera")
+    }
+}
+
+// MARK: - Audio interruption recovery hardening
+
+/// Source-analysis guards ensuring that AVAudioSession reactivation failure
+/// after an interruption (alarm, Siri) is handled safely. Without these guards,
+/// a failed `setActive(true)` would proceed to configure RTCAudioSession with an
+/// inactive system session, leaving the audio engine in a corrupted state.
+@MainActor
+final class CallManagerAudioInterruptionHardeningTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func webRTCServiceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_interruptionEnd_guardsRTCConfigOnReactivationFailure() throws {
+        let source = try callManagerSource()
+        // Locate the interruption-ended branch by finding the setActive call
+        // followed by a catch block that returns early.
+        guard let setActiveRange = source.range(of: "setActive(true, options: [])") else {
+            XCTFail("setActive call not found in CallManager"); return
+        }
+        let afterSetActive = String(source[setActiveRange.upperBound...])
+        // The catch block must contain a `return` to prevent RTCAudioSession
+        // configuration from running when the system session is inactive.
+        guard let catchRange = afterSetActive.range(of: "} catch {") else {
+            XCTFail("catch block not found after setActive"); return
+        }
+        guard let closingBrace = afterSetActive.range(of: "}", range: catchRange.upperBound..<afterSetActive.endIndex) else {
+            XCTFail("catch block closing brace not found"); return
+        }
+        let catchBody = String(afterSetActive[catchRange.upperBound..<closingBrace.lowerBound])
+        XCTAssertTrue(
+            catchBody.contains("return"),
+            "Interruption-ended handler must `return` inside the catch block so that " +
+            "RTCAudioSession.audioSessionDidActivate and isAudioEnabled are NOT set when " +
+            "AVAudioSession.setActive(true) fails — otherwise the audio engine is configured " +
+            "on an inactive system session, causing silent calls")
+    }
+
+    func test_turnRefreshTask_cancelledBeforeReconnectRefreshRequest() throws {
+        let source = try callManagerSource()
+        // Find the emitRequestIceServers call inside the socket-reconnect handler.
+        guard let emitRange = source.range(of: "emitRequestIceServers(callId: callId)") else {
+            XCTFail("emitRequestIceServers not found"); return
+        }
+        // The cancel of turnRefreshTask must appear BEFORE the emit call in the
+        // reconnect handler so the old deadline cannot fire while the fresh
+        // response is in flight, causing duplicate credential requests.
+        let beforeEmit = String(source[..<emitRange.lowerBound])
+        guard let cancelRange = beforeEmit.range(of: "turnRefreshTask?.cancel()", options: .backwards) else {
+            XCTFail("turnRefreshTask?.cancel() must precede emitRequestIceServers on the reconnect path"); return
+        }
+        // Verify the cancel is in the same reconnect context by checking there's
+        // no function definition boundary between the cancel and the emit.
+        let between = String(beforeEmit[cancelRange.upperBound...])
+        XCTAssertFalse(
+            between.contains("func "),
+            "turnRefreshTask?.cancel() must be in the same function as emitRequestIceServers — " +
+            "a function boundary would mean the cancel is in a different code path")
+    }
+
+    func test_stopQualityMonitor_clearsLastStats() throws {
+        let source = try webRTCServiceSource()
+        guard let stopRange = source.range(of: "func stopQualityMonitor()") else {
+            XCTFail("stopQualityMonitor not found in WebRTCService"); return
+        }
+        guard let closingBrace = source.range(of: "\n    }", range: stopRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not find closing brace of stopQualityMonitor"); return
+        }
+        let body = String(source[stopRange.upperBound..<closingBrace.upperBound])
+        XCTAssertTrue(
+            body.contains("lastStats = nil"),
+            "stopQualityMonitor must nil lastStats so that a call starting immediately " +
+            "after does not inherit stale cumulative counters from the previous call, " +
+            "which would produce incorrect packet-loss deltas in the first quality sample")
     }
 }

@@ -267,6 +267,7 @@ final class WebRTCService {
     func stopQualityMonitor() {
         qualityMonitorTask?.cancel()
         qualityMonitorTask = nil
+        lastStats = nil
     }
 
     private func adjustBitrate(basedOn stats: CallStats, previous: CallStats?) {

@@ -436,6 +436,7 @@ final class CallManager: ObservableObject {
                     try AVAudioSession.sharedInstance().setActive(true, options: [])
                 } catch {
                     Logger.calls.error("AVAudioSession reactivation failed after interruption: \(error.localizedDescription)")
+                    return
                 }
                 let rtc = RTCAudioSession.sharedInstance()
                 rtc.lockForConfiguration()
@@ -2717,10 +2718,12 @@ final class CallManager: ObservableObject {
                     // Request fresh TURN credentials after reconnect. The socket may
                     // have been down long enough for our credentials to approach
                     // expiry (TTL=480s, refresh at 80%=384s — a 96-second window
-                    // of vulnerability). Proactively requesting here ensures the
-                    // next ICE restart uses valid relay credentials.  The response
-                    // arrives via `call:ice-servers-refreshed` and also re-arms the
-                    // periodic scheduler at the new TTL.
+                    // of vulnerability). Cancel the periodic scheduler first so the
+                    // old deadline doesn't fire while the fresh response is in flight,
+                    // causing duplicate requests. The response re-arms the scheduler
+                    // at the new TTL via `call:ice-servers-refreshed`.
+                    self.turnRefreshTask?.cancel()
+                    self.turnRefreshTask = nil
                     MessageSocketManager.shared.emitRequestIceServers(callId: callId)
                     Logger.calls.info("Socket reconnect — requesting fresh TURN credentials for call \(callId)")
                 }
