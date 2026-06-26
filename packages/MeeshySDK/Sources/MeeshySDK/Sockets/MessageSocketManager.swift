@@ -1341,6 +1341,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             .reconnectWait(1),
             .reconnectWaitMax(16),
             .reconnectAttempts(-1),
+            .sessionDelegate(CertificatePinningDelegate()),
         ])
 
         socket = manager?.defaultSocket
@@ -1366,6 +1367,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             .reconnectWait(1),
             .reconnectWaitMax(16),
             .reconnectAttempts(-1),
+            .sessionDelegate(CertificatePinningDelegate()),
         ])
 
         socket = manager?.defaultSocket

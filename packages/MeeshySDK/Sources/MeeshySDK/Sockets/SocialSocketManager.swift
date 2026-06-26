@@ -446,6 +446,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             .reconnectWait(1),
             .reconnectWaitMax(16),
             .reconnectAttempts(-1),
+            .sessionDelegate(CertificatePinningDelegate()),
         ])
 
         socket = manager?.defaultSocket

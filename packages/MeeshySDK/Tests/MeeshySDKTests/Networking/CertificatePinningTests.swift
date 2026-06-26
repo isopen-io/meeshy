@@ -161,4 +161,16 @@ final class CertificatePinningDelegateInitTests: XCTestCase {
         XCTAssertNotEqual(result, .unconfigured,
             "Non-empty pin set with unreadable chain must not return .unconfigured")
     }
+
+    func test_socketBaseURL_hostMatchesAPIBaseURL_host() {
+        // The Socket.IO session delegate uses the same CertificatePinningDelegate
+        // default init as the REST URLSession. For the pin set to cover WebSocket
+        // connections, the socket host must equal the API host (verified here).
+        let apiHost = URL(string: MeeshyConfig.shared.apiBaseURL)?.host
+        let socketHost = SocketConfig.baseURL?.host
+        XCTAssertNotNil(apiHost, "apiBaseURL must contain a resolvable host")
+        XCTAssertNotNil(socketHost, "socketBaseURL must contain a resolvable host")
+        XCTAssertEqual(apiHost, socketHost,
+            "Socket host must equal API host so CertificatePinningDelegate covers both connections")
+    }
 }
