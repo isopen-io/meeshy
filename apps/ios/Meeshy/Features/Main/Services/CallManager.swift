@@ -2626,33 +2626,45 @@ final class CallManager: ObservableObject {
                 guard let self else { return }
                 guard self.callState.isActive, let callId = self.currentCallId else { return }
                 Logger.calls.info("Socket reconnected — re-joining call room \(callId)")
-                MessageSocketManager.shared.emitCallJoin(callId: callId)
-                self.flushPendingIceCandidates()
-                // Re-sync video state with the peer. The gateway resets the peer's
-                // call:media-toggled view when our socket disconnects; after reconnect
-                // the peer defaults to assuming our camera is on, which is wrong if we
-                // toggled video off, the survival controller suspended it, or we are
-                // backgrounded. Compute the effective state from all three sources.
-                if self.isVideoEnabled {
-                    let effectiveVideoOn = !self.isVideoSuspended && !self.isVideoSuspendedByBackground
-                    MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: effectiveVideoOn)
-                    Logger.calls.info("Socket reconnect — re-syncing video state to peer (effectiveVideoOn=\(effectiveVideoOn))")
+                // Await the gateway's ACK before sending room-scoped events.
+                // call:join is async server-side (DB lookup + socket.join); if we
+                // fire call:request-ice-servers or call:toggle-video immediately the
+                // gateway's `socket.rooms.has(ROOMS.call(callId))` guard fails and
+                // those events are silently dropped.
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    let joined = await MessageSocketManager.shared.emitCallJoinWithAck(callId: callId)
+                    guard self.callState.isActive, self.currentCallId == callId else { return }
+                    if !joined {
+                        Logger.calls.warning("Socket reconnect — call:join ACK timed out (callId=\(callId)), proceeding anyway")
+                    }
+                    self.flushPendingIceCandidates()
+                    // Re-sync video state with the peer. The gateway resets the peer's
+                    // call:media-toggled view when our socket disconnects; after reconnect
+                    // the peer defaults to assuming our camera is on, which is wrong if we
+                    // toggled video off, the survival controller suspended it, or we are
+                    // backgrounded. Compute the effective state from all three sources.
+                    if self.isVideoEnabled {
+                        let effectiveVideoOn = !self.isVideoSuspended && !self.isVideoSuspendedByBackground
+                        MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: effectiveVideoOn)
+                        Logger.calls.info("Socket reconnect — re-syncing video state to peer (effectiveVideoOn=\(effectiveVideoOn))")
+                    }
+                    // Re-sync audio mute state. The gateway resets per-participant
+                    // media state when a socket disconnects; the peer defaults to
+                    // assuming our mic is live, which is wrong if we were muted.
+                    // Always emit (even when !isMuted) to overwrite any stale state.
+                    MessageSocketManager.shared.emitCallToggleAudio(callId: callId, enabled: !self.isMuted)
+                    Logger.calls.info("Socket reconnect — re-syncing audio mute state to peer (isMuted=\(self.isMuted))")
+                    // Request fresh TURN credentials after reconnect. The socket may
+                    // have been down long enough for our credentials to approach
+                    // expiry (TTL=480s, refresh at 80%=384s — a 96-second window
+                    // of vulnerability). Proactively requesting here ensures the
+                    // next ICE restart uses valid relay credentials.  The response
+                    // arrives via `call:ice-servers-refreshed` and also re-arms the
+                    // periodic scheduler at the new TTL.
+                    MessageSocketManager.shared.emitRequestIceServers(callId: callId)
+                    Logger.calls.info("Socket reconnect — requesting fresh TURN credentials for call \(callId)")
                 }
-                // Re-sync audio mute state. The gateway resets per-participant
-                // media state when a socket disconnects; the peer defaults to
-                // assuming our mic is live, which is wrong if we were muted.
-                // Always emit (even when !isMuted) to overwrite any stale state.
-                MessageSocketManager.shared.emitCallToggleAudio(callId: callId, enabled: !self.isMuted)
-                Logger.calls.info("Socket reconnect — re-syncing audio mute state to peer (isMuted=\(self.isMuted))")
-                // Request fresh TURN credentials after reconnect. The socket may
-                // have been down long enough for our credentials to approach
-                // expiry (TTL=480s, refresh at 80%=384s — a 96-second window
-                // of vulnerability). Proactively requesting here ensures the
-                // next ICE restart uses valid relay credentials.  The response
-                // arrives via `call:ice-servers-refreshed` and also re-arms the
-                // periodic scheduler at the new TTL.
-                MessageSocketManager.shared.emitRequestIceServers(callId: callId)
-                Logger.calls.info("Socket reconnect — requesting fresh TURN credentials for call \(callId)")
             }
             .store(in: &cancellables)
 

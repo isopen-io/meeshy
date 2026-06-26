@@ -1008,6 +1008,7 @@ public protocol MessageSocketProviding: Sendable {
     func sendViaSocketFallback(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String) async -> MessageSocketManager.SendMessageAck?
     func emitCallInitiate(conversationId: String, isVideo: Bool) async throws -> MessageSocketManager.CallInitiateAck
     func emitCallJoin(callId: String)
+    func emitCallJoinWithAck(callId: String) async -> Bool
     func emitCallLeave(callId: String)
     func emitAppForeground(_ foreground: Bool)
     func addAttachmentReaction(attachmentId: String, messageId: String, emoji: String)
@@ -1055,6 +1056,7 @@ public extension MessageSocketProviding {
 
     func emitCallReconnecting(callId: String, participantId: String, attempt: Int) {}
     func emitCallReconnected(callId: String, participantId: String) {}
+    func emitCallJoinWithAck(callId: String) async -> Bool { false }
     func emitRequestIceServers(callId: String) {}
     func emitCallBackgrounded(callId: String, participantId: String) {}
     func emitCallForegrounded(callId: String, participantId: String) {}
@@ -1986,6 +1988,26 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     public func emitCallJoin(callId: String) {
         socket?.emit("call:join", ["callId": callId])
+    }
+
+    /// ACK-aware join: emits `call:join` and awaits gateway confirmation (3 s
+    /// timeout). Returns `true` when the gateway has put the socket in the call
+    /// room. Use this on socket reconnect before sending room-scoped events
+    /// (call:request-ice-servers, call:toggle-video) — the gateway guards those
+    /// with `socket.rooms.has(ROOMS.call(callId))` which is only true after the
+    /// async joinCall() DB work completes and socket.join() runs.
+    public func emitCallJoinWithAck(callId: String) async -> Bool {
+        guard let socket else { return false }
+        let payload: [String: Any] = ["callId": callId]
+        return await withCheckedContinuation { continuation in
+            var resumed = false
+            socket.emitWithAck("call:join", payload).timingOut(after: 3) { items in
+                guard !resumed else { return }
+                resumed = true
+                let success = (items.first as? [String: Any])?["success"] as? Bool ?? false
+                continuation.resume(returning: success)
+            }
+        }
     }
 
     public func emitCallLeave(callId: String) {

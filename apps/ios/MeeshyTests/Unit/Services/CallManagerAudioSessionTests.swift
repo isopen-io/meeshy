@@ -1647,3 +1647,117 @@ final class CallManagerRemoteAudioStateTests: XCTestCase {
             "peer sounds silent (FaceTime parity)")
     }
 }
+
+// MARK: - call:join / call:request-ice-servers race condition tests
+
+/// Guards the fix for the room-membership race between call:join and room-scoped events.
+/// The gateway's call:join handler is async (rate-limit check + DB + socket.join) — if
+/// we send call:request-ice-servers before socket.join() resolves, the gateway's
+/// `socket.rooms.has(ROOMS.call(callId))` guard returns false and the event is silently
+/// dropped. Fix: emitCallJoinWithAck awaits the ACK before proceeding.
+@MainActor
+final class CallManagerJoinRaceTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func socketManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// socket.didReconnect must use emitCallJoinWithAck (ACK-aware) rather than
+    /// fire-and-forget emitCallJoin so room-scoped events are sent only after the
+    /// gateway has put this socket in the call room.
+    func test_socketReconnect_usesAckAwareJoin() throws {
+        let source = try callManagerSource()
+        guard let reconnectRange = source.range(of: "socket.didReconnect") else {
+            XCTFail("socket.didReconnect sink not found in CallManager.swift"); return
+        }
+        let afterReconnect = String(source[reconnectRange.upperBound...])
+        guard let storeRange = afterReconnect.range(of: ".store(in: &cancellables)") else {
+            XCTFail("Could not find .store(in:) after socket.didReconnect"); return
+        }
+        let sinkBody = String(afterReconnect[..<storeRange.lowerBound])
+        XCTAssertTrue(
+            sinkBody.contains("emitCallJoinWithAck"),
+            "socket.didReconnect must use emitCallJoinWithAck rather than emitCallJoin " +
+            "— the ACK-aware variant awaits the gateway's async call:join (DB lookup + " +
+            "socket.join) before sending room-scoped events. Fire-and-forget lets " +
+            "call:request-ice-servers arrive while socket.rooms.has(callRoom) is still " +
+            "false, silently dropping the event.")
+        XCTAssertFalse(
+            sinkBody.contains("emitCallJoin(callId:"),
+            "socket.didReconnect must not use bare fire-and-forget emitCallJoin — " +
+            "replace with emitCallJoinWithAck to await room membership before sending " +
+            "room-scoped events (ICE flush, media resync, TURN refresh)")
+    }
+
+    /// Post-join operations must be deferred inside an async Task so they execute
+    /// AFTER the ACK resolves.  Placing them synchronously before the await defeats
+    /// the entire purpose of using the ACK-aware join variant.
+    func test_socketReconnect_postsJoinWorkInsideTask() throws {
+        let source = try callManagerSource()
+        guard let reconnectRange = source.range(of: "socket.didReconnect") else {
+            XCTFail("socket.didReconnect sink not found in CallManager.swift"); return
+        }
+        let afterReconnect = String(source[reconnectRange.upperBound...])
+        guard let storeRange = afterReconnect.range(of: ".store(in: &cancellables)") else {
+            XCTFail("Could not find .store(in:) after socket.didReconnect"); return
+        }
+        let sinkBody = String(afterReconnect[..<storeRange.lowerBound])
+        XCTAssertTrue(
+            sinkBody.contains("Task {"),
+            "socket.didReconnect must wrap post-join work in an async Task so that " +
+            "flushPendingIceCandidates, emitCallToggleVideo, emitCallToggleAudio, and " +
+            "emitRequestIceServers are sent AFTER the ACK resolves and the gateway has " +
+            "completed socket.join() for the call room")
+    }
+
+    /// The protocol must declare emitCallJoinWithAck so conforming mocks get the
+    /// default no-op from the extension and need no manual update.
+    func test_messageSocketProvidingProtocol_declaresEmitCallJoinWithAck() throws {
+        let source = try socketManagerSource()
+        guard let protocolRange = source.range(of: "public protocol MessageSocketProviding") else {
+            XCTFail("MessageSocketProviding protocol not found in MessageSocketManager.swift"); return
+        }
+        guard let endBraceRange = source.range(of: "}", range: protocolRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not find closing brace of MessageSocketProviding"); return
+        }
+        let protocolBody = String(source[protocolRange.upperBound..<endBraceRange.lowerBound])
+        XCTAssertTrue(
+            protocolBody.contains("emitCallJoinWithAck"),
+            "MessageSocketProviding must declare emitCallJoinWithAck(callId:) async -> Bool " +
+            "so any conformer (including test mocks) automatically gets the ACK-aware join " +
+            "path via the default no-op in the protocol extension")
+    }
+
+    /// MessageSocketManager must implement emitCallJoinWithAck with a timeout so
+    /// callers can await room membership without blocking indefinitely.
+    func test_messageSocketManager_implementsEmitCallJoinWithAck() throws {
+        let source = try socketManagerSource()
+        XCTAssertTrue(
+            source.contains("func emitCallJoinWithAck(callId: String) async -> Bool"),
+            "MessageSocketManager must implement emitCallJoinWithAck(callId:) async -> Bool " +
+            "— the ACK-aware join that awaits the gateway confirmation before returning, " +
+            "eliminating the race with room-scoped events on socket reconnect")
+        XCTAssertTrue(
+            source.contains("timingOut(after:"),
+            "emitCallJoinWithAck must use socket.emitWithAck with timingOut to prevent " +
+            "hanging indefinitely if the gateway is slow or the call has already ended")
+    }
+}
