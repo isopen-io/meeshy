@@ -118,8 +118,8 @@ final class CertificatePinningTests: XCTestCase {
 final class CertificatePinningDelegateInitTests: XCTestCase {
 
     func test_delegate_canBeCreatedWithCustomProviders() {
-        var pinSetCallCount = 0
-        var hostCallCount = 0
+        nonisolated(unsafe) var pinSetCallCount = 0
+        nonisolated(unsafe) var hostCallCount = 0
 
         let delegate = CertificatePinningDelegate(
             pinSetProvider: { pinSetCallCount += 1; return ["abc123"] },
