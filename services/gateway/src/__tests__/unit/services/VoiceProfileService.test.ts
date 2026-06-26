@@ -74,6 +74,10 @@ const mockPrisma = {
   },
   participant: {
     findFirst: jest.fn() as jest.Mock<any>
+  },
+  userPreferences: {
+    findUnique: jest.fn() as jest.Mock<any>,
+    upsert: jest.fn() as jest.Mock<any>
   }
 };
 
@@ -1549,6 +1553,8 @@ describe('VoiceProfileService', () => {
       const mockUser = createMockUser();
       mockPrisma.user.findUnique.mockResolvedValue(mockUser);
       mockPrisma.userVoiceModel.create.mockResolvedValue(createMockVoiceModel());
+      mockPrisma.userPreferences.findUnique.mockResolvedValue(null);
+      mockPrisma.userPreferences.upsert.mockResolvedValue({ userId: 'user-123', audio: {} });
       mockZmqClient.sendVoiceProfileRequest.mockImplementation(async () => {
         setTimeout(() => {
           mockZmqClient.emit('voiceProfileAnalyzeResult', createMockZmqAnalyzeResult());
