@@ -1133,4 +1133,43 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
             "endCallInternal must reset isVideoSuspendedByBackground = false so the flag " +
             "does not bleed into the next call (singleton lifecycle)")
     }
+
+    /// When the VideoSurvivalController has already suspended outbound video
+    /// (weak network), the foreground observer must NOT re-signal the peer with
+    /// `call:media-toggled true` — doing so would falsely indicate our camera is
+    /// active while we're still not sending frames.
+    func test_foregroundObserver_guardsSurvivalSuspended_beforeRestoringPeer() throws {
+        let source = try callManagerSource()
+        guard let fgRange = source.range(of: "willEnterForegroundNotification") else {
+            XCTFail("willEnterForegroundNotification observer not found"); return
+        }
+        // Find the block that emits call:media-toggled true on foreground.
+        let afterFg = String(source[fgRange.upperBound...])
+        // The restoration condition must check `!self.isVideoSuspended` in
+        // addition to `self.isVideoEnabled` so that a network-survival suspension
+        // in progress before the background is not prematurely cleared.
+        XCTAssertTrue(
+            afterFg.contains("!self.isVideoSuspended"),
+            "willEnterForeground restore must guard on !isVideoSuspended: if the " +
+            "VideoSurvivalController already suspended video before we backgrounded, " +
+            "emitting call:media-toggled true would signal the peer that our camera is " +
+            "active while frames are still paused — showing a frozen/stale feed instead " +
+            "of the correct avatar placeholder.")
+    }
+
+    /// Validates that the foreground restore emits `call:media-toggled true`
+    /// only when BOTH conditions hold: user intent (isVideoEnabled) AND no
+    /// network suspension (isVideoSuspended is false).
+    func test_foregroundObserver_combinesVideoEnabledAndNotSuspendedGuard() throws {
+        let source = try callManagerSource()
+        guard let fgRange = source.range(of: "willEnterForegroundNotification") else {
+            XCTFail("willEnterForegroundNotification observer not found"); return
+        }
+        let afterFg = String(source[fgRange.upperBound...])
+        // The compound condition must appear together before the emit call.
+        XCTAssertTrue(
+            afterFg.contains("isVideoEnabled") && afterFg.contains("!self.isVideoSuspended"),
+            "willEnterForeground restore must combine isVideoEnabled && !isVideoSuspended " +
+            "before calling emitCallToggleVideo(enabled:true)")
+    }
 }
