@@ -1081,7 +1081,13 @@ final class CallManagerThermalVideoDowngradeTests: XCTestCase {
         }
         let end = source.range(of: "\n// MARK:", range: start.upperBound..<source.endIndex)?.lowerBound
                 ?? source.endIndex
+        // Strip whole-line comments so the source-guards match on actual code, not
+        // documentation that may legitimately reference a forbidden API (e.g. the
+        // comment "rather than enableVideo(false)" explaining why it is NOT used).
         return String(source[start.lowerBound..<end])
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
+            .joined(separator: "\n")
     }
 
     func test_thermalCritical_usesDowngradeFromVideo_notEnableVideoFalse() throws {
@@ -1544,7 +1550,7 @@ final class CallKitActionFulfillmentSourceGuardTests: XCTestCase {
             XCTFail("CXEndCallAction handler not found"); return
         }
         let bodyStart = src[endRange.upperBound...].firstIndex(of: "{") ?? src.endIndex
-        let bodyFragment = String(src[bodyStart...].prefix(500))
+        let bodyFragment = String(src[bodyStart...].prefix(2500))
 
         let fulfillOffset = bodyFragment.range(of: "action.fulfill()")?.lowerBound
         let taskOffset = bodyFragment.range(of: "Task {")?.lowerBound

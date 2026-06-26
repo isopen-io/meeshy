@@ -1038,7 +1038,7 @@ final class CallManagerDTMFTests: XCTestCase {
 
     func test_dtmfHandler_fulfillsAction() throws {
         let source = try callManagerSource()
-        let handlerRange = source.range(of: "CXPlayDTMFCallAction")
+        let handlerRange = source.range(of: "perform action: CXPlayDTMFCallAction")
         XCTAssertNotNil(handlerRange)
         let afterHandler = String(source[handlerRange!.upperBound...])
         let nextHandlerBoundary = afterHandler.range(of: "func provider")?.lowerBound
@@ -2608,7 +2608,7 @@ final class CallManagerReconnectVideoSyncTests: XCTestCase {
         }
         // Walk back to find the effectiveVideoOn assignment.
         let beforeLog = String(source[..<reconnectRange.lowerBound])
-        guard let assignRange = beforeLog.range(of: "effectiveVideoOn", options: .backwards) else {
+        guard let assignRange = beforeLog.range(of: "let effectiveVideoOn", options: .backwards) else {
             XCTFail("effectiveVideoOn not found before reconnect log"); return
         }
         // Take the line containing the assignment and a few lines after it.
@@ -2917,7 +2917,7 @@ final class WebRTCServiceAudioBitrateAdaptationTests: XCTestCase {
         guard let fnRange = source.range(of: "private func adjustBitrate(") else {
             XCTFail("adjustBitrate not found in WebRTCService"); return
         }
-        let fnBody = String(source[fnRange.upperBound...].prefix(1000))
+        let fnBody = String(source[fnRange.upperBound...].prefix(3000))
 
         XCTAssertTrue(
             fnBody.contains("client.applyAudioEncoding(maxBitrateBps:"),
@@ -2934,7 +2934,7 @@ final class WebRTCServiceAudioBitrateAdaptationTests: XCTestCase {
         guard let protocolRange = source.range(of: "protocol WebRTCClientProviding:") else {
             XCTFail("WebRTCClientProviding protocol not found"); return
         }
-        let protocolBody = String(source[protocolRange.upperBound...].prefix(2000))
+        let protocolBody = String(source[protocolRange.upperBound...].prefix(4000))
 
         XCTAssertTrue(
             protocolBody.contains("applyAudioEncoding"),
@@ -2993,7 +2993,7 @@ final class CallManagerMediaServicesResetSetActiveGuardTests: XCTestCase {
         guard let handlerRange = source.range(of: "private func handleMediaServicesReset()") else {
             XCTFail("handleMediaServicesReset not found in CallManager.swift"); return
         }
-        let endIdx = source.index(handlerRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let endIdx = source.index(handlerRange.lowerBound, offsetBy: 2600, limitedBy: source.endIndex) ?? source.endIndex
         let fnBody = String(source[handlerRange.lowerBound ..< endIdx])
 
         // The error block for setActive must contain a `return` so the queued
@@ -3001,7 +3001,7 @@ final class CallManagerMediaServicesResetSetActiveGuardTests: XCTestCase {
         guard let errorRange = fnBody.range(of: "AVAudioSession reactivation after media-services reset failed") else {
             XCTFail("setActive error log not found inside handleMediaServicesReset"); return
         }
-        let errorEnd = fnBody.index(errorRange.upperBound, offsetBy: 200, limitedBy: fnBody.endIndex) ?? fnBody.endIndex
+        let errorEnd = fnBody.index(errorRange.upperBound, offsetBy: 400, limitedBy: fnBody.endIndex) ?? fnBody.endIndex
         let errorBlock = String(fnBody[errorRange.lowerBound ..< errorEnd])
 
         XCTAssertTrue(
@@ -3022,7 +3022,7 @@ final class CallManagerMediaServicesResetSetActiveGuardTests: XCTestCase {
         guard let handlerRange = source.range(of: "private func handleMediaServicesReset()") else {
             XCTFail("handleMediaServicesReset not found in CallManager.swift"); return
         }
-        let endIdx = source.index(handlerRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let endIdx = source.index(handlerRange.lowerBound, offsetBy: 2600, limitedBy: source.endIndex) ?? source.endIndex
         let fnBody = String(source[handlerRange.lowerBound ..< endIdx])
 
         guard let setActiveRange = fnBody.range(of: "setActive(true"),
@@ -3048,7 +3048,7 @@ final class CallManagerMediaServicesResetSetActiveGuardTests: XCTestCase {
         guard let handlerRange = source.range(of: "private func handleMediaServicesReset()") else {
             XCTFail("handleMediaServicesReset not found in CallManager.swift"); return
         }
-        let endIdx = source.index(handlerRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let endIdx = source.index(handlerRange.lowerBound, offsetBy: 2600, limitedBy: source.endIndex) ?? source.endIndex
         let fnBody = String(source[handlerRange.lowerBound ..< endIdx])
 
         XCTAssertTrue(
