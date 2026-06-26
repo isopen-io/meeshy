@@ -9,6 +9,7 @@ import { SERVER_EVENTS, CLIENT_EVENTS } from '@meeshy/shared/types/socketio-even
 import { logConversationIdDebug, getConversationIdType, getConversationApiId } from '@/utils/conversation-id-utils';
 import { triggerManualUpdateCheck } from '@/utils/service-worker';
 import type { User } from '@/types';
+import { authService } from '../auth.service';
 import type {
   TypedSocket,
   ConnectionState,
@@ -191,6 +192,15 @@ export class ConnectionService {
 
     socket.on(SERVER_EVENTS.ERROR, (error: any) => {
       this.handleConnectionError(error);
+    });
+
+    socket.on(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, () => {
+      logger.info('[Socket]', 'auth token expired — refreshing and reconnecting');
+      authService.refreshToken().then(() => {
+        this.reconnect();
+      }).catch((err) => {
+        logger.warn('[Socket]', 'token refresh failed after auth:token-expired', { err });
+      });
     });
   }
 

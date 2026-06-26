@@ -118,6 +118,8 @@ export const SERVER_EVENTS = {
    * cache entries. */
   CONVERSATION_JOIN_ERROR: 'conversation:join-error',
   AUTHENTICATED: 'authenticated',
+  AUTH_TOKEN_EXPIRED: 'auth:token-expired',
+  AUTH_SESSION_REVOKED: 'auth:session-revoked',
   ERROR: 'error',
   NOTIFICATION: 'notification',
   NOTIFICATION_NEW: 'notification:new',
@@ -432,6 +434,17 @@ export interface AuthenticatedEventData {
 export interface ErrorEventData {
   readonly message: string;
   readonly code?: string;
+}
+
+export interface AuthTokenExpiredEventData {
+  readonly code: 'token_expired';
+  readonly message: string;
+}
+
+export interface AuthSessionRevokedEventData {
+  readonly code: 'session_revoked';
+  readonly message: string;
+  readonly reason: 'password_changed' | 'logout_all_devices' | 'admin_revoke';
 }
 
 /**
@@ -1114,6 +1127,8 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CONVERSATION_JOINED]: (data: ConversationParticipationEventData) => void;
   [SERVER_EVENTS.CONVERSATION_LEFT]: (data: ConversationParticipationEventData) => void;
   [SERVER_EVENTS.AUTHENTICATED]: (data: AuthenticatedEventData) => void;
+  [SERVER_EVENTS.AUTH_TOKEN_EXPIRED]: (data: AuthTokenExpiredEventData) => void;
+  [SERVER_EVENTS.AUTH_SESSION_REVOKED]: (data: AuthSessionRevokedEventData) => void;
   [SERVER_EVENTS.ERROR]: (data: ErrorEventData) => void;
   [SERVER_EVENTS.NOTIFICATION]: (data: NotificationEventData) => void;
   [SERVER_EVENTS.SYSTEM_MESSAGE]: (data: SystemMessageEventData) => void;

@@ -79,6 +79,12 @@ export class AuthHandler {
         return;
       }
     } catch (error) {
+      if (error instanceof jwt.TokenExpiredError) {
+        logger.info('token expired on socket connect', { socketId: socket.id });
+        socket.emit(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, { code: 'token_expired', message: 'JWT token has expired' });
+        socket.disconnect(true);
+        return;
+      }
       logger.error('erreur authentification automatique', { error });
       socket.emit(SERVER_EVENTS.ERROR, { message: 'Authentication failed' });
       socket.disconnect(true);
@@ -177,6 +183,12 @@ export class AuthHandler {
         }
       }
     } catch (error) {
+      if (error instanceof jwt.TokenExpiredError) {
+        logger.info('token expired on manual auth', { socketId: socket.id });
+        socket.emit(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, { code: 'token_expired', message: 'JWT token has expired' });
+        socket.disconnect(true);
+        return;
+      }
       logger.error('erreur authentification manuelle', { error });
       socket.emit(SERVER_EVENTS.ERROR, { message: 'Authentication failed' });
       socket.disconnect(true);
