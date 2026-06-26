@@ -474,6 +474,26 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         Logger.webrtc.info("[WEBRTC] audio max bitrate updated to \(bitrate / 1000, privacy: .public)kbps")
     }
 
+    /// Adjusts the audio sender's max bitrate at runtime. Called by the
+    /// quality-adaptation loop when the network tier changes (e.g. poor link
+    /// drops from 64 kbps to 24 kbps so audio competes less with video).
+    /// The min bitrate floor (16 kbps) set in `applyAudioCodecPreferences`
+    /// is preserved — only the ceiling is modified.
+    func applyAudioEncoding(maxBitrateBps: Int) {
+        guard let sender = audioTransceiver?.sender else { return }
+        let params = sender.parameters
+        for encoding in params.encodings {
+            encoding.maxBitrateBps = NSNumber(value: maxBitrateBps)
+        }
+        sender.parameters = params
+        let count = params.encodings.count
+        if count > 0 {
+            Logger.webrtc.info("[WEBRTC] audio encoding applied (max=\(maxBitrateBps / 1000, privacy: .public)kbps encodings=\(count, privacy: .public))")
+        } else {
+            Logger.webrtc.warning("[WEBRTC] audio encoding NOT applied — encodings array empty")
+        }
+    }
+
     /// Selects a capture device for a desired logical position. On iPhone/iPad the
     /// front/back cameras report `.front`/`.back`. On **iOS-app-on-Mac** the
     /// built-in / Continuity / USB cameras report `.unspecified`, so a strict
@@ -695,6 +715,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             try await setLocalDescription(RTCSessionDescription(type: .rollback, sdp: ""), on: pc)
         }
 
+        try Self.validateRemoteSDP(offer.sdp)
         let rtcOffer = RTCSessionDescription(type: .offer, sdp: offer.sdp)
         try await setRemoteDescription(rtcOffer, on: pc)
 
@@ -749,6 +770,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
 
     func setRemoteAnswer(_ answer: SessionDescription) async throws {
         guard let pc = peerConnection else { throw WebRTCError.noPeerConnection }
+        try Self.validateRemoteSDP(answer.sdp)
         // §3.4 — mark the answer-application window so a remote offer arriving
         // mid-apply is not misread as a glare collision (MDN invariant).
         isSettingRemoteAnswerPending = true
@@ -783,6 +805,24 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         // guard rather than faulting inside libwebrtc.
         guard pc.signalingState != .closed else {
             Logger.webrtc.warning("Ignoring ICE candidate — peer connection already closed")
+            return
+        }
+        // Input validation: reject candidates with out-of-range indices, oversized
+        // sdpMid strings, or oversized candidate lines. libwebrtc processes these
+        // strings without bounds checks; malformed input from a hostile peer could
+        // cause parsing errors or memory pressure inside the library.
+        guard candidate.sdpMLineIndex >= 0, candidate.sdpMLineIndex <= 255 else {
+            Logger.webrtc.error("Ignoring ICE candidate — sdpMLineIndex out of range: \(candidate.sdpMLineIndex)")
+            return
+        }
+        if let mid = candidate.sdpMid {
+            guard mid.count <= 256 else {
+                Logger.webrtc.error("Ignoring ICE candidate — sdpMid too long (\(mid.count) chars)")
+                return
+            }
+        }
+        guard candidate.candidate.count <= 10_000 else {
+            Logger.webrtc.error("Ignoring ICE candidate — candidate line too long (\(candidate.candidate.count) chars)")
             return
         }
         let rtcCandidate = RTCIceCandidate(
@@ -1170,6 +1210,21 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
                 if let error { cont.resume(throwing: error) }
                 else { cont.resume() }
             }
+        }
+    }
+
+    /// Validates a remote SDP string before passing it to libwebrtc. A hostile peer
+    /// could send an arbitrarily large or malformed SDP that triggers parsing errors
+    /// or memory pressure inside libwebrtc. We guard against the most obvious attacks:
+    /// excessive length and missing mandatory first line.
+    private static func validateRemoteSDP(_ sdp: String) throws {
+        guard sdp.count <= 1_000_000 else {
+            Logger.webrtc.error("Remote SDP too large (\(sdp.count) bytes) — rejecting")
+            throw WebRTCError.failedToCreateSDP
+        }
+        guard sdp.hasPrefix("v=0") else {
+            Logger.webrtc.error("Remote SDP missing required v=0 line — rejecting")
+            throw WebRTCError.failedToCreateSDP
         }
     }
 

@@ -318,6 +318,12 @@ protocol WebRTCClientProviding: AnyObject {
     /// downscale). No-op on audio-only calls (no video transceiver). Driven by
     /// the quality ladder in `WebRTCService.adjustBitrate`.
     func applyVideoEncoding(maxBitrateBps: Int, maxFramerate: Int, scaleResolutionDownBy: Double)
+    /// Applies an adaptive audio sender cap (max bitrate). Called by
+    /// `WebRTCService.adjustBitrate` when the quality ladder changes tier so
+    /// the encoder sheds bandwidth on a degraded link rather than competing
+    /// with video for the available budget. Min bitrate is always preserved
+    /// at the value set by `applyAudioCodecPreferences` (16 kbps floor).
+    func applyAudioEncoding(maxBitrateBps: Int)
     /// Dynamically tightens the Opus encoder ceiling. Called from
     /// `WebRTCService.adjustBitrate` when the RTT/loss heuristic drops
     /// below the `goodRTT`/`goodPacketLoss` thresholds, reducing the

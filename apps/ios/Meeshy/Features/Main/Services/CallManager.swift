@@ -205,7 +205,14 @@ final class CallManager: ObservableObject {
     /// referencing CallManager or hopping to the MainActor. Used to suppress
     /// `forceReconnect()` mid-call (token rotation / re-auth) so the WebRTC
     /// signaling socket is never torn down during a call.
-    nonisolated(unsafe) static var isCallActiveFlag: Bool = false
+    private static let _isCallActiveLock = OSAllocatedUnfairLock(initialState: false)
+    /// Thread-safe read/write. Written only from @MainActor (callState.didSet);
+    /// read from non-isolated socket-manager closures — guarded by an unfair lock
+    /// so concurrent reads never observe a torn write.
+    nonisolated static var isCallActiveFlag: Bool {
+        get { _isCallActiveLock.withLock { $0 } }
+        set { _isCallActiveLock.withLock { $0 = newValue } }
+    }
 
     // MARK: - Internal
 
@@ -279,6 +286,12 @@ final class CallManager: ObservableObject {
     /// so the later intent always wins and `isVideoEnabled` stays consistent with WebRTC.
     private var videoToggleTask: Task<Void, Never>?
     private var remoteQualityResetTask: Task<Void, Never>?
+    /// In-flight ICE restart task. Tracked so overlapping `attemptReconnection`
+    /// calls (e.g. watchdog fires while backoff is sleeping) cancel the previous
+    /// attempt before starting the new one — prevents two concurrent restart
+    /// offers from corrupting the perfect-negotiation state machine.
+    private var iceRestartTask: Task<Void, Never>?
+    private var voipFreshnessTask: Task<Void, Never>?
     private var pendingRemoteOffer: SessionDescription?
     // P0-3 — ICE candidates generated while the socket is down are buffered
     // here and replayed after the socket reconnects + emitCallJoin fires.
@@ -833,7 +846,8 @@ final class CallManager: ObservableObject {
         // disparaît, l'entrée Recents reste neutre.
         let capturedUuid = uuid
         let capturedCallId = callId
-        Task { [weak self] in
+        voipFreshnessTask?.cancel()
+        voipFreshnessTask = Task { [weak self] in
             await self?.checkVoIPCallFreshness(uuid: capturedUuid, callId: capturedCallId)
         }
 
@@ -1699,7 +1713,16 @@ final class CallManager: ObservableObject {
         guard acceptIncomingNegotiation(generation) else { return }
         Task { @MainActor [weak self] in
             guard let self else { return }
-            await self.webRTCService.setRemoteDescription(sdp)
+            let success = await self.webRTCService.setRemoteDescription(sdp)
+            guard self.currentCallId == callId else { return }
+            // A peer connection without a remote description will never produce
+            // media even if ICE connects — fail fast instead of letting the call
+            // hang silently in `.offering` / `.connecting`.
+            guard success else {
+                Logger.calls.error("Failed to apply remote answer for call \(callId) — ending call")
+                self.endCallInternal(reason: .failed(String(localized: "call.error.sdp")))
+                return
+            }
             // Phase 1 fix E5: now that remote answer is applied, ICE
             // checking starts. Transition .offering → .connecting.
             // The single source of truth for `.connected` remains
@@ -2374,6 +2397,10 @@ final class CallManager: ObservableObject {
         videoToggleTask = nil
         remoteQualityResetTask?.cancel()
         remoteQualityResetTask = nil
+        iceRestartTask?.cancel()
+        iceRestartTask = nil
+        voipFreshnessTask?.cancel()
+        voipFreshnessTask = nil
         isRemoteQualityDegraded = false
         pendingRemoteOffer = nil
         pendingIceCandidates = []
@@ -3426,7 +3453,11 @@ extension CallManager: WebRTCServiceDelegate {
         let attempt = reconnectAttempt
         let backoffSeconds = attempt > 1 ? min(pow(2.0, Double(attempt - 1)), 4.0) : 0.0
 
-        Task { @MainActor [weak self] in
+        // Cancel any in-flight restart so two concurrent Tasks don't both send an
+        // offer — overlapping offers corrupt the perfect-negotiation state machine
+        // (both peers may enter makingOffer simultaneously with no polite resolution).
+        iceRestartTask?.cancel()
+        iceRestartTask = Task { @MainActor [weak self] in
             guard let self, let callId = self.currentCallId, let userId = self.remoteUserId else { return }
             if backoffSeconds > 0 {
                 Logger.calls.info("ICE restart attempt \(attempt): backing off \(Int(backoffSeconds))s before retry")
@@ -3465,6 +3496,14 @@ extension CallManager: WebRTCServiceDelegate {
     // which `setupSocketListeners` applies via `webRTCService.updateIceServers`.
     private func scheduleTURNCredentialRefresh(ttl: TimeInterval) {
         turnRefreshTask?.cancel()
+        // Guard against a malformed or zero TTL from the gateway — a 0-second
+        // delay would cause an immediate re-request, hammering the gateway in a
+        // tight loop. Minimum 60 s is a reasonable floor; the expected value is
+        // 480 s (8 min) or the TURN server's credential lifetime.
+        guard ttl >= 60 else {
+            Logger.calls.warning("TURN refresh TTL too short (\(Int(ttl))s) — skipping reschedule")
+            return
+        }
         // Guard against zero/negative TTL (malformed gateway response): a delay of
         // ≤0 would schedule an immediate refresh on every tick, hammering the gateway.
         let refreshDelay = max(QualityThresholds.turnMinRefreshDelaySeconds, ttl * 0.8)
@@ -3515,9 +3554,13 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
     }
 
     func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
+        // CallKit requires fulfill()/fail() to be called synchronously before
+        // the delegate method returns. Calling fulfill() from inside a Task
+        // violates this contract — if the manager is nil or the task is
+        // cancelled, the action is never settled and CallKit times out the call.
+        action.fulfill()
         Task { @MainActor [weak self] in
             await self?.manager?.answerCallReady()
-            action.fulfill()
         }
     }
 
@@ -3538,13 +3581,16 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
         // `endCallInternal` BEFORE requesting the transaction, so the log
         // will show `state=ended(.local)`. In (1)/(3), state is still
         // `.ringing` / `.offering` / `.connecting` / `.connected`.
+        // CallKit requires fulfill() to be called synchronously before the
+        // delegate method returns. Settling the action from inside a Task
+        // means CallKit may time out the action if the manager hop is delayed.
+        action.fulfill()
         Task { @MainActor [weak self] in
             let stateAtEntry = self?.manager?.callState
             Logger.calls.info(
                 "CallKit -> CXEndCallAction received (callUUID=\(action.callUUID), state=\(String(describing: stateAtEntry)))"
             )
             self?.manager?.endCall()
-            action.fulfill()
         }
     }
 

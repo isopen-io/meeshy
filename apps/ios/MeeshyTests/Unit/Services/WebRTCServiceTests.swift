@@ -50,9 +50,11 @@ final class WebRTCServiceTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(client.addIceCandidateCallCount, 1)
     }
 
-    func test_addICECandidate_bufferCap_dropsExcessCandidates() async {
-        // The buffer must never exceed 200 entries. Candidates 201–205 are
-        // silently dropped; after flush, the client receives exactly 200 calls.
+    func test_addICECandidate_bufferCap_retainsNewestCandidates() async {
+        // The buffer is a FIFO ring capped at 200: when full, the OLDEST entry is
+        // evicted so the newest (highest-priority) candidate is always preserved.
+        // After inserting 205 candidates the buffer holds the last 200 (#6–#205).
+        // On flush the client receives exactly 200 calls.
         let (sut, client) = makeSUT()
         let candidate = IceCandidate(sdpMid: "0", sdpMLineIndex: 0, candidate: "candidate:test")
         // Overshoot the cap by 5.
@@ -64,7 +66,7 @@ final class WebRTCServiceTests: XCTestCase {
         await sut.setRemoteDescription(desc)
         // Give the flush task time to drain the buffer.
         try? await Task.sleep(nanoseconds: 200_000_000)
-        // Exactly 200 candidates forwarded — not 205.
+        // Exactly 200 candidates forwarded — the 5 oldest were evicted.
         XCTAssertEqual(client.addIceCandidateCallCount, 200)
     }
 
@@ -142,6 +144,34 @@ final class WebRTCServiceTests: XCTestCase {
         XCTAssertEqual(client.disconnectCallCount, 1)
     }
 
+    // MARK: - Set Remote Description
+
+    func test_setRemoteDescription_success_returnsTrue() async {
+        let (sut, _) = makeSUT()
+        let desc = SessionDescription(type: .answer, sdp: "v=0\r\n")
+        let result = await sut.setRemoteDescription(desc)
+        XCTAssertTrue(result)
+    }
+
+    func test_setRemoteDescription_whenClientFails_returnsFalse() async {
+        let (sut, client) = makeSUT()
+        client.setRemoteAnswerResult = .failure(WebRTCError.failedToCreateSDP)
+        let desc = SessionDescription(type: .answer, sdp: "v=0\r\n")
+        let result = await sut.setRemoteDescription(desc)
+        XCTAssertFalse(result)
+    }
+
+    func test_setRemoteDescription_whenClientFails_doesNotFlushCandidates() async {
+        let (sut, client) = makeSUT()
+        client.setRemoteAnswerResult = .failure(WebRTCError.failedToCreateSDP)
+        let candidate = IceCandidate(sdpMid: "0", sdpMLineIndex: 0, candidate: "candidate:test")
+        sut.addICECandidate(candidate)
+        let desc = SessionDescription(type: .answer, sdp: "v=0\r\n")
+        await sut.setRemoteDescription(desc)
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertEqual(client.addIceCandidateCallCount, 0)
+    }
+
     // MARK: - ICE Restart
 
     func test_performICERestart_returnsNewOffer() async {
@@ -152,6 +182,37 @@ final class WebRTCServiceTests: XCTestCase {
 
         XCTAssertNotNil(result)
         XCTAssertEqual(result?.sdp, "restart-offer")
+    }
+
+    func test_performICERestart_callsRestartIceOnClient() async {
+        let (sut, client) = makeSUT()
+        client.createOfferResult = .success(SessionDescription(type: .offer, sdp: "restart-offer"))
+        _ = await sut.performICERestart()
+        XCTAssertEqual(client.restartIceCallCount, 1)
+    }
+
+    func test_performICERestart_clearsStaleCandidateBufferBeforeRestart() async {
+        let (sut, client) = makeSUT()
+        for i in 0..<3 {
+            sut.addICECandidate(IceCandidate(sdpMid: "0", sdpMLineIndex: 0, candidate: "candidate:\(i)"))
+        }
+        _ = await sut.performICERestart()
+        let desc = SessionDescription(type: .answer, sdp: "v=0\r\n")
+        await sut.setRemoteDescription(desc)
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertEqual(client.addIceCandidateCallCount, 0)
+    }
+
+    func test_addICECandidate_bufferCap_oldestCandidateIsEvictedFirst() async {
+        let (sut, client) = makeSUT()
+        for i in 0...200 {
+            sut.addICECandidate(IceCandidate(sdpMid: "0", sdpMLineIndex: 0, candidate: "candidate:\(i)"))
+        }
+        let desc = SessionDescription(type: .answer, sdp: "v=0\r\n")
+        await sut.setRemoteDescription(desc)
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertEqual(client.addIceCandidateCallCount, 200)
+        XCTAssertEqual(client.addedCandidates.first?.candidate, "candidate:1")
     }
 
     // MARK: - Transcription Channel
@@ -473,6 +534,137 @@ final class WebRTCQualityDelegateSourceGuardTests: XCTestCase {
     }
 }
 
+// MARK: - ICE candidate buffer source guards
+
+/// Guards that the ICE candidate buffer uses FIFO eviction (removeFirst) instead of
+/// an early-return guard — newest (relay) candidates are always preserved.
+@MainActor
+final class ICECandidateBufferSourceGuardTests: XCTestCase {
+
+    private func webRTCServiceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_iceCandidateBuffer_usesFIFOEviction_notEarlyReturn() throws {
+        let src = try webRTCServiceSource()
+        XCTAssertTrue(
+            src.contains("iceCandidateBuffer.removeFirst()"),
+            "ICE candidate buffer must evict the oldest entry via removeFirst() — " +
+            "an early return discards the incoming candidate which may be the TURN relay entry."
+        )
+        XCTAssertFalse(
+            src.contains("guard iceCandidateBuffer.count < 200 else { return }") ||
+            src.contains("guard count < 200 else { return }"),
+            "ICE buffer must NOT use an early-return guard — it must evict oldest and append newest."
+        )
+    }
+
+    func test_iceCandidateBuffer_capIs200() throws {
+        let src = try webRTCServiceSource()
+        XCTAssertTrue(
+            src.contains("iceCandidateBuffer.count >= 200"),
+            "ICE buffer cap check must use >= 200 — the ring size is 200 entries."
+        )
+    }
+}
+
+// MARK: - adjustBitrate audio encoding source guards
+
+/// Guards that `adjustBitrate` calls `applyAudioEncoding` (not the defunct `setMaxAudioBitrate`),
+/// which actually sets sender.parameters.encodings on the live transceiver.
+@MainActor
+final class AdjustBitrateAudioEncodingSourceGuardTests: XCTestCase {
+
+    private func webRTCServiceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_adjustBitrate_callsApplyAudioEncoding_notSetMaxAudioBitrate() throws {
+        let src = try webRTCServiceSource()
+        guard let range = src.range(of: "func adjustBitrate(") else {
+            XCTFail("adjustBitrate not found in WebRTCService.swift"); return
+        }
+        let end = src.range(of: "\n    }", range: range.upperBound..<src.endIndex)?.upperBound ?? src.endIndex
+        let body = String(src[range.lowerBound..<end])
+        XCTAssertTrue(
+            body.contains("applyAudioEncoding(maxBitrateBps:"),
+            "adjustBitrate must call client.applyAudioEncoding(maxBitrateBps:) to set encoding " +
+            "parameters on the live sender — setMaxAudioBitrate only sets a hint and has no effect."
+        )
+        XCTAssertFalse(
+            body.contains("setMaxAudioBitrate("),
+            "adjustBitrate must NOT call setMaxAudioBitrate — use applyAudioEncoding instead."
+        )
+    }
+}
+
+// MARK: - WebRTC input validation source guards
+
+/// Guards that P2PWebRTCClient validates ICE candidate fields and remote SDP
+/// before passing them into the native WebRTC layer.
+@MainActor
+final class WebRTCInputValidationSourceGuardTests: XCTestCase {
+
+    private func p2pClientSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_addIceCandidate_validatesSDPMLineIndexRange() throws {
+        let src = try p2pClientSource()
+        XCTAssertTrue(
+            src.contains("candidate.sdpMLineIndex >= 0") && src.contains("candidate.sdpMLineIndex <= 255"),
+            "addIceCandidate must validate sdpMLineIndex is in [0, 255] — " +
+            "out-of-range values crash the WebRTC native layer."
+        )
+    }
+
+    func test_addIceCandidate_validatesSdpMidLength() throws {
+        let src = try p2pClientSource()
+        XCTAssertTrue(
+            src.contains("mid.count <= 256"),
+            "addIceCandidate must reject sdpMid longer than 256 characters."
+        )
+    }
+
+    func test_addIceCandidate_validatesCandidateStringLength() throws {
+        let src = try p2pClientSource()
+        XCTAssertTrue(
+            src.contains("candidate.candidate.count <= 10_000"),
+            "addIceCandidate must reject candidate strings longer than 10,000 characters."
+        )
+    }
+
+    func test_remoteSDP_validatesMaxSizeAndV0Prefix() throws {
+        let src = try p2pClientSource()
+        XCTAssertTrue(
+            src.contains("sdp.count <= 1_000_000"),
+            "validateRemoteSDP must reject SDPs larger than 1 MB."
+        )
+        XCTAssertTrue(
+            src.contains("sdp.hasPrefix(\"v=0\")"),
+            "validateRemoteSDP must require the v=0 line — it is mandatory per RFC 4566."
+        )
+    }
+}
+
 // MARK: - Testable WebRTC Client
 
 private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
@@ -485,6 +677,7 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
     var createOfferResult: Result<SessionDescription, Error> = .success(SessionDescription(type: .offer, sdp: "mock"))
     var createAnswerResult: Result<SessionDescription, Error> = .success(SessionDescription(type: .answer, sdp: "mock"))
     var addIceCandidateCallCount = 0
+    private(set) var addedCandidates: [IceCandidate] = []
     var disconnectCallCount = 0
     var lastAudioEnabled: Bool?
     var lastVideoEnabled: Bool?
@@ -501,8 +694,12 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
     func setNegotiationRole(isPolite: Bool) { lastNegotiationIsPolite = isPolite }
     func createOffer() async throws -> SessionDescription { try createOfferResult.get() }
     func createAnswer(for offer: SessionDescription) async throws -> SessionDescription { try createAnswerResult.get() }
-    func setRemoteAnswer(_ answer: SessionDescription) async throws {}
-    func addIceCandidate(_ candidate: IceCandidate) async throws { addIceCandidateCallCount += 1 }
+    var setRemoteAnswerResult: Result<Void, Error> = .success(())
+    func setRemoteAnswer(_ answer: SessionDescription) async throws { try setRemoteAnswerResult.get() }
+    func addIceCandidate(_ candidate: IceCandidate) async throws {
+        addIceCandidateCallCount += 1
+        addedCandidates.append(candidate)
+    }
     func startLocalMedia(type: CallMediaType) async throws {}
     func toggleAudio(_ enabled: Bool) { lastAudioEnabled = enabled }
     func toggleVideo(_ enabled: Bool) { lastVideoEnabled = enabled }
@@ -541,6 +738,12 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
     func disconnect() { disconnectCallCount += 1; isConnected = false }
     private(set) var restartIceCallCount = 0
     func restartIce() { restartIceCallCount += 1 }
+    private(set) var applyAudioEncodingCallCount = 0
+    private(set) var lastAudioEncodingMaxBitrateBps: Int?
+    func applyAudioEncoding(maxBitrateBps: Int) {
+        applyAudioEncodingCallCount += 1
+        lastAudioEncodingMaxBitrateBps = maxBitrateBps
+    }
     func setMaxAudioBitrate(_ bitrate: Int) {}
     func sendDTMF(digits: String) {}
     func setAudioEffect(_ effect: AudioEffectConfig?) throws {}

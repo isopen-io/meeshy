@@ -248,6 +248,7 @@ nonisolated final class MockWebRTCClient: WebRTCClientProviding {
     func disconnect() { disconnectCallCount += 1; isConnected = false }
     private(set) var restartIceCallCount = 0
     func restartIce() { restartIceCallCount += 1 }
+    func applyAudioEncoding(maxBitrateBps: Int) {}
     func setMaxAudioBitrate(_ bitrate: Int) {}
     func sendDTMF(digits: String) {}
     func setAudioEffect(_ effect: AudioEffectConfig?) throws {}
@@ -1377,5 +1378,166 @@ final class CallManagerStaleCallIdGuardTests: XCTestCase {
             "`self.currentCallId == callId` on BOTH the nil-offer path AND the success path, " +
             "before calling emitCallOffer."
         )
+    }
+}
+
+// MARK: - ICE restart task serialization source guards
+
+/// Guards that `attemptReconnection()` tracks its in-flight Task via
+/// `iceRestartTask`, cancels any prior one before starting a new one, and
+/// clears the property on teardown. Without this serialisation, two concurrent
+/// calls (e.g. a watchdog firing during exponential-backoff sleep) would both
+/// eventually send ICE restart SDP offers and corrupt the perfect-negotiation
+/// state machine — both peers enter `makingOffer=true` simultaneously with no
+/// polite-peer resolution path.
+@MainActor
+final class ICERestartTaskSerializationTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_callManager_declaresIceRestartTaskProperty() throws {
+        let src = try callManagerSource()
+        XCTAssertTrue(
+            src.contains("private var iceRestartTask: Task<Void, Never>?"),
+            "CallManager must declare `private var iceRestartTask: Task<Void, Never>?` to " +
+            "track the in-flight ICE restart task. Without a named property, overlapping " +
+            "calls to attemptReconnection() create two concurrent Tasks that both eventually " +
+            "send restart offers and corrupt the perfect-negotiation state machine."
+        )
+    }
+
+    func test_attemptReconnection_cancelsExistingTaskBeforeStartingNew() throws {
+        let src = try callManagerSource()
+        guard let funcRange = src.range(of: "func attemptReconnection()") else {
+            XCTFail("attemptReconnection() not found in CallManager.swift"); return
+        }
+        let bodyEnd = src.range(of: "\n    }", range: funcRange.upperBound..<src.endIndex)?.upperBound
+            ?? src.endIndex
+        let body = String(src[funcRange.lowerBound..<bodyEnd])
+        XCTAssertTrue(
+            body.contains("iceRestartTask?.cancel()"),
+            "attemptReconnection must cancel the previous iceRestartTask before creating a " +
+            "new one — two concurrent Tasks sending restart offers corrupt perfect negotiation."
+        )
+        XCTAssertTrue(
+            body.contains("iceRestartTask = Task"),
+            "attemptReconnection must assign the new Task to iceRestartTask so subsequent " +
+            "calls can cancel it."
+        )
+    }
+
+    func test_endCallInternal_cancelsAndNilsIceRestartTask() throws {
+        let src = try callManagerSource()
+        guard let funcRange = src.range(of: "func endCallInternal") else {
+            XCTFail("endCallInternal not found in CallManager.swift"); return
+        }
+        let bodyEnd = src.range(of: "\n    // MARK:", range: funcRange.upperBound..<src.endIndex)?.lowerBound
+            ?? src.endIndex
+        let body = String(src[funcRange.lowerBound..<bodyEnd])
+        XCTAssertTrue(
+            body.contains("iceRestartTask?.cancel()"),
+            "endCallInternal must cancel iceRestartTask to prevent a mid-restart offer from " +
+            "being sent after the call has ended."
+        )
+        XCTAssertTrue(
+            body.contains("iceRestartTask = nil"),
+            "endCallInternal must nil iceRestartTask after cancelling to release the Task object."
+        )
+    }
+}
+
+// MARK: - isCallActiveFlag thread-safety source guard
+
+@MainActor
+final class CallManagerIsCallActiveFlagSourceGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_isCallActiveFlag_isNotUnsafeNonisolated() throws {
+        let src = try callManagerSource()
+        XCTAssertFalse(
+            src.contains("nonisolated(unsafe) static var isCallActiveFlag"),
+            "isCallActiveFlag must NOT use nonisolated(unsafe) — it is read from non-MainActor threads " +
+            "and requires a lock guard (OSAllocatedUnfairLock) to prevent a Swift 6 data race."
+        )
+    }
+
+    func test_isCallActiveFlag_usesOSAllocatedUnfairLock() throws {
+        let src = try callManagerSource()
+        XCTAssertTrue(
+            src.contains("OSAllocatedUnfairLock"),
+            "isCallActiveFlag backing store must use OSAllocatedUnfairLock so concurrent " +
+            "socket-thread reads are serialised against @MainActor writes."
+        )
+    }
+}
+
+// MARK: - CallKit delegate action-fulfillment timing source guards
+
+@MainActor
+final class CallKitActionFulfillmentSourceGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_cxAnswerCallAction_fulfilledBeforeTask() throws {
+        let src = try callManagerSource()
+        guard let answerRange = src.range(of: "perform action: CXAnswerCallAction") else {
+            XCTFail("CXAnswerCallAction handler not found"); return
+        }
+        let bodyStart = src[answerRange.upperBound...].firstIndex(of: "{") ?? src.endIndex
+        let bodyFragment = String(src[bodyStart...].prefix(400))
+
+        let fulfillOffset = bodyFragment.range(of: "action.fulfill()")?.lowerBound
+        let taskOffset = bodyFragment.range(of: "Task {")?.lowerBound
+        XCTAssertNotNil(fulfillOffset, "action.fulfill() must exist in CXAnswerCallAction handler")
+        XCTAssertNotNil(taskOffset, "Task { must exist in CXAnswerCallAction handler for async setup")
+        if let f = fulfillOffset, let t = taskOffset {
+            XCTAssertTrue(f < t,
+                "CXAnswerCallAction: action.fulfill() must appear BEFORE Task { — " +
+                "settling inside the Task is async and may never fire if manager is nil or Task is cancelled.")
+        }
+    }
+
+    func test_cxEndCallAction_fulfilledBeforeTask() throws {
+        let src = try callManagerSource()
+        guard let endRange = src.range(of: "perform action: CXEndCallAction") else {
+            XCTFail("CXEndCallAction handler not found"); return
+        }
+        let bodyStart = src[endRange.upperBound...].firstIndex(of: "{") ?? src.endIndex
+        let bodyFragment = String(src[bodyStart...].prefix(500))
+
+        let fulfillOffset = bodyFragment.range(of: "action.fulfill()")?.lowerBound
+        let taskOffset = bodyFragment.range(of: "Task {")?.lowerBound
+        XCTAssertNotNil(fulfillOffset, "action.fulfill() must exist in CXEndCallAction handler")
+        XCTAssertNotNil(taskOffset, "Task { must exist in CXEndCallAction handler for async teardown")
+        if let f = fulfillOffset, let t = taskOffset {
+            XCTAssertTrue(f < t,
+                "CXEndCallAction: action.fulfill() must appear BEFORE Task { — " +
+                "settling inside the Task creates a CallKit timeout window if manager deallocs mid-flight.")
+        }
     }
 }

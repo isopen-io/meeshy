@@ -1241,7 +1241,7 @@ struct CallView: View {
     private func statusPill(icon: String, text: String, color: Color) -> some View {
         HStack(spacing: 4) {
             Image(systemName: icon)
-                .font(.system(size: 10, weight: .semibold))
+                .font(.caption2.weight(.semibold))
                 .accessibilityHidden(true)
             Text(text)
                 .font(.caption2.weight(.medium))

@@ -2908,10 +2908,10 @@ final class WebRTCServiceAudioBitrateAdaptationTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    /// `adjustBitrate` must call `client.setMaxAudioBitrate` when the computed
-    /// bitrate tier changes, so the Opus encoder ceiling is tightened under
-    /// congestion — not just tracked in a dead `currentBitrate` variable.
-    func test_adjustBitrate_callsSetMaxAudioBitrate_whenBitrateChanges() throws {
+    /// `adjustBitrate` must call `client.applyAudioEncoding` when the computed
+    /// bitrate tier changes — this sets sender.parameters.encodings on the live
+    /// transceiver. The old `setMaxAudioBitrate` call was a no-op hint.
+    func test_adjustBitrate_callsApplyAudioEncoding_whenBitrateChanges() throws {
         let source = try webRTCServiceSource()
 
         guard let fnRange = source.range(of: "private func adjustBitrate(") else {
@@ -2920,16 +2920,15 @@ final class WebRTCServiceAudioBitrateAdaptationTests: XCTestCase {
         let fnBody = String(source[fnRange.upperBound...].prefix(1000))
 
         XCTAssertTrue(
-            fnBody.contains("client.setMaxAudioBitrate("),
-            "adjustBitrate must call client.setMaxAudioBitrate() when currentBitrate changes. " +
-            "Tracking currentBitrate without applying it leaves the Opus ceiling at the initial " +
-            "64 kbps regardless of congestion — audio fills available bandwidth when it should yield."
+            fnBody.contains("client.applyAudioEncoding(maxBitrateBps:"),
+            "adjustBitrate must call client.applyAudioEncoding(maxBitrateBps:) when currentBitrate changes. " +
+            "setMaxAudioBitrate is a hint-only API with no effect on the live sender encoding."
         )
     }
 
-    /// The `WebRTCClientProviding` protocol must declare `setMaxAudioBitrate`
+    /// The `WebRTCClientProviding` protocol must declare `applyAudioEncoding`
     /// so all conformers (real + stub) implement it.
-    func test_webRTCClientProviding_declaresSetMaxAudioBitrate() throws {
+    func test_webRTCClientProviding_declaresApplyAudioEncoding() throws {
         let source = try webRTCTypesSource()
 
         guard let protocolRange = source.range(of: "protocol WebRTCClientProviding:") else {
@@ -2938,8 +2937,8 @@ final class WebRTCServiceAudioBitrateAdaptationTests: XCTestCase {
         let protocolBody = String(source[protocolRange.upperBound...].prefix(2000))
 
         XCTAssertTrue(
-            protocolBody.contains("setMaxAudioBitrate"),
-            "WebRTCClientProviding must declare setMaxAudioBitrate so the protocol " +
+            protocolBody.contains("applyAudioEncoding"),
+            "WebRTCClientProviding must declare applyAudioEncoding so the protocol " +
             "enforces the implementation across P2PWebRTCClient and test stubs"
         )
     }
