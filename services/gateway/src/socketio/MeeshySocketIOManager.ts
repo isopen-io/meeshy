@@ -1639,9 +1639,13 @@ export class MeeshySocketIOManager {
             select: { id: true, userId: true, joinedAt: true }
           });
 
-          // CONVERSATION_UPDATED → room user de CHAQUE participant (re-tri liste)
+          // CONVERSATION_UPDATED → room user de CHAQUE participant (re-tri liste).
+          // `updatedBy` est requis par ConversationUpdatedEventData (this.io est typé,
+          // contrairement à MessageHandler) : c'est l'auteur du message qui déclenche
+          // le bump (resolvedSenderId = User.id du sender, fallback participant id).
           const updatePayload = {
             conversationId: normalizedId,
+            updatedBy: { id: resolvedSenderId ?? message.senderId ?? '' },
             lastMessageAt: message.createdAt || new Date(),
             lastMessageId: message.id,
             lastMessagePreview: message.content,
