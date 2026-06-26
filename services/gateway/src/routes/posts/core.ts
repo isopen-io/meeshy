@@ -82,13 +82,16 @@ export function registerCoreRoutes(
         const postType = parsed.data.type ?? 'POST';
         const broadcastPost = hoistTrackingLinks(post) as unknown as Post;
         if (postType === 'STORY') {
-          socialEvents.broadcastStoryCreated(broadcastPost, authContext.registeredUser.id).catch(() => {});
+          socialEvents.broadcastStoryCreated(broadcastPost, authContext.registeredUser.id)
+            .catch((err) => fastify.log.error({ err, postId: (post as any).id }, '[POST /posts] broadcastStoryCreated failed'));
         } else if (postType === 'STATUS') {
-          socialEvents.broadcastStatusCreated(broadcastPost, authContext.registeredUser.id).catch(() => {});
+          socialEvents.broadcastStatusCreated(broadcastPost, authContext.registeredUser.id)
+            .catch((err) => fastify.log.error({ err, postId: (post as any).id }, '[POST /posts] broadcastStatusCreated failed'));
         } else {
           // U1 — echo the request cmid so an offline author reconciles its
           // optimistic temp post (keyed by cmid) with this server post.
-          socialEvents.broadcastPostCreated(broadcastPost, authContext.registeredUser.id, request.clientMutationId).catch(() => {});
+          socialEvents.broadcastPostCreated(broadcastPost, authContext.registeredUser.id, request.clientMutationId)
+            .catch((err) => fastify.log.error({ err, postId: (post as any).id }, '[POST /posts] broadcastPostCreated failed'));
         }
       }
 
@@ -106,7 +109,7 @@ export function registerCoreRoutes(
             parsed.data.content,
             parsed.data.originalLanguage ?? (post as any).originalLanguage,
             authContext.registeredUser.id,
-          ).catch(() => {});
+          ).catch((err) => fastify.log.error({ err, postId: (post as any).id }, '[POST /posts] translatePost failed'));
         } catch {
           // PostTranslationService not initialized — skip silently
         }
@@ -268,12 +271,16 @@ export function registerCoreRoutes(
       const socialEvents = fastify.socialEvents;
       if (socialEvents) {
         const updatedPostType = (post as any).type as string;
+        const postId = (post as any).id;
         if (updatedPostType === 'STORY') {
-          socialEvents.broadcastStoryUpdated(post as any, authContext.registeredUser.id).catch(() => {});
+          socialEvents.broadcastStoryUpdated(post as any, authContext.registeredUser.id)
+            .catch((err) => fastify.log.error({ err, postId }, '[PATCH /posts/:postId] broadcastStoryUpdated failed'));
         } else if (updatedPostType === 'STATUS') {
-          socialEvents.broadcastStatusUpdated(post as any, authContext.registeredUser.id).catch(() => {});
+          socialEvents.broadcastStatusUpdated(post as any, authContext.registeredUser.id)
+            .catch((err) => fastify.log.error({ err, postId }, '[PATCH /posts/:postId] broadcastStatusUpdated failed'));
         } else {
-          socialEvents.broadcastPostUpdated(post as any, authContext.registeredUser.id).catch(() => {});
+          socialEvents.broadcastPostUpdated(post as any, authContext.registeredUser.id)
+            .catch((err) => fastify.log.error({ err, postId }, '[PATCH /posts/:postId] broadcastPostUpdated failed'));
         }
       }
 
@@ -312,11 +319,14 @@ export function registerCoreRoutes(
       const socialEvents = fastify.socialEvents;
       if (socialEvents) {
         if (result.type === 'STATUS') {
-          socialEvents.broadcastStatusDeleted(postId, authContext.registeredUser.id, result.visibility, (result as any).visibilityUserIds ?? []).catch(() => {});
+          socialEvents.broadcastStatusDeleted(postId, authContext.registeredUser.id, result.visibility, (result as any).visibilityUserIds ?? [])
+            .catch((err) => fastify.log.error({ err, postId }, '[DELETE /posts/:postId] broadcastStatusDeleted failed'));
         } else if (result.type === 'STORY') {
-          socialEvents.broadcastStoryDeleted(postId, authContext.registeredUser.id).catch(() => {});
+          socialEvents.broadcastStoryDeleted(postId, authContext.registeredUser.id)
+            .catch((err) => fastify.log.error({ err, postId }, '[DELETE /posts/:postId] broadcastStoryDeleted failed'));
         } else {
-          socialEvents.broadcastPostDeleted(postId, authContext.registeredUser.id).catch(() => {});
+          socialEvents.broadcastPostDeleted(postId, authContext.registeredUser.id)
+            .catch((err) => fastify.log.error({ err, postId }, '[DELETE /posts/:postId] broadcastPostDeleted failed'));
         }
       }
 

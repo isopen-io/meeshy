@@ -160,7 +160,8 @@ export function registerCommentRoutes(
           postId,
           comment: hoistCommentTrackingLinks(comment as unknown as Record<string, unknown>) as unknown as typeof comment,
           commentCount: post.commentCount,
-        }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch(() => {});
+        }, post.authorId, post.visibility, post.visibilityUserIds ?? [])
+          .catch((err) => fastify.log.error({ err, postId, commentId: comment.id }, '[POST /posts/:postId/comments] broadcastCommentAdded failed'));
       }
 
       // Notify post author (or parent comment author for replies)
@@ -186,7 +187,7 @@ export function registerCommentRoutes(
               postType: post?.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' | undefined,
               postCreatedAt: post?.createdAt ?? undefined,
               postExpiresAt: post?.expiresAt ?? undefined,
-            }).catch(() => {});
+            }).catch((err) => fastify.log.error({ err, commentId: comment.id }, '[POST /posts/:postId/comments] createCommentReplyNotification failed'));
           }
         } else if (post?.authorId && post.type !== 'STORY') {
           // Top-level comment on a regular post/mood/status — notify the
@@ -204,7 +205,7 @@ export function registerCommentRoutes(
             postPreview: post.content?.slice(0, 80),
             postCreatedAt: post.createdAt ?? undefined,
             postExpiresAt: post.expiresAt ?? undefined,
-          }).catch(() => {});
+          }).catch((err) => fastify.log.error({ err, commentId: comment.id }, '[POST /posts/:postId/comments] createPostCommentNotification failed'));
         }
       }
 
@@ -259,7 +260,7 @@ export function registerCommentRoutes(
             postId,
             parsed.data.content,
             (comment as any).originalLanguage,
-          ).catch(() => {});
+          ).catch((err) => fastify.log.error({ err, commentId: comment.id }, '[POST /posts/:postId/comments] translateComment failed'));
         } catch {
           // PostTranslationService not initialized — skip silently
         }
@@ -347,7 +348,7 @@ export function registerCommentRoutes(
           commentAuthorId: result.authorId,
           emoji,
           commentPreview: likedComment?.content?.slice(0, 80),
-        }).catch(() => {});
+        }).catch((err) => fastify.log.error({ err, commentId }, '[POST comments/:commentId/like] createCommentLikeNotification failed'));
       }
 
       return sendSuccess(reply, { liked: true, likeCount: result.likeCount, reactionSummary: result.reactionSummary });
@@ -429,7 +430,8 @@ export function registerCommentRoutes(
             postId,
             commentId,
             commentCount: post.commentCount,
-          }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch(() => {});
+          }, post.authorId, post.visibility, post.visibilityUserIds ?? [])
+            .catch((err) => fastify.log.error({ err, postId, commentId }, '[DELETE comments/:commentId] broadcastCommentDeleted failed'));
         }
       }
 

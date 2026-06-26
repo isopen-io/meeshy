@@ -151,7 +151,7 @@ export class BroadcastSenderJob {
           errorMessage: msg,
           completedAt: new Date(),
         },
-      }).catch(() => {});
+      }).catch((dbErr) => logger.error(`[BroadcastSenderJob] Failed to persist FAILED status for broadcast ${broadcastId}`, { error: dbErr }));
     }
   }
 

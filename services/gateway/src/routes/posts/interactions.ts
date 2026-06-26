@@ -94,7 +94,7 @@ export function registerInteractionRoutes(
           }, post.authorId,
             (post as { visibility?: string }).visibility ?? 'PUBLIC',
             (post as { visibilityUserIds?: string[] }).visibilityUserIds ?? [],
-          ).catch(() => {});
+          ).catch((err) => fastify.log.error({ err, postId }, '[POST /posts/:postId/like] broadcastPostLiked failed'));
         }
       }
 
@@ -110,7 +110,7 @@ export function registerInteractionRoutes(
           postPreview: (post as { content?: string | null }).content?.slice(0, 80) ?? undefined,
           postCreatedAt: (post as { createdAt?: Date | string | null }).createdAt ?? undefined,
           postExpiresAt: (post as { expiresAt?: Date | string | null }).expiresAt ?? undefined,
-        }).catch(() => {});
+        }).catch((err) => fastify.log.error({ err, postId }, '[POST /posts/:postId/like] createPostLikeNotification failed'));
       }
 
       return sendSuccess(reply, { liked: true, reactionSummary: post.reactionSummary });
@@ -182,7 +182,7 @@ export function registerInteractionRoutes(
           }, post.authorId,
             (post as { visibility?: string }).visibility ?? 'PUBLIC',
             (post as { visibilityUserIds?: string[] }).visibilityUserIds ?? [],
-          ).catch(() => {});
+          ).catch((err) => fastify.log.error({ err, postId }, '[DELETE /posts/:postId/like] broadcastPostUnliked failed'));
         }
       }
 
@@ -264,7 +264,8 @@ export function registerInteractionRoutes(
       // éviter de rejouer la requête à chaque impression répétée du feed.
       // Fire-and-forget : ne bloque pas la réponse, émet `notification:counts`.
       if (isNewView) {
-        fastify.notificationService.markPostNotificationsAsRead(viewerId, postId).catch(() => {});
+        fastify.notificationService.markPostNotificationsAsRead(viewerId, postId)
+          .catch((err) => fastify.log.error({ err, postId }, '[POST /posts/:postId/view] markPostNotificationsAsRead failed'));
       }
 
       // If this is a story, broadcast the view to the story author
@@ -695,7 +696,8 @@ export function registerInteractionRoutes(
         socialEvents.broadcastPostReposted({
           originalPostId: postId,
           repost: repost as unknown as Post,
-        }, authContext.registeredUser.id).catch(() => {});
+        }, authContext.registeredUser.id)
+          .catch((err) => fastify.log.error({ err, postId }, '[POST /posts/:postId/repost] broadcastPostReposted failed'));
       }
 
       // Notify original post author
@@ -712,7 +714,7 @@ export function registerInteractionRoutes(
             postPreview: (original as { content?: string | null }).content?.slice(0, 80) ?? undefined,
             postCreatedAt: (original as { createdAt?: Date | string | null }).createdAt ?? undefined,
             postExpiresAt: (original as { expiresAt?: Date | string | null }).expiresAt ?? undefined,
-          }).catch(() => {});
+          }).catch((err) => fastify.log.error({ err, postId }, '[POST /posts/:postId/repost] createPostRepostNotification failed'));
         }
       }
 

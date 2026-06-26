@@ -191,7 +191,8 @@ export class PostService {
 
     // Déclencher la traduction Prisme pour les stories avec texte (fire-and-forget)
     if (data.type === PostType.STORY && data.content) {
-      this.triggerStoryTextTranslation(post.id, data.content, userId).catch(() => {});
+      this.triggerStoryTextTranslation(post.id, data.content, userId)
+        .catch((err) => log.error('Failed to trigger story text translation', { postId: post.id, error: err }));
     }
 
     // Si story avec textObjects : remplir content comme index de recherche + déclencher traductions
@@ -212,7 +213,8 @@ export class PostService {
         });
       }
 
-      this.triggerStoryTextObjectTranslation(post.id, textObjects, userId).catch(() => {});
+      this.triggerStoryTextObjectTranslation(post.id, textObjects, userId)
+        .catch((err) => log.error('Failed to trigger story textObject translation', { postId: post.id, error: err }));
     }
 
     // Tracking des URLs brutes du post/story : mapping `url → token` rangé dans
@@ -627,7 +629,8 @@ export class PostService {
     if (languageChanged) {
       const content = data.content ?? post.content;
       if (content) {
-        this.triggerStoryTextTranslation(postId, content, userId, requestedLanguage).catch(() => {});
+        this.triggerStoryTextTranslation(postId, content, userId, requestedLanguage)
+          .catch((err) => log.error('Failed to trigger story text retranslation after language change', { postId, error: err }));
       }
     }
 
