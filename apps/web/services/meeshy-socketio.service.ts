@@ -279,6 +279,18 @@ class MeeshySocketIOService {
     return this.orchestrator.onAudioTranslationsCompleted(listener);
   }
 
+  public onTranslationFailed(listener: Parameters<SocketIOOrchestrator['onTranslationFailed']>[0]): () => void {
+    return this.orchestrator.onTranslationFailed(listener);
+  }
+
+  public onAudioTranslationFailed(listener: Parameters<SocketIOOrchestrator['onAudioTranslationFailed']>[0]): () => void {
+    return this.orchestrator.onAudioTranslationFailed(listener);
+  }
+
+  public onTranscriptionFailed(listener: Parameters<SocketIOOrchestrator['onTranscriptionFailed']>[0]): () => void {
+    return this.orchestrator.onTranscriptionFailed(listener);
+  }
+
   public onTyping(listener: (event: TypingEvent) => void): () => void {
     return this.orchestrator.onTyping(listener);
   }

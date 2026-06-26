@@ -28,6 +28,7 @@ import { EventEmitter } from 'events';
 import { LRUCache } from '@/lib/lru-cache';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { logger } from '@/utils/logger';
 import type { TranslationModel, MessagePriority } from '@meeshy/shared/types';
 
 // Types de données de traduction
@@ -297,7 +298,7 @@ class AdvancedTranslationService extends EventEmitter {
         this.stats.avgBatchSize = (this.stats.avgBatchSize + requests.length) / 2;
       })
       .catch((error) => {
-        console.error(`❌ Erreur traitement batch ${batchId}:`, error);
+        logger.error('[AdvancedTranslation]', `Erreur traitement batch ${batchId}`, { error });
         this.stats.errors++;
       })
       .finally(() => {
@@ -372,7 +373,7 @@ class AdvancedTranslationService extends EventEmitter {
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
         batch.errors.set(request.messageId, errorMessage);
-        console.error(`❌ Erreur traduction ${request.messageId}:`, error);
+        logger.error('[AdvancedTranslation]', `Erreur traduction ${request.messageId}`, { error });
       }
     }
   }
@@ -394,7 +395,7 @@ class AdvancedTranslationService extends EventEmitter {
       }
       return false;
     } catch (error) {
-      console.error(`❌ Erreur émission traduction via Socket.IO:`, error);
+      logger.error('[AdvancedTranslation]', 'Erreur émission traduction via Socket.IO', { error });
       return false;
     }
   }

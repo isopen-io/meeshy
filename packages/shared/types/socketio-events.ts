@@ -118,6 +118,8 @@ export const SERVER_EVENTS = {
    * cache entries. */
   CONVERSATION_JOIN_ERROR: 'conversation:join-error',
   AUTHENTICATED: 'authenticated',
+  AUTH_TOKEN_EXPIRED: 'auth:token-expired',
+  AUTH_SESSION_REVOKED: 'auth:session-revoked',
   ERROR: 'error',
   NOTIFICATION: 'notification',
   NOTIFICATION_NEW: 'notification:new',
@@ -213,6 +215,36 @@ export const SERVER_EVENTS = {
    * Transcription originale prête (avant traductions)
    */
   TRANSCRIPTION_READY: 'audio:transcription-ready',
+  /**
+   * Emitted when a server-side translation attempt (text or audio) has
+   * permanently failed — e.g. the translator service rejected the request
+   * or the ZMQ pipeline returned an error after all retries.  Lets clients
+   * clear any "translating…" spinner and surface a retry affordance
+   * instead of waiting indefinitely for a result that will never arrive.
+   *
+   * Emitted to the conversation room so all participants on any device
+   * receive the failure at the same time.
+   *
+   * Payload: `TranslationFailedEventData`
+   */
+  TRANSLATION_FAILED: 'translation:failed',
+  /**
+   * Emitted when audio translation processing has permanently failed for a
+   * specific attachment (ZMQ translator returned an error code after all
+   * retries). Lets clients clear any "processing…" spinner on the audio
+   * bubble and surface a retry affordance.
+   *
+   * Payload: `AudioTranslationFailedEventData`
+   */
+  AUDIO_TRANSLATION_FAILED: 'audio:translation-failed',
+  /**
+   * Emitted when audio transcription has permanently failed for a specific
+   * attachment. Lets clients render a "transcription unavailable" state
+   * rather than keeping the transcript placeholder visible forever.
+   *
+   * Payload: `TranscriptionFailedEventData`
+   */
+  TRANSCRIPTION_FAILED: 'audio:transcription-failed',
 
   /**
    * --- Message pinning ---
@@ -402,6 +434,17 @@ export interface AuthenticatedEventData {
 export interface ErrorEventData {
   readonly message: string;
   readonly code?: string;
+}
+
+export interface AuthTokenExpiredEventData {
+  readonly code: 'token_expired';
+  readonly message: string;
+}
+
+export interface AuthSessionRevokedEventData {
+  readonly code: 'session_revoked';
+  readonly message: string;
+  readonly reason: 'password_changed' | 'logout_all_devices' | 'admin_revoke';
 }
 
 /**
@@ -745,6 +788,38 @@ export interface TranscriptionReadyEventData {
   readonly processingTimeMs?: number;
 }
 
+/**
+ * Emitted when a server-side translation attempt has permanently failed.
+ * Lets clients clear any "translating…" spinner and surface a retry
+ * affordance instead of waiting indefinitely for a result that will
+ * never arrive. Emitted to the conversation room so all participants
+ * receive the failure at the same time.
+ */
+export interface TranslationFailedEventData {
+  readonly messageId: string;
+  readonly conversationId: string;
+  readonly error: string;
+  readonly taskId?: string;
+}
+
+export interface AudioTranslationFailedEventData {
+  readonly messageId: string;
+  readonly attachmentId: string;
+  readonly conversationId: string;
+  readonly error: string;
+  readonly errorCode?: string;
+  readonly taskId?: string;
+}
+
+export interface TranscriptionFailedEventData {
+  readonly messageId: string;
+  readonly attachmentId: string;
+  readonly conversationId: string;
+  readonly error: string;
+  readonly errorCode?: string;
+  readonly taskId?: string;
+}
+
 // ===== LOCATION SHARING EVENTS =====
 
 export interface LocationShareData {
@@ -1052,6 +1127,8 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CONVERSATION_JOINED]: (data: ConversationParticipationEventData) => void;
   [SERVER_EVENTS.CONVERSATION_LEFT]: (data: ConversationParticipationEventData) => void;
   [SERVER_EVENTS.AUTHENTICATED]: (data: AuthenticatedEventData) => void;
+  [SERVER_EVENTS.AUTH_TOKEN_EXPIRED]: (data: AuthTokenExpiredEventData) => void;
+  [SERVER_EVENTS.AUTH_SESSION_REVOKED]: (data: AuthSessionRevokedEventData) => void;
   [SERVER_EVENTS.ERROR]: (data: ErrorEventData) => void;
   [SERVER_EVENTS.NOTIFICATION]: (data: NotificationEventData) => void;
   [SERVER_EVENTS.SYSTEM_MESSAGE]: (data: SystemMessageEventData) => void;
@@ -1086,6 +1163,9 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.AUDIO_TRANSLATIONS_PROGRESSIVE]: (data: AudioTranslationsProgressiveEventData) => void;
   [SERVER_EVENTS.AUDIO_TRANSLATIONS_COMPLETED]: (data: AudioTranslationsCompletedEventData) => void;
   [SERVER_EVENTS.TRANSCRIPTION_READY]: (data: TranscriptionReadyEventData) => void;
+  [SERVER_EVENTS.TRANSLATION_FAILED]: (data: TranslationFailedEventData) => void;
+  [SERVER_EVENTS.AUDIO_TRANSLATION_FAILED]: (data: AudioTranslationFailedEventData) => void;
+  [SERVER_EVENTS.TRANSCRIPTION_FAILED]: (data: TranscriptionFailedEventData) => void;
 
   // Mentions
   [SERVER_EVENTS.MENTION_CREATED]: (data: MentionCreatedEventData) => void;

@@ -229,7 +229,7 @@ export class MessagingService {
         : errorMsg.includes('session')
           ? 'SESSION_NOT_FOUND'
           : 'DECRYPTION_FAILED';
-      console.error(`[MessagingService] Decryption failed (${decryptionErrorCode}):`, decryptionError);
+      logger.error('[MessagingService]', `Decryption failed (${decryptionErrorCode})`, { conversationId: message.conversationId, messageId: message.id });
       return {
         ...message,
         content: message.content || '[Encrypted message - Unable to decrypt]',
@@ -298,7 +298,8 @@ export class MessagingService {
             }
           }
         } catch (encryptionError) {
-          console.error('[MessagingService] Encryption failed:', encryptionError);
+          logger.error('[MessagingService]', 'Encryption failed — aborting send to prevent plaintext leak', { conversationId });
+          throw encryptionError;
         }
       }
 
@@ -344,7 +345,7 @@ export class MessagingService {
       return this.sendMessageViaRest(options);
 
     } catch (error) {
-      console.error('[MessagingService] Error sending message:', error);
+      logger.error('[MessagingService]', 'Error sending message', { error: error instanceof Error ? error.message : String(error) });
       return { success: false };
     }
   }
@@ -358,7 +359,7 @@ export class MessagingService {
     content: string
   ): Promise<boolean> {
     if (!socket || !socket.connected) {
-      console.error('[MessagingService] Socket not connected');
+      logger.warn('[MessagingService]', 'editMessage: socket not connected');
       return false;
     }
 
@@ -382,7 +383,7 @@ export class MessagingService {
     messageId: string
   ): Promise<boolean> {
     if (!socket || !socket.connected) {
-      console.error('[MessagingService] Socket not connected');
+      logger.warn('[MessagingService]', 'deleteMessage: socket not connected');
       return false;
     }
 
@@ -426,7 +427,7 @@ export class MessagingService {
         clientMessageId: options.clientMessageId,
       };
     } catch (error) {
-      console.error('[MessagingService] REST fallback also failed:', error);
+      logger.error('[MessagingService]', 'REST fallback also failed', { error: error instanceof Error ? error.message : String(error) });
       return { success: false };
     }
   }

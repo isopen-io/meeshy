@@ -4,6 +4,7 @@
  */
 
 import { apiService } from '../api.service';
+import { logger } from '@/utils/logger';
 import { transformersService } from './transformers.service';
 import type {
   Conversation,
@@ -173,7 +174,7 @@ export class ConversationsCrudService {
         transformersService.transformConversationData(conv)
       );
     } catch (error) {
-      console.error('[ConversationsCrudService] Error searching conversations:', error);
+      logger.error('[ConversationsCrud]', 'Error searching conversations', { error });
       return [];
     }
   }
@@ -197,7 +198,7 @@ export class ConversationsCrudService {
 
       return conversations;
     } catch (error) {
-      console.error('Erreur lors de la récupération des conversations avec l\'utilisateur:', error);
+      logger.error('[ConversationsCrud]', "Erreur lors de la récupération des conversations avec l'utilisateur", { error });
       return [];
     }
   }

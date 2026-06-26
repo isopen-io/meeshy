@@ -78,6 +78,14 @@ export type SocketValidationResult<T> =
   | { success: true; data: T }
   | { success: false; error: string; details?: any[] };
 
+export type SocketValidationFailure = { success: false; error: string; details?: any[] };
+
+export function isValidationFailure<T>(
+  result: SocketValidationResult<T>
+): result is SocketValidationFailure {
+  return !result.success;
+}
+
 export function validateSocketEvent<T>(
   schema: z.ZodType<T>,
   data: unknown

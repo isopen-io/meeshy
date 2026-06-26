@@ -79,6 +79,12 @@ export class AuthHandler {
         return;
       }
     } catch (error) {
+      if (error instanceof jwt.TokenExpiredError) {
+        logger.info('token expired on socket connect', { socketId: socket.id });
+        socket.emit(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, { code: 'token_expired', message: 'JWT token has expired' });
+        socket.disconnect(true);
+        return;
+      }
       logger.error('erreur authentification automatique', { error });
       socket.emit(SERVER_EVENTS.ERROR, { message: 'Authentication failed' });
       socket.disconnect(true);
@@ -157,7 +163,9 @@ export class AuthHandler {
 
         try {
           socket.join('conversation:any');
-        } catch {}
+        } catch (error) {
+          logger.debug('failed to join conversation:any room (manual auth)', { userId: user.id, error });
+        }
 
         socket.emit(SERVER_EVENTS.AUTHENTICATED, {
           success: true,
@@ -175,6 +183,12 @@ export class AuthHandler {
         }
       }
     } catch (error) {
+      if (error instanceof jwt.TokenExpiredError) {
+        logger.info('token expired on manual auth', { socketId: socket.id });
+        socket.emit(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, { code: 'token_expired', message: 'JWT token has expired' });
+        socket.disconnect(true);
+        return;
+      }
       logger.error('erreur authentification manuelle', { error });
       socket.emit(SERVER_EVENTS.ERROR, { message: 'Authentication failed' });
       socket.disconnect(true);
@@ -238,7 +252,9 @@ export class AuthHandler {
 
     try {
       socket.join('conversation:any');
-    } catch {}
+    } catch (error) {
+      logger.debug('failed to join conversation:any room (JWT auth)', { userId: user.id, error });
+    }
 
     socket.emit(SERVER_EVENTS.AUTHENTICATED, {
       success: true,
@@ -309,7 +325,13 @@ export class AuthHandler {
 
     try {
       socket.join(ROOMS.conversation(participant.conversationId));
-    } catch {}
+    } catch (error) {
+      logger.warn('failed to join conversation room for anonymous user — messages may not be received', {
+        anonymousId: socketUser.id,
+        conversationId: participant.conversationId,
+        error,
+      });
+    }
 
     socket.emit(SERVER_EVENTS.AUTHENTICATED, {
       success: true,
@@ -402,7 +424,12 @@ export class AuthHandler {
       logger.error('error checking/leaving active calls on disconnect', { userId: userIdOrToken, error });
     }
 
-    this.connectedUsers.delete(userIdOrToken);
+    // Guard: a new socket may have reconnected while async cleanup was in progress.
+    // Only delete the connectedUsers entry if no new sockets exist for this user.
+    const stillHasSockets = (this.userSockets.get(userIdOrToken)?.size ?? 0) > 0;
+    if (!stillHasSockets) {
+      this.connectedUsers.delete(userIdOrToken);
+    }
 
     try {
       if (isAnonymous) {
@@ -431,7 +458,9 @@ export class AuthHandler {
           data: { lastActiveAt: new Date() }
         });
       }
-    } catch {}
+    } catch (error) {
+      logger.debug('heartbeat DB update failed (best-effort)', { userId: userIdOrToken, error });
+    }
   }
 
   private async _joinUserConversations(socket: Socket, userId: string, isAnonymous: boolean): Promise<void> {

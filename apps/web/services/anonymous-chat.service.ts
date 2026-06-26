@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 /**
  * Service pour la gestion des participants anonymes
  * Gère les connexions, messages et sessions pour les participants anonymes
@@ -71,7 +72,7 @@ export class AnonymousChatService {
         throw new Error(result.message || 'Erreur lors du rafraîchissement de la session');
       }
     } catch (error) {
-      console.error('Erreur rafraîchissement session anonyme:', error);
+      logger.error('[Service]', 'Erreur rafraîchissement session anonyme', { error });
       throw error;
     }
   }
@@ -107,7 +108,7 @@ export class AnonymousChatService {
         throw new Error(result.message || 'Erreur lors du chargement des messages');
       }
     } catch (error) {
-      console.error('Erreur chargement messages anonymes:', error);
+      logger.error('[Service]', 'Erreur chargement messages anonymes', { error });
       throw error;
     }
   }
@@ -149,7 +150,7 @@ export class AnonymousChatService {
         throw new Error(result.message || 'Erreur lors de l\'envoi du message');
       }
     } catch (error) {
-      console.error('Erreur envoi message anonyme:', error);
+      logger.error('[Service]', 'Erreur envoi message anonyme', { error });
       throw error;
     }
   }
@@ -171,7 +172,7 @@ export class AnonymousChatService {
         body: JSON.stringify({ sessionToken: this.sessionToken })
       });
     } catch (error) {
-      console.error('Erreur lors de la fermeture de session:', error);
+      logger.error('[Service]', 'Erreur lors de la fermeture de session', { error });
     } finally {
       // Nettoyer le localStorage
       if (typeof window !== 'undefined') {

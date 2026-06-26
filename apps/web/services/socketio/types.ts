@@ -19,7 +19,10 @@ import type {
   TranscriptionReadyEventData,
   AudioTranslationsProgressiveEventData,
   AudioTranslationsCompletedEventData,
-  PresenceSnapshotEventData
+  PresenceSnapshotEventData,
+  TranslationFailedEventData,
+  AudioTranslationFailedEventData,
+  TranscriptionFailedEventData,
 } from '@meeshy/shared/types/socketio-events';
 import type { EncryptedPayload, EncryptionMode } from '@meeshy/shared/types/encryption';
 
@@ -47,6 +50,9 @@ export type OnlineStatsListener = (data: { conversationId: string; onlineUsers: 
 export type ReactionListener = (data: { messageId: string; userId: string; emoji: string; conversationId: string }) => void;
 export type ConversationJoinedListener = (data: { conversationId: string; userId: string }) => void;
 export type ReadStatusListener = (data: { conversationId: string; participantId: string; type: 'read' | 'received'; updatedAt: Date; summary: { totalMembers: number; deliveredCount: number; readCount: number } }) => void;
+export type TranslationFailedListener = (data: TranslationFailedEventData) => void;
+export type AudioTranslationFailedListener = (data: AudioTranslationFailedEventData) => void;
+export type TranscriptionFailedListener = (data: TranscriptionFailedEventData) => void;
 
 /**
  * Unsubscribe function type

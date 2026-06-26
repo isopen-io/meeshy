@@ -4,6 +4,7 @@
  */
 
 import axios from 'axios';
+import { logger } from '@/utils/logger';
 import { buildApiUrl } from '@/lib/config';
 import { authManager } from './auth-manager.service';
 import type { TranslationModel } from '@meeshy/shared/types';
@@ -87,7 +88,7 @@ class MessageTranslationService {
         estimatedTime: response.data.estimatedTime
       };
     } catch (error: any) {
-      console.error('Erreur lors de la demande de traduction:', error);
+      logger.error('[MessageTranslation]', 'Erreur lors de la demande de traduction', { error });
       throw new Error(`Impossible de demander la traduction: ${error.response?.data?.message || error.message}`);
     }
   }
@@ -110,7 +111,7 @@ class MessageTranslationService {
         error: response.data.error
       };
     } catch (error: any) {
-      console.error('Erreur lors de la vérification du statut:', error);
+      logger.error('[MessageTranslation]', 'Erreur lors de la vérification du statut', { error });
       return {
         messageId,
         targetLanguage,
@@ -130,7 +131,7 @@ class MessageTranslationService {
       });
       return true;
     } catch (error: any) {
-      console.error('Erreur lors de l\'annulation:', error);
+      logger.error('[MessageTranslation]', "Erreur lors de l'annulation", { error });
       return false;
     }
   }
@@ -146,7 +147,7 @@ class MessageTranslationService {
 
       return response.data.translations || [];
     } catch (error: any) {
-      console.error('Erreur lors de la récupération des traductions:', error);
+      logger.error('[MessageTranslation]', 'Erreur lors de la récupération des traductions', { error });
       return [];
     }
   }

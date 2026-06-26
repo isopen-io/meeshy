@@ -562,6 +562,18 @@ export class SocketIOOrchestrator {
     return this.translationService.onAudioTranslationsCompleted(listener);
   }
 
+  onTranslationFailed(listener: Parameters<TranslationService['onTranslationFailed']>[0]): UnsubscribeFn {
+    return this.translationService.onTranslationFailed(listener);
+  }
+
+  onAudioTranslationFailed(listener: Parameters<TranslationService['onAudioTranslationFailed']>[0]): UnsubscribeFn {
+    return this.translationService.onAudioTranslationFailed(listener);
+  }
+
+  onTranscriptionFailed(listener: Parameters<TranslationService['onTranscriptionFailed']>[0]): UnsubscribeFn {
+    return this.translationService.onTranscriptionFailed(listener);
+  }
+
   onTyping(listener: (event: any) => void): UnsubscribeFn {
     return this.typingService.onTyping(listener);
   }

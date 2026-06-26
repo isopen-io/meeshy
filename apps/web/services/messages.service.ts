@@ -1,3 +1,4 @@
+import { logger } from '@/utils/logger';
 import { apiService } from './api.service';
 import type { ApiResponse, PaginationMeta, MessagesListResponse } from '@meeshy/shared/types';
 import { generateClientMessageId } from '@/utils/client-message-id';
@@ -59,7 +60,7 @@ export const messagesService = {
       const response = await apiService.post<Message>('/messages', payload);
       return response;
     } catch (error) {
-      console.error('Erreur lors de la création du message:', error);
+      logger.error('[Service]', 'Erreur lors de la création du message', { error });
       throw error;
     }
   },
@@ -79,7 +80,7 @@ export const messagesService = {
       const offset = (page - 1) * limit;
       return await this.getMessagesWithOffset(conversationId, offset, limit);
     } catch (error) {
-      console.error('Erreur lors de la récupération des messages:', error);
+      logger.error('[Service]', 'Erreur lors de la récupération des messages', { error });
       throw error;
     }
   },
@@ -111,7 +112,7 @@ export const messagesService = {
       // Le backend retourne directement le format MessagesListResponse
       return response.data as unknown as MessagesResponse;
     } catch (error) {
-      console.error('Erreur lors de la récupération des messages avec offset:', error);
+      logger.error('[Service]', 'Erreur lors de la récupération des messages avec offset', { error });
       throw error;
     }
   },
@@ -131,7 +132,7 @@ export const messagesService = {
       });
       return response;
     } catch (error) {
-      console.error('Erreur lors de l\'envoi du message:', error);
+      logger.error('[Service]', "Erreur lors de l'envoi du message", { error });
       throw error;
     }
   },
@@ -144,7 +145,7 @@ export const messagesService = {
       const response = await apiService.patch<Message>(`/messages/${messageId}`, updateData);
       return response;
     } catch (error) {
-      console.error('Erreur lors de la mise à jour du message:', error);
+      logger.error('[Service]', 'Erreur lors de la mise à jour du message', { error });
       throw error;
     }
   },
@@ -157,7 +158,7 @@ export const messagesService = {
       const response = await apiService.delete<{ message: string }>(`/messages/${messageId}`);
       return response;
     } catch (error) {
-      console.error('Erreur lors de la suppression du message:', error);
+      logger.error('[Service]', 'Erreur lors de la suppression du message', { error });
       throw error;
     }
   },

@@ -3,7 +3,7 @@
  * Gestion des connexions, conversations et traductions en temps réel
  */
 
-import { Server as SocketIOServer } from 'socket.io';
+import { Server as SocketIOServer, type Socket } from 'socket.io';
 import { Server as HTTPServer } from 'http';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService, MessageData } from '../services/message-translation/MessageTranslationService';
@@ -48,6 +48,10 @@ import type {
   SocketIOResponse,
   TranslationEvent,
   MessageType,
+  TranslationFailedEventData,
+  AudioTranslationFailedEventData,
+  TranscriptionFailedEventData,
+  AudioTranslationEventData,
 } from '@meeshy/shared/types/socketio-events';
 import { CLIENT_EVENTS, SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../services/ConversationStatsService';
@@ -239,13 +243,13 @@ export class MeeshySocketIOManager {
 
     // Initialiser le SocialEventsHandler pour les broadcasts feed
     this.socialEventsHandler = new SocialEventsHandler({
-      io: this.io as any,
+      io: this.io as SocketIOServer,
       prisma: this.prisma,
     });
 
     // Initialiser le LocationHandler pour les événements de partage de localisation
     this.locationHandler = new LocationHandler({
-      io: this.io as any,
+      io: this.io as SocketIOServer,
       prisma: this.prisma,
       connectedUsers: this.connectedUsers,
       socketToUser: this.socketToUser,
@@ -256,7 +260,7 @@ export class MeeshySocketIOManager {
     PostAudioService.init(this.prisma, this.socialEventsHandler);
 
     // Initialiser le StoryTextObjectTranslationService singleton
-    StoryTextObjectTranslationService.init(this.prisma, this.io as any);
+    StoryTextObjectTranslationService.init(this.prisma, this.io as SocketIOServer);
 
     this.authHandler = new AuthHandler({
       prisma: this.prisma,
@@ -353,7 +357,7 @@ export class MeeshySocketIOManager {
     this.deliveryQueue = queue;
   }
 
-  private async _drainPendingMessages(socket: any, userId: string): Promise<void> {
+  private async _drainPendingMessages(socket: Socket, userId: string): Promise<void> {
     if (!this.deliveryQueue) return;
     try {
       const pending = await this.deliveryQueue.drain(userId);
@@ -438,7 +442,7 @@ export class MeeshySocketIOManager {
    * Permet au client de seed son store sans attendre qu'un changement d'état arrive
    * (closes la faille "ne se met jamais à jour" sur les contacts déjà connectés).
    */
-  private async _emitPresenceSnapshot(socket: any, userId: string, isAnonymous: boolean): Promise<void> {
+  private async _emitPresenceSnapshot(socket: Socket, userId: string, isAnonymous: boolean): Promise<void> {
     try {
       const cached = this.presenceSnapshotCache.get(userId);
       if (cached && Date.now() - cached.cachedAt < this.PRESENCE_SNAPSHOT_CACHE_TTL_MS) {
@@ -508,6 +512,16 @@ export class MeeshySocketIOManager {
       this.presenceSnapshotCache.set(userId, { users, cachedAt: Date.now() });
       socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users });
       logger.info(`📸 [PRESENCE_SNAPSHOT] ${users.length} contacts sent to ${userId} (${users.filter(u => u.isOnline).length} online)`);
+
+      // Drain offline delivery queue — replay any messages that arrived while
+      // the user was disconnected (enqueued in _broadcastNewMessage). Called
+      // here (post-authentication, post-room-join) so the socket is already in
+      // the right conversation rooms when replayed messages arrive.
+      if (!isAnonymous) {
+        this._drainPendingMessages(socket, userId).catch(err => {
+          logger.warn('Failed to drain pending messages on connect', { userId, error: err });
+        });
+      }
     } catch (error) {
       logger.error('❌ [PRESENCE_SNAPSHOT] Failed to build snapshot', error);
     }
@@ -559,6 +573,9 @@ export class MeeshySocketIOManager {
       // Initialiser le service de notifications pour CallEventsHandler
       this.callEventsHandler.setNotificationService(this.notificationService);
       this.callEventsHandler.setPushNotificationService(pushService);
+      if (zmqClient) {
+        this.callEventsHandler.setZmqClient(zmqClient);
+      }
 
       // Écouter les événements de transcription seule prêtes
       this.translationService.on('transcriptionReady', this._handleTranscriptionReady.bind(this));
@@ -573,6 +590,11 @@ export class MeeshySocketIOManager {
 
       // Écouter les traductions de textObjects de story
       this.translationService.on('storyTextObjectTranslationCompleted', this._handleStoryTextObjectTranslationCompleted.bind(this));
+
+      // Propager les erreurs de traduction aux clients — empêche les spinners "translating…" permanents
+      this.translationService.on('translationFailed', this._handleTranslationFailed.bind(this));
+      this.translationService.on('audioTranslationError', this._handleAudioTranslationFailed.bind(this));
+      this.translationService.on('transcriptionError', this._handleTranscriptionFailed.bind(this));
 
       // Configurer les événements Socket.IO
       this._setupSocketEvents();
@@ -797,7 +819,7 @@ export class MeeshySocketIOManager {
   }
 
 
-  private async _handleTranslationRequest(socket: any, data: { messageId: string; targetLanguage: string }) {
+  private async _handleTranslationRequest(socket: Socket, data: { messageId: string; targetLanguage: string }) {
     try {
       const userId = this.socketToUser.get(socket.id);
       if (!userId) {
@@ -860,6 +882,86 @@ export class MeeshySocketIOManager {
     }
   }
 
+  private _handleTranslationFailed(data: TranslationFailedEventData): void {
+    try {
+      const room = ROOMS.conversation(data.conversationId);
+      this.io.to(room).emit(SERVER_EVENTS.TRANSLATION_FAILED, data);
+      logger.warn('translation:failed broadcast', {
+        messageId: data.messageId,
+        conversationId: data.conversationId,
+        error: data.error,
+      });
+    } catch (error) {
+      logger.error('failed to broadcast translation:failed', { data, error });
+    }
+  }
+
+  private async _handleAudioTranslationFailed(data: {
+    taskId?: string;
+    messageId: string;
+    attachmentId: string;
+    error: string;
+    errorCode?: string;
+  }): Promise<void> {
+    try {
+      const msg = await this.prisma.message.findUnique({
+        where: { id: data.messageId },
+        select: { conversationId: true },
+      });
+      if (!msg) return;
+      const payload: AudioTranslationFailedEventData = {
+        messageId: data.messageId,
+        attachmentId: data.attachmentId,
+        conversationId: msg.conversationId,
+        error: data.error,
+        errorCode: data.errorCode,
+        taskId: data.taskId,
+      };
+      this.io.to(ROOMS.conversation(msg.conversationId)).emit(SERVER_EVENTS.AUDIO_TRANSLATION_FAILED, payload);
+      logger.warn('audio:translation-failed broadcast', {
+        messageId: data.messageId,
+        attachmentId: data.attachmentId,
+        conversationId: msg.conversationId,
+        error: data.error,
+      });
+    } catch (error) {
+      logger.error('failed to broadcast audio:translation-failed', { data, error });
+    }
+  }
+
+  private async _handleTranscriptionFailed(data: {
+    taskId?: string;
+    messageId: string;
+    attachmentId: string;
+    error: string;
+    errorCode?: string;
+  }): Promise<void> {
+    try {
+      const msg = await this.prisma.message.findUnique({
+        where: { id: data.messageId },
+        select: { conversationId: true },
+      });
+      if (!msg) return;
+      const payload: TranscriptionFailedEventData = {
+        messageId: data.messageId,
+        attachmentId: data.attachmentId,
+        conversationId: msg.conversationId,
+        error: data.error,
+        errorCode: data.errorCode,
+        taskId: data.taskId,
+      };
+      this.io.to(ROOMS.conversation(msg.conversationId)).emit(SERVER_EVENTS.TRANSCRIPTION_FAILED, payload);
+      logger.warn('audio:transcription-failed broadcast', {
+        messageId: data.messageId,
+        attachmentId: data.attachmentId,
+        conversationId: msg.conversationId,
+        error: data.error,
+      });
+    } catch (error) {
+      logger.error('failed to broadcast audio:transcription-failed', { data, error });
+    }
+  }
+
   /**
    * @deprecated Cette fonction gère les anciennes traductions de texte (non audio).
    * Les nouvelles traductions audio utilisent _handleAudioTranslationReady et variants.
@@ -909,11 +1011,6 @@ export class MeeshySocketIOManager {
         const clientCount = roomClients ? roomClients.size : 0;
         
         
-        // Log des clients dans la room pour debug
-        if (clientCount > 0 && roomClients) {
-          const clientSocketIds = Array.from(roomClients);
-        }
-        
         this.io.to(roomName).emit(SERVER_EVENTS.MESSAGE_TRANSLATION, translationData);
         this.stats.translations_sent += clientCount;
         
@@ -932,31 +1029,8 @@ export class MeeshySocketIOManager {
           }
         }
         
-        if (directSendCount > 0) {
-        }
       }
-      
-      // Envoyer les notifications de traduction pour les utilisateurs non connectés
-      if (conversationIdForBroadcast) {
-        setImmediate(async () => {
-          try {
-            // Construire les traductions pour les trois langues de base
-            const translations: { fr?: string; en?: string; es?: string } = {};
-            if (targetLanguage === 'fr') {
-              translations.fr = result.translatedText;
-            } else if (targetLanguage === 'en') {
-              translations.en = result.translatedText;
-            } else if (targetLanguage === 'es') {
-              translations.es = result.translatedText;
-            }
-            
-            // Note: Les notifications de traduction sont gérées directement dans routes/notifications.ts
-          } catch (error) {
-            logger.error(`❌ Erreur envoi notification traduction ${result.messageId}:`, error);
-          }
-        });
-      }
-      
+
     } catch (error) {
       logger.error(`❌ Erreur envoi traduction: ${error}`);
       this.stats.errors++;
@@ -1120,15 +1194,7 @@ export class MeeshySocketIOManager {
    * Helper générique pour broadcaster les événements de traduction audio.
    */
   private async _broadcastTranslationEvent(
-    data: {
-      taskId: string;
-      messageId: string;
-      attachmentId: string;
-      language: string;
-      translatedAudio: any;
-      phase?: string;
-      transcription?: any;
-    },
+    data: AudioTranslationEventData & { taskId?: string; phase?: string; transcription?: unknown },
     eventName: string,
     eventConstant:
       | typeof SERVER_EVENTS.AUDIO_TRANSLATION_READY
@@ -1185,8 +1251,8 @@ export class MeeshySocketIOManager {
           id: data.translatedAudio.id || `${data.attachmentId}_${data.language}`,
           targetLanguage: data.translatedAudio.targetLanguage || data.language,
           url: data.translatedAudio.url,
-          transcription: data.translatedAudio.translatedText || data.translatedAudio.transcription || '',
-          durationMs: data.translatedAudio.durationMs || data.translatedAudio.duration || 0,
+          transcription: (data.translatedAudio as unknown as { translatedText?: string }).translatedText || data.translatedAudio.transcription || '',
+          durationMs: data.translatedAudio.durationMs || (data.translatedAudio as unknown as { duration?: number }).duration || 0,
           format: data.translatedAudio.format || 'mp3',
           cloned: data.translatedAudio.cloned || false,
           quality: data.translatedAudio.quality || 0,
@@ -1229,7 +1295,7 @@ export class MeeshySocketIOManager {
    * Gère un événement de traduction audio unique (1 seule langue demandée).
    * Format unifié: translatedAudio (singulier) — cohérent avec progressive/completed.
    */
-  private async _handleAudioTranslationReady(data: any) {
+  private async _handleAudioTranslationReady(data: AudioTranslationEventData & { taskId?: string; transcription?: unknown; phase?: string }) {
     if (!data.translatedAudio) {
       logger.error(`❌ [SocketIOManager] _handleAudioTranslationReady: translatedAudio manquant`, {
         keys: Object.keys(data),
@@ -1239,15 +1305,7 @@ export class MeeshySocketIOManager {
     }
 
     await this._broadcastTranslationEvent(
-      {
-        taskId: data.taskId,
-        messageId: data.messageId,
-        attachmentId: data.attachmentId,
-        language: data.language || data.translatedAudio.targetLanguage,
-        translatedAudio: data.translatedAudio,
-        transcription: data.transcription,
-        phase: data.phase
-      },
+      data,
       'audioTranslationReady',
       SERVER_EVENTS.AUDIO_TRANSLATION_READY,
       '🎯'
@@ -1258,7 +1316,7 @@ export class MeeshySocketIOManager {
    * Gère un événement de traduction progressive (multi-langues, pas la dernière).
    * Format unifié: translatedAudio (singulier).
    */
-  private async _handleAudioTranslationsProgressive(data: any) {
+  private async _handleAudioTranslationsProgressive(data: AudioTranslationEventData & { taskId?: string; phase?: string }) {
     await this._broadcastTranslationEvent(
       data,
       'audioTranslationsProgressive',
@@ -1271,7 +1329,7 @@ export class MeeshySocketIOManager {
    * Gère un événement de dernière traduction terminée (multi-langues).
    * Format unifié: translatedAudio (singulier).
    */
-  private async _handleAudioTranslationsCompleted(data: any) {
+  private async _handleAudioTranslationsCompleted(data: AudioTranslationEventData & { taskId?: string; phase?: string }) {
     await this._broadcastTranslationEvent(
       data,
       'audioTranslationsCompleted',
@@ -1324,9 +1382,11 @@ export class MeeshySocketIOManager {
     }
 
     for (const { socketIds: socketsForLangs, langs } of socketsByLanguageKey.values()) {
+      if (socketsForLangs.length === 0) continue;
       const filtered = filterMessagePayloadForLanguages(payload, [...langs, originalLanguage]);
-      let emitter: any = this.io;
-      for (const socketId of socketsForLangs) emitter = emitter.to(socketId);
+      const [firstSid, ...restSids] = socketsForLangs;
+      let emitter: ReturnType<SocketIOServer['to']> = this.io.to(firstSid);
+      for (const socketId of restSids) emitter = emitter.to(socketId);
       emitter.emit(SERVER_EVENTS.MESSAGE_NEW, filtered);
     }
   }
@@ -1425,16 +1485,10 @@ export class MeeshySocketIOManager {
    * 
    * OPTIMISATION: Le calcul des stats est fait de manière asynchrone (non-bloquant)
    */
-  private async _broadcastNewMessage(message: Message, conversationId: string, senderSocket?: any): Promise<void> {
+  private async _broadcastNewMessage(message: Message, conversationId: string, senderSocket?: Socket): Promise<void> {
     try {
-      // Normaliser l'ID de conversation pour le broadcast ET le payload
       const normalizedId = await this.normalizeConversationId(conversationId);
 
-
-      // CORRECTION CRITIQUE: Remplacer message.conversationId par l'ObjectId normalisé
-      // car le message en base peut contenir l'identifier au lieu de l'ObjectId
-      (message as any).conversationId = normalizedId;
-      
       // OPTIMISATION: Récupérer les traductions et déclencher le calcul des stats
       // en parallèle. Les stats ne sont plus embarquées dans le payload
       // message:new — elles sont diffusées via l'event dédié `conversation:stats`.
@@ -1450,7 +1504,7 @@ export class MeeshySocketIOManager {
             // `message.translations` est déjà le champ JSON MongoDB — éviter un findUnique redondant
             return transformTranslationsToArray(
               message.id,
-              (message as any).translations as Record<string, any>
+              message.translations as unknown as Record<string, import('../utils/translation-transformer').MessageTranslationJSON>
             );
           } catch (error) {
             logger.warn(`⚠️ [DEBUG] Erreur transformation traductions pour ${message.id}:`, error);
@@ -1481,93 +1535,76 @@ export class MeeshySocketIOManager {
 
       // Construire le payload de message pour broadcast - compatible avec les types existants
       // CORRECTION CRITIQUE: Utiliser l'ObjectId normalisé pour cohérence client-serveur
-      const s = message.sender as any;
+      const senderParticipant = message.sender;
       // CORRECTION senderId: message.senderId = participant ID, mais les clients comparent
       // senderId avec leur userId. On expose sender.userId (= User.id) en priorité.
-      const resolvedSenderId = s?.userId || s?.user?.id || message.senderId || undefined;
+      const resolvedSenderId = senderParticipant?.userId || senderParticipant?.user?.id || message.senderId || undefined;
       const messagePayload = {
         id: message.id,
         conversationId: normalizedId,  // ← FIX: Toujours utiliser l'ObjectId normalisé
         senderId: resolvedSenderId,
         content: message.content,
         originalLanguage: message.originalLanguage || 'fr',
-        originalContent: (message as any).originalContent || message.content,
+        originalContent: (message as unknown as Record<string, unknown>)['originalContent'] as string | undefined || message.content,
         messageType: (message.messageType || 'text') as MessageType,
-        // Message origin (user/system/...) so clients render system notices
-        // (e.g. call summaries) in real time, not only after a REST reload.
-        messageSource: (message as any).messageSource || undefined,
-        // Structured per-type payload (call-summary facts for system messages)
-        metadata: (message as any).metadata || undefined,
+        messageSource: message.messageSource || undefined,
+        metadata: message.metadata || undefined,
         isEdited: Boolean(message.isEdited),
         deletedAt: message.deletedAt || undefined,
-        isBlurred: Boolean((message as any).isBlurred),
-        isViewOnce: Boolean((message as any).isViewOnce),
-        effectFlags: (message as any).effectFlags ?? 0,
-        expiresAt: (message as any).expiresAt || undefined,
+        isBlurred: Boolean(message.isBlurred),
+        isViewOnce: Boolean(message.isViewOnce),
+        effectFlags: (message as unknown as Record<string, unknown>)['effectFlags'] ?? 0,
+        expiresAt: message.expiresAt || undefined,
         createdAt: message.createdAt || new Date(),
         updatedAt: message.updatedAt || new Date(),
-        // CORRECTION CRITIQUE: Inclure validatedMentions pour rendre les mentions cliquables en temps réel
-        validatedMentions: (message as any).validatedMentions || [],
-        // CORRECTION CRITIQUE: Inclure les traductions dans le payload
+        validatedMentions: message.validatedMentions ?? [],
         translations: messageTranslations,
-        // Unified Participant sender
-        sender: message.sender ? (() => {
-          const s = message.sender as any;
-          const u = s.user;
-          return {
-            id: s.id,
-            displayName: s.nickname || s.displayName,
-            avatar: s.avatar || u?.avatar,
-            type: s.type,
-            userId: s.userId,
-            username: u?.username,
-            firstName: u?.firstName || '',
-            lastName: u?.lastName || '',
-          };
-        })() : undefined,
-        // CORRECTION: Inclure les attachments dans le payload avec metadata brut
-        attachments: (message as any).attachments || [],
-        // CORRECTION: Inclure l'objet replyTo complet ET replyToId
+        sender: senderParticipant ? {
+          id: senderParticipant.id,
+          displayName: senderParticipant.nickname || senderParticipant.displayName,
+          avatar: senderParticipant.avatar || senderParticipant.user?.avatar,
+          type: senderParticipant.type,
+          userId: senderParticipant.userId,
+          username: senderParticipant.user?.username,
+          firstName: senderParticipant.user?.firstName || '',
+          lastName: senderParticipant.user?.lastName || '',
+        } : undefined,
+        attachments: message.attachments ?? [],
         replyToId: message.replyToId || undefined,
-        replyTo: (message as any).replyTo ? {
-          id: (message as any).replyTo.id,
+        replyTo: message.replyTo ? {
+          id: message.replyTo.id,
           conversationId: normalizedId,
-          senderId: (message as any).replyTo.senderId || undefined,
-          content: (message as any).replyTo.content,
-          originalLanguage: (message as any).replyTo.originalLanguage || 'fr',
-          messageType: ((message as any).replyTo.messageType || 'text') as MessageType,
-          createdAt: (message as any).replyTo.createdAt || new Date(),
-          sender: (message as any).replyTo.sender ? {
-            id: (message as any).replyTo.sender.id,
-            displayName: (message as any).replyTo.sender.nickname || (message as any).replyTo.sender.displayName,
-            avatar: (message as any).replyTo.sender.avatar,
-            type: (message as any).replyTo.sender.type,
-            userId: (message as any).replyTo.sender.userId,
-            username: (message as any).replyTo.sender.user?.username,
-            firstName: (message as any).replyTo.sender.user?.firstName || '',
-            lastName: (message as any).replyTo.sender.user?.lastName || '',
+          senderId: message.replyTo.senderId || undefined,
+          content: message.replyTo.content,
+          originalLanguage: message.replyTo.originalLanguage || 'fr',
+          messageType: (message.replyTo.messageType || 'text') as MessageType,
+          createdAt: message.replyTo.createdAt || new Date(),
+          sender: message.replyTo.sender ? {
+            id: message.replyTo.sender.id,
+            displayName: message.replyTo.sender.nickname || message.replyTo.sender.displayName,
+            avatar: message.replyTo.sender.avatar,
+            type: message.replyTo.sender.type,
+            userId: message.replyTo.sender.userId,
+            username: message.replyTo.sender.user?.username,
+            firstName: message.replyTo.sender.user?.firstName || '',
+            lastName: message.replyTo.sender.user?.lastName || '',
           } : undefined
         } : undefined,
       };
 
-      // DEBUG: Log pour vérifier les attachments et metadata
-      if ((message as any).attachments && (message as any).attachments.length > 0) {
+      if (message.attachments && message.attachments.length > 0) {
+        const first = message.attachments[0] as unknown as Record<string, unknown>;
+        const firstMeta = typeof first['metadata'] === 'object' && first['metadata'] ? first['metadata'] as Record<string, unknown> : null;
         logger.info('🔍 [WEBSOCKET] Broadcasting message avec attachments:', {
           messageId: message.id,
-          attachmentCount: (message as any).attachments.length,
+          attachmentCount: message.attachments.length,
           firstAttachment: {
-            id: (message as any).attachments[0].id,
-            hasMetadata: !!(message as any).attachments[0].metadata,
-            metadata: (message as any).attachments[0].metadata,
-            metadataType: typeof (message as any).attachments[0].metadata,
-            metadataKeys: (message as any).attachments[0].metadata ? Object.keys((message as any).attachments[0].metadata) : []
+            id: first['id'],
+            hasMetadata: !!firstMeta,
+            metadata: firstMeta,
+            metadataType: typeof first['metadata'],
+            metadataKeys: firstMeta ? Object.keys(firstMeta) : []
           },
-          payloadAttachments: messagePayload.attachments,
-          payloadFirstAttachment: messagePayload.attachments && messagePayload.attachments[0] ? {
-            id: messagePayload.attachments[0].id,
-            hasMetadata: !!(messagePayload.attachments[0] as any).metadata,
-            metadataKeys: (messagePayload.attachments[0] as any).metadata ? Object.keys((messagePayload.attachments[0] as any).metadata) : []
-          } : null
         });
       }
 
@@ -1593,7 +1630,7 @@ export class MeeshySocketIOManager {
       }
 
       // 2b. Emit mention:created to each mentioned user's personal room
-      const mentions = (message as any).validatedMentions as Array<{ participantId?: string; userId?: string; username?: string }> | undefined;
+      const mentions = message.validatedMentions as unknown as Array<{ participantId?: string; userId?: string; username?: string }> | undefined;
       if (mentions && mentions.length > 0) {
         for (const mention of mentions) {
           const targetUserId = mention.userId;
@@ -1604,7 +1641,7 @@ export class MeeshySocketIOManager {
               senderId: message.senderId,
               mentionedUserId: targetUserId,
               mentionedParticipantId: mention.participantId,
-              content: (message as any).content,
+              content: message.content,
               timestamp: new Date().toISOString(),
             });
           }
@@ -1700,9 +1737,9 @@ export class MeeshySocketIOManager {
   public async broadcastMessage(message: Message, conversationId: string): Promise<void> {
     const messageWithTimestamp = {
       ...message,
-      timestamp: (message as any).createdAt || (message as any).timestamp || new Date()
-    } as any;
-    await this._broadcastNewMessage(messageWithTimestamp, conversationId);
+      timestamp: message.createdAt || (message as unknown as { timestamp?: Date })['timestamp'] || new Date()
+    };
+    await this._broadcastNewMessage(messageWithTimestamp as Message, conversationId);
   }
 
 
@@ -1885,7 +1922,7 @@ export class MeeshySocketIOManager {
 
       // Broadcast to all members (translation arrives asynchronously via translationReady event)
       // Note: Notifications are already triggered inside messagingService.handleMessage -> processor.triggerAllNotifications
-      const messageWithTimestamp = { ...result.data, timestamp: result.data.createdAt } as any;
+      const messageWithTimestamp = { ...result.data, timestamp: result.data.createdAt } as Message;
       await this._broadcastNewMessage(messageWithTimestamp, response.conversationId);
 
       logger.info(`[Agent] Response sent — conv=${response.conversationId} user=${response.asUserId} type=${response.metadata.agentType} msgId=${result.data.id}`);
