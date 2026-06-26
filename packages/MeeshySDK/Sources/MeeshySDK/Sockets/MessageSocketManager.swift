@@ -2522,7 +2522,9 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         socket.on("auth:token-expired") { _, _ in
             Logger.socket.info("MessageSocket: auth token expired — triggering refresh")
-            AuthManager.shared.handleUnauthorized()
+            Task { @MainActor in
+                AuthManager.shared.handleUnauthorized()
+            }
         }
 
         // --- Read status events ---
