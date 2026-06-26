@@ -1148,7 +1148,12 @@ final class CallManager: ObservableObject {
                 // createAnswer (called concurrently with emitCallJoin).
                 await self.localMediaTask?.value
                 guard let answer = await self.webRTCService.createAnswer(from: sdp) else {
+                    guard self.currentCallId == callId else { return }
                     self.endCallInternal(reason: .failed("Failed to create SDP answer"))
+                    return
+                }
+                guard self.currentCallId == callId else {
+                    Logger.calls.info("[CALL] late-offer answer discarded: call ended during createAnswer")
                     return
                 }
                 await self.emitCallAnswer(callId: callId, toUserId: userId, sdp: answer)
@@ -1164,7 +1169,12 @@ final class CallManager: ObservableObject {
             Task { [weak self] in
                 guard let self else { return }
                 guard let answer = await self.webRTCService.createAnswer(from: sdp) else {
+                    guard self.currentCallId == callId else { return }
                     Logger.calls.error("Failed to answer mid-call renegotiation offer for call: \(callId)")
+                    return
+                }
+                guard self.currentCallId == callId else {
+                    Logger.calls.info("[CALL] renegotiation answer discarded: call ended during createAnswer")
                     return
                 }
                 await self.emitCallAnswer(callId: callId, toUserId: userId, sdp: answer)
@@ -1212,7 +1222,12 @@ final class CallManager: ObservableObject {
                 // (emitCallJoin is now decoupled from startLocalMedia).
                 await self.localMediaTask?.value
                 guard let answer = await self.webRTCService.createAnswer(from: remoteOffer) else {
+                    guard self.currentCallId == callId else { return }
                     self.endCallInternal(reason: .failed("Failed to create SDP answer"))
+                    return
+                }
+                guard self.currentCallId == callId else {
+                    Logger.calls.info("[CALL] buffered-offer answer discarded: call ended during createAnswer")
                     return
                 }
                 await self.emitCallAnswer(callId: callId, toUserId: userId, sdp: answer)
@@ -1251,7 +1266,12 @@ final class CallManager: ObservableObject {
             // (10s+), so awaiting camera/mic warmup here is safe.
             await self.localMediaTask?.value
             guard let answer = await self.webRTCService.createAnswer(from: remoteOffer) else {
+                guard self.currentCallId == callId else { return }
                 self.endCallInternal(reason: .failed("Failed to create SDP answer"))
+                return
+            }
+            guard self.currentCallId == callId else {
+                Logger.calls.info("[CALL] CallKit answer discarded: call ended during createAnswer")
                 return
             }
             // PERF-004: await the gateway ACK (3s) so when answerCallReady
