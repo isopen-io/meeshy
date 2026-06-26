@@ -820,12 +820,32 @@ export class CallEventsHandler {
         const joinerParticipantId = (participant as any).participant?.userId || participant.participantId;
         const replayOffer = this.bufferedOfferFor(data.callId, userId, joinerParticipantId);
         if (replayOffer) {
-          socket.emit(CALL_EVENTS.SIGNAL, replayOffer);
-          logger.info('📦 [CALL] Replayed buffered offer on (re)join', {
-            callId: data.callId,
-            to: userId,
-            type: replayOffer.signal.type
-          });
+          // C2 — verify the offer sender is still an active participant before
+          // replaying. If the sender left between buffering and this join, the
+          // offer is stale: replaying it would expose the departed sender's
+          // identity to the joining participant and trigger a dead negotiation
+          // (answer sent to nobody). callSession is already in scope from joinCall.
+          const senderId = replayOffer.signal.from;
+          const senderActive = callSession.participants.some(
+            (p: any) => !p.leftAt && (
+              (p.participant?.userId ?? p.participantId) === senderId ||
+              p.participantId === senderId
+            )
+          );
+          if (senderActive) {
+            socket.emit(CALL_EVENTS.SIGNAL, replayOffer);
+            logger.info('📦 [CALL] Replayed buffered offer on (re)join', {
+              callId: data.callId,
+              to: userId,
+              type: replayOffer.signal.type
+            });
+          } else {
+            this.clearBufferedOffer(data.callId);
+            logger.info('📦 [CALL] Buffered offer sender no longer active — dropped', {
+              callId: data.callId,
+              type: replayOffer.signal.type
+            });
+          }
         }
 
         // Audit P1-27 — notify the joining user's OTHER devices that the
@@ -1559,6 +1579,12 @@ export class CallEventsHandler {
           ack?.({ success: false });
           return;
         }
+
+        // Anonymous users cannot end calls — they cannot initiate or join them
+        // either (denyAnonymous is checked at initiate/join). This gate prevents
+        // a future bug where an anonymous user that somehow holds a callId
+        // could end someone else's call by guessing or replaying an event.
+        if (denyAnonymous()) { ack?.({ success: false }); return; }
 
         // Rate limiting
         const rateLimitPassed = await checkSocketRateLimit(

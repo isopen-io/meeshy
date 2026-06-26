@@ -31359,6 +31359,19 @@
         }
       }
     },
+    "call.transcript.you": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You"
     "widget.unreadMessages.title" : {
       "extractionState" : "stale",
       "localizations" : {

@@ -45,6 +45,17 @@ export class TURNCredentialService {
           'cannot be used because it is public.'
         );
       }
+      // A short secret provides insufficient entropy for HMAC-SHA1 credential
+      // generation: a ≤16-char secret can be brute-forced offline from a single
+      // captured TURN allocation request, allowing an attacker to forge credentials
+      // and abuse the relay (bandwidth theft, internal-network pivot).
+      if (envSecret.length < 32) {
+        throw new Error(
+          '[SECURITY] TURN_SECRET must be at least 32 characters in production/staging ' +
+          'to provide adequate key entropy for HMAC-SHA1 credential generation. ' +
+          'Generate with: openssl rand -hex 32'
+        );
+      }
       this.turnSecret = envSecret;
     } else {
       // dev / local / test: tolerate the committed default (it is only used

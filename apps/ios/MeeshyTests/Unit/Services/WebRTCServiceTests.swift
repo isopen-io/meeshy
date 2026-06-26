@@ -187,32 +187,60 @@ final class WebRTCServiceTests: XCTestCase {
     func test_performICERestart_callsRestartIceOnClient() async {
         let (sut, client) = makeSUT()
         client.createOfferResult = .success(SessionDescription(type: .offer, sdp: "restart-offer"))
+
         _ = await sut.performICERestart()
-        XCTAssertEqual(client.restartIceCallCount, 1)
+
+        XCTAssertEqual(client.restartIceCallCount, 1,
+            "performICERestart must signal the peer connection to embed new ICE credentials " +
+            "via restartIce() (IceRestart:true constraint). Omitting this means the ICE " +
+            "re-gather uses old credentials that the remote peer will reject.")
     }
 
     func test_performICERestart_clearsStaleCandidateBufferBeforeRestart() async {
+        // Candidates buffered during a failed ICE session belong to the old ufrag/pwd.
+        // After an ICE restart, those stale candidates must be discarded so the flush
+        // that follows the new answer doesn't forward them to the new ICE agent.
         let (sut, client) = makeSUT()
-        for i in 0..<3 {
-            sut.addICECandidate(IceCandidate(sdpMid: "0", sdpMLineIndex: 0, candidate: "candidate:\(i)"))
-        }
+        let staleCandidate = IceCandidate(sdpMid: "0", sdpMLineIndex: 0, candidate: "candidate:stale")
+        sut.addICECandidate(staleCandidate)
+        sut.addICECandidate(staleCandidate)
+        client.createOfferResult = .success(SessionDescription(type: .offer, sdp: "restart-offer"))
+
         _ = await sut.performICERestart()
-        let desc = SessionDescription(type: .answer, sdp: "v=0\r\n")
-        await sut.setRemoteDescription(desc)
-        try? await Task.sleep(nanoseconds: 200_000_000)
-        XCTAssertEqual(client.addIceCandidateCallCount, 0)
+
+        // Setting a new remote answer after the restart must flush zero stale candidates.
+        let answer = SessionDescription(type: .answer, sdp: "v=0\r\n")
+        await sut.setRemoteDescription(answer)
+        try? await Task.sleep(nanoseconds: 150_000_000)
+
+        XCTAssertEqual(client.addIceCandidateCallCount, 0,
+            "performICERestart must clear the candidate buffer. " +
+            "Stale candidates from the previous ICE session use old ufrag/pwd that the " +
+            "remote peer will reject, causing the new ICE session to silently fail.")
     }
 
     func test_addICECandidate_bufferCap_oldestCandidateIsEvictedFirst() async {
+        // The buffer is a FIFO ring: when full (200), the OLDEST entry is evicted.
+        // This test proves the eviction order by using labelled candidates and
+        // verifying that after one overflow, candidate:0 (oldest) is gone while
+        // candidate:200 (newest) is present.
         let (sut, client) = makeSUT()
-        for i in 0...200 {
+        for i in 0..<200 {
             sut.addICECandidate(IceCandidate(sdpMid: "0", sdpMLineIndex: 0, candidate: "candidate:\(i)"))
         }
-        let desc = SessionDescription(type: .answer, sdp: "v=0\r\n")
-        await sut.setRemoteDescription(desc)
-        try? await Task.sleep(nanoseconds: 200_000_000)
+        // One more triggers FIFO eviction of candidate:0
+        sut.addICECandidate(IceCandidate(sdpMid: "0", sdpMLineIndex: 0, candidate: "candidate:200"))
+
+        let answer = SessionDescription(type: .answer, sdp: "v=0\r\n")
+        await sut.setRemoteDescription(answer)
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
         XCTAssertEqual(client.addIceCandidateCallCount, 200)
-        XCTAssertEqual(client.addedCandidates.first?.candidate, "candidate:1")
+        XCTAssertEqual(client.addedCandidates.first?.candidate, "candidate:1",
+            "The oldest candidate (candidate:0) must be the evicted one — the buffer " +
+            "must preserve relay candidates that arrive after the initial STUN gather.")
+        XCTAssertEqual(client.addedCandidates.last?.candidate, "candidate:200",
+            "The newest candidate must always be retained by the FIFO ring.")
     }
 
     // MARK: - Transcription Channel
@@ -255,6 +283,53 @@ final class WebRTCServiceTests: XCTestCase {
             observed = await sut.connectionState
         }
         XCTAssertEqual(observed, .connected)
+    }
+}
+
+// MARK: - ICE candidate buffer FIFO source guards
+
+/// Verifies that the ICE candidate buffer uses FIFO eviction (removeFirst) rather
+/// than silently discarding new arrivals. A regression to "return early when full"
+/// means relay candidates gathered after the STUN round-trip are never buffered,
+/// silently killing connectivity on symmetric-NAT networks.
+@MainActor
+final class ICECandidateBufferSourceGuardTests: XCTestCase {
+
+    private func webRTCServiceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// The buffer must evict the OLDEST entry (removeFirst) when full, NOT the
+    /// newest. Discarding new arrivals would strand late-arriving relay candidates
+    /// that are essential for symmetric-NAT traversal.
+    func test_iceCandidateBuffer_usesFirstInFirstOutEviction() throws {
+        let src = try webRTCServiceSource()
+        XCTAssertTrue(
+            src.contains("iceCandidateBuffer.removeFirst()"),
+            "ICE candidate buffer must use FIFO eviction (removeFirst) when full — " +
+            "silently dropping new candidates discards relay candidates that arrive " +
+            "after the initial STUN gather and breaks symmetric-NAT connectivity."
+        )
+    }
+
+    /// The guard must NOT use an early `return` path that discards new candidates
+    /// when the buffer cap is hit.
+    func test_iceCandidateBuffer_doesNotDropNewCandidatesWhenFull() throws {
+        let src = try webRTCServiceSource()
+        guard let addFunc = src.range(of: "func addICECandidate(_ candidate: IceCandidate)") else {
+            XCTFail("addICECandidate function not found in WebRTCService.swift"); return
+        }
+        let body = String(src[addFunc.lowerBound...])
+        XCTAssertFalse(
+            body.contains("return") && body.contains("dropping candidate"),
+            "addICECandidate must not silently drop new candidates — use FIFO eviction instead."
+        )
     }
 }
 

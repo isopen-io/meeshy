@@ -1403,6 +1403,9 @@ final class ICERestartTaskSerializationTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
+    /// CallManager must own an `iceRestartTask` property to track the in-flight
+    /// ICE restart. Without a named property there is no way to cancel a prior
+    /// restart before starting the next one.
     func test_callManager_declaresIceRestartTaskProperty() throws {
         let src = try callManagerSource()
         XCTAssertTrue(
@@ -1414,6 +1417,9 @@ final class ICERestartTaskSerializationTests: XCTestCase {
         )
     }
 
+    /// `attemptReconnection` must cancel any previous task before starting a new
+    /// one. A second reconnection attempt (e.g. the watchdog fires mid-backoff)
+    /// must kill the sleeping first attempt to prevent two concurrent offers.
     func test_attemptReconnection_cancelsExistingTaskBeforeStartingNew() throws {
         let src = try callManagerSource()
         guard let funcRange = src.range(of: "func attemptReconnection()") else {
@@ -1434,6 +1440,8 @@ final class ICERestartTaskSerializationTests: XCTestCase {
         )
     }
 
+    /// `endCallInternal` must cancel and nil the ICE restart task as part of
+    /// teardown so a mid-restart offer is not sent after the call has ended.
     func test_endCallInternal_cancelsAndNilsIceRestartTask() throws {
         let src = try callManagerSource()
         guard let funcRange = src.range(of: "func endCallInternal") else {

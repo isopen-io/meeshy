@@ -30,7 +30,7 @@ describe('Call Validation Schemas', () => {
           type: 'offer',
           from: 'user-1',
           to: 'user-2',
-          sdp: 'v=0\r\no=- 1234 1 IN IP4 0.0.0.0\r\n',
+          sdp: 'v=0\r\no=- 1234 1 IN IP4 0.0.0.0\r\nm=audio 9 RTP/AVP 0\r\n',
         },
       });
       expect(result.success).toBe(true);
@@ -43,7 +43,7 @@ describe('Call Validation Schemas', () => {
           type: 'ice-restart',
           from: 'user-1',
           to: 'user-2',
-          sdp: 'v=0\r\no=- 5678 2 IN IP4 0.0.0.0\r\n',
+          sdp: 'v=0\r\no=- 5678 2 IN IP4 0.0.0.0\r\nm=audio 9 RTP/AVP 0\r\n',
         },
       });
       expect(result.success).toBe(true);
@@ -87,6 +87,58 @@ describe('Call Validation Schemas', () => {
       expect(result.success).toBe(false);
     });
 
+    it('rejects SDP missing v=0 version field (RFC 4566 structural check)', () => {
+      const result = socketSignalSchema.safeParse({
+        callId: validMongoId,
+        signal: {
+          type: 'offer',
+          from: 'user-1',
+          to: 'user-2',
+          sdp: 'm=audio 9 RTP/AVP 0\r\n',
+        },
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects SDP missing m= media line (RFC 4566 structural check)', () => {
+      const result = socketSignalSchema.safeParse({
+        callId: validMongoId,
+        signal: {
+          type: 'offer',
+          from: 'user-1',
+          to: 'user-2',
+          sdp: 'v=0\r\no=- 1234 1 IN IP4 0.0.0.0\r\n',
+        },
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('accepts empty string as ICE end-of-candidates marker (RFC 8445 §8.2.1)', () => {
+      const result = socketSignalSchema.safeParse({
+        callId: validMongoId,
+        signal: {
+          type: 'ice-candidate',
+          from: 'user-1',
+          to: 'user-2',
+          candidate: '',
+        },
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects ICE candidate missing "candidate:" prefix (RFC 8445)', () => {
+      const result = socketSignalSchema.safeParse({
+        callId: validMongoId,
+        signal: {
+          type: 'ice-candidate',
+          from: 'user-1',
+          to: 'user-2',
+          candidate: 'not-a-valid-ice-line',
+        },
+      });
+      expect(result.success).toBe(false);
+    });
+
     it('rejects unknown signal type', () => {
       const result = socketSignalSchema.safeParse({
         callId: validMongoId,
@@ -125,7 +177,7 @@ describe('Call Validation Schemas', () => {
           type: 'offer',
           from: 'user-1',
           to: 'user-2',
-          sdp: 'v=0\r\no=- 1234 1 IN IP4 0.0.0.0\r\n',
+          sdp: 'v=0\r\no=- 1234 1 IN IP4 0.0.0.0\r\nm=audio 9 RTP/AVP 0\r\n',
           negotiationId: 7,
         },
       });
@@ -155,7 +207,7 @@ describe('Call Validation Schemas', () => {
           type: 'offer',
           from: 'user-1',
           to: 'user-2',
-          sdp: 'v=0\r\n',
+          sdp: 'v=0\r\nm=audio 9 RTP/AVP 0\r\n',
         },
       });
       expect(result.success).toBe(true);
@@ -183,7 +235,7 @@ describe('Call Validation Schemas', () => {
           type: 'offer',
           from: 'user-1',
           to: 'user-2',
-          sdp: 'v=0\r\n',
+          sdp: 'v=0\r\nm=audio 9 RTP/AVP 0\r\n',
           someUndeclaredField: 'value',
         },
       });
@@ -311,6 +363,30 @@ describe('Call Validation Schemas', () => {
         reason: 'x'.repeat(51),
       });
       expect(result.success).toBe(false);
+    });
+
+    it('rejects reason with uppercase letters (whitelist: lowercase + underscore only)', () => {
+      const result = socketEndCallSchema.safeParse({
+        callId: validMongoId,
+        reason: 'UserHangup',
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects reason with special characters that could carry XSS payload', () => {
+      const result = socketEndCallSchema.safeParse({
+        callId: validMongoId,
+        reason: '<script>alert(1)</script>',
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('accepts known CallEndReason values that match the whitelist', () => {
+      const validReasons = ['completed', 'missed', 'failed', 'garbage_collected', 'heartbeat_timeout'];
+      for (const reason of validReasons) {
+        const result = socketEndCallSchema.safeParse({ callId: validMongoId, reason });
+        expect(result.success).toBe(true);
+      }
     });
   });
 

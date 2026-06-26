@@ -158,10 +158,29 @@ export const socketSignalSchema = z.object({
     }),
     from: z.string().min(1, 'from field is required'),
     to: z.string().min(1, 'to field is required'),
-    // SDP data for offer/answer
-    sdp: z.string().max(50000, 'SDP data exceeds maximum size of 50KB').optional(),
-    // ICE candidate data
-    candidate: z.string().max(1000, 'ICE candidate exceeds maximum size of 1KB').optional(),
+    // SDP data for offer/answer — size-capped and structurally validated.
+    // Every RFC 4566 WebRTC SDP must contain "v=0" (version field, always first)
+    // and at least one "m=" line (media description). A string that passes the
+    // 50KB cap but lacks these fields is either malformed or a crafted payload
+    // that could exploit the client-side SDP parser.
+    sdp: z.string()
+      .max(50000, 'SDP data exceeds maximum size of 50KB')
+      .refine(
+        (s) => s.includes('v=0') && s.includes('m='),
+        'SDP must contain a version field (v=0) and at least one media line (m=) per RFC 4566'
+      )
+      .optional(),
+    // ICE candidate data — validated against RFC 8445 candidate-attribute format.
+    // An empty string is accepted as the end-of-candidates marker (§8.2.1).
+    // Rejecting non-conforming strings prevents forwarding crafted payloads that
+    // could trigger parser bugs in the peer's WebRTC implementation.
+    candidate: z.string()
+      .max(1000, 'ICE candidate exceeds maximum size of 1KB')
+      .refine(
+        (s) => s === '' || /^candidate:\S+/i.test(s),
+        'ICE candidate must start with "candidate:" (RFC 8445) or be empty (end-of-candidates marker)'
+      )
+      .optional(),
     sdpMLineIndex: z.number().optional(),
     sdpMid: z.string().optional(),
     // §3.5 negotiation epoch — declared so Zod does not strip it from the
@@ -201,7 +220,11 @@ export const socketMediaToggleSchema = z.object({
  */
 export const socketEndCallSchema = z.object({
   callId: objectIdSchema,
-  reason: z.string().max(50).optional()
+  // Whitelist: only lowercase letters and underscores. Prevents XSS payloads
+  // from being stored in call session metadata if the client later renders the
+  // raw reason string. The service maps it to a known CallEndReason enum anyway,
+  // but the gate here stops malicious payloads from reaching the DB or logs.
+  reason: z.string().max(50).regex(/^[a-z_]+$/, 'End reason must contain only lowercase letters and underscores').optional()
 });
 
 /**
