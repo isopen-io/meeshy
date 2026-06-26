@@ -400,11 +400,7 @@ describe('StatusHandler', () => {
       expect(findUnique).toHaveBeenCalledTimes(1);
     });
 
-    it('invalidateIdentityCache removes the cache entry (using bare userId key)', async () => {
-      // Note: the production cache stores keys as `user:${userId}` / `anon:${userId}`,
-      // but invalidateIdentityCache() deletes by bare `userId`. The current observable
-      // behavior is that this is a no-op for user: entries (key mismatch), so we
-      // assert what the code actually does rather than what one might expect.
+    it('invalidateIdentityCache removes the prefixed cache entries for a userId', async () => {
       const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
       const findUnique = jest.fn<any>().mockResolvedValue(dbUser);
       const prisma = makePrisma({ user: { findUnique } });
@@ -415,17 +411,12 @@ describe('StatusHandler', () => {
       await handler.handleTypingStart(socket, { conversationId: CONV_ID });
       expect(findUnique).toHaveBeenCalledTimes(1);
 
-      // Delete by bare userId — note the key mismatch means `user:xxx` entry stays
+      // invalidateIdentityCache removes the prefixed entry
       handler.invalidateIdentityCache(USER_ID);
 
-      // Verify the method exists and is callable without throwing
       const identityCache = (handler as any).identityCache as Map<string, unknown>;
-      // The entry `user:${USER_ID}` was not removed (key mismatch with bare userId)
-      expect(identityCache.has(`user:${USER_ID}`)).toBe(true);
-      // The bare userId key (if it existed) would be removed — this is the public contract
-      identityCache.set(USER_ID, { username: 'cached', displayName: 'Cached', expiresAt: Date.now() + 60_000 });
-      handler.invalidateIdentityCache(USER_ID);
-      expect(identityCache.has(USER_ID)).toBe(false);
+      expect(identityCache.has(`user:${USER_ID}`)).toBe(false);
+      expect(identityCache.has(`anon:${USER_ID}`)).toBe(false);
     });
 
     it('refreshes cache when TTL has expired', async () => {
