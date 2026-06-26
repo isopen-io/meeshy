@@ -420,6 +420,16 @@ enum QualityThresholds {
     /// Above this → at most .poor; at or below → may be .fair or better.
     static let videoFairPacketLoss: Double = 0.03
 
+    // MARK: BWE (TWCC GCC) quality tier thresholds
+    // Set conservatively below each tier's `targetVideoBitrate` to absorb
+    // audio (~64kbps) + RTCP/SRTCP overhead without over-committing bitrate.
+    // Used by VideoQualityLevel.from(availableOutgoingBitrateBps:).
+
+    static let bweExcellentBps: Int = 2_000_000  // 80 % of excellent target (2.5 Mbps)
+    static let bweGoodBps: Int     = 1_000_000   // 67 % of good target (1.5 Mbps)
+    static let bweFairBps: Int     =   400_000   // 50 % of fair target (800 kbps)
+    static let bwePoorBps: Int     =   150_000   // 37.5 % of poor target (400 kbps)
+
     static let maxBitrate: Int = 128_000
     /// Floor bitrate the adaptation algorithm will proactively target under
     /// severe degradation (24 kbps = speech quality floor for Opus).
@@ -614,10 +624,10 @@ enum VideoQualityLevel: String, Comparable, Sendable {
     /// are set conservatively below each tier's `targetVideoBitrate` to leave headroom
     /// for audio + RTCP overhead. Returns `nil` when `bps == 0` (TWCC not active).
     static func from(availableOutgoingBitrateBps bps: Int) -> VideoQualityLevel {
-        if bps >= 2_000_000 { return .excellent }
-        if bps >= 1_000_000 { return .good }
-        if bps >= 400_000  { return .fair }
-        if bps >= 150_000  { return .poor }
+        if bps >= QualityThresholds.bweExcellentBps { return .excellent }
+        if bps >= QualityThresholds.bweGoodBps      { return .good }
+        if bps >= QualityThresholds.bweFairBps       { return .fair }
+        if bps >= QualityThresholds.bwePoorBps       { return .poor }
         return .critical
     }
 }

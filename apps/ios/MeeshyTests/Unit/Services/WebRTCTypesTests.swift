@@ -109,6 +109,50 @@ final class QualityThresholdsAudioBitrateTests: XCTestCase {
         XCTAssertLessThan(QualityThresholds.goodPacketLoss, QualityThresholds.poorPacketLoss,
                           "goodPacketLoss must be < poorPacketLoss (critical boundary)")
     }
+
+    func test_bweExcellentBps_is2Mbps() {
+        XCTAssertEqual(QualityThresholds.bweExcellentBps, 2_000_000,
+                       "BWE excellent threshold must be 2 Mbps (80% of 2.5 Mbps target)")
+    }
+
+    func test_bweGoodBps_is1Mbps() {
+        XCTAssertEqual(QualityThresholds.bweGoodBps, 1_000_000,
+                       "BWE good threshold must be 1 Mbps (67% of 1.5 Mbps target)")
+    }
+
+    func test_bweFairBps_is400kbps() {
+        XCTAssertEqual(QualityThresholds.bweFairBps, 400_000,
+                       "BWE fair threshold must be 400 kbps (50% of 800 kbps target)")
+    }
+
+    func test_bwePoorBps_is150kbps() {
+        XCTAssertEqual(QualityThresholds.bwePoorBps, 150_000,
+                       "BWE poor threshold must be 150 kbps (37.5% of 400 kbps target)")
+    }
+
+    func test_bweThresholds_areStrictlyOrdered() {
+        XCTAssertGreaterThan(QualityThresholds.bweExcellentBps, QualityThresholds.bweGoodBps,
+                             "BWE excellent must be > good")
+        XCTAssertGreaterThan(QualityThresholds.bweGoodBps, QualityThresholds.bweFairBps,
+                             "BWE good must be > fair")
+        XCTAssertGreaterThan(QualityThresholds.bweFairBps, QualityThresholds.bwePoorBps,
+                             "BWE fair must be > poor")
+        XCTAssertGreaterThan(QualityThresholds.bwePoorBps, 0,
+                             "BWE poor threshold must be > 0 (reserved for TWCC inactive path)")
+    }
+
+    func test_bweThresholds_belowTargetBitrates() {
+        // BWE thresholds must stay conservatively below each tier's targetVideoBitrate
+        // so audio + RTCP overhead doesn't force a tier downgrade on a healthy network.
+        XCTAssertLessThan(QualityThresholds.bweExcellentBps, VideoQualityLevel.excellent.targetVideoBitrate,
+                          "BWE excellent threshold must be < excellent targetVideoBitrate")
+        XCTAssertLessThan(QualityThresholds.bweGoodBps, VideoQualityLevel.good.targetVideoBitrate,
+                          "BWE good threshold must be < good targetVideoBitrate")
+        XCTAssertLessThan(QualityThresholds.bweFairBps, VideoQualityLevel.fair.targetVideoBitrate,
+                          "BWE fair threshold must be < fair targetVideoBitrate")
+        XCTAssertLessThan(QualityThresholds.bwePoorBps, VideoQualityLevel.poor.targetVideoBitrate,
+                          "BWE poor threshold must be < poor targetVideoBitrate")
+    }
 }
 
 // §5.6 — thermal-aware video encoder ceiling.
