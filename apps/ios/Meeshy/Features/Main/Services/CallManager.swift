@@ -340,6 +340,7 @@ final class CallManager: ObservableObject {
         startNetworkMonitoring()
         startAudioInterruptionMonitoring()
         startAudioRouteChangeMonitoring()
+        startMediaServicesResetMonitoring()
         Logger.calls.info("CallManager initialized")
     }
 
@@ -460,6 +461,48 @@ final class CallManager: ObservableObject {
         default:
             // Category change, wake-from-sleep, etc. — re-apply to stay consistent.
             applySpeakerRoute()
+        }
+    }
+
+    private func startMediaServicesResetMonitoring() {
+        NotificationCenter.default.addObserver(
+            forName: AVAudioSession.mediaServicesResetNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.handleMediaServicesReset()
+            }
+        }
+    }
+
+    @MainActor
+    private func handleMediaServicesReset() {
+        guard callState.isActive else { return }
+        Logger.calls.fault("AVAudioSession media services reset during call — rebuilding audio stack")
+        // The media server process crashed and restarted. All session state is
+        // gone. Reconstruct: reconfigure RTCAudioSession (category / mode /
+        // options), then notify libwebrtc that the session cycled so it
+        // restarts its audio I/O unit. Re-apply the speaker route last, once
+        // the engine is live again.
+        configureAudioSession()
+        audioSessionQueue.async { [weak self] in
+            guard let self else { return }
+            do {
+                try AVAudioSession.sharedInstance().setActive(true, options: [])
+            } catch {
+                Logger.calls.error("AVAudioSession reactivation after media-services reset failed: \(error.localizedDescription)")
+            }
+            let rtc = RTCAudioSession.sharedInstance()
+            rtc.lockForConfiguration()
+            rtc.audioSessionDidDeactivate(AVAudioSession.sharedInstance())
+            rtc.audioSessionDidActivate(AVAudioSession.sharedInstance())
+            rtc.isAudioEnabled = true
+            rtc.unlockForConfiguration()
+        }
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(200))
+            self?.applySpeakerRoute()
         }
     }
 

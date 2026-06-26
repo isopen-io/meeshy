@@ -910,3 +910,67 @@ final class CallManagerDTMFTests: XCTestCase {
             "sendDTMF must be declared in WebRTCClientProviding protocol so mocks can stub it")
     }
 }
+
+// MARK: - AVAudioSession media services reset recovery
+
+/// Source-analysis guards ensuring the app survives an `AVAudioSession.mediaServicesResetNotification`.
+/// Without handling this notification, a media server crash during a call leaves the audio path silent
+/// for the rest of the call — no recovery, no user feedback.
+@MainActor
+final class CallManagerMediaServicesResetTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_mediaServicesReset_observerIsRegistered() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("AVAudioSession.mediaServicesResetNotification"),
+            "mediaServicesResetNotification must be observed — a media server crash otherwise " +
+            "silences the call permanently")
+    }
+
+    func test_mediaServicesReset_handlerGuardsCallActive() throws {
+        let source = try callManagerSource()
+        let handlerRange = source.range(of: "handleMediaServicesReset")
+        XCTAssertNotNil(handlerRange, "handleMediaServicesReset handler must exist")
+        let handlerBody = String(source[handlerRange!.upperBound...])
+        XCTAssertTrue(
+            handlerBody.contains("callState.isActive"),
+            "handleMediaServicesReset must guard on callState.isActive — no-op outside active calls")
+    }
+
+    func test_mediaServicesReset_rebuildsRTCAudioSession() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("audioSessionDidDeactivate") && source.contains("audioSessionDidActivate"),
+            "handleMediaServicesReset must call audioSessionDidDeactivate then audioSessionDidActivate " +
+            "so libwebrtc rebuilds its audio I/O unit after the media server restart")
+    }
+
+    func test_mediaServicesReset_reactivatesAVAudioSession() throws {
+        let source = try callManagerSource()
+        let handlerRange = source.range(of: "handleMediaServicesReset")
+        XCTAssertNotNil(handlerRange)
+        let handlerBody = String(source[handlerRange!.upperBound...])
+        XCTAssertTrue(
+            handlerBody.contains("setActive(true"),
+            "handleMediaServicesReset must call setActive(true) to bring AVAudioSession back online " +
+            "after the system reset cleared all session state")
+    }
+
+    func test_mediaServicesReset_isStartedInInit() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("startMediaServicesResetMonitoring()"),
+            "startMediaServicesResetMonitoring() must be called in CallManager.init so the " +
+            "observer is live for the full singleton lifetime")
+    }
+}
