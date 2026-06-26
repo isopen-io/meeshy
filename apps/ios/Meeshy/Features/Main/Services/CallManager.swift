@@ -113,6 +113,10 @@ final class CallManager: ObservableObject {
     /// peer's frozen last frame. 1:1 only — the gateway routes the toggle to the
     /// other participant via `socket.to(room)` so we never see our own echo.
     @Published private(set) var isRemoteVideoEnabled: Bool = true
+    /// `false` when the remote peer has muted their microphone (call:media-toggled
+    /// audioType=="audio"). Drives the mute indicator in the call UI so the local
+    /// user knows why the remote peer sounds silent. Resets to `true` on call end.
+    @Published private(set) var isRemoteAudioEnabled: Bool = true
     /// Set to `true` when the gateway reports the remote peer has high RTT or packet
     /// loss (call:quality-alert). Auto-resets after 15 s of silence — sustained poor
     /// conditions keep resetting the timer, so the indicator stays up as long as
@@ -533,6 +537,7 @@ final class CallManager: ObservableObject {
             callDuration = 0
             isVideoEnabled = false
             isRemoteVideoEnabled = true
+            isRemoteAudioEnabled = true
             isMuted = false
             isSpeaker = false
             videoSurvivalController.reset()
@@ -2280,6 +2285,7 @@ final class CallManager: ObservableObject {
         // vidéo potentiellement suspendu — violation du contrat documenté de
         // `VideoSurvivalControlling.reset()`.
         isRemoteVideoEnabled = true
+        isRemoteAudioEnabled = true
         videoSurvivalController.reset()
         isVideoSuspended = false
         isVideoSuspendedByBackground = false
@@ -2675,9 +2681,17 @@ final class CallManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self else { return }
-                guard event.callId == self.currentCallId, event.mediaType == "video" else { return }
-                self.isRemoteVideoEnabled = event.enabled
-                Logger.calls.info("Remote video \(event.enabled ? "enabled" : "disabled") (callId=\(event.callId))")
+                guard event.callId == self.currentCallId else { return }
+                switch event.mediaType {
+                case "video":
+                    self.isRemoteVideoEnabled = event.enabled
+                    Logger.calls.info("Remote video \(event.enabled ? "enabled" : "disabled") (callId=\(event.callId))")
+                case "audio":
+                    self.isRemoteAudioEnabled = event.enabled
+                    Logger.calls.info("Remote audio \(event.enabled ? "enabled" : "muted") (callId=\(event.callId))")
+                default:
+                    break
+                }
             }
             .store(in: &cancellables)
 

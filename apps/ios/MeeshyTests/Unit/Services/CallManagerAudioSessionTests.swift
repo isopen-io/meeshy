@@ -1561,3 +1561,89 @@ final class CallManagerMuteStateTests: XCTestCase {
             "assumes our mic is live after reconnect")
     }
 }
+
+// MARK: - Remote audio mute state tests
+
+final class CallManagerRemoteAudioStateTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func callViewSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/CallView.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// CallManager must declare isRemoteAudioEnabled so the call UI can show a
+    /// "contact is muted" indicator when the remote peer silences their mic.
+    func test_callManager_declaresIsRemoteAudioEnabled() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("isRemoteAudioEnabled"),
+            "CallManager must declare isRemoteAudioEnabled — the remote peer's " +
+            "call:toggle-audio events (mediaType=audio) must drive a published " +
+            "property so the UI can display a mute indicator without polling")
+    }
+
+    /// The callMediaToggled sink must handle mediaType=="audio" and update
+    /// isRemoteAudioEnabled. The old guard `event.mediaType == "video"` dropped
+    /// audio events silently and left isRemoteAudioEnabled permanently at true.
+    func test_callMediaToggledSink_handlesAudioMediaType() throws {
+        let source = try callManagerSource()
+        guard let mediaToggledRange = source.range(of: "socket.callMediaToggled") else {
+            XCTFail("socket.callMediaToggled sink not found"); return
+        }
+        guard let storeRange = source.range(of: ".store(in: &cancellables)", range: mediaToggledRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not find .store after callMediaToggled"); return
+        }
+        let sinkBody = String(source[mediaToggledRange.upperBound..<storeRange.lowerBound])
+        XCTAssertTrue(
+            sinkBody.contains("\"audio\""),
+            "callMediaToggled sink must handle mediaType==\"audio\" — a guard that " +
+            "only passes \"video\" silently drops remote audio toggle events and " +
+            "leaves isRemoteAudioEnabled permanently stale at true")
+        XCTAssertTrue(
+            sinkBody.contains("isRemoteAudioEnabled"),
+            "callMediaToggled sink must update isRemoteAudioEnabled when mediaType==\"audio\"")
+    }
+
+    /// isRemoteAudioEnabled must be reset to true in endCallInternal so it
+    /// doesn't leak across calls (next caller incorrectly shown as muted).
+    func test_endCallInternal_resetsIsRemoteAudioEnabled() throws {
+        let source = try callManagerSource()
+        guard let endInternalRange = source.range(of: "func endCallInternal(reason:") else {
+            XCTFail("endCallInternal not found"); return
+        }
+        guard let nextFuncRange = source.range(of: "\n    private func ", range: endInternalRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not isolate endCallInternal body"); return
+        }
+        let body = String(source[endInternalRange.upperBound..<nextFuncRange.lowerBound])
+        XCTAssertTrue(
+            body.contains("isRemoteAudioEnabled = true"),
+            "endCallInternal must reset isRemoteAudioEnabled to true — otherwise " +
+            "the next call's remote user appears muted if the previous call ended " +
+            "while the remote peer was muted")
+    }
+
+    /// CallView must display a remote-muted indicator when isRemoteAudioEnabled is false.
+    func test_callView_showsRemoteMuteIndicator() throws {
+        let source = try callViewSource()
+        XCTAssertTrue(
+            source.contains("isRemoteAudioEnabled"),
+            "CallView must check isRemoteAudioEnabled to show a 'contact is muted' " +
+            "indicator — without it the local user has no indication why the remote " +
+            "peer sounds silent (FaceTime parity)")
+    }
+}
