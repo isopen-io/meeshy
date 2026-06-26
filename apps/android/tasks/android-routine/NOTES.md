@@ -179,3 +179,34 @@ Append-only log of gotchas and decisions that save time next run.
   URL). The VM's `onImageResolved` re-emits only when the resolved URL is the
   *current* slide's image, so off-screen prefetch resolutions don't churn state.
   `resolvedImageUrls` persists across slides so back-navigation never re-waits.
+
+## 2026-06-26 — story composer / publish via outbox
+- **Publish reuses the shared outbox, not a bespoke queue.** iOS has a dedicated
+  `StoryPublishQueue` (its own retry schedule + media-ref persistence). Android's
+  generic `outbox` already gives durable FIFO lanes, ×5 retry/exhaust, boot
+  recovery and the WorkManager drain — so a story publish is just a new
+  `OutboxKind.PUBLISH_STORY` on its own `OutboxLanes.STORY` lane. The sender lives
+  inline in `OutboxFlushWorker.buildSenders()` (mirror the existing senders:
+  `json.decodeFromString<CreateStoryRequest>` → `postApi.createStory`, map
+  Success/Failure → SendResult). Add the lane to the drained-lanes list too, or it
+  never flushes.
+- **Don't coalesce publishes.** `OutboxCoalescer.decide` only special-cases the
+  message/reaction/prefs kinds; everything else (incl. PUBLISH_STORY) falls to
+  `Enqueue`. Give each publish a fresh `pending_<uuid>` targetId so two stories
+  stay independent rows.
+- **R import is the module Gradle namespace, NOT the package.** `feature:stories`
+  Kotlin lives in `me.meeshy.app.stories` but the generated `R` is
+  `me.meeshy.feature.stories.R` (the module `namespace`). Always
+  `import me.meeshy.feature.stories.R` — copy it from a sibling screen.
+- **`Modifier.weight` is a scope member, never import it.** Importing
+  `androidx.compose.foundation.layout.weight` pulls the *internal* RowColumn
+  extension and fails with "it is internal in file". Inside a `Column { }` /
+  `Row { }` content lambda, `Modifier.weight(1f)` resolves on the scope receiver
+  with no import.
+- **Nav route collisions are silent.** `story_composer` (literal) must not be
+  `story/compose` — that pattern-matches `story/{userId}` with userId="compose".
+  Use a slash-free literal for a sibling of a parameterised route.
+- **`WorkManager` is a per-feature dependency.** `feature:stories` needed
+  `implementation(libs.work.runtime)` added before the VM could `workManager
+  .enqueue(OutboxFlushWorker.buildRequest())` (chat already had it). `buildRequest()`
+  builds a `OneTimeWorkRequest` fine in a plain JVM unit test (no Robolectric).

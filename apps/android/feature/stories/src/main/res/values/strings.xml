@@ -26,4 +26,13 @@
     <string name="stories_comments_open">Comments</string>
     <string name="stories_comments_failed">Failed — tap to retry</string>
     <string name="stories_count_dots">%1$d new of %2$d stories</string>
+    <string name="stories_composer_title">New story</string>
+    <string name="stories_composer_cancel">Cancel</string>
+    <string name="stories_composer_publish">Share</string>
+    <string name="stories_composer_placeholder">Share a moment…</string>
+    <string name="stories_composer_remaining">%1$d</string>
+    <string name="stories_visibility_public">Public</string>
+    <string name="stories_visibility_friends">Friends</string>
+    <string name="stories_visibility_community">Community</string>
+    <string name="stories_visibility_private">Only me</string>
 </resources>

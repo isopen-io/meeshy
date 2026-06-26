@@ -26,4 +26,13 @@
     <string name="stories_comments_open">Commentaires</string>
     <string name="stories_comments_failed">Échec — appuyez pour réessayer</string>
     <string name="stories_count_dots">%1$d nouvelles sur %2$d stories</string>
+    <string name="stories_composer_title">Nouvelle story</string>
+    <string name="stories_composer_cancel">Annuler</string>
+    <string name="stories_composer_publish">Partager</string>
+    <string name="stories_composer_placeholder">Partagez un moment…</string>
+    <string name="stories_composer_remaining">%1$d</string>
+    <string name="stories_visibility_public">Public</string>
+    <string name="stories_visibility_friends">Amis</string>
+    <string name="stories_visibility_community">Communauté</string>
+    <string name="stories_visibility_private">Moi uniquement</string>
 </resources>

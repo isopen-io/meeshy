@@ -13,8 +13,14 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.StoryViewerWire
 import me.meeshy.sdk.model.StoryViewersResponse
+import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.api.CreateStoryRequest
 import me.meeshy.sdk.net.api.StoryApi
+import me.meeshy.sdk.outbox.OutboxKind
+import me.meeshy.sdk.outbox.OutboxLanes
+import me.meeshy.sdk.outbox.OutboxRepository
+import me.meeshy.sdk.outbox.kindEnum
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -41,7 +47,10 @@ class StoryRepositoryTest {
         db.close()
     }
 
-    private fun repository() = StoryRepository(api, db, db.storyDao(), db.syncMetaDao())
+    private fun outbox() = OutboxRepository(db, db.outboxDao())
+
+    private fun repository(outbox: OutboxRepository = outbox()) =
+        StoryRepository(api, db, db.storyDao(), db.syncMetaDao(), outbox)
 
     private fun stubList(vararg posts: ApiPost) {
         coEvery { api.list(any(), any()) } returns ApiResponse(success = true, data = posts.toList())
@@ -138,5 +147,39 @@ class StoryRepositoryTest {
 
         assertThat(thrown).isInstanceOf(StorySyncException::class.java)
         assertThat(thrown).hasMessageThat().isEqualTo("Server down")
+    }
+
+    @Test
+    fun `enqueuePublish persists a PUBLISH_STORY mutation on the story lane`() = runTest {
+        val outbox = outbox()
+        val request = CreateStoryRequest(content = "hello", visibility = "FRIENDS", originalLanguage = "fr")
+
+        val cmid = repository(outbox).enqueuePublish(request)
+
+        val rows = outbox.deliverable(OutboxLanes.STORY)
+        assertThat(rows).hasSize(1)
+        assertThat(rows.single().cmid).isEqualTo(cmid)
+        assertThat(rows.single().kindEnum).isEqualTo(OutboxKind.PUBLISH_STORY)
+    }
+
+    @Test
+    fun `enqueuePublish serializes the request as the row payload`() = runTest {
+        val outbox = outbox()
+        val request = CreateStoryRequest(content = "bonjour", visibility = "PUBLIC", originalLanguage = "fr")
+
+        repository(outbox).enqueuePublish(request)
+
+        val payload = outbox.deliverable(OutboxLanes.STORY).single().payload
+        assertThat(MeeshyApi.json.decodeFromString<CreateStoryRequest>(payload)).isEqualTo(request)
+    }
+
+    @Test
+    fun `enqueuePublish keeps each story as an independent row (no coalescing)`() = runTest {
+        val outbox = outbox()
+
+        repository(outbox).enqueuePublish(CreateStoryRequest(content = "first"))
+        repository(outbox).enqueuePublish(CreateStoryRequest(content = "second"))
+
+        assertThat(outbox.deliverable(OutboxLanes.STORY)).hasSize(2)
     }
 }

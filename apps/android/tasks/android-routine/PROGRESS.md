@@ -7,24 +7,32 @@
 Stories so far: tray (ring carousel) + cross-group viewer playback engine +
 quick-reaction strip + swipe gestures + realtime reaction socket deltas +
 who-viewed sheet + Room-backed tray SWR + comments overlay + segmented
-count-dots + adjacent-slide media prefetch shipped earlier loops; this loop adds
-the **auto-advance media-load gate** — a pure `StoryAutoAdvanceGate` that holds
-the 5s countdown until the current slide's image has resolved (load or error),
-so a slow image never auto-advances before it paints. This closes the loop the
-prefetch window opened (Instant-App, surpassing iOS which starts its timer on
-slide appearance regardless of paint).
+count-dots + adjacent-slide media prefetch + auto-advance media-load gate
+shipped earlier loops; this loop adds the **text story composer + publish flow**
+— a pure `StoryComposerDraft` publish-gate, an optimistic `StoryComposerViewModel`,
+and an accent `StoryComposerScreen` reached from the tray's add affordance. The
+publish goes through the **shared durable outbox** (`OutboxKind.PUBLISH_STORY` on
+its own `story` lane → `OutboxFlushWorker` → `POST /posts`), surpassing iOS's
+dedicated `StoryPublishQueue`: it survives process death / offline, auto-retries
+on reconnect, and never head-of-line-blocks message delivery.
 
 ## Next slice (pick one for the next run)
 
 Ordered by value within the Stories area:
-1. `story-composer` — publish flow (text/media) via the outbox/WorkManager chain.
+1. `story-composer-optimistic-tray` — inject the queued story into the tray cache
+   immediately (a `pending_*` self-ring) and reconcile/rollback on the
+   `PUBLISH_STORY` outbox outcome + `story:created` socket. (Closes the last gap
+   between "queued" and a fully optimistic tray.)
+2. `story-composer-media` — extend the composer to a single image/video slide
+   (media pick → upload → `mediaIds`), then multi-slide.
 
+After the composer is optimistic on the tray, advance to the **Calls** area
+(`feature-parity.md` §"Calls").
+
+(`story-composer` ✅ shipped 2026-06-26 — see run log.)
 (`story-autoadvance-media-gate` ✅ shipped 2026-06-23 — see run log.)
 (`story-media-prefetch` ✅ shipped 2026-06-23 — see run log.)
 (`story-tray-count-dots` ✅ shipped 2026-06-23 — see run log.)
-
-After `story-composer` (Stories richness will then be sufficient), advance to the
-**Calls** area (`feature-parity.md` §"Calls").
 
 Note: server-side `currentUserReactions` seeding of `mine` on load, the
 app-wide `SocialSocketManager.attach()` lifecycle wiring (no caller yet — affects
@@ -36,6 +44,71 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-26 — slice `story-composer` ✅
+- **Branch:** `claude/apps/android/story-composer`
+- **Housekeeping:** no open Android PR to land first (checked `list_pull_requests`
+  — 22 open PRs, none `apps/android`). Branched off latest `origin/main`.
+- **What:** the **text story composer + publish flow**. A user taps the tray's
+  add-story affordance, types a story, picks an audience, and shares; the publish
+  is enqueued on the **shared durable outbox** and delivered in the background by
+  `OutboxFlushWorker`. Optimistic: the composer dismisses the instant the row is
+  queued. Surpasses iOS, which uses a bespoke `StoryPublishQueue` — Android reuses
+  the proven outbox (FIFO lanes, coalescing skip for publishes, ×5 retry/exhaust,
+  WorkManager drain on reconnect), so a publish survives process death / offline
+  and never head-of-line-blocks message sends.
+- **Added (production):**
+  - `feature:stories` — pure `StoryComposerDraft` (`StoryVisibility{PUBLIC,FRIENDS,
+    COMMUNITY,PRIVATE}` with `.wire`; `trimmedText`, `isWithinLimit`@`MAX_CHARS=5000`,
+    `charactersRemaining`, `canPublish`, immutable `withText`/`withVisibility`,
+    `toCreateStoryRequest(originalLanguage)` mapping); `StoryComposerViewModel`
+    (immutable `StoryComposerUiState` + derived `canPublish`; `onTextChange`/
+    `onVisibilityChange`; re-entrancy-guarded `publish()` → resolves the Prisme
+    publish language from the session via `LanguageResolver`, `enqueuePublish`,
+    kicks `OutboxFlushWorker`, clears the draft, emits a one-shot `published`
+    signal; failure → error + draft preserved; `CancellationException` rethrown);
+    `StoryComposerScreen` (Material3 Scaffold, char-counter `OutlinedTextField`,
+    accent `FilterChip` visibility row, dismiss-on-`published`) — Composable glue.
+  - `sdk-core` — `OutboxKind.PUBLISH_STORY` + `OutboxLanes.STORY`;
+    `StoryRepository.enqueuePublish(CreateStoryRequest)` (serializes + enqueues on
+    the `story` lane, fresh `pending_<uuid>` targetId per publish, no coalescing);
+    `OutboxFlushWorker` injects `PostApi` + drains the `story` lane with a
+    `PUBLISH_STORY` sender (`json → postApi.createStory`, transient/permanent map).
+  - `:app` — route `story_composer` (collision-free vs `story/{userId}`) wired to
+    the tray's `onAddStory`; `StoryComposerScreen` destination.
+  - Strings `stories_composer_*` / `stories_visibility_*` in en/fr/es/pt.
+- **Tests (+24):**
+  - `StoryComposerDraftTest` (pure) +13 — empty/blank can't publish; non-blank can;
+    whitespace trimmed; at-limit ok vs over-limit blocked; `charactersRemaining`
+    counts down + goes negative; `withText`/`withVisibility` immutability; default
+    visibility PUBLIC; `toCreateStoryRequest` mapping (trimmed content, STORY type,
+    wire visibility, language, null media); every visibility's wire value.
+  - `StoryComposerViewModelTest` +8 — text/visibility intents update state; blank
+    can't publish; publish enqueues exactly one + kicks the worker + emits
+    `published`; language resolved from session (`es`) and fallback `fr` when no
+    user; draft cleared + flag down on success; blank publish is a no-op (0
+    enqueue/worker); re-entrancy guard = 1 enqueue; queue-throws → error surfaced,
+    flag down, draft preserved.
+  - `StoryRepositoryTest` +3 — `enqueuePublish` persists one `PUBLISH_STORY` row on
+    the `story` lane; payload round-trips the `CreateStoryRequest`; two publishes
+    stay independent (no coalescing).
+- **Edge cases covered:** empty/blank/whitespace draft; char-limit boundary
+  (5000 ok / 5001 blocked) + negative remaining; absent session user → `fr`
+  fallback; re-entrancy while in-flight; durable-queue failure → graceful error
+  with draft kept for retry; independent publish rows; cancellation-safe scope.
+- **Verify:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL in 2m11s**
+  (full `assembleDebug` + all module JVM unit tests; 836 tasks). Targeted
+  `:feature:stories` + `:sdk-core` `testDebugUnitTest` green.
+- **Reviewer:** PASS — scope `apps/android` only; behavioural tests through the
+  public API, no tautologies; SDK purity (the pure publish-gate + wire mapping
+  live in `:feature:stories`; the durable `enqueuePublish` building block + worker
+  sender live in `:sdk-core`; the "when to publish" rule is the ViewModel's);
+  single source of truth (Prisme language via `LanguageResolver`, reuses the
+  existing `CreateStoryRequest`/`PostApi.createStory` + the shared outbox, no
+  second queue); Instant-App (optimistic dismiss on queue, no blocking spinner);
+  UDF + immutable `UiState`, pure draft; colour/UX coherence (accent chips,
+  natural tray entry point, dismiss returns to the list — no dead end). Surpasses
+  iOS (shared durable outbox vs bespoke queue).
 
 ### 2026-06-23 — slice `story-autoadvance-media-gate` ✅
 - **Branch:** `claude/apps/android/story-autoadvance-media-gate`
