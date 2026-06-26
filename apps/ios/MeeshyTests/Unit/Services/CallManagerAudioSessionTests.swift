@@ -698,3 +698,55 @@ final class CallViewPiPLandscapeSourceGuardTests: XCTestCase {
         )
     }
 }
+
+// MARK: - CallEffectsOverlay Accessibility + Dynamic Type Source Guards
+
+/// Source-level guards for `CallEffectsOverlay.toolbarButton`:
+/// - Dynamic Type: caption text must use a semantic font, not a fixed pixel size.
+/// - Accessibility: VoiceOver must be able to announce the active/inactive state
+///   and what the button does when tapped.
+@MainActor
+final class CallEffectsOverlayAccessibilityTests: XCTestCase {
+
+    private func callEffectsSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/CallEffectsOverlay.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_toolbarButtonCaption_usesSemanticFont_forDynamicType() throws {
+        let source = try callEffectsSource()
+        XCTAssertTrue(
+            source.contains(".caption2"),
+            "toolbarButton caption must use .caption2 (Dynamic Type) — not a hardcoded pixel size"
+        )
+    }
+
+    func test_toolbarButtonCaption_doesNotUseFixedSize10() throws {
+        let source = try callEffectsSource()
+        XCTAssertFalse(
+            source.contains(".font(.system(size: 10"),
+            "toolbarButton caption must not use .font(.system(size: 10)) — breaks Dynamic Type accessibility"
+        )
+    }
+
+    func test_toolbarButton_hasAccessibilityValue_forToggleState() throws {
+        let source = try callEffectsSource()
+        XCTAssertTrue(
+            source.contains(".accessibilityValue("),
+            "toolbarButton must declare .accessibilityValue so VoiceOver announces active/inactive state"
+        )
+    }
+
+    func test_toolbarButton_hasAccessibilityHint() throws {
+        let source = try callEffectsSource()
+        XCTAssertTrue(
+            source.contains(".accessibilityHint("),
+            "toolbarButton must declare .accessibilityHint so VoiceOver describes what the button will do"
+        )
+    }
+}
