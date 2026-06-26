@@ -626,3 +626,75 @@ final class P2PWebRTCClientPerfectNegotiationTests: XCTestCase {
         )
     }
 }
+
+// MARK: - CallView PiP Landscape Safe Area Source Guards
+
+/// Source-level guards ensuring `pipCenter(_:in:safeArea:)` in CallView.swift
+/// threads `geo.safeAreaInsets` from both GeometryReader call sites so PiP
+/// positioning adapts correctly in landscape (Dynamic Island cutout, etc.).
+@MainActor
+final class CallViewPiPLandscapeSourceGuardTests: XCTestCase {
+
+    private func callViewSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/CallView.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_pipCenter_acceptsSafeAreaEdgeInsets_parameter() throws {
+        let source = try callViewSource()
+        XCTAssertTrue(
+            source.contains("safeArea: EdgeInsets"),
+            "pipCenter must accept `safeArea: EdgeInsets` — hardcoded insets break landscape layout"
+        )
+    }
+
+    func test_pipCenter_usesSafeAreaLeading_forLandscapeCutout() throws {
+        let source = try callViewSource()
+        XCTAssertTrue(
+            source.contains("safeArea.leading"),
+            "pipCenter must add safeArea.leading to leadingX — PiP must clear the Dynamic Island cutout in landscape"
+        )
+    }
+
+    func test_pipCenter_usesSafeAreaTrailing_forLandscapeCutout() throws {
+        let source = try callViewSource()
+        XCTAssertTrue(
+            source.contains("safeArea.trailing"),
+            "pipCenter must subtract safeArea.trailing from trailingX — PiP must clear the Dynamic Island cutout in landscape"
+        )
+    }
+
+    func test_pipCenter_usesPipTopBottomClearanceConstants() throws {
+        let source = try callViewSource()
+        XCTAssertTrue(
+            source.contains("QualityThresholds.pipTopClearance"),
+            "pipCenter must reference QualityThresholds.pipTopClearance — no hardcoded top inset"
+        )
+        XCTAssertTrue(
+            source.contains("QualityThresholds.pipBottomClearance"),
+            "pipCenter must reference QualityThresholds.pipBottomClearance — no hardcoded bottom inset"
+        )
+    }
+
+    func test_bothGeometryReaderSites_passSafeAreaInsets() throws {
+        let source = try callViewSource()
+        let passCount = source.components(separatedBy: "geo.safeAreaInsets").count - 1
+        XCTAssertGreaterThanOrEqual(
+            passCount, 2,
+            "Both pipView and localVideoSuspendedTile must pass geo.safeAreaInsets to pipCenter — found \(passCount) site(s)"
+        )
+    }
+
+    func test_nearestCorner_threadsSafeAreaInsets() throws {
+        let source = try callViewSource()
+        XCTAssertTrue(
+            source.contains("nearestCorner(to: dropped, in: geo.size, safeArea: geo.safeAreaInsets)"),
+            "nearestCorner must receive geo.safeAreaInsets so snap targets match pipCenter positions in landscape"
+        )
+    }
+}

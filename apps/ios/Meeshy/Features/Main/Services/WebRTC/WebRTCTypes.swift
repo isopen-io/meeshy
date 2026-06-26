@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 // MARK: - Agnostic Types (no WebRTC framework dependency)
@@ -447,6 +448,18 @@ enum QualityThresholds {
     /// PiP frame rate cap under `.critical` thermal pressure. Near-slideshow
     /// but preserves the call without the user losing the remote face entirely.
     static let pipFrameRateCritical: Int = 8
+
+    /// Fixed clearance added on top of `safeAreaInsets.top` when computing the
+    /// PiP thumbnail resting position. Provides room for the minimize chevron
+    /// and the call-duration badge above the safe area edge.
+    /// Source of truth for `CallView.pipCenter(_:in:safeArea:)`.
+    static let pipTopClearance: CGFloat = 20
+
+    /// Fixed clearance added on top of `safeAreaInsets.bottom` when computing
+    /// the PiP thumbnail resting position. Provides room for the call control
+    /// bar above the safe area edge (control bar ≈ 120 pt).
+    /// Source of truth for `CallView.pipCenter(_:in:safeArea:)`.
+    static let pipBottomClearance: CGFloat = 130
 
     static let maxBitrate: Int = 128_000
     /// Floor bitrate the adaptation algorithm will proactively target under

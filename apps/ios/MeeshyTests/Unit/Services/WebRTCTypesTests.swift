@@ -612,6 +612,40 @@ final class QualityThresholdsPiPTests: XCTestCase {
     }
 }
 
+// MARK: - PiP layout clearance constants
+
+/// Guards the two fixed clearances added on top of safe-area insets when
+/// computing the PiP thumbnail resting position in landscape/portrait.
+@MainActor
+final class QualityThresholdsPiPLayoutTests: XCTestCase {
+
+    func test_pipTopClearance_is20() {
+        XCTAssertEqual(QualityThresholds.pipTopClearance, 20,
+                       "Fixed clearance above safe area top — minimize chevron + badge room")
+    }
+
+    func test_pipBottomClearance_is130() {
+        XCTAssertEqual(QualityThresholds.pipBottomClearance, 130,
+                       "Fixed clearance above safe area bottom — call control bar room (~120 pt)")
+    }
+
+    func test_pipTopClearance_isPositive() {
+        XCTAssertGreaterThan(QualityThresholds.pipTopClearance, 0,
+                             "PiP must always sit below the top safe area edge")
+    }
+
+    func test_pipBottomClearance_isPositive() {
+        XCTAssertGreaterThan(QualityThresholds.pipBottomClearance, 0,
+                             "PiP must always sit above the bottom safe area edge")
+    }
+
+    func test_pipBottomClearance_exceedsTopClearance() {
+        XCTAssertGreaterThan(QualityThresholds.pipBottomClearance,
+                             QualityThresholds.pipTopClearance,
+                             "Control bar clearance must exceed chevron clearance — control bar is taller")
+    }
+}
+
 // MARK: - Codec hint constants (Opus fmtp + SDP x-google-bitrate)
 
 @MainActor

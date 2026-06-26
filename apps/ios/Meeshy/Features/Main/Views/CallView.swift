@@ -656,16 +656,17 @@ struct CallView: View {
 
     private static let pipSize = CGSize(width: 100, height: 140)
 
-    /// Resting center for the PiP in a given container, accounting for safe-ish
-    /// insets (top for the notch/duration badge, bottom for the control bar).
-    private func pipCenter(_ corner: PiPCorner, in container: CGSize) -> CGPoint {
+    /// Resting center for the PiP in a given container, accounting for device
+    /// safe area insets (landscape notch/Dynamic Island cutouts) plus fixed
+    /// clearances for the minimize chevron/badge (top) and control bar (bottom).
+    private func pipCenter(_ corner: PiPCorner, in container: CGSize, safeArea: EdgeInsets = .init()) -> CGPoint {
         let halfW = Self.pipSize.width / 2
         let halfH = Self.pipSize.height / 2
         let margin: CGFloat = 16
-        let topInset: CGFloat = 64      // below the minimize chevron / notch
-        let bottomInset: CGFloat = 160  // above the control bar
-        let leadingX = margin + halfW
-        let trailingX = container.width - margin - halfW
+        let topInset = safeArea.top + QualityThresholds.pipTopClearance
+        let bottomInset = safeArea.bottom + QualityThresholds.pipBottomClearance
+        let leadingX = safeArea.leading + margin + halfW
+        let trailingX = container.width - safeArea.trailing - margin - halfW
         let topY = topInset + halfH
         let bottomY = container.height - bottomInset - halfH
         switch corner {
@@ -677,17 +678,17 @@ struct CallView: View {
     }
 
     /// Nearest corner to a point — used to snap on drag end.
-    private func nearestCorner(to point: CGPoint, in container: CGSize) -> PiPCorner {
+    private func nearestCorner(to point: CGPoint, in container: CGSize, safeArea: EdgeInsets = .init()) -> PiPCorner {
         PiPCorner.allCases.min(by: { a, b in
-            let ca = pipCenter(a, in: container)
-            let cb = pipCenter(b, in: container)
+            let ca = pipCenter(a, in: container, safeArea: safeArea)
+            let cb = pipCenter(b, in: container, safeArea: safeArea)
             return hypot(point.x - ca.x, point.y - ca.y) < hypot(point.x - cb.x, point.y - cb.y)
         }) ?? .topTrailing
     }
 
     private var pipView: some View {
         GeometryReader { geo in
-            let base = pipCenter(pipCorner, in: geo.size)
+            let base = pipCenter(pipCorner, in: geo.size, safeArea: geo.safeAreaInsets)
             // §7.2 — the PiP shows the SECONDARY stream (the opposite of the
             // primary). Swap flips both with one tap.
             videoStream(local: !swapStreams, contentMode: .scaleAspectFill)
@@ -705,7 +706,7 @@ struct CallView: View {
                         .onEnded { value in
                             let dropped = CGPoint(x: base.x + value.translation.width,
                                                   y: base.y + value.translation.height)
-                            let corner = nearestCorner(to: dropped, in: geo.size)
+                            let corner = nearestCorner(to: dropped, in: geo.size, safeArea: geo.safeAreaInsets)
                             withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
                                 pipCorner = corner
                                 pipDragOffset = .zero
@@ -737,7 +738,7 @@ struct CallView: View {
     /// adaptive controller has dropped our outbound video to audio-only.
     private var localVideoSuspendedTile: some View {
         GeometryReader { geo in
-            let base = pipCenter(pipCorner, in: geo.size)
+            let base = pipCenter(pipCorner, in: geo.size, safeArea: geo.safeAreaInsets)
             videoSuspendedTileBody
                 .frame(width: Self.pipSize.width, height: Self.pipSize.height)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
