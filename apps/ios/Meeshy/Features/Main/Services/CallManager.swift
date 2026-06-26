@@ -1919,18 +1919,28 @@ final class CallManager: ObservableObject {
 
         // CALL-FIX 2026-06-06 — call established: stop ringback/ringtone + play the
         // "connected" cue. transitionToConnected is idempotent (guarded above) so
-        // the cue plays exactly once.
+        // the cue plays exactly once. On a reconnect (wasReconnecting=true) the
+        // ringback is already stopped, the cue already played, and the timer is
+        // already running — replaying the cue or resetting the timer mid-call
+        // would be a jarring UX regression.
         ringbackPlayer.stop()
         ringbackPlayer.stopRingtone()
-        ringbackPlayer.playConnected()
+        if !wasReconnecting {
+            ringbackPlayer.playConnected()
+        }
         callState = .connected
         // Audio session was configured ONCE at peer-connection setup; CallKit
         // drives activation via provider:didActivate:, which is the single
         // place that flips RTCAudioSession.isAudioEnabled.
-        playHaptic(.heavy)
+        // On reconnect use a lighter haptic — the user is mid-call, not initiating.
+        playHaptic(wasReconnecting ? .light : .heavy)
         startScreenCaptureMonitoring()
-        callStartDate = Date()
-        callDuration = 0
+        // Preserve the call start time and running duration on reconnect so the
+        // timer does not reset to 0:00 mid-call after an ICE restart.
+        if !wasReconnecting {
+            callStartDate = Date()
+            callDuration = 0
+        }
         reconnectAttempt = 0
 
         // Notify gateway that the ICE restart succeeded so call DB status is

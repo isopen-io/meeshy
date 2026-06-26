@@ -1355,6 +1355,62 @@ final class CallManagerCameraPermissionTests: XCTestCase {
     }
 }
 
+// MARK: - Call Duration Preserved on Reconnect
+
+/// Guards against a UX regression where `transitionToConnected()` resets
+/// `callStartDate` and `callDuration` on EVERY transition — including when
+/// coming from `.reconnecting`. Without this guard the call timer jumps back
+/// to 0:00 after a successful ICE restart, and the "connected" audio cue plays
+/// again mid-call. A successful reconnect should continue the existing timer.
+@MainActor
+final class CallManagerDurationReconnectTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_transitionToConnected_doesNotResetDurationOnReconnect() throws {
+        let source = try callManagerSource()
+        guard let fnRange = source.range(of: "private func transitionToConnected()") else {
+            XCTFail("transitionToConnected() not found in CallManager.swift"); return
+        }
+        // Find the callStartDate = Date() assignment within the function
+        guard let assignRange = source[fnRange.upperBound...].range(of: "callStartDate = Date()") else {
+            XCTFail("callStartDate = Date() not found after transitionToConnected()"); return
+        }
+        // The assignment must be inside a !wasReconnecting guard
+        let contextStart = source.index(assignRange.lowerBound, offsetBy: -200, limitedBy: source.startIndex) ?? source.startIndex
+        let contextStr = String(source[contextStart ..< assignRange.upperBound])
+        XCTAssertTrue(
+            contextStr.contains("!wasReconnecting") || contextStr.contains("wasReconnecting == false"),
+            "callStartDate must only be reset when !wasReconnecting — resetting it " +
+            "on every transitionToConnected call causes the timer to jump back to 0:00 " +
+            "after a successful ICE restart, which is a jarring mid-call UX regression")
+    }
+
+    func test_transitionToConnected_doesNotPlayConnectCueOnReconnect() throws {
+        let source = try callManagerSource()
+        guard let fnRange = source.range(of: "private func transitionToConnected()") else {
+            XCTFail("transitionToConnected() not found"); return
+        }
+        guard let cueRange = source[fnRange.upperBound...].range(of: "playConnected()") else {
+            XCTFail("playConnected() not found after transitionToConnected()"); return
+        }
+        let contextStart = source.index(cueRange.lowerBound, offsetBy: -200, limitedBy: source.startIndex) ?? source.startIndex
+        let contextStr = String(source[contextStart ..< cueRange.upperBound])
+        XCTAssertTrue(
+            contextStr.contains("!wasReconnecting") || contextStr.contains("wasReconnecting == false"),
+            "playConnected() must be gated on !wasReconnecting — replaying the " +
+            "connect audio cue mid-call after an ICE restart is jarring")
+    }
+}
+
 // MARK: - ICE Candidate Buffer & TURN Refresh on Reconnect
 
 /// Guards two production-grade reliability fixes:
