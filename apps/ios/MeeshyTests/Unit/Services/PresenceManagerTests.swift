@@ -213,6 +213,85 @@ final class PresenceManagerTests: XCTestCase {
         XCTAssertTrue(sut.presenceMap.isEmpty)
     }
 
+    // MARK: - ingestSnapshot
+
+    func test_ingestSnapshot_empty_doesNotChangeMap() {
+        sut.presenceMap["user-1"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
+        sut.ingestSnapshot([])
+        XCTAssertEqual(sut.presenceMap.count, 1)
+    }
+
+    func test_ingestSnapshot_singleEntry_populatesMap() {
+        let event = makeUserStatusEvent(userId: "user-A", isOnline: true, lastActiveAt: nil)
+        sut.ingestSnapshot([event])
+        XCTAssertEqual(sut.presenceState(for: "user-A"), PresenceState.online)
+    }
+
+    func test_ingestSnapshot_multipleEntries_allApplied() {
+        let events = [
+            makeUserStatusEvent(userId: "u1", isOnline: true, lastActiveAt: nil),
+            makeUserStatusEvent(userId: "u2", isOnline: false, lastActiveAt: nil),
+            makeUserStatusEvent(userId: "u3", isOnline: true, lastActiveAt: Date().addingTimeInterval(-600))
+        ]
+        sut.ingestSnapshot(events)
+        XCTAssertEqual(sut.presenceState(for: "u1"), PresenceState.online)
+        XCTAssertEqual(sut.presenceState(for: "u2"), PresenceState.offline)
+        XCTAssertEqual(sut.presenceState(for: "u3"), PresenceState.away)
+    }
+
+    func test_ingestSnapshot_preservesExistingEntries() {
+        sut.presenceMap["existing"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
+        let event = makeUserStatusEvent(userId: "new-user", isOnline: false, lastActiveAt: nil)
+        sut.ingestSnapshot([event])
+        XCTAssertEqual(sut.presenceState(for: "existing"), PresenceState.online)
+        XCTAssertEqual(sut.presenceState(for: "new-user"), PresenceState.offline)
+    }
+
+    func test_ingestSnapshot_overwritesExistingEntry() {
+        sut.presenceMap["user-1"] = AppUserPresence(isOnline: false, lastActiveAt: nil)
+        let event = makeUserStatusEvent(userId: "user-1", isOnline: true, lastActiveAt: nil)
+        sut.ingestSnapshot([event])
+        XCTAssertEqual(sut.presenceState(for: "user-1"), PresenceState.online)
+    }
+
+    func test_ingestSnapshot_firesSinglePublishForLargeSnapshot() {
+        var changeCount = 0
+        let cancellable = sut.objectWillChange.sink { changeCount += 1 }
+        let events = (0..<50).map { i in
+            makeUserStatusEvent(userId: "user-\(i)", isOnline: true, lastActiveAt: nil)
+        }
+        sut.ingestSnapshot(events)
+        XCTAssertEqual(changeCount, 1, "objectWillChange must fire exactly once for a bulk snapshot")
+        _ = cancellable
+    }
+
+    // MARK: - ingestRefresh
+
+    func test_ingestRefresh_empty_doesNotChangeMap() {
+        sut.presenceMap["user-1"] = AppUserPresence(isOnline: true, lastActiveAt: nil)
+        sut.ingestRefresh([])
+        XCTAssertEqual(sut.presenceMap.count, 1)
+    }
+
+    func test_ingestRefresh_multipleEntries_allApplied() {
+        let entries = [
+            makePresenceRefreshEntry(userId: "r1", isOnline: true),
+            makePresenceRefreshEntry(userId: "r2", isOnline: false)
+        ]
+        sut.ingestRefresh(entries)
+        XCTAssertEqual(sut.presenceState(for: "r1"), PresenceState.online)
+        XCTAssertEqual(sut.presenceState(for: "r2"), PresenceState.offline)
+    }
+
+    func test_ingestRefresh_firesSinglePublish() {
+        var changeCount = 0
+        let cancellable = sut.objectWillChange.sink { changeCount += 1 }
+        let entries = (0..<20).map { i in makePresenceRefreshEntry(userId: "r-\(i)", isOnline: true) }
+        sut.ingestRefresh(entries)
+        XCTAssertEqual(changeCount, 1)
+        _ = cancellable
+    }
+
     // MARK: - presenceMap clearing
 
     func test_clearingPresenceMap_allUsersReturnOffline() {
@@ -289,5 +368,15 @@ final class PresenceManagerTests: XCTestCase {
         }
         participantDict["user"] = userDict
         return participantDict
+    }
+
+    private func makeUserStatusEvent(userId: String, isOnline: Bool, lastActiveAt: Date?) -> UserStatusEvent {
+        UserStatusEvent(userId: userId, username: userId, isOnline: isOnline, lastActiveAt: lastActiveAt)
+    }
+
+    private func makePresenceRefreshEntry(userId: String, isOnline: Bool) -> PresenceRefreshEntry {
+        let json: [String: Any] = ["userId": userId, "isOnline": isOnline]
+        let data = try! JSONSerialization.data(withJSONObject: json)
+        return try! JSONDecoder().decode(PresenceRefreshEntry.self, from: data)
     }
 }

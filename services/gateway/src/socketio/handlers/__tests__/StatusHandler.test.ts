@@ -400,32 +400,30 @@ describe('StatusHandler', () => {
       expect(findUnique).toHaveBeenCalledTimes(1);
     });
 
-    it('invalidateIdentityCache removes the cache entry (using bare userId key)', async () => {
-      // Note: the production cache stores keys as `user:${userId}` / `anon:${userId}`,
-      // but invalidateIdentityCache() deletes by bare `userId`. The current observable
-      // behavior is that this is a no-op for user: entries (key mismatch), so we
-      // assert what the code actually does rather than what one might expect.
+    it('invalidateIdentityCache removes both user: and anon: prefixed entries', async () => {
       const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
       const findUnique = jest.fn<any>().mockResolvedValue(dbUser);
       const prisma = makePrisma({ user: { findUnique } });
       const socket = makeSocket();
       const handler = makeHandler({ prisma });
 
-      // Prime the cache with a `user:${USER_ID}` key
+      // Prime the identity cache via a typing:start (stores key `user:${USER_ID}`)
       await handler.handleTypingStart(socket, { conversationId: CONV_ID });
       expect(findUnique).toHaveBeenCalledTimes(1);
 
-      // Delete by bare userId — note the key mismatch means `user:xxx` entry stays
-      handler.invalidateIdentityCache(USER_ID);
-
-      // Verify the method exists and is callable without throwing
       const identityCache = (handler as any).identityCache as Map<string, unknown>;
-      // The entry `user:${USER_ID}` was not removed (key mismatch with bare userId)
       expect(identityCache.has(`user:${USER_ID}`)).toBe(true);
-      // The bare userId key (if it existed) would be removed — this is the public contract
-      identityCache.set(USER_ID, { username: 'cached', displayName: 'Cached', expiresAt: Date.now() + 60_000 });
+
+      // Invalidate — both `user:` and `anon:` prefixed entries must be removed
       handler.invalidateIdentityCache(USER_ID);
-      expect(identityCache.has(USER_ID)).toBe(false);
+      expect(identityCache.has(`user:${USER_ID}`)).toBe(false);
+      expect(identityCache.has(`anon:${USER_ID}`)).toBe(false);
+
+      // A subsequent typing:start should re-query the DB (cache was cleared)
+      const throttleMap = (handler as any).typingThrottleMap as Map<string, number>;
+      throttleMap.clear();
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+      expect(findUnique).toHaveBeenCalledTimes(2);
     });
 
     it('refreshes cache when TTL has expired', async () => {
@@ -535,6 +533,73 @@ describe('StatusHandler', () => {
       await handler.handleTypingStop(socket, { conversationId: CONV_ID });
 
       expect(statusService.updateLastSeen).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── broadcastTypingStopOnDisconnect ────────────────────────────────────────
+
+  describe('broadcastTypingStopOnDisconnect', () => {
+    it('emits typing:stop for each conversation where user was typing', async () => {
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+
+      // Warm the identity cache and prime two throttle entries
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+      const throttleMap = (handler as any).typingThrottleMap as Map<string, number>;
+      throttleMap.set(`${USER_ID}:conv-b`, Date.now());
+
+      const emitted: Array<{ room: string; event: unknown }> = [];
+      handler.broadcastTypingStopOnDisconnect(USER_ID, (room, event) => {
+        emitted.push({ room, event });
+      });
+
+      expect(emitted).toHaveLength(2);
+      const rooms = emitted.map((e) => e.room);
+      expect(rooms).toContain(ROOMS.conversation(CONV_ID));
+      expect(rooms).toContain(ROOMS.conversation('conv-b'));
+      for (const { event } of emitted) {
+        expect(event).toMatchObject({ userId: USER_ID, username: 'alice', displayName: 'Alice', isTyping: false });
+      }
+    });
+
+    it('emits nothing when user has no active typing entries', () => {
+      const handler = makeHandler();
+      const emitted: unknown[] = [];
+      handler.broadcastTypingStopOnDisconnect(USER_ID, (_room, event) => emitted.push(event));
+      expect(emitted).toHaveLength(0);
+    });
+
+    it('uses empty strings for username/displayName when identity is not cached', () => {
+      const handler = makeHandler();
+      const throttleMap = (handler as any).typingThrottleMap as Map<string, number>;
+      throttleMap.set(`${USER_ID}:${CONV_ID}`, Date.now());
+
+      const emitted: Array<{ room: string; event: any }> = [];
+      handler.broadcastTypingStopOnDisconnect(USER_ID, (room, event) => emitted.push({ room, event }));
+
+      expect(emitted).toHaveLength(1);
+      expect(emitted[0].event.username).toBe('');
+      expect(emitted[0].event.displayName).toBe('');
+      expect(emitted[0].event.isTyping).toBe(false);
+    });
+
+    it('does not emit for other users typing entries', async () => {
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+      const throttleMap = (handler as any).typingThrottleMap as Map<string, number>;
+      throttleMap.set('other-user:conv-x', Date.now());
+
+      const emitted: Array<{ room: string }> = [];
+      handler.broadcastTypingStopOnDisconnect(USER_ID, (room, _event) => emitted.push({ room }));
+
+      expect(emitted).toHaveLength(1);
+      expect(emitted[0].room).toBe(ROOMS.conversation(CONV_ID));
     });
   });
 

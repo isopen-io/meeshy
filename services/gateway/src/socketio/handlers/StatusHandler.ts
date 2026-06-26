@@ -50,13 +50,55 @@ export class StatusHandler {
   }
 
   invalidateIdentityCache(userId: string): void {
-    this.identityCache.delete(userId);
+    this.identityCache.delete(`user:${userId}`);
+    this.identityCache.delete(`anon:${userId}`);
   }
 
   clearTypingThrottle(userId: string): void {
+    const prefix = `${userId}:`;
     for (const key of this.typingThrottleMap.keys()) {
-      if (key.startsWith(`${userId}:`)) this.typingThrottleMap.delete(key);
+      if (key.startsWith(prefix)) this.typingThrottleMap.delete(key);
     }
+  }
+
+  /**
+   * Broadcast `typing:stop` to every conversation where `userId` was actively
+   * typing, then clear their throttle entries. Called on socket disconnect so
+   * peer clients clear the typing indicator immediately instead of waiting for
+   * the client-side 15-second timeout.
+   *
+   * Must be called BEFORE `invalidateIdentityCache` — this method reads the
+   * identity cache synchronously so it can populate the event payload without
+   * an async DB lookup.
+   */
+  broadcastTypingStopOnDisconnect(
+    userId: string,
+    emit: (room: string, event: TypingEvent) => void
+  ): void {
+    const identity = this._getCachedIdentity(userId);
+    const prefix = `${userId}:`;
+    for (const key of this.typingThrottleMap.keys()) {
+      if (!key.startsWith(prefix)) continue;
+      const conversationId = key.slice(prefix.length);
+      const typingEvent: TypingEvent = {
+        userId,
+        username: identity?.username ?? '',
+        displayName: identity?.displayName ?? '',
+        conversationId,
+        isTyping: false,
+      };
+      emit(ROOMS.conversation(conversationId), typingEvent);
+    }
+  }
+
+  private _getCachedIdentity(userId: string): { username: string; displayName: string } | null {
+    const now = Date.now();
+    const cached =
+      this.identityCache.get(`user:${userId}`) ??
+      this.identityCache.get(`anon:${userId}`);
+    return cached && cached.expiresAt > now
+      ? { username: cached.username, displayName: cached.displayName }
+      : null;
   }
 
   /**

@@ -778,6 +778,14 @@ export class MeeshySocketIOManager {
         logger.debug('socket disconnect', { socketId: socket.id, reason });
         const disconnectedUserId = this.socketToUser.get(socket.id);
         if (disconnectedUserId) {
+          // Broadcast typing:stop BEFORE invalidating the identity cache so the
+          // event payload can be populated from the cached display name.  Peer
+          // clients then clear the typing indicator immediately instead of
+          // waiting for their 15-second client-side timeout.
+          this.statusHandler.broadcastTypingStopOnDisconnect(
+            disconnectedUserId,
+            (room, event) => this.io.to(room).emit(SERVER_EVENTS.TYPING_STOP, event)
+          );
           this.statusHandler.invalidateIdentityCache(disconnectedUserId);
           this.statusHandler.clearTypingThrottle(disconnectedUserId);
           // Invalider le snapshot de présence pour forcer un recalcul à la prochaine connexion
