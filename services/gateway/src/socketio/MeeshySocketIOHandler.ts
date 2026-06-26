@@ -10,6 +10,7 @@ import { MessageTranslationService } from '../services/message-translation/Messa
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { requireAdmin } from '../middleware/auth.js';
 
 export class MeeshySocketIOHandler {
   private socketIOManager: MeeshySocketIOManager | null = null;
@@ -54,22 +55,18 @@ export class MeeshySocketIOHandler {
     });
 
     // Route pour forcer la déconnexion d'un utilisateur (admin seulement)
-    fastify.post('/api/socketio/disconnect-user', async (request, reply) => {
+    fastify.post('/api/socketio/disconnect-user', {
+      onRequest: [(fastify as any).authenticate, requireAdmin]
+    }, async (request, reply) => {
       try {
         const { userId } = request.body as { userId: string };
-        
+
         if (!userId) {
           return reply.status(400).send({
             success: false,
             error: 'userId requis'
           });
         }
-
-        // TODO: Vérifier les permissions admin
-        // const userRole = await this.checkUserRole(request);
-        // if (userRole !== 'ADMIN') {
-        //   return reply.status(403).send({ success: false, error: 'Permission refusée' });
-        // }
 
         if (this.socketIOManager) {
           const disconnected = this.socketIOManager.disconnectUser(userId);
