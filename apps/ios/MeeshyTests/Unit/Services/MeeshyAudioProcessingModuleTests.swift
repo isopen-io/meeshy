@@ -2,6 +2,13 @@ import XCTest
 import AVFoundation
 @testable import Meeshy
 
+/// Thread-safe value holder for capturing results from `@Sendable` closures in XCTest.
+/// `@unchecked Sendable` is safe here because `XCTestExpectation.wait` provides the
+/// happens-before ordering between the background write and the main-thread assertion.
+private final class Captured<T>: @unchecked Sendable {
+    var value: T?
+}
+
 @MainActor
 final class MeeshyAudioProcessingModuleTests: XCTestCase {
 
@@ -75,9 +82,9 @@ final class MeeshyAudioProcessingModuleTests: XCTestCase {
         let sut = makeSUT(effectsService: mock)
 
         let expectation = expectation(description: "Clean buffer callback")
-        var receivedBuffer: AVAudioPCMBuffer?
+        let received = Captured<AVAudioPCMBuffer>()
         sut.onCleanAudioBuffer = { buffer in
-            receivedBuffer = buffer
+            received.value = buffer
             expectation.fulfill()
         }
 
@@ -85,8 +92,8 @@ final class MeeshyAudioProcessingModuleTests: XCTestCase {
         sut.processAudioBuffer(buffer)
 
         wait(for: [expectation], timeout: 1.0)
-        XCTAssertNotNil(receivedBuffer)
-        XCTAssertEqual(receivedBuffer?.frameLength, buffer.frameLength)
+        XCTAssertNotNil(received.value)
+        XCTAssertEqual(received.value?.frameLength, buffer.frameLength)
     }
 
     func test_processBuffer_alwaysCopiesBufferForCallback() {
@@ -94,9 +101,9 @@ final class MeeshyAudioProcessingModuleTests: XCTestCase {
         let sut = makeSUT(effectsService: mock)
 
         let expectation = expectation(description: "Clean buffer callback")
-        var receivedBuffer: AVAudioPCMBuffer?
+        let received = Captured<AVAudioPCMBuffer>()
         sut.onCleanAudioBuffer = { buffer in
-            receivedBuffer = buffer
+            received.value = buffer
             expectation.fulfill()
         }
 
@@ -104,8 +111,8 @@ final class MeeshyAudioProcessingModuleTests: XCTestCase {
         sut.processAudioBuffer(buffer)
 
         wait(for: [expectation], timeout: 1.0)
-        XCTAssertNotNil(receivedBuffer)
-        XCTAssertFalse(receivedBuffer === buffer)
+        XCTAssertNotNil(received.value)
+        XCTAssertFalse(received.value === buffer)
     }
 
     func test_processBuffer_cleanBufferHasOriginalSamples() throws {
@@ -114,9 +121,9 @@ final class MeeshyAudioProcessingModuleTests: XCTestCase {
         let sut = makeSUT(effectsService: mock)
 
         let expectation = expectation(description: "Clean buffer callback")
-        var receivedBuffer: AVAudioPCMBuffer?
+        let received = Captured<AVAudioPCMBuffer>()
         sut.onCleanAudioBuffer = { buffer in
-            receivedBuffer = buffer
+            received.value = buffer
             expectation.fulfill()
         }
 
@@ -126,8 +133,8 @@ final class MeeshyAudioProcessingModuleTests: XCTestCase {
         sut.processAudioBuffer(buffer)
 
         wait(for: [expectation], timeout: 1.0)
-        XCTAssertNotNil(receivedBuffer)
-        XCTAssertEqual(receivedBuffer?.floatChannelData![0][0] ?? 0, originalFirstSample, accuracy: 0.001)
+        XCTAssertNotNil(received.value)
+        XCTAssertEqual(received.value?.floatChannelData![0][0] ?? 0, originalFirstSample, accuracy: 0.001)
     }
 
     // MARK: - Effects Service Integration
@@ -145,9 +152,9 @@ final class MeeshyAudioProcessingModuleTests: XCTestCase {
         let sut = makeSUT(effectsService: mock)
 
         let expectation = expectation(description: "Clean buffer callback")
-        var receivedBuffer: AVAudioPCMBuffer?
+        let received = Captured<AVAudioPCMBuffer>()
         sut.onCleanAudioBuffer = { buffer in
-            receivedBuffer = buffer
+            received.value = buffer
             expectation.fulfill()
         }
 
@@ -155,8 +162,8 @@ final class MeeshyAudioProcessingModuleTests: XCTestCase {
         sut.processAudioBuffer(stereoBuffer)
 
         wait(for: [expectation], timeout: 1.0)
-        XCTAssertNotNil(receivedBuffer)
-        XCTAssertEqual(receivedBuffer?.format.channelCount, 2)
+        XCTAssertNotNil(received.value)
+        XCTAssertEqual(received.value?.format.channelCount, 2)
     }
 
     // MARK: - No Callback
