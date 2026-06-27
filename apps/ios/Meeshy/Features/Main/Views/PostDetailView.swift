@@ -941,7 +941,7 @@ struct PostDetailView: View {
                             .foregroundColor(theme.textMuted)
 
                         let flags = buildAvailableFlags()
-                        if !flags.isEmpty || (post.translations != nil && !post.translations!.isEmpty) {
+                        if !flags.isEmpty || post.translations?.isEmpty == false {
                             Text("·").font(.caption).foregroundColor(theme.textMuted)
 
                             ForEach(flags, id: \.self) { code in
@@ -966,7 +966,7 @@ struct PostDetailView: View {
                                 .meeshyTapTarget(44)
                             }
 
-                            if post.translations != nil, !post.translations!.isEmpty {
+                            if post.translations?.isEmpty == false {
                                 Image(systemName: "translate")
                                     .font(.caption2.weight(.medium))
                                     .foregroundColor(MeeshyColors.indigo400)

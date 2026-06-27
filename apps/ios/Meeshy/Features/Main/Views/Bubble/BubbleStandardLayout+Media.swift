@@ -938,7 +938,7 @@ struct BubbleCarouselView: View {
             // le cache image (téléchargement complet + échec de décodage
             // UIImage). On prefetch le thumbnail uniquement ; si absent, skip.
             let urlStr: String = attachment.type == .video
-                ? (attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl! : "")
+                ? (attachment.thumbnailUrl ?? "")
                 : (attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl)
             guard !urlStr.isEmpty else { continue }
             Task {

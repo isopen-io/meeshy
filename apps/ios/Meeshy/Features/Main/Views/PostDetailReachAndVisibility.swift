@@ -19,7 +19,7 @@ enum PostReachFormatter {
     }
 
     static func components(username: String?, isAuthor: Bool, openCount: Int, impressionCount: Int) -> Components {
-        let pseudo = (username?.isEmpty == false) ? "@\(username!)" : nil
+        let pseudo = username.flatMap { $0.isEmpty ? nil : "@\($0)" }
         guard isAuthor else { return Components(pseudo: pseudo, views: nil, impressions: nil) }
         return Components(pseudo: pseudo, views: compact(openCount), impressions: compact(impressionCount))
     }

@@ -15,19 +15,30 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.media.MediaRepository
+import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.model.UploadedMedia
+import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.story.StoryRepository
 import javax.inject.Inject
 
-/** Immutable state of the text story composer. [canPublish] is derived from the draft. */
+/**
+ * Immutable state of the story composer. [canPublish] is derived from the draft
+ * and gated while a publish or media upload is in flight. [attachments] hold the
+ * uploaded media for the on-screen preview; the draft carries only their ids for
+ * the wire request.
+ */
 @Immutable
 data class StoryComposerUiState(
     val draft: StoryComposerDraft = StoryComposerDraft(),
+    val attachments: List<UploadedMedia> = emptyList(),
+    val isUploadingMedia: Boolean = false,
     val isPublishing: Boolean = false,
     val errorMessage: String? = null,
 ) {
-    val canPublish: Boolean get() = draft.canPublish && !isPublishing
+    val canPublish: Boolean get() = draft.canPublish && !isPublishing && !isUploadingMedia
 }
 
 /**
@@ -47,6 +58,7 @@ data class StoryComposerUiState(
 class StoryComposerViewModel @Inject constructor(
     private val storyRepository: StoryRepository,
     private val sessionRepository: SessionRepository,
+    private val mediaRepository: MediaRepository,
     private val workManager: WorkManager,
 ) : ViewModel() {
 
@@ -65,9 +77,69 @@ class StoryComposerViewModel @Inject constructor(
         _state.update { it.copy(draft = it.draft.withVisibility(visibility)) }
     }
 
+    /**
+     * Uploads freshly-picked media and attaches the returned ids to the draft.
+     * Empty picks are inert; a second pick while an upload is in flight is ignored
+     * (re-entrancy guard). The upload is synchronous in the VM for v1 — a durable
+     * upload-then-publish outbox chain is the SOTA follow-up. On success the new
+     * media is **appended** so multiple picks accumulate; an empty result (every
+     * row unusable), a failure response, or a thrown error all surface a message
+     * and leave the existing draft untouched.
+     */
+    fun onMediaPicked(items: List<MediaUploadItem>) {
+        if (items.isEmpty() || _state.value.isUploadingMedia) return
+        val remaining = _state.value.draft.remainingMediaSlots
+        if (remaining <= 0) {
+            _state.update { it.copy(errorMessage = MEDIA_LIMIT) }
+            return
+        }
+        val accepted = items.take(remaining)
+        _state.update { it.copy(isUploadingMedia = true, errorMessage = null) }
+        viewModelScope.launch {
+            try {
+                when (val result = mediaRepository.upload(accepted)) {
+                    is NetworkResult.Success -> applyUploaded(result.data)
+                    is NetworkResult.Failure -> _state.update {
+                        it.copy(isUploadingMedia = false, errorMessage = result.error.message)
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                _state.update { it.copy(isUploadingMedia = false, errorMessage = e.message ?: MEDIA_FAILED) }
+            }
+        }
+    }
+
+    private fun applyUploaded(uploaded: List<UploadedMedia>) {
+        if (uploaded.isEmpty()) {
+            _state.update { it.copy(isUploadingMedia = false, errorMessage = MEDIA_UNUSABLE) }
+            return
+        }
+        _state.update {
+            val attachments = it.attachments + uploaded
+            it.copy(
+                attachments = attachments,
+                draft = it.draft.withMediaIds(attachments.map(UploadedMedia::id)),
+                isUploadingMedia = false,
+            )
+        }
+    }
+
+    /** Removes an attached media (and its id from the draft) before publishing. */
+    fun onRemoveMedia(id: String) {
+        _state.update {
+            val attachments = it.attachments.filterNot { media -> media.id == id }
+            it.copy(
+                attachments = attachments,
+                draft = it.draft.withMediaIds(attachments.map(UploadedMedia::id)),
+            )
+        }
+    }
+
     fun publish() {
         val current = _state.value
-        if (current.isPublishing || !current.draft.canPublish) return
+        if (!current.canPublish) return
         _state.update { it.copy(isPublishing = true, errorMessage = null) }
         viewModelScope.launch {
             try {
@@ -87,4 +159,10 @@ class StoryComposerViewModel @Inject constructor(
         sessionRepository.currentUser.value
             ?.let { LanguageResolver.resolveUserLanguage(it) }
             ?: LanguageResolver.FALLBACK_LANGUAGE
+
+    private companion object {
+        const val MEDIA_FAILED = "Couldn't attach that media"
+        const val MEDIA_UNUSABLE = "That media couldn't be attached"
+        const val MEDIA_LIMIT = "You can attach up to ${StoryComposerDraft.MAX_MEDIA} items"
+    }
 }

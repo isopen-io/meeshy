@@ -30,7 +30,9 @@ final class MeeshyAudioProcessingModule: NSObject {
 
     /// Callback for clean (unprocessed) audio buffers — used for transcription.
     /// Called on `transcriptionQueue`, never on the real-time audio thread.
-    var onCleanAudioBuffer: ((AVAudioPCMBuffer) -> Void)?
+    /// `@Sendable` because the closure crosses a concurrency domain: it is
+    /// captured on the real-time audio thread and dispatched to `transcriptionQueue`.
+    var onCleanAudioBuffer: (@Sendable (AVAudioPCMBuffer) -> Void)?
 
     var isEffectsActive: Bool { effectsService.isEffectsActive }
 
@@ -65,10 +67,9 @@ final class MeeshyAudioProcessingModule: NSObject {
         // Always copy: in the effects path the buffer will be mutated below;
         // outside it, RTCAudioBuffer memory is only valid for this callback lifetime.
         if let callback = onCleanAudioBuffer {
-            nonisolated(unsafe) let sendableCallback = callback
             guard let cleanCopy = copyBuffer(buffer) else { return }
             transcriptionQueue.async {
-                sendableCallback(cleanCopy)
+                callback(cleanCopy)
             }
         }
 

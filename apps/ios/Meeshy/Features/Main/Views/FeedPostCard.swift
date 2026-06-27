@@ -517,7 +517,7 @@ struct FeedPostCard: View {
                         .foregroundColor(theme.accentText(accentColor))
 
                     let flags = buildAvailableFlags()
-                    if !flags.isEmpty || (post.translations != nil && !post.translations!.isEmpty) {
+                    if !flags.isEmpty || post.translations?.isEmpty == false {
                         Text("·")
                             .font(.caption)
                             .foregroundColor(theme.textMuted)
@@ -541,7 +541,7 @@ struct FeedPostCard: View {
                             .accessibilityAddTraits(.isButton)
                         }
 
-                        if post.translations != nil, !post.translations!.isEmpty {
+                        if post.translations?.isEmpty == false {
                             Image(systemName: "translate")
                                 .font(.caption2.weight(.medium))
                                 .foregroundColor(MeeshyColors.indigo400)

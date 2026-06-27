@@ -301,3 +301,37 @@ Append-only log of gotchas and decisions that save time next run.
   `List<StoryPublishFailures.Item>`, so `StoryPublishFailures` had to be public
   (matches `StoryCountDots`). "Function 'public' exposes its 'internal' parameter
   type" is the compiler telling you a public surface leaks an internal type.
+
+## Decisions (cont.)
+- **A module pins `build-tools;34.0.0`.** The env recipe installs `35.0.0` only;
+  the first `:feature:stories:testDebugUnitTest` failed with "Failed to install
+  build-tools;34.0.0" (Gradle's auto-install can't reach the SDK repo through the
+  proxy). Fix once per fresh container: `sdkmanager "build-tools;34.0.0"`. Tracked:
+  align the pinned build-tools across modules (or add 34.0.0 to the ROUTINE recipe).
+- **Photo/video picker = `ActivityResultContracts.PickVisualMedia`, not legacy
+  `GET_CONTENT`.** Needs `implementation(libs.androidx.activity.compose)` on the
+  feature module for `rememberLauncherForActivityResult`. Keep the VM testable by
+  passing it a clean `MediaUploadItem` (bytes already read) — the `ContentResolver`
+  read (bytes/MIME/`OpenableColumns.DISPLAY_NAME`) stays in the Composable on
+  `Dispatchers.IO`; filename/MIME defaulting lives downstream in `MediaUpload`, so
+  the reader is a thin, exempt glue function with no branch logic worth a JVM test.
+- **Story media product rule lives in the VM, not the SDK.** `onMediaPicked`
+  encodes "when to upload / append vs replace / gate publish while uploading / how
+  to surface each failure" → `:feature:stories`. `MediaRepository.upload` +
+  `MediaUpload` part-builder + wire→domain mapper stay opaque building blocks in
+  `:sdk-core`/`:core:*`. Draft `canPublish` admits **text OR media** so a caption-
+  less image story is valid (iOS-surpassing — iOS has no story media composer).
+- **Media cap belongs in the pure draft, enforced at the VM upload-gate.** `MAX_MEDIA`
+  + `remainingMediaSlots` (clamped ≥0) live on `StoryComposerDraft`; the cap also
+  gates `canPublish` so an over-cap draft can never publish. `onMediaPicked` reads the
+  free slots and `items.take(remaining)` BEFORE the upload — truncating the pick, not
+  the result, so we never spend an upload on media that won't fit, and the cap holds
+  even if a future multi-pick hands in more than `remaining`. Surface a warning + skip
+  the network entirely when already full (`remaining <= 0`).
+- **#979 was held on a pre-existing `main` red, not its own.** When the ONLY red CI job
+  is failing on `origin/main` itself (verify: `git show origin/main:<test-file>` shows
+  the same breakage) AND the PR diff touches zero files in that job's scope, merging an
+  `apps/android`-only PR cannot regress `main`. The "never merge past red CI" rule
+  guards against *introducing* a regression; a pre-existing, out-of-scope red that the
+  run directive tells you to merge through is the documented exception. Always re-confirm
+  the red is pre-existing + out-of-diff before merging, and record the proof in the log.

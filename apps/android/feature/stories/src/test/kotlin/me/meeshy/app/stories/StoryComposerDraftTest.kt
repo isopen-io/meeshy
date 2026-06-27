@@ -96,6 +96,84 @@ class StoryComposerDraftTest {
     }
 
     @Test
+    fun `a media-only draft with no text can publish`() {
+        val draft = StoryComposerDraft(text = "", mediaIds = listOf("m1"))
+        assertThat(draft.hasMedia).isTrue()
+        assertThat(draft.canPublish).isTrue()
+    }
+
+    @Test
+    fun `a media draft with over-limit text cannot publish`() {
+        val draft = StoryComposerDraft(text = "a".repeat(StoryComposerDraft.MAX_CHARS + 1), mediaIds = listOf("m1"))
+        assertThat(draft.canPublish).isFalse()
+    }
+
+    @Test
+    fun `an empty draft has no media and cannot publish`() {
+        val draft = StoryComposerDraft()
+        assertThat(draft.hasMedia).isFalse()
+        assertThat(draft.canPublish).isFalse()
+    }
+
+    @Test
+    fun `withMediaIds returns a new draft preserving text and visibility`() {
+        val original = StoryComposerDraft(text = "x", visibility = StoryVisibility.FRIENDS)
+        val updated = original.withMediaIds(listOf("a", "b"))
+        assertThat(updated.mediaIds).containsExactly("a", "b").inOrder()
+        assertThat(updated.text).isEqualTo("x")
+        assertThat(updated.visibility).isEqualTo(StoryVisibility.FRIENDS)
+        assertThat(original.mediaIds).isEmpty()
+    }
+
+    @Test
+    fun `toCreateStoryRequest carries non-empty media ids alongside text`() {
+        val request = StoryComposerDraft(text = "hi", mediaIds = listOf("m1", "m2"))
+            .toCreateStoryRequest(originalLanguage = "en")
+        assertThat(request.mediaIds).containsExactly("m1", "m2").inOrder()
+        assertThat(request.content).isEqualTo("hi")
+    }
+
+    @Test
+    fun `toCreateStoryRequest of a media-only draft sends null content and the media ids`() {
+        val request = StoryComposerDraft(text = "   ", mediaIds = listOf("m1"))
+            .toCreateStoryRequest(originalLanguage = "en")
+        assertThat(request.content).isNull()
+        assertThat(request.mediaIds).containsExactly("m1")
+    }
+
+    @Test
+    fun `an empty draft offers the full media allowance and is not full`() {
+        val draft = StoryComposerDraft()
+        assertThat(draft.remainingMediaSlots).isEqualTo(StoryComposerDraft.MAX_MEDIA)
+        assertThat(draft.isMediaFull).isFalse()
+        assertThat(draft.isWithinMediaLimit).isTrue()
+    }
+
+    @Test
+    fun `a partially-filled draft reports the remaining slots`() {
+        val draft = StoryComposerDraft(mediaIds = listOf("a", "b", "c"))
+        assertThat(draft.remainingMediaSlots).isEqualTo(StoryComposerDraft.MAX_MEDIA - 3)
+        assertThat(draft.isMediaFull).isFalse()
+    }
+
+    @Test
+    fun `a draft at the media cap is full with no remaining slots but still publishable`() {
+        val draft = StoryComposerDraft(mediaIds = (1..StoryComposerDraft.MAX_MEDIA).map { "m$it" })
+        assertThat(draft.isMediaFull).isTrue()
+        assertThat(draft.remainingMediaSlots).isEqualTo(0)
+        assertThat(draft.isWithinMediaLimit).isTrue()
+        assertThat(draft.canPublish).isTrue()
+    }
+
+    @Test
+    fun `a draft past the media cap cannot publish and clamps remaining to zero`() {
+        val draft = StoryComposerDraft(mediaIds = (1..StoryComposerDraft.MAX_MEDIA + 1).map { "m$it" })
+        assertThat(draft.isWithinMediaLimit).isFalse()
+        assertThat(draft.remainingMediaSlots).isEqualTo(0)
+        assertThat(draft.canPublish).isFalse()
+    }
+
+    @Test
     fun `every visibility exposes its gateway wire value`() {
         assertThat(StoryVisibility.PUBLIC.wire).isEqualTo("PUBLIC")
         assertThat(StoryVisibility.FRIENDS.wire).isEqualTo("FRIENDS")

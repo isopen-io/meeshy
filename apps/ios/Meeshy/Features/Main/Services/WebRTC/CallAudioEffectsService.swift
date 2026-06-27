@@ -15,17 +15,22 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
         self.backSoundFileProvider = backSoundFileProvider
     }
 
-    // MARK: - State (atomic reads via os_unfair_lock for real-time safety)
+    // MARK: - State (atomic reads via OSAllocatedUnfairLock for real-time safety)
 
-    private(set) var activeVoiceEffect: AudioEffectType?
-    private(set) var isBackSoundActive = false
-    private(set) var isAutoDegraded = false
+    private struct LockedState {
+        var activeVoiceEffect: AudioEffectType?
+        var isBackSoundActive: Bool = false
+        var isAutoDegraded: Bool = false
+    }
+
+    private let stateLock = OSAllocatedUnfairLock(initialState: LockedState())
+
+    var activeVoiceEffect: AudioEffectType? { stateLock.withLock { $0.activeVoiceEffect } }
+    var isBackSoundActive: Bool { stateLock.withLock { $0.isBackSoundActive } }
+    var isAutoDegraded: Bool { stateLock.withLock { $0.isAutoDegraded } }
 
     var isEffectsActive: Bool {
-        os_unfair_lock_lock(&stateLock)
-        let result = activeVoiceEffect != nil || isBackSoundActive
-        os_unfair_lock_unlock(&stateLock)
-        return result
+        stateLock.withLock { $0.activeVoiceEffect != nil || $0.isBackSoundActive }
     }
 
     // MARK: - Node Chain (exposed for testing)
@@ -48,16 +53,13 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
     // MARK: - Thread Safety
     //
     // Two-lock strategy:
-    // - `configLock`: protects graph mutations (setEffect, tearDown, rebuild).
-    //   Taken on a background queue, NEVER on main thread or audio thread.
-    // - `stateLock`: os_unfair_lock for fast reads of state flags from any thread
-    //   (audio thread checks isEffectsActive/isAutoDegraded).
-    //
-    // processAudioBuffer uses NO lock — it snapshots the render block array
-    // which is swapped atomically by the config queue.
+    // - `configQueue` (serial): serialises graph mutations (setEffect, tearDown,
+    //   rebuild). Never held on the main thread or the audio thread.
+    // - `stateLock` (OSAllocatedUnfairLock): protects the three state flags so any
+    //   thread — including the real-time audio thread — can read them atomically
+    //   without allocation. `withLock` ensures balanced lock/unlock even on throw.
 
     private let configQueue = DispatchQueue(label: "me.meeshy.audioeffects.config")
-    private var stateLock = os_unfair_lock()
 
     // MARK: - Render Pipeline (lock-free for audio thread)
     //
@@ -126,9 +128,7 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
             throw AudioEffectsError.invalidParams("No matching effect active for update")
         }
 
-        os_unfair_lock_lock(&stateLock)
-        let active = activeVoiceEffect
-        os_unfair_lock_unlock(&stateLock)
+        let active = stateLock.withLock { $0.activeVoiceEffect }
 
         guard let active, active == config.effectType else {
             throw AudioEffectsError.invalidParams(
@@ -146,10 +146,9 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
     // MARK: - Process Audio Buffer (AUDIO THREAD — no locks, no allocations)
 
     func processAudioBuffer(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer {
-        os_unfair_lock_lock(&stateLock)
-        let degraded = isAutoDegraded
-        let active = activeVoiceEffect != nil || isBackSoundActive
-        os_unfair_lock_unlock(&stateLock)
+        let (active, degraded) = stateLock.withLock {
+            ($0.activeVoiceEffect != nil || $0.isBackSoundActive, $0.isAutoDegraded)
+        }
 
         guard active, !degraded else { return buffer }
 
@@ -177,9 +176,7 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
         }
         consecutiveOverBudgetFrames = 0
         consecutiveUnderBudgetFrames = 0
-        os_unfair_lock_lock(&stateLock)
-        isAutoDegraded = false
-        os_unfair_lock_unlock(&stateLock)
+        stateLock.withLock { $0.isAutoDegraded = false }
         lastProcessingTimeMs = nil
         Logger.audioEffects.info("Audio effects service reset")
     }
@@ -195,28 +192,28 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
             consecutiveOverBudgetFrames += 1
             consecutiveUnderBudgetFrames = 0
             if consecutiveOverBudgetFrames >= AudioEffectsConstants.overBudgetThreshold {
-                os_unfair_lock_lock(&stateLock)
-                if !isAutoDegraded {
-                    isAutoDegraded = true
-                    os_unfair_lock_unlock(&stateLock)
+                let didDegrade = stateLock.withLock { state -> Bool in
+                    guard !state.isAutoDegraded else { return false }
+                    state.isAutoDegraded = true
+                    return true
+                }
+                if didDegrade {
                     Logger.audioEffects.warning(
                         "Audio effects auto-degraded: \(ms, privacy: .public)ms exceeds budget"
                     )
-                } else {
-                    os_unfair_lock_unlock(&stateLock)
                 }
             }
         } else if ms < AudioEffectsConstants.restoreBudgetMs {
             consecutiveUnderBudgetFrames += 1
             if consecutiveUnderBudgetFrames >= AudioEffectsConstants.underBudgetThreshold {
-                os_unfair_lock_lock(&stateLock)
-                if isAutoDegraded {
-                    isAutoDegraded = false
-                    os_unfair_lock_unlock(&stateLock)
+                let didRestore = stateLock.withLock { state -> Bool in
+                    guard state.isAutoDegraded else { return false }
+                    state.isAutoDegraded = false
+                    return true
+                }
+                if didRestore {
                     consecutiveOverBudgetFrames = 0
                     Logger.audioEffects.info("Audio effects restored from auto-degradation")
-                } else {
-                    os_unfair_lock_unlock(&stateLock)
                 }
             }
         } else {
@@ -394,18 +391,14 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
         }
     }
 
-    // MARK: - Private — State Helpers (use stateLock)
+    // MARK: - Private — State Helpers (protected by stateLock)
 
     private func setActiveVoiceEffect(_ effect: AudioEffectType?) {
-        os_unfair_lock_lock(&stateLock)
-        activeVoiceEffect = effect
-        os_unfair_lock_unlock(&stateLock)
+        stateLock.withLock { $0.activeVoiceEffect = effect }
     }
 
     private func setBackSoundActive(_ active: Bool) {
-        os_unfair_lock_lock(&stateLock)
-        isBackSoundActive = active
-        os_unfair_lock_unlock(&stateLock)
+        stateLock.withLock { $0.isBackSoundActive = active }
     }
 
     // MARK: - Private — Engine Graph (config queue)
@@ -511,9 +504,7 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
     }
 
     private func restartEngineIfNeededOnConfigQueue() {
-        os_unfair_lock_lock(&stateLock)
-        let active = activeVoiceEffect != nil || isBackSoundActive
-        os_unfair_lock_unlock(&stateLock)
+        let active = stateLock.withLock { $0.activeVoiceEffect != nil || $0.isBackSoundActive }
         guard active else { return }
         rebuildEngineGraphOnConfigQueue()
     }

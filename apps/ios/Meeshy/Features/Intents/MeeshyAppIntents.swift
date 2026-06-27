@@ -314,7 +314,7 @@ struct ContactEntity: AppEntity {
         DisplayRepresentation(
             title: "\(name)",
             subtitle: "",
-            image: avatar != nil ? DisplayRepresentation.Image(url: URL(string: avatar!)!) : nil
+            image: avatar.flatMap { URL(string: $0) }.map { DisplayRepresentation.Image(url: $0) }
         )
     }
 }
