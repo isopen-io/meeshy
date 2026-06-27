@@ -692,7 +692,7 @@ final class WebRTCInputValidationSourceGuardTests: XCTestCase {
     func test_addIceCandidate_validatesSdpMidLength() throws {
         let src = try p2pClientSource()
         XCTAssertTrue(
-            src.contains("mid.count <= 256"),
+            src.contains("mid.count <= QualityThresholds.iceCandidateSdpMidMaxLength") || src.contains("mid.count <= 256"),
             "addIceCandidate must check sdpMid length <= 256 to prevent oversized strings " +
             "from a hostile peer reaching libwebrtc."
         )
