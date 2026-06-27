@@ -692,9 +692,9 @@ final class WebRTCInputValidationSourceGuardTests: XCTestCase {
     func test_addIceCandidate_validatesSdpMidLength() throws {
         let src = try p2pClientSource()
         XCTAssertTrue(
-            src.contains("mid.count <= 256"),
-            "addIceCandidate must check sdpMid length <= 256 to prevent oversized strings " +
-            "from a hostile peer reaching libwebrtc."
+            src.contains("mid.count <= QualityThresholds.iceCandidateSdpMidMaxLength"),
+            "addIceCandidate must check sdpMid length <= QualityThresholds.iceCandidateSdpMidMaxLength " +
+            "(256) to prevent oversized strings from a hostile peer reaching libwebrtc."
         )
     }
 
@@ -703,9 +703,10 @@ final class WebRTCInputValidationSourceGuardTests: XCTestCase {
     func test_addIceCandidate_validatesCandidateLineLength() throws {
         let src = try p2pClientSource()
         XCTAssertTrue(
-            src.contains("candidate.candidate.count <= 10_000"),
-            "addIceCandidate must enforce a 10 KB ceiling on the candidate line — " +
-            "libwebrtc has no app-level length guard and processes the string in C++."
+            src.contains("candidate.candidate.count <= QualityThresholds.iceCandidateLineMaxBytes"),
+            "addIceCandidate must enforce a 10 KB ceiling on the candidate line via " +
+            "QualityThresholds.iceCandidateLineMaxBytes — libwebrtc has no app-level length " +
+            "guard and processes the string in C++."
         )
     }
 

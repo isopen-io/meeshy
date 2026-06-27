@@ -411,7 +411,11 @@ enum CallDisplayMode: Sendable {
 
 // MARK: - Quality Thresholds
 
-enum QualityThresholds {
+/// Pure namespace of immutable configuration constants. Declared `nonisolated`
+/// so it opts out of the module's `defaultIsolation = MainActor`: these `static
+/// let` thresholds are Sendable value types and must be readable from nonisolated
+/// contexts (e.g. libwebrtc stats callbacks, `VoIPPushManager.parseIceServers`).
+nonisolated enum QualityThresholds {
     // MARK: Audio bitrate tier boundaries (used by adjustBitrate in WebRTCService)
 
     /// RTT at or below this value → excellent audio quality (max bitrate).
