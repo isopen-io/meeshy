@@ -88,10 +88,16 @@ class StoryComposerViewModel @Inject constructor(
      */
     fun onMediaPicked(items: List<MediaUploadItem>) {
         if (items.isEmpty() || _state.value.isUploadingMedia) return
+        val remaining = _state.value.draft.remainingMediaSlots
+        if (remaining <= 0) {
+            _state.update { it.copy(errorMessage = MEDIA_LIMIT) }
+            return
+        }
+        val accepted = items.take(remaining)
         _state.update { it.copy(isUploadingMedia = true, errorMessage = null) }
         viewModelScope.launch {
             try {
-                when (val result = mediaRepository.upload(items)) {
+                when (val result = mediaRepository.upload(accepted)) {
                     is NetworkResult.Success -> applyUploaded(result.data)
                     is NetworkResult.Failure -> _state.update {
                         it.copy(isUploadingMedia = false, errorMessage = result.error.message)
@@ -157,5 +163,6 @@ class StoryComposerViewModel @Inject constructor(
     private companion object {
         const val MEDIA_FAILED = "Couldn't attach that media"
         const val MEDIA_UNUSABLE = "That media couldn't be attached"
+        const val MEDIA_LIMIT = "You can attach up to ${StoryComposerDraft.MAX_MEDIA} items"
     }
 }

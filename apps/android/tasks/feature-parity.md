@@ -374,8 +374,13 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       caption) is publishable (`StoryComposerDraft.canPublish` admits text **or** media; `content`
       sent null when blank). `onRemoveMedia` drops a wrongly-picked attachment; uploads are
       re-entrancy-guarded and gate `canPublish` while in flight; a failure / thrown error / all-rows-
-      unusable result surfaces a message and leaves the draft intact. Pending: multi-pick limit (≤10),
-      on-canvas crop/edit, durable upload-then-publish outbox chain (SOTA follow-up).
+      unusable result surfaces a message and leaves the draft intact. **≤10 media cap enforced**
+      (`story-composer-media-cap`): pure `StoryComposerDraft.MAX_MEDIA`/`isWithinMediaLimit`/
+      `remainingMediaSlots`/`isMediaFull` (the cap also gates `canPublish`); `onMediaPicked`
+      truncates a pick to the free slots and is inert-with-a-warning once full; the Add button
+      disables + shows an `n/10` count at the cap. Pending: multi-pick the picker
+      (`PickMultipleVisualMedia(maxItems = remainingMediaSlots)`), on-canvas crop/edit, durable
+      upload-then-publish outbox chain (SOTA follow-up).
 - [ ] Audio elements (≤5/slide): voice recording (60s), audio file import, on-canvas player widget
 - [ ] Freehand drawing layer (pen/marker/eraser, colour, width, undo/redo/clear)
 - [ ] Emoji sticker picker (categorised + searchable)

@@ -39,11 +39,22 @@ data class StoryComposerDraft(
     /** True once at least one uploaded media is attached to the draft. */
     val hasMedia: Boolean get() = mediaIds.isNotEmpty()
 
+    /** Within the per-story media cap ([MAX_MEDIA]) — parity with iOS's ≤10 rule. */
+    val isWithinMediaLimit: Boolean get() = mediaIds.size <= MAX_MEDIA
+
+    /** Free media slots left, never negative so the UI can size a picker request. */
+    val remainingMediaSlots: Int get() = (MAX_MEDIA - mediaIds.size).coerceAtLeast(0)
+
+    /** No more media may be attached — the cap is reached. */
+    val isMediaFull: Boolean get() = mediaIds.size >= MAX_MEDIA
+
     /**
      * A draft is publishable when it carries real content — text **or** attached
-     * media — within the limit. A media-only story (no caption) is valid.
+     * media — within both the character and media limits. A media-only story (no
+     * caption) is valid.
      */
-    val canPublish: Boolean get() = (trimmedText.isNotEmpty() || hasMedia) && isWithinLimit
+    val canPublish: Boolean
+        get() = (trimmedText.isNotEmpty() || hasMedia) && isWithinLimit && isWithinMediaLimit
 
     fun withText(value: String): StoryComposerDraft = copy(text = value)
 
@@ -67,6 +78,9 @@ data class StoryComposerDraft(
 
     companion object {
         const val MAX_CHARS: Int = 5000
+
+        /** Maximum media attachments per story — matches the iOS composer cap. */
+        const val MAX_MEDIA: Int = 10
         private const val STORY_TYPE = "STORY"
     }
 }
