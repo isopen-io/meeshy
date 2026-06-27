@@ -1092,12 +1092,14 @@ describe('MeeshySocketIOManager', () => {
   // -------------------------------------------------------------------------
 
   describe('FEED_SUBSCRIBE handler', () => {
-    it('calls socialEventsHandler.handleFeedSubscribe and invokes success callback when authenticated', () => {
+    it('calls socialEventsHandler.handleFeedSubscribe and invokes success callback when authenticated', async () => {
       const socket = makeSocket('sock-fs1');
       (manager as any).socketToUser.set('sock-fs1', 'user-feed1');
       triggerConnection(socket);
       const callback = jest.fn();
-      socket._handlers[CLIENT_EVENTS.FEED_SUBSCRIBE](callback);
+      // The handler is async (awaits the social handler before acking), so await
+      // it before asserting the success callback fired.
+      await socket._handlers[CLIENT_EVENTS.FEED_SUBSCRIBE](callback);
       expect(mockSocialEventsHandlerInstance.handleFeedSubscribe).toHaveBeenCalledWith(socket, 'user-feed1');
       expect(callback).toHaveBeenCalledWith({ success: true });
     });
@@ -1130,12 +1132,14 @@ describe('MeeshySocketIOManager', () => {
   // -------------------------------------------------------------------------
 
   describe('FEED_UNSUBSCRIBE handler', () => {
-    it('calls socialEventsHandler.handleFeedUnsubscribe and invokes success callback when authenticated', () => {
+    it('calls socialEventsHandler.handleFeedUnsubscribe and invokes success callback when authenticated', async () => {
       const socket = makeSocket('sock-fu1');
       (manager as any).socketToUser.set('sock-fu1', 'user-feed-unsub');
       triggerConnection(socket);
       const callback = jest.fn();
-      socket._handlers[CLIENT_EVENTS.FEED_UNSUBSCRIBE](callback);
+      // The handler is async (awaits the social handler before acking), so await
+      // it before asserting the success callback fired.
+      await socket._handlers[CLIENT_EVENTS.FEED_UNSUBSCRIBE](callback);
       expect(mockSocialEventsHandlerInstance.handleFeedUnsubscribe).toHaveBeenCalledWith(socket, 'user-feed-unsub');
       expect(callback).toHaveBeenCalledWith({ success: true });
     });
@@ -1752,14 +1756,11 @@ describe('MeeshySocketIOManager', () => {
       expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.PRESENCE_SNAPSHOT, expect.objectContaining({
         users: expect.arrayContaining([expect.objectContaining({ userId: 'user-x' })]),
       }));
-      // Cache hit: the expensive contacts lookup (stale path) was NOT done.
-      // _emitUnreadCountsSnapshot does run (1 lightweight findMany for conversation IDs)
-      // but the 2-query contacts-building path is skipped entirely.
-      expect(prisma.participant.findMany).toHaveBeenCalledTimes(1);
-      expect(prisma.participant.findMany).toHaveBeenCalledWith(expect.objectContaining({
-        where: expect.objectContaining({ userId: 'user-ps1', isActive: true }),
-        select: { conversationId: true },
-      }));
+      // Cache hit: the snapshot is served from cache, so the expensive contacts
+      // lookup is skipped. The post-snapshot drains (_emitUnreadCountsSnapshot,
+      // _drainPendingMessages) are mocked out above, so no participant query runs
+      // at all on this path.
+      expect(prisma.participant.findMany).not.toHaveBeenCalled();
     });
 
     it('fetches fresh data when cache is stale', async () => {

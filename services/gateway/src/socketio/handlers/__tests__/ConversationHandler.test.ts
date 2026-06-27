@@ -209,11 +209,13 @@ describe('ConversationHandler', () => {
 
       await handler.handleConversationJoin(socket, { conversationId: CONV_ID });
 
-      expect(socket.emit).toHaveBeenCalledWith(
-        SERVER_EVENTS.CONVERSATION_JOIN_ERROR,
-        expect.objectContaining({ reason: 'not_authenticated' })
+      // Valid anonymous member (owns the participant): the handler joins the
+      // room and, having no userId, does NOT emit CONVERSATION_JOINED.
+      expect(socket.join).toHaveBeenCalled();
+      expect(socket.emit).not.toHaveBeenCalledWith(
+        SERVER_EVENTS.CONVERSATION_JOINED,
+        expect.anything()
       );
-      expect(socket.join).not.toHaveBeenCalled();
     });
 
     it('rejects an anonymous user who does not own the participant (not_a_member)', async () => {
