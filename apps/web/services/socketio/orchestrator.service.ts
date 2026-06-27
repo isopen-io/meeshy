@@ -558,6 +558,14 @@ export class SocketIOOrchestrator {
     return this.messagingService.onLinkMessageNew(listener);
   }
 
+  onMessagePinned(listener: (data: { messageId: string; conversationId: string; pinnedBy: string; pinnedAt: string }) => void): UnsubscribeFn {
+    return this.messagingService.onMessagePinned(listener);
+  }
+
+  onMessageUnpinned(listener: (data: { messageId: string; conversationId: string }) => void): UnsubscribeFn {
+    return this.messagingService.onMessageUnpinned(listener);
+  }
+
   onTranslation(listener: (data: any) => void): UnsubscribeFn {
     return this.translationService.onTranslation(listener);
   }

@@ -609,6 +609,50 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       );
     };
 
+    // Handler for message:pinned — update message in cache with pin metadata
+    const handleMessagePinned = (data: { messageId: string; conversationId: string; pinnedBy: string; pinnedAt: string }) => {
+      const { conversationId: pinnedConvId, messageId: pinnedMsgId, pinnedBy, pinnedAt } = data;
+      if (!pinnedConvId || !pinnedMsgId) return;
+      queryClient.setQueryData(
+        queryKeys.messages.infinite(pinnedConvId),
+        (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
+          if (!old) return old;
+          return {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              messages: page.messages.map((m) =>
+                m.id === pinnedMsgId ? { ...m, pinnedBy, pinnedAt } : m
+              ),
+            })),
+          };
+        }
+      );
+    };
+
+    // Handler for message:unpinned — clear pin metadata from message in cache
+    const handleMessageUnpinned = (data: { messageId: string; conversationId: string }) => {
+      const { conversationId: unpinnedConvId, messageId: unpinnedMsgId } = data;
+      if (!unpinnedConvId || !unpinnedMsgId) return;
+      queryClient.setQueryData(
+        queryKeys.messages.infinite(unpinnedConvId),
+        (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
+          if (!old) return old;
+          return {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              messages: page.messages.map((m) => {
+                if (m.id !== unpinnedMsgId) return m;
+                const { pinnedBy: _pb, pinnedAt: _pa, ...rest } = m as Message & { pinnedBy?: string; pinnedAt?: string };
+                return rest as Message;
+              }),
+            })),
+          };
+        }
+      );
+    };
+
     // Handler for link:message:new — a link preview message arrived; append to messages + bump conversation
     const handleLinkMessageNew = (data: { message: Record<string, unknown> }) => {
       const linkMsg = data.message;
@@ -781,6 +825,8 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const unsubscribePendingDelivered = meeshySocketIOService.onPendingMessagesDelivered(handlePendingMessagesDelivered);
     const unsubscribeLinkMessageNew = meeshySocketIOService.onLinkMessageNew(handleLinkMessageNew);
     const unsubscribeConversationJoinError = meeshySocketIOService.onConversationJoinError(handleConversationJoinError);
+    const unsubscribeMessagePinned = meeshySocketIOService.onMessagePinned(handleMessagePinned);
+    const unsubscribeMessageUnpinned = meeshySocketIOService.onMessageUnpinned(handleMessageUnpinned);
 
     return () => {
       unsubscribeMessage?.();
@@ -807,6 +853,8 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       unsubscribePendingDelivered?.();
       unsubscribeLinkMessageNew?.();
       unsubscribeConversationJoinError?.();
+      unsubscribeMessagePinned?.();
+      unsubscribeMessageUnpinned?.();
     };
   }, [conversationId, enabled, queryClient]);
 }

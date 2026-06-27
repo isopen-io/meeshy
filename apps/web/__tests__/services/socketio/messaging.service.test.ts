@@ -21,6 +21,8 @@ const SERVER_EVENTS_MOCK = {
   MESSAGE_ATTACHMENT_UPDATED: 'message:attachment-updated',
   PENDING_MESSAGES_DELIVERED: 'message:pending-delivered',
   LINK_MESSAGE_NEW: 'link:message:new',
+  MESSAGE_PINNED: 'message:pinned',
+  MESSAGE_UNPINNED: 'message:unpinned',
   MENTION_CREATED: 'mention:created',
   AUTHENTICATED: 'authenticated',
   ERROR: 'error',
@@ -60,6 +62,8 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
     MESSAGE_ATTACHMENT_UPDATED: 'message:attachment-updated',
     PENDING_MESSAGES_DELIVERED: 'message:pending-delivered',
     LINK_MESSAGE_NEW: 'link:message:new',
+    MESSAGE_PINNED: 'message:pinned',
+    MESSAGE_UNPINNED: 'message:unpinned',
     MENTION_CREATED: 'mention:created',
     AUTHENTICATED: 'authenticated',
     ERROR: 'error',
@@ -739,6 +743,38 @@ describe('MessagingService', () => {
         await Promise.resolve();
 
         expect(listener).toHaveBeenCalledWith({ count: 3 });
+      });
+    });
+
+    describe('message:pinned', () => {
+      it('forwards event data to all registered listeners', async () => {
+        const svc = new MessagingService();
+        const socket = makeSocket();
+        const listener = jest.fn();
+        svc.onMessagePinned(listener);
+        svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
+
+        const data = { messageId: 'msg-1', conversationId: 'conv-1', pinnedBy: 'user-1', pinnedAt: new Date().toISOString() };
+        socket._trigger(SERVER_EVENTS_MOCK.MESSAGE_PINNED, data);
+        await Promise.resolve();
+
+        expect(listener).toHaveBeenCalledWith(data);
+      });
+    });
+
+    describe('message:unpinned', () => {
+      it('forwards event data to all registered listeners', async () => {
+        const svc = new MessagingService();
+        const socket = makeSocket();
+        const listener = jest.fn();
+        svc.onMessageUnpinned(listener);
+        svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
+
+        const data = { messageId: 'msg-1', conversationId: 'conv-1' };
+        socket._trigger(SERVER_EVENTS_MOCK.MESSAGE_UNPINNED, data);
+        await Promise.resolve();
+
+        expect(listener).toHaveBeenCalledWith(data);
       });
     });
 
@@ -1718,6 +1754,30 @@ describe('MessagingService', () => {
       const listener = jest.fn();
       const unsub = svc.onLinkMessageNew(listener);
       const listenerSet = (svc as any).linkMessageNewListeners as Set<unknown>;
+      expect(listenerSet.size).toBe(1);
+      unsub();
+      expect(listenerSet.size).toBe(0);
+    });
+  });
+
+  describe('onMessagePinned', () => {
+    it('subscribes and unsubscribes', () => {
+      const svc = new MessagingService();
+      const listener = jest.fn();
+      const unsub = svc.onMessagePinned(listener);
+      const listenerSet = (svc as any).messagePinnedListeners as Set<unknown>;
+      expect(listenerSet.size).toBe(1);
+      unsub();
+      expect(listenerSet.size).toBe(0);
+    });
+  });
+
+  describe('onMessageUnpinned', () => {
+    it('subscribes and unsubscribes', () => {
+      const svc = new MessagingService();
+      const listener = jest.fn();
+      const unsub = svc.onMessageUnpinned(listener);
+      const listenerSet = (svc as any).messageUnpinnedListeners as Set<unknown>;
       expect(listenerSet.size).toBe(1);
       unsub();
       expect(listenerSet.size).toBe(0);

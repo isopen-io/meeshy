@@ -38,6 +38,8 @@ let messageAttachmentUpdatedCallback: ((data: { conversationId: string; messageI
 let pendingMessagesDeliveredCallback: ((data: { count: number }) => void) | null = null;
 let linkMessageNewCallback: ((data: { message: Record<string, unknown> }) => void) | null = null;
 let conversationJoinErrorCallback: ((data: { conversationId: string; reason: string; message: string }) => void) | null = null;
+let messagePinnedCallback: ((data: { messageId: string; conversationId: string; pinnedBy: string; pinnedAt: string }) => void) | null = null;
+let messageUnpinnedCallback: ((data: { messageId: string; conversationId: string }) => void) | null = null;
 
 // Mock unsubscribe functions
 const mockUnsubscribeMessage = jest.fn();
@@ -128,6 +130,14 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     },
     onConversationJoinError: (callback: (data: { conversationId: string; reason: string; message: string }) => void) => {
       conversationJoinErrorCallback = callback;
+      return jest.fn();
+    },
+    onMessagePinned: (callback: (data: { messageId: string; conversationId: string; pinnedBy: string; pinnedAt: string }) => void) => {
+      messagePinnedCallback = callback;
+      return jest.fn();
+    },
+    onMessageUnpinned: (callback: (data: { messageId: string; conversationId: string }) => void) => {
+      messageUnpinnedCallback = callback;
       return jest.fn();
     },
     onStatusChange: jest.fn(() => () => {}),
@@ -268,6 +278,8 @@ describe('useSocketCacheSync', () => {
     pendingMessagesDeliveredCallback = null;
     linkMessageNewCallback = null;
     conversationJoinErrorCallback = null;
+    messagePinnedCallback = null;
+    messageUnpinnedCallback = null;
   });
 
   describe('Event Listener Registration', () => {
@@ -924,6 +936,88 @@ describe('useSocketCacheSync', () => {
 
       const cached = queryClient.getQueryData(['messages', 'list', 'conv-1', 'infinite']) as { pages: { messages: Message[] }[] };
       expect(cached.pages[0].messages).toHaveLength(0);
+    });
+  });
+
+  describe('Message Pinned Handler', () => {
+    it('updates the pinned message in the messages cache with pin metadata', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+        pages: [{ messages: [createMockMessage('msg-1', 'Hello')], hasMore: false, total: 1 }],
+        pageParams: [1],
+      });
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-1' }), { wrapper });
+
+      const pinnedAt = new Date().toISOString();
+      act(() => {
+        messagePinnedCallback?.({ messageId: 'msg-1', conversationId: 'conv-1', pinnedBy: 'user-admin', pinnedAt });
+      });
+
+      const cached = queryClient.getQueryData(['messages', 'list', 'conv-1', 'infinite']) as { pages: { messages: (Message & { pinnedBy?: string; pinnedAt?: string })[] }[] };
+      expect(cached.pages[0].messages[0].pinnedBy).toBe('user-admin');
+      expect(cached.pages[0].messages[0].pinnedAt).toBe(pinnedAt);
+    });
+
+    it('ignores events with missing messageId or conversationId', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+        pages: [{ messages: [createMockMessage('msg-1', 'Hello')], hasMore: false, total: 1 }],
+        pageParams: [1],
+      });
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-1' }), { wrapper });
+
+      act(() => {
+        messagePinnedCallback?.({ messageId: '', conversationId: 'conv-1', pinnedBy: 'admin', pinnedAt: new Date().toISOString() });
+      });
+
+      const cached = queryClient.getQueryData(['messages', 'list', 'conv-1', 'infinite']) as { pages: { messages: (Message & { pinnedBy?: string })[] }[] };
+      expect(cached.pages[0].messages[0].pinnedBy).toBeUndefined();
+    });
+  });
+
+  describe('Message Unpinned Handler', () => {
+    it('removes pin metadata from the message in the messages cache', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      const pinnedMsg = { ...createMockMessage('msg-1', 'Hello'), pinnedBy: 'admin', pinnedAt: new Date().toISOString() };
+      queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+        pages: [{ messages: [pinnedMsg], hasMore: false, total: 1 }],
+        pageParams: [1],
+      });
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-1' }), { wrapper });
+
+      act(() => {
+        messageUnpinnedCallback?.({ messageId: 'msg-1', conversationId: 'conv-1' });
+      });
+
+      const cached = queryClient.getQueryData(['messages', 'list', 'conv-1', 'infinite']) as { pages: { messages: (Message & { pinnedBy?: string; pinnedAt?: string })[] }[] };
+      expect(cached.pages[0].messages[0].pinnedBy).toBeUndefined();
+      expect(cached.pages[0].messages[0].pinnedAt).toBeUndefined();
+    });
+
+    it('ignores events with missing messageId or conversationId', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      const pinnedMsg = { ...createMockMessage('msg-1', 'Hello'), pinnedBy: 'admin', pinnedAt: new Date().toISOString() };
+      queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+        pages: [{ messages: [pinnedMsg], hasMore: false, total: 1 }],
+        pageParams: [1],
+      });
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-1' }), { wrapper });
+
+      act(() => {
+        messageUnpinnedCallback?.({ messageId: '', conversationId: 'conv-1' });
+      });
+
+      const cached = queryClient.getQueryData(['messages', 'list', 'conv-1', 'infinite']) as { pages: { messages: (Message & { pinnedBy?: string })[] }[] };
+      // pinnedBy should still be present since we ignored the event
+      expect(cached.pages[0].messages[0].pinnedBy).toBe('admin');
     });
   });
 

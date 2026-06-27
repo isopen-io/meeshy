@@ -406,6 +406,14 @@ class MeeshySocketIOService {
     return this.orchestrator.onConversationJoinError(listener);
   }
 
+  public onMessagePinned(listener: (data: { messageId: string; conversationId: string; pinnedBy: string; pinnedAt: string }) => void): () => void {
+    return this.orchestrator.onMessagePinned(listener);
+  }
+
+  public onMessageUnpinned(listener: (data: { messageId: string; conversationId: string }) => void): () => void {
+    return this.orchestrator.onMessageUnpinned(listener);
+  }
+
   /**
    * Obtient le statut de connexion
    */
