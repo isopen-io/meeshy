@@ -150,19 +150,17 @@ describe('SocialEventsHandler', () => {
       const { handler } = buildHandler();
       const socket = makeSocket();
 
-      handler.handleFeedSubscribe(socket, USER_ID);
+      await handler.handleFeedSubscribe(socket, USER_ID);
 
-      await new Promise(r => setTimeout(r, 0));
       expect(socket.join).toHaveBeenCalledWith(`feed:${USER_ID}`);
     });
 
-    it('does not throw when socket.join rejects', async () => {
+    it('rejects when socket.join rejects', async () => {
       const { handler } = buildHandler();
       const socket = makeSocket();
       (socket.join as jest.Mock<any>).mockRejectedValueOnce(new Error('join failed'));
 
-      expect(() => handler.handleFeedSubscribe(socket, USER_ID)).not.toThrow();
-      await new Promise(r => setTimeout(r, 0));
+      await expect(handler.handleFeedSubscribe(socket, USER_ID)).rejects.toThrow('join failed');
     });
   });
 
@@ -171,19 +169,17 @@ describe('SocialEventsHandler', () => {
       const { handler } = buildHandler();
       const socket = makeSocket();
 
-      handler.handleFeedUnsubscribe(socket, USER_ID);
+      await handler.handleFeedUnsubscribe(socket, USER_ID);
 
-      await new Promise(r => setTimeout(r, 0));
       expect(socket.leave).toHaveBeenCalledWith(`feed:${USER_ID}`);
     });
 
-    it('does not throw when socket.leave rejects', async () => {
+    it('rejects when socket.leave rejects', async () => {
       const { handler } = buildHandler();
       const socket = makeSocket();
       (socket.leave as jest.Mock<any>).mockRejectedValueOnce(new Error('leave failed'));
 
-      expect(() => handler.handleFeedUnsubscribe(socket, USER_ID)).not.toThrow();
-      await new Promise(r => setTimeout(r, 0));
+      await expect(handler.handleFeedUnsubscribe(socket, USER_ID)).rejects.toThrow('leave failed');
     });
   });
 

@@ -702,23 +702,33 @@ export class MeeshySocketIOManager {
         }
       );
 
-      socket.on(CLIENT_EVENTS.FEED_SUBSCRIBE, (callback?: (response: SocketIOResponse) => void) => {
-        const userId = this.socketToUser.get(socket.id);
-        if (userId) {
-          this.socialEventsHandler.handleFeedSubscribe(socket, userId);
-          if (callback) callback({ success: true });
-        } else {
-          if (callback) callback({ success: false, error: 'Not authenticated' });
+      socket.on(CLIENT_EVENTS.FEED_SUBSCRIBE, async (callback?: (response: SocketIOResponse) => void) => {
+        try {
+          const userId = this.socketToUser.get(socket.id);
+          if (!userId) {
+            callback?.({ success: false, error: 'Not authenticated' });
+            return;
+          }
+          await this.socialEventsHandler.handleFeedSubscribe(socket, userId);
+          callback?.({ success: true });
+        } catch (error) {
+          logger.error('[FEED_SUBSCRIBE] Error:', error);
+          callback?.({ success: false, error: 'Failed to subscribe to feed' });
         }
       });
 
-      socket.on(CLIENT_EVENTS.FEED_UNSUBSCRIBE, (callback?: (response: SocketIOResponse) => void) => {
-        const userId = this.socketToUser.get(socket.id);
-        if (userId) {
-          this.socialEventsHandler.handleFeedUnsubscribe(socket, userId);
-          if (callback) callback({ success: true });
-        } else {
-          if (callback) callback({ success: false, error: 'Not authenticated' });
+      socket.on(CLIENT_EVENTS.FEED_UNSUBSCRIBE, async (callback?: (response: SocketIOResponse) => void) => {
+        try {
+          const userId = this.socketToUser.get(socket.id);
+          if (!userId) {
+            callback?.({ success: false, error: 'Not authenticated' });
+            return;
+          }
+          await this.socialEventsHandler.handleFeedUnsubscribe(socket, userId);
+          callback?.({ success: true });
+        } catch (error) {
+          logger.error('[FEED_UNSUBSCRIBE] Error:', error);
+          callback?.({ success: false, error: 'Failed to unsubscribe from feed' });
         }
       });
 

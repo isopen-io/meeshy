@@ -84,7 +84,8 @@ export class SocialEventsHandler {
           if (v.expiresAt <= now) this.friendsCache.delete(k);
         }
         if (this.friendsCache.size >= 500) {
-          this.friendsCache.delete(this.friendsCache.keys().next().value!);
+          const oldest = this.friendsCache.keys().next().value;
+          if (oldest !== undefined) this.friendsCache.delete(oldest);
         }
       }
       this.friendsCache.set(userId, { ids, expiresAt: Date.now() + this.FRIENDS_CACHE_TTL_MS });
@@ -139,21 +140,17 @@ export class SocialEventsHandler {
   /**
    * Appelé quand un socket reçoit feed:subscribe
    */
-  handleFeedSubscribe(socket: Socket, userId: string): void {
+  async handleFeedSubscribe(socket: Socket, userId: string): Promise<void> {
     const room = ROOMS.feed(userId);
-    Promise.resolve(socket.join(room)).catch((err: unknown) => {
-      logger.warn('feed:subscribe join failed', { userId, error: err });
-    });
+    await socket.join(room);
   }
 
   /**
    * Appelé quand un socket reçoit feed:unsubscribe
    */
-  handleFeedUnsubscribe(socket: Socket, userId: string): void {
+  async handleFeedUnsubscribe(socket: Socket, userId: string): Promise<void> {
     const room = ROOMS.feed(userId);
-    Promise.resolve(socket.leave(room)).catch((err: unknown) => {
-      logger.warn('feed:unsubscribe leave failed', { userId, error: err });
-    });
+    await socket.leave(room);
   }
 
   private async getVisibilityFilteredRecipients(
