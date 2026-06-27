@@ -103,9 +103,18 @@ file-by-file audit — every one of the 673 iOS files was read in full.
       verdict — a dependent **holds the lane** while its (cross-lane) prerequisite
       is `PENDING`/`INFLIGHT`, runs once it has succeeded (row gone), and is
       **cascade-exhausted** if the prerequisite gives up. The durable upload→publish
-      chain primitive (added a `MEDIA` lane + `OutboxRepository.stateOf`). Pending
-      follow-up: write the upload's resulting `mediaId` into the dependent publish
-      payload before it sends.
+      chain primitive (added a `MEDIA` lane + `OutboxRepository.stateOf`).
+- [x] **Outbox produced-id write-back** (`outbox-produced-id-writeback`): the second
+      half of the chain. A prerequisite that delivers a `SendResult.SuccessWithId(realId)`
+      grafts that id into every still-queued dependent's payload (placeholder = the
+      prerequisite's own `cmid`) **before** the row is deleted, via the pure
+      `PublishMediaWriteBack.graft` (decode→swap→`distinct`→re-encode, inert/`null`
+      when undecodable/no-media/absent/identity) and the generic
+      `OutboxRepository.rewriteDependents` (PENDING dependents only). So a media story
+      queued **offline before its upload finished** publishes with the correct id.
+      Pending follow-up (producer half): nothing emits `SuccessWithId` yet — needs a
+      durable `UPLOAD_MEDIA` `MEDIA`-lane sender (drained before `STORY`) + composer
+      wiring.
 - [ ] TUS resumable uploads in a **dedicated `WorkManager` chain** (foreground
       progress); message-send items `dependsOn` the upload (gating now in place)
 - [x] `MessageStateMachine` (pure, monotonic 8-state delivery FSM) — 9 tests

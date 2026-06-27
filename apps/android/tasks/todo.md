@@ -4,21 +4,24 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Stories) — slice `story-composer` ✅
-Text story composer + publish flow via the shared durable outbox/WorkManager chain.
+## This loop (Phase: Stories) — slice `outbox-produced-id-writeback` ✅
+Second half of the durable upload→publish chain: a prerequisite's
+`SendResult.SuccessWithId(realId)` grafts that id into every still-queued dependent
+publish's payload before its gate opens.
 
-- [x] `StoryComposerDraft` pure publish-gate + `toCreateStoryRequest` mapping
-      (`StoryVisibility.wire`, `MAX_CHARS=5000`, immutable copies).
-- [x] `StoryRepository.enqueuePublish` (`OutboxKind.PUBLISH_STORY` on the `story`
-      lane) + `OutboxFlushWorker` `PostApi.createStory` sender.
-- [x] `StoryComposerViewModel` optimistic publish (Prisme language, re-entrancy
-      guard, one-shot `published`, failure keeps draft) + `StoryComposerScreen`.
-- [x] `:app` route `story_composer` wired to the tray's `onAddStory`.
-- [x] TDD: +13 `StoryComposerDraftTest`, +8 `StoryComposerViewModelTest`,
-      +3 `StoryRepositoryTest` — every branch/edge covered.
+- [x] `PublishMediaWriteBack.graft` (pure: decode→swap placeholder→`distinct`→re-encode;
+      inert `null` on undecodable/no-media/absent/identity).
+- [x] `SendResult.SuccessWithId(producedId)` + `OutboxDrainer` graft-before-delete
+      (injected `graftProducedId`, no-op default to keep the package generic).
+- [x] `OutboxRepository.rewriteDependents` (PENDING dependents only) + `OutboxDao`
+      `findDependents`/`updatePayload` (no schema change).
+- [x] `OutboxFlushWorker` wires `graftProducedId = PublishMediaWriteBack::graft`.
+- [x] TDD: +10 `PublishMediaWriteBackTest`, +3 `OutboxDrainerTest`,
+      +4 `OutboxRepositoryTest` — every branch/edge covered.
 - [x] `./apps/android/meeshy.sh check` green (assemble + all unit tests, 836 tasks).
 
 ## Next loop (see PROGRESS.md "Next")
-1. `story-composer-optimistic-tray` (inject `pending_*` ring + reconcile on outcome/socket).
-2. `story-composer-media` (single image/video slide → `mediaIds`).
+1. Durable media upload row (the producer half): `UPLOAD_MEDIA` kind + durable
+   file-bytes store + `MEDIA`-lane sender returning `SuccessWithId` + composer wiring.
+2. `multi-slide canvas` (9:16 add/remove/reorder).
 3. Then advance to the **Calls** area.

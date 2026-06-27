@@ -119,6 +119,30 @@ class OutboxRepository @Inject constructor(
         outboxDao.deleteAll(listOf(cmid))
     }
 
+    /**
+     * Grafts a delivered prerequisite's outcome into its still-queued dependents
+     * (ARCHITECTURE.md §5) — the second half of the durable upload→publish chain.
+     * For every **`PENDING`** row whose `dependsOn` is [prerequisiteCmid], [rewrite]
+     * is applied to its payload; a non-`null` result is persisted, a `null` result
+     * (no-op) leaves the row untouched. `INFLIGHT`/`EXHAUSTED` dependents are skipped
+     * — only a row that has not yet started delivery can safely have its payload
+     * rewritten. The generic `(payload) -> payload?` shape keeps the queue agnostic
+     * of any one mutation's payload format.
+     *
+     * @return how many dependents were actually rewritten.
+     */
+    suspend fun rewriteDependents(prerequisiteCmid: String, rewrite: (String) -> String?): Int {
+        val dependents = outboxDao.findDependents(prerequisiteCmid)
+            .filter { it.stateEnum == OutboxState.PENDING }
+        var changed = 0
+        for (row in dependents) {
+            val newPayload = rewrite(row.payload) ?: continue
+            outboxDao.updatePayload(row.cmid, newPayload, now())
+            changed++
+        }
+        return changed
+    }
+
     /** Crash-safe boot recovery (ARCHITECTURE.md §5) — any orphaned `INFLIGHT` row becomes `PENDING`. */
     suspend fun recoverInflight(): Int = outboxDao.resetInflight(now())
 

@@ -5,7 +5,12 @@ import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
+import me.meeshy.sdk.net.MeeshyApi
+import me.meeshy.sdk.net.api.CreateStoryRequest
+import me.meeshy.sdk.story.PublishMediaWriteBack
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -204,6 +209,69 @@ class OutboxDrainerTest {
 
         assertThat(report.delivered).isEqualTo(1)
         assertThat(outbox.stateOf("publish")).isNull()
+    }
+
+    private suspend fun enqueuePublish(
+        cmid: String,
+        rowLane: String,
+        dependsOn: String,
+        mediaIds: List<String>,
+    ) {
+        outbox.enqueue(
+            OutboxMutation(
+                OutboxKind.PUBLISH_STORY,
+                rowLane,
+                targetId = cmid,
+                payload = MeeshyApi.json.encodeToString(CreateStoryRequest(content = "hi", mediaIds = mediaIds)),
+                dependsOn = dependsOn,
+                cmid = cmid,
+            ),
+        )
+    }
+
+    private suspend fun mediaIdsOfPublish(cmid: String): List<String>? =
+        outbox.deliverable(OutboxLanes.STORY).single { it.cmid == cmid }
+            .let { MeeshyApi.json.decodeFromString<CreateStoryRequest>(it.payload).mediaIds }
+
+    private fun graftingDrainer(sender: MutationSender) =
+        OutboxDrainer(
+            outbox,
+            mapOf(OutboxKind.SEND_MESSAGE to sender, OutboxKind.PUBLISH_STORY to sender),
+            graftProducedId = PublishMediaWriteBack::graft,
+        )
+
+    @Test
+    fun `drainLane grafts a produced id into a waiting dependent publish`() = runTest {
+        enqueueOn("upload", OutboxLanes.MEDIA)
+        enqueuePublish("publish", OutboxLanes.STORY, dependsOn = "upload", mediaIds = listOf("upload"))
+
+        val report = graftingDrainer { row ->
+            if (row.cmid == "upload") SendResult.SuccessWithId("real-77") else SendResult.Success
+        }.drainLane(OutboxLanes.MEDIA)
+
+        assertThat(report.delivered).isEqualTo(1)
+        assertThat(outbox.stateOf("upload")).isNull()
+        assertThat(mediaIdsOfPublish("publish")).containsExactly("real-77")
+    }
+
+    @Test
+    fun `SuccessWithId counts as a delivery and removes the row`() = runTest {
+        enqueueOn("upload", OutboxLanes.MEDIA)
+
+        val report = graftingDrainer { SendResult.SuccessWithId("real-77") }.drainLane(OutboxLanes.MEDIA)
+
+        assertThat(report.delivered).isEqualTo(1)
+        assertThat(outbox.observeAll().first()).isEmpty()
+    }
+
+    @Test
+    fun `a plain Success leaves a dependent placeholder untouched`() = runTest {
+        enqueueOn("upload", OutboxLanes.MEDIA)
+        enqueuePublish("publish", OutboxLanes.STORY, dependsOn = "upload", mediaIds = listOf("upload"))
+
+        graftingDrainer { SendResult.Success }.drainLane(OutboxLanes.MEDIA)
+
+        assertThat(mediaIdsOfPublish("publish")).containsExactly("upload")
     }
 
     @Test

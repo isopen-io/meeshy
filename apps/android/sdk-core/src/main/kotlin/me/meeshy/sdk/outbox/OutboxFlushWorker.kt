@@ -24,6 +24,7 @@ import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.api.PostApi
 import me.meeshy.sdk.net.api.ReactionApi
 import me.meeshy.sdk.net.apiCall
+import me.meeshy.sdk.story.PublishMediaWriteBack
 import timber.log.Timber
 import java.util.concurrent.TimeUnit
 
@@ -51,11 +52,16 @@ class OutboxFlushWorker @AssistedInject constructor(
         outboxRepository.recoverInflight()
 
         val senders = buildSenders()
-        val drainer = OutboxDrainer(outboxRepository, senders) { row ->
-            if (row.kindEnum == OutboxKind.SEND_MESSAGE) {
-                messageRepository.markSendFailed(row.cmid)
-            }
-        }
+        val drainer = OutboxDrainer(
+            outboxRepository,
+            senders,
+            onExhausted = { row ->
+                if (row.kindEnum == OutboxKind.SEND_MESSAGE) {
+                    messageRepository.markSendFailed(row.cmid)
+                }
+            },
+            graftProducedId = PublishMediaWriteBack::graft,
+        )
 
         val lanes = listOf(
             OutboxLanes.REACTION,

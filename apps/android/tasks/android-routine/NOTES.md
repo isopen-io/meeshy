@@ -21,6 +21,34 @@ Append-only log of gotchas and decisions that save time next run.
 - `NetworkResult.Failure` wraps **`ApiError(message, code?, httpStatus?)`** — not
   a `NetworkError` type. Use `NetworkResult.Success(Unit)` for unit endpoints.
 
+## Outbox / durable chain
+- The durable upload→publish chain is two halves: (1) **gating** the dependent on
+  its prerequisite (`outbox-dependency-gating` — drainer holds/cascade-exhausts via
+  `OutboxDependencies.verdict`); (2) **produced-id write-back**
+  (`outbox-produced-id-writeback` — a prerequisite's `SendResult.SuccessWithId(realId)`
+  grafts the id into dependents' payloads via `OutboxRepository.rewriteDependents` +
+  the pure `PublishMediaWriteBack.graft`). The **placeholder convention** is: a publish
+  queued before its upload carries the **upload row's own `cmid`** as the placeholder
+  media id; the drainer passes `placeholder = row.cmid` to the graft. Self-documenting,
+  needs no extra column.
+- Keep the outbox package **payload-agnostic**: `rewriteDependents` takes a generic
+  `(payload) -> payload?` and the drainer takes an injected `graftProducedId` (no-op
+  default). The story-specific `CreateStoryRequest` decode lives only in
+  `PublishMediaWriteBack` (sdk-core `story` package); the worker injects it. Don't let
+  `OutboxRepository`/`OutboxDrainer` import story types.
+- `MeeshyApi.json` has `explicitNulls = false` + default `encodeDefaults = false`, so
+  re-encoding a `CreateStoryRequest.copy(...)` round-trips cleanly (default/null fields
+  are simply omitted). Safe to decode→edit→re-encode a queued payload.
+- `rewriteDependents` only touches **PENDING** dependents — never rewrite a row that is
+  INFLIGHT (mid-send) or EXHAUSTED. The gate keeps a dependent PENDING until its
+  prerequisite succeeds, so the graft always lands before the dependent's gate opens.
+- Producer gap (still open after `outbox-produced-id-writeback`): nothing emits
+  `SuccessWithId` yet and the worker's lane list omits `MEDIA`. The write-back is a
+  tested primitive awaiting its `UPLOAD_MEDIA` sender — same "ship the primitive before
+  its producer" pattern as the gating slice. Drain `MEDIA` **before** `STORY` when it
+  lands. Also: a `BLOCKED` dependency doesn't set `anyTransient`, so a held lane isn't
+  auto-retried by WorkManager — fix with the producer.
+
 ## Domain gotchas
 - `List<ApiPost>.toStoryGroups()` orders each group's stories **oldest-first**
   (ascending `createdAt`); groups order = current-user → unviewed → latest desc.
