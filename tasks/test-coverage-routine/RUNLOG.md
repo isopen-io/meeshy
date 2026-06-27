@@ -2048,4 +2048,4 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - ⚠️ PR must NOT be auto-merged — diff includes production logic fix (|| → ??). Needs human review.
 - Reviewer: PASS (rounds: 2)
 - Notes: Production bugs in GET /admin/translations fixed by prior commit `bdfe0343` unblocked this slice. Full gateway suite: 291/291 suites pass, 8947 tests pass. Threshold ratcheted lines:65→67, branches:61→63, statements:65→67, functions:65→67.
-- Commit: (pending)
+- Commit: eb1325e4 (PR #969 — ⚠ awaiting human review, do NOT auto-merge: production bug fix in diff)
