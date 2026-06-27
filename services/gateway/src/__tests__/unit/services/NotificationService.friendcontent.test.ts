@@ -85,6 +85,9 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     friendRequest: {
       findMany: jest.fn(),
     },
+    communityMember: {
+      findMany: jest.fn(),
+    },
   };
 
   return {
@@ -935,6 +938,57 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
         [{ data: { userId: string } }]
       >;
       const recipientIds = calls.map((c) => c[0].data.userId);
+      expect(recipientIds).not.toContain(FRIEND_2);
+      expect(recipientIds).toContain(FRIEND_3);
+    });
+
+    it('test_createFriendContentNotificationsBatch_COMMUNITY_notifiesCoMembersNotFriends', async () => {
+      // R1: une action dans une communauté est OBLIGATOIREMENT notifiée à TOUS
+      // les membres de la communauté — pas aux contacts (friends) de l'auteur.
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+        makeFriendRequest(AUTHOR_ID, FRIEND_1), // contact, NOT a community member
+      ]);
+      // getCommunityCoMemberIds: 1er findMany → appartenances de l'auteur,
+      // 2e findMany → co-membres actifs de ces communautés.
+      (prisma.communityMember.findMany as jest.Mock)
+        .mockResolvedValueOnce([{ communityId: 'community-1' }])
+        .mockResolvedValueOnce([{ userId: FRIEND_2 }, { userId: FRIEND_3 }]);
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'POST',
+        visibility: 'COMMUNITY',
+      });
+
+      const calls = (prisma.notification.create as jest.Mock).mock.calls as Array<
+        [{ data: { userId: string } }]
+      >;
+      const recipientIds = calls.map((c) => c[0].data.userId);
+      expect(recipientIds).toContain(FRIEND_2);
+      expect(recipientIds).toContain(FRIEND_3);
+      expect(recipientIds).not.toContain(FRIEND_1);
+    });
+
+    it('test_createFriendContentNotificationsBatch_COMMUNITY_excludesAuthorAndExcludeUserIds', async () => {
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.communityMember.findMany as jest.Mock)
+        .mockResolvedValueOnce([{ communityId: 'community-1' }])
+        .mockResolvedValueOnce([{ userId: AUTHOR_ID }, { userId: FRIEND_2 }, { userId: FRIEND_3 }]);
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'POST',
+        visibility: 'COMMUNITY',
+        excludeUserIds: [FRIEND_2],
+      });
+
+      const calls = (prisma.notification.create as jest.Mock).mock.calls as Array<
+        [{ data: { userId: string } }]
+      >;
+      const recipientIds = calls.map((c) => c[0].data.userId);
+      expect(recipientIds).not.toContain(AUTHOR_ID);
       expect(recipientIds).not.toContain(FRIEND_2);
       expect(recipientIds).toContain(FRIEND_3);
     });
