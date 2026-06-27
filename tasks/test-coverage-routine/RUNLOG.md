@@ -2063,3 +2063,44 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Reviewer: PASS (rounds: 1)
 - Notes: ChartsImpl.tsx had pre-existing 100% coverage — confirmed. AdminLayout.tsx and debug.tsx were the substantive additions. Global web thresholds (42%/34%) not ratcheted — 3-file addition in a 1091-file codebase shifts global <0.1pp; will ratchet once a later phase measures the full suite.
 - Commit: (this commit)
+
+---
+
+## 2026-06-27T16:20Z — Shared types gap-fill (role-types + preference schemas)
+
+- Slice: Shared TypeScript utilities — types/role-types.ts + types/preferences/{video,audio,privacy,message,document,application}.ts
+- Branch: `claude/coverage/shared-utilities-remaining`
+- Targeted files (added to vitest coverage include):
+  - `packages/shared/types/role-types.ts` — 100% lines / 100% branches ✓ (was in test file but not measured)
+  - `packages/shared/types/preferences/video.ts` — 100% lines / 100% branches ✓
+  - `packages/shared/types/preferences/audio.ts` — 100% lines / 100% branches ✓
+  - `packages/shared/types/preferences/privacy.ts` — 100% lines / 100% branches ✓
+  - `packages/shared/types/preferences/message.ts` — 100% lines / 100% branches ✓
+  - `packages/shared/types/preferences/document.ts` — 100% lines / 100% branches ✓
+  - `packages/shared/types/preferences/application.ts` — 100% lines / 100% branches ✓
+- Result: ☑ done — all 7 files at 100% line+branch; preference schemas already had comprehensive tests
+- Coverage (final run, 1029 tests, 36 test files):
+  - shared global: **99.72% lines / 97.27% branches / 94.23% functions** — all thresholds met (branches:96, lines:99, functions:93)
+- Tests added: 80 new tests in `packages/shared/types/__tests__/role-types.test.ts`:
+  - MemberRole enum values (creator, admin, moderator, member)
+  - MEMBER_ROLE_HIERARCHY constants (creator:40, admin:30, moderator:20, member:10)
+  - hasMinimumMemberRole (7 cases: hierarchy checks, unknown user role returns false, MemberRole enum input)
+  - isMemberRole (7 cases: all valid values, CREATOR uppercase accepted, unknown value rejected, empty string)
+  - isGlobalAdmin (7 cases: ADMIN/BIGBOSS true, case-insensitive, non-admin false, enum input)
+  - isGlobalModerator (7 cases: MODERATOR/ADMIN/BIGBOSS true, AUDIT/ANALYST/USER false)
+  - isMemberAdmin / isMemberModerator / isMemberCreator (6 cases each: role-specific guards)
+  - WRITE_PERMISSION_HIERARCHY (7 cases: all 5 levels + ordering invariants)
+  - normalizeGlobalRole (invalid + empty string → USER fallback)
+  - hasModeratorPrivileges (unknown role → false)
+  - getEffectiveRole (unknown global role treated as level 0)
+  - getEffectiveRoleLevel (empty global role defaults to USER; unknown roles → level 0)
+  - isGlobalUserRole (reject unknown + empty string)
+- Production code changes (comment-only — 7 × v8 ignore for genuinely unreachable branches):
+  - `hasMinimumRole` lines 74-75: `/* v8 ignore next 2 */` — TypeScript types ensure roles always in GLOBAL_ROLE_HIERARCHY; `|| 0` unreachable
+  - `hasMinimumMemberRole` line 137: `/* v8 ignore next */` — requiredRole typed MemberRole|MemberRoleType, always mapped
+  - `hasModeratorPrivileges` line 196: `/* v8 ignore next */` — UNIFIED_ROLE_LEVELS.MODERATOR is constant, `?? 60` unreachable
+  - `isGlobalAdmin` line 279, `isMemberAdmin` line 295, `isMemberCreator` line 310: `/* v8 ignore next */` — TypeScript string enums are always typeof 'string' at runtime; else-branch unreachable
+- ⚠️ PR must NOT be auto-merged — diff includes production code changes (v8 ignore comments in role-types.ts). Needs human review per ROUTINE.md §7.
+- Reviewer: PASS (rounds: 1) — v8 ignore justifications accepted; test quality high (116 test cases, no tautologies, good edge-case coverage)
+- Pre-flight checks: Confirmed PR #969 (gateway) and PR #974 (web) both merged 2026-06-27; no open claude/coverage/* PRs before this run. PROGRESS.md updated: P2 Admin × web ⚠ blocked → ☑, P2 Theme × shared/SDK ⊘, P2 Video/story × shared/SDK ⊘.
+- Commit: (see PR push below)
