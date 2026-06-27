@@ -424,4 +424,71 @@ describe('AdminLayout', () => {
       expect(mockPush).toHaveBeenCalled();
     });
   });
+
+  describe('preload on hover and focus', () => {
+    it('calls preloadRouteModules("/dashboard") on mouseEnter of back-to-dashboard button', () => {
+      const { preloadRouteModules } = require('@/lib/lazy-components');
+      render(<AdminLayout><div>content</div></AdminLayout>);
+      const buttons = screen.getAllByTestId('button');
+      const dashBtn = buttons.find(b => b.textContent?.includes('layout.backDashboard'));
+      expect(dashBtn).toBeTruthy();
+      fireEvent.mouseEnter(dashBtn!);
+      expect(preloadRouteModules).toHaveBeenCalledWith('/dashboard');
+    });
+
+    it('calls preloadRouteModules("/dashboard") on focus of back-to-dashboard button', () => {
+      const { preloadRouteModules } = require('@/lib/lazy-components');
+      render(<AdminLayout><div>content</div></AdminLayout>);
+      const buttons = screen.getAllByTestId('button');
+      const dashBtn = buttons.find(b => b.textContent?.includes('layout.backDashboard'));
+      expect(dashBtn).toBeTruthy();
+      fireEvent.focus(dashBtn!);
+      expect(preloadRouteModules).toHaveBeenCalledWith('/dashboard');
+    });
+
+    it('calls preloadRouteModules with nav item href on mouseEnter', () => {
+      mockHasPermission.mockReturnValue(true);
+      const { preloadRouteModules } = require('@/lib/lazy-components');
+      render(<AdminLayout><div>content</div></AdminLayout>);
+      const buttons = screen.getAllByTestId('button');
+      const navBtn = buttons.find(b => b.textContent?.includes('layout.navDashboard'));
+      expect(navBtn).toBeTruthy();
+      fireEvent.mouseEnter(navBtn!);
+      expect(preloadRouteModules).toHaveBeenCalled();
+    });
+
+    it('calls preloadRouteModules with nav item href on focus', () => {
+      mockHasPermission.mockReturnValue(true);
+      const { preloadRouteModules } = require('@/lib/lazy-components');
+      render(<AdminLayout><div>content</div></AdminLayout>);
+      const buttons = screen.getAllByTestId('button');
+      const navBtn = buttons.find(b => b.textContent?.includes('layout.navDashboard'));
+      expect(navBtn).toBeTruthy();
+      fireEvent.focus(navBtn!);
+      expect(preloadRouteModules).toHaveBeenCalled();
+    });
+
+    it('shows aria-label on dashboard button when sidebar is collapsed', () => {
+      render(<AdminLayout><div>content</div></AdminLayout>);
+      const buttons = screen.getAllByTestId('button');
+      const collapseBtn = buttons.find(b => b.getAttribute('aria-label') === 'layout.collapseMenu');
+      expect(collapseBtn).toBeTruthy();
+      fireEvent.click(collapseBtn!);
+      const afterButtons = screen.getAllByTestId('button');
+      const dashBtn = afterButtons.find(b => b.getAttribute('aria-label') === 'layout.backDashboard');
+      expect(dashBtn).toBeInTheDocument();
+    });
+
+    it('shows aria-label on nav items when sidebar is collapsed', () => {
+      mockHasPermission.mockReturnValue(true);
+      render(<AdminLayout><div>content</div></AdminLayout>);
+      const buttons = screen.getAllByTestId('button');
+      const collapseBtn = buttons.find(b => b.getAttribute('aria-label') === 'layout.collapseMenu');
+      expect(collapseBtn).toBeTruthy();
+      fireEvent.click(collapseBtn!);
+      const afterButtons = screen.getAllByTestId('button');
+      const navBtnWithLabel = afterButtons.find(b => b.getAttribute('aria-label') === 'layout.navDashboard');
+      expect(navBtnWithLabel).toBeInTheDocument();
+    });
+  });
 });
