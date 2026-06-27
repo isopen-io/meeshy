@@ -14,6 +14,7 @@ import { logger } from '@/utils/logger';
 import { SERVER_EVENTS, CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type {
   AttachmentStatusUpdatedEventData,
+  AttachmentUpdatedEventData,
   MessageConsumedEventData,
   ReactionUpdateEventData,
 } from '@meeshy/shared/types/socketio-events';
@@ -45,6 +46,7 @@ export class MessagingService {
   private mentionListeners: Set<(data: unknown) => void> = new Set();
   private consumedListeners: Set<(data: MessageConsumedEventData) => void> = new Set();
   private attachmentStatusListeners: Set<(data: AttachmentStatusUpdatedEventData) => void> = new Set();
+  private messageAttachmentUpdatedListeners: Set<(data: AttachmentUpdatedEventData) => void> = new Set();
 
   private encryptionHandlers: EncryptionHandlers | null = null;
   private getMessageByIdCallback: GetMessageByIdCallback | null = null;
@@ -185,6 +187,10 @@ export class MessagingService {
 
     (socket as unknown as { on: (event: string, handler: (data: AttachmentStatusUpdatedEventData) => void) => void }).on(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, (data: AttachmentStatusUpdatedEventData) => {
       this.attachmentStatusListeners.forEach(listener => listener(data));
+    });
+
+    (socket as unknown as { on: (event: string, handler: (data: AttachmentUpdatedEventData) => void) => void }).on(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, (data: AttachmentUpdatedEventData) => {
+      this.messageAttachmentUpdatedListeners.forEach(listener => listener(data));
     });
 
     socket.on(SERVER_EVENTS.MENTION_CREATED, (data: unknown) => {
@@ -521,6 +527,11 @@ export class MessagingService {
     return () => this.attachmentStatusListeners.delete(listener);
   }
 
+  onMessageAttachmentUpdated(listener: (data: AttachmentUpdatedEventData) => void): UnsubscribeFn {
+    this.messageAttachmentUpdatedListeners.add(listener);
+    return () => this.messageAttachmentUpdatedListeners.delete(listener);
+  }
+
   /**
    * Cleanup all listeners
    */
@@ -531,6 +542,7 @@ export class MessagingService {
     this.mentionListeners.clear();
     this.consumedListeners.clear();
     this.attachmentStatusListeners.clear();
+    this.messageAttachmentUpdatedListeners.clear();
     this.markReceivedTimers.forEach(timer => clearTimeout(timer));
     this.markReceivedTimers.clear();
     this.recentMessageIds.clear();

@@ -350,6 +350,10 @@ class MeeshySocketIOService {
     return this.orchestrator.onPreferencesUpdated(listener);
   }
 
+  public onCategoryChanged(listener: () => void): () => void {
+    return this.orchestrator.onCategoryChanged(listener);
+  }
+
   public onParticipantRoleUpdated(listener: (data: { conversationId: string; userId: string; newRole: string }) => void): () => void {
     return this.orchestrator.onParticipantRoleUpdated(listener);
   }
@@ -384,6 +388,10 @@ class MeeshySocketIOService {
 
   public onAttachmentStatusUpdated(listener: (data: { attachmentId: string; messageId: string; conversationId: string; userId: string; action: string }) => void): () => void {
     return this.orchestrator.onAttachmentStatusUpdated(listener);
+  }
+
+  public onMessageAttachmentUpdated(listener: (data: { conversationId: string; messageId: string; attachment: unknown }) => void): () => void {
+    return this.orchestrator.onMessageAttachmentUpdated(listener);
   }
 
   /**

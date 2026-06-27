@@ -18,6 +18,7 @@ const SERVER_EVENTS_MOCK = {
   MESSAGE_CONSUMED: 'message:consumed',
   SYSTEM_MESSAGE: 'system:message',
   ATTACHMENT_STATUS_UPDATED: 'attachment-status:updated',
+  MESSAGE_ATTACHMENT_UPDATED: 'message:attachment-updated',
   MENTION_CREATED: 'mention:created',
   AUTHENTICATED: 'authenticated',
   ERROR: 'error',
@@ -54,6 +55,7 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
     MESSAGE_CONSUMED: 'message:consumed',
     SYSTEM_MESSAGE: 'system:message',
     ATTACHMENT_STATUS_UPDATED: 'attachment-status:updated',
+    MESSAGE_ATTACHMENT_UPDATED: 'message:attachment-updated',
     MENTION_CREATED: 'mention:created',
     AUTHENTICATED: 'authenticated',
     ERROR: 'error',
@@ -699,6 +701,22 @@ describe('MessagingService', () => {
 
         const data = { attachmentId: 'att-1', status: 'ready', messageId: 'msg-1', conversationId: 'conv-1' };
         socket._trigger(SERVER_EVENTS_MOCK.ATTACHMENT_STATUS_UPDATED, data);
+        await Promise.resolve();
+
+        expect(listener).toHaveBeenCalledWith(data);
+      });
+    });
+
+    describe('message:attachment-updated', () => {
+      it('forwards event data to all registered listeners', async () => {
+        const svc = new MessagingService();
+        const socket = makeSocket();
+        const listener = jest.fn();
+        svc.onMessageAttachmentUpdated(listener);
+        svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
+
+        const data = { conversationId: 'conv-1', messageId: 'msg-1', attachment: { id: 'att-1', mimeType: 'audio/mp4', transcription: 'Hello' } };
+        socket._trigger(SERVER_EVENTS_MOCK.MESSAGE_ATTACHMENT_UPDATED, data);
         await Promise.resolve();
 
         expect(listener).toHaveBeenCalledWith(data);
@@ -1632,6 +1650,18 @@ describe('MessagingService', () => {
       expect(attachListeners.size).toBe(1);
       unsub();
       expect(attachListeners.size).toBe(0);
+    });
+  });
+
+  describe('onMessageAttachmentUpdated', () => {
+    it('subscribes and unsubscribes', () => {
+      const svc = new MessagingService();
+      const listener = jest.fn();
+      const unsub = svc.onMessageAttachmentUpdated(listener);
+      const listenerSet = (svc as any).messageAttachmentUpdatedListeners as Set<unknown>;
+      expect(listenerSet.size).toBe(1);
+      unsub();
+      expect(listenerSet.size).toBe(0);
     });
   });
 

@@ -42,6 +42,7 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     onConversationParticipantUnbanned: jest.fn(() => () => {}),
     onConversationClosed: jest.fn(() => () => {}),
     onCategoryChanged: jest.fn(() => () => {}),
+    onMessageAttachmentUpdated: jest.fn(() => () => {}),
     onStatusChange: jest.fn(() => () => {}),
   },
 }));

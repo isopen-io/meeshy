@@ -34,6 +34,7 @@ let conversationParticipantBannedCallback: ((data: { conversationId: string; use
 let conversationParticipantUnbannedCallback: ((data: { conversationId: string; userId: string }) => void) | null = null;
 let conversationClosedCallback: ((data: { conversationId: string; closedBy: string; closedAt: string }) => void) | null = null;
 let categoryChangedCallback: (() => void) | null = null;
+let messageAttachmentUpdatedCallback: ((data: { conversationId: string; messageId: string; attachment: unknown }) => void) | null = null;
 
 // Mock unsubscribe functions
 const mockUnsubscribeMessage = jest.fn();
@@ -108,6 +109,10 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     },
     onCategoryChanged: (callback: () => void) => {
       categoryChangedCallback = callback;
+      return jest.fn();
+    },
+    onMessageAttachmentUpdated: (callback: (data: { conversationId: string; messageId: string; attachment: unknown }) => void) => {
+      messageAttachmentUpdatedCallback = callback;
       return jest.fn();
     },
     onStatusChange: jest.fn(() => () => {}),
@@ -244,6 +249,7 @@ describe('useSocketCacheSync', () => {
     conversationParticipantUnbannedCallback = null;
     conversationClosedCallback = null;
     categoryChangedCallback = null;
+    messageAttachmentUpdatedCallback = null;
   });
 
   describe('Event Listener Registration', () => {
@@ -796,6 +802,33 @@ describe('useSocketCacheSync', () => {
       expect(invalidateSpy).toHaveBeenCalledWith(
         expect.objectContaining({ queryKey: ['user-preferences', 'categories'] })
       );
+    });
+  });
+
+  describe('Message Attachment Updated Handler', () => {
+    it('replaces the attachment in the infinite messages cache when updated', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      const existingMessage = createMockMessage('msg-1', 'Hello');
+      (existingMessage as any).attachments = [{ id: 'att-1', mimeType: 'audio/mp4', transcription: null }];
+
+      queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+        pages: [{ messages: [existingMessage], hasMore: false, total: 1 }],
+        pageParams: [1],
+      });
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-1' }), { wrapper });
+
+      const updatedAttachment = { id: 'att-1', mimeType: 'audio/mp4', transcription: 'Hello world' };
+      act(() => {
+        messageAttachmentUpdatedCallback?.({ conversationId: 'conv-1', messageId: 'msg-1', attachment: updatedAttachment });
+      });
+
+      const cached = queryClient.getQueryData(['messages', 'list', 'conv-1', 'infinite']) as {
+        pages: { messages: (Message & { attachments?: unknown[] })[] }[];
+      };
+      const msg = cached.pages[0].messages[0];
+      expect((msg.attachments as typeof updatedAttachment[])[0].transcription).toBe('Hello world');
     });
   });
 });

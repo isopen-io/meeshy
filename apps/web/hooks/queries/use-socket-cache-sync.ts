@@ -573,6 +573,34 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       queryClient.invalidateQueries({ queryKey: queryKeys.preferences.categories() });
     };
 
+    // Handler for message:attachment-updated — async enrichment (transcription/translation) completed for an attachment
+    const handleMessageAttachmentUpdated = (data: { conversationId: string; messageId: string; attachment: unknown }) => {
+      const { conversationId: attachConvId, messageId: attachMsgId, attachment } = data;
+      if (!attachConvId || !attachMsgId || !attachment) return;
+      const attachId = (attachment as { id?: string }).id;
+      queryClient.setQueryData(
+        queryKeys.messages.infinite(attachConvId),
+        (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
+          if (!old) return old;
+          return {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              messages: page.messages.map((m) => {
+                if (m.id !== attachMsgId) return m;
+                const attachments = Array.isArray((m as any).attachments)
+                  ? (m as any).attachments.map((a: { id?: string }) =>
+                      attachId && a.id === attachId ? { ...a, ...attachment as object } : a
+                    )
+                  : (m as any).attachments;
+                return { ...m, attachments };
+              }),
+            })),
+          };
+        }
+      );
+    };
+
     // Handler for attachment status updated (listened, watched, viewed, downloaded)
     const handleAttachmentStatusUpdated = (data: { attachmentId: string; messageId: string; conversationId: string; userId: string; action: string }) => {
       const targetConversationId = data.conversationId;
@@ -685,6 +713,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const unsubscribeParticipantUnbanned = meeshySocketIOService.onConversationParticipantUnbanned(handleConversationParticipantUnbanned);
     const unsubscribeConversationClosed = meeshySocketIOService.onConversationClosed(handleConversationClosed);
     const unsubscribeCategoryChanged = meeshySocketIOService.onCategoryChanged(handleCategoryChanged);
+    const unsubscribeMessageAttachmentUpdated = meeshySocketIOService.onMessageAttachmentUpdated(handleMessageAttachmentUpdated);
 
     return () => {
       unsubscribeMessage?.();
@@ -707,6 +736,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       unsubscribeParticipantUnbanned?.();
       unsubscribeConversationClosed?.();
       unsubscribeCategoryChanged?.();
+      unsubscribeMessageAttachmentUpdated?.();
     };
   }, [conversationId, enabled, queryClient]);
 }
