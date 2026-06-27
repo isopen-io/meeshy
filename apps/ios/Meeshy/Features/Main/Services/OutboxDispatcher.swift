@@ -36,9 +36,6 @@ struct OutboxDispatcher: OutboxDispatching {
         case .sendReaction:
             try await dispatchSendReaction(record)
 
-        // Wave 1 Phase B — 5 of the 14 new mutation kinds are now wired
-        // through to their REST endpoints with X-Client-Mutation-Id header
-        // for gateway-side MutationLog dedup.
         case .blockUser:
             try await dispatchBlockUser(record)
 
@@ -54,11 +51,6 @@ struct OutboxDispatcher: OutboxDispatching {
         case .updateProfile:
             try await dispatchUpdateProfile(record)
 
-        // Wave 1 Phase C — 9 of the 11 remaining kinds are now wired.
-        // `publishStory` / `repostStory` stay in the existing
-        // `StoryOfflineQueue` pipeline for now (Tier C queue merge will
-        // unify them later) and surface here as a permanent failure so a
-        // stray row doesn't loop in the flusher.
         case .markAsRead:
             try await dispatchMarkAsRead(record)
 
@@ -102,7 +94,7 @@ struct OutboxDispatcher: OutboxDispatching {
         }
     }
 
-    // MARK: - Non-message mutation dispatch (Wave 1 Phase B)
+    // MARK: - Social mutations
 
     /// Decoded the typed payload from `record.payload`. Treats a decode
     /// failure as permanent so the flusher escalates to `.exhausted` after
@@ -227,7 +219,7 @@ struct OutboxDispatcher: OutboxDispatching {
         logger.info("updateProfile dispatched cmid=\(payload.clientMutationId, privacy: .public)")
     }
 
-    // MARK: - Non-message mutation dispatch (Wave 1 Phase C)
+    // MARK: - Conversation & content mutations
 
     /// `POST /conversations/:id/mark-read` — the gateway treats read
     /// receipts as monotonic + idempotent at the storage layer (a higher
@@ -348,11 +340,10 @@ struct OutboxDispatcher: OutboxDispatching {
     private func dispatchCreatePost(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: CreatePostPayload.self)
 
-        // U1b — an OFFLINE media post carries local file paths; upload them via
-        // TUS on reconnect, then create the post with the resulting ids. Faithful
-        // twin of the message media replay (dispatchSendMessage). The within-
-        // session TUS checkpoint resume fires automatically on re-upload (same
-        // sha256 key), so a kill mid-upload resumes from the saved offset.
+        // An offline media post carries local file paths; upload them via TUS
+        // on reconnect, then create the post with the resulting ids. TUS
+        // checkpoint resume fires on re-upload (same sha256 key), so a kill
+        // mid-upload resumes from the saved offset.
         var resolvedMediaIds = payload.attachmentIds
         var uploadedLocalPaths: [String] = []
         if let pendingMediaPaths = payload.localMediaPaths, !pendingMediaPaths.isEmpty {
@@ -569,16 +560,15 @@ struct OutboxDispatcher: OutboxDispatching {
     /// Durably reconciles a successful message send — independent of whether a
     /// `ConversationViewModel` is currently alive for the conversation.
     ///
-    /// Fix A: before this, the optimistic→server transition (`serverAck`) ran
-    /// ONLY from `ConversationViewModel`'s `retrySucceeded` Combine sink. When
-    /// an outbox flush completed while the user was outside the conversation
-    /// (the canonical "leave → reconnect → return" path), that transient
-    /// `PassthroughSubject` event was dropped, the optimistic GRDB row stayed
-    /// `.sending`, and a cold reload duplicated it against the real server
-    /// message. Applying the `serverAck` here — at the always-alive dispatcher
-    /// — guarantees the row flips to `.sent` and a `PendingIdRecord` is written
-    /// regardless of UI state. When a VM IS alive its sink runs the same
-    /// `applyEvent` again as a harmless no-op on the already-`.sent` record.
+    /// Without this, the optimistic→server transition (`serverAck`) only ran
+    /// from `ConversationViewModel`'s `retrySucceeded` Combine sink. When a
+    /// flush completed while the user was outside the conversation, that
+    /// transient `PassthroughSubject` event was dropped, the optimistic GRDB
+    /// row stayed `.sending`, and a cold reload duplicated it against the real
+    /// server message. Applying the `serverAck` here — at the always-alive
+    /// dispatcher — guarantees the row flips to `.sent` and a `PendingIdRecord`
+    /// is written regardless of UI state. When a VM IS alive its sink runs the
+    /// same `applyEvent` again as a harmless no-op on the already-`.sent` row.
     private func reconcileSuccessfulMessageSend(
         clientMessageId: String,
         serverId: String,
@@ -608,17 +598,13 @@ struct OutboxDispatcher: OutboxDispatching {
                 return
             }
 
-            // A3 — multi-track audio offline write-ahead replay path.
-            // Task 4 routes single-audio enqueues through `enqueueAudios`, so
-            // the canonical field is `localAudioPaths` (array). Legacy rows
-            // written before Task 4 may still carry only `localAudioPath`
-            // (scalar). Both are resolved here so the dispatcher handles every
-            // row shape. Each track is uploaded via TUS independently; any
-            // track whose file is missing or whose upload throws is skipped
-            // (best-effort). All successfully-uploaded ids are sent in a
-            // single `message:send-with-attachments` socket event so the
-            // gateway runs Whisper transcription + NLLB translation +
-            // Chatterbox TTS exactly like an online multi-track send.
+            // Multi-track audio offline replay. The canonical field is
+            // `localAudioPaths` (array); legacy rows may still carry only
+            // `localAudioPath` (scalar). Both are resolved so the dispatcher
+            // handles every row shape. Each track is uploaded via TUS
+            // independently; missing or failed tracks are skipped
+            // (best-effort). All uploaded ids go out in a single
+            // `message:send-with-attachments` socket event.
             let pendingAudioPaths: [String] = {
                 if let many = item.localAudioPaths, !many.isEmpty { return many }
                 if let one = item.localAudioPath, !one.isEmpty { return [one] }
@@ -699,14 +685,13 @@ struct OutboxDispatcher: OutboxDispatching {
                 return
             }
 
-            // S7b ST3 — offline VISUAL-media (photo/video) replay, the parity
-            // twin of the audio branch above. Each pending file (relocated under
-            // Documents/pending-media/ by enqueueMedia) is uploaded via TUS with
-            // a MIME derived from its preserved extension (MimeTypeResolver —
-            // the audio branch hardcodes audio/mp4), then all ids go out in one
-            // message:send-with-attachments. The within-session TUS checkpoint
-            // resume fires automatically on re-upload (same sha256 key), so a
-            // kill mid-upload resumes from the saved offset (S8).
+            // Offline visual-media (photo/video) replay. Each pending file
+            // (relocated under Documents/pending-media/ by enqueueMedia) is
+            // uploaded via TUS with a MIME derived from its extension (unlike
+            // the audio branch which hardcodes audio/mp4), then all ids go out
+            // in one message:send-with-attachments. TUS checkpoint resume fires
+            // on re-upload (same sha256 key), so a kill mid-upload resumes from
+            // the saved offset.
             if let pendingMediaPaths = item.localMediaPaths, !pendingMediaPaths.isEmpty {
                 let serverOrigin = MeeshyConfig.shared.serverOrigin
                 guard let baseURL = URL(string: serverOrigin),
@@ -799,17 +784,15 @@ struct OutboxDispatcher: OutboxDispatching {
             )
 
         } else if record.id.hasPrefix("mrq_") {
-            // Wave 1 Task 3.6 — `MessageRetryQueue` was removed but legacy
-            // `mrq_*` rows may still live on user devices that upgraded mid-
-            // queue. The payload format (`RetryQueueItem`) was a strict
-            // superset of the fields we care about for replay (content,
-            // originalLanguage, replyToId, attachmentIds, clientMessageId) ;
-            // we hand-roll a minimal struct here so we don't need to keep
-            // the deleted public types around just for legacy decoding.
+            // `MessageRetryQueue` was removed but legacy `mrq_*` rows may
+            // still live on devices that upgraded mid-queue. The payload
+            // format was a strict superset of the fields needed for replay;
+            // we hand-roll a minimal struct here instead of keeping the
+            // deleted public types around just for legacy decoding.
             //
-            // Decoded rows are sent through the SAME unified
-            // `OfflineQueue.shared.retrySucceeded` signal as `ofq_*` rows so
-            // ConversationViewModel reconciles via a single subscription.
+            // Decoded rows are sent through the same unified
+            // `OfflineQueue.shared.retrySucceeded` signal as `ofq_*` rows
+            // so ConversationViewModel reconciles via a single subscription.
             struct LegacyMrqPayload: Decodable {
                 let conversationId: String
                 let content: String
@@ -891,14 +874,11 @@ struct OutboxDispatcher: OutboxDispatching {
                 )
             }
             logger.info("Reaction \(payload.action.rawValue, privacy: .public) \(payload.emoji, privacy: .public) dispatched for message \(payload.messageId, privacy: .public)")
-            // Wave 1 Task 3.6 — emit unified success. We don't have a
-            // server-assigned id for reactions (the gateway broadcasts
-            // `reaction:added` / `reaction:removed` over the socket which
-            // the rest of the app already consumes), but the call still
-            // carries enough context for any pending-indicator UI to clear
-            // its hint. `serverId` is set to the reaction `clientMessageId`
-            // as a stable placeholder so subscribers reading it never see
-            // an empty string.
+            // Reactions have no server-assigned id (the gateway broadcasts
+            // `reaction:added` / `reaction:removed` over the socket), but
+            // the success signal still carries enough context for any
+            // pending-indicator UI to clear its hint. `serverId` is set to
+            // `clientMessageId` as a stable non-empty placeholder.
             OfflineQueue.shared.retrySucceeded.send(OfflineRetrySuccess(
                 clientMessageId: payload.clientMessageId,
                 serverId: payload.clientMessageId,
@@ -954,7 +934,6 @@ enum OutboxFlushTrigger {
             onOutcome: { @Sendable outcome in
                 Task { await OfflineQueue.shared.publishOutcome(outcome) }
             },
-            // BW1 — bandwidth gate (cf. MeeshyApp boot flusher).
             isNetworkReachable: { @Sendable in
                 await MainActor.run { NetworkConditionMonitor.shared.isOnline }
             }
@@ -980,7 +959,7 @@ final class OutboxRetryScheduler {
     private var networkCancellable: AnyCancellable?
     private init() {}
 
-    /// Réveille le flusher à chaque transition réseau offline→online (T10).
+    /// Réveille le flusher à chaque transition réseau offline→online.
     ///
     /// `OutboxFlusher.flush()` est bandwidth-gated : une mutation enqueueée
     /// hors-ligne court-circuite, et comme rien n'est différé, AUCUN timer de
