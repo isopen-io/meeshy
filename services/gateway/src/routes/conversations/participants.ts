@@ -358,6 +358,33 @@ export function registerParticipantsRoutes(
           (err: unknown) => logger.error('Failed to auto-join added user to conversation room', err as Error)
         );
       }
+      // Emit CONVERSATION_NEW to the added user's room so connected clients
+      // (iOS: ConversationListViewModel.conversationNew handler) discover the
+      // conversation immediately without waiting for a push notification.
+      if (io) {
+        try {
+          const conv = await prisma.conversation.findUnique({
+            where: { id: conversationId },
+            select: { type: true, title: true, createdAt: true },
+          });
+          const allParticipantIds = await prisma.participant.findMany({
+            where: { conversationId, isActive: true },
+            select: { userId: true },
+          }).then(rows => rows.map(r => r.userId).filter((id): id is string => !!id));
+          if (conv) {
+            io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.CONVERSATION_NEW, {
+              conversationId,
+              conversationType: conv.type,
+              title: conv.title ?? null,
+              creatorId: currentUserId ?? userId,
+              participantIds: allParticipantIds,
+              createdAt: conv.createdAt instanceof Date ? conv.createdAt.toISOString() : String(conv.createdAt),
+            });
+          }
+        } catch (err) {
+          logger.warn('Failed to emit CONVERSATION_NEW to added user', { userId, conversationId, err });
+        }
+      }
 
       const notificationService = fastify.notificationService;
       if (notificationService) {
