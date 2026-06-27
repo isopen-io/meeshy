@@ -244,18 +244,28 @@ Append-only log of gotchas and decisions that save time next run.
   builds a `OneTimeWorkRequest` fine in a plain JVM unit test (no Robolectric).
 
 ## Lessons — slice `story-publish-retry` (2026-06-27)
-- **`combine` only emits once ALL source flows have emitted.** When the VM grew
-  from 2 to 3 combined repository flows, every test (and every hand-rolled mock)
-  had to stub the new `failedPublishes()` — a relaxed mockk returns a Flow that
-  never emits, so `combine` silently never collected and the VM state stayed at
-  its default. Symptom: a previously-green assertion fails for no obvious reason.
-  Always stub *every* combined flow with `flowOf(emptyList())` as the default.
+- **`combine` only emits once ALL source flows have emitted.** When the VM's
+  combined repository flows changed, every test (and every hand-rolled mock) had to
+  stub the new flow (here `publishQueue()`) — a relaxed mockk returns a Flow that
+  never emits, so `combine` silently never collected and the VM state stayed at its
+  default. Symptom: a previously-green assertion fails for no obvious reason. Always
+  stub *every* combined flow (default `flowOf(...)`).
 - **A "row vanished from the pending queue" is ambiguous.** Both a *delivered*
   publish (row deleted) and a *failed* one (row → `EXHAUSTED`, dropped from
   `pendingPublishes`) disappear from the live queue. The optimistic-tray
   reconciler originally treated any disappearance as delivery and fired a spurious
-  `refresh()`. Disambiguate by also watching `failedPublishes()`: a temp id now in
-  the failed set exhausted (surface it), only a temp id in neither set delivered.
+  `refresh()`. Disambiguate by also tracking the failed set: a temp id now failed
+  exhausted (surface it), only a temp id in neither set delivered.
+- **Don't disambiguate across two separately-subscribed flows — they race.**
+  First cut combined `pendingPublishes()` + `failedPublishes()` as two `combine`
+  args, but each independently re-subscribes `observeAll()`, so a `PENDING →
+  EXHAUSTED` change fires both and `combine` emits an intermediate frame where the
+  row is in *neither* set → the exact spurious `refresh()` we were fixing,
+  reintroduced by timing. Fix: a **single** `publishQueue(): Flow<{pending, failed}>`
+  mapping one `observeAll()` emission into both lists, so the transition is atomic
+  to the consumer; `pendingPublishes`/`failedPublishes` became thin `.map`
+  projections. Rule: when two derived views must stay mutually consistent, derive
+  them from **one** source emission, never two subscriptions.
 - **`OutboxRepository.retry(cmid)` already existed** (revive EXHAUSTED → PENDING,
   fresh budget) but had no caller — wiring it through `StoryRepository.retryPublish`
   + a VM intent that kicks `OutboxFlushWorker` is all the recovery loop needed.

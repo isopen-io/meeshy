@@ -70,39 +70,46 @@ After Stories richness is sufficient, advance to the **Calls** area
   optimistic story evaporates on failure with no signal or recovery.
 - **Added (production):**
   - `sdk-core` — `FailedStoryPublish` (pure domain: `cmid` + `tempId` + content/
-    visibility/language + `createdAtMillis`/`failedAtMillis`);
-    `StoryRepository.failedPublishes(): Flow<List<FailedStoryPublish>>` (observes
-    the outbox, keeps `EXHAUSTED` `PUBLISH_STORY` rows, decodes them — shares the
-    blank/undecodable-guarding decode helper with `pendingPublishes`);
-    `retryPublish(cmid)` → `OutboxRepository.retry` (revive → PENDING, fresh budget);
-    `discardPublish(cmid)` → new `OutboxRepository.discard(cmid)` (delete row, no
-    outcome signal — a deliberate user removal, not a delivery).
+    visibility/language + `createdAtMillis`/`failedAtMillis`); `StoryPublishQueue`
+    (`{pending, failed}`) + `StoryRepository.publishQueue(): Flow<StoryPublishQueue>`
+    — derives **both** lists from **one** `observeAll()` emission so a
+    `PENDING → EXHAUSTED` transition is atomic to a consumer (the row leaves
+    `pending` and enters `failed` in the same frame; never seen in neither set →
+    no false "delivered" read). `pendingPublishes()`/`failedPublishes()` are now
+    thin `.map` projections of it. `retryPublish(cmid)` → `OutboxRepository.retry`
+    (revive → PENDING, fresh budget); `discardPublish(cmid)` → new
+    `OutboxRepository.discard(cmid)` (delete row, no outcome signal — a deliberate
+    user removal, not a delivery).
   - `feature:stories` — pure `StoryPublishFailures` (`from(failed)` → newest-failed-
     first items with a single-line, cap-80 ellipsised content preview);
-    `StoriesViewModel` now `combine`s a **third** flow (`failedPublishes`), exposes
-    `failedPublishes: List<Item>` in `UiState`, and adds `retryPublish`/`discardPublish`
-    intents (retry kicks `OutboxFlushWorker`); reconciler excludes failed temp ids
-    from the delivered-detection.
+    `StoriesViewModel` now `combine`s the single consistent `publishQueue()`
+    snapshot (one source — the fix that makes the no-spurious-refresh guarantee
+    race-free; two separately-subscribed flows could show a transient neither-set
+    frame), exposes `failedPublishes: List<Item>` in `UiState`, and adds
+    `retryPublish`/`discardPublish` intents (retry kicks `OutboxFlushWorker`);
+    reconciler excludes failed temp ids from the delivered-detection.
   - `feature:stories` (Compose glue) — `StoryFailedStrip`/`StoryFailedRow` rendered
     above the carousel (shown even when the tray is otherwise empty), accent via the
     `MeeshyTheme.tokens.error` token, Retry `TextButton` + Discard `IconButton`.
   - Strings `stories_publish_{failed_title,retry,discard}` in en/fr/es/pt.
-- **Tests (+22):**
+- **Tests (+24):**
   - `StoryPublishFailuresTest` (pure) +8 — empty→none; single item keyed by cmid;
     newest-failed-first ordering; same-timestamp ties keep input order; multi-line →
     single-line preview; surrounding whitespace trimmed; exactly-cap kept whole;
     over-cap truncated with ellipsis (len cap+1).
-  - `StoryRepositoryTest` (sdk-core, Robolectric) +7 — `failedPublishes` surfaces an
-    exhausted publish (cmid/tempId/content/visibility/lang/timestamps); excludes a
-    still-pending one; ignores non-publish exhausted rows; skips blank/undecodable;
-    `retryPublish` revives (failed→empty, pending→content) ; unknown cmid → false;
-    `discardPublish` removes for good (failed & pending empty).
+  - `StoryRepositoryTest` (sdk-core, Robolectric) +9 — `publishQueue` surfaces live +
+    exhausted together in one snapshot / empty when nothing queued; `failedPublishes`
+    surfaces an exhausted publish (cmid/tempId/content/visibility/lang/timestamps);
+    excludes a still-pending one; ignores non-publish exhausted rows; skips
+    blank/undecodable; `retryPublish` revives (failed→empty, pending→content) ;
+    unknown cmid → false; `discardPublish` removes for good (failed & pending empty).
   - `OutboxRepositoryTest` (sdk-core) +2 — `discard` removes a row outright; unknown
     cmid → no-op.
-  - `StoriesViewModelTest` +5 — exhausted publish surfaces as a failed item with **no**
-    spurious refresh; retry revives + kicks the worker; retry on a vanished row does
-    **not** kick the worker; discard drops the row. (Existing tests updated for the new
-    `failedPublishes` stub + `workManager` ctor arg, all green.)
+  - `StoriesViewModelTest` +5 — exhausted publish surfaces as a failed item (one
+    atomic `publishQueue` transition) with **no** spurious refresh; retry revives +
+    kicks the worker; retry on a vanished row does **not** kick the worker; discard
+    drops the row. (Existing tests migrated to the `publishQueue` stub + `workManager`
+    ctor arg, all green.)
 - **Edge cases covered:** empty/single collections; preview cap boundary (=80 whole /
   >80 ellipsised); multi-line + whitespace normalisation; unknown cmid on retry
   (false → no worker kick) and discard (no-op); failed-vs-delivered disambiguation

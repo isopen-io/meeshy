@@ -59,10 +59,11 @@ class StoriesViewModel @Inject constructor(
                         _state.update { it.copy(showSkeleton = false, isSyncing = false) }
                     },
                 ),
-                storyRepository.pendingPublishes(),
-                storyRepository.failedPublishes(),
-            ) { result, pending, failed -> Triple(result, pending, failed) }
-                .collect { (result, pending, failed) ->
+                storyRepository.publishQueue(),
+            ) { result, queue -> result to queue }
+                .collect { (result, queue) ->
+                    val pending = queue.pending
+                    val failed = queue.failed
                     reconcileDeliveredPublishes(pending, failed)
                     rawStories = StoryTrayReducer.stories(result, rawStories)
                     val flags = StoryTrayReducer.flags(result, rawStories.isNotEmpty())

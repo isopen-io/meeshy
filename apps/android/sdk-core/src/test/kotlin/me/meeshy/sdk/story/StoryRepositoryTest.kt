@@ -260,6 +260,28 @@ class StoryRepositoryTest {
     }
 
     @Test
+    fun `publishQueue surfaces live and exhausted publishes together in one snapshot`() = runTest {
+        val outbox = outbox()
+        val repo = repository(outbox)
+        repo.enqueuePublish(CreateStoryRequest(content = "live"))
+        val doomed = repo.enqueuePublish(CreateStoryRequest(content = "doomed"))!!
+        outbox.markExhausted(doomed, "gave up")
+
+        val queue = repo.publishQueue().first()
+
+        assertThat(queue.pending.map { it.content }).containsExactly("live")
+        assertThat(queue.failed.map { it.content }).containsExactly("doomed")
+    }
+
+    @Test
+    fun `publishQueue is empty when nothing is queued`() = runTest {
+        val queue = repository().publishQueue().first()
+
+        assertThat(queue.pending).isEmpty()
+        assertThat(queue.failed).isEmpty()
+    }
+
+    @Test
     fun `failedPublishes surfaces an exhausted publish with its cmid and content`() = runTest {
         val outbox = outbox()
         val repo = repository(outbox)

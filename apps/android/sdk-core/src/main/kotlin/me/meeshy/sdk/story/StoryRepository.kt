@@ -118,19 +118,35 @@ class StoryRepository @Inject constructor(
         )
 
     /**
-     * Live story publishes still in flight on the durable outbox (ARCHITECTURE.md
-     * §5), decoded for the tray's optimistic self-ring. Only `PENDING`/`INFLIGHT`
-     * rows are surfaced — a row that exhausted its retries is omitted, so the
-     * optimistic story is **rolled back** automatically; a delivered publish is
-     * deleted from the queue and likewise drops out. Undecodable or blank-content
-     * rows are skipped defensively (never an empty ring).
+     * The story-publish queue as a **single consistent snapshot** (ARCHITECTURE.md
+     * §5): the live (`PENDING`/`INFLIGHT`) publishes for the optimistic self-ring
+     * and the `EXHAUSTED` ones for the failure strip, both derived from **one**
+     * `observeAll()` emission. Deriving them together matters: a publish that
+     * transitions `PENDING → EXHAUSTED` leaves `pending` and enters `failed` in the
+     * *same* emission, so a consumer can never observe a transient frame where the
+     * row is in neither set (which would otherwise read as a spurious delivery).
+     * Undecodable / blank-content rows are skipped defensively.
      */
-    fun pendingPublishes(): Flow<List<PendingStoryPublish>> =
+    fun publishQueue(): Flow<StoryPublishQueue> =
         outboxRepository.observeAll().map { rows ->
-            rows
-                .filter { it.kindEnum == OutboxKind.PUBLISH_STORY && it.stateEnum in LIVE_PUBLISH_STATES }
-                .mapNotNull { it.toPendingStoryPublish() }
+            val storyRows = rows.filter { it.kindEnum == OutboxKind.PUBLISH_STORY }
+            StoryPublishQueue(
+                pending = storyRows
+                    .filter { it.stateEnum in LIVE_PUBLISH_STATES }
+                    .mapNotNull { it.toPendingStoryPublish() },
+                failed = storyRows
+                    .filter { it.stateEnum == OutboxState.EXHAUSTED }
+                    .mapNotNull { it.toFailedStoryPublish() },
+            )
         }
+
+    /**
+     * Live story publishes still in flight on the durable outbox, decoded for the
+     * tray's optimistic self-ring — the `pending` projection of [publishQueue].
+     * Only `PENDING`/`INFLIGHT` rows are surfaced; an exhausted row is **rolled
+     * back** automatically, a delivered row is deleted and likewise drops out.
+     */
+    fun pendingPublishes(): Flow<List<PendingStoryPublish>> = publishQueue().map { it.pending }
 
     private fun OutboxEntity.toPendingStoryPublish(): PendingStoryPublish? {
         val request = decodeStoryPublish() ?: return null
@@ -144,18 +160,13 @@ class StoryRepository @Inject constructor(
     }
 
     /**
-     * Story publishes that **exhausted** their durable-outbox retries
-     * (ARCHITECTURE.md §5). Each carries the `cmid` so the tray can offer a
-     * user-initiated retry ([retryPublish]) or a discard ([discardPublish]).
-     * Undecodable or blank-content rows are skipped defensively. Surpasses iOS,
-     * whose optimistic story silently evaporates on failure with no recovery.
+     * Story publishes that **exhausted** their durable-outbox retries — the
+     * `failed` projection of [publishQueue]. Each carries the `cmid` so the tray
+     * can offer a user-initiated retry ([retryPublish]) or a discard
+     * ([discardPublish]). Surpasses iOS, whose optimistic story silently
+     * evaporates on failure with no recovery.
      */
-    fun failedPublishes(): Flow<List<FailedStoryPublish>> =
-        outboxRepository.observeAll().map { rows ->
-            rows
-                .filter { it.kindEnum == OutboxKind.PUBLISH_STORY && it.stateEnum == OutboxState.EXHAUSTED }
-                .mapNotNull { it.toFailedStoryPublish() }
-        }
+    fun failedPublishes(): Flow<List<FailedStoryPublish>> = publishQueue().map { it.failed }
 
     /**
      * Revives an exhausted publish for a user-initiated retry — back to the live

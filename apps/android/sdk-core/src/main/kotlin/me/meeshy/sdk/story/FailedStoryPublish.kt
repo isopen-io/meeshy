@@ -27,3 +27,16 @@ public data class FailedStoryPublish(
     val createdAtMillis: Long,
     val failedAtMillis: Long,
 )
+
+/**
+ * A **consistent snapshot** of the story-publish outbox queue, decoded from one
+ * `observeAll()` emission by [StoryRepository.publishQueue]: the [pending]
+ * publishes feeding the optimistic self-ring and the [failed] ones feeding the
+ * retry/discard strip. Deriving both together guarantees a `PENDING → EXHAUSTED`
+ * transition is atomic to a consumer (the row leaves [pending] and enters
+ * [failed] in the same frame), so a failure is never mistaken for a delivery.
+ */
+public data class StoryPublishQueue(
+    val pending: List<PendingStoryPublish>,
+    val failed: List<FailedStoryPublish>,
+)
