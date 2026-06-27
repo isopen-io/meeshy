@@ -535,7 +535,7 @@ enum QualityThresholds {
     /// Maximum character length of a TURN credential field (username or credential).
     /// libwebrtc encodes these in HTTP Authorization headers; > 1 KB per field risks
     /// header-size rejection by TURN servers and memory pressure in the auth path.
-    static let turnCredentialMaxLength: Int = 1024
+    nonisolated static let turnCredentialMaxLength: Int = 1024
 
     /// §3.2 — debounce before treating `RTCPeerConnectionState.disconnected`
     /// as a reconnect trigger. ICE produces transient `.disconnected` blips
