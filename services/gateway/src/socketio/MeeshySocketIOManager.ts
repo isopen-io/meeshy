@@ -800,7 +800,8 @@ export class MeeshySocketIOManager {
         const disconnectingUserId = this.socketToUser.get(socket.id);
         if (disconnectingUserId) {
           this.statusHandler.handleSocketDisconnecting(socket.id, (room, event, data) => {
-            this.io.to(room).emit(event, data);
+            // event is always SERVER_EVENTS.TYPING_STOP — cast bypasses union exhaustiveness check
+            this.io.to(room).emit(event as keyof ServerToClientEvents, data as any);
           });
         }
       });
