@@ -142,6 +142,64 @@ class OutboxRepositoryTest {
         assertThat(repository.observeAll().first().map { it.cmid }).containsExactly("m1")
     }
 
+    private fun rowDependingOn(cmid: String, prereq: String, payload: String) = OutboxMutation(
+        kind = OutboxKind.SEND_MESSAGE,
+        lane = "lane-$cmid",
+        targetId = "t-$cmid",
+        payload = payload,
+        dependsOn = prereq,
+        cmid = cmid,
+    )
+
+    private suspend fun payloadOf(cmid: String): String? =
+        repository.observeAll().first().firstOrNull { it.cmid == cmid }?.payload
+
+    @Test
+    fun `rewriteDependents rewrites every pending dependent and returns the count`() = runTest {
+        repository.enqueue(OutboxMutation(OutboxKind.SEND_MESSAGE, "lane-u", "t-u", "{}", cmid = "u"))
+        repository.enqueue(rowDependingOn("p1", "u", "old1"))
+        repository.enqueue(rowDependingOn("p2", "u", "old2"))
+
+        val changed = repository.rewriteDependents("u") { "new:$it" }
+
+        assertThat(changed).isEqualTo(2)
+        assertThat(payloadOf("p1")).isEqualTo("new:old1")
+        assertThat(payloadOf("p2")).isEqualTo("new:old2")
+    }
+
+    @Test
+    fun `rewriteDependents leaves a dependent whose rewrite returns null untouched`() = runTest {
+        repository.enqueue(rowDependingOn("p1", "u", "old1"))
+
+        val changed = repository.rewriteDependents("u") { null }
+
+        assertThat(changed).isEqualTo(0)
+        assertThat(payloadOf("p1")).isEqualTo("old1")
+    }
+
+    @Test
+    fun `rewriteDependents ignores rows depending on a different prerequisite`() = runTest {
+        repository.enqueue(rowDependingOn("p1", "u", "old1"))
+        repository.enqueue(rowDependingOn("p2", "other", "old2"))
+
+        val changed = repository.rewriteDependents("u") { "new" }
+
+        assertThat(changed).isEqualTo(1)
+        assertThat(payloadOf("p1")).isEqualTo("new")
+        assertThat(payloadOf("p2")).isEqualTo("old2")
+    }
+
+    @Test
+    fun `rewriteDependents skips a non-pending dependent`() = runTest {
+        repository.enqueue(rowDependingOn("p1", "u", "old1"))
+        repository.markInflight("p1")
+
+        val changed = repository.rewriteDependents("u") { "new" }
+
+        assertThat(changed).isEqualTo(0)
+        assertThat(payloadOf("p1")).isEqualTo("old1")
+    }
+
     @Test
     fun `recoverInflight returns inflight rows to pending`() = runTest {
         repository.enqueue(

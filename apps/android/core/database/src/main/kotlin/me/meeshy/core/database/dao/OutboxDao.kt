@@ -22,6 +22,13 @@ public interface OutboxDao {
     @Query("SELECT * FROM outbox WHERE cmid = :cmid")
     public suspend fun find(cmid: String): OutboxEntity?
 
+    /** Rows gated on [cmid] as their `dependsOn` prerequisite, oldest first. */
+    @Query("SELECT * FROM outbox WHERE dependsOn = :cmid ORDER BY createdAt ASC")
+    public suspend fun findDependents(cmid: String): List<OutboxEntity>
+
+    @Query("UPDATE outbox SET payload = :payload, updatedAt = :now WHERE cmid = :cmid")
+    public suspend fun updatePayload(cmid: String, payload: String, now: Long)
+
     @Upsert
     public suspend fun upsert(row: OutboxEntity)
 

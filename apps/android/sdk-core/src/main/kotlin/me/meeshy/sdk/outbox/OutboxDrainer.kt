@@ -8,6 +8,13 @@ public sealed interface SendResult {
     /** Delivered and acknowledged (a 404 on a delete counts as success). */
     public data object Success : SendResult
 
+    /**
+     * Delivered, and the gateway returned a server id (an upload's real `mediaId`)
+     * that must be grafted into every still-queued dependent before its gate opens.
+     * Accounted as a delivery exactly like [Success].
+     */
+    public data class SuccessWithId(val producedId: String) : SendResult
+
     /** A retryable failure — network down, 5xx, timeout. */
     public data object TransientFailure : SendResult
 
@@ -42,11 +49,18 @@ public data class DrainReport(
  * cascade-exhausts the dependent — it can never run. This is the durable
  * upload→publish chain primitive: a media publish waits for its upload to land
  * and is abandoned with it if the upload gives up.
+ *
+ * When a prerequisite delivers a [SendResult.SuccessWithId], its real id is
+ * grafted into every still-queued dependent's payload via [graftProducedId]
+ * (placeholder = the prerequisite's own `cmid`) **before** the row is deleted, so
+ * a publish queued offline with a placeholder media id delivers with the real one.
  */
 public class OutboxDrainer(
     private val outbox: OutboxRepository,
     private val senders: Map<OutboxKind, MutationSender>,
     private val onExhausted: suspend (OutboxEntity) -> Unit = {},
+    private val graftProducedId: (payload: String, placeholder: String, realId: String) -> String? =
+        { _, _, _ -> null },
 ) {
     public suspend fun drainLane(lane: String): DrainReport {
         var delivered = 0
@@ -83,6 +97,13 @@ public class OutboxDrainer(
             outbox.markInflight(row.cmid)
             when (val result = sender.send(row)) {
                 SendResult.Success -> {
+                    outbox.markSucceeded(row.cmid)
+                    delivered++
+                }
+                is SendResult.SuccessWithId -> {
+                    outbox.rewriteDependents(row.cmid) { payload ->
+                        graftProducedId(payload, row.cmid, result.producedId)
+                    }
                     outbox.markSucceeded(row.cmid)
                     delivered++
                 }

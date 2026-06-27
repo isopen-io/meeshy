@@ -36,24 +36,38 @@ multi-item system picker (`PickMultipleVisualMedia(MAX_MEDIA)`), falling back to
 the single picker at exactly one free slot so the multi-picker's `maxItems > 1`
 requirement never throws, and launching nothing when full. The VM's existing
 free-slot truncation still caps the batch, so the ≤10 invariant holds end-to-end.
+Latest loop (`outbox-produced-id-writeback`) closed the **second half** of the durable
+upload→publish chain: a prerequisite that delivers a `SendResult.SuccessWithId(realId)`
+now **grafts** that real id into every still-queued dependent publish's payload
+(placeholder = the prerequisite's own `cmid`) before its gate opens — via the pure
+`PublishMediaWriteBack.graft` and the generic `OutboxRepository.rewriteDependents`. A
+media story queued **offline, before its upload finished** will publish with the
+correct id (once the producer half — a durable `MEDIA`-lane upload sender — lands).
 
 ## Next slice (pick one for the next run)
 
 Ordered by value:
-1. **Upload→publish payload write-back** — the natural follow-up to this run's
-   `outbox-dependency-gating`. The drainer now *holds* a publish until its upload
-   lands, but the publish still carries its enqueue-time `mediaIds`. Next: when a
-   media-upload row succeeds, write its returned real `mediaId` into the dependent
-   publish's payload (replace the placeholder) before the gate opens — so a media
-   story queued **offline, before the upload finished** publishes with the correct
-   id. Then wire the story composer to enqueue the upload as a `MEDIA`-lane row the
-   publish `dependsOn`.
+1. **Durable media upload row (the producer half)** — the now-unblocked follow-up to
+   this run's `outbox-produced-id-writeback`. The write-back primitive is in place
+   (a `SuccessWithId` grafts a real id into dependents), but **nothing produces a
+   `SuccessWithId` yet** and the worker's lane list omits `MEDIA`. Next: add an
+   `UPLOAD_MEDIA` outbox kind + a durable file-bytes store (a content-URI copy or a
+   blob row, since the payload is a `String`), a `MEDIA`-lane sender that uploads and
+   returns `SuccessWithId(realMediaId)`, drain `MEDIA` **before** `STORY`, and wire the
+   composer to enqueue the `upload → publish(dependsOn, placeholder=upload cmid)` chain
+   so a media story is publishable fully offline. Also: a `BLOCKED` dependency doesn't
+   set `anyTransient`, so a held lane isn't auto-retried — revisit then.
 2. **Multi-slide canvas** — begin the real multi-slide composer (add/remove/
    reorder slides, 9:16 canvas). Much larger; see `feature-parity.md`
    §"Stories composer".
 3. After Stories richness is sufficient, advance to the **Calls** area
    (`feature-parity.md` §"Calls").
 
+(`outbox-produced-id-writeback` ✅ shipped 2026-06-27 — this run; a prerequisite's
+`SendResult.SuccessWithId(producedId)` now grafts the real id into every still-queued
+dependent's payload (placeholder = the prerequisite cmid) before the gate opens, via
+the pure `PublishMediaWriteBack.graft` + the generic `OutboxRepository.rewriteDependents`.
+The second half of the durable upload→publish chain. See run log.)
 (`outbox-dependency-gating` ✅ shipped 2026-06-27 — this run; the drainer now
 honours the persisted `dependsOn` cmid: a dependent holds its lane while the
 prerequisite is queued, runs once it succeeds, cascade-exhausts if it gives up.
@@ -86,6 +100,82 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-27 — slice `outbox-produced-id-writeback` ✅
+- **Branch:** `claude/apps/android/outbox-produced-id-writeback` (off `origin/main` @ `64c2c4e1`).
+- **Housekeeping (step 0):** no open `claude/apps/android/*` PR from a prior run
+  (`search_pull_requests head:claude/apps/android` → 0). `main` was fresh (last merge
+  `#985 outbox-dependency-gating`); branched directly off it.
+- **What:** the **second half** of the durable upload→publish chain (the part-1
+  follow-up flagged in "Next"). The `outbox-dependency-gating` slice taught the
+  drainer to *hold* a publish until its upload lands, but the held publish still
+  carried its **enqueue-time** `mediaIds` — useless for a media story queued
+  **offline, before the upload finished** (the real `mediaId` is unknowable then).
+  Now: when a prerequisite delivers a **`SendResult.SuccessWithId(producedId)`**, the
+  drainer **grafts** that real id into every still-queued dependent's payload —
+  placeholder = the prerequisite's own `cmid` — **before** the prerequisite row is
+  deleted and the gate opens. So a media story queued offline with a placeholder
+  publishes with the correct id once its upload lands. Surpasses iOS, which uploads
+  synchronously and cannot queue a media story while offline.
+- **Added / changed (production, `apps/android` only):**
+  - `PublishMediaWriteBack.graft(payload, placeholder, realId): String?` (pure, new) —
+    decodes a `CreateStoryRequest`, swaps every `placeholder` media id for `realId`
+    (order preserved, duplicates collapsed via `distinct()`), re-encodes; returns
+    `null` (no-op) when undecodable, no `mediaIds`, placeholder absent, or an identity
+    swap — so the caller skips a pointless durable write.
+  - `SendResult.SuccessWithId(producedId: String)` (new variant) — a delivery that
+    carries a server-produced id; accounted as a delivery exactly like `Success`.
+  - `OutboxDrainer` — gains an injected `graftProducedId` (default no-op, keeping the
+    outbox package generic). On `SuccessWithId`, calls `outbox.rewriteDependents(...)`
+    then `markSucceeded` (graft-before-delete ordering).
+  - `OutboxRepository.rewriteDependents(prerequisiteCmid, rewrite): Int` — applies a
+    generic `(payload) -> payload?` to every **PENDING** dependent (skips
+    INFLIGHT/EXHAUSTED — can't rewrite a row mid-flight), persists non-null results,
+    returns the count. Generic shape keeps the queue payload-format-agnostic.
+  - `OutboxDao` — `findDependents(cmid)` (by `dependsOn`) + `updatePayload(cmid,
+    payload, now)`. No schema change (the `payload` column already exists).
+  - `OutboxFlushWorker` — wires `graftProducedId = PublishMediaWriteBack::graft` so the
+    production drainer is capable; `onExhausted` made a named arg in the same call.
+- **Tests (+17, red→green):**
+  - `PublishMediaWriteBackTest` (pure) +10 — graft in place; order/neighbours
+    preserved; every occurrence replaced; dedupe when realId already present; rest of
+    the request intact (content/visibility); inert on placeholder-absent, null media,
+    empty media, identity swap (realId==placeholder), undecodable payload. All `graft`
+    branches hit.
+  - `OutboxDrainerTest` +3 — `SuccessWithId` grafts the real id into a waiting
+    dependent publish; `SuccessWithId` counts as a delivery and removes the row; a
+    plain `Success` leaves a dependent placeholder untouched (graft only on the new arm).
+  - `OutboxRepositoryTest` +4 — rewrites every PENDING dependent and returns the count;
+    a `null` rewrite leaves the row untouched; rows depending on a **different**
+    prerequisite are ignored; a **non-PENDING** (INFLIGHT) dependent is skipped.
+- **Edge cases covered:** empty/single media list; null/absent `mediaIds`; placeholder
+  absent (inert); identity swap (inert, no DB write); duplicate collapse; undecodable
+  payload (graceful null, never a crash); dependent on a different prerequisite; a
+  non-PENDING dependent skipped; graft-before-delete ordering; `dependsOn`-less and
+  plain-`Success` rows unaffected (all prior drainer/repo tests still green).
+- **Verify:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL in 1m47s**
+  (full `assembleDebug` + all module JVM unit tests; 836 tasks). TEST XMLs:
+  `PublishMediaWriteBackTest` 10/10, `OutboxDrainerTest` 14/14, `OutboxRepositoryTest`
+  13/13 — failures=0 errors=0.
+- **Reviewer:** PASS — scope `apps/android` only (4 prod + 2 test changed, 1 prod + 1
+  test new, all under `sdk-core/` + `core/database/`); behavioural tests through the
+  public API (pure `graft`, drainer `drainLane` outcome, repo `rewriteDependents`
+  count + observable payloads), no tautologies, no floor lowered; SDK purity (the
+  story-specific knowledge lives only in the stateless `PublishMediaWriteBack`;
+  `rewriteDependents`/the drainer stay payload-agnostic via the injected transform);
+  single source of truth (reuses `MeeshyApi.json` + `CreateStoryRequest`, the one
+  outbox table, `dependsOn` — no second queue, no new column); Instant-App (makes
+  durable offline optimism *correct*, not just held); Kotlin style (`explicitApi`,
+  immutable, early `return`/`continue`, exhaustive `when`). Surpasses iOS (durable
+  offline media publish vs synchronous-only upload).
+- **Follow-ups (next slice — the producer half):** no upstream sender returns
+  `SuccessWithId` yet, and the worker's lane list still omits `MEDIA` (no
+  `UPLOAD_MEDIA` kind/sender). Next: add a durable `UPLOAD_MEDIA` outbox row (needs a
+  durable file-bytes store), a `MEDIA`-lane sender that returns `SuccessWithId(realId)`,
+  drain `MEDIA` **before** `STORY`, and wire the composer to enqueue the upload +
+  publish-with-placeholder chain. A `BLOCKED` dependency also doesn't currently set
+  `anyTransient`, so a held lane isn't auto-retried by WorkManager — revisit when the
+  producer lands.
 
 ### 2026-06-27 — slice `outbox-dependency-gating` ✅
 - **Branch:** `claude/apps/android/outbox-dependency-gating` (off `origin/main` @ `8277b688`).
