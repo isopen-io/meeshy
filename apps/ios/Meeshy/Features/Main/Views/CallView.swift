@@ -977,14 +977,17 @@ struct CallView: View {
                 }
             }
 
-            // Effects (Plus button)
+            // Effects (Plus button) — label is state-aware so VoiceOver users
+            // hear the expected outcome (open vs. close) rather than a static noun.
             callControlButton(
                 icon: showEffectsToolbar ? "xmark" : "plus",
                 color: hasActiveEffects ? MeeshyColors.indigo500 : .white,
                 bgColor: hasActiveEffects ? MeeshyColors.indigo500 : .white,
                 isActive: showEffectsToolbar || hasActiveEffects,
                 caption: String(localized: "call.control.effects", defaultValue: "Effets", bundle: .main),
-                label: String(localized: "call.control.effects", defaultValue: "Effets", bundle: .main)
+                label: showEffectsToolbar
+                    ? String(localized: "call.control.effects.close", defaultValue: "Fermer les effets", bundle: .main)
+                    : String(localized: "call.control.effects.open", defaultValue: "Ouvrir les effets", bundle: .main)
             ) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     showEffectsToolbar.toggle()

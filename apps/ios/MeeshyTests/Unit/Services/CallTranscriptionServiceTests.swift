@@ -144,6 +144,45 @@ final class CallTranscriptionServiceTests: XCTestCase {
         XCTAssertEqual(sut.displayedSegments.count, 5)
     }
 
+    // MARK: - Permission Guard (startTranscribing)
+
+    func test_startTranscribing_whenPermissionNotDetermined_doesNotStart() {
+        let sut = makeSUT()
+        // permission defaults to .notDetermined — no requestPermission() called
+
+        sut.startTranscribing(
+            localLanguage: "en",
+            remoteLanguage: "fr",
+            localUserId: "local",
+            remoteUserId: "remote"
+        )
+
+        XCTAssertFalse(sut.isTranscribing, "Must not start transcription when permission is notDetermined")
+        XCTAssertEqual(sut.lastError, .permissionDenied, "Must set permissionDenied error when not authorized")
+    }
+
+    func test_startTranscribing_whenPermissionNotDetermined_doesNotSetIsTranscribingTrue() {
+        let sut = makeSUT()
+
+        sut.startTranscribing(
+            localLanguage: "en",
+            remoteLanguage: "fr",
+            localUserId: "local",
+            remoteUserId: "remote"
+        )
+
+        XCTAssertFalse(sut.isTranscribing)
+    }
+
+    func test_startTranscribing_calledTwiceWhileNotAuthorized_lastErrorRemainsPermissionDenied() {
+        let sut = makeSUT()
+
+        sut.startTranscribing(localLanguage: "en", remoteLanguage: "fr", localUserId: "l", remoteUserId: "r")
+        sut.startTranscribing(localLanguage: "en", remoteLanguage: "fr", localUserId: "l", remoteUserId: "r")
+
+        XCTAssertEqual(sut.lastError, .permissionDenied)
+    }
+
     // MARK: - Stop Transcribing
 
     func test_stopTranscribing_clearsSegmentsAndState() {
