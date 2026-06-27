@@ -346,6 +346,11 @@ export function registerMessagesRoutes(
         emitter = emitter.to(userRoom);
       }
       emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
+
+      io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+        conversationId,
+        unreadCount: 0,
+      });
     } catch (error) {
       logger.error('Error broadcasting read status:', error);
     }

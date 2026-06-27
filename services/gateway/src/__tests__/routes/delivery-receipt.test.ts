@@ -148,13 +148,19 @@ describe('POST /conversations/:conversationId/messages/:messageId/delivery-recei
     });
 
     expect(response.statusCode).toBe(200);
-    expect(emitMock).toHaveBeenCalledTimes(1);
+    // 2 events: READ_STATUS_UPDATED (for senders' checkmarks) +
+    // CONVERSATION_UNREAD_UPDATED (for the reader's own badge reset).
+    expect(emitMock).toHaveBeenCalledTimes(2);
     const [eventName, payload] = emitMock.mock.calls[0];
     expect(eventName).toBe(SERVER_EVENTS.READ_STATUS_UPDATED);
     expect(payload.type).toBe('read');
     // A 'read' carries the per-actor multi-device sync fields.
     expect(payload.lastReadAt).toEqual(frontier);
     expect(payload.unreadCount).toBe(3);
+    // Badge reset event goes to the reader's user room.
+    const [badgeEvent, badgePayload] = emitMock.mock.calls[1];
+    expect(badgeEvent).toBe(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED);
+    expect(badgePayload).toMatchObject({ conversationId: CONVERSATION_ID, unreadCount: 3 });
   });
 
   it('returns 404 when the conversation identifier cannot be resolved', async () => {
