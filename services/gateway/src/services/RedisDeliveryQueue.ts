@@ -15,6 +15,22 @@ redis.call('DEL', KEYS[1])
 return entries
 `.trim();
 
+// Idempotent enqueue: only push if no entry with the same messageId exists.
+// Returns 1 when pushed, 0 when the messageId was already present (dedup).
+// KEYS[1] = queue key, ARGV[1] = serialized entry, ARGV[2] = messageId, ARGV[3] = TTL
+const ENQUEUE_DEDUP_LUA = `
+local entries = redis.call('LRANGE', KEYS[1], 0, -1)
+for _, entry in ipairs(entries) do
+  local ok, decoded = pcall(cjson.decode, entry)
+  if ok and decoded and decoded.messageId == ARGV[2] then
+    return 0
+  end
+end
+redis.call('RPUSH', KEYS[1], ARGV[1])
+redis.call('EXPIRE', KEYS[1], tonumber(ARGV[3]))
+return 1
+`.trim();
+
 function queueKey(userId: string): string {
   return `${DELIVERY_QUEUE_PREFIX}${userId}`;
 }
@@ -38,10 +54,13 @@ export class RedisDeliveryQueue {
     if (redis) {
       try {
         const key = queueKey(userId);
-        const pipeline = redis.pipeline();
-        pipeline.rpush(key, serialized);
-        pipeline.expire(key, DELIVERY_QUEUE_TTL_SECONDS);
-        await pipeline.exec();
+        const pushed = await redis.eval(
+          ENQUEUE_DEDUP_LUA, 1, key,
+          serialized, entry.messageId, String(DELIVERY_QUEUE_TTL_SECONDS)
+        );
+        if (pushed === 0) {
+          logger.debug('Delivery queue dedup: messageId already queued', { userId, messageId: entry.messageId });
+        }
         return;
       } catch (error) {
         logger.warn('Redis enqueue failed, falling back to memory', { userId, error });
@@ -58,6 +77,10 @@ export class RedisDeliveryQueue {
       }
     }
     const existing = this.memoryQueue.get(userId) ?? [];
+    if (existing.some(e => e.messageId === entry.messageId)) {
+      logger.debug('Delivery queue dedup (memory): messageId already queued', { userId, messageId: entry.messageId });
+      return;
+    }
     const bounded = existing.length >= MEMORY_QUEUE_MAX_PER_USER
       ? existing.slice(existing.length - MEMORY_QUEUE_MAX_PER_USER + 1)
       : existing;
