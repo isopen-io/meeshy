@@ -39,8 +39,11 @@ Ordered by value within the Stories area:
 2. After Stories richness is sufficient, advance to the **Calls** area
    (`feature-parity.md` §"Calls").
 
-(`story-composer-media` ✅ shipped 2026-06-27 — see run log; wired the picker +
-`mediaIds` publish on top of the `media-upload-api` foundation.)
+(`story-composer-media` ⚠ 2026-06-27 — code complete + reviewer PASS + local
+`check` green + 11/12 CI ✅, but PR #979 is **held unmerged**: the monorepo
+`Test gateway` job is red on `main` itself (pre-existing duplicate-`jwt`-import +
+socket-handler test breakage, zero gateway files in this diff). Merge once main's
+gateway suite is green. See run log.)
 (`media-upload-api` ✅ shipped 2026-06-27 — see run log; upload foundation.)
 (`story-publish-retry` ✅ shipped 2026-06-27 — see run log; closed the
 "failed publish disappears silently" follow-up.)
@@ -61,7 +64,21 @@ After Stories richness is sufficient, advance to the **Calls** area
 
 ## Run log
 
-### 2026-06-27 — slice `story-composer-media` ✅
+### 2026-06-27 — slice `story-composer-media` ⚠ BLOCKED (merge held, not by this diff)
+- **Status:** PR [#979](https://github.com/isopen-io/meeshy/pull/979) **open, NOT merged.**
+  Everything in scope is green (local `check`, reviewer PASS, `apps/android`-only diff,
+  11/12 CI checks ✅) but the monorepo **`Test gateway`** CI job is **red on `main`
+  itself** — pre-existing breakage unrelated to this diff:
+  - `AuthHandler.manual-auth.test.ts` — `TS2300: Duplicate identifier 'jwt'` (two
+    `import jwt from 'jsonwebtoken'` lines 16 & 21 — present verbatim on `origin/main`).
+  - `MeeshySocketIOManager.test.ts`, `AuthHandler.test.ts`, two `ConversationHandler`
+    suites — assertion mismatches in gateway socket handlers.
+  - `git diff origin/main...HEAD` touches **zero** gateway files → this PR cannot have
+    caused it, and the hard scope rule (`apps/android` only, no production logic in
+    `gateway/`) forbids fixing it inside this slice. Held per hard rule "never merge
+    past red CI". Will re-run CI + squash-merge once `main`'s gateway suite is green
+    (tracked: a separate, explicitly-authorised run is needed to fix gateway tests —
+    out of the Android workstream's scope).
 - **Branch:** `claude/apps/android/story-composer-media`
 - **Housekeeping:** no open Android PR to land first (`list_pull_requests` open
   set = 24, none on an `apps/android` head). Branched off latest `origin/main`
