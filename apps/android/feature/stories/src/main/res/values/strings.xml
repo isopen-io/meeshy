@@ -34,6 +34,8 @@
     <string name="stories_composer_publish">Share</string>
     <string name="stories_composer_placeholder">Share a moment…</string>
     <string name="stories_composer_remaining">%1$d</string>
+    <string name="stories_composer_add_media">Add photo or video</string>
+    <string name="stories_composer_remove_media">Remove</string>
     <string name="stories_visibility_public">Public</string>
     <string name="stories_visibility_friends">Friends</string>
     <string name="stories_visibility_community">Community</string>

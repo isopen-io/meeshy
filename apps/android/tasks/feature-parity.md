@@ -365,7 +365,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       **Upload foundation done** (`media-upload-api`): `MediaApi` multipart `POST /attachments/upload`
       (`files` parts) + `MediaRepository.upload()` → domain `UploadedMedia` (id = `mediaId`, url,
       mime, size, dims, durationMs, thumbnail); pure `MediaUpload` part-builder + wire→domain mapper
-      that drops unusable rows. Pending: system picker glue + `mediaIds` into the publish flow.
+      that drops unusable rows. **Picker + publish wiring done** (`story-composer-media`): the
+      composer's `OutlinedButton` launches the system photo/video picker
+      (`ActivityResultContracts.PickVisualMedia`, ImageAndVideo); the chosen file is read off-main
+      into a `MediaUploadItem` and `StoryComposerViewModel.onMediaPicked` uploads it, **appends** the
+      returned media to the draft (`StoryComposerUiState.attachments` preview row + `draft.mediaIds`),
+      and `publish()` carries `mediaIds` into the same durable-outbox flow. A media-only story (no
+      caption) is publishable (`StoryComposerDraft.canPublish` admits text **or** media; `content`
+      sent null when blank). `onRemoveMedia` drops a wrongly-picked attachment; uploads are
+      re-entrancy-guarded and gate `canPublish` while in flight; a failure / thrown error / all-rows-
+      unusable result surfaces a message and leaves the draft intact. Pending: multi-pick limit (≤10),
+      on-canvas crop/edit, durable upload-then-publish outbox chain (SOTA follow-up).
 - [ ] Audio elements (≤5/slide): voice recording (60s), audio file import, on-canvas player widget
 - [ ] Freehand drawing layer (pen/marker/eraser, colour, width, undo/redo/clear)
 - [ ] Emoji sticker picker (categorised + searchable)

@@ -14,32 +14,37 @@ self-ring derived from the live durable outbox (`StoryRepository.pendingPublishe
 building block + pure `StoryOptimisticTray` product rule), so it survives process
 death, **rolls back** automatically if the publish exhausts, and hands off to the
 real story on delivery (the VM refreshes when a publish vanishes from the queue).
-Surpasses iOS's in-memory optimism (which evaporates on a kill). Latest loop
-(`story-publish-retry`) closes the failure gap: an **exhausted** publish now
-surfaces a "Couldn't post your story" **Retry/Discard strip** above the tray
-(`StoryRepository.failedPublishes` + pure `StoryPublishFailures`) instead of
-vanishing silently, and the reconciler tells a *failed* publish apart from a
-*delivered* one (no spurious refresh).
+Surpasses iOS's in-memory optimism (which evaporates on a kill). The
+`story-publish-retry` loop closed the failure gap (exhausted publish → a
+"Couldn't post your story" Retry/Discard strip). Latest loop
+(`story-composer-media`) gives the composer **real media**: the system
+photo/video picker (`ActivityResultContracts.PickVisualMedia`) feeds the chosen
+file to `StoryComposerViewModel.onMediaPicked`, which uploads it via the
+`media-upload-api` foundation and **appends** the returned media to the draft
+(`StoryComposerUiState.attachments` preview + `draft.mediaIds`); `publish()`
+carries `mediaIds` into the same durable-outbox flow. A **media-only** story
+(no caption) is now publishable. Uploads are re-entrancy-guarded, gate
+`canPublish` while in flight, and fail gracefully (message, draft intact).
 
 ## Next slice (pick one for the next run)
 
 Ordered by value within the Stories area:
-1. `story-composer-media` — now that the **upload foundation exists**
-   (`media-upload-api` ✅ — `MediaApi` + `MediaRepository.upload()` → `UploadedMedia`),
-   wire a **system photo/video picker** (Compose `PickVisualMedia` glue) into the
-   composer: pick → `MediaRepository.upload()` → carry the returned ids into
-   `StoryComposerDraft.toCreateStoryRequest(mediaIds = …)` so a single image/video
-   slide publishes through the existing durable-outbox flow. Keep the upload off
-   the publish enqueue path is acceptable for v1 (upload synchronously in the VM,
-   then enqueue the publish with the resulting ids); a **TUS-style upload-then-
-   publish outbox chain** (upload as its own durable lane the publish `dependsOn`)
-   is the SOTA follow-up. Pure/testable parts: the VM's pick→upload→publish state
-   machine (loading/error/ids), and the `mediaIds` plumbing into the draft mapping.
-2. Then multi-slide composer + on-canvas media (much larger; see `feature-parity.md`
-   §"Stories composer").
+1. `story-composer-multipick-limit` / multi-slide composer — allow several media
+   per story (enforce the iOS ≤10 cap) and begin the **multi-slide canvas**
+   (add/remove/reorder slides, 9:16 canvas). Much larger; see `feature-parity.md`
+   §"Stories composer". A smaller intermediate slice: a **durable upload-then-
+   publish outbox chain** (upload as its own lane the publish `dependsOn`) so a
+   media publish survives process death *before* the upload completes — the SOTA
+   follow-up flagged on `story-composer-media`.
+2. After Stories richness is sufficient, advance to the **Calls** area
+   (`feature-parity.md` §"Calls").
 
-After Stories composer-media, advance to the **Calls** area (`feature-parity.md` §"Calls").
-
+(`story-composer-media` ⚠ 2026-06-27 — code complete + reviewer PASS + local
+`check` green + 11/12 CI ✅, but PR #979 is **held unmerged**: the monorepo
+`Test gateway` job is red on `main` itself (pre-existing duplicate-`jwt`-import +
+socket-handler test breakage, zero gateway files in this diff). Merge once main's
+gateway suite is green. See run log.)
+(`media-upload-api` ✅ shipped 2026-06-27 — see run log; upload foundation.)
 (`story-publish-retry` ✅ shipped 2026-06-27 — see run log; closed the
 "failed publish disappears silently" follow-up.)
 (`story-composer-optimistic-tray` ✅ shipped 2026-06-27 — see run log.)
@@ -58,6 +63,85 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-27 — slice `story-composer-media` ⚠ BLOCKED (merge held, not by this diff)
+- **Status:** PR [#979](https://github.com/isopen-io/meeshy/pull/979) **open, NOT merged.**
+  Everything in scope is green (local `check`, reviewer PASS, `apps/android`-only diff,
+  11/12 CI checks ✅) but the monorepo **`Test gateway`** CI job is **red on `main`
+  itself** — pre-existing breakage unrelated to this diff:
+  - `AuthHandler.manual-auth.test.ts` — `TS2300: Duplicate identifier 'jwt'` (two
+    `import jwt from 'jsonwebtoken'` lines 16 & 21 — present verbatim on `origin/main`).
+  - `MeeshySocketIOManager.test.ts`, `AuthHandler.test.ts`, two `ConversationHandler`
+    suites — assertion mismatches in gateway socket handlers.
+  - `git diff origin/main...HEAD` touches **zero** gateway files → this PR cannot have
+    caused it, and the hard scope rule (`apps/android` only, no production logic in
+    `gateway/`) forbids fixing it inside this slice. Held per hard rule "never merge
+    past red CI". Will re-run CI + squash-merge once `main`'s gateway suite is green
+    (tracked: a separate, explicitly-authorised run is needed to fix gateway tests —
+    out of the Android workstream's scope).
+- **Branch:** `claude/apps/android/story-composer-media`
+- **Housekeeping:** no open Android PR to land first (`list_pull_requests` open
+  set = 24, none on an `apps/android` head). Branched off latest `origin/main`
+  (carries #976). SDK bootstrapped per the env recipe; also installed
+  `build-tools;34.0.0` (a module pins it — the recipe only lists 35.0.0; noted).
+- **What:** wires **real media** into the story composer on top of the
+  `media-upload-api` foundation. The composer gains an "Add photo or video" button
+  that launches the **system photo/video picker** (`ActivityResultContracts
+  .PickVisualMedia`, ImageAndVideo); the picked file is read off-main into a
+  `MediaUploadItem`, uploaded via `MediaRepository.upload()`, and the returned
+  `UploadedMedia` is **appended** to the draft. `publish()` carries the resulting
+  `mediaIds` into the existing durable-outbox publish flow. A **media-only** story
+  (no caption) is now publishable. Surpasses iOS (single-JPEG-avatar uploads,
+  no story media composer yet).
+- **Added / changed (production, `apps/android` only):**
+  - `StoryComposerDraft` — `mediaIds: List<String>` + `hasMedia` + `withMediaIds`;
+    `canPublish` now admits **text OR media** within the limit; `toCreateStoryRequest`
+    sends `content` null when blank (media-only) and rides `mediaIds` when present.
+  - `StoryComposerViewModel` — injects `MediaRepository`; `StoryComposerUiState`
+    gains `attachments: List<UploadedMedia>` + `isUploadingMedia` (gates `canPublish`).
+    New `onMediaPicked(items)` (empty/in-flight inert; upload → append on success;
+    failure / thrown / all-rows-unusable → message, draft intact; `CancellationException`
+    rethrown) and `onRemoveMedia(id)`. `publish()` now guards on the derived
+    `canPublish` (so an in-flight upload blocks it) and clears attachments on success.
+  - `StoryComposerScreen` — picker launcher + off-main `ContentResolver` reader
+    (bytes/MIME/display-name → `MediaUploadItem`), media preview `LazyRow`
+    (coil `AsyncImage` thumbnails + remove chip), "Add photo or video" button with
+    in-flight spinner. Exempt Compose/IO glue.
+  - `feature/stories/build.gradle.kts` — `implementation(libs.androidx.activity.compose)`
+    for `rememberLauncherForActivityResult` / `PickVisualMedia`.
+  - strings: `stories_composer_add_media`, `stories_composer_remove_media`.
+- **Tests (+19, red→green):**
+  - `StoryComposerDraftTest` +6 — media-only draft publishes; media + over-limit
+    text can't; empty draft has no media / can't publish; `withMediaIds` is a pure
+    copy preserving text+visibility (original untouched); `toCreateStoryRequest`
+    carries non-empty `mediaIds` alongside text; media-only request sends null content.
+  - `StoryComposerViewModelTest` +13 — empty pick is inert (no upload call); upload
+    stores ids on the draft + flips `canPublish`; second pick **appends**; in-flight
+    sets `isUploadingMedia` and blocks publish until resolved (gated `CompletableDeferred`);
+    re-entrancy guard (one upload while in flight); failure response → message, no ids;
+    thrown upload → message, no ids; all-rows-unusable (empty success) → message, no ids;
+    `onRemoveMedia` drops the attachment + its id; media-only draft publishes carrying
+    `mediaIds` with null content; publish clears attachments on success.
+- **Edge cases covered:** empty pick (short-circuit, no network); single vs append;
+  in-flight re-entrancy + publish-gating; three failure paths (Failure / exception /
+  empty-success); remove-then-publish; media-only (no text) boundary; over-limit text
+  with media. `CancellationException` rethrown (cancellation-safe `viewModelScope`).
+- **Verify:** `:feature:stories:testDebugUnitTest --tests StoryComposer*` →
+  **BUILD SUCCESSFUL in 2m09s**; full `assembleDebug + testDebugUnitTest` →
+  **BUILD SUCCESSFUL in 2m58s** (836 tasks; full debug APK + every module's JVM
+  unit tests green).
+- **Reviewer:** PASS — scope `apps/android` only (draft/VM/screen/build/strings +
+  docs; no web/ios/gateway/shared); behavioural tests through the public API
+  (draft rule, VM state machine via intents + Turbine-free synchronous reads under
+  `UnconfinedTestDispatcher`), no tautologies, no floor lowered; SDK purity (the
+  "when to upload / append / gate publish" rule is product UX → `:feature:stories`;
+  `MediaRepository`/`MediaUpload`/wire mapper stay building blocks in `:sdk-core`/
+  `:core:*`); single source of truth (reuses `MediaRepository.upload`, `NetworkResult`,
+  `LanguageResolver`, the one durable outbox); Instant-App (optimistic publish
+  unchanged; upload shows an inline spinner, not a blocking screen); colour/nav
+  coherence (composer accent unchanged, natural system-picker gesture, removable
+  preview). Surpasses iOS (any-MIME multi-file upload + media-only story vs single
+  JPEG avatar / no story media composer).
 
 ### 2026-06-27 — slice `media-upload-api` ✅
 - **Branch:** `claude/apps/android/media-upload-api`

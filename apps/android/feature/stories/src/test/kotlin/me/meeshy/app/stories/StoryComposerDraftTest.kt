@@ -96,6 +96,52 @@ class StoryComposerDraftTest {
     }
 
     @Test
+    fun `a media-only draft with no text can publish`() {
+        val draft = StoryComposerDraft(text = "", mediaIds = listOf("m1"))
+        assertThat(draft.hasMedia).isTrue()
+        assertThat(draft.canPublish).isTrue()
+    }
+
+    @Test
+    fun `a media draft with over-limit text cannot publish`() {
+        val draft = StoryComposerDraft(text = "a".repeat(StoryComposerDraft.MAX_CHARS + 1), mediaIds = listOf("m1"))
+        assertThat(draft.canPublish).isFalse()
+    }
+
+    @Test
+    fun `an empty draft has no media and cannot publish`() {
+        val draft = StoryComposerDraft()
+        assertThat(draft.hasMedia).isFalse()
+        assertThat(draft.canPublish).isFalse()
+    }
+
+    @Test
+    fun `withMediaIds returns a new draft preserving text and visibility`() {
+        val original = StoryComposerDraft(text = "x", visibility = StoryVisibility.FRIENDS)
+        val updated = original.withMediaIds(listOf("a", "b"))
+        assertThat(updated.mediaIds).containsExactly("a", "b").inOrder()
+        assertThat(updated.text).isEqualTo("x")
+        assertThat(updated.visibility).isEqualTo(StoryVisibility.FRIENDS)
+        assertThat(original.mediaIds).isEmpty()
+    }
+
+    @Test
+    fun `toCreateStoryRequest carries non-empty media ids alongside text`() {
+        val request = StoryComposerDraft(text = "hi", mediaIds = listOf("m1", "m2"))
+            .toCreateStoryRequest(originalLanguage = "en")
+        assertThat(request.mediaIds).containsExactly("m1", "m2").inOrder()
+        assertThat(request.content).isEqualTo("hi")
+    }
+
+    @Test
+    fun `toCreateStoryRequest of a media-only draft sends null content and the media ids`() {
+        val request = StoryComposerDraft(text = "   ", mediaIds = listOf("m1"))
+            .toCreateStoryRequest(originalLanguage = "en")
+        assertThat(request.content).isNull()
+        assertThat(request.mediaIds).containsExactly("m1")
+    }
+
+    @Test
     fun `every visibility exposes its gateway wire value`() {
         assertThat(StoryVisibility.PUBLIC.wire).isEqualTo("PUBLIC")
         assertThat(StoryVisibility.FRIENDS.wire).isEqualTo("FRIENDS")

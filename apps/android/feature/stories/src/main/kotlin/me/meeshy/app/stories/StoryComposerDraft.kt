@@ -25,6 +25,7 @@ enum class StoryVisibility(val wire: String) {
 data class StoryComposerDraft(
     val text: String = "",
     val visibility: StoryVisibility = StoryVisibility.PUBLIC,
+    val mediaIds: List<String> = emptyList(),
 ) {
     /** The content actually sent — surrounding whitespace is never published. */
     val trimmedText: String get() = text.trim()
@@ -35,23 +36,33 @@ data class StoryComposerDraft(
     /** Remaining budget; negative once the limit is exceeded so the UI can warn. */
     val charactersRemaining: Int get() = MAX_CHARS - text.length
 
-    /** A draft is publishable when it has real content within the limit. */
-    val canPublish: Boolean get() = trimmedText.isNotEmpty() && isWithinLimit
+    /** True once at least one uploaded media is attached to the draft. */
+    val hasMedia: Boolean get() = mediaIds.isNotEmpty()
+
+    /**
+     * A draft is publishable when it carries real content — text **or** attached
+     * media — within the limit. A media-only story (no caption) is valid.
+     */
+    val canPublish: Boolean get() = (trimmedText.isNotEmpty() || hasMedia) && isWithinLimit
 
     fun withText(value: String): StoryComposerDraft = copy(text = value)
 
     fun withVisibility(value: StoryVisibility): StoryComposerDraft = copy(visibility = value)
 
+    fun withMediaIds(value: List<String>): StoryComposerDraft = copy(mediaIds = value)
+
     /**
      * Maps the draft to the create-story wire request. [originalLanguage] is the
      * publisher's resolved content language (Prisme) so the gateway can seed
-     * translations; media fields stay null for a text story.
+     * translations. [content] is omitted (null) for a media-only story; attached
+     * [mediaIds] ride along when present.
      */
     fun toCreateStoryRequest(originalLanguage: String): CreateStoryRequest = CreateStoryRequest(
         type = STORY_TYPE,
-        content = trimmedText,
+        content = trimmedText.takeIf { it.isNotEmpty() },
         visibility = visibility.wire,
         originalLanguage = originalLanguage,
+        mediaIds = mediaIds.takeIf { it.isNotEmpty() },
     )
 
     companion object {
