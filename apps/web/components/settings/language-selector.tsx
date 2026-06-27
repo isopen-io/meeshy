@@ -75,7 +75,7 @@ export function LanguageSelector({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-        <Command>
+        <Command shouldFilter={false}>
           <CommandInput
             placeholder={t('languageSelector.searchPlaceholder')}
             value={searchQuery}

@@ -121,7 +121,7 @@ describe('LanguageSelector', () => {
   });
 
   describe('Recherche', () => {
-    it.skip('filtre les langues par nom', async () => {
+    it('filtre les langues par nom', async () => {
       render(<LanguageSelector {...defaultProps} />);
 
       fireEvent.click(screen.getByRole('combobox'));
@@ -152,7 +152,7 @@ describe('LanguageSelector', () => {
       });
     });
 
-    it.skip('filtre les langues par nom natif', async () => {
+    it('filtre les langues par nom natif', async () => {
       render(<LanguageSelector {...defaultProps} />);
 
       fireEvent.click(screen.getByRole('combobox'));
@@ -182,7 +182,7 @@ describe('LanguageSelector', () => {
       });
     });
 
-    it.skip('la recherche est insensible a la casse', async () => {
+    it('la recherche est insensible a la casse', async () => {
       render(<LanguageSelector {...defaultProps} />);
 
       fireEvent.click(screen.getByRole('combobox'));
@@ -248,7 +248,7 @@ describe('LanguageSelector', () => {
       });
     });
 
-    it.skip('reinitialise la recherche apres selection', async () => {
+    it('reinitialise la recherche apres selection', async () => {
       render(<LanguageSelector {...defaultProps} />);
 
       fireEvent.click(screen.getByRole('combobox'));
