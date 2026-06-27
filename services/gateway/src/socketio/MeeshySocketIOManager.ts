@@ -117,6 +117,7 @@ export class MeeshySocketIOManager {
   private agentClient: ZmqAgentClient | null = null;
   private mentionService: MentionService;
   private deliveryQueue: RedisDeliveryQueue | null = null;
+  private readStatusService!: MessageReadStatusService;
 
   private authHandler!: AuthHandler;
   private messageHandler!: MessageHandler;
@@ -280,7 +281,8 @@ export class MeeshySocketIOManager {
     });
 
     const reactionService = new ReactionService(prisma);
-    const readStatusService = new MessageReadStatusService(prisma);
+    this.readStatusService = new MessageReadStatusService(prisma);
+    const readStatusService = this.readStatusService;
 
     this.messageHandler = new MessageHandler({
       io: this.io,
@@ -513,9 +515,29 @@ export class MeeshySocketIOManager {
         this._drainPendingMessages(socket, userId).catch(err => {
           logger.warn('Failed to drain pending messages on connect', { userId, error: err });
         });
+        this._emitUnreadCountsSnapshot(socket, userId).catch(err => {
+          logger.warn('Failed to emit unread counts snapshot on reconnect', { userId, error: err });
+        });
       }
     } catch (error) {
       logger.error('❌ [PRESENCE_SNAPSHOT] Failed to build snapshot', error);
+    }
+  }
+
+  private async _emitUnreadCountsSnapshot(socket: Socket, userId: string): Promise<void> {
+    try {
+      const participantRows = await this.prisma.participant.findMany({
+        where: { userId, isActive: true },
+        select: { conversationId: true },
+      });
+      if (participantRows.length === 0) return;
+      const conversationIds = participantRows.map(p => p.conversationId);
+      const unreadCounts = await this.readStatusService.getUnreadCountsForUser(userId, conversationIds);
+      for (const [conversationId, unreadCount] of unreadCounts) {
+        socket.emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, { conversationId, unreadCount });
+      }
+    } catch (error) {
+      logger.warn('unread counts snapshot failed on reconnect', { userId, error });
     }
   }
 
