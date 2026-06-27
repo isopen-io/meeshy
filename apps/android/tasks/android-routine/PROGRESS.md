@@ -7,28 +7,29 @@
 Stories so far: tray (ring carousel) + cross-group viewer playback engine +
 quick-reaction strip + swipe gestures + realtime reaction socket deltas +
 who-viewed sheet + Room-backed tray SWR + comments overlay + segmented
-count-dots + adjacent-slide media prefetch + auto-advance media-load gate
-shipped earlier loops; this loop adds the **text story composer + publish flow**
-— a pure `StoryComposerDraft` publish-gate, an optimistic `StoryComposerViewModel`,
-and an accent `StoryComposerScreen` reached from the tray's add affordance. The
-publish goes through the **shared durable outbox** (`OutboxKind.PUBLISH_STORY` on
-its own `story` lane → `OutboxFlushWorker` → `POST /posts`), surpassing iOS's
-dedicated `StoryPublishQueue`: it survives process death / offline, auto-retries
-on reconnect, and never head-of-line-blocks message delivery.
+count-dots + adjacent-slide media prefetch + auto-advance media-load gate +
+text composer + durable-outbox publish shipped earlier loops; this loop makes
+the **tray optimistic** — a just-queued story shows instantly as a `pending_*`
+self-ring derived from the live durable outbox (`StoryRepository.pendingPublishes`
+building block + pure `StoryOptimisticTray` product rule), so it survives process
+death, **rolls back** automatically if the publish exhausts, and hands off to the
+real story on delivery (the VM refreshes when a publish vanishes from the queue).
+Surpasses iOS's in-memory optimism (which evaporates on a kill).
 
 ## Next slice (pick one for the next run)
 
 Ordered by value within the Stories area:
-1. `story-composer-optimistic-tray` — inject the queued story into the tray cache
-   immediately (a `pending_*` self-ring) and reconcile/rollback on the
-   `PUBLISH_STORY` outbox outcome + `story:created` socket. (Closes the last gap
-   between "queued" and a fully optimistic tray.)
-2. `story-composer-media` — extend the composer to a single image/video slide
+1. `story-composer-media` — extend the composer to a single image/video slide
    (media pick → upload → `mediaIds`), then multi-slide.
 
-After the composer is optimistic on the tray, advance to the **Calls** area
-(`feature-parity.md` §"Calls").
+After this, advance to the **Calls** area (`feature-parity.md` §"Calls").
 
+Tracked follow-up surfaced this loop: a still-`EXHAUSTED` publish currently just
+disappears from the optimistic tray silently — a "failed to post, tap to retry"
+affordance (read the EXHAUSTED rows via `outboxRepository.observeAll`/`outcomes`)
+would close that UX gap. Needs `:app`/`:feature` wiring → its own slice.
+
+(`story-composer-optimistic-tray` ✅ shipped 2026-06-27 — see run log.)
 (`story-composer` ✅ shipped 2026-06-26 — see run log.)
 (`story-autoadvance-media-gate` ✅ shipped 2026-06-23 — see run log.)
 (`story-media-prefetch` ✅ shipped 2026-06-23 — see run log.)
@@ -44,6 +45,66 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-27 — slice `story-composer-optimistic-tray` ✅
+- **Branch:** `claude/apps/android/story-composer-optimistic-tray`
+- **Housekeeping:** no open Android PR to land first (`list_pull_requests` open set
+  has none on an `apps/android` branch). Branched off latest `origin/main`.
+- **What:** makes the story tray **optimistic** off the durable outbox. A publish
+  queued by the composer now shows **instantly** as a `pending_*` self-ring,
+  derived from the live outbox queue — so it survives process death (the row is
+  durable), **rolls back** by itself when the publish exhausts (the row stops
+  being surfaced), and **hands off** to the real server story on delivery. This
+  surpasses iOS, whose optimistic story is in-memory and evaporates on a kill.
+- **Added (production):**
+  - `sdk-core` — `PendingStoryPublish` (pure domain: `tempId`, `content`,
+    `visibility`, `originalLanguage`, `createdAtMillis`) +
+    `StoryRepository.pendingPublishes(): Flow<List<PendingStoryPublish>>`: observes
+    `OutboxRepository.observeAll()`, keeps only `PUBLISH_STORY` rows in a **live**
+    state (`PENDING`/`INFLIGHT` — exhausted = rolled back, deleted = delivered),
+    and decodes each `CreateStoryRequest` payload, skipping blank/undecodable rows.
+    This is the queue-semantics **building block**.
+  - `feature:stories` — pure `StoryOptimisticTray` (`pendingStories(publishes, self)`
+    → synthetic self-authored `STORY` `ApiPost`s, `isViewedByMe=true`, enqueue-time
+    `createdAt`; `merge(cached, pending)` appends pending after the cached feed,
+    de-duping by id). This is the **product rule** ("render a queued publish as the
+    signed-in user's newest story"). `StoriesViewModel` now `combine`s
+    `storiesStream` with `pendingPublishes`, merges the synthetics before
+    `toStoryGroups` → `StoryTrayBuilder` (one code path, self ring), and **refreshes**
+    when a publish vanishes from the queue (delivered → pull the real story in so
+    the optimistic ring hands off without waiting for the next background sync).
+- **Tests (+20):**
+  - `StoryOptimisticTrayTest` (pure) +11 — self-null → none; empty → none; publish
+    → self-authored STORY post (id/type/content/visibility/lang/author); marked
+    viewed-by-me; enqueue time → `createdAt`; multiple map in order; `merge` no-pending
+    passthrough / append-after-cached / drop-id-already-cached / empty-cache.
+  - `StoryRepositoryTest` (sdk-core, Robolectric) +6 — `pendingPublishes` decodes a
+    queued publish; excludes an **exhausted** row (rollback); ignores non-publish
+    rows; skips blank content; skips an undecodable payload without crashing;
+    surfaces each independent publish.
+  - `StoriesViewModelTest` +4 — a queued publish injects the self ring; merges with
+    the user's server stories into one ring (count 2); a logged-out tray stays empty;
+    a publish that **vanishes** refreshes once (hand-off); a still-pending publish
+    does **not** refresh. (Existing 6 tests updated for the new `pendingPublishes`/
+    `currentUser` stubs, all green.)
+- **Edge cases covered:** empty/single collections; null self (logged out → nothing
+  optimistic); exhausted publish (rollback, no ring); blank/undecodable payload
+  (failure path, no crash); id-collision de-dup on merge; idempotent (still-pending
+  → no spurious refresh); delivery hand-off (vanished → exactly one refresh);
+  no refresh on first emission (empty → empty).
+- **Verify:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL in 3m**
+  (full `assembleDebug` + all module JVM unit tests; 836 tasks). Targeted
+  `:sdk-core` + `:feature:stories` `testDebugUnitTest` green.
+- **Reviewer:** PASS — scope `apps/android` only; behavioural tests through the
+  public API (VM `state`, repo `Flow`, pure object), no tautologies; SDK purity
+  (the outbox-decoding `pendingPublishes` building block lives in `:sdk-core`; the
+  "render as a self ring / when to refresh" product rule lives in
+  `:feature:stories`); single source of truth (reuses the durable outbox,
+  `toStoryGroups`, `StoryTrayBuilder`, `LanguageResolver` — no second queue/cache);
+  Instant-App (optimistic ring with no spinner, durable across process death);
+  UDF + immutable `UiState`, pure object; colour/UX coherence (the synthetic flows
+  through the existing accent-coherent tray builder, lands in the self ring entry
+  point, no dead end). Surpasses iOS (durable-outbox optimism vs in-memory).
 
 ### 2026-06-26 — slice `story-composer` ✅
 - **Branch:** `claude/apps/android/story-composer`

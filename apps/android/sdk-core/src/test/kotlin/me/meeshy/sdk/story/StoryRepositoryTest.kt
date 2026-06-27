@@ -19,6 +19,7 @@ import me.meeshy.sdk.net.api.CreateStoryRequest
 import me.meeshy.sdk.net.api.StoryApi
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
+import me.meeshy.sdk.outbox.OutboxMutation
 import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.outbox.kindEnum
 import org.junit.After
@@ -181,5 +182,80 @@ class StoryRepositoryTest {
         repository(outbox).enqueuePublish(CreateStoryRequest(content = "second"))
 
         assertThat(outbox.deliverable(OutboxLanes.STORY)).hasSize(2)
+    }
+
+    @Test
+    fun `pendingPublishes decodes a queued publish into its building block`() = runTest {
+        val outbox = outbox()
+        val repo = repository(outbox)
+        repo.enqueuePublish(CreateStoryRequest(content = "hi", visibility = "FRIENDS", originalLanguage = "es"))
+
+        val pending = repo.pendingPublishes().first().single()
+
+        assertThat(pending.content).isEqualTo("hi")
+        assertThat(pending.visibility).isEqualTo("FRIENDS")
+        assertThat(pending.originalLanguage).isEqualTo("es")
+        assertThat(pending.tempId).startsWith("pending_")
+        assertThat(pending.createdAtMillis).isGreaterThan(0L)
+    }
+
+    @Test
+    fun `pendingPublishes excludes an exhausted publish (rollback)`() = runTest {
+        val outbox = outbox()
+        val repo = repository(outbox)
+        val cmid = repo.enqueuePublish(CreateStoryRequest(content = "doomed"))!!
+
+        outbox.markExhausted(cmid, "gave up")
+
+        assertThat(repo.pendingPublishes().first()).isEmpty()
+    }
+
+    @Test
+    fun `pendingPublishes ignores non-publish outbox rows`() = runTest {
+        val outbox = outbox()
+        outbox.enqueue(
+            OutboxMutation(
+                kind = OutboxKind.ADD_REACTION,
+                lane = OutboxLanes.REACTION,
+                targetId = "m1:like",
+                payload = """{"emoji":"👍"}""",
+            ),
+        )
+
+        assertThat(repository(outbox).pendingPublishes().first()).isEmpty()
+    }
+
+    @Test
+    fun `pendingPublishes skips a blank-content publish`() = runTest {
+        val outbox = outbox()
+        repository(outbox).enqueuePublish(CreateStoryRequest(content = "   "))
+
+        assertThat(repository(outbox).pendingPublishes().first()).isEmpty()
+    }
+
+    @Test
+    fun `pendingPublishes skips an undecodable payload without crashing`() = runTest {
+        val outbox = outbox()
+        outbox.enqueue(
+            OutboxMutation(
+                kind = OutboxKind.PUBLISH_STORY,
+                lane = OutboxLanes.STORY,
+                targetId = "pending_bad",
+                payload = "{ not json",
+            ),
+        )
+
+        assertThat(repository(outbox).pendingPublishes().first()).isEmpty()
+    }
+
+    @Test
+    fun `pendingPublishes surfaces each independent publish`() = runTest {
+        val outbox = outbox()
+        val repo = repository(outbox)
+        repo.enqueuePublish(CreateStoryRequest(content = "first"))
+        repo.enqueuePublish(CreateStoryRequest(content = "second"))
+
+        assertThat(repo.pendingPublishes().first().map { it.content })
+            .containsExactly("first", "second")
     }
 }
