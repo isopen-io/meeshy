@@ -14,21 +14,29 @@ self-ring derived from the live durable outbox (`StoryRepository.pendingPublishe
 building block + pure `StoryOptimisticTray` product rule), so it survives process
 death, **rolls back** automatically if the publish exhausts, and hands off to the
 real story on delivery (the VM refreshes when a publish vanishes from the queue).
-Surpasses iOS's in-memory optimism (which evaporates on a kill).
+Surpasses iOS's in-memory optimism (which evaporates on a kill). Latest loop
+(`story-publish-retry`) closes the failure gap: an **exhausted** publish now
+surfaces a "Couldn't post your story" **Retry/Discard strip** above the tray
+(`StoryRepository.failedPublishes` + pure `StoryPublishFailures`) instead of
+vanishing silently, and the reconciler tells a *failed* publish apart from a
+*delivered* one (no spurious refresh).
 
 ## Next slice (pick one for the next run)
 
 Ordered by value within the Stories area:
 1. `story-composer-media` — extend the composer to a single image/video slide
-   (media pick → upload → `mediaIds`), then multi-slide.
+   (media pick → upload → `mediaIds`), then multi-slide. **Note:** there is **no
+   media-upload API in the Android SDK yet** — this slice must first build the
+   multipart upload endpoint (`MediaApi`) + a system photo/video picker (Compose
+   glue) + the `mediaIds` plumbing into `CreateStoryRequest`. It is bigger than a
+   typical thin slice; consider splitting into `media-upload-api` (pure: multipart
+   request + repository, fully testable) then `story-composer-media` (picker glue +
+   compose into the existing publish flow).
 
 After this, advance to the **Calls** area (`feature-parity.md` §"Calls").
 
-Tracked follow-up surfaced this loop: a still-`EXHAUSTED` publish currently just
-disappears from the optimistic tray silently — a "failed to post, tap to retry"
-affordance (read the EXHAUSTED rows via `outboxRepository.observeAll`/`outcomes`)
-would close that UX gap. Needs `:app`/`:feature` wiring → its own slice.
-
+(`story-publish-retry` ✅ shipped 2026-06-27 — see run log; closed the
+"failed publish disappears silently" follow-up.)
 (`story-composer-optimistic-tray` ✅ shipped 2026-06-27 — see run log.)
 (`story-composer` ✅ shipped 2026-06-26 — see run log.)
 (`story-autoadvance-media-gate` ✅ shipped 2026-06-23 — see run log.)
@@ -45,6 +53,80 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-27 — slice `story-publish-retry` ✅
+- **Branch:** `claude/apps/android/story-publish-retry`
+- **Housekeeping:** no open Android PR to land first (`list_pull_requests` open
+  set = 24, none on an `apps/android` branch). Branched off latest `origin/main`
+  (carries #960, the optimistic tray). SDK bootstrapped per the env recipe.
+- **What:** closes the tracked follow-up — a story publish that **exhausts** its
+  durable-outbox retries no longer vanishes silently. It now surfaces as a
+  "Couldn't post your story" **strip above the tray** with explicit **Retry** and
+  **Discard**, derived from the durable outbox so it survives process death.
+  Also **fixes a latent bug**: the optimistic-tray reconciler treated *any*
+  vanished pending publish as "delivered" and fired a spurious `refresh()` — it
+  now tells a *failed* publish (moved to `EXHAUSTED`, surfaced as a failure) apart
+  from a *delivered* one (row deleted → real hand-off). Surpasses iOS, whose
+  optimistic story evaporates on failure with no signal or recovery.
+- **Added (production):**
+  - `sdk-core` — `FailedStoryPublish` (pure domain: `cmid` + `tempId` + content/
+    visibility/language + `createdAtMillis`/`failedAtMillis`); `StoryPublishQueue`
+    (`{pending, failed}`) + `StoryRepository.publishQueue(): Flow<StoryPublishQueue>`
+    — derives **both** lists from **one** `observeAll()` emission so a
+    `PENDING → EXHAUSTED` transition is atomic to a consumer (the row leaves
+    `pending` and enters `failed` in the same frame; never seen in neither set →
+    no false "delivered" read). `pendingPublishes()`/`failedPublishes()` are now
+    thin `.map` projections of it. `retryPublish(cmid)` → `OutboxRepository.retry`
+    (revive → PENDING, fresh budget); `discardPublish(cmid)` → new
+    `OutboxRepository.discard(cmid)` (delete row, no outcome signal — a deliberate
+    user removal, not a delivery).
+  - `feature:stories` — pure `StoryPublishFailures` (`from(failed)` → newest-failed-
+    first items with a single-line, cap-80 ellipsised content preview);
+    `StoriesViewModel` now `combine`s the single consistent `publishQueue()`
+    snapshot (one source — the fix that makes the no-spurious-refresh guarantee
+    race-free; two separately-subscribed flows could show a transient neither-set
+    frame), exposes `failedPublishes: List<Item>` in `UiState`, and adds
+    `retryPublish`/`discardPublish` intents (retry kicks `OutboxFlushWorker`);
+    reconciler excludes failed temp ids from the delivered-detection.
+  - `feature:stories` (Compose glue) — `StoryFailedStrip`/`StoryFailedRow` rendered
+    above the carousel (shown even when the tray is otherwise empty), accent via the
+    `MeeshyTheme.tokens.error` token, Retry `TextButton` + Discard `IconButton`.
+  - Strings `stories_publish_{failed_title,retry,discard}` in en/fr/es/pt.
+- **Tests (+24):**
+  - `StoryPublishFailuresTest` (pure) +8 — empty→none; single item keyed by cmid;
+    newest-failed-first ordering; same-timestamp ties keep input order; multi-line →
+    single-line preview; surrounding whitespace trimmed; exactly-cap kept whole;
+    over-cap truncated with ellipsis (len cap+1).
+  - `StoryRepositoryTest` (sdk-core, Robolectric) +9 — `publishQueue` surfaces live +
+    exhausted together in one snapshot / empty when nothing queued; `failedPublishes`
+    surfaces an exhausted publish (cmid/tempId/content/visibility/lang/timestamps);
+    excludes a still-pending one; ignores non-publish exhausted rows; skips
+    blank/undecodable; `retryPublish` revives (failed→empty, pending→content) ;
+    unknown cmid → false; `discardPublish` removes for good (failed & pending empty).
+  - `OutboxRepositoryTest` (sdk-core) +2 — `discard` removes a row outright; unknown
+    cmid → no-op.
+  - `StoriesViewModelTest` +5 — exhausted publish surfaces as a failed item (one
+    atomic `publishQueue` transition) with **no** spurious refresh; retry revives +
+    kicks the worker; retry on a vanished row does **not** kick the worker; discard
+    drops the row. (Existing tests migrated to the `publishQueue` stub + `workManager`
+    ctor arg, all green.)
+- **Edge cases covered:** empty/single collections; preview cap boundary (=80 whole /
+  >80 ellipsised); multi-line + whitespace normalisation; unknown cmid on retry
+  (false → no worker kick) and discard (no-op); failed-vs-delivered disambiguation
+  (no spurious refresh); non-publish & blank/undecodable rows excluded; tie-stable order.
+- **Verify:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL in 2m32s**
+  (full `assembleDebug` + all module JVM unit tests; 836 tasks). Targeted
+  `:sdk-core` + `:feature:stories` `testDebugUnitTest` green (23/23 stories VM+failures).
+- **Reviewer:** PASS — scope `apps/android` only; behavioural tests through the public
+  API (repo `Flow`, VM `state`, pure object), no tautologies; SDK purity (the outbox-
+  reading `failedPublishes`/`retry`/`discard` building blocks live in `:sdk-core`; the
+  "render as a Retry/Discard strip, when to refresh" product rule lives in
+  `:feature:stories`); single source of truth (reuses the durable outbox +
+  `OutboxRepository.retry`, no second queue/cache); Instant-App (failed state derived
+  from the durable outbox, survives process death, no spinner); UDF + immutable
+  `UiState`, pure presentation; colour/UX coherence (error-token strip, explicit
+  Retry/Discard = no dead end). Surpasses iOS (durable failure recovery vs silent
+  evaporation).
 
 ### 2026-06-27 — slice `story-composer-optimistic-tray` ✅
 - **Branch:** `claude/apps/android/story-composer-optimistic-tray`

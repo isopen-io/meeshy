@@ -26,6 +26,9 @@
     <string name="stories_comments_open">Comentários</string>
     <string name="stories_comments_failed">Falhou — toca para tentar de novo</string>
     <string name="stories_count_dots">%1$d novas de %2$d stories</string>
+    <string name="stories_publish_failed_title">Não foi possível publicar sua story</string>
+    <string name="stories_publish_retry">Tentar novamente</string>
+    <string name="stories_publish_discard">Descartar</string>
     <string name="stories_composer_title">Nova story</string>
     <string name="stories_composer_cancel">Cancelar</string>
     <string name="stories_composer_publish">Partilhar</string>

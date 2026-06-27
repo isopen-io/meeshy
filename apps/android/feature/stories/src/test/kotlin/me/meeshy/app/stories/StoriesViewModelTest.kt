@@ -1,6 +1,9 @@
 package me.meeshy.app.stories
 
+import androidx.work.OneTimeWorkRequest
+import androidx.work.WorkManager
 import com.google.common.truth.Truth.assertThat
+import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
@@ -21,7 +24,9 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.story.FailedStoryPublish
 import me.meeshy.sdk.story.PendingStoryPublish
+import me.meeshy.sdk.story.StoryPublishQueue
 import me.meeshy.sdk.story.StoryRepository
 import org.junit.After
 import org.junit.Before
@@ -62,6 +67,17 @@ class StoriesViewModelTest {
             createdAtMillis = System.currentTimeMillis(),
         )
 
+    private fun failedPublish(cmid: String, tempId: String, content: String = "oops") =
+        FailedStoryPublish(
+            cmid = cmid,
+            tempId = tempId,
+            content = content,
+            visibility = "PUBLIC",
+            originalLanguage = "fr",
+            createdAtMillis = System.currentTimeMillis(),
+            failedAtMillis = System.currentTimeMillis(),
+        )
+
     private fun session(userId: String? = "me"): SessionRepository {
         val user = userId?.let { MeeshyUser(id = it, username = "self") }
         return mockk<SessionRepository>(relaxed = true).also {
@@ -70,17 +86,24 @@ class StoriesViewModelTest {
         }
     }
 
+    private val workManager: WorkManager = mockk(relaxed = true)
+
+    private fun queueOf(
+        pending: List<PendingStoryPublish> = emptyList(),
+        failed: List<FailedStoryPublish> = emptyList(),
+    ) = StoryPublishQueue(pending = pending, failed = failed)
+
     private fun repositoryReturning(
         stream: Flow<CacheResult<List<ApiPost>>>,
-        pending: Flow<List<PendingStoryPublish>> = flowOf(emptyList()),
+        queue: Flow<StoryPublishQueue> = flowOf(queueOf()),
     ): StoryRepository =
         mockk<StoryRepository>(relaxed = true).also {
             every { it.storiesStream(any(), any()) } returns stream
-            every { it.pendingPublishes() } returns pending
+            every { it.publishQueue() } returns queue
         }
 
     private fun viewModel(repo: StoryRepository, session: SessionRepository = session()) =
-        StoriesViewModel(repo, session, MeeshyConfig())
+        StoriesViewModel(repo, session, MeeshyConfig(), workManager)
 
     @Test
     fun `cold empty cache shows the skeleton with no tray`() = runTest(dispatcher) {
@@ -148,7 +171,7 @@ class StoriesViewModelTest {
         val repo = mockk<StoryRepository>(relaxed = true)
         val onError = slot<(Throwable) -> Unit>()
         every { repo.storiesStream(any(), capture(onError)) } returns flowOf(CacheResult.Empty)
-        every { repo.pendingPublishes() } returns flowOf(emptyList())
+        every { repo.publishQueue() } returns flowOf(queueOf())
         val vm = viewModel(repo)
         advanceUntilIdle()
         assertThat(vm.state.value.showSkeleton).isTrue()
@@ -164,7 +187,7 @@ class StoriesViewModelTest {
         val vm = viewModel(
             repositoryReturning(
                 stream = flowOf(CacheResult.Fresh(emptyList(), ageMillis = 0)),
-                pending = flowOf(listOf(pendingPublish("pending_1", "hello"))),
+                queue = flowOf(queueOf(pending = listOf(pendingPublish("pending_1", "hello")))),
             ),
             session = session(userId = "me"),
         )
@@ -181,7 +204,7 @@ class StoriesViewModelTest {
             val vm = viewModel(
                 repositoryReturning(
                     stream = flowOf(CacheResult.Fresh(listOf(story("s1", "me", "self")), ageMillis = 0)),
-                    pending = flowOf(listOf(pendingPublish("pending_1", "hello"))),
+                    queue = flowOf(queueOf(pending = listOf(pendingPublish("pending_1", "hello")))),
                 ),
                 session = session(userId = "me"),
             )
@@ -196,7 +219,7 @@ class StoriesViewModelTest {
         val vm = viewModel(
             repositoryReturning(
                 stream = flowOf(CacheResult.Fresh(emptyList(), ageMillis = 0)),
-                pending = flowOf(listOf(pendingPublish("pending_1", "hello"))),
+                queue = flowOf(queueOf(pending = listOf(pendingPublish("pending_1", "hello")))),
             ),
             session = session(userId = null),
         )
@@ -211,11 +234,11 @@ class StoriesViewModelTest {
             val repo = mockk<StoryRepository>(relaxed = true)
             every { repo.storiesStream(any(), any()) } returns
                 flowOf(CacheResult.Fresh(emptyList(), ageMillis = 0))
-            every { repo.pendingPublishes() } returns flowOf(
-                listOf(pendingPublish("pending_1", "hello")),
-                emptyList(),
+            every { repo.publishQueue() } returns flowOf(
+                queueOf(pending = listOf(pendingPublish("pending_1", "hello"))),
+                queueOf(),
             )
-            val vm = StoriesViewModel(repo, session(userId = "me"), MeeshyConfig())
+            val vm = StoriesViewModel(repo, session(userId = "me"), MeeshyConfig(), workManager)
             advanceUntilIdle()
 
             assertThat(vm.state.value.tray.isEmpty).isTrue()
@@ -227,11 +250,79 @@ class StoriesViewModelTest {
         val repo = mockk<StoryRepository>(relaxed = true)
         every { repo.storiesStream(any(), any()) } returns
             flowOf(CacheResult.Fresh(emptyList(), ageMillis = 0))
-        every { repo.pendingPublishes() } returns flowOf(listOf(pendingPublish("pending_1", "hello")))
-        val vm = StoriesViewModel(repo, session(userId = "me"), MeeshyConfig())
+        every { repo.publishQueue() } returns
+            flowOf(queueOf(pending = listOf(pendingPublish("pending_1", "hello"))))
+        val vm = StoriesViewModel(repo, session(userId = "me"), MeeshyConfig(), workManager)
         advanceUntilIdle()
 
         assertThat(vm.state.value.tray.self?.storyCount).isEqualTo(1)
         coVerify(exactly = 0) { repo.refresh() }
+    }
+
+    @Test
+    fun `an exhausted publish surfaces as a failed item with no spurious refresh`() =
+        runTest(dispatcher) {
+            val repo = mockk<StoryRepository>(relaxed = true)
+            every { repo.storiesStream(any(), any()) } returns
+                flowOf(CacheResult.Fresh(emptyList(), ageMillis = 0))
+            // One atomic transition: the publish leaves `pending` and enters `failed`
+            // in the SAME snapshot — so it is never seen in neither set (no false delivery).
+            every { repo.publishQueue() } returns flowOf(
+                queueOf(pending = listOf(pendingPublish("pending_1", "hello"))),
+                queueOf(failed = listOf(failedPublish("c1", "pending_1", "hello"))),
+            )
+            val vm = StoriesViewModel(repo, session(userId = "me"), MeeshyConfig(), workManager)
+            advanceUntilIdle()
+
+            assertThat(vm.state.value.failedPublishes.map { it.cmid }).containsExactly("c1")
+            assertThat(vm.state.value.tray.isEmpty).isTrue()
+            // A failed publish is NOT a delivery: it must not provoke a hand-off refresh.
+            coVerify(exactly = 0) { repo.refresh() }
+        }
+
+    @Test
+    fun `retryPublish revives the row and kicks the drain worker`() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            stream = flowOf(CacheResult.Fresh(emptyList(), ageMillis = 0)),
+            queue = flowOf(queueOf(failed = listOf(failedPublish("c1", "pending_1")))),
+        )
+        coEvery { repo.retryPublish("c1") } returns true
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.retryPublish("c1")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { repo.retryPublish("c1") }
+        coVerify(exactly = 1) { workManager.enqueue(any<OneTimeWorkRequest>()) }
+    }
+
+    @Test
+    fun `retryPublish on a vanished row does not kick the worker`() = runTest(dispatcher) {
+        val repo = repositoryReturning(stream = flowOf(CacheResult.Fresh(emptyList(), ageMillis = 0)))
+        coEvery { repo.retryPublish("gone") } returns false
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.retryPublish("gone")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { repo.retryPublish("gone") }
+        coVerify(exactly = 0) { workManager.enqueue(any<OneTimeWorkRequest>()) }
+    }
+
+    @Test
+    fun `discardPublish drops the failed row`() = runTest(dispatcher) {
+        val repo = repositoryReturning(
+            stream = flowOf(CacheResult.Fresh(emptyList(), ageMillis = 0)),
+            queue = flowOf(queueOf(failed = listOf(failedPublish("c1", "pending_1")))),
+        )
+        val vm = viewModel(repo)
+        advanceUntilIdle()
+
+        vm.discardPublish("c1")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { repo.discardPublish("c1") }
     }
 }

@@ -118,33 +118,93 @@ class StoryRepository @Inject constructor(
         )
 
     /**
-     * Live story publishes still in flight on the durable outbox (ARCHITECTURE.md
-     * §5), decoded for the tray's optimistic self-ring. Only `PENDING`/`INFLIGHT`
-     * rows are surfaced — a row that exhausted its retries is omitted, so the
-     * optimistic story is **rolled back** automatically; a delivered publish is
-     * deleted from the queue and likewise drops out. Undecodable or blank-content
-     * rows are skipped defensively (never an empty ring).
+     * The story-publish queue as a **single consistent snapshot** (ARCHITECTURE.md
+     * §5): the live (`PENDING`/`INFLIGHT`) publishes for the optimistic self-ring
+     * and the `EXHAUSTED` ones for the failure strip, both derived from **one**
+     * `observeAll()` emission. Deriving them together matters: a publish that
+     * transitions `PENDING → EXHAUSTED` leaves `pending` and enters `failed` in the
+     * *same* emission, so a consumer can never observe a transient frame where the
+     * row is in neither set (which would otherwise read as a spurious delivery).
+     * Undecodable / blank-content rows are skipped defensively.
      */
-    fun pendingPublishes(): Flow<List<PendingStoryPublish>> =
+    fun publishQueue(): Flow<StoryPublishQueue> =
         outboxRepository.observeAll().map { rows ->
-            rows
-                .filter { it.kindEnum == OutboxKind.PUBLISH_STORY && it.stateEnum in LIVE_PUBLISH_STATES }
-                .mapNotNull { it.toPendingStoryPublish() }
+            val storyRows = rows.filter { it.kindEnum == OutboxKind.PUBLISH_STORY }
+            StoryPublishQueue(
+                pending = storyRows
+                    .filter { it.stateEnum in LIVE_PUBLISH_STATES }
+                    .mapNotNull { it.toPendingStoryPublish() },
+                failed = storyRows
+                    .filter { it.stateEnum == OutboxState.EXHAUSTED }
+                    .mapNotNull { it.toFailedStoryPublish() },
+            )
         }
 
+    /**
+     * Live story publishes still in flight on the durable outbox, decoded for the
+     * tray's optimistic self-ring — the `pending` projection of [publishQueue].
+     * Only `PENDING`/`INFLIGHT` rows are surfaced; an exhausted row is **rolled
+     * back** automatically, a delivered row is deleted and likewise drops out.
+     */
+    fun pendingPublishes(): Flow<List<PendingStoryPublish>> = publishQueue().map { it.pending }
+
     private fun OutboxEntity.toPendingStoryPublish(): PendingStoryPublish? {
-        val request = runCatching {
-            MeeshyApi.json.decodeFromString<CreateStoryRequest>(payload)
-        }.getOrNull() ?: return null
-        val content = request.content?.takeIf { it.isNotBlank() } ?: return null
+        val request = decodeStoryPublish() ?: return null
         return PendingStoryPublish(
             tempId = targetId,
-            content = content,
+            content = request.content,
             visibility = request.visibility,
             originalLanguage = request.originalLanguage,
             createdAtMillis = createdAt,
         )
     }
+
+    /**
+     * Story publishes that **exhausted** their durable-outbox retries — the
+     * `failed` projection of [publishQueue]. Each carries the `cmid` so the tray
+     * can offer a user-initiated retry ([retryPublish]) or a discard
+     * ([discardPublish]). Surpasses iOS, whose optimistic story silently
+     * evaporates on failure with no recovery.
+     */
+    fun failedPublishes(): Flow<List<FailedStoryPublish>> = publishQueue().map { it.failed }
+
+    /**
+     * Revives an exhausted publish for a user-initiated retry — back to the live
+     * queue with a fresh attempt budget. The caller kicks the drain worker.
+     * @return `false` when the row no longer exists.
+     */
+    suspend fun retryPublish(cmid: String): Boolean = outboxRepository.retry(cmid)
+
+    /** Permanently discards an exhausted publish the user no longer wants to retry. */
+    suspend fun discardPublish(cmid: String) = outboxRepository.discard(cmid)
+
+    private fun OutboxEntity.toFailedStoryPublish(): FailedStoryPublish? {
+        val request = decodeStoryPublish() ?: return null
+        return FailedStoryPublish(
+            cmid = cmid,
+            tempId = targetId,
+            content = request.content,
+            visibility = request.visibility,
+            originalLanguage = request.originalLanguage,
+            createdAtMillis = createdAt,
+            failedAtMillis = updatedAt,
+        )
+    }
+
+    /** A non-blank story publish decoded from this row's payload, or null if undecodable/blank. */
+    private fun OutboxEntity.decodeStoryPublish(): DecodedStoryPublish? {
+        val request = runCatching {
+            MeeshyApi.json.decodeFromString<CreateStoryRequest>(payload)
+        }.getOrNull() ?: return null
+        val content = request.content?.takeIf { it.isNotBlank() } ?: return null
+        return DecodedStoryPublish(content, request.visibility, request.originalLanguage)
+    }
+
+    private data class DecodedStoryPublish(
+        val content: String,
+        val visibility: String,
+        val originalLanguage: String?,
+    )
 
     /**
      * Fetches the viewers of a story (with their optional reaction), mapping the

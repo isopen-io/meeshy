@@ -26,6 +26,9 @@
     <string name="stories_comments_open">Comentarios</string>
     <string name="stories_comments_failed">Error: toca para reintentar</string>
     <string name="stories_count_dots">%1$d nuevas de %2$d historias</string>
+    <string name="stories_publish_failed_title">No se pudo publicar tu historia</string>
+    <string name="stories_publish_retry">Reintentar</string>
+    <string name="stories_publish_discard">Descartar</string>
     <string name="stories_composer_title">Nueva historia</string>
     <string name="stories_composer_cancel">Cancelar</string>
     <string name="stories_composer_publish">Compartir</string>

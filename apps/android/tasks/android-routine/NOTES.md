@@ -242,3 +242,37 @@ Append-only log of gotchas and decisions that save time next run.
   `implementation(libs.work.runtime)` added before the VM could `workManager
   .enqueue(OutboxFlushWorker.buildRequest())` (chat already had it). `buildRequest()`
   builds a `OneTimeWorkRequest` fine in a plain JVM unit test (no Robolectric).
+
+## Lessons — slice `story-publish-retry` (2026-06-27)
+- **`combine` only emits once ALL source flows have emitted.** When the VM's
+  combined repository flows changed, every test (and every hand-rolled mock) had to
+  stub the new flow (here `publishQueue()`) — a relaxed mockk returns a Flow that
+  never emits, so `combine` silently never collected and the VM state stayed at its
+  default. Symptom: a previously-green assertion fails for no obvious reason. Always
+  stub *every* combined flow (default `flowOf(...)`).
+- **A "row vanished from the pending queue" is ambiguous.** Both a *delivered*
+  publish (row deleted) and a *failed* one (row → `EXHAUSTED`, dropped from
+  `pendingPublishes`) disappear from the live queue. The optimistic-tray
+  reconciler originally treated any disappearance as delivery and fired a spurious
+  `refresh()`. Disambiguate by also tracking the failed set: a temp id now failed
+  exhausted (surface it), only a temp id in neither set delivered.
+- **Don't disambiguate across two separately-subscribed flows — they race.**
+  First cut combined `pendingPublishes()` + `failedPublishes()` as two `combine`
+  args, but each independently re-subscribes `observeAll()`, so a `PENDING →
+  EXHAUSTED` change fires both and `combine` emits an intermediate frame where the
+  row is in *neither* set → the exact spurious `refresh()` we were fixing,
+  reintroduced by timing. Fix: a **single** `publishQueue(): Flow<{pending, failed}>`
+  mapping one `observeAll()` emission into both lists, so the transition is atomic
+  to the consumer; `pendingPublishes`/`failedPublishes` became thin `.map`
+  projections. Rule: when two derived views must stay mutually consistent, derive
+  them from **one** source emission, never two subscriptions.
+- **`OutboxRepository.retry(cmid)` already existed** (revive EXHAUSTED → PENDING,
+  fresh budget) but had no caller — wiring it through `StoryRepository.retryPublish`
+  + a VM intent that kicks `OutboxFlushWorker` is all the recovery loop needed.
+  Added a sibling `discard(cmid)` (plain `deleteAll`, emits no outcome — a user
+  removal is not a delivery outcome) so a permanently-failing publish isn't a dead end.
+- **A public `UiState` can't hold an `internal` nested type.** `StoriesUiState`
+  (public, read by the screen + exposed via the public VM `StateFlow`) carries
+  `List<StoryPublishFailures.Item>`, so `StoryPublishFailures` had to be public
+  (matches `StoryCountDots`). "Function 'public' exposes its 'internal' parameter
+  type" is the compiler telling you a public surface leaks an internal type.

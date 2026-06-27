@@ -258,4 +258,122 @@ class StoryRepositoryTest {
         assertThat(repo.pendingPublishes().first().map { it.content })
             .containsExactly("first", "second")
     }
+
+    @Test
+    fun `publishQueue surfaces live and exhausted publishes together in one snapshot`() = runTest {
+        val outbox = outbox()
+        val repo = repository(outbox)
+        repo.enqueuePublish(CreateStoryRequest(content = "live"))
+        val doomed = repo.enqueuePublish(CreateStoryRequest(content = "doomed"))!!
+        outbox.markExhausted(doomed, "gave up")
+
+        val queue = repo.publishQueue().first()
+
+        assertThat(queue.pending.map { it.content }).containsExactly("live")
+        assertThat(queue.failed.map { it.content }).containsExactly("doomed")
+    }
+
+    @Test
+    fun `publishQueue is empty when nothing is queued`() = runTest {
+        val queue = repository().publishQueue().first()
+
+        assertThat(queue.pending).isEmpty()
+        assertThat(queue.failed).isEmpty()
+    }
+
+    @Test
+    fun `failedPublishes surfaces an exhausted publish with its cmid and content`() = runTest {
+        val outbox = outbox()
+        val repo = repository(outbox)
+        val cmid = repo.enqueuePublish(
+            CreateStoryRequest(content = "doomed", visibility = "FRIENDS", originalLanguage = "es"),
+        )!!
+        outbox.markExhausted(cmid, "gave up")
+
+        val failed = repo.failedPublishes().first().single()
+
+        assertThat(failed.cmid).isEqualTo(cmid)
+        assertThat(failed.tempId).startsWith("pending_")
+        assertThat(failed.content).isEqualTo("doomed")
+        assertThat(failed.visibility).isEqualTo("FRIENDS")
+        assertThat(failed.originalLanguage).isEqualTo("es")
+        assertThat(failed.createdAtMillis).isGreaterThan(0L)
+        assertThat(failed.failedAtMillis).isAtLeast(failed.createdAtMillis)
+    }
+
+    @Test
+    fun `failedPublishes excludes a still-pending publish`() = runTest {
+        val outbox = outbox()
+        val repo = repository(outbox)
+        repo.enqueuePublish(CreateStoryRequest(content = "in flight"))
+
+        assertThat(repo.failedPublishes().first()).isEmpty()
+    }
+
+    @Test
+    fun `failedPublishes ignores non-publish exhausted rows`() = runTest {
+        val outbox = outbox()
+        val cmid = outbox.enqueue(
+            OutboxMutation(
+                kind = OutboxKind.ADD_REACTION,
+                lane = OutboxLanes.REACTION,
+                targetId = "m1:like",
+                payload = """{"emoji":"👍"}""",
+            ),
+        )!!
+        outbox.markExhausted(cmid, "gave up")
+
+        assertThat(repository(outbox).failedPublishes().first()).isEmpty()
+    }
+
+    @Test
+    fun `failedPublishes skips a blank-content exhausted row`() = runTest {
+        val outbox = outbox()
+        val cmid = repository(outbox).enqueuePublish(CreateStoryRequest(content = "   "))
+        // A blank publish never enqueues content; an exhausted blank/undecodable
+        // row must never produce a failure item.
+        outbox.enqueue(
+            OutboxMutation(
+                kind = OutboxKind.PUBLISH_STORY,
+                lane = OutboxLanes.STORY,
+                targetId = "pending_bad",
+                payload = "{ not json",
+            ),
+        )?.let { outbox.markExhausted(it, "gave up") }
+
+        assertThat(repository(outbox).failedPublishes().first()).isEmpty()
+        assertThat(cmid).isNotNull()
+    }
+
+    @Test
+    fun `retryPublish revives an exhausted publish back into the live queue`() = runTest {
+        val outbox = outbox()
+        val repo = repository(outbox)
+        val cmid = repo.enqueuePublish(CreateStoryRequest(content = "retry me"))!!
+        outbox.markExhausted(cmid, "gave up")
+
+        val revived = repo.retryPublish(cmid)
+
+        assertThat(revived).isTrue()
+        assertThat(repo.failedPublishes().first()).isEmpty()
+        assertThat(repo.pendingPublishes().first().map { it.content }).containsExactly("retry me")
+    }
+
+    @Test
+    fun `retryPublish on an unknown cmid reports no row revived`() = runTest {
+        assertThat(repository().retryPublish("missing")).isFalse()
+    }
+
+    @Test
+    fun `discardPublish removes an exhausted publish for good`() = runTest {
+        val outbox = outbox()
+        val repo = repository(outbox)
+        val cmid = repo.enqueuePublish(CreateStoryRequest(content = "drop me"))!!
+        outbox.markExhausted(cmid, "gave up")
+
+        repo.discardPublish(cmid)
+
+        assertThat(repo.failedPublishes().first()).isEmpty()
+        assertThat(repo.pendingPublishes().first()).isEmpty()
+    }
 }
