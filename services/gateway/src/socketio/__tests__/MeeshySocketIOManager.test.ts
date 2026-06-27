@@ -1707,7 +1707,10 @@ describe('MeeshySocketIOManager', () => {
       expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.PRESENCE_SNAPSHOT, expect.objectContaining({
         users: expect.arrayContaining([expect.objectContaining({ userId: 'user-x' })]),
       }));
-      expect(prisma.participant.findMany).not.toHaveBeenCalled();
+      // _emitUnreadCountsSnapshot fires on every reconnect (even cache hits) and calls
+      // prisma.participant.findMany once. The presence-snapshot DB path (which would call
+      // findMany twice: participant rows + contacts) must NOT run on a cache hit.
+      expect(prisma.participant.findMany).toHaveBeenCalledTimes(1);
     });
 
     it('fetches fresh data when cache is stale', async () => {
