@@ -52,14 +52,20 @@ function parseTextObjects(value: unknown): StoryTextObjectData[] | undefined {
   for (const raw of value) {
     if (!raw || typeof raw !== 'object') continue;
     const r = raw as Record<string, unknown>;
-    if (typeof r.id !== 'string' || typeof r.content !== 'string') continue;
+    // The iOS composer encodes the overlay text under `text`; `content` is a
+    // decoder-only legacy alias. Read the canonical key first, fall back to the
+    // legacy one — without this the web dropped every text overlay iOS sent.
+    const textValue = typeof r.text === 'string'
+      ? r.text
+      : (typeof r.content === 'string' ? r.content : undefined);
+    if (typeof r.id !== 'string' || textValue === undefined) continue;
     if (typeof r.x !== 'number' || typeof r.y !== 'number') continue;
     const translations = (r.translations && typeof r.translations === 'object' && !Array.isArray(r.translations))
       ? r.translations as Record<string, string>
       : undefined;
     result.push({
       id: r.id,
-      content: r.content,
+      content: textValue,
       x: r.x,
       y: r.y,
       scale: typeof r.scale === 'number' ? r.scale : 1,
@@ -68,7 +74,12 @@ function parseTextObjects(value: unknown): StoryTextObjectData[] | undefined {
       sourceLanguage: typeof r.sourceLanguage === 'string' ? r.sourceLanguage : undefined,
       textStyle: parseTextStyle(r.textStyle),
       textColor: typeof r.textColor === 'string' ? r.textColor : undefined,
+      // Legacy `textSize` is css px; canonical `fontSize` is design px on the
+      // 1080-wide reference canvas. Keep them in distinct fields so the renderer
+      // can scale `fontSizeDesign` to the live canvas instead of treating an
+      // iOS 96-design-px size as 96 css px (≈2.25× too large).
       textSize: typeof r.textSize === 'number' ? r.textSize : undefined,
+      fontSizeDesign: typeof r.fontSize === 'number' ? r.fontSize : undefined,
       textAlign: typeof r.textAlign === 'string' ? r.textAlign : undefined,
       textBg: typeof r.textBg === 'string' ? r.textBg : undefined,
       zIndex: typeof r.zIndex === 'number' ? r.zIndex : undefined,
@@ -301,7 +312,11 @@ export function postToStoryData(post: Post): StoryData {
     originalLanguage: post.originalLanguage ?? undefined,
     translations: translations && translations.length > 0 ? translations : undefined,
     storyEffects: effects ? {
-      background: typeof effects.backgroundColor === 'string' ? effects.backgroundColor : undefined,
+      // Canonical key is `background` (iOS composer + gateway StoryEffectsSchema);
+      // `backgroundColor` is a legacy alias kept as a fallback for old payloads.
+      background: typeof effects.background === 'string'
+        ? effects.background
+        : (typeof effects.backgroundColor === 'string' ? effects.backgroundColor : undefined),
       textStyle: parseTextStyle(effects.textStyle),
       textColor: typeof effects.textColor === 'string' ? effects.textColor : undefined,
       textPosition: parseTextPosition(effects.textPosition),

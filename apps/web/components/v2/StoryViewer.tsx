@@ -31,7 +31,12 @@ export interface StoryTextObjectData {
   sourceLanguage?: string;
   textStyle?: 'bold' | 'neon' | 'typewriter' | 'handwriting';
   textColor?: string;
+  /// Legacy css-px size (old web payloads). Rendered as raw `px`.
   textSize?: number;
+  /// Canonical iOS size in design pixels on the 1080-wide reference canvas.
+  /// Rendered relative to the live canvas width (`cqw`) so a story authored on
+  /// iOS keeps the same proportions on web instead of being ~2.25× too large.
+  fontSizeDesign?: number;
   textAlign?: string;
   textBg?: string;
   zIndex?: number;
@@ -113,6 +118,10 @@ interface StoryViewerProps {
 // ============================================================================
 
 const DEFAULT_STORY_DURATION_MS = 6000;
+
+/// Reference canvas width the iOS composer authors against (`CanvasGeometry`).
+/// Design-pixel text sizes are projected back to the live canvas relative to it.
+const STORY_DESIGN_WIDTH = 1080;
 
 const FILTER_MAP: Record<string, string> = {
   vintage: 'sepia(0.5) saturate(1.3)',
@@ -663,10 +672,20 @@ function StoryViewer({
             by 100 for CSS percentages. Each text picks its own translation
             via the Prisme chain (passed via `userLanguage` for now; full
             chain support ships in B11B). */}
+        {/* `containerType: inline-size` scopes `cqw` units to the canvas width
+            so iOS design-pixel font sizes (1080 reference) scale to the live
+            canvas. Isolated to this full-bleed wrapper so it never becomes the
+            containing block for the fixed-position overlays elsewhere. */}
+        <div className="absolute inset-0 pointer-events-none" style={{ containerType: 'inline-size' }}>
         {effects?.textObjects?.map((t) => {
           const resolvedText = resolvePrismeText(t, userLanguage);
           if (!resolvedText) return null;
-          const fontSize = t.textSize ?? 24;
+          // Canonical iOS size is design px on the 1080-wide canvas → express it
+          // as a fraction of the live canvas width (`cqw`). Legacy `textSize` is
+          // raw css px. Fallback default keeps old behaviour for untyped data.
+          const fontSize = t.fontSizeDesign != null
+            ? `${((t.fontSizeDesign / STORY_DESIGN_WIDTH) * 100).toFixed(4)}cqw`
+            : `${t.textSize ?? 24}px`;
           return (
             <div
               key={t.id}
@@ -678,7 +697,7 @@ function StoryViewer({
                 left: `${t.x * 100}%`,
                 top: `${t.y * 100}%`,
                 transform: `translate(-50%, -50%) scale(${t.scale}) rotate(${t.rotation}deg)`,
-                fontSize: `${fontSize}px`,
+                fontSize,
                 color: t.textColor ? (t.textColor.startsWith('#') ? t.textColor : `#${t.textColor}`) : '#ffffff',
                 textShadow: textObjectShadow(t.textStyle),
                 textAlign: (t.textAlign as 'left' | 'right' | 'center' | undefined) ?? 'center',
@@ -695,6 +714,7 @@ function StoryViewer({
             </div>
           );
         })}
+        </div>
 
         {/* Foreground / background audio players. Volume is set on mount via
             a ref because React's native `<audio>` doesn't accept `volume` as
