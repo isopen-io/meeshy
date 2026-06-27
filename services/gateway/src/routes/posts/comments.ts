@@ -163,55 +163,14 @@ export function registerCommentRoutes(
         }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/comments]: broadcast comment added failed'));
       }
 
-      // Notify post author (or parent comment author for replies)
       const notifService = fastify.notificationService;
-      if (notifService) {
-        if (parsed.data.parentId) {
-          // Reply to a comment — notify the parent comment author. Le contenu
-          // du commentaire parent voyage en subtitle (« En réponse à « … » »)
-          // pour que le destinataire sache À QUOI on lui répond.
-          const parentComment = await fastify.prisma?.postComment?.findUnique({
-            where: { id: parsed.data.parentId },
-            select: { authorId: true, content: true },
-          });
-          if (parentComment?.authorId) {
-            notifService.createCommentReplyNotification({
-              actorId: authContext.registeredUser.id,
-              postId,
-              commentAuthorId: parentComment.authorId,
-              commentId: comment.id,
-              replyPreview: parsed.data.content,
-              parentCommentPreview: parentComment.content?.slice(0, 80),
-              // Précise « sur votre story/réel/… » + date côté client (du JJ/MM/AAAA HH:MM).
-              postType: post?.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' | undefined,
-              postCreatedAt: post?.createdAt ?? undefined,
-              postExpiresAt: post?.expiresAt ?? undefined,
-            }).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/comments]: notify comment reply failed'));
-          }
-        } else if (post?.authorId && post.type !== 'STORY') {
-          // Top-level comment on a regular post/mood/status — notify the
-          // author with the typed subtitle. Pour une STORY, l'auteur est
-          // notifié par le bucket story_new_comment du fan-out ci-dessous
-          // (avant ce gate, il recevait DEUX notifications pour le même
-          // commentaire : post_comment + story_new_comment).
-          notifService.createPostCommentNotification({
-            actorId: authContext.registeredUser.id,
-            postId,
-            postAuthorId: post.authorId,
-            commentId: comment.id,
-            commentPreview: parsed.data.content,
-            postType: post.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL',
-            postPreview: post.content?.slice(0, 80),
-            postCreatedAt: post.createdAt ?? undefined,
-            postExpiresAt: post.expiresAt ?? undefined,
-          }).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/comments]: notify post comment failed'));
-        }
-      }
 
-      // Mention persistence + notifications (Phase 2B)
-      // Extract, resolve, persist CommentMentions, fire user_mentioned notifications.
-      // mentionedUserIds is also used to exclude mentioned users from the lower-priority
-      // story fan-out buckets (priority: user_mentioned > story_thread_reply > friend_story_comment).
+      // Mention persistence + notifications (Phase 2B) — resolved FIRST so the
+      // mentioned users can be excluded from the lower-priority recipient buckets
+      // (priority: user_mentioned > comment_reply > post_comment > story_new_comment
+      // > story_thread_reply > friend_story_comment). Sans cette résolution amont,
+      // répondre à un commentaire EN mentionnant son auteur lui envoyait DEUX
+      // notifications (user_mentioned + comment_reply) au lieu de la seule mention.
       let mentionedUserIds: string[] = [];
       if (parsed.data.content && notifService) {
         const mentionedUsernames = mentionService.extractMentions(parsed.data.content);
@@ -231,6 +190,52 @@ export function registerCommentRoutes(
               commentExcerpt: parsed.data.content?.slice(0, 100),
             }).catch(err => fastify.log.error(`comment mention notification failed: ${err}`));
           }
+        }
+      }
+
+      // Notify post author (or parent comment author for replies) — but SKIP a
+      // recipient already mentioned above: la mention (user_mentioned) prime sur
+      // comment_reply / post_comment pour un même destinataire.
+      if (notifService) {
+        if (parsed.data.parentId) {
+          // Reply to a comment — notify the parent comment author. Le contenu
+          // du commentaire parent voyage en subtitle (« En réponse à « … » »)
+          // pour que le destinataire sache À QUOI on lui répond.
+          const parentComment = await fastify.prisma?.postComment?.findUnique({
+            where: { id: parsed.data.parentId },
+            select: { authorId: true, content: true },
+          });
+          if (parentComment?.authorId && !mentionedUserIds.includes(parentComment.authorId)) {
+            notifService.createCommentReplyNotification({
+              actorId: authContext.registeredUser.id,
+              postId,
+              commentAuthorId: parentComment.authorId,
+              commentId: comment.id,
+              replyPreview: parsed.data.content,
+              parentCommentPreview: parentComment.content?.slice(0, 80),
+              // Précise « sur votre story/réel/… » + date côté client (du JJ/MM/AAAA HH:MM).
+              postType: post?.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' | undefined,
+              postCreatedAt: post?.createdAt ?? undefined,
+              postExpiresAt: post?.expiresAt ?? undefined,
+            }).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/comments]: notify comment reply failed'));
+          }
+        } else if (post?.authorId && post.type !== 'STORY' && !mentionedUserIds.includes(post.authorId)) {
+          // Top-level comment on a regular post/mood/status — notify the
+          // author with the typed subtitle. Pour une STORY, l'auteur est
+          // notifié par le bucket story_new_comment du fan-out ci-dessous
+          // (avant ce gate, il recevait DEUX notifications pour le même
+          // commentaire : post_comment + story_new_comment).
+          notifService.createPostCommentNotification({
+            actorId: authContext.registeredUser.id,
+            postId,
+            postAuthorId: post.authorId,
+            commentId: comment.id,
+            commentPreview: parsed.data.content,
+            postType: post.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL',
+            postPreview: post.content?.slice(0, 80),
+            postCreatedAt: post.createdAt ?? undefined,
+            postExpiresAt: post.expiresAt ?? undefined,
+          }).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/comments]: notify post comment failed'));
         }
       }
 
