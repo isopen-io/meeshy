@@ -103,86 +103,21 @@ export class AuthHandler {
       }
       const validated = schemaValidation.data;
 
-      const { userId, sessionToken, language } = validated;
+      const { sessionToken, language, token } = validated;
 
-      if (!userId && !sessionToken) {
-        socket.emit(SERVER_EVENTS.ERROR, { message: 'userId or sessionToken required' });
+      if (!token && !sessionToken) {
+        socket.emit(SERVER_EVENTS.ERROR, { message: 'token or sessionToken required' });
         return;
       }
 
-      if (sessionToken && !userId) {
+      if (sessionToken && !token) {
         await this._authenticateAnonymousUser(socket, sessionToken, language);
         return;
       }
 
-      if (userId) {
-        const user = await this.prisma.user.findUnique({
-          where: { id: userId },
-          select: {
-            id: true,
-            systemLanguage: true,
-            regionalLanguage: true,
-            customDestinationLanguage: true,
-            deviceLocale: true,
-          }
-        });
-
-        if (!user) {
-          socket.emit(SERVER_EVENTS.ERROR, { message: 'User not found' });
-          return;
-        }
-
-        const resolvedLanguages = resolveUserLanguagesOrdered(user, {
-          deviceLocale: user.deviceLocale ?? undefined,
-        });
-
-        const socketUser: SocketUser = {
-          id: user.id,
-          socketId: socket.id,
-          isAnonymous: false,
-          language: language || user.systemLanguage || 'en',
-          resolvedLanguages,
-          userId: user.id
-        };
-
-        this._registerUser(user.id, socketUser, socket);
-
-        try {
-          if (user.id && typeof user.id === 'string') {
-            await Promise.all([
-              socket.join(user.id),
-              socket.join(ROOMS.user(user.id)),
-              socket.join(ROOMS.feed(user.id)),
-            ]);
-          }
-        } catch (error) {
-          logger.error('failed to join personal rooms', { userId: user.id, error });
-        }
-
-        this.statusService.markConnected(user.id, false);
-        await this.maintenanceService.updateUserOnlineStatus(user.id, true, true);
-        await this._joinUserConversations(socket, user.id, false);
-
-        try {
-          await socket.join('conversation:any');
-        } catch (error) {
-          logger.debug('failed to join conversation:any room (manual auth)', { userId: user.id, error });
-        }
-
-        socket.emit(SERVER_EVENTS.AUTHENTICATED, {
-          success: true,
-          user: { id: user.id, language: socketUser.language, isAnonymous: false },
-          version: process.env.APP_VERSION || '1.1.0'
-        });
-
-        // Snapshot de présence: liste les contacts (participants des conversations
-        // partagées) actuellement online pour que le client seed son store sans attendre
-        // qu'un changement d'état arrive. Best-effort, on swallow les erreurs.
-        if (this.emitPresenceSnapshot) {
-          this.emitPresenceSnapshot(socket, user.id, false).catch(error => {
-            logger.error('failed to emit presence snapshot', { userId: user.id, error });
-          });
-        }
+      if (token) {
+        await this._authenticateJWTUser(socket, token);
+        return;
       }
     } catch (error) {
       if (error instanceof jwt.TokenExpiredError) {
@@ -241,7 +176,6 @@ export class AuthHandler {
     try {
       if (user.id && typeof user.id === 'string') {
         await Promise.all([
-          socket.join(user.id),
           socket.join(ROOMS.user(user.id)),
           socket.join(ROOMS.feed(user.id)),
         ]);
