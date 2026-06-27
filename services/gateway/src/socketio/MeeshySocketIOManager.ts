@@ -810,6 +810,7 @@ export class MeeshySocketIOManager {
         const disconnectedUserId = this.socketToUser.get(socket.id);
         if (disconnectedUserId) {
           this.statusHandler.invalidateIdentityCache(disconnectedUserId);
+          this.statusHandler.clearTypingThrottle(disconnectedUserId);
           // Invalider le snapshot de présence pour forcer un recalcul à la prochaine connexion
           this.presenceSnapshotCache.delete(disconnectedUserId);
           // Nettoyage du rate limiter in-memory (keyed by userId — purge si dernier socket)
