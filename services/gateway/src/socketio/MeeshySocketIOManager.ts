@@ -796,6 +796,16 @@ export class MeeshySocketIOManager {
         try { await this.locationHandler.handleLiveLocationStop(socket, data); } catch (error) { logger.error('[LOCATION_LIVE_STOP] Error:', error); }
       });
 
+      socket.on('disconnecting', (_reason: string) => {
+        const disconnectingUserId = this.socketToUser.get(socket.id);
+        if (disconnectingUserId) {
+          this.statusHandler.handleSocketDisconnecting(socket.id, (room, event, data) => {
+            // event is always SERVER_EVENTS.TYPING_STOP — cast bypasses union exhaustiveness check
+            this.io.to(room).emit(event as keyof ServerToClientEvents, data as any);
+          });
+        }
+      });
+
       socket.on('disconnect', (reason: string) => {
         logger.debug('socket disconnect', { socketId: socket.id, reason });
         const disconnectedUserId = this.socketToUser.get(socket.id);

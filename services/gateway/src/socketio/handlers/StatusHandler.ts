@@ -31,6 +31,8 @@ const IDENTITY_CACHE_TTL_MS = 60_000;
 
 type CachedIdentity = { username: string; displayName: string; expiresAt: number };
 
+type ActiveTyper = { conversationId: string; userId: string; username: string; displayName: string };
+
 export class StatusHandler {
   private prisma: PrismaClient;
   private statusService: StatusService;
@@ -39,6 +41,7 @@ export class StatusHandler {
   private socketToUser: Map<string, string>;
   private identityCache = new Map<string, CachedIdentity>();
   private typingThrottleMap = new Map<string, number>();
+  private activeTypers = new Map<string, Array<ActiveTyper>>();
   private static readonly TYPING_THROTTLE_MS = 2_000;
   private static readonly TYPING_THROTTLE_TTL_MS = 30_000;
   private static readonly TYPING_THROTTLE_CLEANUP_SIZE = 1_000;
@@ -77,6 +80,36 @@ export class StatusHandler {
     for (const key of this.typingThrottleMap.keys()) {
       if (key.startsWith(`${userId}:`)) this.typingThrottleMap.delete(key);
     }
+  }
+
+  handleSocketDisconnecting(socketId: string, broadcastFn: (room: string, event: string, data: unknown) => void): void {
+    const typers = this.activeTypers.get(socketId);
+    if (typers && typers.length > 0) {
+      for (const { conversationId, userId, username, displayName } of typers) {
+        const room = ROOMS.conversation(conversationId);
+        const typingEvent: TypingEvent = { userId, username, displayName, conversationId, isTyping: false };
+        broadcastFn(room, SERVER_EVENTS.TYPING_STOP, typingEvent);
+      }
+      this.activeTypers.delete(socketId);
+    }
+    const userIdOrToken = this.socketToUser.get(socketId);
+    if (userIdOrToken) {
+      this.clearTypingThrottle(userIdOrToken);
+    }
+  }
+
+  private _trackTyping(socketId: string, conversationId: string, userId: string, username: string, displayName: string): void {
+    const existing = this.activeTypers.get(socketId) ?? [];
+    const filtered = existing.filter(t => t.conversationId !== conversationId);
+    this.activeTypers.set(socketId, [...filtered, { conversationId, userId, username, displayName }]);
+  }
+
+  private _untrackTyping(socketId: string, conversationId: string): void {
+    const existing = this.activeTypers.get(socketId);
+    if (!existing) return;
+    const filtered = existing.filter(t => t.conversationId !== conversationId);
+    if (filtered.length === 0) this.activeTypers.delete(socketId);
+    else this.activeTypers.set(socketId, filtered);
   }
 
   /**
@@ -172,6 +205,7 @@ export class StatusHandler {
 
       const room = ROOMS.conversation(normalizedId);
       socket.to(room).emit(SERVER_EVENTS.TYPING_START, typingEvent);
+      this._trackTyping(socket.id, normalizedId, userId, identity.username, identity.displayName);
     } catch (error) {
       logger.error('typing:start failed', { error });
     }
@@ -225,6 +259,7 @@ export class StatusHandler {
 
       const room = ROOMS.conversation(normalizedId);
       socket.to(room).emit(SERVER_EVENTS.TYPING_STOP, typingEvent);
+      this._untrackTyping(socket.id, normalizedId);
     } catch (error) {
       logger.error('typing:stop failed', { error });
     }

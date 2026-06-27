@@ -183,23 +183,34 @@ export class PreferencesService {
    * Get encryption preferences for a user
    */
   async getEncryptionPreferences(userId: string): Promise<EncryptionPreferencesDTO> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        signalIdentityKeyPublic: true,
-        signalRegistrationId: true,
-        signalPreKeyBundleVersion: true,
-        lastKeyRotation: true
-      }
-    });
+    const [user, userPrefs] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          signalIdentityKeyPublic: true,
+          signalRegistrationId: true,
+          signalPreKeyBundleVersion: true,
+          lastKeyRotation: true
+        }
+      }),
+      this.prisma.userPreferences.findUnique({
+        where: { userId },
+        select: { application: true }
+      })
+    ]);
 
     if (!user) {
       throw new Error('User not found');
     }
 
-    // TODO: Load encryptionPreference from UserPreferences.application when implemented
+    const application = (userPrefs?.application ?? {}) as Record<string, unknown>;
+    const storedPref = application.encryptionPreference as EncryptionPreference | undefined;
+    const validPreferences: EncryptionPreference[] = ['disabled', 'optional', 'always'];
+    const encryptionPreference: EncryptionPreference =
+      storedPref && validPreferences.includes(storedPref) ? storedPref : 'optional';
+
     return {
-      encryptionPreference: 'optional' as EncryptionPreference,
+      encryptionPreference,
       hasSignalKeys: !!user.signalIdentityKeyPublic,
       signalRegistrationId: user.signalRegistrationId,
       signalPreKeyBundleVersion: user.signalPreKeyBundleVersion,
@@ -214,18 +225,27 @@ export class PreferencesService {
     userId: string,
     data: UpdateEncryptionPreferenceDTO
   ): Promise<{ encryptionPreference: EncryptionPreference }> {
-    // Validate preference
     const validPreferences: EncryptionPreference[] = ['disabled', 'optional', 'always'];
     if (!validPreferences.includes(data.encryptionPreference)) {
       throw new Error('Invalid encryption preference. Must be "disabled", "optional", or "always"');
     }
 
-    // TODO: Save encryptionPreference to UserPreferences.application when implemented
-    logger.debug('TODO: Save encryption preference to UserPreferences.application', { encryptionPreference: data.encryptionPreference, userId });
+    const existing = await this.prisma.userPreferences.findUnique({
+      where: { userId },
+      select: { application: true }
+    });
 
-    return {
-      encryptionPreference: data.encryptionPreference
-    };
+    const currentApplication = (existing?.application ?? {}) as Record<string, unknown>;
+    const updatedApplication = { ...currentApplication, encryptionPreference: data.encryptionPreference };
+
+    await this.prisma.userPreferences.upsert({
+      where: { userId },
+      create: { userId, application: updatedApplication as any },
+      update: { application: updatedApplication as any },
+      select: { id: true }
+    });
+
+    return { encryptionPreference: data.encryptionPreference };
   }
 
   // ============================================================================
