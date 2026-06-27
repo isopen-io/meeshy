@@ -677,7 +677,7 @@ describe('BubbleMessageNormalView', () => {
       expect(onEnterDeleteMode).toHaveBeenCalled();
     });
 
-    it.skip('devrait appeler onEnterReportMode au clic sur Report', () => {
+    it('devrait appeler onEnterReportMode au clic sur Report', () => {
       const onEnterReportMode = jest.fn();
       renderNormalView({
         message: createMockMessage({ senderId: 'other-user' }),

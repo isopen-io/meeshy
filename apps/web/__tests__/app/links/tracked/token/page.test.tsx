@@ -190,6 +190,7 @@ describe('TrackingLinkDetailsPage', () => {
         createdAt: '2024-01-15T10:00:00Z',
         lastClickedAt: '2024-01-20T15:30:00Z',
       },
+      confirmedClicks: 75,
       clicksByDate: {
         '2024-01-15': 10,
         '2024-01-16': 15,
@@ -307,7 +308,7 @@ describe('TrackingLinkDetailsPage', () => {
       render(<TrackingLinkDetailsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('https://meeshy.io/t/abc123')).toBeInTheDocument();
+        expect(screen.getAllByText('https://meeshy.io/t/abc123').length).toBeGreaterThanOrEqual(1);
       });
     });
 
@@ -323,10 +324,13 @@ describe('TrackingLinkDetailsPage', () => {
       render(<TrackingLinkDetailsPage />);
 
       await waitFor(() => {
-        const originalLink = screen.getByRole('link', { name: /example\.com/i });
-        expect(originalLink).toHaveAttribute('href', 'https://example.com/long-url');
-        expect(originalLink).toHaveAttribute('target', '_blank');
-        expect(originalLink).toHaveAttribute('rel', 'noopener noreferrer');
+        const originalLinks = screen.getAllByRole('link', { name: /example\.com/i });
+        expect(originalLinks.length).toBeGreaterThanOrEqual(1);
+        originalLinks.forEach((link) => {
+          expect(link).toHaveAttribute('href', 'https://example.com/long-url');
+          expect(link).toHaveAttribute('target', '_blank');
+          expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+        });
       });
     });
 
@@ -368,7 +372,7 @@ describe('TrackingLinkDetailsPage', () => {
       });
     });
 
-    it.skip('should calculate and display conversion rate', async () => {
+    it('should calculate and display conversion rate', async () => {
       render(<TrackingLinkDetailsPage />);
 
       await waitFor(() => {
@@ -523,35 +527,35 @@ describe('TrackingLinkDetailsPage', () => {
   });
 
   describe('Link Information Section', () => {
-    it.skip('should display link creation date', async () => {
+    it('should display link creation date', async () => {
       render(<TrackingLinkDetailsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('tracking.details.createdOn')).toBeInTheDocument();
+        expect(screen.getAllByText('tracking.details.createdOn').length).toBeGreaterThanOrEqual(1);
       });
     });
 
-    it.skip('should display token in info section', async () => {
+    it('should display token in info section', async () => {
       render(<TrackingLinkDetailsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('tracking.details.token')).toBeInTheDocument();
+        expect(screen.getAllByText('tracking.details.token').length).toBeGreaterThanOrEqual(1);
       });
     });
 
-    it.skip('should display short URL in info section', async () => {
+    it('should display short URL in info section', async () => {
       render(<TrackingLinkDetailsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('tracking.details.shortUrl')).toBeInTheDocument();
+        expect(screen.getAllByText('tracking.details.shortUrl').length).toBeGreaterThanOrEqual(1);
       });
     });
 
-    it.skip('should display original URL in info section', async () => {
+    it('should display original URL in info section', async () => {
       render(<TrackingLinkDetailsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('tracking.details.originalUrl')).toBeInTheDocument();
+        expect(screen.getAllByText('tracking.details.originalUrl').length).toBeGreaterThanOrEqual(1);
       });
     });
   });
@@ -566,7 +570,7 @@ describe('TrackingLinkDetailsPage', () => {
       });
     });
 
-    it.skip('should handle missing data gracefully', async () => {
+    it('should handle missing data gracefully', async () => {
       mockStats = {
         trackingLink: {
           id: 'link-123',
@@ -579,6 +583,7 @@ describe('TrackingLinkDetailsPage', () => {
           createdAt: '2024-01-15T10:00:00Z',
           lastClickedAt: null,
         },
+        confirmedClicks: 0,
         clicksByDate: {},
         clicksByCountry: {},
         clicksByDevice: {},
@@ -589,7 +594,8 @@ describe('TrackingLinkDetailsPage', () => {
       render(<TrackingLinkDetailsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('0')).toBeInTheDocument(); // totalClicks
+        // Multiple zeros appear (totalClicks=0, uniqueClicks=0, successRate=0%)
+        expect(screen.getAllByText('0').length).toBeGreaterThan(0);
       });
     });
 
@@ -641,22 +647,22 @@ describe('TrackingLinkDetailsPage', () => {
   });
 
   describe('Progress Bars', () => {
-    it.skip('should render progress bars with correct widths for country data', async () => {
+    it('should render progress bars with correct widths for country data', async () => {
       render(<TrackingLinkDetailsPage />);
 
       await waitFor(() => {
-        // The progress bars should be rendered based on the percentage
-        expect(screen.getByText('40')).toBeInTheDocument(); // United States clicks
-        expect(screen.getByText('25')).toBeInTheDocument(); // France clicks
+        // 40 appears in both country (US) and device (desktop) sections; 25 appears in country and referrers
+        expect(screen.getAllByText('40').length).toBeGreaterThanOrEqual(1); // United States clicks
+        expect(screen.getAllByText('25').length).toBeGreaterThanOrEqual(1); // France clicks
       });
     });
 
-    it.skip('should render progress bars for device data', async () => {
+    it('should render progress bars for device data', async () => {
       render(<TrackingLinkDetailsPage />);
 
       await waitFor(() => {
-        expect(screen.getByText('55')).toBeInTheDocument(); // mobile clicks
-        expect(screen.getByText('40')).toBeInTheDocument(); // desktop clicks
+        expect(screen.getByText('55')).toBeInTheDocument(); // mobile clicks (unique)
+        expect(screen.getAllByText('40').length).toBeGreaterThanOrEqual(1); // desktop clicks
       });
     });
   });

@@ -622,7 +622,10 @@ describe('AttachmentGallery', () => {
   });
 
   describe('No Images State', () => {
-    it.skip('displays no image message when no attachments', async () => {
+    it('displays no image message when no attachments', async () => {
+      const { AttachmentService } = require('@/services/attachmentService');
+      AttachmentService.getConversationAttachments.mockResolvedValue({ success: true, attachments: [] });
+
       render(<AttachmentGallery {...defaultProps} attachments={[]} />);
 
       await waitFor(() => {

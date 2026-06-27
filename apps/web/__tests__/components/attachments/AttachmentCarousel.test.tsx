@@ -223,23 +223,23 @@ describe('AttachmentCarousel', () => {
       });
     });
 
-    it.skip('renders fullscreen button for video', async () => {
+    it('renders fullscreen button for video', async () => {
       const files = [createMockFile('video.mp4', 'video/mp4')];
 
       render(<AttachmentCarousel files={files} onRemove={mockOnRemove} />);
 
       await waitFor(() => {
-        expect(screen.getByText('Plein ecran')).toBeInTheDocument();
+        expect(screen.getByText('Plein écran')).toBeInTheDocument();
       });
     });
 
-    it.skip('opens video lightbox on fullscreen button click', async () => {
+    it('opens video lightbox on fullscreen button click', async () => {
       const files = [createMockFile('video.mp4', 'video/mp4')];
 
       render(<AttachmentCarousel files={files} onRemove={mockOnRemove} />);
 
       await waitFor(() => {
-        fireEvent.click(screen.getByText('Plein ecran'));
+        fireEvent.click(screen.getByText('Plein écran'));
       });
 
       await waitFor(() => {

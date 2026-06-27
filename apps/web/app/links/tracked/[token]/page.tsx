@@ -437,6 +437,55 @@ export default function TrackingLinkDetailsPage() {
             </Card>
           )}
 
+          {/* Link Information Section */}
+          <Card className="border-2 bg-white dark:bg-gray-950">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Link2 className="h-5 w-5" />
+                {t('tracking.details.linkInformation')}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-1">
+                    {t('tracking.details.token')}
+                  </p>
+                  <p className="text-sm font-mono bg-muted px-2 py-1 rounded">{trackingLink.token}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-1">
+                    {t('tracking.details.createdOn')}
+                  </p>
+                  <p className="text-sm">
+                    {trackingLink.createdAt
+                      ? new Date(trackingLink.createdAt).toLocaleDateString(locale)
+                      : '—'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-1">
+                    {t('tracking.details.shortUrl')}
+                  </p>
+                  <p className="text-sm font-mono break-all">{trackingLink.shortUrl}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-1">
+                    {t('tracking.details.originalUrl')}
+                  </p>
+                  <a
+                    href={trackingLink.originalUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-blue-600 dark:text-blue-400 hover:underline break-all"
+                  >
+                    {trackingLink.originalUrl}
+                  </a>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Graphes et données détaillées */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
