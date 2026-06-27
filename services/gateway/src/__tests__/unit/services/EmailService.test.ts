@@ -656,6 +656,51 @@ describe('EmailService', () => {
   });
 
   // ==============================================
+  // NOTIFICATION-TYPE LABELLING (regression: a social notification must
+  // never be mislabelled as a "Nouvelle connexion" security alert)
+  // ==============================================
+
+  describe('sendSecurityAlertEmail — alert type labelling', () => {
+    const sendAlert = async (alertType: string, details: string) => {
+      const { EmailService } = await getEmailServiceWithEnv({ BREVO_API_KEY: 'test-brevo-key' });
+      const service = new EmailService();
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'msg-123' }));
+      await service.sendSecurityAlertEmail({
+        to: 'user@example.com',
+        name: 'jcnm',
+        language: 'fr',
+        alertType,
+        details,
+      });
+      return mockAxiosPost.mock.calls[0][1] as { subject: string; htmlContent: string };
+    };
+
+    it('labels a mention notification as a mention, not a login', async () => {
+      const payload = await sendAlert('user_mentioned', '@jcnm maintenant tu as égalisé');
+      expect(payload.subject).not.toContain('Nouvelle connexion');
+      expect(payload.subject.toLowerCase()).toContain('mention');
+      expect(payload.htmlContent).toContain('@jcnm maintenant tu as égalisé');
+      expect(payload.htmlContent).not.toContain('Nouvelle connexion');
+    });
+
+    it('labels a missed-call notification as a call, not a login', async () => {
+      const payload = await sendAlert('missed_call', 'Appel manqué de Alice');
+      expect(payload.subject).not.toContain('Nouvelle connexion');
+      expect(payload.subject.toLowerCase()).toContain('appel');
+    });
+
+    it('still labels a genuine new-device login as such', async () => {
+      const payload = await sendAlert('login_new_device', 'iPhone, Paris');
+      expect(payload.subject).toContain('Nouvelle connexion');
+    });
+
+    it('falls back to a neutral notification label for unknown types (never a login)', async () => {
+      const payload = await sendAlert('some_future_type', 'whatever');
+      expect(payload.subject).not.toContain('Nouvelle connexion');
+    });
+  });
+
+  // ==============================================
   // SENDGRID PROVIDER TESTS
   // ==============================================
 

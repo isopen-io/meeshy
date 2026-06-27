@@ -992,6 +992,9 @@ export class EmailService {
         two_factor_enabled: { label: 'Double authentification activee', description: 'La verification en deux etapes a ete activee sur votre compte.', icon: '🛡️', isInfo: true },
         two_factor_disabled: { label: 'Double authentification desactivee', description: 'La verification en deux etapes a ete desactivee sur votre compte.', icon: '⚠️', isInfo: false },
         suspicious_activity: { label: 'Activite suspecte', description: 'Nous avons detecte une activite inhabituelle sur votre compte.', icon: '🚨', isInfo: false },
+        user_mentioned: { label: 'Nouvelle mention', description: 'Vous avez ete mentionne.', icon: '💬', isInfo: true },
+        missed_call: { label: 'Appel manque', description: 'Vous avez un appel manque.', icon: '📞', isInfo: true },
+        generic_notification: { label: 'Nouvelle notification', description: 'Vous avez une nouvelle notification.', icon: '🔔', isInfo: true },
       },
       en: {
         login_new_device: { label: 'New login detected', description: 'A login was made from a new device or browser.', icon: '🔐', isInfo: true },
@@ -999,10 +1002,16 @@ export class EmailService {
         two_factor_enabled: { label: 'Two-factor authentication enabled', description: 'Two-step verification has been enabled on your account.', icon: '🛡️', isInfo: true },
         two_factor_disabled: { label: 'Two-factor authentication disabled', description: 'Two-step verification has been disabled on your account.', icon: '⚠️', isInfo: false },
         suspicious_activity: { label: 'Suspicious activity', description: 'We detected unusual activity on your account.', icon: '🚨', isInfo: false },
+        user_mentioned: { label: 'New mention', description: 'You were mentioned.', icon: '💬', isInfo: true },
+        missed_call: { label: 'Missed call', description: 'You have a missed call.', icon: '📞', isInfo: true },
+        generic_notification: { label: 'New notification', description: 'You have a new notification.', icon: '🔔', isInfo: true },
       },
     };
     const lang = labels[language] ? language : 'fr';
-    return labels[lang][alertType] ?? labels[lang]['login_new_device'];
+    // Unknown types fall back to a neutral notification label — NEVER to
+    // login_new_device, which would mislabel any social notification (a
+    // mention, a missed call, …) as a "new login detected" security alert.
+    return labels[lang][alertType] ?? labels[lang]['generic_notification'];
   }
 
   async sendSecurityAlertEmail(data: SecurityAlertEmailData): Promise<EmailResult> {
