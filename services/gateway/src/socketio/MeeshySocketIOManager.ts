@@ -896,6 +896,23 @@ export class MeeshySocketIOManager {
             return;
           }
 
+          // Verify requesting user is a participant of the message's conversation
+          const connectedUser = this.connectedUsers.get(userId);
+          const membershipCheck = connectedUser?.isAnonymous
+            ? await this.prisma.participant.findFirst({
+                where: { id: connectedUser.participantId, conversationId: message.conversationId, isActive: true },
+                select: { id: true },
+              })
+            : await this.prisma.participant.findFirst({
+                where: { userId, conversationId: message.conversationId, isActive: true },
+                select: { id: true },
+              });
+
+          if (!membershipCheck) {
+            socket.emit(SERVER_EVENTS.ERROR, { message: 'Access denied' });
+            return;
+          }
+
           await this.translationService.handleNewMessage({
             id: message.id,
             conversationId: message.conversationId,
@@ -1055,20 +1072,7 @@ export class MeeshySocketIOManager {
         this.stats.translations_sent += clientCount;
         
       } else {
-        logger.warn(`⚠️ [SocketIOManager] Aucune conversation trouvée pour le message ${result.messageId}`);
-        
-        // Fallback UNIQUEMENT si pas de room: Envoi direct aux utilisateurs connectés pour cette langue
-        const targetUsers = this._findUsersForLanguage(targetLanguage);
-        let directSendCount = 0;
-        
-        for (const user of targetUsers) {
-          const userSocket = this.io.sockets.sockets.get(user.socketId);
-          if (userSocket) {
-            userSocket.emit(SERVER_EVENTS.MESSAGE_TRANSLATION, translationData);
-            directSendCount++;
-          }
-        }
-        
+        logger.warn(`⚠️ [SocketIOManager] No conversation found for message ${result.messageId} — translation dropped (no room to broadcast to)`);
       }
 
     } catch (error) {
@@ -1685,8 +1689,7 @@ export class MeeshySocketIOManager {
           const participants = allParticipants.filter((p) => p.id !== senderId);
 
           // Calculer le unreadCount pour tous les participants en batch (1 query au lieu de N)
-          const { MessageReadStatusService } = await import('../services/MessageReadStatusService.js');
-          const readStatusService = new MessageReadStatusService(this.prisma);
+          const readStatusService = this.readStatusService;
 
           const unreadCountMap = await readStatusService.getUnreadCountsForParticipants(participants, normalizedId, senderId);
 
