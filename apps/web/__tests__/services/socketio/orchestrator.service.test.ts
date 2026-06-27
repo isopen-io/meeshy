@@ -1723,5 +1723,31 @@ describe('SocketIOOrchestrator', () => {
         expect.objectContaining({ error })
       );
     });
+
+    it('onSessionRevoked callback dispatches meeshy:session-revoked DOM event and logs warn', () => {
+      const orchestrator = SocketIOOrchestrator.getInstance();
+      const socket = makeConnectedSocket();
+      mockConnGetSocket.mockReturnValue(socket);
+
+      let capturedOnSessionRevoked: (() => void) | null = null;
+      mockConnSetupConnectionListeners.mockImplementation(
+        (_onAuth: unknown, _onDisconnect: unknown, _onError: unknown, onRevoked: () => void) => {
+          capturedOnSessionRevoked = onRevoked;
+        }
+      );
+
+      orchestrator.initializeConnection();
+
+      const dispatchSpy = jest.spyOn(window, 'dispatchEvent');
+      expect(() => capturedOnSessionRevoked?.()).not.toThrow();
+
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'meeshy:session-revoked' })
+      );
+      expect(mockLoggerWarn).toHaveBeenCalledWith(
+        '[SocketIOOrchestrator]',
+        expect.stringContaining('Session revoked by server')
+      );
+    });
   });
 });

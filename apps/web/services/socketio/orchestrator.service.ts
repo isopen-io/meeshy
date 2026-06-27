@@ -123,7 +123,8 @@ export class SocketIOOrchestrator {
     this.connectionService.setupConnectionListeners(
       () => this.onAuthenticated(),
       (reason) => this.onDisconnected(reason),
-      (error) => this.onError(error)
+      (error) => this.onError(error),
+      () => this.onSessionRevoked()
     );
 
     // Setup service listeners
@@ -239,6 +240,18 @@ export class SocketIOOrchestrator {
    */
   private onError(error: Error): void {
     logger.error('[SocketIOOrchestrator]', 'Error', { error });
+  }
+
+  /**
+   * Handle session revoked event — server explicitly invalidated this session.
+   * Dispatches a DOM event so the React layer can trigger logout without a
+   * circular import between the socket service and the auth store.
+   */
+  private onSessionRevoked(): void {
+    logger.warn('[SocketIOOrchestrator]', 'Session revoked by server — dispatching meeshy:session-revoked');
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('meeshy:session-revoked'));
+    }
   }
 
   /**
@@ -617,6 +630,10 @@ export class SocketIOOrchestrator {
     listener: (data: import('@meeshy/shared/types/socketio-events').UserPreferencesUpdatedEventData) => void,
   ): UnsubscribeFn {
     return this.preferencesSyncService.onPreferencesUpdated(listener);
+  }
+
+  onCategoryChanged(listener: () => void): UnsubscribeFn {
+    return this.preferencesSyncService.onCategoryChanged(listener);
   }
 
   onParticipantRoleUpdated(listener: (data: { conversationId: string; userId: string; newRole: string }) => void): UnsubscribeFn {

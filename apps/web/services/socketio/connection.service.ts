@@ -38,6 +38,7 @@ export class ConnectionService {
     onAuthenticated?: (user: User) => void;
     onDisconnected?: (reason: string) => void;
     onError?: (error: any) => void;
+    onSessionRevoked?: () => void;
   } | null = null;
 
   constructor() {
@@ -157,11 +158,11 @@ export class ConnectionService {
     this.autoJoinCallback = callback;
   }
 
-  setupConnectionListeners(onAuthenticated?: (user: User) => void, onDisconnected?: (reason: string) => void, onError?: (error: any) => void): void {
+  setupConnectionListeners(onAuthenticated?: (user: User) => void, onDisconnected?: (reason: string) => void, onError?: (error: any) => void, onSessionRevoked?: () => void): void {
     const socket = this.state.socket;
     if (!socket) return;
 
-    this.listenerCallbacks = { onAuthenticated, onDisconnected, onError };
+    this.listenerCallbacks = { onAuthenticated, onDisconnected, onError, onSessionRevoked };
 
     socket.on('connect', () => {
       this.state.isConnected = true;
@@ -205,6 +206,11 @@ export class ConnectionService {
       }).catch((err) => {
         logger.warn('[Socket]', 'token refresh failed after auth:token-expired', { err });
       });
+    });
+
+    socket.on(SERVER_EVENTS.AUTH_SESSION_REVOKED as any, () => {
+      logger.warn('[Socket]', 'auth session revoked — forcing logout');
+      if (this.listenerCallbacks?.onSessionRevoked) this.listenerCallbacks.onSessionRevoked();
     });
   }
 
