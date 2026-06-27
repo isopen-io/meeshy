@@ -301,3 +301,23 @@ Append-only log of gotchas and decisions that save time next run.
   `List<StoryPublishFailures.Item>`, so `StoryPublishFailures` had to be public
   (matches `StoryCountDots`). "Function 'public' exposes its 'internal' parameter
   type" is the compiler telling you a public surface leaks an internal type.
+
+## Decisions (cont.)
+- **A module pins `build-tools;34.0.0`.** The env recipe installs `35.0.0` only;
+  the first `:feature:stories:testDebugUnitTest` failed with "Failed to install
+  build-tools;34.0.0" (Gradle's auto-install can't reach the SDK repo through the
+  proxy). Fix once per fresh container: `sdkmanager "build-tools;34.0.0"`. Tracked:
+  align the pinned build-tools across modules (or add 34.0.0 to the ROUTINE recipe).
+- **Photo/video picker = `ActivityResultContracts.PickVisualMedia`, not legacy
+  `GET_CONTENT`.** Needs `implementation(libs.androidx.activity.compose)` on the
+  feature module for `rememberLauncherForActivityResult`. Keep the VM testable by
+  passing it a clean `MediaUploadItem` (bytes already read) — the `ContentResolver`
+  read (bytes/MIME/`OpenableColumns.DISPLAY_NAME`) stays in the Composable on
+  `Dispatchers.IO`; filename/MIME defaulting lives downstream in `MediaUpload`, so
+  the reader is a thin, exempt glue function with no branch logic worth a JVM test.
+- **Story media product rule lives in the VM, not the SDK.** `onMediaPicked`
+  encodes "when to upload / append vs replace / gate publish while uploading / how
+  to surface each failure" → `:feature:stories`. `MediaRepository.upload` +
+  `MediaUpload` part-builder + wire→domain mapper stay opaque building blocks in
+  `:sdk-core`/`:core:*`. Draft `canPublish` admits **text OR media** so a caption-
+  less image story is valid (iOS-surpassing — iOS has no story media composer).
