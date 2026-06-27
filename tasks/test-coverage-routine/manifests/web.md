@@ -46,7 +46,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `apps/web/app/admin/broadcasts/new/page.tsx`
 - [~] `apps/web/app/admin/broadcasts/page.tsx`
 - [~] `apps/web/app/admin/communities/page.tsx`
-- [ ] `apps/web/app/admin/debug.tsx`
+- [x] `apps/web/app/admin/debug.tsx`
 - [~] `apps/web/app/admin/invitations/page.tsx`
 - [~] `apps/web/app/admin/languages/page.tsx`
 - [~] `apps/web/app/admin/loading.tsx`
@@ -246,9 +246,9 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 
 ## components/admin  (38/62 have a test)
 
-- [ ] `apps/web/components/admin/AdminLayout.tsx`
+- [x] `apps/web/components/admin/AdminLayout.tsx`
 - [x] `apps/web/components/admin/Charts.tsx`
-- [ ] `apps/web/components/admin/ChartsImpl.tsx`
+- [x] `apps/web/components/admin/ChartsImpl.tsx`
 - [x] `apps/web/components/admin/ConfirmDialog.tsx`
 - [x] `apps/web/components/admin/TableSkeleton.tsx`
 - [x] `apps/web/components/admin/agent/AgentArchetypesTab.tsx`

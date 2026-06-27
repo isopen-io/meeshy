@@ -2049,3 +2049,17 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Reviewer: PASS (rounds: 2)
 - Notes: Production bugs in GET /admin/translations fixed by prior commit `bdfe0343` unblocked this slice. Full gateway suite: 291/291 suites pass, 8947 tests pass. Threshold ratcheted lines:65→67, branches:61→63, statements:65→67, functions:65→67.
 - Commit: eb1325e4 (PR #969 — ⚠ awaiting human review, do NOT auto-merge: production bug fix in diff)
+
+## 2026-06-27T00:00Z — P2 Admin × web (AdminLayout.tsx, ChartsImpl.tsx, debug.tsx)
+- Targeted: `apps/web/components/admin/AdminLayout.tsx`, `apps/web/components/admin/ChartsImpl.tsx`, `apps/web/app/admin/debug.tsx`
+- Result: ☑ done
+- Coverage:
+  - AdminLayout.tsx  line 98.59%  branch 98.79% (≥92% both)
+  - ChartsImpl.tsx   line 100%    branch 100%   (already covered — confirmed)
+  - debug.tsx        line 100%    branch 92%    (≥92% both; unreachable ternary branch on line 65 is genuinely unreachable)
+- Tests added: 32 (6 new in `__tests__/components/admin/AdminLayout.test.tsx`; 26 new in `__tests__/admin/debug.test.tsx`)
+  - AdminLayout: hover/focus preload handlers (mouseEnter+focus on back-to-dashboard + nav items); collapsed-sidebar aria-label assertions
+  - debug.tsx: loading state (spinner + animate-spin); success + API user; no token (fetch not called, role=UNKNOWN); API 401; API success=false; fetch throws (title rendered, no cards); back button navigation; null getCurrentUser; null permissions field
+- Reviewer: PASS (rounds: 1)
+- Notes: ChartsImpl.tsx had pre-existing 100% coverage — confirmed. AdminLayout.tsx and debug.tsx were the substantive additions. Global web thresholds (42%/34%) not ratcheted — 3-file addition in a 1091-file codebase shifts global <0.1pp; will ratchet once a later phase measures the full suite.
+- Commit: (this commit)
