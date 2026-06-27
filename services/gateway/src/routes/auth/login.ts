@@ -48,19 +48,18 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       body: loginRequestSchema,
       response: {
         200: {
-          description: 'Successful login - returns user data, tokens, and session info',
+          description: 'Successful login - returns user data, tokens, and session info (or 2FA challenge)',
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
             data: {
               type: 'object',
-              properties: {
-                user: userSchema,
-                token: { type: 'string', description: 'JWT access token for API authentication' },
-                sessionToken: { type: 'string', description: 'Session token for device management (store securely)' },
-                session: sessionMinimalSchema,
-                expiresIn: { type: 'number', description: 'Token expiration time in seconds', example: 86400 }
-              }
+              // additionalProperties: true is required so that the 2FA branch
+              // (which sends requires2FA/twoFactorToken instead of token/session)
+              // is serialized correctly. Without it, fast-json-stringify strips
+              // any property not listed under `properties` and the client never
+              // receives `requires2FA: true`, silently breaking the 2FA flow.
+              additionalProperties: true
             }
           }
         },
@@ -195,16 +194,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                user: userSchema,
-                token: { type: 'string', description: 'JWT access token' },
-                sessionToken: { type: 'string', description: 'Session token' },
-                session: sessionMinimalSchema,
-                expiresIn: { type: 'number', example: 86400 }
-              }
-            }
+            data: { type: 'object', additionalProperties: true }
           }
         },
         400: errorResponseSchema,
