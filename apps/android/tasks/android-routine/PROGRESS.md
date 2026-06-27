@@ -29,27 +29,30 @@ Latest loop (`story-composer-media-cap`) enforces the iOS **≤10 media cap**: t
 pure draft gains `MAX_MEDIA`/`isWithinMediaLimit`/`remainingMediaSlots`/`isMediaFull`
 (and `canPublish` now also requires the media limit), `onMediaPicked` truncates a
 pick to the free slots and is inert-with-a-warning once full, and the composer's
-Add button disables + shows an `n/10` count at the cap.
+Add button disables + shows an `n/10` count at the cap. Latest loop
+(`story-composer-multipick`) lets a user grab **several media in one go**: a pure
+`StoryMediaPicker.modeFor(remainingSlots)` routes the Add button to the single- or
+multi-item system picker (`PickMultipleVisualMedia(MAX_MEDIA)`), falling back to
+the single picker at exactly one free slot so the multi-picker's `maxItems > 1`
+requirement never throws, and launching nothing when full. The VM's existing
+free-slot truncation still caps the batch, so the ≤10 invariant holds end-to-end.
 
 ## Next slice (pick one for the next run)
 
 Ordered by value within the Stories area:
-1. **Multi-pick the picker** — now that the ≤10 cap is enforced
-   (`story-composer-media-cap` ✅), switch the composer's `PickVisualMedia`
-   single-pick to `PickMultipleVisualMedia(maxItems = draft.remainingMediaSlots)`
-   so a user can grab several media in one go (the VM already accepts a
-   `List<MediaUploadItem>`, uploads the batch, and truncates to the free slots).
-   Mostly Compose/IO glue on top of the existing VM contract.
-2. **Multi-slide canvas** — begin the real multi-slide composer (add/remove/
+1. **Multi-slide canvas** — begin the real multi-slide composer (add/remove/
    reorder slides, 9:16 canvas). Much larger; see `feature-parity.md`
    §"Stories composer". A smaller intermediate slice: a **durable upload-then-
    publish outbox chain** (upload as its own lane the publish `dependsOn`) so a
    media publish survives process death *before* the upload completes — the SOTA
    follow-up flagged on `story-composer-media`.
-3. After Stories richness is sufficient, advance to the **Calls** area
+2. After Stories richness is sufficient, advance to the **Calls** area
    (`feature-parity.md` §"Calls").
 
-(`story-composer-media-cap` ✅ shipped 2026-06-27 — this run; enforced the iOS
+(`story-composer-multipick` ✅ shipped 2026-06-27 — this run; the Add button now
+routes to the multi-item system picker, with a pure single/multi/none decision so
+the multi-picker's `maxItems > 1` requirement never throws. See run log.)
+(`story-composer-media-cap` ✅ shipped 2026-06-27 — see run log; enforced the iOS
 ≤10 media cap end-to-end. See run log.)
 (`story-composer-media` ✅ shipped 2026-06-27 — PR #979 squash-merged this run
 after confirming the sole red CI job (`Test gateway`) is a pre-existing
@@ -74,6 +77,42 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-27 — slice `story-composer-multipick` ✅
+- **Branch:** `claude/apps/android/story-composer-multipick` (off `origin/main` @ `2d229df4`).
+- **Housekeeping (step 0):** no open `claude/apps/android/*` PR from a prior run
+  (`search_pull_requests head:claude/apps/android` → 0). The one open PR (#980) is a
+  `shared` types-coverage PR by a teammate — outside Android scope, left untouched.
+  `main` was fresh; branched directly.
+- **What:** lets the composer grab **several media in one pick**, while keeping the
+  iOS ≤10 cap. Closes the "multi-pick the picker" follow-up flagged on
+  `story-composer-media`/`-media-cap`.
+- **Added (production, `apps/android` only):**
+  - `StoryMediaPickMode` (pure enum `None`/`Single`/`Multiple`) + `StoryMediaPicker.modeFor(remainingSlots)`
+    — routes by free slots: `<= 0` → `None` (don't launch), `== 1` → `Single`,
+    `>= 2` → `Multiple`. Encodes the crash-avoiding rule that Android's
+    `PickMultipleVisualMedia(maxItems)` **throws** when `maxItems <= 1`.
+  - `StoryComposerScreen` (exempt glue) — now holds two launchers (`PickVisualMedia`
+    single + `PickMultipleVisualMedia(MAX_MEDIA)` multi); a shared `dispatchPicked`
+    reads every picked uri off-main into `MediaUploadItem`s and forwards the batch to
+    the existing `onMediaPicked` (which already truncates to free slots). The Add
+    button's `onClick` switches on `StoryMediaPicker.modeFor(...)`.
+- **Tests (+8, red→green):** `StoryMediaPickerTest` — `modeFor` 0/None, negative/None,
+  1/Single, 2/Multiple, `MAX_MEDIA`/Multiple; plus draft-derived: empty draft → Multiple,
+  one-slot-left draft → Single, full draft → None. All three `when` arms + both
+  boundaries (0→1, 1→2) hit.
+- **Edge cases covered:** empty/full collections (0 and 10 media); boundary at the
+  single-slot fallback (1 vs 2); defensive negative slot count → None. The
+  per-launch quantity cap is unchanged (VM truncation, already tested in
+  `StoryComposerViewModelTest`).
+- **Verify:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL in 6m14s**
+  (full `assembleDebug` + all module JVM unit tests; 836 tasks).
+  `StoryMediaPickerTest` 8/8 green (`TEST-…StoryMediaPickerTest.xml`:
+  tests=8 failures=0 errors=0).
+- **Reviewer verdict:** PASS — diff is `apps/android` only (3 files: 1 pure prod, 1
+  glue screen, 1 test); behavioural tests through the public `modeFor` API, no
+  tautologies; SDK purity respected (pure product rule lives in `:feature:stories`,
+  not the SDK); no coverage floor touched.
 
 ### 2026-06-27 — slice `story-composer-media-cap` ✅
 - **Branch:** `claude/apps/android/story-composer-media-cap`

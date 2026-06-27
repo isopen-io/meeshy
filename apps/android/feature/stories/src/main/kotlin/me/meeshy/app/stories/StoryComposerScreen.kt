@@ -60,10 +60,12 @@ import me.meeshy.sdk.model.UploadedMedia
 /**
  * Story composer screen — the publish surface reached from the tray's "add story"
  * affordance. Keeps to glue: it renders [StoryComposerUiState] and forwards
- * intents to [StoryComposerViewModel]. The system photo/video picker
- * ([ActivityResultContracts.PickVisualMedia]) reads the chosen file off the main
- * thread, hands the bytes to the ViewModel for upload, and the returned media
- * ride into the publish through the existing durable-outbox flow. Publishing is
+ * intents to [StoryComposerViewModel]. The system photo/video picker reads the
+ * chosen files off the main thread, hands the bytes to the ViewModel for upload,
+ * and the returned media ride into the publish through the existing durable-outbox
+ * flow. [StoryMediaPicker] routes to the single- or multi-item contract by the
+ * free slots left so a single remaining slot never trips the multi-picker's
+ * `maxItems > 1` requirement. Publishing is
  * optimistic — the screen dismisses on the one-shot `published` signal while the
  * outbox delivers in the background.
  */
@@ -84,18 +86,25 @@ fun StoryComposerScreen(
             .collectLatest { onClose() }
     }
 
-    val pickMedia = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickVisualMedia(),
-    ) { uri: Uri? ->
-        if (uri != null) {
-            scope.launch {
-                val item = withContext(Dispatchers.IO) {
-                    context.contentResolver.readMediaUploadItem(uri)
-                }
-                if (item != null) viewModel.onMediaPicked(listOf(item))
+    fun dispatchPicked(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        scope.launch {
+            val items = withContext(Dispatchers.IO) {
+                uris.mapNotNull { context.contentResolver.readMediaUploadItem(it) }
             }
+            if (items.isNotEmpty()) viewModel.onMediaPicked(items)
         }
     }
+
+    val pickSingle = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri: Uri? -> dispatchPicked(listOfNotNull(uri)) }
+
+    val pickMultiple = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickMultipleVisualMedia(StoryComposerDraft.MAX_MEDIA),
+    ) { uris: List<Uri> -> dispatchPicked(uris) }
+
+    val imageAndVideo = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
 
     Scaffold(
         topBar = {
@@ -148,9 +157,11 @@ fun StoryComposerScreen(
 
             OutlinedButton(
                 onClick = {
-                    pickMedia.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo),
-                    )
+                    when (StoryMediaPicker.modeFor(state.draft.remainingMediaSlots)) {
+                        StoryMediaPickMode.Single -> pickSingle.launch(imageAndVideo)
+                        StoryMediaPickMode.Multiple -> pickMultiple.launch(imageAndVideo)
+                        StoryMediaPickMode.None -> Unit
+                    }
                 },
                 enabled = !state.isUploadingMedia && !state.draft.isMediaFull,
                 modifier = Modifier.fillMaxWidth(),

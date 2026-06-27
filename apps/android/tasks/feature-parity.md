@@ -378,8 +378,12 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (`story-composer-media-cap`): pure `StoryComposerDraft.MAX_MEDIA`/`isWithinMediaLimit`/
       `remainingMediaSlots`/`isMediaFull` (the cap also gates `canPublish`); `onMediaPicked`
       truncates a pick to the free slots and is inert-with-a-warning once full; the Add button
-      disables + shows an `n/10` count at the cap. Pending: multi-pick the picker
-      (`PickMultipleVisualMedia(maxItems = remainingMediaSlots)`), on-canvas crop/edit, durable
+      disables + shows an `n/10` count at the cap. **Multi-pick done** (`story-composer-multipick`):
+      a pure `StoryMediaPicker.modeFor(remainingSlots)` routes the Add button to the single- vs
+      multi-item picker (`PickMultipleVisualMedia(MAX_MEDIA)`), falling back to single when one slot
+      is left so the multi-picker's `maxItems > 1` requirement never throws and launching nothing
+      when full; the screen reads every picked uri off-main and the VM's existing free-slot
+      truncation still caps the batch. Pending: on-canvas crop/edit, durable
       upload-then-publish outbox chain (SOTA follow-up).
 - [ ] Audio elements (≤5/slide): voice recording (60s), audio file import, on-canvas player widget
 - [ ] Freehand drawing layer (pen/marker/eraser, colour, width, undo/redo/clear)
