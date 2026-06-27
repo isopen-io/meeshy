@@ -206,6 +206,12 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
             return
         }
 
+        guard permission == .authorized else {
+            lastError = .permissionDenied
+            callsLogger.warning("startTranscribing: speech recognition not authorized — permission=\(String(describing: self.permission))")
+            return
+        }
+
         self.localUserId = localUserId
         self.remoteUserId = remoteUserId
         lastError = nil
