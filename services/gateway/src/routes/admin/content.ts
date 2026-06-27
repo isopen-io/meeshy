@@ -79,6 +79,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'Permission insuffisante pour gerer les messages');
       }
 
+      /* istanbul ignore next -- Fastify schema applies defaults; destructuring defaults never reached */
       const { offset = '0', limit = '20', search, type, period } = request.query as MessageListQuery;
       const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
@@ -228,6 +229,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'Permission insuffisante pour gerer les communautes');
       }
 
+      /* istanbul ignore next -- Fastify schema applies defaults; destructuring defaults never reached */
       const { offset = '0', limit = '20', search, isPrivate } = request.query as CommunityListQuery;
       const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
@@ -343,6 +345,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'Permission insuffisante pour gerer les traductions');
       }
 
+      /* istanbul ignore next -- Fastify schema applies defaults; destructuring defaults never reached */
       const { offset = '0', limit = '20', sourceLanguage, targetLanguage, period } = request.query as TranslationListQuery;
       const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
@@ -438,7 +441,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
               targetLanguage: targetLang,
               translatedContent: transData.text,
               translationModel: transData.translationModel,
-              confidenceScore: transData.confidenceScore || null,
+              confidenceScore: transData.confidenceScore ?? null,
               createdAt: transData.createdAt || msg.createdAt,
               message: {
                 id: msg.id,
@@ -469,7 +472,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
         translationModel: translation.translationModel,
         confidenceScore: translation.confidenceScore,
         createdAt: translation.createdAt,
-        message: translation.message ? {
+        message: /* istanbul ignore next -- message is always set in allTranslations.push above */ translation.message ? {
           id: translation.message.id,
           content: translation.message.content,
           originalLanguage: translation.message.originalLanguage,
@@ -540,6 +543,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'Permission insuffisante pour gerer les liens de partage');
       }
 
+      /* istanbul ignore next -- Fastify schema applies defaults; destructuring defaults never reached */
       const { offset = '0', limit = '20', search, isActive } = request.query as ShareLinkListQuery;
       const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
