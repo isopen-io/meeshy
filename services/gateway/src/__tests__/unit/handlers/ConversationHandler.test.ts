@@ -245,10 +245,10 @@ describe('ConversationHandler', () => {
       const handler = new ConversationHandler(deps);
       const socket = makeSocket();
       await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
-      expect(socket.emit).toHaveBeenCalledWith('conversation:join-error', expect.objectContaining({
-        reason: 'not_authenticated',
-      }));
-      expect(socket.join).not.toHaveBeenCalled();
+      // Valid anonymous member (owns the participant): joins the room and emits
+      // no conversation:joined (no userId on an anonymous SocketUser).
+      expect(socket.join).toHaveBeenCalled();
+      expect(socket.emit).not.toHaveBeenCalledWith('conversation:joined', expect.anything());
     });
 
     it('rejects an anonymous user who does not own the participant (not_a_member)', async () => {
