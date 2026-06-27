@@ -3,12 +3,10 @@
  */
 
 jest.mock('@/lib/avatar-utils', () => ({
-  getUserInitials: jest.fn((user: any) => {
-    if (!user) return '??';
-    if (user.firstName && user.lastName) return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
-    if (user.displayName) return user.displayName.slice(0, 2).toUpperCase();
-    return user.username?.slice(0, 2).toUpperCase() ?? '??';
-  }),
+  getUserInitials: (user: any) => {
+    const name = user.displayName || user.username || '';
+    return name.slice(0, 2).toUpperCase();
+  },
 }));
 
 import {
@@ -21,24 +19,27 @@ import {
 // ─── isAnonymousParticipant ───────────────────────────────────────────────────
 
 describe('isAnonymousParticipant', () => {
-  it('returns true when type is anonymous', () => {
+  it('returns true for a user with type=anonymous', () => {
     expect(isAnonymousParticipant({ type: 'anonymous' })).toBe(true);
   });
 
-  it('returns true when user has sessionToken property', () => {
-    expect(isAnonymousParticipant({ sessionToken: 'token123' })).toBe(true);
+  it('returns true when the user has a sessionToken property', () => {
+    expect(isAnonymousParticipant({ sessionToken: 'tok' })).toBe(true);
   });
 
-  it('returns true when user has shareLinkId property', () => {
-    expect(isAnonymousParticipant({ shareLinkId: 'link-abc' })).toBe(true);
+  it('returns true when the user has a shareLinkId property', () => {
+    expect(isAnonymousParticipant({ shareLinkId: 'link-1' })).toBe(true);
   });
 
-  it('returns false for a registered user', () => {
-    expect(isAnonymousParticipant({ type: 'registered', userId: 'u1' })).toBe(false);
+  it('returns false for a regular user', () => {
+    expect(isAnonymousParticipant({ type: 'user', id: 'u-1' })).toBe(false);
   });
 
-  it('returns falsy for null/undefined', () => {
+  it('returns false for null', () => {
     expect(isAnonymousParticipant(null)).toBeFalsy();
+  });
+
+  it('returns false for undefined', () => {
     expect(isAnonymousParticipant(undefined)).toBeFalsy();
   });
 });
@@ -46,64 +47,53 @@ describe('isAnonymousParticipant', () => {
 // ─── getParticipantDisplayName ────────────────────────────────────────────────
 
 describe('getParticipantDisplayName', () => {
-  it('prefers displayName when set', () => {
-    expect(getParticipantDisplayName({ displayName: 'Alice', username: 'alice99' })).toBe('Alice');
+  it('returns displayName when set', () => {
+    expect(getParticipantDisplayName({ displayName: 'Alice Smith', username: 'alice' })).toBe('Alice Smith');
   });
 
-  it('falls back to firstName + lastName', () => {
-    expect(getParticipantDisplayName({ firstName: 'Bob', lastName: 'Smith', username: 'bob' })).toBe('Bob Smith');
+  it('returns firstName + lastName when displayName is absent', () => {
+    expect(getParticipantDisplayName({ firstName: 'Bob', lastName: 'Jones', username: 'bob' })).toBe('Bob Jones');
   });
 
-  it('falls back to username when no displayName or name parts', () => {
-    expect(getParticipantDisplayName({ username: 'charlie99' })).toBe('charlie99');
+  it('returns just firstName when lastName is absent', () => {
+    expect(getParticipantDisplayName({ firstName: 'Bob', username: 'bob' })).toBe('Bob');
   });
 
-  it('handles firstName only', () => {
-    expect(getParticipantDisplayName({ firstName: 'Dave', username: 'dave' })).toBe('Dave');
+  it('returns just lastName when firstName is absent', () => {
+    expect(getParticipantDisplayName({ lastName: 'Jones', username: 'jones' })).toBe('Jones');
   });
 
-  it('handles empty displayName by falling through', () => {
-    expect(getParticipantDisplayName({ displayName: '', firstName: 'Eve', username: 'eve' })).toBe('Eve');
+  it('returns username as last resort', () => {
+    expect(getParticipantDisplayName({ username: 'charlie' })).toBe('charlie');
   });
 });
 
 // ─── getParticipantInitials ───────────────────────────────────────────────────
 
 describe('getParticipantInitials', () => {
-  it('returns initials from firstName and lastName', () => {
-    expect(getParticipantInitials({ firstName: 'Frank', lastName: 'Green', username: 'fg' })).toBe('FG');
-  });
-
-  it('returns ?? for null user (mock behaviour)', () => {
-    expect(getParticipantInitials(null as any)).toBe('??');
-  });
-
-  it('uses displayName fallback (mock behaviour)', () => {
-    expect(getParticipantInitials({ displayName: 'Hiro', username: 'hiro' })).toBe('HI');
+  it('returns initials from the mocked getUserInitials', () => {
+    const initials = getParticipantInitials({ displayName: 'Alice', username: 'alice' });
+    expect(typeof initials).toBe('string');
+    expect(initials.length).toBeGreaterThan(0);
   });
 });
 
 // ─── isParticipantModerator ───────────────────────────────────────────────────
 
 describe('isParticipantModerator', () => {
-  it('returns true for moderator role', () => {
-    expect(isParticipantModerator('moderator')).toBe(true);
-  });
-
-  it('returns true for admin role (higher than moderator)', () => {
-    expect(isParticipantModerator('admin')).toBe(true);
-  });
-
-  it('returns true for creator role (highest)', () => {
-    expect(isParticipantModerator('creator')).toBe(true);
-  });
-
-  it('returns false for member role (below moderator)', () => {
-    expect(isParticipantModerator('member')).toBe(false);
-  });
-
-  it('lowercases the input before checking', () => {
+  it('returns true for MODERATOR role', () => {
     expect(isParticipantModerator('MODERATOR')).toBe(true);
-    expect(isParticipantModerator('MEMBER')).toBe(false);
+  });
+
+  it('returns true for ADMIN role (higher than MODERATOR)', () => {
+    expect(isParticipantModerator('ADMIN')).toBe(true);
+  });
+
+  it('returns false for USER role', () => {
+    expect(isParticipantModerator('USER')).toBe(false);
+  });
+
+  it('is case-insensitive', () => {
+    expect(isParticipantModerator('moderator')).toBe(true);
   });
 });

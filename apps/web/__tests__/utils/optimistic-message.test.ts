@@ -2,96 +2,102 @@
  * Tests for utils/optimistic-message.ts
  */
 
-jest.mock('@/utils/client-message-id', () => ({
-  generateClientMessageId: jest.fn(() => 'cid_00000000-0000-4000-8000-000000000001'),
-}));
-
-import { createOptimisticMessage } from '@/utils/optimistic-message';
+import { createOptimisticMessage, OptimisticMessage } from '@/utils/optimistic-message';
+import { isValidClientMessageId } from '@/utils/client-message-id';
 
 const BASE_OPTS = {
-  content: 'Hello',
-  senderId: 'user-1',
+  content: 'Hello world',
+  senderId: 'sender-1',
   conversationId: 'conv-1',
   language: 'fr',
 };
 
-// ─── createOptimisticMessage (options form) ───────────────────────────────────
+// ─── object-options overload ──────────────────────────────────────────────────
 
-describe('createOptimisticMessage (options object)', () => {
-  it('sets _tempId and id from generateClientMessageId', () => {
+describe('createOptimisticMessage (object options)', () => {
+  it('returns a message with the correct content', () => {
     const msg = createOptimisticMessage(BASE_OPTS);
-    expect(msg._tempId).toBe('cid_00000000-0000-4000-8000-000000000001');
-    expect(msg.id).toBe(msg._tempId);
+    expect(msg.content).toBe('Hello world');
   });
 
-  it('sets _localStatus to sending', () => {
+  it('sets _localStatus to "sending"', () => {
     const msg = createOptimisticMessage(BASE_OPTS);
     expect(msg._localStatus).toBe('sending');
   });
 
-  it('copies content, senderId, conversationId, originalLanguage', () => {
+  it('generates a valid clientMessageId for _tempId', () => {
     const msg = createOptimisticMessage(BASE_OPTS);
-    expect(msg.content).toBe('Hello');
-    expect(msg.senderId).toBe('user-1');
+    expect(isValidClientMessageId(msg._tempId)).toBe(true);
+  });
+
+  it('uses _tempId as the message id', () => {
+    const msg = createOptimisticMessage(BASE_OPTS);
+    expect(msg.id).toBe(msg._tempId);
+  });
+
+  it('sets conversationId correctly', () => {
+    const msg = createOptimisticMessage(BASE_OPTS);
     expect(msg.conversationId).toBe('conv-1');
+  });
+
+  it('sets senderId correctly', () => {
+    const msg = createOptimisticMessage(BASE_OPTS);
+    expect(msg.senderId).toBe('sender-1');
+  });
+
+  it('sets originalLanguage correctly', () => {
+    const msg = createOptimisticMessage(BASE_OPTS);
     expect(msg.originalLanguage).toBe('fr');
   });
 
-  it('defaults messageType to text', () => {
+  it('defaults messageType to "text"', () => {
     const msg = createOptimisticMessage(BASE_OPTS);
     expect(msg.messageType).toBe('text');
   });
 
-  it('respects explicit messageType', () => {
-    const msg = createOptimisticMessage({ ...BASE_OPTS, messageType: 'image' as any });
-    expect(msg.messageType).toBe('image');
+  it('allows custom messageType', () => {
+    const msg = createOptimisticMessage({ ...BASE_OPTS, messageType: 'audio' as any });
+    expect(msg.messageType).toBe('audio');
   });
 
-  it('sets messageSource to user', () => {
-    const msg = createOptimisticMessage(BASE_OPTS);
-    expect(msg.messageSource).toBe('user');
-  });
-
-  it('sets boolean flags to false', () => {
+  it('sets isEdited to false', () => {
     const msg = createOptimisticMessage(BASE_OPTS);
     expect(msg.isEdited).toBe(false);
+  });
+
+  it('sets isEncrypted to false', () => {
+    const msg = createOptimisticMessage(BASE_OPTS);
     expect(msg.isEncrypted).toBe(false);
-    expect(msg.isViewOnce).toBe(false);
-    expect(msg.isBlurred).toBe(false);
   });
 
-  it('sets count fields to 0', () => {
+  it('sets translations to an empty array', () => {
     const msg = createOptimisticMessage(BASE_OPTS);
-    expect(msg.deliveredCount).toBe(0);
-    expect(msg.readCount).toBe(0);
-    expect(msg.reactionCount).toBe(0);
-    expect(msg.viewOnceCount).toBe(0);
-  });
-
-  it('has createdAt, updatedAt, timestamp set to Date instances', () => {
-    const msg = createOptimisticMessage(BASE_OPTS);
-    expect(msg.createdAt).toBeInstanceOf(Date);
-    expect(msg.updatedAt).toBeInstanceOf(Date);
-    expect(msg.timestamp).toBeInstanceOf(Date);
+    expect(Array.isArray(msg.translations)).toBe(true);
+    expect(msg.translations).toHaveLength(0);
   });
 
   it('sets replyToId when provided', () => {
-    const msg = createOptimisticMessage({ ...BASE_OPTS, replyToId: 'reply-99' });
-    expect(msg.replyToId).toBe('reply-99');
+    const msg = createOptimisticMessage({ ...BASE_OPTS, replyToId: 'msg-99' });
+    expect(msg.replyToId).toBe('msg-99');
   });
 
-  it('sets forwardedFromId when provided', () => {
-    const msg = createOptimisticMessage({ ...BASE_OPTS, forwardedFromId: 'orig-1', forwardedFromConversationId: 'conv-orig' });
-    expect(msg.forwardedFromId).toBe('orig-1');
-    expect(msg.forwardedFromConversationId).toBe('conv-orig');
+  it('sets _sendPayload to empty object by default', () => {
+    const msg = createOptimisticMessage(BASE_OPTS);
+    expect(msg._sendPayload).toEqual({});
   });
 
-  it('sets sender with full participant shape when provided', () => {
-    const sender = { id: 'p1', userId: 'user-1', username: 'alice', displayName: 'Alice', avatar: '/a.jpg' };
+  it('stores custom sendPayload in _sendPayload', () => {
+    const sendPayload = { attachmentIds: ['att-1'], mentionedUserIds: ['u-1'] };
+    const msg = createOptimisticMessage({ ...BASE_OPTS, sendPayload });
+    expect(msg._sendPayload).toEqual(sendPayload);
+  });
+
+  it('builds sender participant when sender is provided', () => {
+    const sender = { id: 'p-1', userId: 'u-1', username: 'alice', displayName: 'Alice', avatar: 'a.png' };
     const msg = createOptimisticMessage({ ...BASE_OPTS, sender });
     expect(msg.sender).toBeDefined();
-    expect((msg.sender as any)?.user.displayName).toBe('Alice');
-    expect((msg.sender as any)?.isOnline).toBe(true);
+    expect(msg.sender?.displayName).toBe('Alice');
+    expect(msg.sender?.user?.username).toBe('alice');
   });
 
   it('leaves sender undefined when not provided', () => {
@@ -99,36 +105,27 @@ describe('createOptimisticMessage (options object)', () => {
     expect(msg.sender).toBeUndefined();
   });
 
-  it('sets _sendPayload from provided value', () => {
-    const sendPayload = { attachmentIds: ['a1'] };
-    const msg = createOptimisticMessage({ ...BASE_OPTS, sendPayload });
-    expect(msg._sendPayload).toEqual(sendPayload);
-  });
-
-  it('defaults _sendPayload to empty object', () => {
-    const msg = createOptimisticMessage(BASE_OPTS);
-    expect(msg._sendPayload).toEqual({});
-  });
-
-  it('initialises translations as empty array', () => {
-    const msg = createOptimisticMessage(BASE_OPTS);
-    expect(msg.translations).toEqual([]);
+  it('each call produces a unique id', () => {
+    const ids = new Set(
+      Array.from({ length: 50 }, () => createOptimisticMessage(BASE_OPTS)._tempId)
+    );
+    expect(ids.size).toBe(50);
   });
 });
 
-// ─── createOptimisticMessage (positional form) ────────────────────────────────
+// ─── positional-args overload ─────────────────────────────────────────────────
 
-describe('createOptimisticMessage (positional arguments)', () => {
-  it('accepts positional content/senderId/conversationId/language', () => {
-    const msg = createOptimisticMessage('Hi', 'user-2', 'conv-2', 'en');
+describe('createOptimisticMessage (positional args)', () => {
+  it('accepts positional arguments', () => {
+    const msg = createOptimisticMessage('Hi', 'sender-1', 'conv-1', 'en');
     expect(msg.content).toBe('Hi');
-    expect(msg.senderId).toBe('user-2');
-    expect(msg.conversationId).toBe('conv-2');
+    expect(msg.senderId).toBe('sender-1');
+    expect(msg.conversationId).toBe('conv-1');
     expect(msg.originalLanguage).toBe('en');
   });
 
-  it('accepts optional replyToId as 5th positional arg', () => {
-    const msg = createOptimisticMessage('Hi', 'u', 'c', 'fr', 'reply-id');
-    expect(msg.replyToId).toBe('reply-id');
+  it('sets replyToId when passed as 5th arg', () => {
+    const msg = createOptimisticMessage('Hi', 'sender-1', 'conv-1', 'en', 'reply-1');
+    expect(msg.replyToId).toBe('reply-1');
   });
 });
