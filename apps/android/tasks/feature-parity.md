@@ -348,7 +348,14 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `StoryOptimisticTray` product rule) so it survives process death and **rolls back**
       automatically if the publish exhausts; on delivery the ring hands off to the real story
       (`StoriesViewModel` refreshes when a publish vanishes from the queue). Surpasses iOS's
-      in-memory optimism. Pending: multi-slide canvas / media / text styling below.
+      in-memory optimism. **Failed-publish recovery** done: a publish that exhausts its outbox
+      retries no longer vanishes silently — it surfaces as a "Couldn't post your story" strip
+      above the tray (`StoryRepository.failedPublishes` building block + `StoryPublishFailures`
+      product rule) with explicit **Retry** (`retryPublish` → revive + kick the drain worker) and
+      **Discard** (`discardPublish` → drop the row); the reconciler now tells a *failed* publish
+      apart from a *delivered* one (no spurious hand-off refresh). Surpasses iOS, whose optimistic
+      story evaporates on failure with no signal/recovery. Pending: multi-slide canvas / media /
+      text styling below.
 - [ ] Multi-slide composer (≤10 slides; add/remove/duplicate/reorder; slide mini-preview strip)
 - [ ] 9:16 canvas with pinch-zoom + drag-pan; FAB + bottom-band toolbar (Contenu/Effets)
 - [ ] Text elements (≤5/slide): style (bold/italic/handwriting/typewriter/neon/retro), colour,
@@ -367,8 +374,9 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Repost flow: clone source story + locked attribution badge
 - [ ] Draft save/restore with media persistence + lost-media detection / re-capture prompt
 - [~] Offline publish queue done (durable outbox `PUBLISH_STORY` lane, auto-retry on
-      reconnect via `OutboxFlushWorker`); preview-before-publish, RAW background publish-all
-      and the tray pending badge still pending.
+      reconnect via `OutboxFlushWorker`); **failed-publish recovery** done (exhausted publishes
+      surface a Retry/Discard strip above the tray — no silent loss); preview-before-publish and
+      RAW background publish-all still pending.
 - [x] Visibility selection (Public / Friends / Community / Private) — accent `FilterChip` row
       in the composer; wire value carried on `StoryVisibility.wire` → `CreateStoryRequest.visibility`.
 - [ ] thumbHash blur-placeholder generation per slide

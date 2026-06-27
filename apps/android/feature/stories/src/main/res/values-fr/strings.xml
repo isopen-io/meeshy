@@ -26,6 +26,9 @@
     <string name="stories_comments_open">Commentaires</string>
     <string name="stories_comments_failed">Échec — appuyez pour réessayer</string>
     <string name="stories_count_dots">%1$d nouvelles sur %2$d stories</string>
+    <string name="stories_publish_failed_title">Échec de la publication</string>
+    <string name="stories_publish_retry">Réessayer</string>
+    <string name="stories_publish_discard">Supprimer</string>
     <string name="stories_composer_title">Nouvelle story</string>
     <string name="stories_composer_cancel">Annuler</string>
     <string name="stories_composer_publish">Partager</string>

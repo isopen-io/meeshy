@@ -121,6 +121,28 @@ class OutboxRepositoryTest {
     }
 
     @Test
+    fun `discard removes a row outright`() = runTest {
+        repository.enqueue(
+            OutboxMutation(OutboxKind.SEND_MESSAGE, OutboxLanes.forMessage("c1"), "cid_1", "{}", cmid = "m1"),
+        )
+
+        repository.discard("m1")
+
+        assertThat(repository.observeAll().first()).isEmpty()
+    }
+
+    @Test
+    fun `discard of an unknown cmid is a no-op`() = runTest {
+        repository.enqueue(
+            OutboxMutation(OutboxKind.SEND_MESSAGE, OutboxLanes.forMessage("c1"), "cid_1", "{}", cmid = "m1"),
+        )
+
+        repository.discard("missing")
+
+        assertThat(repository.observeAll().first().map { it.cmid }).containsExactly("m1")
+    }
+
+    @Test
     fun `recoverInflight returns inflight rows to pending`() = runTest {
         repository.enqueue(
             OutboxMutation(OutboxKind.SEND_MESSAGE, OutboxLanes.forMessage("c1"), "cid_1", "{}", cmid = "m1"),

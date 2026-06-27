@@ -102,6 +102,16 @@ class OutboxRepository @Inject constructor(
         return true
     }
 
+    /**
+     * Removes a row outright — a user **discarding** a permanently-failed mutation
+     * (e.g. an exhausted story publish they no longer want to retry). Unknown
+     * `cmid`s are a no-op. Unlike [markSucceeded] this signals no outcome: it is a
+     * deliberate user removal, not a delivery.
+     */
+    suspend fun discard(cmid: String) {
+        outboxDao.deleteAll(listOf(cmid))
+    }
+
     /** Crash-safe boot recovery (ARCHITECTURE.md §5) — any orphaned `INFLIGHT` row becomes `PENDING`. */
     suspend fun recoverInflight(): Int = outboxDao.resetInflight(now())
 

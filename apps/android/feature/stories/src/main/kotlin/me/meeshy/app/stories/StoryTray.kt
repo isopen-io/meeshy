@@ -17,9 +17,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -64,37 +68,134 @@ fun StoryTray(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val tray = state.tray
-    if (tray.isEmpty) {
+    val failures = state.failedPublishes
+    if (tray.isEmpty && failures.isEmpty()) {
         if (state.showSkeleton) StoryTraySkeleton(modifier)
         return
     }
 
-    LazyRow(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
-        contentPadding = PaddingValues(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
+    Column(modifier = modifier) {
+        if (failures.isNotEmpty()) {
+            StoryFailedStrip(
+                failures = failures,
+                onRetry = viewModel::retryPublish,
+                onDiscard = viewModel::discardPublish,
+            )
+        }
+        if (!tray.isEmpty) {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+                contentPadding = PaddingValues(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),
+            ) {
+                tray.self?.let { self ->
+                    item(key = "self") {
+                        StoryRingItem(
+                            ring = self,
+                            label = stringResource(R.string.stories_my_story),
+                            showAddBadge = true,
+                            onClick = { onOpenStory(self.userId) },
+                        )
+                    }
+                }
+                if (tray.self == null) {
+                    item(key = "add") {
+                        AddStoryItem(onClick = onAddStory)
+                    }
+                }
+                items(tray.others, key = { it.userId }) { ring ->
+                    StoryRingItem(
+                        ring = ring,
+                        label = ring.displayName,
+                        showAddBadge = false,
+                        onClick = { onOpenStory(ring.userId) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The "failed to post" strip shown above the tray when one or more story
+ * publishes have exhausted their durable-outbox retries. Each row shows the
+ * story preview with an explicit **Retry** and **Discard** — no dead end, no
+ * silent loss (surpasses iOS, whose optimistic story just evaporates). Survives
+ * process death because it is derived from the durable outbox.
+ */
+@Composable
+private fun StoryFailedStrip(
+    failures: List<StoryPublishFailures.Item>,
+    onRetry: (String) -> Unit,
+    onDiscard: (String) -> Unit,
+) {
+    Column(
+        modifier = Modifier.padding(
+            horizontal = MeeshySpacing.md,
+            vertical = MeeshySpacing.xs,
+        ),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
     ) {
-        tray.self?.let { self ->
-            item(key = "self") {
-                StoryRingItem(
-                    ring = self,
-                    label = stringResource(R.string.stories_my_story),
-                    showAddBadge = true,
-                    onClick = { onOpenStory(self.userId) },
-                )
-            }
+        failures.forEach { failure ->
+            StoryFailedRow(
+                failure = failure,
+                onRetry = { onRetry(failure.cmid) },
+                onDiscard = { onDiscard(failure.cmid) },
+            )
         }
-        if (tray.self == null) {
-            item(key = "add") {
-                AddStoryItem(onClick = onAddStory)
-            }
+    }
+}
+
+@Composable
+private fun StoryFailedRow(
+    failure: StoryPublishFailures.Item,
+    onRetry: () -> Unit,
+    onDiscard: () -> Unit,
+) {
+    val errorColor = MeeshyTheme.tokens.error
+    Row(
+        modifier = Modifier
+            .clip(MaterialTheme.shapes.medium)
+            .background(errorColor.copy(alpha = 0.10f))
+            .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+    ) {
+        Icon(
+            Icons.Filled.ErrorOutline,
+            contentDescription = null,
+            tint = errorColor,
+            modifier = Modifier.size(18.dp),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.stories_publish_failed_title),
+                style = MaterialTheme.typography.labelMedium,
+                color = errorColor,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = failure.preview,
+                style = MaterialTheme.typography.bodySmall,
+                color = MeeshyTheme.tokens.textSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
-        items(tray.others, key = { it.userId }) { ring ->
-            StoryRingItem(
-                ring = ring,
-                label = ring.displayName,
-                showAddBadge = false,
-                onClick = { onOpenStory(ring.userId) },
+        TextButton(onClick = onRetry) {
+            Text(stringResource(R.string.stories_publish_retry))
+        }
+        val discardLabel = stringResource(R.string.stories_publish_discard)
+        IconButton(
+            onClick = onDiscard,
+            modifier = Modifier.semantics { contentDescription = discardLabel },
+        ) {
+            Icon(
+                Icons.Filled.Close,
+                contentDescription = null,
+                tint = MeeshyTheme.tokens.textSecondary,
+                modifier = Modifier.size(18.dp),
             )
         }
     }

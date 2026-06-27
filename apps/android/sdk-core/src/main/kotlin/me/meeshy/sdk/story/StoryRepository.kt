@@ -133,18 +133,67 @@ class StoryRepository @Inject constructor(
         }
 
     private fun OutboxEntity.toPendingStoryPublish(): PendingStoryPublish? {
-        val request = runCatching {
-            MeeshyApi.json.decodeFromString<CreateStoryRequest>(payload)
-        }.getOrNull() ?: return null
-        val content = request.content?.takeIf { it.isNotBlank() } ?: return null
+        val request = decodeStoryPublish() ?: return null
         return PendingStoryPublish(
             tempId = targetId,
-            content = content,
+            content = request.content,
             visibility = request.visibility,
             originalLanguage = request.originalLanguage,
             createdAtMillis = createdAt,
         )
     }
+
+    /**
+     * Story publishes that **exhausted** their durable-outbox retries
+     * (ARCHITECTURE.md §5). Each carries the `cmid` so the tray can offer a
+     * user-initiated retry ([retryPublish]) or a discard ([discardPublish]).
+     * Undecodable or blank-content rows are skipped defensively. Surpasses iOS,
+     * whose optimistic story silently evaporates on failure with no recovery.
+     */
+    fun failedPublishes(): Flow<List<FailedStoryPublish>> =
+        outboxRepository.observeAll().map { rows ->
+            rows
+                .filter { it.kindEnum == OutboxKind.PUBLISH_STORY && it.stateEnum == OutboxState.EXHAUSTED }
+                .mapNotNull { it.toFailedStoryPublish() }
+        }
+
+    /**
+     * Revives an exhausted publish for a user-initiated retry — back to the live
+     * queue with a fresh attempt budget. The caller kicks the drain worker.
+     * @return `false` when the row no longer exists.
+     */
+    suspend fun retryPublish(cmid: String): Boolean = outboxRepository.retry(cmid)
+
+    /** Permanently discards an exhausted publish the user no longer wants to retry. */
+    suspend fun discardPublish(cmid: String) = outboxRepository.discard(cmid)
+
+    private fun OutboxEntity.toFailedStoryPublish(): FailedStoryPublish? {
+        val request = decodeStoryPublish() ?: return null
+        return FailedStoryPublish(
+            cmid = cmid,
+            tempId = targetId,
+            content = request.content,
+            visibility = request.visibility,
+            originalLanguage = request.originalLanguage,
+            createdAtMillis = createdAt,
+            failedAtMillis = updatedAt,
+        )
+    }
+
+    /** A non-blank story publish decoded from this row's payload, or null if undecodable/blank. */
+    private fun OutboxEntity.decodeStoryPublish(): DecodedStoryPublish? {
+        val request = runCatching {
+            MeeshyApi.json.decodeFromString<CreateStoryRequest>(payload)
+        }.getOrNull() ?: return null
+        val content = request.content?.takeIf { it.isNotBlank() } ?: return null
+        return DecodedStoryPublish(content, request.visibility, request.originalLanguage)
+    }
+
+    private data class DecodedStoryPublish(
+        val content: String,
+        val visibility: String,
+        val originalLanguage: String?,
+    )
 
     /**
      * Fetches the viewers of a story (with their optional reaction), mapping the

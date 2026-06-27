@@ -242,3 +242,27 @@ Append-only log of gotchas and decisions that save time next run.
   `implementation(libs.work.runtime)` added before the VM could `workManager
   .enqueue(OutboxFlushWorker.buildRequest())` (chat already had it). `buildRequest()`
   builds a `OneTimeWorkRequest` fine in a plain JVM unit test (no Robolectric).
+
+## Lessons — slice `story-publish-retry` (2026-06-27)
+- **`combine` only emits once ALL source flows have emitted.** When the VM grew
+  from 2 to 3 combined repository flows, every test (and every hand-rolled mock)
+  had to stub the new `failedPublishes()` — a relaxed mockk returns a Flow that
+  never emits, so `combine` silently never collected and the VM state stayed at
+  its default. Symptom: a previously-green assertion fails for no obvious reason.
+  Always stub *every* combined flow with `flowOf(emptyList())` as the default.
+- **A "row vanished from the pending queue" is ambiguous.** Both a *delivered*
+  publish (row deleted) and a *failed* one (row → `EXHAUSTED`, dropped from
+  `pendingPublishes`) disappear from the live queue. The optimistic-tray
+  reconciler originally treated any disappearance as delivery and fired a spurious
+  `refresh()`. Disambiguate by also watching `failedPublishes()`: a temp id now in
+  the failed set exhausted (surface it), only a temp id in neither set delivered.
+- **`OutboxRepository.retry(cmid)` already existed** (revive EXHAUSTED → PENDING,
+  fresh budget) but had no caller — wiring it through `StoryRepository.retryPublish`
+  + a VM intent that kicks `OutboxFlushWorker` is all the recovery loop needed.
+  Added a sibling `discard(cmid)` (plain `deleteAll`, emits no outcome — a user
+  removal is not a delivery outcome) so a permanently-failing publish isn't a dead end.
+- **A public `UiState` can't hold an `internal` nested type.** `StoriesUiState`
+  (public, read by the screen + exposed via the public VM `StateFlow`) carries
+  `List<StoryPublishFailures.Item>`, so `StoryPublishFailures` had to be public
+  (matches `StoryCountDots`). "Function 'public' exposes its 'internal' parameter
+  type" is the compiler telling you a public surface leaks an internal type.
