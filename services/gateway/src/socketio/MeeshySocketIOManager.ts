@@ -450,74 +450,65 @@ export class MeeshySocketIOManager {
         const users = cached.users.map(u => ({ ...u, isOnline: this.connectedUsers.has(u.userId) }));
         socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users });
         logger.info(`📸 [PRESENCE_SNAPSHOT] ${users.length} contacts (cache) sent to ${userId}`);
-        return;
-      }
+      } else {
+        // Trouver toutes les conversations du user/participant
+        const participantRows = isAnonymous
+          ? await this.prisma.participant.findMany({
+              where: { id: userId, isActive: true },
+              select: { conversationId: true }
+            })
+          : await this.prisma.participant.findMany({
+              where: { userId: userId, isActive: true },
+              select: { conversationId: true }
+            });
 
-      // Trouver toutes les conversations du user/participant
-      const participantRows = isAnonymous
-        ? await this.prisma.participant.findMany({
-            where: { id: userId, isActive: true },
-            select: { conversationId: true }
-          })
-        : await this.prisma.participant.findMany({
-            where: { userId: userId, isActive: true },
-            select: { conversationId: true }
+        if (participantRows.length > 0) {
+          const conversationIds = participantRows.map(p => p.conversationId);
+
+          // Lister tous les autres participants (registered + anonymes) de ces conversations
+          const contacts = await this.prisma.participant.findMany({
+            where: {
+              conversationId: { in: conversationIds },
+              isActive: true,
+              NOT: isAnonymous
+                ? { id: userId }
+                : { userId: userId }
+            },
+            select: {
+              id: true,
+              userId: true,
+              displayName: true,
+              type: true,
+              lastActiveAt: true,
+              user: { select: { id: true, username: true, displayName: true, lastActiveAt: true } }
+            }
           });
 
-      if (participantRows.length === 0) {
-        return;
-      }
+          // Dédupliquer par userId (un même user peut être dans plusieurs conversations)
+          const seen = new Set<string>();
+          const users: { userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }[] = [];
 
-      const conversationIds = participantRows.map(p => p.conversationId);
+          for (const c of contacts) {
+            const presenceKey = c.userId ?? c.id; // userId pour registered, id pour anonyme
+            if (seen.has(presenceKey)) continue;
+            seen.add(presenceKey);
 
-      // Lister tous les autres participants (registered + anonymes) de ces conversations
-      const contacts = await this.prisma.participant.findMany({
-        where: {
-          conversationId: { in: conversationIds },
-          isActive: true,
-          NOT: isAnonymous
-            ? { id: userId }
-            : { userId: userId }
-        },
-        select: {
-          id: true,
-          userId: true,
-          displayName: true,
-          type: true,
-          lastActiveAt: true,
-          user: { select: { id: true, username: true, displayName: true, lastActiveAt: true } }
+            const isOnline = this.connectedUsers.has(presenceKey);
+            const username = c.user?.username ?? c.user?.displayName ?? c.displayName ?? presenceKey;
+            const lastActiveAt = c.user?.lastActiveAt ?? c.lastActiveAt ?? null;
+
+            users.push({ userId: presenceKey, username, isOnline, lastActiveAt });
+          }
+
+          this.presenceSnapshotCache.set(userId, { users, cachedAt: Date.now() });
+          socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users });
+          logger.info(`📸 [PRESENCE_SNAPSHOT] ${users.length} contacts sent to ${userId} (${users.filter(u => u.isOnline).length} online)`);
         }
-      });
-
-      // Dédupliquer par userId (un même user peut être dans plusieurs conversations)
-      const seen = new Set<string>();
-      const users: { userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }[] = [];
-
-      for (const c of contacts) {
-        const presenceKey = c.userId ?? c.id; // userId pour registered, id pour anonyme
-        if (seen.has(presenceKey)) continue;
-        seen.add(presenceKey);
-
-        const isOnline = this.connectedUsers.has(presenceKey);
-        const username = c.user?.username ?? c.user?.displayName ?? c.displayName ?? presenceKey;
-        const lastActiveAt = c.user?.lastActiveAt ?? c.lastActiveAt ?? null;
-
-        users.push({
-          userId: presenceKey,
-          username,
-          isOnline,
-          lastActiveAt
-        });
       }
 
-      this.presenceSnapshotCache.set(userId, { users, cachedAt: Date.now() });
-      socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users });
-      logger.info(`📸 [PRESENCE_SNAPSHOT] ${users.length} contacts sent to ${userId} (${users.filter(u => u.isOnline).length} online)`);
-
-      // Drain offline delivery queue — replay any messages that arrived while
-      // the user was disconnected (enqueued in _broadcastNewMessage). Called
-      // here (post-authentication, post-room-join) so the socket is already in
-      // the right conversation rooms when replayed messages arrive.
+      // Drain offline delivery queue regardless of snapshot cache hit/miss.
+      // Previously this only ran on the non-cached path — on quick reconnects
+      // (within the 30s TTL) queued messages were silently dropped.
       if (!isAnonymous) {
         this._drainPendingMessages(socket, userId).catch(err => {
           logger.warn('Failed to drain pending messages on connect', { userId, error: err });
