@@ -105,7 +105,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [x] `services/gateway/src/routes/admin/analytics.ts`
 - [x] `services/gateway/src/routes/admin/anonymous-users.ts`
 - [x] `services/gateway/src/routes/admin/broadcasts.ts`
-- [ ] `services/gateway/src/routes/admin/content.ts`
+- [x] `services/gateway/src/routes/admin/content.ts`
 - [x] `services/gateway/src/routes/admin/dashboard.ts`
 - [x] `services/gateway/src/routes/admin/index.ts`
 - [x] `services/gateway/src/routes/admin/invitations.ts`

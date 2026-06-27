@@ -361,7 +361,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Text elements (≤5/slide): style (bold/italic/handwriting/typewriter/neon/retro), colour,
       size, alignment, background (none/solid/glass), outline/stroke, RTL, fade timing
 - [ ] In-place floating text editor with tool bubbles + keyboard-aware canvas shift
-- [ ] Media elements (≤10/slide): photo/video import, crop/edit, aspect-ratio preservation
+- [~] Media elements (≤10/slide): photo/video import, crop/edit, aspect-ratio preservation.
+      **Upload foundation done** (`media-upload-api`): `MediaApi` multipart `POST /attachments/upload`
+      (`files` parts) + `MediaRepository.upload()` → domain `UploadedMedia` (id = `mediaId`, url,
+      mime, size, dims, durationMs, thumbnail); pure `MediaUpload` part-builder + wire→domain mapper
+      that drops unusable rows. Pending: system picker glue + `mediaIds` into the publish flow.
 - [ ] Audio elements (≤5/slide): voice recording (60s), audio file import, on-canvas player widget
 - [ ] Freehand drawing layer (pen/marker/eraser, colour, width, undo/redo/clear)
 - [ ] Emoji sticker picker (categorised + searchable)

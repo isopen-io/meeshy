@@ -78,6 +78,16 @@ function buildNoAuthApp(): FastifyInstance {
   return app;
 }
 
+function buildPartialAuthApp(authContext: Record<string, any>): FastifyInstance {
+  const app = Fastify({ logger: false });
+  app.decorate('prisma', mockPrisma);
+  app.decorate('authenticate', async (request: any) => {
+    request.authContext = authContext;
+  });
+  app.register(registerContentRoutes);
+  return app;
+}
+
 // ---------------------------------------------------------------------------
 // GET /messages
 // ---------------------------------------------------------------------------
@@ -102,6 +112,24 @@ describe('Admin content routes — GET /messages', () => {
     const response = await noAuthApp.inject({ method: 'GET', url: '/messages' });
     expect(response.statusCode).toBe(401);
     await noAuthApp.close();
+  });
+
+  it('returns 401 when authContext.isAuthenticated is false', async () => {
+    const partialApp = buildPartialAuthApp({ isAuthenticated: false, registeredUser: null });
+    await partialApp.ready();
+
+    const response = await partialApp.inject({ method: 'GET', url: '/messages' });
+    expect(response.statusCode).toBe(401);
+    await partialApp.close();
+  });
+
+  it('returns 401 when authContext.registeredUser is null', async () => {
+    const partialApp = buildPartialAuthApp({ isAuthenticated: true, registeredUser: null });
+    await partialApp.ready();
+
+    const response = await partialApp.inject({ method: 'GET', url: '/messages' });
+    expect(response.statusCode).toBe(401);
+    await partialApp.close();
   });
 
   it('returns 403 when role lacks canAccessAdmin (USER)', async () => {
@@ -577,6 +605,128 @@ describe('Admin content routes — GET /translations', () => {
     expect(entry.translationModel).toBe('nllb');
     expect(entry.message).toBeDefined();
     expect(entry.message.id).toBe(VALID_MONGO_ID);
+    await bigbossApp.close();
+  });
+
+  it('returns 200 and applies period=month filter to prisma query', async () => {
+    const bigbossApp = buildApp('BIGBOSS');
+    await bigbossApp.ready();
+
+    const response = await bigbossApp.inject({ method: 'GET', url: '/translations?period=month' });
+    expect(response.statusCode).toBe(200);
+
+    const call = mockPrisma.message.findMany.mock.calls[0][0];
+    expect(call.where.createdAt).toBeDefined();
+    expect(call.where.createdAt.gte).toBeInstanceOf(Date);
+    await bigbossApp.close();
+  });
+
+  it('falls back to sourceLanguage=unknown when message has no originalLanguage', async () => {
+    const msgNoLang = {
+      id: VALID_MONGO_ID,
+      content: 'Hello',
+      originalLanguage: null,
+      createdAt: new Date(),
+      translations: {
+        fr: { text: 'Bonjour', translationModel: 'nllb', createdAt: new Date() },
+      },
+      sender: { id: '1', userId: '1', displayName: 'Alice', user: { username: 'alice' } },
+      conversation: { id: '2', identifier: 'conv-1', title: 'Test' },
+    };
+    mockPrisma.message.findMany.mockResolvedValue([msgNoLang]);
+
+    const bigbossApp = buildApp('BIGBOSS');
+    await bigbossApp.ready();
+
+    const response = await bigbossApp.inject({ method: 'GET', url: '/translations?targetLanguage=fr' });
+    const body = JSON.parse(response.body);
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].sourceLanguage).toBe('unknown');
+    await bigbossApp.close();
+  });
+
+  it('preserves confidenceScore of 0 (numeric zero is a valid score)', async () => {
+    const msgZeroScore = {
+      ...makeFakeMessageWithTranslations(),
+      translations: {
+        fr: { text: 'Bonjour', translationModel: 'nllb', createdAt: new Date(), confidenceScore: 0 },
+      },
+    };
+    mockPrisma.message.findMany.mockResolvedValue([msgZeroScore]);
+
+    const bigbossApp = buildApp('BIGBOSS');
+    await bigbossApp.ready();
+
+    const response = await bigbossApp.inject({ method: 'GET', url: '/translations?targetLanguage=fr' });
+    const body = JSON.parse(response.body);
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].confidenceScore).toBe(0);
+    await bigbossApp.close();
+  });
+
+  it('returns null confidenceScore when translation entry lacks it', async () => {
+    const msgNoScore = {
+      ...makeFakeMessageWithTranslations(),
+      translations: {
+        fr: { text: 'Bonjour', translationModel: 'nllb', createdAt: new Date() }, // no confidenceScore
+      },
+    };
+    mockPrisma.message.findMany.mockResolvedValue([msgNoScore]);
+
+    const bigbossApp = buildApp('BIGBOSS');
+    await bigbossApp.ready();
+
+    const response = await bigbossApp.inject({ method: 'GET', url: '/translations?targetLanguage=fr' });
+    const body = JSON.parse(response.body);
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].confidenceScore).toBeNull();
+    await bigbossApp.close();
+  });
+
+  it('falls back to message createdAt when translation entry lacks createdAt', async () => {
+    const msgDate = new Date('2026-01-15T10:00:00.000Z');
+    const msgNoTransDate = {
+      id: VALID_MONGO_ID,
+      content: 'Hola',
+      originalLanguage: 'es',
+      createdAt: msgDate,
+      translations: {
+        fr: { text: 'Bonjour', translationModel: 'nllb' }, // no createdAt
+      },
+      sender: { id: '1', userId: '1', displayName: 'Alice', user: { username: 'alice' } },
+      conversation: { id: '2', identifier: 'conv-1', title: 'Test' },
+    };
+    mockPrisma.message.findMany.mockResolvedValue([msgNoTransDate]);
+
+    const bigbossApp = buildApp('BIGBOSS');
+    await bigbossApp.ready();
+
+    const response = await bigbossApp.inject({ method: 'GET', url: '/translations?targetLanguage=fr' });
+    const body = JSON.parse(response.body);
+    expect(body.data).toHaveLength(1);
+    expect(new Date(body.data[0].createdAt).getTime()).toBe(msgDate.getTime());
+    await bigbossApp.close();
+  });
+
+  it('skips messages whose translations field is null (defensive branch)', async () => {
+    const msgNullTrans = {
+      id: VALID_MONGO_ID,
+      content: 'Hello',
+      originalLanguage: 'en',
+      translations: null,
+      createdAt: new Date(),
+      sender: { id: '1', userId: '1', displayName: 'Alice', user: { username: 'alice' } },
+      conversation: { id: '2', identifier: 'conv-1', title: 'Test' },
+    };
+    mockPrisma.message.findMany.mockResolvedValue([msgNullTrans]);
+
+    const bigbossApp = buildApp('BIGBOSS');
+    await bigbossApp.ready();
+
+    const response = await bigbossApp.inject({ method: 'GET', url: '/translations' });
+    const body = JSON.parse(response.body);
+    expect(body.data).toHaveLength(0);
+    expect(body.pagination.total).toBe(0);
     await bigbossApp.close();
   });
 

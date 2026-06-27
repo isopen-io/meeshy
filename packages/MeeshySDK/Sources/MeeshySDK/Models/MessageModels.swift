@@ -630,13 +630,56 @@ extension APIMessage {
         let thumbnailColor = senderColor ?? DynamicColorGenerator.colorForName("?")
 
         let uiAttachments: [MeeshyMessageAttachment] = (attachments ?? []).map { apiAtt in
-            MeeshyMessageAttachment(
+            let embeddedTranscription: MeeshyMessageAttachment.EmbeddedTranscription? = apiAtt.transcription.map { t in
+                MeeshyMessageAttachment.EmbeddedTranscription(
+                    text: t.resolvedText,
+                    language: t.language ?? "und",
+                    confidence: t.confidence,
+                    durationMs: t.durationMs,
+                    speakerCount: t.speakerCount,
+                    segments: t.segments?.map { s in
+                        MeeshyMessageAttachment.EmbeddedTranscription.TranscriptionSegmentData(
+                            text: s.text,
+                            startTime: s.startTime,
+                            endTime: s.endTime,
+                            speakerId: s.speakerId
+                        )
+                    }
+                )
+            }
+            let embeddedAudioTranslations: [String: MeeshyMessageAttachment.EmbeddedAudioTranslation]? = apiAtt.translations.flatMap { dict in
+                let mapped = dict.compactMapValues { t -> MeeshyMessageAttachment.EmbeddedAudioTranslation? in
+                    guard let url = t.url else { return nil }
+                    return MeeshyMessageAttachment.EmbeddedAudioTranslation(
+                        url: url,
+                        transcription: t.transcription,
+                        durationMs: t.durationMs,
+                        format: t.format,
+                        cloned: t.cloned,
+                        quality: t.quality,
+                        voiceModelId: t.voiceModelId,
+                        ttsModel: t.ttsModel,
+                        segments: t.segments?.map { s in
+                            MeeshyMessageAttachment.EmbeddedTranscription.TranscriptionSegmentData(
+                                text: s.text,
+                                startTime: s.startTime,
+                                endTime: s.endTime,
+                                speakerId: s.speakerId
+                            )
+                        }
+                    )
+                }
+                return mapped.isEmpty ? nil : mapped
+            }
+            return MeeshyMessageAttachment(
                 id: apiAtt.id, fileName: apiAtt.fileName ?? "", originalName: apiAtt.originalName ?? "",
                 mimeType: apiAtt.mimeType ?? "application/octet-stream", fileSize: apiAtt.fileSize ?? 0,
                 fileUrl: apiAtt.fileUrl ?? "", width: apiAtt.width, height: apiAtt.height,
                 thumbnailUrl: apiAtt.thumbnailUrl, thumbHash: apiAtt.thumbHash, duration: apiAtt.duration, uploadedBy: senderId,
                 latitude: apiAtt.latitude, longitude: apiAtt.longitude,
                 thumbnailColor: thumbnailColor,
+                transcription: embeddedTranscription,
+                audioTranslations: embeddedAudioTranslations,
                 imageVariants: apiAtt.imageVariants,
                 deliveredToAllAt: apiAtt.deliveredToAllAt, viewedByAllAt: apiAtt.viewedByAllAt,
                 downloadedByAllAt: apiAtt.downloadedByAllAt, listenedByAllAt: apiAtt.listenedByAllAt,
