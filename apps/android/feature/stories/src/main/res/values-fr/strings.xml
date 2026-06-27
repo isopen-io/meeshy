@@ -34,6 +34,9 @@
     <string name="stories_composer_publish">Partager</string>
     <string name="stories_composer_placeholder">Partagez un moment…</string>
     <string name="stories_composer_remaining">%1$d</string>
+    <string name="stories_composer_add_media">Ajouter une photo ou une vidéo</string>
+    <string name="stories_composer_add_media_count">Ajouter (%1$d/%2$d)</string>
+    <string name="stories_composer_remove_media">Retirer</string>
     <string name="stories_visibility_public">Public</string>
     <string name="stories_visibility_friends">Amis</string>
     <string name="stories_visibility_community">Communauté</string>

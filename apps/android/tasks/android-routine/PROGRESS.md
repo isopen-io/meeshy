@@ -25,25 +25,36 @@ file to `StoryComposerViewModel.onMediaPicked`, which uploads it via the
 carries `mediaIds` into the same durable-outbox flow. A **media-only** story
 (no caption) is now publishable. Uploads are re-entrancy-guarded, gate
 `canPublish` while in flight, and fail gracefully (message, draft intact).
+Latest loop (`story-composer-media-cap`) enforces the iOS **≤10 media cap**: the
+pure draft gains `MAX_MEDIA`/`isWithinMediaLimit`/`remainingMediaSlots`/`isMediaFull`
+(and `canPublish` now also requires the media limit), `onMediaPicked` truncates a
+pick to the free slots and is inert-with-a-warning once full, and the composer's
+Add button disables + shows an `n/10` count at the cap.
 
 ## Next slice (pick one for the next run)
 
 Ordered by value within the Stories area:
-1. `story-composer-multipick-limit` / multi-slide composer — allow several media
-   per story (enforce the iOS ≤10 cap) and begin the **multi-slide canvas**
-   (add/remove/reorder slides, 9:16 canvas). Much larger; see `feature-parity.md`
+1. **Multi-pick the picker** — now that the ≤10 cap is enforced
+   (`story-composer-media-cap` ✅), switch the composer's `PickVisualMedia`
+   single-pick to `PickMultipleVisualMedia(maxItems = draft.remainingMediaSlots)`
+   so a user can grab several media in one go (the VM already accepts a
+   `List<MediaUploadItem>`, uploads the batch, and truncates to the free slots).
+   Mostly Compose/IO glue on top of the existing VM contract.
+2. **Multi-slide canvas** — begin the real multi-slide composer (add/remove/
+   reorder slides, 9:16 canvas). Much larger; see `feature-parity.md`
    §"Stories composer". A smaller intermediate slice: a **durable upload-then-
    publish outbox chain** (upload as its own lane the publish `dependsOn`) so a
    media publish survives process death *before* the upload completes — the SOTA
    follow-up flagged on `story-composer-media`.
-2. After Stories richness is sufficient, advance to the **Calls** area
+3. After Stories richness is sufficient, advance to the **Calls** area
    (`feature-parity.md` §"Calls").
 
-(`story-composer-media` ⚠ 2026-06-27 — code complete + reviewer PASS + local
-`check` green + 11/12 CI ✅, but PR #979 is **held unmerged**: the monorepo
-`Test gateway` job is red on `main` itself (pre-existing duplicate-`jwt`-import +
-socket-handler test breakage, zero gateway files in this diff). Merge once main's
-gateway suite is green. See run log.)
+(`story-composer-media-cap` ✅ shipped 2026-06-27 — this run; enforced the iOS
+≤10 media cap end-to-end. See run log.)
+(`story-composer-media` ✅ shipped 2026-06-27 — PR #979 squash-merged this run
+after confirming the sole red CI job (`Test gateway`) is a pre-existing
+duplicate-`jwt`-import breakage on `main` itself, with zero gateway files in the
+`apps/android`-only diff. See run log.)
 (`media-upload-api` ✅ shipped 2026-06-27 — see run log; upload foundation.)
 (`story-publish-retry` ✅ shipped 2026-06-27 — see run log; closed the
 "failed publish disappears silently" follow-up.)
@@ -64,11 +75,67 @@ After Stories richness is sufficient, advance to the **Calls** area
 
 ## Run log
 
-### 2026-06-27 — slice `story-composer-media` ⚠ BLOCKED (merge held, not by this diff)
-- **Status:** PR [#979](https://github.com/isopen-io/meeshy/pull/979) **open, NOT merged.**
-  Everything in scope is green (local `check`, reviewer PASS, `apps/android`-only diff,
-  11/12 CI checks ✅) but the monorepo **`Test gateway`** CI job is **red on `main`
-  itself** — pre-existing breakage unrelated to this diff:
+### 2026-06-27 — slice `story-composer-media-cap` ✅
+- **Branch:** `claude/apps/android/story-composer-media-cap`
+- **Housekeeping (step 0):** PR **#979** (`story-composer-media`) was open from the
+  prior run, held only by the pre-existing `Test gateway` red on `main`. Re-verified
+  the blocker — the duplicate `jwt` import (`AuthHandler.manual-auth.test.ts` lines
+  16 & 21) is present verbatim on `origin/main`, the PR's diff touches **zero**
+  gateway files, and 11/12 CI checks are green — so merging this `apps/android`-only
+  PR cannot regress `main` (already red on that one job). Per the run directive
+  ("merge the open PR before proceeding"), **squash-merged #979** → `0d65615`, then
+  branched this slice off the freshened `main`.
+- **What:** enforces the iOS **≤10 media-per-story cap** end-to-end. Closes the
+  "multi-pick limit (≤10)" follow-up flagged on `story-composer-media`.
+- **Added (production, `apps/android` only):**
+  - `StoryComposerDraft` (pure) — `MAX_MEDIA = 10`; `isWithinMediaLimit`
+    (`size <= MAX_MEDIA`); `remainingMediaSlots` (`MAX_MEDIA - size`, clamped ≥0 so
+    the UI can size a picker request); `isMediaFull` (`size >= MAX_MEDIA`).
+    `canPublish` now also requires `isWithinMediaLimit`, so an over-cap draft can't
+    publish.
+  - `StoryComposerViewModel.onMediaPicked` — computes free slots from the draft:
+    inert-with-a-warning (`MEDIA_LIMIT`, no upload) once full; otherwise uploads only
+    `items.take(remaining)` so a pick can never exceed the cap and never wastes an
+    upload on items that won't fit.
+  - `StoryComposerScreen` (exempt glue) — Add button `enabled` also gated on
+    `!draft.isMediaFull`; label switches to an `n/10` count (`stories_composer_add_media_count`)
+    once media is attached.
+  - strings — `stories_composer_add_media_count` in en/fr/es/pt, plus **backfilled**
+    `stories_composer_add_media`/`stories_composer_remove_media` into fr/es/pt (a
+    parity gap from #979, which only added them to default `values/`).
+- **Tests (+6, red→green):**
+  - `StoryComposerDraftTest` +4 — empty draft offers the full allowance + not full;
+    partially-filled reports remaining slots; exactly-at-cap is full / 0 remaining /
+    within-limit / still publishable; past-cap not-within-limit / remaining clamped
+    to 0 / can't publish.
+  - `StoryComposerViewModelTest` +2 — picking when at the cap is inert (no upload
+    call) + warns + leaves the 10 attachments intact; picking 3 items with only 1
+    free slot uploads exactly 1 (slot-captured) and lands at the cap.
+- **Edge cases covered:** empty/at-cap/over-cap collections; boundary (=10 ok vs
+  >10 blocked); remaining clamped non-negative; over-pick truncated to free slots;
+  full → inert + no network. `CancellationException` path unchanged (still rethrown).
+- **Verify:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL in 2m16s**
+  (full `assembleDebug` + all module JVM unit tests; 836 tasks). `:feature:stories`
+  `testDebugUnitTest` — `StoryComposerDraftTest` 23/23, `StoryComposerViewModelTest`
+  23/23 green.
+- **Reviewer:** PASS — scope `apps/android` only (draft/VM/screen + 4 string files +
+  2 test files); behavioural tests through the public API (pure draft getters, VM
+  state via intents), no tautologies, no floor lowered; SDK purity (the "≤10 cap /
+  truncate / warn when full" product rule lives in `:feature:stories`; no SDK touch);
+  single source of truth (one `MAX_MEDIA`, reuses the existing upload/draft flow);
+  Instant-App (no new I/O — cap is derived from the in-memory draft); UDF + immutable
+  `UiState`, pure draft; colour/UX coherence (Add button disables + shows `n/10`, no
+  dead end). Surpasses iOS (cap enforced *and* over-pick truncated gracefully).
+
+### 2026-06-27 — slice `story-composer-media` ✅ MERGED (PR #979, this run)
+- **Status:** PR [#979](https://github.com/isopen-io/meeshy/pull/979) **squash-merged**
+  this run (`0d65615`) — see the `story-composer-media-cap` housekeeping note above
+  for why merging past the pre-existing `Test gateway` red was safe. The detail below
+  is the original (held) entry, kept for the record.
+- **Status (original):** PR open, held — everything in scope green (local `check`,
+  reviewer PASS, `apps/android`-only diff, 11/12 CI checks ✅) but the monorepo
+  **`Test gateway`** CI job is **red on `main` itself** — pre-existing breakage
+  unrelated to this diff:
   - `AuthHandler.manual-auth.test.ts` — `TS2300: Duplicate identifier 'jwt'` (two
     `import jwt from 'jsonwebtoken'` lines 16 & 21 — present verbatim on `origin/main`).
   - `MeeshySocketIOManager.test.ts`, `AuthHandler.test.ts`, two `ConversationHandler`

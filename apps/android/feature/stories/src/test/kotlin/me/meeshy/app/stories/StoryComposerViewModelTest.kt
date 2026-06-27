@@ -320,6 +320,36 @@ class StoryComposerViewModelTest {
     }
 
     @Test
+    fun `onMediaPicked is inert and warns once the draft is at the media cap`() = runTest {
+        val vm = viewModel()
+        val full = (1..StoryComposerDraft.MAX_MEDIA).map { uploaded("m$it") }
+        coEvery { media.upload(any()) } returns NetworkResult.Success(full)
+        vm.onMediaPicked(List(StoryComposerDraft.MAX_MEDIA) { item("p$it.jpg") })
+
+        vm.onMediaPicked(listOf(item("over.jpg")))
+
+        coVerify(exactly = 1) { media.upload(any()) }
+        assertThat(vm.state.value.errorMessage).isNotNull()
+        assertThat(vm.state.value.attachments).hasSize(StoryComposerDraft.MAX_MEDIA)
+    }
+
+    @Test
+    fun `onMediaPicked only uploads as many items as there are free media slots`() = runTest {
+        val vm = viewModel()
+        val seedCount = StoryComposerDraft.MAX_MEDIA - 1
+        coEvery { media.upload(any()) } returns
+            NetworkResult.Success((1..seedCount).map { uploaded("m$it") })
+        vm.onMediaPicked(List(seedCount) { item("seed$it.jpg") })
+
+        val captured = slot<List<MediaUploadItem>>()
+        coEvery { media.upload(capture(captured)) } returns NetworkResult.Success(listOf(uploaded("last")))
+        vm.onMediaPicked(listOf(item("a.jpg"), item("b.jpg"), item("c.jpg")))
+
+        assertThat(captured.captured).hasSize(1)
+        assertThat(vm.state.value.attachments).hasSize(StoryComposerDraft.MAX_MEDIA)
+    }
+
+    @Test
     fun `publish clears attached media on success`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1")))

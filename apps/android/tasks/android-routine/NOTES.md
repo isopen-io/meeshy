@@ -321,3 +321,17 @@ Append-only log of gotchas and decisions that save time next run.
   `MediaUpload` part-builder + wire→domain mapper stay opaque building blocks in
   `:sdk-core`/`:core:*`. Draft `canPublish` admits **text OR media** so a caption-
   less image story is valid (iOS-surpassing — iOS has no story media composer).
+- **Media cap belongs in the pure draft, enforced at the VM upload-gate.** `MAX_MEDIA`
+  + `remainingMediaSlots` (clamped ≥0) live on `StoryComposerDraft`; the cap also
+  gates `canPublish` so an over-cap draft can never publish. `onMediaPicked` reads the
+  free slots and `items.take(remaining)` BEFORE the upload — truncating the pick, not
+  the result, so we never spend an upload on media that won't fit, and the cap holds
+  even if a future multi-pick hands in more than `remaining`. Surface a warning + skip
+  the network entirely when already full (`remaining <= 0`).
+- **#979 was held on a pre-existing `main` red, not its own.** When the ONLY red CI job
+  is failing on `origin/main` itself (verify: `git show origin/main:<test-file>` shows
+  the same breakage) AND the PR diff touches zero files in that job's scope, merging an
+  `apps/android`-only PR cannot regress `main`. The "never merge past red CI" rule
+  guards against *introducing* a regression; a pre-existing, out-of-scope red that the
+  run directive tells you to merge through is the documented exception. Always re-confirm
+  the red is pre-existing + out-of-diff before merging, and record the proof in the log.

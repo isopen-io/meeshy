@@ -142,6 +142,38 @@ class StoryComposerDraftTest {
     }
 
     @Test
+    fun `an empty draft offers the full media allowance and is not full`() {
+        val draft = StoryComposerDraft()
+        assertThat(draft.remainingMediaSlots).isEqualTo(StoryComposerDraft.MAX_MEDIA)
+        assertThat(draft.isMediaFull).isFalse()
+        assertThat(draft.isWithinMediaLimit).isTrue()
+    }
+
+    @Test
+    fun `a partially-filled draft reports the remaining slots`() {
+        val draft = StoryComposerDraft(mediaIds = listOf("a", "b", "c"))
+        assertThat(draft.remainingMediaSlots).isEqualTo(StoryComposerDraft.MAX_MEDIA - 3)
+        assertThat(draft.isMediaFull).isFalse()
+    }
+
+    @Test
+    fun `a draft at the media cap is full with no remaining slots but still publishable`() {
+        val draft = StoryComposerDraft(mediaIds = (1..StoryComposerDraft.MAX_MEDIA).map { "m$it" })
+        assertThat(draft.isMediaFull).isTrue()
+        assertThat(draft.remainingMediaSlots).isEqualTo(0)
+        assertThat(draft.isWithinMediaLimit).isTrue()
+        assertThat(draft.canPublish).isTrue()
+    }
+
+    @Test
+    fun `a draft past the media cap cannot publish and clamps remaining to zero`() {
+        val draft = StoryComposerDraft(mediaIds = (1..StoryComposerDraft.MAX_MEDIA + 1).map { "m$it" })
+        assertThat(draft.isWithinMediaLimit).isFalse()
+        assertThat(draft.remainingMediaSlots).isEqualTo(0)
+        assertThat(draft.canPublish).isFalse()
+    }
+
+    @Test
     fun `every visibility exposes its gateway wire value`() {
         assertThat(StoryVisibility.PUBLIC.wire).isEqualTo("PUBLIC")
         assertThat(StoryVisibility.FRIENDS.wire).isEqualTo("FRIENDS")

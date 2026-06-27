@@ -152,7 +152,7 @@ fun StoryComposerScreen(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo),
                     )
                 },
-                enabled = !state.isUploadingMedia,
+                enabled = !state.isUploadingMedia && !state.draft.isMediaFull,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 if (state.isUploadingMedia) {
@@ -161,7 +161,15 @@ fun StoryComposerScreen(
                     Icon(Icons.Filled.AddPhotoAlternate, contentDescription = null)
                 }
                 Text(
-                    text = stringResource(R.string.stories_composer_add_media),
+                    text = if (state.draft.hasMedia) {
+                        stringResource(
+                            R.string.stories_composer_add_media_count,
+                            state.draft.mediaIds.size,
+                            StoryComposerDraft.MAX_MEDIA,
+                        )
+                    } else {
+                        stringResource(R.string.stories_composer_add_media)
+                    },
                     modifier = Modifier.padding(start = 8.dp),
                 )
             }
