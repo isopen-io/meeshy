@@ -330,11 +330,15 @@ final class ConversationSocketHandler {
                         // Persist server ACK (state machine) via actor — store
                         // observation will surface the delivery-status change.
                         if let persistence = self.persistence {
-                            _ = try? await persistence.applyEvent(
-                                localId: tempId,
-                                event: .serverAck(serverId: apiMsg.id, at: serverMsg.updatedAt)
-                            )
-                            Logger.messages.info("SendFlow PENDING->SENT (socket broadcast) tempId=\(tempId, privacy: .public) serverId=\(apiMsg.id, privacy: .public) transport=broadcast")
+                            do {
+                                _ = try await persistence.applyEvent(
+                                    localId: tempId,
+                                    event: .serverAck(serverId: apiMsg.id, at: serverMsg.updatedAt)
+                                )
+                                Logger.messages.info("SendFlow PENDING->SENT (socket broadcast) tempId=\(tempId, privacy: .public) serverId=\(apiMsg.id, privacy: .public) transport=broadcast")
+                            } catch {
+                                Logger.messages.error("serverAck persistence failed for tempId=\(tempId, privacy: .public) serverId=\(apiMsg.id, privacy: .public): \(error.localizedDescription, privacy: .public) — message may remain in .sending state until reload")
+                            }
                             // Persist server-confirmed content/attachments/reactions
                             // so the store snapshot reflects ground-truth values.
                             // `nil` attachments/reactions are preserved by
@@ -345,22 +349,26 @@ final class ConversationSocketHandler {
                                 : try? JSONEncoder().encode(serverMsg.attachments)
                             let reactionsJson = serverMsg.reactions.isEmpty ? nil
                                 : try? JSONEncoder().encode(serverMsg.reactions)
-                            try? await persistence.updateServerAckedFields(
-                                localId: tempId,
-                                content: reconciledContent,
-                                attachmentsJson: attachmentsJson,
-                                reactionsJson: reactionsJson,
-                                pinnedAt: serverMsg.pinnedAt,
-                                pinnedBy: serverMsg.pinnedBy,
-                                isEdited: serverMsg.isEdited,
-                                editedAt: serverMsg.editedAt,
-                                deletedAt: serverMsg.deletedAt,
-                                deliveredCount: serverMsg.deliveredCount,
-                                readCount: serverMsg.readCount,
-                                deliveredToAllAt: serverMsg.deliveredToAllAt,
-                                readByAllAt: serverMsg.readByAllAt,
-                                updatedAt: serverMsg.updatedAt
-                            )
+                            do {
+                                try await persistence.updateServerAckedFields(
+                                    localId: tempId,
+                                    content: reconciledContent,
+                                    attachmentsJson: attachmentsJson,
+                                    reactionsJson: reactionsJson,
+                                    pinnedAt: serverMsg.pinnedAt,
+                                    pinnedBy: serverMsg.pinnedBy,
+                                    isEdited: serverMsg.isEdited,
+                                    editedAt: serverMsg.editedAt,
+                                    deletedAt: serverMsg.deletedAt,
+                                    deliveredCount: serverMsg.deliveredCount,
+                                    readCount: serverMsg.readCount,
+                                    deliveredToAllAt: serverMsg.deliveredToAllAt,
+                                    readByAllAt: serverMsg.readByAllAt,
+                                    updatedAt: serverMsg.updatedAt
+                                )
+                            } catch {
+                                Logger.messages.error("updateServerAckedFields failed for tempId=\(tempId, privacy: .public): \(error.localizedDescription, privacy: .public) — server content may not persist across reload")
+                            }
                         }
                         // Persist using server id so a future cold-start REST
                         // fetch reconciles cleanly without duplicates.

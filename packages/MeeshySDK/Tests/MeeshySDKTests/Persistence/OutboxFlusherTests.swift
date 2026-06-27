@@ -98,6 +98,36 @@ final class OutboxFlusherTests: XCTestCase {
             "Row must be deferred for a later retry once the session is refreshed")
     }
 
+    /// Verifies that a raw HTTP 401 surfaced as `.server(statusCode: 401, ...)`
+    /// — e.g. from a custom dispatcher that doesn't map to `MeeshyError.auth` —
+    /// is ALSO treated as a transitory session failure (no retry-budget consumed).
+    func test_flush_server401Error_doesNotConsumeRetryBudget() async throws {
+        let pool = try makeFreshPool()
+        try MessageDatabaseMigrations.runAll(on: pool)
+
+        let now = Date()
+        try await pool.write { db in
+            try OutboxRecord(
+                id: "server401", kind: .sendMessage, conversationId: "c1",
+                clientMessageId: "cid_server401",
+                payload: Data(), status: .pending, attempts: 4, lastError: nil,
+                createdAt: now, updatedAt: now, nextAttemptAt: now
+            ).insert(db)
+        }
+
+        let dispatcher = Server401Dispatcher()
+        let flusher = OutboxFlusher(pool: pool, dispatcher: dispatcher)
+        await flusher.flush()
+
+        let after = try await pool.read { db in try OutboxRecord.fetchOne(db, key: "server401")! }
+        XCTAssertEqual(after.status, .pending,
+            "A .server(401) error is a transitory auth failure — must not exhaust the row")
+        XCTAssertEqual(after.attempts, 4,
+            "A .server(401) error must not consume the retry budget")
+        XCTAssertGreaterThan(after.nextAttemptAt, now,
+            "Row must be deferred for later retry after server 401")
+    }
+
     func test_flush_marksExhausted_after5Attempts() async throws {
         let pool = try makeFreshPool()
         try MessageDatabaseMigrations.runAll(on: pool)
@@ -285,6 +315,15 @@ final class OutboxFlusherTests: XCTestCase {
 
     private func makeFreshPool() throws -> DatabaseQueue {
         return try DatabaseQueue()
+    }
+}
+
+/// Simulates a dispatcher that surfaces a raw HTTP 401 as `.server(statusCode: 401, ...)`.
+/// This covers dispatchers that do not remap 401 to `MeeshyError.auth` — the
+/// flusher must still treat it as a transitory auth failure and not burn the budget.
+private actor Server401Dispatcher: OutboxDispatching {
+    func dispatch(_ record: OutboxRecord) async throws {
+        throw MeeshyError.server(statusCode: 401, message: "Unauthorized")
     }
 }
 

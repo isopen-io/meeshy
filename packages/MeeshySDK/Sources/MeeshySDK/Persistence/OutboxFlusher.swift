@@ -19,6 +19,7 @@ internal func reactionContext(for record: OutboxRecord) -> OfflineRetrySuccess.R
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .iso8601
     guard let payload = try? decoder.decode(ReactionOutboxPayload.self, from: record.payload) else {
+        outboxFlusherLog.warning("reactionContext: failed to decode ReactionOutboxPayload for outbox row \(record.id, privacy: .public) — exhausted event will omit emoji/messageId context")
         return nil
     }
     return OfflineRetrySuccess.ReactionContext(
@@ -183,14 +184,27 @@ public actor OutboxFlusher {
     /// transitory auth failure, NOT a permanent dispatch error. It must not consume
     /// the retry budget — otherwise a brief session expiry permanently exhausts every
     /// queued row before the app gets a chance to refresh the token.
+    ///
+    /// Also covers `.server(statusCode: 401, ...)` — a 401 that reached the client
+    /// without being converted to `.auth` (e.g., from a custom dispatcher or a
+    /// non-standard gateway response path).
     private static func isSessionExpiry(_ error: Error) -> Bool {
-        if case MeeshyError.auth = error { return true }
-        return false
+        switch error {
+        case MeeshyError.auth:
+            return true
+        case MeeshyError.server(let code, _) where code == 401:
+            return true
+        default:
+            return false
+        }
     }
 
     private func processRecord(_ record: OutboxRecord) async {
         // S1 — claim atomically; skip dispatch if another flusher beat us to it.
-        guard await claimPending(record) else { return }
+        guard await claimPending(record) else {
+            outboxFlusherLog.debug("Outbox row \(record.id, privacy: .public) already claimed by a concurrent flusher — skipping")
+            return
+        }
         var current = record
         current.status = .inflight
         current.updatedAt = Date()
@@ -226,8 +240,10 @@ public actor OutboxFlusher {
                 current.updatedAt = Date()
                 current.nextAttemptAt = Date().addingTimeInterval(maxBackoff)
                 let deferredSnapshot = current
-                try? await pool.write { db in
-                    try deferredSnapshot.update(db)
+                do {
+                    try await pool.write { db in try deferredSnapshot.update(db) }
+                } catch {
+                    outboxFlusherLog.error("Failed to defer outbox row \(deferredSnapshot.id, privacy: .public) after session expiry: \(error.localizedDescription, privacy: .public) — row may retry prematurely on next flush")
                 }
                 return
             }
@@ -246,8 +262,10 @@ public actor OutboxFlusher {
             }
 
             let failedSnapshot = current
-            try? await pool.write { db in
-                try failedSnapshot.update(db)
+            do {
+                try await pool.write { db in try failedSnapshot.update(db) }
+            } catch {
+                outboxFlusherLog.error("Failed to persist failure state for outbox row \(failedSnapshot.id, privacy: .public) (attempts=\(failedSnapshot.attempts, privacy: .public), status=\(failedSnapshot.status.rawValue, privacy: .public)): \(error.localizedDescription, privacy: .public) — in-memory state diverges from DB")
             }
 
             // Wave 1 Task 3.6 + Phase 4 prereq — emit BOTH the outcome
