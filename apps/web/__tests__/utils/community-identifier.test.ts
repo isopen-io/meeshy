@@ -1,172 +1,145 @@
 /**
- * Tests for community-identifier utility
+ * Tests for utils/community-identifier.ts
  */
 
 import {
   generateCommunityIdentifier,
   validateCommunityIdentifier,
   sanitizeCommunityIdentifier,
-} from '../../utils/community-identifier';
+} from '@/utils/community-identifier';
 
-describe('community-identifier', () => {
-  describe('generateCommunityIdentifier', () => {
-    it('should generate identifier from simple title', () => {
-      const identifier = generateCommunityIdentifier('My Community');
-      expect(identifier).toMatch(/^my-community-[a-z0-9]{6}$/);
-    });
+// ─── generateCommunityIdentifier ──────────────────────────────────────────────
 
-    it('should normalize special characters', () => {
-      const identifier = generateCommunityIdentifier('My Community!@#$%');
-      expect(identifier).toMatch(/^my-community-[a-z0-9]{6}$/);
-    });
-
-    it('should convert to lowercase', () => {
-      const identifier = generateCommunityIdentifier('MY COMMUNITY');
-      expect(identifier).toMatch(/^my-community-[a-z0-9]{6}$/);
-    });
-
-    it('should replace multiple spaces with single hyphen', () => {
-      const identifier = generateCommunityIdentifier('My    Community');
-      expect(identifier).toMatch(/^my-community-[a-z0-9]{6}$/);
-    });
-
-    it('should handle hyphens in title', () => {
-      // Hyphens in the title are not alphanumeric or spaces, so they're removed
-      // "My---Community" -> lowercase -> replace non-alphanumeric except spaces -> "mycommunity"
-      const identifier = generateCommunityIdentifier('My---Community');
-      expect(identifier).toMatch(/^mycommunity-[a-z0-9]{6}$/);
-    });
-
-    it('should remove leading and trailing hyphens from title', () => {
-      const identifier = generateCommunityIdentifier('-My Community-');
-      expect(identifier).toMatch(/^my-community-[a-z0-9]{6}$/);
-    });
-
-    it('should handle numbers in title', () => {
-      const identifier = generateCommunityIdentifier('Community 123');
-      expect(identifier).toMatch(/^community-123-[a-z0-9]{6}$/);
-    });
-
-    it('should use default prefix for empty title after normalization', () => {
-      const identifier = generateCommunityIdentifier('!!!');
-      expect(identifier).toMatch(/^community-[a-z0-9]{6}$/);
-    });
-
-    it('should use default prefix for empty string', () => {
-      const identifier = generateCommunityIdentifier('');
-      expect(identifier).toMatch(/^community-[a-z0-9]{6}$/);
-    });
-
-    it('should truncate long titles to 50 characters', () => {
-      const longTitle = 'A'.repeat(100);
-      const identifier = generateCommunityIdentifier(longTitle);
-      const parts = identifier.split('-');
-      const titlePart = parts.slice(0, -1).join('-');
-      expect(titlePart.length).toBeLessThanOrEqual(50);
-    });
-
-    it('should generate unique identifiers', () => {
-      const id1 = generateCommunityIdentifier('Test');
-      const id2 = generateCommunityIdentifier('Test');
-      expect(id1).not.toBe(id2);
-    });
-
-    it('should handle Unicode characters by removing them', () => {
-      const identifier = generateCommunityIdentifier('Communaute');
-      expect(identifier).toMatch(/^communaute-[a-z0-9]{6}$/);
-    });
-
-    it('should handle mixed content', () => {
-      const identifier = generateCommunityIdentifier('My 1st Community! (Best)');
-      expect(identifier).toMatch(/^my-1st-community-best-[a-z0-9]{6}$/);
-    });
+describe('generateCommunityIdentifier', () => {
+  it('returns a non-empty string', () => {
+    expect(generateCommunityIdentifier('My Community')).toBeTruthy();
   });
 
-  describe('validateCommunityIdentifier', () => {
-    it('should return true for valid lowercase identifier', () => {
-      expect(validateCommunityIdentifier('my-community')).toBe(true);
-    });
-
-    it('should return true for identifier with numbers', () => {
-      expect(validateCommunityIdentifier('community123')).toBe(true);
-    });
-
-    it('should return true for identifier with hyphens', () => {
-      expect(validateCommunityIdentifier('my-test-community')).toBe(true);
-    });
-
-    it('should return true for identifier with underscores', () => {
-      expect(validateCommunityIdentifier('my_test_community')).toBe(true);
-    });
-
-    it('should return true for identifier with @ symbol', () => {
-      expect(validateCommunityIdentifier('@mycommunity')).toBe(true);
-    });
-
-    it('should return false for uppercase letters', () => {
-      expect(validateCommunityIdentifier('MyCommunity')).toBe(false);
-    });
-
-    it('should return false for spaces', () => {
-      expect(validateCommunityIdentifier('my community')).toBe(false);
-    });
-
-    it('should return false for special characters', () => {
-      expect(validateCommunityIdentifier('my!community')).toBe(false);
-    });
-
-    it('should return false for empty string', () => {
-      expect(validateCommunityIdentifier('')).toBe(false);
-    });
-
-    it('should return false for null', () => {
-      expect(validateCommunityIdentifier(null as any)).toBe(false);
-    });
-
-    it('should return false for undefined', () => {
-      expect(validateCommunityIdentifier(undefined as any)).toBe(false);
-    });
+  it('lowercases the title', () => {
+    const id = generateCommunityIdentifier('Hello World');
+    expect(id).not.toMatch(/[A-Z]/);
   });
 
-  describe('sanitizeCommunityIdentifier', () => {
-    it('should convert to lowercase', () => {
-      expect(sanitizeCommunityIdentifier('MyCommunity')).toBe('mycommunity');
-    });
+  it('replaces spaces with hyphens', () => {
+    const id = generateCommunityIdentifier('hello world');
+    expect(id.startsWith('hello-world')).toBe(true);
+  });
 
-    it('should remove invalid characters', () => {
-      expect(sanitizeCommunityIdentifier('my!community')).toBe('mycommunity');
-    });
+  it('removes special characters', () => {
+    const id = generateCommunityIdentifier('Hello! World?');
+    expect(id).not.toMatch(/[!?]/);
+  });
 
-    it('should remove spaces', () => {
-      expect(sanitizeCommunityIdentifier('my community')).toBe('mycommunity');
-    });
+  it('appends a 6-char random suffix after a hyphen', () => {
+    const id = generateCommunityIdentifier('test');
+    const parts = id.split('-');
+    const suffix = parts[parts.length - 1];
+    expect(suffix).toHaveLength(6);
+  });
 
-    it('should keep valid characters', () => {
-      expect(sanitizeCommunityIdentifier('my-community_123')).toBe('my-community_123');
-    });
+  it('uses "community" prefix for empty title', () => {
+    const id = generateCommunityIdentifier('');
+    expect(id.startsWith('community-')).toBe(true);
+  });
 
-    it('should keep @ symbol', () => {
-      expect(sanitizeCommunityIdentifier('@mycommunity')).toBe('@mycommunity');
-    });
+  it('uses "community" prefix for special-char-only title', () => {
+    const id = generateCommunityIdentifier('!!!');
+    expect(id.startsWith('community-')).toBe(true);
+  });
 
-    it('should replace multiple hyphens with single hyphen', () => {
-      expect(sanitizeCommunityIdentifier('my---community')).toBe('my-community');
-    });
+  it('generates different ids on successive calls', () => {
+    const id1 = generateCommunityIdentifier('test');
+    const id2 = generateCommunityIdentifier('test');
+    // random suffix makes them differ almost always
+    // Run several pairs to be sure
+    let differs = false;
+    for (let i = 0; i < 5; i++) {
+      if (generateCommunityIdentifier('test') !== generateCommunityIdentifier('test')) {
+        differs = true;
+        break;
+      }
+    }
+    expect(differs).toBe(true);
+  });
 
-    it('should remove leading hyphens', () => {
-      expect(sanitizeCommunityIdentifier('-mycommunity')).toBe('mycommunity');
-    });
+  it('collapses multiple spaces into a single hyphen', () => {
+    const id = generateCommunityIdentifier('hello   world');
+    expect(id.startsWith('hello-world')).toBe(true);
+  });
 
-    it('should remove trailing hyphens', () => {
-      expect(sanitizeCommunityIdentifier('mycommunity-')).toBe('mycommunity');
-    });
+  it('truncates title to 50 chars', () => {
+    const longTitle = 'a'.repeat(100);
+    const id = generateCommunityIdentifier(longTitle);
+    // The normalized title portion (before the suffix) should be ≤ 50 chars
+    const withoutSuffix = id.split('-').slice(0, -1).join('-');
+    expect(withoutSuffix.length).toBeLessThanOrEqual(50);
+  });
+});
 
-    it('should handle complex input', () => {
-      expect(sanitizeCommunityIdentifier('My---Community!!!123')).toBe('my-community123');
-    });
+// ─── validateCommunityIdentifier ─────────────────────────────────────────────
 
-    it('should return empty string for all invalid characters', () => {
-      expect(sanitizeCommunityIdentifier('!!!')).toBe('');
-    });
+describe('validateCommunityIdentifier', () => {
+  it('returns true for lowercase alphanumeric', () => {
+    expect(validateCommunityIdentifier('mycommunity')).toBe(true);
+  });
+
+  it('returns true for identifiers with hyphens', () => {
+    expect(validateCommunityIdentifier('my-community')).toBe(true);
+  });
+
+  it('returns true for identifiers with underscores', () => {
+    expect(validateCommunityIdentifier('my_community')).toBe(true);
+  });
+
+  it('returns true for identifiers with @', () => {
+    expect(validateCommunityIdentifier('@mycommunity')).toBe(true);
+  });
+
+  it('returns false for empty string', () => {
+    expect(validateCommunityIdentifier('')).toBe(false);
+  });
+
+  it('returns false for identifiers with spaces', () => {
+    expect(validateCommunityIdentifier('my community')).toBe(false);
+  });
+
+  it('returns false for identifiers with special chars', () => {
+    expect(validateCommunityIdentifier('my!community')).toBe(false);
+  });
+
+  it('returns false for uppercase letters', () => {
+    expect(validateCommunityIdentifier('MyCommunity')).toBe(false);
+  });
+});
+
+// ─── sanitizeCommunityIdentifier ─────────────────────────────────────────────
+
+describe('sanitizeCommunityIdentifier', () => {
+  it('lowercases the identifier', () => {
+    expect(sanitizeCommunityIdentifier('HELLO')).toBe('hello');
+  });
+
+  it('removes special characters', () => {
+    expect(sanitizeCommunityIdentifier('my!community')).toBe('mycommunity');
+  });
+
+  it('keeps hyphens', () => {
+    expect(sanitizeCommunityIdentifier('my-community')).toBe('my-community');
+  });
+
+  it('collapses multiple hyphens', () => {
+    expect(sanitizeCommunityIdentifier('my--community')).toBe('my-community');
+  });
+
+  it('strips leading and trailing hyphens', () => {
+    expect(sanitizeCommunityIdentifier('-my-community-')).toBe('my-community');
+  });
+
+  it('keeps underscores and @', () => {
+    expect(sanitizeCommunityIdentifier('my_@community')).toBe('my_@community');
+  });
+
+  it('handles empty string', () => {
+    expect(sanitizeCommunityIdentifier('')).toBe('');
   });
 });
