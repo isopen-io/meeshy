@@ -33,18 +33,14 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       body: registerRequestSchema,
       response: {
         200: {
-          description: 'Account created successfully - verification email sent',
+          description: 'Account created - returns user+token, or phoneOwnershipConflict challenge',
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                user: userSchema,
-                token: { type: 'string', description: 'JWT access token for API authentication' },
-                expiresIn: { type: 'number', description: 'Token expiration time in seconds', example: 86400 }
-              }
-            }
+            // additionalProperties: true required so the phoneOwnershipConflict
+            // branch (which returns conflict info instead of user/token) is
+            // serialized correctly by fast-json-stringify.
+            data: { type: 'object', additionalProperties: true }
           }
         },
         400: validationErrorResponseSchema,
