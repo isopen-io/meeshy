@@ -1701,9 +1701,10 @@ describe('MeeshySocketIOManager', () => {
       const socket = makeSocket('sock-ps1');
       const cachedUsers = [{ userId: 'user-x', username: 'x', isOnline: false, lastActiveAt: null }];
       (manager as any).presenceSnapshotCache.set('user-ps1', { users: cachedUsers, cachedAt: Date.now() });
-      // _emitUnreadCountsSnapshot runs fire-and-forget on every path; isolate this
-      // test to only assert presence-snapshot cache behaviour (not unread counts).
+      // Suppress the unconditional post-snapshot drains — this test only cares
+      // that the presence snapshot itself served from cache (no DB query).
       jest.spyOn(manager as any, '_emitUnreadCountsSnapshot').mockResolvedValue(undefined);
+      jest.spyOn(manager as any, '_drainPendingMessages').mockResolvedValue(undefined);
 
       await (manager as any)._emitPresenceSnapshot(socket, 'user-ps1', false);
 

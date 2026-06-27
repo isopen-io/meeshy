@@ -267,7 +267,7 @@ export class MessageHandler {
         });
 
         conversationMessageStatsService.onNewMessage(
-          this.prisma, message.conversationId, userId || participantId, data.content ?? '', [], null
+          this.prisma, message.conversationId, userId || participantId, validated.content ?? '', [], null
         ).catch(err => handlerLogger.warn('stats update error', { error: err }));
       }
 
@@ -422,7 +422,7 @@ export class MessageHandler {
       // retry. Mirror the order used by `handleMessageSend` above.
       this._sendResponse(callback, response);
 
-      if (response.success && response.data) {
+      if (response.success && response.data && !(response.data as { isDuplicate?: boolean }).isDuplicate) {
         const message = response.data as unknown as import('@meeshy/shared/types/index').Message;
         await performanceLogger.withTiming(
           'ws.broadcastNewMessage',

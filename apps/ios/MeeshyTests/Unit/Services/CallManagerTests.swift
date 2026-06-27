@@ -461,15 +461,16 @@ final class CallManagerEarlyJoinTests: XCTestCase {
             return
         }
         guard let emitJoinIdx = body.range(of: "emitCallJoin(callId: callId)")?.lowerBound,
-              let startMediaIdx = body.range(of: "startLocalMedia(isVideo:")?.lowerBound else {
-            XCTFail("Expected emitCallJoin and startLocalMedia call sites in handleIncomingCallNotification")
+              let startMediaIdx = body.range(of: "performLocalMediaStart(isVideo:")?.lowerBound else {
+            XCTFail("Expected emitCallJoin and performLocalMediaStart call sites in handleIncomingCallNotification")
             return
         }
         XCTAssertLessThan(
             emitJoinIdx,
             startMediaIdx,
-            "Bug 2 guard: emitCallJoin MUST be called before awaiting startLocalMedia in handleIncomingCallNotification, " +
-            "otherwise the caller stays in .ringing(true) until the callee's camera/mic warmup completes."
+            "Bug 2 guard: emitCallJoin MUST be called before kicking off performLocalMediaStart (which awaits " +
+            "startLocalMedia) in handleIncomingCallNotification, otherwise the caller stays in .ringing(true) " +
+            "until the callee's camera/mic warmup completes."
         )
     }
 
@@ -480,14 +481,15 @@ final class CallManagerEarlyJoinTests: XCTestCase {
             return
         }
         guard let emitJoinIdx = body.range(of: "emitCallJoin(callId: callId)")?.lowerBound,
-              let startMediaIdx = body.range(of: "startLocalMedia(isVideo:")?.lowerBound else {
-            XCTFail("Expected emitCallJoin and startLocalMedia call sites in reportIncomingVoIPCall")
+              let startMediaIdx = body.range(of: "performLocalMediaStart(isVideo:")?.lowerBound else {
+            XCTFail("Expected emitCallJoin and performLocalMediaStart call sites in reportIncomingVoIPCall")
             return
         }
         XCTAssertLessThan(
             emitJoinIdx,
             startMediaIdx,
-            "Bug 2 guard: emitCallJoin MUST be called before awaiting startLocalMedia in reportIncomingVoIPCall."
+            "Bug 2 guard: emitCallJoin MUST be called before kicking off performLocalMediaStart (which awaits " +
+            "startLocalMedia) in reportIncomingVoIPCall."
         )
     }
 
@@ -1660,7 +1662,11 @@ final class VoIPFreshnessSourceGuardTests: XCTestCase {
             "Bug D: freshness check must handle 404 (call not found on server)"
         )
         guard let notFoundRange = body.range(of: "statusCode == 404") else { return }
-        let segment = String(body[notFoundRange.lowerBound...].prefix(300))
+        // 500-char window: the long [VOIP_FRESHNESS] warning log between the 404
+        // branch and `endCallInternal(reason: .missed)` pushes `.missed` past the
+        // original 300-char window. 500 still stops well before the terminal-status
+        // block's own `.missed` (~600+ chars away), so the first 404 branch is matched.
+        let segment = String(body[notFoundRange.lowerBound...].prefix(500))
         XCTAssertTrue(
             segment.contains("reason: .unanswered"),
             "Bug D: 404 path must report the phantom call as .unanswered to CX (not .failed)"

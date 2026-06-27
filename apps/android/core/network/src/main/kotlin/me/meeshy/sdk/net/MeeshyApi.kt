@@ -5,6 +5,7 @@ import me.meeshy.sdk.net.api.AuthApi
 import me.meeshy.sdk.net.api.CommunityApi
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.net.api.FriendApi
+import me.meeshy.sdk.net.api.MediaApi
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.api.NotificationApi
 import me.meeshy.sdk.net.api.PostApi
@@ -32,6 +33,7 @@ class MeeshyApi private constructor(retrofit: Retrofit) {
     val communities: CommunityApi = retrofit.create()
     val stories: StoryApi = retrofit.create()
     val translation: TranslationApi = retrofit.create()
+    val media: MediaApi = retrofit.create()
 
     companion object {
         val json: Json = Json {

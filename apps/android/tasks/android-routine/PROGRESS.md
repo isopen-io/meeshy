@@ -24,16 +24,21 @@ vanishing silently, and the reconciler tells a *failed* publish apart from a
 ## Next slice (pick one for the next run)
 
 Ordered by value within the Stories area:
-1. `story-composer-media` — extend the composer to a single image/video slide
-   (media pick → upload → `mediaIds`), then multi-slide. **Note:** there is **no
-   media-upload API in the Android SDK yet** — this slice must first build the
-   multipart upload endpoint (`MediaApi`) + a system photo/video picker (Compose
-   glue) + the `mediaIds` plumbing into `CreateStoryRequest`. It is bigger than a
-   typical thin slice; consider splitting into `media-upload-api` (pure: multipart
-   request + repository, fully testable) then `story-composer-media` (picker glue +
-   compose into the existing publish flow).
+1. `story-composer-media` — now that the **upload foundation exists**
+   (`media-upload-api` ✅ — `MediaApi` + `MediaRepository.upload()` → `UploadedMedia`),
+   wire a **system photo/video picker** (Compose `PickVisualMedia` glue) into the
+   composer: pick → `MediaRepository.upload()` → carry the returned ids into
+   `StoryComposerDraft.toCreateStoryRequest(mediaIds = …)` so a single image/video
+   slide publishes through the existing durable-outbox flow. Keep the upload off
+   the publish enqueue path is acceptable for v1 (upload synchronously in the VM,
+   then enqueue the publish with the resulting ids); a **TUS-style upload-then-
+   publish outbox chain** (upload as its own durable lane the publish `dependsOn`)
+   is the SOTA follow-up. Pure/testable parts: the VM's pick→upload→publish state
+   machine (loading/error/ids), and the `mediaIds` plumbing into the draft mapping.
+2. Then multi-slide composer + on-canvas media (much larger; see `feature-parity.md`
+   §"Stories composer").
 
-After this, advance to the **Calls** area (`feature-parity.md` §"Calls").
+After Stories composer-media, advance to the **Calls** area (`feature-parity.md` §"Calls").
 
 (`story-publish-retry` ✅ shipped 2026-06-27 — see run log; closed the
 "failed publish disappears silently" follow-up.)
@@ -53,6 +58,67 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-27 — slice `media-upload-api` ✅
+- **Branch:** `claude/apps/android/media-upload-api`
+- **Housekeeping:** no open Android PR to land first (`search_pull_requests` for open
+  `apps/android` heads = 0). Branched off latest `origin/main` (carries #968). SDK
+  bootstrapped per the env recipe.
+- **What:** the **media-upload foundation** the story composer's media slice needs.
+  iOS uploads a single compressed JPEG avatar via `POST /attachments/upload`
+  (`AttachmentUploader`) and discards the returned id; Meeshy stories reference media
+  **by id** (`CreateStoryRequest.mediaIds`), so Android generalises the upload to any
+  file/MIME and **carries the attachment id**. Pure, fully-testable: no Compose glue —
+  this is the request/repository/mapper layer only (the picker + publish wiring is the
+  next slice).
+- **Added (production):**
+  - `core:model` — `UploadedMedia` domain (id = `mediaId`, url, mimeType, fileSize,
+    width?/height?/durationMs?/thumbnailUrl?) + `MediaUploadResponse`/`MediaAttachmentWire`
+    wire (subset of `messageAttachmentSchema`, every field defaulted/nullable) + pure
+    `MediaAttachmentWire.toUploadedMedia()` mapper returning `null` for unusable rows
+    (blank id → no `mediaId`; blank/absent `fileUrl` → nothing to show), defaulting a
+    blank mime to `DEFAULT_MEDIA_MIME_TYPE`, clamping a negative size to 0 and collapsing
+    zero/negative dims+duration and blank thumbnail to `null`.
+  - `core:network` — `MediaApi` (`@Multipart @POST("attachments/upload")` taking
+    `List<MultipartBody.Part>`), registered in `MeeshyApi` + a Hilt `providesMediaApi`.
+  - `sdk-core` — pure `MediaUpload` part-builder (field name `files`, default filename
+    `upload`, octet-stream default content type; `formPart` builds the
+    `MultipartBody.Part`) + `MediaRepository.upload(items)` → `NetworkResult<List<UploadedMedia>>`
+    (empty list short-circuits with **no** API call; folds via `apiCall`, maps the wire
+    list through the mapper, `mapNotNull` drops unusable rows). Added `implementation(libs.okhttp)`
+    to `sdk-core` (it only had okhttp transitively as `implementation` of `:core:network`).
+- **Tests (+28):**
+  - `MediaMappingTest` (core:model, pure) +11 — full payload maps every field; blank/
+    whitespace id → null; absent url → null; blank url → null; blank mime → octet-stream;
+    absent size → 0; negative size → 0; zero/negative dims → null; zero/negative duration
+    → null; blank thumbnail → null; audio-style (no dims, has duration) keeps positives.
+  - `MediaUploadTest` (sdk-core, pure) +9 — filename passthrough / blank→default; mime
+    passthrough / blank→octet-stream; `formPart` uses the `files` field name + filename;
+    blank filename → default in disposition; resolved content type set on body; blank mime
+    → octet-stream content type; body carries the exact byte count.
+  - `MediaRepositoryTest` (sdk-core, fake `MediaApi`) +8 — empty items → Success(empty)
+    with **no** API call (`coVerify exactly = 0`); single attachment maps wire→domain;
+    multiple preserve order; unusable rows dropped, valid kept; **one part per item under
+    the `files` field** (slot-captured); failure response → Failure; `IOException` →
+    Failure; success with no attachments → empty list.
+- **Edge cases covered:** empty collection (short-circuit, no network); single vs multiple;
+  blank/absent identifiers (id, url) → row dropped, never crashes the batch; boundary
+  numeric values (negative size, zero/negative dims+duration); default-substitution
+  branches (filename, mime); failure-response vs transport-exception paths.
+- **Verify:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL in 3m04s**
+  (full `assembleDebug` + all module JVM unit tests; 836 tasks). Targeted
+  `:core:model` (MediaMappingTest 11/11) + `:sdk-core` (MediaUploadTest 9/9,
+  MediaRepositoryTest 8/8) green.
+- **Reviewer:** PASS — scope `apps/android` only (3 edits in `:core:network`/`:sdk-core`
+  build + 5 new files; no web/ios/gateway/shared); behavioural tests through the public
+  API (pure mapper, pure builder via okhttp's observable headers/body, repo `NetworkResult`),
+  no tautologies; SDK purity (the upload endpoint + repository + part-builder + wire mapper
+  are stateless **building blocks** in `:core:network`/`:core:model`/`:sdk-core` — no "when
+  to upload" product rule here, that's the composer's next slice); single source of truth
+  (reuses `apiCall`/`NetworkResult`/`ApiResponse`, the `messageAttachmentSchema` wire shape,
+  one `MediaApi`); Instant-App N/A (no UI); Kotlin style (immutable data, early returns in
+  the mapper, plain class for the `ByteArray`-holding `MediaUploadItem` to dodge the array-
+  equality footgun). Surpasses iOS (id-carrying, any-MIME, multi-file vs single-JPEG-avatar).
 
 ### 2026-06-27 — slice `story-publish-retry` ✅
 - **Branch:** `claude/apps/android/story-publish-retry`

@@ -62,13 +62,36 @@ export class ConversationHandler {
         (where) => this.prisma.conversation.findUnique({ where, select: { id: true, identifier: true } })
       );
 
-      const userId = this.socketToUser.get(socket.id);
+      const userIdOrToken = this.socketToUser.get(socket.id);
+      const connectedUser = userIdOrToken ? this.connectedUsers.get(userIdOrToken) : null;
 
-      if (userId) {
-        // Membership check: a user can only join a conversation they are
-        // an active participant of. Banned and removed participants are
-        // both rejected here so the client knows to purge its local
-        // cache and dismiss any open view of the conversation.
+      if (!connectedUser) {
+        socket.emit(SERVER_EVENTS.CONVERSATION_JOIN_ERROR, {
+          conversationId: validated.conversationId,
+          reason: 'not_authenticated',
+          message: 'Non authentifié',
+        });
+        return;
+      }
+
+      if (connectedUser.isAnonymous) {
+        // Anonymous: verify participant owns this exact conversation
+        const participantId = connectedUser.participantId;
+        const participant = await this.prisma.participant.findFirst({
+          where: { id: participantId, conversationId: normalizedId, isActive: true },
+          select: { id: true },
+        });
+        if (!participant) {
+          socket.emit(SERVER_EVENTS.CONVERSATION_JOIN_ERROR, {
+            conversationId: validated.conversationId,
+            reason: 'not_a_member',
+            message: 'Vous n\'êtes pas membre de cette conversation',
+          });
+          return;
+        }
+      } else {
+        // Registered: check participant record by userId
+        const userId = connectedUser.userId!;
         const participant = await this.prisma.participant.findFirst({
           where: { conversationId: normalizedId, userId },
           select: { id: true, bannedAt: true, leftAt: true, isActive: true },
@@ -104,14 +127,15 @@ export class ConversationHandler {
 
       const room = ROOMS.conversation(normalizedId);
       await socket.join(room);
-      if (userId) {
+      const registeredUserId = connectedUser.userId;
+      if (registeredUserId) {
         socket.emit(SERVER_EVENTS.CONVERSATION_JOINED, {
           conversationId: normalizedId,
-          userId
+          userId: registeredUserId
         });
 
         try {
-          const unreadCount = await this.readStatusService.getUnreadCount(userId, normalizedId);
+          const unreadCount = await this.readStatusService.getUnreadCount(registeredUserId, normalizedId);
           socket.emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, { conversationId: normalizedId, unreadCount });
         } catch (err) {
           logger.warn('unread count fetch failed on join (non-blocking)', { conversationId: normalizedId, error: err });

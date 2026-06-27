@@ -129,6 +129,7 @@ export const SocketAuthenticateSchema = z.object({
   userId: z.string().optional(),
   sessionToken: z.string().optional(),
   language: z.string().optional(),
+  token: z.string().optional(),
 });
 
 export type SocketAuthenticateData = z.infer<typeof SocketAuthenticateSchema>;
