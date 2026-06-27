@@ -43,6 +43,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.okhttp)
     implementation(libs.room.ktx)
     implementation(libs.hilt.android)
     implementation(libs.hilt.work)
