@@ -40,6 +40,23 @@ class OutboxDrainerTest {
         )
     }
 
+    private suspend fun enqueueOn(
+        cmid: String,
+        rowLane: String,
+        dependsOn: String? = null,
+    ) {
+        outbox.enqueue(
+            OutboxMutation(
+                OutboxKind.SEND_MESSAGE,
+                rowLane,
+                targetId = cmid,
+                payload = "{}",
+                dependsOn = dependsOn,
+                cmid = cmid,
+            ),
+        )
+    }
+
     private fun drainer(sender: MutationSender) =
         OutboxDrainer(outbox, mapOf(OutboxKind.SEND_MESSAGE to sender))
 
@@ -109,6 +126,84 @@ class OutboxDrainerTest {
         ).drainLane(lane)
 
         assertThat(exhaustedCmids).containsExactly("m1")
+    }
+
+    @Test
+    fun `drainLane holds a dependent while its prerequisite is still pending`() = runTest {
+        val media = OutboxLanes.MEDIA
+        val story = OutboxLanes.STORY
+        enqueueOn("upload", media)
+        enqueueOn("publish", story, dependsOn = "upload")
+        var calls = 0
+
+        val report = drainer { calls++; SendResult.Success }.drainLane(story)
+
+        assertThat(report.stoppedOnBlockedDependency).isTrue()
+        assertThat(report.stoppedOnTransientFailure).isFalse()
+        assertThat(report.delivered).isEqualTo(0)
+        assertThat(calls).isEqualTo(0)
+        assertThat(outbox.stateOf("publish")).isEqualTo(OutboxState.PENDING)
+    }
+
+    @Test
+    fun `drainLane holds a dependent while its prerequisite is inflight`() = runTest {
+        val media = OutboxLanes.MEDIA
+        val story = OutboxLanes.STORY
+        enqueueOn("upload", media)
+        outbox.markInflight("upload")
+        enqueueOn("publish", story, dependsOn = "upload")
+
+        val report = drainer { SendResult.Success }.drainLane(story)
+
+        assertThat(report.stoppedOnBlockedDependency).isTrue()
+        assertThat(outbox.stateOf("publish")).isEqualTo(OutboxState.PENDING)
+    }
+
+    @Test
+    fun `drainLane delivers a dependent once its prerequisite has succeeded`() = runTest {
+        val media = OutboxLanes.MEDIA
+        val story = OutboxLanes.STORY
+        enqueueOn("upload", media)
+        outbox.markSucceeded("upload")
+        enqueueOn("publish", story, dependsOn = "upload")
+
+        val report = drainer { SendResult.Success }.drainLane(story)
+
+        assertThat(report.stoppedOnBlockedDependency).isFalse()
+        assertThat(report.delivered).isEqualTo(1)
+        assertThat(outbox.stateOf("publish")).isNull()
+    }
+
+    @Test
+    fun `drainLane cascade-exhausts a dependent whose prerequisite exhausted`() = runTest {
+        val media = OutboxLanes.MEDIA
+        val story = OutboxLanes.STORY
+        enqueueOn("upload", media)
+        outbox.markExhausted("upload", "upload failed")
+        enqueueOn("publish", story, dependsOn = "upload")
+        val exhaustedCmids = mutableListOf<String>()
+
+        val report = OutboxDrainer(
+            outbox,
+            mapOf(OutboxKind.SEND_MESSAGE to MutationSender { SendResult.Success }),
+            onExhausted = { exhaustedCmids += it.cmid },
+        ).drainLane(story)
+
+        assertThat(report.exhausted).isEqualTo(1)
+        assertThat(report.delivered).isEqualTo(0)
+        assertThat(exhaustedCmids).containsExactly("publish")
+        assertThat(outbox.stateOf("publish")).isEqualTo(OutboxState.EXHAUSTED)
+    }
+
+    @Test
+    fun `drainLane delivers a dependent whose prerequisite never existed`() = runTest {
+        val story = OutboxLanes.STORY
+        enqueueOn("publish", story, dependsOn = "never-enqueued")
+
+        val report = drainer { SendResult.Success }.drainLane(story)
+
+        assertThat(report.delivered).isEqualTo(1)
+        assertThat(outbox.stateOf("publish")).isNull()
     }
 
     @Test
