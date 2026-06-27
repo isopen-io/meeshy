@@ -53,14 +53,14 @@ export function usePrefetch(
 
   const prefetchComponent = useCallback(() => {
     if (loadedRef.current) return;
+    loadedRef.current = true;
 
-    // Précharger le composant
     loader()
       .then(() => {
-        loadedRef.current = true;
         console.log('[Prefetch] Component loaded successfully');
       })
       .catch(err => {
+        loadedRef.current = false;
         console.error('[Prefetch] Failed to load component:', err);
       });
   }, [loader]);
