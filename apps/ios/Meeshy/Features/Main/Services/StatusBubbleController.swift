@@ -146,7 +146,7 @@ private struct MoodReplyConfirmationOverlay: View {
 
     private var moodSummary: String {
         let date = RelativeTimeFormatter.shortString(for: entry.createdAt)
-        let content = (entry.content?.isEmpty == false) ? " \(entry.content!)" : ""
+        let content = entry.content.flatMap { $0.isEmpty ? nil : " \($0)" } ?? ""
         return "\(entry.moodEmoji)\(content) \u{00B7} \(date)"
     }
 
