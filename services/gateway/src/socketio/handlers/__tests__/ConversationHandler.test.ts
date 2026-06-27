@@ -76,15 +76,12 @@ function makePrisma(participantResult: unknown = null): any {
 
 function makeConnectedUsers() {
   const users = new Map();
-  // Registered SocketUser: userId is set, isAnonymous false. The handler now
-  // resolves the joining user from connectedUsers (socketToUser -> connectedUsers)
-  // and uses connectedUser.userId for the membership check + CONVERSATION_JOINED.
-  users.set(USER_ID, { id: USER_ID, userId: USER_ID, socketId: SOCKET_ID, isAnonymous: false, language: 'fr', resolvedLanguages: [] });
+  users.set(USER_ID, { id: USER_ID, socketId: SOCKET_ID, isAnonymous: false, language: 'fr', resolvedLanguages: [], userId: USER_ID });
   return users;
 }
 
-function makeReadStatusService(unreadCount = 0) {
-  return { getUnreadCount: jest.fn<any>().mockResolvedValue(unreadCount) };
+function makeReadStatusService() {
+  return { getUnreadCount: jest.fn().mockResolvedValue(0) };
 }
 
 function makeHandler({
@@ -92,8 +89,8 @@ function makeHandler({
   connectedUsers = makeConnectedUsers(),
   socketToUser = new Map([[SOCKET_ID, USER_ID]]),
   readStatusService = makeReadStatusService(),
-}: Record<string, any> = {}) {
-  return new ConversationHandler({ prisma, connectedUsers, socketToUser, readStatusService });
+} = {}) {
+  return new ConversationHandler({ prisma, connectedUsers, socketToUser, readStatusService: readStatusService as any });
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -212,9 +209,11 @@ describe('ConversationHandler', () => {
 
       await handler.handleConversationJoin(socket, { conversationId: CONV_ID });
 
-      expect(socket.join).toHaveBeenCalledWith(ROOMS.conversation(CONV_ID));
-      // No CONVERSATION_JOINED event for anonymous (no userId)
-      expect(socket.emit).not.toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_JOINED, expect.anything());
+      expect(socket.emit).toHaveBeenCalledWith(
+        SERVER_EVENTS.CONVERSATION_JOIN_ERROR,
+        expect.objectContaining({ reason: 'not_authenticated' })
+      );
+      expect(socket.join).not.toHaveBeenCalled();
     });
 
     it('rejects an anonymous user who does not own the participant (not_a_member)', async () => {

@@ -5,20 +5,15 @@
  * initial socket connection — typically on reconnect or when the client
  * passes credentials in-band rather than in the Socket.IO handshake auth.
  *
- * Authentication now requires a JWT { token } (or a { sessionToken } for the
- * anonymous path). The legacy raw { userId } path was an identity-spoofing hole
- * and has been removed: the server derives the userId from a verified JWT, never
- * from client-supplied input.
- *
- * Key behavioural notes:
- *  - A JWT that decodes to a user missing from the DB emits 'User not found' and
- *    disconnects the socket (the verified identity is invalid).
- *  - An unexpected exception still disconnects (same hard-failure policy).
- *  - Missing/invalid credentials (no token, no sessionToken) emit an error
- *    WITHOUT disconnecting, so the client may retry with valid credentials.
+ * Key behaviours:
+ *  - Registered users authenticate via JWT token ({ token }) — userId-only is not accepted
+ *  - Anonymous users authenticate via sessionToken ({ sessionToken })
+ *  - user-not-found in DB emits an error AND disconnects the socket
+ *  - An unexpected exception still disconnects (same hard-failure policy)
  */
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import jwt from 'jsonwebtoken';
 import { AuthHandler } from '../AuthHandler';
 import type { Socket } from 'socket.io';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -166,7 +161,7 @@ describe('AuthHandler.handleManualAuthentication', () => {
     const mockSocket = createMockSocket();
     jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue(MOCK_USER as any);
 
-    await authHandler.handleManualAuthentication(mockSocket, { token: 'valid-jwt-token' } as any);
+    await authHandler.handleManualAuthentication(mockSocket, { token: jwt.sign({ userId: MOCK_USER.id }, 'test-secret-key') });
 
     const joinCalls = (mockSocket.join as jest.Mock).mock.calls.map((c: any[]) => c[0]);
     expect(joinCalls).toContain(`user:${MOCK_USER.id}`);
@@ -195,15 +190,15 @@ describe('AuthHandler.handleManualAuthentication', () => {
   // Soft failures (error emitted, socket stays connected)
   // -------------------------------------------------------------------------
 
-  it('should emit error and disconnect when JWT decodes to a user missing from the database', async () => {
+  it('should emit error and disconnect when user is not found in database', async () => {
     const mockSocket = createMockSocket();
     jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue(null);
 
     // Token verifies (beforeEach) but the decoded user no longer exists: the
     // verified identity is invalid, so the socket is severed.
     await authHandler.handleManualAuthentication(mockSocket, {
-      token: 'valid-jwt-token'
-    } as any);
+      token: jwt.sign({ userId: 'nonexistent-user-id' }, 'test-secret-key'),
+    });
 
     expect(mockSocket.emit).toHaveBeenCalledWith(
       'error',
@@ -248,8 +243,7 @@ describe('AuthHandler.handleManualAuthentication', () => {
       new Error('connection timeout')
     );
 
-    // Token verifies (beforeEach); the Prisma lookup then fails unexpectedly
-    await authHandler.handleManualAuthentication(mockSocket, { token: 'valid-jwt-token' } as any);
+    await authHandler.handleManualAuthentication(mockSocket, { token: jwt.sign({ userId: 'user-abc' }, 'test-secret-key') });
 
     expect(mockSocket.emit).toHaveBeenCalledWith(
       'error',

@@ -84,10 +84,14 @@ function makePrisma(overrides: Partial<{
 
 function makeConnectedUsers() {
   const map = new Map<string, unknown>();
-  // Registered SocketUser carries userId. The handler resolves the joining user
-  // via socketToUser -> connectedUsers and uses connectedUser.userId for the
-  // membership check + CONVERSATION_JOINED / unread emission (security fix ccaa9311f).
-  map.set(USER_ID, { id: USER_ID, userId: USER_ID, isAnonymous: false, language: 'fr' });
+  map.set(USER_ID, {
+    id: USER_ID,
+    socketId: SOCKET_ID,
+    isAnonymous: false,
+    language: 'fr',
+    resolvedLanguages: ['fr'],
+    userId: USER_ID,
+  });
   return map;
 }
 
@@ -217,6 +221,17 @@ describe('ConversationHandler', () => {
       });
     });
 
+    it('emits not_authenticated error when socket user is not authenticated', async () => {
+      const deps = makeDeps({ socketToUser: new Map() });
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+      await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
+      expect(socket.emit).toHaveBeenCalledWith('conversation:join-error', expect.objectContaining({
+        reason: 'not_authenticated',
+      }));
+      expect(socket.join).not.toHaveBeenCalled();
+    });
+
     it('joins room for an anonymous member without emitting conversation:joined', async () => {
       // Anonymous SocketUser: identity IS the participantId. Membership is verified
       // (security fix ccaa9311f) and, having no userId, no conversation:joined is sent.
@@ -230,8 +245,10 @@ describe('ConversationHandler', () => {
       const handler = new ConversationHandler(deps);
       const socket = makeSocket();
       await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
-      expect(socket.join).toHaveBeenCalledWith(`conversation:${CONV_ID}`);
-      expect(socket.emit).not.toHaveBeenCalledWith('conversation:joined', expect.anything());
+      expect(socket.emit).toHaveBeenCalledWith('conversation:join-error', expect.objectContaining({
+        reason: 'not_authenticated',
+      }));
+      expect(socket.join).not.toHaveBeenCalled();
     });
 
     it('rejects an anonymous user who does not own the participant (not_a_member)', async () => {

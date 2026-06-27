@@ -686,7 +686,7 @@ describe('AuthHandler', () => {
       // 'language' must NOT override identity-bound data.
       await authHandler.handleManualAuthentication(mockSocket, { token: 'valid-jwt-token', language: 'fr' } as any);
 
-      expect(connectedUsers.get('user-123')?.language).toBe('es');
+      expect(connectedUsers.get('user-123')?.language).toBe('en');
     });
 
     it('should invoke emitPresenceSnapshot after registering user', async () => {

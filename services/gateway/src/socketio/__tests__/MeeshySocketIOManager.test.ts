@@ -1214,6 +1214,19 @@ describe('MeeshySocketIOManager', () => {
       expect(manager.getStats().translations_sent).toBe(before + 3);
     });
 
+    it('drops translation and does not emit to user when message not found in DB', async () => {
+      prisma.message.findUnique.mockResolvedValue(null);
+      // User in connectedUsers — verifies that the removed direct-emit fallback is not called    
+          (manager as any).connectedUsers.set('user-en', {
+        id: 'user-en', socketId: 'sock-en', isAnonymous: false, language: 'en', resolvedLanguages: ['en'],
+      });
+      const fakeSocket = { emit: jest.fn() };
+      ioState.sockets.sockets.set('sock-en', fakeSocket);
+
+      await (manager as any)._handleTextTranslationReady(baseData);
+      expect(fakeSocket.emit).not.toHaveBeenCalled();
+    });
+      
     it('drops the translation (no direct socket emit) when no conversation is found', async () => {
       prisma.message.findUnique.mockResolvedValue(null);
       // A connected user with a matching language must NOT receive a direct emit:
@@ -1227,7 +1240,6 @@ describe('MeeshySocketIOManager', () => {
       ioState.sockets.sockets.set('sock-en', fakeSocket);
 
       await (manager as any)._handleTextTranslationReady(baseData);
-
       expect(fakeSocket.emit).not.toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_TRANSLATION, expect.anything());
     });
 
