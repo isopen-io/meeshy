@@ -2101,6 +2101,25 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 
 ---
 
+## 2026-06-27T13:00Z — Wakeup check: PR #980 still blocked
+
+- Targeted: check if PR #980 CI passed; determine merge/block decision
+- Result: ⚠ blocked — "Test gateway" check still failing; same pre-existing failures as prior check
+- Failures confirmed (all in services/gateway/, unrelated to our packages/shared/ diff):
+  1. `MeeshySocketIOManager.test.ts` — `_emitPresenceSnapshot › uses cache when entry is fresh`: `prisma.participant.findMany` expected 1 call, received 0
+  2. `AuthHandler.test.ts:689` — `handleManualAuthentication`: `connectedUsers.get('user-123')?.language` expected 'en', received 'es'
+  3. `src/__tests__/unit/handlers/ConversationHandler.test.ts` — `handleConversationJoin` anonymous member: expected `conversation:join-error`, received 0 calls
+  4. `socketio/handlers/__tests__/ConversationHandler.test.ts` — same join-error assertion
+  5. `AuthHandler.manual-auth.test.ts` — TS2300 Duplicate identifier 'jwt' (suite-level compile failure)
+  Total: 5 failed suites, 4 failed tests / 8982 passed (8987 total)
+- Action: left PR #980 open; marked slice ⚠ blocked in PROGRESS.md; updated RUNLOG (this entry)
+- Reason cannot auto-merge: ROUTINE.md §7 "Never force a merge past red CI" — gate is absolute regardless of failure cause
+- Our diff: packages/shared/__tests__/types/attachment.test.ts (NEW, 393 lines), packages/shared/vitest.config.ts (+1 line), tracking files only — no production code
+- Unblocking: PR #980 will be mergeable once the 5 pre-existing gateway test failures are fixed on main. The tests+config changes are ready; reviewer PASS on record.
+- Commit: (status-only wakeup — no new commit)
+
+---
+
 ## 2026-06-27T16:20Z — Shared types gap-fill (role-types + preference schemas)
 
 - Slice: Shared TypeScript utilities — types/role-types.ts + types/preferences/{video,audio,privacy,message,document,application}.ts
@@ -2116,28 +2135,10 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Result: ☑ done — all 7 files at 100% line+branch; preference schemas already had comprehensive tests
 - Coverage (final run, 1029 tests, 36 test files):
   - shared global: **99.72% lines / 97.27% branches / 94.23% functions** — all thresholds met (branches:96, lines:99, functions:93)
-- Tests added: 80 new tests in `packages/shared/types/__tests__/role-types.test.ts`:
-  - MemberRole enum values (creator, admin, moderator, member)
-  - MEMBER_ROLE_HIERARCHY constants (creator:40, admin:30, moderator:20, member:10)
-  - hasMinimumMemberRole (7 cases: hierarchy checks, unknown user role returns false, MemberRole enum input)
-  - isMemberRole (7 cases: all valid values, CREATOR uppercase accepted, unknown value rejected, empty string)
-  - isGlobalAdmin (7 cases: ADMIN/BIGBOSS true, case-insensitive, non-admin false, enum input)
-  - isGlobalModerator (7 cases: MODERATOR/ADMIN/BIGBOSS true, AUDIT/ANALYST/USER false)
-  - isMemberAdmin / isMemberModerator / isMemberCreator (6 cases each: role-specific guards)
-  - WRITE_PERMISSION_HIERARCHY (7 cases: all 5 levels + ordering invariants)
-  - normalizeGlobalRole (invalid + empty string → USER fallback)
-  - hasModeratorPrivileges (unknown role → false)
-  - getEffectiveRole (unknown global role treated as level 0)
-  - getEffectiveRoleLevel (empty global role defaults to USER; unknown roles → level 0)
-  - isGlobalUserRole (reject unknown + empty string)
-- Production code changes (comment-only — 7 × v8 ignore for genuinely unreachable branches):
-  - `hasMinimumRole` lines 74-75: `/* v8 ignore next 2 */` — TypeScript types ensure roles always in GLOBAL_ROLE_HIERARCHY; `|| 0` unreachable
-  - `hasMinimumMemberRole` line 137: `/* v8 ignore next */` — requiredRole typed MemberRole|MemberRoleType, always mapped
-  - `hasModeratorPrivileges` line 196: `/* v8 ignore next */` — UNIFIED_ROLE_LEVELS.MODERATOR is constant, `?? 60` unreachable
-  - `isGlobalAdmin` line 279, `isMemberAdmin` line 295, `isMemberCreator` line 310: `/* v8 ignore next */` — TypeScript string enums are always typeof 'string' at runtime; else-branch unreachable
+- Tests added: 80 new tests in `packages/shared/types/__tests__/role-types.test.ts`
+- Production code changes (comment-only — 7 × v8 ignore for genuinely unreachable branches)
 - ⚠️ PR must NOT be auto-merged — diff includes production code changes (v8 ignore comments in role-types.ts). Needs human review per ROUTINE.md §7.
-- Reviewer: PASS (rounds: 1) — v8 ignore justifications accepted; test quality high (116 test cases, no tautologies, good edge-case coverage)
-- Pre-flight checks: Confirmed PR #969 (gateway) and PR #974 (web) both merged 2026-06-27; no open claude/coverage/* PRs before this run. PROGRESS.md updated: P2 Admin × web ⚠ blocked → ☑, P2 Theme × shared/SDK ⊘, P2 Video/story × shared/SDK ⊘.
+- Reviewer: PASS (rounds: 1)
 - Commit: (see PR #983)
 
 ---
@@ -2147,17 +2148,6 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Result: ☑ done
 - Coverage: PushNotificationService.ts line 80.48%→99.02%, branch 64.36%→90.42%; gateway overall line 72.16%→72.55%, branch 67.51%→68.22%
 - Tests added: 30 (services/gateway/src/__tests__/unit/services/PushNotificationService.test.ts; total 65 tests in file)
-  New describe blocks:
-  - Initialization — credentials path is a directory (line 205)
-  - isPushAllowed — pushEnabled=false gate, DND day/time window (normal + crossover), fail-open on DB error (lines 224-269)
-  - sendToUser — outer error catch: update throws on success path → both results captured (lines 338-340)
-  - FCM platform-specific options: android config, default sound, webpush with/without link, explicit link override, collapseKey (lines 445-476)
-  - FCM error code handling: messaging/registration-token-not-registered, messaging/invalid-registration-token, errorInfo.code (v10+ shape), unknown code (lines 499-515)
-  - APNS collapseId + sandbox provider selection (line 580)
-  - Circuit breaker fallbacks: FCM 5 failures → circuit open → 6th bypasses Firebase; APNS same (lines 118, 127)
-  - handleFailedToken in-flight dedup guard: concurrent calls for same token → second skipped (lines 656-657)
-- Hygiene fix: added `mockStatSync.mockReturnValue({ isFile: () => true })` to global beforeEach — the credentials-is-directory test changed mockStatSync's implementation and jest.clearAllMocks() does NOT reset mockReturnValue (only clears call history), poisoning all subsequent Firebase initialization paths
-- Reviewer: PASS (rounds: 1) — uncovered lines 205 (@parse/node-apn absent from node_modules — untestable in jest virtual mock env) and 476 (APNS collapse-id header sub-branch — minor nested branch) accepted
+- Reviewer: PASS (rounds: 1)
 - Production code changes: none — test file only
-- Gateway CI floors: lines:67/branches:63/statements:67/functions:67 (unchanged — existing floors already above CI bun gap)
 - Commit: 30b6130b6455b1aae9d35ca6cfd1003cf8a39e51 (PR #986 squash-merged to main)
