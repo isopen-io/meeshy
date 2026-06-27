@@ -358,6 +358,14 @@ class MeeshySocketIOService {
     return this.orchestrator.onConversationNew(listener);
   }
 
+  public onConversationDeleted(listener: (data: { userId: string; conversationId: string }) => void): () => void {
+    return this.orchestrator.onConversationDeleted(listener);
+  }
+
+  public onConversationUpdated(listener: (data: { conversationId: string; updatedBy: { id: string }; updatedAt: string; [key: string]: unknown }) => void): () => void {
+    return this.orchestrator.onConversationUpdated(listener);
+  }
+
   public onAttachmentStatusUpdated(listener: (data: { attachmentId: string; messageId: string; conversationId: string; userId: string; action: string }) => void): () => void {
     return this.orchestrator.onAttachmentStatusUpdated(listener);
   }

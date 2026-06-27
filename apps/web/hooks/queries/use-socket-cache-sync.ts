@@ -547,6 +547,25 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       );
     };
 
+    // Handler for conversation:deleted — user removed the conversation for themselves.
+    const handleConversationDeleted = (data: { userId: string; conversationId: string }) => {
+      const { conversationId: deletedId } = data;
+      if (!deletedId) return;
+      updateInfiniteConversationCache(queryClient, (convs) =>
+        convs.filter((c) => c.id !== deletedId)
+      );
+      queryClient.removeQueries({ queryKey: queryKeys.conversations.detail(deletedId) });
+    };
+
+    // Handler for conversation:updated — metadata changed (title, settings) or lastMessage bump.
+    const handleConversationUpdated = (data: { conversationId: string; updatedBy: { id: string }; updatedAt: string; [key: string]: unknown }) => {
+      const { conversationId: updatedId, updatedBy: _updatedBy, ...rest } = data;
+      if (!updatedId) return;
+      updateInfiniteConversationCache(queryClient, (convs) =>
+        convs.map((c) => c.id === updatedId ? { ...c, ...rest } : c)
+      );
+    };
+
     // Handler for conversation:new — a group was created or the user was added to one.
     // The event carries only partial data, so fetch the full conversation and prepend it.
     const handleConversationNew = (data: { conversationId: string }) => {
@@ -601,6 +620,8 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const unsubscribeLeft = meeshySocketIOService.onConversationLeft(handleConversationLeft);
     const unsubscribeParticipantRole = meeshySocketIOService.onParticipantRoleUpdated(handleParticipantRoleUpdated);
     const unsubscribeConversationNew = meeshySocketIOService.onConversationNew(handleConversationNew);
+    const unsubscribeConversationDeleted = meeshySocketIOService.onConversationDeleted(handleConversationDeleted);
+    const unsubscribeConversationUpdated = meeshySocketIOService.onConversationUpdated(handleConversationUpdated);
 
     return () => {
       unsubscribeMessage?.();
@@ -616,6 +637,8 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       unsubscribeLeft?.();
       unsubscribeParticipantRole?.();
       unsubscribeConversationNew?.();
+      unsubscribeConversationDeleted?.();
+      unsubscribeConversationUpdated?.();
     };
   }, [conversationId, enabled, queryClient]);
 }

@@ -627,6 +627,14 @@ export class SocketIOOrchestrator {
     return this.presenceService.onConversationNew(listener);
   }
 
+  onConversationDeleted(listener: import('./types').ConversationDeletedListener): UnsubscribeFn {
+    return this.presenceService.onConversationDeleted(listener);
+  }
+
+  onConversationUpdated(listener: import('./types').ConversationUpdatedListener): UnsubscribeFn {
+    return this.presenceService.onConversationUpdated(listener);
+  }
+
   // ============ CLEANUP ============
 
   cleanup(): void {

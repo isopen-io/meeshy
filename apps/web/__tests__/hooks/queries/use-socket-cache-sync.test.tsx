@@ -27,6 +27,8 @@ let newMessageCallback: ((message: Message) => void) | null = null;
 let messageEditedCallback: ((message: Message) => void) | null = null;
 let messageDeletedCallback: ((messageId: string) => void) | null = null;
 let translationCallback: ((data: TranslationEvent) => void) | null = null;
+let conversationDeletedCallback: ((data: { userId: string; conversationId: string }) => void) | null = null;
+let conversationUpdatedCallback: ((data: { conversationId: string; updatedBy: { id: string }; updatedAt: string; [key: string]: unknown }) => void) | null = null;
 
 // Mock unsubscribe functions
 const mockUnsubscribeMessage = jest.fn();
@@ -74,6 +76,15 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     onPreferencesUpdated: jest.fn(() => jest.fn()),
     onConversationJoined: jest.fn(() => jest.fn()),
     onConversationLeft: jest.fn(() => jest.fn()),
+    onConversationNew: jest.fn(() => jest.fn()),
+    onConversationDeleted: (callback: (data: { userId: string; conversationId: string }) => void) => {
+      conversationDeletedCallback = callback;
+      return jest.fn();
+    },
+    onConversationUpdated: (callback: (data: { conversationId: string; updatedBy: { id: string }; updatedAt: string; [key: string]: unknown }) => void) => {
+      conversationUpdatedCallback = callback;
+      return jest.fn();
+    },
     onStatusChange: jest.fn(() => () => {}),
   },
 }));
@@ -196,6 +207,8 @@ describe('useSocketCacheSync', () => {
     messageEditedCallback = null;
     messageDeletedCallback = null;
     translationCallback = null;
+    conversationDeletedCallback = null;
+    conversationUpdatedCallback = null;
   });
 
   describe('Event Listener Registration', () => {
@@ -528,6 +541,87 @@ describe('useSocketCacheSync', () => {
       };
 
       expect(cachedData.pages[0].messages[0].translations).toEqual([]);
+    });
+  });
+
+  describe('Conversation Deleted Handler', () => {
+    it('removes the deleted conversation from the infinite cache', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [mockConversation, { ...mockConversation, id: 'conv-2' }], pagination: { total: 2, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationDeletedCallback?.({ userId: 'current-user', conversationId: 'conv-1' });
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      const ids = cached.pages.flatMap(p => p.conversations.map(c => c.id));
+      expect(ids).not.toContain('conv-1');
+      expect(ids).toContain('conv-2');
+    });
+
+    it('is a no-op when the conversation is not in the cache', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [mockConversation], pagination: { total: 1, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationDeletedCallback?.({ userId: 'current-user', conversationId: 'conv-UNKNOWN' });
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      expect(cached.pages[0].conversations).toHaveLength(1);
+    });
+  });
+
+  describe('Conversation Updated Handler', () => {
+    it('updates the matching conversation title in the infinite cache', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [mockConversation], pagination: { total: 1, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationUpdatedCallback?.({ conversationId: 'conv-1', updatedBy: { id: 'user-2' }, updatedAt: new Date().toISOString(), title: 'Renamed Group' });
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      const conv = cached.pages[0].conversations[0];
+      expect((conv as any).title).toBe('Renamed Group');
+    });
+
+    it('updates the lastMessageAt when lastMessageAt is present in the event', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+      const newTime = new Date('2025-01-15T10:00:00Z').toISOString();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [mockConversation], pagination: { total: 1, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationUpdatedCallback?.({ conversationId: 'conv-1', updatedBy: { id: 'user-1' }, updatedAt: newTime, lastMessageAt: newTime });
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      const conv = cached.pages[0].conversations[0];
+      expect((conv as any).lastMessageAt).toBe(newTime);
     });
   });
 });

@@ -24,6 +24,8 @@ import type {
   ReadStatusListener,
   ConversationJoinedListener,
   ConversationNewListener,
+  ConversationDeletedListener,
+  ConversationUpdatedListener,
   UnsubscribeFn
 } from './types';
 
@@ -44,6 +46,8 @@ export class PresenceService {
   private unreadUpdatedListeners: Set<(data: { conversationId: string; unreadCount: number }) => void> = new Set();
   private participantRoleUpdatedListeners: Set<(data: { conversationId: string; userId: string; newRole: string }) => void> = new Set();
   private conversationNewListeners: Set<ConversationNewListener> = new Set();
+  private conversationDeletedListeners: Set<ConversationDeletedListener> = new Set();
+  private conversationUpdatedListeners: Set<ConversationUpdatedListener> = new Set();
 
   /**
    * Setup presence event listeners on socket
@@ -121,6 +125,14 @@ export class PresenceService {
 
     socket.on(SERVER_EVENTS.CONVERSATION_NEW as any, (data: any) => {
       this.conversationNewListeners.forEach(listener => listener(data));
+    });
+
+    socket.on(SERVER_EVENTS.CONVERSATION_DELETED as any, (data: any) => {
+      this.conversationDeletedListeners.forEach(listener => listener(data));
+    });
+
+    socket.on(SERVER_EVENTS.CONVERSATION_UPDATED as any, (data: any) => {
+      this.conversationUpdatedListeners.forEach(listener => listener(data));
     });
   }
 
@@ -213,6 +225,16 @@ export class PresenceService {
     return () => this.conversationNewListeners.delete(listener);
   }
 
+  onConversationDeleted(listener: ConversationDeletedListener): UnsubscribeFn {
+    this.conversationDeletedListeners.add(listener);
+    return () => this.conversationDeletedListeners.delete(listener);
+  }
+
+  onConversationUpdated(listener: ConversationUpdatedListener): UnsubscribeFn {
+    this.conversationUpdatedListeners.add(listener);
+    return () => this.conversationUpdatedListeners.delete(listener);
+  }
+
   /**
    * Cleanup all listeners
    */
@@ -229,6 +251,8 @@ export class PresenceService {
     this.unreadUpdatedListeners.clear();
     this.participantRoleUpdatedListeners.clear();
     this.conversationNewListeners.clear();
+    this.conversationDeletedListeners.clear();
+    this.conversationUpdatedListeners.clear();
   }
 
   /**
