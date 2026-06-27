@@ -312,11 +312,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         Task { @MainActor [weak self] in
             guard let self else { return }
             self.voipToken = nil
-            // Re-arm desiredPushTypes so PushKit emits a fresh
-            // didUpdatePushCredentials with a new token. Without this, the
-            // user has no working VoIP token until next cold start.
-            self.voipRegistry?.desiredPushTypes = []
-            self.voipRegistry?.desiredPushTypes = [.voIP]
+            self.forceReregister()
         }
     }
 

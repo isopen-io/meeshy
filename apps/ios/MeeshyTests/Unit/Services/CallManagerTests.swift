@@ -30,6 +30,7 @@ final class CallStateTests: XCTestCase {
         XCTAssertFalse(CallState.ended(reason: .rejected).isActive)
         XCTAssertFalse(CallState.ended(reason: .missed).isActive)
         XCTAssertFalse(CallState.ended(reason: .failed("error")).isActive)
+        XCTAssertFalse(CallState.ended(reason: .connectionLost).isActive)
     }
 
     func test_equatable() {

@@ -161,7 +161,7 @@ final class WebRTCService {
             // (e.g. relay candidates gathered after STUN, or candidates from a
             // network handoff). Dropping the tail means the freshest paths never
             // reach the ICE agent.
-            if iceCandidateBuffer.count >= 200 {
+            if iceCandidateBuffer.count >= QualityThresholds.iceCandidateBufferCap {
                 iceCandidateBuffer.removeFirst()
                 Logger.webrtc.warning("ICE candidate buffer full — evicting oldest to make room")
             }
