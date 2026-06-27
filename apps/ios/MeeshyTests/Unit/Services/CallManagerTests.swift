@@ -53,6 +53,82 @@ final class CallStateTests: XCTestCase {
     func test_offering_notEqualRinging() {
         XCTAssertNotEqual(CallState.offering, CallState.ringing(isOutgoing: true))
     }
+
+    // MARK: isEnded
+
+    func test_ended_isEnded() {
+        XCTAssertTrue(CallState.ended(reason: .local).isEnded)
+        XCTAssertTrue(CallState.ended(reason: .remote).isEnded)
+        XCTAssertTrue(CallState.ended(reason: .rejected).isEnded)
+        XCTAssertTrue(CallState.ended(reason: .missed).isEnded)
+        XCTAssertTrue(CallState.ended(reason: .failed("err")).isEnded)
+        XCTAssertTrue(CallState.ended(reason: .connectionLost).isEnded)
+    }
+
+    func test_nonEnded_isNotEnded() {
+        XCTAssertFalse(CallState.idle.isEnded)
+        XCTAssertFalse(CallState.connecting.isEnded)
+        XCTAssertFalse(CallState.connected.isEnded)
+        XCTAssertFalse(CallState.offering.isEnded)
+        XCTAssertFalse(CallState.ringing(isOutgoing: true).isEnded)
+        XCTAssertFalse(CallState.ringing(isOutgoing: false).isEnded)
+    }
+
+    // MARK: isRinging
+
+    func test_ringing_isRinging() {
+        XCTAssertTrue(CallState.ringing(isOutgoing: true).isRinging)
+        XCTAssertTrue(CallState.ringing(isOutgoing: false).isRinging)
+    }
+
+    func test_nonRinging_isNotRinging() {
+        XCTAssertFalse(CallState.idle.isRinging)
+        XCTAssertFalse(CallState.offering.isRinging)
+        XCTAssertFalse(CallState.connecting.isRinging)
+        XCTAssertFalse(CallState.connected.isRinging)
+        XCTAssertFalse(CallState.ended(reason: .local).isRinging)
+    }
+
+    // MARK: shouldPresentFullScreenCover
+
+    func test_shouldPresentFullScreenCover_connected_fullScreen_returnsTrue() {
+        XCTAssertTrue(
+            CallState.shouldPresentFullScreenCover(callState: .connected, displayMode: .fullScreen)
+        )
+    }
+
+    func test_shouldPresentFullScreenCover_connected_pip_returnsFalse() {
+        XCTAssertFalse(
+            CallState.shouldPresentFullScreenCover(callState: .connected, displayMode: .pip)
+        )
+    }
+
+    func test_shouldPresentFullScreenCover_ended_fullScreen_returnsTrue() {
+        // End-of-call dismissal panel must still be visible
+        XCTAssertTrue(
+            CallState.shouldPresentFullScreenCover(
+                callState: .ended(reason: .local), displayMode: .fullScreen)
+        )
+    }
+
+    func test_shouldPresentFullScreenCover_idle_fullScreen_returnsFalse() {
+        XCTAssertFalse(
+            CallState.shouldPresentFullScreenCover(callState: .idle, displayMode: .fullScreen)
+        )
+    }
+
+    func test_shouldPresentFullScreenCover_ringing_fullScreen_returnsTrue() {
+        XCTAssertTrue(
+            CallState.shouldPresentFullScreenCover(
+                callState: .ringing(isOutgoing: false), displayMode: .fullScreen)
+        )
+    }
+
+    func test_shouldPresentFullScreenCover_offering_pip_returnsFalse() {
+        XCTAssertFalse(
+            CallState.shouldPresentFullScreenCover(callState: .offering, displayMode: .pip)
+        )
+    }
 }
 
 // MARK: - Perfect Negotiation Role (§3.4)

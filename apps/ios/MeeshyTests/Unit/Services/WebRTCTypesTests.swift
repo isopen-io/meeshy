@@ -1265,3 +1265,230 @@ final class CallStatsReducerTests: XCTestCase {
         XCTAssertEqual(stats.codec, "opus")
     }
 }
+
+// MARK: - CallReliabilityPolicy Tests
+
+final class CallReliabilityPolicyTests: XCTestCase {
+
+    // MARK: evaluateHalfOpen
+
+    func test_evaluateHalfOpen_sufficientInbound_returnsHealthy() {
+        // requiredInboundPackets = 5; exactly at threshold → healthy
+        let outcome = CallReliabilityPolicy.evaluateHalfOpen(
+            inboundPackets: 5,
+            outboundPackets: 10,
+            secondsInConnected: 10,
+            requiredInboundPackets: 5,
+            graceSeconds: 4
+        )
+        XCTAssertEqual(outcome, .healthy)
+    }
+
+    func test_evaluateHalfOpen_aboveThreshold_returnsHealthy() {
+        let outcome = CallReliabilityPolicy.evaluateHalfOpen(
+            inboundPackets: 100,
+            outboundPackets: 100,
+            secondsInConnected: 30,
+            requiredInboundPackets: 5,
+            graceSeconds: 4
+        )
+        XCTAssertEqual(outcome, .healthy)
+    }
+
+    func test_evaluateHalfOpen_belowThreshold_withinGrace_returnsWaiting() {
+        // 0 inbound, 10 outbound, but still inside grace window → waiting
+        let outcome = CallReliabilityPolicy.evaluateHalfOpen(
+            inboundPackets: 0,
+            outboundPackets: 10,
+            secondsInConnected: 2,
+            requiredInboundPackets: 5,
+            graceSeconds: 4
+        )
+        XCTAssertEqual(outcome, .waiting)
+    }
+
+    func test_evaluateHalfOpen_belowThreshold_pastGrace_withOutbound_returnsHealHalfOpen() {
+        // Classic half-open: we're sending, peer isn't responding → ICE restart
+        let outcome = CallReliabilityPolicy.evaluateHalfOpen(
+            inboundPackets: 0,
+            outboundPackets: 50,
+            secondsInConnected: 5,
+            requiredInboundPackets: 5,
+            graceSeconds: 4
+        )
+        XCTAssertEqual(outcome, .healHalfOpen)
+    }
+
+    func test_evaluateHalfOpen_belowThreshold_pastGrace_noOutbound_returnsWaiting() {
+        // Both sides silent (mute/mic-off) — transport is fine, keep waiting
+        let outcome = CallReliabilityPolicy.evaluateHalfOpen(
+            inboundPackets: 0,
+            outboundPackets: 0,
+            secondsInConnected: 5,
+            requiredInboundPackets: 5,
+            graceSeconds: 4
+        )
+        XCTAssertEqual(outcome, .waiting)
+    }
+
+    func test_evaluateHalfOpen_exactlyAtGraceBoundary_noOutbound_returnsWaiting() {
+        // At exactly graceSeconds boundary with no outbound → still waiting (mute case)
+        let outcome = CallReliabilityPolicy.evaluateHalfOpen(
+            inboundPackets: 0,
+            outboundPackets: 0,
+            secondsInConnected: 4.0,
+            requiredInboundPackets: 5,
+            graceSeconds: 4
+        )
+        XCTAssertEqual(outcome, .waiting)
+    }
+
+    func test_evaluateHalfOpen_exactlyAtGraceBoundary_withOutbound_returnsHealHalfOpen() {
+        let outcome = CallReliabilityPolicy.evaluateHalfOpen(
+            inboundPackets: 0,
+            outboundPackets: 1,
+            secondsInConnected: 4.0,
+            requiredInboundPackets: 5,
+            graceSeconds: 4
+        )
+        XCTAssertEqual(outcome, .healHalfOpen)
+    }
+
+    // MARK: evaluateConnecting
+
+    func test_evaluateConnecting_belowRestartThreshold_returnsWaiting() {
+        let outcome = CallReliabilityPolicy.evaluateConnecting(
+            secondsInConnecting: 5,
+            didAttemptRestart: false,
+            restartAfterSeconds: 12,
+            failAfterSeconds: 25
+        )
+        XCTAssertEqual(outcome, .waiting)
+    }
+
+    func test_evaluateConnecting_atRestartThreshold_noRestart_returnsRestartICE() {
+        let outcome = CallReliabilityPolicy.evaluateConnecting(
+            secondsInConnecting: 12,
+            didAttemptRestart: false,
+            restartAfterSeconds: 12,
+            failAfterSeconds: 25
+        )
+        XCTAssertEqual(outcome, .restartICE)
+    }
+
+    func test_evaluateConnecting_pastRestartThreshold_alreadyRestarted_returnsWaiting() {
+        // Already tried ICE restart once — keep waiting until fail threshold
+        let outcome = CallReliabilityPolicy.evaluateConnecting(
+            secondsInConnecting: 15,
+            didAttemptRestart: true,
+            restartAfterSeconds: 12,
+            failAfterSeconds: 25
+        )
+        XCTAssertEqual(outcome, .waiting)
+    }
+
+    func test_evaluateConnecting_atFailThreshold_returnsFailRegardlessOfRestart() {
+        let outcomeNotRestarted = CallReliabilityPolicy.evaluateConnecting(
+            secondsInConnecting: 25,
+            didAttemptRestart: false,
+            restartAfterSeconds: 12,
+            failAfterSeconds: 25
+        )
+        XCTAssertEqual(outcomeNotRestarted, .fail)
+
+        let outcomeAlreadyRestarted = CallReliabilityPolicy.evaluateConnecting(
+            secondsInConnecting: 25,
+            didAttemptRestart: true,
+            restartAfterSeconds: 12,
+            failAfterSeconds: 25
+        )
+        XCTAssertEqual(outcomeAlreadyRestarted, .fail)
+    }
+
+    func test_evaluateConnecting_pastFailThreshold_returnsFail() {
+        let outcome = CallReliabilityPolicy.evaluateConnecting(
+            secondsInConnecting: 60,
+            didAttemptRestart: true,
+            restartAfterSeconds: 12,
+            failAfterSeconds: 25
+        )
+        XCTAssertEqual(outcome, .fail)
+    }
+
+    func test_evaluateConnecting_failThresholdTakesPriorityOverRestartThreshold() {
+        // If both conditions hold (>= failAfterSeconds), fail wins over restartICE
+        let outcome = CallReliabilityPolicy.evaluateConnecting(
+            secondsInConnecting: 30,
+            didAttemptRestart: false,
+            restartAfterSeconds: 12,
+            failAfterSeconds: 25
+        )
+        XCTAssertEqual(outcome, .fail)
+    }
+
+    // MARK: evaluateReconnecting
+
+    func test_evaluateReconnecting_belowBudget_returnsWaiting() {
+        let outcome = CallReliabilityPolicy.evaluateReconnecting(
+            secondsInAttempt: 5,
+            budgetSeconds: 10
+        )
+        XCTAssertEqual(outcome, .waiting)
+    }
+
+    func test_evaluateReconnecting_atBudget_returnsRetry() {
+        let outcome = CallReliabilityPolicy.evaluateReconnecting(
+            secondsInAttempt: 10,
+            budgetSeconds: 10
+        )
+        XCTAssertEqual(outcome, .retry)
+    }
+
+    func test_evaluateReconnecting_pastBudget_returnsRetry() {
+        let outcome = CallReliabilityPolicy.evaluateReconnecting(
+            secondsInAttempt: 30,
+            budgetSeconds: 10
+        )
+        XCTAssertEqual(outcome, .retry)
+    }
+
+    func test_evaluateReconnecting_justBelowBudget_returnsWaiting() {
+        let outcome = CallReliabilityPolicy.evaluateReconnecting(
+            secondsInAttempt: 9.99,
+            budgetSeconds: 10
+        )
+        XCTAssertEqual(outcome, .waiting)
+    }
+
+    // MARK: Default thresholds smoke test
+
+    func test_evaluateHalfOpen_defaultThresholds_healthyAfterSufficientPackets() {
+        let outcome = CallReliabilityPolicy.evaluateHalfOpen(
+            inboundPackets: QualityThresholds.rtpGateRequiredPackets,
+            outboundPackets: 10,
+            secondsInConnected: 10
+        )
+        XCTAssertEqual(outcome, .healthy)
+    }
+
+    func test_evaluateConnecting_defaultThresholds_restartBeforeFail() {
+        let restartOutcome = CallReliabilityPolicy.evaluateConnecting(
+            secondsInConnecting: QualityThresholds.connectingRestartSeconds,
+            didAttemptRestart: false
+        )
+        XCTAssertEqual(restartOutcome, .restartICE)
+
+        let failOutcome = CallReliabilityPolicy.evaluateConnecting(
+            secondsInConnecting: QualityThresholds.connectingFailSeconds,
+            didAttemptRestart: true
+        )
+        XCTAssertEqual(failOutcome, .fail)
+    }
+
+    func test_evaluateReconnecting_defaultThreshold_retryAtBudget() {
+        let outcome = CallReliabilityPolicy.evaluateReconnecting(
+            secondsInAttempt: QualityThresholds.reconnectAttemptBudgetSeconds
+        )
+        XCTAssertEqual(outcome, .retry)
+    }
+}
