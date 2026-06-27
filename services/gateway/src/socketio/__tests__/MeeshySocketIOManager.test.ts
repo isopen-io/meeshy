@@ -1707,7 +1707,14 @@ describe('MeeshySocketIOManager', () => {
       expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.PRESENCE_SNAPSHOT, expect.objectContaining({
         users: expect.arrayContaining([expect.objectContaining({ userId: 'user-x' })]),
       }));
-      expect(prisma.participant.findMany).not.toHaveBeenCalled();
+      // Cache hit: the expensive contacts lookup (stale path) was NOT done.
+      // _emitUnreadCountsSnapshot does run (1 lightweight findMany for conversation IDs)
+      // but the 2-query contacts-building path is skipped entirely.
+      expect(prisma.participant.findMany).toHaveBeenCalledTimes(1);
+      expect(prisma.participant.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        where: expect.objectContaining({ userId: 'user-ps1', isActive: true }),
+        select: { conversationId: true },
+      }));
     });
 
     it('fetches fresh data when cache is stale', async () => {
