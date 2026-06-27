@@ -14,6 +14,7 @@ import {
   type NotificationPreference as NotifPrefs,
 } from '@meeshy/shared/types/preferences';
 import { enhancedLogger, performanceLogger } from '../utils/logger-enhanced';
+import { CircuitBreaker } from '../utils/circuitBreaker';
 
 const pushLogger = enhancedLogger.child({ module: 'PushNotificationService' });
 
@@ -104,6 +105,31 @@ export class PushNotificationService {
   private apnsClientProduction: any = null;
   private apnsClientSandbox: any = null;
   private initialized = false;
+
+  // Circuit breakers prevent hammering FCM/APNs during outages.
+  // OPEN after 5 consecutive failures; recovers after 60s with 2 probe successes.
+  private fcmCircuitBreaker = new CircuitBreaker({
+    name: 'FCM',
+    failureThreshold: 5,
+    failureWindowMs: 60_000,
+    resetTimeoutMs: 60_000,
+    successThreshold: 2,
+    timeout: 10_000,
+    fallback: () => ({ success: false, tokenId: '', error: 'FCM circuit breaker OPEN' }),
+  });
+  private apnsCircuitBreaker = new CircuitBreaker({
+    name: 'APNS',
+    failureThreshold: 5,
+    failureWindowMs: 60_000,
+    resetTimeoutMs: 60_000,
+    successThreshold: 2,
+    timeout: 10_000,
+    fallback: () => ({ success: false, tokenId: '', error: 'APNS circuit breaker OPEN' }),
+  });
+
+  // In-flight deactivation guard: prevents duplicate DB writes when the same
+  // token fails multiple concurrent sends (e.g. a burst of push requests).
+  private deactivatingTokenIds = new Set<string>();
 
   constructor(prisma: PrismaClient) {
     this.prisma = prisma;
@@ -459,10 +485,12 @@ export class PushNotificationService {
         platform: tokenRecord.platform,
         collapseId: payload.collapseId ?? undefined
       };
-      await performanceLogger.withTiming(
-        'push.sendViaFCM',
-        () => this.firebaseAdmin!.messaging().send(message),
-        fcmCorr
+      await this.fcmCircuitBreaker.execute(() =>
+        performanceLogger.withTiming(
+          'push.sendViaFCM',
+          () => this.firebaseAdmin!.messaging().send(message),
+          fcmCorr
+        )
       );
       pushLogger.info('push.sendViaFCM.success', fcmCorr);
       return { success: true, tokenId: tokenRecord.id };
@@ -582,10 +610,12 @@ export class PushNotificationService {
         bundleId: tokenRecord.bundleId ?? undefined,
         collapseId: payload.collapseId ?? undefined
       };
-      const result = await performanceLogger.withTiming(
-        'push.sendViaAPNS',
-        () => client.send(notification, tokenRecord.token) as Promise<{ failed: Array<{ response?: { reason?: string }; status?: number | string }>; sent: unknown[] }>,
-        apnsCorr
+      const result = await this.apnsCircuitBreaker.execute(() =>
+        performanceLogger.withTiming(
+          'push.sendViaAPNS',
+          () => client.send(notification, tokenRecord.token) as Promise<{ failed: Array<{ response?: { reason?: string }; status?: number | string }>; sent: unknown[] }>,
+          apnsCorr
+        )
       );
 
       if (result.failed.length > 0) {
@@ -617,39 +647,50 @@ export class PushNotificationService {
   }
 
   /**
-   * Handle failed token delivery
+   * Handle failed token delivery.
+   * Uses an in-flight guard to prevent duplicate DB writes when the same
+   * token fails multiple concurrent sends in a burst scenario.
    */
   private async handleFailedToken(tokenId: string, error: string): Promise<void> {
-    const token = await this.prisma.pushToken.findUnique({
-      where: { id: tokenId },
-      select: { failedAttempts: true },
-    });
-
-    if (!token) return;
-
-    const newFailedAttempts = token.failedAttempts + 1;
-
-    // Deactivate token after 3 consecutive failures or if explicitly invalid
-    const shouldDeactivate = newFailedAttempts >= 3 ||
-      error === 'TOKEN_INVALID' ||
-      error.includes('NotRegistered') ||
-      error.includes('InvalidRegistration');
-
-    await this.prisma.pushToken.update({
-      where: { id: tokenId },
-      data: {
-        failedAttempts: newFailedAttempts,
-        lastError: error,
-        isActive: !shouldDeactivate,
-      },
-    });
-
-    if (shouldDeactivate) {
-      pushLogger.warn('Token deactivated', {
-        tokenId,
-        failedAttempts: newFailedAttempts,
-        reason: error
+    if (this.deactivatingTokenIds.has(tokenId)) {
+      pushLogger.debug('handleFailedToken skipped (already in-flight)', { tokenId });
+      return;
+    }
+    this.deactivatingTokenIds.add(tokenId);
+    try {
+      const token = await this.prisma.pushToken.findUnique({
+        where: { id: tokenId },
+        select: { failedAttempts: true },
       });
+
+      if (!token) return;
+
+      const newFailedAttempts = token.failedAttempts + 1;
+
+      // Deactivate token after 3 consecutive failures or if explicitly invalid
+      const shouldDeactivate = newFailedAttempts >= 3 ||
+        error === 'TOKEN_INVALID' ||
+        error.includes('NotRegistered') ||
+        error.includes('InvalidRegistration');
+
+      await this.prisma.pushToken.update({
+        where: { id: tokenId },
+        data: {
+          failedAttempts: newFailedAttempts,
+          lastError: error,
+          isActive: !shouldDeactivate,
+        },
+      });
+
+      if (shouldDeactivate) {
+        pushLogger.warn('Token deactivated', {
+          tokenId,
+          failedAttempts: newFailedAttempts,
+          reason: error
+        });
+      }
+    } finally {
+      this.deactivatingTokenIds.delete(tokenId);
     }
   }
 
