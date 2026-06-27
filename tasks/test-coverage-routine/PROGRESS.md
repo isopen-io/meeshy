@@ -51,7 +51,7 @@ A run targets **one (feature × app) cell**. Pick the highest-priority `☐` cel
 | Pri | Feature | gateway | translator | web | iOS | android | shared/SDK |
 |-----|---------|:------:|:----------:|:---:|:---:|:-------:|:----------:|
 | P0 | **Auth** (login/register/JWT/session/2FA/magic-link/pw-reset) | ☑ | ⊘ | ☑ | ☐ | ☐ | ☑ (TS shared; MeeshySDK Swift ⊘ Linux env) |
-| P0 | **Encryption & attachments** (E2EE, AES-GCM, encrypt-then-upload, audio attach) | ☑ | ⊘ | ☑ | ☐ | ☐ | ☑ (encryption-service.ts 100%/94.28%; types/encryption.ts 100%; attachment-validators.ts 100%) |
+| P0 | **Encryption & attachments** (E2EE, AES-GCM, encrypt-then-upload, audio attach) | ☑ | ⊘ | ☑ | ☐ | ☐ | ☑ (encryption-service.ts 100%/94.28%; types/encryption.ts 100%; attachment-validators.ts 100%; types/attachment.ts 100%/100% — 10 functions + constants) |
 | P0 | **Prisme Linguistique** (lang resolution + translation display) | ☑ | ☑ | ☑ | ☐ | ☐ | ☑ (TS shared; MeeshySDK Swift ⊘ Linux env) |
 | P0 | **Messaging core** (send/recv/edit/delete/optimistic/dedup/clientMessageId) | ☑ sub: MessageHandler.ts ☑, messages.ts ☑ (99.69%lines/93.91%branches; 167 tests) | ⊘ | ☑ | ☐ | ☐ | ☑ (client-message-id.ts 100%; MeeshySDK Swift ⊘ Linux env) |
 | P1 | **Real-time** (Socket.IO presence, typing, reactions, delivery, reconnect) | ☑ sub: StatusHandler☑ ConversationHandler☑ AttachmentReactionHandler☑ LocationHandler☑ CallEventsHandler☑ MeeshySocketIOManager☑ | ⊘ | ☑ sub: notification-socketio.singleton☑ use-connection-status☑ use-socketio-messaging☑ | ☐ | ☐ | ☑ (types/status-types.ts 100%/100%; utils/errors.ts 100%/100%; utils/notification-strings.ts 100%/96.96%; MeeshySDK Swift ⊘ Linux env) |
@@ -159,7 +159,7 @@ Measured 2026-06-14. Commands run after `pnpm install` + `cd packages/shared && 
 | translator | `.venv/bin/python -m pytest tests/ -m "not slow and not gpu" --cov=src` | ~39 | n/a | 2026-06-19 (post P1 Voice/audio × translator; +127 tests covering 6 modules; fail_under ratcheted 37→39; diarization GPU methods pragma'd) |
 | iOS | `./apps/ios/meeshy.sh test` | n/a | n/a | not measurable (no macOS/Xcode in CI env) |
 | android | `apps/android/meeshy.sh test` | n/a | n/a | not measurable (no Android SDK in CI env) |
-| shared | `pnpm --filter @meeshy/shared test:coverage` | 99.72 | 97.27 | 2026-06-27 (post shared types gap-fill; +80 tests, 1029 total; types/role-types.ts☑(100%/100%) types/preferences/{video,audio,privacy,message,document,application}.ts☑(100%/100% all); vitest.config.ts coverage include expanded; threshold floor unchanged lines:99/branches:96/functions:93/statements:99) |
+| shared | `pnpm --filter @meeshy/shared test:coverage` | 99.72 | 97.31 | 2026-06-28 (post P0 Enc&attach × shared bonus: types/attachment.ts 100%/100%, +161 tests=1110 total; types/role-types.ts+preferences/* also landed via PR #983; global: stmts:99.72/branch:97.31/funcs:94.14/lines:99.72; threshold floor unchanged lines:99/branches:96/functions:93/statements:99 — all above floor) |
 
 ### Key findings from baseline measurement
 

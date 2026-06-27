@@ -38,6 +38,7 @@ export default defineConfig({
         // which emit no executable JavaScript. Coverage would show 0/0 (no lines to cover).
         // The smoke test in __tests__/types/post.test.ts verifies the module loads without error.
         'types/reaction.ts',
+        'types/attachment.ts',
       ],
       exclude: ['**/*.d.ts', '**/index.ts', '**/signal-store-interface.ts'],
       thresholds: {
