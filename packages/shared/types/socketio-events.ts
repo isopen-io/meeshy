@@ -323,6 +323,15 @@ export const SERVER_EVENTS = {
 
   // --- Agent admin dashboard (room admin:agent) ---
   AGENT_ADMIN_EVENT: 'agent:admin-event',
+
+  // --- Connection health ---
+  /**
+   * Emitted in response to a client `heartbeat` event.
+   * Lets clients measure round-trip latency and detect server-side processing
+   * stalls (socket connected but gateway event loop starved).
+   * Payload: { serverTime: ISO-string, latencyMs: number }
+   */
+  HEARTBEAT_ACK: 'heartbeat:ack',
 } as const;
 
 // Événements du client vers le serveur
@@ -445,6 +454,23 @@ export interface AuthSessionRevokedEventData {
   readonly code: 'session_revoked';
   readonly message: string;
   readonly reason: 'password_changed' | 'logout_all_devices' | 'admin_revoke';
+}
+
+/**
+ * Payload emitted by the server in response to a client `heartbeat` event.
+ * Clients can measure RTT = (received at) - clientTime, and detect stalled
+ * gateway event loops even while the WebSocket connection appears healthy.
+ */
+export interface HeartbeatAckEventData {
+  /** ISO-8601 timestamp of the server's response — use for clock-skew diagnostics */
+  readonly serverTime: string;
+  /**
+   * Round-trip latency hint computed by the gateway when the client includes
+   * a `clientTime` in the heartbeat payload (optional, for backwards compat
+   * with older clients that emit bare `heartbeat` with no payload).
+   * Undefined when the client did not supply `clientTime`.
+   */
+  readonly latencyHintMs?: number;
 }
 
 /**
@@ -1258,6 +1284,9 @@ export interface ServerToClientEvents {
 
   // Share link messages
   [SERVER_EVENTS.LINK_MESSAGE_NEW]: (data: LinkMessageNewEventData) => void;
+
+  // Connection health
+  [SERVER_EVENTS.HEARTBEAT_ACK]: (data: HeartbeatAckEventData) => void;
 }
 
 /**
@@ -1459,8 +1488,8 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.POST_REACTION_REMOVE]: (data: PostReactionRemoveData, callback?: (response: SocketIOResponse<PostReactionUpdateEventData>) => void) => void;
   [CLIENT_EVENTS.POST_REACTION_REQUEST_SYNC]: (data: { postId: string }, callback?: (response: SocketIOResponse<PostReactionSyncEventData>) => void) => void;
 
-  // Presence
-  [CLIENT_EVENTS.HEARTBEAT]: () => void;
+  // Presence — optionally carries clientTime (ms since epoch) for RTT measurement
+  [CLIENT_EVENTS.HEARTBEAT]: (data?: { clientTime?: number }) => void;
 
   // Agent admin dashboard
   [CLIENT_EVENTS.ADMIN_AGENT_SUBSCRIBE]: (callback?: (response: SocketIOResponse) => void) => void;

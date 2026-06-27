@@ -91,6 +91,15 @@ export class MessageHandler {
   private privacyPreferencesService: PrivacyPreferencesService;
   private rateLimiter = getSocketRateLimiter();
 
+  /**
+   * Short-lived in-process cache for (userId, conversationId) → participantId lookups.
+   * Avoids a DB findFirst query on every message send for active users.
+   * TTL: 5 minutes. Invalidated on conversation leave / kick events via
+   * `invalidateParticipantCache`. Key: `${userId}:${conversationId}`.
+   */
+  private participantIdCache = new Map<string, { participantId: string; expiresAt: number }>();
+  private readonly PARTICIPANT_CACHE_TTL_MS = 5 * 60 * 1000;
+
   constructor(deps: MessageHandlerDependencies) {
     this.io = deps.io;
     this.prisma = deps.prisma;
@@ -151,6 +160,23 @@ export class MessageHandler {
         if (callback) callback(errorResponse);
         socket.emit(SERVER_EVENTS.ERROR, {
           message: `Rate limit exceeded. Please wait ${Math.ceil(info.resetIn / 1000)} seconds.`
+        });
+        return;
+      }
+
+      // Per-conversation burst guard: prevents flooding a single conversation
+      // even within the global 20 msg/min budget.
+      const convRateLimitKey = `${userId || participantId}:${validated.conversationId}`;
+      const convRateLimitAllowed = await this.rateLimiter.checkLimit(convRateLimitKey, SOCKET_RATE_LIMITS.MESSAGE_SEND_PER_CONVERSATION);
+      if (!convRateLimitAllowed) {
+        const convInfo = this.rateLimiter.getRateLimitInfo(convRateLimitKey, SOCKET_RATE_LIMITS.MESSAGE_SEND_PER_CONVERSATION);
+        const errorResponse: SocketIOResponse<{ messageId: string }> = {
+          success: false,
+          error: 'Rate limit exceeded'
+        };
+        if (callback) callback(errorResponse);
+        socket.emit(SERVER_EVENTS.ERROR, {
+          message: `Too many messages in this conversation. Please wait ${Math.ceil(convInfo.resetIn / 1000)} seconds.`
         });
         return;
       }
@@ -328,6 +354,22 @@ export class MessageHandler {
         if (callback) callback(errorResponse);
         socket.emit(SERVER_EVENTS.ERROR, {
           message: `Rate limit exceeded. Please wait ${Math.ceil(info.resetIn / 1000)} seconds.`
+        });
+        return;
+      }
+
+      // Per-conversation burst guard (mirrors handleMessageSend logic)
+      const convRateLimitKeyWA = `${userId || participantId}:${validated.conversationId}`;
+      const convRateLimitAllowedWA = await this.rateLimiter.checkLimit(convRateLimitKeyWA, SOCKET_RATE_LIMITS.MESSAGE_SEND_PER_CONVERSATION);
+      if (!convRateLimitAllowedWA) {
+        const convInfoWA = this.rateLimiter.getRateLimitInfo(convRateLimitKeyWA, SOCKET_RATE_LIMITS.MESSAGE_SEND_PER_CONVERSATION);
+        const errorResponse: SocketIOResponse<{ messageId: string }> = {
+          success: false,
+          error: 'Rate limit exceeded'
+        };
+        if (callback) callback(errorResponse);
+        socket.emit(SERVER_EVENTS.ERROR, {
+          message: `Too many messages in this conversation. Please wait ${Math.ceil(convInfoWA.resetIn / 1000)} seconds.`
         });
         return;
       }
@@ -866,6 +908,12 @@ export class MessageHandler {
 
     if (!userId) return null;
 
+    const cacheKey = `${userId}:${conversationId}`;
+    const cached = this.participantIdCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.participantId;
+    }
+
     const result = await resolveParticipant({
       prisma: this.prisma,
       userIdOrToken: userId,
@@ -873,7 +921,30 @@ export class MessageHandler {
       connectedUsers: this.connectedUsers,
     });
 
+    if (result?.participantId) {
+      this.participantIdCache.set(cacheKey, {
+        participantId: result.participantId,
+        expiresAt: Date.now() + this.PARTICIPANT_CACHE_TTL_MS,
+      });
+    }
+
     return result?.participantId ?? null;
+  }
+
+  /**
+   * Invalidate participantId cache entries for a given user (e.g. on leave/kick).
+   * Pass conversationId to remove just one entry, omit to clear all for the user.
+   */
+  invalidateParticipantCache(userId: string, conversationId?: string): void {
+    if (conversationId) {
+      this.participantIdCache.delete(`${userId}:${conversationId}`);
+    } else {
+      for (const key of this.participantIdCache.keys()) {
+        if (key.startsWith(`${userId}:`)) {
+          this.participantIdCache.delete(key);
+        }
+      }
+    }
   }
 
   /**

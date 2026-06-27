@@ -50,7 +50,10 @@ const mockGetSocketRateLimiter = jest.fn(() => ({
 }));
 jest.mock('../../../utils/socket-rate-limiter', () => ({
   getSocketRateLimiter: () => mockGetSocketRateLimiter(),
-  SOCKET_RATE_LIMITS: { MESSAGE_SEND: { maxRequests: 20, windowMs: 60000 } },
+  SOCKET_RATE_LIMITS: {
+    MESSAGE_SEND: { maxRequests: 20, windowMs: 60000, keyPrefix: 'socket:message:send' },
+    MESSAGE_SEND_PER_CONVERSATION: { maxRequests: 10, windowMs: 10000, keyPrefix: 'socket:message:send-conv' },
+  },
 }));
 
 const mockIsBlockedBetween = jest.fn() as jest.Mock<any>;
@@ -2116,6 +2119,118 @@ describe('MessageHandler', () => {
       expect(callback).toHaveBeenCalledWith(
         expect.objectContaining({ success: false, error: 'Failed to send message' })
       );
+    });
+  });
+
+  // ── Per-conversation rate limiting ────────────────────────────────────────
+
+  describe('per-conversation rate limit', () => {
+    beforeEach(() => {
+      mockValidateSocketEvent.mockImplementation((_schema: unknown, data: unknown) => ({
+        success: true,
+        data: { ...(data as object), clientMessageId: VALID_CID },
+      }));
+      mockValidateMessageLength.mockReturnValue({ isValid: true });
+      mockIsBlockedBetween.mockResolvedValue(false);
+      mockResolveParticipant.mockResolvedValue({
+        participantId: PARTICIPANT_ID,
+        userId: USER_ID,
+        isAnonymous: false,
+        displayName: 'Test',
+      });
+    });
+
+    it('blocks handleMessageSend when per-conversation limit exceeded', async () => {
+      // Global limit passes, per-conversation limit fails
+      mockCheckLimit
+        .mockResolvedValueOnce(true)   // global MESSAGE_SEND
+        .mockResolvedValueOnce(false); // per-conversation MESSAGE_SEND_PER_CONVERSATION
+
+      await handler.handleMessageSend(socket, makeValidSendData(), callback);
+
+      expect(callback).toHaveBeenCalledWith(
+        expect.objectContaining({ success: false, error: 'Rate limit exceeded' })
+      );
+      expect(socket.emit).toHaveBeenCalledWith(
+        'error',
+        expect.objectContaining({ message: expect.stringContaining('conversation') })
+      );
+    });
+
+    it('blocks handleMessageSendWithAttachments when per-conversation limit exceeded', async () => {
+      mockCheckLimit
+        .mockResolvedValueOnce(true)
+        .mockResolvedValueOnce(false);
+
+      await handler.handleMessageSendWithAttachments(socket, makeValidSendData(), callback);
+
+      expect(callback).toHaveBeenCalledWith(
+        expect.objectContaining({ success: false, error: 'Rate limit exceeded' })
+      );
+    });
+
+    it('uses composite userId:conversationId key for per-conversation check', async () => {
+      mockCheckLimit.mockResolvedValue(true);
+      mockResolveParticipant.mockResolvedValue({ participantId: PARTICIPANT_ID, userId: USER_ID, isAnonymous: false, displayName: 'T' });
+      (deps.messagingService.handleMessage as jest.Mock<any>).mockResolvedValue({ success: true, data: { id: 'msg-1', conversationId: VALID_CONV_ID } });
+      mockGroupSocketsByLanguage.mockReturnValue(new Map());
+
+      await handler.handleMessageSend(socket, makeValidSendData(), callback);
+
+      const calls = (mockCheckLimit as jest.Mock<any>).mock.calls;
+      const convCall = calls.find((c: any[]) => {
+        const key: string = c[0];
+        return key.includes(VALID_CONV_ID);
+      });
+      expect(convCall).toBeDefined();
+    });
+  });
+
+  // ── Participant ID cache ──────────────────────────────────────────────────
+
+  describe('invalidateParticipantCache', () => {
+    it('removes specific conversation entry', () => {
+      // Prime the cache via a successful send
+      (handler as any).participantIdCache.set(`${USER_ID}:${VALID_CONV_ID}`, {
+        participantId: PARTICIPANT_ID,
+        expiresAt: Date.now() + 300_000,
+      });
+
+      handler.invalidateParticipantCache(USER_ID, VALID_CONV_ID);
+
+      expect((handler as any).participantIdCache.has(`${USER_ID}:${VALID_CONV_ID}`)).toBe(false);
+    });
+
+    it('removes all entries for user when conversationId omitted', () => {
+      const conv2 = 'b2c3d4e5f6a1b2c3d4e5f6a1';
+      (handler as any).participantIdCache.set(`${USER_ID}:${VALID_CONV_ID}`, {
+        participantId: PARTICIPANT_ID,
+        expiresAt: Date.now() + 300_000,
+      });
+      (handler as any).participantIdCache.set(`${USER_ID}:${conv2}`, {
+        participantId: PARTICIPANT_ID,
+        expiresAt: Date.now() + 300_000,
+      });
+
+      handler.invalidateParticipantCache(USER_ID);
+
+      expect((handler as any).participantIdCache.size).toBe(0);
+    });
+
+    it('leaves other users unaffected', () => {
+      const OTHER_USER = 'other0011223344556677889900';
+      (handler as any).participantIdCache.set(`${USER_ID}:${VALID_CONV_ID}`, {
+        participantId: PARTICIPANT_ID,
+        expiresAt: Date.now() + 300_000,
+      });
+      (handler as any).participantIdCache.set(`${OTHER_USER}:${VALID_CONV_ID}`, {
+        participantId: 'other-participant',
+        expiresAt: Date.now() + 300_000,
+      });
+
+      handler.invalidateParticipantCache(USER_ID);
+
+      expect((handler as any).participantIdCache.has(`${OTHER_USER}:${VALID_CONV_ID}`)).toBe(true);
     });
   });
 });
