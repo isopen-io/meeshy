@@ -4054,4 +4054,38 @@ describe('MeeshySocketIOManager', () => {
       expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.anything());
     });
   });
+
+  // -------------------------------------------------------------------------
+  // joinUserToConversationRoom — server-side room join when user is added
+  // to a conversation while already connected (e.g. group invite mid-session)
+  // -------------------------------------------------------------------------
+
+  describe('joinUserToConversationRoom', () => {
+    it('joins all active sockets of the user to the conversation room', async () => {
+      const socketA = { join: jest.fn().mockResolvedValue(undefined) };
+      const socketB = { join: jest.fn().mockResolvedValue(undefined) };
+      ioState.sockets.sockets.set('sock-join-a', socketA);
+      ioState.sockets.sockets.set('sock-join-b', socketB);
+
+      (manager as any).userSockets.set('user-joined', new Set(['sock-join-a', 'sock-join-b']));
+
+      await manager.joinUserToConversationRoom('user-joined', 'conv-new-1234');
+
+      expect(socketA.join).toHaveBeenCalledWith(ROOMS.conversation('conv-new-1234'));
+      expect(socketB.join).toHaveBeenCalledWith(ROOMS.conversation('conv-new-1234'));
+    });
+
+    it('is a no-op when the user has no active sockets', async () => {
+      // userSockets has no entry for this user — should not throw
+      await expect(manager.joinUserToConversationRoom('user-offline', 'conv-new-1234')).resolves.toBeUndefined();
+    });
+
+    it('tolerates a missing socket object gracefully', async () => {
+      // socket registered in userSockets but gone from io.sockets (disconnected mid-flight)
+      (manager as any).userSockets.set('user-stale', new Set(['stale-sock-gone']));
+      // do NOT add 'stale-sock-gone' to ioState.sockets.sockets
+
+      await expect(manager.joinUserToConversationRoom('user-stale', 'conv-new-1234')).resolves.toBeUndefined();
+    });
+  });
 });
