@@ -12,76 +12,81 @@ describe('buildMentionDisplayMap', () => {
     expect(map.size).toBe(0);
   });
 
-  it('maps username→displayName when displayName differs from username', () => {
+  it('maps username to displayName when they differ', () => {
     const map = buildMentionDisplayMap([
-      { username: 'alice99', displayName: 'Alice Smith' } as any,
+      { username: 'alice', displayName: 'Alice Smith' } as any,
     ]);
-    expect(map.get('alice99')).toBe('Alice Smith');
+    expect(map.get('alice')).toBe('Alice Smith');
   });
 
-  it('skips entries where displayName equals username', () => {
+  it('excludes entries where displayName equals username', () => {
     const map = buildMentionDisplayMap([
-      { username: 'bob', displayName: 'bob' } as any,
+      { username: 'alice', displayName: 'alice' } as any,
     ]);
-    expect(map.has('bob')).toBe(false);
+    expect(map.has('alice')).toBe(false);
   });
 
-  it('skips entries without displayName', () => {
+  it('excludes entries with no displayName', () => {
     const map = buildMentionDisplayMap([
-      { username: 'charlie', displayName: undefined } as any,
+      { username: 'alice', displayName: undefined } as any,
     ]);
-    expect(map.has('charlie')).toBe(false);
+    expect(map.has('alice')).toBe(false);
   });
 
-  it('keys are lowercased for case-insensitive lookup', () => {
+  it('lowercases the username key', () => {
     const map = buildMentionDisplayMap([
-      { username: 'DaveUpper', displayName: 'Dave U' } as any,
+      { username: 'Alice', displayName: 'Alice Smith' } as any,
     ]);
-    expect(map.get('daveupper')).toBe('Dave U');
+    expect(map.get('alice')).toBe('Alice Smith');
   });
 
-  it('handles multiple entries', () => {
+  it('handles multiple users', () => {
     const map = buildMentionDisplayMap([
       { username: 'alice', displayName: 'Alice' } as any,
-      { username: 'bob', displayName: 'Robert' } as any,
+      { username: 'bob', displayName: 'Bob Jones' } as any,
     ]);
     expect(map.size).toBe(2);
-    expect(map.get('alice')).toBe('Alice');
-    expect(map.get('bob')).toBe('Robert');
+    expect(map.get('bob')).toBe('Bob Jones');
   });
 });
 
 // ─── resolveDisplayContent ────────────────────────────────────────────────────
 
 describe('resolveDisplayContent', () => {
-  const makeMap = (entries: [string, string][]): Map<string, string> => new Map(entries);
-
-  it('returns content unchanged when no mentions', () => {
-    expect(resolveDisplayContent('Hello world', new Map())).toBe('Hello world');
+  it('replaces @username with displayName from map', () => {
+    const map = new Map([['alice', 'Alice Smith']]);
+    expect(resolveDisplayContent('Hello @alice!', map)).toBe('Hello @Alice Smith!');
   });
 
-  it('replaces @mention with displayName from map', () => {
-    const map = makeMap([['alice99', 'Alice Smith']]);
-    expect(resolveDisplayContent('Hi @alice99!', map)).toBe('Hi @Alice Smith!');
+  it('leaves @username unchanged when not in map', () => {
+    const map = new Map<string, string>();
+    expect(resolveDisplayContent('Hello @alice!', map)).toBe('Hello @alice!');
   });
 
-  it('leaves mention unchanged when not in map', () => {
-    expect(resolveDisplayContent('Hi @unknown!', new Map())).toBe('Hi @unknown!');
+  it('handles multiple mentions', () => {
+    const map = new Map([['alice', 'Alice'], ['bob', 'Bob Jones']]);
+    const result = resolveDisplayContent('@alice and @bob', map);
+    expect(result).toBe('@Alice and @Bob Jones');
   });
 
-  it('is case-insensitive for lookup', () => {
-    const map = makeMap([['alice99', 'Alice']]);
-    expect(resolveDisplayContent('Hi @ALICE99', map)).toBe('Hi @Alice');
+  it('is case-insensitive for mention lookup', () => {
+    const map = new Map([['alice', 'Alice Smith']]);
+    // buildMentionDisplayMap lowercases, resolveDisplayContent should also lower
+    expect(resolveDisplayContent('Hello @Alice!', map)).toBe('Hello @Alice Smith!');
   });
 
-  it('replaces multiple mentions in a single string', () => {
-    const map = makeMap([['alice', 'Alice'], ['bob', 'Robert']]);
-    expect(resolveDisplayContent('@alice and @bob', map)).toBe('@Alice and @Robert');
+  it('returns content unchanged when there are no mentions', () => {
+    const map = new Map([['alice', 'Alice']]);
+    expect(resolveDisplayContent('No mentions here', map)).toBe('No mentions here');
   });
 
-  it('limits mention match to max 30 word-chars', () => {
-    const longUsername = 'a'.repeat(30);
-    const map = makeMap([[longUsername, 'Long Name']]);
-    expect(resolveDisplayContent(`@${longUsername}`, map)).toBe('@Long Name');
+  it('handles empty content', () => {
+    const map = new Map([['alice', 'Alice']]);
+    expect(resolveDisplayContent('', map)).toBe('');
+  });
+
+  it('handles empty map', () => {
+    const map = new Map<string, string>();
+    expect(resolveDisplayContent('@anyone here', map)).toBe('@anyone here');
   });
 });

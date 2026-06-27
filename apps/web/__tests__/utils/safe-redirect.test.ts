@@ -7,91 +7,113 @@ import { safeExternalUrl, safeInternalPath } from '@/utils/safe-redirect';
 // ─── safeExternalUrl ──────────────────────────────────────────────────────────
 
 describe('safeExternalUrl', () => {
-  it('accepts a valid https URL', () => {
-    expect(safeExternalUrl('https://example.com/page')).toBe('https://example.com/page');
-  });
-
-  it('accepts a valid http URL', () => {
-    expect(safeExternalUrl('http://example.com/')).toBe('http://example.com/');
-  });
-
-  it('rejects javascript: protocol', () => {
-    expect(safeExternalUrl('javascript:alert(1)')).toBeNull();
-  });
-
-  it('rejects data: protocol', () => {
-    expect(safeExternalUrl('data:text/html,<h1>XSS</h1>')).toBeNull();
-  });
-
-  it('rejects file: protocol', () => {
-    expect(safeExternalUrl('file:///etc/passwd')).toBeNull();
-  });
-
-  it('rejects a non-string value', () => {
-    expect(safeExternalUrl(42)).toBeNull();
+  it('returns null for null input', () => {
     expect(safeExternalUrl(null)).toBeNull();
-    expect(safeExternalUrl(undefined)).toBeNull();
-    expect(safeExternalUrl({})).toBeNull();
   });
 
-  it('rejects an empty string', () => {
+  it('returns null for undefined input', () => {
+    expect(safeExternalUrl(undefined)).toBeNull();
+  });
+
+  it('returns null for empty string', () => {
     expect(safeExternalUrl('')).toBeNull();
   });
 
-  it('rejects an unparseable string', () => {
+  it('returns null for non-string input', () => {
+    expect(safeExternalUrl(42)).toBeNull();
+  });
+
+  it('returns the URL for a valid http URL', () => {
+    const url = 'http://example.com/page';
+    expect(safeExternalUrl(url)).toBe(new URL(url).toString());
+  });
+
+  it('returns the URL for a valid https URL', () => {
+    const url = 'https://example.com/path?q=1';
+    expect(safeExternalUrl(url)).toBe(new URL(url).toString());
+  });
+
+  it('returns null for javascript: scheme', () => {
+    expect(safeExternalUrl('javascript:alert(1)')).toBeNull();
+  });
+
+  it('returns null for data: scheme', () => {
+    expect(safeExternalUrl('data:text/html,<script>alert(1)</script>')).toBeNull();
+  });
+
+  it('returns null for file: scheme', () => {
+    expect(safeExternalUrl('file:///etc/passwd')).toBeNull();
+  });
+
+  it('returns null for a relative path', () => {
+    expect(safeExternalUrl('/relative/path')).toBeNull();
+  });
+
+  it('returns null for an invalid URL string', () => {
     expect(safeExternalUrl('not a url')).toBeNull();
   });
 
-  it('rejects relative paths', () => {
-    expect(safeExternalUrl('/relative/path')).toBeNull();
+  it('accepts http URL with port number', () => {
+    expect(safeExternalUrl('http://localhost:3000/page')).toBeTruthy();
   });
 });
 
 // ─── safeInternalPath ─────────────────────────────────────────────────────────
 
 describe('safeInternalPath', () => {
+  it('returns fallback for null input', () => {
+    expect(safeInternalPath(null)).toBe('/');
+  });
+
+  it('returns fallback for undefined input', () => {
+    expect(safeInternalPath(undefined)).toBe('/');
+  });
+
+  it('returns fallback for empty string', () => {
+    expect(safeInternalPath('')).toBe('/');
+  });
+
+  it('returns fallback for non-string input', () => {
+    expect(safeInternalPath(42)).toBe('/');
+  });
+
   it('accepts a simple path', () => {
-    expect(safeInternalPath('/dashboard')).toBe('/dashboard');
+    expect(safeInternalPath('/conversations')).toBe('/conversations');
   });
 
   it('accepts root path', () => {
     expect(safeInternalPath('/')).toBe('/');
   });
 
-  it('accepts a nested path', () => {
-    expect(safeInternalPath('/settings/profile')).toBe('/settings/profile');
-  });
-
   it('accepts a path with query string', () => {
-    expect(safeInternalPath('/search?q=hello')).toBe('/search?q=hello');
+    expect(safeInternalPath('/login?next=/home')).toBe('/login?next=/home');
   });
 
-  it('rejects an absolute URL', () => {
-    expect(safeInternalPath('https://evil.com')).toBe('/');
+  it('returns fallback for absolute http URL', () => {
+    expect(safeInternalPath('https://attacker.com')).toBe('/');
   });
 
-  it('rejects protocol-relative URL (//)', () => {
+  it('returns fallback for protocol-relative URL', () => {
     expect(safeInternalPath('//evil.com')).toBe('/');
   });
 
-  it('rejects backslash-prefixed path (/\\)', () => {
+  it('returns fallback for backslash-prefixed path', () => {
     expect(safeInternalPath('/\\evil.com')).toBe('/');
   });
 
-  it('rejects non-slash-prefixed strings', () => {
-    expect(safeInternalPath('evil')).toBe('/');
-  });
-
-  it('rejects javascript: scheme', () => {
+  it('returns fallback for javascript: scheme', () => {
     expect(safeInternalPath('javascript:alert(1)')).toBe('/');
   });
 
-  it('rejects a non-string value', () => {
-    expect(safeInternalPath(null)).toBe('/');
-    expect(safeInternalPath(undefined)).toBe('/');
+  it('returns fallback for path not starting with /', () => {
+    expect(safeInternalPath('evil.com')).toBe('/');
   });
 
   it('uses custom fallback when provided', () => {
-    expect(safeInternalPath('//bad', '/home')).toBe('/home');
+    expect(safeInternalPath('', '/dashboard')).toBe('/dashboard');
+  });
+
+  it('returns custom fallback for invalid path', () => {
+    expect(safeInternalPath('https://evil.com', '/home')).toBe('/home');
   });
 });

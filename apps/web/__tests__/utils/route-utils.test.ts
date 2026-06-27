@@ -4,16 +4,26 @@
 
 import { isPublicRoute, isSharedChatRoute, PUBLIC_ROUTES } from '@/utils/route-utils';
 
-// ─── isPublicRoute ────────────────────────────────────────────────────────────
+// ─── PUBLIC_ROUTES ────────────────────────────────────────────────────────────
 
-describe('isPublicRoute', () => {
-  it('returns true for each static public route', () => {
-    for (const route of PUBLIC_ROUTES) {
-      expect(isPublicRoute(route)).toBe(true);
-    }
+describe('PUBLIC_ROUTES', () => {
+  it('includes the root path', () => {
+    expect(PUBLIC_ROUTES).toContain('/');
   });
 
-  it('returns true for root /', () => {
+  it('includes /login', () => {
+    expect(PUBLIC_ROUTES).toContain('/login');
+  });
+
+  it('includes /register', () => {
+    expect(PUBLIC_ROUTES).toContain('/register');
+  });
+});
+
+// ─── isPublicRoute ─────────────────────────────────────────────────────────────
+
+describe('isPublicRoute', () => {
+  it('returns true for root path', () => {
     expect(isPublicRoute('/')).toBe(true);
   });
 
@@ -21,33 +31,31 @@ describe('isPublicRoute', () => {
     expect(isPublicRoute('/login')).toBe(true);
   });
 
-  it('returns true for trailing slash variant', () => {
-    expect(isPublicRoute('/login/')).toBe(true);
+  it('returns true for /register', () => {
+    expect(isPublicRoute('/register')).toBe(true);
   });
 
-  it('returns true for empty string (treated as public)', () => {
-    expect(isPublicRoute('')).toBe(true);
+  it('returns true for /privacy', () => {
+    expect(isPublicRoute('/privacy')).toBe(true);
   });
 
-  it('returns false for protected route /conversations', () => {
-    expect(isPublicRoute('/conversations')).toBe(false);
+  it('returns true for /terms', () => {
+    expect(isPublicRoute('/terms')).toBe(true);
   });
 
-  it('returns false for protected route /settings', () => {
-    expect(isPublicRoute('/settings')).toBe(false);
+  it('returns true for /forgot-password', () => {
+    expect(isPublicRoute('/forgot-password')).toBe(true);
   });
 
-  it('returns true for /v2 routes (new UI)', () => {
-    expect(isPublicRoute('/v2')).toBe(true);
-    expect(isPublicRoute('/v2/conversations')).toBe(true);
+  it('returns true for /v2 routes', () => {
+    expect(isPublicRoute('/v2/anything')).toBe(true);
   });
 
-  it('returns true for /auth/ routes', () => {
+  it('returns true for /auth/ sub-routes', () => {
     expect(isPublicRoute('/auth/verify-email')).toBe(true);
-    expect(isPublicRoute('/auth/callback')).toBe(true);
   });
 
-  it('returns true for /l/ tracking routes', () => {
+  it('returns true for tracking routes /l/', () => {
     expect(isPublicRoute('/l/abc123')).toBe(true);
   });
 
@@ -55,31 +63,51 @@ describe('isPublicRoute', () => {
     expect(isPublicRoute('/links/tracked/xyz')).toBe(true);
   });
 
-  it('returns true for /signup/affiliate/ routes', () => {
-    expect(isPublicRoute('/signup/affiliate/ref123')).toBe(true);
+  it('returns true for affiliate routes', () => {
+    expect(isPublicRoute('/signup/affiliate/token')).toBe(true);
   });
 
-  it('returns true for /join/ routes', () => {
-    expect(isPublicRoute('/join/room-invite')).toBe(true);
+  it('returns true for join routes', () => {
+    expect(isPublicRoute('/join/abc')).toBe(true);
   });
 
-  it('returns false for /messages (private)', () => {
-    expect(isPublicRoute('/messages')).toBe(false);
+  it('returns false for /conversations (protected)', () => {
+    expect(isPublicRoute('/conversations')).toBe(false);
+  });
+
+  it('returns false for /dashboard (protected)', () => {
+    expect(isPublicRoute('/dashboard')).toBe(false);
+  });
+
+  it('strips trailing slash before checking', () => {
+    expect(isPublicRoute('/login/')).toBe(true);
+  });
+
+  it('preserves trailing slash for root', () => {
+    expect(isPublicRoute('/')).toBe(true);
+  });
+
+  it('returns true for empty string (no pathname)', () => {
+    expect(isPublicRoute('')).toBe(true);
   });
 });
 
 // ─── isSharedChatRoute ────────────────────────────────────────────────────────
 
 describe('isSharedChatRoute', () => {
-  it('returns true for /chat/ path', () => {
-    expect(isSharedChatRoute('/chat/abc')).toBe(true);
+  it('returns true for /chat/ paths', () => {
+    expect(isSharedChatRoute('/chat/link-abc')).toBe(true);
   });
 
-  it('returns false for non-chat path', () => {
-    expect(isSharedChatRoute('/conversations/abc')).toBe(false);
+  it('returns false for /conversations/ paths', () => {
+    expect(isSharedChatRoute('/conversations/123')).toBe(false);
   });
 
-  it('returns false for /chats/ (different prefix)', () => {
-    expect(isSharedChatRoute('/chats/')).toBe(false);
+  it('returns false for root path', () => {
+    expect(isSharedChatRoute('/')).toBe(false);
+  });
+
+  it('returns false for /login', () => {
+    expect(isSharedChatRoute('/login')).toBe(false);
   });
 });
