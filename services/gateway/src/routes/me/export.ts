@@ -57,7 +57,7 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
             type: 'object',
             properties: {
               success: { type: 'boolean' },
-              data: { type: 'object' },
+              data: { type: 'object', additionalProperties: true },
             },
           },
           401: {
