@@ -5,13 +5,15 @@
  * initial socket connection — typically on reconnect or when the client
  * passes credentials in-band rather than in the Socket.IO handshake auth.
  *
- * Key behavioural differences from handleTokenAuthentication:
- *  - A valid userId-not-found result returns an error but does NOT disconnect
- *    (client may retry with different credentials)
+ * Key behaviours:
+ *  - Registered users authenticate via JWT token ({ token }) — userId-only is not accepted
+ *  - Anonymous users authenticate via sessionToken ({ sessionToken })
+ *  - user-not-found in DB emits an error AND disconnects the socket
  *  - An unexpected exception still disconnects (same hard-failure policy)
  */
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import jwt from 'jsonwebtoken';
 import { AuthHandler } from '../AuthHandler';
 import type { Socket } from 'socket.io';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -117,11 +119,11 @@ describe('AuthHandler.handleManualAuthentication', () => {
   // Happy paths
   // -------------------------------------------------------------------------
 
-  it('should register a user and emit authenticated when userId is valid', async () => {
+  it('should register a user and emit authenticated when JWT token is valid', async () => {
     const mockSocket = createMockSocket();
     jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue(MOCK_USER as any);
 
-    await authHandler.handleManualAuthentication(mockSocket, { userId: MOCK_USER.id });
+    await authHandler.handleManualAuthentication(mockSocket, { token: jwt.sign({ userId: MOCK_USER.id }, 'test-secret-key') });
 
     expect(connectedUsers.size).toBe(1);
     expect(socketToUser.get('socket-manual-1')).toBe(MOCK_USER.id);
@@ -134,24 +136,23 @@ describe('AuthHandler.handleManualAuthentication', () => {
     );
   });
 
-  it('should respect language override when caller passes language', async () => {
+  it('should use systemLanguage from user record (JWT auth does not propagate language param)', async () => {
     const mockSocket = createMockSocket();
     jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue(MOCK_USER as any);
 
     await authHandler.handleManualAuthentication(mockSocket, {
-      userId: MOCK_USER.id,
-      language: 'fr'
+      token: jwt.sign({ userId: MOCK_USER.id }, 'test-secret-key'),
     });
 
     const registered = connectedUsers.get(MOCK_USER.id);
-    expect(registered?.language).toBe('fr');
+    expect(registered?.language).toBe('en');
   });
 
   it('should join personal Socket.IO rooms for a registered user', async () => {
     const mockSocket = createMockSocket();
     jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue(MOCK_USER as any);
 
-    await authHandler.handleManualAuthentication(mockSocket, { userId: MOCK_USER.id });
+    await authHandler.handleManualAuthentication(mockSocket, { token: jwt.sign({ userId: MOCK_USER.id }, 'test-secret-key') });
 
     const joinCalls = (mockSocket.join as jest.Mock).mock.calls.map((c: any[]) => c[0]);
     expect(joinCalls).toContain(`user:${MOCK_USER.id}`);
@@ -180,19 +181,19 @@ describe('AuthHandler.handleManualAuthentication', () => {
   // Soft failures (error emitted, socket stays connected)
   // -------------------------------------------------------------------------
 
-  it('should emit error (not disconnect) when userId is not found in database', async () => {
+  it('should emit error and disconnect when user is not found in database', async () => {
     const mockSocket = createMockSocket();
     jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue(null);
 
     await authHandler.handleManualAuthentication(mockSocket, {
-      userId: 'nonexistent-user-id'
+      token: jwt.sign({ userId: 'nonexistent-user-id' }, 'test-secret-key'),
     });
 
     expect(mockSocket.emit).toHaveBeenCalledWith(
       'error',
       expect.objectContaining({ message: expect.stringContaining('not found') })
     );
-    expect(mockSocket.disconnect).not.toHaveBeenCalled();
+    expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
     expect(connectedUsers.size).toBe(0);
   });
 
@@ -231,7 +232,7 @@ describe('AuthHandler.handleManualAuthentication', () => {
       new Error('connection timeout')
     );
 
-    await authHandler.handleManualAuthentication(mockSocket, { userId: 'user-abc' });
+    await authHandler.handleManualAuthentication(mockSocket, { token: jwt.sign({ userId: 'user-abc' }, 'test-secret-key') });
 
     expect(mockSocket.emit).toHaveBeenCalledWith(
       'error',

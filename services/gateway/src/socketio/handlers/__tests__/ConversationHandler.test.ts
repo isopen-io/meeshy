@@ -76,16 +76,21 @@ function makePrisma(participantResult: unknown = null): any {
 
 function makeConnectedUsers() {
   const users = new Map();
-  users.set(USER_ID, { id: USER_ID, socketId: SOCKET_ID, isAnonymous: false, language: 'fr', resolvedLanguages: [] });
+  users.set(USER_ID, { id: USER_ID, socketId: SOCKET_ID, isAnonymous: false, language: 'fr', resolvedLanguages: [], userId: USER_ID });
   return users;
+}
+
+function makeReadStatusService() {
+  return { getUnreadCount: jest.fn().mockResolvedValue(0) };
 }
 
 function makeHandler({
   prisma = makePrisma(),
   connectedUsers = makeConnectedUsers(),
   socketToUser = new Map([[SOCKET_ID, USER_ID]]),
+  readStatusService = makeReadStatusService(),
 } = {}) {
-  return new ConversationHandler({ prisma, connectedUsers, socketToUser });
+  return new ConversationHandler({ prisma, connectedUsers, socketToUser, readStatusService: readStatusService as any });
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -187,16 +192,18 @@ describe('ConversationHandler', () => {
       );
     });
 
-    it('allows anonymous user (no userId in socketToUser) to join without membership check', async () => {
+    it('emits not_authenticated error when socket user is not in socketToUser', async () => {
       const socketToUser = new Map<string, string>(); // no entry for SOCKET_ID
       const socket = makeSocket();
       const handler = makeHandler({ socketToUser });
 
       await handler.handleConversationJoin(socket, { conversationId: CONV_ID });
 
-      expect(socket.join).toHaveBeenCalledWith(ROOMS.conversation(CONV_ID));
-      // No CONVERSATION_JOINED event for anonymous (no userId)
-      expect(socket.emit).not.toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_JOINED, expect.anything());
+      expect(socket.emit).toHaveBeenCalledWith(
+        SERVER_EVENTS.CONVERSATION_JOIN_ERROR,
+        expect.objectContaining({ reason: 'not_authenticated' })
+      );
+      expect(socket.join).not.toHaveBeenCalled();
     });
 
     it('calls sendConversationStatsToSocket after successful join', async () => {

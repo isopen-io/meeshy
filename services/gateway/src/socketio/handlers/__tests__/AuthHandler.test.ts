@@ -579,7 +579,7 @@ describe('AuthHandler', () => {
   });
 
   describe('handleManualAuthentication', () => {
-    it('should authenticate registered user with valid userId', async () => {
+    it('should authenticate registered user with valid JWT token', async () => {
       const mockSocket = createMockSocket();
       jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
         id: 'user-123',
@@ -589,7 +589,7 @@ describe('AuthHandler', () => {
         deviceLocale: null
       } as any);
 
-      await authHandler.handleManualAuthentication(mockSocket, { userId: 'user-123' });
+      await authHandler.handleManualAuthentication(mockSocket, { token: 'valid-jwt-token' });
 
       expect(connectedUsers.size).toBe(1);
       expect(socketToUser.get('socket-123')).toBe('user-123');
@@ -634,7 +634,7 @@ describe('AuthHandler', () => {
       const mockSocket = createMockSocket();
       jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue(null);
 
-      await authHandler.handleManualAuthentication(mockSocket, { userId: 'nonexistent-user' });
+      await authHandler.handleManualAuthentication(mockSocket, { token: 'any-token' });
 
       expect(mockSocket.emit).toHaveBeenCalledWith('error', expect.objectContaining({
         message: expect.stringContaining('not found')
@@ -648,7 +648,7 @@ describe('AuthHandler', () => {
         new jwt.TokenExpiredError('jwt expired', new Date())
       );
 
-      await authHandler.handleManualAuthentication(mockSocket, { userId: 'user-123' });
+      await authHandler.handleManualAuthentication(mockSocket, { token: 'any-token' });
 
       expect(mockSocket.emit).toHaveBeenCalledWith('auth:token-expired', expect.objectContaining({
         code: 'token_expired'
@@ -660,7 +660,7 @@ describe('AuthHandler', () => {
       const mockSocket = createMockSocket();
       jest.spyOn(mockPrisma.user, 'findUnique').mockRejectedValue(new Error('database down'));
 
-      await authHandler.handleManualAuthentication(mockSocket, { userId: 'user-123' });
+      await authHandler.handleManualAuthentication(mockSocket, { token: 'any-token' });
 
       expect(mockSocket.emit).toHaveBeenCalledWith('error', expect.objectContaining({
         message: 'Authentication failed'
@@ -668,7 +668,7 @@ describe('AuthHandler', () => {
       expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
     });
 
-    it('should use provided language over systemLanguage for registered user', async () => {
+    it('should use systemLanguage from user record (JWT auth does not use language param)', async () => {
       const mockSocket = createMockSocket();
       jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
         id: 'user-123',
@@ -678,9 +678,9 @@ describe('AuthHandler', () => {
         deviceLocale: null
       } as any);
 
-      await authHandler.handleManualAuthentication(mockSocket, { userId: 'user-123', language: 'es' });
+      await authHandler.handleManualAuthentication(mockSocket, { token: 'any-token' });
 
-      expect(connectedUsers.get('user-123')?.language).toBe('es');
+      expect(connectedUsers.get('user-123')?.language).toBe('en');
     });
 
     it('should invoke emitPresenceSnapshot after registering user', async () => {
@@ -705,7 +705,7 @@ describe('AuthHandler', () => {
         deviceLocale: null
       } as any);
 
-      await handlerWithSnapshot.handleManualAuthentication(mockSocket, { userId: 'user-123' });
+      await handlerWithSnapshot.handleManualAuthentication(mockSocket, { token: 'any-token' });
 
       // emitPresenceSnapshot is fire-and-forget (.catch) — flush microtasks
       await Promise.resolve();

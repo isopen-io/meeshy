@@ -93,7 +93,7 @@ export class AuthHandler {
 
   async handleManualAuthentication(
     socket: Socket,
-    data: { userId?: string; sessionToken?: string; language?: string }
+    data: { userId?: string; sessionToken?: string; language?: string; token?: string }
   ): Promise<void> {
     try {
       const schemaValidation = validateSocketEvent(SocketAuthenticateSchema, data);

@@ -1040,6 +1040,7 @@ describe('MeeshySocketIOManager', () => {
         senderId: 'sender-1',
         encryptionMode: null,
       });
+      prisma.participant.findFirst.mockResolvedValue({ id: 'part-1' });
       triggerConnection(socket);
       const handler = getTranslationHandler(socket);
       await handler({ messageId: 'msg-fresh', targetLanguage: 'en' });
@@ -1188,9 +1189,9 @@ describe('MeeshySocketIOManager', () => {
       expect(manager.getStats().translations_sent).toBe(before + 3);
     });
 
-    it('falls back to direct user emit when no conversation found', async () => {
+    it('drops translation and does not emit to user when message not found in DB', async () => {
       prisma.message.findUnique.mockResolvedValue(null);
-      // Put a user with matching language in connectedUsers
+      // User in connectedUsers — verifies that the removed direct-emit fallback is not called
       (manager as any).connectedUsers.set('user-en', {
         id: 'user-en', socketId: 'sock-en', isAnonymous: false, language: 'en', resolvedLanguages: ['en'],
       });
@@ -1199,7 +1200,7 @@ describe('MeeshySocketIOManager', () => {
 
       await (manager as any)._handleTextTranslationReady(baseData);
 
-      expect(fakeSocket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_TRANSLATION, expect.objectContaining({ messageId: 'msg-txt-1' }));
+      expect(fakeSocket.emit).not.toHaveBeenCalled();
     });
 
     it('gracefully handles DB error when looking up message', async () => {
@@ -2613,6 +2614,7 @@ describe('MeeshySocketIOManager', () => {
         senderId: 'sender-1',
         encryptionMode: null,
       });
+      prisma.participant.findFirst.mockResolvedValue({ id: 'part-1' });
       (translationService.handleNewMessage as any).mockRejectedValue(new Error('ZMQ send fail'));
       triggerConnection(socket);
       await socket._handlers[CLIENT_EVENTS.REQUEST_TRANSLATION]({ messageId: 'msg-err-demand', targetLanguage: 'en' });

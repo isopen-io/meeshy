@@ -84,7 +84,14 @@ function makePrisma(overrides: Partial<{
 
 function makeConnectedUsers() {
   const map = new Map<string, unknown>();
-  map.set(USER_ID, { id: USER_ID, isAnonymous: false, language: 'fr' });
+  map.set(USER_ID, {
+    id: USER_ID,
+    socketId: SOCKET_ID,
+    isAnonymous: false,
+    language: 'fr',
+    resolvedLanguages: ['fr'],
+    userId: USER_ID,
+  });
   return map;
 }
 
@@ -214,13 +221,15 @@ describe('ConversationHandler', () => {
       });
     });
 
-    it('joins room even when socket user is not authenticated (no participant check)', async () => {
+    it('emits not_authenticated error when socket user is not authenticated', async () => {
       const deps = makeDeps({ socketToUser: new Map() });
       const handler = new ConversationHandler(deps);
       const socket = makeSocket();
       await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
-      expect(socket.join).toHaveBeenCalledWith(`conversation:${CONV_ID}`);
-      expect(socket.emit).not.toHaveBeenCalledWith('conversation:joined', expect.anything());
+      expect(socket.emit).toHaveBeenCalledWith('conversation:join-error', expect.objectContaining({
+        reason: 'not_authenticated',
+      }));
+      expect(socket.join).not.toHaveBeenCalled();
     });
 
     it('emits conversation:stats when stats service returns data', async () => {
