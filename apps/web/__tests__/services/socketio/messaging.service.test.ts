@@ -20,6 +20,7 @@ const SERVER_EVENTS_MOCK = {
   ATTACHMENT_STATUS_UPDATED: 'attachment-status:updated',
   MESSAGE_ATTACHMENT_UPDATED: 'message:attachment-updated',
   PENDING_MESSAGES_DELIVERED: 'message:pending-delivered',
+  LINK_MESSAGE_NEW: 'link:message:new',
   MENTION_CREATED: 'mention:created',
   AUTHENTICATED: 'authenticated',
   ERROR: 'error',
@@ -58,6 +59,7 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
     ATTACHMENT_STATUS_UPDATED: 'attachment-status:updated',
     MESSAGE_ATTACHMENT_UPDATED: 'message:attachment-updated',
     PENDING_MESSAGES_DELIVERED: 'message:pending-delivered',
+    LINK_MESSAGE_NEW: 'link:message:new',
     MENTION_CREATED: 'mention:created',
     AUTHENTICATED: 'authenticated',
     ERROR: 'error',
@@ -737,6 +739,22 @@ describe('MessagingService', () => {
         await Promise.resolve();
 
         expect(listener).toHaveBeenCalledWith({ count: 3 });
+      });
+    });
+
+    describe('link:message:new', () => {
+      it('forwards link message data to all registered listeners', async () => {
+        const svc = new MessagingService();
+        const socket = makeSocket();
+        const listener = jest.fn();
+        svc.onLinkMessageNew(listener);
+        svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
+
+        const data = { message: { id: 'link-msg-1', conversationId: 'conv-1', content: 'https://example.com', messageType: 'link' } };
+        socket._trigger(SERVER_EVENTS_MOCK.LINK_MESSAGE_NEW, data);
+        await Promise.resolve();
+
+        expect(listener).toHaveBeenCalledWith(data);
       });
     });
 
@@ -1688,6 +1706,18 @@ describe('MessagingService', () => {
       const listener = jest.fn();
       const unsub = svc.onPendingMessagesDelivered(listener);
       const listenerSet = (svc as any).pendingDeliveredListeners as Set<unknown>;
+      expect(listenerSet.size).toBe(1);
+      unsub();
+      expect(listenerSet.size).toBe(0);
+    });
+  });
+
+  describe('onLinkMessageNew', () => {
+    it('subscribes and unsubscribes', () => {
+      const svc = new MessagingService();
+      const listener = jest.fn();
+      const unsub = svc.onLinkMessageNew(listener);
+      const listenerSet = (svc as any).linkMessageNewListeners as Set<unknown>;
       expect(listenerSet.size).toBe(1);
       unsub();
       expect(listenerSet.size).toBe(0);

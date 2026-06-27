@@ -398,6 +398,14 @@ class MeeshySocketIOService {
     return this.orchestrator.onPendingMessagesDelivered(listener);
   }
 
+  public onLinkMessageNew(listener: (data: { message: Record<string, unknown> }) => void): () => void {
+    return this.orchestrator.onLinkMessageNew(listener);
+  }
+
+  public onConversationJoinError(listener: (data: { conversationId: string; reason: string; message: string }) => void): () => void {
+    return this.orchestrator.onConversationJoinError(listener);
+  }
+
   /**
    * Obtient le statut de connexion
    */

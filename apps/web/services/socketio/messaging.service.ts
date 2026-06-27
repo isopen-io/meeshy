@@ -15,6 +15,7 @@ import { SERVER_EVENTS, CLIENT_EVENTS } from '@meeshy/shared/types/socketio-even
 import type {
   AttachmentStatusUpdatedEventData,
   AttachmentUpdatedEventData,
+  LinkMessageNewEventData,
   MessageConsumedEventData,
   ReactionUpdateEventData,
 } from '@meeshy/shared/types/socketio-events';
@@ -48,6 +49,7 @@ export class MessagingService {
   private attachmentStatusListeners: Set<(data: AttachmentStatusUpdatedEventData) => void> = new Set();
   private messageAttachmentUpdatedListeners: Set<(data: AttachmentUpdatedEventData) => void> = new Set();
   private pendingDeliveredListeners: Set<(data: { count: number }) => void> = new Set();
+  private linkMessageNewListeners: Set<(data: LinkMessageNewEventData) => void> = new Set();
 
   private encryptionHandlers: EncryptionHandlers | null = null;
   private getMessageByIdCallback: GetMessageByIdCallback | null = null;
@@ -196,6 +198,10 @@ export class MessagingService {
 
     (socket as unknown as { on: (event: string, handler: (data: { count: number }) => void) => void }).on(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, (data: { count: number }) => {
       this.pendingDeliveredListeners.forEach(listener => listener(data));
+    });
+
+    (socket as unknown as { on: (event: string, handler: (data: LinkMessageNewEventData) => void) => void }).on(SERVER_EVENTS.LINK_MESSAGE_NEW, (data: LinkMessageNewEventData) => {
+      this.linkMessageNewListeners.forEach(listener => listener(data));
     });
 
     socket.on(SERVER_EVENTS.MENTION_CREATED, (data: unknown) => {
@@ -542,6 +548,11 @@ export class MessagingService {
     return () => this.pendingDeliveredListeners.delete(listener);
   }
 
+  onLinkMessageNew(listener: (data: LinkMessageNewEventData) => void): UnsubscribeFn {
+    this.linkMessageNewListeners.add(listener);
+    return () => this.linkMessageNewListeners.delete(listener);
+  }
+
   /**
    * Cleanup all listeners
    */
@@ -554,6 +565,7 @@ export class MessagingService {
     this.attachmentStatusListeners.clear();
     this.messageAttachmentUpdatedListeners.clear();
     this.pendingDeliveredListeners.clear();
+    this.linkMessageNewListeners.clear();
     this.markReceivedTimers.forEach(timer => clearTimeout(timer));
     this.markReceivedTimers.clear();
     this.recentMessageIds.clear();

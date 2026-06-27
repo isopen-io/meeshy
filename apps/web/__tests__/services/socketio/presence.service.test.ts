@@ -44,6 +44,7 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
     CONVERSATION_PARTICIPANT_BANNED: 'conversation:participant-banned',
     CONVERSATION_PARTICIPANT_UNBANNED: 'conversation:participant-unbanned',
     CONVERSATION_CLOSED: 'conversation:closed',
+    CONVERSATION_JOIN_ERROR: 'conversation:join-error',
   },
   CLIENT_EVENTS: {},
 }));
@@ -101,6 +102,7 @@ describe('PresenceService', () => {
         'conversation:participant-banned',
         'conversation:participant-unbanned',
         'conversation:closed',
+        'conversation:join-error',
       ];
       for (const event of expectedEvents) {
         expect(socket.on).toHaveBeenCalledWith(event, expect.any(Function));
@@ -479,6 +481,42 @@ describe('PresenceService', () => {
       const unsub = service.onConversationParticipantUnbanned(listener);
       unsub();
       socket._trigger('conversation:participant-unbanned', { conversationId: 'c', userId: 'u' });
+      expect(listener).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── conversation:join-error ────────────────────────────────────────────────
+
+  describe('conversation:join-error', () => {
+    it('forwards conversation:join-error events to registered listeners', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      service.onConversationJoinError(listener);
+      const event = { conversationId: 'conv-1', reason: 'banned', message: 'You are banned' };
+      socket._trigger('conversation:join-error', event);
+      expect(listener).toHaveBeenCalledWith(event);
+    });
+
+    it('forwards conversation:join-error to multiple listeners', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const l1 = jest.fn();
+      const l2 = jest.fn();
+      service.onConversationJoinError(l1);
+      service.onConversationJoinError(l2);
+      socket._trigger('conversation:join-error', { conversationId: 'c', reason: 'not_a_member', message: 'Not a member' });
+      expect(l1).toHaveBeenCalled();
+      expect(l2).toHaveBeenCalled();
+    });
+
+    it('onConversationJoinError returns a working unsubscribe function', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      const unsub = service.onConversationJoinError(listener);
+      unsub();
+      socket._trigger('conversation:join-error', { conversationId: 'c', reason: 'banned', message: '' });
       expect(listener).not.toHaveBeenCalled();
     });
   });

@@ -36,6 +36,8 @@ let conversationClosedCallback: ((data: { conversationId: string; closedBy: stri
 let categoryChangedCallback: (() => void) | null = null;
 let messageAttachmentUpdatedCallback: ((data: { conversationId: string; messageId: string; attachment: unknown }) => void) | null = null;
 let pendingMessagesDeliveredCallback: ((data: { count: number }) => void) | null = null;
+let linkMessageNewCallback: ((data: { message: Record<string, unknown> }) => void) | null = null;
+let conversationJoinErrorCallback: ((data: { conversationId: string; reason: string; message: string }) => void) | null = null;
 
 // Mock unsubscribe functions
 const mockUnsubscribeMessage = jest.fn();
@@ -118,6 +120,14 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     },
     onPendingMessagesDelivered: (callback: (data: { count: number }) => void) => {
       pendingMessagesDeliveredCallback = callback;
+      return jest.fn();
+    },
+    onLinkMessageNew: (callback: (data: { message: Record<string, unknown> }) => void) => {
+      linkMessageNewCallback = callback;
+      return jest.fn();
+    },
+    onConversationJoinError: (callback: (data: { conversationId: string; reason: string; message: string }) => void) => {
+      conversationJoinErrorCallback = callback;
       return jest.fn();
     },
     onStatusChange: jest.fn(() => () => {}),
@@ -256,6 +266,8 @@ describe('useSocketCacheSync', () => {
     categoryChangedCallback = null;
     messageAttachmentUpdatedCallback = null;
     pendingMessagesDeliveredCallback = null;
+    linkMessageNewCallback = null;
+    conversationJoinErrorCallback = null;
   });
 
   describe('Event Listener Registration', () => {
@@ -855,6 +867,118 @@ describe('useSocketCacheSync', () => {
       };
       const msg = cached.pages[0].messages[0];
       expect((msg.attachments as typeof updatedAttachment[])[0].transcription).toBe('Hello world');
+    });
+  });
+
+  describe('Link Message New Handler', () => {
+    it('prepends the link message to the infinite messages cache', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+        pages: [{ messages: [createMockMessage('existing-1', 'hi')], hasMore: false, total: 1 }],
+        pageParams: [1],
+      });
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-1' }), { wrapper });
+
+      act(() => {
+        linkMessageNewCallback?.({ message: { id: 'link-1', conversationId: 'conv-1', content: 'https://example.com', messageType: 'link', createdAt: new Date().toISOString() } });
+      });
+
+      const cached = queryClient.getQueryData(['messages', 'list', 'conv-1', 'infinite']) as { pages: { messages: Message[] }[] };
+      expect(cached.pages[0].messages).toHaveLength(2);
+      expect(cached.pages[0].messages[0]).toMatchObject({ id: 'link-1', messageType: 'link' });
+    });
+
+    it('does not add duplicate link message if ID already exists in cache', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+        pages: [{ messages: [{ id: 'link-1', conversationId: 'conv-1', content: 'https://example.com' }], hasMore: false, total: 1 }],
+        pageParams: [1],
+      });
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-1' }), { wrapper });
+
+      act(() => {
+        linkMessageNewCallback?.({ message: { id: 'link-1', conversationId: 'conv-1', content: 'https://example.com' } });
+      });
+
+      const cached = queryClient.getQueryData(['messages', 'list', 'conv-1', 'infinite']) as { pages: { messages: Message[] }[] };
+      expect(cached.pages[0].messages).toHaveLength(1);
+    });
+
+    it('ignores link messages without a conversationId', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+        pages: [{ messages: [], hasMore: false, total: 0 }],
+        pageParams: [1],
+      });
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-1' }), { wrapper });
+
+      act(() => {
+        linkMessageNewCallback?.({ message: { id: 'link-1', content: 'https://example.com' } });
+      });
+
+      const cached = queryClient.getQueryData(['messages', 'list', 'conv-1', 'infinite']) as { pages: { messages: Message[] }[] };
+      expect(cached.pages[0].messages).toHaveLength(0);
+    });
+  });
+
+  describe('Conversation Join Error Handler', () => {
+    it('removes the rejected conversation from the conversations list cache', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'list', undefined], [
+        { ...mockConversation, id: 'conv-1' },
+        { ...mockConversation, id: 'conv-2' },
+      ] as Conversation[]);
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-1' }), { wrapper });
+
+      act(() => {
+        conversationJoinErrorCallback?.({ conversationId: 'conv-1', reason: 'banned', message: 'You are banned' });
+      });
+
+      const convs = queryClient.getQueryData(['conversations', 'list', undefined]) as Conversation[];
+      expect(convs.map((c) => c.id)).not.toContain('conv-1');
+      expect(convs.map((c) => c.id)).toContain('conv-2');
+    });
+
+    it('removes the rejected conversation detail and messages from cache', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'detail', 'conv-1'], { ...mockConversation });
+      queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+        pages: [{ messages: [], hasMore: false, total: 0 }],
+        pageParams: [1],
+      });
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-1' }), { wrapper });
+
+      act(() => {
+        conversationJoinErrorCallback?.({ conversationId: 'conv-1', reason: 'not_a_member', message: '' });
+      });
+
+      expect(queryClient.getQueryData(['conversations', 'detail', 'conv-1'])).toBeUndefined();
+      expect(queryClient.getQueryData(['messages', 'list', 'conv-1', 'infinite'])).toBeUndefined();
+    });
+
+    it('dispatches meeshy:conversation-join-error CustomEvent on window', () => {
+      const { wrapper } = createWrapperWithClient();
+      const dispatchSpy = jest.spyOn(window, 'dispatchEvent');
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-1' }), { wrapper });
+
+      act(() => {
+        conversationJoinErrorCallback?.({ conversationId: 'conv-2', reason: 'banned', message: 'You are banned' });
+      });
+
+      const call = dispatchSpy.mock.calls.find(([e]) => (e as CustomEvent).type === 'meeshy:conversation-join-error');
+      expect(call).toBeDefined();
+      expect((call![0] as CustomEvent).detail).toMatchObject({ conversationId: 'conv-2', reason: 'banned' });
     });
   });
 });

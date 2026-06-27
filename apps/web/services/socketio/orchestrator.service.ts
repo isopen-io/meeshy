@@ -554,6 +554,10 @@ export class SocketIOOrchestrator {
     return this.messagingService.onPendingMessagesDelivered(listener);
   }
 
+  onLinkMessageNew(listener: (data: { message: Record<string, unknown> }) => void): UnsubscribeFn {
+    return this.messagingService.onLinkMessageNew(listener);
+  }
+
   onTranslation(listener: (data: any) => void): UnsubscribeFn {
     return this.translationService.onTranslation(listener);
   }
@@ -674,6 +678,10 @@ export class SocketIOOrchestrator {
 
   onConversationClosed(listener: (data: { conversationId: string; closedBy: string; closedAt: string }) => void): UnsubscribeFn {
     return this.presenceService.onConversationClosed(listener);
+  }
+
+  onConversationJoinError(listener: (data: { conversationId: string; reason: string; message: string }) => void): UnsubscribeFn {
+    return this.presenceService.onConversationJoinError(listener);
   }
 
   // ============ CLEANUP ============

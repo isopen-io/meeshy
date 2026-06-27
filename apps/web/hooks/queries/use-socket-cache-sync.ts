@@ -609,6 +609,62 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       );
     };
 
+    // Handler for link:message:new — a link preview message arrived; append to messages + bump conversation
+    const handleLinkMessageNew = (data: { message: Record<string, unknown> }) => {
+      const linkMsg = data.message;
+      const linkConvId = linkMsg.conversationId as string | undefined;
+      if (!linkConvId) return;
+      const linkMsgId = linkMsg.id as string | undefined;
+
+      queryClient.setQueryData(
+        queryKeys.messages.infinite(linkConvId),
+        (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
+          if (!old) return old;
+          if (linkMsgId && old.pages.some((p) => p.messages.some((m) => m.id === linkMsgId))) return old;
+          return {
+            ...old,
+            pages: old.pages.map((page, i) =>
+              i === 0 ? { ...page, messages: [linkMsg as unknown as Message, ...page.messages] } : page
+            ),
+          };
+        }
+      );
+
+      queryClient.setQueriesData<Conversation[]>(
+        { queryKey: queryKeys.conversations.lists() },
+        (old) => {
+          if (!old) return old;
+          const idx = old.findIndex((c) => c.id === linkConvId);
+          if (idx === -1) return old;
+          const updated = { ...old[idx], lastMessage: linkMsg as unknown as Message, lastMessageAt: linkMsg.createdAt as string ?? new Date().toISOString() };
+          return [updated, ...old.filter((_, i) => i !== idx)];
+        }
+      );
+
+      updateInfiniteConversationCache(queryClient, (convs) => {
+        const idx = convs.findIndex((c) => c.id === linkConvId);
+        if (idx === -1) return convs;
+        const updated = { ...convs[idx], lastMessage: linkMsg as unknown as Message, lastMessageAt: linkMsg.createdAt as string ?? new Date().toISOString() };
+        return [updated, ...convs.filter((_, i) => i !== idx)];
+      });
+    };
+
+    // Handler for conversation:join-error — server rejected the room join; purge stale local cache
+    const handleConversationJoinError = (data: { conversationId: string; reason: string; message: string }) => {
+      const { conversationId: rejectedId, reason } = data;
+      if (!rejectedId) return;
+      updateInfiniteConversationCache(queryClient, (convs) => convs.filter((c) => c.id !== rejectedId));
+      queryClient.setQueriesData<Conversation[]>(
+        { queryKey: queryKeys.conversations.lists() },
+        (old) => (old ? old.filter((c) => c.id !== rejectedId) : old)
+      );
+      queryClient.removeQueries({ queryKey: queryKeys.conversations.detail(rejectedId) });
+      queryClient.removeQueries({ queryKey: queryKeys.messages.infinite(rejectedId) });
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('meeshy:conversation-join-error', { detail: { conversationId: rejectedId, reason } }));
+      }
+    };
+
     // Handler for attachment status updated (listened, watched, viewed, downloaded)
     const handleAttachmentStatusUpdated = (data: { attachmentId: string; messageId: string; conversationId: string; userId: string; action: string }) => {
       const targetConversationId = data.conversationId;
@@ -723,6 +779,8 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const unsubscribeCategoryChanged = meeshySocketIOService.onCategoryChanged(handleCategoryChanged);
     const unsubscribeMessageAttachmentUpdated = meeshySocketIOService.onMessageAttachmentUpdated(handleMessageAttachmentUpdated);
     const unsubscribePendingDelivered = meeshySocketIOService.onPendingMessagesDelivered(handlePendingMessagesDelivered);
+    const unsubscribeLinkMessageNew = meeshySocketIOService.onLinkMessageNew(handleLinkMessageNew);
+    const unsubscribeConversationJoinError = meeshySocketIOService.onConversationJoinError(handleConversationJoinError);
 
     return () => {
       unsubscribeMessage?.();
@@ -747,6 +805,8 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       unsubscribeCategoryChanged?.();
       unsubscribeMessageAttachmentUpdated?.();
       unsubscribePendingDelivered?.();
+      unsubscribeLinkMessageNew?.();
+      unsubscribeConversationJoinError?.();
     };
   }, [conversationId, enabled, queryClient]);
 }

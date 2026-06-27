@@ -52,6 +52,7 @@ export class PresenceService {
   private conversationParticipantBannedListeners: Set<(data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string }) => void> = new Set();
   private conversationParticipantUnbannedListeners: Set<(data: { conversationId: string; userId: string }) => void> = new Set();
   private conversationClosedListeners: Set<(data: { conversationId: string; closedBy: string; closedAt: string }) => void> = new Set();
+  private conversationJoinErrorListeners: Set<(data: { conversationId: string; reason: string; message: string }) => void> = new Set();
 
   /**
    * Setup presence event listeners on socket
@@ -153,6 +154,11 @@ export class PresenceService {
 
     socket.on(SERVER_EVENTS.CONVERSATION_CLOSED as any, (data: any) => {
       this.conversationClosedListeners.forEach(listener => listener(data));
+    });
+
+    socket.on(SERVER_EVENTS.CONVERSATION_JOIN_ERROR as any, (data: { conversationId: string; reason: string; message: string }) => {
+      logger.warn('[PresenceService]', 'conversation join rejected', { conversationId: data.conversationId, reason: data.reason });
+      this.conversationJoinErrorListeners.forEach(listener => listener(data));
     });
   }
 
@@ -275,6 +281,11 @@ export class PresenceService {
     return () => this.conversationClosedListeners.delete(listener);
   }
 
+  onConversationJoinError(listener: (data: { conversationId: string; reason: string; message: string }) => void): UnsubscribeFn {
+    this.conversationJoinErrorListeners.add(listener);
+    return () => this.conversationJoinErrorListeners.delete(listener);
+  }
+
   /**
    * Cleanup all listeners
    */
@@ -297,6 +308,7 @@ export class PresenceService {
     this.conversationParticipantBannedListeners.clear();
     this.conversationParticipantUnbannedListeners.clear();
     this.conversationClosedListeners.clear();
+    this.conversationJoinErrorListeners.clear();
   }
 
   /**
