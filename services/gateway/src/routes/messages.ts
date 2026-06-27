@@ -68,21 +68,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         200: {
           description: 'Message details',
           type: 'object',
-          properties: {
-            id: { type: 'string' },
-            content: { type: 'string' },
-            sender: { type: 'object' },
-            attachments: { type: 'array' },
-            translations: { type: 'array' },
-            createdAt: { type: 'string', format: 'date-time' }
-          }
-        },
-        404: {
-          description: 'Message not found',
-          type: 'object',
-          properties: {
-            error: { type: 'string' }
-          }
+          additionalProperties: true
         }
       }
     },
