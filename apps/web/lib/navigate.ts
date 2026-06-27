@@ -10,11 +10,11 @@
  */
 
 /** Replace the current history entry with `url` (no back-button entry). */
-export function replaceLocation(url: string): void {
-  window.location.replace(url);
+export function replaceLocation(url: string, loc: Pick<Location, 'replace'> = window.location): void {
+  loc.replace(url);
 }
 
 /** Assign `url` to the current location (creates a back-button entry). */
-export function assignLocation(url: string): void {
-  window.location.href = url;
+export function assignLocation(url: string, loc: { href: string } = window.location): void {
+  loc.href = url;
 }
