@@ -529,6 +529,67 @@ describe('StatusHandler', () => {
     });
   });
 
+  // ── handleSocketDisconnecting ───────────────────────────────────────────────
+
+  describe('handleSocketDisconnecting', () => {
+    it('broadcasts typing:stop for each active typing conversation on disconnect', async () => {
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+
+      const CONV_ID_2 = '507f1f77bcf86cd799439099';
+      mockNormalizeConversationId
+        .mockResolvedValueOnce(CONV_ID)
+        .mockResolvedValueOnce(CONV_ID_2);
+
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+      mockValidateSocketEvent.mockReturnValue({ success: true, data: { conversationId: CONV_ID_2 } });
+      const throttleMap = (handler as any).typingThrottleMap as Map<string, number>;
+      throttleMap.clear();
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID_2 });
+
+      const broadcastFn = jest.fn();
+      handler.handleSocketDisconnecting(SOCKET_ID, broadcastFn);
+
+      expect(broadcastFn).toHaveBeenCalledTimes(2);
+      expect(broadcastFn).toHaveBeenCalledWith(
+        ROOMS.conversation(CONV_ID),
+        SERVER_EVENTS.TYPING_STOP,
+        expect.objectContaining({ userId: USER_ID, isTyping: false, conversationId: CONV_ID })
+      );
+      expect(broadcastFn).toHaveBeenCalledWith(
+        ROOMS.conversation(CONV_ID_2),
+        SERVER_EVENTS.TYPING_STOP,
+        expect.objectContaining({ userId: USER_ID, isTyping: false, conversationId: CONV_ID_2 })
+      );
+    });
+
+    it('clears activeTypers entries for the socket after disconnect', async () => {
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+
+      const activeTypers = (handler as any).activeTypers as Map<string, unknown[]>;
+      expect(activeTypers.has(SOCKET_ID)).toBe(true);
+
+      handler.handleSocketDisconnecting(SOCKET_ID, jest.fn());
+
+      expect(activeTypers.has(SOCKET_ID)).toBe(false);
+    });
+
+    it('is a no-op when socket has no active typing', () => {
+      const handler = makeHandler();
+      const broadcastFn = jest.fn();
+
+      expect(() => handler.handleSocketDisconnecting(SOCKET_ID, broadcastFn)).not.toThrow();
+      expect(broadcastFn).not.toHaveBeenCalled();
+    });
+  });
+
   // ── clearTypingThrottle ─────────────────────────────────────────────────────
 
   describe('clearTypingThrottle', () => {
