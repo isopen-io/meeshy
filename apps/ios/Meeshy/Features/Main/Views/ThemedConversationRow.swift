@@ -403,7 +403,7 @@ struct ThemedConversationRow: View {
     private var typingIndicatorView: some View {
         HStack(spacing: 5) {
             Text(typingUsername.map { name in
-                String(localized: "typing.named", bundle: .main)
+                String(format: String(localized: "typing.named", bundle: .main), name)
             } ?? String(localized: "typing.anonymous", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular, design: .default).italic())
                 .foregroundColor(accent)

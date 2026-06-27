@@ -1040,7 +1040,10 @@ describe('MeeshySocketIOManager', () => {
         senderId: 'sender-1',
         encryptionMode: null,
       });
-      prisma.participant.findFirst.mockResolvedValue({ id: 'part-1' });
+      // Requester must be a participant of the message's conversation — the
+      // on-demand translation membership guard (CVE-class leak fix) now runs
+      // before handleNewMessage is reached.
+      prisma.participant.findFirst.mockResolvedValue({ id: 'part-fresh' });
       triggerConnection(socket);
       const handler = getTranslationHandler(socket);
       await handler({ messageId: 'msg-fresh', targetLanguage: 'en' });
@@ -1048,6 +1051,28 @@ describe('MeeshySocketIOManager', () => {
         id: 'msg-fresh',
         targetLanguage: 'en',
       }));
+    });
+
+    it('emits Access denied and skips translation when requester is not a participant', async () => {
+      const socket = makeSocket('sock-t6b');
+      (manager as any).socketToUser.set('sock-t6b', 'user-t6b');
+      (translationService.getTranslation as jest.Mock).mockResolvedValue(null);
+      prisma.message.findUnique.mockResolvedValue({
+        id: 'msg-foreign',
+        conversationId: 'conv-not-mine',
+        content: 'Bonjour',
+        originalLanguage: 'fr',
+        senderId: 'sender-1',
+        encryptionMode: null,
+      });
+      // Not a participant of conv-not-mine — the membership guard must block the
+      // request before any translation work happens (no unauthorized data access).
+      prisma.participant.findFirst.mockResolvedValue(null);
+      triggerConnection(socket);
+      const handler = getTranslationHandler(socket);
+      await handler({ messageId: 'msg-foreign', targetLanguage: 'en' });
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.ERROR, expect.objectContaining({ message: 'Access denied' }));
+      expect(translationService.handleNewMessage).not.toHaveBeenCalledWith(expect.objectContaining({ id: 'msg-foreign' }));
     });
 
     it('emits ERROR when message not found in DB', async () => {
@@ -1191,7 +1216,23 @@ describe('MeeshySocketIOManager', () => {
 
     it('drops translation and does not emit to user when message not found in DB', async () => {
       prisma.message.findUnique.mockResolvedValue(null);
-      // User in connectedUsers — verifies that the removed direct-emit fallback is not called
+      // User in connectedUsers — verifies that the removed direct-emit fallback is not called    
+          (manager as any).connectedUsers.set('user-en', {
+        id: 'user-en', socketId: 'sock-en', isAnonymous: false, language: 'en', resolvedLanguages: ['en'],
+      });
+      const fakeSocket = { emit: jest.fn() };
+      ioState.sockets.sockets.set('sock-en', fakeSocket);
+
+      await (manager as any)._handleTextTranslationReady(baseData);
+      expect(fakeSocket.emit).not.toHaveBeenCalled();
+    });
+      
+    it('drops the translation (no direct socket emit) when no conversation is found', async () => {
+      prisma.message.findUnique.mockResolvedValue(null);
+      // A connected user with a matching language must NOT receive a direct emit:
+      // with no resolved conversation we cannot verify room membership, so emitting
+      // straight to the socket would leak the translation (CVE-class data access).
+      // The legacy direct-emit fallback was removed; the translation is now dropped.
       (manager as any).connectedUsers.set('user-en', {
         id: 'user-en', socketId: 'sock-en', isAnonymous: false, language: 'en', resolvedLanguages: ['en'],
       });
@@ -1199,8 +1240,7 @@ describe('MeeshySocketIOManager', () => {
       ioState.sockets.sockets.set('sock-en', fakeSocket);
 
       await (manager as any)._handleTextTranslationReady(baseData);
-
-      expect(fakeSocket.emit).not.toHaveBeenCalled();
+      expect(fakeSocket.emit).not.toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_TRANSLATION, expect.anything());
     });
 
     it('gracefully handles DB error when looking up message', async () => {
@@ -2614,7 +2654,9 @@ describe('MeeshySocketIOManager', () => {
         senderId: 'sender-1',
         encryptionMode: null,
       });
-      prisma.participant.findFirst.mockResolvedValue({ id: 'part-1' });
+      // Authorize the requester so the flow reaches handleNewMessage (the membership
+      // guard would otherwise short-circuit with 'Access denied').
+      prisma.participant.findFirst.mockResolvedValue({ id: 'part-err' });
       (translationService.handleNewMessage as any).mockRejectedValue(new Error('ZMQ send fail'));
       triggerConnection(socket);
       await socket._handlers[CLIENT_EVENTS.REQUEST_TRANSLATION]({ messageId: 'msg-err-demand', targetLanguage: 'en' });

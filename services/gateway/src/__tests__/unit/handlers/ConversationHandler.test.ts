@@ -232,6 +232,55 @@ describe('ConversationHandler', () => {
       expect(socket.join).not.toHaveBeenCalled();
     });
 
+    it('joins room for an anonymous member without emitting conversation:joined', async () => {
+      // Anonymous SocketUser: identity IS the participantId. Membership is verified
+      // (security fix ccaa9311f) and, having no userId, no conversation:joined is sent.
+      const SESSION_TOKEN = 'anon-session-token';
+      const ANON_PARTICIPANT_ID = 'anon-part-1';
+      const connectedUsers = new Map<string, unknown>();
+      connectedUsers.set(SESSION_TOKEN, { id: SESSION_TOKEN, isAnonymous: true, participantId: ANON_PARTICIPANT_ID, language: 'fr' });
+      const socketToUser = new Map<string, string>([[SOCKET_ID, SESSION_TOKEN]]);
+      const prisma = makePrisma({ participantFindFirst: { id: ANON_PARTICIPANT_ID } });
+      const deps = makeDeps({ connectedUsers, socketToUser, prisma });
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+      await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
+      expect(socket.emit).toHaveBeenCalledWith('conversation:join-error', expect.objectContaining({
+        reason: 'not_authenticated',
+      }));
+      expect(socket.join).not.toHaveBeenCalled();
+    });
+
+    it('rejects an anonymous user who does not own the participant (not_a_member)', async () => {
+      // Security fix ccaa9311f: anonymous join is membership-checked, not skipped.
+      const SESSION_TOKEN = 'anon-session-token';
+      const connectedUsers = new Map<string, unknown>();
+      connectedUsers.set(SESSION_TOKEN, { id: SESSION_TOKEN, isAnonymous: true, participantId: 'anon-part-1', language: 'fr' });
+      const socketToUser = new Map<string, string>([[SOCKET_ID, SESSION_TOKEN]]);
+      const prisma = makePrisma({ participantFindFirst: null });
+      const deps = makeDeps({ connectedUsers, socketToUser, prisma });
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+      await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
+      expect(socket.emit).toHaveBeenCalledWith('conversation:join-error', expect.objectContaining({
+        reason: 'not_a_member',
+      }));
+      expect(socket.join).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unauthenticated socket (no connected user) with not_authenticated', async () => {
+      // Security fix ccaa9311f: the old userId-less "join without verification"
+      // path was removed; an unresolvable socket is now rejected outright.
+      const deps = makeDeps({ socketToUser: new Map() });
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+      await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
+      expect(socket.emit).toHaveBeenCalledWith('conversation:join-error', expect.objectContaining({
+        reason: 'not_authenticated',
+      }));
+      expect(socket.join).not.toHaveBeenCalled();
+    });
+
     it('emits conversation:stats when stats service returns data', async () => {
       const stats = { memberCount: 5, onlineCount: 2 };
       mockedStats.mockResolvedValue(stats);
