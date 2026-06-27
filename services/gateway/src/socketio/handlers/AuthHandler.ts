@@ -380,9 +380,17 @@ export class AuthHandler {
     }
   }
 
-  async handleHeartbeat(socket: Socket): Promise<void> {
+  async handleHeartbeat(socket: Socket, data?: { clientTime?: number }): Promise<void> {
     const userIdOrToken = this.socketToUser.get(socket.id);
     if (!userIdOrToken) return;
+
+    const serverTime = new Date().toISOString();
+    const latencyHintMs = data?.clientTime !== undefined
+      ? Date.now() - data.clientTime
+      : undefined;
+
+    // Emit ACK before the async DB write so clients get RTT data immediately
+    socket.emit(SERVER_EVENTS.HEARTBEAT_ACK, { serverTime, latencyHintMs });
 
     try {
       const user = this.connectedUsers.get(userIdOrToken);

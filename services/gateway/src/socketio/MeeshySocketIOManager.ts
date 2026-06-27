@@ -740,8 +740,8 @@ export class MeeshySocketIOManager {
         this.statusHandler.handleTypingStop(socket, data).catch((error) => logger.error('[TYPING_STOP] Error:', error));
       });
 
-      socket.on(CLIENT_EVENTS.HEARTBEAT, () => {
-        this.authHandler.handleHeartbeat(socket).catch((error) => logger.error('[HEARTBEAT] Error:', error));
+      socket.on(CLIENT_EVENTS.HEARTBEAT, (data?: { clientTime?: number }) => {
+        this.authHandler.handleHeartbeat(socket, data).catch((error) => logger.error('[HEARTBEAT] Error:', error));
       });
 
       socket.on(CLIENT_EVENTS.ADMIN_AGENT_SUBSCRIBE, (callback?: (response: SocketIOResponse) => void) => {

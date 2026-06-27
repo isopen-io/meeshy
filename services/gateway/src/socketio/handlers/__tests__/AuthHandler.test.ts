@@ -789,5 +789,64 @@ describe('AuthHandler', () => {
       await expect(authHandler.handleHeartbeat(createMockSocket())).resolves.toBeUndefined();
       expect(mockStatusService.updateLastSeen).toHaveBeenCalledWith('user-123', false);
     });
+
+    it('should emit heartbeat:ack immediately with serverTime', async () => {
+      const mockSocket = createMockSocket();
+      socketToUser.set('socket-123', 'user-123');
+      connectedUsers.set('user-123', {
+        id: 'user-123',
+        socketId: 'socket-123',
+        isAnonymous: false,
+        language: 'en'
+      });
+
+      await authHandler.handleHeartbeat(mockSocket);
+
+      expect(mockSocket.emit).toHaveBeenCalledWith(
+        'heartbeat:ack',
+        expect.objectContaining({ serverTime: expect.any(String) })
+      );
+    });
+
+    it('should include latencyHintMs in heartbeat:ack when clientTime provided', async () => {
+      const mockSocket = createMockSocket();
+      socketToUser.set('socket-123', 'user-123');
+      connectedUsers.set('user-123', {
+        id: 'user-123',
+        socketId: 'socket-123',
+        isAnonymous: false,
+        language: 'en'
+      });
+
+      const clientTime = Date.now() - 50; // 50ms ago
+      await authHandler.handleHeartbeat(mockSocket, { clientTime });
+
+      const emitCall = (mockSocket.emit as jest.Mock).mock.calls.find(
+        (c) => c[0] === 'heartbeat:ack'
+      );
+      expect(emitCall).toBeDefined();
+      const payload = emitCall![1];
+      expect(typeof payload.latencyHintMs).toBe('number');
+      expect(payload.latencyHintMs).toBeGreaterThanOrEqual(0);
+    });
+
+    it('should not include latencyHintMs when clientTime not provided', async () => {
+      const mockSocket = createMockSocket();
+      socketToUser.set('socket-123', 'user-123');
+      connectedUsers.set('user-123', {
+        id: 'user-123',
+        socketId: 'socket-123',
+        isAnonymous: false,
+        language: 'en'
+      });
+
+      await authHandler.handleHeartbeat(mockSocket, {});
+
+      const emitCall = (mockSocket.emit as jest.Mock).mock.calls.find(
+        (c) => c[0] === 'heartbeat:ack'
+      );
+      expect(emitCall).toBeDefined();
+      expect(emitCall![1].latencyHintMs).toBeUndefined();
+    });
   });
 });

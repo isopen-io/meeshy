@@ -28,6 +28,16 @@ export const SOCKET_RATE_LIMITS = {
     windowMs: 60000, // 1 minute
     keyPrefix: 'socket:message:send'
   },
+  /**
+   * Per-conversation burst guard: prevents a single user from flooding one
+   * conversation even while staying within the global 20 msg/min budget.
+   * Key = `${keyPrefix}:${userId}:${conversationId}` (constructed by caller).
+   */
+  MESSAGE_SEND_PER_CONVERSATION: {
+    maxRequests: 10,
+    windowMs: 10000, // 10 seconds — allows bursts of up to 10 in a conversation
+    keyPrefix: 'socket:message:send-conv'
+  },
   CALL_INITIATE: {
     maxRequests: 5,
     windowMs: 60000, // 1 minute
