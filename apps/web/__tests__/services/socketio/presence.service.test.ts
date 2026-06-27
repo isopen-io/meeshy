@@ -37,6 +37,14 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
     REACTION_SYNC: 'reaction:sync',
     READ_STATUS_UPDATED: 'read-status:updated',
     PARTICIPANT_ROLE_UPDATED: 'participant:role-updated',
+    CONVERSATION_NEW: 'conversation:new',
+    CONVERSATION_DELETED: 'conversation:deleted',
+    CONVERSATION_UPDATED: 'conversation:updated',
+    CONVERSATION_PARTICIPANT_LEFT: 'conversation:participant-left',
+    CONVERSATION_PARTICIPANT_BANNED: 'conversation:participant-banned',
+    CONVERSATION_PARTICIPANT_UNBANNED: 'conversation:participant-unbanned',
+    CONVERSATION_CLOSED: 'conversation:closed',
+    CONVERSATION_JOIN_ERROR: 'conversation:join-error',
   },
   CLIENT_EVENTS: {},
 }));
@@ -87,6 +95,14 @@ describe('PresenceService', () => {
         'reaction:sync',
         'read-status:updated',
         'participant:role-updated',
+        'conversation:new',
+        'conversation:deleted',
+        'conversation:updated',
+        'conversation:participant-left',
+        'conversation:participant-banned',
+        'conversation:participant-unbanned',
+        'conversation:closed',
+        'conversation:join-error',
       ];
       for (const event of expectedEvents) {
         expect(socket.on).toHaveBeenCalledWith(event, expect.any(Function));
@@ -349,6 +365,158 @@ describe('PresenceService', () => {
       const unsub = service.onConversationOnlineStats(listener);
       unsub();
       socket._trigger('conversation:online-stats', {});
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it('onConversationNew unsubscribe works', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      const unsub = service.onConversationNew(listener);
+      unsub();
+      socket._trigger('conversation:new', {});
+      expect(listener).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── CONVERSATION_NEW ────────────────────────────────────────────────────────
+
+  describe('conversation:new', () => {
+    it('forwards conversation:new events to registered listeners', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      service.onConversationNew(listener);
+      const event = {
+        conversationId: 'conv-123',
+        conversationType: 'group',
+        title: 'Team Chat',
+        creatorId: 'user-1',
+        participantIds: ['user-1', 'user-2'],
+        createdAt: new Date().toISOString(),
+      };
+      socket._trigger('conversation:new', event);
+      expect(listener).toHaveBeenCalledWith(event);
+    });
+
+    it('forwards conversation:new to multiple listeners', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listenerA = jest.fn();
+      const listenerB = jest.fn();
+      service.onConversationNew(listenerA);
+      service.onConversationNew(listenerB);
+      const event = { conversationId: 'c', conversationType: 'direct', title: null, creatorId: 'u1', participantIds: ['u1', 'u2'], createdAt: '' };
+      socket._trigger('conversation:new', event);
+      expect(listenerA).toHaveBeenCalledWith(event);
+      expect(listenerB).toHaveBeenCalledWith(event);
+    });
+  });
+
+  // ─── conversation:participant-left ──────────────────────────────────────────
+
+  describe('conversation:participant-left', () => {
+    it('forwards conversation:participant-left events to registered listeners', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      service.onConversationParticipantLeft(listener);
+      const event = { conversationId: 'conv-1', userId: 'user-2', displayName: 'Bob', leftAt: new Date().toISOString() };
+      socket._trigger('conversation:participant-left', event);
+      expect(listener).toHaveBeenCalledWith(event);
+    });
+
+    it('onConversationParticipantLeft unsubscribe works', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      const unsub = service.onConversationParticipantLeft(listener);
+      unsub();
+      socket._trigger('conversation:participant-left', { conversationId: 'c', userId: 'u' });
+      expect(listener).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── conversation:participant-banned ────────────────────────────────────────
+
+  describe('conversation:participant-banned', () => {
+    it('forwards conversation:participant-banned events to registered listeners', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      service.onConversationParticipantBanned(listener);
+      const event = { conversationId: 'conv-1', userId: 'user-2', bannedBy: { id: 'admin-1' }, bannedAt: new Date().toISOString() };
+      socket._trigger('conversation:participant-banned', event);
+      expect(listener).toHaveBeenCalledWith(event);
+    });
+
+    it('onConversationParticipantBanned unsubscribe works', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      const unsub = service.onConversationParticipantBanned(listener);
+      unsub();
+      socket._trigger('conversation:participant-banned', { conversationId: 'c', userId: 'u' });
+      expect(listener).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── conversation:participant-unbanned ──────────────────────────────────────
+
+  describe('conversation:participant-unbanned', () => {
+    it('forwards conversation:participant-unbanned events to registered listeners', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      service.onConversationParticipantUnbanned(listener);
+      const event = { conversationId: 'conv-1', userId: 'user-2' };
+      socket._trigger('conversation:participant-unbanned', event);
+      expect(listener).toHaveBeenCalledWith(event);
+    });
+
+    it('onConversationParticipantUnbanned unsubscribe works', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      const unsub = service.onConversationParticipantUnbanned(listener);
+      unsub();
+      socket._trigger('conversation:participant-unbanned', { conversationId: 'c', userId: 'u' });
+      expect(listener).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── conversation:join-error ────────────────────────────────────────────────
+
+  describe('conversation:join-error', () => {
+    it('forwards conversation:join-error events to registered listeners', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      service.onConversationJoinError(listener);
+      const event = { conversationId: 'conv-1', reason: 'banned', message: 'You are banned' };
+      socket._trigger('conversation:join-error', event);
+      expect(listener).toHaveBeenCalledWith(event);
+    });
+
+    it('forwards conversation:join-error to multiple listeners', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const l1 = jest.fn();
+      const l2 = jest.fn();
+      service.onConversationJoinError(l1);
+      service.onConversationJoinError(l2);
+      socket._trigger('conversation:join-error', { conversationId: 'c', reason: 'not_a_member', message: 'Not a member' });
+      expect(l1).toHaveBeenCalled();
+      expect(l2).toHaveBeenCalled();
+    });
+
+    it('onConversationJoinError returns a working unsubscribe function', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      const unsub = service.onConversationJoinError(listener);
+      unsub();
+      socket._trigger('conversation:join-error', { conversationId: 'c', reason: 'banned', message: '' });
       expect(listener).not.toHaveBeenCalled();
     });
   });

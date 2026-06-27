@@ -14,7 +14,11 @@ import { logger } from '@/utils/logger';
 import { SERVER_EVENTS, CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type {
   AttachmentStatusUpdatedEventData,
+  AttachmentUpdatedEventData,
+  LinkMessageNewEventData,
   MessageConsumedEventData,
+  MessagePinnedEventData,
+  MessageUnpinnedEventData,
   ReactionUpdateEventData,
 } from '@meeshy/shared/types/socketio-events';
 import type {
@@ -45,6 +49,11 @@ export class MessagingService {
   private mentionListeners: Set<(data: unknown) => void> = new Set();
   private consumedListeners: Set<(data: MessageConsumedEventData) => void> = new Set();
   private attachmentStatusListeners: Set<(data: AttachmentStatusUpdatedEventData) => void> = new Set();
+  private messageAttachmentUpdatedListeners: Set<(data: AttachmentUpdatedEventData) => void> = new Set();
+  private pendingDeliveredListeners: Set<(data: { count: number }) => void> = new Set();
+  private linkMessageNewListeners: Set<(data: LinkMessageNewEventData) => void> = new Set();
+  private messagePinnedListeners: Set<(data: MessagePinnedEventData) => void> = new Set();
+  private messageUnpinnedListeners: Set<(data: MessageUnpinnedEventData) => void> = new Set();
 
   private encryptionHandlers: EncryptionHandlers | null = null;
   private getMessageByIdCallback: GetMessageByIdCallback | null = null;
@@ -185,6 +194,26 @@ export class MessagingService {
 
     (socket as unknown as { on: (event: string, handler: (data: AttachmentStatusUpdatedEventData) => void) => void }).on(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, (data: AttachmentStatusUpdatedEventData) => {
       this.attachmentStatusListeners.forEach(listener => listener(data));
+    });
+
+    (socket as unknown as { on: (event: string, handler: (data: AttachmentUpdatedEventData) => void) => void }).on(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, (data: AttachmentUpdatedEventData) => {
+      this.messageAttachmentUpdatedListeners.forEach(listener => listener(data));
+    });
+
+    (socket as unknown as { on: (event: string, handler: (data: { count: number }) => void) => void }).on(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, (data: { count: number }) => {
+      this.pendingDeliveredListeners.forEach(listener => listener(data));
+    });
+
+    (socket as unknown as { on: (event: string, handler: (data: LinkMessageNewEventData) => void) => void }).on(SERVER_EVENTS.LINK_MESSAGE_NEW, (data: LinkMessageNewEventData) => {
+      this.linkMessageNewListeners.forEach(listener => listener(data));
+    });
+
+    (socket as unknown as { on: (event: string, handler: (data: MessagePinnedEventData) => void) => void }).on(SERVER_EVENTS.MESSAGE_PINNED, (data: MessagePinnedEventData) => {
+      this.messagePinnedListeners.forEach(listener => listener(data));
+    });
+
+    (socket as unknown as { on: (event: string, handler: (data: MessageUnpinnedEventData) => void) => void }).on(SERVER_EVENTS.MESSAGE_UNPINNED, (data: MessageUnpinnedEventData) => {
+      this.messageUnpinnedListeners.forEach(listener => listener(data));
     });
 
     socket.on(SERVER_EVENTS.MENTION_CREATED, (data: unknown) => {
@@ -521,6 +550,31 @@ export class MessagingService {
     return () => this.attachmentStatusListeners.delete(listener);
   }
 
+  onMessageAttachmentUpdated(listener: (data: AttachmentUpdatedEventData) => void): UnsubscribeFn {
+    this.messageAttachmentUpdatedListeners.add(listener);
+    return () => this.messageAttachmentUpdatedListeners.delete(listener);
+  }
+
+  onPendingMessagesDelivered(listener: (data: { count: number }) => void): UnsubscribeFn {
+    this.pendingDeliveredListeners.add(listener);
+    return () => this.pendingDeliveredListeners.delete(listener);
+  }
+
+  onLinkMessageNew(listener: (data: LinkMessageNewEventData) => void): UnsubscribeFn {
+    this.linkMessageNewListeners.add(listener);
+    return () => this.linkMessageNewListeners.delete(listener);
+  }
+
+  onMessagePinned(listener: (data: MessagePinnedEventData) => void): UnsubscribeFn {
+    this.messagePinnedListeners.add(listener);
+    return () => this.messagePinnedListeners.delete(listener);
+  }
+
+  onMessageUnpinned(listener: (data: MessageUnpinnedEventData) => void): UnsubscribeFn {
+    this.messageUnpinnedListeners.add(listener);
+    return () => this.messageUnpinnedListeners.delete(listener);
+  }
+
   /**
    * Cleanup all listeners
    */
@@ -531,6 +585,11 @@ export class MessagingService {
     this.mentionListeners.clear();
     this.consumedListeners.clear();
     this.attachmentStatusListeners.clear();
+    this.messageAttachmentUpdatedListeners.clear();
+    this.pendingDeliveredListeners.clear();
+    this.linkMessageNewListeners.clear();
+    this.messagePinnedListeners.clear();
+    this.messageUnpinnedListeners.clear();
     this.markReceivedTimers.forEach(timer => clearTimeout(timer));
     this.markReceivedTimers.clear();
     this.recentMessageIds.clear();

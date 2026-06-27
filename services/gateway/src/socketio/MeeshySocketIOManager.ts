@@ -1848,6 +1848,25 @@ export class MeeshySocketIOManager {
     return Array.from(this.connectedUsers.keys());
   }
 
+  /**
+   * Joins all active sockets of a user to a conversation room.
+   * Called when a user is added to a conversation while already connected
+   * (e.g. group invite mid-session) so they immediately receive message:new
+   * events without requiring a reconnect.
+   */
+  async joinUserToConversationRoom(userId: string, conversationId: string): Promise<void> {
+    const socketIds = this.userSockets.get(userId);
+    if (!socketIds || socketIds.size === 0) return;
+    const room = ROOMS.conversation(conversationId);
+    await Promise.all(
+      Array.from(socketIds).map(async (socketId) => {
+        const socket = this.io.sockets.sockets.get(socketId);
+        if (!socket) return;
+        await socket.join(room);
+      })
+    );
+  }
+
 
 
   async healthCheck(): Promise<boolean> {

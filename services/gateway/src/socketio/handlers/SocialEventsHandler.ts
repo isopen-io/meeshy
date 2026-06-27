@@ -141,7 +141,9 @@ export class SocialEventsHandler {
    */
   handleFeedSubscribe(socket: Socket, userId: string): void {
     const room = ROOMS.feed(userId);
-    socket.join(room);
+    Promise.resolve(socket.join(room)).catch((err: unknown) => {
+      logger.warn('feed:subscribe join failed', { userId, error: err });
+    });
   }
 
   /**
@@ -149,7 +151,9 @@ export class SocialEventsHandler {
    */
   handleFeedUnsubscribe(socket: Socket, userId: string): void {
     const room = ROOMS.feed(userId);
-    socket.leave(room);
+    Promise.resolve(socket.leave(room)).catch((err: unknown) => {
+      logger.warn('feed:unsubscribe leave failed', { userId, error: err });
+    });
   }
 
   private async getVisibilityFilteredRecipients(

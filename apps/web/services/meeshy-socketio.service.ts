@@ -350,12 +350,68 @@ class MeeshySocketIOService {
     return this.orchestrator.onPreferencesUpdated(listener);
   }
 
+  public onCategoryChanged(listener: () => void): () => void {
+    return this.orchestrator.onCategoryChanged(listener);
+  }
+
   public onParticipantRoleUpdated(listener: (data: { conversationId: string; userId: string; newRole: string }) => void): () => void {
     return this.orchestrator.onParticipantRoleUpdated(listener);
   }
 
+  public onConversationNew(listener: (data: { conversationId: string; conversationType: string; title: string | null; creatorId: string; participantIds: readonly string[]; createdAt: string }) => void): () => void {
+    return this.orchestrator.onConversationNew(listener);
+  }
+
+  public onConversationDeleted(listener: (data: { userId: string; conversationId: string }) => void): () => void {
+    return this.orchestrator.onConversationDeleted(listener);
+  }
+
+  public onConversationUpdated(listener: (data: { conversationId: string; updatedBy: { id: string }; updatedAt: string; [key: string]: unknown }) => void): () => void {
+    return this.orchestrator.onConversationUpdated(listener);
+  }
+
+  public onConversationParticipantLeft(listener: (data: { conversationId: string; userId: string; displayName: string; leftAt: string }) => void): () => void {
+    return this.orchestrator.onConversationParticipantLeft(listener);
+  }
+
+  public onConversationParticipantBanned(listener: (data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string }) => void): () => void {
+    return this.orchestrator.onConversationParticipantBanned(listener);
+  }
+
+  public onConversationParticipantUnbanned(listener: (data: { conversationId: string; userId: string }) => void): () => void {
+    return this.orchestrator.onConversationParticipantUnbanned(listener);
+  }
+
+  public onConversationClosed(listener: (data: { conversationId: string; closedBy: string; closedAt: string }) => void): () => void {
+    return this.orchestrator.onConversationClosed(listener);
+  }
+
   public onAttachmentStatusUpdated(listener: (data: { attachmentId: string; messageId: string; conversationId: string; userId: string; action: string }) => void): () => void {
     return this.orchestrator.onAttachmentStatusUpdated(listener);
+  }
+
+  public onMessageAttachmentUpdated(listener: (data: { conversationId: string; messageId: string; attachment: unknown }) => void): () => void {
+    return this.orchestrator.onMessageAttachmentUpdated(listener);
+  }
+
+  public onPendingMessagesDelivered(listener: (data: { count: number }) => void): () => void {
+    return this.orchestrator.onPendingMessagesDelivered(listener);
+  }
+
+  public onLinkMessageNew(listener: (data: { message: Record<string, unknown> }) => void): () => void {
+    return this.orchestrator.onLinkMessageNew(listener);
+  }
+
+  public onConversationJoinError(listener: (data: { conversationId: string; reason: string; message: string }) => void): () => void {
+    return this.orchestrator.onConversationJoinError(listener);
+  }
+
+  public onMessagePinned(listener: (data: { messageId: string; conversationId: string; pinnedBy: string; pinnedAt: string }) => void): () => void {
+    return this.orchestrator.onMessagePinned(listener);
+  }
+
+  public onMessageUnpinned(listener: (data: { messageId: string; conversationId: string }) => void): () => void {
+    return this.orchestrator.onMessageUnpinned(listener);
   }
 
   /**

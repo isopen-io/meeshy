@@ -169,6 +169,7 @@ jest.mock('@meeshy/shared/utils/validation', () => {
 jest.mock('@meeshy/shared/types/socketio-events', () => ({
   SERVER_EVENTS: {
     READ_STATUS_UPDATED: 'read-status:updated',
+    CONVERSATION_UNREAD_UPDATED: 'conversation:unread-updated',
     MESSAGE_PINNED: 'message:pinned',
     MESSAGE_UNPINNED: 'message:unpinned',
   },
@@ -2772,5 +2773,45 @@ describe('GET /conversations/:id/messages/search — extra branch coverage', () 
     const reply = makeReply();
     await getHandler()(makeSearchReq('hello', { limit: 'notanumber' }), reply);
     expect(reply._body.cursorPagination.limit).toBe(20);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Badge reset: broadcastReadStatus emits CONVERSATION_UNREAD_UPDATED to reader
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('broadcastReadStatus — CONVERSATION_UNREAD_UPDATED badge reset', () => {
+  const getMarkReadHandler = () => fastify._routes['POST']['/conversations/:id/mark-read'];
+
+  it('emits CONVERSATION_UNREAD_UPDATED with unreadCount=0 to the reading user room after mark-read', async () => {
+    mockShouldShowReadReceipts.mockResolvedValue(true);
+    // No other participants — avoids chaining issue so READ_STATUS_UPDATED also fires cleanly.
+    prisma.participant.findMany.mockResolvedValue([]);
+    mockGetUnreadCount.mockResolvedValue(3);
+
+    await getMarkReadHandler()(makeRequest(), makeReply());
+
+    expect(fastify._mockTo).toHaveBeenCalledWith(`user:${USER_ID}`);
+    expect(fastify._mockEmit).toHaveBeenCalledWith('conversation:unread-updated', {
+      conversationId: 'resolved-conv-id',
+      unreadCount: 0,
+    });
+  });
+
+  it('emits CONVERSATION_UNREAD_UPDATED even when showReadReceipts=false (badge reset is not a peer disclosure)', async () => {
+    mockShouldShowReadReceipts.mockResolvedValue(false);
+    prisma.participant.findMany.mockResolvedValue([]);
+    mockGetUnreadCount.mockResolvedValue(3);
+
+    await getMarkReadHandler()(makeRequest(), makeReply());
+
+    // Badge reset must fire regardless of showReadReceipts.
+    expect(fastify._mockTo).toHaveBeenCalledWith(`user:${USER_ID}`);
+    expect(fastify._mockEmit).toHaveBeenCalledWith('conversation:unread-updated', {
+      conversationId: 'resolved-conv-id',
+      unreadCount: 0,
+    });
+    // READ_STATUS_UPDATED (peer disclosure) must be suppressed.
+    expect(fastify._mockEmit).not.toHaveBeenCalledWith('read-status:updated', expect.anything());
   });
 });

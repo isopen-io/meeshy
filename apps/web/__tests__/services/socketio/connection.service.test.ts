@@ -41,6 +41,7 @@ const SERVER_EVENTS_MOCK = {
   AUTHENTICATED: 'authenticated',
   ERROR: 'error',
   AUTH_TOKEN_EXPIRED: 'auth:token-expired',
+  AUTH_SESSION_REVOKED: 'auth:session-revoked',
   MESSAGE_NEW: 'message:new',
   MESSAGE_EDITED: 'message:edited',
   MESSAGE_DELETED: 'message:deleted',
@@ -99,6 +100,7 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
     AUTHENTICATED: 'authenticated',
     ERROR: 'error',
     AUTH_TOKEN_EXPIRED: 'auth:token-expired',
+    AUTH_SESSION_REVOKED: 'auth:session-revoked',
     MESSAGE_NEW: 'message:new',
     MESSAGE_EDITED: 'message:edited',
     MESSAGE_DELETED: 'message:deleted',
@@ -614,7 +616,7 @@ describe('ConnectionService', () => {
       expect(mockSocket.on).not.toHaveBeenCalled();
     });
 
-    it('registers 6 socket event handlers', () => {
+    it('registers 7 socket event handlers', () => {
       const eventHandlers: Record<string, (...args: unknown[]) => void> = {};
       const localSocket = {
         ...mockSocket,
@@ -627,7 +629,7 @@ describe('ConnectionService', () => {
 
       svc.setupConnectionListeners();
 
-      expect(localSocket.on).toHaveBeenCalledTimes(6);
+      expect(localSocket.on).toHaveBeenCalledTimes(7);
     });
 
     it('on connect: sets connected=true, calls autoJoinCallback, emits status', () => {
@@ -929,6 +931,46 @@ describe('ConnectionService', () => {
           'token refresh failed after auth:token-expired',
           expect.objectContaining({ err: expect.any(Error) })
         );
+      });
+    });
+
+    describe('on AUTH_SESSION_REVOKED', () => {
+      it('calls onSessionRevoked callback when provided', () => {
+        const eventHandlers: Record<string, (...args: unknown[]) => void> = {};
+        const localSocket = {
+          ...mockSocket,
+          on: jest.fn((event: string, handler: (...args: unknown[]) => void) => {
+            eventHandlers[event] = handler;
+          }),
+        };
+
+        const svc = new ConnectionService();
+        (svc as any).state.socket = localSocket;
+
+        const onSessionRevoked = jest.fn();
+        svc.setupConnectionListeners(undefined, undefined, undefined, onSessionRevoked);
+
+        eventHandlers[SERVER_EVENTS_MOCK.AUTH_SESSION_REVOKED]();
+
+        expect(onSessionRevoked).toHaveBeenCalledTimes(1);
+        expect(mockLogger.warn).toHaveBeenCalledWith('[Socket]', 'auth session revoked — forcing logout');
+      });
+
+      it('logs warn and does not throw when onSessionRevoked is not provided', () => {
+        const eventHandlers: Record<string, (...args: unknown[]) => void> = {};
+        const localSocket = {
+          ...mockSocket,
+          on: jest.fn((event: string, handler: (...args: unknown[]) => void) => {
+            eventHandlers[event] = handler;
+          }),
+        };
+
+        const svc = new ConnectionService();
+        (svc as any).state.socket = localSocket;
+        svc.setupConnectionListeners();
+
+        expect(() => eventHandlers[SERVER_EVENTS_MOCK.AUTH_SESSION_REVOKED]()).not.toThrow();
+        expect(mockLogger.warn).toHaveBeenCalledWith('[Socket]', 'auth session revoked — forcing logout');
       });
     });
   });

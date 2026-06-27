@@ -389,7 +389,7 @@ export class PostReactionHandler {
         return callback?.({ success: false, error: 'Forbidden' });
       }
 
-      socket.join(ROOMS.post(validated.postId));
+      await socket.join(ROOMS.post(validated.postId));
       callback?.({ success: true });
     } catch (error: unknown) {
       this.logger.error('Failed to join post room', error, { postId: (data as { postId?: string }).postId });
@@ -424,7 +424,7 @@ export class PostReactionHandler {
         return;
       }
 
-      socket.leave(ROOMS.post(validated.postId));
+      await socket.leave(ROOMS.post(validated.postId));
       if (callback) callback({ success: true });
     } catch (error: unknown) {
       this.logger.error('Failed to leave post room', error, { postId: (data as { postId?: string }).postId });

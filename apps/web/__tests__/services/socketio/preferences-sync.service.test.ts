@@ -6,6 +6,11 @@
 jest.mock('@meeshy/shared/types/socketio-events', () => ({
   SERVER_EVENTS: {
     USER_PREFERENCES_UPDATED: 'user:preferences-updated',
+    USER_PREFERENCES_REORDERED: 'user:preferences-reordered',
+    CATEGORY_CREATED: 'category:created',
+    CATEGORY_UPDATED: 'category:updated',
+    CATEGORY_DELETED: 'category:deleted',
+    CATEGORIES_REORDERED: 'categories:reordered',
   },
   CLIENT_EVENTS: {},
 }));
@@ -102,6 +107,63 @@ describe('PreferencesSyncService', () => {
 
     it('does not throw on a fresh instance', () => {
       expect(() => service.cleanup()).not.toThrow();
+    });
+  });
+
+  describe('onCategoryChanged', () => {
+    it('registers category:created handler and fires callback', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      service.onCategoryChanged(listener);
+      socket._trigger('category:created', { userId: 'u1', category: { id: 'cat-1', name: 'Work' } });
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it('registers category:updated handler and fires callback', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      service.onCategoryChanged(listener);
+      socket._trigger('category:updated', { userId: 'u1', category: { id: 'cat-1', name: 'Friends' } });
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it('registers category:deleted handler and fires callback', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      service.onCategoryChanged(listener);
+      socket._trigger('category:deleted', { userId: 'u1', categoryId: 'cat-1' });
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it('registers categories:reordered handler and fires callback', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      service.onCategoryChanged(listener);
+      socket._trigger('categories:reordered', { userId: 'u1', updates: [] });
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it('registers user:preferences-reordered handler and fires callback', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      service.onCategoryChanged(listener);
+      socket._trigger('user:preferences-reordered', { userId: 'u1', updates: [] });
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it('unsubscribe stops receiving category events', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      const unsub = service.onCategoryChanged(listener);
+      unsub();
+      socket._trigger('category:created', { userId: 'u1', category: {} });
+      expect(listener).not.toHaveBeenCalled();
     });
   });
 });

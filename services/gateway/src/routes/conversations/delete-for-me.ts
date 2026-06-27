@@ -105,9 +105,7 @@ export function registerDeleteForMeRoutes(
       const io = socketIOHandler?.getManager()?.getIO()
       if (io) {
         const userSockets = await io.in(ROOMS.user(userId)).fetchSockets()
-        for (const s of userSockets) {
-          s.leave(ROOMS.conversation(conversationId))
-        }
+        await Promise.all(userSockets.map(s => s.leave(ROOMS.conversation(conversationId))))
         // Notify the user's other devices so they drop the conversation from
         // their local store/list (per-user soft delete). Consumed iOS-side by
         // ConversationStore.applyConversationDeleted.

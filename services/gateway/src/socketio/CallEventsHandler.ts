@@ -582,7 +582,7 @@ export class CallEventsHandler {
         });
 
         // CRITICAL: Initiator must join the call room to receive participant-joined events
-        socket.join(ROOMS.call(callSession.id));
+        await socket.join(ROOMS.call(callSession.id));
 
         logger.info('✅ Socket: Initiator joined call room', {
           callId: callSession.id,
@@ -927,7 +927,7 @@ export class CallEventsHandler {
         const { callSession, iceServers } = joinResult;
 
         // Join call room
-        socket.join(ROOMS.call(data.callId));
+        await socket.join(ROOMS.call(data.callId));
 
         // Get the participant that just joined
         const participant = callSession.participants.find(
@@ -1164,7 +1164,7 @@ export class CallEventsHandler {
         );
 
         // Leave call room AFTER broadcasting
-        socket.leave(ROOMS.call(data.callId));
+        await socket.leave(ROOMS.call(data.callId));
 
         // Audit P1-29 — leaveCall service now maps pre-answer last-leave to
         // `missed` (with endReason=missed). Handle both terminal statuses:
@@ -1355,7 +1355,7 @@ export class CallEventsHandler {
               );
 
               // Leave the room
-              socket.leave(ROOMS.call(call.id));
+              await socket.leave(ROOMS.call(call.id));
 
               if (callSession.status === 'ended') {
                 const endedEvent: CallEndedEvent = {
@@ -1830,9 +1830,7 @@ export class CallEventsHandler {
 
         // Cleanup: remove all sockets from call room
         const socketsInCallRoom = await io.in(ROOMS.call(data.callId)).fetchSockets();
-        for (const s of socketsInCallRoom) {
-          s.leave(ROOMS.call(data.callId));
-        }
+        await Promise.all(socketsInCallRoom.map(s => s.leave(ROOMS.call(data.callId))));
 
         ack?.({ success: true });
 

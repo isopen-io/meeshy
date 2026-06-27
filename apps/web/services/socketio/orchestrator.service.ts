@@ -123,7 +123,8 @@ export class SocketIOOrchestrator {
     this.connectionService.setupConnectionListeners(
       () => this.onAuthenticated(),
       (reason) => this.onDisconnected(reason),
-      (error) => this.onError(error)
+      (error) => this.onError(error),
+      () => this.onSessionRevoked()
     );
 
     // Setup service listeners
@@ -239,6 +240,18 @@ export class SocketIOOrchestrator {
    */
   private onError(error: Error): void {
     logger.error('[SocketIOOrchestrator]', 'Error', { error });
+  }
+
+  /**
+   * Handle session revoked event — server explicitly invalidated this session.
+   * Dispatches a DOM event so the React layer can trigger logout without a
+   * circular import between the socket service and the auth store.
+   */
+  private onSessionRevoked(): void {
+    logger.warn('[SocketIOOrchestrator]', 'Session revoked by server — dispatching meeshy:session-revoked');
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('meeshy:session-revoked'));
+    }
   }
 
   /**
@@ -533,6 +546,26 @@ export class SocketIOOrchestrator {
     return this.messagingService.onAttachmentStatusUpdated(listener);
   }
 
+  onMessageAttachmentUpdated(listener: (data: any) => void): UnsubscribeFn {
+    return this.messagingService.onMessageAttachmentUpdated(listener);
+  }
+
+  onPendingMessagesDelivered(listener: (data: { count: number }) => void): UnsubscribeFn {
+    return this.messagingService.onPendingMessagesDelivered(listener);
+  }
+
+  onLinkMessageNew(listener: (data: { message: Record<string, unknown> }) => void): UnsubscribeFn {
+    return this.messagingService.onLinkMessageNew(listener);
+  }
+
+  onMessagePinned(listener: (data: { messageId: string; conversationId: string; pinnedBy: string; pinnedAt: string }) => void): UnsubscribeFn {
+    return this.messagingService.onMessagePinned(listener);
+  }
+
+  onMessageUnpinned(listener: (data: { messageId: string; conversationId: string }) => void): UnsubscribeFn {
+    return this.messagingService.onMessageUnpinned(listener);
+  }
+
   onTranslation(listener: (data: any) => void): UnsubscribeFn {
     return this.translationService.onTranslation(listener);
   }
@@ -619,8 +652,44 @@ export class SocketIOOrchestrator {
     return this.preferencesSyncService.onPreferencesUpdated(listener);
   }
 
+  onCategoryChanged(listener: () => void): UnsubscribeFn {
+    return this.preferencesSyncService.onCategoryChanged(listener);
+  }
+
   onParticipantRoleUpdated(listener: (data: { conversationId: string; userId: string; newRole: string }) => void): UnsubscribeFn {
     return this.presenceService.onParticipantRoleUpdated(listener);
+  }
+
+  onConversationNew(listener: import('./types').ConversationNewListener): UnsubscribeFn {
+    return this.presenceService.onConversationNew(listener);
+  }
+
+  onConversationDeleted(listener: import('./types').ConversationDeletedListener): UnsubscribeFn {
+    return this.presenceService.onConversationDeleted(listener);
+  }
+
+  onConversationUpdated(listener: import('./types').ConversationUpdatedListener): UnsubscribeFn {
+    return this.presenceService.onConversationUpdated(listener);
+  }
+
+  onConversationParticipantLeft(listener: (data: { conversationId: string; userId: string; displayName: string; leftAt: string }) => void): UnsubscribeFn {
+    return this.presenceService.onConversationParticipantLeft(listener);
+  }
+
+  onConversationParticipantBanned(listener: (data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string }) => void): UnsubscribeFn {
+    return this.presenceService.onConversationParticipantBanned(listener);
+  }
+
+  onConversationParticipantUnbanned(listener: (data: { conversationId: string; userId: string }) => void): UnsubscribeFn {
+    return this.presenceService.onConversationParticipantUnbanned(listener);
+  }
+
+  onConversationClosed(listener: (data: { conversationId: string; closedBy: string; closedAt: string }) => void): UnsubscribeFn {
+    return this.presenceService.onConversationClosed(listener);
+  }
+
+  onConversationJoinError(listener: (data: { conversationId: string; reason: string; message: string }) => void): UnsubscribeFn {
+    return this.presenceService.onConversationJoinError(listener);
   }
 
   // ============ CLEANUP ============

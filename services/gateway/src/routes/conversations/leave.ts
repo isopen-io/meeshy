@@ -77,9 +77,7 @@ export function registerLeaveRoutes(
         })
 
         const userSockets = await io.in(ROOMS.user(userId)).fetchSockets()
-        for (const s of userSockets) {
-          s.leave(room)
-        }
+        await Promise.all(userSockets.map(s => s.leave(room)))
       }
 
       return sendSuccess(reply, { conversationId: id, leftAt: now.toISOString() })

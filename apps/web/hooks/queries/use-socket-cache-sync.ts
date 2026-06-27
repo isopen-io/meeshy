@@ -515,6 +515,200 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       });
     };
 
+    // Handler for participant-left (room broadcast) — another member was removed/left
+    const handleConversationParticipantLeft = (data: { conversationId: string; userId: string; displayName: string; leftAt: string }) => {
+      const leftUpdater = (convs: Conversation[]) =>
+        convs.map((conv) =>
+          conv.id === data.conversationId
+            ? { ...conv, memberCount: Math.max(0, (conv.memberCount ?? 1) - 1) }
+            : conv
+        );
+      queryClient.setQueriesData<Conversation[]>(
+        { queryKey: queryKeys.conversations.lists() },
+        (old) => old ? leftUpdater(old) : old
+      );
+      updateInfiniteConversationCache(queryClient, leftUpdater);
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.conversations.participants(data.conversationId),
+      });
+    };
+
+    // Handler for participant-banned — member was banned from the conversation
+    const handleConversationParticipantBanned = (data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string }) => {
+      const bannedUpdater = (convs: Conversation[]) =>
+        convs.map((conv) =>
+          conv.id === data.conversationId
+            ? { ...conv, memberCount: Math.max(0, (conv.memberCount ?? 1) - 1) }
+            : conv
+        );
+      queryClient.setQueriesData<Conversation[]>(
+        { queryKey: queryKeys.conversations.lists() },
+        (old) => old ? bannedUpdater(old) : old
+      );
+      updateInfiniteConversationCache(queryClient, bannedUpdater);
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.conversations.participants(data.conversationId),
+      });
+    };
+
+    // Handler for participant-unbanned — member was unbanned (may rejoin)
+    const handleConversationParticipantUnbanned = (data: { conversationId: string; userId: string }) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.conversations.participants(data.conversationId),
+      });
+    };
+
+    // Handler for conversation:closed — conversation permanently closed by admin
+    const handleConversationClosed = (data: { conversationId: string; closedBy: string; closedAt: string }) => {
+      const { conversationId: closedId } = data;
+      if (!closedId) return;
+      updateInfiniteConversationCache(queryClient, (convs) =>
+        convs.filter((c) => c.id !== closedId)
+      );
+      queryClient.removeQueries({ queryKey: queryKeys.conversations.detail(closedId) });
+    };
+
+    // Handler for category CRUD events — invalidate categories cache so sidebar reflects cross-device changes
+    const handleCategoryChanged = () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.preferences.categories() });
+    };
+
+    // Handler for message:pending-delivered — queued outgoing messages were delivered after reconnect
+    const handlePendingMessagesDelivered = () => {
+      if (conversationId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.messages.infinite(conversationId) });
+      }
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
+    };
+
+    // Handler for message:attachment-updated — async enrichment (transcription/translation) completed for an attachment
+    const handleMessageAttachmentUpdated = (data: { conversationId: string; messageId: string; attachment: unknown }) => {
+      const { conversationId: attachConvId, messageId: attachMsgId, attachment } = data;
+      if (!attachConvId || !attachMsgId || !attachment) return;
+      const attachId = (attachment as { id?: string }).id;
+      queryClient.setQueryData(
+        queryKeys.messages.infinite(attachConvId),
+        (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
+          if (!old) return old;
+          return {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              messages: page.messages.map((m) => {
+                if (m.id !== attachMsgId) return m;
+                const attachments = Array.isArray((m as any).attachments)
+                  ? (m as any).attachments.map((a: { id?: string }) =>
+                      attachId && a.id === attachId ? { ...a, ...attachment as object } : a
+                    )
+                  : (m as any).attachments;
+                return { ...m, attachments };
+              }),
+            })),
+          };
+        }
+      );
+    };
+
+    // Handler for message:pinned — update message in cache with pin metadata
+    const handleMessagePinned = (data: { messageId: string; conversationId: string; pinnedBy: string; pinnedAt: string }) => {
+      const { conversationId: pinnedConvId, messageId: pinnedMsgId, pinnedBy, pinnedAt } = data;
+      if (!pinnedConvId || !pinnedMsgId) return;
+      queryClient.setQueryData(
+        queryKeys.messages.infinite(pinnedConvId),
+        (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
+          if (!old) return old;
+          return {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              messages: page.messages.map((m) =>
+                m.id === pinnedMsgId ? { ...m, pinnedBy, pinnedAt } : m
+              ),
+            })),
+          };
+        }
+      );
+    };
+
+    // Handler for message:unpinned — clear pin metadata from message in cache
+    const handleMessageUnpinned = (data: { messageId: string; conversationId: string }) => {
+      const { conversationId: unpinnedConvId, messageId: unpinnedMsgId } = data;
+      if (!unpinnedConvId || !unpinnedMsgId) return;
+      queryClient.setQueryData(
+        queryKeys.messages.infinite(unpinnedConvId),
+        (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
+          if (!old) return old;
+          return {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              messages: page.messages.map((m) => {
+                if (m.id !== unpinnedMsgId) return m;
+                const { pinnedBy: _pb, pinnedAt: _pa, ...rest } = m as Message & { pinnedBy?: string; pinnedAt?: string };
+                return rest as Message;
+              }),
+            })),
+          };
+        }
+      );
+    };
+
+    // Handler for link:message:new — a link preview message arrived; append to messages + bump conversation
+    const handleLinkMessageNew = (data: { message: Record<string, unknown> }) => {
+      const linkMsg = data.message;
+      const linkConvId = linkMsg.conversationId as string | undefined;
+      if (!linkConvId) return;
+      const linkMsgId = linkMsg.id as string | undefined;
+
+      queryClient.setQueryData(
+        queryKeys.messages.infinite(linkConvId),
+        (old: { pages: { messages: Message[]; hasMore: boolean; total: number }[]; pageParams: number[] } | undefined) => {
+          if (!old) return old;
+          if (linkMsgId && old.pages.some((p) => p.messages.some((m) => m.id === linkMsgId))) return old;
+          return {
+            ...old,
+            pages: old.pages.map((page, i) =>
+              i === 0 ? { ...page, messages: [linkMsg as unknown as Message, ...page.messages] } : page
+            ),
+          };
+        }
+      );
+
+      queryClient.setQueriesData<Conversation[]>(
+        { queryKey: queryKeys.conversations.lists() },
+        (old) => {
+          if (!old) return old;
+          const idx = old.findIndex((c) => c.id === linkConvId);
+          if (idx === -1) return old;
+          const updated = { ...old[idx], lastMessage: linkMsg as unknown as Message, lastMessageAt: linkMsg.createdAt as string ?? new Date().toISOString() };
+          return [updated, ...old.filter((_, i) => i !== idx)];
+        }
+      );
+
+      updateInfiniteConversationCache(queryClient, (convs) => {
+        const idx = convs.findIndex((c) => c.id === linkConvId);
+        if (idx === -1) return convs;
+        const updated = { ...convs[idx], lastMessage: linkMsg as unknown as Message, lastMessageAt: linkMsg.createdAt as string ?? new Date().toISOString() };
+        return [updated, ...convs.filter((_, i) => i !== idx)];
+      });
+    };
+
+    // Handler for conversation:join-error — server rejected the room join; purge stale local cache
+    const handleConversationJoinError = (data: { conversationId: string; reason: string; message: string }) => {
+      const { conversationId: rejectedId, reason } = data;
+      if (!rejectedId) return;
+      updateInfiniteConversationCache(queryClient, (convs) => convs.filter((c) => c.id !== rejectedId));
+      queryClient.setQueriesData<Conversation[]>(
+        { queryKey: queryKeys.conversations.lists() },
+        (old) => (old ? old.filter((c) => c.id !== rejectedId) : old)
+      );
+      queryClient.removeQueries({ queryKey: queryKeys.conversations.detail(rejectedId) });
+      queryClient.removeQueries({ queryKey: queryKeys.messages.infinite(rejectedId) });
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('meeshy:conversation-join-error', { detail: { conversationId: rejectedId, reason } }));
+      }
+    };
+
     // Handler for attachment status updated (listened, watched, viewed, downloaded)
     const handleAttachmentStatusUpdated = (data: { attachmentId: string; messageId: string; conversationId: string; userId: string; action: string }) => {
       const targetConversationId = data.conversationId;
@@ -547,6 +741,55 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       );
     };
 
+    // Handler for conversation:deleted — user removed the conversation for themselves.
+    const handleConversationDeleted = (data: { userId: string; conversationId: string }) => {
+      const { conversationId: deletedId } = data;
+      if (!deletedId) return;
+      updateInfiniteConversationCache(queryClient, (convs) =>
+        convs.filter((c) => c.id !== deletedId)
+      );
+      queryClient.removeQueries({ queryKey: queryKeys.conversations.detail(deletedId) });
+    };
+
+    // Handler for conversation:updated — metadata changed (title, settings) or lastMessage bump.
+    const handleConversationUpdated = (data: { conversationId: string; updatedBy: { id: string }; updatedAt: string; [key: string]: unknown }) => {
+      const { conversationId: updatedId, updatedBy: _updatedBy, ...rest } = data;
+      if (!updatedId) return;
+      updateInfiniteConversationCache(queryClient, (convs) =>
+        convs.map((c) => c.id === updatedId ? { ...c, ...rest } : c)
+      );
+    };
+
+    // Handler for conversation:new — a group was created or the user was added to one.
+    // The event carries only partial data, so fetch the full conversation and prepend it.
+    const handleConversationNew = (data: { conversationId: string }) => {
+      const { conversationId: newConvId } = data;
+      if (!newConvId || !/^[a-f\d]{24}$/i.test(newConvId)) return;
+      if (typeof window === 'undefined' || window.location.pathname === '/login') return;
+
+      let alreadyInCache = false;
+      updateInfiniteConversationCache(queryClient, (convs) => {
+        if (convs.some((c) => c.id === newConvId)) {
+          alreadyInCache = true;
+        }
+        return convs;
+      });
+      if (alreadyInCache) return;
+
+      apiService.get<Conversation>(`/conversations/${newConvId}`)
+        .then((response) => {
+          const fetched = response?.data;
+          if (!fetched) return;
+          updateInfiniteConversationCache(queryClient, (convs) => {
+            if (convs.some((c) => c.id === newConvId)) return convs;
+            return [fetched, ...convs];
+          });
+        })
+        .catch(() => {
+          queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
+        });
+    };
+
     // Register listeners
     const unsubscribeMessage = meeshySocketIOService.onNewMessage(handleNewMessage);
     const unsubscribeEdit = meeshySocketIOService.onMessageEdited(handleMessageEdited);
@@ -570,6 +813,20 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const unsubscribeJoined = meeshySocketIOService.onConversationJoined(handleConversationJoined);
     const unsubscribeLeft = meeshySocketIOService.onConversationLeft(handleConversationLeft);
     const unsubscribeParticipantRole = meeshySocketIOService.onParticipantRoleUpdated(handleParticipantRoleUpdated);
+    const unsubscribeConversationNew = meeshySocketIOService.onConversationNew(handleConversationNew);
+    const unsubscribeConversationDeleted = meeshySocketIOService.onConversationDeleted(handleConversationDeleted);
+    const unsubscribeConversationUpdated = meeshySocketIOService.onConversationUpdated(handleConversationUpdated);
+    const unsubscribeParticipantLeft = meeshySocketIOService.onConversationParticipantLeft(handleConversationParticipantLeft);
+    const unsubscribeParticipantBanned = meeshySocketIOService.onConversationParticipantBanned(handleConversationParticipantBanned);
+    const unsubscribeParticipantUnbanned = meeshySocketIOService.onConversationParticipantUnbanned(handleConversationParticipantUnbanned);
+    const unsubscribeConversationClosed = meeshySocketIOService.onConversationClosed(handleConversationClosed);
+    const unsubscribeCategoryChanged = meeshySocketIOService.onCategoryChanged(handleCategoryChanged);
+    const unsubscribeMessageAttachmentUpdated = meeshySocketIOService.onMessageAttachmentUpdated(handleMessageAttachmentUpdated);
+    const unsubscribePendingDelivered = meeshySocketIOService.onPendingMessagesDelivered(handlePendingMessagesDelivered);
+    const unsubscribeLinkMessageNew = meeshySocketIOService.onLinkMessageNew(handleLinkMessageNew);
+    const unsubscribeConversationJoinError = meeshySocketIOService.onConversationJoinError(handleConversationJoinError);
+    const unsubscribeMessagePinned = meeshySocketIOService.onMessagePinned(handleMessagePinned);
+    const unsubscribeMessageUnpinned = meeshySocketIOService.onMessageUnpinned(handleMessageUnpinned);
 
     return () => {
       unsubscribeMessage?.();
@@ -584,6 +841,20 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       unsubscribeJoined?.();
       unsubscribeLeft?.();
       unsubscribeParticipantRole?.();
+      unsubscribeConversationNew?.();
+      unsubscribeConversationDeleted?.();
+      unsubscribeConversationUpdated?.();
+      unsubscribeParticipantLeft?.();
+      unsubscribeParticipantBanned?.();
+      unsubscribeParticipantUnbanned?.();
+      unsubscribeConversationClosed?.();
+      unsubscribeCategoryChanged?.();
+      unsubscribeMessageAttachmentUpdated?.();
+      unsubscribePendingDelivered?.();
+      unsubscribeLinkMessageNew?.();
+      unsubscribeConversationJoinError?.();
+      unsubscribeMessagePinned?.();
+      unsubscribeMessageUnpinned?.();
     };
   }, [conversationId, enabled, queryClient]);
 }
