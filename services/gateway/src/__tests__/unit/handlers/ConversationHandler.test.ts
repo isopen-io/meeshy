@@ -10,6 +10,7 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
     CONVERSATION_LEFT: 'conversation:left',
     CONVERSATION_JOIN_ERROR: 'conversation:join-error',
     CONVERSATION_STATS: 'conversation:stats',
+    CONVERSATION_UNREAD_UPDATED: 'conversation:unread-updated',
     ERROR: 'error',
   },
   ROOMS: {
@@ -93,15 +94,21 @@ function makeSocketToUser() {
   return map;
 }
 
+function makeReadStatusService(unreadCount = 0) {
+  return { getUnreadCount: jest.fn().mockResolvedValue(unreadCount) };
+}
+
 function makeDeps(overrides: Partial<{
   prisma: ReturnType<typeof makePrisma>;
   connectedUsers: Map<string, unknown>;
   socketToUser: Map<string, string>;
+  readStatusService: ReturnType<typeof makeReadStatusService>;
 }> = {}): ConversationHandlerDependencies {
   return {
     prisma: (overrides.prisma ?? makePrisma()) as any,
     connectedUsers: (overrides.connectedUsers ?? makeConnectedUsers()) as any,
     socketToUser: overrides.socketToUser ?? makeSocketToUser(),
+    readStatusService: (overrides.readStatusService ?? makeReadStatusService()) as any,
   };
 }
 
@@ -234,6 +241,36 @@ describe('ConversationHandler', () => {
       await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
       expect(socket.emit).not.toHaveBeenCalledWith('conversation:stats', expect.anything());
     });
+
+    it('emits conversation:unread-updated with the user unread count on join', async () => {
+      const readStatusService = makeReadStatusService(7);
+      const deps = makeDeps({ readStatusService });
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+      await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
+      expect(readStatusService.getUnreadCount).toHaveBeenCalledWith(USER_ID, CONV_ID);
+      expect(socket.emit).toHaveBeenCalledWith('conversation:unread-updated', {
+        conversationId: CONV_ID,
+        unreadCount: 7,
+      });
+    });
+
+    it('does not emit conversation:unread-updated when socket user is not authenticated', async () => {
+      const deps = makeDeps({ socketToUser: new Map() });
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+      await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
+      expect(socket.emit).not.toHaveBeenCalledWith('conversation:unread-updated', expect.anything());
+    });
+
+    it('does not throw when unread count fetch fails on join', async () => {
+      const readStatusService = { getUnreadCount: jest.fn().mockRejectedValue(new Error('DB error')) };
+      const deps = makeDeps({ readStatusService: readStatusService as any });
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+      await expect(handler.handleConversationJoin(socket as any, JOIN_PAYLOAD)).resolves.toBeUndefined();
+      expect(socket.emit).toHaveBeenCalledWith('conversation:joined', expect.anything());
+    });
   });
 
   // ─── handleConversationJoin: error handling ───────────────────────────────
@@ -249,6 +286,18 @@ describe('ConversationHandler', () => {
       expect(socket.emit).toHaveBeenCalledWith('conversation:join-error', expect.objectContaining({
         reason: 'server_error',
       }));
+    });
+
+    it('emits server_error when socket.join rejects (proves join is awaited)', async () => {
+      const deps = makeDeps();
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+      socket.join.mockRejectedValue(new Error('socket adapter failure'));
+      await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
+      expect(socket.emit).toHaveBeenCalledWith('conversation:join-error', expect.objectContaining({
+        reason: 'server_error',
+      }));
+      expect(socket.emit).not.toHaveBeenCalledWith('conversation:joined', expect.anything());
     });
   });
 

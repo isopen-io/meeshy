@@ -11,6 +11,7 @@ import { conversationStatsService } from '../../services/ConversationStatsServic
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketConversationJoinSchema, SocketConversationLeaveSchema } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import type { MessageReadStatusService } from '../../services/MessageReadStatusService.js';
 
 const logger = enhancedLogger.child({ module: 'ConversationHandler' });
 
@@ -18,17 +19,20 @@ export interface ConversationHandlerDependencies {
   prisma: PrismaClient;
   connectedUsers: Map<string, SocketUser>;
   socketToUser: Map<string, string>;
+  readStatusService: Pick<MessageReadStatusService, 'getUnreadCount'>;
 }
 
 export class ConversationHandler {
   private prisma: PrismaClient;
   private connectedUsers: Map<string, SocketUser>;
   private socketToUser: Map<string, string>;
+  private readStatusService: Pick<MessageReadStatusService, 'getUnreadCount'>;
 
   constructor(deps: ConversationHandlerDependencies) {
     this.prisma = deps.prisma;
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
+    this.readStatusService = deps.readStatusService;
   }
 
   /**
@@ -99,12 +103,19 @@ export class ConversationHandler {
       }
 
       const room = ROOMS.conversation(normalizedId);
-      socket.join(room);
+      await socket.join(room);
       if (userId) {
         socket.emit(SERVER_EVENTS.CONVERSATION_JOINED, {
           conversationId: normalizedId,
           userId
         });
+
+        try {
+          const unreadCount = await this.readStatusService.getUnreadCount(userId, normalizedId);
+          socket.emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, { conversationId: normalizedId, unreadCount });
+        } catch (err) {
+          logger.warn('unread count fetch failed on join (non-blocking)', { conversationId: normalizedId, error: err });
+        }
 
         // Envoyer les stats de conversation
         await this.sendConversationStatsToSocket(socket, validated.conversationId).catch(err => {
@@ -139,7 +150,7 @@ export class ConversationHandler {
       );
 
       const room = ROOMS.conversation(normalizedId);
-      socket.leave(room);
+      await socket.leave(room);
 
       const userId = this.socketToUser.get(socket.id);
       if (userId) {

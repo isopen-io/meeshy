@@ -434,6 +434,31 @@ describe('AuthHandler', () => {
       expect(mockSocket.join).toHaveBeenCalledWith('conversation:conv-bbb');
     });
 
+    it('awaits all conversation room joins before handleTokenAuthentication resolves', async () => {
+      const joinCompleted: string[] = [];
+      const asyncJoin = jest.fn().mockImplementation(async (room: string) => {
+        await new Promise(resolve => process.nextTick(resolve));
+        joinCompleted.push(room);
+      });
+      const mockSocket = createMockSocket({
+        handshake: { auth: { token: 'valid-jwt-token' } },
+        join: asyncJoin,
+      });
+      jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
+        id: 'user-123', systemLanguage: 'en',
+        regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null,
+      } as any);
+      jest.spyOn((mockPrisma as any).participant, 'findMany').mockResolvedValue([
+        { conversationId: 'conv-aaa' },
+        { conversationId: 'conv-bbb' },
+      ]);
+
+      await authHandler.handleTokenAuthentication(mockSocket);
+
+      expect(joinCompleted).toContain('conversation:conv-aaa');
+      expect(joinCompleted).toContain('conversation:conv-bbb');
+    });
+
     it('should not throw when participant.findMany fails in _joinUserConversations', async () => {
       const mockSocket = createMockSocket({
         handshake: { auth: { token: 'valid-jwt-token' } }

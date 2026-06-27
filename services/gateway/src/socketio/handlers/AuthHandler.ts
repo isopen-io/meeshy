@@ -149,9 +149,11 @@ export class AuthHandler {
 
         try {
           if (user.id && typeof user.id === 'string') {
-            socket.join(user.id);
-            socket.join(ROOMS.user(user.id));
-            socket.join(ROOMS.feed(user.id));
+            await Promise.all([
+              socket.join(user.id),
+              socket.join(ROOMS.user(user.id)),
+              socket.join(ROOMS.feed(user.id)),
+            ]);
           }
         } catch (error) {
           logger.error('failed to join personal rooms', { userId: user.id, error });
@@ -162,7 +164,7 @@ export class AuthHandler {
         await this._joinUserConversations(socket, user.id, false);
 
         try {
-          socket.join('conversation:any');
+          await socket.join('conversation:any');
         } catch (error) {
           logger.debug('failed to join conversation:any room (manual auth)', { userId: user.id, error });
         }
@@ -238,9 +240,11 @@ export class AuthHandler {
 
     try {
       if (user.id && typeof user.id === 'string') {
-        socket.join(user.id);
-        socket.join(ROOMS.user(user.id));
-        socket.join(ROOMS.feed(user.id));
+        await Promise.all([
+          socket.join(user.id),
+          socket.join(ROOMS.user(user.id)),
+          socket.join(ROOMS.feed(user.id)),
+        ]);
       }
     } catch (error) {
       logger.error('failed to join personal rooms (JWT auth)', { userId: user.id, error });
@@ -251,7 +255,7 @@ export class AuthHandler {
     await this._joinUserConversations(socket, user.id, false);
 
     try {
-      socket.join('conversation:any');
+      await socket.join('conversation:any');
     } catch (error) {
       logger.debug('failed to join conversation:any room (JWT auth)', { userId: user.id, error });
     }
@@ -315,7 +319,7 @@ export class AuthHandler {
 
     try {
       if (socketUser.id && typeof socketUser.id === 'string') {
-        socket.join(socketUser.id);
+        await socket.join(socketUser.id);
       }
     } catch (error) {
       logger.error('failed to join personal room for anonymous user', { anonymousId: socketUser.id, error });
@@ -324,7 +328,7 @@ export class AuthHandler {
     await this.maintenanceService.updateAnonymousOnlineStatus(socketUser.id, true, true);
 
     try {
-      socket.join(ROOMS.conversation(participant.conversationId));
+      await socket.join(ROOMS.conversation(participant.conversationId));
     } catch (error) {
       logger.warn('failed to join conversation room for anonymous user — messages may not be received', {
         anonymousId: socketUser.id,
@@ -479,9 +483,7 @@ export class AuthHandler {
         });
       }
 
-      for (const conv of conversations) {
-        socket.join(ROOMS.conversation(conv.conversationId));
-      }
+      await Promise.all(conversations.map(conv => socket.join(ROOMS.conversation(conv.conversationId))));
       logger.debug('user joined conversation rooms', { userId, count: conversations.length });
     } catch (error) {
       logger.error('error joining conversations for user', { userId, error });
