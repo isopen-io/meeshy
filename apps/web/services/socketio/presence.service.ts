@@ -48,6 +48,9 @@ export class PresenceService {
   private conversationNewListeners: Set<ConversationNewListener> = new Set();
   private conversationDeletedListeners: Set<ConversationDeletedListener> = new Set();
   private conversationUpdatedListeners: Set<ConversationUpdatedListener> = new Set();
+  private conversationParticipantLeftListeners: Set<(data: { conversationId: string; userId: string; displayName: string; leftAt: string }) => void> = new Set();
+  private conversationParticipantBannedListeners: Set<(data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string }) => void> = new Set();
+  private conversationParticipantUnbannedListeners: Set<(data: { conversationId: string; userId: string }) => void> = new Set();
 
   /**
    * Setup presence event listeners on socket
@@ -133,6 +136,18 @@ export class PresenceService {
 
     socket.on(SERVER_EVENTS.CONVERSATION_UPDATED as any, (data: any) => {
       this.conversationUpdatedListeners.forEach(listener => listener(data));
+    });
+
+    socket.on(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT as any, (data: any) => {
+      this.conversationParticipantLeftListeners.forEach(listener => listener(data));
+    });
+
+    socket.on(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED as any, (data: any) => {
+      this.conversationParticipantBannedListeners.forEach(listener => listener(data));
+    });
+
+    socket.on(SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED as any, (data: any) => {
+      this.conversationParticipantUnbannedListeners.forEach(listener => listener(data));
     });
   }
 
@@ -235,6 +250,21 @@ export class PresenceService {
     return () => this.conversationUpdatedListeners.delete(listener);
   }
 
+  onConversationParticipantLeft(listener: (data: { conversationId: string; userId: string; displayName: string; leftAt: string }) => void): UnsubscribeFn {
+    this.conversationParticipantLeftListeners.add(listener);
+    return () => this.conversationParticipantLeftListeners.delete(listener);
+  }
+
+  onConversationParticipantBanned(listener: (data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string }) => void): UnsubscribeFn {
+    this.conversationParticipantBannedListeners.add(listener);
+    return () => this.conversationParticipantBannedListeners.delete(listener);
+  }
+
+  onConversationParticipantUnbanned(listener: (data: { conversationId: string; userId: string }) => void): UnsubscribeFn {
+    this.conversationParticipantUnbannedListeners.add(listener);
+    return () => this.conversationParticipantUnbannedListeners.delete(listener);
+  }
+
   /**
    * Cleanup all listeners
    */
@@ -253,6 +283,9 @@ export class PresenceService {
     this.conversationNewListeners.clear();
     this.conversationDeletedListeners.clear();
     this.conversationUpdatedListeners.clear();
+    this.conversationParticipantLeftListeners.clear();
+    this.conversationParticipantBannedListeners.clear();
+    this.conversationParticipantUnbannedListeners.clear();
   }
 
   /**

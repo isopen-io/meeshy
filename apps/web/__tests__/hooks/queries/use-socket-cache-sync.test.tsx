@@ -29,6 +29,9 @@ let messageDeletedCallback: ((messageId: string) => void) | null = null;
 let translationCallback: ((data: TranslationEvent) => void) | null = null;
 let conversationDeletedCallback: ((data: { userId: string; conversationId: string }) => void) | null = null;
 let conversationUpdatedCallback: ((data: { conversationId: string; updatedBy: { id: string }; updatedAt: string; [key: string]: unknown }) => void) | null = null;
+let conversationParticipantLeftCallback: ((data: { conversationId: string; userId: string; displayName: string; leftAt: string }) => void) | null = null;
+let conversationParticipantBannedCallback: ((data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string }) => void) | null = null;
+let conversationParticipantUnbannedCallback: ((data: { conversationId: string; userId: string }) => void) | null = null;
 
 // Mock unsubscribe functions
 const mockUnsubscribeMessage = jest.fn();
@@ -85,6 +88,18 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
       conversationUpdatedCallback = callback;
       return jest.fn();
     },
+    onConversationParticipantLeft: (callback: (data: { conversationId: string; userId: string; displayName: string; leftAt: string }) => void) => {
+      conversationParticipantLeftCallback = callback;
+      return jest.fn();
+    },
+    onConversationParticipantBanned: (callback: (data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string }) => void) => {
+      conversationParticipantBannedCallback = callback;
+      return jest.fn();
+    },
+    onConversationParticipantUnbanned: (callback: (data: { conversationId: string; userId: string }) => void) => {
+      conversationParticipantUnbannedCallback = callback;
+      return jest.fn();
+    },
     onStatusChange: jest.fn(() => () => {}),
   },
 }));
@@ -105,6 +120,7 @@ jest.mock('@/lib/react-query/query-keys', () => ({
       infinite: () => ['conversations', 'infinite'],
       details: () => ['conversations', 'detail'],
       detail: (id: string) => ['conversations', 'detail', id],
+      participants: (id: string) => ['conversations', 'participants', id],
     },
     notifications: {
       all: ['notifications'],
@@ -209,6 +225,9 @@ describe('useSocketCacheSync', () => {
     translationCallback = null;
     conversationDeletedCallback = null;
     conversationUpdatedCallback = null;
+    conversationParticipantLeftCallback = null;
+    conversationParticipantBannedCallback = null;
+    conversationParticipantUnbannedCallback = null;
   });
 
   describe('Event Listener Registration', () => {
@@ -622,6 +641,93 @@ describe('useSocketCacheSync', () => {
       const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
       const conv = cached.pages[0].conversations[0];
       expect((conv as any).lastMessageAt).toBe(newTime);
+    });
+  });
+
+  describe('Conversation Participant Left Handler', () => {
+    it('decrements memberCount when a participant leaves', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [{ ...mockConversation, memberCount: 5 }], pagination: { total: 1, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationParticipantLeftCallback?.({ conversationId: 'conv-1', userId: 'user-2', displayName: 'Bob', leftAt: new Date().toISOString() });
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      expect((cached.pages[0].conversations[0] as any).memberCount).toBe(4);
+    });
+
+    it('invalidates participants query on participant-left', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+      const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationParticipantLeftCallback?.({ conversationId: 'conv-1', userId: 'user-2', displayName: 'Bob', leftAt: new Date().toISOString() });
+      });
+
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: ['conversations', 'participants', 'conv-1'] })
+      );
+    });
+  });
+
+  describe('Conversation Participant Banned Handler', () => {
+    it('decrements memberCount when a participant is banned', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [{ ...mockConversation, memberCount: 3 }], pagination: { total: 1, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationParticipantBannedCallback?.({ conversationId: 'conv-1', userId: 'user-2', bannedBy: { id: 'admin-1' }, bannedAt: new Date().toISOString() });
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      expect((cached.pages[0].conversations[0] as any).memberCount).toBe(2);
+    });
+
+    it('invalidates participants query on participant-banned', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+      const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationParticipantBannedCallback?.({ conversationId: 'conv-1', userId: 'user-2', bannedBy: { id: 'admin-1' }, bannedAt: new Date().toISOString() });
+      });
+
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: ['conversations', 'participants', 'conv-1'] })
+      );
+    });
+  });
+
+  describe('Conversation Participant Unbanned Handler', () => {
+    it('invalidates participants query when a participant is unbanned', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+      const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationParticipantUnbannedCallback?.({ conversationId: 'conv-1', userId: 'user-2' });
+      });
+
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: ['conversations', 'participants', 'conv-1'] })
+      );
     });
   });
 });

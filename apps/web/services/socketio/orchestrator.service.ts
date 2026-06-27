@@ -635,6 +635,18 @@ export class SocketIOOrchestrator {
     return this.presenceService.onConversationUpdated(listener);
   }
 
+  onConversationParticipantLeft(listener: (data: { conversationId: string; userId: string; displayName: string; leftAt: string }) => void): UnsubscribeFn {
+    return this.presenceService.onConversationParticipantLeft(listener);
+  }
+
+  onConversationParticipantBanned(listener: (data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string }) => void): UnsubscribeFn {
+    return this.presenceService.onConversationParticipantBanned(listener);
+  }
+
+  onConversationParticipantUnbanned(listener: (data: { conversationId: string; userId: string }) => void): UnsubscribeFn {
+    return this.presenceService.onConversationParticipantUnbanned(listener);
+  }
+
   // ============ CLEANUP ============
 
   cleanup(): void {

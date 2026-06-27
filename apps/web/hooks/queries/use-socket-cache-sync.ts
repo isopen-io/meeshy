@@ -515,6 +515,49 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       });
     };
 
+    // Handler for participant-left (room broadcast) — another member was removed/left
+    const handleConversationParticipantLeft = (data: { conversationId: string; userId: string; displayName: string; leftAt: string }) => {
+      const leftUpdater = (convs: Conversation[]) =>
+        convs.map((conv) =>
+          conv.id === data.conversationId
+            ? { ...conv, memberCount: Math.max(0, (conv.memberCount ?? 1) - 1) }
+            : conv
+        );
+      queryClient.setQueriesData<Conversation[]>(
+        { queryKey: queryKeys.conversations.lists() },
+        (old) => old ? leftUpdater(old) : old
+      );
+      updateInfiniteConversationCache(queryClient, leftUpdater);
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.conversations.participants(data.conversationId),
+      });
+    };
+
+    // Handler for participant-banned — member was banned from the conversation
+    const handleConversationParticipantBanned = (data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string }) => {
+      const bannedUpdater = (convs: Conversation[]) =>
+        convs.map((conv) =>
+          conv.id === data.conversationId
+            ? { ...conv, memberCount: Math.max(0, (conv.memberCount ?? 1) - 1) }
+            : conv
+        );
+      queryClient.setQueriesData<Conversation[]>(
+        { queryKey: queryKeys.conversations.lists() },
+        (old) => old ? bannedUpdater(old) : old
+      );
+      updateInfiniteConversationCache(queryClient, bannedUpdater);
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.conversations.participants(data.conversationId),
+      });
+    };
+
+    // Handler for participant-unbanned — member was unbanned (may rejoin)
+    const handleConversationParticipantUnbanned = (data: { conversationId: string; userId: string }) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.conversations.participants(data.conversationId),
+      });
+    };
+
     // Handler for attachment status updated (listened, watched, viewed, downloaded)
     const handleAttachmentStatusUpdated = (data: { attachmentId: string; messageId: string; conversationId: string; userId: string; action: string }) => {
       const targetConversationId = data.conversationId;
@@ -622,6 +665,9 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const unsubscribeConversationNew = meeshySocketIOService.onConversationNew(handleConversationNew);
     const unsubscribeConversationDeleted = meeshySocketIOService.onConversationDeleted(handleConversationDeleted);
     const unsubscribeConversationUpdated = meeshySocketIOService.onConversationUpdated(handleConversationUpdated);
+    const unsubscribeParticipantLeft = meeshySocketIOService.onConversationParticipantLeft(handleConversationParticipantLeft);
+    const unsubscribeParticipantBanned = meeshySocketIOService.onConversationParticipantBanned(handleConversationParticipantBanned);
+    const unsubscribeParticipantUnbanned = meeshySocketIOService.onConversationParticipantUnbanned(handleConversationParticipantUnbanned);
 
     return () => {
       unsubscribeMessage?.();
@@ -639,6 +685,9 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       unsubscribeConversationNew?.();
       unsubscribeConversationDeleted?.();
       unsubscribeConversationUpdated?.();
+      unsubscribeParticipantLeft?.();
+      unsubscribeParticipantBanned?.();
+      unsubscribeParticipantUnbanned?.();
     };
   }, [conversationId, enabled, queryClient]);
 }

@@ -366,6 +366,18 @@ class MeeshySocketIOService {
     return this.orchestrator.onConversationUpdated(listener);
   }
 
+  public onConversationParticipantLeft(listener: (data: { conversationId: string; userId: string; displayName: string; leftAt: string }) => void): () => void {
+    return this.orchestrator.onConversationParticipantLeft(listener);
+  }
+
+  public onConversationParticipantBanned(listener: (data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string }) => void): () => void {
+    return this.orchestrator.onConversationParticipantBanned(listener);
+  }
+
+  public onConversationParticipantUnbanned(listener: (data: { conversationId: string; userId: string }) => void): () => void {
+    return this.orchestrator.onConversationParticipantUnbanned(listener);
+  }
+
   public onAttachmentStatusUpdated(listener: (data: { attachmentId: string; messageId: string; conversationId: string; userId: string; action: string }) => void): () => void {
     return this.orchestrator.onAttachmentStatusUpdated(listener);
   }
