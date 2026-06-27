@@ -644,13 +644,13 @@ export class MessageTranslationService extends EventEmitter {
    */
   private async _extractConversationLanguages(conversationId: string): Promise<string[]> {
     try {
-      logger.debug(`lang-trace: extracting languages for conversation ${conversationId}`);
+      logger.info(`🔍 [LANG-TRACE] Extraction langues pour conversation: ${conversationId}`);
 
       // OPTIMISATION: Vérifier le cache d'abord
       const cached = this.languageCache.get(conversationId);
 
       if (cached) {
-        logger.debug(`lang-trace: languages from cache for ${conversationId}: [${cached.join(', ')}]`);
+        logger.info(`💾 [LANG-TRACE] Langues depuis cache: [${cached.join(', ')}]`);
         return cached;
       }
 
@@ -679,12 +679,12 @@ export class MessageTranslationService extends EventEmitter {
       ]);
 
       if (conversation?.autoTranslateEnabled === false) {
-        logger.debug(`lang-trace: autoTranslateEnabled=false for ${conversationId} — skipping`);
+        logger.info(`⛔ [LANG-TRACE] autoTranslateEnabled=false pour ${conversationId} — traduction désactivée`);
         this.languageCache.set(conversationId, []);
         return [];
       }
 
-      logger.debug(`lang-trace: ${participants.length} participants for ${conversationId}`);
+      logger.info(`[LANG-TRACE] Participants: ${participants.length}`);
 
       for (const participant of participants) {
         if (participant.type === 'user' && participant.user) {
@@ -982,13 +982,18 @@ export class MessageTranslationService extends EventEmitter {
         durationMs: data.transcription.durationMs || attachment.duration || 0
       };
 
-      if (!data.transcription.segments || data.transcription.segments.length === 0) {
-        logger.warn('Transcription received without segments');
+      if (data.transcription.segments && data.transcription.segments.length > 0) {
+        const firstSeg = data.transcription.segments[0];
+        logger.debug(`transcription segments`, { count: data.transcription.segments.length, lang: data.transcription.language, firstText: firstSeg.text, startMs: firstSeg.startMs });
       } else {
-        logger.debug(`Transcription: ${data.transcription.segments.length} segments, lang=${data.transcription.language}`);
+        logger.warn('transcription received without segments', { attachmentId: data.attachmentId });
       }
 
-      logger.info(`Transcription saved: ${data.transcription.language}`);
+      if (data.transcription.speakerCount) {
+        logger.debug('transcription diarisation', { speakerCount: data.transcription.speakerCount, primarySpeakerId: data.transcription.primarySpeakerId, senderVoiceIdentified: data.transcription.senderVoiceIdentified });
+      }
+
+      logger.info('transcription saved', { language: data.transcription.language, attachmentId: data.attachmentId });
 
       // 3. Construire les NOUVELLES entrées de traduction (sauvegarde fichiers
       // incluse). Le merge avec l'existant + l'update sont faits SOUS MUTEX
@@ -1012,7 +1017,7 @@ export class MessageTranslationService extends EventEmitter {
         const audioBinary = translatedAudio._audioBinary;
         const audioBase64 = translatedAudio.audioDataBase64;
 
-        logger.debug(`Audio source: lang=${translatedAudio.targetLanguage} binary=${!!audioBinary}(${audioBinary?.length ?? 0}B) base64=${!!audioBase64}`);
+        logger.debug('audio translation data presence', { language: translatedAudio.targetLanguage, hasBinary: !!audioBinary, binaryBytes: audioBinary?.length ?? 0, hasBase64: !!audioBase64 });
 
         if (audioBinary || audioBase64) {
           try {
@@ -1583,7 +1588,7 @@ export class MessageTranslationService extends EventEmitter {
       const audioBinary = data.translatedAudio._audioBinary;
       const audioBase64 = data.translatedAudio.audioDataBase64;
 
-      logger.debug(`Audio source: lang=${data.language} binary=${!!audioBinary}(${audioBinary?.length ?? 0}B) base64=${!!audioBase64}`);
+      logger.debug('progressive audio data presence', { language: data.language, hasBinary: !!audioBinary, binaryBytes: audioBinary?.length ?? 0, hasBase64: !!audioBase64 });
 
       if (audioBinary || audioBase64) {
         try {
@@ -2153,7 +2158,7 @@ export class MessageTranslationService extends EventEmitter {
       let canGenerateTranslatedAudio = true;
 
       try {
-        logger.debug(`voice-profile-trace: checking consents for sender ${params.senderId}`);
+        logger.info(`🔍 [VOICE-PROFILE-TRACE] Vérification consentements...`);
 
         if (bypassConsentCheck) {
           logger.warn(`🔍 [VOICE-PROFILE-TRACE] ⚠️ BYPASS activé - force consentements à TRUE`);
@@ -2165,7 +2170,12 @@ export class MessageTranslationService extends EventEmitter {
           const consentService = new ConsentValidationService(this.prisma);
           const consentStatus = await consentService.getConsentStatus(params.senderId);
 
-          logger.debug(`voice-profile-trace: consent status`, { senderId: params.senderId, canTranscribeAudio: consentStatus.canTranscribeAudio, canTranslateAudio: consentStatus.canTranslateAudio, canGenerateTranslatedAudio: consentStatus.canGenerateTranslatedAudio, canUseVoiceCloning: consentStatus.canUseVoiceCloning });
+          logger.info(`🔍 [VOICE-PROFILE-TRACE] Statut des consentements récupéré:`, {
+            canTranscribeAudio: consentStatus.canTranscribeAudio,
+            canTranslateAudio: consentStatus.canTranslateAudio,
+            canGenerateTranslatedAudio: consentStatus.canGenerateTranslatedAudio,
+            canUseVoiceCloning: consentStatus.canUseVoiceCloning
+          });
 
           // Vérifier que l'utilisateur a les consentements de base pour le traitement audio
           if (!consentStatus.canTranscribeAudio) {
@@ -2328,7 +2338,9 @@ export class MessageTranslationService extends EventEmitter {
         userLanguage: userLanguage  // Langue de l'utilisateur pour fallback sur messages courts
       });
 
-      logger.debug(`voice-profile-trace: request sent taskId=${taskId}`);
+      logger.info(`🔍 [VOICE-PROFILE-TRACE] ✅ Requête envoyée avec succès`);
+      logger.info(`🔍 [VOICE-PROFILE-TRACE] Task ID: ${taskId}`);
+      logger.info(`🔍 [VOICE-PROFILE-TRACE] ======== FIN ENVOI REQUÊTE ========`);
       this.stats.incrementRequestsSent();
 
       return taskId;
@@ -2359,14 +2371,15 @@ export class MessageTranslationService extends EventEmitter {
     };
   } | null> {
     try {
-      logger.debug(`gateway-trace: transcription request attachmentId=${attachmentId}`);
+      logger.info(`🔍 [GATEWAY-TRACE] ======== DÉBUT TRANSCRIPTION ========`);
+      logger.info(`🔍 [GATEWAY-TRACE] Attachment ID: ${attachmentId}`);
 
       if (!this.zmqClient) {
         logger.error('[GATEWAY-TRACE] ❌ ZMQ Client non disponible pour la transcription');
         return null;
       }
 
-      logger.debug(`gateway-trace: fetching attachment ${attachmentId} from DB`);
+      logger.info(`🔍 [GATEWAY-TRACE] Étape 1: Récupération attachment depuis BDD...`);
 
       // 1. Récupérer l'attachement depuis la BDD
       const attachment = await this.prisma.messageAttachment.findUnique({
@@ -2388,7 +2401,11 @@ export class MessageTranslationService extends EventEmitter {
         return null;
       }
 
-      logger.debug(`gateway-trace: attachment found id=${attachment.id} mime=${attachment.mimeType} duration=${attachment.duration}ms`);
+      logger.info(
+        `🔍 [GATEWAY-TRACE] Attachment récupéré: ${attachment.id} | ` +
+        `Msg: ${attachment.messageId} | File: ${attachment.fileName} | ` +
+        `MIME: ${attachment.mimeType} | Duration: ${attachment.duration}ms`
+      );
 
       // Vérifier que c'est un fichier audio
       if (!attachment.mimeType.startsWith('audio/')) {
@@ -2396,7 +2413,8 @@ export class MessageTranslationService extends EventEmitter {
         return null;
       }
 
-      logger.debug(`gateway-trace: resolving audio path filePath=${attachment.filePath}`);
+      logger.info(`🔍 [GATEWAY-TRACE] Étape 2: Construction du chemin audio absolu...`);
+      logger.info(`🔍 [GATEWAY-TRACE] filePath: ${attachment.filePath}`);
 
       // 2. Construire le chemin ABSOLU du fichier audio via filePath (chemin relatif au dossier uploads)
       const uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
@@ -2405,13 +2423,16 @@ export class MessageTranslationService extends EventEmitter {
       const fileExists = require('fs').existsSync(audioPath);
       const fileSize = fileExists ? require('fs').statSync(audioPath).size : 0;
 
-      logger.debug(`gateway-trace: audioPath=${audioPath} exists=${fileExists}${fileExists ? ` size=${(fileSize / 1024).toFixed(2)}KB` : ''}`);
+      logger.info(
+        `🔍 [GATEWAY-TRACE] Chemins: ${audioPath} | ` +
+        `Exists: ${fileExists}${fileExists ? ` | Size: ${(fileSize / 1024).toFixed(2)} KB` : ''}`
+      );
 
       if (!fileExists) {
         logger.error(`🔍 [GATEWAY-TRACE] ❌ FICHIER AUDIO INTROUVABLE: ${audioPath}`);
       }
 
-      logger.debug(`gateway-trace: sending ZMQ transcription request for attachmentId=${attachmentId}`);
+      logger.info(`🔍 [GATEWAY-TRACE] Étape 3: Envoi requête ZMQ vers Translator...`);
 
       // 3. Envoyer la requête de transcription au Translator (multipart binaire)
       const taskId = await this.zmqClient.sendTranscriptionOnlyRequest({
@@ -2420,8 +2441,11 @@ export class MessageTranslationService extends EventEmitter {
         audioPath: audioPath
       });
 
-      logger.debug(`gateway-trace: ZMQ transcription request sent taskId=${taskId}`);
+      logger.info(`🔍 [GATEWAY-TRACE] ✅ Requête ZMQ envoyée avec succès`);
+      logger.info(`🔍 [GATEWAY-TRACE] Task ID: ${taskId}`);
       this.stats.incrementRequestsSent();
+
+      logger.info(`🔍 [GATEWAY-TRACE] ======== FIN TRANSCRIPTION (requête envoyée) ========`);
 
       return {
         taskId,

@@ -102,7 +102,11 @@ public final class AppDatabase: @unchecked Sendable {
     private static func openPool(at databaseURL: URL) throws -> DatabasePool {
         var configuration = Configuration()
         configuration.prepareDatabase { db in
-            db.trace { _ in }
+            // WAL mode is GRDB default, but set it explicitly for clarity.
+            // busy_timeout prevents immediate SQLITE_BUSY errors under concurrent
+            // socket-event writes and UI reads (5s gives the writer time to finish).
+            try db.execute(sql: "PRAGMA journal_mode = WAL")
+            try db.execute(sql: "PRAGMA busy_timeout = 5000")
         }
         return try DatabasePool(path: databaseURL.path, configuration: configuration)
     }

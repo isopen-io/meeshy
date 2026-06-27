@@ -40,6 +40,9 @@ export class StatusHandler {
   private identityCache = new Map<string, CachedIdentity>();
   private typingThrottleMap = new Map<string, number>();
   private static readonly TYPING_THROTTLE_MS = 2_000;
+  private static readonly TYPING_THROTTLE_TTL_MS = 30_000;
+  private static readonly TYPING_THROTTLE_CLEANUP_SIZE = 1_000;
+  private typingThrottleCleanupTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(deps: StatusHandlerDependencies) {
     this.prisma = deps.prisma;
@@ -47,6 +50,22 @@ export class StatusHandler {
     this.privacyPreferencesService = deps.privacyPreferencesService;
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
+    this.typingThrottleCleanupTimer = setInterval(() => this._evictStaleThrottleEntries(), 30_000);
+    if (this.typingThrottleCleanupTimer.unref) this.typingThrottleCleanupTimer.unref();
+  }
+
+  destroy(): void {
+    if (this.typingThrottleCleanupTimer !== null) {
+      clearInterval(this.typingThrottleCleanupTimer);
+      this.typingThrottleCleanupTimer = null;
+    }
+  }
+
+  private _evictStaleThrottleEntries(): void {
+    const stale = Date.now() - StatusHandler.TYPING_THROTTLE_TTL_MS;
+    for (const [k, ts] of this.typingThrottleMap) {
+      if (ts < stale) this.typingThrottleMap.delete(k);
+    }
   }
 
   invalidateIdentityCache(userId: string): void {
@@ -58,6 +77,38 @@ export class StatusHandler {
     for (const key of this.typingThrottleMap.keys()) {
       if (key.startsWith(`${userId}:`)) this.typingThrottleMap.delete(key);
     }
+  }
+
+  /**
+   * Returns the conversations where `userId` was recently typing (throttle
+   * map entry exists within TTL) and simultaneously clears those entries so
+   * the caller can broadcast `typing:stop` on behalf of a disconnected socket
+   * without waiting for the 15-second safety timer on every client.
+   *
+   * Also returns the cached identity so the caller can compose the stop event
+   * without an extra DB round-trip. Returns `null` identity when the user has
+   * no cache entry (never typed this session or cache already evicted).
+   */
+  drainActiveTypingState(userId: string): {
+    conversationIds: string[];
+    identity: { username: string; displayName: string } | null;
+  } {
+    const stale = Date.now() - StatusHandler.TYPING_THROTTLE_TTL_MS;
+    const conversationIds: string[] = [];
+    const prefix = `${userId}:`;
+    for (const [key, ts] of this.typingThrottleMap) {
+      if (!key.startsWith(prefix)) continue;
+      if (ts >= stale) {
+        conversationIds.push(key.slice(prefix.length));
+      }
+      this.typingThrottleMap.delete(key);
+    }
+    const cacheKey = `user:${userId}`;
+    const cached = this.identityCache.get(cacheKey);
+    const identity = cached && cached.expiresAt > Date.now()
+      ? { username: cached.username, displayName: cached.displayName }
+      : null;
+    return { conversationIds, identity };
   }
 
   /**
@@ -115,11 +166,8 @@ export class StatusHandler {
       const lastEmitAt = this.typingThrottleMap.get(throttleKey) ?? 0;
       if (now - lastEmitAt < StatusHandler.TYPING_THROTTLE_MS) return;
       this.typingThrottleMap.set(throttleKey, now);
-      if (this.typingThrottleMap.size > 10_000) {
-        const stale = now - StatusHandler.TYPING_THROTTLE_MS * 10;
-        for (const [k, ts] of this.typingThrottleMap) {
-          if (ts < stale) this.typingThrottleMap.delete(k);
-        }
+      if (this.typingThrottleMap.size > StatusHandler.TYPING_THROTTLE_CLEANUP_SIZE) {
+        this._evictStaleThrottleEntries();
       }
 
       const room = ROOMS.conversation(normalizedId);

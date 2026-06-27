@@ -92,7 +92,13 @@ final class ConversationSocketHandler {
     private var recentMessageIds: Set<String> = []
     private var recentMessageIdOrder: [String] = []
 
-    // Typing emission state
+    // Typing emission state. `nonisolated(unsafe)` is REQUIRED (not cosmetic):
+    // the nonisolated `deinit` invalidates these timers for cleanup, and under
+    // Swift 6 strict concurrency a nonisolated deinit cannot touch MainActor-
+    // isolated, non-Sendable stored properties (`Timer` is non-Sendable). At
+    // deallocation `self` is uniquely referenced, so there is no actual data
+    // race — the unsafe assertion is sound. Timer callbacks still hop to the
+    // MainActor via `Task { @MainActor [weak self] in ... }` before mutating.
     nonisolated(unsafe) private var typingTimer: Timer?
     nonisolated(unsafe) private var typingIdleTimer: Timer?
     nonisolated(unsafe) private var isEmittingTyping = false
@@ -977,6 +983,23 @@ final class ConversationSocketHandler {
 
     private func subscribeToReconnect() {
         messageSocket.didReconnect
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                Task { [weak self] in
+                    await self?.delegate?.syncMissedMessages()
+                    await PendingStatusQueue.shared.flush()
+                }
+            }
+            .store(in: &cancellables)
+
+        // Foreground backfill: if the socket stayed connected while the app was
+        // backgrounded (APNs / NSE delivered messages but the socket never
+        // disconnected), `didReconnect` never fires and those messages won't be
+        // fetched. Subscribe to willEnterForeground as a second trigger so the
+        // watermark sync runs regardless of reconnect state.
+        NotificationCenter.default
+            .publisher(for: UIApplication.willEnterForegroundNotification)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 guard let self else { return }

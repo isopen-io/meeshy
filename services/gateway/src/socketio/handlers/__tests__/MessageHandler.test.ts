@@ -1997,8 +1997,7 @@ describe('MessageHandler', () => {
     it('uses participant.id as ROOMS.user target when userId is null', async () => {
       const partId = 'anon-part-unread-xx1';
       (deps.prisma.participant.findMany as jest.Mock<any>)
-        .mockResolvedValueOnce([{ userId: USER_ID }]) // conversation:updated
-        .mockResolvedValueOnce([{ id: partId, userId: null, joinedAt: new Date() }]) // _updateUnreadCounts: null userId
+        .mockResolvedValueOnce([{ id: partId, userId: null, joinedAt: new Date() }]) // sharedParticipants (single query for CONVERSATION_UPDATED + _updateUnreadCounts)
         .mockResolvedValue([]); // _autoDeliver
       (deps.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockResolvedValue(
         new Map([[partId, 2]])

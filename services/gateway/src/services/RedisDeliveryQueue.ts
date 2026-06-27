@@ -38,8 +38,10 @@ export class RedisDeliveryQueue {
     if (redis) {
       try {
         const key = queueKey(userId);
-        await redis.rpush(key, serialized);
-        await redis.expire(key, DELIVERY_QUEUE_TTL_SECONDS);
+        const pipeline = redis.pipeline();
+        pipeline.rpush(key, serialized);
+        pipeline.expire(key, DELIVERY_QUEUE_TTL_SECONDS);
+        await pipeline.exec();
         return;
       } catch (error) {
         logger.warn('Redis enqueue failed, falling back to memory', { userId, error });

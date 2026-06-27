@@ -202,27 +202,30 @@ describe('RedisDeliveryQueue (memory fallback)', () => {
 // ---------------------------------------------------------------------------
 
 describe('RedisDeliveryQueue (Redis-backed paths)', () => {
-  test('enqueue — writes to Redis rpush + expire', async () => {
-    const redis = makeMockRedis();
+  test('enqueue — writes to Redis via pipeline (rpush + expire in one round-trip)', async () => {
+    const pipeline = makePipeline();
+    pipeline.exec.mockResolvedValue([[null, 1], [null, 1]]);
+    const redis = makeMockRedis({ pipeline: jest.fn().mockReturnValue(pipeline) });
     const queue = new RedisDeliveryQueue(makeCacheStore(redis));
     const entry = makePayload({ messageId: 'redis-msg-1' });
 
     await queue.enqueue('user-r', entry);
 
-    expect(redis.rpush).toHaveBeenCalledWith(
+    expect(redis.pipeline).toHaveBeenCalled();
+    expect(pipeline.rpush).toHaveBeenCalledWith(
       'delivery:queue:user-r',
       JSON.stringify(entry)
     );
-    expect(redis.expire).toHaveBeenCalledWith(
+    expect(pipeline.expire).toHaveBeenCalledWith(
       'delivery:queue:user-r',
       expect.any(Number)
     );
-    expect(redis.expire.mock.calls[0][1]).toBeGreaterThan(0);
+    expect(pipeline.exec).toHaveBeenCalled();
   });
 
-  test('enqueue — falls back to memory when Redis rpush throws', async () => {
-    const redis = makeMockRedis();
-    redis.rpush.mockRejectedValue(new Error('conn reset'));
+  test('enqueue — falls back to memory when Redis pipeline exec throws', async () => {
+    const pipeline = makeFailingEnqueuePipeline(new Error('conn reset'));
+    const redis = makeMockRedis({ pipeline: jest.fn().mockReturnValue(pipeline) });
     redis.llen.mockRejectedValue(new Error('conn reset'));
     const queue = new RedisDeliveryQueue(makeCacheStore(redis));
 
@@ -500,6 +503,16 @@ function makePipeline(execResult: unknown = [[null, []], [null, 1]]): MockPipeli
   return pipeline;
 }
 
+function makeFailingEnqueuePipeline(error = new Error('pipeline exec fail')): MockPipeline {
+  return {
+    lrange: jest.fn().mockReturnThis(),
+    del: jest.fn().mockReturnThis(),
+    rpush: jest.fn().mockReturnThis(),
+    expire: jest.fn().mockReturnThis(),
+    exec: jest.fn().mockRejectedValue(error),
+  } as unknown as MockPipeline;
+}
+
 function makeMockRedis(overrides: Record<string, unknown> = {}) {
   const pipeline = makePipeline();
   return {
@@ -535,21 +548,24 @@ function makeCacheStore(redis: unknown = null): CacheStore {
 // ─── Redis-path tests ──────────────────────────────────────────────────────────
 
 describe('RedisDeliveryQueue (Redis path)', () => {
-  test('enqueue calls rpush + expire and bypasses memory queue', async () => {
-    const redis = makeMockRedis();
+  test('enqueue calls rpush + expire via pipeline and bypasses memory queue', async () => {
+    const pipeline = makePipeline([[null, 1], [null, 1]]);
+    const redis = makeMockRedis({ pipeline: jest.fn().mockReturnValue(pipeline) });
     const queue = new RedisDeliveryQueue(makeCacheStore(redis));
     const entry = makePayload({ messageId: 'r-1' });
 
     await queue.enqueue('user-redis', entry);
 
-    expect(redis.rpush).toHaveBeenCalledWith(
+    expect(redis.pipeline).toHaveBeenCalled();
+    expect(pipeline.rpush).toHaveBeenCalledWith(
       expect.stringContaining('user-redis'),
       JSON.stringify(entry),
     );
-    expect(redis.expire).toHaveBeenCalledWith(
+    expect(pipeline.expire).toHaveBeenCalledWith(
       expect.stringContaining('user-redis'),
       DELIVERY_QUEUE_TTL_SECONDS,
     );
+    expect(pipeline.exec).toHaveBeenCalled();
     // memory fallback was NOT used
     expect(await queue.size('user-redis')).toBe(0);
   });
@@ -735,9 +751,9 @@ describe('RedisDeliveryQueue (Redis path)', () => {
 // ─── Redis-error fallback tests ────────────────────────────────────────────────
 
 describe('RedisDeliveryQueue (Redis error → memory fallback)', () => {
-  test('enqueue falls back to memory when Redis throws', async () => {
+  test('enqueue falls back to memory when Redis pipeline.exec throws', async () => {
     const redis = makeMockRedis({
-      rpush: jest.fn().mockRejectedValue(new Error('Redis down')),
+      pipeline: jest.fn().mockReturnValue(makeFailingEnqueuePipeline(new Error('Redis down'))),
       llen: jest.fn().mockRejectedValue(new Error('Redis down')),
     });
     const queue = new RedisDeliveryQueue(makeCacheStore(redis));
@@ -745,14 +761,14 @@ describe('RedisDeliveryQueue (Redis error → memory fallback)', () => {
 
     await queue.enqueue('user-fb', entry);
 
-    // Both rpush and llen fail → memory used for enqueue and size
+    // pipeline.exec and llen both fail → memory used for enqueue and size
     const size = await queue.size('user-fb');
     expect(size).toBe(1);
   });
 
   test('drain falls back to memory when Redis eval throws', async () => {
     const failingRedis = makeMockRedis({
-      rpush: jest.fn().mockRejectedValue(new Error('down')),
+      pipeline: jest.fn().mockReturnValue(makeFailingEnqueuePipeline(new Error('down'))),
       eval: jest.fn().mockRejectedValue(new Error('Redis eval failed')),
     });
     const q2 = new RedisDeliveryQueue(makeCacheStore(failingRedis));
@@ -766,12 +782,12 @@ describe('RedisDeliveryQueue (Redis error → memory fallback)', () => {
 
   test('peek falls back to memory when Redis lrange throws', async () => {
     const redis = makeMockRedis({
-      rpush: jest.fn().mockRejectedValue(new Error('rpush fail')),
+      pipeline: jest.fn().mockReturnValue(makeFailingEnqueuePipeline(new Error('rpush fail'))),
       lrange: jest.fn().mockRejectedValue(new Error('lrange error')),
     });
     const queue = new RedisDeliveryQueue(makeCacheStore(redis));
 
-    // rpush fails → enqueue uses memory; lrange fails → peek uses memory
+    // pipeline.exec fails → enqueue uses memory; lrange fails → peek uses memory
     await queue.enqueue('user-pk', makePayload({ messageId: 'pk-1' }));
     await queue.enqueue('user-pk', makePayload({ messageId: 'pk-2' }));
 
@@ -782,7 +798,7 @@ describe('RedisDeliveryQueue (Redis error → memory fallback)', () => {
 
   test('size falls back to memory when Redis llen throws', async () => {
     const redis = makeMockRedis({
-      rpush: jest.fn().mockRejectedValue(new Error('rpush fail')),
+      pipeline: jest.fn().mockReturnValue(makeFailingEnqueuePipeline(new Error('rpush fail'))),
       llen: jest.fn().mockRejectedValue(new Error('llen fail')),
     });
     const queue = new RedisDeliveryQueue(makeCacheStore(redis));
@@ -793,15 +809,9 @@ describe('RedisDeliveryQueue (Redis error → memory fallback)', () => {
   });
 
   test('cleanup falls back to memory when Redis scan throws', async () => {
-    const redis = makeMockRedis({
-      scan: jest.fn().mockRejectedValue(new Error('scan error')),
-    });
-    const cacheStore = makeCacheStore(redis);
-    const queue = new RedisDeliveryQueue(cacheStore);
-
-    // Add to memory by failing rpush
+    // Add to memory by failing pipeline.exec on enqueue, then scan fails → memory cleanup
     const failRedis = makeMockRedis({
-      rpush: jest.fn().mockRejectedValue(new Error('rpush fail')),
+      pipeline: jest.fn().mockReturnValue(makeFailingEnqueuePipeline(new Error('rpush fail'))),
       scan: jest.fn().mockRejectedValue(new Error('scan error')),
     });
     const q2 = new RedisDeliveryQueue(makeCacheStore(failRedis));

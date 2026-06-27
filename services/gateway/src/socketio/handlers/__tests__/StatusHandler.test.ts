@@ -555,4 +555,114 @@ describe('StatusHandler', () => {
       expect(throttleMap.size).toBe(1);
     });
   });
+
+  // ── drainActiveTypingState ───────────────────────────────────────────────────
+
+  describe('drainActiveTypingState', () => {
+    const TTL_MS = 30_000;
+
+    it('returns active conversation IDs and clears throttle entries', () => {
+      const handler = makeHandler();
+      const throttleMap = (handler as any).typingThrottleMap as Map<string, number>;
+      const now = Date.now();
+      throttleMap.set(`${USER_ID}:conv-1`, now);
+      throttleMap.set(`${USER_ID}:conv-2`, now);
+      throttleMap.set('other-user:conv-3', now);
+
+      const result = handler.drainActiveTypingState(USER_ID);
+
+      expect(result.conversationIds.sort()).toEqual(['conv-1', 'conv-2'].sort());
+      // user entries removed, other user entry untouched
+      expect(throttleMap.has(`${USER_ID}:conv-1`)).toBe(false);
+      expect(throttleMap.has(`${USER_ID}:conv-2`)).toBe(false);
+      expect(throttleMap.has('other-user:conv-3')).toBe(true);
+    });
+
+    it('excludes stale entries (older than TTL) from returned conversation IDs', () => {
+      const handler = makeHandler();
+      const throttleMap = (handler as any).typingThrottleMap as Map<string, number>;
+      const staleTs = Date.now() - TTL_MS - 1_000;
+      throttleMap.set(`${USER_ID}:conv-stale`, staleTs);
+      throttleMap.set(`${USER_ID}:conv-fresh`, Date.now());
+
+      const result = handler.drainActiveTypingState(USER_ID);
+
+      expect(result.conversationIds).toEqual(['conv-fresh']);
+      // Both entries (stale and fresh) should be cleared
+      expect(throttleMap.has(`${USER_ID}:conv-stale`)).toBe(false);
+      expect(throttleMap.has(`${USER_ID}:conv-fresh`)).toBe(false);
+    });
+
+    it('returns null identity when user has no cached identity', () => {
+      const handler = makeHandler();
+      const throttleMap = (handler as any).typingThrottleMap as Map<string, number>;
+      throttleMap.set(`${USER_ID}:conv-1`, Date.now());
+
+      const result = handler.drainActiveTypingState(USER_ID);
+
+      expect(result.identity).toBeNull();
+    });
+
+    it('returns cached identity when available and not expired', () => {
+      const handler = makeHandler();
+      const throttleMap = (handler as any).typingThrottleMap as Map<string, number>;
+      const identityCache = (handler as any).identityCache as Map<string, { username: string; displayName: string; expiresAt: number }>;
+      throttleMap.set(`${USER_ID}:conv-1`, Date.now());
+      identityCache.set(`user:${USER_ID}`, {
+        username: 'alice',
+        displayName: 'Alice',
+        expiresAt: Date.now() + 60_000
+      });
+
+      const result = handler.drainActiveTypingState(USER_ID);
+
+      expect(result.identity).toEqual({ username: 'alice', displayName: 'Alice' });
+    });
+
+    it('returns empty conversationIds and null identity when user has no state', () => {
+      const handler = makeHandler();
+
+      const result = handler.drainActiveTypingState('unknown-user');
+
+      expect(result.conversationIds).toEqual([]);
+      expect(result.identity).toBeNull();
+    });
+  });
+
+  // ── destroy / periodic eviction ──────────────────────────────────────────────
+
+  describe('destroy', () => {
+    it('clears the periodic cleanup timer without throwing', () => {
+      const handler = makeHandler();
+      expect(() => handler.destroy()).not.toThrow();
+      expect(() => handler.destroy()).not.toThrow(); // idempotent
+    });
+  });
+
+  describe('_evictStaleThrottleEntries (via size-triggered cleanup)', () => {
+    it('removes entries older than TTL when map exceeds cleanup threshold', async () => {
+      jest.useFakeTimers();
+      const CLEANUP_SIZE = (StatusHandler as any).TYPING_THROTTLE_CLEANUP_SIZE as number;
+      const TTL_MS = (StatusHandler as any).TYPING_THROTTLE_TTL_MS as number;
+
+      const handler = makeHandler();
+      const throttleMap = (handler as any).typingThrottleMap as Map<string, number>;
+
+      const now = Date.now();
+      const staleTs = now - TTL_MS - 1_000;
+
+      // Fill past the cleanup threshold with stale entries
+      for (let i = 0; i < CLEANUP_SIZE + 1; i++) {
+        throttleMap.set(`user-${i}:conv`, staleTs);
+      }
+
+      // Trigger the cleanup by calling handleTypingStart which sets a fresh entry
+      // and then invokes _evictStaleThrottleEntries if size > threshold.
+      // Call it directly to avoid full async chain:
+      (handler as any)._evictStaleThrottleEntries();
+
+      // All stale entries should be gone
+      expect(throttleMap.size).toBe(0);
+    });
+  });
 });

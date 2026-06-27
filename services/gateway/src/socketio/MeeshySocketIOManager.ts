@@ -800,8 +800,24 @@ export class MeeshySocketIOManager {
         logger.debug('socket disconnect', { socketId: socket.id, reason });
         const disconnectedUserId = this.socketToUser.get(socket.id);
         if (disconnectedUserId) {
+          // Drain active typing state BEFORE invalidating cache: broadcasts
+          // typing:stop to every conversation the user was typing in so
+          // clients clear the indicator immediately (vs waiting up to 15s for
+          // their safety timer). drainActiveTypingState also clears the
+          // throttle map entries, superseding the old clearTypingThrottle call.
+          const { conversationIds, identity } = this.statusHandler.drainActiveTypingState(disconnectedUserId);
+          if (conversationIds.length > 0 && identity) {
+            for (const convId of conversationIds) {
+              this.io.to(ROOMS.conversation(convId)).emit(SERVER_EVENTS.TYPING_STOP, {
+                userId: disconnectedUserId,
+                username: identity.username,
+                displayName: identity.displayName,
+                conversationId: convId,
+                isTyping: false
+              });
+            }
+          }
           this.statusHandler.invalidateIdentityCache(disconnectedUserId);
-          this.statusHandler.clearTypingThrottle(disconnectedUserId);
           // Invalider le snapshot de présence pour forcer un recalcul à la prochaine connexion
           this.presenceSnapshotCache.delete(disconnectedUserId);
           // Nettoyage du rate limiter in-memory (keyed by userId — purge si dernier socket)
@@ -1469,49 +1485,31 @@ export class MeeshySocketIOManager {
     try {
       const normalizedId = await this.normalizeConversationId(conversationId);
 
-      // OPTIMISATION: Récupérer les traductions et déclencher le calcul des stats
-      // en parallèle. Les stats ne sont plus embarquées dans le payload
-      // message:new — elles sont diffusées via l'event dédié `conversation:stats`.
-      // L'appel reste pour son side-effect (update du cache stats).
+      // Translation transform is synchronous (field reshape from MongoDB JSON object
+      // to array). Call directly — no DB query, no await needed.
       let messageTranslations: any[] = [];
-
-      // Lancer les 2 requêtes en parallèle
-      const [translationsResult, statsResult] = await Promise.allSettled([
-        // Utiliser les traductions déjà présentes sur l'objet message (pas de query DB)
-        (async () => {
-          if (!message.id) return [];
-          try {
-            // `message.translations` est déjà le champ JSON MongoDB — éviter un findUnique redondant
-            return transformTranslationsToArray(
-              message.id,
-              message.translations as unknown as Record<string, import('../utils/translation-transformer').MessageTranslationJSON>
-            );
-          } catch (error) {
-            logger.warn(`Translation transform failed for message ${message.id}`, { error });
-            return [];
-          }
-        })(),
-        // OPTIMISATION: Calculer les stats de manière asynchrone
-        // Si c'est long, le broadcast du message ne sera pas bloqué
-        conversationStatsService.updateOnNewMessage(
-          this.prisma,
-          conversationId,  // Utiliser l'ID original (ObjectId) pour Prisma
-          message.originalLanguage || 'fr',
-          () => this.getConnectedUsers()
-        ).catch(error => {
-          logger.warn(`⚠️ [PERF] Erreur calcul stats (non-bloquant): ${error}`);
-          return null; // Continuer même si les stats échouent
-        })
-      ]);
-
-      // Extraire les résultats
-      if (translationsResult.status === 'fulfilled') {
-        messageTranslations = translationsResult.value;
+      if (message.id) {
+        try {
+          messageTranslations = transformTranslationsToArray(
+            message.id,
+            message.translations as unknown as Record<string, import('../utils/translation-transformer').MessageTranslationJSON>
+          );
+        } catch (error) {
+          logger.warn(`Translation transform failed for message ${message.id}`, { error });
+        }
       }
 
-      if (statsResult.status !== 'fulfilled') {
-        logger.warn(`⚠️ [PERF] Calcul stats échoué (non-bloquant), cache non rafraîchi`);
-      }
+      // Fire stats update as true fire-and-forget — it is a non-critical DB side-effect
+      // (cache warm-up for `conversation:stats`). Previously awaited via Promise.allSettled,
+      // which blocked the broadcast by the full duration of the MongoDB write (~10–50ms).
+      conversationStatsService.updateOnNewMessage(
+        this.prisma,
+        conversationId,
+        message.originalLanguage || 'fr',
+        () => this.getConnectedUsers()
+      ).catch(error => {
+        logger.warn(`⚠️ [PERF] Erreur calcul stats (non-bloquant): ${error}`);
+      });
 
       // Construire le payload de message pour broadcast - compatible avec les types existants
       // CORRECTION CRITIQUE: Utiliser l'ObjectId normalisé pour cohérence client-serveur
@@ -1620,20 +1618,47 @@ export class MeeshySocketIOManager {
 
       const roomClients = this.io.sockets.adapter.rooms.get(room);
 
-      // 3. Mettre à jour le unreadCount pour tous les participants (sauf l'expéditeur)
-      // Cela permet d'incrémenter le badge en temps réel pour les conversations non ouvertes
+      // 3. Synchronisation temps réel de la liste des conversations. Deux signaux
+      //    par destinataire, partageant une SEULE requête participants :
+      //    - CONVERSATION_UPDATED (bump lastMessageAt) → liste se re-trie et les
+      //      conversations toutes neuves apparaissent même quand MESSAGE_NEW
+      //      n'atteint aucun socket hors de ROOMS.conversation(id). Émis à TOUS
+      //      les participants (expéditeur inclus — sa propre liste remonte aussi).
+      //    - CONVERSATION_UNREAD_UPDATED (badge) → destinataires uniquement
+      //      (l'expéditeur n'a pas de non-lu sur son propre message).
+      //    Parité avec MessageHandler.broadcastNewMessage (chemin socket).
       try {
         const senderId = message.senderId;
         if (senderId) {
-          // Récupérer tous les participants de la conversation (Participant model)
-          const participants = await this.prisma.participant.findMany({
+          // Une seule requête : superset (id + userId + joinedAt) pour les deux signaux
+          const allParticipants = await this.prisma.participant.findMany({
             where: {
               conversationId: normalizedId,
-              isActive: true,
-              id: { not: senderId }
+              isActive: true
             },
             select: { id: true, userId: true, joinedAt: true }
           });
+
+          // CONVERSATION_UPDATED → room user de CHAQUE participant (re-tri liste).
+          // `updatedBy` est requis par ConversationUpdatedEventData (this.io est typé,
+          // contrairement à MessageHandler) : c'est l'auteur du message qui déclenche
+          // le bump (resolvedSenderId = User.id du sender, fallback participant id).
+          const updatePayload = {
+            conversationId: normalizedId,
+            updatedBy: { id: resolvedSenderId ?? message.senderId ?? '' },
+            lastMessageAt: message.createdAt || new Date(),
+            lastMessageId: message.id,
+            lastMessagePreview: message.content,
+            senderId: message.senderId,
+            updatedAt: new Date().toISOString()
+          };
+          for (const p of allParticipants) {
+            if (!p.userId) continue;
+            this.io.to(ROOMS.user(p.userId)).emit(SERVER_EVENTS.CONVERSATION_UPDATED, updatePayload);
+          }
+
+          // Badge non-lu → destinataires uniquement (exclure l'expéditeur in-process)
+          const participants = allParticipants.filter((p) => p.id !== senderId);
 
           // Calculer le unreadCount pour tous les participants en batch (1 query au lieu de N)
           const { MessageReadStatusService } = await import('../services/MessageReadStatusService.js');
@@ -1654,11 +1679,11 @@ export class MeeshySocketIOManager {
 
             // 5.3 SCOPE — le filtre SOCKET_LANG_FILTER s'applique au message:new
             // ONLINE uniquement. L'enqueue offline ci-dessous stocke le payload
-            // complet (multi-traduit), NON filtré par langue. Acceptable car
-            // (a) le chemin principal `message:send` (MessageHandler) n'enqueue pas
-            // offline, et (b) le drain `_drainPendingMessages` est actuellement du
-            // code mort (jamais appelé) — sujet pré-existant à traiter séparément,
-            // hors périmètre 5.3.
+            // complet (multi-traduit), NON filtré par langue. Acceptable car le
+            // chemin principal `message:send` (MessageHandler) n'enqueue pas offline.
+            // Le drain (`_drainPendingMessages`) EST câblé : il s'exécute sur
+            // connexion (post-auth, post-room-join) — voir l'appel ~ligne 521.
+            // Le destinataire reconnecté rejoue donc ces messages au prochain login.
             if (this.deliveryQueue && !connectedUserIds.has(roomTarget)) {
               this.deliveryQueue.enqueue(roomTarget, {
                 messageId: message.id,
@@ -1669,8 +1694,8 @@ export class MeeshySocketIOManager {
             }
           }
         }
-      } catch (unreadError) {
-        logger.warn('⚠️ [UNREAD_COUNT] Erreur calcul unreadCount (non-bloquant):', unreadError);
+      } catch (syncError) {
+        logger.warn('⚠️ [CONV_SYNC] Erreur sync liste conversations (non-bloquant):', syncError);
       }
 
       // Envoyer les notifications de message pour les utilisateurs non connectés à la conversation

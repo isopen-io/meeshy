@@ -96,10 +96,10 @@ export function resolveUserTranslationLanguages(user: {
   systemLanguage?: string;
   regionalLanguage?: string;
 }): string[] {
-  const languages: string[] = [];
-  if (user.systemLanguage) languages.push(user.systemLanguage);
-  if (user.regionalLanguage) languages.push(user.regionalLanguage);
-  return languages.length > 0 ? languages : ['fr'];
+  const seen = new Set<string>();
+  if (user.systemLanguage?.trim()) seen.add(user.systemLanguage.trim());
+  if (user.regionalLanguage?.trim()) seen.add(user.regionalLanguage.trim());
+  return seen.size > 0 ? Array.from(seen) : ['fr'];
 }
 
 /**
@@ -202,8 +202,8 @@ export function canEditMessage(
   createdAt: Date | string,
   userRole: string = 'USER'
 ): { canEdit: boolean; reason?: string } {
-  // Admins et BIGBOSS peuvent toujours modifier
-  if (['ADMIN', 'BIGBOSS', 'MODERATOR', 'CREATOR'].includes(userRole)) {
+  // Admins et BIGBOSS peuvent toujours modifier (case-insensitive — DB may store lowercase)
+  if (['ADMIN', 'BIGBOSS', 'MODERATOR', 'CREATOR'].includes(userRole.toUpperCase())) {
     return { canEdit: true };
   }
   
@@ -237,22 +237,29 @@ export function generateDefaultConversationTitle(
   if (otherMembers.length === 1) {
     const member = otherMembers[0];
     if (member) {
-      return member.displayName || member.username || `${member.firstName || ''} ${member.lastName || ''}`.trim() || 'Unknown User';
+      const fullName = [member.firstName, member.lastName]
+        .filter((p): p is string => !!p && p.trim().length > 0)
+        .map(p => p.trim())
+        .join(' ');
+      return member.displayName?.trim() || member.username?.trim() || fullName || 'Unknown User';
     }
     return 'Unknown User';
   }
   
+  const resolveName = (m: { displayName?: string; username?: string; firstName?: string; lastName?: string }): string => {
+    const fullName = [m.firstName, m.lastName]
+      .filter((p): p is string => !!p && p.trim().length > 0)
+      .map(p => p.trim())
+      .join(' ');
+    return m.displayName?.trim() || m.username?.trim() || fullName || 'Unknown User';
+  };
+
   if (otherMembers.length === 2) {
-    const names = otherMembers.map(m => 
-      m.displayName || m.username || m.firstName || 'Unknown User'
-    );
-    return names.join(', ');
+    return otherMembers.map(resolveName).join(', ');
   }
-  
+
   // 3+ membres
-  const firstTwo = otherMembers.slice(0, 2).map(m => 
-    m.displayName || m.username || m.firstName || 'Unknown User'
-  );
+  const firstTwo = otherMembers.slice(0, 2).map(resolveName);
   return `${firstTwo.join(', ')} and ${otherMembers.length - 2} other(s)`;
 }
 
