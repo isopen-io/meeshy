@@ -500,7 +500,7 @@ describe('Admin content routes — GET /translations', () => {
     expect(response.statusCode).toBe(200);
 
     const call = mockPrisma.message.findMany.mock.calls[0][0];
-    expect(call.where.message?.originalLanguage ?? call.where.message).toBeDefined();
+    expect(call.where.originalLanguage).toBe('es');
     await bigbossApp.close();
   });
 
@@ -527,6 +527,25 @@ describe('Admin content routes — GET /translations', () => {
     const call = mockPrisma.message.findMany.mock.calls[0][0];
     expect(call.where.createdAt).toBeDefined();
     expect(call.where.createdAt.gte).toBeInstanceOf(Date);
+    await bigbossApp.close();
+  });
+
+  it('filters by targetLanguage in-memory after denormalization', async () => {
+    mockPrisma.message.findMany.mockResolvedValue([makeFakeMessageWithTranslations()]);
+
+    const bigbossApp = buildApp('BIGBOSS');
+    await bigbossApp.ready();
+
+    const response = await bigbossApp.inject({ method: 'GET', url: '/translations?targetLanguage=fr' });
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body);
+    // Only 'fr' entry survives the in-memory filter
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].targetLanguage).toBe('fr');
+    expect(body.pagination.total).toBe(1);
+    // targetLanguage must NOT reach the Prisma WHERE (it is not a Message field)
+    const call = mockPrisma.message.findMany.mock.calls[0][0];
+    expect(call.where.targetLanguage).toBeUndefined();
     await bigbossApp.close();
   });
 
