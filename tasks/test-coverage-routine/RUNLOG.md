@@ -2004,3 +2004,26 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Thresholds: floor unchanged (branches:96, functions:93, lines:99, statements:99) — measurements already above floor
 - Commit: bd03e69a (branch); squash-merge SHA on main: 9afdf594
 - PR: #916 — squash-merged to main 2026-06-23T21:30Z, CI 15/15 checks green (13 success, 1 neutral Trivy, 1 skipped Voice E2E Benchmark)
+
+---
+
+## 2026-06-27T01:30Z — P2 Feed/posts/stories × shared
+
+- Slice: P2 Feed / posts / stories / reactions × shared/SDK (TypeScript shared package)
+- Branch: `claude/amazing-darwin-oxyn5g`
+- Targeted files:
+  - `packages/shared/types/reaction.ts` — `isValidEmoji()`, `sanitizeEmoji()`, `POPULAR_EMOJIS`
+  - `packages/shared/types/post.ts` — type-only (zero executable JavaScript; all TypeScript interfaces/type aliases)
+- Result: ☑ done — P2 Feed/posts/stories × shared/SDK cell flipped ☐→☑
+- Coverage (per-file, vitest v8):
+  - reaction.ts: **100% lines / 100% branches / 100% funcs** ✓
+  - post.ts: excluded from coverage include (0 executable lines — all TypeScript interfaces erased at compile time); smoke test verifies module loads and exports no runtime values
+  - shared global: 99.70% lines / 96.87% branches / 93.81% funcs — all thresholds met (floor unchanged: lines:99/branches:96/functions:93/statements:99)
+- Tests added: 32 tests across 2 new files:
+  - `__tests__/types/reaction.test.ts` (31 tests) — isValidEmoji: emoji_presentation emojis (😀👍🔥⭐🚀🎉💯), FE0F variation selector (❤️), whitespace trim (leading/trailing/both), invalid inputs (text/letter/digit/empty/whitespace/double-emoji/flag-sequence/text-suffix); sanitizeEmoji: valid trimmed/whitespace/FE0F, null for text/empty/whitespace/double; POPULAR_EMOJIS: length=10, backward-compat ⭐, expected entries ❤️/👍/🔥, all entries valid, no duplicates
+  - `__tests__/types/post.test.ts` (1 test) — module loads without error, Object.keys returns 0 (type-only file)
+- Reviewer: PASS (rounds: 1) — post.ts coverage exclusion accepted; POPULAR_EMOJIS assertions confirmed non-tautological (behavioral contracts on content); flag-emoji false case grounded in Unicode spec
+- Notes:
+  1. types/post.ts is pure TypeScript interface/type declarations; v8 coverage provider correctly reports 0 lines (nothing executable to cover). Excluded from vitest coverage include with comment justification. Smoke test in post.test.ts is the correct approach.
+  2. MeeshySDK Swift portion of this cell is ⊘ on Linux (no Xcode/macOS env).
+  3. Thresholds unchanged (branches:96 already comfortably met at 96.87%).

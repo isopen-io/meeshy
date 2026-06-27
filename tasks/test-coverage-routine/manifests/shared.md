@@ -65,9 +65,9 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `packages/shared/types/migration-utils.ts`
 - [x] `packages/shared/types/notification.ts`
 - [~] `packages/shared/types/participant.ts`
-- [ ] `packages/shared/types/post.ts`
+- [x] `packages/shared/types/post.ts`
 - [ ] `packages/shared/types/push-notification.ts`
-- [ ] `packages/shared/types/reaction.ts`
+- [x] `packages/shared/types/reaction.ts`
 - [ ] `packages/shared/types/report.ts`
 - [ ] `packages/shared/types/role-types.ts`
 - [ ] `packages/shared/types/security.ts`
