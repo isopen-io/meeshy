@@ -161,7 +161,8 @@ describe('MessagingService', () => {
       message: {
         create: jest.fn(),
         update: jest.fn(),
-        findMany: jest.fn()
+        findMany: jest.fn(),
+        findFirst: jest.fn().mockResolvedValue(null)
       },
       trackingLink: {
         updateMany: jest.fn()
@@ -1724,7 +1725,8 @@ describe('MessagingService - Edge Cases', () => {
       },
       message: {
         create: jest.fn(),
-        update: jest.fn()
+        update: jest.fn(),
+        findFirst: jest.fn().mockResolvedValue(null)
       },
       trackingLink: {
         updateMany: jest.fn()
@@ -1978,5 +1980,126 @@ describe('MessagingService - Edge Cases', () => {
 
     expect(response.success).toBe(false);
     expect(response.error).toContain('empty');
+  });
+
+  describe('handleMessage — early clientMessageId dedup', () => {
+    const CLIENT_MSG_ID = 'cid_550e8400-e29b-41d4-a716-446655440000';
+    const SENDER_USER_ID = '507f1f77bcf86cd799439011';
+    const BASE_MSG_ID = '507f1f77bcf86cd799439013';
+
+    const makeExistingMsg = (overrides: Record<string, unknown> = {}) => ({
+      id: BASE_MSG_ID,
+      conversationId: testConversationId,
+      senderId: testParticipantId,
+      content: 'Hello',
+      originalLanguage: 'en',
+      messageType: 'text',
+      replyToId: null,
+      deletedAt: null,
+      isEdited: false,
+      validatedMentions: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      clientMessageId: CLIENT_MSG_ID,
+      translations: { fr: 'Bonjour' },
+      sender: null,
+      attachments: [],
+      replyTo: null,
+      ...overrides
+    });
+
+    beforeEach(() => {
+      mockPrisma.conversation.findFirst.mockResolvedValue({
+        id: testConversationId,
+        identifier: 'test-conv',
+        type: 'private'
+      });
+      mockPrisma.conversation.findUnique.mockResolvedValue({
+        id: testConversationId,
+        type: 'private'
+      });
+      mockPrisma.participant.findUnique.mockResolvedValue({
+        id: testParticipantId,
+        conversationId: testConversationId,
+        isActive: true,
+        type: 'user',
+        userId: SENDER_USER_ID
+      });
+    });
+
+    it('returns success without calling message.create when existing record found', async () => {
+      mockPrisma.message.findFirst.mockResolvedValue(makeExistingMsg());
+
+      const response = await service.handleMessage(
+        { conversationId: testConversationId, content: 'Hello', clientMessageId: CLIENT_MSG_ID },
+        testParticipantId
+      );
+
+      expect(response.success).toBe(true);
+      expect(mockPrisma.message.create).not.toHaveBeenCalled();
+      expect(mockPrisma.message.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ clientMessageId: CLIENT_MSG_ID })
+        })
+      );
+    });
+
+    it('returns the existing message id in the response on early dedup hit', async () => {
+      const EXISTING_ID = '507f1f77bcf86cd799439099';
+      mockPrisma.message.findFirst.mockResolvedValue(makeExistingMsg({ id: EXISTING_ID }));
+
+      const response = await service.handleMessage(
+        { conversationId: testConversationId, content: 'Hello', clientMessageId: CLIENT_MSG_ID },
+        testParticipantId
+      );
+
+      expect(response.success).toBe(true);
+      expect(response.data?.id).toBe(EXISTING_ID);
+    });
+
+    it('queues re-translation when existing record has no translations', async () => {
+      mockPrisma.message.findFirst.mockResolvedValue(makeExistingMsg({ translations: {} }));
+
+      await service.handleMessage(
+        { conversationId: testConversationId, content: 'Hello', clientMessageId: CLIENT_MSG_ID },
+        testParticipantId
+      );
+
+      expect(mockHandleNewMessage).toHaveBeenCalled();
+    });
+
+    it('proceeds normally (calls message.create) when clientMessageId not in DB', async () => {
+      mockPrisma.message.findFirst.mockResolvedValue(null);
+      mockPrisma.message.create.mockResolvedValue({
+        ...makeExistingMsg(),
+        sender: { id: testParticipantId, displayName: 'Test User', avatar: null, role: 'member', isOnline: true, type: 'user', userId: SENDER_USER_ID, language: 'en' },
+      });
+      mockPrisma.conversation.update.mockResolvedValue({});
+
+      const response = await service.handleMessage(
+        { conversationId: testConversationId, content: 'Hello', clientMessageId: CLIENT_MSG_ID },
+        testParticipantId
+      );
+
+      expect(response.success).toBe(true);
+      expect(mockPrisma.message.create).toHaveBeenCalled();
+    });
+
+    it('skips early dedup check when no clientMessageId is provided', async () => {
+      mockPrisma.message.create.mockResolvedValue({
+        ...makeExistingMsg({ clientMessageId: undefined }),
+        sender: { id: testParticipantId, displayName: 'Test User', avatar: null, role: 'member', isOnline: true, type: 'user', userId: SENDER_USER_ID, language: 'en' },
+      });
+      mockPrisma.conversation.update.mockResolvedValue({});
+
+      await service.handleMessage(
+        { conversationId: testConversationId, content: 'Hello' },
+        testParticipantId
+      );
+
+      expect(mockPrisma.message.findFirst).not.toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ clientMessageId: expect.anything() }) })
+      );
+    });
   });
 });

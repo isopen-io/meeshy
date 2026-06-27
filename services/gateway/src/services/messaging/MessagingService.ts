@@ -122,6 +122,33 @@ export class MessagingService {
         );
       }
 
+      // 3.5. Early dedup — runs after participant verification (security gate
+      //      stays intact) but before language detection, link processing, and
+      //      encryption context. Handles sequential retries with one DB read.
+      //      Concurrent retries still resolve via the P2002 catch in saveMessage.
+      if (request.clientMessageId) {
+        const earlyHit = await performanceLogger.withTiming(
+          'messaging.earlyDedupCheck',
+          () => this.prisma.message.findFirst({
+            where: { conversationId, clientMessageId: request.clientMessageId }
+          }),
+          corr
+        );
+        if (earlyHit) {
+          const translations = (earlyHit as { translations?: unknown }).translations;
+          if (this.isTranslationsEmpty(translations)) {
+            void this.queueTranslation(earlyHit, earlyHit.originalLanguage ?? 'fr').catch((err) =>
+              logger.error('background re-translation failed on early dedup', err as Error)
+            );
+          }
+          logger.info('perf:messaging.handleMessage', {
+            ...corr, step: 'messaging.handleMessage', phase: 'end',
+            durationMs: Date.now() - startTime, messageId: earlyHit.id, earlyDedupHit: true
+          });
+          return this.createSuccessResponse(earlyHit, requestId, startTime, undefined, PENDING_TRANSLATION_STATUS);
+        }
+      }
+
       // 4. Détection de langue — trust the client's `originalLanguage` when
       //    provided. iOS detects it locally (ConversationViewModel:
       //    detectKeyboardLanguage()) and the web via navigator.language ;

@@ -350,6 +350,7 @@ export class MeeshySocketIOManager {
       prisma: this.prisma,
       connectedUsers: this.connectedUsers,
       socketToUser: this.socketToUser,
+      readStatusService,
     });
   }
 
