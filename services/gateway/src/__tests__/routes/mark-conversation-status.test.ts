@@ -201,4 +201,23 @@ describe('broadcastReadStatusUpdate — CONVERSATION_UNREAD_UPDATED badge reset'
       unreadCount: expect.any(Number),
     });
   });
+
+  it('mark-as-read emits CONVERSATION_UNREAD_UPDATED even when showReadReceipts=false (badge reset is not a peer disclosure)', async () => {
+    mockShouldShowReadReceipts.mockResolvedValue(false);
+
+    const response = await app2.inject({
+      method: 'POST',
+      url: `/conversations/${CONVERSATION_ID}/mark-as-read`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    // Badge reset must still fire — it syncs the reader's OWN devices, not discloses to peers.
+    expect(mockTo2).toHaveBeenCalledWith('user:user-1');
+    expect(mockEmit2).toHaveBeenCalledWith('conversation:unread-updated', {
+      conversationId: CONVERSATION_ID,
+      unreadCount: 0,
+    });
+    // read-status:updated (peer disclosure) must NOT fire when showReadReceipts=false.
+    expect(mockEmit2).not.toHaveBeenCalledWith('read-status:updated', expect.anything());
+  });
 });

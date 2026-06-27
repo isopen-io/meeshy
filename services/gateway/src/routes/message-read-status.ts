@@ -204,8 +204,8 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
         false // Les utilisateurs authentifiés ne sont pas anonymes ici
       );
 
-      // Émettre événement Socket.IO seulement si l'utilisateur permet les read receipts
       if (shouldShowReadReceipts) {
+        // READ_STATUS_UPDATED (peer disclosure) + CONVERSATION_UNREAD_UPDATED (badge reset)
         try {
           await broadcastReadStatusUpdate(fastify, prisma, readStatusService, {
             conversationId,
@@ -215,7 +215,15 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
           });
         } catch (socketError) {
           logger.error('Erreur lors de la diffusion Socket.IO', socketError as Error);
-          // Ne pas faire échouer la requête si Socket.IO échoue
+        }
+      } else {
+        // Badge reset is internal multi-device sync, not a peer disclosure — always fire.
+        const manager = fastify.socketIOHandler?.getManager?.();
+        if (manager) {
+          manager.getIO().to(ROOMS.user(userId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+            conversationId,
+            unreadCount: 0,
+          });
         }
       }
 

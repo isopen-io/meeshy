@@ -2797,4 +2797,21 @@ describe('broadcastReadStatus — CONVERSATION_UNREAD_UPDATED badge reset', () =
       unreadCount: 0,
     });
   });
+
+  it('emits CONVERSATION_UNREAD_UPDATED even when showReadReceipts=false (badge reset is not a peer disclosure)', async () => {
+    mockShouldShowReadReceipts.mockResolvedValue(false);
+    prisma.participant.findMany.mockResolvedValue([]);
+    mockGetUnreadCount.mockResolvedValue(3);
+
+    await getMarkReadHandler()(makeRequest(), makeReply());
+
+    // Badge reset must fire regardless of showReadReceipts.
+    expect(fastify._mockTo).toHaveBeenCalledWith(`user:${USER_ID}`);
+    expect(fastify._mockEmit).toHaveBeenCalledWith('conversation:unread-updated', {
+      conversationId: 'resolved-conv-id',
+      unreadCount: 0,
+    });
+    // READ_STATUS_UPDATED (peer disclosure) must be suppressed.
+    expect(fastify._mockEmit).not.toHaveBeenCalledWith('read-status:updated', expect.anything());
+  });
 });

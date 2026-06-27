@@ -303,13 +303,26 @@ export function registerMessagesRoutes(
     isAnonymous: boolean
   ): Promise<void> {
     try {
+      if (!socketIOHandler) return;
+      const socketIOManager = socketIOHandler.getManager?.();
+      if (!socketIOManager) return;
+      const io = socketIOManager.getIO();
+
       const shouldBroadcast = await privacyPreferencesService.shouldShowReadReceipts(userId, isAnonymous);
-      if (!shouldBroadcast || !socketIOHandler) return;
+
+      if (!shouldBroadcast) {
+        // Badge reset is internal multi-device sync, not a peer disclosure — always fire.
+        if (type === 'read') {
+          io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+            conversationId,
+            unreadCount: 0,
+          });
+        }
+        return;
+      }
 
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
       const readStatusService = new MessageReadStatusService(prisma);
-      const socketIOManager = socketIOHandler.getManager?.();
-      if (!socketIOManager) return;
 
       // Fetch the summary and the list of active participants' userIds in parallel.
       // We emit to BOTH the conversation room AND each registered participant's
@@ -334,7 +347,6 @@ export function registerMessagesRoutes(
         summary
       };
 
-      const io = socketIOManager.getIO();
       const convRoom = ROOMS.conversation(conversationId);
       let emitter: any = io.to(convRoom);
       const seenRooms = new Set<string>([convRoom]);
