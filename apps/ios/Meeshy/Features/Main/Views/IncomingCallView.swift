@@ -139,6 +139,7 @@ struct IncomingCallView: View {
                 .foregroundColor(.white)
         }
         .shadow(color: MeeshyColors.indigo500.opacity(0.4), radius: 16, y: 6)
+        .accessibilityLabel(name)
     }
 
     // MARK: - Call Type Badge

@@ -1563,3 +1563,878 @@ final class CallKitActionFulfillmentSourceGuardTests: XCTestCase {
         }
     }
 }
+
+// MARK: - handleHold tracked task guard
+
+@MainActor
+final class HandleHoldTaskTrackingTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_holdVideoTask_propertyExists() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("private var holdVideoTask: Task<Void, Never>?"),
+            "handleHold must store its video tasks in holdVideoTask to allow cancellation on rapid hold→unhold"
+        )
+    }
+
+    func test_handleHold_cancelsPreviousTask_beforeCreatingNew() throws {
+        let source = try callManagerSource()
+        guard let funcRange = source.range(of: "func handleHold") else {
+            XCTFail("handleHold not found"); return
+        }
+        let nextFunc = [
+            source.range(of: "\n    func ", range: funcRange.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: funcRange.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: funcRange.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        let body = String(source[funcRange.lowerBound..<nextFunc])
+
+        guard let cancelRange = body.range(of: "holdVideoTask?.cancel()"),
+              let assignRange = body.range(of: "holdVideoTask = Task") else {
+            XCTFail("handleHold must cancel then assign holdVideoTask"); return
+        }
+        XCTAssertLessThan(
+            cancelRange.lowerBound,
+            assignRange.lowerBound,
+            "holdVideoTask?.cancel() must appear before holdVideoTask = Task to prevent concurrent hold/unhold video operations"
+        )
+    }
+
+    func test_endCallInternal_cancelsHoldVideoTask() throws {
+        let source = try callManagerSource()
+        guard let funcRange = source.range(of: "func endCallInternal") else {
+            XCTFail("endCallInternal not found"); return
+        }
+        let nextMark = source.range(of: "\n    // MARK:", range: funcRange.upperBound..<source.endIndex)?.lowerBound
+                    ?? source.endIndex
+        let body = String(source[funcRange.lowerBound..<nextMark])
+        XCTAssertTrue(
+            body.contains("holdVideoTask?.cancel()"),
+            "endCallInternal must cancel holdVideoTask to avoid dangling video ops after call teardown"
+        )
+    }
+}
+
+// MARK: - VoIP Push Freshness (Bug D) source guards
+
+@MainActor
+final class VoIPFreshnessSourceGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func freshnessBody(in source: String) -> String? {
+        guard let range = source.range(of: "func checkVoIPCallFreshness") else { return nil }
+        let nextFunc = source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound
+                    ?? source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound
+                    ?? source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound
+                    ?? source.endIndex
+        return String(source[range.lowerBound..<nextFunc])
+    }
+
+    func test_freshness_404_endsCallWithMissed() throws {
+        let source = try callManagerSource()
+        guard let body = freshnessBody(in: source) else {
+            XCTFail("checkVoIPCallFreshness not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("statusCode == 404"),
+            "Bug D: freshness check must handle 404 (call not found on server)"
+        )
+        guard let notFoundRange = body.range(of: "statusCode == 404") else { return }
+        let segment = String(body[notFoundRange.lowerBound...].prefix(300))
+        XCTAssertTrue(
+            segment.contains("reason: .unanswered"),
+            "Bug D: 404 path must report the phantom call as .unanswered to CX (not .failed)"
+        )
+        XCTAssertTrue(
+            segment.contains("reason: .missed"),
+            "Bug D: 404 path must end the call internally with .missed (not .failed)"
+        )
+    }
+
+    func test_freshness_terminalStatuses_areComplete() throws {
+        let source = try callManagerSource()
+        guard let body = freshnessBody(in: source) else {
+            XCTFail("checkVoIPCallFreshness not found"); return
+        }
+        XCTAssertTrue(body.contains("\"ended\""), "Bug D: 'ended' must be in the terminal status set")
+        XCTAssertTrue(body.contains("\"missed\""), "Bug D: 'missed' must be in the terminal status set")
+        XCTAssertTrue(body.contains("\"rejected\""), "Bug D: 'rejected' must be in the terminal status set")
+        XCTAssertTrue(body.contains("\"failed\""), "Bug D: 'failed' must be in the terminal status set")
+    }
+
+    func test_freshness_opaque_response_assumesFresh() throws {
+        let source = try callManagerSource()
+        guard let body = freshnessBody(in: source) else {
+            XCTFail("checkVoIPCallFreshness not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("assuming fresh"),
+            "Bug D: opaque / non-200 response must be treated as fresh (fail-open) to avoid false phantom-call teardowns"
+        )
+    }
+
+    func test_freshness_liveness_guard_before_endCall() throws {
+        let source = try callManagerSource()
+        guard let body = freshnessBody(in: source) else {
+            XCTFail("checkVoIPCallFreshness not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("activeCallUUID == uuid"),
+            "Bug D: freshness check must guard on activeCallUUID == uuid before ending call to avoid tearing down a new call"
+        )
+        guard let guardRange = body.range(of: "activeCallUUID == uuid"),
+              let endRange = body.range(of: "endCallInternal(reason: .missed)") else { return }
+        XCTAssertLessThan(
+            guardRange.lowerBound,
+            endRange.lowerBound,
+            "Bug D: liveness guard must appear before endCallInternal(.missed)"
+        )
+    }
+
+    func test_freshness_uses_configuredTimeout() throws {
+        let source = try callManagerSource()
+        guard let body = freshnessBody(in: source) else {
+            XCTFail("checkVoIPCallFreshness not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("voipFreshnessTimeoutSeconds"),
+            "Bug D: freshness check must use QualityThresholds.voipFreshnessTimeoutSeconds (not a magic number)"
+        )
+    }
+
+    func test_freshness_voipFreshnessTimeout_isReasonable() {
+        XCTAssertGreaterThan(
+            QualityThresholds.voipFreshnessTimeoutSeconds, 0,
+            "voipFreshnessTimeoutSeconds must be positive"
+        )
+        XCTAssertLessThanOrEqual(
+            QualityThresholds.voipFreshnessTimeoutSeconds, 10,
+            "voipFreshnessTimeoutSeconds must be ≤10s — a slow freshness check delays the CallKit UI"
+        )
+    }
+}
+
+// MARK: - endCurrentAndAnswerPending race condition guard
+
+@MainActor
+final class EndCurrentAndAnswerPendingTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(of signature: String, in source: String) -> String? {
+        guard let range = source.range(of: signature) else { return nil }
+        let nextFunc = [
+            source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<nextFunc])
+    }
+
+    func test_endCurrentAndAnswerPending_hasSettleDelay() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCurrentAndAnswerPending", in: source) else {
+            XCTFail("endCurrentAndAnswerPending not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("Task.sleep"),
+            "endCurrentAndAnswerPending must sleep before routing the pending call to allow the previous call's " +
+            "socket/WebRTC teardown to complete (avoids endCallInternal racing with handleIncomingCallNotification)"
+        )
+    }
+
+    func test_endCurrentAndAnswerPending_clearsPendingInsideTask() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCurrentAndAnswerPending", in: source) else {
+            XCTFail("endCurrentAndAnswerPending not found"); return
+        }
+        guard let taskRange = body.range(of: "Task {") else {
+            XCTFail("Task { not found in endCurrentAndAnswerPending"); return
+        }
+        let insideTask = String(body[taskRange.lowerBound...])
+        XCTAssertTrue(
+            insideTask.contains("pendingIncomingCall = nil"),
+            "pendingIncomingCall must be cleared INSIDE the Task, after handleIncomingCallNotification, " +
+            "to avoid a second endCurrentAndAnswerPending() racing with the first"
+        )
+    }
+
+    func test_endCurrentAndAnswerPending_guardsPendingBeforeEndCall() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCurrentAndAnswerPending", in: source) else {
+            XCTFail("endCurrentAndAnswerPending not found"); return
+        }
+        guard let guardRange = body.range(of: "guard let pending = pendingIncomingCall"),
+              let endCallRange = body.range(of: "endCall()") else {
+            XCTFail("Expected guard + endCall in endCurrentAndAnswerPending"); return
+        }
+        XCTAssertLessThan(
+            guardRange.lowerBound,
+            endCallRange.lowerBound,
+            "endCurrentAndAnswerPending must guard that a pending call exists before ending the current call"
+        )
+    }
+}
+
+// MARK: - performLocalMediaStart deduplication guard
+
+@MainActor
+final class LocalMediaStartHelperTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(of signature: String, in source: String) -> String? {
+        guard let range = source.range(of: signature) else { return nil }
+        let nextFunc = [
+            source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<nextFunc])
+    }
+
+    func test_performLocalMediaStart_helperExists() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("func performLocalMediaStart(isVideo: Bool, callId: String)"),
+            "CallManager must have a private performLocalMediaStart(isVideo:callId:) helper to avoid triplication"
+        )
+    }
+
+    func test_performLocalMediaStart_handlesCancellationError() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func performLocalMediaStart", in: source) else {
+            XCTFail("performLocalMediaStart not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("CancellationError"),
+            "performLocalMediaStart must catch CancellationError — media warmup can be cancelled when a call ends mid-flight"
+        )
+    }
+
+    func test_performLocalMediaStart_degradesOnSimulatorVideoUnsupported() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func performLocalMediaStart", in: source) else {
+            XCTFail("performLocalMediaStart not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("simulatorVideoUnsupported"),
+            "performLocalMediaStart must handle simulatorVideoUnsupported and fall back to audio-only"
+        )
+        XCTAssertTrue(
+            body.contains("isVideoEnabled = false"),
+            "performLocalMediaStart must set isVideoEnabled = false on video degradation"
+        )
+    }
+
+    func test_callers_useHelper_notInlineDoCatch() throws {
+        let source = try callManagerSource()
+
+        let methods = [
+            "func startCall(",
+            "func reportIncomingVoIPCall(",
+            "func handleIncomingCallNotification(",
+        ]
+        for method in methods {
+            guard let body = functionBody(of: method, in: source) else {
+                XCTFail("\(method) not found"); continue
+            }
+            XCTAssertFalse(
+                body.contains("catch WebRTCError.simulatorVideoUnsupported"),
+                "\(method) must not inline the simulatorVideoUnsupported catch — use performLocalMediaStart"
+            )
+            XCTAssertTrue(
+                body.contains("performLocalMediaStart"),
+                "\(method) must delegate to performLocalMediaStart"
+            )
+        }
+    }
+
+    func test_performLocalMediaStart_hasLivenessGuardBeforeEndCall() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func performLocalMediaStart", in: source) else {
+            XCTFail("performLocalMediaStart not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("currentCallId == callId"),
+            "performLocalMediaStart must guard on currentCallId == callId before mutating state or ending the call"
+        )
+        guard let guardRange = body.range(of: "currentCallId == callId"),
+              let endCallRange = body.range(of: "endCallInternal(") else { return }
+        XCTAssertLessThan(
+            guardRange.lowerBound,
+            endCallRange.lowerBound,
+            "Liveness guard must appear before endCallInternal in performLocalMediaStart"
+        )
+    }
+}
+
+// MARK: - Audio interruption always-reactivate guard
+
+/// Verifies that `handleAudioInterruption` ALWAYS re-enables the RTCAudioSession
+/// when an interruption ends, regardless of whether iOS includes the
+/// `.shouldResume` option hint. iOS frequently omits this hint after alarms,
+/// Siri, and GSM calls — relying on it as a gate leaves calls permanently silent.
+@MainActor
+final class AudioInterruptionReactivationTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func interruptionHandlerBody(in source: String) -> String? {
+        guard let range = source.range(of: "func handleAudioInterruption(") else { return nil }
+        let bodyEnd = [
+            source.range(of: "\n    @MainActor\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<bodyEnd])
+    }
+
+    /// `isAudioEnabled = true` must appear OUTSIDE the `shouldResume` branch so
+    /// it runs unconditionally when the interruption ends.
+    func test_handleAudioInterruption_ended_alwaysEnablesRTC_notGatedOnShouldResume() throws {
+        let source = try callManagerSource()
+        guard let body = interruptionHandlerBody(in: source) else {
+            XCTFail("handleAudioInterruption not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("rtc.isAudioEnabled = true"),
+            "handleAudioInterruption must re-enable RTCAudioSession when interruption ends — " +
+            "iOS omits shouldResume after alarms/Siri/GSM calls, so reactivation cannot be gated on the hint"
+        )
+        // Verify reactivation is UNCONDITIONAL (not inside the `.shouldResume` conditional block).
+        // The `.shouldResume` branch only affects logging; the `audioSessionQueue.async` block
+        // with `isAudioEnabled = true` must fall outside it.
+        guard let shouldResumeRange = body.range(of: "shouldResume") else {
+            XCTFail("shouldResume check not found — expected conditional log for diagnostic purposes"); return
+        }
+        guard let enableRange = body.range(of: "rtc.isAudioEnabled = true") else {
+            XCTFail("rtc.isAudioEnabled = true not found"); return
+        }
+        // `audioSessionQueue.async` (the reactivation block) must start AFTER the
+        // shouldResume conditional log, not inside it.
+        guard let asyncRange = body.range(of: "audioSessionQueue.async") else {
+            XCTFail("audioSessionQueue.async not found — interruption handler must use the audio session queue"); return
+        }
+        XCTAssertGreaterThan(
+            asyncRange.lowerBound,
+            shouldResumeRange.lowerBound,
+            "The audioSessionQueue.async reactivation block must follow (not nest inside) the shouldResume log"
+        )
+        XCTAssertGreaterThan(
+            enableRange.lowerBound,
+            shouldResumeRange.lowerBound,
+            "rtc.isAudioEnabled = true must appear after the shouldResume check, confirming it is unconditional"
+        )
+    }
+
+    /// The handler must call `rtc.audioSessionDidActivate` before enabling audio,
+    /// because RTCAudioSession requires the system AVAudioSession to be active first.
+    func test_handleAudioInterruption_ended_bridgesSystemSessionBeforeEnabling() throws {
+        let source = try callManagerSource()
+        guard let body = interruptionHandlerBody(in: source) else {
+            XCTFail("handleAudioInterruption not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("audioSessionDidActivate"),
+            "handleAudioInterruption must call rtc.audioSessionDidActivate(AVAudioSession.sharedInstance()) " +
+            "to bridge the system session back into WebRTC before setting isAudioEnabled = true"
+        )
+        guard let bridgeRange = body.range(of: "audioSessionDidActivate"),
+              let enableRange = body.range(of: "isAudioEnabled = true") else { return }
+        XCTAssertLessThan(
+            bridgeRange.lowerBound,
+            enableRange.lowerBound,
+            "audioSessionDidActivate must be called before isAudioEnabled = true — " +
+            "enabling audio before the bridge causes WebRTC to try to use a deactivated session"
+        )
+    }
+
+    /// The handler must guard `callState.isActive` to avoid reactivating the audio
+    /// session for a notification that arrives after the call has ended.
+    func test_handleAudioInterruption_guardsCallStateIsActive() throws {
+        let source = try callManagerSource()
+        guard let body = interruptionHandlerBody(in: source) else {
+            XCTFail("handleAudioInterruption not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("callState.isActive"),
+            "handleAudioInterruption must guard callState.isActive — " +
+            "the notification can arrive after the call has ended"
+        )
+    }
+}
+
+// MARK: - Audio route change state reconciliation guard
+
+/// Verifies that `handleAudioRouteChange` correctly reconciles the `isSpeaker`
+/// flag when the audio route changes externally (Bluetooth connect/disconnect).
+@MainActor
+final class AudioRouteChangeStateReconciliationTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func routeChangeHandlerBody(in source: String) -> String? {
+        guard let range = source.range(of: "func handleAudioRouteChange(") else { return nil }
+        let bodyEnd = [
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    @MainActor\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<bodyEnd])
+    }
+
+    /// When a new device (Bluetooth, headset) becomes available, `isSpeaker` must
+    /// be set to false — iOS automatically routes audio to the new device, and the
+    /// UI must reflect that the built-in speaker is no longer active.
+    func test_handleAudioRouteChange_newDeviceAvailable_setsSpeakerFalse() throws {
+        let source = try callManagerSource()
+        guard let body = routeChangeHandlerBody(in: source) else {
+            XCTFail("handleAudioRouteChange not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("newDeviceAvailable"),
+            "handleAudioRouteChange must handle the .newDeviceAvailable case"
+        )
+        XCTAssertTrue(
+            body.contains("isSpeaker = false"),
+            "handleAudioRouteChange must set isSpeaker = false when a new audio device connects — " +
+            "iOS routes to the new device automatically and the UI speaker button must reflect this"
+        )
+    }
+
+    /// When a device is removed (Bluetooth disconnect, headset unplug), iOS routes
+    /// back to the built-in receiver. We must re-apply the current `isSpeaker`
+    /// preference so `applySpeakerRoute` ensures the correct output port is set.
+    func test_handleAudioRouteChange_oldDeviceUnavailable_reappliesSpeakerRoute() throws {
+        let source = try callManagerSource()
+        guard let body = routeChangeHandlerBody(in: source) else {
+            XCTFail("handleAudioRouteChange not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("oldDeviceUnavailable"),
+            "handleAudioRouteChange must handle the .oldDeviceUnavailable case"
+        )
+        guard let oldDeviceRange = body.range(of: "oldDeviceUnavailable") else { return }
+        let afterOldDevice = String(body[oldDeviceRange.upperBound...])
+        XCTAssertTrue(
+            afterOldDevice.contains("applySpeakerRoute()"),
+            "handleAudioRouteChange must call applySpeakerRoute() after a device becomes unavailable — " +
+            "this re-applies the user's speaker preference to the newly-selected built-in route"
+        )
+    }
+
+    /// The `.override` case (our own `overrideOutputAudioPort` call) must NOT
+    /// call `applySpeakerRoute()` again — doing so would create an infinite loop
+    /// (applySpeakerRoute → override → routeChange → applySpeakerRoute → …).
+    func test_handleAudioRouteChange_override_doesNotCallApplySpeakerRoute() throws {
+        let source = try callManagerSource()
+        guard let body = routeChangeHandlerBody(in: source) else {
+            XCTFail("handleAudioRouteChange not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("override"),
+            "handleAudioRouteChange must handle the .override case"
+        )
+        guard let overrideRange = body.range(of: "case .override") else {
+            XCTFail(".override case not found"); return
+        }
+        // Find the end of the .override case block (the `default:` label or next case).
+        let afterOverride = String(body[overrideRange.upperBound...])
+        let boundaries = [
+            afterOverride.range(of: "\n        case ")?.lowerBound,
+            afterOverride.range(of: "\n        default:")?.lowerBound,
+        ].compactMap { $0 }.min()
+        guard let endIdx = boundaries else { return }
+        let overrideBlock = String(afterOverride[afterOverride.startIndex..<endIdx])
+        XCTAssertFalse(
+            overrideBlock.contains("applySpeakerRoute()"),
+            ".override case must not call applySpeakerRoute() — doing so creates a " +
+            "recursive route-change loop (override fires a routeChange notification)"
+        )
+    }
+}
+
+// MARK: - applyNegotiationRole epoch reset guard
+
+/// Verifies that `applyNegotiationRole` resets the negotiation epoch (negotiationId)
+/// to zero at the start of each call. Without this reset, a lingering high-water
+/// mark from the previous call would cause the first offer of the new call to be
+/// rejected as "stale" — silently breaking call setup.
+@MainActor
+final class NegotiationEpochResetTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(of signature: String, in source: String) -> String? {
+        guard let range = source.range(of: signature) else { return nil }
+        let nextBoundary = [
+            source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    @MainActor\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<nextBoundary])
+    }
+
+    /// `applyNegotiationRole` must reset `negotiationId` to 0 so the new call
+    /// starts from a clean epoch. If it did not reset, a negotiationId of (say) 5
+    /// from the last call would reject any offer with generation < 5 as stale.
+    func test_applyNegotiationRole_resetsNegotiationIdToZero() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func applyNegotiationRole()", in: source) else {
+            XCTFail("applyNegotiationRole not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("negotiationId = 0"),
+            "applyNegotiationRole must reset negotiationId to 0 — without this reset, a " +
+            "high-water mark from the previous call rejects the first offer of the new call"
+        )
+    }
+
+    /// `applyNegotiationRole` must be called from the call setup paths so the
+    /// epoch is always clean at the start of any call.
+    func test_applyNegotiationRole_isCalledFromStartCall() throws {
+        let source = try callManagerSource()
+        guard let startCallRange = source.range(of: "func startCall(") else {
+            XCTFail("startCall not found"); return
+        }
+        let bodyEnd = [
+            source.range(of: "\n    func ", range: startCallRange.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: startCallRange.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        let startCallBody = String(source[startCallRange.lowerBound..<bodyEnd])
+        XCTAssertTrue(
+            startCallBody.contains("applyNegotiationRole()"),
+            "startCall must call applyNegotiationRole() to reset the epoch for the new outgoing call"
+        )
+    }
+
+    /// The `acceptIncomingNegotiation` function must advance the high-water mark
+    /// when accepting a signal, so stale duplicates from a churned socket are
+    /// rejected by `isStaleNegotiation`.
+    func test_acceptIncomingNegotiation_advancesHighWaterMark() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func acceptIncomingNegotiation(", in: source) else {
+            XCTFail("acceptIncomingNegotiation not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("negotiationId = max(negotiationId, generation)"),
+            "acceptIncomingNegotiation must advance negotiationId to max(current, incoming) so " +
+            "stale signals from a churned socket buffer are rejected as generations < highWaterMark"
+        )
+    }
+}
+
+// MARK: - endCallInternal teardown ordering guards
+
+/// Guards the ordering of critical teardown steps in `endCallInternal`. Out-of-order
+/// teardown has caused audio ghosts (audio session deactivated before WebRTC closed
+/// → WebRTC tries to use an inactive session), state mismatches (UI transitions to
+/// `.ended` while WebRTC is still running → reconnection watchdog fires on a closed
+/// call), and TURN credential leaks (refresh task not cancelled → timer fires and
+/// re-arms credentials on a dead call).
+@MainActor
+final class EndCallInternalTeardownOrderTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func endCallInternalBody(in source: String) -> String? {
+        guard let funcRange = source.range(of: "func endCallInternal") else { return nil }
+        let bodyEnd = source.range(of: "\n    // MARK:", range: funcRange.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        return String(source[funcRange.lowerBound..<bodyEnd])
+    }
+
+    /// The TURN credential refresh task must be cancelled in `endCallInternal`.
+    /// Without this, the scheduled refresh fires after teardown, re-registers
+    /// stale ICE credentials, and logs confusing "TURN refreshed for call X"
+    /// messages when no call is active.
+    func test_endCallInternal_cancelsTurnRefreshTask() throws {
+        let source = try callManagerSource()
+        guard let body = endCallInternalBody(in: source) else {
+            XCTFail("endCallInternal not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("turnRefreshTask?.cancel()"),
+            "endCallInternal must cancel turnRefreshTask to stop TURN credential refreshes " +
+            "on a dead call."
+        )
+        XCTAssertTrue(
+            body.contains("turnRefreshTask = nil"),
+            "endCallInternal must nil turnRefreshTask after cancelling to release the Task object."
+        )
+    }
+
+    /// ICE candidates buffered while the socket was down must be cleared in
+    /// `endCallInternal`. Leftover candidates would be flushed on the NEXT call's
+    /// socket reconnect — adding stale candidates to a different peer connection.
+    func test_endCallInternal_clearsPendingIceCandidates() throws {
+        let source = try callManagerSource()
+        guard let body = endCallInternalBody(in: source) else {
+            XCTFail("endCallInternal not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("pendingIceCandidates = []"),
+            "endCallInternal must clear pendingIceCandidates to prevent stale candidates " +
+            "from being flushed to the next call's peer connection."
+        )
+    }
+
+    /// A buffered SDP offer that arrived while the user was deciding to answer
+    /// must be cleared in `endCallInternal`. Without this reset, starting a new
+    /// incoming call immediately reuses the old offer for a different peer.
+    func test_endCallInternal_clearsPendingRemoteOffer() throws {
+        let source = try callManagerSource()
+        guard let body = endCallInternalBody(in: source) else {
+            XCTFail("endCallInternal not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("pendingRemoteOffer = nil"),
+            "endCallInternal must clear pendingRemoteOffer to prevent a stale SDP offer " +
+            "from being applied to the next incoming call."
+        )
+    }
+
+    /// `webRTCService.close()` must be called BEFORE `callState = .ended(reason:)`.
+    /// If the state transitions first, a reactive observer (e.g. the reliability
+    /// monitor's reconnecting watchdog) may fire its final `endCallInternal` while
+    /// WebRTC is still active, sending ICE restart offers on a terminating session.
+    func test_endCallInternal_closesWebRTCBeforeTransitioningToEnded() throws {
+        let source = try callManagerSource()
+        guard let body = endCallInternalBody(in: source) else {
+            XCTFail("endCallInternal not found in CallManager.swift"); return
+        }
+        guard let closeIdx = body.range(of: "webRTCService.close()")?.lowerBound else {
+            XCTFail("webRTCService.close() not found in endCallInternal body"); return
+        }
+        guard let endedIdx = body.range(of: "callState = .ended(reason: reason)")?.lowerBound else {
+            XCTFail("callState = .ended(reason: reason) not found in endCallInternal body"); return
+        }
+        XCTAssertTrue(
+            closeIdx < endedIdx,
+            "webRTCService.close() must precede `callState = .ended` — transitioning state " +
+            "first allows observers to fire while WebRTC is still active."
+        )
+    }
+
+    /// `deactivateAudioSession()` must be called BEFORE `callState = .ended(reason:)`.
+    /// The audio deactivation triggers a CallKit `provider:didDeactivate:` callback
+    /// which in turn resets the RTCAudioSession — this must complete while the call
+    /// is still in an active-teardown state, not after the UI has fully transitioned.
+    func test_endCallInternal_deactivatesAudioBeforeTransitioningToEnded() throws {
+        let source = try callManagerSource()
+        guard let body = endCallInternalBody(in: source) else {
+            XCTFail("endCallInternal not found in CallManager.swift"); return
+        }
+        guard let deactivateIdx = body.range(of: "deactivateAudioSession()")?.lowerBound else {
+            XCTFail("deactivateAudioSession() not found in endCallInternal body"); return
+        }
+        guard let endedIdx = body.range(of: "callState = .ended(reason: reason)")?.lowerBound else {
+            XCTFail("callState = .ended(reason: reason) not found in endCallInternal body"); return
+        }
+        XCTAssertTrue(
+            deactivateIdx < endedIdx,
+            "deactivateAudioSession() must precede `callState = .ended` — the audio deactivation " +
+            "path must complete before the UI observes the terminal state."
+        )
+    }
+}
+
+// MARK: - DTLS-SRTP enforcement guards
+
+/// Guards that the WebRTC peer connection is always created with DTLS-SRTP
+/// mandatory. Without `DtlsSrtpKeyAgreement: true`, WebRTC falls back to
+/// SDES (key negotiation in the SDP plaintext), sending media encryption keys
+/// over the signaling channel — any server that routes the SDP can decrypt
+/// the call audio and video.
+@MainActor
+final class DTLSSRTPEnforcementTests: XCTestCase {
+
+    private func p2pClientSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// The peer connection must require DTLS-SRTP key agreement.
+    /// A missing or `false` value silently falls back to SDES in some WebRTC
+    /// builds, transmitting media keys in the SDP offer/answer.
+    func test_peerConnection_requiresDTLSSRTP() throws {
+        let source = try p2pClientSource()
+        XCTAssertTrue(
+            source.contains("\"DtlsSrtpKeyAgreement\": \"true\""),
+            "P2PWebRTCClient must pass `DtlsSrtpKeyAgreement: true` in RTCMediaConstraints. " +
+            "Without it, some WebRTC builds fall back to SDES key exchange — media keys are " +
+            "sent in the SDP plaintext over the signaling channel."
+        )
+    }
+
+    /// The bundle policy must be `.maxBundle` to minimize the number of transport
+    /// sockets and DTLS handshakes. With fewer transports, there is less surface
+    /// for downgrade attacks and the DTLS connection is established faster.
+    func test_peerConnection_useMaxBundlePolicy() throws {
+        let source = try p2pClientSource()
+        XCTAssertTrue(
+            source.contains("bundlePolicy = .maxBundle"),
+            "P2PWebRTCClient must set bundlePolicy = .maxBundle to multiplex all tracks " +
+            "onto a single DTLS transport — fewer handshakes, smaller attack surface."
+        )
+    }
+
+    /// RTCP must be multiplexed onto the RTP port (rtcpMuxPolicy = .require).
+    /// Without mux, a separate DTLS transport is opened for RTCP — doubling the
+    /// number of ports that need to be traversed and firewalled.
+    func test_peerConnection_requiresRTCPMux() throws {
+        let source = try p2pClientSource()
+        XCTAssertTrue(
+            source.contains("rtcpMuxPolicy = .require"),
+            "P2PWebRTCClient must set rtcpMuxPolicy = .require to avoid opening a separate " +
+            "RTCP transport — extra ports increase NAT traversal complexity and attack surface."
+        )
+    }
+}
+
+// MARK: - Settle-token race guard
+
+/// Guards the settle-token pattern in `endCallInternal` that prevents a new
+/// call from being reset to `.idle` by the deferred cleanup Task of the
+/// preceding call. Without the token check, the following race is possible:
+///   T+0ms  call A ends → endCallInternal schedules 1.5 s idle Task
+///   T+50ms new call B starts → callState = .ringing
+///   T+1500ms Task fires → sees .idle candidate → resets state to .idle
+///   T+1500ms BUG: call B's .ringing is clobbered → UI drops the incoming ring
+@MainActor
+final class SettleTokenRaceGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func endCallInternalBody(in source: String) -> String? {
+        guard let funcRange = source.range(of: "func endCallInternal") else { return nil }
+        let bodyEnd = source.range(of: "\n    // MARK:", range: funcRange.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        return String(source[funcRange.lowerBound..<bodyEnd])
+    }
+
+    /// `endCallInternal` must mint a fresh UUID token and assign it to `settleToken`
+    /// before scheduling the deferred idle transition. The token is how the deferred
+    /// Task knows whether its identity is still current when it fires.
+    func test_endCallInternal_mintsAndStoresSettleToken() throws {
+        let source = try callManagerSource()
+        guard let body = endCallInternalBody(in: source) else {
+            XCTFail("endCallInternal not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("let token = UUID()"),
+            "endCallInternal must mint a UUID settle token — the deferred idle Task uses it " +
+            "to detect whether a new call has taken over before the 1.5 s window expires."
+        )
+        XCTAssertTrue(
+            body.contains("settleToken = token"),
+            "endCallInternal must assign the minted token to `settleToken` so that " +
+            "`resetEndedStateForNewCall` can nil it to cancel the pending idle transition."
+        )
+    }
+
+    /// The deferred idle-transition Task must check that `settleToken == token`
+    /// before resetting state. Without this guard, a new call that started during
+    /// the 1.5 s settle window gets its state clobbered by the old Task.
+    func test_settleTask_guardsOnTokenBeforeResettingToIdle() throws {
+        let source = try callManagerSource()
+        guard let body = endCallInternalBody(in: source) else {
+            XCTFail("endCallInternal not found in CallManager.swift"); return
+        }
+        // The guard must appear inside the deferred Task body, so we look for
+        // the token comparison AND the subsequent .idle assignment together.
+        XCTAssertTrue(
+            body.contains("self.settleToken == token"),
+            "The deferred idle Task in endCallInternal must guard on `settleToken == token` " +
+            "before transitioning to .idle — without this, a new call started within 1.5 s " +
+            "has its state reset by the previous call's cleanup Task."
+        )
+        XCTAssertTrue(
+            body.contains("self.callState = .idle"),
+            "The deferred Task must set callState = .idle when the settle token still matches — " +
+            "this is the terminal cleanup that releases the last call's identity fields."
+        )
+    }
+}

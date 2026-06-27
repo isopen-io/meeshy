@@ -337,6 +337,14 @@ struct CallView: View {
                 videoCallLayout
                     .contentShape(Rectangle())
                     .onTapGesture { toggleControls() }
+                    .accessibilityLabel(showControls
+                        ? String(localized: "call.video.hideControls", defaultValue: "Masquer les contrôles", bundle: .main)
+                        : String(localized: "call.video.showControls", defaultValue: "Afficher les contrôles", bundle: .main))
+                    .accessibilityAddTraits(.isButton)
+                    // Controls never auto-hide during VoiceOver (shouldAutoHideControls
+                    // returns false) — this tap element has no meaningful purpose then,
+                    // so hide it from the accessibility tree to avoid confusing VoiceOver.
+                    .accessibilityHidden(!shouldAutoHideControls)
             }
 
             VStack(spacing: 0) {
@@ -1002,7 +1010,10 @@ struct CallView: View {
                     : String(localized: "call.control.video.caption", defaultValue: "Vidéo", bundle: .main),
                 label: videoAutoPaused
                     ? String(localized: "call.control.video.paused", defaultValue: "Vidéo en pause (connexion faible)", bundle: .main)
-                    : (callManager.isVideoEnabled ? String(localized: "call.control.videoOff", defaultValue: "Désactiver la vidéo", bundle: .main) : String(localized: "call.control.videoOn", defaultValue: "Activer la vidéo", bundle: .main))
+                    : (callManager.isVideoEnabled ? String(localized: "call.control.videoOff", defaultValue: "Désactiver la vidéo", bundle: .main) : String(localized: "call.control.videoOn", defaultValue: "Activer la vidéo", bundle: .main)),
+                hint: videoAutoPaused
+                    ? String(localized: "call.control.video.paused.hint", defaultValue: "Touchez pour éteindre la caméra. La vidéo reprend automatiquement si la connexion s'améliore.", bundle: .main)
+                    : nil
             ) {
                 callManager.toggleVideo()
             }
@@ -1174,7 +1185,7 @@ struct CallView: View {
     /// what lets every column stay the same width so the row reads as an even,
     /// intelligently-aligned glass bar instead of one button ballooning to fit a
     /// long French label.
-    private func callControlButton(icon: String, color: Color, bgColor: Color, isActive: Bool, caption: String, label: String, action: @escaping () -> Void) -> some View {
+    private func callControlButton(icon: String, color: Color, bgColor: Color, isActive: Bool, caption: String, label: String, hint: String? = nil, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 6) {
                 Image(systemName: icon)
@@ -1192,6 +1203,7 @@ struct CallView: View {
         }
         .pressable()
         .accessibilityLabel(label)
+        .accessibilityHint(hint ?? "")
     }
 
     private var effectsToggleButton: some View {

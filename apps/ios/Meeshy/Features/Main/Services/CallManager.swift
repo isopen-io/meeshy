@@ -285,6 +285,9 @@ final class CallManager: ObservableObject {
     /// Tracks the in-flight toggleVideo Task. Cancelled when a rapid second tap arrives
     /// so the later intent always wins and `isVideoEnabled` stays consistent with WebRTC.
     private var videoToggleTask: Task<Void, Never>?
+    /// Tracks the in-flight hold/unhold video Task so a rapid hold→unhold sequence
+    /// cancels the previous operation rather than running both concurrently.
+    private var holdVideoTask: Task<Void, Never>?
     private var remoteQualityResetTask: Task<Void, Never>?
     /// In-flight ICE restart task. Tracked so overlapping `attemptReconnection`
     /// calls (e.g. watchdog fires while backoff is sleeping) cancel the previous
@@ -733,44 +736,8 @@ final class CallManager: ObservableObject {
                 self.configureAudioSession()
                 self.startReliabilityMonitor()
                 Logger.calls.info("[CALL_SETUP] outgoing 3/4 startLocalMedia begin (isVideo=\(isVideo))")
-                do {
-                    try await self.webRTCService.startLocalMedia(isVideo: isVideo)
-                    guard self.activeCallUUID == uuid else {
-                        Logger.calls.info("[CALL_SETUP] startLocalMedia completed after end — discarding")
-                        return
-                    }
-                    if isVideo { self.hasLocalVideoTrack = true }
-                } catch WebRTCError.simulatorVideoUnsupported {
-                    // Phase 1 fix E7/B4: simulator can't run video — degrade to audio-only
-                    Logger.calls.warning("Simulator video unsupported — continuing audio-only")
-                    guard self.activeCallUUID == uuid else { return }
-                    self.isVideoEnabled = false
-                    try? await self.webRTCService.startLocalMedia(isVideo: false)
-                    guard self.activeCallUUID == uuid else { return }
-                } catch WebRTCError.cameraPermissionDenied {
-                    // Camera denied — degrade to audio-only. Ending the call here would
-                    // be wrong: the user still expects to talk even without video.
-                    // Surface an actionable toast so they can open Settings mid-call.
-                    Logger.calls.warning("[CALL_SETUP] camera permission denied — degrading to audio-only")
-                    guard self.activeCallUUID == uuid else { return }
-                    self.isVideoEnabled = false
-                    try? await self.webRTCService.startLocalMedia(isVideo: false)
-                    guard self.activeCallUUID == uuid else { return }
-                    FeedbackToastManager.shared.showError(
-                        String(localized: "call.video.permission.denied",
-                               defaultValue: "Caméra : accès refusé — toucher pour ouvrir les Paramètres",
-                               bundle: .main)
-                    ) {
-                        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
-                        UIApplication.shared.open(url)
-                    }
-                } catch {
-                    Logger.calls.error("startLocalMedia failed: \(error.localizedDescription)")
-                    if self.activeCallUUID == uuid {
-                        self.endCallInternal(reason: .failed(String(localized: "call.error.media")))
-                    }
-                    return
-                }
+                await self.performLocalMediaStart(isVideo: isVideo, callId: ack.callId)
+                guard self.currentCallId == ack.callId else { return }
                 Logger.calls.info("[CALL_SETUP] outgoing 4/4 startLocalMedia done")
                 self.listenForParticipantJoined(callId: ack.callId, toUserId: userId, isVideo: isVideo)
                 Logger.calls.info("Outgoing call initiated: \(ack.callId) to \(displayName), waiting for participant joined (\(dynamicServers.count) ICE servers)")
@@ -878,40 +845,7 @@ final class CallManager: ObservableObject {
         localMediaTask = Task { [weak self] in
             guard let self else { return }
             Logger.calls.info("[CALL_SETUP] incoming 3/4 startLocalMedia begin (isVideo=\(isVideo))")
-            do {
-                try await self.webRTCService.startLocalMedia(isVideo: isVideo)
-                // Liveness post-await : l'appel a pu se terminer pendant le
-                // warm-up media — ne pas re-poser d'état sur un appel mort.
-                guard self.currentCallId == callId else { return }
-                if isVideo { self.hasLocalVideoTrack = true }
-            } catch WebRTCError.simulatorVideoUnsupported {
-                // Phase 1 fix E7/B4: simulator can't run video — degrade to audio-only
-                Logger.calls.warning("Simulator video unsupported — continuing audio-only")
-                self.isVideoEnabled = false
-                try? await self.webRTCService.startLocalMedia(isVideo: false)
-            } catch WebRTCError.cameraPermissionDenied {
-                Logger.calls.warning("[CALL_SETUP] camera permission denied on incoming — degrading to audio-only")
-                self.isVideoEnabled = false
-                try? await self.webRTCService.startLocalMedia(isVideo: false)
-                FeedbackToastManager.shared.showError(
-                    String(localized: "call.video.permission.denied",
-                           defaultValue: "Caméra : accès refusé — toucher pour ouvrir les Paramètres",
-                           bundle: .main)
-                ) {
-                    guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
-                    UIApplication.shared.open(url)
-                }
-            } catch is CancellationError {
-                // L'appel s'est terminé pendant startCapture (P2PWebRTCClient
-                // a déjà éteint la caméra orpheline) — pas un échec media.
-                return
-            } catch {
-                Logger.calls.error("startLocalMedia failed: \(error.localizedDescription)")
-                if self.currentCallId == callId {
-                    self.endCallInternal(reason: .failed(String(localized: "call.error.media")))
-                }
-                return
-            }
+            await self.performLocalMediaStart(isVideo: isVideo, callId: callId)
             Logger.calls.info("[CALL_SETUP] incoming 4/4 startLocalMedia done")
         }
 
@@ -1097,47 +1031,50 @@ final class CallManager: ObservableObject {
         localMediaTask?.cancel()
         localMediaTask = Task { [weak self] in
             guard let self else { return }
-            do {
-                try await self.webRTCService.startLocalMedia(isVideo: isVideo)
-                // Liveness post-await : l'appel a pu se terminer pendant le
-                // warm-up media — ne pas re-poser d'état sur un appel mort.
-                guard self.currentCallId == callId else { return }
-                if isVideo { self.hasLocalVideoTrack = true }
-            } catch WebRTCError.simulatorVideoUnsupported {
-                // Phase 1 fix E7/B4: simulator can't run video — degrade to audio-only
-                Logger.calls.warning("Simulator video unsupported — continuing audio-only")
-                self.isVideoEnabled = false
-                try? await self.webRTCService.startLocalMedia(isVideo: false)
-            } catch WebRTCError.cameraPermissionDenied {
-                Logger.calls.warning("[CALL_SETUP] camera permission denied on incoming — degrading to audio-only")
-                self.isVideoEnabled = false
-                try? await self.webRTCService.startLocalMedia(isVideo: false)
-                FeedbackToastManager.shared.showError(
-                    String(localized: "call.video.permission.denied",
-                           defaultValue: "Caméra : accès refusé — toucher pour ouvrir les Paramètres",
-                           bundle: .main)
-                ) {
-                    guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
-                    UIApplication.shared.open(url)
-                }
-            } catch is CancellationError {
-                // L'appel s'est terminé pendant startCapture (P2PWebRTCClient
-                // a déjà éteint la caméra orpheline) — pas un échec media :
-                // surtout ne pas re-déclencher endCallInternal(.failed) sur
-                // un appel déjà clos (ou écraser un nouvel appel naissant).
-                return
-            } catch {
-                Logger.calls.error("startLocalMedia failed: \(error.localizedDescription)")
-                if self.currentCallId == callId {
-                    self.endCallInternal(reason: .failed(String(localized: "call.error.media")))
-                }
-                return
-            }
+            await self.performLocalMediaStart(isVideo: isVideo, callId: callId)
             Logger.calls.info("Incoming call — local media ready: \(callId)")
         }
 
         Logger.calls.info("Incoming call notification from \(fromUsername): \(callId)")
         HapticFeedback.medium()
+    }
+
+    // MARK: - Local Media Start Helper
+
+    @MainActor
+    private func performLocalMediaStart(isVideo: Bool, callId: String) async {
+        do {
+            try await webRTCService.startLocalMedia(isVideo: isVideo)
+            guard currentCallId == callId else { return }
+            if isVideo { hasLocalVideoTrack = true }
+        } catch WebRTCError.simulatorVideoUnsupported {
+            Logger.calls.warning("Simulator video unsupported — continuing audio-only")
+            guard currentCallId == callId else { return }
+            isVideoEnabled = false
+            try? await webRTCService.startLocalMedia(isVideo: false)
+            guard currentCallId == callId else { return }
+        } catch WebRTCError.cameraPermissionDenied {
+            Logger.calls.warning("[CALL_SETUP] camera permission denied — degrading to audio-only")
+            guard currentCallId == callId else { return }
+            isVideoEnabled = false
+            try? await webRTCService.startLocalMedia(isVideo: false)
+            guard currentCallId == callId else { return }
+            FeedbackToastManager.shared.showError(
+                String(localized: "call.video.permission.denied",
+                       defaultValue: "Caméra : accès refusé — toucher pour ouvrir les Paramètres",
+                       bundle: .main)
+            ) {
+                guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                UIApplication.shared.open(url)
+            }
+        } catch is CancellationError {
+            return
+        } catch {
+            Logger.calls.error("startLocalMedia failed: \(error.localizedDescription)")
+            if currentCallId == callId {
+                endCallInternal(reason: .failed(String(localized: "call.error.media")))
+            }
+        }
     }
 
     // MARK: - Signal Offer (real SDP from caller after auto-join)
@@ -2229,7 +2166,8 @@ final class CallManager: ObservableObject {
         if isOnHold {
             if isVideoEnabled {
                 isVideoSuspendedByHold = true
-                Task { [weak self] in _ = await self?.webRTCService.downgradeFromVideo() }
+                holdVideoTask?.cancel()
+                holdVideoTask = Task { [weak self] in _ = await self?.webRTCService.downgradeFromVideo() }
                 MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: false)
                 Logger.calls.info("CallKit hold — video suspended, peer notified (callId=\(callId))")
             }
@@ -2237,7 +2175,8 @@ final class CallManager: ObservableObject {
             if isVideoSuspendedByHold {
                 isVideoSuspendedByHold = false
                 if isVideoEnabled && !isVideoSuspended && !isVideoSuspendedByBackground {
-                    Task { [weak self] in _ = try? await self?.webRTCService.upgradeToVideo() }
+                    holdVideoTask?.cancel()
+                    holdVideoTask = Task { [weak self] in _ = try? await self?.webRTCService.upgradeToVideo() }
                     MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: true)
                     Logger.calls.info("CallKit unhold — video restored, peer notified (callId=\(callId))")
                 }
@@ -2389,6 +2328,8 @@ final class CallManager: ObservableObject {
         answerRetryTask = nil
         videoToggleTask?.cancel()
         videoToggleTask = nil
+        holdVideoTask?.cancel()
+        holdVideoTask = nil
         remoteQualityResetTask?.cancel()
         remoteQualityResetTask = nil
         iceRestartTask?.cancel()
