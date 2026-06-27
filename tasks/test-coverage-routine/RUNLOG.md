@@ -2104,3 +2104,25 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Reviewer: PASS (rounds: 1) — v8 ignore justifications accepted; test quality high (116 test cases, no tautologies, good edge-case coverage)
 - Pre-flight checks: Confirmed PR #969 (gateway) and PR #974 (web) both merged 2026-06-27; no open claude/coverage/* PRs before this run. PROGRESS.md updated: P2 Admin × web ⚠ blocked → ☑, P2 Theme × shared/SDK ⊘, P2 Video/story × shared/SDK ⊘.
 - Commit: (see PR push below)
+
+---
+
+## 2026-06-27T<UTC> — P2 Notifications × gateway (PushNotificationService.ts)
+- Targeted: `services/gateway/src/services/PushNotificationService.ts`
+- Result: ☑ done
+- Coverage: PushNotificationService.ts line 80.48%→99.02%, branch 64.36%→90.42%; gateway overall line 72.16%→72.55%, branch 67.51%→68.22%
+- Tests added: 30 (services/gateway/src/__tests__/unit/services/PushNotificationService.test.ts; total 65 tests in file)
+  New describe blocks:
+  - Initialization — credentials path is a directory (line 205)
+  - isPushAllowed — pushEnabled=false gate, DND day/time window (normal + crossover), fail-open on DB error (lines 224-269)
+  - sendToUser — outer error catch: update throws on success path → both results captured (lines 338-340)
+  - FCM platform-specific options: android config, default sound, webpush with/without link, explicit link override, collapseKey (lines 445-476)
+  - FCM error code handling: messaging/registration-token-not-registered, messaging/invalid-registration-token, errorInfo.code (v10+ shape), unknown code (lines 499-515)
+  - APNS collapseId + sandbox provider selection (line 580)
+  - Circuit breaker fallbacks: FCM 5 failures → circuit open → 6th bypasses Firebase; APNS same (lines 118, 127)
+  - handleFailedToken in-flight dedup guard: concurrent calls for same token → second skipped (lines 656-657)
+- Hygiene fix: added `mockStatSync.mockReturnValue({ isFile: () => true })` to global beforeEach — the credentials-is-directory test changed mockStatSync's implementation and jest.clearAllMocks() does NOT reset mockReturnValue (only clears call history), poisoning all subsequent Firebase initialization paths
+- Reviewer: PASS (rounds: 1) — uncovered lines 205 (@parse/node-apn absent from node_modules — untestable in jest virtual mock env) and 476 (APNS collapse-id header sub-branch — minor nested branch) accepted
+- Production code changes: none — test file only
+- Gateway CI floors: lines:67/branches:63/statements:67/functions:67 (unchanged — existing floors already above CI bun gap)
+- Commit: TBD (see PR)
