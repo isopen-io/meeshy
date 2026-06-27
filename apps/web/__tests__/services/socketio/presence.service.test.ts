@@ -43,6 +43,7 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
     CONVERSATION_PARTICIPANT_LEFT: 'conversation:participant-left',
     CONVERSATION_PARTICIPANT_BANNED: 'conversation:participant-banned',
     CONVERSATION_PARTICIPANT_UNBANNED: 'conversation:participant-unbanned',
+    CONVERSATION_CLOSED: 'conversation:closed',
   },
   CLIENT_EVENTS: {},
 }));
@@ -99,6 +100,7 @@ describe('PresenceService', () => {
         'conversation:participant-left',
         'conversation:participant-banned',
         'conversation:participant-unbanned',
+        'conversation:closed',
       ];
       for (const event of expectedEvents) {
         expect(socket.on).toHaveBeenCalledWith(event, expect.any(Function));

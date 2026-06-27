@@ -40,6 +40,7 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     onConversationParticipantLeft: jest.fn(() => () => {}),
     onConversationParticipantBanned: jest.fn(() => () => {}),
     onConversationParticipantUnbanned: jest.fn(() => () => {}),
+    onConversationClosed: jest.fn(() => () => {}),
     onStatusChange: jest.fn(() => () => {}),
   },
 }));

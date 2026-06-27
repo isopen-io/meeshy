@@ -647,6 +647,10 @@ export class SocketIOOrchestrator {
     return this.presenceService.onConversationParticipantUnbanned(listener);
   }
 
+  onConversationClosed(listener: (data: { conversationId: string; closedBy: string; closedAt: string }) => void): UnsubscribeFn {
+    return this.presenceService.onConversationClosed(listener);
+  }
+
   // ============ CLEANUP ============
 
   cleanup(): void {

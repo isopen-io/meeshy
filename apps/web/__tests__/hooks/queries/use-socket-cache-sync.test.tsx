@@ -32,6 +32,7 @@ let conversationUpdatedCallback: ((data: { conversationId: string; updatedBy: { 
 let conversationParticipantLeftCallback: ((data: { conversationId: string; userId: string; displayName: string; leftAt: string }) => void) | null = null;
 let conversationParticipantBannedCallback: ((data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string }) => void) | null = null;
 let conversationParticipantUnbannedCallback: ((data: { conversationId: string; userId: string }) => void) | null = null;
+let conversationClosedCallback: ((data: { conversationId: string; closedBy: string; closedAt: string }) => void) | null = null;
 
 // Mock unsubscribe functions
 const mockUnsubscribeMessage = jest.fn();
@@ -98,6 +99,10 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     },
     onConversationParticipantUnbanned: (callback: (data: { conversationId: string; userId: string }) => void) => {
       conversationParticipantUnbannedCallback = callback;
+      return jest.fn();
+    },
+    onConversationClosed: (callback: (data: { conversationId: string; closedBy: string; closedAt: string }) => void) => {
+      conversationClosedCallback = callback;
       return jest.fn();
     },
     onStatusChange: jest.fn(() => () => {}),
@@ -228,6 +233,7 @@ describe('useSocketCacheSync', () => {
     conversationParticipantLeftCallback = null;
     conversationParticipantBannedCallback = null;
     conversationParticipantUnbannedCallback = null;
+    conversationClosedCallback = null;
   });
 
   describe('Event Listener Registration', () => {
@@ -728,6 +734,41 @@ describe('useSocketCacheSync', () => {
       expect(invalidateSpy).toHaveBeenCalledWith(
         expect.objectContaining({ queryKey: ['conversations', 'participants', 'conv-1'] })
       );
+    });
+  });
+
+  describe('Conversation Closed Handler', () => {
+    it('removes conversation from infinite cache when closed', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [mockConversation, { ...mockConversation, id: 'conv-2' }], pagination: { total: 2, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationClosedCallback?.({ conversationId: 'conv-1', closedBy: 'admin-1', closedAt: new Date().toISOString() });
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      expect(cached.pages[0].conversations).toHaveLength(1);
+      expect(cached.pages[0].conversations[0].id).toBe('conv-2');
+    });
+
+    it('removes conversation detail query when closed', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'detail', 'conv-1'], { id: 'conv-1' });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationClosedCallback?.({ conversationId: 'conv-1', closedBy: 'admin-1', closedAt: new Date().toISOString() });
+      });
+
+      expect(queryClient.getQueryData(['conversations', 'detail', 'conv-1'])).toBeUndefined();
     });
   });
 });

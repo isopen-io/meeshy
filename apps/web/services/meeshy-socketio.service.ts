@@ -378,6 +378,10 @@ class MeeshySocketIOService {
     return this.orchestrator.onConversationParticipantUnbanned(listener);
   }
 
+  public onConversationClosed(listener: (data: { conversationId: string; closedBy: string; closedAt: string }) => void): () => void {
+    return this.orchestrator.onConversationClosed(listener);
+  }
+
   public onAttachmentStatusUpdated(listener: (data: { attachmentId: string; messageId: string; conversationId: string; userId: string; action: string }) => void): () => void {
     return this.orchestrator.onAttachmentStatusUpdated(listener);
   }

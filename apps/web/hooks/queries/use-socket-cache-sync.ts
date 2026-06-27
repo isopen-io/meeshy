@@ -558,6 +558,16 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       });
     };
 
+    // Handler for conversation:closed — conversation permanently closed by admin
+    const handleConversationClosed = (data: { conversationId: string; closedBy: string; closedAt: string }) => {
+      const { conversationId: closedId } = data;
+      if (!closedId) return;
+      updateInfiniteConversationCache(queryClient, (convs) =>
+        convs.filter((c) => c.id !== closedId)
+      );
+      queryClient.removeQueries({ queryKey: queryKeys.conversations.detail(closedId) });
+    };
+
     // Handler for attachment status updated (listened, watched, viewed, downloaded)
     const handleAttachmentStatusUpdated = (data: { attachmentId: string; messageId: string; conversationId: string; userId: string; action: string }) => {
       const targetConversationId = data.conversationId;
@@ -668,6 +678,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const unsubscribeParticipantLeft = meeshySocketIOService.onConversationParticipantLeft(handleConversationParticipantLeft);
     const unsubscribeParticipantBanned = meeshySocketIOService.onConversationParticipantBanned(handleConversationParticipantBanned);
     const unsubscribeParticipantUnbanned = meeshySocketIOService.onConversationParticipantUnbanned(handleConversationParticipantUnbanned);
+    const unsubscribeConversationClosed = meeshySocketIOService.onConversationClosed(handleConversationClosed);
 
     return () => {
       unsubscribeMessage?.();
@@ -688,6 +699,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       unsubscribeParticipantLeft?.();
       unsubscribeParticipantBanned?.();
       unsubscribeParticipantUnbanned?.();
+      unsubscribeConversationClosed?.();
     };
   }, [conversationId, enabled, queryClient]);
 }

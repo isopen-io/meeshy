@@ -51,6 +51,7 @@ export class PresenceService {
   private conversationParticipantLeftListeners: Set<(data: { conversationId: string; userId: string; displayName: string; leftAt: string }) => void> = new Set();
   private conversationParticipantBannedListeners: Set<(data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string }) => void> = new Set();
   private conversationParticipantUnbannedListeners: Set<(data: { conversationId: string; userId: string }) => void> = new Set();
+  private conversationClosedListeners: Set<(data: { conversationId: string; closedBy: string; closedAt: string }) => void> = new Set();
 
   /**
    * Setup presence event listeners on socket
@@ -148,6 +149,10 @@ export class PresenceService {
 
     socket.on(SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED as any, (data: any) => {
       this.conversationParticipantUnbannedListeners.forEach(listener => listener(data));
+    });
+
+    socket.on(SERVER_EVENTS.CONVERSATION_CLOSED as any, (data: any) => {
+      this.conversationClosedListeners.forEach(listener => listener(data));
     });
   }
 
@@ -265,6 +270,11 @@ export class PresenceService {
     return () => this.conversationParticipantUnbannedListeners.delete(listener);
   }
 
+  onConversationClosed(listener: (data: { conversationId: string; closedBy: string; closedAt: string }) => void): UnsubscribeFn {
+    this.conversationClosedListeners.add(listener);
+    return () => this.conversationClosedListeners.delete(listener);
+  }
+
   /**
    * Cleanup all listeners
    */
@@ -286,6 +296,7 @@ export class PresenceService {
     this.conversationParticipantLeftListeners.clear();
     this.conversationParticipantBannedListeners.clear();
     this.conversationParticipantUnbannedListeners.clear();
+    this.conversationClosedListeners.clear();
   }
 
   /**
