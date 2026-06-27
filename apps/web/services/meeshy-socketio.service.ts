@@ -394,6 +394,10 @@ class MeeshySocketIOService {
     return this.orchestrator.onMessageAttachmentUpdated(listener);
   }
 
+  public onPendingMessagesDelivered(listener: (data: { count: number }) => void): () => void {
+    return this.orchestrator.onPendingMessagesDelivered(listener);
+  }
+
   /**
    * Obtient le statut de connexion
    */

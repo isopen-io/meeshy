@@ -573,6 +573,14 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       queryClient.invalidateQueries({ queryKey: queryKeys.preferences.categories() });
     };
 
+    // Handler for message:pending-delivered — queued outgoing messages were delivered after reconnect
+    const handlePendingMessagesDelivered = () => {
+      if (conversationId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.messages.infinite(conversationId) });
+      }
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
+    };
+
     // Handler for message:attachment-updated — async enrichment (transcription/translation) completed for an attachment
     const handleMessageAttachmentUpdated = (data: { conversationId: string; messageId: string; attachment: unknown }) => {
       const { conversationId: attachConvId, messageId: attachMsgId, attachment } = data;
@@ -714,6 +722,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const unsubscribeConversationClosed = meeshySocketIOService.onConversationClosed(handleConversationClosed);
     const unsubscribeCategoryChanged = meeshySocketIOService.onCategoryChanged(handleCategoryChanged);
     const unsubscribeMessageAttachmentUpdated = meeshySocketIOService.onMessageAttachmentUpdated(handleMessageAttachmentUpdated);
+    const unsubscribePendingDelivered = meeshySocketIOService.onPendingMessagesDelivered(handlePendingMessagesDelivered);
 
     return () => {
       unsubscribeMessage?.();
@@ -737,6 +746,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       unsubscribeConversationClosed?.();
       unsubscribeCategoryChanged?.();
       unsubscribeMessageAttachmentUpdated?.();
+      unsubscribePendingDelivered?.();
     };
   }, [conversationId, enabled, queryClient]);
 }

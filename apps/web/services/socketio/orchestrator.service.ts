@@ -550,6 +550,10 @@ export class SocketIOOrchestrator {
     return this.messagingService.onMessageAttachmentUpdated(listener);
   }
 
+  onPendingMessagesDelivered(listener: (data: { count: number }) => void): UnsubscribeFn {
+    return this.messagingService.onPendingMessagesDelivered(listener);
+  }
+
   onTranslation(listener: (data: any) => void): UnsubscribeFn {
     return this.translationService.onTranslation(listener);
   }

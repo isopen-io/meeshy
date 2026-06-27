@@ -19,6 +19,7 @@ const SERVER_EVENTS_MOCK = {
   SYSTEM_MESSAGE: 'system:message',
   ATTACHMENT_STATUS_UPDATED: 'attachment-status:updated',
   MESSAGE_ATTACHMENT_UPDATED: 'message:attachment-updated',
+  PENDING_MESSAGES_DELIVERED: 'message:pending-delivered',
   MENTION_CREATED: 'mention:created',
   AUTHENTICATED: 'authenticated',
   ERROR: 'error',
@@ -56,6 +57,7 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
     SYSTEM_MESSAGE: 'system:message',
     ATTACHMENT_STATUS_UPDATED: 'attachment-status:updated',
     MESSAGE_ATTACHMENT_UPDATED: 'message:attachment-updated',
+    PENDING_MESSAGES_DELIVERED: 'message:pending-delivered',
     MENTION_CREATED: 'mention:created',
     AUTHENTICATED: 'authenticated',
     ERROR: 'error',
@@ -720,6 +722,21 @@ describe('MessagingService', () => {
         await Promise.resolve();
 
         expect(listener).toHaveBeenCalledWith(data);
+      });
+    });
+
+    describe('message:pending-delivered', () => {
+      it('forwards event data to all registered listeners', async () => {
+        const svc = new MessagingService();
+        const socket = makeSocket();
+        const listener = jest.fn();
+        svc.onPendingMessagesDelivered(listener);
+        svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
+
+        socket._trigger(SERVER_EVENTS_MOCK.PENDING_MESSAGES_DELIVERED, { count: 3 });
+        await Promise.resolve();
+
+        expect(listener).toHaveBeenCalledWith({ count: 3 });
       });
     });
 
@@ -1659,6 +1676,18 @@ describe('MessagingService', () => {
       const listener = jest.fn();
       const unsub = svc.onMessageAttachmentUpdated(listener);
       const listenerSet = (svc as any).messageAttachmentUpdatedListeners as Set<unknown>;
+      expect(listenerSet.size).toBe(1);
+      unsub();
+      expect(listenerSet.size).toBe(0);
+    });
+  });
+
+  describe('onPendingMessagesDelivered', () => {
+    it('subscribes and unsubscribes', () => {
+      const svc = new MessagingService();
+      const listener = jest.fn();
+      const unsub = svc.onPendingMessagesDelivered(listener);
+      const listenerSet = (svc as any).pendingDeliveredListeners as Set<unknown>;
       expect(listenerSet.size).toBe(1);
       unsub();
       expect(listenerSet.size).toBe(0);

@@ -35,6 +35,7 @@ let conversationParticipantUnbannedCallback: ((data: { conversationId: string; u
 let conversationClosedCallback: ((data: { conversationId: string; closedBy: string; closedAt: string }) => void) | null = null;
 let categoryChangedCallback: (() => void) | null = null;
 let messageAttachmentUpdatedCallback: ((data: { conversationId: string; messageId: string; attachment: unknown }) => void) | null = null;
+let pendingMessagesDeliveredCallback: ((data: { count: number }) => void) | null = null;
 
 // Mock unsubscribe functions
 const mockUnsubscribeMessage = jest.fn();
@@ -113,6 +114,10 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     },
     onMessageAttachmentUpdated: (callback: (data: { conversationId: string; messageId: string; attachment: unknown }) => void) => {
       messageAttachmentUpdatedCallback = callback;
+      return jest.fn();
+    },
+    onPendingMessagesDelivered: (callback: (data: { count: number }) => void) => {
+      pendingMessagesDeliveredCallback = callback;
       return jest.fn();
     },
     onStatusChange: jest.fn(() => () => {}),
@@ -250,6 +255,7 @@ describe('useSocketCacheSync', () => {
     conversationClosedCallback = null;
     categoryChangedCallback = null;
     messageAttachmentUpdatedCallback = null;
+    pendingMessagesDeliveredCallback = null;
   });
 
   describe('Event Listener Registration', () => {
@@ -801,6 +807,26 @@ describe('useSocketCacheSync', () => {
 
       expect(invalidateSpy).toHaveBeenCalledWith(
         expect.objectContaining({ queryKey: ['user-preferences', 'categories'] })
+      );
+    });
+  });
+
+  describe('Pending Messages Delivered Handler', () => {
+    it('invalidates messages and conversations queries when pending messages are delivered', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+      const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-1' }), { wrapper });
+
+      act(() => {
+        pendingMessagesDeliveredCallback?.({ count: 3 });
+      });
+
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: ['messages', 'list', 'conv-1', 'infinite'] })
+      );
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: ['conversations'] })
       );
     });
   });
