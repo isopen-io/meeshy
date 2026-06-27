@@ -2107,7 +2107,7 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 
 ---
 
-## 2026-06-27T<UTC> — P2 Notifications × gateway (PushNotificationService.ts)
+## 2026-06-27T21:42Z — P2 Notifications × gateway (PushNotificationService.ts)
 - Targeted: `services/gateway/src/services/PushNotificationService.ts`
 - Result: ☑ done
 - Coverage: PushNotificationService.ts line 80.48%→99.02%, branch 64.36%→90.42%; gateway overall line 72.16%→72.55%, branch 67.51%→68.22%
@@ -2125,4 +2125,5 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Reviewer: PASS (rounds: 1) — uncovered lines 205 (@parse/node-apn absent from node_modules — untestable in jest virtual mock env) and 476 (APNS collapse-id header sub-branch — minor nested branch) accepted
 - Production code changes: none — test file only
 - Gateway CI floors: lines:67/branches:63/statements:67/functions:67 (unchanged — existing floors already above CI bun gap)
-- Commit: TBD (see PR)
+- Commit: d2e03dff6d41c8a0de051b05fd2beb44f31a0fbc
+- PR: https://github.com/isopen-io/meeshy/pull/986 (CI in_progress at run end; next scheduled run will merge when green)
