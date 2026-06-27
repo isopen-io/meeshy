@@ -126,7 +126,7 @@ export function registerThreadsRoutes(
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            data: { type: 'object' }
+            data: { type: 'object', additionalProperties: true }
           }
         },
         400: errorResponseSchema,
