@@ -23,6 +23,7 @@ import type {
   ReactionListener,
   ReadStatusListener,
   ConversationJoinedListener,
+  ConversationNewListener,
   UnsubscribeFn
 } from './types';
 
@@ -42,6 +43,7 @@ export class PresenceService {
   private readStatusListeners: Set<ReadStatusListener> = new Set();
   private unreadUpdatedListeners: Set<(data: { conversationId: string; unreadCount: number }) => void> = new Set();
   private participantRoleUpdatedListeners: Set<(data: { conversationId: string; userId: string; newRole: string }) => void> = new Set();
+  private conversationNewListeners: Set<ConversationNewListener> = new Set();
 
   /**
    * Setup presence event listeners on socket
@@ -115,6 +117,10 @@ export class PresenceService {
 
     socket.on(SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED, (data: { conversationId: string; userId: string; newRole: string }) => {
       this.participantRoleUpdatedListeners.forEach(listener => listener(data));
+    });
+
+    socket.on(SERVER_EVENTS.CONVERSATION_NEW as any, (data: any) => {
+      this.conversationNewListeners.forEach(listener => listener(data));
     });
   }
 
@@ -202,6 +208,11 @@ export class PresenceService {
     return () => this.participantRoleUpdatedListeners.delete(listener);
   }
 
+  onConversationNew(listener: ConversationNewListener): UnsubscribeFn {
+    this.conversationNewListeners.add(listener);
+    return () => this.conversationNewListeners.delete(listener);
+  }
+
   /**
    * Cleanup all listeners
    */
@@ -217,6 +228,7 @@ export class PresenceService {
     this.readStatusListeners.clear();
     this.unreadUpdatedListeners.clear();
     this.participantRoleUpdatedListeners.clear();
+    this.conversationNewListeners.clear();
   }
 
   /**

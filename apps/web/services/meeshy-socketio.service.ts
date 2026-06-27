@@ -354,6 +354,10 @@ class MeeshySocketIOService {
     return this.orchestrator.onParticipantRoleUpdated(listener);
   }
 
+  public onConversationNew(listener: (data: { conversationId: string; conversationType: string; title: string | null; creatorId: string; participantIds: readonly string[]; createdAt: string }) => void): () => void {
+    return this.orchestrator.onConversationNew(listener);
+  }
+
   public onAttachmentStatusUpdated(listener: (data: { attachmentId: string; messageId: string; conversationId: string; userId: string; action: string }) => void): () => void {
     return this.orchestrator.onAttachmentStatusUpdated(listener);
   }

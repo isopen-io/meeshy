@@ -623,6 +623,10 @@ export class SocketIOOrchestrator {
     return this.presenceService.onParticipantRoleUpdated(listener);
   }
 
+  onConversationNew(listener: import('./types').ConversationNewListener): UnsubscribeFn {
+    return this.presenceService.onConversationNew(listener);
+  }
+
   // ============ CLEANUP ============
 
   cleanup(): void {

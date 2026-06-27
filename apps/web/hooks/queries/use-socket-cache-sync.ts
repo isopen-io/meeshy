@@ -547,6 +547,36 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       );
     };
 
+    // Handler for conversation:new — a group was created or the user was added to one.
+    // The event carries only partial data, so fetch the full conversation and prepend it.
+    const handleConversationNew = (data: { conversationId: string }) => {
+      const { conversationId: newConvId } = data;
+      if (!newConvId || !/^[a-f\d]{24}$/i.test(newConvId)) return;
+      if (typeof window === 'undefined' || window.location.pathname === '/login') return;
+
+      let alreadyInCache = false;
+      updateInfiniteConversationCache(queryClient, (convs) => {
+        if (convs.some((c) => c.id === newConvId)) {
+          alreadyInCache = true;
+        }
+        return convs;
+      });
+      if (alreadyInCache) return;
+
+      apiService.get<Conversation>(`/conversations/${newConvId}`)
+        .then((response) => {
+          const fetched = response?.data;
+          if (!fetched) return;
+          updateInfiniteConversationCache(queryClient, (convs) => {
+            if (convs.some((c) => c.id === newConvId)) return convs;
+            return [fetched, ...convs];
+          });
+        })
+        .catch(() => {
+          queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
+        });
+    };
+
     // Register listeners
     const unsubscribeMessage = meeshySocketIOService.onNewMessage(handleNewMessage);
     const unsubscribeEdit = meeshySocketIOService.onMessageEdited(handleMessageEdited);
@@ -570,6 +600,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const unsubscribeJoined = meeshySocketIOService.onConversationJoined(handleConversationJoined);
     const unsubscribeLeft = meeshySocketIOService.onConversationLeft(handleConversationLeft);
     const unsubscribeParticipantRole = meeshySocketIOService.onParticipantRoleUpdated(handleParticipantRoleUpdated);
+    const unsubscribeConversationNew = meeshySocketIOService.onConversationNew(handleConversationNew);
 
     return () => {
       unsubscribeMessage?.();
@@ -584,6 +615,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       unsubscribeJoined?.();
       unsubscribeLeft?.();
       unsubscribeParticipantRole?.();
+      unsubscribeConversationNew?.();
     };
   }, [conversationId, enabled, queryClient]);
 }

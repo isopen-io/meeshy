@@ -37,6 +37,7 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
     REACTION_SYNC: 'reaction:sync',
     READ_STATUS_UPDATED: 'read-status:updated',
     PARTICIPANT_ROLE_UPDATED: 'participant:role-updated',
+    CONVERSATION_NEW: 'conversation:new',
   },
   CLIENT_EVENTS: {},
 }));
@@ -87,6 +88,7 @@ describe('PresenceService', () => {
         'reaction:sync',
         'read-status:updated',
         'participant:role-updated',
+        'conversation:new',
       ];
       for (const event of expectedEvents) {
         expect(socket.on).toHaveBeenCalledWith(event, expect.any(Function));
@@ -350,6 +352,50 @@ describe('PresenceService', () => {
       unsub();
       socket._trigger('conversation:online-stats', {});
       expect(listener).not.toHaveBeenCalled();
+    });
+
+    it('onConversationNew unsubscribe works', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      const unsub = service.onConversationNew(listener);
+      unsub();
+      socket._trigger('conversation:new', {});
+      expect(listener).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── CONVERSATION_NEW ────────────────────────────────────────────────────────
+
+  describe('conversation:new', () => {
+    it('forwards conversation:new events to registered listeners', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      service.onConversationNew(listener);
+      const event = {
+        conversationId: 'conv-123',
+        conversationType: 'group',
+        title: 'Team Chat',
+        creatorId: 'user-1',
+        participantIds: ['user-1', 'user-2'],
+        createdAt: new Date().toISOString(),
+      };
+      socket._trigger('conversation:new', event);
+      expect(listener).toHaveBeenCalledWith(event);
+    });
+
+    it('forwards conversation:new to multiple listeners', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listenerA = jest.fn();
+      const listenerB = jest.fn();
+      service.onConversationNew(listenerA);
+      service.onConversationNew(listenerB);
+      const event = { conversationId: 'c', conversationType: 'direct', title: null, creatorId: 'u1', participantIds: ['u1', 'u2'], createdAt: '' };
+      socket._trigger('conversation:new', event);
+      expect(listenerA).toHaveBeenCalledWith(event);
+      expect(listenerB).toHaveBeenCalledWith(event);
     });
   });
 

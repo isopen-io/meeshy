@@ -53,6 +53,7 @@ export type ReadStatusListener = (data: { conversationId: string; participantId:
 export type TranslationFailedListener = (data: TranslationFailedEventData) => void;
 export type AudioTranslationFailedListener = (data: AudioTranslationFailedEventData) => void;
 export type TranscriptionFailedListener = (data: TranscriptionFailedEventData) => void;
+export type ConversationNewListener = (data: { conversationId: string; conversationType: string; title: string | null; creatorId: string; participantIds: readonly string[]; createdAt: string }) => void;
 
 /**
  * Unsubscribe function type
