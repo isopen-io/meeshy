@@ -343,7 +343,12 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       Publishes through the **shared durable outbox** (`OutboxKind.PUBLISH_STORY` on its own
       `story` lane → `OutboxFlushWorker` → `POST /posts`), surpassing iOS's dedicated queue:
       survives process death / offline, auto-retries, no head-of-line block on messages.
-      Pending: multi-slide canvas / media / text styling below.
+      **Optimistic tray** done: a queued publish appears instantly as a `pending_*` self-ring,
+      derived from the live outbox (`StoryRepository.pendingPublishes` building block +
+      `StoryOptimisticTray` product rule) so it survives process death and **rolls back**
+      automatically if the publish exhausts; on delivery the ring hands off to the real story
+      (`StoriesViewModel` refreshes when a publish vanishes from the queue). Surpasses iOS's
+      in-memory optimism. Pending: multi-slide canvas / media / text styling below.
 - [ ] Multi-slide composer (≤10 slides; add/remove/duplicate/reorder; slide mini-preview strip)
 - [ ] 9:16 canvas with pinch-zoom + drag-pan; FAB + bottom-band toolbar (Contenu/Effets)
 - [ ] Text elements (≤5/slide): style (bold/italic/handwriting/typewriter/neon/retro), colour,

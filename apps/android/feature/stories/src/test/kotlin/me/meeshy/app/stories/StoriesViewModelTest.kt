@@ -1,12 +1,14 @@
 package me.meeshy.app.stories
 
 import com.google.common.truth.Truth.assertThat
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -16,8 +18,10 @@ import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPost
+import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.story.PendingStoryPublish
 import me.meeshy.sdk.story.StoryRepository
 import org.junit.After
 import org.junit.Before
@@ -48,12 +52,31 @@ class StoriesViewModelTest {
             author = ApiAuthor(id = authorId, username = name),
         )
 
-    private fun session(userId: String? = "me"): SessionRepository =
-        mockk<SessionRepository> { every { currentUserId } returns userId }
+    // A freshly-enqueued publish: stamped now so its synthetic story stays live.
+    private fun pendingPublish(tempId: String, content: String) =
+        PendingStoryPublish(
+            tempId = tempId,
+            content = content,
+            visibility = "PUBLIC",
+            originalLanguage = "fr",
+            createdAtMillis = System.currentTimeMillis(),
+        )
 
-    private fun repositoryReturning(stream: Flow<CacheResult<List<ApiPost>>>): StoryRepository =
+    private fun session(userId: String? = "me"): SessionRepository {
+        val user = userId?.let { MeeshyUser(id = it, username = "self") }
+        return mockk<SessionRepository>(relaxed = true).also {
+            every { it.currentUser } returns MutableStateFlow(user)
+            every { it.currentUserId } returns userId
+        }
+    }
+
+    private fun repositoryReturning(
+        stream: Flow<CacheResult<List<ApiPost>>>,
+        pending: Flow<List<PendingStoryPublish>> = flowOf(emptyList()),
+    ): StoryRepository =
         mockk<StoryRepository>(relaxed = true).also {
             every { it.storiesStream(any(), any()) } returns stream
+            every { it.pendingPublishes() } returns pending
         }
 
     private fun viewModel(repo: StoryRepository, session: SessionRepository = session()) =
@@ -125,6 +148,7 @@ class StoriesViewModelTest {
         val repo = mockk<StoryRepository>(relaxed = true)
         val onError = slot<(Throwable) -> Unit>()
         every { repo.storiesStream(any(), capture(onError)) } returns flowOf(CacheResult.Empty)
+        every { repo.pendingPublishes() } returns flowOf(emptyList())
         val vm = viewModel(repo)
         advanceUntilIdle()
         assertThat(vm.state.value.showSkeleton).isTrue()
@@ -133,5 +157,81 @@ class StoriesViewModelTest {
 
         assertThat(vm.state.value.showSkeleton).isFalse()
         assertThat(vm.state.value.isSyncing).isFalse()
+    }
+
+    @Test
+    fun `a queued publish injects an optimistic self ring`() = runTest(dispatcher) {
+        val vm = viewModel(
+            repositoryReturning(
+                stream = flowOf(CacheResult.Fresh(emptyList(), ageMillis = 0)),
+                pending = flowOf(listOf(pendingPublish("pending_1", "hello"))),
+            ),
+            session = session(userId = "me"),
+        )
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.tray.self?.userId).isEqualTo("me")
+        assertThat(vm.state.value.tray.self?.storyCount).isEqualTo(1)
+        assertThat(vm.state.value.tray.others).isEmpty()
+    }
+
+    @Test
+    fun `a queued publish merges with the user's server stories into one self ring`() =
+        runTest(dispatcher) {
+            val vm = viewModel(
+                repositoryReturning(
+                    stream = flowOf(CacheResult.Fresh(listOf(story("s1", "me", "self")), ageMillis = 0)),
+                    pending = flowOf(listOf(pendingPublish("pending_1", "hello"))),
+                ),
+                session = session(userId = "me"),
+            )
+            advanceUntilIdle()
+
+            assertThat(vm.state.value.tray.self?.userId).isEqualTo("me")
+            assertThat(vm.state.value.tray.self?.storyCount).isEqualTo(2)
+        }
+
+    @Test
+    fun `a logged-out tray shows nothing optimistic for a pending publish`() = runTest(dispatcher) {
+        val vm = viewModel(
+            repositoryReturning(
+                stream = flowOf(CacheResult.Fresh(emptyList(), ageMillis = 0)),
+                pending = flowOf(listOf(pendingPublish("pending_1", "hello"))),
+            ),
+            session = session(userId = null),
+        )
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.tray.isEmpty).isTrue()
+    }
+
+    @Test
+    fun `a publish that vanishes from the queue refreshes to hand off to the real story`() =
+        runTest(dispatcher) {
+            val repo = mockk<StoryRepository>(relaxed = true)
+            every { repo.storiesStream(any(), any()) } returns
+                flowOf(CacheResult.Fresh(emptyList(), ageMillis = 0))
+            every { repo.pendingPublishes() } returns flowOf(
+                listOf(pendingPublish("pending_1", "hello")),
+                emptyList(),
+            )
+            val vm = StoriesViewModel(repo, session(userId = "me"), MeeshyConfig())
+            advanceUntilIdle()
+
+            assertThat(vm.state.value.tray.isEmpty).isTrue()
+            coVerify(exactly = 1) { repo.refresh() }
+        }
+
+    @Test
+    fun `a still-pending publish does not trigger a refresh`() = runTest(dispatcher) {
+        val repo = mockk<StoryRepository>(relaxed = true)
+        every { repo.storiesStream(any(), any()) } returns
+            flowOf(CacheResult.Fresh(emptyList(), ageMillis = 0))
+        every { repo.pendingPublishes() } returns flowOf(listOf(pendingPublish("pending_1", "hello")))
+        val vm = StoriesViewModel(repo, session(userId = "me"), MeeshyConfig())
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.tray.self?.storyCount).isEqualTo(1)
+        coVerify(exactly = 0) { repo.refresh() }
     }
 }

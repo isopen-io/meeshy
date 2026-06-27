@@ -1,10 +1,13 @@
 package me.meeshy.sdk.story
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.StoryDao
 import me.meeshy.core.database.dao.SyncMetaDao
+import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.sdk.cache.CachePolicy
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.SystemCacheClock
@@ -25,6 +28,9 @@ import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
 import me.meeshy.sdk.outbox.OutboxRepository
+import me.meeshy.sdk.outbox.OutboxState
+import me.meeshy.sdk.outbox.kindEnum
+import me.meeshy.sdk.outbox.stateEnum
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -112,10 +118,44 @@ class StoryRepository @Inject constructor(
         )
 
     /**
+     * Live story publishes still in flight on the durable outbox (ARCHITECTURE.md
+     * §5), decoded for the tray's optimistic self-ring. Only `PENDING`/`INFLIGHT`
+     * rows are surfaced — a row that exhausted its retries is omitted, so the
+     * optimistic story is **rolled back** automatically; a delivered publish is
+     * deleted from the queue and likewise drops out. Undecodable or blank-content
+     * rows are skipped defensively (never an empty ring).
+     */
+    fun pendingPublishes(): Flow<List<PendingStoryPublish>> =
+        outboxRepository.observeAll().map { rows ->
+            rows
+                .filter { it.kindEnum == OutboxKind.PUBLISH_STORY && it.stateEnum in LIVE_PUBLISH_STATES }
+                .mapNotNull { it.toPendingStoryPublish() }
+        }
+
+    private fun OutboxEntity.toPendingStoryPublish(): PendingStoryPublish? {
+        val request = runCatching {
+            MeeshyApi.json.decodeFromString<CreateStoryRequest>(payload)
+        }.getOrNull() ?: return null
+        val content = request.content?.takeIf { it.isNotBlank() } ?: return null
+        return PendingStoryPublish(
+            tempId = targetId,
+            content = content,
+            visibility = request.visibility,
+            originalLanguage = request.originalLanguage,
+            createdAtMillis = createdAt,
+        )
+    }
+
+    /**
      * Fetches the viewers of a story (with their optional reaction), mapping the
      * wire payload to domain [StoryViewer]s. Port of iOS
      * `StoryInteractionService.loadViewers`.
      */
     suspend fun viewers(storyId: String): NetworkResult<List<StoryViewer>> =
         apiCall { storyApi.viewers(storyId) }.map { it.viewers.map { wire -> wire.toStoryViewer() } }
+
+    private companion object {
+        /** Outbox states that still represent an un-rolled-back publish. */
+        val LIVE_PUBLISH_STATES = setOf(OutboxState.PENDING, OutboxState.INFLIGHT)
+    }
 }

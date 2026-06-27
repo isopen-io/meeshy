@@ -7,11 +7,13 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.story.PendingStoryPublish
 import me.meeshy.sdk.story.StoryRepository
 import me.meeshy.sdk.story.toStoryGroups
 import javax.inject.Inject
@@ -41,18 +43,33 @@ class StoriesViewModel @Inject constructor(
     /** Authoritative cached story list; the fallback when a sync carries no value yet. */
     private var rawStories: List<ApiPost> = emptyList()
 
+    /** Temp ids of the publishes seen last emission — a vanished one delivered. */
+    private var lastPendingIds: Set<String> = emptySet()
+
     init {
         viewModelScope.launch {
-            storyRepository.storiesStream(
-                onSyncError = {
-                    _state.update { it.copy(showSkeleton = false, isSyncing = false) }
-                },
-            ).collect { result ->
+            combine(
+                storyRepository.storiesStream(
+                    onSyncError = {
+                        _state.update { it.copy(showSkeleton = false, isSyncing = false) }
+                    },
+                ),
+                storyRepository.pendingPublishes(),
+            ) { result, pending -> result to pending }.collect { (result, pending) ->
+                reconcileDeliveredPublishes(pending)
                 rawStories = StoryTrayReducer.stories(result, rawStories)
                 val flags = StoryTrayReducer.flags(result, rawStories.isNotEmpty())
-                val currentUserId = sessionRepository.currentUserId
+                val user = sessionRepository.currentUser.value
+                val currentUserId = user?.id
+                val self = user?.let {
+                    StoryOptimisticTray.SelfIdentity(it.id, it.effectiveDisplayName, it.avatar)
+                }
+                val merged = StoryOptimisticTray.merge(
+                    cached = rawStories,
+                    pending = StoryOptimisticTray.pendingStories(pending, self),
+                )
                 val tray = StoryTrayBuilder.build(
-                    groups = rawStories.toStoryGroups(currentUserId = currentUserId),
+                    groups = merged.toStoryGroups(currentUserId = currentUserId),
                     currentUserId = currentUserId,
                     mediaBaseUrl = config.socketUrl,
                 )
@@ -61,6 +78,19 @@ class StoriesViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * A publish present last emission but gone now was delivered (a succeeded
+     * outbox row is deleted; exhausted rows linger, so a disappearance means
+     * success). Pull the real story in so the optimistic ring hands off to it
+     * without waiting for the next background revalidation.
+     */
+    private fun reconcileDeliveredPublishes(pending: List<PendingStoryPublish>) {
+        val currentIds = pending.mapTo(HashSet()) { it.tempId }
+        val delivered = lastPendingIds.any { it !in currentIds }
+        lastPendingIds = currentIds
+        if (delivered) refresh()
     }
 
     /** Pull-to-refresh / retry. Background SWR keeps the visible tray; a failure just leaves the skeleton. */

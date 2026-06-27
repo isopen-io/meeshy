@@ -132,6 +132,33 @@ Append-only log of gotchas and decisions that save time next run.
   Coil 2.x prefetch = `loader.enqueue(ImageRequest.Builder(ctx).data(url).build())`
   with no target. Surpasses iOS (single-next) with a windowed cross-group warm.
 
+## 2026-06-27 — optimistic tray derived from the durable outbox
+- **Optimism = a projection of the durable queue, not a separate in-memory list.**
+  The tray's optimistic self-ring is `StoryRepository.pendingPublishes()` — a `map`
+  over `OutboxRepository.observeAll()` keeping `PUBLISH_STORY` rows in a **live**
+  state (`PENDING`/`INFLIGHT`). This gives reconcile + rollback for free: a
+  *delivered* publish deletes its row (vanishes), an *exhausted* one flips to
+  `EXHAUSTED` (filtered out) — no bespoke state machine, and the optimism survives
+  process death because the row does. Surpasses iOS's in-memory optimistic story.
+- **Decode lives in `:sdk-core`, "render it" lives in `:feature`.** Decoding the
+  outbox payload (`CreateStoryRequest`) into a `PendingStoryPublish` is queue
+  semantics → a building block in `:sdk-core` (also keeps `:feature` off
+  `:core:database`, which `:sdk-core` only exposes as `implementation`, NOT `api` —
+  so `OutboxEntity` is invisible downstream). The "synthesize a self-authored
+  `STORY` `ApiPost` and merge it into the tray" rule is product UX → pure
+  `StoryOptimisticTray` in `:feature:stories`. Reuse the existing `toStoryGroups` →
+  `StoryTrayBuilder` pipeline (one code path) instead of a second tray builder.
+- **Delivery hand-off without an `outcomes` subscription:** diff consecutive
+  `pendingPublishes` emissions in the VM — a tempId present last tick but gone now
+  was delivered (success deletes the row; exhausted rows linger), so `refresh()`
+  pulls the real story in. Avoids plumbing `OutboxOutcome` + cmid→kind tracking.
+  Guard the first emission (empty→empty ⇒ no spurious refresh) and rely on the
+  pending set staying stable afterwards so the refresh doesn't loop.
+- **`combine` needs every source to emit once.** A `relaxed` mockk of a
+  `Flow`-returning fun yields a flow that emits **nothing**, so `combine` stalls and
+  the VM never updates state. Always stub `pendingPublishes()`/`storiesStream()`
+  explicitly with `flowOf(...)` in `StoriesViewModel` tests, even the unrelated ones.
+
 ## Open follow-ups (cross-slice)
 - Wire **Kover** with a 90% per-module verification rule.
 - Add a dedicated **Android CI workflow** (touches `.github/` → separate run).
@@ -152,6 +179,11 @@ Append-only log of gotchas and decisions that save time next run.
   null-check the local. Bit us in `StoryCommentsSheet` (compile error).
 - Reaction `mine` still seeded empty on load — needs server `currentUserReactions`
   exposed by the stories API to pre-fill the user's own emojis.
+- **Optimistic publish has no failed-state UI.** An `EXHAUSTED` publish silently
+  drops from the optimistic tray (rollback). A "failed to post — tap to retry"
+  affordance (read `EXHAUSTED` rows via `observeAll`/`outcomes`, call
+  `outboxRepository.retry(cmid)`) would close the loop. Needs `:app`/`:feature`
+  wiring → its own slice.
 - **`data class` with a non-public primary constructor** triggers a Kotlin 2.1
   copy-visibility warning (the generated `copy()` will change visibility). When a
   value object is only meant to be built through a factory (e.g. `StoryCountDots`),
