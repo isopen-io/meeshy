@@ -30,6 +30,7 @@ import { SecuritySanitizer } from '../../utils/sanitize';
 import type { Server as SocketIOServer } from 'socket.io';
 import { PushNotificationService } from '../PushNotificationService';
 import { EmailService } from '../EmailService';
+import { getCommunityCoMemberIds } from '../posts/communityVisibility';
 
 function formatDuration(ms: number): string {
   const totalSeconds = Math.round(ms / 1000);
@@ -1866,7 +1867,14 @@ export class NotificationService {
       .filter(id => id !== params.authorId && !excludeSet.has(id));
 
     let recipientIds: string[];
-    if (visibility === 'ONLY') {
+    if (visibility === 'COMMUNITY') {
+      // Une action dans une communauté est OBLIGATOIREMENT notifiée à TOUS les
+      // membres de la communauté (pas seulement aux contacts de l'auteur) —
+      // miroir de SocialEventsHandler.getVisibilityFilteredRecipients pour que
+      // notification et broadcast temps réel ciblent exactement le même set.
+      const coMemberIds = await getCommunityCoMemberIds(this.prisma, params.authorId);
+      recipientIds = coMemberIds.filter(id => id !== params.authorId && !excludeSet.has(id));
+    } else if (visibility === 'ONLY') {
       recipientIds = visibilityUserIds.filter(id => id !== params.authorId && !excludeSet.has(id));
     } else if (visibility === 'EXCEPT') {
       recipientIds = baseFriendIds.filter(id => !visibilityUserIdSet.has(id));

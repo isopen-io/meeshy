@@ -1212,9 +1212,9 @@ private struct TypingIndicatorBubble: View {
     private var label: String {
         switch names.count {
         case 0: return ""
-        case 1: return "\(names[0]) écrit"
-        case 2: return "\(names[0]) et \(names[1]) écrivent"
-        default: return "Plusieurs personnes écrivent"
+        case 1: return String(format: String(localized: "typing.named", bundle: .main), names[0])
+        case 2: return String(format: String(localized: "typing.double", bundle: .main), names[0], names[1])
+        default: return String(localized: "typing.several", bundle: .main)
         }
     }
 
