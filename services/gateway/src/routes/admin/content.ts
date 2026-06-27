@@ -350,13 +350,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
       const where: any = {};
 
       if (sourceLanguage) {
-        where.message = {
-          originalLanguage: sourceLanguage
-        };
-      }
-
-      if (targetLanguage) {
-        where.targetLanguage = targetLanguage;
+        where.originalLanguage = sourceLanguage;
       }
 
       // Filtre par periode
@@ -458,9 +452,14 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
         }
       });
 
+      // Apply targetLanguage filter in-memory (translations are stored as JSON keys)
+      const filteredTranslations = targetLanguage
+        ? allTranslations.filter(t => t.targetLanguage === targetLanguage)
+        : allTranslations;
+
       // Appliquer pagination sur le array plat
-      const totalCount = allTranslations.length;
-      const paginatedTranslations = allTranslations.slice(offsetNum, offsetNum + limitNum);
+      const totalCount = filteredTranslations.length;
+      const paginatedTranslations = filteredTranslations.slice(offsetNum, offsetNum + limitNum);
 
       return sendPaginatedSuccess(reply, paginatedTranslations.map(translation => ({
         id: translation.id,
