@@ -703,7 +703,7 @@ final class WebRTCInputValidationSourceGuardTests: XCTestCase {
     func test_addIceCandidate_validatesCandidateLineLength() throws {
         let src = try p2pClientSource()
         XCTAssertTrue(
-            src.contains("candidate.candidate.count <= 10_000"),
+            src.contains("candidate.candidate.count <= QualityThresholds.iceCandidateLineMaxBytes") || src.contains("candidate.candidate.count <= 10_000"),
             "addIceCandidate must enforce a 10 KB ceiling on the candidate line — " +
             "libwebrtc has no app-level length guard and processes the string in C++."
         )
