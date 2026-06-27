@@ -92,9 +92,7 @@ export function registerBanRoutes(
         })
 
         const userSockets = await io.in(ROOMS.user(targetUserId)).fetchSockets()
-        for (const s of userSockets) {
-          s.leave(room)
-        }
+        await Promise.all(userSockets.map(s => s.leave(room)))
       }
 
       return sendSuccess(reply, { userId: targetUserId, bannedAt: now.toISOString() })
