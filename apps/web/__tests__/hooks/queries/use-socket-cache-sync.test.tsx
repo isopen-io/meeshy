@@ -33,6 +33,7 @@ let conversationParticipantLeftCallback: ((data: { conversationId: string; userI
 let conversationParticipantBannedCallback: ((data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string }) => void) | null = null;
 let conversationParticipantUnbannedCallback: ((data: { conversationId: string; userId: string }) => void) | null = null;
 let conversationClosedCallback: ((data: { conversationId: string; closedBy: string; closedAt: string }) => void) | null = null;
+let categoryChangedCallback: (() => void) | null = null;
 
 // Mock unsubscribe functions
 const mockUnsubscribeMessage = jest.fn();
@@ -105,6 +106,10 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
       conversationClosedCallback = callback;
       return jest.fn();
     },
+    onCategoryChanged: (callback: () => void) => {
+      categoryChangedCallback = callback;
+      return jest.fn();
+    },
     onStatusChange: jest.fn(() => () => {}),
   },
 }));
@@ -129,6 +134,10 @@ jest.mock('@/lib/react-query/query-keys', () => ({
     },
     notifications: {
       all: ['notifications'],
+    },
+    preferences: {
+      all: ['user-preferences'],
+      categories: () => ['user-preferences', 'categories'],
     },
   },
 }));
@@ -234,6 +243,7 @@ describe('useSocketCacheSync', () => {
     conversationParticipantBannedCallback = null;
     conversationParticipantUnbannedCallback = null;
     conversationClosedCallback = null;
+    categoryChangedCallback = null;
   });
 
   describe('Event Listener Registration', () => {
@@ -769,6 +779,23 @@ describe('useSocketCacheSync', () => {
       });
 
       expect(queryClient.getQueryData(['conversations', 'detail', 'conv-1'])).toBeUndefined();
+    });
+  });
+
+  describe('Category Changed Handler', () => {
+    it('invalidates preferences categories query on any category event', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+      const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        categoryChangedCallback?.();
+      });
+
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: ['user-preferences', 'categories'] })
+      );
     });
   });
 });

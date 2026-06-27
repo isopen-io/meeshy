@@ -568,6 +568,11 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       queryClient.removeQueries({ queryKey: queryKeys.conversations.detail(closedId) });
     };
 
+    // Handler for category CRUD events — invalidate categories cache so sidebar reflects cross-device changes
+    const handleCategoryChanged = () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.preferences.categories() });
+    };
+
     // Handler for attachment status updated (listened, watched, viewed, downloaded)
     const handleAttachmentStatusUpdated = (data: { attachmentId: string; messageId: string; conversationId: string; userId: string; action: string }) => {
       const targetConversationId = data.conversationId;
@@ -679,6 +684,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const unsubscribeParticipantBanned = meeshySocketIOService.onConversationParticipantBanned(handleConversationParticipantBanned);
     const unsubscribeParticipantUnbanned = meeshySocketIOService.onConversationParticipantUnbanned(handleConversationParticipantUnbanned);
     const unsubscribeConversationClosed = meeshySocketIOService.onConversationClosed(handleConversationClosed);
+    const unsubscribeCategoryChanged = meeshySocketIOService.onCategoryChanged(handleCategoryChanged);
 
     return () => {
       unsubscribeMessage?.();
@@ -700,6 +706,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       unsubscribeParticipantBanned?.();
       unsubscribeParticipantUnbanned?.();
       unsubscribeConversationClosed?.();
+      unsubscribeCategoryChanged?.();
     };
   }, [conversationId, enabled, queryClient]);
 }
