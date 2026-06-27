@@ -27,7 +27,6 @@
     "<rootDir>/src/__tests__/unit/StatusService",
     "<rootDir>/src/__tests__/unit/MaintenanceService",
     "<rootDir>/src/__tests__/unit/encryption/shared-encryption",
-    "<rootDir>/src/__tests__/unit/adapters/node-crypto",
     "<rootDir>/src/dma-interoperability/"
   ],
   "collectCoverageFrom": [
