@@ -335,3 +335,18 @@ Append-only log of gotchas and decisions that save time next run.
   guards against *introducing* a regression; a pre-existing, out-of-scope red that the
   run directive tells you to merge through is the documented exception. Always re-confirm
   the red is pre-existing + out-of-diff before merging, and record the proof in the log.
+
+- **`dependsOn` was persisted but never honoured (fixed in `outbox-dependency-gating`).**
+  `OutboxEntity.dependsOn` + `OutboxMutation.dependsOn` shipped with the outbox runtime
+  but `OutboxDrainer.drainLane` ignored it — a chain was a no-op. The gate is now a pure
+  `OutboxDependencies.verdict(prerequisiteState)`: **gone (null) = SATISFIED** (a chain is
+  enqueued prerequisite-first, so an absent row has already succeeded), `PENDING`/`INFLIGHT`
+  = BLOCKED (hold the lane, dependent stays PENDING for the next pass), `EXHAUSTED` = FAILED
+  (cascade-exhaust the dependent — it can never run). The prerequisite can live on **another
+  lane** (`OutboxRepository.stateOf(cmid)` looks it up by cmid, lane-agnostic), which is the
+  point: an upload on the `MEDIA` lane, a publish on `STORY` that `dependsOn` it. BLOCKED
+  *stops the lane* (like a transient failure) rather than skipping — preserves the strict
+  FIFO-per-lane invariant uniformly; message rows never carry `dependsOn` so this branch
+  only ever affects the upload/publish lanes. Remaining gap for the real chain: the upload's
+  returned real `mediaId` must be written into the dependent publish's payload before the
+  gate opens (next slice) — gating alone holds the order but doesn't yet rewrite the id.

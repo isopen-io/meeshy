@@ -43,8 +43,42 @@ public object OutboxLanes {
     public const val PRESENCE: String = "presence"
     public const val SOCIAL: String = "social"
     public const val STORY: String = "story"
+    public const val MEDIA: String = "media"
     public const val PROFILE: String = "profile"
     public const val SETTINGS: String = "settings"
+}
+
+/**
+ * Whether a row's [OutboxEntity.dependsOn] prerequisite lets it run yet
+ * (ARCHITECTURE.md §5). The dependency is resolved purely from the prerequisite
+ * row's current state, so it is fully testable without a database.
+ */
+public enum class DependencyVerdict {
+    /** No prerequisite, or the prerequisite was delivered (its row is gone). */
+    SATISFIED,
+
+    /** The prerequisite is still queued (`PENDING`/`INFLIGHT`) — hold the dependent. */
+    BLOCKED,
+
+    /** The prerequisite gave up (`EXHAUSTED`) — the dependent can never run. */
+    FAILED,
+}
+
+/** Resolves a `dependsOn` gate from the prerequisite row's current state. */
+public object OutboxDependencies {
+    /**
+     * @param prerequisiteState the [OutboxState] of the `dependsOn` row, or `null`
+     *   when that row is no longer in the queue (delivered and deleted, or
+     *   user-discarded). A gone prerequisite is treated as satisfied: a chain is
+     *   always enqueued prerequisite-first, so by drain time an absent row has
+     *   already succeeded.
+     */
+    public fun verdict(prerequisiteState: OutboxState?): DependencyVerdict =
+        when (prerequisiteState) {
+            null -> DependencyVerdict.SATISFIED
+            OutboxState.EXHAUSTED -> DependencyVerdict.FAILED
+            OutboxState.PENDING, OutboxState.INFLIGHT -> DependencyVerdict.BLOCKED
+        }
 }
 
 /** Payload of an `ADD_REACTION` / `REMOVE_REACTION` outbox row. */

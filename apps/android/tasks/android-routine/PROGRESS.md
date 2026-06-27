@@ -39,16 +39,25 @@ free-slot truncation still caps the batch, so the ≤10 invariant holds end-to-e
 
 ## Next slice (pick one for the next run)
 
-Ordered by value within the Stories area:
-1. **Multi-slide canvas** — begin the real multi-slide composer (add/remove/
+Ordered by value:
+1. **Upload→publish payload write-back** — the natural follow-up to this run's
+   `outbox-dependency-gating`. The drainer now *holds* a publish until its upload
+   lands, but the publish still carries its enqueue-time `mediaIds`. Next: when a
+   media-upload row succeeds, write its returned real `mediaId` into the dependent
+   publish's payload (replace the placeholder) before the gate opens — so a media
+   story queued **offline, before the upload finished** publishes with the correct
+   id. Then wire the story composer to enqueue the upload as a `MEDIA`-lane row the
+   publish `dependsOn`.
+2. **Multi-slide canvas** — begin the real multi-slide composer (add/remove/
    reorder slides, 9:16 canvas). Much larger; see `feature-parity.md`
-   §"Stories composer". A smaller intermediate slice: a **durable upload-then-
-   publish outbox chain** (upload as its own lane the publish `dependsOn`) so a
-   media publish survives process death *before* the upload completes — the SOTA
-   follow-up flagged on `story-composer-media`.
-2. After Stories richness is sufficient, advance to the **Calls** area
+   §"Stories composer".
+3. After Stories richness is sufficient, advance to the **Calls** area
    (`feature-parity.md` §"Calls").
 
+(`outbox-dependency-gating` ✅ shipped 2026-06-27 — this run; the drainer now
+honours the persisted `dependsOn` cmid: a dependent holds its lane while the
+prerequisite is queued, runs once it succeeds, cascade-exhausts if it gives up.
+The durable upload→publish chain primitive. See run log.)
 (`story-composer-multipick` ✅ shipped 2026-06-27 — this run; the Add button now
 routes to the multi-item system picker, with a pure single/multi/none decision so
 the multi-picker's `maxItems > 1` requirement never throws. See run log.)
@@ -77,6 +86,63 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-27 — slice `outbox-dependency-gating` ✅
+- **Branch:** `claude/apps/android/outbox-dependency-gating` (off `origin/main` @ `8277b688`).
+- **Housekeeping (step 0):** no open `claude/apps/android/*` PR from a prior run
+  (`search_pull_requests head:claude/apps/android` → 0). `main` was fresh; branched
+  directly off it.
+- **What:** the durable **upload→publish outbox chain** primitive — the SOTA
+  follow-up flagged on `story-composer-media`. The `dependsOn` cmid was persisted on
+  every outbox row but the drainer **never consulted it**; a media publish could be
+  delivered before (or independently of) the upload it depends on. The drainer now
+  gates a dependent on its prerequisite: it **holds the lane** while the prerequisite
+  is still queued, runs the dependent once the prerequisite has succeeded (its row is
+  gone), and **cascade-exhausts** the dependent if the prerequisite gives up. The
+  prerequisite may sit on a **different lane** (e.g. an upload on the new `MEDIA`
+  lane the publish, on the `STORY` lane, depends on). Surpasses iOS, which has no
+  durable cross-mutation dependency primitive.
+- **Added / changed (production, `apps/android` only):**
+  - `OutboxModel.kt` — pure `DependencyVerdict {SATISFIED, BLOCKED, FAILED}` +
+    `OutboxDependencies.verdict(prerequisiteState: OutboxState?)`: `null` (gone) →
+    `SATISFIED`; `EXHAUSTED` → `FAILED`; `PENDING`/`INFLIGHT` → `BLOCKED`. Added
+    `OutboxLanes.MEDIA = "media"` for the upload lane.
+  - `OutboxRepository.stateOf(cmid): OutboxState?` — current state of an arbitrary
+    cmid (null when the row is gone), so the drainer can resolve a cross-lane gate.
+  - `OutboxDrainer.drainLane` — before sending a row with a non-null `dependsOn`,
+    resolves the verdict: `BLOCKED` returns early (`stoppedOnBlockedDependency=true`,
+    dependent left `PENDING`); `FAILED` `markExhausted`+`onExhausted`+continues;
+    `SATISFIED` falls through to the existing send path. `DrainReport` gains
+    `stoppedOnBlockedDependency: Boolean = false` (defaulted — no existing call site
+    changes). A `dependsOn == null` row is entirely unaffected (existing behaviour).
+- **Tests (+9, red→green):**
+  - `OutboxDependenciesTest` (pure) +4 — gone→SATISFIED; PENDING→BLOCKED;
+    INFLIGHT→BLOCKED; EXHAUSTED→FAILED. All four arms of the nullable-state `when`.
+  - `OutboxDrainerTest` +5 — a pending prerequisite holds the dependent (lane stops,
+    0 sends, dependent stays PENDING); an inflight prerequisite holds it; a succeeded
+    (gone) prerequisite lets it deliver; an exhausted prerequisite cascade-exhausts
+    it (onExhausted fires with the dependent, state EXHAUSTED); a never-enqueued
+    prerequisite delivers (gone = satisfied).
+- **Edge cases covered:** prerequisite gone vs present; all three live/terminal
+  states (PENDING/INFLIGHT/EXHAUSTED); cross-lane dependency (upload on `MEDIA`,
+  publish on `STORY`); never-existed prerequisite (no crash, treated satisfied);
+  cascade-failure surfaces through `onExhausted` (never a silent drop); a
+  `dependsOn == null` row unaffected (all 6 prior drainer tests still green).
+- **Verify:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL in 3m08s**
+  (full `assembleDebug` + all module JVM unit tests; 836 tasks).
+  `:sdk-core:testDebugUnitTest` — `OutboxDependenciesTest` 4/4, `OutboxDrainerTest`
+  11/11 green (TEST XMLs: tests=4/11 failures=0 errors=0).
+- **Reviewer:** PASS — scope `apps/android` only (3 prod + 2 test files, all under
+  `sdk-core/`); behavioural tests through the public API (pure `verdict`, drainer
+  `drainLane` report + observable outbox state), no tautologies, no floor lowered;
+  SDK purity (the dependency *resolution* is a stateless building block in
+  `:sdk-core` — there is no product "when to chain" rule here, that is the future
+  composer's job); single source of truth (reuses `OutboxState`/`dependsOn`/the one
+  outbox table — no second queue, no new state machine); Instant-App (the gate makes
+  durable optimism *stronger* — a queued publish now waits for its upload rather than
+  failing); Kotlin style (`explicitApi` honoured, immutable `DrainReport` with a
+  defaulted field, exhaustive `when`, early `return`/`continue`). Surpasses iOS
+  (durable cross-mutation dependency vs none).
 
 ### 2026-06-27 — slice `story-composer-multipick` ✅
 - **Branch:** `claude/apps/android/story-composer-multipick` (off `origin/main` @ `2d229df4`).

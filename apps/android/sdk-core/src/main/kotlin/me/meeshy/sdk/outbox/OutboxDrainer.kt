@@ -25,6 +25,7 @@ public data class DrainReport(
     val delivered: Int,
     val exhausted: Int,
     val stoppedOnTransientFailure: Boolean,
+    val stoppedOnBlockedDependency: Boolean = false,
 )
 
 /**
@@ -34,6 +35,13 @@ public data class DrainReport(
  * a later message is never delivered ahead of an earlier, still-failing one.
  * A permanent failure (or a kind with no registered sender) exhausts that row
  * and the drain continues.
+ *
+ * A row with a `dependsOn` prerequisite is gated on that prerequisite
+ * ([OutboxDependencies]): a still-queued prerequisite **stops** the lane (the
+ * dependent stays `PENDING` for the next pass), while an `EXHAUSTED` prerequisite
+ * cascade-exhausts the dependent — it can never run. This is the durable
+ * upload→publish chain primitive: a media publish waits for its upload to land
+ * and is abandoned with it if the upload gives up.
  */
 public class OutboxDrainer(
     private val outbox: OutboxRepository,
@@ -46,6 +54,25 @@ public class OutboxDrainer(
         val pending = outbox.deliverable(lane).filter { it.stateEnum == OutboxState.PENDING }
 
         for (row in pending) {
+            val dependsOn = row.dependsOn
+            if (dependsOn != null) {
+                when (OutboxDependencies.verdict(outbox.stateOf(dependsOn))) {
+                    DependencyVerdict.BLOCKED ->
+                        return DrainReport(
+                            delivered,
+                            exhausted,
+                            stoppedOnTransientFailure = false,
+                            stoppedOnBlockedDependency = true,
+                        )
+                    DependencyVerdict.FAILED -> {
+                        outbox.markExhausted(row.cmid, "Prerequisite $dependsOn failed")
+                        onExhausted(row)
+                        exhausted++
+                        continue
+                    }
+                    DependencyVerdict.SATISFIED -> Unit
+                }
+            }
             val sender = senders[row.kindEnum]
             if (sender == null) {
                 outbox.markExhausted(row.cmid, "No sender registered for ${row.kind}")

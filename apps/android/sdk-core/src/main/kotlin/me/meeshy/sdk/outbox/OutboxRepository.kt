@@ -57,6 +57,13 @@ class OutboxRepository @Inject constructor(
     /** Still-deliverable rows of one lane, oldest first. */
     suspend fun deliverable(lane: String): List<OutboxEntity> = outboxDao.deliverableForLane(lane)
 
+    /**
+     * Current [OutboxState] of [cmid], or `null` when the row is gone (delivered
+     * and deleted, or discarded). Used by the drainer to resolve a `dependsOn`
+     * gate across lanes — a prerequisite need not share the dependent's lane.
+     */
+    suspend fun stateOf(cmid: String): OutboxState? = outboxDao.find(cmid)?.stateEnum
+
     suspend fun markInflight(cmid: String) {
         val row = outboxDao.find(cmid) ?: return
         outboxDao.updateState(cmid, OutboxState.INFLIGHT.name, row.attempts, now())

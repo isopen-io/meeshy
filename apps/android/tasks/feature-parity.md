@@ -98,8 +98,16 @@ file-by-file audit — every one of the 673 iOS files was read in full.
       `MutationSender`, transient/permanent classification)
 - [x] `WorkManager` flush worker (Hilt-injected, network-constrained, exponential
       backoff, per-lane drain) scheduled on enqueue + FCM push
+- [x] **Outbox dependency-gating** (`outbox-dependency-gating`): the drainer now
+      honours the persisted `dependsOn` cmid via the pure `OutboxDependencies`
+      verdict — a dependent **holds the lane** while its (cross-lane) prerequisite
+      is `PENDING`/`INFLIGHT`, runs once it has succeeded (row gone), and is
+      **cascade-exhausted** if the prerequisite gives up. The durable upload→publish
+      chain primitive (added a `MEDIA` lane + `OutboxRepository.stateOf`). Pending
+      follow-up: write the upload's resulting `mediaId` into the dependent publish
+      payload before it sends.
 - [ ] TUS resumable uploads in a **dedicated `WorkManager` chain** (foreground
-      progress); message-send items `dependsOn` the upload
+      progress); message-send items `dependsOn` the upload (gating now in place)
 - [x] `MessageStateMachine` (pure, monotonic 8-state delivery FSM) — 9 tests
 - [x] `cmid`↔serverId reconciliation: optimistic Room row (`sendState`
       SENDING/FAILED) swapped atomically on REST ACK, plus `clientMessageId`
