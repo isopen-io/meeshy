@@ -159,6 +159,31 @@ Append-only log of gotchas and decisions that save time next run.
   the VM never updates state. Always stub `pendingPublishes()`/`storiesStream()`
   explicitly with `flowOf(...)` in `StoriesViewModel` tests, even the unrelated ones.
 
+## 2026-06-27 — media upload foundation (`media-upload-api`)
+- **`:core:network` exposes okhttp only as `implementation`, not `api`.** So a
+  downstream module that builds `MultipartBody.Part` (here `:sdk-core`'s
+  `MediaUpload`) does NOT see okhttp transitively — add an explicit
+  `implementation(libs.okhttp)` to that module's `build.gradle.kts`. Symptom
+  otherwise: `MultipartBody`/`RequestBody.toRequestBody` unresolved at compile.
+- **okhttp multipart parts are JVM-testable without a server or Robolectric.**
+  `MultipartBody.Part.createFormData(name, filename, body)` is pure JVM okhttp:
+  assert the field name + filename via `part.headers?.get("Content-Disposition")`
+  and the content type + length via `part.body.contentType()` / `contentLength()`.
+  Keeps the "which field name / filename / mime" decision behavioural, not mocked.
+- **Stories reference media by id, not URL.** iOS `AttachmentUploader` returns the
+  uploaded URL and throws the attachment **id** away (messages embed by URL). But
+  `CreateStoryRequest.mediaIds` is a list of **ids**, so the Android `UploadedMedia`
+  carries `id` (= the gateway attachment id from `messageAttachmentSchema.id`) as the
+  primary key, with `url` alongside for previews. Don't port iOS's URL-only response.
+- **Repository drops unusable rows instead of failing the batch.** `MediaRepository
+  .upload` maps the wire list through `toUploadedMedia()` with `mapNotNull` — a blank
+  id or url removes that one attachment but keeps the good ones (one degenerate row
+  never discards a multi-file upload). Empty input short-circuits to `Success(empty)`
+  with **no** network call (assert with `coVerify(exactly = 0)`).
+- **A `data class` holding a `ByteArray` is a footgun** (value equality over arrays).
+  `MediaUploadItem` is a plain `class` — it's only ever constructed + read, never
+  compared by value, so no `equals`/`hashCode` is needed.
+
 ## Open follow-ups (cross-slice)
 - Wire **Kover** with a 90% per-module verification rule.
 - Add a dedicated **Android CI workflow** (touches `.github/` → separate run).
