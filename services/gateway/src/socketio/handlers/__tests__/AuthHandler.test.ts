@@ -676,7 +676,7 @@ describe('AuthHandler', () => {
       const mockSocket = createMockSocket();
       jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
         id: 'user-123',
-        systemLanguage: 'es',
+        systemLanguage: 'en',
         regionalLanguage: null,
         customDestinationLanguage: null,
         deviceLocale: null
