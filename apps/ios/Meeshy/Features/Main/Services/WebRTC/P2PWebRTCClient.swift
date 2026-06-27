@@ -820,12 +820,12 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             return
         }
         if let mid = candidate.sdpMid {
-            guard mid.count <= 256 else {
+            guard mid.count <= QualityThresholds.iceCandidateSdpMidMaxLength else {
                 Logger.webrtc.error("Ignoring ICE candidate — sdpMid too long (\(mid.count) chars)")
                 return
             }
         }
-        guard candidate.candidate.count <= 10_000 else {
+        guard candidate.candidate.count <= QualityThresholds.iceCandidateLineMaxBytes else {
             Logger.webrtc.error("Ignoring ICE candidate — candidate line too long (\(candidate.candidate.count) chars)")
             return
         }
