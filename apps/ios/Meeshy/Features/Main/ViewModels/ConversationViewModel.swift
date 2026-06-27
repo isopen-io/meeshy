@@ -450,7 +450,10 @@ class ConversationViewModel: ObservableObject {
     // through `serverId(for:)`. The mapping survives until the next reload
     // from cache (which already stores server ids), at which point the
     // optimistic id disappears naturally.
-    var pendingServerIds: [String: String] = [:]
+    var pendingServerIds: [String: String] = [:] {
+        didSet { pendingServerIdSet = Set(pendingServerIds.values) }
+    }
+    private var pendingServerIdSet: Set<String> = []
 
     /// Resolve the authoritative server id for an in-memory message. Falls
     /// back to the supplied id when no mapping exists (the message id is
@@ -542,7 +545,7 @@ class ConversationViewModel: ObservableObject {
     }
 
     func containsMessage(id: String) -> Bool {
-        messageIdIndex[id] != nil || pendingServerIds.values.contains(id)
+        messageIdIndex[id] != nil || pendingServerIdSet.contains(id)
     }
 
     // MARK: - Date-Grouped Messages
@@ -2424,8 +2427,13 @@ class ConversationViewModel: ObservableObject {
                     encryptionMode = "E2EE"
                 } catch {
                     Logger.messages.error("Failed to encrypt message: \(error.localizedDescription)")
-                    // For MVP, we'll fall back to plaintext if encryption fails or session isn't established
-                    // In a production secure messaging app, we should throw an error here to prevent accidental plaintext sends.
+                    #if DEBUG
+                    // Debug-only fallback: log and continue with plaintext so dev builds don't block on E2EE setup issues.
+                    #else
+                    // Production: never silently downgrade an E2EE session to plaintext.
+                    try? await messagePersistence.markOptimisticFailed(localId: tempId, reason: "encryption_failed")
+                    throw error
+                    #endif
                 }
             }
 

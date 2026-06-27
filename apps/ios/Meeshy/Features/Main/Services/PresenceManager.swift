@@ -31,14 +31,13 @@ final class PresenceManager: ObservableObject {
 
     private nonisolated static let persistFileName = "presence_map.json"
     private nonisolated static let persistMaxAge: TimeInterval = 24 * 3600 // 24h
-    private static let persistDebounce: TimeInterval = 1.5
+    private nonisolated static let persistDebounce: TimeInterval = 1.5
 
     private init() {
-        // Hydrate from disk BEFORE subscribing so the first render frame shows
-        // the last-known online dots instead of "everyone is offline" — the
-        // iMessage/WhatsApp feel requires the state to appear instantly even
-        // on a cold start before the first `user:status` event lands.
-        presenceMap = Self.loadFromDisk()
+        // Start with empty map; disk I/O runs off-main below to avoid blocking
+        // the launch thread. Using the Published backing store directly bypasses
+        // didSet so we don't schedule a spurious persist of the empty state.
+        _presenceMap = Published(initialValue: [:])
 
         // Subscribe to user:status events from socket
         MessageSocketManager.shared.userStatusChanged
@@ -80,6 +79,16 @@ final class PresenceManager: ObservableObject {
         // "forgot" who was online. The `.away` computed state still kicks in
         // after 5 min of inactivity, so stale data decays gracefully.
         // Presence will be refreshed when `user:status` events resume.
+
+        // Hydrate from disk off-main: fills entries not yet populated by a
+        // real-time socket event (live updates take precedence via merging).
+        Task { @MainActor [weak self] in
+            let loaded = await Task.detached(priority: .utility) {
+                Self.loadFromDisk()
+            }.value
+            guard let self else { return }
+            self.presenceMap = loaded.merging(self.presenceMap) { _, liveEntry in liveEntry }
+        }
 
         // Recalculate every 60s — déclenche un re-render seulement si un utilisateur
         // passe de online → away dans cette fenêtre (lastActiveAt entre 300 et 360s)
@@ -200,7 +209,7 @@ final class PresenceManager: ObservableObject {
         try? data.write(to: persistURL, options: .atomic)
     }
 
-    private static func loadFromDisk() -> [String: UserPresence] {
+    private nonisolated static func loadFromDisk() -> [String: UserPresence] {
         let url = persistURL
         guard FileManager.default.fileExists(atPath: url.path),
               let data = try? Data(contentsOf: url) else { return [:] }
