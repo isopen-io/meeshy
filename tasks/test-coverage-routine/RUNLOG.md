@@ -2027,3 +2027,25 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   1. types/post.ts is pure TypeScript interface/type declarations; v8 coverage provider correctly reports 0 lines (nothing executable to cover). Excluded from vitest coverage include with comment justification. Smoke test in post.test.ts is the correct approach.
   2. MeeshySDK Swift portion of this cell is ⊘ on Linux (no Xcode/macOS env).
   3. Thresholds unchanged (branches:96 already comfortably met at 96.87%).
+
+---
+
+## 2026-06-27T09:00Z — P2 Admin × gateway (content.ts)
+
+- Targeted: `services/gateway/src/routes/admin/content.ts`
+- Result: ☑ done
+- Coverage: content.ts line 97%→100%, branch 76%→100% (istanbul ignores: 4× destructuring defaults unreachable via Fastify schema, 1× `translation.message?:null` dead ternary)
+- Tests added: 8 new tests (total: 46→54 in `src/__tests__/unit/routes/admin/admin-content-routes.test.ts`)
+  - requireAdmin: `isAuthenticated=false` → 401 (covers `||` short-circuit branch)
+  - requireAdmin: `isAuthenticated=true, registeredUser=null` → 401 (covers `||` short-circuit branch)
+  - /translations period=month (covers `case 'month':` branch)
+  - /translations: message with `originalLanguage=null` → sourceLanguage='unknown' (covers `|| 'unknown'` branch)
+  - /translations: `confidenceScore: 0` preserved as 0 — boundary test (triggered TDD fix below)
+  - /translations: translation entry with no `confidenceScore` → null in response (covers `?? null` when undefined)
+  - /translations: translation entry with no `transData.createdAt` → falls back to msg.createdAt (covers `|| msg.createdAt` branch)
+  - /translations: message with `translations=null` → empty response (covers `if (translations)` false branch)
+- Production change: TDD-driven bug fix: `confidenceScore: transData.confidenceScore || null` → `confidenceScore: transData.confidenceScore ?? null` (|| incorrectly coerced numeric 0 to null; ?? preserves valid zero scores per FlatTranslation type `number | null`). Also 5 justified `/* istanbul ignore next */` for unreachable branches.
+- ⚠️ PR must NOT be auto-merged — diff includes production logic fix (|| → ??). Needs human review.
+- Reviewer: PASS (rounds: 2)
+- Notes: Production bugs in GET /admin/translations fixed by prior commit `bdfe0343` unblocked this slice. Full gateway suite: 291/291 suites pass, 8947 tests pass. Threshold ratcheted lines:65→67, branches:61→63, statements:65→67, functions:65→67.
+- Commit: (pending)
