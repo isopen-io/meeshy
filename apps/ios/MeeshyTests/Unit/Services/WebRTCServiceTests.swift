@@ -58,7 +58,7 @@ final class WebRTCServiceTests: XCTestCase {
         let (sut, client) = makeSUT()
         let candidate = IceCandidate(sdpMid: "0", sdpMLineIndex: 0, candidate: "candidate:test")
         // Overshoot the cap by 5.
-        for _ in 0..<205 {
+        for _ in 0..<(QualityThresholds.iceCandidateBufferCap + 5) {
             sut.addICECandidate(candidate)
         }
         // Trigger flush by setting remote description.
@@ -66,8 +66,8 @@ final class WebRTCServiceTests: XCTestCase {
         await sut.setRemoteDescription(desc)
         // Give the flush task time to drain the buffer.
         try? await Task.sleep(nanoseconds: 200_000_000)
-        // Exactly 200 candidates forwarded — the 5 oldest were evicted.
-        XCTAssertEqual(client.addIceCandidateCallCount, 200)
+        // Exactly iceCandidateBufferCap candidates forwarded — the 5 oldest were evicted.
+        XCTAssertEqual(client.addIceCandidateCallCount, QualityThresholds.iceCandidateBufferCap)
     }
 
     // MARK: - Create Offer
@@ -225,7 +225,7 @@ final class WebRTCServiceTests: XCTestCase {
         // verifying that after one overflow, candidate:0 (oldest) is gone while
         // candidate:200 (newest) is present.
         let (sut, client) = makeSUT()
-        for i in 0..<200 {
+        for i in 0..<QualityThresholds.iceCandidateBufferCap {
             sut.addICECandidate(IceCandidate(sdpMid: "0", sdpMLineIndex: 0, candidate: "candidate:\(i)"))
         }
         // One more triggers FIFO eviction of candidate:0
@@ -235,7 +235,7 @@ final class WebRTCServiceTests: XCTestCase {
         await sut.setRemoteDescription(answer)
         try? await Task.sleep(nanoseconds: 300_000_000)
 
-        XCTAssertEqual(client.addIceCandidateCallCount, 200)
+        XCTAssertEqual(client.addIceCandidateCallCount, QualityThresholds.iceCandidateBufferCap)
         XCTAssertEqual(client.addedCandidates.first?.candidate, "candidate:1",
             "The oldest candidate (candidate:0) must be the evicted one — the buffer " +
             "must preserve relay candidates that arrive after the initial STUN gather.")

@@ -518,6 +518,24 @@ enum QualityThresholds {
     /// candidates are dropped since they belong to a stale ICE generation
     /// that the remote won't honour after reconnect anyway.
     static let maxPendingIceCandidates: Int = 50
+    /// Cap on the `WebRTCService.iceCandidateBuffer` maintained while the remote
+    /// description has not yet been set. Beyond this count ICE candidates are
+    /// FIFO-evicted (oldest first) — the ICE agent selects a pair well before
+    /// 200 candidates arrive, so older entries have negligible value.
+    /// Distinct from `maxPendingIceCandidates` (CallManager socket-level buffer, cap 50).
+    static let iceCandidateBufferCap: Int = 200
+    /// Maximum byte length of a single ICE candidate line accepted from a remote peer.
+    /// libwebrtc parses these strings without bounds checks; a malformed or hostile SDP
+    /// with a multi-MB candidate string causes memory pressure inside the library.
+    /// 10 KB is orders of magnitude above any real ICE candidate (~200 bytes typical).
+    static let iceCandidateLineMaxBytes: Int = 10_000
+    /// Maximum character length of the `sdpMid` field in an ICE candidate.
+    /// RFC 5888 §5 allows any ALPHANUMERIC token; 256 chars is a safe ceiling.
+    static let iceCandidateSdpMidMaxLength: Int = 256
+    /// Maximum character length of a TURN credential field (username or credential).
+    /// libwebrtc encodes these in HTTP Authorization headers; > 1 KB per field risks
+    /// header-size rejection by TURN servers and memory pressure in the auth path.
+    static let turnCredentialMaxLength: Int = 1024
 
     /// §3.2 — debounce before treating `RTCPeerConnectionState.disconnected`
     /// as a reconnect trigger. ICE produces transient `.disconnected` blips
@@ -779,7 +797,7 @@ enum VideoQualityLevel: String, Comparable, Sendable {
 
     /// Map TWCC GCC `availableOutgoingBitrate` (bps) to a quality level. Thresholds
     /// are set conservatively below each tier's `targetVideoBitrate` to leave headroom
-    /// for audio + RTCP overhead. Returns `nil` when `bps == 0` (TWCC not active).
+    /// for audio + RTCP overhead. Returns `.critical` when `bps == 0` (TWCC not yet active).
     static func from(availableOutgoingBitrateBps bps: Int) -> VideoQualityLevel {
         if bps >= QualityThresholds.bweExcellentBps { return .excellent }
         if bps >= QualityThresholds.bweGoodBps      { return .good }

@@ -171,7 +171,15 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         // need a phantom-call report to keep PushKit happy when the dedup
         // ring already covers the callId, because PushKit demands a call
         // report per delivery. Use a phantom that ends immediately.
-        let alreadyReported = MainActor.assumeIsolated { Self.shared.dedupRing.contains(callId, now: Date()) }
+        //
+        // The contains-check and insert are performed in a single MainActor
+        // block to prevent a check-then-act race if PushKit ever delivers two
+        // pushes concurrently on different threads.
+        let alreadyReported = MainActor.assumeIsolated {
+            let seen = Self.shared.dedupRing.contains(callId, now: Date())
+            if !seen { Self.shared.dedupRing.insert(callId, now: Date()) }
+            return seen
+        }
         if alreadyReported {
             logger.info("VoIP push duplicate detected (callId=\(callId)) — phantom-acking")
             let phantomUUID = UUID()
@@ -183,9 +191,6 @@ extension VoIPPushManager: PKPushRegistryDelegate {
             }
             completion()
             return
-        }
-        MainActor.assumeIsolated {
-            Self.shared.dedupRing.insert(callId, now: Date())
         }
 
         let callerUserId = data["callerUserId"] as? String ?? ""
@@ -264,11 +269,10 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         // Credential length guard: TURN credentials from a malformed or hostile
         // payload could be arbitrarily long, causing memory pressure or overflow
         // in libwebrtc's auth header construction. Drop any server that exceeds
-        // a generous-but-finite bound (1 KB per field).
-        let maxCredentialLength = 1024
+        // a generous-but-finite bound (1 KB per field). See QualityThresholds.turnCredentialMaxLength.
         return decoded.compactMap { server in
-            guard (server.username?.count ?? 0) <= maxCredentialLength,
-                  (server.credential?.count ?? 0) <= maxCredentialLength else {
+            guard (server.username?.count ?? 0) <= QualityThresholds.turnCredentialMaxLength,
+                  (server.credential?.count ?? 0) <= QualityThresholds.turnCredentialMaxLength else {
                 logger.error("[VOIP] TURN credential too long — dropping ICE server")
                 return nil
             }
@@ -312,11 +316,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         Task { @MainActor [weak self] in
             guard let self else { return }
             self.voipToken = nil
-            // Re-arm desiredPushTypes so PushKit emits a fresh
-            // didUpdatePushCredentials with a new token. Without this, the
-            // user has no working VoIP token until next cold start.
-            self.voipRegistry?.desiredPushTypes = []
-            self.voipRegistry?.desiredPushTypes = [.voIP]
+            self.forceReregister()
         }
     }
 
