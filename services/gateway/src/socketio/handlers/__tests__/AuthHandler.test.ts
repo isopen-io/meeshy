@@ -579,7 +579,7 @@ describe('AuthHandler', () => {
   });
 
   describe('handleManualAuthentication', () => {
-    it('should authenticate registered user with valid userId', async () => {
+    it('should authenticate registered user with valid JWT token', async () => {
       const mockSocket = createMockSocket();
       jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
         id: 'user-123',
@@ -589,7 +589,8 @@ describe('AuthHandler', () => {
         deviceLocale: null
       } as any);
 
-      await authHandler.handleManualAuthentication(mockSocket, { userId: 'user-123' });
+      // jwt.verify is mocked in beforeEach to decode to { userId: 'user-123' }
+      await authHandler.handleManualAuthentication(mockSocket, { token: 'valid-jwt-token' } as any);
 
       expect(connectedUsers.size).toBe(1);
       expect(socketToUser.get('socket-123')).toBe('user-123');
@@ -630,25 +631,27 @@ describe('AuthHandler', () => {
       expect(connectedUsers.size).toBe(0);
     });
 
-    it('should emit error when user is not found in DB', async () => {
+    it('should emit error and disconnect when JWT user is not found in DB', async () => {
       const mockSocket = createMockSocket();
       jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue(null);
 
-      await authHandler.handleManualAuthentication(mockSocket, { userId: 'nonexistent-user' });
+      // jwt.verify decodes (beforeEach) but the user no longer exists in DB
+      await authHandler.handleManualAuthentication(mockSocket, { token: 'valid-jwt-token' } as any);
 
       expect(mockSocket.emit).toHaveBeenCalledWith('error', expect.objectContaining({
         message: expect.stringContaining('not found')
       }));
+      expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
       expect(connectedUsers.size).toBe(0);
     });
 
     it('should emit AUTH_TOKEN_EXPIRED and disconnect on TokenExpiredError', async () => {
       const mockSocket = createMockSocket();
-      jest.spyOn(mockPrisma.user, 'findUnique').mockRejectedValue(
-        new jwt.TokenExpiredError('jwt expired', new Date())
-      );
+      jest.spyOn(jwt, 'verify').mockImplementation(() => {
+        throw new jwt.TokenExpiredError('jwt expired', new Date());
+      });
 
-      await authHandler.handleManualAuthentication(mockSocket, { userId: 'user-123' });
+      await authHandler.handleManualAuthentication(mockSocket, { token: 'expired-jwt-token' } as any);
 
       expect(mockSocket.emit).toHaveBeenCalledWith('auth:token-expired', expect.objectContaining({
         code: 'token_expired'
@@ -660,7 +663,8 @@ describe('AuthHandler', () => {
       const mockSocket = createMockSocket();
       jest.spyOn(mockPrisma.user, 'findUnique').mockRejectedValue(new Error('database down'));
 
-      await authHandler.handleManualAuthentication(mockSocket, { userId: 'user-123' });
+      // jwt.verify decodes (beforeEach); the Prisma lookup then fails unexpectedly
+      await authHandler.handleManualAuthentication(mockSocket, { token: 'valid-jwt-token' } as any);
 
       expect(mockSocket.emit).toHaveBeenCalledWith('error', expect.objectContaining({
         message: 'Authentication failed'
@@ -668,17 +672,19 @@ describe('AuthHandler', () => {
       expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
     });
 
-    it('should use provided language over systemLanguage for registered user', async () => {
+    it('should resolve registered user language from systemLanguage on JWT auth, ignoring client-supplied language', async () => {
       const mockSocket = createMockSocket();
       jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
         id: 'user-123',
-        systemLanguage: 'en',
+        systemLanguage: 'es',
         regionalLanguage: null,
         customDestinationLanguage: null,
         deviceLocale: null
       } as any);
 
-      await authHandler.handleManualAuthentication(mockSocket, { userId: 'user-123', language: 'es' });
+      // JWT auth binds language to the server-side systemLanguage; a client-supplied
+      // 'language' must NOT override identity-bound data.
+      await authHandler.handleManualAuthentication(mockSocket, { token: 'valid-jwt-token', language: 'fr' } as any);
 
       expect(connectedUsers.get('user-123')?.language).toBe('es');
     });
@@ -705,7 +711,7 @@ describe('AuthHandler', () => {
         deviceLocale: null
       } as any);
 
-      await handlerWithSnapshot.handleManualAuthentication(mockSocket, { userId: 'user-123' });
+      await handlerWithSnapshot.handleManualAuthentication(mockSocket, { token: 'valid-jwt-token' } as any);
 
       // emitPresenceSnapshot is fire-and-forget (.catch) — flush microtasks
       await Promise.resolve();

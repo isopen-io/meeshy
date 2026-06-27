@@ -5,10 +5,17 @@
  * initial socket connection — typically on reconnect or when the client
  * passes credentials in-band rather than in the Socket.IO handshake auth.
  *
- * Key behavioural differences from handleTokenAuthentication:
- *  - A valid userId-not-found result returns an error but does NOT disconnect
- *    (client may retry with different credentials)
- *  - An unexpected exception still disconnects (same hard-failure policy)
+ * Authentication now requires a JWT { token } (or a { sessionToken } for the
+ * anonymous path). The legacy raw { userId } path was an identity-spoofing hole
+ * and has been removed: the server derives the userId from a verified JWT, never
+ * from client-supplied input.
+ *
+ * Key behavioural notes:
+ *  - A JWT that decodes to a user missing from the DB emits 'User not found' and
+ *    disconnects the socket (the verified identity is invalid).
+ *  - An unexpected exception still disconnects (same hard-failure policy).
+ *  - Missing/invalid credentials (no token, no sessionToken) emit an error
+ *    WITHOUT disconnecting, so the client may retry with valid credentials.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
@@ -16,6 +23,7 @@ import { AuthHandler } from '../AuthHandler';
 import type { Socket } from 'socket.io';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { StatusService } from '../../../services/StatusService';
+import jwt from 'jsonwebtoken';
 
 // ---------------------------------------------------------------------------
 // Socket / Prisma mocks
@@ -107,6 +115,10 @@ describe('AuthHandler.handleManualAuthentication', () => {
       socketToUser,
       userSockets
     });
+
+    // JWT auth is now the registered-user path: decode a verified token to the
+    // user's id. Individual tests override this when they need an error path.
+    jest.spyOn(jwt, 'verify').mockReturnValue({ userId: MOCK_USER.id } as any);
   });
 
   afterEach(() => {
@@ -117,11 +129,12 @@ describe('AuthHandler.handleManualAuthentication', () => {
   // Happy paths
   // -------------------------------------------------------------------------
 
-  it('should register a user and emit authenticated when userId is valid', async () => {
+  it('should register a user and emit authenticated when JWT token is valid', async () => {
     const mockSocket = createMockSocket();
     jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue(MOCK_USER as any);
 
-    await authHandler.handleManualAuthentication(mockSocket, { userId: MOCK_USER.id });
+    // jwt.verify (beforeEach) decodes to { userId: MOCK_USER.id }
+    await authHandler.handleManualAuthentication(mockSocket, { token: 'valid-jwt-token' } as any);
 
     expect(connectedUsers.size).toBe(1);
     expect(socketToUser.get('socket-manual-1')).toBe(MOCK_USER.id);
@@ -134,24 +147,26 @@ describe('AuthHandler.handleManualAuthentication', () => {
     );
   });
 
-  it('should respect language override when caller passes language', async () => {
+  it('should resolve language from systemLanguage on JWT auth, ignoring client-supplied language', async () => {
     const mockSocket = createMockSocket();
     jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue(MOCK_USER as any);
 
+    // JWT auth binds the socket language to the verified user's systemLanguage;
+    // a client-supplied 'language' must NOT override identity-bound data.
     await authHandler.handleManualAuthentication(mockSocket, {
-      userId: MOCK_USER.id,
+      token: 'valid-jwt-token',
       language: 'fr'
-    });
+    } as any);
 
     const registered = connectedUsers.get(MOCK_USER.id);
-    expect(registered?.language).toBe('fr');
+    expect(registered?.language).toBe(MOCK_USER.systemLanguage);
   });
 
   it('should join personal Socket.IO rooms for a registered user', async () => {
     const mockSocket = createMockSocket();
     jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue(MOCK_USER as any);
 
-    await authHandler.handleManualAuthentication(mockSocket, { userId: MOCK_USER.id });
+    await authHandler.handleManualAuthentication(mockSocket, { token: 'valid-jwt-token' } as any);
 
     const joinCalls = (mockSocket.join as jest.Mock).mock.calls.map((c: any[]) => c[0]);
     expect(joinCalls).toContain(`user:${MOCK_USER.id}`);
@@ -180,19 +195,21 @@ describe('AuthHandler.handleManualAuthentication', () => {
   // Soft failures (error emitted, socket stays connected)
   // -------------------------------------------------------------------------
 
-  it('should emit error (not disconnect) when userId is not found in database', async () => {
+  it('should emit error and disconnect when JWT decodes to a user missing from the database', async () => {
     const mockSocket = createMockSocket();
     jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue(null);
 
+    // Token verifies (beforeEach) but the decoded user no longer exists: the
+    // verified identity is invalid, so the socket is severed.
     await authHandler.handleManualAuthentication(mockSocket, {
-      userId: 'nonexistent-user-id'
-    });
+      token: 'valid-jwt-token'
+    } as any);
 
     expect(mockSocket.emit).toHaveBeenCalledWith(
       'error',
       expect.objectContaining({ message: expect.stringContaining('not found') })
     );
-    expect(mockSocket.disconnect).not.toHaveBeenCalled();
+    expect(mockSocket.disconnect).toHaveBeenCalledWith(true);
     expect(connectedUsers.size).toBe(0);
   });
 
@@ -231,7 +248,8 @@ describe('AuthHandler.handleManualAuthentication', () => {
       new Error('connection timeout')
     );
 
-    await authHandler.handleManualAuthentication(mockSocket, { userId: 'user-abc' });
+    // Token verifies (beforeEach); the Prisma lookup then fails unexpectedly
+    await authHandler.handleManualAuthentication(mockSocket, { token: 'valid-jwt-token' } as any);
 
     expect(mockSocket.emit).toHaveBeenCalledWith(
       'error',

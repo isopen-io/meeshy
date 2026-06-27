@@ -76,16 +76,24 @@ function makePrisma(participantResult: unknown = null): any {
 
 function makeConnectedUsers() {
   const users = new Map();
-  users.set(USER_ID, { id: USER_ID, socketId: SOCKET_ID, isAnonymous: false, language: 'fr', resolvedLanguages: [] });
+  // Registered SocketUser: userId is set, isAnonymous false. The handler now
+  // resolves the joining user from connectedUsers (socketToUser -> connectedUsers)
+  // and uses connectedUser.userId for the membership check + CONVERSATION_JOINED.
+  users.set(USER_ID, { id: USER_ID, userId: USER_ID, socketId: SOCKET_ID, isAnonymous: false, language: 'fr', resolvedLanguages: [] });
   return users;
+}
+
+function makeReadStatusService(unreadCount = 0) {
+  return { getUnreadCount: jest.fn<any>().mockResolvedValue(unreadCount) };
 }
 
 function makeHandler({
   prisma = makePrisma(),
   connectedUsers = makeConnectedUsers(),
   socketToUser = new Map([[SOCKET_ID, USER_ID]]),
-} = {}) {
-  return new ConversationHandler({ prisma, connectedUsers, socketToUser });
+  readStatusService = makeReadStatusService(),
+}: Record<string, any> = {}) {
+  return new ConversationHandler({ prisma, connectedUsers, socketToUser, readStatusService });
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -187,16 +195,64 @@ describe('ConversationHandler', () => {
       );
     });
 
-    it('allows anonymous user (no userId in socketToUser) to join without membership check', async () => {
-      const socketToUser = new Map<string, string>(); // no entry for SOCKET_ID
+    it('allows an anonymous member (owns participant) to join without CONVERSATION_JOINED', async () => {
+      // Anonymous SocketUser: identity IS the participantId. The handler now
+      // verifies the anonymous user owns the participant for THIS conversation
+      // (security fix ccaa9311f) instead of skipping verification entirely.
+      const SESSION_TOKEN = 'anon-session-token';
+      const ANON_PARTICIPANT_ID = 'anon-part-1';
+      const socketToUser = new Map<string, string>([[SOCKET_ID, SESSION_TOKEN]]);
+      const connectedUsers = new Map();
+      connectedUsers.set(SESSION_TOKEN, {
+        id: SESSION_TOKEN, isAnonymous: true, participantId: ANON_PARTICIPANT_ID, language: 'fr', resolvedLanguages: [],
+      });
+      const prisma = makePrisma({ id: ANON_PARTICIPANT_ID }); // membership check resolves a participant
       const socket = makeSocket();
-      const handler = makeHandler({ socketToUser });
+      const handler = makeHandler({ prisma, connectedUsers, socketToUser });
 
       await handler.handleConversationJoin(socket, { conversationId: CONV_ID });
 
       expect(socket.join).toHaveBeenCalledWith(ROOMS.conversation(CONV_ID));
       // No CONVERSATION_JOINED event for anonymous (no userId)
       expect(socket.emit).not.toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_JOINED, expect.anything());
+    });
+
+    it('rejects an anonymous user who does not own the participant (not_a_member)', async () => {
+      // Security fix ccaa9311f: anonymous users are membership-checked, no longer
+      // allowed to join an arbitrary conversation without verification.
+      const SESSION_TOKEN = 'anon-session-token';
+      const socketToUser = new Map<string, string>([[SOCKET_ID, SESSION_TOKEN]]);
+      const connectedUsers = new Map();
+      connectedUsers.set(SESSION_TOKEN, {
+        id: SESSION_TOKEN, isAnonymous: true, participantId: 'anon-part-1', language: 'fr', resolvedLanguages: [],
+      });
+      const prisma = makePrisma(null); // no participant found for this conversation
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma, connectedUsers, socketToUser });
+
+      await handler.handleConversationJoin(socket, { conversationId: CONV_ID });
+
+      expect(socket.emit).toHaveBeenCalledWith(
+        SERVER_EVENTS.CONVERSATION_JOIN_ERROR,
+        expect.objectContaining({ reason: 'not_a_member' })
+      );
+      expect(socket.join).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unauthenticated socket (no connected user) with not_authenticated', async () => {
+      // Security fix ccaa9311f: a socket with no resolvable connected user can no
+      // longer join — the old userId-less "skip verification" path was removed.
+      const socketToUser = new Map<string, string>(); // no entry for SOCKET_ID
+      const socket = makeSocket();
+      const handler = makeHandler({ socketToUser });
+
+      await handler.handleConversationJoin(socket, { conversationId: CONV_ID });
+
+      expect(socket.emit).toHaveBeenCalledWith(
+        SERVER_EVENTS.CONVERSATION_JOIN_ERROR,
+        expect.objectContaining({ reason: 'not_authenticated' })
+      );
+      expect(socket.join).not.toHaveBeenCalled();
     });
 
     it('calls sendConversationStatsToSocket after successful join', async () => {
