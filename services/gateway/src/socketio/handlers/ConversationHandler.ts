@@ -103,7 +103,7 @@ export class ConversationHandler {
       }
 
       const room = ROOMS.conversation(normalizedId);
-      socket.join(room);
+      await socket.join(room);
       if (userId) {
         socket.emit(SERVER_EVENTS.CONVERSATION_JOINED, {
           conversationId: normalizedId,
@@ -150,7 +150,7 @@ export class ConversationHandler {
       );
 
       const room = ROOMS.conversation(normalizedId);
-      socket.leave(room);
+      await socket.leave(room);
 
       const userId = this.socketToUser.get(socket.id);
       if (userId) {

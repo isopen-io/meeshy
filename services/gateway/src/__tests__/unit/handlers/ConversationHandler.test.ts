@@ -287,6 +287,18 @@ describe('ConversationHandler', () => {
         reason: 'server_error',
       }));
     });
+
+    it('emits server_error when socket.join rejects (proves join is awaited)', async () => {
+      const deps = makeDeps();
+      const handler = new ConversationHandler(deps);
+      const socket = makeSocket();
+      socket.join.mockRejectedValue(new Error('socket adapter failure'));
+      await handler.handleConversationJoin(socket as any, JOIN_PAYLOAD);
+      expect(socket.emit).toHaveBeenCalledWith('conversation:join-error', expect.objectContaining({
+        reason: 'server_error',
+      }));
+      expect(socket.emit).not.toHaveBeenCalledWith('conversation:joined', expect.anything());
+    });
   });
 
   // ─── handleConversationLeave ──────────────────────────────────────────────
