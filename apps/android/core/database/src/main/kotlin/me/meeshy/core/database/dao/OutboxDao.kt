@@ -22,9 +22,14 @@ public interface OutboxDao {
     @Query("SELECT * FROM outbox WHERE cmid = :cmid")
     public suspend fun find(cmid: String): OutboxEntity?
 
-    /** Rows gated on [cmid] as their `dependsOn` prerequisite, oldest first. */
-    @Query("SELECT * FROM outbox WHERE dependsOn = :cmid ORDER BY createdAt ASC")
-    public suspend fun findDependents(cmid: String): List<OutboxEntity>
+    /**
+     * Rows that hold a given prerequisite among their (possibly multi-valued)
+     * `dependsOn` set, oldest first. [pattern] is a `LIKE` membership pattern built
+     * by `OutboxDependencyKey.likePattern`; `ESCAPE '\'` keeps a `cmid`'s `_`
+     * literal.
+     */
+    @Query("SELECT * FROM outbox WHERE dependsOn LIKE :pattern ESCAPE '\\' ORDER BY createdAt ASC")
+    public suspend fun findDependents(pattern: String): List<OutboxEntity>
 
     @Query("UPDATE outbox SET payload = :payload, updatedAt = :now WHERE cmid = :cmid")
     public suspend fun updatePayload(cmid: String, payload: String, now: Long)

@@ -430,16 +430,28 @@ class StoryComposerViewModelTest {
         coEvery { uploadQueue.enqueue(any()) } returns "up-1"
         vm.onMediaPicked(listOf(item()))
         val request = slot<CreateStoryRequest>()
-        val dependsOn = slot<String>()
+        val dependsOn = slot<List<String>>()
         coEvery { repo.enqueuePublish(capture(request), capture(dependsOn)) } returns "story-cmid"
 
         vm.publish()
 
         coVerify(exactly = 1) { repo.enqueuePublish(any(), any()) }
         coVerify(exactly = 1) { workManager.enqueue(any<OneTimeWorkRequest>()) }
-        assertThat(dependsOn.captured).isEqualTo("up-1")
+        assertThat(dependsOn.captured).containsExactly("up-1")
         assertThat(request.captured.mediaIds).containsExactly("up-1")
         assertThat(request.captured.content).isNull()
+    }
+
+    @Test
+    fun `publish with no offline-queued media gates on no prerequisites`() = runTest {
+        val vm = viewModel()
+        vm.onTextChange("plain text story")
+        val dependsOn = slot<List<String>>()
+        coEvery { repo.enqueuePublish(any(), capture(dependsOn)) } returns "story-cmid"
+
+        vm.publish()
+
+        assertThat(dependsOn.captured).isEmpty()
     }
 
     @Test

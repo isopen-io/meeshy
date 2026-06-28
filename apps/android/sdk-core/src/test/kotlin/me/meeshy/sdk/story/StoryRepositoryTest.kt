@@ -17,6 +17,7 @@ import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CreateStoryRequest
 import me.meeshy.sdk.net.api.StoryApi
+import me.meeshy.sdk.outbox.OutboxDependencyKey
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
@@ -180,10 +181,24 @@ class StoryRepositoryTest {
 
         repository(outbox).enqueuePublish(
             CreateStoryRequest(content = "gated"),
-            dependsOn = "upload-cmid",
+            dependsOn = listOf("upload-cmid"),
         )
 
-        assertThat(outbox.deliverable(OutboxLanes.STORY).single().dependsOn).isEqualTo("upload-cmid")
+        val stored = outbox.deliverable(OutboxLanes.STORY).single().dependsOn
+        assertThat(OutboxDependencyKey.decode(stored)).containsExactly("upload-cmid")
+    }
+
+    @Test
+    fun `enqueuePublish persists every prerequisite when gated on several uploads`() = runTest {
+        val outbox = outbox()
+
+        repository(outbox).enqueuePublish(
+            CreateStoryRequest(content = "gated"),
+            dependsOn = listOf("up-1", "up-2"),
+        )
+
+        val stored = outbox.deliverable(OutboxLanes.STORY).single().dependsOn
+        assertThat(OutboxDependencyKey.decode(stored)).containsExactly("up-1", "up-2").inOrder()
     }
 
     @Test

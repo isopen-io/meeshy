@@ -210,7 +210,7 @@ class StoryComposerViewModel @Inject constructor(
             try {
                 storyRepository.enqueuePublish(
                     current.draft.toCreateStoryRequest(resolvePublishLanguage()),
-                    dependsOn = current.pendingUpload?.cmid,
+                    dependsOn = listOfNotNull(current.pendingUpload?.cmid),
                 )
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
                 _state.update { StoryComposerUiState() }

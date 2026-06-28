@@ -80,6 +80,27 @@ public object OutboxDependencies {
             OutboxState.EXHAUSTED -> DependencyVerdict.FAILED
             OutboxState.PENDING, OutboxState.INFLIGHT -> DependencyVerdict.BLOCKED
         }
+
+    /**
+     * Resolves a gate over **several** prerequisites (a dependent enqueued behind
+     * more than one upload — see [OutboxDependencyKey]). The dependent may only run
+     * once **all** are satisfied, and is doomed the moment **any** is doomed:
+     *
+     * - any `EXHAUSTED` → [DependencyVerdict.FAILED] — a single dead prerequisite
+     *   means the dependent can never run; cascade-exhaust now rather than wait.
+     * - else any `PENDING`/`INFLIGHT` → [DependencyVerdict.BLOCKED] — still waiting.
+     * - else (every prerequisite gone) → [DependencyVerdict.SATISFIED].
+     *
+     * An empty list is [DependencyVerdict.SATISFIED] — an unconstrained row.
+     */
+    public fun verdictAll(prerequisiteStates: List<OutboxState?>): DependencyVerdict {
+        val verdicts = prerequisiteStates.map(::verdict)
+        return when {
+            verdicts.any { it == DependencyVerdict.FAILED } -> DependencyVerdict.FAILED
+            verdicts.any { it == DependencyVerdict.BLOCKED } -> DependencyVerdict.BLOCKED
+            else -> DependencyVerdict.SATISFIED
+        }
+    }
 }
 
 /** Payload of an `ADD_REACTION` / `REMOVE_REACTION` outbox row. */
@@ -101,13 +122,19 @@ public data class ConversationPrefsPayload(
     val mentionsOnly: Boolean,
 )
 
-/** Input to [OutboxRepository.enqueue] — a mutation to deliver. */
+/**
+ * Input to [OutboxRepository.enqueue] — a mutation to deliver.
+ *
+ * [dependsOn] is the **set** of prerequisite `cmid`s this row must wait for; it is
+ * persisted as one encoded column ([OutboxDependencyKey]). An empty set is an
+ * unconstrained row. Most mutations have no prerequisite (the default).
+ */
 public data class OutboxMutation(
     val kind: OutboxKind,
     val lane: String,
     val targetId: String,
     val payload: String,
-    val dependsOn: String? = null,
+    val dependsOn: Set<String> = emptySet(),
     val cmid: String = OutboxIds.cmid(),
 )
 
@@ -117,7 +144,7 @@ internal fun OutboxMutation.toEntity(now: Long): OutboxEntity = OutboxEntity(
     kind = kind.name,
     targetId = targetId,
     payload = payload,
-    dependsOn = dependsOn,
+    dependsOn = OutboxDependencyKey.encode(dependsOn),
     attempts = 0,
     state = OutboxState.PENDING.name,
     createdAt = now,
