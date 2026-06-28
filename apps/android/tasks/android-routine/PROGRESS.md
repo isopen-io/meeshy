@@ -85,25 +85,43 @@ sitting until an unrelated trigger fired. A new pure `OutboxFlushPlan.outcome(re
 block decides the pass outcome — `RETRY` when **any** lane stopped on a transient failure **or** a
 blocked dependency — and the worker delegates to it. Forward progress is guaranteed: each retry
 either delivers the dependent or cascade-exhausts it once the prerequisite gives up (`EXHAUSTED`
-flips the verdict to `FAILED`, never `BLOCKED`), so the loop always terminates.
+flips the verdict to `FAILED`, never `BLOCKED`), so the loop always terminates. Latest loop
+(`outbox-multi-dependency`) generalises the `dependsOn` gate from **one** prerequisite to a
+**set**: a new pure `OutboxDependencyKey` (encode/decode/`likePattern`) round-trips the set through
+the single `dependsOn` column (wrapped-delimited, `_`-escaped membership `LIKE`), `OutboxMutation.dependsOn`
+is now a `Set<String>`, and `OutboxDependencies.verdictAll` gates a dependent on **all** prerequisites
+(any `EXHAUSTED` ⇒ cascade-exhaust; else any still-queued ⇒ hold). `findDependents` became a membership
+query so a delivered producer grafts its real id into a dependent waiting on several uploads, and
+`StoryRepository.enqueuePublish` now takes a `List<String>`. This is the provably-correct SDK half of
+"several media queued offline"; the composer adopts the list contract but keeps single-pending UI (the
+multi-pending UX is the next slice). Surpasses iOS, which has no durable offline upload chain at all.
 
 ## Next slice (pick one for the next run)
 
 Ordered by value:
-1. **Multi-pending offline uploads** — the offline path currently allows **one** pending
-   upload at a time (the single `dependsOn` cmid keeps the chain provably correct). To queue
-   several media offline, the publish needs to gate on *all* their cmids — either a
-   multi-`dependsOn` outbox primitive or a synthetic "barrier" upload row the publish depends
-   on. (`remove-pending cancels the row` ✅ landed in `media-upload-cancel`; the cross-pass
-   `BLOCKED`-not-`anyTransient` retry gap ✅ closed in `outbox-flush-retry-on-blocked` — the
-   worker now reschedules on a blocked dependency too, so a held publish lane is auto-retried
-   once its upload lands in a later pass.)
+1. **Multi-pending offline uploads — composer UX** — the SDK multi-dependency primitive
+   ✅ landed in `outbox-multi-dependency` (the gate now expresses a *set* of prerequisites;
+   `enqueuePublish` takes a `List<String>`; the drainer holds until **all** land and grafts each
+   producer's id; `findDependents` is a membership query). The composer still stages at most **one**
+   `pendingUpload`. This slice relaxes the UI: `pendingUploads: List<PendingMediaUpload>`, drop the
+   `pendingUpload == null` single-pending guard so each transient-failed pick is appended, render N
+   "Offline" preview tiles, `publish(dependsOn = pendingUploads.map { it.cmid })`, and per-tile
+   remove → `cancel(cmid)`. (Touches `StoryComposerViewModel` + `StoryComposerScreen` + their tests;
+   the "single-pending rejected" test flips to "second pick is also staged".) Optionally also accept a
+   **multi-item offline batch** in one pick (queue each item) — currently still surfaces an error.
 2. **Multi-slide canvas** — begin the real multi-slide composer (add/remove/
    reorder slides, 9:16 canvas). Much larger; see `feature-parity.md`
    §"Stories composer".
 3. After Stories richness is sufficient, advance to the **Calls** area
    (`feature-parity.md` §"Calls").
 
+(`outbox-multi-dependency` ✅ shipped 2026-06-28 — this run; the `dependsOn` gate now expresses a
+**set** of prerequisites via the new pure `OutboxDependencyKey` (encode/decode/likePattern) +
+`OutboxDependencies.verdictAll`. `OutboxMutation.dependsOn: Set<String>`, the drainer gates on all
+and cascade-exhausts on any failure, `findDependents` is a `LIKE` membership query so a producer
+grafts its id into a dependent waiting on several uploads, and `enqueuePublish` takes a `List<String>`.
+The composer adopts the list contract but keeps single-pending UI — the multi-pending UX is the next
+slice. See run log.)
 (`outbox-flush-retry-on-blocked` ✅ shipped 2026-06-28 — this run; the `OutboxFlushWorker` now
 reschedules (WorkManager `Result.retry()`) when any lane stopped on a **blocked dependency**, not
 only a transient failure, via the new pure `OutboxFlushPlan.outcome(reports)` building block.
@@ -161,6 +179,54 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-28 — slice `outbox-multi-dependency` ✅
+- **Branch:** `claude/apps/android/outbox-multi-dependency` (off `origin/main` @ `af7791af`).
+- **Housekeeping (step 0):** no open `claude/apps/android/*` PR (all prior loops already
+  squash-merged; HEAD == `origin/main`). Branched off the freshened `main`.
+- **What:** delivers the **multi-dependency outbox primitive** flagged in "Next" #1 — the
+  foundational, provably-correct half. The `dependsOn` gate was single-valued (one `cmid`), so a
+  publish could wait on at most **one** offline upload. It now expresses a **set** of prerequisites:
+  a dependent gates on **all** of them and is doomed the moment **any** is exhausted. This is the
+  enabling brick for "several media queued offline" (the composer multi-pending **UX** is the
+  explicit next slice — kept out of this slice to keep it thin and low-risk).
+- **Added / changed (production, `apps/android` only):**
+  - `OutboxDependencyKey` (`:sdk-core`, new stateless building block) — `encode(Collection)→String?`
+    / `decode(String?)→List` round-trip a *set* of `cmid`s through the one `dependsOn` column,
+    wrapped-delimited (`{a,b}`→`"|a|b|"`; `'|'` is reserved, a `cmid` never contains it). `decode`
+    is robust to a **bare** legacy value (no delimiter → singleton). `likePattern(cmid)` builds an
+    escaped membership `LIKE` pattern (`%|cmid\_x|%`, `_` escaped — `cmid`s carry `_`).
+  - `OutboxDependencies.verdictAll(states)` — pure multi-prerequisite gate: any `EXHAUSTED`→`FAILED`,
+    else any `PENDING`/`INFLIGHT`→`BLOCKED`, else `SATISFIED`. Empty→`SATISFIED`. `FAILED` dominates
+    `BLOCKED` (one dead prerequisite ⇒ cascade-exhaust now, never wait).
+  - `OutboxMutation.dependsOn`: `String?` → `Set<String>` (default empty); `toEntity` encodes via
+    `OutboxDependencyKey.encode` so the column stays one TEXT field (no schema/migration change).
+  - `OutboxDrainer` decodes `row.dependsOn` to the set and gates via `verdictAll` (the single-dep
+    path is just N=1 — every existing drainer behaviour preserved).
+  - `OutboxDao.findDependents` is now a `LIKE … ESCAPE '\'` membership query; `OutboxRepository`
+    `.rewriteDependents` builds the pattern with `likePattern`, so a delivered producer grafts its
+    real id into a dependent gated on *several* uploads.
+  - `StoryRepository.enqueuePublish(request, dependsOn: List<String> = emptyList())` (was `String?`)
+    → `dependsOn.toSet()`; the composer adopts the list contract (`listOfNotNull(pendingUpload?.cmid)`)
+    while **keeping single-pending UI** for now.
+- **TDD (red → green):** +new `OutboxDependencyKeyTest` (14: empty/blank/single/multi/dupes+trim
+  encode, null/blank/bare/wrapped decode, round-trip, likePattern wrap + `_` escape, escapeLike all
+  metachars); `OutboxDependenciesTest` +5 verdictAll (empty / all-gone / one-blocked / failed-dominates
+  / satisfied); `OutboxDrainerTest` +4 (hold-until-all / deliver-when-all / cascade-exhaust-on-any /
+  graft-each-producer); `OutboxRepositoryTest` +2 (membership-by-any-prereq / no substring false match);
+  `StoryRepositoryTest` +1 (persists every prerequisite) and the existing single-dep assertion adapted
+  to decode the encoded column (behaviour-preserving); `StoryComposerViewModelTest` +1 (no-media publish
+  gates on no prerequisites) and the `dependsOn` capture adapted to the `List` contract. No test
+  weakened, no coverage floor lowered.
+- **Verification:** `./apps/android/meeshy.sh check` (`assembleDebug` + all `testDebugUnitTest`)
+  **BUILD SUCCESSFUL**. Diff = `apps/android` only (2 prod files added, 5 prod edits, 6 test files).
+- **Reviewer gate:** PASS — scope clean (apps/android only), behavioural non-tautological tests, SDK
+  purity respected (pure stateless key + gate in `:sdk-core`; no product orchestration leaked down),
+  single source of truth (one encode/decode + one verdict resolver), backward-compatible decode,
+  no schema migration.
+- **Note / next:** the composer still stages at most one `pendingUpload`; the *multi-pending UX*
+  (let the user queue several offline media — `pendingUploads: List`, relax the single-pending guard,
+  `publish(dependsOn = all cmids)`) is now unblocked at the SDK layer and is the next slice.
 
 ### 2026-06-28 — slice `outbox-flush-retry-on-blocked` ✅
 - **Branch:** `claude/apps/android/outbox-flush-retry-on-blocked` (off `origin/main` @ `50c198e9`).

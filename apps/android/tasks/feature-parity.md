@@ -136,7 +136,8 @@ file-by-file audit — every one of the 673 iOS files was read in full.
       the ≤10 cap, renders an "Offline" preview tile); `publish()` gates the story on it via
       the new `StoryRepository.enqueuePublish(request, dependsOn)`. Permanent failure / multi
       pick / second-while-pending surface the error (single-pending keeps the single-`dependsOn`
-      chain correct). **Remaining:** multi-pending offline uploads (multi-`dependsOn`/barrier).
+      chain correct). **Remaining:** the composer multi-pending **UX** (SDK primitive now landed,
+      see below).
 - [x] **Remove-pending cancels the durable upload** (`media-upload-cancel`): removing the
       offline placeholder now `MediaUploadQueue.cancel`s its `UPLOAD_MEDIA` row + blob (drops the
       outbox row first, then the bytes — unknown cmid inert), so no orphaned upload streams bytes
@@ -152,6 +153,19 @@ file-by-file audit — every one of the 673 iOS files was read in full.
       lane is auto-retried; forward progress is guaranteed (a dependent is delivered, or
       cascade-exhausted once its prerequisite gives up). Closes the cross-pass `BLOCKED`-not-
       `anyTransient` retry gap.
+- [x] **Multi-dependency outbox gate** (`outbox-multi-dependency`): the `dependsOn` gate now
+      expresses a **set** of prerequisites, not one. A new pure `OutboxDependencyKey`
+      (`encode`/`decode`/`likePattern`) round-trips the set through the single `dependsOn` column
+      (wrapped-delimited `"|a|b|"`; `decode` tolerant of a bare legacy value; membership `LIKE` with
+      `_`-escaping), `OutboxMutation.dependsOn` is a `Set<String>`, and `OutboxDependencies.verdictAll`
+      gates a dependent on **all** prerequisites (any `EXHAUSTED` ⇒ cascade-exhaust; else any
+      still-queued ⇒ hold). The drainer decodes + gates via `verdictAll`, `findDependents` is a
+      membership query (a delivered producer grafts its id into a dependent waiting on several
+      uploads), and `StoryRepository.enqueuePublish` takes a `List<String>`. The provably-correct SDK
+      half of multi-pending offline uploads; the composer adopts the list contract but keeps the
+      single-pending UI (the multi-pending UX is the next slice). No schema/migration change.
+- [ ] **Multi-pending offline uploads — composer UX**: stage several `PendingMediaUpload`s,
+      `publish(dependsOn = all cmids)`, per-tile cancel. SDK primitive ✅ above; UI relaxation pending.
 - [ ] TUS resumable uploads in a **dedicated `WorkManager` chain** (foreground
       progress); message-send items `dependsOn` the upload (gating now in place)
 - [x] `MessageStateMachine` (pure, monotonic 8-state delivery FSM) — 9 tests

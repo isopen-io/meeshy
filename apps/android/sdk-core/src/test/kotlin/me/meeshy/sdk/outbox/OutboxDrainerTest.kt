@@ -48,7 +48,7 @@ class OutboxDrainerTest {
     private suspend fun enqueueOn(
         cmid: String,
         rowLane: String,
-        dependsOn: String? = null,
+        dependsOn: Set<String> = emptySet(),
     ) {
         outbox.enqueue(
             OutboxMutation(
@@ -138,7 +138,7 @@ class OutboxDrainerTest {
         val media = OutboxLanes.MEDIA
         val story = OutboxLanes.STORY
         enqueueOn("upload", media)
-        enqueueOn("publish", story, dependsOn = "upload")
+        enqueueOn("publish", story, dependsOn = setOf("upload"))
         var calls = 0
 
         val report = drainer { calls++; SendResult.Success }.drainLane(story)
@@ -156,7 +156,7 @@ class OutboxDrainerTest {
         val story = OutboxLanes.STORY
         enqueueOn("upload", media)
         outbox.markInflight("upload")
-        enqueueOn("publish", story, dependsOn = "upload")
+        enqueueOn("publish", story, dependsOn = setOf("upload"))
 
         val report = drainer { SendResult.Success }.drainLane(story)
 
@@ -170,7 +170,7 @@ class OutboxDrainerTest {
         val story = OutboxLanes.STORY
         enqueueOn("upload", media)
         outbox.markSucceeded("upload")
-        enqueueOn("publish", story, dependsOn = "upload")
+        enqueueOn("publish", story, dependsOn = setOf("upload"))
 
         val report = drainer { SendResult.Success }.drainLane(story)
 
@@ -185,7 +185,7 @@ class OutboxDrainerTest {
         val story = OutboxLanes.STORY
         enqueueOn("upload", media)
         outbox.markExhausted("upload", "upload failed")
-        enqueueOn("publish", story, dependsOn = "upload")
+        enqueueOn("publish", story, dependsOn = setOf("upload"))
         val exhaustedCmids = mutableListOf<String>()
 
         val report = OutboxDrainer(
@@ -203,7 +203,7 @@ class OutboxDrainerTest {
     @Test
     fun `drainLane delivers a dependent whose prerequisite never existed`() = runTest {
         val story = OutboxLanes.STORY
-        enqueueOn("publish", story, dependsOn = "never-enqueued")
+        enqueueOn("publish", story, dependsOn = setOf("never-enqueued"))
 
         val report = drainer { SendResult.Success }.drainLane(story)
 
@@ -214,7 +214,7 @@ class OutboxDrainerTest {
     private suspend fun enqueuePublish(
         cmid: String,
         rowLane: String,
-        dependsOn: String,
+        dependsOn: Set<String>,
         mediaIds: List<String>,
     ) {
         outbox.enqueue(
@@ -243,7 +243,7 @@ class OutboxDrainerTest {
     @Test
     fun `drainLane grafts a produced id into a waiting dependent publish`() = runTest {
         enqueueOn("upload", OutboxLanes.MEDIA)
-        enqueuePublish("publish", OutboxLanes.STORY, dependsOn = "upload", mediaIds = listOf("upload"))
+        enqueuePublish("publish", OutboxLanes.STORY, dependsOn = setOf("upload"), mediaIds = listOf("upload"))
 
         val report = graftingDrainer { row ->
             if (row.cmid == "upload") SendResult.SuccessWithId("real-77") else SendResult.Success
@@ -267,11 +267,81 @@ class OutboxDrainerTest {
     @Test
     fun `a plain Success leaves a dependent placeholder untouched`() = runTest {
         enqueueOn("upload", OutboxLanes.MEDIA)
-        enqueuePublish("publish", OutboxLanes.STORY, dependsOn = "upload", mediaIds = listOf("upload"))
+        enqueuePublish("publish", OutboxLanes.STORY, dependsOn = setOf("upload"), mediaIds = listOf("upload"))
 
         graftingDrainer { SendResult.Success }.drainLane(OutboxLanes.MEDIA)
 
         assertThat(mediaIdsOfPublish("publish")).containsExactly("upload")
+    }
+
+    @Test
+    fun `drainLane holds a multi-dependency publish until every prerequisite lands`() = runTest {
+        enqueueOn("u1", OutboxLanes.MEDIA)
+        enqueueOn("u2", OutboxLanes.MEDIA)
+        outbox.markSucceeded("u1")
+        enqueueOn("publish", OutboxLanes.STORY, dependsOn = setOf("u1", "u2"))
+
+        val report = drainer { SendResult.Success }.drainLane(OutboxLanes.STORY)
+
+        assertThat(report.stoppedOnBlockedDependency).isTrue()
+        assertThat(report.delivered).isEqualTo(0)
+        assertThat(outbox.stateOf("publish")).isEqualTo(OutboxState.PENDING)
+    }
+
+    @Test
+    fun `drainLane delivers a multi-dependency publish once every prerequisite has succeeded`() = runTest {
+        enqueueOn("u1", OutboxLanes.MEDIA)
+        enqueueOn("u2", OutboxLanes.MEDIA)
+        outbox.markSucceeded("u1")
+        outbox.markSucceeded("u2")
+        enqueueOn("publish", OutboxLanes.STORY, dependsOn = setOf("u1", "u2"))
+
+        val report = drainer { SendResult.Success }.drainLane(OutboxLanes.STORY)
+
+        assertThat(report.delivered).isEqualTo(1)
+        assertThat(outbox.stateOf("publish")).isNull()
+    }
+
+    @Test
+    fun `drainLane cascade-exhausts a multi-dependency publish when any prerequisite exhausted`() = runTest {
+        enqueueOn("u1", OutboxLanes.MEDIA)
+        enqueueOn("u2", OutboxLanes.MEDIA)
+        outbox.markExhausted("u1", "upload failed")
+        enqueueOn("publish", OutboxLanes.STORY, dependsOn = setOf("u1", "u2"))
+        val exhaustedCmids = mutableListOf<String>()
+
+        val report = OutboxDrainer(
+            outbox,
+            mapOf(OutboxKind.SEND_MESSAGE to MutationSender { SendResult.Success }),
+            onExhausted = { exhaustedCmids += it.cmid },
+        ).drainLane(OutboxLanes.STORY)
+
+        assertThat(report.exhausted).isEqualTo(1)
+        assertThat(report.delivered).isEqualTo(0)
+        assertThat(exhaustedCmids).containsExactly("publish")
+        assertThat(outbox.stateOf("publish")).isEqualTo(OutboxState.EXHAUSTED)
+    }
+
+    @Test
+    fun `drainLane grafts each producer id into a publish waiting on several uploads`() = runTest {
+        enqueueOn("u1", OutboxLanes.MEDIA)
+        enqueueOn("u2", OutboxLanes.MEDIA)
+        enqueuePublish(
+            "publish",
+            OutboxLanes.STORY,
+            dependsOn = setOf("u1", "u2"),
+            mediaIds = listOf("u1", "u2"),
+        )
+
+        graftingDrainer { row ->
+            when (row.cmid) {
+                "u1" -> SendResult.SuccessWithId("real-1")
+                "u2" -> SendResult.SuccessWithId("real-2")
+                else -> SendResult.Success
+            }
+        }.drainLane(OutboxLanes.MEDIA)
+
+        assertThat(mediaIdsOfPublish("publish")).containsExactly("real-1", "real-2").inOrder()
     }
 
     @Test

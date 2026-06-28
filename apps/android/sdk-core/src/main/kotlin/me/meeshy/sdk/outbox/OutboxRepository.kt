@@ -132,7 +132,7 @@ class OutboxRepository @Inject constructor(
      * @return how many dependents were actually rewritten.
      */
     suspend fun rewriteDependents(prerequisiteCmid: String, rewrite: (String) -> String?): Int {
-        val dependents = outboxDao.findDependents(prerequisiteCmid)
+        val dependents = outboxDao.findDependents(OutboxDependencyKey.likePattern(prerequisiteCmid))
             .filter { it.stateEnum == OutboxState.PENDING }
         var changed = 0
         for (row in dependents) {
