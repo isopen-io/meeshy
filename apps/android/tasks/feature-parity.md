@@ -430,7 +430,15 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       apart from a *delivered* one (no spurious hand-off refresh). Surpasses iOS, whose optimistic
       story evaporates on failure with no signal/recovery. Pending: multi-slide canvas / media /
       text styling below.
-- [ ] Multi-slide composer (≤10 slides; add/remove/duplicate/reorder; slide mini-preview strip)
+- [~] Multi-slide composer (≤10 slides; add/remove/duplicate/reorder; slide mini-preview strip)
+      **Pure deck foundation done** (`story-slide-deck`): `StorySlide` (id/text/mediaIds) +
+      `StorySlideDeck` reducer in `:feature:stories` — structural CRUD (`addSlide`/`duplicate`/
+      `removeSlide`/`move`/`select`) with the iOS **≤10 cap** (`MAX_SLIDES`/`canAddSlide`/`isFull`)
+      and the **always-≥1-slide** invariant (`canRemoveSlide`; removal reselects the slide taking the
+      removed one's place). Total functions — every inapplicable op (cap reached, last slide, unknown
+      id, no-op move) returns the same instance; ids are caller-supplied so the reducer stays pure.
+      Pending: ViewModel wiring (mint ids, expose deck in `StoryComposerUiState`) + the mini-preview
+      strip UI in `StoryComposerScreen`.
 - [ ] 9:16 canvas with pinch-zoom + drag-pan; FAB + bottom-band toolbar (Contenu/Effets)
 - [ ] Text elements (≤5/slide): style (bold/italic/handwriting/typewriter/neon/retro), colour,
       size, alignment, background (none/solid/glass), outline/stroke, RTL, fade timing
