@@ -61,6 +61,56 @@ final class FeedPipelineIntegrationTests: XCTestCase {
     }
 
     @MainActor
+    func test_commentReactionAdded_persistsAbsoluteCountViaSocketHandler() async throws {
+        let socket = MockSocialSocket()
+        let handler = FeedSocketHandler(persistence: feedActor, socialSocket: socket)
+        handler.arm()
+        defer { handler.disarm() }
+
+        try await feedActor.insertComment(
+            CommentRecordFactory.make(id: "c_rx_int", postId: "post_rx"))
+
+        let event = try JSONDecoder().decode(SocketCommentReactionUpdateEvent.self, from: Data("""
+        {
+            "commentId": "c_rx_int", "postId": "post_rx", "userId": "u2",
+            "emoji": "🔥", "action": "added",
+            "aggregation": { "emoji": "🔥", "count": 3, "userIds": ["u2"], "hasCurrentUser": false }
+        }
+        """.utf8))
+        socket.commentReactionAdded.send(event)
+
+        try await Task.sleep(for: .milliseconds(150))
+        let comment = try feedActor.comments(forPostId: "post_rx", limit: 10).first { $0.id == "c_rx_int" }
+        XCTAssertEqual(comment?.reactionSummary["🔥"], 3)
+    }
+
+    @MainActor
+    func test_commentReactionSync_replacesSummaryViaSocketHandler() async throws {
+        let socket = MockSocialSocket()
+        let handler = FeedSocketHandler(persistence: feedActor, socialSocket: socket)
+        handler.arm()
+        defer { handler.disarm() }
+
+        try await feedActor.insertComment(
+            CommentRecordFactory.make(id: "c_sync_int", postId: "post_rx"))
+        try await feedActor.updateCommentReactionSummary(commentId: "c_sync_int", emoji: "👍", count: 9)
+
+        let event = try JSONDecoder().decode(SocketCommentReactionSyncEvent.self, from: Data("""
+        {
+            "commentId": "c_sync_int", "postId": "post_rx", "totalCount": 2,
+            "userReactions": [],
+            "reactions": [ { "emoji": "🔥", "count": 2, "userIds": ["u2", "u3"], "hasCurrentUser": false } ]
+        }
+        """.utf8))
+        socket.commentReactionSync.send(event)
+
+        try await Task.sleep(for: .milliseconds(150))
+        let comment = try feedActor.comments(forPostId: "post_rx", limit: 10).first { $0.id == "c_sync_int" }
+        XCTAssertEqual(comment?.reactionSummary["🔥"], 2)
+        XCTAssertNil(comment?.reactionSummary["👍"], "sync ACK is authoritative — stale emoji dropped")
+    }
+
+    @MainActor
     func test_nestedThread_expandCollapse() async throws {
         let store = CommentStore(postId: "post_thread", persistence: feedActor)
 
