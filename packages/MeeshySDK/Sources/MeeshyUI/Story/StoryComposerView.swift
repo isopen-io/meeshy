@@ -655,10 +655,9 @@ public struct StoryComposerView: View {
         } message: {
             Text(String(localized: "story.composer.unpublishedDraft", defaultValue: "Vous avez un brouillon non publie.", bundle: .module))
         }
-        .confirmationDialog(
+        .alert(
             String(localized: "story.composer.quitWithoutPublishing", defaultValue: "Quitter sans publier ?", bundle: .module),
-            isPresented: $showDiscardAlert,
-            titleVisibility: .visible
+            isPresented: $showDiscardAlert
         ) {
             Button(String(localized: "story.composer.save", defaultValue: "Sauvegarder", bundle: .module)) { saveDraftAndDismiss() }
             Button(String(localized: "story.composer.quit", defaultValue: "Quitter", bundle: .module), role: .destructive) { cancelAndDismiss() }
