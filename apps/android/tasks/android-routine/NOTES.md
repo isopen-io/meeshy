@@ -408,3 +408,23 @@ Append-only log of gotchas and decisions that save time next run.
   `:sdk-core`'s `media` package does **not** use `explicitApi`-style `public` modifiers
   (bare `class`/`object`) while the `outbox` package does — match the *package-local*
   convention, don't blindly add `public`.
+
+- **Offline-media composer fallback (`story-composer-offline-media`).** The "when to
+  fall back to the durable chain" decision is a **product policy → app-side**: a pure
+  `MediaUploadRetryPolicy.isQueueable(ApiError)` in `:feature:stories` (null status /
+  429 / 5xx → queueable; other 4xx → dead end), NOT in the SDK. Adding an optional param
+  to an SDK function consumed via mockk (`enqueuePublish(req, dependsOn = null)`) **breaks
+  existing mockk stubs** silently: `coEvery { f(capture(s)) }` no longer matches the now
+  2-arg call, the relaxed mock returns the default, and the slot never captures →
+  "slot not captured". Fix = extend every stub/verify to the new arity
+  (`f(capture(s), any())`), which is *adapting* not weakening. **`io.mockk.captureNullable`
+  is not in this mockk version** — to capture a nullable param whose actual value is
+  non-null, use a plain `slot<String>()` + `capture(slot)` (non-null actual ⇒ matches).
+  Keep the offline path **single-pending**: the outbox `dependsOn` is one cmid, so one
+  pending upload per publish stays provably correct; reject a 2nd pick + multi-item batches
+  rather than ship a broken multi-`dependsOn` chain. Centralise the combined wire ids in
+  **one** derivation (`UiState.draftMediaIds = attachments.ids + pending?.cmid`) and feed
+  `withMediaIds(next.draftMediaIds)` from every mutator (applyUploaded/queueDurably/remove)
+  — else a later success silently drops the pending placeholder. The pending preview tile
+  renders the held `ByteArray` straight through Coil (`AsyncImage(model = bytes)`); make it
+  removable so it's never a dead end.

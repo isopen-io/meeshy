@@ -60,31 +60,44 @@ and the `OutboxFlushWorker` wiring: a `MEDIA`-lane sender (reads the blob, uploa
 `MediaRepository`, `remove`s the bytes once no longer retryable), `MEDIA` drained
 **before** `STORY`, and `onExhausted` dropping the blob so a dead upload never leaks
 bytes. The whole durable offline upload→publish chain now functions end-to-end at the
-SDK layer — only the **composer wiring** remains.
+SDK layer. Latest loop (`story-composer-offline-media`) wires the **last brick** — the
+composer now **falls back to the durable chain** when a synchronous media upload fails
+transiently: a single picked media whose upload returns offline / 429 / 5xx (the pure
+`MediaUploadRetryPolicy.isQueueable` product policy) is instead `MediaUploadQueue.enqueue`d
+and staged as a single `PendingMediaUpload` placeholder in the draft (its `cmid` rides in
+`draft.mediaIds`, counts toward the ≤10 cap, renders an "Offline" preview tile). `publish()`
+then enqueues the `PUBLISH_STORY` row with `dependsOn = pendingUpload.cmid` (via the new
+`StoryRepository.enqueuePublish(request, dependsOn)` param), so the drainer holds the publish
+until the upload delivers, then grafts the real id. A **permanent** failure (4xx), a
+**multi-item** offline pick, or a pick **while one upload is already pending** still surfaces
+the error (single-pending constraint keeps the single-`dependsOn` chain correct). Surpasses
+iOS, which drops a pick on an offline upload.
 
 ## Next slice (pick one for the next run)
 
 Ordered by value:
-1. **Composer offline-media chain wiring (the last brick of the producer half)** — the
-   SDK chain is now complete (`media-upload-sender`, this run): `MediaUploadQueue.enqueue`
-   + the `MEDIA`-lane sender + `SuccessWithId` graft + dependency gating all exist.
-   Remaining is **product orchestration in `:feature:stories`**: change
-   `StoryComposerViewModel.onMediaPicked` so that, **when offline / preferring durability**,
-   it calls `MediaUploadQueue.enqueue(item)` (returns the upload `cmid`) and stages a
-   *placeholder* attachment in the draft keyed by that cmid; `publish()` then enqueues a
-   `PUBLISH_STORY` row with `dependsOn = uploadCmid` and `mediaIds = [uploadCmid]`
-   (placeholder), so the drainer grafts the real id once the upload lands. Decide the
-   policy: always-durable vs the current synchronous upload-then-append when online (the
-   synchronous path already works). Also: a `BLOCKED` dependency doesn't set
-   `anyTransient`, so a held publish lane isn't auto-retried by WorkManager once its
-   upload lands mid-pass — revisit (the upload's own `SuccessWithId` re-kick, or have a
-   `stoppedOnBlockedDependency` report request a retry).
+1. **Multi-pending offline uploads + remove-pending cancels the row** — the offline path
+   currently allows **one** pending upload at a time (the single `dependsOn` cmid keeps the
+   chain provably correct). To queue several media offline, the publish needs to gate on
+   *all* their cmids — either a multi-`dependsOn` outbox primitive or a synthetic "barrier"
+   upload row the publish depends on. Also: `onRemoveMedia(pendingCmid)` clears the draft
+   placeholder but leaves the durable `UPLOAD_MEDIA` row + blob (a harmless orphan that
+   uploads to an unreferenced media) — add an outbox cancel-by-cmid so removal also drops
+   the queued upload. And the known gating gap: a `BLOCKED` dependency doesn't set
+   `anyTransient`, so a held publish lane isn't auto-retried by WorkManager once its upload
+   lands in a *later* pass — revisit (upload `SuccessWithId` re-kick, or a
+   `stoppedOnBlockedDependency` retry request). Within a single drain pass it already works
+   (MEDIA drained before STORY).
 2. **Multi-slide canvas** — begin the real multi-slide composer (add/remove/
    reorder slides, 9:16 canvas). Much larger; see `feature-parity.md`
    §"Stories composer".
 3. After Stories richness is sufficient, advance to the **Calls** area
    (`feature-parity.md` §"Calls").
 
+(`story-composer-offline-media` ✅ shipped 2026-06-28 — this run; the composer's offline
+fallback: a single transient-failed media pick is durably queued + staged as a pending
+placeholder, and `publish()` gates the story on it via `enqueuePublish(.., dependsOn)`. The
+durable offline upload→publish chain is now reachable from the UI. See run log.)
 (`media-upload-sender` ✅ shipped 2026-06-28 — this run; the rest of the producer half
 at the SDK layer — `OutboxKind.UPLOAD_MEDIA`, the pure `MediaUploadSender` outcome map,
 the `MediaUploadQueue.enqueue` building block, and the `OutboxFlushWorker` `MEDIA`-lane
@@ -129,6 +142,64 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-28 — slice `story-composer-offline-media` ✅
+- **Branch:** `claude/apps/android/story-composer-offline-media` (off `origin/main` @ `e691dbe9`).
+- **Housekeeping (step 0):** prior run's PR **#994** (`media-upload-sender`) was open + green +
+  `apps/android`-only + up-to-date with `main` → squash-merged it first (`e691dbe9`), then
+  branched off the freshened `main`.
+- **What:** the **last brick of the producer half** flagged in "Next" #1 — the composer now
+  reaches the durable offline upload→publish chain. The SDK chain (`MediaUploadQueue.enqueue`,
+  the `MEDIA`-lane sender, `SuccessWithId` graft, `dependsOn` gating) was already complete; this
+  slice adds the **product orchestration** in `:feature:stories` that drives it from the UI.
+- **Added / changed (production, `apps/android` only):**
+  - `MediaUploadRetryPolicy` (`:feature:stories`, new, **pure**) — `isQueueable(error)`: no HTTP
+    status (offline) / 429 / 5xx → queueable; any other 4xx → dead end. The composer's product
+    pivot between "stage it offline" and "tell the user now"; kept app-side, not in the SDK.
+  - `StoryComposerViewModel` — injects `MediaUploadQueue`; on a **single** transient-failed pick
+    with no upload already pending, `queueDurably(item)` enqueues the durable upload + stages a
+    `PendingMediaUpload(cmid, item)`; the draft's media ids (`draftMediaIds`) now combine uploaded
+    ids + the placeholder cmid (so the cap, `canPublish`, and the wire request all see it).
+    `publish()` passes `dependsOn = pendingUpload?.cmid`. `onRemoveMedia` also clears a pending
+    placeholder. A permanent failure / multi-item pick / second-while-pending surfaces the error.
+  - `StoryComposerUiState.pendingUpload` + the `PendingMediaUpload` model + internal `draftMediaIds`.
+  - `StoryComposerScreen` — renders the pending media as an "Offline" preview tile (Coil reads the
+    held bytes) with its own remove affordance (no dead end); extracted a shared `MediaThumbnail`.
+    New string `stories_composer_media_pending` in all 4 locales.
+  - `StoryRepository.enqueuePublish(request, dependsOn: String? = null)` — additive param threading
+    the prerequisite cmid into the `PUBLISH_STORY` `OutboxMutation` (default `null` = unchanged).
+- **Tests (+20, red→green):**
+  - `MediaUploadRetryPolicyTest` (pure) +8 — null status, 429, 500, 599 → queueable; 413, 400, 401,
+    499 → not. Boundary sweep of the 5xx range.
+  - `StoryComposerViewModelTest` +10 — single offline pick → durable enqueue + pending staged +
+    placeholder in draft + canPublish; permanent failure → error, never queued; multi-item offline
+    → not chained, error; second pick while pending → rejected, queued once; publish gates on the
+    pending cmid + carries the placeholder media id + kicks the worker; remove-pending clears it +
+    its id; pending kept alongside an already-uploaded id (ordering); pending counts toward the cap;
+    durable-enqueue throwing → graceful error, nothing staged; publish clears the pending on success.
+  - `StoryRepositoryTest` +2 — `enqueuePublish` persists a given `dependsOn`; defaults it to null.
+- **Edge cases covered:** boundary HTTP statuses (499/500/599); empty pick (inert); single vs
+  multi-item batch; idempotent/inert second pick while pending; failure path (queue throws →
+  graceful, no crash, nothing staged); re-entrancy guard preserved; `CancellationException`
+  rethrown. The single-pending constraint is asserted (keeps the single-`dependsOn` chain correct).
+- **Verify:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL in 2m21s** (full `assembleDebug`
+  incl. the VM's new Hilt dep + the screen + all module JVM unit tests; 836 tasks). TEST XMLs:
+  `MediaUploadRetryPolicyTest` 8/8, `StoryComposerViewModelTest` 33/33, `StoryRepositoryTest` 28/28
+  — failures=0 errors=0.
+- **Reviewer:** PASS — scope `apps/android` only (1 new prod + 3 prod edits + 4 string files under
+  `:feature:stories`, 1 additive prod edit under `:sdk-core`; + 1 new test + 2 test edits + docs);
+  behavioural tests through the public API (VM intents → `state`/`StateFlow`, pure policy outcomes,
+  observable outbox `dependsOn`), no tautologies, no floor lowered; **SDK purity** (the durable
+  building blocks stay in `:sdk-core`; the "when to fall back to durable" product rule is the
+  app-side `MediaUploadRetryPolicy`); **single source of truth** (reuses `MediaUploadQueue`,
+  `MediaRepository`, the one `enqueuePublish`, `draftMediaIds` derived once — no second queue/id
+  shape); **Instant-App** (offline pick is staged instantly, no blocking spinner, publish stays
+  optimistic); **UDF** (immutable `StateFlow<UiState>`, pure transitions); **UX coherence** (the
+  pending tile is a real, removable preview — no dead end). Surpasses iOS (durable offline media vs
+  drop-on-offline).
+- **Follow-up (next slice):** multi-pending offline uploads (needs a multi-`dependsOn` / barrier
+  primitive); remove-pending should also cancel the durable `UPLOAD_MEDIA` row (currently a harmless
+  orphan); the cross-pass `BLOCKED`-not-`anyTransient` retry gap. See "Next slice" #1.
 
 ### 2026-06-28 — slice `media-upload-sender` ✅
 - **Branch:** `claude/apps/android/media-upload-sender` (off `origin/main` @ `a3d39a3e`).

@@ -148,9 +148,10 @@ fun StoryComposerScreen(
                 },
             )
 
-            if (state.attachments.isNotEmpty()) {
+            if (state.attachments.isNotEmpty() || state.pendingUpload != null) {
                 MediaPreviewRow(
                     attachments = state.attachments,
+                    pending = state.pendingUpload,
                     onRemove = viewModel::onRemoveMedia,
                 )
             }
@@ -197,6 +198,7 @@ fun StoryComposerScreen(
 @Composable
 private fun MediaPreviewRow(
     attachments: List<UploadedMedia>,
+    pending: PendingMediaUpload?,
     onRemove: (String) -> Unit,
 ) {
     LazyRow(
@@ -204,32 +206,72 @@ private fun MediaPreviewRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         items(attachments, key = { it.id }) { media ->
-            Box {
-                AsyncImage(
-                    model = media.thumbnailUrl ?: media.url,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .size(72.dp)
-                        .clip(RoundedCornerShape(8.dp)),
+            MediaThumbnail(
+                model = media.thumbnailUrl ?: media.url,
+                isPending = false,
+                onRemove = { onRemove(media.id) },
+            )
+        }
+        pending?.let { upload ->
+            item(key = upload.cmid) {
+                MediaThumbnail(
+                    model = upload.item.bytes,
+                    isPending = true,
+                    onRemove = { onRemove(upload.cmid) },
                 )
-                Surface(
-                    onClick = { onRemove(media.id) },
-                    shape = RoundedCornerShape(50),
-                    color = Color.Black.copy(alpha = 0.55f),
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(2.dp)
-                        .size(22.dp),
-                ) {
-                    Icon(
-                        Icons.Filled.Close,
-                        contentDescription = stringResource(R.string.stories_composer_remove_media),
-                        tint = Color.White,
-                        modifier = Modifier.padding(3.dp),
-                    )
-                }
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MediaThumbnail(
+    model: Any?,
+    isPending: Boolean,
+    onRemove: () -> Unit,
+) {
+    Box {
+        AsyncImage(
+            model = model,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .size(72.dp)
+                .clip(RoundedCornerShape(8.dp)),
+        )
+        if (isPending) {
+            Surface(
+                color = Color.Black.copy(alpha = 0.55f),
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth(),
+            ) {
+                Text(
+                    text = stringResource(R.string.stories_composer_media_pending),
+                    color = Color.White,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 2.dp),
+                )
+            }
+        }
+        Surface(
+            onClick = onRemove,
+            shape = RoundedCornerShape(50),
+            color = Color.Black.copy(alpha = 0.55f),
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(2.dp)
+                .size(22.dp),
+        ) {
+            Icon(
+                Icons.Filled.Close,
+                contentDescription = stringResource(R.string.stories_composer_remove_media),
+                tint = Color.White,
+                modifier = Modifier.padding(3.dp),
+            )
         }
     }
 }

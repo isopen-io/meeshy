@@ -105,15 +105,20 @@ class StoryRepository @Inject constructor(
      * messages and the publish survives process death / offline. Each publish is
      * an independent row keyed by a fresh temp id (no coalescing across stories).
      *
+     * @param dependsOn the `cmid` of a prerequisite `UPLOAD_MEDIA` row this publish
+     *   must wait for (its placeholder media id rides in `request.mediaIds`); the
+     *   drainer holds the publish until that upload delivers, then grafts the real
+     *   id in. `null` for a publish with no offline-queued media.
      * @return the queued row's `cmid` (drives optimistic-rollback observation).
      */
-    suspend fun enqueuePublish(request: CreateStoryRequest): String? =
+    suspend fun enqueuePublish(request: CreateStoryRequest, dependsOn: String? = null): String? =
         outboxRepository.enqueue(
             OutboxMutation(
                 kind = OutboxKind.PUBLISH_STORY,
                 lane = OutboxLanes.STORY,
                 targetId = "pending_${UUID.randomUUID()}",
                 payload = MeeshyApi.json.encodeToString(request),
+                dependsOn = dependsOn,
             ),
         )
 
