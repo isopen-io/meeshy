@@ -72,6 +72,9 @@ jest.mock('@/lib/react-query/query-keys', () => ({
       stories: () => ['posts', 'list', 'stories'],
       statuses: () => ['posts', 'list', 'statuses'],
     },
+    stories: {
+      feed: () => ['stories', 'feed'],
+    },
   },
 }));
 
@@ -121,6 +124,16 @@ function seedFeed(qc: QueryClient, posts = [mockPost]) {
 function getFeedPosts(qc: QueryClient): unknown[] {
   const data = qc.getQueryData<{ pages: { data: unknown[] }[] }>(['posts', 'list', 'infinite', 'feed']);
   return data?.pages.flatMap((p) => p.data) ?? [];
+}
+
+const mockStory = { ...mockPost, id: 'story-1', type: 'STORY' as const };
+
+function seedStories(qc: QueryClient, stories: unknown[] = [mockStory]) {
+  qc.setQueryData(['stories', 'feed'], stories);
+}
+
+function getStories(qc: QueryClient): Array<{ id: string; viewCount?: number; content?: string }> {
+  return qc.getQueryData<Array<{ id: string; viewCount?: number; content?: string }>>(['stories', 'feed']) ?? [];
 }
 
 describe('usePostSocketCacheSync', () => {
@@ -257,15 +270,24 @@ describe('usePostSocketCacheSync', () => {
   });
 
   describe('story:created', () => {
-    it('invalidates stories cache', () => {
+    it('prepends the new story to the stories.feed() cache', () => {
       const qc = createQueryClient();
-      const spy = jest.spyOn(qc, 'invalidateQueries');
+      seedStories(qc, [{ ...mockStory, id: 'story-old' }]);
       renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
 
-      act(() => emit('story:created', { story: mockPost }));
+      act(() => emit('story:created', { story: { ...mockStory, id: 'story-new' } }));
 
-      expect(spy).toHaveBeenCalledWith({ queryKey: ['posts', 'list', 'stories'] });
-      spy.mockRestore();
+      expect(getStories(qc).map((s) => s.id)).toEqual(['story-new', 'story-old']);
+    });
+
+    it('is idempotent when the story already exists (no duplicate)', () => {
+      const qc = createQueryClient();
+      seedStories(qc, [mockStory]);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('story:created', { story: mockStory }));
+
+      expect(getStories(qc).map((s) => s.id)).toEqual(['story-1']);
     });
   });
 
@@ -694,28 +716,27 @@ describe('usePostSocketCacheSync', () => {
   });
 
   describe('story:viewed', () => {
-    it('invalidates stories cache', () => {
+    it('patches viewCount on the matching story in stories.feed()', () => {
       const qc = createQueryClient();
-      const spy = jest.spyOn(qc, 'invalidateQueries');
+      seedStories(qc, [{ ...mockStory, viewCount: 5 }]);
       renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
 
       act(() => emit('story:viewed', { storyId: 'story-1', viewerId: 'user-2', viewerUsername: 'bob', viewCount: 6 }));
 
-      expect(spy).toHaveBeenCalledWith({ queryKey: ['posts', 'list', 'stories'] });
-      spy.mockRestore();
+      expect(getStories(qc)[0].viewCount).toBe(6);
     });
   });
 
   describe('story:reacted', () => {
-    it('invalidates stories cache', () => {
+    it('does not mutate stories.feed() (no authoritative count on the wire)', () => {
       const qc = createQueryClient();
-      const spy = jest.spyOn(qc, 'invalidateQueries');
+      seedStories(qc, [mockStory]);
+      const before = getStories(qc);
       renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
 
       act(() => emit('story:reacted', { storyId: 'story-1', userId: 'user-2', emoji: '❤️' }));
 
-      expect(spy).toHaveBeenCalledWith({ queryKey: ['posts', 'list', 'stories'] });
-      spy.mockRestore();
+      expect(getStories(qc)).toEqual(before);
     });
   });
 
@@ -905,34 +926,35 @@ describe('usePostSocketCacheSync', () => {
   // M1 — newly-wired consumers that were emitted by the gateway but ignored on
   // web. Story/status lifecycle + comment media all invalidate/patch the cache.
   describe('story/status lifecycle + comment media (M1)', () => {
-    it('story:updated invalidates the stories query', () => {
+    it('story:updated replaces the matching story in stories.feed()', () => {
       const qc = createQueryClient();
-      const spy = jest.spyOn(qc, 'invalidateQueries');
+      seedStories(qc, [{ ...mockStory, id: 's-1', content: 'old' }]);
       renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
 
-      act(() => emit('story:updated', { storyId: 's-1' }));
+      act(() => emit('story:updated', { story: { ...mockStory, id: 's-1', content: 'new' } }));
 
-      expect(spy).toHaveBeenCalledWith({ queryKey: ['posts', 'list', 'stories'] });
+      expect(getStories(qc)[0].content).toBe('new');
     });
 
-    it('story:deleted invalidates the stories query', () => {
+    it('story:deleted removes the story from stories.feed()', () => {
       const qc = createQueryClient();
-      const spy = jest.spyOn(qc, 'invalidateQueries');
+      seedStories(qc, [{ ...mockStory, id: 's-1' }, { ...mockStory, id: 's-2' }]);
       renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
 
-      act(() => emit('story:deleted', { storyId: 's-1' }));
+      act(() => emit('story:deleted', { storyId: 's-1', authorId: 'user-1' }));
 
-      expect(spy).toHaveBeenCalledWith({ queryKey: ['posts', 'list', 'stories'] });
+      expect(getStories(qc).map((s) => s.id)).toEqual(['s-2']);
     });
 
-    it('story:unreacted invalidates the stories query', () => {
+    it('story:unreacted does not mutate stories.feed()', () => {
       const qc = createQueryClient();
-      const spy = jest.spyOn(qc, 'invalidateQueries');
+      seedStories(qc, [{ ...mockStory, id: 's-1' }]);
+      const before = getStories(qc);
       renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
 
       act(() => emit('story:unreacted', { storyId: 's-1', userId: 'user-2', emoji: '❤️' }));
 
-      expect(spy).toHaveBeenCalledWith({ queryKey: ['posts', 'list', 'stories'] });
+      expect(getStories(qc)).toEqual(before);
     });
 
     it('status:unreacted invalidates the statuses query', () => {
