@@ -124,6 +124,12 @@ struct UniversalComposerBar: View {
 
     var externalHasContent: Bool = false
 
+    // MARK: - External send state (disables button while a send is in flight)
+
+    /// When true, the send button is non-interactive. Pass `viewModel.isSending`
+    /// to prevent double-taps during the 0.2s bounce animation window.
+    var externalIsSending: Bool = false
+
     // MARK: - Attachment ladder callbacks
 
     var onPhotoLibrary: (() -> Void)? = nil
@@ -865,7 +871,7 @@ struct UniversalComposerBar: View {
     /// moment `hasContent || effectiveIsRecording` flips.
     @ViewBuilder
     var actionButton: some View {
-        let isReady = effectiveIsRecording || hasContent
+        let isReady = (effectiveIsRecording || hasContent) && !externalIsSending
         sendButton
             .opacity(isReady ? 1.0 : 0.4)
             .allowsHitTesting(isReady)

@@ -149,6 +149,7 @@ extension ConversationView {
             externalRecordingDuration: audioRecorder.duration,
             externalAudioLevels: audioRecorder.audioLevels,
             externalHasContent: !composerState.pendingAttachments.isEmpty || audioRecorder.isRecording,
+            externalIsSending: viewModel.isSending,
             onPhotoLibrary: { composerState.showPhotoPicker = true },
             onCamera: { composerState.showCamera = true },
             onFilePicker: { composerState.showFilePicker = true },

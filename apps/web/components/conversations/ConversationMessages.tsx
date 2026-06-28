@@ -118,20 +118,6 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
   // État pour afficher/masquer le bouton "Scroll to bottom"
   const [showScrollButton, setShowScrollButton] = useState(false);
 
-  // Fonction pour vérifier si l'utilisateur est en bas de la conversation
-  const _isUserAtBottom = useCallback(() => {
-    if (!scrollAreaRef.current) return true;
-    
-    const container = scrollAreaRef.current;
-    const { scrollTop, scrollHeight, clientHeight } = container;
-    
-    // Considérer l'utilisateur "en bas" s'il est à moins de 150px du bas
-    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-    const isAtBottom = distanceFromBottom < 150;
-    
-    return isAtBottom;
-  }, []);
-
   // Fonction pour scroller vers le bas
   const scrollToBottom = useCallback((smooth = true) => {
     const container = scrollAreaRef.current;
@@ -156,38 +142,6 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
       });
     }
   }, []);
-
-  // Fonction pour scroller vers un message spécifique
-  const _scrollToMessage = useCallback((messageId: string, smooth = true) => {
-    const messageElement = document.getElementById(`message-${messageId}`);
-    if (messageElement) {
-      messageElement.scrollIntoView({
-        behavior: smooth ? 'smooth' : 'auto',
-        block: 'center'
-      });
-    }
-  }, []);
-
-  // Fonction pour trouver le premier message non lu
-  const _findFirstUnreadMessage = useCallback(() => {
-    if (!currentUser) return null;
-    
-    // Trouver le premier message qui n'a pas été lu par l'utilisateur courant
-    const firstUnread = messages.find(msg => {
-      // Un message est considéré non lu si :
-      // 1. Ce n'est pas un message de l'utilisateur courant
-      // 2. Il n'a pas de readStatus ou l'utilisateur n'est pas dans readStatus
-      const senderUserId = getSenderUserId(msg.sender as Record<string, unknown>) ?? (msg.sender as unknown)?.id;
-      if (senderUserId === currentUser.id) return false;
-      
-      if (!(msg as unknown).readStatus || (msg as unknown).readStatus.length === 0) return true;
-      
-      const userReadStatus = (msg as unknown).readStatus.find((rs: unknown) => rs.userId === currentUser.id);
-      return !userReadStatus || !userReadStatus.readAt;
-    });
-    
-    return firstUnread || null;
-  }, [messages, currentUser]);
 
   // Stable ref for handleScroll to prevent listener detach/reattach (#16)
   const handleScrollRef = useRef<((e: React.UIEvent<HTMLDivElement>) => void) | null>(null);
@@ -539,6 +493,9 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
           className="flex-1 messages-scroll conversation-scroll h-full overflow-y-auto overflow-x-visible"
           onScroll={handleScroll}
           style={{ position: 'relative' }}
+          role="log"
+          aria-live="polite"
+          aria-label="Messages"
         >
           {content}
         </div>
