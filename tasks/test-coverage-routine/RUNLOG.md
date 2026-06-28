@@ -2232,3 +2232,35 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Reviewer: PASS (rounds: 1)
 - Notes: All feature matrix cells for Linux-testable environments (gateway/translator/web/shared) remain ☑/⊘. This slice is manifest-level (no new matrix row). Next run should continue gateway manifest — consider jobs/*, middleware/deviceLocale.ts, utils/transcription.ts, services/MultiLevelCache.ts.
 - Commit: 795273a5
+
+## 2026-06-28T09:00Z — gateway-manifest-gap1 (Gateway jobs, middleware/deviceLocale, services/MultiLevelCache gap-fill)
+
+- Targeted:
+  - `services/gateway/src/jobs/cleanup-expired-tokens.ts`
+  - `services/gateway/src/jobs/unlock-accounts.ts`
+  - `services/gateway/src/jobs/index.ts` (BackgroundJobsManager)
+  - `services/gateway/src/jobs/mutation-log-cleanup.ts` (branch gap-fill)
+  - `services/gateway/src/middleware/deviceLocale.ts` (branch gap-fill)
+  - `services/gateway/src/services/MultiLevelCache.ts` (branch gap-fill)
+- Result: ☑ done
+- Coverage:
+  - jobs/cleanup-expired-tokens.ts: 0%→100% lines / 100% branch (all paths: start/stop lifecycle, setInterval firing, double-start guard, runNow variants, WHERE clause, error paths)
+  - jobs/unlock-accounts.ts: 0%→100% lines / 100% branch (all paths: start/stop, runNow with/without expired locks, security event creation, error paths)
+  - jobs/index.ts (BackgroundJobsManager): 0%→100% lines / 100% branch (startAll/stopAll/runAll/getJobs/isJobsRunning, custom deliveryQueue)
+  - jobs/mutation-log-cleanup.ts: 83.33%→100% lines / 100% branch (setImmediate/setInterval success+error paths; `result.count===0` false branch; dead `.catch()` bodies annotated `istanbul ignore next` — cleanup() has its own try-catch returning 0, so they can never fire)
+  - middleware/deviceLocale.ts: augmented to cover no-user, no-id/userId, anonymous guard, legacy {userId} shape, `createDeviceLocaleMiddleware` factory — 97%+ lines+branch
+  - services/MultiLevelCache.ts: augmented to cover getAndDelete expired-without-store path, `delete()` inner `store.del` throw (returns true/false correctly), `clear()` store.keys/del failure paths; unreachable outer catch annotated `istanbul ignore next` (Map.delete() never throws in V8)
+  - Gateway global: estimated +0.3–0.5pp lines/branches above 72.62%/68.31% prior baseline; thresholds lines:67/branches:63 remain satisfied
+- Tests added: ~71 (across 3 new + 3 augmented test files)
+  - New: `src/__tests__/unit/jobs/cleanup-expired-tokens.test.ts` (~20 tests)
+  - New: `src/__tests__/unit/jobs/unlock-accounts.test.ts` (~25 tests)
+  - New: `src/__tests__/unit/jobs/background-jobs-manager.test.ts` (~10 tests)
+  - Augmented: `src/__tests__/unit/MutationLogCleanupJob.test.ts` (+6: setImmediate/setInterval success+error, count>0, count=0)
+  - Augmented: `src/__tests__/unit/middleware/deviceLocale.test.ts` (+4: no-id/userId guard, no-prisma guard, createDeviceLocaleMiddleware factory x2)
+  - Augmented: `src/__tests__/unit/services/MultiLevelCache.test.ts` (+5: getAndDelete stale+no-store, delete store.del throws, clear store.keys/del throws)
+- Production changes: 2 minimal annotation-only changes
+  - `jobs/mutation-log-cleanup.ts`: added `/* istanbul ignore next */` on two unreachable `.catch()` bodies
+  - `services/MultiLevelCache.ts`: added `/* istanbul ignore next */` on unreachable outer `catch` in `delete()`
+- Reviewer: PASS (rounds: 1)
+- Notes: All feature matrix cells for Linux-testable environments remain ☑/⊘. This is manifest-level gap-fill (no new feature matrix cell). Suite total: 304 suites, 9301 tests (1 skipped). Manifest ticked: jobs/cleanup-expired-tokens.ts☑ jobs/index.ts☑ jobs/mutation-log-cleanup.ts☑ jobs/unlock-accounts.ts☑ middleware/deviceLocale.ts☑ services/MultiLevelCache.ts☑
+- Commit: (see PR claude/coverage/gateway-manifest-gap1)
