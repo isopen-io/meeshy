@@ -2081,6 +2081,18 @@ struct StoryActionButton: View {
                     .shadow(color: .black.opacity(0.55), radius: 2, y: 1)
             }
             .frame(width: 56)
+            // Élargit la zone sensible de quelques pixels AUTOUR du glyph + label.
+            // Sans cartouche/cercle de fond (style « glyph flottant »), seul le
+            // glyph rendu était tappable : un tap qui manquait le glyph de
+            // quelques pixels traversait jusqu'à l'overlay de navigation (Layer 6
+            // de StoryViewerView+Canvas — gesture prev/next) et faisait passer la
+            // story à la suivante (bug user 2026-06-28 « je touche un bouton, ça
+            // passe à la story suivante »). Le `padding` agrandit le rectangle et
+            // comble les gaps entre FABs ; `contentShape(Rectangle())` rend TOUT
+            // ce rectangle (padding inclus) sensible, transparent compris.
+            .padding(.vertical, 8)
+            .padding(.horizontal, 6)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
