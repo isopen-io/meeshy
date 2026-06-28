@@ -83,4 +83,37 @@ class MediaUploadQueueTest {
         assertThat(blobStore.get(first)!!.fileName).isEqualTo("a.jpg")
         assertThat(blobStore.get(second)!!.fileName).isEqualTo("b.jpg")
     }
+
+    @Test
+    fun `cancel drops both the outbox row and the stored blob for the cmid`() = runTest {
+        val cmid = queue.enqueue(item())
+
+        queue.cancel(cmid)
+
+        assertThat(outbox.deliverable(OutboxLanes.MEDIA)).isEmpty()
+        assertThat(outbox.stateOf(cmid)).isNull()
+        assertThat(blobStore.get(cmid)).isNull()
+    }
+
+    @Test
+    fun `cancel leaves other queued uploads untouched`() = runTest {
+        val keep = queue.enqueue(item(bytes = byteArrayOf(1), fileName = "keep.jpg"))
+        val drop = queue.enqueue(item(bytes = byteArrayOf(2), fileName = "drop.jpg"))
+
+        queue.cancel(drop)
+
+        assertThat(outbox.deliverable(OutboxLanes.MEDIA).map { it.cmid }).containsExactly(keep)
+        assertThat(blobStore.get(keep)!!.fileName).isEqualTo("keep.jpg")
+        assertThat(blobStore.get(drop)).isNull()
+    }
+
+    @Test
+    fun `cancel of an unknown cmid is a no-op`() = runTest {
+        val cmid = queue.enqueue(item())
+
+        queue.cancel("never-queued")
+
+        assertThat(outbox.deliverable(OutboxLanes.MEDIA).map { it.cmid }).containsExactly(cmid)
+        assertThat(blobStore.get(cmid)).isNotNull()
+    }
 }

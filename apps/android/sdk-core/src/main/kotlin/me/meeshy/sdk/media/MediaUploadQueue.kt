@@ -48,4 +48,15 @@ class MediaUploadQueue @Inject constructor(
         )
         return cmid
     }
+
+    /**
+     * The mirror of [enqueue]: a user removing a still-queued media before it
+     * uploads. Drops the `UPLOAD_MEDIA` row first (so the drainer stops picking it
+     * up) then its stored bytes, leaving no orphaned row that would upload to an
+     * unreferenced media. Unknown [cmid]s are inert — both layers tolerate absence.
+     */
+    suspend fun cancel(cmid: String) {
+        outboxRepository.discard(cmid)
+        blobStore.remove(cmid)
+    }
 }

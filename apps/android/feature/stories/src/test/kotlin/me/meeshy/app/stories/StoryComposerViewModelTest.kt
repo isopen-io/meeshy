@@ -457,6 +457,56 @@ class StoryComposerViewModelTest {
     }
 
     @Test
+    fun `removing the pending upload cancels its durable upload row and blob`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns offline()
+        coEvery { uploadQueue.enqueue(any()) } returns "up-1"
+        vm.onMediaPicked(listOf(item()))
+
+        vm.onRemoveMedia("up-1")
+
+        coVerify(exactly = 1) { uploadQueue.cancel("up-1") }
+    }
+
+    @Test
+    fun `removing an uploaded attachment never cancels a durable upload`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
+        vm.onMediaPicked(listOf(item()))
+
+        vm.onRemoveMedia("m1")
+
+        coVerify(exactly = 0) { uploadQueue.cancel(any()) }
+    }
+
+    @Test
+    fun `removing a non-pending id while an upload is pending does not cancel it`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns offline()
+        coEvery { uploadQueue.enqueue(any()) } returns "up-1"
+        vm.onMediaPicked(listOf(item()))
+
+        vm.onRemoveMedia("not-the-pending-id")
+
+        coVerify(exactly = 0) { uploadQueue.cancel(any()) }
+        assertThat(vm.state.value.pendingUpload?.cmid).isEqualTo("up-1")
+    }
+
+    @Test
+    fun `removing the pending upload clears state even when the durable cancel fails`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns offline()
+        coEvery { uploadQueue.enqueue(any()) } returns "up-1"
+        coEvery { uploadQueue.cancel(any()) } throws IllegalStateException("disk busy")
+        vm.onMediaPicked(listOf(item()))
+
+        vm.onRemoveMedia("up-1")
+
+        assertThat(vm.state.value.pendingUpload).isNull()
+        assertThat(vm.state.value.draft.mediaIds).isEmpty()
+    }
+
+    @Test
     fun `a pending upload keeps an already-uploaded media id alongside its placeholder`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
