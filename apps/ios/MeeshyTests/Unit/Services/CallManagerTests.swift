@@ -228,8 +228,14 @@ final class WebRTCTypesTests: XCTestCase {
 
     func test_defaultIceServers_hasGoogleStun() {
         let servers = IceServer.defaultServers
-        XCTAssertEqual(servers.count, 3)
+        XCTAssertEqual(servers.count, 4)
         XCTAssertTrue(servers[0].urls.first?.contains("stun.l.google.com") ?? false)
+    }
+
+    func test_defaultIceServers_includesIPv6Stun() {
+        let servers = IceServer.defaultServers
+        let hasIPv6 = servers.contains { $0.urls.contains { $0.contains("stun6.l.google.com") } }
+        XCTAssertTrue(hasIPv6, "defaultServers must include stun6 for IPv6-only cellular networks")
     }
 
     func test_callMediaType_cases() {
@@ -2608,6 +2614,189 @@ final class CallManagerAlreadyAnsweredTests: XCTestCase {
             endsCall || dismissesRing,
             "The call:already-answered handler must either end the call via endCallInternal " +
             "or dismiss the ringing state — it must not silently ignore the event."
+        )
+    }
+}
+
+// MARK: - CallState Reconnecting Tests
+
+@MainActor
+final class CallStateReconnectingTests: XCTestCase {
+
+    func test_reconnecting_isActive() {
+        XCTAssertTrue(CallState.reconnecting(attempt: 1).isActive)
+        XCTAssertTrue(CallState.reconnecting(attempt: 2).isActive)
+        XCTAssertTrue(CallState.reconnecting(attempt: 3).isActive)
+    }
+
+    func test_reconnecting_isNotEnded() {
+        XCTAssertFalse(CallState.reconnecting(attempt: 1).isEnded)
+    }
+
+    func test_reconnecting_isNotRinging() {
+        XCTAssertFalse(CallState.reconnecting(attempt: 1).isRinging)
+    }
+
+    func test_reconnecting_equatable_sameAttempt_isEqual() {
+        XCTAssertEqual(CallState.reconnecting(attempt: 1), CallState.reconnecting(attempt: 1))
+        XCTAssertEqual(CallState.reconnecting(attempt: 3), CallState.reconnecting(attempt: 3))
+    }
+
+    func test_reconnecting_equatable_differentAttempt_isNotEqual() {
+        XCTAssertNotEqual(CallState.reconnecting(attempt: 1), CallState.reconnecting(attempt: 2))
+        XCTAssertNotEqual(CallState.reconnecting(attempt: 2), CallState.reconnecting(attempt: 3))
+    }
+
+    func test_reconnecting_notEqualToConnected() {
+        XCTAssertNotEqual(CallState.reconnecting(attempt: 1), CallState.connected)
+    }
+
+    func test_reconnecting_notEqualToConnecting() {
+        XCTAssertNotEqual(CallState.reconnecting(attempt: 1), CallState.connecting)
+    }
+
+    func test_shouldPresentFullScreenCover_reconnecting_fullScreen_returnsTrue() {
+        XCTAssertTrue(
+            CallState.shouldPresentFullScreenCover(callState: .reconnecting(attempt: 1), displayMode: .fullScreen)
+        )
+    }
+
+    func test_shouldPresentFullScreenCover_reconnecting_pip_returnsFalse() {
+        XCTAssertFalse(
+            CallState.shouldPresentFullScreenCover(callState: .reconnecting(attempt: 1), displayMode: .pip)
+        )
+    }
+
+    func test_shouldPresentFullScreenCover_reconnecting_allAttempts_fullScreen_returnsTrue() {
+        for attempt in 1...3 {
+            XCTAssertTrue(
+                CallState.shouldPresentFullScreenCover(callState: .reconnecting(attempt: attempt), displayMode: .fullScreen),
+                "reconnecting(attempt: \(attempt)) must present fullscreen"
+            )
+        }
+    }
+}
+
+// MARK: - handleRemoteEnd rawReason Mapping
+
+@MainActor
+final class CallManagerHandleRemoteEndTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_handleRemoteEnd_answeredElsewhere_handlesBothVariants() throws {
+        let source = try callManagerSource()
+        guard let switchRange = source.range(of: "switch rawReason?.lowercased()") else {
+            XCTFail("handleRemoteEnd switch not found"); return
+        }
+        let blockEnd = source.range(of: "cxReason = .remoteEnded", range: switchRange.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
+        let switchBlock = String(source[switchRange.lowerBound..<blockEnd])
+
+        XCTAssertTrue(
+            switchBlock.contains("\"answeredelsewhere\""),
+            "handleRemoteEnd must handle 'answeredelsewhere' (camelCase lowercased) from legacy gateway payloads"
+        )
+        XCTAssertTrue(
+            switchBlock.contains("\"answered_elsewhere\""),
+            "handleRemoteEnd must handle 'answered_elsewhere' (snake_case) — the gateway uses " +
+            "snake_case for multi-word event reasons as documented in CLAUDE.md"
+        )
+    }
+
+    func test_handleRemoteEnd_answeredElsewhere_casesShareSameOutcome() throws {
+        let source = try callManagerSource()
+        guard let switchRange = source.range(of: "switch rawReason?.lowercased()") else {
+            XCTFail("handleRemoteEnd switch not found"); return
+        }
+        let blockEnd = source.range(of: "cxReason = .remoteEnded", range: switchRange.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
+        let switchBlock = String(source[switchRange.lowerBound..<blockEnd])
+
+        guard let camelIdx = switchBlock.range(of: "\"answeredelsewhere\"")?.lowerBound,
+              let snakeIdx = switchBlock.range(of: "\"answered_elsewhere\"")?.lowerBound else {
+            XCTFail("Both 'answeredelsewhere' and 'answered_elsewhere' variants must be present"); return
+        }
+        // They must appear in the same case pattern (within 60 chars of each other)
+        let distance = switchBlock.distance(from: min(camelIdx, snakeIdx), to: max(camelIdx, snakeIdx))
+        XCTAssertLessThan(distance, 60, "Both 'answeredelsewhere' variants must be in the same case pattern")
+    }
+
+    func test_handleRemoteEnd_missed_handlesAllVariants() throws {
+        let source = try callManagerSource()
+        guard let switchRange = source.range(of: "switch rawReason?.lowercased()") else {
+            XCTFail("handleRemoteEnd switch not found"); return
+        }
+        let blockEnd = source.range(of: "default:", range: switchRange.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
+        let switchBlock = String(source[switchRange.lowerBound..<blockEnd])
+        XCTAssertTrue(switchBlock.contains("\"missed\""), "handleRemoteEnd must handle 'missed'")
+        XCTAssertTrue(switchBlock.contains("\"no_answer\""), "handleRemoteEnd must handle 'no_answer'")
+        XCTAssertTrue(switchBlock.contains("\"unanswered\""), "handleRemoteEnd must handle 'unanswered'")
+    }
+
+    func test_handleRemoteEnd_rejected_handlesAllVariants() throws {
+        let source = try callManagerSource()
+        guard let switchRange = source.range(of: "switch rawReason?.lowercased()") else {
+            XCTFail("handleRemoteEnd switch not found"); return
+        }
+        let blockEnd = source.range(of: "default:", range: switchRange.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
+        let switchBlock = String(source[switchRange.lowerBound..<blockEnd])
+        XCTAssertTrue(switchBlock.contains("\"rejected\""), "handleRemoteEnd must handle 'rejected'")
+        XCTAssertTrue(switchBlock.contains("\"declined\""), "handleRemoteEnd must handle 'declined'")
+    }
+}
+
+// MARK: - DTMF Validation
+
+@MainActor
+final class CallManagerDTMFTests: XCTestCase {
+
+    func test_sendDTMF_validatesInput_inSourceCode() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+
+        guard let funcRange = source.range(of: "func sendDTMF(digits: String)") else {
+            XCTFail("sendDTMF not found in CallManager.swift"); return
+        }
+        let blockEnd = source.range(of: "}", range: funcRange.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
+        let funcBody = String(source[funcRange.lowerBound..<blockEnd])
+
+        XCTAssertTrue(
+            funcBody.contains("guard") || funcBody.contains("allSatisfy") || funcBody.contains("CharacterSet"),
+            "sendDTMF must validate that digits contain only legal DTMF characters before " +
+            "forwarding to WebRTC — invalid characters cause RTCDataChannel errors"
+        )
+    }
+
+    func test_sendDTMF_rejectsEmptyString_inSourceCode() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+
+        guard let funcRange = source.range(of: "func sendDTMF(digits: String)") else {
+            XCTFail("sendDTMF not found in CallManager.swift"); return
+        }
+        let blockEnd = source.range(of: "}", range: funcRange.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
+        let funcBody = String(source[funcRange.lowerBound..<blockEnd])
+
+        XCTAssertTrue(
+            funcBody.contains("isEmpty"),
+            "sendDTMF must guard against empty digit strings before forwarding"
         )
     }
 }

@@ -1727,7 +1727,7 @@ final class CallManager: ObservableObject {
         case "rejected", "declined":
             cxReason = .declinedElsewhere
             localReason = .rejected
-        case "answeredelsewhere":
+        case "answeredelsewhere", "answered_elsewhere":
             cxReason = .answeredElsewhere
             localReason = .remote
         case "failed", "connectionlost":
@@ -2188,6 +2188,8 @@ final class CallManager: ObservableObject {
 
     /// Called by `CXPlayDTMFCallAction` to forward CallKit keypad digits to WebRTC.
     func sendDTMF(digits: String) {
+        let validCharacters = CharacterSet(charactersIn: "0123456789*#ABCD")
+        guard !digits.isEmpty, digits.unicodeScalars.allSatisfy({ validCharacters.contains($0) }) else { return }
         webRTCService.sendDTMF(digits: digits)
     }
 

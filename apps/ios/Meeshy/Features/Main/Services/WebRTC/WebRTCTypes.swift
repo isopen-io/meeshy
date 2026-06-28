@@ -33,7 +33,8 @@ struct IceServer: Sendable {
     static let defaultServers: [IceServer] = [
         IceServer(urls: ["stun:stun.l.google.com:19302"], username: nil, credential: nil),
         IceServer(urls: ["stun:stun1.l.google.com:19302"], username: nil, credential: nil),
-        IceServer(urls: ["stun:stun2.l.google.com:19302"], username: nil, credential: nil)
+        IceServer(urls: ["stun:stun2.l.google.com:19302"], username: nil, credential: nil),
+        IceServer(urls: ["stun:stun6.l.google.com:19302"], username: nil, credential: nil)
     ]
 }
 
