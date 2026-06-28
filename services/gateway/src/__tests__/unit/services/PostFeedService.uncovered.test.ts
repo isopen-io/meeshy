@@ -492,3 +492,333 @@ describe('PostFeedService — getSeenCounts (private)', () => {
     expect(result.size).toBe(0);
   });
 });
+
+// ── getReels — cursor path (line 398) ────────────────────────────────────────
+
+describe('PostFeedService — getReels cursor path (line 398)', () => {
+  afterEach(() => jest.clearAllMocks());
+
+  it('appends cursor OR clause to AND array when cursor is provided', async () => {
+    const prisma = makePrisma();
+    prisma.post.findMany.mockResolvedValue([]);
+    const cursor = buildCursor(new Date('2025-01-01T00:00:00Z'), POST_ID_1);
+    const service = new PostFeedService(prisma);
+
+    await service.getReels(USER_ID, { cursor, limit: 10 });
+
+    const call = (prisma.post.findMany.mock.calls[0] as any[])[0] as any;
+    const cursorClause = call.where.AND.find((c: any) => c.OR !== undefined);
+    expect(cursorClause).toBeDefined();
+  });
+});
+
+// ── enrichReelsForViewer — empty items early return (line 470) ─────────────
+
+describe('PostFeedService — enrichReelsForViewer empty items (line 470)', () => {
+  afterEach(() => jest.clearAllMocks());
+
+  it('returns [] immediately when called with an empty items array', async () => {
+    const service = new PostFeedService(makePrisma());
+    const result = await (service as any).enrichReelsForViewer([], USER_ID);
+    expect(result).toEqual([]);
+  });
+});
+
+// ── getReelSeed — reel found with mentions (line 536) ────────────────────────
+
+describe('PostFeedService — getReelSeed reel found with mentions (line 536)', () => {
+  afterEach(() => jest.clearAllMocks());
+
+  it('builds mentionedUserIds Set from mentions when reel is found', async () => {
+    const prisma = makePrisma();
+    prisma.post.findUnique.mockResolvedValue({ id: POST_ID_1, authorId: 'author-1', originalLanguage: 'fr' });
+    prisma.postMention.findMany.mockResolvedValue([
+      { mentionedUserId: 'user-a' },
+      { mentionedUserId: 'user-b' },
+    ]);
+    const service = new PostFeedService(prisma);
+
+    const result = await (service as any).getReelSeed(POST_ID_1);
+
+    expect(result).not.toBeNull();
+    expect(result.mentionedUserIds).toBeInstanceOf(Set);
+    expect(result.mentionedUserIds.has('user-a')).toBe(true);
+    expect(result.mentionedUserIds.has('user-b')).toBe(true);
+  });
+});
+
+// ── getMentionsByPost — with actual mentions returned ─────────────────────────
+
+describe('PostFeedService — getMentionsByPost — mention accumulation (lines 567-569)', () => {
+  afterEach(() => jest.clearAllMocks());
+
+  it('accumulates mentionedUserIds per postId in the result Map', async () => {
+    const prisma = makePrisma();
+    prisma.postMention.findMany.mockResolvedValue([
+      { postId: POST_ID_1, mentionedUserId: 'u1' },
+      { postId: POST_ID_1, mentionedUserId: 'u2' },
+      { postId: POST_ID_2, mentionedUserId: 'u3' },
+    ]);
+    const service = new PostFeedService(prisma);
+
+    const result = await (service as any).getMentionsByPost([POST_ID_1, POST_ID_2]);
+
+    expect(result.get(POST_ID_1)).toEqual(['u1', 'u2']);
+    expect(result.get(POST_ID_2)).toEqual(['u3']);
+  });
+});
+
+// ── affinityScore — all three branches ───────────────────────────────────────
+
+describe('PostFeedService — affinityScore (lines 845-846)', () => {
+  afterEach(() => jest.clearAllMocks());
+
+  it('returns 0.8 when authorId === viewerId (self-affinity)', () => {
+    const service = new PostFeedService(makePrisma());
+    const score = (service as any).affinityScore(USER_ID, USER_ID, []);
+    expect(score).toBe(0.8);
+  });
+
+  it('returns 0.5 when authorId is in friendIds (friend affinity)', () => {
+    const FRIEND = 'friend-user';
+    const service = new PostFeedService(makePrisma());
+    const score = (service as any).affinityScore(FRIEND, USER_ID, [FRIEND]);
+    expect(score).toBe(0.5);
+  });
+
+  it('returns 0 when authorId is neither viewer nor friend (stranger)', () => {
+    const service = new PostFeedService(makePrisma());
+    const score = (service as any).affinityScore('stranger', USER_ID, ['friend-a']);
+    expect(score).toBe(0);
+  });
+});
+
+// ── getFeed — cursor path (line 103) ──────────────────────────────────────────
+
+describe('PostFeedService — getFeed cursor path (line 103)', () => {
+  afterEach(() => jest.clearAllMocks());
+
+  it('appends cursor AND clause when cursor is provided', async () => {
+    const prisma = makePrisma();
+    const post = makeStatus(POST_ID_1, { type: 'POST' });
+    prisma.post.findMany.mockResolvedValue([post]);
+    prisma.postReaction.findMany.mockResolvedValue([]);
+    const cursor = buildCursor(new Date('2025-01-01T00:00:00Z'), POST_ID_1);
+    const service = new PostFeedService(prisma);
+
+    await service.getFeed(USER_ID, cursor, 10);
+
+    const call = (prisma.post.findMany.mock.calls[0] as any[])[0] as any;
+    expect(call.where.AND).toBeDefined();
+    expect(call.where.AND.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// ── getFeed — userBookmarks callback coverage (line 200) ─────────────────────
+
+describe('PostFeedService — getFeed bookmark map callback (line 200)', () => {
+  afterEach(() => jest.clearAllMocks());
+
+  it('populates isBookmarkedByMe when postBookmark returns a result', async () => {
+    const prisma = makePrisma();
+    const post = makeStatus(POST_ID_1, { type: 'POST' });
+    prisma.post.findMany.mockResolvedValue([post]);
+    prisma.postReaction.findMany.mockResolvedValue([]);
+    prisma.postBookmark.findMany.mockResolvedValue([{ postId: POST_ID_1 }]);
+    const service = new PostFeedService(prisma);
+
+    const result = await service.getFeed(USER_ID, undefined, 10);
+
+    expect((result.items[0] as any).isBookmarkedByMe).toBe(true);
+  });
+});
+
+// ── getStories — viewedRows callback coverage (line 254) ─────────────────────
+
+describe('PostFeedService — getStories viewedSet callback (line 254)', () => {
+  afterEach(() => jest.clearAllMocks());
+
+  it('marks story as viewed when postView returns a matching entry', async () => {
+    const prisma = makePrisma();
+    const story = makeStatus(POST_ID_1, { type: 'STORY', expiresAt: null });
+    prisma.post.findMany.mockResolvedValue([story]);
+    prisma.postView.findMany.mockResolvedValue([{ postId: POST_ID_1 }]);
+    prisma.postReaction.findMany.mockResolvedValue([]);
+    const service = new PostFeedService(prisma);
+
+    const result = await service.getStories(USER_ID);
+
+    expect((result[0] as any).isViewedByMe).toBe(true);
+  });
+});
+
+// ── getUserPosts — cursor path (line 592) ─────────────────────────────────────
+
+describe('PostFeedService — getUserPosts cursor path (line 592)', () => {
+  afterEach(() => jest.clearAllMocks());
+
+  it('appends cursor OR clause when cursor is provided', async () => {
+    const prisma = makePrisma();
+    const post = makeStatus(POST_ID_1, { type: 'POST', authorId: USER_ID });
+    prisma.post.findMany.mockResolvedValue([post]);
+    prisma.postReaction.findMany.mockResolvedValue([]);
+    const cursor = buildCursor(new Date('2025-01-01T00:00:00Z'), POST_ID_1);
+    const service = new PostFeedService(prisma);
+
+    await service.getUserPosts(USER_ID, USER_ID, cursor, 10);
+
+    const call = (prisma.post.findMany.mock.calls[0] as any[])[0] as any;
+    expect(call.where.OR).toBeDefined();
+  });
+});
+
+// ── getCommunityFeed — cursor path (line 658) ─────────────────────────────────
+
+describe('PostFeedService — getCommunityFeed cursor path (line 658)', () => {
+  afterEach(() => jest.clearAllMocks());
+
+  it('appends cursor OR clause when cursor is provided', async () => {
+    const prisma = makePrisma();
+    const post = makeStatus(POST_ID_1, { type: 'POST' });
+    prisma.post.findMany.mockResolvedValue([post]);
+    prisma.postReaction.findMany.mockResolvedValue([]);
+    const cursor = buildCursor(new Date('2025-01-01T00:00:00Z'), POST_ID_1);
+    const service = new PostFeedService(prisma);
+
+    await service.getCommunityFeed('community-1', USER_ID, cursor, 10);
+
+    const call = (prisma.post.findMany.mock.calls[0] as any[])[0] as any;
+    expect(call.where.OR).toBeDefined();
+  });
+});
+
+// ── getBookmarks — cursor path (line 713) ─────────────────────────────────────
+
+describe('PostFeedService — getBookmarks cursor path (line 713)', () => {
+  afterEach(() => jest.clearAllMocks());
+
+  it('appends cursor OR clause when cursor is provided', async () => {
+    const prisma = makePrisma();
+    prisma.postBookmark.findMany.mockResolvedValue([]);
+    const cursor = buildCursor(new Date('2025-01-01T00:00:00Z'), POST_ID_1);
+    const service = new PostFeedService(prisma);
+
+    await service.getBookmarks(USER_ID, cursor, 10);
+
+    const call = (prisma.postBookmark.findMany.mock.calls[0] as any[])[0] as any;
+    expect(call.where.OR).toBeDefined();
+  });
+});
+
+// ── getDirectConversationContactIds — cache.set rejection (lines 788, 801) ───
+
+describe('PostFeedService — getDirectConversationContactIds cache.set rejection', () => {
+  afterEach(() => jest.clearAllMocks());
+
+  it('swallows cache.set rejection when contacts list is empty (line 788)', async () => {
+    const prisma = makePrisma();
+    const cache = {
+      get: jest.fn<any>().mockResolvedValue(null),
+      set: jest.fn<any>().mockRejectedValue(new Error('Redis write error')),
+    } as any;
+    prisma.participant.findMany.mockResolvedValue([]);
+    const service = new PostFeedService(prisma, cache);
+
+    const result = await (service as any).getDirectConversationContactIds(USER_ID);
+
+    expect(result).toEqual([]);
+    expect(cache.set).toHaveBeenCalled();
+  });
+
+  it('swallows cache.set rejection when contacts are found (line 801)', async () => {
+    const prisma = makePrisma();
+    const cache = {
+      get: jest.fn<any>().mockResolvedValue(null),
+      set: jest.fn<any>().mockRejectedValue(new Error('Redis write error')),
+    } as any;
+    prisma.participant.findMany
+      .mockResolvedValueOnce([{ conversationId: 'conv-1' }])
+      .mockResolvedValueOnce([{ userId: 'contact-a' }]);
+    const service = new PostFeedService(prisma, cache);
+
+    const result = await (service as any).getDirectConversationContactIds(USER_ID);
+
+    expect(result).toContain('contact-a');
+    expect(cache.set).toHaveBeenCalled();
+  });
+});
+
+// ── getFriendIds — cache.get rejection (line 811) ────────────────────────────
+
+describe('PostFeedService — getFriendIds cache.get rejection (line 811)', () => {
+  afterEach(() => jest.clearAllMocks());
+
+  it('falls through to DB when cache.get rejects', async () => {
+    const prisma = makePrisma();
+    const cache = {
+      get: jest.fn<any>().mockRejectedValue(new Error('Redis read error')),
+      set: jest.fn<any>().mockResolvedValue(undefined),
+    } as any;
+    prisma.friendRequest.findMany.mockResolvedValue([{ senderId: USER_ID, receiverId: 'friend-1' }]);
+    const service = new PostFeedService(prisma, cache);
+
+    const result = await (service as any).getFriendIds(USER_ID);
+
+    expect(result).toContain('friend-1');
+    expect(prisma.friendRequest.findMany).toHaveBeenCalled();
+  });
+
+  it('swallows cache.set rejection when friends are found (line 829)', async () => {
+    const prisma = makePrisma();
+    const cache = {
+      get: jest.fn<any>().mockResolvedValue(null),
+      set: jest.fn<any>().mockRejectedValue(new Error('Redis write error')),
+    } as any;
+    prisma.friendRequest.findMany.mockResolvedValue([{ senderId: USER_ID, receiverId: 'friend-1' }]);
+    const service = new PostFeedService(prisma, cache);
+
+    const result = await (service as any).getFriendIds(USER_ID);
+
+    expect(result).toContain('friend-1');
+    expect(cache.set).toHaveBeenCalled();
+  });
+});
+
+// ── getInterestAffinity — cache.get rejection (line 864) ─────────────────────
+
+describe('PostFeedService — getInterestAffinity cache.get rejection (line 864)', () => {
+  afterEach(() => jest.clearAllMocks());
+
+  it('falls through to DB when cache.get rejects (line 864 catch)', async () => {
+    const prisma = makePrisma();
+    const cache = {
+      get: jest.fn<any>().mockRejectedValue(new Error('Redis read error')),
+      set: jest.fn<any>().mockResolvedValue(undefined),
+    } as any;
+    prisma.postReaction.findMany.mockResolvedValue([]);
+    prisma.postBookmark.findMany.mockResolvedValue([]);
+    const service = new PostFeedService(prisma, cache);
+
+    const result = await (service as any).getInterestAffinity(USER_ID);
+
+    expect(result).toBeInstanceOf(Map);
+    expect(prisma.postReaction.findMany).toHaveBeenCalled();
+  });
+
+  it('swallows cache.set rejection when affinity is computed (line 909)', async () => {
+    const AUTHOR = 'creator-1';
+    const prisma = makePrisma();
+    const cache = {
+      get: jest.fn<any>().mockResolvedValue(null),
+      set: jest.fn<any>().mockRejectedValue(new Error('Redis write error')),
+    } as any;
+    prisma.postReaction.findMany.mockResolvedValue([{ post: { authorId: AUTHOR } }]);
+    prisma.postBookmark.findMany.mockResolvedValue([]);
+    const service = new PostFeedService(prisma, cache);
+
+    const result = await (service as any).getInterestAffinity(USER_ID);
+
+    expect(result.get(AUTHOR)).toBeGreaterThan(0);
+    expect(cache.set).toHaveBeenCalled();
+  });
+});

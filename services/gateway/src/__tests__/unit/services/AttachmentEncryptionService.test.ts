@@ -990,4 +990,117 @@ describe('AttachmentEncryptionService', () => {
       jest.useRealTimers();
     });
   });
+
+  // ─── getKeyFromCache ──────────────────────────────────────────────────────
+
+  describe('getKeyFromCache (lines 308-313)', () => {
+    it('returns undefined when key is not in cache', () => {
+      const svc = new AttachmentEncryptionService(makePrisma());
+      const result = (svc as any).keyVault.getKeyFromCache('no-such-key');
+      expect(result).toBeUndefined();
+    });
+
+    it('returns Buffer when key is freshly cached', async () => {
+      const svc = new AttachmentEncryptionService(makePrisma());
+      const keyId = await svc.generateServerKey();
+      const result = (svc as any).keyVault.getKeyFromCache(keyId);
+      expect(result).toBeInstanceOf(Buffer);
+    });
+
+    it('returns undefined when cached entry has expired TTL', async () => {
+      jest.useFakeTimers();
+      const svc = new AttachmentEncryptionService(makePrisma());
+      const keyId = await svc.generateServerKey();
+      jest.advanceTimersByTime(31 * 60 * 1000); // past 30-min TTL
+      const result = (svc as any).keyVault.getKeyFromCache(keyId);
+      expect(result).toBeUndefined();
+      jest.useRealTimers();
+    });
+  });
+
+  // ─── LRU eviction (cacheKey / evictOldestEntries) ────────────────────────
+
+  describe('LRU eviction — evictOldestEntries (lines 372, 385-390)', () => {
+    it('evicts oldest entry when cache reaches MAX_CACHE_SIZE', () => {
+      const svc = new AttachmentEncryptionService(makePrisma());
+      const vault = (svc as any).keyVault;
+
+      // Use MAX_CACHE_SIZE=5 so Math.floor(5*0.2)=1 entry gets evicted
+      vault.MAX_CACHE_SIZE = 5;
+
+      // Seed 5 entries with ascending cachedAt so key-0 is the oldest
+      for (let i = 0; i < 5; i++) {
+        vault.cache.set(`seed-key-${i}`, { key: Buffer.alloc(32), cachedAt: i * 1000 });
+      }
+
+      // Calling cacheKey detects full cache → evictOldestEntries(1) → delete seed-key-0
+      vault.cacheKey('new-key', Buffer.alloc(32));
+
+      expect(vault.cache.has('seed-key-0')).toBe(false); // oldest evicted
+      expect(vault.cache.has('new-key')).toBe(true);     // newest present
+      expect(vault.cache.size).toBeLessThanOrEqual(5);
+    });
+  });
+
+  // ─── encryptAttachment — max file size ───────────────────────────────────
+
+  describe('encryptAttachment — max file size (line 444-445)', () => {
+    it('throws when fileBuffer length exceeds 2 GB', async () => {
+      const svc = new AttachmentEncryptionService(makePrisma());
+      // Use a fake buffer-shaped object with a length > 2 GB to avoid
+      // allocating real memory; the check runs before any buffer operation.
+      const hugeBuffer = { length: 3 * 1024 * 1024 * 1024 } as unknown as Buffer;
+      await expect(
+        svc.encryptAttachment({
+          fileBuffer: hugeBuffer,
+          filename: 'huge.bin',
+          mimeType: 'application/octet-stream',
+          mode: 'e2ee',
+        })
+      ).rejects.toThrow('exceeds maximum allowed size');
+    });
+  });
+
+  // ─── getKey — fire-and-forget DB update rejection (line 292) ─────────────
+
+  describe('getKey — fire-and-forget update rejection (line 292)', () => {
+    it('silently swallows DB update error after loading key from MongoDB', async () => {
+      // Step 1: set up prisma so we can capture the encrypted key data written
+      //         by generateKey, then return it from findUnique.
+      const prisma = makePrisma({
+        serverEncryptionKey: {
+          create: (jest.fn() as jest.Mock<any>).mockImplementation(async ({ data }: { data: unknown }) => data),
+          findUnique: (jest.fn() as jest.Mock<any>).mockResolvedValue(null),
+          update: (jest.fn() as jest.Mock<any>).mockRejectedValue(new Error('DB update error')),
+          updateMany: (jest.fn() as jest.Mock<any>).mockResolvedValue({ count: 0 }),
+          count: (jest.fn() as jest.Mock<any>).mockResolvedValue(0),
+        },
+      });
+      const svc = new AttachmentEncryptionService(prisma);
+
+      // Step 2: generate a key — captures encrypted blob via prisma.create
+      const keyId = await svc.generateServerKey();
+      const createData = ((prisma.serverEncryptionKey.create as any).mock.calls as any[][])[0][0].data;
+
+      // Step 3: evict from in-memory cache to force a DB lookup on next access
+      (svc as any).keyVault.cache.delete(keyId);
+
+      // Step 4: make findUnique return the encrypted data so decryptDataKey succeeds
+      (prisma.serverEncryptionKey.findUnique as any).mockResolvedValue({
+        ...createData,
+        id: keyId,
+      });
+
+      // Step 5: call getKey — it decrypts successfully, then fires-and-forgets
+      //         the update (which rejects); the rejection is swallowed.
+      const key = await (svc as any).keyVault.getKey(keyId);
+      expect(key).toBeInstanceOf(Buffer);
+
+      // Flush microtasks to execute the .catch(() => {}) callback
+      await Promise.resolve();
+
+      expect(prisma.serverEncryptionKey.update).toHaveBeenCalled();
+      // No unhandled rejection — the test itself would fail if one escaped
+    });
+  });
 });
