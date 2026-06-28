@@ -67,7 +67,8 @@ export class MessagingService {
 
   private isOwnMessage(message: Message): boolean {
     if (!this.currentUserId) return false;
-    const senderId = (message.sender as any)?.userId ?? (message.sender as any)?.id ?? (message as any).senderId;
+    const sender = message.sender;
+    const senderId = sender?.userId ?? sender?.id ?? message.senderId;
     return senderId === this.currentUserId;
   }
 

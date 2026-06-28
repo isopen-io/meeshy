@@ -85,12 +85,16 @@ final class ConversationSocketHandler {
     /// write through the actor in addition to updating the delegate/ViewModel.
     var persistence: MessagePersistenceActor?
 
-    // Message deduplication: sliding window of recently seen message IDs
-    // to prevent duplicates when REST refresh and socket broadcast deliver
-    // the same message during reconnection.
-    private static let dedupWindowSize = 1000
-    private var recentMessageIds: Set<String> = []
-    private var recentMessageIdOrder: [String] = []
+    // Message deduplication: combined count + time-based eviction.
+    // Tracks messageId → timestamp so:
+    //   • Entries older than dedupMaxAge are always evictable (prevents stale
+    //     entries from blocking legitimate re-delivers after long gaps).
+    //   • When the table exceeds dedupMaxSize the oldest half is pruned
+    //     to keep memory bounded even during reconnect bursts.
+    // Replacing the old Set+Array approach which had no time dimension.
+    private static let dedupMaxSize: Int = 1000
+    private static let dedupMaxAge: TimeInterval = 10 * 60 // 10 minutes
+    private var recentMessageTimestamps: [String: Date] = [:]
 
     // Typing emission state. `nonisolated(unsafe)` is REQUIRED (not cosmetic):
     // the nonisolated `deinit` invalidates these timers for cleanup, and under
@@ -183,16 +187,26 @@ final class ConversationSocketHandler {
     // MARK: - Deduplication
 
     private func markSeen(_ messageId: String) {
-        guard recentMessageIds.insert(messageId).inserted else { return }
-        recentMessageIdOrder.append(messageId)
-        while recentMessageIdOrder.count > Self.dedupWindowSize {
-            let oldest = recentMessageIdOrder.removeFirst()
-            recentMessageIds.remove(oldest)
+        guard recentMessageTimestamps[messageId] == nil else { return }
+        recentMessageTimestamps[messageId] = Date()
+        if recentMessageTimestamps.count > Self.dedupMaxSize {
+            evictDedup()
         }
     }
 
     private func wasSeen(_ messageId: String) -> Bool {
-        recentMessageIds.contains(messageId)
+        recentMessageTimestamps[messageId] != nil
+    }
+
+    private func evictDedup() {
+        let cutoff = Date().addingTimeInterval(-Self.dedupMaxAge)
+        recentMessageTimestamps = recentMessageTimestamps.filter { $0.value > cutoff }
+        guard recentMessageTimestamps.count > Self.dedupMaxSize else { return }
+        let sorted = recentMessageTimestamps.sorted { $0.value < $1.value }
+        let excessCount = recentMessageTimestamps.count - Self.dedupMaxSize / 2
+        for (key, _) in sorted.prefix(excessCount) {
+            recentMessageTimestamps.removeValue(forKey: key)
+        }
     }
 
     // MARK: - Room Management
@@ -253,12 +267,22 @@ final class ConversationSocketHandler {
 
     // MARK: - Typing Safety Timers
 
+    // Guard against runaway timer growth in large conversations: beyond this
+    // cap we skip scheduling a new timer (the oldest entry stays at its current
+    // timeout, which is the desired no-op for very large groups).
+    private static let typingSafetyTimerCap = 50
+
     private func resetTypingSafetyTimer(for username: String) {
+        if typingSafetyTimers[username] == nil,
+           typingSafetyTimers.count >= Self.typingSafetyTimerCap {
+            return
+        }
         typingSafetyTimers[username]?.invalidate()
         typingSafetyTimers[username] = Timer.scheduledTimer(withTimeInterval: Self.typingSafetyTimeout, repeats: false) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.delegate?.typingUsernames.removeAll { $0 == username }
-                self?.typingSafetyTimers.removeValue(forKey: username)
+                guard let self else { return }
+                self.delegate?.typingUsernames.removeAll { $0 == username }
+                self.typingSafetyTimers.removeValue(forKey: username)
             }
         }
     }
