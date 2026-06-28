@@ -108,6 +108,9 @@ const mockPrisma = {
     update: jest.fn(),
     deleteMany: jest.fn(),
   },
+  userPreferences: {
+    findUnique: jest.fn(),
+  },
 };
 
 jest.mock('@meeshy/shared/prisma/client', () => ({
@@ -1397,6 +1400,433 @@ describe('PushNotificationService', () => {
         'Failed to initialize APNS',
         expect.objectContaining({ error: expect.any(Error) })
       );
+    });
+  });
+
+  // ── sendViaFCM — platform-specific message building (lines 419-420, 427-429) ──
+
+  describe('sendViaFCM — android and web platform message building', () => {
+    it('builds android-specific message for android FCM tokens (lines 419-420)', async () => {
+      const { PushNotificationService } = await getServiceWithEnv({
+        ENABLE_PUSH_NOTIFICATIONS: 'true',
+        ENABLE_FCM_PUSH: 'true',
+        FIREBASE_ADMIN_CREDENTIALS_PATH: '/path/to/creds.json',
+      });
+      mockFirebaseMessagingSend.mockResolvedValue({ messageId: 'msg-android' });
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'tok-a', token: 'fcm-tok-a', type: 'fcm', platform: 'android', bundleId: null },
+      ]);
+      mockPrisma.pushToken.update.mockResolvedValue({});
+
+      const service = new PushNotificationService(mockPrisma as any);
+
+      const result = await service.sendToUser({
+        userId: 'user-1',
+        payload: { title: 'Hello', body: 'World' },
+      });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].success).toBe(true);
+      expect(mockFirebaseMessagingSend).toHaveBeenCalled();
+      const msgArg = (mockFirebaseMessagingSend.mock.calls[0] as any[])[0];
+      expect(msgArg.android).toMatchObject({ priority: 'high' });
+    });
+
+    it('builds webpush message for web FCM tokens (lines 427-429)', async () => {
+      const { PushNotificationService } = await getServiceWithEnv({
+        ENABLE_PUSH_NOTIFICATIONS: 'true',
+        ENABLE_FCM_PUSH: 'true',
+        FIREBASE_ADMIN_CREDENTIALS_PATH: '/path/to/creds.json',
+      });
+      mockFirebaseMessagingSend.mockResolvedValue({ messageId: 'msg-web' });
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'tok-w', token: 'fcm-tok-w', type: 'fcm', platform: 'web', bundleId: null },
+      ]);
+      mockPrisma.pushToken.update.mockResolvedValue({});
+
+      const service = new PushNotificationService(mockPrisma as any);
+
+      const result = await service.sendToUser({
+        userId: 'user-1',
+        payload: { title: 'Hi', body: 'Web push' },
+      });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].success).toBe(true);
+      const msgArg = (mockFirebaseMessagingSend.mock.calls[0] as any[])[0];
+      expect(msgArg.webpush).toBeDefined();
+      expect(msgArg.webpush.notification).toMatchObject({ title: 'Hi', body: 'Web push' });
+    });
+
+    it('sets collapseId on android and apns parts when platform=ios (lines 445, 449-450)', async () => {
+      const { PushNotificationService } = await getServiceWithEnv({
+        ENABLE_PUSH_NOTIFICATIONS: 'true',
+        ENABLE_FCM_PUSH: 'true',
+        FIREBASE_ADMIN_CREDENTIALS_PATH: '/path/to/creds.json',
+      });
+      mockFirebaseMessagingSend.mockResolvedValue({ messageId: 'msg-collapse' });
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'tok-i', token: 'fcm-tok-i', type: 'fcm', platform: 'ios', bundleId: null },
+      ]);
+      mockPrisma.pushToken.update.mockResolvedValue({});
+
+      const service = new PushNotificationService(mockPrisma as any);
+
+      const result = await service.sendToUser({
+        userId: 'user-1',
+        payload: { title: 'Hi', body: 'Msg', collapseId: 'conv-xyz' },
+      });
+
+      expect(result[0].success).toBe(true);
+      const msgArg = (mockFirebaseMessagingSend.mock.calls[0] as any[])[0];
+      expect(msgArg.android).toMatchObject({ collapseKey: 'conv-xyz' });
+      expect(msgArg.apns.headers).toMatchObject({ 'apns-collapse-id': 'conv-xyz' });
+    });
+
+    it('returns TOKEN_INVALID on registration-token-not-registered error (lines 471, 473, 481, 484)', async () => {
+      const { PushNotificationService } = await getServiceWithEnv({
+        ENABLE_PUSH_NOTIFICATIONS: 'true',
+        ENABLE_FCM_PUSH: 'true',
+        FIREBASE_ADMIN_CREDENTIALS_PATH: '/path/to/creds.json',
+      });
+      const invalidTokenError = Object.assign(new Error('token invalid'), {
+        code: 'messaging/registration-token-not-registered',
+      });
+      mockFirebaseMessagingSend.mockRejectedValue(invalidTokenError);
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'tok-inv', token: 'fcm-tok-inv', type: 'fcm', platform: 'android', bundleId: null },
+      ]);
+      mockPrisma.pushToken.findUnique.mockResolvedValue({ failedAttempts: 0 });
+      mockPrisma.pushToken.update.mockResolvedValue({});
+
+      const service = new PushNotificationService(mockPrisma as any);
+
+      const result = await service.sendToUser({
+        userId: 'user-1',
+        payload: { title: 'Hi', body: 'Msg' },
+      });
+
+      expect(result[0].success).toBe(false);
+      expect(result[0].error).toBe('TOKEN_INVALID');
+    });
+
+    it('returns error message on generic FCM error (lines 473, 487)', async () => {
+      const { PushNotificationService } = await getServiceWithEnv({
+        ENABLE_PUSH_NOTIFICATIONS: 'true',
+        ENABLE_FCM_PUSH: 'true',
+        FIREBASE_ADMIN_CREDENTIALS_PATH: '/path/to/creds.json',
+      });
+      mockFirebaseMessagingSend.mockRejectedValue(new Error('Internal server error'));
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'tok-err', token: 'fcm-tok-err', type: 'fcm', platform: 'android', bundleId: null },
+      ]);
+      mockPrisma.pushToken.findUnique.mockResolvedValue({ failedAttempts: 0 });
+      mockPrisma.pushToken.update.mockResolvedValue({});
+
+      const service = new PushNotificationService(mockPrisma as any);
+
+      const result = await service.sendToUser({
+        userId: 'user-1',
+        payload: { title: 'Hi', body: 'Msg' },
+      });
+
+      expect(result[0].success).toBe(false);
+      expect(result[0].error).toBe('Internal server error');
+    });
+  });
+
+  // ── sendToUser — outer catch block (lines 312-314) ────────────────────────
+
+  describe('sendToUser — outer catch block when pushToken.update throws', () => {
+    it('catches error in token loop and calls handleFailedToken (lines 312-314)', async () => {
+      const { PushNotificationService } = await getServiceWithEnv({
+        ENABLE_PUSH_NOTIFICATIONS: 'true',
+        ENABLE_FCM_PUSH: 'true',
+        FIREBASE_ADMIN_CREDENTIALS_PATH: '/path/to/creds.json',
+      });
+      mockFirebaseMessagingSend.mockResolvedValue({ messageId: 'msg-ok' });
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'tok-upd', token: 'fcm-tok-upd', type: 'fcm', platform: 'android', bundleId: null },
+      ]);
+      // First update (lastUsedAt after success) throws; second (handleFailedToken) resolves
+      mockPrisma.pushToken.update
+        .mockRejectedValueOnce(new Error('DB write error'))
+        .mockResolvedValue({});
+      mockPrisma.pushToken.findUnique.mockResolvedValue({ failedAttempts: 0 });
+
+      const service = new PushNotificationService(mockPrisma as any);
+
+      const result = await service.sendToUser({
+        userId: 'user-1',
+        payload: { title: 'Hi', body: 'Msg' },
+      });
+
+      // FCM succeeded (first result), then the lastUsedAt update threw,
+      // so catch block (lines 312-313) appends a second failed result
+      expect(result).toHaveLength(2);
+      expect(result[0].success).toBe(true);
+      expect(result[1].success).toBe(false);
+      expect(result[1].error).toBe('DB write error');
+    });
+  });
+
+  // ── sendViaAPNS — APNs collapseId (line 552) ────────────────────────────
+
+  describe('sendViaAPNS — collapseId on notification', () => {
+    it('sets notification.collapseId when payload.collapseId is provided (line 552)', async () => {
+      let capturedNotification: any = null;
+      mockApnsProviderSend.mockImplementation((notif: any) => {
+        capturedNotification = notif;
+        return Promise.resolve({ sent: [{}], failed: [] });
+      });
+
+      const { PushNotificationService } = await getServiceWithEnv({
+        ENABLE_PUSH_NOTIFICATIONS: 'true',
+        ENABLE_APNS_PUSH: 'true',
+        APNS_KEY_ID: 'key-id',
+        APNS_TEAM_ID: 'team-id',
+        APNS_KEY_PATH: '/path/to/key.p8',
+        APNS_BUNDLE_ID: 'me.meeshy.app',
+      });
+      const service = new PushNotificationService(mockPrisma as any);
+
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'tok-c', token: 'apns-tok-c', type: 'apns', platform: 'ios', bundleId: 'me.meeshy.app' },
+      ]);
+      mockPrisma.pushToken.update.mockResolvedValue({});
+
+      const result = await service.sendToUser({
+        userId: 'user-1',
+        payload: { title: 'Hi', body: 'Msg', collapseId: 'thread-001' },
+      });
+
+      expect(result[0].success).toBe(true);
+      expect(capturedNotification).toBeDefined();
+      expect(capturedNotification.collapseId).toBe('thread-001');
+    });
+  });
+
+  // ── APNS init — @parse/node-apn unavailable (lines 157, 179) ─────────────
+
+  describe('APNS initialization — apn module throws on import (lines 157, 179)', () => {
+    it('warns when @parse/node-apn dynamic import throws (apn becomes null)', async () => {
+      jest.resetModules();
+
+      jest.doMock('firebase-admin', () => ({
+        __esModule: true,
+        default: firebaseAdminMockShape,
+        ...firebaseAdminMockShape,
+      }));
+
+      // Make @parse/node-apn throw so import().catch(() => null) fires (line 157)
+      jest.doMock('@parse/node-apn', () => {
+        throw new Error('@parse/node-apn: native module not available');
+      }, { virtual: true });
+
+      jest.doMock('fs', () => ({
+        __esModule: true,
+        default: { existsSync: mockExistsSync, readFileSync: mockReadFileSync, statSync: mockStatSync },
+        existsSync: mockExistsSync,
+        readFileSync: mockReadFileSync,
+        statSync: mockStatSync,
+      }));
+
+      jest.doMock('path', () => ({
+        __esModule: true,
+        default: { resolve: jest.fn((p: string) => p) },
+        resolve: jest.fn((p: string) => p),
+      }));
+
+      jest.doMock('@meeshy/shared/prisma/client', () => ({
+        PrismaClient: jest.fn(() => mockPrisma),
+      }));
+
+      jest.doMock('../../../utils/logger-enhanced', () => ({
+        __esModule: true,
+        enhancedLogger: enhancedLoggerMockShape,
+        performanceLogger: performanceLoggerMockShape,
+        notificationLogger: mockChildLogger,
+        default: enhancedLoggerMockShape,
+      }));
+
+      // Clear and set env vars
+      delete process.env.ENABLE_PUSH_NOTIFICATIONS;
+      delete process.env.ENABLE_APNS_PUSH;
+      delete process.env.ENABLE_FCM_PUSH;
+      delete process.env.FIREBASE_ADMIN_CREDENTIALS_PATH;
+      delete process.env.APNS_KEY_ID;
+      delete process.env.APNS_TEAM_ID;
+      delete process.env.APNS_KEY_PATH;
+      process.env.ENABLE_PUSH_NOTIFICATIONS = 'true';
+      process.env.ENABLE_APNS_PUSH = 'true';
+      process.env.APNS_KEY_ID = 'key-id';
+      process.env.APNS_TEAM_ID = 'team-id';
+      process.env.APNS_KEY_PATH = '/path/to/key.p8';
+
+      const { PushNotificationService: PushSvc } = await import('../../../services/PushNotificationService');
+      const service = new PushSvc(mockPrisma as any);
+      await service.initialize();
+
+      expect(mockLoggerWarn).toHaveBeenCalledWith('@parse/node-apn not installed, APNS push disabled');
+    });
+  });
+
+  // ── isPushAllowed — user preference checks (lines 198-221) ───────────────
+
+  describe('isPushAllowed — user preference and DND checks', () => {
+    it('returns empty array when pushEnabled is false (lines 201, 242-243)', async () => {
+      const { PushNotificationService } = await getServiceWithEnv({
+        ENABLE_PUSH_NOTIFICATIONS: 'true',
+        ENABLE_FCM_PUSH: 'true',
+        FIREBASE_ADMIN_CREDENTIALS_PATH: '/path/to/creds.json',
+      });
+      mockPrisma.userPreferences.findUnique.mockResolvedValue({
+        notification: { pushEnabled: false },
+      });
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'tok-blocked', token: 'fcm-tok', type: 'fcm', platform: 'android', bundleId: null },
+      ]);
+
+      const service = new PushNotificationService(mockPrisma as any);
+      const result = await service.sendToUser({
+        userId: 'user-no-push',
+        payload: { title: 'Hi', body: 'Msg' },
+      });
+
+      expect(result).toEqual([]);
+      expect(mockLoggerInfo).toHaveBeenCalledWith(
+        'Push blocked by user preferences',
+        expect.objectContaining({ userId: 'user-no-push' })
+      );
+    });
+
+    it('blocks push when DND start<=end window is active (lines 204-219)', async () => {
+      const { PushNotificationService } = await getServiceWithEnv({
+        ENABLE_PUSH_NOTIFICATIONS: 'true',
+        ENABLE_FCM_PUSH: 'true',
+        FIREBASE_ADMIN_CREDENTIALS_PATH: '/path/to/creds.json',
+      });
+
+      jest.useFakeTimers({ now: new Date('2026-06-29T14:30:00Z') }); // Tuesday 14:30 UTC
+
+      try {
+        mockPrisma.userPreferences.findUnique.mockResolvedValue({
+          notification: {
+            pushEnabled: true,
+            dndEnabled: true,
+            dndStartTime: '12:00',
+            dndEndTime: '16:00',
+            dndDays: [],
+          },
+        });
+        mockPrisma.pushToken.findMany.mockResolvedValue([
+          { id: 'tok-dnd', token: 'fcm-dnd', type: 'fcm', platform: 'android', bundleId: null },
+        ]);
+
+        const service = new PushNotificationService(mockPrisma as any);
+        const result = await service.sendToUser({
+          userId: 'user-dnd',
+          payload: { title: 'Hi', body: 'Msg' },
+        });
+
+        expect(result).toEqual([]);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('allows push when today is not a DND day (line 209)', async () => {
+      const { PushNotificationService } = await getServiceWithEnv({
+        ENABLE_PUSH_NOTIFICATIONS: 'true',
+        ENABLE_FCM_PUSH: 'true',
+        FIREBASE_ADMIN_CREDENTIALS_PATH: '/path/to/creds.json',
+      });
+
+      jest.useFakeTimers({ now: new Date('2026-06-30T14:30:00Z') }); // Tuesday
+
+      try {
+        mockPrisma.userPreferences.findUnique.mockResolvedValue({
+          notification: {
+            pushEnabled: true,
+            dndEnabled: true,
+            dndStartTime: '12:00',
+            dndEndTime: '16:00',
+            dndDays: ['mon'], // Only Monday; today is Tuesday → not DND today
+          },
+        });
+        mockPrisma.pushToken.findMany.mockResolvedValue([]);
+
+        const service = new PushNotificationService(mockPrisma as any);
+        await service.sendToUser({
+          userId: 'user-dnd-day',
+          payload: { title: 'Hi', body: 'Msg' },
+        });
+
+        expect(mockLoggerInfo).not.toHaveBeenCalledWith(
+          'Push blocked by user preferences',
+          expect.anything()
+        );
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('fails open when userPreferences.findUnique throws (line 223)', async () => {
+      const { PushNotificationService } = await getServiceWithEnv({
+        ENABLE_PUSH_NOTIFICATIONS: 'true',
+        ENABLE_FCM_PUSH: 'true',
+        FIREBASE_ADMIN_CREDENTIALS_PATH: '/path/to/creds.json',
+      });
+      mockPrisma.userPreferences.findUnique.mockRejectedValue(new Error('DB down'));
+      mockPrisma.pushToken.findMany.mockResolvedValue([]);
+
+      const service = new PushNotificationService(mockPrisma as any);
+      const result = await service.sendToUser({
+        userId: 'user-db-error',
+        payload: { title: 'Hi', body: 'Msg' },
+      });
+
+      // Fail open: push is allowed (returns [] only because no tokens)
+      expect(mockLoggerInfo).not.toHaveBeenCalledWith(
+        'Push blocked by user preferences',
+        expect.anything()
+      );
+      expect(result).toEqual([]);
+    });
+
+    it('blocks push when DND start>end (overnight) and current time is in range (line 215)', async () => {
+      const { PushNotificationService } = await getServiceWithEnv({
+        ENABLE_PUSH_NOTIFICATIONS: 'true',
+        ENABLE_FCM_PUSH: 'true',
+        FIREBASE_ADMIN_CREDENTIALS_PATH: '/path/to/creds.json',
+      });
+
+      jest.useFakeTimers({ now: new Date('2026-06-29T23:30:00Z') }); // 23:30 UTC
+
+      try {
+        mockPrisma.userPreferences.findUnique.mockResolvedValue({
+          notification: {
+            pushEnabled: true,
+            dndEnabled: true,
+            dndStartTime: '22:00',
+            dndEndTime: '06:00',
+            dndDays: [],
+          },
+        });
+        mockPrisma.pushToken.findMany.mockResolvedValue([
+          { id: 'tok-overnight', token: 'fcm-overnight', type: 'fcm', platform: 'android', bundleId: null },
+        ]);
+
+        const service = new PushNotificationService(mockPrisma as any);
+        const result = await service.sendToUser({
+          userId: 'user-overnight-dnd',
+          payload: { title: 'Hi', body: 'Msg' },
+        });
+
+        expect(result).toEqual([]);
+      } finally {
+        jest.useRealTimers();
+      }
     });
   });
 });
