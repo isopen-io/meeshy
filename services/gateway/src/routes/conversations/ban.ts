@@ -83,6 +83,7 @@ export function registerBanRoutes(
       const io = socketIOHandler?.getManager()?.getIO()
       const room = ROOMS.conversation(id)
 
+      const manager = socketIOHandler?.getManager()
       if (io) {
         io.to(room).emit(SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED, {
           conversationId: id,
@@ -93,6 +94,8 @@ export function registerBanRoutes(
 
         const userSockets = await io.in(ROOMS.user(targetUserId)).fetchSockets()
         await Promise.all(userSockets.map(s => s.leave(room)))
+
+        manager?.invalidateParticipantCache?.(targetUserId, id)
       }
 
       return sendSuccess(reply, { userId: targetUserId, bannedAt: now.toISOString() })

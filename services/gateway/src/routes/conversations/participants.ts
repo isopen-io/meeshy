@@ -520,14 +520,24 @@ export function registerParticipantsRoutes(
       // conversation:participant-left (room broadcast feeding ParticipantsView,
       // ConversationListViewModel count, ConversationSyncEngine invalidate) —
       // NOT conversation:left, which is a self-only ack.
-      const io = fastify.socketIOHandler?.getManager()?.getIO();
-      if (io) {
-        io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, {
-          conversationId,
-          userId,
-          displayName: removedParticipant?.displayName ?? '',
-          leftAt: leftAt.toISOString()
-        });
+      try {
+        const socketManager = fastify.socketIOHandler?.getManager();
+        const io = socketManager?.getIO();
+        if (io) {
+          io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, {
+            conversationId,
+            userId,
+            displayName: removedParticipant?.displayName ?? '',
+            leftAt: leftAt.toISOString()
+          });
+
+          const userSockets = await io.in(ROOMS.user(userId)).fetchSockets();
+          await Promise.all(userSockets.map((s: { leave: (room: string) => void }) => s.leave(ROOMS.conversation(conversationId))));
+
+          socketManager.invalidateParticipantCache?.(userId, conversationId);
+        }
+      } catch (socketError) {
+        logger.error('Socket eviction error for removed participant', socketError as Error);
       }
 
       const notificationService = fastify.notificationService;

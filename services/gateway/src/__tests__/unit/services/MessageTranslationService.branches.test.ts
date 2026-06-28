@@ -1217,6 +1217,30 @@ describe('MessageTranslationService — branch supplement', () => {
   });
 
   // =========================================================================
+  // 22b. invalidateCacheForMessage — public API for message-edit flow
+  // =========================================================================
+  describe('invalidateCacheForMessage', () => {
+    it('removes all LRU cache entries for the given messageId before retranslation', () => {
+      const msgId = '507f1f77bcf86cd799439011';
+      const cache = (svc as any).translationCache as TranslationCache;
+
+      cache.set(`${msgId}_en_fr`, { messageId: msgId } as any);
+      cache.set(`${msgId}_fr`, { messageId: msgId } as any);
+      cache.set('other_en_fr', { messageId: 'other' } as any);
+
+      svc.invalidateCacheForMessage(msgId);
+
+      expect(cache.get(`${msgId}_en_fr`)).toBeNull();
+      expect(cache.get(`${msgId}_fr`)).toBeNull();
+      expect(cache.get('other_en_fr')).not.toBeNull();
+    });
+
+    it('is a no-op when the messageId has no cached entries', () => {
+      expect(() => svc.invalidateCacheForMessage('nonexistent-id')).not.toThrow();
+    });
+  });
+
+  // =========================================================================
   // 22. _saveTranslationToDatabase — null message (line 2773,223,1)
   // =========================================================================
   describe('_saveTranslationToDatabase — message.findUnique returns null', () => {

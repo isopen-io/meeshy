@@ -414,11 +414,14 @@ export function registerMessagesAdvancedRoutes(
         // Utiliser les instances déjà disponibles dans le contexte Fastify
         const translationService = fastify.translationService;
 
-        // Invalider les traductions existantes (vider le JSON translations)
+        // Invalider les traductions en base ET dans le cache mémoire LRU avant
+        // de lancer la retraduction — sinon _processRetranslationAsync peut
+        // servir l'ancien résultat caché au lieu de calculer le nouveau.
         await prisma.message.update({
           where: { id: messageId },
           data: { translations: null }
         });
+        translationService.invalidateCacheForMessage(messageId);
 
         // Créer un objet message pour la retraduction (avec contenu traité incluant tracking links)
         const messageForRetranslation = {

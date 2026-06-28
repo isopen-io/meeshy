@@ -270,7 +270,7 @@ final class ConversationSocketHandler {
     // Guard against runaway timer growth in large conversations: beyond this
     // cap we skip scheduling a new timer (the oldest entry stays at its current
     // timeout, which is the desired no-op for very large groups).
-    private static let typingSafetyTimerCap = 50
+    private static let typingSafetyTimerCap = 200
 
     private func resetTypingSafetyTimer(for username: String) {
         if typingSafetyTimers[username] == nil,
