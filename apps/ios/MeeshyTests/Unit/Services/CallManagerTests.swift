@@ -822,10 +822,10 @@ final class CallStatsPacketReducerTests: XCTestCase {
     }
 }
 
-// MARK: - Call Reliability Policy (§5.8)
+// MARK: - Call Reliability Policy (§5.8) — default-threshold integration
 
 @MainActor
-final class CallReliabilityPolicyTests: XCTestCase {
+final class CallReliabilityPolicyDefaultsTests: XCTestCase {
     typealias Policy = CallReliabilityPolicy
 
     // --- Half-open self-heal ---
