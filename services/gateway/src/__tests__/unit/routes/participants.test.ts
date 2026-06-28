@@ -14,7 +14,10 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
     CONVERSATION_JOINED: 'conversation:joined',
     CONVERSATION_PARTICIPANT_LEFT: 'conversation:participant-left',
   },
-  ROOMS: { conversation: (id: string) => `conversation:${id}` },
+  ROOMS: {
+    conversation: (id: string) => `conversation:${id}`,
+    user: (id: string) => `user:${id}`,
+  },
 }));
 
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
@@ -79,10 +82,16 @@ function createMockNotificationService() {
 
 function createMockIO() {
   const mockEmit = jest.fn<any>();
-  return {
+  const mockLeave = jest.fn<any>();
+  const mockFetchSockets = jest.fn<any>().mockResolvedValue([{ leave: mockLeave }]);
+  const io = {
     to: jest.fn<any>().mockReturnValue({ emit: mockEmit }),
+    in: jest.fn<any>().mockReturnValue({ fetchSockets: mockFetchSockets }),
     _emit: mockEmit,
+    _leave: mockLeave,
+    _fetchSockets: mockFetchSockets,
   };
+  return io;
 }
 
 type RouteHandler = (request: any, reply: any) => Promise<any>;
@@ -125,10 +134,12 @@ function wireServerToFastify(
   fastify: any,
   server?: { io?: unknown; notificationService?: unknown }
 ) {
+  const invalidateParticipantCache = jest.fn<any>();
   fastify.socketIOHandler = server?.io
-    ? { getManager: () => ({ getIO: () => server.io }) }
+    ? { getManager: () => ({ getIO: () => server.io, invalidateParticipantCache }) }
     : undefined;
   fastify.notificationService = server?.notificationService;
+  fastify._invalidateParticipantCache = invalidateParticipantCache;
 }
 
 function createParticipant(overrides: Record<string, unknown> = {}) {
@@ -1213,6 +1224,24 @@ describe('registerParticipantsRoutes', () => {
         displayName: 'TestUser',
         leftAt: expect.any(String),
       }));
+      expect(reply.send).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    });
+
+    it('should evict removed user socket from conversation room and invalidate participant cache', async () => {
+      const route = getRoute(mockFastify, 'DELETE', '/participants');
+      const io = createMockIO();
+      const request = createDeleteRequest({ server: { io, notificationService: createMockNotificationService() } });
+      mockPrisma.participant.findFirst.mockResolvedValue(createCreatorParticipant());
+      mockPrisma.participant.updateMany.mockResolvedValue({ count: 1 });
+      mockPrisma.participant.findMany.mockResolvedValue([]);
+      const reply = createMockReply();
+
+      await route.handler(request, reply);
+
+      expect(io.in).toHaveBeenCalledWith(`user:${TARGET_USER_ID}`);
+      expect(io._leave).toHaveBeenCalledWith(`conversation:${VALID_CONV_ID}`);
+      expect(mockFastify._invalidateParticipantCache).toHaveBeenCalledWith(TARGET_USER_ID, VALID_CONV_ID);
+      expect(reply.send).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
 
     it('should soft delete the participant when authorized as ADMIN user role', async () => {

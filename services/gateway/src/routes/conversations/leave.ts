@@ -68,6 +68,7 @@ export function registerLeaveRoutes(
       const io = socketIOHandler?.getManager()?.getIO()
       const room = ROOMS.conversation(id)
 
+      const manager = socketIOHandler?.getManager()
       if (io) {
         io.to(room).emit(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, {
           conversationId: id,
@@ -78,6 +79,8 @@ export function registerLeaveRoutes(
 
         const userSockets = await io.in(ROOMS.user(userId)).fetchSockets()
         await Promise.all(userSockets.map(s => s.leave(room)))
+
+        manager?.invalidateParticipantCache?.(userId, id)
       }
 
       return sendSuccess(reply, { conversationId: id, leftAt: now.toISOString() })

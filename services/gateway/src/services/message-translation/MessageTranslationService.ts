@@ -106,6 +106,15 @@ export class MessageTranslationService extends EventEmitter {
     return this.zmqClient;
   }
 
+  /**
+   * Purge all in-memory cached translations for a given message.
+   * Must be called before triggering a re-translation so that the old
+   * cached result is never served in place of the freshly computed one.
+   */
+  invalidateCacheForMessage(messageId: string): void {
+    this.translationCache.deleteByMessageId(messageId);
+  }
+
   async initialize(): Promise<void> {
     if (this.isInitialized) {
       return;
