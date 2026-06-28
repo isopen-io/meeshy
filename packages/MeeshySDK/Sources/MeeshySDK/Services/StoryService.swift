@@ -11,6 +11,10 @@ public protocol StoryServiceProviding: Sendable {
     func repost(storyId: String) async throws
     func cachedPost(id: String) -> APIPost?
     func fetchPost(id: String) async throws -> APIPost
+    /// Seed the in-memory by-id cache from outside (e.g. an NSE-prefetched story
+    /// post drained on a cold-start notification tap), so `cachedPost(id:)` then
+    /// resolves it without a network round-trip.
+    func cache(post: APIPost)
 }
 
 public final class StoryService: StoryServiceProviding, @unchecked Sendable {
@@ -82,6 +86,10 @@ public final class StoryService: StoryServiceProviding, @unchecked Sendable {
         let response: APIResponse<APIPost> = try await api.request(endpoint: "/posts/\(id)")
         cachePost(response.data)
         return response.data
+    }
+
+    public func cache(post: APIPost) {
+        cachePost(post)
     }
 
     private func cachePost(_ post: APIPost) {

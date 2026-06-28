@@ -111,6 +111,42 @@ final class FeedPipelineIntegrationTests: XCTestCase {
     }
 
     @MainActor
+    func test_persistComments_seedsInlinePostCommentsIntoGRDB() async throws {
+        // A post payload prefetched by the NSE embeds its recent comments (incl.
+        // the one that triggered the notification). They must land in feed_comments
+        // so a cold-start tap renders the triggering comment from local data.
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { d in
+            let s = try d.singleValueContainer().decode(String.self)
+            let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = f.date(from: s) { return date }
+            let f2 = ISO8601DateFormatter(); f2.formatOptions = [.withInternetDateTime]
+            if let date = f2.date(from: s) { return date }
+            throw DecodingError.dataCorruptedError(in: try d.singleValueContainer(), debugDescription: "bad date")
+        }
+        let apiComments = try decoder.decode([APIPostComment].self, from: Data("""
+        [
+          { "id": "c_trigger", "content": "Nice post!", "createdAt": "2026-06-28T10:00:00.000Z",
+            "author": { "id": "u2", "username": "bob", "displayName": "Bob", "avatar": null } },
+          { "id": "c_other", "content": "Agreed", "createdAt": "2026-06-28T09:00:00.000Z",
+            "author": { "id": "u3", "username": "carol", "displayName": "Carol", "avatar": null } }
+        ]
+        """.utf8))
+
+        await NSEPendingPostConsumer.persistComments(apiComments, postId: "post_nse", to: feedActor)
+
+        let stored = try feedActor.comments(forPostId: "post_nse", limit: 20)
+        XCTAssertEqual(Set(stored.map(\.id)), ["c_trigger", "c_other"])
+    }
+
+    @MainActor
+    func test_persistComments_emptyList_isNoOp() async throws {
+        await NSEPendingPostConsumer.persistComments([], postId: "post_empty", to: feedActor)
+        let stored = try feedActor.comments(forPostId: "post_empty", limit: 20)
+        XCTAssertTrue(stored.isEmpty)
+    }
+
+    @MainActor
     func test_nestedThread_expandCollapse() async throws {
         let store = CommentStore(postId: "post_thread", persistence: feedActor)
 
