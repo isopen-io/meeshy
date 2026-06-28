@@ -71,19 +71,21 @@ then enqueues the `PUBLISH_STORY` row with `dependsOn = pendingUpload.cmid` (via
 until the upload delivers, then grafts the real id. A **permanent** failure (4xx), a
 **multi-item** offline pick, or a pick **while one upload is already pending** still surfaces
 the error (single-pending constraint keeps the single-`dependsOn` chain correct). Surpasses
-iOS, which drops a pick on an offline upload.
+iOS, which drops a pick on an offline upload. Latest loop (`media-upload-cancel`) closes the
+**orphan-leak gap**: removing the offline placeholder now `MediaUploadQueue.cancel`s its durable
+`UPLOAD_MEDIA` row + blob (row discarded first so the drainer stops picking it up, then the bytes;
+unknown cmid inert), so no orphaned upload streams bytes to a media the story never references. The
+UI clears optimistically; the durable cancel is best-effort & cancellation-safe.
 
 ## Next slice (pick one for the next run)
 
 Ordered by value:
-1. **Multi-pending offline uploads + remove-pending cancels the row** — the offline path
-   currently allows **one** pending upload at a time (the single `dependsOn` cmid keeps the
-   chain provably correct). To queue several media offline, the publish needs to gate on
-   *all* their cmids — either a multi-`dependsOn` outbox primitive or a synthetic "barrier"
-   upload row the publish depends on. Also: `onRemoveMedia(pendingCmid)` clears the draft
-   placeholder but leaves the durable `UPLOAD_MEDIA` row + blob (a harmless orphan that
-   uploads to an unreferenced media) — add an outbox cancel-by-cmid so removal also drops
-   the queued upload. And the known gating gap: a `BLOCKED` dependency doesn't set
+1. **Multi-pending offline uploads** — the offline path currently allows **one** pending
+   upload at a time (the single `dependsOn` cmid keeps the chain provably correct). To queue
+   several media offline, the publish needs to gate on *all* their cmids — either a
+   multi-`dependsOn` outbox primitive or a synthetic "barrier" upload row the publish depends
+   on. (`remove-pending cancels the row` ✅ landed in `media-upload-cancel` this run — see
+   below.) And the known gating gap: a `BLOCKED` dependency doesn't set
    `anyTransient`, so a held publish lane isn't auto-retried by WorkManager once its upload
    lands in a *later* pass — revisit (upload `SuccessWithId` re-kick, or a
    `stoppedOnBlockedDependency` retry request). Within a single drain pass it already works
@@ -94,6 +96,10 @@ Ordered by value:
 3. After Stories richness is sufficient, advance to the **Calls** area
    (`feature-parity.md` §"Calls").
 
+(`media-upload-cancel` ✅ shipped 2026-06-28 — this run; removing the offline placeholder now
+`MediaUploadQueue.cancel`s its durable `UPLOAD_MEDIA` row + blob (row discarded first, then
+bytes; unknown cmid inert), closing the orphan-leak gap left by `story-composer-offline-media`.
+UI clears optimistically; the durable cancel is best-effort & cancellation-safe. See run log.)
 (`story-composer-offline-media` ✅ shipped 2026-06-28 — this run; the composer's offline
 fallback: a single transient-failed media pick is durably queued + staged as a pending
 placeholder, and `publish()` gates the story on it via `enqueuePublish(.., dependsOn)`. The
@@ -142,6 +148,38 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-28 — slice `media-upload-cancel` ✅
+- **Branch:** `claude/apps/android/media-upload-cancel` (off `origin/main` @ `a970f979`).
+- **Housekeeping (step 0):** prior run's PR **#996** (`story-composer-offline-media`) was already
+  squash-merged to `main` (`a970f979`); no open `claude/apps/android/*` PR. (PR #997 is a separate
+  `calls`/iOS branch, out of this loop's scope.) Branched off the freshened `main`.
+- **What:** closes the **orphan-leak gap** flagged in "Next" #1 — `onRemoveMedia(pendingCmid)`
+  cleared only the draft placeholder, leaving the durable `UPLOAD_MEDIA` row + blob to upload to a
+  media the story would never reference. Removal now cancels the durable upload too.
+- **Added / changed (production, `apps/android` only):**
+  - `MediaUploadQueue.cancel(cmid)` (`:sdk-core`, stateless building block) — the mirror of
+    `enqueue`: `OutboxRepository.discard(cmid)` (drops the row so the drainer stops picking it up)
+    **then** `MediaBlobStore.remove(cmid)` (drops the bytes). Unknown cmid inert — both layers
+    tolerate absence. Reuses the existing `discard`/`remove` primitives (no new outbox API).
+  - `StoryComposerViewModel.onRemoveMedia` (`:feature:stories`, product orchestration) — captures
+    `wasPending` before the state update, and when the removed id was the pending placeholder fires
+    a best-effort `cancelDurableUpload(cmid)` on `viewModelScope` (cancellation-safe: rethrows
+    `CancellationException`, swallows the rest — a stranded row exhausts harmlessly). UI still
+    clears optimistically/synchronously; removing a regular attachment never cancels.
+- **TDD (red → green):**
+  - `MediaUploadQueueTest` +3: cancel drops both row & blob (real Room) / cancel leaves other
+    queued uploads untouched / cancel of an unknown cmid is a no-op.
+  - `StoryComposerViewModelTest` +4: removing the pending upload cancels its durable row & blob /
+    removing an uploaded attachment never cancels / removing a non-pending id while a pending
+    upload exists doesn't cancel (and keeps the pending) / clears state even when the cancel throws.
+  - Branch sweep: pending-vs-attachment arm, unknown-id arm, failure (cancel throws) arm,
+    cancellation-safety arm all covered.
+- **Verification:** `./apps/android/meeshy.sh test` (37 story tests, 6 queue tests) + `build`
+  (assembleDebug) both `BUILD SUCCESSFUL`. Diff = `apps/android` only, 2 prod + 2 test files.
+- **Reviewer gate:** PASS — scope clean, behavioural non-tautological tests, SDK purity respected
+  (cancel is a stateless building block; "when to cancel" stays in the VM), failure path graceful,
+  cancellation-safe, no coverage floor lowered.
 
 ### 2026-06-28 — slice `story-composer-offline-media` ✅
 - **Branch:** `claude/apps/android/story-composer-offline-media` (off `origin/main` @ `e691dbe9`).

@@ -169,8 +169,16 @@ class StoryComposerViewModel @Inject constructor(
         }
     }
 
-    /** Removes an attached or pending media (and its id from the draft) before publishing. */
+    /**
+     * Removes an attached or pending media (and its id from the draft) before
+     * publishing. Removing the offline placeholder also **cancels** its durable
+     * upload ([MediaUploadQueue.cancel]) so no orphaned `UPLOAD_MEDIA` row keeps
+     * uploading bytes to a media the story will never reference. The UI clears
+     * instantly (optimistic); the durable cancel is best-effort — if it fails the
+     * stranded row simply exhausts harmlessly on its own.
+     */
     fun onRemoveMedia(id: String) {
+        val wasPending = _state.value.pendingUpload?.cmid == id
         _state.update {
             val next = if (id == it.pendingUpload?.cmid) {
                 it.copy(pendingUpload = null)
@@ -178,6 +186,19 @@ class StoryComposerViewModel @Inject constructor(
                 it.copy(attachments = it.attachments.filterNot { media -> media.id == id })
             }
             next.copy(draft = next.draft.withMediaIds(next.draftMediaIds))
+        }
+        if (wasPending) cancelDurableUpload(id)
+    }
+
+    private fun cancelDurableUpload(cmid: String) {
+        viewModelScope.launch {
+            try {
+                mediaUploadQueue.cancel(cmid)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Throwable) {
+                // Best-effort: a stranded UPLOAD_MEDIA row exhausts harmlessly on its own.
+            }
         }
     }
 

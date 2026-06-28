@@ -136,8 +136,13 @@ file-by-file audit — every one of the 673 iOS files was read in full.
       the ≤10 cap, renders an "Offline" preview tile); `publish()` gates the story on it via
       the new `StoryRepository.enqueuePublish(request, dependsOn)`. Permanent failure / multi
       pick / second-while-pending surface the error (single-pending keeps the single-`dependsOn`
-      chain correct). **Remaining:** multi-pending offline uploads (multi-`dependsOn`/barrier);
-      remove-pending should cancel the durable `UPLOAD_MEDIA` row (harmless orphan today).
+      chain correct). **Remaining:** multi-pending offline uploads (multi-`dependsOn`/barrier).
+- [x] **Remove-pending cancels the durable upload** (`media-upload-cancel`): removing the
+      offline placeholder now `MediaUploadQueue.cancel`s its `UPLOAD_MEDIA` row + blob (drops the
+      outbox row first, then the bytes — unknown cmid inert), so no orphaned upload streams bytes
+      to a media the story never references. UI clears optimistically; the durable cancel is
+      best-effort (a stranded row otherwise exhausts harmlessly). Closes the orphan-leak gap left
+      by `story-composer-offline-media`.
 - [ ] TUS resumable uploads in a **dedicated `WorkManager` chain** (foreground
       progress); message-send items `dependsOn` the upload (gating now in place)
 - [x] `MessageStateMachine` (pure, monotonic 8-state delivery FSM) — 9 tests
