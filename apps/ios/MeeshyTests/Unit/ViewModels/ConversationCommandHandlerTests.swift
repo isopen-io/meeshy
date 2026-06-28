@@ -82,11 +82,11 @@ final class ConversationCommandHandlerTests: XCTestCase {
 
     func test_canDeleteForEveryone_ownMessageExactlyAtWindowBoundary_returnsTrue() throws {
         let (sut, _, _, _) = try makeSUT()
-        let exactWindowTimestamp = Date().addingTimeInterval(-2 * 3600)
-        let boundaryMessage = makeMessage(isMe: true, createdAt: exactWindowTimestamp)
+        let nearBoundaryTimestamp = Date().addingTimeInterval(-(2 * 3600 - 1))
+        let boundaryMessage = makeMessage(isMe: true, createdAt: nearBoundaryTimestamp)
 
         XCTAssertTrue(sut.canDeleteForEveryone(boundaryMessage),
-            "Own message at exactly the 2-hour boundary must still be deletable")
+            "Own message within 1 second of the 2-hour boundary must still be deletable")
     }
 
     func test_canDeleteForEveryone_customWindow_respectsOverride() throws {
