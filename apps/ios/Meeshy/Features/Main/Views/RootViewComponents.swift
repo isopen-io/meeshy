@@ -9,8 +9,8 @@ import MeeshyUI
 struct ThemedActionButton: View {
     let icon: String
     let color: String
-    var label: String? = nil
-    var hint: String? = nil
+    let label: String
+    let hint: String
     var badge: Int = 0
     var size: CGFloat = 46
     let action: () -> Void

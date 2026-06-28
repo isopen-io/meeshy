@@ -74,7 +74,7 @@ struct BubbleCallNoticeView: View, Equatable {
         .padding(.vertical, 10)
         .frame(minHeight: 44)
         .background(simpleContour)
-        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous))
     }
 
     // MARK: - Leading direction/media glyph
@@ -162,10 +162,10 @@ struct BubbleCallNoticeView: View, Equatable {
 
     private var simpleContour: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
                 .fill(tint.opacity(isDark ? 0.06 : 0.03))
             // Thinner single border
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
                 .stroke(tint.opacity(isDark ? 0.25 : 0.15), lineWidth: 0.5)
         }
     }

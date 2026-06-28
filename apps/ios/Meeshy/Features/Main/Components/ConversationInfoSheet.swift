@@ -245,7 +245,7 @@ struct ConversationInfoSheet: View {
 
             muteIndicator
 
-            Text(String(format: String(localized: "conversation.info.created-on", defaultValue: "Cree le %@", bundle: .main), dateFormatter.string(from: conversation.createdAt)))
+            Text(String(format: String(localized: "conversation.info.created-on", defaultValue: "Créé le %@", bundle: .main), conversation.createdAt.formatted(.dateTime.day().month().year())))
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
@@ -292,7 +292,7 @@ struct ConversationInfoSheet: View {
             muteIndicator
                 .padding(.top, 6)
 
-            Text(String(format: String(localized: "conversation.info.created-on", defaultValue: "Cree le %@", bundle: .main), dateFormatter.string(from: conversation.createdAt)))
+            Text(String(format: String(localized: "conversation.info.created-on", defaultValue: "Créé le %@", bundle: .main), conversation.createdAt.formatted(.dateTime.day().month().year())))
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(theme.textMuted)
                 .padding(.top, 6)
@@ -1174,18 +1174,12 @@ struct ConversationInfoSheet: View {
     }
 
     private func shortDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
         let isSameYear = Calendar.current.isDate(date, equalTo: Date(), toGranularity: .year)
-        formatter.dateFormat = isSameYear ? "dd MMM" : "dd MMM yy"
-        return formatter.string(from: date)
-    }
-
-    private var dateFormatter: DateFormatter {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
-        formatter.dateFormat = "dd MMM yyyy"
-        return formatter
+        if isSameYear {
+            return date.formatted(.dateTime.day().month(.abbreviated))
+        } else {
+            return date.formatted(.dateTime.day().month(.abbreviated).year(.twoDigits))
+        }
     }
 
     // MARK: - Block Button
