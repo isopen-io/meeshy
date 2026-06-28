@@ -156,6 +156,11 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 }));
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+// Static import ensures bun instruments the module for platform-specific branch coverage.
+// Tests that call getServiceWithEnv() use a re-imported instance (after resetModules) which
+// bun may not instrument; these direct-injection tests cover the same lines with the
+// statically-loaded class.
+import { PushNotificationService as StaticPushService } from '../../../services/PushNotificationService';
 
 // Store original environment variables
 const originalEnv = { ...process.env };
@@ -1827,6 +1832,210 @@ describe('PushNotificationService', () => {
       } finally {
         jest.useRealTimers();
       }
+    });
+  });
+
+  // ── Direct-injection tests for bun-compatible coverage ───────────────────
+  // These use the statically-imported class so bun instruments the code.
+  // They bypass initialize() by injecting firebaseAdmin/apnsClient directly.
+
+  describe('sendViaFCM — platform branches (direct injection)', () => {
+    const makeFcmService = () => {
+      const svc = new StaticPushService(mockPrisma as any);
+      (svc as any).firebaseAdmin = { messaging: () => ({ send: mockFirebaseMessagingSend }) };
+      (svc as any).initialized = true;
+      return svc;
+    };
+
+    it('builds android message for android FCM tokens (lines 419-426)', async () => {
+      mockFirebaseMessagingSend.mockResolvedValue({ messageId: 'msg-a' });
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'ta', token: 'fcm-a', type: 'fcm', platform: 'android', bundleId: null },
+      ]);
+      mockPrisma.pushToken.update.mockResolvedValue({});
+
+      const result = await makeFcmService().sendToUser({
+        userId: 'u1',
+        payload: { title: 'Hi', body: 'Msg' },
+      });
+
+      expect(result[0].success).toBe(true);
+      const msg = (mockFirebaseMessagingSend.mock.calls[0] as any[])[0];
+      expect(msg.android).toMatchObject({ priority: 'high' });
+    });
+
+    it('builds webpush message for web FCM tokens (lines 427-442)', async () => {
+      mockFirebaseMessagingSend.mockResolvedValue({ messageId: 'msg-w' });
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'tw', token: 'fcm-w', type: 'fcm', platform: 'web', bundleId: null },
+      ]);
+      mockPrisma.pushToken.update.mockResolvedValue({});
+
+      const result = await makeFcmService().sendToUser({
+        userId: 'u2',
+        payload: { title: 'Hi', body: 'Web', data: { conversationId: 'conv1' } },
+      });
+
+      expect(result[0].success).toBe(true);
+      const msg = (mockFirebaseMessagingSend.mock.calls[0] as any[])[0];
+      expect(msg.webpush.notification).toMatchObject({ title: 'Hi', body: 'Web' });
+    });
+
+    it('sets collapseId on android/apns parts for ios token (lines 445-454)', async () => {
+      mockFirebaseMessagingSend.mockResolvedValue({ messageId: 'msg-ci' });
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'ti', token: 'fcm-i', type: 'fcm', platform: 'ios', bundleId: null },
+      ]);
+      mockPrisma.pushToken.update.mockResolvedValue({});
+
+      const result = await makeFcmService().sendToUser({
+        userId: 'u3',
+        payload: { title: 'Hi', body: 'Msg', collapseId: 'cid-123' },
+      });
+
+      expect(result[0].success).toBe(true);
+      const msg = (mockFirebaseMessagingSend.mock.calls[0] as any[])[0];
+      expect(msg.android.collapseKey).toBe('cid-123');
+      expect(msg.apns.headers['apns-collapse-id']).toBe('cid-123');
+    });
+
+    it('returns TOKEN_INVALID on registration-token-not-registered (lines 471-484)', async () => {
+      const err = Object.assign(new Error('bad token'), {
+        code: 'messaging/registration-token-not-registered',
+      });
+      mockFirebaseMessagingSend.mockRejectedValue(err);
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'tinv', token: 'fcm-inv', type: 'fcm', platform: 'android', bundleId: null },
+      ]);
+      mockPrisma.pushToken.findUnique.mockResolvedValue({ failedAttempts: 0 });
+      mockPrisma.pushToken.update.mockResolvedValue({});
+
+      const result = await makeFcmService().sendToUser({
+        userId: 'u4',
+        payload: { title: 'Hi', body: 'Msg' },
+      });
+
+      expect(result[0].success).toBe(false);
+      expect(result[0].error).toBe('TOKEN_INVALID');
+    });
+
+    it('returns generic error message on FCM failure (lines 473, 487)', async () => {
+      mockFirebaseMessagingSend.mockRejectedValue(new Error('fcm down'));
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'terr', token: 'fcm-err', type: 'fcm', platform: 'android', bundleId: null },
+      ]);
+      mockPrisma.pushToken.findUnique.mockResolvedValue({ failedAttempts: 0 });
+      mockPrisma.pushToken.update.mockResolvedValue({});
+
+      const result = await makeFcmService().sendToUser({
+        userId: 'u5',
+        payload: { title: 'Hi', body: 'Msg' },
+      });
+
+      expect(result[0].success).toBe(false);
+      expect(result[0].error).toBe('fcm down');
+    });
+
+    it('catch block fires when pushToken.update throws after FCM success (lines 312-314)', async () => {
+      mockFirebaseMessagingSend.mockResolvedValue({ messageId: 'msg-upd' });
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'tupd', token: 'fcm-upd', type: 'fcm', platform: 'android', bundleId: null },
+      ]);
+      mockPrisma.pushToken.update
+        .mockRejectedValueOnce(new Error('DB write err'))
+        .mockResolvedValue({});
+      mockPrisma.pushToken.findUnique.mockResolvedValue({ failedAttempts: 0 });
+
+      const result = await makeFcmService().sendToUser({
+        userId: 'u6',
+        payload: { title: 'Hi', body: 'Msg' },
+      });
+
+      expect(result[1].success).toBe(false);
+      expect(result[1].error).toBe('DB write err');
+    });
+  });
+
+  describe('sendViaAPNS — collapseId + apn=null (direct injection)', () => {
+    const makeApnsService = () => {
+      const svc = new StaticPushService(mockPrisma as any);
+      (svc as any).apnsClientSandbox = { send: mockApnsProviderSend };
+      (svc as any).apnsClientProduction = { send: mockApnsProviderSend };
+      (svc as any).initialized = true;
+      return svc;
+    };
+
+    it('sets collapseId on APNs notification when payload.collapseId is set (line 552)', async () => {
+      let captured: any = null;
+      mockApnsProviderSend.mockImplementation((notif: any) => {
+        captured = notif;
+        return Promise.resolve({ sent: [{}], failed: [] });
+      });
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'tac', token: 'apns-c', type: 'apns', platform: 'ios', bundleId: 'me.meeshy.app', apnsEnvironment: 'sandbox' },
+      ]);
+      mockPrisma.pushToken.update.mockResolvedValue({});
+
+      const result = await makeApnsService().sendToUser({
+        userId: 'u7',
+        payload: { title: 'Hi', body: 'Msg', collapseId: 'thread-42' },
+      });
+
+      expect(result[0].success).toBe(true);
+      expect(captured?.collapseId).toBe('thread-42');
+    });
+
+    it('logs warn and sets apn=null when @parse/node-apn import throws (lines 157, 179)', async () => {
+      jest.resetModules();
+      jest.doMock('@parse/node-apn', () => {
+        throw new Error('apn unavailable');
+      }, { virtual: true });
+      jest.doMock('firebase-admin', () => ({
+        __esModule: true,
+        default: firebaseAdminMockShape,
+        ...firebaseAdminMockShape,
+      }));
+      jest.doMock('fs', () => ({
+        __esModule: true,
+        default: { existsSync: mockExistsSync, readFileSync: mockReadFileSync, statSync: mockStatSync },
+        existsSync: mockExistsSync,
+        readFileSync: mockReadFileSync,
+        statSync: mockStatSync,
+      }));
+      jest.doMock('path', () => ({
+        __esModule: true,
+        default: { resolve: jest.fn((p: string) => p) },
+        resolve: jest.fn((p: string) => p),
+      }));
+      jest.doMock('@meeshy/shared/prisma/client', () => ({
+        PrismaClient: jest.fn(() => mockPrisma),
+      }));
+      jest.doMock('../../../utils/logger-enhanced', () => ({
+        __esModule: true,
+        enhancedLogger: enhancedLoggerMockShape,
+        performanceLogger: performanceLoggerMockShape,
+        notificationLogger: mockChildLogger,
+        default: enhancedLoggerMockShape,
+      }));
+
+      delete process.env.ENABLE_PUSH_NOTIFICATIONS;
+      delete process.env.ENABLE_APNS_PUSH;
+      delete process.env.ENABLE_FCM_PUSH;
+      delete process.env.FIREBASE_ADMIN_CREDENTIALS_PATH;
+      delete process.env.APNS_KEY_ID;
+      delete process.env.APNS_TEAM_ID;
+      delete process.env.APNS_KEY_PATH;
+      process.env.ENABLE_PUSH_NOTIFICATIONS = 'true';
+      process.env.ENABLE_APNS_PUSH = 'true';
+      process.env.APNS_KEY_ID = 'kid';
+      process.env.APNS_TEAM_ID = 'tid';
+      process.env.APNS_KEY_PATH = '/key.p8';
+
+      const { PushNotificationService: FreshService } = await import('../../../services/PushNotificationService');
+      const svc = new FreshService(mockPrisma as any);
+      await svc.initialize();
+
+      expect(mockLoggerWarn).toHaveBeenCalledWith('@parse/node-apn not installed, APNS push disabled');
     });
   });
 });
