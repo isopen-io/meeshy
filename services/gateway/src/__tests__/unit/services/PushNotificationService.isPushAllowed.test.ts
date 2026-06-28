@@ -59,7 +59,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import { PushNotificationService } from '../../../services/PushNotificationService';
 
 // ── mock prisma factory ────────────────────────────────────────────────────────
@@ -210,5 +210,82 @@ describe('PushNotificationService — isPushAllowed()', () => {
     const result = await service.sendToUser({ userId: 'u7', payload: MINIMAL_PAYLOAD });
     expect(result).toEqual([]);
     expect(prisma.pushToken.findMany).toHaveBeenCalled();
+  });
+});
+
+// ── cross-midnight DND (start > end string comparison) ────────────────────────
+// These tests require controlling the system clock so we use fake timers.
+// Jan 6 2025 = Monday UTC (getUTCDay() === 1 → 'mon')
+
+describe('PushNotificationService — isPushAllowed cross-midnight DND (private)', () => {
+  afterEach(() => {
+    jest.useRealTimers();
+    jest.clearAllMocks();
+  });
+
+  it('returns false when time is after start in a cross-midnight window (23:00 inside 22:00→06:00)', async () => {
+    jest.useFakeTimers({ now: new Date('2025-01-06T23:00:00.000Z') }); // Mon 23:00 UTC
+
+    const prisma = {
+      userPreferences: {
+        findUnique: jest.fn<any>().mockResolvedValue({ notification: {
+          pushEnabled: true,
+          dndEnabled: true,
+          dndDays: ['mon'],
+          dndStartTime: '22:00',
+          dndEndTime: '06:00', // start > end → midnight wrap
+        }}),
+      },
+      pushToken: { findMany: jest.fn<any>().mockResolvedValue([]) },
+    } as any;
+    const service = new PushNotificationService(prisma);
+
+    const result = await (service as any).isPushAllowed('u-mn-23');
+
+    expect(result).toBe(false);
+  });
+
+  it('returns false when time is before end in a cross-midnight window (05:00 inside 22:00→06:00)', async () => {
+    jest.useFakeTimers({ now: new Date('2025-01-06T05:00:00.000Z') }); // Mon 05:00 UTC
+
+    const prisma = {
+      userPreferences: {
+        findUnique: jest.fn<any>().mockResolvedValue({ notification: {
+          pushEnabled: true,
+          dndEnabled: true,
+          dndDays: ['mon'],
+          dndStartTime: '22:00',
+          dndEndTime: '06:00',
+        }}),
+      },
+      pushToken: { findMany: jest.fn<any>().mockResolvedValue([]) },
+    } as any;
+    const service = new PushNotificationService(prisma);
+
+    const result = await (service as any).isPushAllowed('u-mn-05');
+
+    expect(result).toBe(false);
+  });
+
+  it('returns true when time is between end and start in a cross-midnight window (10:00 outside 22:00→06:00)', async () => {
+    jest.useFakeTimers({ now: new Date('2025-01-06T10:00:00.000Z') }); // Mon 10:00 UTC
+
+    const prisma = {
+      userPreferences: {
+        findUnique: jest.fn<any>().mockResolvedValue({ notification: {
+          pushEnabled: true,
+          dndEnabled: true,
+          dndDays: ['mon'],
+          dndStartTime: '22:00',
+          dndEndTime: '06:00',
+        }}),
+      },
+      pushToken: { findMany: jest.fn<any>().mockResolvedValue([]) },
+    } as any;
+    const service = new PushNotificationService(prisma);
+
+    const result = await (service as any).isPushAllowed('u-mn-10');
+
+    expect(result).toBe(true);
   });
 });
