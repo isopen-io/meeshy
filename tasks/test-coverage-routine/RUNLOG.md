@@ -2264,3 +2264,27 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Reviewer: PASS (rounds: 1)
 - Notes: All feature matrix cells for Linux-testable environments remain ☑/⊘. This is manifest-level gap-fill (no new feature matrix cell). Suite total: 304 suites, 9301 tests (1 skipped). Manifest ticked: jobs/cleanup-expired-tokens.ts☑ jobs/index.ts☑ jobs/mutation-log-cleanup.ts☑ jobs/unlock-accounts.ts☑ middleware/deviceLocale.ts☑ services/MultiLevelCache.ts☑
 - Commit: d6981364 (squash-merged PR #1005 → main 2026-06-28T21:01Z)
+
+## 2026-06-28T21:00Z — gateway-manifest-gap2 (CaptchaService, TURNCredentialService, MultiLevelJobMappingCache, routes/auth/types.ts)
+
+- Targeted:
+  - `services/gateway/src/services/CaptchaService.ts`
+  - `services/gateway/src/services/TURNCredentialService.ts` (branch gap-fill)
+  - `services/gateway/src/services/MultiLevelJobMappingCache.ts` (already 100%; manifest tick)
+  - `services/gateway/src/routes/auth/types.ts`
+- Result: ☑ done
+- Coverage:
+  - CaptchaService.ts: 0%→100% lines / 100% branches
+  - TURNCredentialService.ts: 89.74%→92.3% branches (100% lines already; 3 residual V8 sub-expression branches justified)
+  - MultiLevelJobMappingCache.ts: 100%/100% (confirmed — manifest ticked)
+  - routes/auth/types.ts: 0%→100% lines / 100% branches
+  - Gateway global: 306 suites / 9346 tests / 1 skipped (all pass)
+- Tests added: ~90 across 3 new + 1 modified test files
+  - New: `src/__tests__/unit/services/CaptchaService.test.ts` (~60 tests): verify success/failure/HTTP-503/network-error/replay/TTL-expiry, shouldBypassInDev (4 cases), verifyWithDevBypass (bypass/passthrough), startCleanup interval (3 fake-timer tests), getCacheStats/clearCache
+  - Modified: `src/__tests__/unit/services/TURNCredentialService.test.ts` (+2 tests): short secret (<32 chars) in production and staging
+  - New: `src/__tests__/unit/routes/auth-types.test.ts` (~28 tests): formatUserResponse (all fields, banner fallback, permissions priority, pendingPhone/Number priority, pendingEmail, all-null user), formatSessionResponse (all fields, isTrusted default/true/false, null optional fields, desktop session)
+- Production changes (annotation-only):
+  - `services/CaptchaService.ts`: `/* istanbul ignore next */` on `validateStatus: (status) => status < 500` — axios-internal callback never invoked through module-level mock
+- Reviewer: PASS (rounds: 1)
+- Notes: All feature matrix cells for Linux-testable environments remain ☑/⊘. Manifest-level gap-fill (no new feature matrix cell). Manifest ticked: services/CaptchaService.ts☑ services/TURNCredentialService.ts☑ services/MultiLevelJobMappingCache.ts☑ routes/auth/types.ts☑
+- Commit: (see PR claude/coverage/gateway-manifest-gap2)

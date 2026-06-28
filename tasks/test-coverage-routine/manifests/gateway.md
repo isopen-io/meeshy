@@ -137,7 +137,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/gateway/src/routes/auth/phone-transfer.ts`
 - [ ] `services/gateway/src/routes/auth/register.ts`
 - [ ] `services/gateway/src/routes/auth/revoke-all-sessions.ts`
-- [ ] `services/gateway/src/routes/auth/types.ts`
+- [x] `services/gateway/src/routes/auth/types.ts`
 
 ## routes/communities  (0/6 have a test)
 
@@ -244,7 +244,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `services/gateway/src/services/CacheStore.ts`
 - [ ] `services/gateway/src/services/CallCleanupService.ts`
 - [~] `services/gateway/src/services/CallService.ts`
-- [ ] `services/gateway/src/services/CaptchaService.ts`
+- [x] `services/gateway/src/services/CaptchaService.ts`
 - [~] `services/gateway/src/services/CommentReactionService.ts`
 - [ ] `services/gateway/src/services/ConsentValidationService.ts`
 - [x] `services/gateway/src/services/ConversationMessageStatsService.ts`
@@ -261,7 +261,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [x] `services/gateway/src/services/MessageReadStatusService.ts`
 - [~] `services/gateway/src/services/MessagingService.ts`
 - [x] `services/gateway/src/services/MultiLevelCache.ts`
-- [ ] `services/gateway/src/services/MultiLevelJobMappingCache.ts`
+- [x] `services/gateway/src/services/MultiLevelJobMappingCache.ts`
 - [x] `services/gateway/src/services/MutationLogService.ts`
 - [~] `services/gateway/src/services/PasswordResetService.ts`
 - [ ] `services/gateway/src/services/PhonePasswordResetService.ts`
@@ -278,7 +278,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `services/gateway/src/services/SessionService.ts`
 - [~] `services/gateway/src/services/SmsService.ts`
 - [~] `services/gateway/src/services/StatusService.ts`
-- [ ] `services/gateway/src/services/TURNCredentialService.ts`
+- [x] `services/gateway/src/services/TURNCredentialService.ts`
 - [ ] `services/gateway/src/services/TrackingLinkService.ts`
 - [~] `services/gateway/src/services/TranslationCache.ts`
 - [ ] `services/gateway/src/services/TusCleanupService.ts`
