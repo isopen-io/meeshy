@@ -3229,3 +3229,98 @@ final class CallManagerNetworkMonitorSourceGuardTests: XCTestCase {
         )
     }
 }
+
+// MARK: - Media Server Reset Monitoring
+
+@MainActor
+final class CallManagerMediaServicesResetMonitoringTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_callManager_sourceCode_observesMediaServicesWereResetNotification() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("AVAudioSession.mediaServicesWereResetNotification"),
+            "CallManager must observe AVAudioSession.mediaServicesWereResetNotification to recover " +
+            "from iOS media server crashes. Without this, audio is permanently dead after a crash."
+        )
+    }
+
+    func test_callManager_sourceCode_handleMediaServicesReset_callsConfigureAudioSession() throws {
+        let source = try callManagerSource()
+        guard let fnRange = source.range(of: "private func handleMediaServicesReset()") else {
+            XCTFail("handleMediaServicesReset() not found in CallManager.swift")
+            return
+        }
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        XCTAssertTrue(
+            fnBody.contains("configureAudioSession()"),
+            "handleMediaServicesReset must call configureAudioSession() to reconfigure " +
+            "RTCAudioSession after the media server crash resets all session state."
+        )
+    }
+
+    func test_callManager_sourceCode_handleMediaServicesReset_cyclesRTCAudioSession() throws {
+        let source = try callManagerSource()
+        guard let fnRange = source.range(of: "private func handleMediaServicesReset()") else {
+            XCTFail("handleMediaServicesReset() not found in CallManager.swift")
+            return
+        }
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        XCTAssertTrue(
+            fnBody.contains("audioSessionDidDeactivate"),
+            "handleMediaServicesReset must call audioSessionDidDeactivate before audioSessionDidActivate " +
+            "to properly cycle the RTCAudioSession state machine after a media server crash."
+        )
+        XCTAssertTrue(
+            fnBody.contains("audioSessionDidActivate"),
+            "handleMediaServicesReset must call audioSessionDidActivate to restart WebRTC audio I/O " +
+            "after media server recovery."
+        )
+    }
+
+    func test_callManager_sourceCode_startMediaServicesResetMonitoring_calledFromInit() throws {
+        let source = try callManagerSource()
+        // Find the private init body
+        guard let initRange = source.range(of: "private init(webRTCService: WebRTCService? = nil)") else {
+            XCTFail("private init not found in CallManager.swift")
+            return
+        }
+        let endIdx = source.index(initRange.lowerBound, offsetBy: 500, limitedBy: source.endIndex) ?? source.endIndex
+        let initBody = String(source[initRange.lowerBound ..< endIdx])
+
+        XCTAssertTrue(
+            initBody.contains("startMediaServicesResetMonitoring()"),
+            "CallManager.init must call startMediaServicesResetMonitoring() to register the " +
+            "AVAudioSession.mediaServicesWereResetNotification observer at startup."
+        )
+    }
+
+    func test_callManager_sourceCode_handleMediaServicesReset_guardsCallActive() throws {
+        let source = try callManagerSource()
+        guard let fnRange = source.range(of: "private func handleMediaServicesReset()") else {
+            XCTFail("handleMediaServicesReset() not found in CallManager.swift")
+            return
+        }
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 300, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        XCTAssertTrue(
+            fnBody.contains("guard callState.isActive"),
+            "handleMediaServicesReset must guard callState.isActive — running audio reconstruction " +
+            "outside an active call wastes CPU and may corrupt the idle audio state."
+        )
+    }
+}

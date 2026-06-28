@@ -376,7 +376,9 @@ export class CallEventsHandler {
    * first call per `callId` posts a message. Failures are logged, never thrown,
    * so summary posting can never break call teardown.
    */
-  private async postCallSummary(callId: string): Promise<void> {
+  private async postCallSummary(callId: string, attempt = 1): Promise<void> {
+    const MAX_ATTEMPTS = 3;
+    const BASE_DELAY_MS = 1000;
     try {
       const message = await this.callService.createCallSummaryMessage(callId);
       if (!message || !this.messageBroadcaster) {
@@ -386,7 +388,16 @@ export class CallEventsHandler {
     } catch (error) {
       logger.error('[CallEventsHandler] Failed to post call summary message', {
         callId,
+        attempt,
         error: error instanceof Error ? error.message : String(error)
+      });
+      if (attempt < MAX_ATTEMPTS) {
+        await new Promise<void>(resolve => setTimeout(resolve, BASE_DELAY_MS * attempt));
+        return this.postCallSummary(callId, attempt + 1);
+      }
+      logger.error('[CallEventsHandler] Giving up on call summary after max attempts', {
+        callId,
+        maxAttempts: MAX_ATTEMPTS
       });
     }
   }
@@ -1443,6 +1454,23 @@ export class CallEventsHandler {
           from: data.signal.from,
           to: data.signal.to
         });
+
+        // Per-call ICE candidate rate limit — prevents a malicious or buggy client
+        // from flooding a specific call with candidates even within the global signal budget.
+        if (data.signal.type === 'ice-candidate') {
+          const iceAllowed = await this.rateLimiter.checkLimit(
+            `${userId}:${data.callId}`,
+            SOCKET_RATE_LIMITS.CALL_ICE_CANDIDATE
+          );
+          if (!iceAllowed) {
+            socket.emit(CALL_EVENTS.ERROR, {
+              code: CALL_ERROR_CODES.RATE_LIMIT_EXCEEDED,
+              message: 'Too many ICE candidates — slow down'
+            } as CallError);
+            ack?.({ success: false });
+            return;
+          }
+        }
 
         // CVE-001: Verify sender is actually a participant in the call
         const callSession = await this.callService.getCallSession(data.callId);
