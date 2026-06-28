@@ -136,8 +136,22 @@ file-by-file audit — every one of the 673 iOS files was read in full.
       the ≤10 cap, renders an "Offline" preview tile); `publish()` gates the story on it via
       the new `StoryRepository.enqueuePublish(request, dependsOn)`. Permanent failure / multi
       pick / second-while-pending surface the error (single-pending keeps the single-`dependsOn`
-      chain correct). **Remaining:** multi-pending offline uploads (multi-`dependsOn`/barrier);
-      remove-pending should cancel the durable `UPLOAD_MEDIA` row (harmless orphan today).
+      chain correct). **Remaining:** multi-pending offline uploads (multi-`dependsOn`/barrier).
+- [x] **Remove-pending cancels the durable upload** (`media-upload-cancel`): removing the
+      offline placeholder now `MediaUploadQueue.cancel`s its `UPLOAD_MEDIA` row + blob (drops the
+      outbox row first, then the bytes — unknown cmid inert), so no orphaned upload streams bytes
+      to a media the story never references. UI clears optimistically; the durable cancel is
+      best-effort (a stranded row otherwise exhausts harmlessly). Closes the orphan-leak gap left
+      by `story-composer-offline-media`.
+- [x] **Flush retries on a blocked dependency** (`outbox-flush-retry-on-blocked`): the
+      `OutboxFlushWorker` previously rescheduled (WorkManager `Result.retry()`) only on a
+      **transient** failure, ignoring a lane stopped on a **blocked dependency**. A dependent
+      `BLOCKED` early in a pass whose prerequisite delivered *later in the same pass* therefore
+      sat until an unrelated trigger fired. A pure `OutboxFlushPlan.outcome(reports)` building
+      block now drives the outcome — `RETRY` on **any** transient-or-blocked stop — so the held
+      lane is auto-retried; forward progress is guaranteed (a dependent is delivered, or
+      cascade-exhausted once its prerequisite gives up). Closes the cross-pass `BLOCKED`-not-
+      `anyTransient` retry gap.
 - [ ] TUS resumable uploads in a **dedicated `WorkManager` chain** (foreground
       progress); message-send items `dependsOn` the upload (gating now in place)
 - [x] `MessageStateMachine` (pure, monotonic 8-state delivery FSM) — 9 tests

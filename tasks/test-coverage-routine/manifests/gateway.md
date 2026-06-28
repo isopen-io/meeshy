@@ -21,7 +21,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 ## config  (0/2 have a test)
 
 - [x] `services/gateway/src/config/message-limits.ts`
-- [ ] `services/gateway/src/config/user-preferences-defaults.ts`
+- [x] `services/gateway/src/config/user-preferences-defaults.ts`
 
 ## dma-interoperability/adapters  (0/1 have a test)
 
@@ -37,7 +37,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 
 ## errors  (0/1 have a test)
 
-- [ ] `services/gateway/src/errors/custom-errors.ts`
+- [x] `services/gateway/src/errors/custom-errors.ts`
 
 ## jobs  (1/7 have a test)
 
@@ -54,12 +54,12 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [x] `services/gateway/src/middleware/admin-permissions.middleware.ts`
 - [x] `services/gateway/src/middleware/admin-user-auth.middleware.ts`
 - [~] `services/gateway/src/middleware/auth.ts`
-- [ ] `services/gateway/src/middleware/clientMutationId.ts`
+- [x] `services/gateway/src/middleware/clientMutationId.ts`
 - [~] `services/gateway/src/middleware/deviceLocale.ts`
 - [x] `services/gateway/src/middleware/rate-limit.ts`
 - [x] `services/gateway/src/middleware/rate-limiter.ts`
-- [ ] `services/gateway/src/middleware/request-id.ts`
-- [ ] `services/gateway/src/middleware/validation.ts`
+- [x] `services/gateway/src/middleware/request-id.ts`
+- [x] `services/gateway/src/middleware/validation.ts`
 
 ## migrations  (0/1 have a test)
 
@@ -419,12 +419,12 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `services/gateway/src/utils/keyed-mutex.ts`
 - [~] `services/gateway/src/utils/languages.ts`
 - [~] `services/gateway/src/utils/logger-enhanced.ts`
-- [ ] `services/gateway/src/utils/logger.ts`
+- [x] `services/gateway/src/utils/logger.ts`
 - [~] `services/gateway/src/utils/normalize.ts`
 - [~] `services/gateway/src/utils/pagination.ts`
 - [ ] `services/gateway/src/utils/participant-resolver.ts`
 - [x] `services/gateway/src/utils/rate-limiter.ts`
-- [ ] `services/gateway/src/utils/response.ts`
+- [x] `services/gateway/src/utils/response.ts`
 - [~] `services/gateway/src/utils/sanitize.ts`
 - [~] `services/gateway/src/utils/session-token.ts`
 - [~] `services/gateway/src/utils/socket-broadcast.ts`
@@ -439,7 +439,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `services/gateway/src/validation/call-schemas.ts`
 - [ ] `services/gateway/src/validation/conversation-encryption-schemas.ts`
 - [ ] `services/gateway/src/validation/delete-account-schemas.ts`
-- [ ] `services/gateway/src/validation/helpers.ts`
+- [x] `services/gateway/src/validation/helpers.ts`
 - [ ] `services/gateway/src/validation/mentions-schemas.ts`
 - [ ] `services/gateway/src/validation/message-read-status-schemas.ts`
 - [ ] `services/gateway/src/validation/messages-schemas.ts`

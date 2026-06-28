@@ -125,10 +125,9 @@ struct ConversationPreferencesTab: View {
         .onAppear { setupMemberSearchDebounce() }
         .adaptiveOnChange(of: viewModel.didDelete) { _, deleted in if deleted { dismiss() } }
         .adaptiveOnChange(of: viewModel.didLeave) { _, left in if left { dismiss() } }
-        .confirmationDialog(
+        .alert(
             (viewModel.prefs.isArchived ?? false) ? String(localized: "conversation.prefs.unarchive.title", defaultValue: "Unarchive conversation?", bundle: .main) : String(localized: "conversation.prefs.archive.title", defaultValue: "Archive conversation?", bundle: .main),
-            isPresented: $showArchiveConfirm,
-            titleVisibility: .visible
+            isPresented: $showArchiveConfirm
         ) {
             Button((viewModel.prefs.isArchived ?? false) ? String(localized: "conversation.prefs.unarchive", defaultValue: "Unarchive", bundle: .main) : String(localized: "conversation.prefs.archive", defaultValue: "Archive", bundle: .main),
                    role: (viewModel.prefs.isArchived ?? false) ? .none : .destructive) {

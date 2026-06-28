@@ -1089,6 +1089,19 @@ final class ConversationSocketHandlerTests: XCTestCase {
         XCTAssertTrue(delegate.syncMissedCalled)
     }
 
+    func test_willEnterForeground_triggersSyncMissedMessages() async throws {
+        let (sut, delegate, _) = makeSUT()
+        _ = sut
+
+        NotificationCenter.default.post(
+            name: UIApplication.willEnterForegroundNotification, object: nil)
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertTrue(delegate.syncMissedCalled,
+            "Foreground backfill path must call syncMissedMessages when app returns from background")
+    }
+
     // MARK: - armSocketSubscriptions idempotency
 
     func test_armSocketSubscriptions_calledTwice_doesNotDuplicate() async throws {
@@ -1614,5 +1627,41 @@ final class ConversationSocketHandlerTests: XCTestCase {
         // Dedup scoped to (attachmentId, targetLanguage): one entry, latest wins.
         XCTAssertEqual(delegate.messageTranslatedAudiosByAttachment["attA"]?.count, 1)
         XCTAssertEqual(delegate.messageTranslatedAudiosByAttachment["attA"]?.first?.url, "https://x/new.mp3")
+    }
+
+    // MARK: - Deduplication Window Tests
+
+    func test_messageReceived_duplicateId_droppedByDedup() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        let msg = makeAPIMessage(id: "dup1", senderId: otherUserId, content: "Hello")
+        delegate.invalidateIndex()
+
+        socket.messageReceived.send(msg)
+        try await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertEqual(delegate.lastUnreadMessage?.id, "dup1", "First delivery should surface the message")
+
+        // Send exact same ID again — should be dropped by dedup
+        delegate.lastUnreadMessage = nil
+        socket.messageReceived.send(msg)
+        try await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertNil(delegate.lastUnreadMessage, "Duplicate message ID should be suppressed by dedup window")
+    }
+
+    func test_messageReceived_differentIds_bothDelivered() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        let msg1 = makeAPIMessage(id: "unique1", senderId: otherUserId, content: "First")
+        let msg2 = makeAPIMessage(id: "unique2", senderId: otherUserId, content: "Second")
+        delegate.invalidateIndex()
+
+        socket.messageReceived.send(msg1)
+        try await Task.sleep(nanoseconds: 200_000_000)
+        let first = delegate.lastUnreadMessage
+        XCTAssertEqual(first?.id, "unique1")
+
+        socket.messageReceived.send(msg2)
+        try await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertEqual(delegate.lastUnreadMessage?.id, "unique2", "Different ID should always be delivered")
     }
 }

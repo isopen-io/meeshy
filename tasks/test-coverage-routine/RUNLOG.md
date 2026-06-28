@@ -2197,3 +2197,38 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Reviewer: PASS (rounds: 1)
 - Notes: Pre-existing 23 suite failures (all @meeshy/shared build issues) — none caused by this slice, verified before/after comparison.  TABLE_SEPARATOR_PATTERN regex limitation documented in tests (only matches single-column |---| not multi-column |---|---|).
 - Commit: (see PR claude/coverage/web-markdown-service)
+
+## 2026-06-28T06:00Z — gateway-api-infra (Gateway infrastructure: errors, utils, middleware, validation, config)
+
+- Targeted:
+  - `services/gateway/src/errors/custom-errors.ts`
+  - `services/gateway/src/utils/response.ts`
+  - `services/gateway/src/utils/logger.ts`
+  - `services/gateway/src/middleware/clientMutationId.ts`
+  - `services/gateway/src/middleware/request-id.ts`
+  - `services/gateway/src/middleware/validation.ts`
+  - `services/gateway/src/validation/helpers.ts`
+  - `services/gateway/src/config/user-preferences-defaults.ts`
+- Result: ☑ done
+- Coverage:
+  - custom-errors.ts: 0%→100% lines, 0%→100% branch
+  - utils/response.ts: existing tests extended to 100%/100%
+  - utils/logger.ts: existing tests already 100%/100% (manifest ticked)
+  - middleware/clientMutationId.ts: 91.66%/75%→100%/100%
+  - middleware/request-id.ts: 0%→100%/100%
+  - middleware/validation.ts: existing tests extended to 100%/92.85% (1 structurally-impossible ZodError empty-issues branch, istanbul ignored)
+  - validation/helpers.ts: 0%→100%/100%
+  - config/user-preferences-defaults.ts: 0%→100%/100%
+  - Gateway global: lines 72.55%→72.62%, branches 68.22%→68.31% (all thresholds lines:67/branches:63 still pass)
+- Tests added: 193 (across 4 new + 3 augmented test files)
+  - New: `src/__tests__/unit/errors/custom-errors.test.ts`
+  - New: `src/__tests__/unit/config/user-preferences-defaults.test.ts`
+  - New: `src/__tests__/unit/middleware/request-id.test.ts`
+  - New: `src/__tests__/unit/validation/helpers.test.ts`
+  - Augmented: `unit/clientMutationIdMiddleware.test.ts` (+2: array-header rejection, idempotent re-registration)
+  - Augmented: `unit/utils/response.test.ts` (+3: sendSuccess/sendPaginatedSuccess with meta, sendPaginatedSuccess without meta)
+  - Augmented: `unit/middleware/validation.test.ts` (+1: null body false-branch coverage)
+- Production change: `middleware/validation.ts` line 106 — `||` → `??` (semantically identical; `ZodIssue.message` is always a non-empty string) + `/* istanbul ignore next */` on unreachable fallback branch
+- Reviewer: PASS (rounds: 1)
+- Notes: All feature matrix cells for Linux-testable environments (gateway/translator/web/shared) remain ☑/⊘. This slice is manifest-level (no new matrix row). Next run should continue gateway manifest — consider jobs/*, middleware/deviceLocale.ts, utils/transcription.ts, services/MultiLevelCache.ts.
+- Commit: 795273a5

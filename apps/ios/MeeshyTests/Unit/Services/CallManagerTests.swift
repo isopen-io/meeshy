@@ -822,7 +822,7 @@ final class CallStatsPacketReducerTests: XCTestCase {
     }
 }
 
-// MARK: - Call Reliability Policy (§5.8) — default-threshold integration
+// MARK: - Call Reliability Policy — default-threshold behaviour (§5.8)
 
 @MainActor
 final class CallReliabilityPolicyDefaultsTests: XCTestCase {
@@ -2518,6 +2518,62 @@ final class SettleTokenRaceGuardTests: XCTestCase {
             body.contains("self.callState = .idle"),
             "The deferred Task must set callState = .idle when the settle token still matches — " +
             "this is the terminal cleanup that releases the last call's identity fields."
+        )
+    }
+}
+
+// MARK: - Multi-Device Already-Answered Dismissal
+
+/// Source-analysis guards ensuring `call:already-answered` is handled by CallManager.
+/// When a user answers an incoming call on another device, the gateway broadcasts
+/// `call:already-answered` to all other sessions. Without handling this event,
+/// the ringing UI stays up indefinitely on non-answering devices.
+@MainActor
+final class CallManagerAlreadyAnsweredTests: XCTestCase {
+
+    func test_callManager_sourceCode_handlesAlreadyAnsweredEvent() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+
+        XCTAssertTrue(
+            source.contains("already-answered") || source.contains("alreadyAnswered") || source.contains("ALREADY_ANSWERED"),
+            "CallManager must handle the call:already-answered event emitted by the gateway " +
+            "when this user answers the call on another device. Without it, the ringing UI " +
+            "stays up indefinitely on the non-answering device."
+        )
+    }
+
+    func test_callManager_sourceCode_alreadyAnswered_endsCallOrDismissesRing() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+
+        // Find the already-answered handler in CallManager
+        guard let range = source.range(of: "already-answered") else {
+            XCTFail("call:already-answered handler not found in CallManager.swift — required for multi-device dismissal")
+            return
+        }
+        // Grab surrounding context
+        let start = source.index(range.lowerBound, offsetBy: -200, limitedBy: source.startIndex) ?? source.startIndex
+        let end = source.index(range.upperBound, offsetBy: 500, limitedBy: source.endIndex) ?? source.endIndex
+        let context = String(source[start ..< end])
+
+        let endsCall = context.contains("endCallInternal") || context.contains("callState = .ended") || context.contains("endCall")
+        let dismissesRing = context.contains(".idle") || context.contains("dismiss") || context.contains("pendingIncomingCall = nil")
+
+        XCTAssertTrue(
+            endsCall || dismissesRing,
+            "The call:already-answered handler must either end the call via endCallInternal " +
+            "or dismiss the ringing state — it must not silently ignore the event."
         )
     }
 }

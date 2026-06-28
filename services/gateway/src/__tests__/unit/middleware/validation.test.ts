@@ -118,6 +118,17 @@ describe('createValidationMiddleware', () => {
 
     expect(reply.status).not.toHaveBeenCalled();
   });
+
+  it('handles request with null body (falsy) without including body in validation input', async () => {
+    const looseSchema = z.object({}).passthrough();
+    const middleware = createValidationMiddleware(looseSchema);
+    const request = makeRequest({ body: null, params: null, query: null, headers: null });
+    const reply = makeReply();
+
+    await middleware(request, reply);
+
+    expect(reply.status).not.toHaveBeenCalled();
+  });
 });
 
 // ─── validateSocketEvent ─────────────────────────────────────────────────────

@@ -625,7 +625,7 @@ struct BubbleStandardLayout: View {
                     carouselView
                         .background(Color.black)
                         .compositingGroup()
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
                         .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 } else if content.visualHostsReply, let reply = content.reply {
                     // Visual-only reply : conteneur unifié citation + grille,
@@ -635,7 +635,7 @@ struct BubbleStandardLayout: View {
                     visualMediaGrid
                         .background(Color.black)
                         .compositingGroup()
-                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
                         .overlay(alignment: .bottomTrailing) {
                             // Footer caché pendant la lecture d'une vidéo
                             // inline : on libère le coin droit pour les

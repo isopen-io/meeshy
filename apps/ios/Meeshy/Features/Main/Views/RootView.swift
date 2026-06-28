@@ -1547,19 +1547,19 @@ struct RootView: View {
                     if item.icon == "bell.fill" {
                         ThemedActionButton(
                             icon: item.icon, color: item.color,
-                            label: item.label, hint: String(localized: "root.menu.item.hint", defaultValue: "Ouvrir cette section"),
+                            label: item.label, hint: String(localized: "a11y.menu.item.hint", defaultValue: "Ouvrir cette section", bundle: .main),
                             badge: notificationManager.unreadCount, action: item.action
                         )
                     } else if item.icon == "sparkle.magnifyingglass" {
                         ThemedActionButton(
                             icon: item.icon, color: item.color,
-                            label: item.label, hint: String(localized: "root.menu.item.hint", defaultValue: "Ouvrir cette section"),
+                            label: item.label, hint: String(localized: "a11y.menu.item.hint", defaultValue: "Ouvrir cette section", bundle: .main),
                             badge: FriendshipCache.shared.pendingReceivedCount, action: item.action
                         )
                     } else {
                         ThemedActionButton(
                             icon: item.icon, color: item.color,
-                            label: item.label, hint: String(localized: "root.menu.item.hint", defaultValue: "Ouvrir cette section"),
+                            label: item.label, hint: String(localized: "a11y.menu.item.hint", defaultValue: "Ouvrir cette section", bundle: .main),
                             action: item.action
                         )
                     }

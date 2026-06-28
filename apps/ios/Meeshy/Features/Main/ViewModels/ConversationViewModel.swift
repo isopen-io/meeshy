@@ -4070,6 +4070,11 @@ extension ConversationViewModel: ConversationSocketDelegate {
     func handleParticipantRoleUpdated(participantId: String, newRole: String) {
         Logger.socket.info("Participant \(participantId) role changed to \(newRole)")
         _topActiveMembers = nil
+        let convId = conversationId
+        Task { [weak self] in
+            guard self != nil else { return }
+            await CacheCoordinator.shared.participants.invalidate(for: convId)
+        }
         objectWillChange.send()
     }
 

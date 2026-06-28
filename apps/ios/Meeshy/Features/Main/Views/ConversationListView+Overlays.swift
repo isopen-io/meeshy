@@ -54,22 +54,12 @@ extension ConversationListView {
             }
         }
 
-        // Détails (configuration de la conversation)
+        // Détails
         Button {
             HapticFeedback.light()
             conversationInfoConversation = conversation
         } label: {
             Label(String(localized: "context.details", defaultValue: "Détails"), systemImage: "info.circle.fill")
-        }
-
-        // Inviter — ouvrir le sheet d'invitation si droits suffisants
-        if canCreateShareLink(for: conversation) {
-            Button {
-                HapticFeedback.medium()
-                inviteSheetConversation = conversation
-            } label: {
-                Label(String(localized: "context.invite_friends", defaultValue: "Inviter mes amis"), systemImage: "person.badge.plus")
-            }
         }
 
         // Favorite with emoji
@@ -99,8 +89,6 @@ extension ConversationListView {
                 systemImage: conversation.userState.reaction != nil ? "star.fill" : "star"
             )
         }
-
-        Divider()
 
         // Move to category
         Menu {
@@ -134,84 +122,103 @@ extension ConversationListView {
             Label(String(localized: "context.move_to", defaultValue: "D\u{00e9}placer vers..."), systemImage: "folder.fill")
         }
 
-        // Lock/Unlock
-        let isLockedCtx = ConversationLockManager.shared.isLocked(conversation.id)
-        Button {
-            HapticFeedback.medium()
-            if isLockedCtx {
-                lockSheetMode = .unlockConversation
-                lockSheetConversation = conversation
-            } else if ConversationLockManager.shared.masterPinConfigured {
-                lockSheetMode = .lockConversation
-                lockSheetConversation = conversation
-            } else {
-                showNoMasterPinAlert = true
-            }
-        } label: {
-            Label(
-                isLockedCtx
-                    ? String(localized: "context.unlock", defaultValue: "Déverrouiller")
-                    : String(localized: "context.lock", defaultValue: "Verrouiller"),
-                systemImage: isLockedCtx ? "lock.open.fill" : "lock.fill"
-            )
-        }
+        Divider()
 
-        // Archive / Unarchive — always offered so an archived conversation can
-        // always be unarchived (including blocked DMs, which previously hid this
-        // button and left them stuck in the Archived filter).
-        // Per-user archive state — same source the list filter (`.archived`) and
-        // the `.setArchived` mutation read. NOT `conversation.isActive`, which is
-        // the server-side conversation lifecycle flag and is never toggled by
-        // archiving. `userState.isArchived` is folded into `renderFingerprint`,
-        // so the row re-evaluates and this closure stays fresh.
-        let isArchivedConv = conversation.userState.isArchived
-        Button {
-            HapticFeedback.medium()
-            if isArchivedConv {
-                Task { await conversationViewModel.unarchiveConversation(conversationId: conversation.id) }
-            } else {
-                Task { await conversationViewModel.archiveConversation(conversationId: conversation.id) }
+        // Secondary actions — grouped to keep top-level count ≤8 so iOS renders
+        // the compact popup style where Label icons are visible.
+        Menu {
+            // Inviter — ouvrir le sheet d'invitation si droits suffisants
+            if canCreateShareLink(for: conversation) {
+                Button {
+                    HapticFeedback.medium()
+                    inviteSheetConversation = conversation
+                } label: {
+                    Label(String(localized: "context.invite_friends", defaultValue: "Inviter mes amis"), systemImage: "person.badge.plus")
+                }
+            }
+
+            // Lock/Unlock
+            let isLockedCtx = ConversationLockManager.shared.isLocked(conversation.id)
+            Button {
+                HapticFeedback.medium()
+                if isLockedCtx {
+                    lockSheetMode = .unlockConversation
+                    lockSheetConversation = conversation
+                } else if ConversationLockManager.shared.masterPinConfigured {
+                    lockSheetMode = .lockConversation
+                    lockSheetConversation = conversation
+                } else {
+                    showNoMasterPinAlert = true
+                }
+            } label: {
+                Label(
+                    isLockedCtx
+                        ? String(localized: "context.unlock", defaultValue: "Déverrouiller")
+                        : String(localized: "context.lock", defaultValue: "Verrouiller"),
+                    systemImage: isLockedCtx ? "lock.open.fill" : "lock.fill"
+                )
+            }
+
+            // Archive / Unarchive — always offered so an archived conversation can
+            // always be unarchived (including blocked DMs, which previously hid this
+            // button and left them stuck in the Archived filter).
+            // Per-user archive state — same source the list filter (`.archived`) and
+            // the `.setArchived` mutation read. NOT `conversation.isActive`, which is
+            // the server-side conversation lifecycle flag and is never toggled by
+            // archiving. `userState.isArchived` is folded into `renderFingerprint`,
+            // so the row re-evaluates and this closure stays fresh.
+            let isArchivedConv = conversation.userState.isArchived
+            Button {
+                HapticFeedback.medium()
+                if isArchivedConv {
+                    Task { await conversationViewModel.unarchiveConversation(conversationId: conversation.id) }
+                } else {
+                    Task { await conversationViewModel.archiveConversation(conversationId: conversation.id) }
+                }
+            } label: {
+                Label(
+                    isArchivedConv
+                        ? String(localized: "context.unarchive", defaultValue: "Désarchiver")
+                        : String(localized: "context.archive", defaultValue: "Archiver"),
+                    systemImage: isArchivedConv ? "tray.and.arrow.up.fill" : "archivebox.fill"
+                )
+            }
+
+            // Block / Unblock (DM only)
+            if conversation.type == .direct, let userId = conversation.participantUserId {
+                let isBlockedCtx = BlockService.shared.isBlocked(userId: userId)
+                Divider()
+                if isBlockedCtx {
+                    Button {
+                        HapticFeedback.heavy()
+                        Task {
+                            try? await BlockService.shared.unblockUser(userId: userId)
+                            await MainActor.run { HapticFeedback.success() }
+                        }
+                    } label: {
+                        Label(
+                            String(localized: "context.unblock", defaultValue: "Débloquer"),
+                            systemImage: "hand.raised.slash.fill"
+                        )
+                    }
+                } else {
+                    Button(role: .destructive) {
+                        HapticFeedback.heavy()
+                        blockTargetConversation = conversation
+                        showBlockConfirmation = true
+                    } label: {
+                        Label(
+                            String(localized: "context.block", defaultValue: "Bloquer"),
+                            systemImage: "hand.raised.fill"
+                        )
+                    }
+                }
             }
         } label: {
-            Label(
-                isArchivedConv
-                    ? String(localized: "context.unarchive", defaultValue: "Désarchiver")
-                    : String(localized: "context.archive", defaultValue: "Archiver"),
-                systemImage: isArchivedConv ? "tray.and.arrow.up.fill" : "archivebox.fill"
-            )
+            Label(String(localized: "context.more_options", defaultValue: "Plus d'options"), systemImage: "ellipsis.circle.fill")
         }
 
         Divider()
-
-        // Block / Unblock (DM only)
-        if conversation.type == .direct, let userId = conversation.participantUserId {
-            let isBlockedCtx = BlockService.shared.isBlocked(userId: userId)
-            if isBlockedCtx {
-                Button {
-                    HapticFeedback.heavy()
-                    Task {
-                        try? await BlockService.shared.unblockUser(userId: userId)
-                        await MainActor.run { HapticFeedback.success() }
-                    }
-                } label: {
-                    Label(
-                        String(localized: "context.unblock", defaultValue: "Débloquer"),
-                        systemImage: "hand.raised.slash.fill"
-                    )
-                }
-            } else {
-                Button(role: .destructive) {
-                    HapticFeedback.heavy()
-                    blockTargetConversation = conversation
-                    showBlockConfirmation = true
-                } label: {
-                    Label(
-                        String(localized: "context.block", defaultValue: "Bloquer"),
-                        systemImage: "hand.raised.fill"
-                    )
-                }
-            }
-        }
 
         // Delete (destructive -- soft delete for user only)
         Button(role: .destructive) {

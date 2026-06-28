@@ -963,7 +963,8 @@ struct CallView: View {
                 bgColor: callManager.isMuted ? MeeshyColors.error : .white,
                 isActive: callManager.isMuted,
                 caption: String(localized: "call.control.mute.caption", defaultValue: "Micro", bundle: .main),
-                label: callManager.isMuted ? String(localized: "call.control.unmute", defaultValue: "Réactiver le micro", bundle: .main) : String(localized: "call.control.mute", defaultValue: "Couper le micro", bundle: .main)
+                label: callManager.isMuted ? String(localized: "call.control.unmute", defaultValue: "Réactiver le micro", bundle: .main) : String(localized: "call.control.mute", defaultValue: "Couper le micro", bundle: .main),
+                isToggle: true
             ) {
                 callManager.toggleMute()
             }
@@ -977,7 +978,8 @@ struct CallView: View {
                     bgColor: callManager.isSpeaker ? MeeshyColors.info : .white,
                     isActive: callManager.isSpeaker,
                     caption: String(localized: "call.control.speaker.caption", defaultValue: "Son", bundle: .main),
-                    label: callManager.isSpeaker ? String(localized: "call.control.speakerOff", defaultValue: "Désactiver le haut-parleur", bundle: .main) : String(localized: "call.control.speakerOn", defaultValue: "Activer le haut-parleur", bundle: .main)
+                    label: callManager.isSpeaker ? String(localized: "call.control.speakerOff", defaultValue: "Désactiver le haut-parleur", bundle: .main) : String(localized: "call.control.speakerOn", defaultValue: "Activer le haut-parleur", bundle: .main),
+                    isToggle: true
                 ) {
                     callManager.toggleSpeaker()
                 }
@@ -993,7 +995,8 @@ struct CallView: View {
                 caption: String(localized: "call.control.effects", defaultValue: "Effets", bundle: .main),
                 label: showEffectsToolbar
                     ? String(localized: "call.control.effects.close", defaultValue: "Fermer les effets", bundle: .main)
-                    : String(localized: "call.control.effects.open", defaultValue: "Ouvrir les effets", bundle: .main)
+                    : String(localized: "call.control.effects.open", defaultValue: "Ouvrir les effets", bundle: .main),
+                isToggle: true
             ) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     showEffectsToolbar.toggle()
@@ -1022,7 +1025,8 @@ struct CallView: View {
                     : (callManager.isVideoEnabled ? String(localized: "call.control.videoOff", defaultValue: "Désactiver la vidéo", bundle: .main) : String(localized: "call.control.videoOn", defaultValue: "Activer la vidéo", bundle: .main)),
                 hint: videoAutoPaused
                     ? String(localized: "call.control.video.paused.hint", defaultValue: "Touchez pour éteindre la caméra. La vidéo reprend automatiquement si la connexion s'améliore.", bundle: .main)
-                    : nil
+                    : nil,
+                isToggle: true
             ) {
                 callManager.toggleVideo()
             }
@@ -1194,7 +1198,7 @@ struct CallView: View {
     /// what lets every column stay the same width so the row reads as an even,
     /// intelligently-aligned glass bar instead of one button ballooning to fit a
     /// long French label.
-    private func callControlButton(icon: String, color: Color, bgColor: Color, isActive: Bool, caption: String, label: String, hint: String? = nil, action: @escaping () -> Void) -> some View {
+    private func callControlButton(icon: String, color: Color, bgColor: Color, isActive: Bool, caption: String, label: String, hint: String? = nil, isToggle: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 6) {
                 Image(systemName: icon)
@@ -1213,6 +1217,7 @@ struct CallView: View {
         .pressable()
         .accessibilityLabel(label)
         .accessibilityHint(hint ?? "")
+        .callToggleAccessibility(isToggle: isToggle, isActive: isActive)
     }
 
     private var effectsToggleButton: some View {
@@ -1342,5 +1347,25 @@ private extension View {
         self
             .frame(width: diameter, height: diameter)
             .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.error)
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func callToggleAccessibility(isToggle: Bool, isActive: Bool) -> some View {
+        if isToggle {
+            let stateLabel = isActive
+                ? String(localized: "call.control.state.on", defaultValue: "Activé", bundle: .main)
+                : String(localized: "call.control.state.off", defaultValue: "Désactivé", bundle: .main)
+            if #available(iOS 17, *) {
+                self
+                    .accessibilityAddTraits(.isToggle)
+                    .accessibilityValue(stateLabel)
+            } else {
+                self.accessibilityValue(stateLabel)
+            }
+        } else {
+            self
+        }
     }
 }

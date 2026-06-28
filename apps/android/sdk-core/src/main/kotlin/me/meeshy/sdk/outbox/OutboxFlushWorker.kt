@@ -82,7 +82,7 @@ class OutboxFlushWorker @AssistedInject constructor(
             OutboxLanes.SETTINGS,
         )
 
-        var anyTransient = false
+        val reports = mutableListOf<DrainReport>()
 
         // Drain per-conversation message lanes
         val messageLanes = outboxRepository
@@ -92,17 +92,20 @@ class OutboxFlushWorker @AssistedInject constructor(
         for (lane in messageLanes) {
             val report = drainer.drainLane(lane)
             Timber.d("OutboxFlush lane=$lane delivered=${report.delivered} exhausted=${report.exhausted}")
-            if (report.stoppedOnTransientFailure) anyTransient = true
+            reports += report
         }
 
         // Drain shared lanes
         for (lane in lanes) {
             val report = drainer.drainLane(lane)
             Timber.d("OutboxFlush lane=$lane delivered=${report.delivered} exhausted=${report.exhausted}")
-            if (report.stoppedOnTransientFailure) anyTransient = true
+            reports += report
         }
 
-        return if (anyTransient) Result.retry() else Result.success()
+        return when (OutboxFlushPlan.outcome(reports)) {
+            FlushOutcome.RETRY -> Result.retry()
+            FlushOutcome.SUCCESS -> Result.success()
+        }
     }
 
     private fun buildSenders(): Map<OutboxKind, MutationSender> = mapOf(
