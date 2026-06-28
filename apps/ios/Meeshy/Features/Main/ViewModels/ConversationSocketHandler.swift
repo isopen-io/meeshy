@@ -1005,15 +1005,24 @@ final class ConversationSocketHandler {
 
     // MARK: - Reconnection Sync
 
+    private var lastSyncTriggerAt: Date = .distantPast
+    private static let syncCoalesceWindow: TimeInterval = 2.0
+
+    private func triggerSyncIfNeeded() {
+        let now = Date()
+        guard now.timeIntervalSince(lastSyncTriggerAt) > Self.syncCoalesceWindow else { return }
+        lastSyncTriggerAt = now
+        Task { [weak self] in
+            await self?.delegate?.syncMissedMessages()
+            await PendingStatusQueue.shared.flush()
+        }
+    }
+
     private func subscribeToReconnect() {
         messageSocket.didReconnect
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                guard let self else { return }
-                Task { [weak self] in
-                    await self?.delegate?.syncMissedMessages()
-                    await PendingStatusQueue.shared.flush()
-                }
+                self?.triggerSyncIfNeeded()
             }
             .store(in: &cancellables)
 
@@ -1026,11 +1035,7 @@ final class ConversationSocketHandler {
             .publisher(for: UIApplication.willEnterForegroundNotification)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                guard let self else { return }
-                Task { [weak self] in
-                    await self?.delegate?.syncMissedMessages()
-                    await PendingStatusQueue.shared.flush()
-                }
+                self?.triggerSyncIfNeeded()
             }
             .store(in: &cancellables)
     }
