@@ -378,3 +378,17 @@ Append-only log of gotchas and decisions that save time next run.
   only ever affects the upload/publish lanes. Remaining gap for the real chain: the upload's
   returned real `mediaId` must be written into the dependent publish's payload before the
   gate opens (next slice) — gating alone holds the order but doesn't yet rewrite the id.
+
+- **Durable bytes need their own table — the outbox payload is a `String`
+  (`media-blob-store`).** An `UPLOAD_MEDIA` row can't carry raw file bytes in the
+  outbox; persist them in a dedicated `MediaBlobEntity`/`MediaBlobDao` keyed by the
+  upload row's `cmid` and read them back in the `MEDIA`-lane sender. The
+  `MediaBlobStore` wrapper deliberately reuses `MediaUploadItem` (single bytes shape —
+  the store persists exactly what `MediaRepository.upload` consumes, no second type).
+  Two Room footguns confirmed: (1) a `ByteArray` field makes a `data class` equals/
+  hashCode reference-compare the array — use a **plain `class`** (same call already
+  made on `MediaUploadItem`); (2) adding an entity bumps `@Database(version=…)` (5→6
+  here) — safe with the existing `fallbackToDestructiveMigration()` since an in-flight
+  blob is transient (it re-queues), no bespoke migration needed. Assert bytes with
+  `assertThat(actual.bytes).isEqualTo(expected)` (Truth does an array content compare),
+  not entity equality.

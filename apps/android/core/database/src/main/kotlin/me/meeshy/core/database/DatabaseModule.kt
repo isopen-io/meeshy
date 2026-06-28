@@ -8,6 +8,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import me.meeshy.core.database.dao.ConversationDao
+import me.meeshy.core.database.dao.MediaBlobDao
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.core.database.dao.OutboxDao
 import me.meeshy.core.database.dao.StoryDao
@@ -44,6 +45,10 @@ internal object DatabaseModule {
     @Provides
     fun providesStoryDao(database: MeeshyDatabase): StoryDao =
         database.storyDao()
+
+    @Provides
+    fun providesMediaBlobDao(database: MeeshyDatabase): MediaBlobDao =
+        database.mediaBlobDao()
 
     private const val DATABASE_NAME = "meeshy.db"
 }

@@ -43,20 +43,29 @@ now **grafts** that real id into every still-queued dependent publish's payload
 `PublishMediaWriteBack.graft` and the generic `OutboxRepository.rewriteDependents`. A
 media story queued **offline, before its upload finished** will publish with the
 correct id (once the producer half — a durable `MEDIA`-lane upload sender — lands).
+Latest loop (`media-blob-store`) lands the **first brick of that producer half**: a
+durable file-bytes store. The shared outbox carries a `String` payload, so an
+`UPLOAD_MEDIA` row can't hold raw bytes — the new `MediaBlobEntity`/`MediaBlobDao`
+(Room, DB v5→v6 via the existing destructive fallback) plus the `MediaBlobStore`
+building block (`put`/`get`/`remove`, keyed by the upload row's cmid, reusing
+`MediaUploadItem` as the single bytes shape) persist the file so a media attachment
+queued **fully offline** survives process death. The `MEDIA`-lane sender that reads
+this store back, uploads, and returns `SuccessWithId(realMediaId)` is the next brick.
 
 ## Next slice (pick one for the next run)
 
 Ordered by value:
-1. **Durable media upload row (the producer half)** — the now-unblocked follow-up to
-   this run's `outbox-produced-id-writeback`. The write-back primitive is in place
-   (a `SuccessWithId` grafts a real id into dependents), but **nothing produces a
-   `SuccessWithId` yet** and the worker's lane list omits `MEDIA`. Next: add an
-   `UPLOAD_MEDIA` outbox kind + a durable file-bytes store (a content-URI copy or a
-   blob row, since the payload is a `String`), a `MEDIA`-lane sender that uploads and
-   returns `SuccessWithId(realMediaId)`, drain `MEDIA` **before** `STORY`, and wire the
-   composer to enqueue the `upload → publish(dependsOn, placeholder=upload cmid)` chain
-   so a media story is publishable fully offline. Also: a `BLOCKED` dependency doesn't
-   set `anyTransient`, so a held lane isn't auto-retried — revisit then.
+1. **`UPLOAD_MEDIA` kind + `MEDIA`-lane sender (the rest of the producer half)** — the
+   durable file-bytes store now exists (`media-blob-store`, this run). Remaining: add an
+   `OutboxKind.UPLOAD_MEDIA`, an enqueue that writes the bytes via
+   `MediaBlobStore.put(cmid, item)` + an outbox `UPLOAD_MEDIA` row on the `MEDIA` lane, a
+   `MEDIA`-lane `MutationSender` in `OutboxFlushWorker` that reads the blob back, uploads
+   via `MediaRepository.upload`, returns `SuccessWithId(realMediaId)` and `remove`s the
+   blob, and **add `OutboxLanes.MEDIA` to the worker's lane list, drained BEFORE
+   `STORY`**. Then wire the composer to enqueue the
+   `upload → publish(dependsOn=upload cmid, placeholder=upload cmid)` chain so a media
+   story is publishable fully offline. Also: a `BLOCKED` dependency doesn't set
+   `anyTransient`, so a held lane isn't auto-retried — revisit then.
 2. **Multi-slide canvas** — begin the real multi-slide composer (add/remove/
    reorder slides, 9:16 canvas). Much larger; see `feature-parity.md`
    §"Stories composer".
@@ -100,6 +109,59 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-28 — slice `media-blob-store` ✅
+- **Branch:** `claude/apps/android/media-blob-store` (off `origin/main` @ `30b6130b`).
+- **Housekeeping (step 0):** no open `claude/apps/android/*` PR from a prior run
+  (`search_pull_requests is:open head:claude/apps/android` → 0). `main` was fresh
+  (last Android merge `#987 outbox-produced-id-writeback`); branched directly off it.
+- **What:** the **first brick of the producer half** flagged in "Next" — a durable
+  file-bytes store. The shared outbox payload is a `String`, so the raw bytes of a
+  queued media upload have nowhere to live; this slice gives them a durable home keyed
+  by the (future) `UPLOAD_MEDIA` row's `cmid`, so a media attachment can be enqueued
+  **fully offline** and its bytes survive process death until the `MEDIA`-lane sender
+  uploads them. Surpasses iOS, which uploads synchronously and cannot queue a media
+  attachment while offline.
+- **Added / changed (production, `apps/android` only):**
+  - `MediaBlobEntity` (`:core:database`, new) — `cmid` PK + `bytes: ByteArray` +
+    `fileName`/`mimeType`/`createdAt`. A **plain `class`** (not `data`) because value
+    equality over a `ByteArray` is a footgun and the row is only ever looked up by
+    `cmid` — the same decision already made on `MediaUploadItem`.
+  - `MediaBlobDao` (`:core:database`, new) — `upsert`/`find(cmid)`/`delete(cmid)`/`clear`.
+  - `MeeshyDatabase` — registered `MediaBlobEntity` + `mediaBlobDao()`, **DB version
+    5 → 6** (covered by the existing `fallbackToDestructiveMigration()`; an in-flight
+    blob is transient, so destroying it on an upgrade is safe — it re-queues).
+  - `DatabaseModule` — `providesMediaBlobDao`.
+  - `MediaBlobStore` (`:sdk-core`, new) — `put(cmid, item)`/`get(cmid)`/`remove(cmid)`,
+    mapping to/from `MediaUploadItem` (single bytes shape, no second type). A stateless
+    building block: it persists exactly what the uploader consumes; the "when to
+    enqueue / upload" rule stays in the product layer.
+- **Tests (+12, red→green):**
+  - `MediaBlobDaoTest` (Robolectric) +6 — round-trips every field incl. bytes; unknown
+    `cmid` → null; `upsert` replaces same-cmid; `delete` removes only the target;
+    `delete` unknown → no-op; `clear` empties.
+  - `MediaBlobStoreTest` (Robolectric) +6 — `get` returns what `put` stored (bytes +
+    name + mime); unknown → null; `put` overwrites same cmid; `remove` deletes;
+    `remove` unknown → no-op; independent cmids stay separate.
+- **Edge cases covered:** unknown cmid on get/delete/remove (null / no-op, never a
+  crash); same-cmid overwrite (idempotent replace); byte-array preservation across the
+  BLOB round-trip; independent keys isolated; empty store. (No network/failure path —
+  this is a pure durable store; classification lives in the future sender.)
+- **Verify:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL in 2m45s** (full
+  `assembleDebug` + all module JVM unit tests). TEST XMLs: `MediaBlobDaoTest` 6/6,
+  `MediaBlobStoreTest` 6/6 — failures=0 errors=0.
+- **Reviewer:** PASS — scope `apps/android` only (2 prod edits + 3 new prod + 2 new
+  test, all under `core/database/` + `sdk-core/`); behavioural tests through the public
+  API (DAO/store methods + observable rows), no tautologies, no floor lowered; SDK
+  purity (durable store is a stateless building block in `:sdk-core`; entity/DAO in
+  `:core:database`; no product "when" rule); single source of truth (reuses
+  `MediaUploadItem` — no second bytes shape; one DB, destructive-fallback migration —
+  no bespoke migration); Instant-App N/A (no UI); Kotlin style (`explicitApi` honoured,
+  immutable, plain class for the `ByteArray` footgun). Surpasses iOS (durable offline
+  media bytes vs synchronous-only upload).
+- **Follow-up (next slice):** nothing reads/writes this store yet — wire the
+  `UPLOAD_MEDIA` kind + `MEDIA`-lane sender (`SuccessWithId(realMediaId)`) + lane
+  ordering (`MEDIA` before `STORY`) + composer chain. See "Next slice" #1.
 
 ### 2026-06-27 — slice `outbox-produced-id-writeback` ✅
 - **Branch:** `claude/apps/android/outbox-produced-id-writeback` (off `origin/main` @ `64c2c4e1`).

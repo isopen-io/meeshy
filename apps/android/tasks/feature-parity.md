@@ -115,6 +115,14 @@ file-by-file audit — every one of the 673 iOS files was read in full.
       Pending follow-up (producer half): nothing emits `SuccessWithId` yet — needs a
       durable `UPLOAD_MEDIA` `MEDIA`-lane sender (drained before `STORY`) + composer
       wiring.
+- [x] **Durable media-blob store** (`media-blob-store`): the first brick of the producer
+      half. The outbox payload is a `String`, so the raw bytes of a queued media upload
+      live in a dedicated `MediaBlobEntity`/`MediaBlobDao` (Room, DB v5→v6) keyed by the
+      upload row's `cmid`, fronted by the `MediaBlobStore` building block
+      (`put`/`get`/`remove`, reusing `MediaUploadItem` as the single bytes shape). Lets a
+      media attachment be enqueued **fully offline**, bytes surviving process death.
+      Remaining producer half: the `UPLOAD_MEDIA` kind + `MEDIA`-lane sender that reads
+      this store, uploads, returns `SuccessWithId(realMediaId)`, and `remove`s the blob.
 - [ ] TUS resumable uploads in a **dedicated `WorkManager` chain** (foreground
       progress); message-send items `dependsOn` the upload (gating now in place)
 - [x] `MessageStateMachine` (pure, monotonic 8-state delivery FSM) — 9 tests
