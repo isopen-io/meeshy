@@ -1385,7 +1385,7 @@ struct PostDetailView: View {
             .accessibilityLabel(String(localized: "a11y.post.repost", defaultValue: "Republier", bundle: .main))
             .accessibilityValue(isPostReposted ? String(localized: "a11y.post.reposted", defaultValue: "Republié", bundle: .main) : "")
             .accessibilityHint(String(localized: "a11y.post.repost.hint", defaultValue: "Republier ou citer cette publication", bundle: .main))
-            .confirmationDialog("Repartager", isPresented: $showRepostOptions) {
+            .alert(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main), isPresented: $showRepostOptions) {
                 Button(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main)) {
                     toggleDetailRepost(quote: false)
                 }

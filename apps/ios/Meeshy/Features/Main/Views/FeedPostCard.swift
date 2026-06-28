@@ -833,7 +833,7 @@ struct FeedPostCard: View {
             .accessibilityValue(String(format: String(localized: "a11y.feed.post.repost.value", defaultValue: "%d repartages", bundle: .main), displayRepostCount ?? post.repostCount))
             .accessibilityHint(String(localized: "a11y.feed.post.repost.hint", defaultValue: "Repartage ou cite cette publication", bundle: .main))
             .accessibilityAddTraits(isReposted ? .isSelected : [])
-            .confirmationDialog(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main), isPresented: $showRepostOptions) {
+            .alert(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main), isPresented: $showRepostOptions) {
                 Button(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main)) { onRepost?(post.id) }
                 Button(String(localized: "feed.post.quote", defaultValue: "Citer", bundle: .main)) { onQuote?(post.id) }
                 Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
