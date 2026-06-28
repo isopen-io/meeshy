@@ -3298,7 +3298,8 @@ final class CallManagerMediaServicesResetMonitoringTests: XCTestCase {
             XCTFail("private init not found in CallManager.swift")
             return
         }
-        let endIdx = source.index(initRange.lowerBound, offsetBy: 500, limitedBy: source.endIndex) ?? source.endIndex
+        // The init body is ~59 lines / ~2 500 chars; use 3 500 to stay robust against growth.
+        let endIdx = source.index(initRange.lowerBound, offsetBy: 3500, limitedBy: source.endIndex) ?? source.endIndex
         let initBody = String(source[initRange.lowerBound ..< endIdx])
 
         XCTAssertTrue(
