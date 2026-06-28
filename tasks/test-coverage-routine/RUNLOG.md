@@ -2151,3 +2151,39 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Reviewer: PASS (rounds: 1)
 - Production code changes: none — test file only
 - Commit: 30b6130b6455b1aae9d35ca6cfd1003cf8a39e51 (PR #986 squash-merged to main)
+
+---
+
+## 2026-06-28T01:10Z — Fix gateway test failures blocking PR #980 merge
+
+- Targeted: repair pre-existing gateway test failures that blocked PR #980 CI
+- Result: ☑ done — 5 failing gateway suites fixed; all gateway CI green
+- Branch: `claude/coverage/p2-tracking-update`
+- Failures fixed (all test-only, no production code):
+  1. `MeeshySocketIOManager.test.ts` — `_emitPresenceSnapshot cache` hit: kept HEAD assertion (`.not.toHaveBeenCalled()` vs branch's stricter `.toHaveBeenCalledTimes(0)`)
+  2. `AuthHandler.test.ts` — `handleManualAuthentication` language resolution: fixture `systemLanguage: 'en'`, assertion corrected from stale `'es'` → `'en'`
+  3. `src/__tests__/unit/handlers/ConversationHandler.test.ts` — anonymous join: kept HEAD version
+  4. `socketio/handlers/__tests__/ConversationHandler.test.ts` — anonymous join: kept HEAD version
+  5. `AuthHandler.manual-auth.test.ts` — TS2300 duplicate identifier: kept HEAD version (resolved by rebase)
+  Plus 2 post-rebase assertion regressions:
+  6. `AuthHandler.test.ts:692` — assertion `'es'` → `'en'` to match fixture's `systemLanguage: 'en'`
+  7. `MeeshySocketIOManager.test.ts:2081` — HEARTBEAT: `toHaveBeenCalledWith(socket)` → `toHaveBeenCalledWith(socket, undefined)` (production code passes data arg which is undefined when no payload)
+- Tests changed: 2 files (assertions only — no logic changes, no production code)
+- Commits: `9adb80d2d`, `63982dd85`
+
+---
+
+## 2026-06-28T01:31Z — P0 Encryption & attachments × shared (types/attachment.ts) — MERGED
+
+- Slice: P0 Encryption & attachments × shared — `packages/shared/types/attachment.ts`
+- Branch: `claude/coverage/p2-tracking-update` (PR #980)
+- Result: ☑ squash-merged to main
+- Coverage: types/attachment.ts 0%→100% lines / 0%→100% branches; 161 tests; 10 pure functions + constants
+- shared global post-merge: stmts 99.72% / branch 97.31% / funcs 94.14% / lines 99.72%
+- Reviewer: PASS (on record from prior run)
+- Production code changed: none
+- Commit: 84afd057bb0e28e1a73dfa9c93f66010a62c7391 (PR #980 squash-merged to main)
+- Notes:
+  1. All Linux-testable (feature × app) cells are now ☑ or ⊘.
+  2. Remaining ☐ cells are iOS and Android — require macOS/Xcode or Android SDK, not available in this Linux CI environment.
+  3. Routine reaches steady-state for Linux-testable targets. Future runs should focus on iOS/Android if the environment changes, or pick up any newly added modules.
