@@ -428,3 +428,22 @@ Append-only log of gotchas and decisions that save time next run.
   — else a later success silently drops the pending placeholder. The pending preview tile
   renders the held `ByteArray` straight through Coil (`AsyncImage(model = bytes)`); make it
   removable so it's never a dead end.
+
+- **Multi-dependency outbox gate (`outbox-multi-dependency`).** The single-pending constraint
+  above was a deliberate *temporary* guard until the gate could express **several** prerequisites.
+  It now can: `OutboxMutation.dependsOn` is a `Set<String>` encoded into the **one** `dependsOn`
+  TEXT column by `OutboxDependencyKey` — wrapped-delimited (`{a,b}`→`"|a|b|"`, `'|'` reserved/absent
+  from a `cmid`), so a *membership* test is a substring `LIKE`. Two gotchas that shaped the design:
+  (1) a `cmid` is `cmid_<uuid>` and contains `_`, a `LIKE` wildcard — `likePattern` **escapes** it
+  and the DAO query must use `ESCAPE '\'` (Kotlin string: `"… ESCAPE '\\'"`), else `cmid_a` spuriously
+  matches `cmidXa`; a regression test (`up` must NOT match member `upload`) guards it. (2) `decode`
+  must tolerate a **bare** value with no delimiter → singleton, so existing single-dep rows/tests keep
+  resolving — that let every prior drainer test keep its behaviour while only the *storage format*
+  changed (no schema/migration: same column). Gate priority: in `verdictAll`, **`FAILED` dominates
+  `BLOCKED`** — one exhausted prerequisite means the dependent can never run, so cascade-exhaust now
+  rather than wait on the others. Keep the key/gate **pure in `:sdk-core`** (no product policy); the
+  composer's "when to queue / how many pending" rule stays app-side. Changing `enqueuePublish`'s param
+  `String? → List<String>` again rippled into mockk stubs — `slot<String>()` → `slot<List<String>>()`
+  and `isEqualTo("x")` → `containsExactly("x")` (same adapting-not-weakening pattern as the offline
+  slice). The composer **UX** relaxation (`pendingUploads: List`, drop the single-pending guard) is a
+  separate slice — splitting the SDK primitive from the UI kept this diff thin and every prior test green.

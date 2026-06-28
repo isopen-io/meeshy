@@ -27,4 +27,33 @@ class OutboxDependenciesTest {
         assertThat(OutboxDependencies.verdict(OutboxState.EXHAUSTED))
             .isEqualTo(DependencyVerdict.FAILED)
     }
+
+    @Test
+    fun `no prerequisites is satisfied`() {
+        assertThat(OutboxDependencies.verdictAll(emptyList())).isEqualTo(DependencyVerdict.SATISFIED)
+    }
+
+    @Test
+    fun `all-gone prerequisites are satisfied`() {
+        assertThat(OutboxDependencies.verdictAll(listOf(null, null)))
+            .isEqualTo(DependencyVerdict.SATISFIED)
+    }
+
+    @Test
+    fun `a single still-queued prerequisite blocks the whole set`() {
+        assertThat(OutboxDependencies.verdictAll(listOf(null, OutboxState.PENDING)))
+            .isEqualTo(DependencyVerdict.BLOCKED)
+    }
+
+    @Test
+    fun `an exhausted prerequisite fails the set even while another is still pending`() {
+        assertThat(OutboxDependencies.verdictAll(listOf(OutboxState.PENDING, OutboxState.EXHAUSTED)))
+            .isEqualTo(DependencyVerdict.FAILED)
+    }
+
+    @Test
+    fun `every prerequisite gone or satisfied leaves the set satisfied`() {
+        assertThat(OutboxDependencies.verdictAll(listOf(null)))
+            .isEqualTo(DependencyVerdict.SATISFIED)
+    }
 }

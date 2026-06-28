@@ -68,9 +68,10 @@ public class OutboxDrainer(
         val pending = outbox.deliverable(lane).filter { it.stateEnum == OutboxState.PENDING }
 
         for (row in pending) {
-            val dependsOn = row.dependsOn
-            if (dependsOn != null) {
-                when (OutboxDependencies.verdict(outbox.stateOf(dependsOn))) {
+            val prerequisites = OutboxDependencyKey.decode(row.dependsOn)
+            if (prerequisites.isNotEmpty()) {
+                val states = prerequisites.map { outbox.stateOf(it) }
+                when (OutboxDependencies.verdictAll(states)) {
                     DependencyVerdict.BLOCKED ->
                         return DrainReport(
                             delivered,
@@ -79,7 +80,10 @@ public class OutboxDrainer(
                             stoppedOnBlockedDependency = true,
                         )
                     DependencyVerdict.FAILED -> {
-                        outbox.markExhausted(row.cmid, "Prerequisite $dependsOn failed")
+                        val failed = prerequisites.filterIndexed { i, _ ->
+                            states[i] == OutboxState.EXHAUSTED
+                        }
+                        outbox.markExhausted(row.cmid, "Prerequisite(s) failed: ${failed.joinToString()}")
                         onExhausted(row)
                         exhausted++
                         continue

@@ -147,7 +147,16 @@ class OutboxRepositoryTest {
         lane = "lane-$cmid",
         targetId = "t-$cmid",
         payload = payload,
-        dependsOn = prereq,
+        dependsOn = setOf(prereq),
+        cmid = cmid,
+    )
+
+    private fun rowDependingOnAll(cmid: String, prereqs: Set<String>, payload: String) = OutboxMutation(
+        kind = OutboxKind.SEND_MESSAGE,
+        lane = "lane-$cmid",
+        targetId = "t-$cmid",
+        payload = payload,
+        dependsOn = prereqs,
         cmid = cmid,
     )
 
@@ -187,6 +196,26 @@ class OutboxRepositoryTest {
         assertThat(changed).isEqualTo(1)
         assertThat(payloadOf("p1")).isEqualTo("new")
         assertThat(payloadOf("p2")).isEqualTo("old2")
+    }
+
+    @Test
+    fun `rewriteDependents finds a dependent gated on several prerequisites by any one of them`() = runTest {
+        repository.enqueue(rowDependingOnAll("p1", setOf("u", "v"), "old1"))
+
+        assertThat(repository.rewriteDependents("u") { "via-u" }).isEqualTo(1)
+        assertThat(payloadOf("p1")).isEqualTo("via-u")
+        assertThat(repository.rewriteDependents("v") { "via-v" }).isEqualTo(1)
+        assertThat(payloadOf("p1")).isEqualTo("via-v")
+    }
+
+    @Test
+    fun `rewriteDependents does not match a prerequisite that is only a substring of a member`() = runTest {
+        repository.enqueue(rowDependingOnAll("p1", setOf("upload"), "old1"))
+
+        val changed = repository.rewriteDependents("up") { "new" }
+
+        assertThat(changed).isEqualTo(0)
+        assertThat(payloadOf("p1")).isEqualTo("old1")
     }
 
     @Test
