@@ -3325,3 +3325,171 @@ final class CallManagerMediaServicesResetMonitoringTests: XCTestCase {
         )
     }
 }
+
+// MARK: - CallView auto-hide controls source guards
+
+/// Source guards ensuring `shouldAutoHideControls` in CallView.swift correctly
+/// blocks auto-hide for Mac Catalyst, VoiceOver, non-video calls, and when
+/// the effects toolbar is open — any of these missing would cause controls to
+/// vanish in a context where they must remain permanently visible.
+@MainActor
+final class CallViewAutoHideControlsSourceGuardTests: XCTestCase {
+
+    private func callViewSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/CallView.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_shouldAutoHideControls_gatesOnIsVideoEnabled() throws {
+        let source = try callViewSource()
+        guard let fnRange = source.range(of: "private var shouldAutoHideControls: Bool") else {
+            XCTFail("shouldAutoHideControls not found in CallView.swift")
+            return
+        }
+        let end = source.index(fnRange.lowerBound, offsetBy: 300, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[fnRange.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("isVideoEnabled"),
+            "shouldAutoHideControls must gate on isVideoEnabled — controls must never " +
+            "auto-hide on an audio-only call (there's no video surface to tap for recall)."
+        )
+    }
+
+    func test_shouldAutoHideControls_gatesOnIsiOSAppOnMac() throws {
+        let source = try callViewSource()
+        guard let fnRange = source.range(of: "private var shouldAutoHideControls: Bool") else {
+            XCTFail("shouldAutoHideControls not found in CallView.swift")
+            return
+        }
+        let end = source.index(fnRange.lowerBound, offsetBy: 300, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[fnRange.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("isiOSAppOnMac"),
+            "shouldAutoHideControls must gate on isiOSAppOnMac — on Mac the user cannot " +
+            "tap the video surface to recall hidden controls (no touch), so controls must " +
+            "always be visible."
+        )
+    }
+
+    func test_shouldAutoHideControls_gatesOnVoiceOver() throws {
+        let source = try callViewSource()
+        guard let fnRange = source.range(of: "private var shouldAutoHideControls: Bool") else {
+            XCTFail("shouldAutoHideControls not found in CallView.swift")
+            return
+        }
+        let end = source.index(fnRange.lowerBound, offsetBy: 300, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[fnRange.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("isVoiceOverRunning"),
+            "shouldAutoHideControls must gate on UIAccessibility.isVoiceOverRunning — " +
+            "VoiceOver users navigate via swipe gestures, not taps on the video surface, " +
+            "so hidden controls are unreachable and must always stay visible."
+        )
+    }
+
+    func test_shouldAutoHideControls_gatesOnEffectsToolbar() throws {
+        let source = try callViewSource()
+        guard let fnRange = source.range(of: "private var shouldAutoHideControls: Bool") else {
+            XCTFail("shouldAutoHideControls not found in CallView.swift")
+            return
+        }
+        let end = source.index(fnRange.lowerBound, offsetBy: 300, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[fnRange.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("showEffectsToolbar"),
+            "shouldAutoHideControls must gate on showEffectsToolbar — hiding the controls " +
+            "while the effects toolbar is open would leave the user unable to close it."
+        )
+    }
+}
+
+// MARK: - CallView video connect watchdog source guards
+
+/// Source guards ensuring the `connectingVideoPlaceholder` watchdog Task uses
+/// cancellation-aware sleep (not Timer) and correctly posts a VoiceOver
+/// announcement when the video takes longer than expected.
+@MainActor
+final class CallViewVideoWatchdogSourceGuardTests: XCTestCase {
+
+    private func callViewSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/CallView.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_videoWatchdog_usesTaskSleep_notTimer() throws {
+        let source = try callViewSource()
+        guard let fnRange = source.range(of: "private var connectingVideoPlaceholder") else {
+            XCTFail("connectingVideoPlaceholder not found in CallView.swift")
+            return
+        }
+        // The .task { } block with Task.sleep is ~1 400 chars into the function body;
+        // use 3 000 to cover the full property including the closing }.
+        let end = source.index(fnRange.lowerBound, offsetBy: 3000, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[fnRange.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("Task.sleep"),
+            "connectingVideoPlaceholder watchdog must use Task.sleep so the delay is " +
+            "automatically cancelled (by SwiftUI .task lifecycle) when remote video arrives."
+        )
+        XCTAssertFalse(
+            body.contains("Timer.scheduledTimer") || body.contains("Timer.publish"),
+            "connectingVideoPlaceholder watchdog must NOT use a Timer — Timer cannot be " +
+            "cancelled cooperatively when the view disappears."
+        )
+    }
+
+    func test_videoWatchdog_checksCancellationBeforeSlowFlag() throws {
+        let source = try callViewSource()
+        guard let fnRange = source.range(of: "private var connectingVideoPlaceholder") else {
+            XCTFail("connectingVideoPlaceholder not found in CallView.swift")
+            return
+        }
+        let end = source.index(fnRange.lowerBound, offsetBy: 3000, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[fnRange.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("Task.isCancelled"),
+            "connectingVideoPlaceholder watchdog must check Task.isCancelled after sleep " +
+            "so it does not set videoConnectSlow = true after remote video has already arrived."
+        )
+    }
+
+    func test_videoWatchdog_postsAccessibilityAnnouncement() throws {
+        let source = try callViewSource()
+        guard let fnRange = source.range(of: "private var connectingVideoPlaceholder") else {
+            XCTFail("connectingVideoPlaceholder not found in CallView.swift")
+            return
+        }
+        let end = source.index(fnRange.lowerBound, offsetBy: 3000, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[fnRange.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("UIAccessibility.post") && body.contains(".announcement"),
+            "connectingVideoPlaceholder watchdog must post a UIAccessibility .announcement " +
+            "when the video is slow so VoiceOver users are informed without visual feedback."
+        )
+    }
+
+    func test_videoWatchdog_usesConstant_notBareLiteral() throws {
+        let source = try callViewSource()
+        guard let fnRange = source.range(of: "private var connectingVideoPlaceholder") else {
+            XCTFail("connectingVideoPlaceholder not found in CallView.swift")
+            return
+        }
+        let end = source.index(fnRange.lowerBound, offsetBy: 3000, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[fnRange.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("videoConnectWatchdogSeconds"),
+            "connectingVideoPlaceholder watchdog must reference videoConnectWatchdogSeconds " +
+            "constant — not a bare numeric literal — so the threshold is tuneable in one place."
+        )
+    }
+}
