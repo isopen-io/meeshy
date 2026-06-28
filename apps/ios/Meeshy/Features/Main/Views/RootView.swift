@@ -1066,31 +1066,29 @@ struct RootView: View {
         navigateFromNotification(NotificationNavContext(from: payload))
     }
 
-    // Phase G — heuristic for `.postComment` / `.commentReply`: when the
-    // gateway populates `metadata.postType` we trust it (`"STORY"`); when
-    // it doesn't, fall back to the local cache where any post carrying a
-    // non-nil `expiresAt` is, by definition, a story. Both signals are
-    // "best-effort" and we deliberately bias toward the story flow when
-    // either matches because the dedicated screen still degrades gracefully
-    // (`expired` empty state) for posts that no longer exist.
+    // Routing decision for a social-content notification — delegated to the pure
+    // `NotificationContentRouter` (single source of truth, mirrors the web's
+    // `resolveContentRoute`). `metadata.postType` is the high-confidence signal;
+    // when the gateway omits it we fall back to the notification type and, last,
+    // to the local story cache where any post carrying a non-nil `expiresAt` is,
+    // by definition, a story.
     private func isStoryNotification(_ ctx: NotificationNavContext, postId: String) -> Bool {
-        // High confidence: explicit type from notification metadata
-        if ctx.postType?.uppercased() == "STORY" { return true }
-        if ctx.postType?.uppercased() == "POST" || ctx.postType?.uppercased() == "STATUS" { return false }
+        let storyLifecycleHint = StoryService.shared.cachedPost(id: postId)?.expiresAt != nil
+        return NotificationContentRouter.surface(
+            postType: ctx.postType,
+            notificationType: ctx.type,
+            storyLifecycleHint: storyLifecycleHint
+        ) == .story
+    }
 
-        // Medium confidence: explicit notification types that are story-only
-        switch ctx.type {
-        case .storyReaction, .storyNewComment, .friendStoryComment, .storyThreadReply, .friendNewStory:
-            return true
-        default:
-            break
-        }
-
-        // Low confidence fallback: check cache if it has an expiry date
-        if let cached = StoryService.shared.cachedPost(id: postId) {
-            return cached.expiresAt != nil
-        }
-        return false
+    // Reel-flavoured notification (`metadata.postType == "REEL"`). Reels open in
+    // the full-screen immersive viewer, never the story target or the post detail.
+    private func isReelNotification(_ ctx: NotificationNavContext) -> Bool {
+        NotificationContentRouter.surface(
+            postType: ctx.postType,
+            notificationType: ctx.type,
+            storyLifecycleHint: false
+        ) == .reel
     }
 
     private func navigateFromNotification(_ ctx: NotificationNavContext) {
@@ -1129,21 +1127,30 @@ struct RootView: View {
 
         case .postLike, .legacyPostLike, .postRepost, .friendNewPost:
             if let postId = ctx.postId, !postId.isEmpty {
-                router.push(.postDetail(postId))
+                if isReelNotification(ctx) {
+                    openReelFromNotification(postId: postId)
+                } else {
+                    router.push(.postDetail(postId))
+                }
             } else if let conversationId = ctx.conversationId, !conversationId.isEmpty {
                 navigateToConversationById(conversationId)
             }
 
         case .postComment, .legacyPostComment, .commentLike, .commentReply, .commentReaction:
             if let postId = ctx.postId, !postId.isEmpty {
-                // Phase G — story-flavoured comments route to the
-                // notification target screen (which redirects into the
-                // viewer's comments overlay or shows the expired empty
-                // state). Detection: explicit `metadata.postType == "STORY"`
-                // OR a cache hint (cached post carries a non-nil
-                // `expiresAt`). Falls back to the regular post-detail
-                // navigation otherwise.
-                if isStoryNotification(ctx, postId: postId) {
+                // Reel comments/reactions open the full-screen reel viewer (the
+                // user tapped a notification about a réel — it must land on the
+                // réel, not the story viewer with the wrong post).
+                //
+                // Phase G — story-flavoured comments route to the notification
+                // target screen (which redirects into the viewer's comments
+                // overlay or shows the expired empty state). Detection: explicit
+                // `metadata.postType == "STORY"` OR a cache hint (cached post
+                // carries a non-nil `expiresAt`). Falls back to the regular
+                // post-detail navigation otherwise.
+                if isReelNotification(ctx) {
+                    openReelFromNotification(postId: postId)
+                } else if isStoryNotification(ctx, postId: postId) {
                     router.push(.storyNotificationTarget(
                         storyId: postId,
                         intent: .comments,
@@ -1199,6 +1206,49 @@ struct RootView: View {
              .passwordChanged, .twoFactorEnabled, .twoFactorDisabled,
              .system, .maintenance, .updateAvailable, .voiceCloneReady:
             break
+        }
+    }
+
+    /// Opens the full-screen reel viewer for a reel-flavoured social
+    /// notification. The reels feed (`getReels(seedReelId:)`) deliberately
+    /// EXCLUDES the seed reel, so the target reel must be injected as the pager's
+    /// seed — otherwise the pager opens on the first affinity reel (the original
+    /// "wrong post" bug). Cache-first for an instant open (the Notification
+    /// Service Extension prefetches the tapped post into the feed cache via
+    /// `NSEPendingPostConsumer`), then network as a fallback so the tap is never a
+    /// dead end.
+    private func openReelFromNotification(postId: String) {
+        Task { @MainActor in
+            await NSEPendingPostConsumer.shared.consumeAll()
+
+            if let cached = await cachedReelSeed(for: postId) {
+                reelsPresenter.present(posts: [cached], startId: postId)
+                return
+            }
+
+            let preferred = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+            if let apiPost = try? await PostService.shared.getPost(postId: postId) {
+                reelsPresenter.present(
+                    posts: [apiPost.toFeedPost(preferredLanguages: preferred)],
+                    startId: postId
+                )
+            } else {
+                // Never a dead end: the universal post-detail surface renders any
+                // post type, including a reel.
+                router.push(.postDetail(postId))
+            }
+        }
+    }
+
+    /// The reel already cached for `postId` (NSE-prefetched or previously loaded),
+    /// or `nil` on a cold cache. Mirrors `PostDetailViewModel.loadPost`'s
+    /// cache-first read so a tapped reel notification renders instantly.
+    private func cachedReelSeed(for postId: String) async -> FeedPost? {
+        switch await CacheCoordinator.shared.feed.load(for: postId) {
+        case .fresh(let cached, _), .stale(let cached, _):
+            return cached.first
+        case .expired, .empty:
+            return nil
         }
     }
 
