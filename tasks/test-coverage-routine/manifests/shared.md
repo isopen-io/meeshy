@@ -45,7 +45,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `packages/shared/types/api-schemas.ts`
 - [x] `packages/shared/types/attachment-audio.ts`
 - [x] `packages/shared/types/attachment-transcription.ts`
-- [ ] `packages/shared/types/attachment.ts`
+- [x] `packages/shared/types/attachment.ts`
 - [x] `packages/shared/types/audio-effects-timeline.ts`
 - [x] `packages/shared/types/audio-transcription.ts`
 - [ ] `packages/shared/types/community.ts`

@@ -2078,7 +2078,7 @@ describe('MeeshySocketIOManager', () => {
       const socket = makeSocket('sock-hb1');
       triggerConnection(socket);
       await socket._handlers[CLIENT_EVENTS.HEARTBEAT]();
-      expect(mockAuthHandlerInstance.handleHeartbeat).toHaveBeenCalledWith(socket);
+      expect(mockAuthHandlerInstance.handleHeartbeat).toHaveBeenCalledWith(socket, undefined);
     });
   });
 

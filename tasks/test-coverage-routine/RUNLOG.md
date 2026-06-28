@@ -2062,7 +2062,61 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   - debug.tsx: loading state (spinner + animate-spin); success + API user; no token (fetch not called, role=UNKNOWN); API 401; API success=false; fetch throws (title rendered, no cards); back button navigation; null getCurrentUser; null permissions field
 - Reviewer: PASS (rounds: 1)
 - Notes: ChartsImpl.tsx had pre-existing 100% coverage — confirmed. AdminLayout.tsx and debug.tsx were the substantive additions. Global web thresholds (42%/34%) not ratcheted — 3-file addition in a 1091-file codebase shifts global <0.1pp; will ratchet once a later phase measures the full suite.
-- Commit: (this commit)
+- Commit: 5e774e20 (PR #974 squash-merged to main)
+
+---
+
+## 2026-06-27T12:00Z — P0 Encryption & attachments × shared bonus (types/attachment.ts)
+
+- Targeted: `packages/shared/types/attachment.ts` (772 lines, 10 pure functions + constants)
+- Result: ☑ done — types/attachment.ts 100%/100%/100%/100% line+branch+funcs+stmts
+- Coverage (per-file, vitest v8):
+  - `attachment.ts`: **100% lines / 100% branches / 100% funcs / 100% stmts** ✓
+  - shared global: 99.72% stmts / 97.31% branch / 94.14% funcs / 99.72% lines — all thresholds met (floor unchanged: branches:96/functions:93/lines:99/statements:99)
+- Tests added: 161 tests in `__tests__/types/attachment.test.ts` (NEW, 393 lines)
+  - UPLOAD_LIMITS / MAX_FILES_PER_MESSAGE / MAX_CONCURRENT_UPLOADS / TUS_CHUNK_SIZE / SMALL_FILE_THRESHOLD constants (7 tests)
+  - ACCEPTED_MIME_TYPES spot checks (4 tests)
+  - isImageMimeType: 5 true cases, 6 false cases (including empty string)
+  - isAudioMimeType: 9 true cases, codec-stripping (audio/webm;codecs=opus), whitespace after strip, 4 false cases, semicolon-prefix fallback branch (';codecs=opus')
+  - isVideoMimeType: 4 true cases, codec-stripping (video/webm;codecs=vp8), whitespace strip, 4 false, semicolon-prefix fallback
+  - isTextMimeType: 1 true, 5 false (text/html, text/markdown etc are NOT text)
+  - isDocumentMimeType: 8 true (all DOCUMENT MIME types), 4 false
+  - isCodeMimeType: 14 true (markdown/JS/TS/Python/JSON/YAML/HTML/CSS/XML), 5 false
+  - isAcceptedMimeType: 6 true (one per category), 4 false
+  - getAttachmentType MIME-priority path: image/audio/video/text/code/document (9 tests incl. codec params + MIME-over-filename priority)
+  - getAttachmentType extension-fallback path: .py/.ts/.js/.rs/.go/.md/.yaml/.json/.sql (code), .txt/.csv/.log (text), case-insensitive, path with dir, trailing-slash edge case, unknown extension, no filename (17 tests)
+  - getAttachmentType special code files: dockerfile/Dockerfile/makefile/Makefile/.gitignore/.dockerignore/tsconfig.json/.env/.env.local/.eslintrc/.prettierrc + endsWith path 'my-dockerfile' (12 tests)
+  - getSizeLimit: all 6 switch cases + exhaustive-check default ('unknown' as any) (7 tests)
+  - formatFileSize: 0→'0 B', B range, KB range (1024/1536/1048575), MB range (1MB/10MB), GB range (1GB/4GB), TB (1 TB), PB clamped to '1024 TB' (13 tests)
+- Production code changes: NONE — test-only diff (1 line in vitest.config.ts to add types/attachment.ts to coverage include)
+- Also updated in this commit:
+  - PROGRESS.md: fixed P2 Admin × web from "PR #974 open ⚠" to "☑ PR #974 merged → 5e774e20"; marked P2 Theme/accent color × shared/SDK as ⊘; marked P2 Video/story export × shared/SDK as ⊘; updated P0 Enc&attach shared cell; updated shared baselines
+  - RUNLOG.md: this entry
+- Reviewer: PASS (rounds: 2 — round 1 FAIL based on arithmetic error in formatFileSize boundary test; corrected after clarification that 1023.9990234375.toFixed(2) = '1024.00' due to rounding, not '1023.99')
+- Notes:
+  1. All remaining ☐ cells in feature matrix for Linux-testable environments (gateway/translator/web/shared TypeScript) are now ☑ or ⊘. Remaining ☐ cells are iOS/Android (⊘ on Linux — no Xcode/Android SDK).
+  2. P2 Theme/accent color × shared/SDK and P2 Video/story export × shared/SDK marked ⊘: ColorGeneration and VideoExportPipeline are Swift SDK only; no TypeScript shared targets exist.
+  3. formatFileSize boundary: 1024*1024-1 = 1048575 bytes → 1023.9990234375 KB → .toFixed(2) = '1024.00' (rounds up at 3rd decimal) → parseFloat → 1024 → '1024 KB'. Test assertion is correct.
+- Commit: (see PR #980)
+
+---
+
+## 2026-06-27T13:00Z — Wakeup check: PR #980 still blocked
+
+- Targeted: check if PR #980 CI passed; determine merge/block decision
+- Result: ⚠ blocked — "Test gateway" check still failing; same pre-existing failures as prior check
+- Failures confirmed (all in services/gateway/, unrelated to our packages/shared/ diff):
+  1. `MeeshySocketIOManager.test.ts` — `_emitPresenceSnapshot › uses cache when entry is fresh`: `prisma.participant.findMany` expected 1 call, received 0
+  2. `AuthHandler.test.ts:689` — `handleManualAuthentication`: `connectedUsers.get('user-123')?.language` expected 'en', received 'es'
+  3. `src/__tests__/unit/handlers/ConversationHandler.test.ts` — `handleConversationJoin` anonymous member: expected `conversation:join-error`, received 0 calls
+  4. `socketio/handlers/__tests__/ConversationHandler.test.ts` — same join-error assertion
+  5. `AuthHandler.manual-auth.test.ts` — TS2300 Duplicate identifier 'jwt' (suite-level compile failure)
+  Total: 5 failed suites, 4 failed tests / 8982 passed (8987 total)
+- Action: left PR #980 open; marked slice ⚠ blocked in PROGRESS.md; updated RUNLOG (this entry)
+- Reason cannot auto-merge: ROUTINE.md §7 "Never force a merge past red CI" — gate is absolute regardless of failure cause
+- Our diff: packages/shared/__tests__/types/attachment.test.ts (NEW, 393 lines), packages/shared/vitest.config.ts (+1 line), tracking files only — no production code
+- Unblocking: PR #980 will be mergeable once the 5 pre-existing gateway test failures are fixed on main. The tests+config changes are ready; reviewer PASS on record.
+- Commit: (status-only wakeup — no new commit)
 
 ---
 
@@ -2081,29 +2135,11 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Result: ☑ done — all 7 files at 100% line+branch; preference schemas already had comprehensive tests
 - Coverage (final run, 1029 tests, 36 test files):
   - shared global: **99.72% lines / 97.27% branches / 94.23% functions** — all thresholds met (branches:96, lines:99, functions:93)
-- Tests added: 80 new tests in `packages/shared/types/__tests__/role-types.test.ts`:
-  - MemberRole enum values (creator, admin, moderator, member)
-  - MEMBER_ROLE_HIERARCHY constants (creator:40, admin:30, moderator:20, member:10)
-  - hasMinimumMemberRole (7 cases: hierarchy checks, unknown user role returns false, MemberRole enum input)
-  - isMemberRole (7 cases: all valid values, CREATOR uppercase accepted, unknown value rejected, empty string)
-  - isGlobalAdmin (7 cases: ADMIN/BIGBOSS true, case-insensitive, non-admin false, enum input)
-  - isGlobalModerator (7 cases: MODERATOR/ADMIN/BIGBOSS true, AUDIT/ANALYST/USER false)
-  - isMemberAdmin / isMemberModerator / isMemberCreator (6 cases each: role-specific guards)
-  - WRITE_PERMISSION_HIERARCHY (7 cases: all 5 levels + ordering invariants)
-  - normalizeGlobalRole (invalid + empty string → USER fallback)
-  - hasModeratorPrivileges (unknown role → false)
-  - getEffectiveRole (unknown global role treated as level 0)
-  - getEffectiveRoleLevel (empty global role defaults to USER; unknown roles → level 0)
-  - isGlobalUserRole (reject unknown + empty string)
-- Production code changes (comment-only — 7 × v8 ignore for genuinely unreachable branches):
-  - `hasMinimumRole` lines 74-75: `/* v8 ignore next 2 */` — TypeScript types ensure roles always in GLOBAL_ROLE_HIERARCHY; `|| 0` unreachable
-  - `hasMinimumMemberRole` line 137: `/* v8 ignore next */` — requiredRole typed MemberRole|MemberRoleType, always mapped
-  - `hasModeratorPrivileges` line 196: `/* v8 ignore next */` — UNIFIED_ROLE_LEVELS.MODERATOR is constant, `?? 60` unreachable
-  - `isGlobalAdmin` line 279, `isMemberAdmin` line 295, `isMemberCreator` line 310: `/* v8 ignore next */` — TypeScript string enums are always typeof 'string' at runtime; else-branch unreachable
+- Tests added: 80 new tests in `packages/shared/types/__tests__/role-types.test.ts`
+- Production code changes (comment-only — 7 × v8 ignore for genuinely unreachable branches)
 - ⚠️ PR must NOT be auto-merged — diff includes production code changes (v8 ignore comments in role-types.ts). Needs human review per ROUTINE.md §7.
-- Reviewer: PASS (rounds: 1) — v8 ignore justifications accepted; test quality high (116 test cases, no tautologies, good edge-case coverage)
-- Pre-flight checks: Confirmed PR #969 (gateway) and PR #974 (web) both merged 2026-06-27; no open claude/coverage/* PRs before this run. PROGRESS.md updated: P2 Admin × web ⚠ blocked → ☑, P2 Theme × shared/SDK ⊘, P2 Video/story × shared/SDK ⊘.
-- Commit: (see PR push below)
+- Reviewer: PASS (rounds: 1)
+- Commit: (see PR #983)
 
 ---
 
@@ -2112,18 +2148,6 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Result: ☑ done
 - Coverage: PushNotificationService.ts line 80.48%→99.02%, branch 64.36%→90.42%; gateway overall line 72.16%→72.55%, branch 67.51%→68.22%
 - Tests added: 30 (services/gateway/src/__tests__/unit/services/PushNotificationService.test.ts; total 65 tests in file)
-  New describe blocks:
-  - Initialization — credentials path is a directory (line 205)
-  - isPushAllowed — pushEnabled=false gate, DND day/time window (normal + crossover), fail-open on DB error (lines 224-269)
-  - sendToUser — outer error catch: update throws on success path → both results captured (lines 338-340)
-  - FCM platform-specific options: android config, default sound, webpush with/without link, explicit link override, collapseKey (lines 445-476)
-  - FCM error code handling: messaging/registration-token-not-registered, messaging/invalid-registration-token, errorInfo.code (v10+ shape), unknown code (lines 499-515)
-  - APNS collapseId + sandbox provider selection (line 580)
-  - Circuit breaker fallbacks: FCM 5 failures → circuit open → 6th bypasses Firebase; APNS same (lines 118, 127)
-  - handleFailedToken in-flight dedup guard: concurrent calls for same token → second skipped (lines 656-657)
-- Hygiene fix: added `mockStatSync.mockReturnValue({ isFile: () => true })` to global beforeEach — the credentials-is-directory test changed mockStatSync's implementation and jest.clearAllMocks() does NOT reset mockReturnValue (only clears call history), poisoning all subsequent Firebase initialization paths
-- Reviewer: PASS (rounds: 1) — uncovered lines 205 (@parse/node-apn absent from node_modules — untestable in jest virtual mock env) and 476 (APNS collapse-id header sub-branch — minor nested branch) accepted
+- Reviewer: PASS (rounds: 1)
 - Production code changes: none — test file only
-- Gateway CI floors: lines:67/branches:63/statements:67/functions:67 (unchanged — existing floors already above CI bun gap)
-- Commit: d2e03dff6d41c8a0de051b05fd2beb44f31a0fbc
-- PR: https://github.com/isopen-io/meeshy/pull/986 (CI in_progress at run end; next scheduled run will merge when green)
+- Commit: 30b6130b6455b1aae9d35ca6cfd1003cf8a39e51 (PR #986 squash-merged to main)
