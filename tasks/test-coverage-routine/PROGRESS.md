@@ -79,7 +79,7 @@ The routine ticks `[x]` there as each file reaches 92% line+branch + reviewer PA
 |-----|----------|:-----:|:------------:|
 | Gateway | [`manifests/gateway.md`](manifests/gateway.md) | 316 | 228 |
 | Translator | [`manifests/translator.md`](manifests/translator.md) | 110 | 86 |
-| Web | [`manifests/web.md`](manifests/web.md) | 1091 | 728 |
+| Web | [`manifests/web.md`](manifests/web.md) | 1091 | 712 |
 | iOS | [`manifests/ios.md`](manifests/ios.md) | 346 | 250 |
 | Android | [`manifests/android.md`](manifests/android.md) | 148 | 120 |
 | Shared | [`manifests/shared.md`](manifests/shared.md) | 78 | 60 |
