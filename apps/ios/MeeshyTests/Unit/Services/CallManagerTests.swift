@@ -947,6 +947,40 @@ final class CallPillStatusTests: XCTestCase {
         XCTAssertEqual(CallPillStatus.from(.reconnecting(attempt: 2)), .reconnecting)
         XCTAssertFalse(CallPillStatus.from(.reconnecting(attempt: 2)).isConnected)
     }
+
+    // MARK: label property — pre-connection states must surface a text label;
+    // .connected must return empty string (the view shows the live duration instead).
+
+    func test_label_connected_isEmpty() {
+        XCTAssertEqual(CallPillStatus.connected.label, "",
+                       ".connected shows the live duration — label must be empty string")
+    }
+
+    func test_label_ringing_isNonEmpty() {
+        XCTAssertFalse(CallPillStatus.ringing.label.isEmpty,
+                       ".ringing must surface a status label so the user knows no timer has started")
+    }
+
+    func test_label_connecting_isNonEmpty() {
+        XCTAssertFalse(CallPillStatus.connecting.label.isEmpty,
+                       ".connecting must surface a status label — not an empty/zeroed timer")
+    }
+
+    func test_label_reconnecting_isNonEmpty() {
+        XCTAssertFalse(CallPillStatus.reconnecting.label.isEmpty,
+                       ".reconnecting must surface a status label distinct from the connected timer")
+    }
+
+    func test_label_distinctPerPreConnectionStatus() {
+        // Each pre-connection status must emit a unique string so the user
+        // can tell them apart at a glance.
+        let ringing = CallPillStatus.ringing.label
+        let connecting = CallPillStatus.connecting.label
+        let reconnecting = CallPillStatus.reconnecting.label
+        XCTAssertNotEqual(ringing, connecting)
+        XCTAssertNotEqual(ringing, reconnecting)
+        XCTAssertNotEqual(connecting, reconnecting)
+    }
 }
 
 // MARK: - Full-screen cover gate keeps the end-of-call panel reachable
