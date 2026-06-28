@@ -1217,8 +1217,7 @@ struct CallView: View {
         .pressable()
         .accessibilityLabel(label)
         .accessibilityHint(hint ?? "")
-        .accessibilityAddTraits(isToggle ? .isToggle : [])
-        .accessibilityValue(isToggle ? (isActive ? String(localized: "call.control.state.on", defaultValue: "Activé", bundle: .main) : String(localized: "call.control.state.off", defaultValue: "Désactivé", bundle: .main)) : "")
+        .callToggleAccessibility(isToggle: isToggle, isActive: isActive)
     }
 
     private var effectsToggleButton: some View {
@@ -1348,5 +1347,25 @@ private extension View {
         self
             .frame(width: diameter, height: diameter)
             .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.error)
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func callToggleAccessibility(isToggle: Bool, isActive: Bool) -> some View {
+        if isToggle {
+            let stateLabel = isActive
+                ? String(localized: "call.control.state.on", defaultValue: "Activé", bundle: .main)
+                : String(localized: "call.control.state.off", defaultValue: "Désactivé", bundle: .main)
+            if #available(iOS 17, *) {
+                self
+                    .accessibilityAddTraits(.isToggle)
+                    .accessibilityValue(stateLabel)
+            } else {
+                self.accessibilityValue(stateLabel)
+            }
+        } else {
+            self
+        }
     }
 }
