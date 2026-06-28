@@ -1,5 +1,6 @@
 import XCTest
 import GRDB
+import MeeshySDK
 @testable import Meeshy
 
 // MARK: - Tests
