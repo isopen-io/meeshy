@@ -53,7 +53,10 @@ const makePrisma = (overrides: Record<string, unknown> = {}) => {
   const prisma: any = {
     post: {
       findFirst: jest.fn<any>().mockResolvedValue(makePost()),
+      findUnique: jest.fn<any>().mockResolvedValue(makePost()),
+      create: jest.fn<any>().mockResolvedValue(makePost()),
       update: jest.fn<any>().mockResolvedValue(makePost()),
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
       count: jest.fn<any>().mockResolvedValue(0),
     },
     postView: {
@@ -65,6 +68,7 @@ const makePrisma = (overrides: Record<string, unknown> = {}) => {
     },
     postBookmark: {
       findFirst: jest.fn<any>().mockResolvedValue(null),
+      create: jest.fn<any>().mockResolvedValue({}),
       upsert: jest.fn<any>().mockResolvedValue({}),
       delete: jest.fn<any>().mockResolvedValue({}),
     },
@@ -75,6 +79,8 @@ const makePrisma = (overrides: Record<string, unknown> = {}) => {
       findMany: jest.fn<any>().mockResolvedValue([]),
     },
     trackingLink: {
+      findFirst: jest.fn<any>().mockResolvedValue(null),
+      findUnique: jest.fn<any>().mockResolvedValue(null),
       updateMany: jest.fn<any>().mockResolvedValue({}),
     },
     postMedia: {
@@ -381,5 +387,152 @@ describe('PostService — updatePost language change re-triggers translation', (
     await expect(
       service.updatePost(POST_ID, AUTHOR_ID, { type: PostType.REEL }),
     ).rejects.toMatchObject({ message: expect.stringContaining('Cannot change the type of a repost'), statusCode: 422 });
+  });
+});
+
+// ── createPost — STATUS expiry ────────────────────────────────────────────────
+
+describe('PostService — createPost STATUS type (line 108)', () => {
+  it('sets expiresAt for STATUS posts', async () => {
+    const prisma = makePrisma();
+    prisma.post.create.mockResolvedValue(makePost({ type: PostType.STATUS }));
+    const service = makeService(prisma);
+
+    await service.createPost({ type: PostType.STATUS, visibility: PostVisibility.PUBLIC }, AUTHOR_ID);
+
+    const createCall = (prisma.post.create.mock.calls as any[][])[0][0];
+    expect(createCall.data.expiresAt).toBeInstanceOf(Date);
+  });
+
+  it('does NOT set expiresAt for regular POST type', async () => {
+    const prisma = makePrisma();
+    prisma.post.create.mockResolvedValue(makePost());
+    const service = makeService(prisma);
+
+    await service.createPost({ type: PostType.POST, visibility: PostVisibility.PUBLIC }, AUTHOR_ID);
+
+    const createCall = (prisma.post.create.mock.calls as any[][])[0][0];
+    expect(createCall.data.expiresAt).toBeUndefined();
+  });
+});
+
+// ── createPost — repost source not found ──────────────────────────────────────
+
+describe('PostService — createPost repost source not found (lines 122-124)', () => {
+  it('throws 404 when repostOfId source post is not found', async () => {
+    const prisma = makePrisma();
+    prisma.post.findFirst.mockResolvedValue(null);
+    const service = makeService(prisma);
+
+    await expect(
+      service.createPost(
+        { type: PostType.POST, visibility: PostVisibility.PUBLIC, repostOfId: 'missing-source-id' },
+        AUTHOR_ID,
+      ),
+    ).rejects.toMatchObject({ message: 'Repost source not found', statusCode: 404 });
+
+    expect(prisma.post.create).not.toHaveBeenCalled();
+  });
+});
+
+// ── updatePost — visibilityUserIds ────────────────────────────────────────────
+
+describe('PostService — updatePost visibilityUserIds (line 570)', () => {
+  it('writes visibilityUserIds to update when explicitly provided', async () => {
+    const post = makePost({
+      authorId: AUTHOR_ID,
+      originalLanguage: 'en',
+      type: PostType.POST,
+      media: [],
+    });
+    const prisma = makePrisma();
+    prisma.post.findFirst.mockResolvedValue(post);
+    prisma.post.update.mockResolvedValue(post);
+    const service = makeService(prisma);
+    const ids = ['user-a', 'user-b'];
+
+    await service.updatePost(POST_ID, AUTHOR_ID, { visibilityUserIds: ids });
+
+    const updateCall = (prisma.post.update.mock.calls as any[][])[0][0];
+    expect(updateCall.data.visibilityUserIds).toEqual(ids);
+  });
+
+  it('omits visibilityUserIds from update when not provided', async () => {
+    const post = makePost({
+      authorId: AUTHOR_ID,
+      originalLanguage: 'en',
+      type: PostType.POST,
+      media: [],
+    });
+    const prisma = makePrisma();
+    prisma.post.findFirst.mockResolvedValue(post);
+    prisma.post.update.mockResolvedValue(post);
+    const service = makeService(prisma);
+
+    await service.updatePost(POST_ID, AUTHOR_ID, { content: 'Updated' });
+
+    const updateCall = (prisma.post.update.mock.calls as any[][])[0][0];
+    expect(updateCall.data.visibilityUserIds).toBeUndefined();
+  });
+});
+
+// ── bookmarkPost — non-P2002 error re-throw ───────────────────────────────────
+
+describe('PostService — bookmarkPost non-P2002 error (line 773)', () => {
+  it('re-throws when postBookmark.create fails with a non-P2002 error', async () => {
+    const prisma = makePrisma();
+    prisma.post.findFirst.mockResolvedValue(makePost({ bookmarkCount: 3 }));
+    const dbError = Object.assign(new Error('Connection lost'), { code: 'P9999' });
+    prisma.postBookmark.create.mockRejectedValue(dbError);
+    const service = makeService(prisma);
+
+    await expect(service.bookmarkPost(POST_ID, VIEWER_ID)).rejects.toThrow('Connection lost');
+    expect(prisma.post.update).not.toHaveBeenCalled();
+  });
+
+  it('returns success+bookmarkCount on P2002 (already bookmarked — idempotent)', async () => {
+    const prisma = makePrisma();
+    prisma.post.findFirst.mockResolvedValue(makePost({ bookmarkCount: 7 }));
+    const dupError = Object.assign(new Error('Unique constraint'), { code: 'P2002' });
+    prisma.postBookmark.create.mockRejectedValue(dupError);
+    const service = makeService(prisma);
+
+    const result = await service.bookmarkPost(POST_ID, VIEWER_ID);
+
+    expect(result).toEqual({ success: true, bookmarkCount: 7 });
+    expect(prisma.post.update).not.toHaveBeenCalled();
+  });
+});
+
+// ── shareWithTrackingLink — non-P2002 transaction error ───────────────────────
+
+describe('PostService — shareWithTrackingLink non-P2002 error (line 893)', () => {
+  it('re-throws when $transaction fails with a non-P2002 error', async () => {
+    const prisma = makePrisma();
+    prisma.post.findFirst.mockResolvedValue({ id: POST_ID, shareCount: 0, type: PostType.POST });
+    prisma.trackingLink.findFirst.mockResolvedValue(null);
+    prisma.trackingLink.findUnique.mockResolvedValue(null);
+    const txError = Object.assign(new Error('Replica set unavailable'), { code: 'P9999' });
+    prisma.$transaction.mockRejectedValue(txError);
+    const service = makeService(prisma);
+
+    await expect(
+      service.shareWithTrackingLink(POST_ID, VIEWER_ID, { baseUrl: 'https://meeshy.me' }),
+    ).rejects.toThrow('Replica set unavailable');
+  });
+});
+
+// ── generateShareToken — exhaustion ──────────────────────────────────────────
+
+describe('PostService — generateShareToken exhaustion (line 932)', () => {
+  it('throws after 10 failed token generation attempts', async () => {
+    const prisma = makePrisma();
+    prisma.trackingLink.findUnique.mockResolvedValue({ token: 'taken' });
+    const service = makeService(prisma);
+
+    await expect((service as any).generateShareToken()).rejects.toThrow(
+      'Unable to generate unique share token',
+    );
+    expect(prisma.trackingLink.findUnique).toHaveBeenCalledTimes(10);
   });
 });
