@@ -710,7 +710,7 @@ export function registerParticipantsRoutes(
         // Invalidate the in-process participant-ID cache so the next message:send
         // from this user re-validates membership/role against the DB instead of
         // serving a stale 5-minute cached entry.
-        manager.invalidateParticipantCache(userId, conversationId);
+        manager.invalidateParticipantCache?.(userId, conversationId);
       }
 
       const notificationService = fastify.notificationService;
