@@ -13,6 +13,7 @@ final class MessagePipelineIntegrationTests: XCTestCase {
         dbQueue = try DatabaseQueue()
         try MessageDatabaseMigrations.runAll(on: dbQueue)
         actor = MessagePersistenceActor(dbWriter: dbQueue)
+        await actor.start()
     }
 
     @MainActor
@@ -121,14 +122,6 @@ final class MessagePipelineIntegrationTests: XCTestCase {
     /// enforces: socket handlers write through persistence; views read from store.
     @MainActor
     func test_bufferIncoming_surfacesInStore_withoutPathAWrite() async throws {
-        // TODO(test-seam): the store observes `dbQueue` but `actor.bufferIncoming`
-        // writes through MessagePersistenceActor's own pool, so the GRDB
-        // ValueObservation never sees the row (count stays 0 even after a 3 s
-        // poll — confirmed not a timing flake). Re-enable once MessageStore +
-        // MessagePersistenceActor accept the SAME injected DatabasePool in tests
-        // so the observed pool is the written pool. Until then this asserts
-        // nothing meaningful and only red-flags CI.
-        try XCTSkipIf(true, "Needs shared DatabasePool seam between MessageStore and MessagePersistenceActor; observation watches a different pool than bufferIncoming writes.")
 
         let store = MessageStore(conversationId: "conv_t14_incoming", persistence: actor)
         store.startObserving(dbPool: dbQueue)
@@ -142,10 +135,9 @@ final class MessagePipelineIntegrationTests: XCTestCase {
             computedState: .delivered
         )
         await actor.bufferIncoming([incoming])
-        // Poll for the GRDB ValueObservation to surface the row instead of a
-        // fixed 150 ms sleep: on a cold/loaded CI runner the observation can take
-        // longer than 150 ms to fire, which flaked this assert at count 0. The
-        // bounded wait exits as soon as the row lands (typically <50 ms locally).
+        // Bounded wait for the async stream worker to write + post the
+        // NotificationCenter refresh. Exits as soon as the row lands (typically
+        // <50 ms locally); 3 s ceiling guards against CI load spikes.
         let deadline = Date().addingTimeInterval(3.0)
         while store.messages.isEmpty && Date() < deadline {
             try await Task.sleep(for: .milliseconds(20))
