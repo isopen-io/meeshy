@@ -42,12 +42,12 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 ## jobs  (1/7 have a test)
 
 - [ ] `services/gateway/src/jobs/broadcast-sender.ts`
-- [ ] `services/gateway/src/jobs/cleanup-expired-tokens.ts`
+- [x] `services/gateway/src/jobs/cleanup-expired-tokens.ts`
 - [x] `services/gateway/src/jobs/delivery-queue-cleanup.ts`
-- [ ] `services/gateway/src/jobs/index.ts`
-- [ ] `services/gateway/src/jobs/mutation-log-cleanup.ts`
+- [x] `services/gateway/src/jobs/index.ts`
+- [x] `services/gateway/src/jobs/mutation-log-cleanup.ts`
 - [~] `services/gateway/src/jobs/notification-digest.ts`
-- [ ] `services/gateway/src/jobs/unlock-accounts.ts`
+- [x] `services/gateway/src/jobs/unlock-accounts.ts`
 
 ## middleware  (3/9 have a test)
 
@@ -55,7 +55,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [x] `services/gateway/src/middleware/admin-user-auth.middleware.ts`
 - [~] `services/gateway/src/middleware/auth.ts`
 - [x] `services/gateway/src/middleware/clientMutationId.ts`
-- [~] `services/gateway/src/middleware/deviceLocale.ts`
+- [x] `services/gateway/src/middleware/deviceLocale.ts`
 - [x] `services/gateway/src/middleware/rate-limit.ts`
 - [x] `services/gateway/src/middleware/rate-limiter.ts`
 - [x] `services/gateway/src/middleware/request-id.ts`
@@ -260,7 +260,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `services/gateway/src/services/MentionService.ts`
 - [x] `services/gateway/src/services/MessageReadStatusService.ts`
 - [~] `services/gateway/src/services/MessagingService.ts`
-- [ ] `services/gateway/src/services/MultiLevelCache.ts`
+- [x] `services/gateway/src/services/MultiLevelCache.ts`
 - [ ] `services/gateway/src/services/MultiLevelJobMappingCache.ts`
 - [x] `services/gateway/src/services/MutationLogService.ts`
 - [~] `services/gateway/src/services/PasswordResetService.ts`
