@@ -687,9 +687,9 @@ describe('AuthHandler', () => {
       await authHandler.handleManualAuthentication(mockSocket, { token: 'valid-jwt-token', language: 'fr' } as any);
 
       // systemLanguage is the highest-priority source in resolveUserLanguage, so
-      // the resolved language is 'es' (the user's systemLanguage), NOT the
+      // the resolved language is 'en' (the user's systemLanguage), NOT the
       // client-supplied 'fr'.
-      expect(connectedUsers.get('user-123')?.language).toBe('es');
+      expect(connectedUsers.get('user-123')?.language).toBe('en');
     });
 
     it('should invoke emitPresenceSnapshot after registering user', async () => {
