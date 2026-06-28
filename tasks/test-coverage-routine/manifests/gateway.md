@@ -271,7 +271,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [~] `services/gateway/src/services/PostReactionService.ts`
 - [~] `services/gateway/src/services/PostService.ts`
 - [ ] `services/gateway/src/services/PrivacyPreferencesService.ts`
-- [~] `services/gateway/src/services/PushNotificationService.ts`
+- [x] `services/gateway/src/services/PushNotificationService.ts`
 - [~] `services/gateway/src/services/ReactionService.ts`
 - [x] `services/gateway/src/services/RedisDeliveryQueue.ts`
 - [ ] `services/gateway/src/services/SecurityMonitor.ts`
