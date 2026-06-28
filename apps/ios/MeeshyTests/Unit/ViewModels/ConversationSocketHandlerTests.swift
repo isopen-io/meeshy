@@ -1089,6 +1089,19 @@ final class ConversationSocketHandlerTests: XCTestCase {
         XCTAssertTrue(delegate.syncMissedCalled)
     }
 
+    func test_willEnterForeground_triggersSyncMissedMessages() async throws {
+        let (sut, delegate, _) = makeSUT()
+        _ = sut
+
+        NotificationCenter.default.post(
+            name: UIApplication.willEnterForegroundNotification, object: nil)
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertTrue(delegate.syncMissedCalled,
+            "Foreground backfill path must call syncMissedMessages when app returns from background")
+    }
+
     // MARK: - armSocketSubscriptions idempotency
 
     func test_armSocketSubscriptions_calledTwice_doesNotDuplicate() async throws {

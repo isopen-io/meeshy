@@ -4,24 +4,23 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Stories) — slice `outbox-produced-id-writeback` ✅
-Second half of the durable upload→publish chain: a prerequisite's
-`SendResult.SuccessWithId(realId)` grafts that id into every still-queued dependent
-publish's payload before its gate opens.
+## This loop (Phase: Stories) — slice `outbox-flush-retry-on-blocked` ✅
+Closes the cross-pass gating gap: the `OutboxFlushWorker` now reschedules on a **blocked
+dependency**, not only a transient failure, so a held publish/message lane is auto-retried
+once its prerequisite upload lands in a later pass.
 
-- [x] `PublishMediaWriteBack.graft` (pure: decode→swap placeholder→`distinct`→re-encode;
-      inert `null` on undecodable/no-media/absent/identity).
-- [x] `SendResult.SuccessWithId(producedId)` + `OutboxDrainer` graft-before-delete
-      (injected `graftProducedId`, no-op default to keep the package generic).
-- [x] `OutboxRepository.rewriteDependents` (PENDING dependents only) + `OutboxDao`
-      `findDependents`/`updatePayload` (no schema change).
-- [x] `OutboxFlushWorker` wires `graftProducedId = PublishMediaWriteBack::graft`.
-- [x] TDD: +10 `PublishMediaWriteBackTest`, +3 `OutboxDrainerTest`,
-      +4 `OutboxRepositoryTest` — every branch/edge covered.
-- [x] `./apps/android/meeshy.sh check` green (assemble + all unit tests, 836 tasks).
+- [x] `OutboxFlushPlan.outcome(reports)` (`:sdk-core`, stateless pure decision) + `FlushOutcome`
+      enum: `RETRY` when any `DrainReport` stopped on a transient failure **or** a blocked
+      dependency, else `SUCCESS`. Terminating: `EXHAUSTED` prerequisite → verdict `FAILED`, never
+      `BLOCKED`, so a retried pass eventually delivers or cascade-exhausts the dependent.
+- [x] `OutboxFlushWorker.doWork`: collect each lane's `DrainReport`, delegate the WorkManager
+      outcome to `OutboxFlushPlan.outcome` (thin glue; the decision is the covered pure function).
+- [x] TDD: +9 `OutboxFlushPlanTest` (empty / single clean / transient-only / blocked-only / both /
+      many clean / one transient among clean / one blocked among clean / counts-only never retry)
+      — both `||` arms + `.any{}` true/false (`tests=9 failures=0`).
+- [x] `./apps/android/meeshy.sh check` green (assembleDebug + all unit tests).
 
 ## Next loop (see PROGRESS.md "Next")
-1. Durable media upload row (the producer half): `UPLOAD_MEDIA` kind + durable
-   file-bytes store + `MEDIA`-lane sender returning `SuccessWithId` + composer wiring.
-2. `multi-slide canvas` (9:16 add/remove/reorder).
+1. Multi-pending offline uploads (multi-`dependsOn` / barrier).
+2. Multi-slide canvas (9:16 add/remove/reorder).
 3. Then advance to the **Calls** area.

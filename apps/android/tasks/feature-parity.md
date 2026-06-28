@@ -112,17 +112,46 @@ file-by-file audit — every one of the 673 iOS files was read in full.
       when undecodable/no-media/absent/identity) and the generic
       `OutboxRepository.rewriteDependents` (PENDING dependents only). So a media story
       queued **offline before its upload finished** publishes with the correct id.
-      Pending follow-up (producer half): nothing emits `SuccessWithId` yet — needs a
-      durable `UPLOAD_MEDIA` `MEDIA`-lane sender (drained before `STORY`) + composer
-      wiring.
+      (Producer half landed in `media-upload-sender` — see below.)
 - [x] **Durable media-blob store** (`media-blob-store`): the first brick of the producer
       half. The outbox payload is a `String`, so the raw bytes of a queued media upload
       live in a dedicated `MediaBlobEntity`/`MediaBlobDao` (Room, DB v5→v6) keyed by the
       upload row's `cmid`, fronted by the `MediaBlobStore` building block
       (`put`/`get`/`remove`, reusing `MediaUploadItem` as the single bytes shape). Lets a
       media attachment be enqueued **fully offline**, bytes surviving process death.
-      Remaining producer half: the `UPLOAD_MEDIA` kind + `MEDIA`-lane sender that reads
-      this store, uploads, returns `SuccessWithId(realMediaId)`, and `remove`s the blob.
+- [x] **Durable media-upload sender** (`media-upload-sender`): the rest of the producer
+      half at the SDK layer. `OutboxKind.UPLOAD_MEDIA` + the pure `MediaUploadSender`
+      (`send(item, upload)` → blob gone/empty → permanent, offline → transient, real id →
+      `SuccessWithId`) + the `MediaUploadQueue.enqueue(item)` building block (writes the
+      bytes then queues an `UPLOAD_MEDIA` row on the `MEDIA` lane, blob + row sharing one
+      `cmid`) + the `OutboxFlushWorker` wiring (a `MEDIA`-lane sender drained **before**
+      `STORY`, blob removed on delivery and on exhaustion). The durable offline
+      upload→publish chain now works end-to-end at the SDK layer.
+      (Composer wiring landed in `story-composer-offline-media` — see below.)
+- [x] **Composer offline-media fallback** (`story-composer-offline-media`): the composer
+      now reaches the durable chain from the UI. When a synchronous upload fails
+      transiently (offline / 429 / 5xx — the pure app-side `MediaUploadRetryPolicy`), a
+      **single** picked media is `MediaUploadQueue.enqueue`d + staged as a single
+      `PendingMediaUpload` placeholder (its `cmid` rides in `draft.mediaIds`, counts toward
+      the ≤10 cap, renders an "Offline" preview tile); `publish()` gates the story on it via
+      the new `StoryRepository.enqueuePublish(request, dependsOn)`. Permanent failure / multi
+      pick / second-while-pending surface the error (single-pending keeps the single-`dependsOn`
+      chain correct). **Remaining:** multi-pending offline uploads (multi-`dependsOn`/barrier).
+- [x] **Remove-pending cancels the durable upload** (`media-upload-cancel`): removing the
+      offline placeholder now `MediaUploadQueue.cancel`s its `UPLOAD_MEDIA` row + blob (drops the
+      outbox row first, then the bytes — unknown cmid inert), so no orphaned upload streams bytes
+      to a media the story never references. UI clears optimistically; the durable cancel is
+      best-effort (a stranded row otherwise exhausts harmlessly). Closes the orphan-leak gap left
+      by `story-composer-offline-media`.
+- [x] **Flush retries on a blocked dependency** (`outbox-flush-retry-on-blocked`): the
+      `OutboxFlushWorker` previously rescheduled (WorkManager `Result.retry()`) only on a
+      **transient** failure, ignoring a lane stopped on a **blocked dependency**. A dependent
+      `BLOCKED` early in a pass whose prerequisite delivered *later in the same pass* therefore
+      sat until an unrelated trigger fired. A pure `OutboxFlushPlan.outcome(reports)` building
+      block now drives the outcome — `RETRY` on **any** transient-or-blocked stop — so the held
+      lane is auto-retried; forward progress is guaranteed (a dependent is delivered, or
+      cascade-exhausted once its prerequisite gives up). Closes the cross-pass `BLOCKED`-not-
+      `anyTransient` retry gap.
 - [ ] TUS resumable uploads in a **dedicated `WorkManager` chain** (foreground
       progress); message-send items `dependsOn` the upload (gating now in place)
 - [x] `MessageStateMachine` (pure, monotonic 8-state delivery FSM) — 9 tests

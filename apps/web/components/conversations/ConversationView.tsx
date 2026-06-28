@@ -18,6 +18,7 @@ import { ConnectionStatusIndicator } from './connection-status-indicator';
 import { FailedMessageBanner } from '@/components/messages/failed-message-banner';
 import { PinnedMessageBanner } from './PinnedMessageBanner';
 import { MessageSearch } from './MessageSearch';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { getAuthToken } from '@/utils/token-utils';
 import type { Conversation, Message, User } from '@meeshy/shared/types';
 import type { Participant } from '@meeshy/shared/types/participant';
@@ -289,34 +290,36 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
             onClose={resolvedSearchClose}
             isOpen={resolvedSearchOpen}
           />
-          <ConversationMessages
-            messages={messages}
-            translatedMessages={messages as unknown}
-            currentUser={currentUser}
-            userLanguage={userLanguage}
-            usedLanguages={usedLanguages}
-            isLoadingMessages={isLoadingMessages}
-            isLoadingMore={isLoadingMore}
-            hasMore={hasMore}
-            isMobile={isMobile}
-            conversationType={conversationType}
-            scrollContainerRef={scrollContainerRef}
-            userRole={effectiveRole}
-            conversationId={conversation.id}
-            addTranslatingState={addTranslatingState}
-            isTranslating={isTranslating}
-            onEditMessage={onEditMessage}
-            onDeleteMessage={onDeleteMessage}
-            onReplyMessage={onReplyMessage}
-            onNavigateToMessage={onNavigateToMessage}
-            onImageClick={onImageClick}
-            onRetryMessage={onRetryMessage}
-            onCancelMessage={onCancelMessage}
-            onLoadMore={onLoadMore}
-            t={t}
-            tCommon={tCommon}
-            reverseOrder={true}
-          />
+          <ErrorBoundary>
+            <ConversationMessages
+              messages={messages}
+              translatedMessages={messages as unknown}
+              currentUser={currentUser}
+              userLanguage={userLanguage}
+              usedLanguages={usedLanguages}
+              isLoadingMessages={isLoadingMessages}
+              isLoadingMore={isLoadingMore}
+              hasMore={hasMore}
+              isMobile={isMobile}
+              conversationType={conversationType}
+              scrollContainerRef={scrollContainerRef}
+              userRole={effectiveRole}
+              conversationId={conversation.id}
+              addTranslatingState={addTranslatingState}
+              isTranslating={isTranslating}
+              onEditMessage={onEditMessage}
+              onDeleteMessage={onDeleteMessage}
+              onReplyMessage={onReplyMessage}
+              onNavigateToMessage={onNavigateToMessage}
+              onImageClick={onImageClick}
+              onRetryMessage={onRetryMessage}
+              onCancelMessage={onCancelMessage}
+              onLoadMore={onLoadMore}
+              t={t}
+              tCommon={tCommon}
+              reverseOrder={true}
+            />
+          </ErrorBoundary>
         </div>
 
         {/* Composer */}
@@ -334,21 +337,23 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
             onRestore={onRestoreFailedMessage}
           />
 
-          <MessageComposer
-            ref={composerRef}
-            value={composerValue}
-            onChange={onComposerChange}
-            onSend={onSendMessage}
-            selectedLanguage={selectedLanguage}
-            onLanguageChange={onLanguageChange}
-            placeholder={t('conversationLayout.writeMessage')}
-            onKeyPress={onKeyPress}
-            choices={languageChoices}
-            onAttachmentsChange={onAttachmentsChange}
-            token={token}
-            userRole={effectiveRole}
-            conversationId={conversation.id}
-          />
+          <ErrorBoundary>
+            <MessageComposer
+              ref={composerRef}
+              value={composerValue}
+              onChange={onComposerChange}
+              onSend={onSendMessage}
+              selectedLanguage={selectedLanguage}
+              onLanguageChange={onLanguageChange}
+              placeholder={t('conversationLayout.writeMessage')}
+              onKeyPress={onKeyPress}
+              choices={languageChoices}
+              onAttachmentsChange={onAttachmentsChange}
+              token={token}
+              userRole={effectiveRole}
+              conversationId={conversation.id}
+            />
+          </ErrorBoundary>
         </div>
       </div>
     );

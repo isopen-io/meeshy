@@ -53,6 +53,11 @@ export const SOCKET_RATE_LIMITS = {
     windowMs: 10000, // 10 seconds
     keyPrefix: 'socket:call:signal'
   },
+  CALL_ICE_CANDIDATE: {
+    maxRequests: 50,
+    windowMs: 5000,
+    keyPrefix: 'socket:call:ice'
+  },
   CALL_LEAVE: {
     maxRequests: 20,
     windowMs: 60000, // 1 minute

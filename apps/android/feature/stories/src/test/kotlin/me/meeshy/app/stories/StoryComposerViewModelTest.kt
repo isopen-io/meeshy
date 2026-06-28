@@ -19,6 +19,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.media.MediaRepository
 import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.net.ApiError
@@ -45,13 +46,17 @@ class StoryComposerViewModelTest {
     private val session: SessionRepository = mockk(relaxed = true)
     private val workManager: WorkManager = mockk(relaxed = true)
     private val media: MediaRepository = mockk(relaxed = true)
+    private val uploadQueue: MediaUploadQueue = mockk(relaxed = true)
 
     private fun viewModel(
         user: MeeshyUser? = MeeshyUser(id = "me", username = "me", systemLanguage = "en"),
     ): StoryComposerViewModel {
         every { session.currentUser } returns MutableStateFlow(user)
-        return StoryComposerViewModel(repo, session, media, workManager)
+        return StoryComposerViewModel(repo, session, media, uploadQueue, workManager)
     }
+
+    private fun offline(status: Int? = null): NetworkResult<List<UploadedMedia>> =
+        NetworkResult.Failure(ApiError("offline", httpStatus = status))
 
     private fun item(name: String = "pic.jpg"): MediaUploadItem =
         MediaUploadItem(bytes = byteArrayOf(1, 2, 3), fileName = name, mimeType = "image/jpeg")
@@ -99,7 +104,7 @@ class StoryComposerViewModelTest {
         vm.onTextChange("  bonjour  ")
         vm.onVisibilityChange(StoryVisibility.FRIENDS)
         val request = slot<CreateStoryRequest>()
-        coEvery { repo.enqueuePublish(capture(request)) } returns "cmid-1"
+        coEvery { repo.enqueuePublish(capture(request), any()) } returns "cmid-1"
 
         vm.published.test {
             vm.publish()
@@ -107,7 +112,7 @@ class StoryComposerViewModelTest {
             cancelAndIgnoreRemainingEvents()
         }
 
-        coVerify(exactly = 1) { repo.enqueuePublish(any()) }
+        coVerify(exactly = 1) { repo.enqueuePublish(any(), any()) }
         coVerify(exactly = 1) { workManager.enqueue(any<OneTimeWorkRequest>()) }
         assertThat(request.captured.type).isEqualTo("STORY")
         assertThat(request.captured.content).isEqualTo("bonjour")
@@ -119,7 +124,7 @@ class StoryComposerViewModelTest {
         val vm = viewModel(MeeshyUser(id = "me", username = "me", systemLanguage = "es"))
         vm.onTextChange("hola")
         val request = slot<CreateStoryRequest>()
-        coEvery { repo.enqueuePublish(capture(request)) } returns "cmid"
+        coEvery { repo.enqueuePublish(capture(request), any()) } returns "cmid"
 
         vm.publish()
 
@@ -131,7 +136,7 @@ class StoryComposerViewModelTest {
         val vm = viewModel(user = null)
         vm.onTextChange("hi")
         val request = slot<CreateStoryRequest>()
-        coEvery { repo.enqueuePublish(capture(request)) } returns "cmid"
+        coEvery { repo.enqueuePublish(capture(request), any()) } returns "cmid"
 
         vm.publish()
 
@@ -142,7 +147,7 @@ class StoryComposerViewModelTest {
     fun `publish clears the draft and the publishing flag on success`() = runTest {
         val vm = viewModel()
         vm.onTextChange("hi")
-        coEvery { repo.enqueuePublish(any()) } returns "cmid"
+        coEvery { repo.enqueuePublish(any(), any()) } returns "cmid"
 
         vm.publish()
 
@@ -157,7 +162,7 @@ class StoryComposerViewModelTest {
 
         vm.publish()
 
-        coVerify(exactly = 0) { repo.enqueuePublish(any()) }
+        coVerify(exactly = 0) { repo.enqueuePublish(any(), any()) }
         coVerify(exactly = 0) { workManager.enqueue(any<OneTimeWorkRequest>()) }
     }
 
@@ -166,20 +171,20 @@ class StoryComposerViewModelTest {
         val vm = viewModel()
         vm.onTextChange("hi")
         val gate = CompletableDeferred<String?>()
-        coEvery { repo.enqueuePublish(any()) } coAnswers { gate.await() }
+        coEvery { repo.enqueuePublish(any(), any()) } coAnswers { gate.await() }
 
         vm.publish()
         vm.publish()
         gate.complete("cmid")
 
-        coVerify(exactly = 1) { repo.enqueuePublish(any()) }
+        coVerify(exactly = 1) { repo.enqueuePublish(any(), any()) }
     }
 
     @Test
     fun `publish surfaces an error and preserves the draft when the queue throws`() = runTest {
         val vm = viewModel()
         vm.onTextChange("hi")
-        coEvery { repo.enqueuePublish(any()) } throws IllegalStateException("disk full")
+        coEvery { repo.enqueuePublish(any(), any()) } throws IllegalStateException("disk full")
 
         vm.publish()
 
@@ -310,11 +315,11 @@ class StoryComposerViewModelTest {
         coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
         vm.onMediaPicked(listOf(item()))
         val request = slot<CreateStoryRequest>()
-        coEvery { repo.enqueuePublish(capture(request)) } returns "cmid"
+        coEvery { repo.enqueuePublish(capture(request), any()) } returns "cmid"
 
         vm.publish()
 
-        coVerify(exactly = 1) { repo.enqueuePublish(any()) }
+        coVerify(exactly = 1) { repo.enqueuePublish(any(), any()) }
         assertThat(request.captured.mediaIds).containsExactly("m1")
         assertThat(request.captured.content).isNull()
     }
@@ -354,11 +359,207 @@ class StoryComposerViewModelTest {
         val vm = viewModel()
         coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
         vm.onMediaPicked(listOf(item()))
-        coEvery { repo.enqueuePublish(any()) } returns "cmid"
+        coEvery { repo.enqueuePublish(any(), any()) } returns "cmid"
 
         vm.publish()
 
         assertThat(vm.state.value.attachments).isEmpty()
+        assertThat(vm.state.value.draft.mediaIds).isEmpty()
+    }
+
+    @Test
+    fun `a single offline pick is durably queued and staged as a pending attachment`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns offline()
+        coEvery { uploadQueue.enqueue(any()) } returns "up-1"
+
+        vm.onMediaPicked(listOf(item()))
+
+        coVerify(exactly = 1) { uploadQueue.enqueue(any()) }
+        assertThat(vm.state.value.pendingUpload?.cmid).isEqualTo("up-1")
+        assertThat(vm.state.value.draft.mediaIds).containsExactly("up-1")
+        assertThat(vm.state.value.isUploadingMedia).isFalse()
+        assertThat(vm.state.value.errorMessage).isNull()
+        assertThat(vm.state.value.canPublish).isTrue()
+    }
+
+    @Test
+    fun `a permanent upload failure surfaces an error and is never queued`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns offline(status = 413)
+
+        vm.onMediaPicked(listOf(item()))
+
+        coVerify(exactly = 0) { uploadQueue.enqueue(any()) }
+        assertThat(vm.state.value.pendingUpload).isNull()
+        assertThat(vm.state.value.errorMessage).isEqualTo("offline")
+        assertThat(vm.state.value.draft.mediaIds).isEmpty()
+    }
+
+    @Test
+    fun `a multi-item offline pick is not durably chained and surfaces an error`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns offline()
+
+        vm.onMediaPicked(listOf(item("a.jpg"), item("b.jpg")))
+
+        coVerify(exactly = 0) { uploadQueue.enqueue(any()) }
+        assertThat(vm.state.value.pendingUpload).isNull()
+        assertThat(vm.state.value.errorMessage).isEqualTo("offline")
+    }
+
+    @Test
+    fun `a second offline pick is rejected while one upload is already pending`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns offline()
+        coEvery { uploadQueue.enqueue(any()) } returns "up-1"
+        vm.onMediaPicked(listOf(item("first.jpg")))
+
+        vm.onMediaPicked(listOf(item("second.jpg")))
+
+        coVerify(exactly = 1) { uploadQueue.enqueue(any()) }
+        assertThat(vm.state.value.pendingUpload?.cmid).isEqualTo("up-1")
+        assertThat(vm.state.value.draft.mediaIds).containsExactly("up-1")
+        assertThat(vm.state.value.errorMessage).isNotNull()
+    }
+
+    @Test
+    fun `publish gates the story on the pending upload and carries its placeholder id`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns offline()
+        coEvery { uploadQueue.enqueue(any()) } returns "up-1"
+        vm.onMediaPicked(listOf(item()))
+        val request = slot<CreateStoryRequest>()
+        val dependsOn = slot<String>()
+        coEvery { repo.enqueuePublish(capture(request), capture(dependsOn)) } returns "story-cmid"
+
+        vm.publish()
+
+        coVerify(exactly = 1) { repo.enqueuePublish(any(), any()) }
+        coVerify(exactly = 1) { workManager.enqueue(any<OneTimeWorkRequest>()) }
+        assertThat(dependsOn.captured).isEqualTo("up-1")
+        assertThat(request.captured.mediaIds).containsExactly("up-1")
+        assertThat(request.captured.content).isNull()
+    }
+
+    @Test
+    fun `removing the pending upload clears it and its placeholder media id`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns offline()
+        coEvery { uploadQueue.enqueue(any()) } returns "up-1"
+        vm.onMediaPicked(listOf(item()))
+
+        vm.onRemoveMedia("up-1")
+
+        assertThat(vm.state.value.pendingUpload).isNull()
+        assertThat(vm.state.value.draft.mediaIds).isEmpty()
+        assertThat(vm.state.value.canPublish).isFalse()
+    }
+
+    @Test
+    fun `removing the pending upload cancels its durable upload row and blob`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns offline()
+        coEvery { uploadQueue.enqueue(any()) } returns "up-1"
+        vm.onMediaPicked(listOf(item()))
+
+        vm.onRemoveMedia("up-1")
+
+        coVerify(exactly = 1) { uploadQueue.cancel("up-1") }
+    }
+
+    @Test
+    fun `removing an uploaded attachment never cancels a durable upload`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
+        vm.onMediaPicked(listOf(item()))
+
+        vm.onRemoveMedia("m1")
+
+        coVerify(exactly = 0) { uploadQueue.cancel(any()) }
+    }
+
+    @Test
+    fun `removing a non-pending id while an upload is pending does not cancel it`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns offline()
+        coEvery { uploadQueue.enqueue(any()) } returns "up-1"
+        vm.onMediaPicked(listOf(item()))
+
+        vm.onRemoveMedia("not-the-pending-id")
+
+        coVerify(exactly = 0) { uploadQueue.cancel(any()) }
+        assertThat(vm.state.value.pendingUpload?.cmid).isEqualTo("up-1")
+    }
+
+    @Test
+    fun `removing the pending upload clears state even when the durable cancel fails`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns offline()
+        coEvery { uploadQueue.enqueue(any()) } returns "up-1"
+        coEvery { uploadQueue.cancel(any()) } throws IllegalStateException("disk busy")
+        vm.onMediaPicked(listOf(item()))
+
+        vm.onRemoveMedia("up-1")
+
+        assertThat(vm.state.value.pendingUpload).isNull()
+        assertThat(vm.state.value.draft.mediaIds).isEmpty()
+    }
+
+    @Test
+    fun `a pending upload keeps an already-uploaded media id alongside its placeholder`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
+        vm.onMediaPicked(listOf(item("online.jpg")))
+        coEvery { media.upload(any()) } returns offline()
+        coEvery { uploadQueue.enqueue(any()) } returns "up-1"
+
+        vm.onMediaPicked(listOf(item("offline.jpg")))
+
+        assertThat(vm.state.value.attachments.map { it.id }).containsExactly("m1")
+        assertThat(vm.state.value.draft.mediaIds).containsExactly("m1", "up-1").inOrder()
+    }
+
+    @Test
+    fun `the pending upload counts toward the media cap`() = runTest {
+        val vm = viewModel()
+        val seedCount = StoryComposerDraft.MAX_MEDIA - 1
+        coEvery { media.upload(any()) } returns
+            NetworkResult.Success((1..seedCount).map { uploaded("m$it") })
+        vm.onMediaPicked(List(seedCount) { item("seed$it.jpg") })
+        coEvery { media.upload(any()) } returns offline()
+        coEvery { uploadQueue.enqueue(any()) } returns "up-last"
+        vm.onMediaPicked(listOf(item("offline.jpg")))
+
+        assertThat(vm.state.value.draft.mediaIds).hasSize(StoryComposerDraft.MAX_MEDIA)
+        assertThat(vm.state.value.draft.isMediaFull).isTrue()
+    }
+
+    @Test
+    fun `a failure while durably queuing surfaces an error and stages nothing`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns offline()
+        coEvery { uploadQueue.enqueue(any()) } throws IllegalStateException("disk full")
+
+        vm.onMediaPicked(listOf(item()))
+
+        assertThat(vm.state.value.pendingUpload).isNull()
+        assertThat(vm.state.value.errorMessage).isNotNull()
+        assertThat(vm.state.value.isUploadingMedia).isFalse()
+        assertThat(vm.state.value.draft.mediaIds).isEmpty()
+    }
+
+    @Test
+    fun `publish clears the pending upload on success`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns offline()
+        coEvery { uploadQueue.enqueue(any()) } returns "up-1"
+        vm.onMediaPicked(listOf(item()))
+        coEvery { repo.enqueuePublish(any(), any()) } returns "story-cmid"
+
+        vm.publish()
+
+        assertThat(vm.state.value.pendingUpload).isNull()
         assertThat(vm.state.value.draft.mediaIds).isEmpty()
     }
 }

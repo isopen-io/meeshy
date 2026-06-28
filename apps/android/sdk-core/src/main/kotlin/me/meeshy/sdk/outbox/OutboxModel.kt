@@ -14,6 +14,7 @@ public enum class OutboxKind {
     UPDATE_PROFILE,
     UPDATE_SETTINGS,
     PUBLISH_STORY,
+    UPLOAD_MEDIA,
 }
 
 /** Lifecycle of an outbox row; a succeeded mutation is deleted, never flagged. */
