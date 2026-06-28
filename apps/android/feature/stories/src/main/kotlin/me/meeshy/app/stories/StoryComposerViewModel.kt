@@ -42,24 +42,25 @@ data class PendingMediaUpload(
 /**
  * Immutable state of the story composer. [canPublish] is derived from the draft
  * and gated while a publish or media upload is in flight. [attachments] hold the
- * already-uploaded media for the on-screen preview; [pendingUpload] is a single
- * media queued durably offline (placeholder id already in the draft). The draft
- * carries every media id (real + placeholder) for the wire request.
+ * already-uploaded media for the on-screen preview; [pendingUploads] are the media
+ * queued durably offline (their placeholder ids already in the draft) — several may
+ * accumulate so a user can stage a whole offline batch. The draft carries every
+ * media id (real + placeholder) for the wire request.
  */
 @Immutable
 data class StoryComposerUiState(
     val draft: StoryComposerDraft = StoryComposerDraft(),
     val attachments: List<UploadedMedia> = emptyList(),
-    val pendingUpload: PendingMediaUpload? = null,
+    val pendingUploads: List<PendingMediaUpload> = emptyList(),
     val isUploadingMedia: Boolean = false,
     val isPublishing: Boolean = false,
     val errorMessage: String? = null,
 ) {
     val canPublish: Boolean get() = draft.canPublish && !isPublishing && !isUploadingMedia
 
-    /** Every media id carried into the wire request: uploaded ids then the offline placeholder. */
+    /** Every media id carried into the wire request: uploaded ids then the offline placeholders. */
     internal val draftMediaIds: List<String>
-        get() = attachments.map(UploadedMedia::id) + listOfNotNull(pendingUpload?.cmid)
+        get() = attachments.map(UploadedMedia::id) + pendingUploads.map(PendingMediaUpload::cmid)
 }
 
 /**
@@ -105,13 +106,13 @@ class StoryComposerViewModel @Inject constructor(
      * (re-entrancy guard). On success the new media is **appended** so multiple
      * picks accumulate; an empty result (every row unusable) surfaces a message.
      *
-     * When the synchronous upload **fails transiently** (offline / throttled / 5xx)
-     * for a **single** pick and nothing is already pending, the media is instead
-     * queued **durably** ([queueDurably]) and staged as a [PendingMediaUpload]
-     * placeholder, so the user can still publish — the outbox uploads and grafts
-     * the real id when the network returns. This surpasses iOS, which drops the
-     * pick on an offline upload. A permanent failure (4xx), a multi-item pick, or a
-     * pick while one upload is already pending surfaces the error instead.
+     * When the synchronous upload **fails transiently** (offline / throttled / 5xx),
+     * every accepted item is instead queued **durably** ([queueDurably]) and staged
+     * as a [PendingMediaUpload] placeholder, so the user can still publish — the
+     * outbox uploads each and grafts the real ids when the network returns. Several
+     * pending uploads accumulate across picks (and a multi-item offline batch stages
+     * each item), surpassing iOS, which drops the pick on an offline upload. A
+     * permanent failure (4xx) surfaces the error and stages nothing.
      */
     fun onMediaPicked(items: List<MediaUploadItem>) {
         if (items.isEmpty() || _state.value.isUploadingMedia) return
@@ -148,40 +149,47 @@ class StoryComposerViewModel @Inject constructor(
     }
 
     /**
-     * A single transient failure with no upload already pending → queue it durably;
-     * anything else (permanent error, multi-item batch, or a slot already taken by a
-     * pending upload) surfaces the error and stages nothing.
+     * A transient failure → durably queue every accepted item (single pick or batch);
+     * a permanent error (4xx) surfaces the message and stages nothing.
      */
     private suspend fun onUploadFailed(accepted: List<MediaUploadItem>, error: ApiError) {
-        val single = accepted.singleOrNull()
-        if (single != null && _state.value.pendingUpload == null && MediaUploadRetryPolicy.isQueueable(error)) {
-            queueDurably(single)
+        if (MediaUploadRetryPolicy.isQueueable(error)) {
+            queueDurably(accepted)
         } else {
             _state.update { it.copy(isUploadingMedia = false, errorMessage = error.message) }
         }
     }
 
-    private suspend fun queueDurably(item: MediaUploadItem) {
-        val cmid = mediaUploadQueue.enqueue(item)
-        _state.update {
-            val next = it.copy(pendingUpload = PendingMediaUpload(cmid = cmid, item = item), isUploadingMedia = false)
-            next.copy(draft = next.draft.withMediaIds(next.draftMediaIds), errorMessage = null)
+    /**
+     * Enqueues each item durably and stages it as a pending upload, one at a time so
+     * partial progress survives if a later enqueue throws (the already-staged items
+     * stay, the caller's catch surfaces the error). Each enqueued blob + outbox row
+     * shares the returned cmid, which rides in the draft as a placeholder media id.
+     */
+    private suspend fun queueDurably(items: List<MediaUploadItem>) {
+        items.forEach { item ->
+            val cmid = mediaUploadQueue.enqueue(item)
+            _state.update {
+                val next = it.copy(pendingUploads = it.pendingUploads + PendingMediaUpload(cmid = cmid, item = item))
+                next.copy(draft = next.draft.withMediaIds(next.draftMediaIds), errorMessage = null)
+            }
         }
+        _state.update { it.copy(isUploadingMedia = false) }
     }
 
     /**
      * Removes an attached or pending media (and its id from the draft) before
-     * publishing. Removing the offline placeholder also **cancels** its durable
-     * upload ([MediaUploadQueue.cancel]) so no orphaned `UPLOAD_MEDIA` row keeps
-     * uploading bytes to a media the story will never reference. The UI clears
-     * instantly (optimistic); the durable cancel is best-effort — if it fails the
-     * stranded row simply exhausts harmlessly on its own.
+     * publishing. Removing an offline placeholder also **cancels** only that durable
+     * upload ([MediaUploadQueue.cancel]) — the other pending uploads are untouched —
+     * so no orphaned `UPLOAD_MEDIA` row keeps uploading bytes to a media the story
+     * will never reference. The UI clears instantly (optimistic); the durable cancel
+     * is best-effort — if it fails the stranded row simply exhausts harmlessly.
      */
     fun onRemoveMedia(id: String) {
-        val wasPending = _state.value.pendingUpload?.cmid == id
+        val wasPending = _state.value.pendingUploads.any { it.cmid == id }
         _state.update {
-            val next = if (id == it.pendingUpload?.cmid) {
-                it.copy(pendingUpload = null)
+            val next = if (wasPending) {
+                it.copy(pendingUploads = it.pendingUploads.filterNot { pending -> pending.cmid == id })
             } else {
                 it.copy(attachments = it.attachments.filterNot { media -> media.id == id })
             }
@@ -210,7 +218,7 @@ class StoryComposerViewModel @Inject constructor(
             try {
                 storyRepository.enqueuePublish(
                     current.draft.toCreateStoryRequest(resolvePublishLanguage()),
-                    dependsOn = listOfNotNull(current.pendingUpload?.cmid),
+                    dependsOn = current.pendingUploads.map(PendingMediaUpload::cmid),
                 )
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
                 _state.update { StoryComposerUiState() }

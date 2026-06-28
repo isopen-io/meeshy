@@ -135,9 +135,9 @@ file-by-file audit — every one of the 673 iOS files was read in full.
       `PendingMediaUpload` placeholder (its `cmid` rides in `draft.mediaIds`, counts toward
       the ≤10 cap, renders an "Offline" preview tile); `publish()` gates the story on it via
       the new `StoryRepository.enqueuePublish(request, dependsOn)`. Permanent failure / multi
-      pick / second-while-pending surface the error (single-pending keeps the single-`dependsOn`
-      chain correct). **Remaining:** the composer multi-pending **UX** (SDK primitive now landed,
-      see below).
+      pick / second-while-pending surfaced the error at the time (single-pending kept the
+      single-`dependsOn` chain correct). **Superseded** by `story-composer-multi-pending` (see below),
+      which lifts the single-pending restriction: batches and second picks now stage too.
 - [x] **Remove-pending cancels the durable upload** (`media-upload-cancel`): removing the
       offline placeholder now `MediaUploadQueue.cancel`s its `UPLOAD_MEDIA` row + blob (drops the
       outbox row first, then the bytes — unknown cmid inert), so no orphaned upload streams bytes
@@ -164,8 +164,14 @@ file-by-file audit — every one of the 673 iOS files was read in full.
       uploads), and `StoryRepository.enqueuePublish` takes a `List<String>`. The provably-correct SDK
       half of multi-pending offline uploads; the composer adopts the list contract but keeps the
       single-pending UI (the multi-pending UX is the next slice). No schema/migration change.
-- [ ] **Multi-pending offline uploads — composer UX**: stage several `PendingMediaUpload`s,
-      `publish(dependsOn = all cmids)`, per-tile cancel. SDK primitive ✅ above; UI relaxation pending.
+- [x] **Multi-pending offline uploads — composer UX** (`story-composer-multi-pending`):
+      `StoryComposerUiState.pendingUpload?` → `pendingUploads: List<PendingMediaUpload>`; every
+      transient-failed pick (and each item of an offline batch) is durably queued + appended, the
+      single-pending guard dropped. `publish(dependsOn = pendingUploads.map { cmid })` gates the story
+      on **all** placeholders; per-tile remove cancels only that durable row (others untouched);
+      `queueDurably` stages one-at-a-time so a mid-batch enqueue failure keeps already-staged items;
+      the preview renders N "Offline" tiles. Closes the durable offline upload→publish chain
+      end-to-end from the UI. Surpasses iOS, which drops a pick on an offline upload.
 - [ ] TUS resumable uploads in a **dedicated `WorkManager` chain** (foreground
       progress); message-send items `dependsOn` the upload (gating now in place)
 - [x] `MessageStateMachine` (pure, monotonic 8-state delivery FSM) — 9 tests
