@@ -175,6 +175,27 @@ class StoryRepositoryTest {
     }
 
     @Test
+    fun `enqueuePublish persists the dependsOn prerequisite when given`() = runTest {
+        val outbox = outbox()
+
+        repository(outbox).enqueuePublish(
+            CreateStoryRequest(content = "gated"),
+            dependsOn = "upload-cmid",
+        )
+
+        assertThat(outbox.deliverable(OutboxLanes.STORY).single().dependsOn).isEqualTo("upload-cmid")
+    }
+
+    @Test
+    fun `enqueuePublish leaves dependsOn null by default`() = runTest {
+        val outbox = outbox()
+
+        repository(outbox).enqueuePublish(CreateStoryRequest(content = "free"))
+
+        assertThat(outbox.deliverable(OutboxLanes.STORY).single().dependsOn).isNull()
+    }
+
+    @Test
     fun `enqueuePublish keeps each story as an independent row (no coalescing)`() = runTest {
         val outbox = outbox()
 

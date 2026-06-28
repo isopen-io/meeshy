@@ -126,9 +126,18 @@ file-by-file audit — every one of the 673 iOS files was read in full.
       bytes then queues an `UPLOAD_MEDIA` row on the `MEDIA` lane, blob + row sharing one
       `cmid`) + the `OutboxFlushWorker` wiring (a `MEDIA`-lane sender drained **before**
       `STORY`, blob removed on delivery and on exhaustion). The durable offline
-      upload→publish chain now works end-to-end at the SDK layer. **Remaining:** composer
-      wiring (enqueue the upload + a publish that `dependsOn` it with the cmid as the
-      placeholder media id).
+      upload→publish chain now works end-to-end at the SDK layer.
+      (Composer wiring landed in `story-composer-offline-media` — see below.)
+- [x] **Composer offline-media fallback** (`story-composer-offline-media`): the composer
+      now reaches the durable chain from the UI. When a synchronous upload fails
+      transiently (offline / 429 / 5xx — the pure app-side `MediaUploadRetryPolicy`), a
+      **single** picked media is `MediaUploadQueue.enqueue`d + staged as a single
+      `PendingMediaUpload` placeholder (its `cmid` rides in `draft.mediaIds`, counts toward
+      the ≤10 cap, renders an "Offline" preview tile); `publish()` gates the story on it via
+      the new `StoryRepository.enqueuePublish(request, dependsOn)`. Permanent failure / multi
+      pick / second-while-pending surface the error (single-pending keeps the single-`dependsOn`
+      chain correct). **Remaining:** multi-pending offline uploads (multi-`dependsOn`/barrier);
+      remove-pending should cancel the durable `UPLOAD_MEDIA` row (harmless orphan today).
 - [ ] TUS resumable uploads in a **dedicated `WorkManager` chain** (foreground
       progress); message-send items `dependsOn` the upload (gating now in place)
 - [x] `MessageStateMachine` (pure, monotonic 8-state delivery FSM) — 9 tests
