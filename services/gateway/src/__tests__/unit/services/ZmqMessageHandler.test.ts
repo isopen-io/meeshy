@@ -16,8 +16,7 @@
  * - getStats, resetStats, clear
  */
 
-import { describe, it, expect, beforeEach } from '@jest/globals';
-
+// jest.mock() must appear before imports for bun's hoisting to work correctly
 jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: {
     child: () => ({
@@ -29,6 +28,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
+import { describe, it, expect, beforeEach } from '@jest/globals';
 import { ZmqMessageHandler } from '../../../services/zmq-translation/ZmqMessageHandler';
 
 // ──────────────────────────────────────────────────────────────────────────────
