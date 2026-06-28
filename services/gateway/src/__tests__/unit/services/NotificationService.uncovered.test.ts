@@ -109,7 +109,12 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import { NotificationService } from '../../../services/notifications/NotificationService';
+import {
+  NotificationService,
+  contentTypeIcon,
+  formatEphemeralDuration,
+  protectedPreview,
+} from '../../../services/notifications/NotificationService';
 
 // ── constants ──────────────────────────────────────────────────────────────────
 
@@ -677,5 +682,189 @@ describe('sanitizeDate (private) — invalid Date object', () => {
     const svc = service as any;
     const good = new Date('2025-01-01T00:00:00Z');
     expect(svc.sanitizeDate(good, null)).toBe(good);
+  });
+});
+
+// ── contentTypeIcon ───────────────────────────────────────────────────────────
+
+describe('contentTypeIcon', () => {
+  it('returns the text icon when messageType is null', () => {
+    expect(contentTypeIcon(null)).toBe('💬');
+  });
+
+  it('returns the text icon when messageType is undefined', () => {
+    expect(contentTypeIcon(undefined)).toBe('💬');
+  });
+
+  it('returns the audio icon for "audio"', () => {
+    expect(contentTypeIcon('audio')).toBe('🎵');
+  });
+
+  it('is case-insensitive (AUDIO → audio icon)', () => {
+    expect(contentTypeIcon('AUDIO')).toBe('🎵');
+  });
+
+  it('returns the text icon for an unknown messageType (fallback)', () => {
+    expect(contentTypeIcon('unknown-type')).toBe('💬');
+  });
+
+  it('returns the video icon for "video"', () => {
+    expect(contentTypeIcon('video')).toBe('🎬');
+  });
+
+  it('returns the image icon for "image"', () => {
+    expect(contentTypeIcon('image')).toBe('🖼️');
+  });
+
+  it('returns the file icon for "file"', () => {
+    expect(contentTypeIcon('file')).toBe('📎');
+  });
+});
+
+// ── formatEphemeralDuration ───────────────────────────────────────────────────
+
+describe('formatEphemeralDuration', () => {
+  it('returns undefined when expiresAt is null', () => {
+    expect(formatEphemeralDuration(null, new Date())).toBeUndefined();
+  });
+
+  it('returns undefined when createdAt is null', () => {
+    expect(formatEphemeralDuration(new Date(), null)).toBeUndefined();
+  });
+
+  it('returns undefined when duration is 0 (non-positive)', () => {
+    const t = new Date('2026-01-01T00:00:00Z');
+    expect(formatEphemeralDuration(t, t)).toBeUndefined();
+  });
+
+  it('returns undefined for negative duration (expires before created)', () => {
+    const base = new Date('2026-01-01T00:00:00Z');
+    const before = new Date(base.getTime() - 5000);
+    expect(formatEphemeralDuration(before, base)).toBeUndefined();
+  });
+
+  it('returns "Ns" format for duration under 60 seconds', () => {
+    const created = new Date('2026-01-01T00:00:00Z');
+    const expires = new Date(created.getTime() + 30_000); // 30s
+    expect(formatEphemeralDuration(expires, created)).toBe('30s');
+  });
+
+  it('returns "Nmin" format for duration under 60 minutes', () => {
+    const created = new Date('2026-01-01T00:00:00Z');
+    const expires = new Date(created.getTime() + 5 * 60_000); // 5min
+    expect(formatEphemeralDuration(expires, created)).toBe('5min');
+  });
+
+  it('returns "Nh" format for duration under 24 hours', () => {
+    const created = new Date('2026-01-01T00:00:00Z');
+    const expires = new Date(created.getTime() + 2 * 3600_000); // 2h
+    expect(formatEphemeralDuration(expires, created)).toBe('2h');
+  });
+
+  it('returns "Nj" format for duration of 3 days', () => {
+    const created = new Date('2026-01-01T00:00:00Z');
+    const expires = new Date(created.getTime() + 3 * 24 * 3600_000); // 3 days
+    expect(formatEphemeralDuration(expires, created)).toBe('3j');
+  });
+});
+
+// ── protectedPreview ──────────────────────────────────────────────────────────
+
+describe('protectedPreview', () => {
+  it('returns null for a non-protected message (no flags)', () => {
+    const result = protectedPreview({
+      messageType: 'text',
+      isEncrypted: false,
+      isViewOnce: false,
+      isBlurred: false,
+      effectFlags: 0,
+    });
+    expect(result).toBeNull();
+  });
+
+  it('returns ephemeral preview with duration when expiresAt is set', () => {
+    const created = new Date('2026-01-01T00:00:00Z');
+    const expires = new Date(created.getTime() + 30_000);
+    const result = protectedPreview({
+      messageType: 'text',
+      expiresAt: expires,
+      createdAt: created,
+    });
+    expect(result).not.toBeNull();
+    expect(result!.locKey).toBe('notification.ephemeral_message');
+    expect(result!.preview).toContain('🔥');
+    expect(result!.preview).toContain('30s');
+  });
+
+  it('returns ephemeral preview without duration when no createdAt', () => {
+    const result = protectedPreview({
+      messageType: 'audio',
+      expiresAt: new Date('2026-12-31T00:00:00Z'),
+      createdAt: null,
+    });
+    expect(result!.locKey).toBe('notification.ephemeral_message');
+    expect(result!.preview).toContain('🔥');
+    expect(result!.preview).toContain('🎵');
+    expect(result!.preview).not.toContain('s');
+  });
+
+  it('returns view-once preview when isViewOnce is true', () => {
+    const result = protectedPreview({
+      messageType: 'image',
+      isViewOnce: true,
+    });
+    expect(result!.locKey).toBe('notification.view_once_message');
+    expect(result!.preview).toContain('👁️');
+    expect(result!.preview).toContain('🖼️');
+  });
+
+  it('returns blurred preview when isBlurred is true', () => {
+    const result = protectedPreview({
+      messageType: 'text',
+      isBlurred: true,
+    });
+    expect(result!.locKey).toBe('notification.hidden_message');
+    expect(result!.preview).toContain('🌫️');
+  });
+
+  it('returns encrypted preview when isEncrypted is true', () => {
+    const result = protectedPreview({
+      messageType: 'text',
+      isEncrypted: true,
+    });
+    expect(result!.locKey).toBe('notification.encrypted_message');
+    expect(result!.preview).toContain('🔒');
+  });
+
+  it('prioritises ephemeral over other protections (effectFlags EPHEMERAL bit)', () => {
+    const result = protectedPreview({
+      messageType: 'text',
+      isViewOnce: true,
+      isBlurred: true,
+      effectFlags: 0x1, // EPHEMERAL flag bit
+    });
+    expect(result!.locKey).toBe('notification.ephemeral_message');
+  });
+
+  it('prioritises view-once over blurred', () => {
+    const result = protectedPreview({
+      messageType: 'text',
+      isViewOnce: true,
+      isBlurred: true,
+    });
+    expect(result!.locKey).toBe('notification.view_once_message');
+  });
+});
+
+// ── toISOStringOrNull (private) ───────────────────────────────────────────────
+
+describe('toISOStringOrNull (private)', () => {
+  it('returns null for null date', () => {
+    expect((service as any).toISOStringOrNull(null)).toBeNull();
+  });
+
+  it('returns ISO string for a valid date', () => {
+    const d = new Date('2026-06-28T12:00:00.000Z');
+    expect((service as any).toISOStringOrNull(d)).toBe('2026-06-28T12:00:00.000Z');
   });
 });
