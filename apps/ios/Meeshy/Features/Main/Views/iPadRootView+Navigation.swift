@@ -513,6 +513,12 @@ extension iPadRootView {
     // gracefully (`expired` empty state) for posts that no longer exist.
 
     func isStoryPost(postId: String, postType: String?) -> Bool {
+        // A reel is never a story: an explicit `REEL` tag must win over the
+        // cache-expiry heuristic below, otherwise a reel comment/reaction could
+        // be misrouted into the story notification screen (the "story view opens
+        // with the wrong post" bug). iPad has no immersive reel viewer, so reels
+        // fall through to the universal `.postDetail` surface, which renders them.
+        if postType?.uppercased() == "REEL" { return false }
         if postType?.uppercased() == "STORY" { return true }
         if let cached = StoryService.shared.cachedPost(id: postId), cached.expiresAt != nil {
             return true
