@@ -2263,4 +2263,4 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   - `services/MultiLevelCache.ts`: added `/* istanbul ignore next */` on unreachable outer `catch` in `delete()`
 - Reviewer: PASS (rounds: 1)
 - Notes: All feature matrix cells for Linux-testable environments remain ☑/⊘. This is manifest-level gap-fill (no new feature matrix cell). Suite total: 304 suites, 9301 tests (1 skipped). Manifest ticked: jobs/cleanup-expired-tokens.ts☑ jobs/index.ts☑ jobs/mutation-log-cleanup.ts☑ jobs/unlock-accounts.ts☑ middleware/deviceLocale.ts☑ services/MultiLevelCache.ts☑
-- Commit: (see PR claude/coverage/gateway-manifest-gap1)
+- Commit: d6981364 (squash-merged PR #1005 → main 2026-06-28T21:01Z)
