@@ -698,15 +698,19 @@ export function registerParticipantsRoutes(
         }
       });
 
-      const io = fastify.socketIOHandler?.getManager()?.getIO();
-      if (io) {
-        io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED, {
+      const manager = fastify.socketIOHandler?.getManager();
+      if (manager) {
+        manager.getIO().to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED, {
           conversationId,
           userId,
           newRole,
           updatedBy: currentUserId,
           participant: updatedParticipant
         });
+        // Invalidate the in-process participant-ID cache so the next message:send
+        // from this user re-validates membership/role against the DB instead of
+        // serving a stale 5-minute cached entry.
+        manager.invalidateParticipantCache?.(userId, conversationId);
       }
 
       const notificationService = fastify.notificationService;

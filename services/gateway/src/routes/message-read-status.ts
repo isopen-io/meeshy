@@ -9,6 +9,7 @@ import { MessageIdParamSchema, ConversationIdParamSchema, ReadStatusesQuerySchem
 import { resolveConversationId } from '../utils/conversation-id-cache.js';
 import { sendSuccess, sendNotFound, sendForbidden, sendBadRequest, sendInternalError } from '../utils/response.js';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { createCustomRateLimiter } from '../utils/rate-limiter.js';
 const logger = enhancedLogger.child({ module: 'MessageReadStatusRoutes' });
 
 interface MessageParams {
@@ -37,6 +38,20 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
   const requiredAuth = createUnifiedAuthMiddleware(prisma, {
     requireAuth: true,
     allowAnonymous: false
+  });
+
+  // Rate limiter for write operations that broadcast to conversation rooms.
+  // 30 req/min per user — generous enough for normal tab-switching / reconnect
+  // patterns while blocking tight loops that would spam read-receipt broadcasts.
+  const readReceiptWriteLimiter = createCustomRateLimiter({
+    max: 30,
+    windowMs: 60 * 1000,
+    keyPrefix: 'read-receipt',
+    message: 'Too many read-receipt updates. Please slow down.',
+    keyGenerator: (request: FastifyRequest) => {
+      const authRequest = request as UnifiedAuthRequest;
+      return `user:${authRequest.authContext?.userId ?? request.ip ?? 'unknown'}`;
+    }
   });
 
   /**
@@ -164,7 +179,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
     Params: ConversationParams;
   }>('/conversations/:conversationId/mark-as-read', {
     preValidation: [requiredAuth],
-    preHandler: [validateParams(ConversationIdParamSchema)]
+    preHandler: [validateParams(ConversationIdParamSchema), readReceiptWriteLimiter.middleware()]
   }, async (request, reply) => {
     try {
       const { conversationId: rawId } = request.params;
@@ -244,7 +259,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
     Params: ConversationParams;
   }>('/conversations/:conversationId/mark-as-received', {
     preValidation: [requiredAuth],
-    preHandler: [validateParams(ConversationIdParamSchema)]
+    preHandler: [validateParams(ConversationIdParamSchema), readReceiptWriteLimiter.middleware()]
   }, async (request, reply) => {
     try {
       const { conversationId: rawId } = request.params;
@@ -327,7 +342,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
     Params: DeliveryReceiptRouteParams;
   }>('/conversations/:conversationId/messages/:messageId/delivery-receipt', {
     preValidation: [requiredAuth],
-    preHandler: [validateParams(DeliveryReceiptParamsSchema)]
+    preHandler: [validateParams(DeliveryReceiptParamsSchema), readReceiptWriteLimiter.middleware()]
   }, async (request, reply) => {
     try {
       const { conversationId: rawId, messageId } = request.params;

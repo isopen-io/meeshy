@@ -49,6 +49,7 @@ export interface MessageData {
   targetLanguage?: string;
   isEncrypted?: boolean;
   encryptionMode?: 'e2ee' | 'server' | 'hybrid' | null;
+  modelType?: string;
 }
 
 interface TranslationEncryptionData {
@@ -249,8 +250,7 @@ export class MessageTranslationService extends EventEmitter {
               where: { id: messageId }
             });
             if (savedMessage) {
-              const requestedModelType = (messageData as any).modelType;
-              await this._processTranslationsAsync(savedMessage, messageData.targetLanguage, requestedModelType);
+              await this._processTranslationsAsync(savedMessage, messageData.targetLanguage, messageData.modelType);
             } else {
               logger.error(`❌ [TranslationService] Message ${messageId} non trouvé en base`);
             }
@@ -500,7 +500,7 @@ export class MessageTranslationService extends EventEmitter {
       logger.info(`📤 [PARTIAL CACHE] Message ${message.id}: ${cacheResults.length} cached, ${cacheMisses.length} to translate`);
 
       // Déterminer le model type
-      const finalModelType = modelType || (message as any).modelType || ((message.content?.length ?? 0) < 80 ? 'medium' : 'premium');
+      const finalModelType = modelType ?? ((message.content?.length ?? 0) < 80 ? 'medium' : 'premium');
 
       // 6. ENVOYER LA REQUÊTE DE TRADUCTION VIA ZMQ (seulement pour cache misses)
       const request: TranslationRequest = {
@@ -579,9 +579,8 @@ export class MessageTranslationService extends EventEmitter {
       
       // 2. DÉTERMINER LE MODEL TYPE
       // Priorité: 1) modelType du messageData (demandé par l'utilisateur), 2) auto-détection
-      const requestedModelType = (messageData as any).modelType;
       const autoModelType = (existingMessage.content?.length ?? 0) < 80 ? 'medium' : 'premium';
-      const finalModelType = requestedModelType || autoModelType;
+      const finalModelType = messageData.modelType ?? autoModelType;
       
       
       // 3. SUPPRIMER LES ANCIENNES TRADUCTIONS POUR LES LANGUES CIBLES

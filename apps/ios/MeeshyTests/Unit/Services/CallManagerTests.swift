@@ -822,7 +822,7 @@ final class CallStatsPacketReducerTests: XCTestCase {
     }
 }
 
-// MARK: - Call Reliability Policy (§5.8) — default-threshold integration
+// MARK: - Call Reliability Policy — default-threshold behaviour (§5.8)
 
 @MainActor
 final class CallReliabilityPolicyDefaultsTests: XCTestCase {

@@ -1628,4 +1628,40 @@ final class ConversationSocketHandlerTests: XCTestCase {
         XCTAssertEqual(delegate.messageTranslatedAudiosByAttachment["attA"]?.count, 1)
         XCTAssertEqual(delegate.messageTranslatedAudiosByAttachment["attA"]?.first?.url, "https://x/new.mp3")
     }
+
+    // MARK: - Deduplication Window Tests
+
+    func test_messageReceived_duplicateId_droppedByDedup() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        let msg = makeAPIMessage(id: "dup1", senderId: otherUserId, content: "Hello")
+        delegate.invalidateIndex()
+
+        socket.messageReceived.send(msg)
+        try await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertEqual(delegate.lastUnreadMessage?.id, "dup1", "First delivery should surface the message")
+
+        // Send exact same ID again — should be dropped by dedup
+        delegate.lastUnreadMessage = nil
+        socket.messageReceived.send(msg)
+        try await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertNil(delegate.lastUnreadMessage, "Duplicate message ID should be suppressed by dedup window")
+    }
+
+    func test_messageReceived_differentIds_bothDelivered() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        let msg1 = makeAPIMessage(id: "unique1", senderId: otherUserId, content: "First")
+        let msg2 = makeAPIMessage(id: "unique2", senderId: otherUserId, content: "Second")
+        delegate.invalidateIndex()
+
+        socket.messageReceived.send(msg1)
+        try await Task.sleep(nanoseconds: 200_000_000)
+        let first = delegate.lastUnreadMessage
+        XCTAssertEqual(first?.id, "unique1")
+
+        socket.messageReceived.send(msg2)
+        try await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertEqual(delegate.lastUnreadMessage?.id, "unique2", "Different ID should always be delivered")
+    }
 }

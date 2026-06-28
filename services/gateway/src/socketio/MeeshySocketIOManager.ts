@@ -413,6 +413,17 @@ export class MeeshySocketIOManager {
   }
 
   /**
+   * Invalidate the in-process participant-ID cache for a user.
+   * Called by REST routes that change participant membership or role so that
+   * the next socket `message:send` re-validates against the DB instead of
+   * serving a stale cached entry (e.g. a kicked user still appearing as
+   * member for up to 5 minutes without this invalidation).
+   */
+  public invalidateParticipantCache(userId: string, conversationId?: string): void {
+    this.messageHandler.invalidateParticipantCache(userId, conversationId);
+  }
+
+  /**
    * Expose SocialEventsHandler for use in routes (broadcast social events)
    */
   public getSocialEventsHandler(): SocialEventsHandler {
