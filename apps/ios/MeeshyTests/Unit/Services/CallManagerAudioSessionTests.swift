@@ -3432,7 +3432,9 @@ final class CallViewVideoWatchdogSourceGuardTests: XCTestCase {
             XCTFail("connectingVideoPlaceholder not found in CallView.swift")
             return
         }
-        let end = source.index(fnRange.lowerBound, offsetBy: 600, limitedBy: source.endIndex) ?? source.endIndex
+        // The .task { } block with Task.sleep is ~1 400 chars into the function body;
+        // use 3 000 to cover the full property including the closing }.
+        let end = source.index(fnRange.lowerBound, offsetBy: 3000, limitedBy: source.endIndex) ?? source.endIndex
         let body = String(source[fnRange.lowerBound ..< end])
         XCTAssertTrue(
             body.contains("Task.sleep"),
@@ -3452,7 +3454,7 @@ final class CallViewVideoWatchdogSourceGuardTests: XCTestCase {
             XCTFail("connectingVideoPlaceholder not found in CallView.swift")
             return
         }
-        let end = source.index(fnRange.lowerBound, offsetBy: 600, limitedBy: source.endIndex) ?? source.endIndex
+        let end = source.index(fnRange.lowerBound, offsetBy: 3000, limitedBy: source.endIndex) ?? source.endIndex
         let body = String(source[fnRange.lowerBound ..< end])
         XCTAssertTrue(
             body.contains("Task.isCancelled"),
@@ -3467,7 +3469,7 @@ final class CallViewVideoWatchdogSourceGuardTests: XCTestCase {
             XCTFail("connectingVideoPlaceholder not found in CallView.swift")
             return
         }
-        let end = source.index(fnRange.lowerBound, offsetBy: 600, limitedBy: source.endIndex) ?? source.endIndex
+        let end = source.index(fnRange.lowerBound, offsetBy: 3000, limitedBy: source.endIndex) ?? source.endIndex
         let body = String(source[fnRange.lowerBound ..< end])
         XCTAssertTrue(
             body.contains("UIAccessibility.post") && body.contains(".announcement"),
@@ -3482,7 +3484,7 @@ final class CallViewVideoWatchdogSourceGuardTests: XCTestCase {
             XCTFail("connectingVideoPlaceholder not found in CallView.swift")
             return
         }
-        let end = source.index(fnRange.lowerBound, offsetBy: 600, limitedBy: source.endIndex) ?? source.endIndex
+        let end = source.index(fnRange.lowerBound, offsetBy: 3000, limitedBy: source.endIndex) ?? source.endIndex
         let body = String(source[fnRange.lowerBound ..< end])
         XCTAssertTrue(
             body.contains("videoConnectWatchdogSeconds"),
