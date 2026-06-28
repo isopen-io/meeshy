@@ -194,6 +194,12 @@ struct CallView: View {
                     argument: String(localized: "call.a11y.quality.poor",
                                     defaultValue: "Qualité réseau faible",
                                     bundle: .main))
+            } else if wasDegraded && !isDegraded {
+                UIAccessibility.post(
+                    notification: .announcement,
+                    argument: String(localized: "call.a11y.quality.recovered",
+                                    defaultValue: "Qualité réseau restaurée",
+                                    bundle: .main))
             }
         }
     }
@@ -539,7 +545,7 @@ struct CallView: View {
         case .connected: return MeeshyColors.success
         case .reconnecting, .checking, .new: return MeeshyColors.warning
         case .disconnected, .failed, .closed: return MeeshyColors.error
-        default: return MeeshyColors.indigo400
+        case .connecting: return MeeshyColors.indigo400
         }
     }
 
@@ -555,7 +561,7 @@ struct CallView: View {
         case .connected: return String(localized: "call.quality.good", defaultValue: "Connexion bonne", bundle: .main)
         case .reconnecting, .checking, .new: return String(localized: "call.quality.reconnecting", defaultValue: "Reconnexion", bundle: .main)
         case .disconnected, .failed, .closed: return String(localized: "call.quality.lost", defaultValue: "Connexion perdue", bundle: .main)
-        default: return String(localized: "call.quality.inProgress", defaultValue: "Connexion en cours", bundle: .main)
+        case .connecting: return String(localized: "call.quality.inProgress", defaultValue: "Connexion en cours", bundle: .main)
         }
     }
 
