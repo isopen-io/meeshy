@@ -4,30 +4,23 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Stories) — slice `outbox-multi-dependency` ✅
-Generalises the outbox `dependsOn` gate from **one** prerequisite to a **set**, so a dependent
-(a media story queued offline) can wait on several uploads at once. The provably-correct SDK half
-of "multi-pending offline uploads"; the composer multi-pending **UX** is the next slice.
+## This loop (Phase: Stories) — slice `story-composer-multi-pending` ✅
+Lifts the composer's offline staging from **one** pending upload to a **list**, completing the durable
+offline upload→publish chain end-to-end from the UI (the SDK multi-dependency primitive landed last loop).
 
-- [x] `OutboxDependencyKey` (`:sdk-core`, pure building block): `encode(Collection)→String?` /
-      `decode(String?)→List` round-trip a *set* of `cmid`s through the single `dependsOn` column
-      (wrapped-delimited `"|a|b|"`, bare-value tolerant); `likePattern(cmid)` builds an escaped
-      membership `LIKE` pattern (`_` escaped — `cmid`s carry `_`).
-- [x] `OutboxDependencies.verdictAll(states)`: any `EXHAUSTED`→`FAILED` (dominates), else any
-      `PENDING`/`INFLIGHT`→`BLOCKED`, else `SATISFIED`; empty→`SATISFIED`.
-- [x] `OutboxMutation.dependsOn: Set<String>` (was `String?`); `toEntity` encodes it. No schema change.
-- [x] `OutboxDrainer` decodes + gates via `verdictAll`; `OutboxDao.findDependents` is a
-      `LIKE … ESCAPE '\'` membership query; `OutboxRepository.rewriteDependents` builds the pattern.
-- [x] `StoryRepository.enqueuePublish(request, dependsOn: List<String>)`; composer adopts the list
-      contract (`listOfNotNull(pendingUpload?.cmid)`), single-pending UI unchanged.
-- [x] TDD: +`OutboxDependencyKeyTest` (14), +`OutboxDependenciesTest` verdictAll (5),
-      +`OutboxDrainerTest` multi-dep (4), +`OutboxRepositoryTest` membership (2),
-      +`StoryRepositoryTest` (1) + adapted assertion, +`StoryComposerViewModelTest` (1) + adapted
-      capture. No test weakened.
+- [x] `StoryComposerUiState.pendingUpload?` → `pendingUploads: List<PendingMediaUpload>`; `draftMediaIds`
+      appends every pending cmid after the uploaded ids.
+- [x] `onUploadFailed` drops the single-pending guard: any transient error durably queues **every**
+      accepted item (already capped to free slots); permanent (4xx) still surfaces + stages nothing.
+- [x] `queueDurably(items)` enqueues + stages one-at-a-time so a mid-batch failure keeps staged items.
+- [x] `onRemoveMedia` removes one pending from the list + cancels **only that** durable row.
+- [x] `publish(dependsOn = pendingUploads.map { cmid })`; `MediaPreviewRow` renders N "Offline" tiles.
+- [x] TDD: `StoryComposerViewModelTest` — 3 single-pending tests adapted to the list, 2 behaviours
+      flipped (reject→append, batch-error→stage-each), +5 new (batch staging, second-pick append,
+      offline batch truncated to free slots, publish gates on all ids, remove-one keeps rest + cancels
+      only its row, first staged survives mid-batch failure). No test weakened, no floor lowered.
 - [x] `./apps/android/meeshy.sh check` green (assembleDebug + all unit tests).
 
 ## Next loop (see PROGRESS.md "Next")
-1. Multi-pending offline uploads — **composer UX** (SDK primitive ✅; relax single-pending guard,
-   `pendingUploads: List`, `publish(dependsOn = all cmids)`, per-tile cancel).
-2. Multi-slide canvas (9:16 add/remove/reorder).
-3. Then advance to the **Calls** area.
+1. Multi-slide canvas (9:16 add/remove/reorder slides).
+2. Then advance to the **Calls** area.

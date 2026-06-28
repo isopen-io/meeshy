@@ -148,10 +148,10 @@ fun StoryComposerScreen(
                 },
             )
 
-            if (state.attachments.isNotEmpty() || state.pendingUpload != null) {
+            if (state.attachments.isNotEmpty() || state.pendingUploads.isNotEmpty()) {
                 MediaPreviewRow(
                     attachments = state.attachments,
-                    pending = state.pendingUpload,
+                    pending = state.pendingUploads,
                     onRemove = viewModel::onRemoveMedia,
                 )
             }
@@ -198,7 +198,7 @@ fun StoryComposerScreen(
 @Composable
 private fun MediaPreviewRow(
     attachments: List<UploadedMedia>,
-    pending: PendingMediaUpload?,
+    pending: List<PendingMediaUpload>,
     onRemove: (String) -> Unit,
 ) {
     LazyRow(
@@ -212,14 +212,12 @@ private fun MediaPreviewRow(
                 onRemove = { onRemove(media.id) },
             )
         }
-        pending?.let { upload ->
-            item(key = upload.cmid) {
-                MediaThumbnail(
-                    model = upload.item.bytes,
-                    isPending = true,
-                    onRemove = { onRemove(upload.cmid) },
-                )
-            }
+        items(pending, key = { it.cmid }) { upload ->
+            MediaThumbnail(
+                model = upload.item.bytes,
+                isPending = true,
+                onRemove = { onRemove(upload.cmid) },
+            )
         }
     }
 }
