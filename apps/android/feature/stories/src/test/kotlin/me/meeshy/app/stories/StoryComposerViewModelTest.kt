@@ -376,7 +376,7 @@ class StoryComposerViewModelTest {
         vm.onMediaPicked(listOf(item()))
 
         coVerify(exactly = 1) { uploadQueue.enqueue(any()) }
-        assertThat(vm.state.value.pendingUpload?.cmid).isEqualTo("up-1")
+        assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("up-1")
         assertThat(vm.state.value.draft.mediaIds).containsExactly("up-1")
         assertThat(vm.state.value.isUploadingMedia).isFalse()
         assertThat(vm.state.value.errorMessage).isNull()
@@ -391,36 +391,56 @@ class StoryComposerViewModelTest {
         vm.onMediaPicked(listOf(item()))
 
         coVerify(exactly = 0) { uploadQueue.enqueue(any()) }
-        assertThat(vm.state.value.pendingUpload).isNull()
+        assertThat(vm.state.value.pendingUploads).isEmpty()
         assertThat(vm.state.value.errorMessage).isEqualTo("offline")
         assertThat(vm.state.value.draft.mediaIds).isEmpty()
     }
 
     @Test
-    fun `a multi-item offline pick is not durably chained and surfaces an error`() = runTest {
+    fun `a multi-item offline pick durably queues every item as its own pending upload`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any()) } returns offline()
+        coEvery { uploadQueue.enqueue(any()) } returnsMany listOf("up-1", "up-2")
 
         vm.onMediaPicked(listOf(item("a.jpg"), item("b.jpg")))
 
-        coVerify(exactly = 0) { uploadQueue.enqueue(any()) }
-        assertThat(vm.state.value.pendingUpload).isNull()
-        assertThat(vm.state.value.errorMessage).isEqualTo("offline")
+        coVerify(exactly = 2) { uploadQueue.enqueue(any()) }
+        assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("up-1", "up-2").inOrder()
+        assertThat(vm.state.value.draft.mediaIds).containsExactly("up-1", "up-2").inOrder()
+        assertThat(vm.state.value.errorMessage).isNull()
+        assertThat(vm.state.value.canPublish).isTrue()
     }
 
     @Test
-    fun `a second offline pick is rejected while one upload is already pending`() = runTest {
+    fun `a second offline pick is appended as a second pending upload`() = runTest {
         val vm = viewModel()
         coEvery { media.upload(any()) } returns offline()
-        coEvery { uploadQueue.enqueue(any()) } returns "up-1"
+        coEvery { uploadQueue.enqueue(any()) } returnsMany listOf("up-1", "up-2")
         vm.onMediaPicked(listOf(item("first.jpg")))
 
         vm.onMediaPicked(listOf(item("second.jpg")))
 
+        coVerify(exactly = 2) { uploadQueue.enqueue(any()) }
+        assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("up-1", "up-2").inOrder()
+        assertThat(vm.state.value.draft.mediaIds).containsExactly("up-1", "up-2").inOrder()
+        assertThat(vm.state.value.errorMessage).isNull()
+    }
+
+    @Test
+    fun `an offline pick is truncated to the free slots before being durably queued`() = runTest {
+        val vm = viewModel()
+        val seedCount = StoryComposerDraft.MAX_MEDIA - 1
+        coEvery { media.upload(any()) } returns
+            NetworkResult.Success((1..seedCount).map { uploaded("m$it") })
+        vm.onMediaPicked(List(seedCount) { item("seed$it.jpg") })
+        coEvery { media.upload(any()) } returns offline()
+        coEvery { uploadQueue.enqueue(any()) } returnsMany listOf("up-1", "up-2")
+
+        vm.onMediaPicked(listOf(item("a.jpg"), item("b.jpg")))
+
         coVerify(exactly = 1) { uploadQueue.enqueue(any()) }
-        assertThat(vm.state.value.pendingUpload?.cmid).isEqualTo("up-1")
-        assertThat(vm.state.value.draft.mediaIds).containsExactly("up-1")
-        assertThat(vm.state.value.errorMessage).isNotNull()
+        assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("up-1")
+        assertThat(vm.state.value.draft.mediaIds).hasSize(StoryComposerDraft.MAX_MEDIA)
     }
 
     @Test
@@ -439,6 +459,23 @@ class StoryComposerViewModelTest {
         coVerify(exactly = 1) { workManager.enqueue(any<OneTimeWorkRequest>()) }
         assertThat(dependsOn.captured).containsExactly("up-1")
         assertThat(request.captured.mediaIds).containsExactly("up-1")
+        assertThat(request.captured.content).isNull()
+    }
+
+    @Test
+    fun `publish gates the story on every pending upload and carries all placeholder ids`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns offline()
+        coEvery { uploadQueue.enqueue(any()) } returnsMany listOf("up-1", "up-2")
+        vm.onMediaPicked(listOf(item("a.jpg"), item("b.jpg")))
+        val request = slot<CreateStoryRequest>()
+        val dependsOn = slot<List<String>>()
+        coEvery { repo.enqueuePublish(capture(request), capture(dependsOn)) } returns "story-cmid"
+
+        vm.publish()
+
+        assertThat(dependsOn.captured).containsExactly("up-1", "up-2").inOrder()
+        assertThat(request.captured.mediaIds).containsExactly("up-1", "up-2").inOrder()
         assertThat(request.captured.content).isNull()
     }
 
@@ -463,7 +500,7 @@ class StoryComposerViewModelTest {
 
         vm.onRemoveMedia("up-1")
 
-        assertThat(vm.state.value.pendingUpload).isNull()
+        assertThat(vm.state.value.pendingUploads).isEmpty()
         assertThat(vm.state.value.draft.mediaIds).isEmpty()
         assertThat(vm.state.value.canPublish).isFalse()
     }
@@ -478,6 +515,21 @@ class StoryComposerViewModelTest {
         vm.onRemoveMedia("up-1")
 
         coVerify(exactly = 1) { uploadQueue.cancel("up-1") }
+    }
+
+    @Test
+    fun `removing one of several pending uploads keeps the rest and cancels only that durable row`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns offline()
+        coEvery { uploadQueue.enqueue(any()) } returnsMany listOf("up-1", "up-2")
+        vm.onMediaPicked(listOf(item("a.jpg"), item("b.jpg")))
+
+        vm.onRemoveMedia("up-1")
+
+        assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("up-2")
+        assertThat(vm.state.value.draft.mediaIds).containsExactly("up-2")
+        coVerify(exactly = 1) { uploadQueue.cancel("up-1") }
+        coVerify(exactly = 0) { uploadQueue.cancel("up-2") }
     }
 
     @Test
@@ -501,7 +553,7 @@ class StoryComposerViewModelTest {
         vm.onRemoveMedia("not-the-pending-id")
 
         coVerify(exactly = 0) { uploadQueue.cancel(any()) }
-        assertThat(vm.state.value.pendingUpload?.cmid).isEqualTo("up-1")
+        assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("up-1")
     }
 
     @Test
@@ -514,7 +566,7 @@ class StoryComposerViewModelTest {
 
         vm.onRemoveMedia("up-1")
 
-        assertThat(vm.state.value.pendingUpload).isNull()
+        assertThat(vm.state.value.pendingUploads).isEmpty()
         assertThat(vm.state.value.draft.mediaIds).isEmpty()
     }
 
@@ -555,10 +607,24 @@ class StoryComposerViewModelTest {
 
         vm.onMediaPicked(listOf(item()))
 
-        assertThat(vm.state.value.pendingUpload).isNull()
+        assertThat(vm.state.value.pendingUploads).isEmpty()
         assertThat(vm.state.value.errorMessage).isNotNull()
         assertThat(vm.state.value.isUploadingMedia).isFalse()
         assertThat(vm.state.value.draft.mediaIds).isEmpty()
+    }
+
+    @Test
+    fun `the first staged item survives when a later durable enqueue fails mid-batch`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns offline()
+        coEvery { uploadQueue.enqueue(any()) } returns "up-1" andThenThrows IllegalStateException("disk full")
+
+        vm.onMediaPicked(listOf(item("a.jpg"), item("b.jpg")))
+
+        assertThat(vm.state.value.pendingUploads.map { it.cmid }).containsExactly("up-1")
+        assertThat(vm.state.value.draft.mediaIds).containsExactly("up-1")
+        assertThat(vm.state.value.errorMessage).isNotNull()
+        assertThat(vm.state.value.isUploadingMedia).isFalse()
     }
 
     @Test
@@ -571,7 +637,7 @@ class StoryComposerViewModelTest {
 
         vm.publish()
 
-        assertThat(vm.state.value.pendingUpload).isNull()
+        assertThat(vm.state.value.pendingUploads).isEmpty()
         assertThat(vm.state.value.draft.mediaIds).isEmpty()
     }
 }

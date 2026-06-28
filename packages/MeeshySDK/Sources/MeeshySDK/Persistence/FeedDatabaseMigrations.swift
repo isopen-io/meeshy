@@ -77,5 +77,15 @@ public enum FeedDatabaseMigrations {
                 t.column("receivedAt", .datetime).notNull()
             }
         }
+
+        // Durable per-emoji reaction counts on comments (mirrors `feed_posts`).
+        // Without this column the live `comment:reaction-*` socket events had no
+        // persistent home, so the aggregate count reverted to the last REST
+        // snapshot on a cold start. Nullable blob → existing rows decode to `nil`.
+        migrator.registerMigration("feed_v2_comment_reactions") { db in
+            try db.alter(table: "feed_comments") { t in
+                t.add(column: "reactionSummaryJson", .blob)
+            }
+        }
     }
 }

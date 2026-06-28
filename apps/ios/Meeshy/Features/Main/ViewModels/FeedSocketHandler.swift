@@ -97,6 +97,29 @@ final class FeedSocketHandler {
             }
             .store(in: &cancellables)
 
+        // Comment emoji reactions — persist the ABSOLUTE per-emoji count so it
+        // survives a cold start. The live UI (PostDetailViewModel) only tracks the
+        // current user's heart state in-memory; without this bridge the aggregate
+        // count reverted to the last REST snapshot on app restart. Mirror of the
+        // `post:reaction-*` persistence path above.
+        socialSocket.commentReactionAdded
+            .sink { [weak self] event in
+                Task { await self?.handleCommentReaction(event) }
+            }
+            .store(in: &cancellables)
+
+        socialSocket.commentReactionRemoved
+            .sink { [weak self] event in
+                Task { await self?.handleCommentReaction(event) }
+            }
+            .store(in: &cancellables)
+
+        socialSocket.commentReactionSync
+            .sink { [weak self] event in
+                Task { await self?.handleCommentReactionSync(event) }
+            }
+            .store(in: &cancellables)
+
         // Reaction events (emoji, non-heart) — persist to GRDB so the count
         // survives an app restart. The live UI already updates in-session via
         // FeedViewModel / PostDetailViewModel; without this bridge the cached
@@ -160,6 +183,30 @@ final class FeedSocketHandler {
         try? await persistence.updateCommentLikeCount(
             commentId: data.commentId,
             count: data.likeCount
+        )
+    }
+
+    /// Both `comment:reaction-added` and `comment:reaction-removed` carry the
+    /// ABSOLUTE per-emoji count in `aggregation`, so a single idempotent write
+    /// covers both (mirror of `handlePostReaction`).
+    private func handleCommentReaction(_ event: SocketCommentReactionUpdateEvent) async {
+        try? await persistence.updateCommentReactionSummary(
+            commentId: event.commentId,
+            emoji: event.aggregation.emoji,
+            count: event.aggregation.count
+        )
+    }
+
+    /// The `comment:reaction-request-sync` ACK carries the full authoritative set
+    /// of aggregations — replace the persisted dict wholesale.
+    private func handleCommentReactionSync(_ event: SocketCommentReactionSyncEvent) async {
+        let counts = Dictionary(
+            event.reactions.map { ($0.emoji, $0.count) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        try? await persistence.replaceCommentReactionSummary(
+            commentId: event.commentId,
+            counts: counts
         )
     }
 

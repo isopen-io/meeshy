@@ -56,6 +56,9 @@ final class MockStoryService: StoryServiceProviding, @unchecked Sendable {
     var fetchPostCallCount = 0
     var lastFetchPostId: String?
 
+    var cacheCallCount = 0
+    var lastCachedPost: APIPost?
+
     // MARK: - Protocol Conformance
 
     func list(cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
@@ -109,6 +112,11 @@ final class MockStoryService: StoryServiceProviding, @unchecked Sendable {
         return try fetchPostResult.get()
     }
 
+    func cache(post: APIPost) {
+        cacheCallCount += 1
+        lastCachedPost = post
+    }
+
     // MARK: - Reset
 
     func reset() {
@@ -152,5 +160,8 @@ final class MockStoryService: StoryServiceProviding, @unchecked Sendable {
         """))
         fetchPostCallCount = 0
         lastFetchPostId = nil
+
+        cacheCallCount = 0
+        lastCachedPost = nil
     }
 }

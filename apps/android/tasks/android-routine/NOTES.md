@@ -20,6 +20,13 @@ Append-only log of gotchas and decisions that save time next run.
   stub `currentUser` (a `MutableStateFlow`) and `currentUserId` explicitly.
 - `NetworkResult.Failure` wraps **`ApiError(message, code?, httpStatus?)`** — not
   a `NetworkError` type. Use `NetworkResult.Success(Unit)` for unit endpoints.
+- For distinct sequential stub returns, MockK `coEvery { … } returnsMany listOf("a","b")`;
+  for "succeed once then fail", `… returns "a" andThenThrows Exception(…)`. Used to test
+  multi-pending staging (each `enqueue` returns a distinct cmid) and mid-batch failures.
+- **Flipping a behavioural test is not weakening it** when the slice *intentionally* changes
+  the behaviour: `story-composer-multi-pending` flipped "second offline pick is rejected" →
+  "second offline pick is appended". Keep the assertion strong (assert the new outcome
+  precisely), record the flip + rationale in the run log, and the reviewer gate passes.
 
 ## Outbox / durable chain
 - The durable upload→publish chain is two halves: (1) **gating** the dependent on

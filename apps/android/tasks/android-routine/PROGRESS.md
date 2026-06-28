@@ -95,25 +95,28 @@ query so a delivered producer grafts its real id into a dependent waiting on sev
 `StoryRepository.enqueuePublish` now takes a `List<String>`. This is the provably-correct SDK half of
 "several media queued offline"; the composer adopts the list contract but keeps single-pending UI (the
 multi-pending UX is the next slice). Surpasses iOS, which has no durable offline upload chain at all.
+Latest loop (`story-composer-multi-pending`) closes that chain **end-to-end from the UI**: the composer's
+`pendingUpload?` became `pendingUploads: List<PendingMediaUpload>`, so every transient-failed pick is
+appended (and a single offline pick carrying **several** items now stages each one), `publish()` gates the
+story on **all** pending cmids (`enqueuePublish(.., dependsOn = pendingUploads.map { cmid })`), per-tile
+remove cancels only that durable row, and the preview renders N "Offline" tiles. `queueDurably` stages one
+item at a time so partial progress survives a mid-batch enqueue failure. Surpasses iOS, which drops a pick
+on an offline upload.
 
 ## Next slice (pick one for the next run)
 
 Ordered by value:
-1. **Multi-pending offline uploads — composer UX** — the SDK multi-dependency primitive
-   ✅ landed in `outbox-multi-dependency` (the gate now expresses a *set* of prerequisites;
-   `enqueuePublish` takes a `List<String>`; the drainer holds until **all** land and grafts each
-   producer's id; `findDependents` is a membership query). The composer still stages at most **one**
-   `pendingUpload`. This slice relaxes the UI: `pendingUploads: List<PendingMediaUpload>`, drop the
-   `pendingUpload == null` single-pending guard so each transient-failed pick is appended, render N
-   "Offline" preview tiles, `publish(dependsOn = pendingUploads.map { it.cmid })`, and per-tile
-   remove → `cancel(cmid)`. (Touches `StoryComposerViewModel` + `StoryComposerScreen` + their tests;
-   the "single-pending rejected" test flips to "second pick is also staged".) Optionally also accept a
-   **multi-item offline batch** in one pick (queue each item) — currently still surfaces an error.
-2. **Multi-slide canvas** — begin the real multi-slide composer (add/remove/
+1. **Multi-slide canvas** — begin the real multi-slide composer (add/remove/
    reorder slides, 9:16 canvas). Much larger; see `feature-parity.md`
    §"Stories composer".
-3. After Stories richness is sufficient, advance to the **Calls** area
+2. After Stories richness is sufficient, advance to the **Calls** area
    (`feature-parity.md` §"Calls").
+
+(`story-composer-multi-pending` ✅ shipped 2026-06-28 — this run; the composer's offline staging is now
+**multi-pending**: `StoryComposerUiState.pendingUploads: List<PendingMediaUpload>`, every transient-failed
+pick (and each item of an offline batch) is durably queued + appended, `publish()` gates on **all**
+placeholder cmids, per-tile remove cancels only that durable row, and the preview renders N "Offline"
+tiles. Closes the multi-dependency chain end-to-end from the UI. See run log.)
 
 (`outbox-multi-dependency` ✅ shipped 2026-06-28 — this run; the `dependsOn` gate now expresses a
 **set** of prerequisites via the new pure `OutboxDependencyKey` (encode/decode/likePattern) +
@@ -179,6 +182,44 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-28 — slice `story-composer-multi-pending` ✅
+- **Branch:** `claude/apps/android/story-composer-multi-pending` (off `origin/main` @ `997ee729`).
+- **Housekeeping (step 0):** no open `claude/apps/android/*` PR (all prior loops already
+  squash-merged; 28 open PRs are iOS/web/dependabot, none Android). Branched off the freshened `main`.
+- **What:** delivers "Next" #1 — the **multi-pending offline uploads composer UX** on top of the
+  `outbox-multi-dependency` SDK primitive. The composer staged at most **one** `pendingUpload`; it now
+  holds a **list**, so every transient-failed pick is appended (and a single offline pick that carries
+  **several** items now stages each one). `publish()` gates the story on **all** pending cmids; per-tile
+  remove cancels only that durable row. Surpasses iOS, which drops a pick on an offline upload entirely.
+- **Changed (production, `apps/android` only):**
+  - `StoryComposerUiState.pendingUpload: PendingMediaUpload?` → `pendingUploads: List<PendingMediaUpload>`
+    (default empty); `draftMediaIds` now appends every pending cmid after the uploaded ids.
+  - `onUploadFailed` dropped the `single != null && pendingUpload == null` guard: any transient error now
+    durably queues **every** accepted item (already capped to the free slots by `onMediaPicked`). A
+    permanent (4xx) error still surfaces the message and stages nothing.
+  - `queueDurably(items: List<…>)` enqueues + stages **one item at a time** so partial progress survives
+    if a later `enqueue` throws (already-staged items stay; the caller's catch surfaces the error).
+  - `onRemoveMedia` removes one pending upload from the list and cancels **only that** durable row; the
+    other pending uploads are untouched.
+  - `publish(dependsOn = pendingUploads.map { cmid })`; `StoryComposerScreen.MediaPreviewRow` renders N
+    "Offline" tiles via `items(pending)` (was a single optional tile).
+- **TDD (red → green):** `StoryComposerViewModelTest` — 3 existing single-pending tests adapted to the
+  list field; the *"second offline pick is rejected"* and *"multi-item offline pick is not chained"*
+  behaviours **flipped** (now: second pick appended / each item staged) — strengthened, not weakened;
+  +5 new: multi-item batch stages each, second pick appends, offline batch truncated to free slots,
+  publish gates on **all** placeholder ids, remove one pending keeps the rest + cancels only its row,
+  first staged item survives a mid-batch enqueue failure. No coverage floor lowered, no test weakened.
+- **Verification:** `./apps/android/meeshy.sh check` (`assembleDebug` + all `testDebugUnitTest`)
+  **BUILD SUCCESSFUL**. Diff = `apps/android` only (2 prod edits, 1 test file).
+- **Reviewer gate:** PASS — scope clean (apps/android only), behavioural non-tautological tests,
+  branch sweep on the new list paths (empty/single/multi/cap-truncated/mid-batch-failure), SDK purity
+  respected (composer is product orchestration in `:feature:stories`; the multi-dependency primitive
+  stays in `:sdk-core`), single source of truth (one `draftMediaIds` derivation feeds both draft +
+  dependsOn), failure paths covered, `viewModelScope` cancel-safe (`CancellationException` rethrown).
+- **Note / next:** the single-pending offline chain is now fully multi-pending end-to-end. Next up:
+  **multi-slide canvas** ("Next" #2) — the real multi-slide composer (add/remove/reorder slides, 9:16
+  canvas), a larger slice. After Stories richness is sufficient, advance to **Calls**.
 
 ### 2026-06-28 — slice `outbox-multi-dependency` ✅
 - **Branch:** `claude/apps/android/outbox-multi-dependency` (off `origin/main` @ `af7791af`).

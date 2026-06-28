@@ -344,29 +344,47 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
     }
 
     // ── Story events ────────────────────────────────────────────────────
+    //
+    // The stories bar reads `queryKeys.stories.feed()` (a flat `Post[]`), NOT
+    // `queryKeys.posts.stories()`. The previous handlers invalidated the latter
+    // — a key no query subscribes to — so story:deleted / story:updated never
+    // surfaced live and the bar kept showing stale/removed stories until a full
+    // refetch. We now patch `stories.feed()` directly so every story surface
+    // stays fresh offline-first (no network roundtrip, no flash).
 
-    function handleStoryCreated(_data: StoryCreatedEventData) {
-      queryClient.invalidateQueries({ queryKey: queryKeys.posts.stories() });
+    function handleStoryCreated(data: StoryCreatedEventData) {
+      queryClient.setQueryData<Post[]>(queryKeys.stories.feed(), (old) => {
+        if (!old) return old;
+        if (old.some((s) => s.id === data.story.id)) return old;
+        return [data.story, ...old];
+      });
     }
 
-    function handleStoryViewed(_data: StoryViewedEventData) {
-      queryClient.invalidateQueries({ queryKey: queryKeys.posts.stories() });
+    function handleStoryViewed(data: StoryViewedEventData) {
+      patchStoryInFeed(queryClient, data.storyId, (s) => ({
+        ...s,
+        viewCount: data.viewCount,
+      }));
     }
 
     function handleStoryReacted(_data: StoryReactedEventData) {
-      queryClient.invalidateQueries({ queryKey: queryKeys.posts.stories() });
+      // Story reactions are informational for the author and carry no
+      // authoritative aggregation count — mutating the feed would drift. The
+      // feed reconciles via its next refetch.
     }
 
-    function handleStoryUpdated(_data: StoryUpdatedEventData) {
-      queryClient.invalidateQueries({ queryKey: queryKeys.posts.stories() });
+    function handleStoryUpdated(data: StoryUpdatedEventData) {
+      patchStoryInFeed(queryClient, data.story.id, () => data.story);
     }
 
-    function handleStoryDeleted(_data: StoryDeletedEventData) {
-      queryClient.invalidateQueries({ queryKey: queryKeys.posts.stories() });
+    function handleStoryDeleted(data: StoryDeletedEventData) {
+      queryClient.setQueryData<Post[]>(queryKeys.stories.feed(), (old) =>
+        old ? old.filter((s) => s.id !== data.storyId) : old,
+      );
     }
 
     function handleStoryUnreacted(_data: StoryUnreactedEventData) {
-      queryClient.invalidateQueries({ queryKey: queryKeys.posts.stories() });
+      // Mirror of handleStoryReacted — no authoritative count on the wire.
     }
 
     // ── Status events ───────────────────────────────────────────────────
@@ -522,6 +540,24 @@ function patchCommentInPostCaches(
         })),
       };
     },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Shared helper: patch a single story in the stories-bar feed cache.
+//
+// The stories bar is a flat `Post[]` keyed by `queryKeys.stories.feed()`. A
+// no-op when the story is absent (returns `old` untouched) so a missing entry
+// never resurrects a story the feed query has already dropped.
+// ---------------------------------------------------------------------------
+
+function patchStoryInFeed(
+  queryClient: ReturnType<typeof useQueryClient>,
+  storyId: string,
+  patcher: (story: Post) => Post,
+) {
+  queryClient.setQueryData<Post[]>(queryKeys.stories.feed(), (old) =>
+    old ? old.map((s) => (s.id === storyId ? patcher(s) : s)) : old,
   );
 }
 
