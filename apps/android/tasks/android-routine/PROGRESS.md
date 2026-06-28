@@ -75,7 +75,17 @@ iOS, which drops a pick on an offline upload. Latest loop (`media-upload-cancel`
 **orphan-leak gap**: removing the offline placeholder now `MediaUploadQueue.cancel`s its durable
 `UPLOAD_MEDIA` row + blob (row discarded first so the drainer stops picking it up, then the bytes;
 unknown cmid inert), so no orphaned upload streams bytes to a media the story never references. The
-UI clears optimistically; the durable cancel is best-effort & cancellation-safe.
+UI clears optimistically; the durable cancel is best-effort & cancellation-safe. Latest loop
+(`outbox-flush-retry-on-blocked`) closes the **cross-pass gating gap**: the `OutboxFlushWorker`
+previously rescheduled (WorkManager `Result.retry()`) only when a lane stopped on a **transient**
+failure, ignoring a lane that stopped on a **blocked dependency**. Because lanes drain in a fixed
+order, a dependent (a media story/message) can be `BLOCKED` early in a pass while its prerequisite
+`UPLOAD_MEDIA` row is delivered *later in the very same pass* — leaving a now-satisfiable dependent
+sitting until an unrelated trigger fired. A new pure `OutboxFlushPlan.outcome(reports)` building
+block decides the pass outcome — `RETRY` when **any** lane stopped on a transient failure **or** a
+blocked dependency — and the worker delegates to it. Forward progress is guaranteed: each retry
+either delivers the dependent or cascade-exhausts it once the prerequisite gives up (`EXHAUSTED`
+flips the verdict to `FAILED`, never `BLOCKED`), so the loop always terminates.
 
 ## Next slice (pick one for the next run)
 
@@ -84,18 +94,21 @@ Ordered by value:
    upload at a time (the single `dependsOn` cmid keeps the chain provably correct). To queue
    several media offline, the publish needs to gate on *all* their cmids — either a
    multi-`dependsOn` outbox primitive or a synthetic "barrier" upload row the publish depends
-   on. (`remove-pending cancels the row` ✅ landed in `media-upload-cancel` this run — see
-   below.) And the known gating gap: a `BLOCKED` dependency doesn't set
-   `anyTransient`, so a held publish lane isn't auto-retried by WorkManager once its upload
-   lands in a *later* pass — revisit (upload `SuccessWithId` re-kick, or a
-   `stoppedOnBlockedDependency` retry request). Within a single drain pass it already works
-   (MEDIA drained before STORY).
+   on. (`remove-pending cancels the row` ✅ landed in `media-upload-cancel`; the cross-pass
+   `BLOCKED`-not-`anyTransient` retry gap ✅ closed in `outbox-flush-retry-on-blocked` — the
+   worker now reschedules on a blocked dependency too, so a held publish lane is auto-retried
+   once its upload lands in a later pass.)
 2. **Multi-slide canvas** — begin the real multi-slide composer (add/remove/
    reorder slides, 9:16 canvas). Much larger; see `feature-parity.md`
    §"Stories composer".
 3. After Stories richness is sufficient, advance to the **Calls** area
    (`feature-parity.md` §"Calls").
 
+(`outbox-flush-retry-on-blocked` ✅ shipped 2026-06-28 — this run; the `OutboxFlushWorker` now
+reschedules (WorkManager `Result.retry()`) when any lane stopped on a **blocked dependency**, not
+only a transient failure, via the new pure `OutboxFlushPlan.outcome(reports)` building block.
+Closes the cross-pass gating gap so a dependent held early in a pass is auto-retried once its
+prerequisite is delivered later in the same/next pass. See run log.)
 (`media-upload-cancel` ✅ shipped 2026-06-28 — this run; removing the offline placeholder now
 `MediaUploadQueue.cancel`s its durable `UPLOAD_MEDIA` row + blob (row discarded first, then
 bytes; unknown cmid inert), closing the orphan-leak gap left by `story-composer-offline-media`.
@@ -148,6 +161,38 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-28 — slice `outbox-flush-retry-on-blocked` ✅
+- **Branch:** `claude/apps/android/outbox-flush-retry-on-blocked` (off `origin/main` @ `50c198e9`).
+- **Housekeeping (step 0):** prior run's PR **#998** (`media-upload-cancel`) was open + behind main
+  (main had gained iOS-only commits). Rebased it cleanly on `origin/main` (no code conflicts —
+  iOS-only upstream), pushed, confirmed CI run `28323140213` **success** + `mergeable_state: clean`
+  + local `meeshy.sh check` **BUILD SUCCESSFUL** (836 tasks), then **squash-merged to `main`**
+  (`50c198e9`, PR #998). Branched this slice off the freshened `main`.
+- **What:** closes the cross-pass gating gap flagged in "Next" #1 — `OutboxFlushWorker.doWork`
+  returned `Result.retry()` only when a lane stopped on a **transient** failure, ignoring a lane
+  that stopped on a **blocked dependency**. Because lanes drain in a fixed order, a dependent (a
+  media story/message gated via `dependsOn`) can be `BLOCKED` early in a pass while its prerequisite
+  `UPLOAD_MEDIA` row delivers *later in the same pass*; without a retry the now-satisfiable
+  dependent sat until an unrelated trigger fired.
+- **Added / changed (production, `apps/android` only):**
+  - `OutboxFlushPlan.outcome(reports)` (`:sdk-core`, stateless building block) + `FlushOutcome`
+    enum — pure decision: `RETRY` when **any** `DrainReport` stopped on a transient failure **or**
+    a blocked dependency, else `SUCCESS`. Forward progress is guaranteed: each retry delivers the
+    dependent or cascade-exhausts it once the prerequisite gives up (`EXHAUSTED` → verdict `FAILED`,
+    never `BLOCKED`), so the loop terminates.
+  - `OutboxFlushWorker.doWork` now collects each lane's `DrainReport` into a list and delegates the
+    WorkManager outcome to `OutboxFlushPlan.outcome` (the untestable worker glue stays thin; the
+    decision is the pure, fully-covered function).
+- **TDD (red → green):** `OutboxFlushPlanTest` +9 — empty pass / single clean lane / transient-only /
+  blocked-only / both flags / many clean lanes / one transient among clean / one blocked among clean /
+  deliveries+exhaustions without a stop signal never retry. Branch sweep: both arms of the `||`,
+  `.any{}` true and false, recorded as `tests=9 failures=0` in the JUnit report.
+- **Verification:** `./apps/android/meeshy.sh check` (assembleDebug + all unit tests) **BUILD
+  SUCCESSFUL**. Diff = `apps/android` only, 1 prod file added + 1 prod file edited + 1 test file.
+- **Reviewer gate:** PASS — scope clean, behavioural non-tautological tests, SDK purity respected
+  (pure stateless decision in `:sdk-core`; the "when to retry" rule extracted out of the worker),
+  single source of truth (one decision point), no coverage floor lowered.
 
 ### 2026-06-28 — slice `media-upload-cancel` ✅
 - **Branch:** `claude/apps/android/media-upload-cancel` (off `origin/main` @ `a970f979`).
