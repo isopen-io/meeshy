@@ -54,7 +54,7 @@ enum TranscriptionPermission: Equatable {
 
 // MARK: - Transcription Error
 
-enum TranscriptionError: LocalizedError {
+enum TranscriptionError: LocalizedError, Equatable {
     case permissionDenied
     case recognizerUnavailable(language: String)
     case onDeviceNotSupported(language: String)

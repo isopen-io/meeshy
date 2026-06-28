@@ -215,7 +215,7 @@ extension CallStats {
 /// half-open self-heal and the `.connecting` watchdog can be unit-tested without
 /// a live `RTCPeerConnection` or device. `CallManager` owns the timers and the
 /// side effects (ICE restart, end-call); this type owns only the *decision*.
-enum CallReliabilityPolicy {
+nonisolated enum CallReliabilityPolicy {
 
     /// §5.8 — half-open media detection. We keep `.connected` immediately on
     /// `RTCPeerConnectionState.connected` for snappy UX, but a real half-open
