@@ -49,29 +49,49 @@ durable file-bytes store. The shared outbox carries a `String` payload, so an
 (Room, DB v5→v6 via the existing destructive fallback) plus the `MediaBlobStore`
 building block (`put`/`get`/`remove`, keyed by the upload row's cmid, reusing
 `MediaUploadItem` as the single bytes shape) persist the file so a media attachment
-queued **fully offline** survives process death. The `MEDIA`-lane sender that reads
-this store back, uploads, and returns `SuccessWithId(realMediaId)` is the next brick.
+queued **fully offline** survives process death. Latest loop (`media-upload-sender`)
+lands the **rest of the producer half at the SDK layer**: a new
+`OutboxKind.UPLOAD_MEDIA`, a pure `MediaUploadSender.send(item, upload)` mapping the
+four delivery outcomes (blob gone → permanent; offline → transient; empty result →
+permanent; real id → `SuccessWithId(realMediaId)`), a `MediaUploadQueue.enqueue(item)`
+building block that writes the bytes to `MediaBlobStore` then queues an `UPLOAD_MEDIA`
+row on the `MEDIA` lane (blob + row share one `cmid`, returned as the dependency key),
+and the `OutboxFlushWorker` wiring: a `MEDIA`-lane sender (reads the blob, uploads via
+`MediaRepository`, `remove`s the bytes once no longer retryable), `MEDIA` drained
+**before** `STORY`, and `onExhausted` dropping the blob so a dead upload never leaks
+bytes. The whole durable offline upload→publish chain now functions end-to-end at the
+SDK layer — only the **composer wiring** remains.
 
 ## Next slice (pick one for the next run)
 
 Ordered by value:
-1. **`UPLOAD_MEDIA` kind + `MEDIA`-lane sender (the rest of the producer half)** — the
-   durable file-bytes store now exists (`media-blob-store`, this run). Remaining: add an
-   `OutboxKind.UPLOAD_MEDIA`, an enqueue that writes the bytes via
-   `MediaBlobStore.put(cmid, item)` + an outbox `UPLOAD_MEDIA` row on the `MEDIA` lane, a
-   `MEDIA`-lane `MutationSender` in `OutboxFlushWorker` that reads the blob back, uploads
-   via `MediaRepository.upload`, returns `SuccessWithId(realMediaId)` and `remove`s the
-   blob, and **add `OutboxLanes.MEDIA` to the worker's lane list, drained BEFORE
-   `STORY`**. Then wire the composer to enqueue the
-   `upload → publish(dependsOn=upload cmid, placeholder=upload cmid)` chain so a media
-   story is publishable fully offline. Also: a `BLOCKED` dependency doesn't set
-   `anyTransient`, so a held lane isn't auto-retried — revisit then.
+1. **Composer offline-media chain wiring (the last brick of the producer half)** — the
+   SDK chain is now complete (`media-upload-sender`, this run): `MediaUploadQueue.enqueue`
+   + the `MEDIA`-lane sender + `SuccessWithId` graft + dependency gating all exist.
+   Remaining is **product orchestration in `:feature:stories`**: change
+   `StoryComposerViewModel.onMediaPicked` so that, **when offline / preferring durability**,
+   it calls `MediaUploadQueue.enqueue(item)` (returns the upload `cmid`) and stages a
+   *placeholder* attachment in the draft keyed by that cmid; `publish()` then enqueues a
+   `PUBLISH_STORY` row with `dependsOn = uploadCmid` and `mediaIds = [uploadCmid]`
+   (placeholder), so the drainer grafts the real id once the upload lands. Decide the
+   policy: always-durable vs the current synchronous upload-then-append when online (the
+   synchronous path already works). Also: a `BLOCKED` dependency doesn't set
+   `anyTransient`, so a held publish lane isn't auto-retried by WorkManager once its
+   upload lands mid-pass — revisit (the upload's own `SuccessWithId` re-kick, or have a
+   `stoppedOnBlockedDependency` report request a retry).
 2. **Multi-slide canvas** — begin the real multi-slide composer (add/remove/
    reorder slides, 9:16 canvas). Much larger; see `feature-parity.md`
    §"Stories composer".
 3. After Stories richness is sufficient, advance to the **Calls** area
    (`feature-parity.md` §"Calls").
 
+(`media-upload-sender` ✅ shipped 2026-06-28 — this run; the rest of the producer half
+at the SDK layer — `OutboxKind.UPLOAD_MEDIA`, the pure `MediaUploadSender` outcome map,
+the `MediaUploadQueue.enqueue` building block, and the `OutboxFlushWorker` `MEDIA`-lane
+sender drained before `STORY` with blob cleanup on delivery / exhaustion. The durable
+offline upload→publish chain now works end-to-end at the SDK layer. See run log.)
+(`media-blob-store` ✅ shipped 2026-06-28 — see run log; the durable file-bytes store,
+first brick of the producer half.)
 (`outbox-produced-id-writeback` ✅ shipped 2026-06-27 — this run; a prerequisite's
 `SendResult.SuccessWithId(producedId)` now grafts the real id into every still-queued
 dependent's payload (placeholder = the prerequisite cmid) before the gate opens, via
@@ -109,6 +129,66 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-28 — slice `media-upload-sender` ✅
+- **Branch:** `claude/apps/android/media-upload-sender` (off `origin/main` @ `a3d39a3e`).
+- **Housekeeping (step 0):** no open `claude/apps/android/*` PR from a prior run
+  (`search_pull_requests is:open head:claude/apps/android` → 0). `main` was fresh (last
+  Android merge `#990 media-blob-store`); branched directly off it.
+- **What:** the **rest of the producer half** flagged in "Next" #1 — at the SDK layer,
+  the durable offline upload→publish chain now functions end-to-end. The drainer's
+  dependency-gating (`outbox-dependency-gating`) and produced-id graft
+  (`outbox-produced-id-writeback`) and the durable bytes store (`media-blob-store`) were
+  already in place; this slice adds the `UPLOAD_MEDIA` kind, its delivery logic, its
+  enqueue, and the worker wiring that ties them together. Surpasses iOS, which uploads
+  synchronously and cannot queue a media attachment while offline.
+- **Added / changed (production, `apps/android` only):**
+  - `OutboxKind.UPLOAD_MEDIA` (new enum value; `OutboxLanes.MEDIA` already existed from
+    `outbox-dependency-gating`).
+  - `MediaUploadSender` (`:sdk-core/media`, new, pure) — `send(item, upload): SendResult`
+    mapping the four outcomes: `item == null` (blob gone) → `PermanentFailure` **without
+    calling upload**; transport `Failure` → `TransientFailure`; `Success` with no usable
+    (blank/empty) id → `PermanentFailure`; `Success` with a real id → `SuccessWithId`
+    (first id). Kept out of the worker so the decision is JVM-testable.
+  - `MediaUploadQueue` (`:sdk-core/media`, new building block) — `enqueue(item): String`
+    writes the bytes to `MediaBlobStore` **first**, then queues an `UPLOAD_MEDIA` row on
+    the `MEDIA` lane; blob + row share one fresh `cmid` (= `targetId`), returned as the
+    dependency key a dependent publish references. Blob-before-row so the row never exists
+    without its bytes.
+  - `OutboxFlushWorker` — injects `MediaRepository` + `MediaBlobStore`; a `MEDIA`-lane
+    `UPLOAD_MEDIA` sender (looks the blob up, `MediaUploadSender.send`, `remove`s the bytes
+    on any non-transient outcome); `OutboxLanes.MEDIA` added to the lane list **before**
+    `STORY`; `onExhausted` converted to a `when` that drops the blob for an exhausted
+    `UPLOAD_MEDIA` row (no byte leak when an upload gives up).
+- **Tests (+10, red→green):**
+  - `MediaUploadSenderTest` (pure) +7 — gone blob → permanent + upload never called;
+    transport failure → transient; delivered → `SuccessWithId(realId)`; multiple produced
+    → first id; empty success → permanent; blank id → permanent; the stored item is the
+    one handed to upload.
+  - `MediaUploadQueueTest` (Robolectric, real DB) +3 — enqueue stores the bytes
+    retrievable by the returned cmid (bytes/name/mime); queues exactly one
+    `UPLOAD_MEDIA`/`MEDIA`/`PENDING` row keyed by the cmid (= targetId, no `dependsOn`);
+    independent enqueues produce distinct rows + blobs.
+- **Edge cases covered:** absent blob (gone → permanent, no upload, no crash); empty +
+  blank-id upload results (boundary on "no usable media"); transient vs permanent
+  classification (retry vs abandon); first-of-many id selection; blob-before-row ordering;
+  independent keys isolated. (No `viewModelScope` here — pure object + mechanical enqueue.)
+- **Verify:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL in 3m39s** (full
+  `assembleDebug` — incl. the worker's new Hilt deps — + all module JVM unit tests; 836
+  tasks). TEST XMLs: `MediaUploadSenderTest` 7/7, `MediaUploadQueueTest` 3/3 —
+  failures=0 errors=0.
+- **Reviewer:** PASS — scope `apps/android` only (2 prod edits + 2 new prod + 2 new test,
+  all under `sdk-core/`); behavioural tests through the public API (pure `send` outcomes,
+  `enqueue` observable rows + blobs), no tautologies, no floor lowered; SDK purity (the
+  outcome map + enqueue are stateless building blocks in `:sdk-core`; no product "when to
+  upload" rule — that stays in the composer); single source of truth (reuses
+  `MediaBlobStore`, `MediaRepository.upload`, the one outbox, `SendResult`, `OutboxIds` —
+  no second queue / bytes shape); Instant-App N/A (no UI; makes durable offline optimism
+  *capable*); Kotlin style (immutable, early returns, exhaustive `when`, plain glue in the
+  worker). Surpasses iOS (durable offline media upload vs synchronous-only).
+- **Follow-up (next slice):** nothing enqueues an `UPLOAD_MEDIA` row from the UI yet —
+  wire the composer's offline-media chain (`MediaUploadQueue.enqueue` + a publish that
+  `dependsOn` the upload cmid with it as the placeholder media id). See "Next slice" #1.
 
 ### 2026-06-28 — slice `media-blob-store` ✅
 - **Branch:** `claude/apps/android/media-blob-store` (off `origin/main` @ `30b6130b`).

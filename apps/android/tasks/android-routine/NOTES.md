@@ -392,3 +392,19 @@ Append-only log of gotchas and decisions that save time next run.
   blob is transient (it re-queues), no bespoke migration needed. Assert bytes with
   `assertThat(actual.bytes).isEqualTo(expected)` (Truth does an array content compare),
   not entity equality.
+
+- **Worker senders stay thin; the *decision* moves to a pure object
+  (`media-upload-sender`).** `OutboxFlushWorker`'s sender lambdas aren't unit-tested
+  (they're WorkManager glue). For a sender with real branching (blob gone / offline /
+  empty result / real id), extract a pure `MediaUploadSender.send(item, upload)` that
+  returns a `SendResult` and unit-test all four arms with a fake `upload` lambda; the
+  worker lambda is then just "look the blob up → `send` → `remove` on any non-transient
+  outcome". The producer-half enqueue (`MediaUploadQueue.enqueue`) writes the blob
+  **before** the outbox row so a queued upload never lacks its bytes, and shares **one
+  `cmid`** across blob + row + (future) dependent publish placeholder. Blob cleanup is
+  symmetric: drop it on `SuccessWithId`/`PermanentFailure` in the sender glue **and** in
+  `onExhausted` (repeated transient → exhausted keeps the bytes until the give-up), or it
+  leaks. Gotchas: `UploadedMedia` lives in `me.meeshy.sdk.model` (not `.media`); and
+  `:sdk-core`'s `media` package does **not** use `explicitApi`-style `public` modifiers
+  (bare `class`/`object`) while the `outbox` package does — match the *package-local*
+  convention, don't blindly add `public`.

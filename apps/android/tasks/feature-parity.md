@@ -112,17 +112,23 @@ file-by-file audit — every one of the 673 iOS files was read in full.
       when undecodable/no-media/absent/identity) and the generic
       `OutboxRepository.rewriteDependents` (PENDING dependents only). So a media story
       queued **offline before its upload finished** publishes with the correct id.
-      Pending follow-up (producer half): nothing emits `SuccessWithId` yet — needs a
-      durable `UPLOAD_MEDIA` `MEDIA`-lane sender (drained before `STORY`) + composer
-      wiring.
+      (Producer half landed in `media-upload-sender` — see below.)
 - [x] **Durable media-blob store** (`media-blob-store`): the first brick of the producer
       half. The outbox payload is a `String`, so the raw bytes of a queued media upload
       live in a dedicated `MediaBlobEntity`/`MediaBlobDao` (Room, DB v5→v6) keyed by the
       upload row's `cmid`, fronted by the `MediaBlobStore` building block
       (`put`/`get`/`remove`, reusing `MediaUploadItem` as the single bytes shape). Lets a
       media attachment be enqueued **fully offline**, bytes surviving process death.
-      Remaining producer half: the `UPLOAD_MEDIA` kind + `MEDIA`-lane sender that reads
-      this store, uploads, returns `SuccessWithId(realMediaId)`, and `remove`s the blob.
+- [x] **Durable media-upload sender** (`media-upload-sender`): the rest of the producer
+      half at the SDK layer. `OutboxKind.UPLOAD_MEDIA` + the pure `MediaUploadSender`
+      (`send(item, upload)` → blob gone/empty → permanent, offline → transient, real id →
+      `SuccessWithId`) + the `MediaUploadQueue.enqueue(item)` building block (writes the
+      bytes then queues an `UPLOAD_MEDIA` row on the `MEDIA` lane, blob + row sharing one
+      `cmid`) + the `OutboxFlushWorker` wiring (a `MEDIA`-lane sender drained **before**
+      `STORY`, blob removed on delivery and on exhaustion). The durable offline
+      upload→publish chain now works end-to-end at the SDK layer. **Remaining:** composer
+      wiring (enqueue the upload + a publish that `dependsOn` it with the cmid as the
+      placeholder media id).
 - [ ] TUS resumable uploads in a **dedicated `WorkManager` chain** (foreground
       progress); message-send items `dependsOn` the upload (gating now in place)
 - [x] `MessageStateMachine` (pure, monotonic 8-state delivery FSM) — 9 tests

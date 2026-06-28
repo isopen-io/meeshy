@@ -13,6 +13,9 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.media.MediaBlobStore
+import me.meeshy.sdk.media.MediaRepository
+import me.meeshy.sdk.media.MediaUploadSender
 import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.AddReactionRequest
@@ -45,6 +48,8 @@ class OutboxFlushWorker @AssistedInject constructor(
     private val reactionApi: ReactionApi,
     private val conversationApi: ConversationApi,
     private val postApi: PostApi,
+    private val mediaRepository: MediaRepository,
+    private val mediaBlobStore: MediaBlobStore,
     private val json: Json,
 ) : CoroutineWorker(context, params) {
 
@@ -56,8 +61,10 @@ class OutboxFlushWorker @AssistedInject constructor(
             outboxRepository,
             senders,
             onExhausted = { row ->
-                if (row.kindEnum == OutboxKind.SEND_MESSAGE) {
-                    messageRepository.markSendFailed(row.cmid)
+                when (row.kindEnum) {
+                    OutboxKind.SEND_MESSAGE -> messageRepository.markSendFailed(row.cmid)
+                    OutboxKind.UPLOAD_MEDIA -> mediaBlobStore.remove(row.cmid)
+                    else -> Unit
                 }
             },
             graftProducedId = PublishMediaWriteBack::graft,
@@ -69,6 +76,7 @@ class OutboxFlushWorker @AssistedInject constructor(
             OutboxLanes.CONVERSATION_PREFS,
             OutboxLanes.PRESENCE,
             OutboxLanes.SOCIAL,
+            OutboxLanes.MEDIA,
             OutboxLanes.STORY,
             OutboxLanes.PROFILE,
             OutboxLanes.SETTINGS,
@@ -166,6 +174,14 @@ class OutboxFlushWorker @AssistedInject constructor(
                 is NetworkResult.Success -> SendResult.Success
                 is NetworkResult.Failure -> SendResult.TransientFailure
             }
+        },
+        OutboxKind.UPLOAD_MEDIA to MutationSender { row ->
+            val item = mediaBlobStore.get(row.cmid)
+            val result = MediaUploadSender.send(item) { mediaRepository.upload(listOf(it)) }
+            if (result !is SendResult.TransientFailure) {
+                mediaBlobStore.remove(row.cmid)
+            }
+            result
         },
     )
 
