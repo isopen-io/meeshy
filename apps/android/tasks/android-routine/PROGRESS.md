@@ -106,11 +106,23 @@ on an offline upload.
 ## Next slice (pick one for the next run)
 
 Ordered by value:
-1. **Multi-slide canvas** — begin the real multi-slide composer (add/remove/
-   reorder slides, 9:16 canvas). Much larger; see `feature-parity.md`
-   §"Stories composer".
-2. After Stories richness is sufficient, advance to the **Calls** area
+1. **Slide-deck ViewModel wiring** — wire the new pure `StorySlideDeck` reducer into
+   `StoryComposerViewModel` (mint slide ids, expose the deck in `StoryComposerUiState`)
+   and add a **slide mini-preview strip** to `StoryComposerScreen` (add/duplicate/
+   remove/reorder/select gestures). Makes the multi-slide model real in the UI.
+2. **9:16 canvas** — the per-slide canvas (pinch-zoom + drag-pan, FAB + bottom-band
+   toolbar). Larger; see `feature-parity.md` §"Stories composer".
+3. After Stories richness is sufficient, advance to the **Calls** area
    (`feature-parity.md` §"Calls").
+
+(`story-slide-deck` ✅ shipped 2026-06-28 — this run; the **pure foundation of the multi-slide
+composer**. New `StorySlide` model + `StorySlideDeck` reducer (`:feature:stories`): structural
+CRUD — `addSlide`/`duplicate`/`removeSlide`/`move`/`select` — with the iOS **≤10-slides cap**
+(`MAX_SLIDES`/`canAddSlide`/`isFull`) and the **always-≥1-slide** invariant (`canRemoveSlide`,
+removal reselects the slide that takes the removed one's place). Total functions: every
+inapplicable op (cap reached, last slide, unknown id, no-op move) returns the same instance.
+Ids are caller-supplied so the reducer stays pure/deterministic. The ViewModel/screen wiring +
+mini-preview strip is the next slice. See run log.)
 
 (`story-composer-multi-pending` ✅ shipped 2026-06-28 — this run; the composer's offline staging is now
 **multi-pending**: `StoryComposerUiState.pendingUploads: List<PendingMediaUpload>`, every transient-failed
@@ -182,6 +194,49 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-28 — slice `story-slide-deck` ✅
+- **Branch:** `claude/apps/android/story-slide-deck` (off `origin/main` @ `bf4cd477`).
+- **Housekeeping (step 0):** no open `claude/apps/android/*` PR (`search_pull_requests is:open
+  head:claude/apps/android` → 0; prior loop `story-composer-multi-pending` already squash-merged as
+  #1012). HEAD == `origin/main` (0/0). Branched directly off the freshened `main`.
+- **What:** opens the **multi-slide composer** ("Next" #1, feature-parity §E line 433) with its pure,
+  provably-correct foundation — the structural slide-deck reducer. iOS's `StoryComposerViewModel` owns
+  `slides` + slide CRUD (`addSlide`/`removeSlide`/`duplicateSlide`/`selectSlide`/`moveSlide`) with
+  `maxSlides=10` and `canAddSlide` (<10); this slice ports that as a **pure immutable model** so the
+  rules are unit-tested before any canvas glue. Kept thin (no UI) per the established "primitive first,
+  UX next slice" pattern (cf. `outbox-multi-dependency`, `media-blob-store`).
+- **Added (production, `apps/android` only):**
+  - `StorySlide` (`:feature:stories`) — `data class(id, text="", mediaIds=[])`, one slide's identity +
+    content (richer elements layer on later, reusing the id).
+  - `StorySlideDeck` (`:feature:stories`) — immutable deck with two enforced invariants (always ≥1
+    slide; ≤`MAX_SLIDES`=10, both checked in `init`). Derived: `size`/`isFull`/`canAddSlide`/
+    `canRemoveSlide`/`selectedIndex`/`selectedSlide`. Total ops returning the same instance when
+    inapplicable: `addSlide(newId)` (append+select; inert at cap or dup id), `duplicate(sourceId,
+    newId)` (clone content after source + select; inert at cap / unknown source / dup id),
+    `removeSlide(id)` (inert if last or unknown; removal reselects the slide taking the removed one's
+    place, new-last when removing the last), `move(id, toIndex)` (clamps index, preserves selection by
+    id, inert on unknown/no-op), `select(id)` (inert on unknown/already-selected). `single(id)` factory.
+    Ids are caller-supplied → pure & deterministic (no clock/random).
+- **TDD (red → green):** `StorySlideDeckTest` +24 — `single`/invariants (empty + absent-selectedId
+  rejected); add (append+select / cap-inert / dup-id-inert); duplicate (clone content + insert-after +
+  select / unknown-inert / cap-inert / collision-inert); remove (keep-other-selection / reselect-taker /
+  reselect-new-last / single-inert / unknown-inert); move (reorder + selection-by-id / clamp-negative /
+  clamp-over / same-index-inert / unknown-inert); select (switch / unknown-inert); selectedIndex+slide.
+  Branch sweep: every cap/boundary/unknown/last-slide/inert arm. No floor lowered, no test weakened.
+- **Verification:** `:feature:stories:testDebugUnitTest` (`StorySlideDeckTest`) **24/24 green**
+  (failures=0 errors=0); full `./apps/android/meeshy.sh check` (`assembleDebug` + all
+  `testDebugUnitTest`) **BUILD SUCCESSFUL**. Diff = `apps/android` only (1 new prod file, 1 new test).
+- **Reviewer gate:** PASS — scope clean (apps/android only), behavioural non-tautological tests through
+  the public API (deck ops → observable `slides`/`selectedId`), SDK purity (the structural deck rules are
+  composer **product** state in `:feature:stories`, like `StoryComposerDraft`; no orphan in `:sdk-core`),
+  single source of truth (one deck model gates add/remove caps + selection — no second slide list),
+  immutable UDF-friendly value, total functions (no throw on inapplicable op), Kotlin style (immutable,
+  early returns, `coerceIn`). Surpasses the deprecated iOS `StorySlideManager` SSoT violation by being a
+  single pure model from the start.
+- **Note / next:** pure foundation only — nothing renders it yet. Next: wire it into
+  `StoryComposerViewModel` (mint ids, expose in `StoryComposerUiState`) + a **slide mini-preview strip**
+  in `StoryComposerScreen` ("Next" #1). Then the 9:16 canvas ("Next" #2).
 
 ### 2026-06-28 — slice `story-composer-multi-pending` ✅
 - **Branch:** `claude/apps/android/story-composer-multi-pending` (off `origin/main` @ `997ee729`).

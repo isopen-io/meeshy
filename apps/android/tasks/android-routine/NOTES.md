@@ -454,3 +454,29 @@ Append-only log of gotchas and decisions that save time next run.
   and `isEqualTo("x")` → `containsExactly("x")` (same adapting-not-weakening pattern as the offline
   slice). The composer **UX** relaxation (`pendingUploads: List`, drop the single-pending guard) is a
   separate slice — splitting the SDK primitive from the UI kept this diff thin and every prior test green.
+
+## 2026-06-28 — multi-slide composer foundation (`story-slide-deck`)
+- **Open a big feature with its pure structural model, not its UI.** The multi-slide composer
+  (feature-parity §E line 433) is large; the first slice is `StorySlideDeck` — an immutable
+  reducer owning the slide CRUD rules — with **no wiring yet** (same "primitive first, UX next
+  slice" pattern as `outbox-multi-dependency` / `media-blob-store`). Keeps the diff tiny and the
+  rules 100% JVM-tested before any Compose canvas glue exists to obscure a bug.
+- **Two invariants, enforced in `init`:** a deck always holds **≥1 slide** and **≤`MAX_SLIDES`=10**
+  (iOS `maxSlides`). `init { require(slides.isNotEmpty()); require(slides.any{it.id==selectedId}) }`
+  — construction-time guards mean every op can assume a valid deck (no defensive nulls downstream).
+  `selectedIndex`/`selectedSlide` are total because the selected id is invariant-present.
+- **Total functions over throwing.** Every op returns `this` (same instance) when inapplicable —
+  cap reached (`addSlide`/`duplicate`), last slide or unknown id (`removeSlide`), unknown id / no-op
+  (`move`/`select`). Tests assert `isSameInstanceAs(deck)` for the inert arms — a strong, cheap
+  behavioural check that the reducer didn't allocate a spurious new state. Mirrors the iOS
+  composer's silent-guard CRUD without porting its mutable `@MainActor` state (the deprecated
+  `StorySlideManager` was an explicit SSoT violation — Android uses one pure model from the start).
+- **Caller-supplied ids keep the reducer pure.** `addSlide(newId)`/`duplicate(sourceId, newId)`
+  take the new id as a param rather than minting a UUID inside — no `Math.random`/clock, so the
+  reducer is deterministic and the ViewModel (next slice) owns id minting. `removeSlide` reselects
+  the slide that **takes the removed one's place** (`next[index.coerceAtMost(lastIndex)]`), i.e. the
+  former neighbour, and the new-last when the selected last is removed — the natural carousel UX.
+- **Placement = `:feature:stories` (product), not `:sdk-core`.** The deck encodes composer UX rules
+  ("when can I add", "always keep one", "what gets selected after a remove") → product orchestration,
+  same module as `StoryComposerDraft`. An SDK atom would be agnostic to those policies. Grain test
+  from `packages/MeeshySDK/CLAUDE.md` applied.
