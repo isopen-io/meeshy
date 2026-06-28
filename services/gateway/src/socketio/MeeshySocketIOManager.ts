@@ -760,7 +760,7 @@ export class MeeshySocketIOManager {
       });
 
       socket.on(CLIENT_EVENTS.ADMIN_AGENT_UNSUBSCRIBE, (callback?: (response: SocketIOResponse) => void) => {
-        this.adminAgentHandler.handleUnsubscribe(socket, callback);
+        this.adminAgentHandler.handleUnsubscribe(socket, callback).catch((error) => logger.error('[ADMIN_AGENT_UNSUBSCRIBE] Error:', error));
       });
 
       socket.on(CLIENT_EVENTS.REACTION_ADD, async (data, callback) => {
