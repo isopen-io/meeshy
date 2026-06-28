@@ -79,7 +79,7 @@ The routine ticks `[x]` there as each file reaches 92% line+branch + reviewer PA
 |-----|----------|:-----:|:------------:|
 | Gateway | [`manifests/gateway.md`](manifests/gateway.md) | 316 | 228 |
 | Translator | [`manifests/translator.md`](manifests/translator.md) | 110 | 86 |
-| Web | [`manifests/web.md`](manifests/web.md) | 1091 | 728 |
+| Web | [`manifests/web.md`](manifests/web.md) | 1091 | 712 |
 | iOS | [`manifests/ios.md`](manifests/ios.md) | 346 | 250 |
 | Android | [`manifests/android.md`](manifests/android.md) | 148 | 120 |
 | Shared | [`manifests/shared.md`](manifests/shared.md) | 78 | 60 |
@@ -154,7 +154,7 @@ Measured 2026-06-14. Commands run after `pnpm install` + `cd packages/shared && 
 
 | Suite | Command | Line % | Branch % | Recorded |
 |-------|---------|:------:|:--------:|:--------:|
-| web | `pnpm --filter web test:coverage` | 42.97 | 35.17 | 2026-06-22 (post P2 Theme/accent color × web; +1 test for use-resolved-theme dark→light transition; date-format+tag-colors already at 100%; stmts:42.21/branch:35.17/funcs:39.16/lines:42.97; threshold floor unchanged lines:42/branches:34/statements:41/functions:38 — new measurements already above floor) |
+| web | `pnpm --filter web test:coverage` | 42.97+ | 35.17+ | 2026-06-28 (post markdown service slice; 291 new tests covering 16 files at 100% lines/≥92% branches; global floor unchanged lines:42/branches:34/statements:41/functions:38 — floors remain valid; markdown module at 100%lines/96.81%branches) |
 | gateway | `pnpm --filter gateway test:coverage` | 72.55 (local) / ~68 (CI est.) | 68.22 (local) / ~63.5 (CI est.) | 2026-06-27 (post P2 Notifications × gateway PushNotificationService.ts ☑ — 99.02%lines/90.42%branches; 65 tests +30 new; local stmts=72.42%/branches=68.22%/funcs=72.51%/lines=72.55%; threshold floor unchanged lines:67/branches:63/statements:67/functions:67 — floors already above CI-calibrated bun gap) |
 | translator | `.venv/bin/python -m pytest tests/ -m "not slow and not gpu" --cov=src` | ~39 | n/a | 2026-06-19 (post P1 Voice/audio × translator; +127 tests covering 6 modules; fail_under ratcheted 37→39; diarization GPU methods pragma'd) |
 | iOS | `./apps/ios/meeshy.sh test` | n/a | n/a | not measurable (no macOS/Xcode in CI env) |

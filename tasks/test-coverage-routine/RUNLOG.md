@@ -2167,3 +2167,33 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Commits on branch `claude/coverage/p2-tracking-update`: `9adb80d2` (fixes 1-5), `63982dd8` (fixes 6-7)
 - PROGRESS.md: P0 Enc&attach × shared cell flipped ⚠→☑
 - Commit: 84afd057 (PR #980 squash-merged to main 2026-06-28T01:32:15Z)
+
+---
+
+## 2026-06-28T00:00Z — Web markdown service (16 modules)
+
+- Slice: `apps/web/services/markdown/**` — 16 files (cache, index, markdown-parser, utils, parsers/{block,inline,table}-parser, renderers/{block,inline,table}-renderer, rules/{constants,emoji-map,patterns}, security/{sanitizer,validators}, types)
+- Branch: `claude/coverage/web-markdown-service`
+- Result: ☑ done
+- Coverage: markdown service module line 0%→100%, branch 0%→96.81% (all 16 files ≥92% line+branch)
+  - cache.ts 100%/100%
+  - index.ts 100%/100%
+  - markdown-parser.ts 100%/92.68%
+  - utils.ts 100%/100%
+  - parsers/block-parser.ts 100%/96.66%
+  - parsers/inline-parser.ts 100%/100%
+  - parsers/table-parser.ts 100%/100%
+  - renderers/block-renderer.ts 100%/97.56%
+  - renderers/inline-renderer.ts 100%/92.3%
+  - renderers/table-renderer.ts 100%/100%
+  - rules/constants.ts 100%/100%
+  - rules/emoji-map.ts 100%/100%
+  - rules/patterns.ts 100%/100%
+  - security/sanitizer.ts 100%/100%
+  - security/validators.ts 100%/100%
+  - types.ts 100%/100% (type-only, exercised by typed MarkdownNode usage)
+- Tests added: 291 (`apps/web/services/__tests__/markdown/markdown-service.test.ts`, new file)
+- Production code changes: 3 files × 1 `/* istanbul ignore next */` comment each (cache.ts defensive null guard on Map iterator when size >= MAX_CACHE_SIZE; table-renderer.ts default param on private functions whose callers always pass explicitly; utils.ts ternary false branch on /^(\s*)/ which always matches) — no behavior changed
+- Reviewer: PASS (rounds: 1)
+- Notes: Pre-existing 23 suite failures (all @meeshy/shared build issues) — none caused by this slice, verified before/after comparison.  TABLE_SEPARATOR_PATTERN regex limitation documented in tests (only matches single-column |---| not multi-column |---|---|).
+- Commit: (see PR claude/coverage/web-markdown-service)
