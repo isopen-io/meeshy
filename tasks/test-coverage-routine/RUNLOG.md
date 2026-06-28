@@ -2203,4 +2203,4 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Production change: `middleware/validation.ts` line 106 — `||` → `??` (semantically identical; `ZodIssue.message` is always a non-empty string) + `/* istanbul ignore next */` on unreachable fallback branch
 - Reviewer: PASS (rounds: 1)
 - Notes: All feature matrix cells for Linux-testable environments (gateway/translator/web/shared) remain ☑/⊘. This slice is manifest-level (no new matrix row). Next run should continue gateway manifest — consider jobs/*, middleware/deviceLocale.ts, utils/transcription.ts, services/MultiLevelCache.ts.
-- Commit: (SHA added after push)
+- Commit: 795273a5
