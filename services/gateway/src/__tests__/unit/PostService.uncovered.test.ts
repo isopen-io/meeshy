@@ -21,6 +21,7 @@ jest.mock('../../services/posts/PostAudioService', () => ({
 
 import { PostService } from '../../services/PostService';
 import { PostType, PostVisibility } from '@meeshy/shared/prisma/client';
+import { PostAudioService } from '../../services/posts/PostAudioService';
 
 // ── Factory ────────────────────────────────────────────────────────────────────
 
@@ -84,6 +85,8 @@ const makePrisma = (overrides: Record<string, unknown> = {}) => {
       updateMany: jest.fn<any>().mockResolvedValue({}),
     },
     postMedia: {
+      findFirst: jest.fn<any>().mockResolvedValue(null),
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
       deleteMany: jest.fn<any>().mockResolvedValue({}),
     },
     ...overrides,
@@ -534,5 +537,157 @@ describe('PostService — generateShareToken exhaustion (line 932)', () => {
       'Unable to generate unique share token',
     );
     expect(prisma.trackingLink.findUnique).toHaveBeenCalledTimes(10);
+  });
+});
+
+// ── createPost — audio media processing (lines 181-187) ──────────────────────
+
+describe('PostService — createPost audio media (lines 181-187)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('triggers processPostAudio fire-and-forget when audio media found without mobileTranscription', async () => {
+    const audioMedia = { id: 'audio-media-1', fileUrl: 'https://cdn.example.com/audio.mp3' };
+    const prisma = makePrisma();
+    prisma.post.create.mockResolvedValue(makePost({ id: POST_ID, authorId: AUTHOR_ID }));
+    prisma.post.findUnique.mockResolvedValue(makePost());
+    prisma.postMedia.findFirst.mockResolvedValue(audioMedia);
+
+    const service = makeService(prisma);
+
+    await service.createPost(
+      { type: PostType.POST, visibility: PostVisibility.PUBLIC, mediaIds: ['audio-media-1'] },
+      AUTHOR_ID,
+    );
+
+    expect((PostAudioService.shared.processPostAudio as any)).toHaveBeenCalledWith(
+      expect.objectContaining({ postMediaId: 'audio-media-1', fileUrl: audioMedia.fileUrl }),
+    );
+  });
+
+  it('catches and silences processPostAudio rejection (fire-and-forget .catch path)', async () => {
+    const audioMedia = { id: 'audio-media-1', fileUrl: 'https://cdn.example.com/audio.mp3' };
+    const prisma = makePrisma();
+    prisma.post.create.mockResolvedValue(makePost({ id: POST_ID, authorId: AUTHOR_ID }));
+    prisma.post.findUnique.mockResolvedValue(makePost());
+    prisma.postMedia.findFirst.mockResolvedValue(audioMedia);
+
+    // Make processPostAudio reject to trigger the .catch() callback at line 186-187
+    (PostAudioService.shared.processPostAudio as any).mockRejectedValueOnce(new Error('processing failed'));
+
+    const service = makeService(prisma);
+
+    // createPost must not throw even though processPostAudio rejects
+    await expect(
+      service.createPost(
+        { type: PostType.POST, visibility: PostVisibility.PUBLIC, mediaIds: ['audio-media-1'] },
+        AUTHOR_ID,
+      ),
+    ).resolves.not.toThrow();
+
+    // Flush microtasks so the fire-and-forget .catch() callback runs
+    await Promise.resolve();
+  });
+
+  it('does NOT trigger processPostAudio when no audio media found', async () => {
+    const prisma = makePrisma();
+    prisma.post.create.mockResolvedValue(makePost({ id: POST_ID, authorId: AUTHOR_ID }));
+    prisma.post.findUnique.mockResolvedValue(makePost());
+    prisma.postMedia.findFirst.mockResolvedValue(null); // no audio media
+
+    const service = makeService(prisma);
+
+    await service.createPost(
+      { type: PostType.POST, visibility: PostVisibility.PUBLIC, mediaIds: ['image-media-1'] },
+      AUTHOR_ID,
+    );
+
+    expect((PostAudioService.shared.processPostAudio as any)).not.toHaveBeenCalled();
+  });
+});
+
+// ── createPost — storyEffects.textObjects (lines 203-218) ────────────────────
+
+describe('PostService — createPost storyEffects.textObjects (lines 203-218)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('triggers triggerStoryTextObjectTranslation when textObjects are provided', async () => {
+    const textObjects = [
+      { content: 'Hello world', font: 'bold', size: 16, x: 0, y: 0, color: '#fff', align: 'center', rotation: 0 },
+    ];
+    const prisma = makePrisma();
+    prisma.post.create.mockResolvedValue(makePost({ id: POST_ID, content: undefined }));
+    prisma.post.findUnique.mockResolvedValue(makePost());
+
+    const service = makeService(prisma);
+    const objSpy = jest.spyOn(service as any, 'triggerStoryTextObjectTranslation')
+      .mockResolvedValue(undefined);
+
+    await service.createPost(
+      {
+        type: PostType.STORY,
+        visibility: PostVisibility.PUBLIC,
+        content: undefined,
+        storyEffects: { textObjects },
+      },
+      AUTHOR_ID,
+    );
+
+    expect(objSpy).toHaveBeenCalledWith(POST_ID, textObjects, AUTHOR_ID);
+  });
+
+  it('updates post content for search when textObjects present but no content', async () => {
+    const textObjects = [{ content: 'Hello world', font: 'regular', size: 14, x: 0, y: 0, color: '#000', align: 'left', rotation: 0 }];
+    const prisma = makePrisma();
+    prisma.post.create.mockResolvedValue(makePost({ id: POST_ID, content: undefined }));
+    prisma.post.findUnique.mockResolvedValue(makePost());
+
+    const service = makeService(prisma);
+    jest.spyOn(service as any, 'triggerStoryTextObjectTranslation').mockResolvedValue(undefined);
+
+    await service.createPost(
+      {
+        type: PostType.STORY,
+        visibility: PostVisibility.PUBLIC,
+        content: undefined,
+        storyEffects: { textObjects },
+      },
+      AUTHOR_ID,
+    );
+
+    expect(prisma.post.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: POST_ID },
+      data: { content: 'Hello world' },
+    }));
+  });
+});
+
+// ── recordView — friend filter function (line 533) ────────────────────────────
+
+describe('PostService — recordView with friend requests (line 533)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('filters out the requesting viewer from friend IDs (line 533 filter callback)', async () => {
+    const prisma = makePrisma();
+    // Return a friend request where VIEWER_ID is the sender
+    prisma.friendRequest.findMany.mockResolvedValue([
+      { senderId: VIEWER_ID, receiverId: 'friend-of-viewer' },
+    ]);
+    // Post is public and visible
+    prisma.post.findFirst.mockResolvedValue(makePost({ authorId: AUTHOR_ID }));
+    prisma.postView.findUnique.mockResolvedValue(null); // no existing view
+    prisma.postView.create.mockResolvedValue({ id: 'view-new' });
+
+    const service = makeService(prisma);
+    const result = await service.recordView(POST_ID, VIEWER_ID);
+
+    // recordView succeeded and friend list was built
+    expect(prisma.friendRequest.findMany).toHaveBeenCalled();
+    expect(result).toBe(true);
   });
 });
