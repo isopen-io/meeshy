@@ -834,10 +834,21 @@ export class MeeshySocketIOManager {
       socket.on('disconnecting', (_reason: string) => {
         const disconnectingUserId = this.socketToUser.get(socket.id);
         if (disconnectingUserId) {
-          this.statusHandler.handleSocketDisconnecting(socket.id, (room, event, data) => {
-            // event is always SERVER_EVENTS.TYPING_STOP — cast bypasses union exhaustiveness check
-            this.io.to(room).emit(event as keyof ServerToClientEvents, data as any);
-          });
+          // Build the set of OTHER sockets for this user (excluding the one
+          // that is disconnecting). Passed to handleSocketDisconnecting so it
+          // can suppress typing:stop broadcasts for conversations where the
+          // user is still typing on another device — prevents false indicator
+          // flicker when a user has multiple active sessions.
+          const allUserSockets = this.userSockets.get(disconnectingUserId) ?? new Set<string>();
+          const otherSocketIds = new Set([...allUserSockets].filter(sid => sid !== socket.id));
+          this.statusHandler.handleSocketDisconnecting(
+            socket.id,
+            (room, event, data) => {
+              // event is always SERVER_EVENTS.TYPING_STOP — cast bypasses union exhaustiveness check
+              this.io.to(room).emit(event as keyof ServerToClientEvents, data as any);
+            },
+            otherSocketIds.size > 0 ? otherSocketIds : undefined
+          );
         }
       });
 

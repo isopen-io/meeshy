@@ -1000,7 +1000,7 @@ final class CallManagerIdleTimerProximityTests: XCTestCase {
 /// digits to WebRTC via `sendDTMF`. Without this, the CallKit keypad appears but
 /// pressing digits has no effect — conference PINs and IVR navigation are broken.
 @MainActor
-final class CallManagerDTMFCallKitTests: XCTestCase {
+final class CallManagerCallKitDTMFTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
         let url = URL(fileURLWithPath: #filePath)

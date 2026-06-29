@@ -88,6 +88,7 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
       // Validate input
       const validationResult = requestMagicLinkSchema.safeParse(request.body);
       if (!validationResult.success) {
+        /* istanbul ignore next -- Zod always produces a non-falsy message; the || branch is unreachable */
         return sendBadRequest(reply, validationResult.error.issues[0]?.message || 'Invalid email address');
       }
 
@@ -169,6 +170,7 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
       const validationResult = validateMagicLinkSchema.safeParse({ token: query.token });
 
       if (!validationResult.success) {
+        /* istanbul ignore next -- Zod always produces a non-falsy message; the || branch is unreachable */
         return sendBadRequest(reply, validationResult.error.issues[0]?.message || 'Token is required');
       }
 
@@ -257,6 +259,7 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
       const validationResult = validateMagicLinkSchema.safeParse(request.body);
 
       if (!validationResult.success) {
+        /* istanbul ignore next -- Zod always produces a non-falsy message; the || branch is unreachable */
         return sendBadRequest(reply, validationResult.error.issues[0]?.message || 'Token is required');
       }
 

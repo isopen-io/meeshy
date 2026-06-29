@@ -1214,6 +1214,10 @@ export class MessageHandler {
 
   /**
    * Envoie une réponse de succès
+   *
+   * Wrapped in try-catch: a throwing callback must never propagate up to the
+   * Socket.IO event handler frame, which would tear down the entire socket
+   * connection for an unrelated serialization / client-side bug.
    */
   private _sendResponse(
     callback: ((response: SocketIOResponse<{ messageId: string; clientMessageId?: string; createdAt?: string }>) => void) | undefined,
@@ -1221,31 +1225,35 @@ export class MessageHandler {
   ): void {
     if (!callback) return;
 
-    if (response.success && response.data) {
-      // Phase 4 §6.2 — echo `clientMessageId` back so iOS / web can match the
-      // ACK against their pending optimistic row by cid (the `messageId`
-      // alone is insufficient: the optimistic row has a `cid_*` local id
-      // and only learns the server `messageId` from this very ACK).
-      // `createdAt` is echoed too so the WS-first send path can stamp the
-      // optimistic row with the authoritative server time without waiting
-      // for the `message:new` broadcast.
-      const data = response.data as { id: string; clientMessageId?: string; createdAt?: Date | string };
-      const createdAt = data.createdAt instanceof Date
-        ? data.createdAt.toISOString()
-        : data.createdAt;
-      callback({
-        success: true,
-        data: {
-          messageId: data.id,
-          ...(data.clientMessageId ? { clientMessageId: data.clientMessageId } : {}),
-          ...(createdAt ? { createdAt } : {})
-        }
-      });
-    } else {
-      callback({
-        success: false,
-        error: response.error || 'Failed to send message'
-      });
+    try {
+      if (response.success && response.data) {
+        // Phase 4 §6.2 — echo `clientMessageId` back so iOS / web can match the
+        // ACK against their pending optimistic row by cid (the `messageId`
+        // alone is insufficient: the optimistic row has a `cid_*` local id
+        // and only learns the server `messageId` from this very ACK).
+        // `createdAt` is echoed too so the WS-first send path can stamp the
+        // optimistic row with the authoritative server time without waiting
+        // for the `message:new` broadcast.
+        const data = response.data as { id: string; clientMessageId?: string; createdAt?: Date | string };
+        const createdAt = data.createdAt instanceof Date
+          ? data.createdAt.toISOString()
+          : data.createdAt;
+        callback({
+          success: true,
+          data: {
+            messageId: data.id,
+            ...(data.clientMessageId ? { clientMessageId: data.clientMessageId } : {}),
+            ...(createdAt ? { createdAt } : {})
+          }
+        });
+      } else {
+        callback({
+          success: false,
+          error: response.error || 'Failed to send message'
+        });
+      }
+    } catch (error) {
+      handlerLogger.error('ACK callback threw — socket connection preserved', { error });
     }
   }
 }

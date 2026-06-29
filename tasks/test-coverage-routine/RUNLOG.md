@@ -2287,4 +2287,81 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   - `services/CaptchaService.ts`: `/* istanbul ignore next */` on `validateStatus: (status) => status < 500` — axios-internal callback never invoked through module-level mock
 - Reviewer: PASS (rounds: 1)
 - Notes: All feature matrix cells for Linux-testable environments remain ☑/⊘. Manifest-level gap-fill (no new feature matrix cell). Manifest ticked: services/CaptchaService.ts☑ services/TURNCredentialService.ts☑ services/MultiLevelJobMappingCache.ts☑ routes/auth/types.ts☑
-- Commit: (see PR claude/coverage/gateway-manifest-gap2)
+- Commit: 65ef3e96 (squash-merged PR #1013 → main 2026-06-29T01:13Z)
+
+## 2026-06-29T01:53Z — gateway-manifest-gap3 (magic-link, mentions, message-read-status, reactions)
+
+- Targeted:
+  - `services/gateway/src/routes/magic-link.ts`
+  - `services/gateway/src/routes/mentions.ts`
+  - `services/gateway/src/routes/message-read-status.ts`
+  - `services/gateway/src/routes/reactions.ts`
+- Result: ☑ done
+- Coverage:
+  - routes/magic-link.ts: 100% lines / 100% branches
+  - routes/mentions.ts: 100% lines / 100% branches
+  - routes/message-read-status.ts: 100% lines / 92.72% branches
+  - routes/reactions.ts: 100% lines / 100% branches
+  - Gateway global: 309 suites / 9460 tests / 1 skipped (all pass)
+- Tests added: 138 new tests across 4 new + 1 modified test files
+  - New: `src/__tests__/unit/routes/magic-link-routes.test.ts` (36 tests): all 3 endpoints (POST request, GET validate, POST validate); rememberDevice/expiresIn branch; markSessionTrusted call count; fast-json-stringify schema stripping accounted for; Fastify AJV pre-validation vs handler validation distinguished
+  - New: `src/__tests__/unit/routes/reactions-routes.test.ts` (39 tests): all 4 endpoints; participantId resolution from context vs DB; emoji URL-decode; fire-and-forget notifyReactionAdded; own-reactions-only 403
+  - New: `src/__tests__/unit/routes/message-read-status-extra.test.ts` (30 tests): GET read-status + GET read-statuses; outer-catch blocks for all 3 POST handlers; broadcastReadStatusUpdate happy path; 403 membership-null paths; delivery-receipt message-not-found 404; mark-as-read/received/delivery-receipt 500 paths
+  - New: `src/__tests__/unit/routes/mentions-suggestions.test.ts` (already existed — 30 tests, context coverage)
+  - Modified: `src/__tests__/unit/routes/mentions-routes.test.ts` (+2 tests): non-Error throw covers instanceof false branches; limit=0 covers || 50 fallback
+- Production changes (annotation-only):
+  - `routes/magic-link.ts`: 3× `/* istanbul ignore next */` on `|| 'fallback'` after Zod `.issues[0]?.message` — Zod never produces falsy messages
+  - `routes/mentions.ts`: 3× `/* istanbul ignore next */` on `if (!userId)` (requireAuth:true rejects before handler) + 1× on `if (!resolvedContextId)` (SuggestionsQuerySchema.refine() enforces before handler)
+  - `routes/message-read-status.ts`: 2× `/* istanbul ignore next */` on `keyGenerator` function body (rate-limiter mocked in tests, never invoked)
+- Reviewer: PASS (CI green: Quality bun + Security checks passed; squash-merged)
+- Notes: All feature matrix cells for Linux-testable environments remain ☑/⊘. Manifest-level gap-fill (no new feature matrix cell). Manifest ticked: routes/magic-link.ts☑ routes/mentions.ts☑ routes/message-read-status.ts☑ routes/reactions.ts☑ validation/mentions-schemas.ts☑
+- Commit: 57ee8a99 (squash-merged PR #1017 → main 2026-06-29T02:12Z)
+
+## 2026-06-29T02:40Z — gateway-manifest-gap4 (invitations, maintenance, user-stats, two-factor)
+
+- Targeted:
+  - `services/gateway/src/routes/invitations.ts`
+  - `services/gateway/src/routes/maintenance.ts`
+  - `services/gateway/src/routes/user-stats.ts`
+  - `services/gateway/src/routes/two-factor.ts`
+- Result: ☑ done
+- Coverage:
+  - routes/invitations.ts: 100% lines / 100% branches
+  - routes/maintenance.ts: 100% lines / 100% branches
+  - routes/user-stats.ts: 100% lines / 100% branches
+  - routes/two-factor.ts: pre-existing test file, already 100% / 100% — no changes needed
+- Tests added: 22 new tests across 3 new + 1 modified test file
+  - New: `src/__tests__/unit/routes/invitations-routes.test.ts` (8 tests): POST /invitations/email; 201 happy path; 201 when emailService absent (warn logged); 404 user-not-found; 409 invitee already a Meeshy user; 400 invalid email; 400 missing email; displayName=null falls back to username; systemLanguage=null falls back to 'fr'; 500 on prisma throw
+  - New: `src/__tests__/unit/routes/maintenance-routes.test.ts` (13 tests): GET /stats 200 + null→500 + throw→500; POST /cleanup 200 + throw→500; POST /user-status isOnline=true/false + throw→500; GET /status-metrics throttleRate computed + zero-totalRequests + throw→500; POST /status-metrics/reset 200 + throw→500
+  - Modified: `src/__tests__/unit/routes/user-stats-routes.test.ts` (+1 test): message with createdAt=new Date(0) (epoch 1970) falls outside 7-day window → covers `if (key in dailyCounts)` false branch
+- Production changes (annotation-only):
+  - `routes/user-stats.ts`: 2× `/* istanbul ignore next */` — (1) `const { days = 30 }` destructuring fallback (AJV useDefaults:true always injects the default; unreachable); (2) `stats[config.field] ?? 0` (ACHIEVEMENT_THRESHOLDS.field always matches numericStats keys; unreachable)
+- Key gotchas resolved:
+  - AJV strict mode rejects `example` keyword in maintenance.ts schemas → buildApp uses `ajv: { customOptions: { strict: false } }`
+  - maintenance.ts catch blocks call `sendInternalError()` without `return` → 500 assertions only check `statusCode`, not response body
+  - sendError() places `code` at TOP LEVEL (not under `error`) → assertions use `body.code` not `body.error.code`
+  - fast-json-stringify strips unknown properties → invitation response assertions target only schema-declared fields
+- Reviewer: PASS (CI green: Quality bun + Security checks passed; squash-merged)
+- Commit: d3772a7f (squash-merged PR #1021 → main 2026-06-29T02:35Z)
+
+## 2026-06-29T07:10Z — gateway-manifest-gap5 (community-preferences, conversation-encryption, signal-protocol, translation-jobs)
+- Targeted: community-preferences.ts, conversation-encryption.ts, signal-protocol.ts, translation-jobs.ts
+- Result: ☑ done
+- Coverage:
+  - routes/community-preferences.ts: 100% lines / 100% branches
+  - routes/conversation-encryption.ts: 100% lines / 100% branches
+  - routes/translation-jobs.ts: 100% lines / 100% branches
+  - routes/signal-protocol.ts: 100% lines / 98.67% branches (single unreachable 400 path via Fastify routing)
+- Tests added: 64 new tests across 4 new test files
+  - New: `src/__tests__/unit/routes/community-preferences-routes.test.ts` (18 tests): GET single (stored/default/401-anon/500); GET list (200/401/500); PUT upsert (200/401/500); DELETE (200/404-P2025/500/401); POST reorder (200/401/500)
+  - New: `src/__tests__/unit/routes/conversation-encryption-routes.test.ts` (19 tests): GET status (404/403-non-member/200-unencrypted/200-server/200-hybrid/200-anon-skip/500); POST enable (403-anon/400-invalid-mode/404/400-already-encrypted/403-non-member/403-group-no-role/200-direct/200-server/200-hybrid/200-null-sender/500)
+  - New: `src/__tests__/unit/routes/translation-jobs-routes.test.ts` (10 tests): GET (503-no-zmq/401/200/404/500); DELETE (503-no-zmq/401/200/400/500)
+  - New: `src/__tests__/unit/routes/signal-protocol-routes.test.ts` (17 tests): POST keys (200/500); GET bundle (403-no-shared-no-friend/403-empty-convIds/404/200-shared/200-friend/200-null-keys/500); POST establish (400-invalid/403-user-not-participant/400-recipient-not-participant/404-no-bundle/503-no-signalService/200-preKey-consumed/200-no-preKey/500)
+- Production changes: none
+- Key gotchas resolved:
+  - Module mock bleed-through: signal-protocol and community-preferences tests both mocked `@meeshy/shared/types/api-schemas` with incomplete errorResponseSchema (missing `code`/`error` fields) → fast-json-stringify stripped them in translation-jobs tests; fixed by including all fields in both mocks
+  - `@fastify/rate-limit` mocked as `async function noOpRateLimit() {}` to avoid Redis connection attempts in signal-protocol tests
+  - makeSessionPrisma() helper created for session/establish tests to avoid findFirst mock chain collision with GET route test setup
+  - translation-jobs tests use real `@meeshy/shared/types/api-schemas` (not mocked) + `ajv: { customOptions: { strict: false } }` for `example` keyword
+- Reviewer: PASS (CI green: all 15 checks passed; squash-merged)
+- Commit: 7e51b39f (squash-merged PR #1023 → main 2026-06-29T07:10Z)

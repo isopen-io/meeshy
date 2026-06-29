@@ -72,29 +72,29 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/gateway/src/routes/attachments.ts`
 - [x] `services/gateway/src/routes/calls.ts`
 - [ ] `services/gateway/src/routes/communities.ts`
-- [ ] `services/gateway/src/routes/community-preferences.ts`
-- [ ] `services/gateway/src/routes/conversation-encryption.ts`
+- [x] `services/gateway/src/routes/community-preferences.ts`
+- [x] `services/gateway/src/routes/conversation-encryption.ts`
 - [ ] `services/gateway/src/routes/conversation-preferences.ts`
 - [ ] `services/gateway/src/routes/friends.ts`
-- [ ] `services/gateway/src/routes/invitations.ts`
-- [ ] `services/gateway/src/routes/magic-link.ts`
-- [ ] `services/gateway/src/routes/maintenance.ts`
-- [ ] `services/gateway/src/routes/mentions.ts`
-- [ ] `services/gateway/src/routes/message-read-status.ts`
+- [x] `services/gateway/src/routes/invitations.ts`
+- [x] `services/gateway/src/routes/magic-link.ts`
+- [x] `services/gateway/src/routes/maintenance.ts`
+- [x] `services/gateway/src/routes/mentions.ts`
+- [x] `services/gateway/src/routes/message-read-status.ts`
 - [ ] `services/gateway/src/routes/messages.ts`
 - [x] `services/gateway/src/routes/notifications.ts`
 - [ ] `services/gateway/src/routes/password-reset.ts`
 - [x] `services/gateway/src/routes/push-tokens.ts`
-- [ ] `services/gateway/src/routes/reactions.ts`
-- [ ] `services/gateway/src/routes/signal-protocol.ts`
-- [ ] `services/gateway/src/routes/translation-jobs.ts`
+- [x] `services/gateway/src/routes/reactions.ts`
+- [x] `services/gateway/src/routes/signal-protocol.ts`
+- [x] `services/gateway/src/routes/translation-jobs.ts`
 - [ ] `services/gateway/src/routes/translation-non-blocking.ts`
 - [ ] `services/gateway/src/routes/translation.ts`
-- [ ] `services/gateway/src/routes/two-factor.ts`
+- [x] `services/gateway/src/routes/two-factor.ts`
 - [ ] `services/gateway/src/routes/user-deletions.ts`
-- [ ] `services/gateway/src/routes/user-stats.ts`
+- [x] `services/gateway/src/routes/user-stats.ts`
 - [ ] `services/gateway/src/routes/users.ts`
-- [ ] `services/gateway/src/routes/voice-analysis.ts`
+- [x] `services/gateway/src/routes/voice-analysis.ts`
 - [ ] `services/gateway/src/routes/voice-profile.ts`
 - [ ] `services/gateway/src/routes/voice.ts`
 
@@ -114,10 +114,10 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [x] `services/gateway/src/routes/admin/posts.ts`
 - [x] `services/gateway/src/routes/admin/reports.ts`
 - [x] `services/gateway/src/routes/admin/roles.ts`
-- [ ] `services/gateway/src/routes/admin/services/PermissionsService.ts`
+- [x] `services/gateway/src/routes/admin/services/PermissionsService.ts`
 - [x] `services/gateway/src/routes/admin/system-rankings.ts`
 - [ ] `services/gateway/src/routes/admin/system.ts`
-- [ ] `services/gateway/src/routes/admin/types.ts`
+- [x] `services/gateway/src/routes/admin/types.ts`
 - [x] `services/gateway/src/routes/admin/users.ts`
 
 ## routes/attachments  (0/6 have a test)
@@ -157,7 +157,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [x] `services/gateway/src/routes/conversations/leave.ts`
 - [x] `services/gateway/src/routes/conversations/messages-advanced.ts`
 - [ ] `services/gateway/src/routes/conversations/messages.ts`
-- [~] `services/gateway/src/routes/conversations/participants.ts`
+- [x] `services/gateway/src/routes/conversations/participants.ts`
 - [x] `services/gateway/src/routes/conversations/search.ts`
 - [x] `services/gateway/src/routes/conversations/sharing.ts`
 - [x] `services/gateway/src/routes/conversations/stats.ts`
@@ -440,7 +440,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/gateway/src/validation/conversation-encryption-schemas.ts`
 - [ ] `services/gateway/src/validation/delete-account-schemas.ts`
 - [x] `services/gateway/src/validation/helpers.ts`
-- [ ] `services/gateway/src/validation/mentions-schemas.ts`
+- [x] `services/gateway/src/validation/mentions-schemas.ts`
 - [ ] `services/gateway/src/validation/message-read-status-schemas.ts`
 - [ ] `services/gateway/src/validation/messages-schemas.ts`
 - [x] `services/gateway/src/validation/notification-schemas.ts`

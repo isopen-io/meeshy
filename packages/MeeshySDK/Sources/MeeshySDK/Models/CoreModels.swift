@@ -753,7 +753,6 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         self.cachedTimeString = cachedTimeString
         self.callSummary = callSummary
         self.trackedLinkMap = trackedLinkMap
-        self.effects = effects
     }
 
     private enum CodingKeys: String, CodingKey {

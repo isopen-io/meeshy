@@ -82,10 +82,31 @@ export class StatusHandler {
     }
   }
 
-  handleSocketDisconnecting(socketId: string, broadcastFn: (room: string, event: string, data: unknown) => void): void {
+  /**
+   * Broadcast `typing:stop` for every conversation this socket was actively
+   * typing in, then clean up tracking state.
+   *
+   * `otherSocketIds` — when the disconnecting user still has other connected
+   * sockets, pass their IDs here. For each conversation this socket was typing
+   * in, if at least one other socket for the same user is ALSO tracked as
+   * typing in that conversation the stop broadcast is suppressed: the user is
+   * still present and typing on another device, so clients must not clear the
+   * indicator prematurely.
+   */
+  handleSocketDisconnecting(
+    socketId: string,
+    broadcastFn: (room: string, event: string, data: unknown) => void,
+    otherSocketIds?: ReadonlySet<string>
+  ): void {
     const typers = this.activeTypers.get(socketId);
     if (typers && typers.length > 0) {
       for (const { conversationId, userId, username, displayName } of typers) {
+        if (otherSocketIds && otherSocketIds.size > 0) {
+          const anotherIsTyping = [...otherSocketIds].some(sid =>
+            (this.activeTypers.get(sid) ?? []).some(t => t.conversationId === conversationId)
+          );
+          if (anotherIsTyping) continue;
+        }
         const room = ROOMS.conversation(conversationId);
         const typingEvent: TypingEvent = { userId, username, displayName, conversationId, isTyping: false };
         broadcastFn(room, SERVER_EVENTS.TYPING_STOP, typingEvent);

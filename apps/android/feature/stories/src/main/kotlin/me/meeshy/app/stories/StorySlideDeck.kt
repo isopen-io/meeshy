@@ -54,11 +54,55 @@ data class StorySlideDeck(
     /** At least one slide carries publishable (non-blank) text. */
     val hasText: Boolean get() = slides.any { it.text.isNotBlank() }
 
-    /** The slides that would each become a published story — those with non-blank text, in order. */
-    val publishableSlides: List<StorySlide> get() = slides.filter { it.text.isNotBlank() }
+    /** At least one slide carries attached media. */
+    val hasMedia: Boolean get() = slides.any { it.mediaIds.isNotEmpty() }
+
+    /**
+     * The slides that would each become a published story — those carrying real
+     * content (non-blank text **or** attached media), in order. A media-only slide
+     * publishes; a slide with neither text nor media is skipped.
+     */
+    val publishableSlides: List<StorySlide>
+        get() = slides.filter { it.text.isNotBlank() || it.mediaIds.isNotEmpty() }
+
+    /** Free media slots left on the **selected** slide; never negative so the UI can size a pick. */
+    val selectedRemainingMediaSlots: Int
+        get() = (MAX_MEDIA_PER_SLIDE - selectedSlide.mediaIds.size).coerceAtLeast(0)
 
     /** Every slide's raw text is within [maxChars] (surrounding whitespace counts). */
     fun isWithinTextLimit(maxChars: Int): Boolean = slides.all { it.text.length <= maxChars }
+
+    /** Every slide's media count is within the per-slide cap ([MAX_MEDIA_PER_SLIDE]). */
+    fun isWithinMediaLimit(): Boolean = slides.all { it.mediaIds.size <= MAX_MEDIA_PER_SLIDE }
+
+    /**
+     * Appends [mediaId] to the **selected** slide's media, leaving every other slide
+     * and the selection untouched. Inert (same instance) when the id is already on
+     * that slide or the slide is at the [MAX_MEDIA_PER_SLIDE] cap, so the caller can
+     * stay glue and the ≤10-per-story invariant holds in one place.
+     */
+    fun addMediaToSelected(mediaId: String): StorySlideDeck {
+        val selected = selectedSlide
+        if (mediaId in selected.mediaIds || selected.mediaIds.size >= MAX_MEDIA_PER_SLIDE) return this
+        val index = selectedIndex
+        val next = slides.mapIndexed { i, slide ->
+            if (i == index) slide.copy(mediaIds = slide.mediaIds + mediaId) else slide
+        }
+        return copy(slides = next)
+    }
+
+    /**
+     * Removes [mediaId] from whichever slide holds it (a media id lives on exactly
+     * one slide), preserving order, selection, and every other slide. Inert when no
+     * slide carries the id.
+     */
+    fun removeMedia(mediaId: String): StorySlideDeck {
+        if (slides.none { mediaId in it.mediaIds }) return this
+        val next = slides.map { slide ->
+            if (mediaId in slide.mediaIds) slide.copy(mediaIds = slide.mediaIds - mediaId) else slide
+        }
+        return copy(slides = next)
+    }
 
     /**
      * Rewrites the **selected** slide's [text], leaving its id and media — and every
@@ -134,6 +178,9 @@ data class StorySlideDeck(
     companion object {
         /** Maximum slides per story — parity with the iOS composer's `maxSlides`. */
         const val MAX_SLIDES: Int = 10
+
+        /** Maximum media attachments per slide — each slide becomes one ≤10-media story (iOS parity). */
+        const val MAX_MEDIA_PER_SLIDE: Int = 10
 
         /** A fresh deck of a single empty slide, selected. */
         fun single(slideId: String): StorySlideDeck =

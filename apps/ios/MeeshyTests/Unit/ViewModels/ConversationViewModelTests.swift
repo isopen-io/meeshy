@@ -1574,6 +1574,166 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertFalse(sut.isSearching)
     }
 
+    // MARK: - Search Pagination Tests
+
+    func test_searchMessages_withHasMore_setsSearchHasMoreTrue() async {
+        let firstPageResponse: MessagesAPIResponse = JSONStub.decode("""
+        {"success":true,"data":[
+            {"id":"sr-p1","conversationId":"\(testConversationId)","senderId":"\(testUserId)","content":"Hello world","createdAt":"2026-01-01T00:00:00.000Z","sender":{"id":"\(testUserId)","username":"testuser","displayName":"Test User"}}
+        ],"pagination":null,"cursorPagination":{"hasMore":true,"nextCursor":"cursor-abc123","limit":20},"hasNewer":null}
+        """)
+        mockMessageService.searchResult = .success(firstPageResponse)
+        let sut = makeSUT()
+
+        await sut.searchMessages(query: "Hello")
+
+        XCTAssertTrue(sut.searchHasMore, "searchHasMore must be true when server signals hasMore=true")
+        XCTAssertEqual(sut.searchResults.count, 1)
+    }
+
+    func test_loadMoreSearchResults_appendsNextPageToExistingResults() async {
+        let firstPageResponse: MessagesAPIResponse = JSONStub.decode("""
+        {"success":true,"data":[
+            {"id":"sr-page1","conversationId":"\(testConversationId)","senderId":"\(testUserId)","content":"Hello page one","createdAt":"2026-01-01T00:00:00.000Z","sender":{"id":"\(testUserId)","username":"testuser","displayName":"Test User"}}
+        ],"pagination":null,"cursorPagination":{"hasMore":true,"nextCursor":"cursor-page2","limit":20},"hasNewer":null}
+        """)
+        mockMessageService.searchResult = .success(firstPageResponse)
+        let sut = makeSUT()
+        await sut.searchMessages(query: "Hello")
+        XCTAssertEqual(sut.searchResults.count, 1)
+        XCTAssertTrue(sut.searchHasMore)
+
+        let secondPageResponse: MessagesAPIResponse = JSONStub.decode("""
+        {"success":true,"data":[
+            {"id":"sr-page2","conversationId":"\(testConversationId)","senderId":"\(testUserId)","content":"Hello page two","createdAt":"2026-01-01T01:00:00.000Z","sender":{"id":"\(testUserId)","username":"testuser","displayName":"Test User"}}
+        ],"pagination":null,"cursorPagination":{"hasMore":false,"nextCursor":null,"limit":20},"hasNewer":null}
+        """)
+        mockMessageService.searchWithCursorResult = .success(secondPageResponse)
+
+        await sut.loadMoreSearchResults(query: "Hello")
+
+        XCTAssertEqual(sut.searchResults.count, 2, "loadMore must append second page results to existing ones")
+        XCTAssertFalse(sut.searchHasMore, "searchHasMore must be false when server returns hasMore=false on last page")
+        XCTAssertEqual(mockMessageService.searchWithCursorCallCount, 1, "searchWithCursor must be called exactly once for the second page")
+    }
+
+    func test_loadMoreSearchResults_whenSearchHasMoreFalse_isNoOp() async {
+        let singlePageResponse: MessagesAPIResponse = JSONStub.decode("""
+        {"success":true,"data":[
+            {"id":"sr-only","conversationId":"\(testConversationId)","senderId":"\(testUserId)","content":"Hello only page","createdAt":"2026-01-01T00:00:00.000Z","sender":{"id":"\(testUserId)","username":"testuser","displayName":"Test User"}}
+        ],"pagination":null,"cursorPagination":{"hasMore":false,"nextCursor":null,"limit":20},"hasNewer":null}
+        """)
+        mockMessageService.searchResult = .success(singlePageResponse)
+        let sut = makeSUT()
+        await sut.searchMessages(query: "Hello")
+        XCTAssertFalse(sut.searchHasMore)
+        let countAfterFirstPage = sut.searchResults.count
+
+        await sut.loadMoreSearchResults(query: "Hello")
+
+        XCTAssertEqual(sut.searchResults.count, countAfterFirstPage, "loadMore when no more pages must not modify results")
+        XCTAssertEqual(mockMessageService.searchWithCursorCallCount, 0, "searchWithCursor must not be called when there is no cursor")
+    }
+
+    func test_loadMoreSearchResults_setsIsSearchingFalseAfterCompletion() async {
+        let firstPageResponse: MessagesAPIResponse = JSONStub.decode("""
+        {"success":true,"data":[
+            {"id":"sr-lm1","conversationId":"\(testConversationId)","senderId":"\(testUserId)","content":"Hello loadmore","createdAt":"2026-01-01T00:00:00.000Z","sender":{"id":"\(testUserId)","username":"testuser","displayName":"Test User"}}
+        ],"pagination":null,"cursorPagination":{"hasMore":true,"nextCursor":"cursor-lm2","limit":20},"hasNewer":null}
+        """)
+        mockMessageService.searchResult = .success(firstPageResponse)
+        let sut = makeSUT()
+        await sut.searchMessages(query: "Hello")
+
+        let emptyNextPage: MessagesAPIResponse = JSONStub.decode("""
+        {"success":true,"data":[],"pagination":null,"cursorPagination":{"hasMore":false,"nextCursor":null,"limit":20},"hasNewer":null}
+        """)
+        mockMessageService.searchWithCursorResult = .success(emptyNextPage)
+
+        await sut.loadMoreSearchResults(query: "Hello")
+
+        XCTAssertFalse(sut.isSearching, "isSearching must be false once loadMoreSearchResults completes")
+    }
+
+    func test_loadMoreSearchResults_onNetworkFailure_preservesExistingResultsAndHasMore() async {
+        let firstPageResponse: MessagesAPIResponse = JSONStub.decode("""
+        {"success":true,"data":[
+            {"id":"sr-fail1","conversationId":"\(testConversationId)","senderId":"\(testUserId)","content":"Hello fail test","createdAt":"2026-01-01T00:00:00.000Z","sender":{"id":"\(testUserId)","username":"testuser","displayName":"Test User"}}
+        ],"pagination":null,"cursorPagination":{"hasMore":true,"nextCursor":"cursor-fail","limit":20},"hasNewer":null}
+        """)
+        mockMessageService.searchResult = .success(firstPageResponse)
+        let sut = makeSUT()
+        await sut.searchMessages(query: "Hello")
+        XCTAssertEqual(sut.searchResults.count, 1)
+
+        mockMessageService.searchWithCursorResult = .failure(NSError(domain: "test", code: -1009))
+        await sut.loadMoreSearchResults(query: "Hello")
+
+        XCTAssertEqual(sut.searchResults.count, 1,
+            "loadMore network failure must not remove existing search results")
+        XCTAssertTrue(sut.searchHasMore,
+            "searchHasMore must remain true after a transient loadMore failure so the user can retry by scrolling")
+        XCTAssertFalse(sut.isSearching,
+            "isSearching must be false even after a loadMore failure")
+    }
+
+    func test_searchMessages_translationMatch_surfacesTranslationAsMatchedText() async {
+        let responseWithTranslation: MessagesAPIResponse = JSONStub.decode("""
+        {"success":true,"data":[
+            {
+                "id":"sr-tr1",
+                "conversationId":"\(testConversationId)",
+                "senderId":"\(testUserId)",
+                "content":"Bonjour le monde",
+                "createdAt":"2026-01-01T00:00:00.000Z",
+                "sender":{"id":"\(testUserId)","username":"testuser","displayName":"Test User"},
+                "translations":[
+                    {"id":"tl-1","messageId":"sr-tr1","targetLanguage":"en","translatedContent":"Hello world","translationModel":"nllb","confidenceScore":null,"sourceLanguage":"fr"}
+                ]
+            }
+        ],"pagination":null,"cursorPagination":{"hasMore":false,"nextCursor":null,"limit":20},"hasNewer":null}
+        """)
+        mockMessageService.searchResult = .success(responseWithTranslation)
+        let sut = makeSUT()
+
+        await sut.searchMessages(query: "Hello")
+
+        XCTAssertEqual(sut.searchResults.count, 1)
+        let result = sut.searchResults.first
+        XCTAssertEqual(result?.id, "sr-tr1")
+        XCTAssertEqual(result?.matchedText, "Hello world",
+            "matchedText must use the translation when content does not match the query but a translation does")
+        XCTAssertEqual(result?.matchType, "translation",
+            "matchType must be 'translation' when the match is in a translated version of the content")
+    }
+
+    func test_searchMessages_contentMatch_usesContentAsMatchedText() async {
+        let responseWithMatchingContent: MessagesAPIResponse = JSONStub.decode("""
+        {"success":true,"data":[
+            {
+                "id":"sr-ct1",
+                "conversationId":"\(testConversationId)",
+                "senderId":"\(testUserId)",
+                "content":"Hello direct match",
+                "createdAt":"2026-01-01T00:00:00.000Z",
+                "sender":{"id":"\(testUserId)","username":"testuser","displayName":"Test User"},
+                "translations":[
+                    {"id":"tl-ct1","messageId":"sr-ct1","targetLanguage":"fr","translatedContent":"Bonjour correspondance directe","translationModel":"nllb","confidenceScore":null,"sourceLanguage":"en"}
+                ]
+            }
+        ],"pagination":null,"cursorPagination":{"hasMore":false,"nextCursor":null,"limit":20},"hasNewer":null}
+        """)
+        mockMessageService.searchResult = .success(responseWithMatchingContent)
+        let sut = makeSUT()
+
+        await sut.searchMessages(query: "Hello")
+
+        let result = sut.searchResults.first
+        XCTAssertEqual(result?.matchedText, "Hello direct match",
+            "matchedText must use the original content when content matches the query, even if translations are present")
+        XCTAssertEqual(result?.matchType, "content")
+    }
+
     // MARK: - Translation Tests (Point 75)
 
     func test_preferredTranslation_fallsToRegionalLanguage() {

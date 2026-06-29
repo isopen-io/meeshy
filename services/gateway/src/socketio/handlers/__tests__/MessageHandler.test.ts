@@ -2120,6 +2120,27 @@ describe('MessageHandler', () => {
         expect.objectContaining({ success: false, error: 'Failed to send message' })
       );
     });
+
+    it('does not propagate when ACK callback throws — socket connection preserved', async () => {
+      (deps.messagingService.handleMessage as jest.Mock<any>).mockResolvedValue({
+        success: true,
+        data: {
+          id: 'msg-throwing-cb', conversationId: VALID_CONV_ID,
+          createdAt: new Date(), senderId: PARTICIPANT_ID, clientMessageId: VALID_CID,
+        },
+      });
+
+      const throwingCallback = jest.fn<any>().mockImplementation(() => {
+        throw new Error('client-side callback error');
+      });
+
+      // Must resolve without throwing even though the callback throws
+      await expect(
+        handler.handleMessageSend(socket, makeValidSendData(), throwingCallback)
+      ).resolves.toBeUndefined();
+
+      expect(throwingCallback).toHaveBeenCalledTimes(1);
+    });
   });
 
   // ── Per-conversation rate limiting ────────────────────────────────────────

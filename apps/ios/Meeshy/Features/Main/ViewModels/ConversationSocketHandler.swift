@@ -528,11 +528,15 @@ final class ConversationSocketHandler {
                 guard let self else { return }
                 if let persistence = self.persistence {
                     // Write through persistence; store observation surfaces the edit.
-                    Task { try? await persistence.markEdited(
-                        localId: apiMsg.id,
-                        newContent: apiMsg.content ?? "",
-                        editedAt: Date()
-                    ) }
+                    let msgId = apiMsg.id
+                    let content = apiMsg.content ?? ""
+                    Task {
+                        do {
+                            try await persistence.markEdited(localId: msgId, newContent: content, editedAt: Date())
+                        } catch {
+                            Logger.messages.warning("[ConversationSocket] markEdited failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                        }
+                    }
                 }
                 // Keep the (frozen) starred snapshot's preview in sync with the edit.
                 StarredMessagesStore.shared.updatePreview(
@@ -550,7 +554,14 @@ final class ConversationSocketHandler {
                 if let persistence = self.persistence {
                     // Write through persistence; store observation surfaces the deletion.
                     let now = Date()
-                    Task { try? await persistence.markDeleted(localId: event.messageId, deletedAt: now) }
+                    let msgId = event.messageId
+                    Task {
+                        do {
+                            try await persistence.markDeleted(localId: msgId, deletedAt: now)
+                        } catch {
+                            Logger.messages.warning("[ConversationSocket] markDeleted failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                        }
+                    }
                 }
                 // A delete-for-everyone broadcast must also evict the starred
                 // snapshot so the Starred Messages list stops showing a tombstone.
@@ -566,7 +577,14 @@ final class ConversationSocketHandler {
             .sink { [weak self] event in
                 guard let self, let persistence = self.persistence else { return }
                 let pinnedBy = event.pinnedBy
-                Task { try? await persistence.updatePinned(localId: event.messageId, pinnedAt: Date(), pinnedBy: pinnedBy) }
+                let msgId = event.messageId
+                Task {
+                    do {
+                        try await persistence.updatePinned(localId: msgId, pinnedAt: Date(), pinnedBy: pinnedBy)
+                    } catch {
+                        Logger.messages.warning("[ConversationSocket] updatePinned failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    }
+                }
             }
             .store(in: &cancellables)
 
@@ -576,7 +594,14 @@ final class ConversationSocketHandler {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self, let persistence = self.persistence else { return }
-                Task { try? await persistence.updatePinned(localId: event.messageId, pinnedAt: nil, pinnedBy: nil) }
+                let msgId = event.messageId
+                Task {
+                    do {
+                        try await persistence.updatePinned(localId: msgId, pinnedAt: nil, pinnedBy: nil)
+                    } catch {
+                        Logger.messages.warning("[ConversationSocket] updateUnpinned failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    }
+                }
             }
             .store(in: &cancellables)
 
@@ -605,15 +630,23 @@ final class ConversationSocketHandler {
                 // row (keyed by the currentUserId sentinel) — which rendered a
                 // single tap as "2". Other users' reactions still land because the
                 // cap rises with each genuine new reactor.
+                let msgId = event.messageId
+                let participantId = event.participantId
+                let emoji = event.emoji
+                let maxCount = event.aggregation?.count
                 Task {
-                    try? await persistence.appendReaction(
-                        localId: event.messageId,
-                        reactionId: UUID().uuidString,
-                        messageId: event.messageId,
-                        participantId: event.participantId,
-                        emoji: event.emoji,
-                        maxCount: event.aggregation?.count
-                    )
+                    do {
+                        try await persistence.appendReaction(
+                            localId: msgId,
+                            reactionId: UUID().uuidString,
+                            messageId: msgId,
+                            participantId: participantId,
+                            emoji: emoji,
+                            maxCount: maxCount
+                        )
+                    } catch {
+                        Logger.messages.warning("[ConversationSocket] appendReaction failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    }
                 }
             }
             .store(in: &cancellables)
@@ -626,11 +659,15 @@ final class ConversationSocketHandler {
                 guard let self, let persistence = self.persistence else { return }
                 // Write through persistence; store observation surfaces the removal.
                 Task {
-                    try? await persistence.removeReaction(
-                        localId: event.messageId,
-                        emoji: event.emoji,
-                        participantId: event.participantId
-                    )
+                    do {
+                        try await persistence.removeReaction(
+                            localId: event.messageId,
+                            emoji: event.emoji,
+                            participantId: event.participantId
+                        )
+                    } catch {
+                        Logger.messages.warning("[ConversationSocket] removeReaction failed \(event.messageId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    }
                 }
             }
             .store(in: &cancellables)

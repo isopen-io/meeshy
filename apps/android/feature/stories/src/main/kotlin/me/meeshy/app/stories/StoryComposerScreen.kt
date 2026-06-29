@@ -6,6 +6,7 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,13 +39,19 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -140,6 +147,7 @@ fun StoryComposerScreen(
                 onAdd = viewModel::onAddSlide,
                 onDuplicate = viewModel::onDuplicateSelectedSlide,
                 onRemove = viewModel::onRemoveSlide,
+                onMove = viewModel::onMoveSlide,
             )
 
             OutlinedTextField(
@@ -160,10 +168,10 @@ fun StoryComposerScreen(
                 },
             )
 
-            if (state.attachments.isNotEmpty() || state.pendingUploads.isNotEmpty()) {
+            if (state.selectedSlideAttachments.isNotEmpty() || state.selectedSlidePending.isNotEmpty()) {
                 MediaPreviewRow(
-                    attachments = state.attachments,
-                    pending = state.pendingUploads,
+                    attachments = state.selectedSlideAttachments,
+                    pending = state.selectedSlidePending,
                     onRemove = viewModel::onRemoveMedia,
                 )
             }
@@ -211,8 +219,12 @@ fun StoryComposerScreen(
  * upcoming canvas. Each slide is a numbered, selectable chip (tap to switch); the
  * selected chip carries Duplicate / Remove actions (Remove hidden on the last
  * remaining slide). A trailing "+" chip appends a slide, disabled at the ≤10 cap.
- * Pure glue: every decision (cap, can-remove, selection) is read off the already
- * unit-tested [StorySlideDeck]; this only renders it and forwards intents.
+ * A horizontal drag on a chip reorders it: the accumulated pixels and the measured
+ * slot width feed the pure, unit-tested [SlideReorderResolver], which yields the
+ * clamped target index handed to [onMove] on drag end.
+ * Pure glue: every decision (cap, can-remove, selection, reorder target) is read
+ * off the already unit-tested [StorySlideDeck]/[SlideReorderResolver]; this only
+ * renders the deck and forwards intents.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -222,7 +234,10 @@ private fun SlideStrip(
     onAdd: () -> Unit,
     onDuplicate: () -> Unit,
     onRemove: (String) -> Unit,
+    onMove: (String, Int) -> Unit,
 ) {
+    val spacingPx = with(LocalDensity.current) { 8.dp.toPx() }
+    var chipWidthPx by remember { mutableFloatStateOf(0f) }
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -233,6 +248,28 @@ private fun SlideStrip(
             FilterChip(
                 selected = selected,
                 onClick = { onSelect(slide.id) },
+                modifier = Modifier
+                    .onSizeChanged { chipWidthPx = it.width.toFloat() }
+                    .pointerInput(slide.id, index, deck.size) {
+                        var totalDrag = 0f
+                        detectHorizontalDragGestures(
+                            onDragStart = { totalDrag = 0f },
+                            onDragEnd = {
+                                onMove(
+                                    slide.id,
+                                    SlideReorderResolver.targetIndex(
+                                        fromIndex = index,
+                                        dragPx = totalDrag,
+                                        slotWidthPx = chipWidthPx + spacingPx,
+                                        slideCount = deck.size,
+                                    ),
+                                )
+                            },
+                        ) { change, dragAmount ->
+                            change.consume()
+                            totalDrag += dragAmount
+                        }
+                    },
                 label = { Text(stringResource(R.string.stories_composer_slide_label, index + 1)) },
                 trailingIcon = if (selected && deck.canRemoveSlide) {
                     {
