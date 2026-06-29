@@ -32,6 +32,9 @@ import javax.inject.Inject
  * deterministic — id generation lives here, at the impure ViewModel edge. */
 private fun newSlideId(): String = UUID.randomUUID().toString()
 
+/** Mints a fresh, collision-free text-element id (same impure-edge rationale). */
+private fun newTextElementId(): String = UUID.randomUUID().toString()
+
 /**
  * A media attachment durably queued offline: its bytes live in `MediaBlobStore`
  * and an `UPLOAD_MEDIA` outbox row is enqueued, both keyed by [cmid]. The publish
@@ -59,20 +62,23 @@ data class StoryComposerUiState(
     val deck: StorySlideDeck = StorySlideDeck.single(newSlideId()),
     val attachments: List<UploadedMedia> = emptyList(),
     val pendingUploads: List<PendingMediaUpload> = emptyList(),
+    val selectedTextElementId: String? = null,
     val isUploadingMedia: Boolean = false,
     val isPublishing: Boolean = false,
     val errorMessage: String? = null,
 ) {
     /**
-     * Publishable when some slide carries text **or** media, every slide is within
-     * the character cap, the per-slide media cap holds, and nothing is in flight. The
-     * whole **deck** gates publishing — not just the slide currently being edited — so
-     * an over-long off-screen slide, or media on an off-screen slide, both count.
+     * Publishable when some slide carries text, media **or** a publishable text
+     * element, every slide is within the character cap, the per-slide media and
+     * text-element caps hold, and nothing is in flight. The whole **deck** gates
+     * publishing — not just the slide currently being edited — so an over-long
+     * off-screen slide, or media/elements on an off-screen slide, all count.
      */
     val canPublish: Boolean
-        get() = (deck.hasText || deck.hasMedia) &&
+        get() = (deck.hasText || deck.hasMedia || deck.hasTextElements) &&
             deck.isWithinTextLimit(StoryComposerDraft.MAX_CHARS) &&
             deck.isWithinMediaLimit() &&
+            deck.isWithinTextElementLimit() &&
             !isPublishing &&
             !isUploadingMedia
 
@@ -92,6 +98,29 @@ data class StoryComposerUiState(
     /** The persisted 9:16 canvas pan/zoom of the **selected** slide — what the canvas renders. */
     val selectedSlideTransform: StoryCanvasTransform
         get() = deck.selectedSlide.transform
+
+    /** The on-canvas text elements of the **selected** slide, in z-order, for rendering. */
+    val selectedSlideTextElements: List<StoryTextElement>
+        get() = deck.selectedSlide.elements
+
+    /**
+     * The text element currently being edited — the [selectedTextElementId] resolved
+     * against the **selected** slide. Null when nothing is being edited (caption mode)
+     * or the id no longer lives on the selected slide (e.g. after a slide switch), so
+     * the screen never edits a stale element.
+     */
+    val selectedTextElement: StoryTextElement?
+        get() = selectedTextElementId?.let { id -> deck.selectedSlide.elements.firstOrNull { it.id == id } }
+
+    /** True while the text field edits an on-canvas element rather than the slide caption. */
+    val isEditingTextElement: Boolean get() = selectedTextElement != null
+
+    /**
+     * What the single text field shows and edits: the selected element's text while
+     * one is selected, otherwise the selected slide's caption. One field, two roles —
+     * the screen stays glue.
+     */
+    val editorText: String get() = selectedTextElement?.text ?: draft.text
 }
 
 /**
@@ -123,10 +152,75 @@ class StoryComposerViewModel @Inject constructor(
     private val _published = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val published: SharedFlow<Unit> = _published.asSharedFlow()
 
+    /**
+     * Routes the text field: while a text element is selected the keystrokes rewrite
+     * **that element**; otherwise they rewrite the **selected slide's caption** (the
+     * original behaviour). One field serves both roles so the canvas stays a single
+     * coherent surface.
+     */
     fun onTextChange(text: String) {
+        val editingId = _state.value.selectedTextElement?.id
+        if (editingId != null) {
+            _state.update {
+                it.copy(deck = it.deck.updateTextElement(editingId) { element -> element.copy(text = text) }, errorMessage = null)
+            }
+            return
+        }
         _state.update {
             val deck = it.deck.updateSelectedText(text)
             it.copy(draft = it.draft.withText(text), deck = deck, errorMessage = null)
+        }
+    }
+
+    /**
+     * Adds an empty on-canvas text element to the selected slide (clamped to the
+     * canvas centre by the deck) and selects it so the field begins editing it
+     * immediately — the natural "tap +Text, then type" flow. Inert-with-a-warning
+     * once the selected slide is at the ≤5-element cap.
+     */
+    fun onAddTextElement() {
+        val before = _state.value.deck
+        if (!before.selectedCanAddTextElement) {
+            _state.update { it.copy(errorMessage = TEXT_ELEMENT_LIMIT) }
+            return
+        }
+        val id = newTextElementId()
+        _state.update {
+            it.copy(deck = it.deck.addTextElementToSelected(StoryTextElement(id = id)), selectedTextElementId = id, errorMessage = null)
+        }
+    }
+
+    /** Begins editing the on-canvas element [id] (inert when it is not on the selected slide). */
+    fun onSelectTextElement(id: String) {
+        _state.update {
+            if (it.deck.selectedSlide.elements.none { element -> element.id == id }) it
+            else it.copy(selectedTextElementId = id)
+        }
+    }
+
+    /** Stops editing the active element — the field returns to the slide caption. */
+    fun onDeselectTextElement() {
+        _state.update { if (it.selectedTextElementId == null) it else it.copy(selectedTextElementId = null) }
+    }
+
+    /**
+     * Drags the on-canvas element [id] by the normalised canvas deltas [dx]/[dy]
+     * (clamped by the pure [StoryTextElement.nudged]); selection and editing are
+     * untouched. The Composable converts drag pixels to fractions.
+     */
+    fun onTextElementMoved(id: String, dx: Float, dy: Float) {
+        _state.update { it.copy(deck = it.deck.moveTextElement(id, dx, dy)) }
+    }
+
+    /**
+     * Removes the on-canvas element [id] from whichever slide holds it, clearing the
+     * editing selection when it was the one being edited so the field falls back to
+     * the slide caption.
+     */
+    fun onRemoveTextElement(id: String) {
+        _state.update {
+            val selected = if (it.selectedTextElementId == id) null else it.selectedTextElementId
+            it.copy(deck = it.deck.removeTextElement(id), selectedTextElementId = selected)
         }
     }
 
@@ -196,9 +290,20 @@ class StoryComposerViewModel @Inject constructor(
         _state.update { it.copy(deck = transform(it.deck)).mirrorDraftToSelection() }
     }
 
-    /** Re-points [StoryComposerUiState.draft] at the selected slide's text + media. */
-    private fun StoryComposerUiState.mirrorDraftToSelection(): StoryComposerUiState =
-        copy(draft = draft.withText(deck.selectedSlide.text).withMediaIds(deck.selectedSlide.mediaIds))
+    /**
+     * Re-points [StoryComposerUiState.draft] at the selected slide's text + media and
+     * drops a now-dangling element-edit selection (an element id only ever lives on
+     * one slide, so switching/removing a slide ends element editing and the field
+     * falls back to the new slide's caption).
+     */
+    private fun StoryComposerUiState.mirrorDraftToSelection(): StoryComposerUiState {
+        val elementId = selectedTextElementId
+        val stillSelected = elementId != null && deck.selectedSlide.elements.any { it.id == elementId }
+        return copy(
+            draft = draft.withText(deck.selectedSlide.text).withMediaIds(deck.selectedSlide.mediaIds),
+            selectedTextElementId = if (stillSelected) elementId else null,
+        )
+    }
 
     /**
      * Uploads freshly-picked media and attaches the returned ids to the draft.
@@ -352,6 +457,7 @@ class StoryComposerViewModel @Inject constructor(
                 text = slide.text,
                 visibility = current.draft.visibility,
                 mediaIds = slide.mediaIds,
+                textElements = slide.elements,
             )
             PublishPlan(
                 request = draft.toCreateStoryRequest(language),
@@ -369,5 +475,7 @@ class StoryComposerViewModel @Inject constructor(
         const val MEDIA_FAILED = "Couldn't attach that media"
         const val MEDIA_UNUSABLE = "That media couldn't be attached"
         const val MEDIA_LIMIT = "You can attach up to ${StoryComposerDraft.MAX_MEDIA} items"
+        const val TEXT_ELEMENT_LIMIT =
+            "You can add up to ${StorySlideDeck.MAX_TEXT_ELEMENTS_PER_SLIDE} text elements per slide"
     }
 }

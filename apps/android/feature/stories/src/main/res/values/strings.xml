@@ -43,6 +43,10 @@
     <string name="stories_composer_add_slide">Add slide</string>
     <string name="stories_composer_duplicate_slide">Duplicate slide</string>
     <string name="stories_composer_remove_slide">Remove slide</string>
+    <string name="stories_composer_add_text">Add text</string>
+    <string name="stories_composer_text_placeholder">Type something…</string>
+    <string name="stories_composer_remove_text">Remove text</string>
+    <string name="stories_composer_text_caption">Caption</string>
     <string name="stories_visibility_public">Public</string>
     <string name="stories_visibility_friends">Friends</string>
     <string name="stories_visibility_community">Community</string>

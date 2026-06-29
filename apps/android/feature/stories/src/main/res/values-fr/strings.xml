@@ -43,6 +43,10 @@
     <string name="stories_composer_add_slide">Ajouter une diapo</string>
     <string name="stories_composer_duplicate_slide">Dupliquer la diapo</string>
     <string name="stories_composer_remove_slide">Supprimer la diapo</string>
+    <string name="stories_composer_add_text">Ajouter du texte</string>
+    <string name="stories_composer_text_placeholder">Écrivez quelque chose…</string>
+    <string name="stories_composer_remove_text">Supprimer le texte</string>
+    <string name="stories_composer_text_caption">Légende</string>
     <string name="stories_visibility_public">Public</string>
     <string name="stories_visibility_friends">Amis</string>
     <string name="stories_visibility_community">Communauté</string>

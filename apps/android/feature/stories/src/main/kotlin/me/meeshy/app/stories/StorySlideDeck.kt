@@ -12,6 +12,7 @@ data class StorySlide(
     val text: String = "",
     val mediaIds: List<String> = emptyList(),
     val transform: StoryCanvasTransform = StoryCanvasTransform.IDENTITY,
+    val elements: List<StoryTextElement> = emptyList(),
 )
 
 /**
@@ -59,23 +60,39 @@ data class StorySlideDeck(
     /** At least one slide carries attached media. */
     val hasMedia: Boolean get() = slides.any { it.mediaIds.isNotEmpty() }
 
+    /** At least one slide carries a publishable (non-blank) on-canvas text element. */
+    val hasTextElements: Boolean get() = slides.any { slide -> slide.elements.any { it.isPublishable } }
+
     /**
      * The slides that would each become a published story — those carrying real
-     * content (non-blank text **or** attached media), in order. A media-only slide
-     * publishes; a slide with neither text nor media is skipped.
+     * content (non-blank text **or** attached media **or** a publishable text
+     * element), in order. A media-only or text-element-only slide publishes; a
+     * slide with none of the three is skipped.
      */
     val publishableSlides: List<StorySlide>
-        get() = slides.filter { it.text.isNotBlank() || it.mediaIds.isNotEmpty() }
+        get() = slides.filter { slide ->
+            slide.text.isNotBlank() || slide.mediaIds.isNotEmpty() || slide.elements.any { it.isPublishable }
+        }
 
     /** Free media slots left on the **selected** slide; never negative so the UI can size a pick. */
     val selectedRemainingMediaSlots: Int
         get() = (MAX_MEDIA_PER_SLIDE - selectedSlide.mediaIds.size).coerceAtLeast(0)
+
+    /** Free text-element slots left on the **selected** slide; never negative. */
+    val selectedRemainingTextSlots: Int
+        get() = (MAX_TEXT_ELEMENTS_PER_SLIDE - selectedSlide.elements.size).coerceAtLeast(0)
+
+    /** A text element may still be added to the **selected** slide (below the per-slide cap). */
+    val selectedCanAddTextElement: Boolean get() = selectedRemainingTextSlots > 0
 
     /** Every slide's raw text is within [maxChars] (surrounding whitespace counts). */
     fun isWithinTextLimit(maxChars: Int): Boolean = slides.all { it.text.length <= maxChars }
 
     /** Every slide's media count is within the per-slide cap ([MAX_MEDIA_PER_SLIDE]). */
     fun isWithinMediaLimit(): Boolean = slides.all { it.mediaIds.size <= MAX_MEDIA_PER_SLIDE }
+
+    /** Every slide's text-element count is within the per-slide cap ([MAX_TEXT_ELEMENTS_PER_SLIDE]). */
+    fun isWithinTextElementLimit(): Boolean = slides.all { it.elements.size <= MAX_TEXT_ELEMENTS_PER_SLIDE }
 
     /**
      * Appends [mediaId] to the **selected** slide's media, leaving every other slide
@@ -105,6 +122,71 @@ data class StorySlideDeck(
         }
         return copy(slides = next)
     }
+
+    /**
+     * Appends [element] (with its position clamped into the canvas) to the
+     * **selected** slide's text elements, leaving every other slide and the selection
+     * untouched. Inert (same instance) when an element with that id already exists on
+     * the selected slide or the slide is at the [MAX_TEXT_ELEMENTS_PER_SLIDE] cap, so
+     * the caller stays glue and the ≤5-per-slide invariant holds in one place.
+     */
+    fun addTextElementToSelected(element: StoryTextElement): StorySlideDeck {
+        val selected = selectedSlide
+        if (selected.elements.any { it.id == element.id } || selected.elements.size >= MAX_TEXT_ELEMENTS_PER_SLIDE) {
+            return this
+        }
+        val index = selectedIndex
+        val next = slides.mapIndexed { i, slide ->
+            if (i == index) slide.copy(elements = slide.elements + element.normalised()) else slide
+        }
+        return copy(slides = next)
+    }
+
+    /**
+     * Removes the text element [id] from whichever slide holds it (an element id lives
+     * on exactly one slide), preserving order, selection, and every other slide. Inert
+     * when no slide carries the id.
+     */
+    fun removeTextElement(id: String): StorySlideDeck {
+        if (slides.none { slide -> slide.elements.any { it.id == id } }) return this
+        val next = slides.map { slide ->
+            if (slide.elements.any { it.id == id }) {
+                slide.copy(elements = slide.elements.filterNot { it.id == id })
+            } else {
+                slide
+            }
+        }
+        return copy(slides = next)
+    }
+
+    /**
+     * Rewrites the text element [id] via [transform] wherever it lives (re-clamping
+     * its position), leaving every other element, slide, and the selection untouched.
+     * Inert when no slide carries the id.
+     */
+    fun updateTextElement(id: String, transform: (StoryTextElement) -> StoryTextElement): StorySlideDeck {
+        if (slides.none { slide -> slide.elements.any { it.id == id } }) return this
+        val next = slides.map { slide ->
+            if (slide.elements.none { it.id == id }) {
+                slide
+            } else {
+                slide.copy(
+                    elements = slide.elements.map { element ->
+                        if (element.id == id) transform(element).normalised() else element
+                    },
+                )
+            }
+        }
+        return copy(slides = next)
+    }
+
+    /**
+     * Translates the text element [id] by the normalised canvas deltas [dx]/[dy]
+     * (clamped to the canvas by [StoryTextElement.nudged]). Inert when the id is
+     * unknown. The on-canvas drag binds here so the move math lives in one place.
+     */
+    fun moveTextElement(id: String, dx: Float, dy: Float): StorySlideDeck =
+        updateTextElement(id) { it.nudged(dx, dy) }
 
     /**
      * Rewrites the **selected** slide's [text], leaving its id and media — and every
@@ -194,6 +276,9 @@ data class StorySlideDeck(
 
         /** Maximum media attachments per slide — each slide becomes one ≤10-media story (iOS parity). */
         const val MAX_MEDIA_PER_SLIDE: Int = 10
+
+        /** Maximum on-canvas text elements per slide — parity with the iOS composer's ≤5 rule. */
+        const val MAX_TEXT_ELEMENTS_PER_SLIDE: Int = 5
 
         /** A fresh deck of a single empty slide, selected. */
         fun single(slideId: String): StorySlideDeck =

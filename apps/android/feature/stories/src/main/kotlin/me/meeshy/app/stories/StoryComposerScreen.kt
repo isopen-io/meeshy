@@ -7,7 +7,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
@@ -27,6 +30,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -45,6 +49,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -61,8 +66,12 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -162,17 +171,38 @@ fun StoryComposerScreen(
                 transform = state.selectedSlideTransform,
                 backgroundModel = state.selectedSlideAttachments.firstOrNull()?.let { it.thumbnailUrl ?: it.url }
                     ?: state.selectedSlidePending.firstOrNull()?.item?.bytes,
+                textElements = state.selectedSlideTextElements,
+                selectedElementId = state.selectedTextElementId,
                 onTransform = viewModel::onCanvasTransform,
+                onElementTap = viewModel::onSelectTextElement,
+                onElementDrag = viewModel::onTextElementMoved,
+                onElementRemove = viewModel::onRemoveTextElement,
+                onBackgroundTap = viewModel::onDeselectTextElement,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
             )
 
             OutlinedTextField(
-                value = state.draft.text,
+                value = state.editorText,
                 onValueChange = viewModel::onTextChange,
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text(stringResource(R.string.stories_composer_placeholder)) },
+                label = if (state.isEditingTextElement) {
+                    { Text(stringResource(R.string.stories_composer_add_text)) }
+                } else {
+                    { Text(stringResource(R.string.stories_composer_text_caption)) }
+                },
+                placeholder = {
+                    Text(
+                        stringResource(
+                            if (state.isEditingTextElement) {
+                                R.string.stories_composer_text_placeholder
+                            } else {
+                                R.string.stories_composer_placeholder
+                            },
+                        ),
+                    )
+                },
                 isError = !state.draft.isWithinLimit,
                 supportingText = {
                     Text(
@@ -183,6 +213,18 @@ fun StoryComposerScreen(
                     )
                 },
             )
+
+            OutlinedButton(
+                onClick = viewModel::onAddTextElement,
+                enabled = state.deck.selectedCanAddTextElement,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Icon(Icons.Filled.TextFields, contentDescription = null)
+                Text(
+                    text = stringResource(R.string.stories_composer_add_text),
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
 
             if (state.selectedSlideAttachments.isNotEmpty() || state.selectedSlidePending.isNotEmpty()) {
                 MediaPreviewRow(
@@ -232,18 +274,24 @@ fun StoryComposerScreen(
 
 /**
  * The 9:16 story canvas for the **selected** slide. Renders that slide's first
- * media as the background (the upcoming text/sticker/drawing elements layer on top
- * in later slices) and lets the user pinch-zoom + drag-pan it. All transform math
- * lives in the pure, unit-tested [StoryCanvasTransform]: each `detectTransformGestures`
- * callback is forwarded verbatim to [onTransform] together with the measured canvas
- * size, and the resolved [transform] is applied as a `graphicsLayer`, so this
- * Composable stays declarative glue. An empty slide shows the bare 9:16 frame.
+ * media as the background, the slide's on-canvas [textElements] on top, and lets the
+ * user pinch-zoom + drag-pan the background and drag / tap / remove each element. All
+ * transform and clamp math lives in the pure, unit-tested [StoryCanvasTransform] /
+ * [StoryTextElement]: each gesture callback is forwarded verbatim (pixels divided by
+ * the measured canvas size into normalised fractions), so this Composable stays
+ * declarative glue. A tap on the empty canvas deselects ([onBackgroundTap]).
  */
 @Composable
 private fun StoryCanvasSurface(
     transform: StoryCanvasTransform,
     backgroundModel: Any?,
+    textElements: List<StoryTextElement>,
+    selectedElementId: String?,
     onTransform: (Float, Float, Float, Float, Float) -> Unit,
+    onElementTap: (String) -> Unit,
+    onElementDrag: (String, Float, Float) -> Unit,
+    onElementRemove: (String) -> Unit,
+    onBackgroundTap: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val canvasLabel = stringResource(R.string.stories_composer_canvas)
@@ -264,6 +312,7 @@ private fun StoryCanvasSurface(
                     canvasHeightPx = it.height.toFloat()
                 }
                 .semantics { contentDescription = canvasLabel }
+                .pointerInput(Unit) { detectTapGestures { onBackgroundTap() } }
                 .pointerInput(Unit) {
                     detectTransformGestures { _, pan, zoom, _ ->
                         onTransform(pan.x, pan.y, zoom, canvasWidthPx, canvasHeightPx)
@@ -285,9 +334,101 @@ private fun StoryCanvasSurface(
                         },
                 )
             }
+            textElements.forEach { element ->
+                TextElementLayer(
+                    element = element,
+                    selected = element.id == selectedElementId,
+                    canvasWidthPx = canvasWidthPx,
+                    canvasHeightPx = canvasHeightPx,
+                    onTap = { onElementTap(element.id) },
+                    onDrag = { dxPx, dyPx ->
+                        if (canvasWidthPx > 0f && canvasHeightPx > 0f) {
+                            onElementDrag(element.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx)
+                        }
+                    },
+                    onRemove = { onElementRemove(element.id) },
+                )
+            }
         }
     }
 }
+
+/**
+ * One on-canvas text element: positioned at its normalised ([StoryTextElement.x],
+ * [StoryTextElement.y]) of the measured canvas (centred on that point), draggable,
+ * tappable to edit, and — when selected — carrying a small remove affordance. The
+ * normalised→pixel placement and the pixel→normalised drag delta are the only
+ * arithmetic here; the clamp lives in [StoryTextElement.nudged]. Pure glue.
+ */
+@Composable
+private fun TextElementLayer(
+    element: StoryTextElement,
+    selected: Boolean,
+    canvasWidthPx: Float,
+    canvasHeightPx: Float,
+    onTap: () -> Unit,
+    onDrag: (Float, Float) -> Unit,
+    onRemove: () -> Unit,
+) {
+    var sizePx by remember { mutableStateOf(IntSize.Zero) }
+    Box(
+        modifier = Modifier
+            .offset {
+                IntOffset(
+                    x = (element.x * canvasWidthPx - sizePx.width / 2f).roundToInt(),
+                    y = (element.y * canvasHeightPx - sizePx.height / 2f).roundToInt(),
+                )
+            }
+            .onSizeChanged { sizePx = it }
+            .pointerInput(element.id) { detectTapGestures { onTap() } }
+            .pointerInput(element.id) {
+                detectDragGestures { change, dragAmount ->
+                    change.consume()
+                    onDrag(dragAmount.x, dragAmount.y)
+                }
+            }
+            .background(
+                color = if (selected) Color.Black.copy(alpha = 0.35f) else Color.Transparent,
+                shape = RoundedCornerShape(8.dp),
+            )
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = element.text.ifBlank { stringResource(R.string.stories_composer_text_placeholder) },
+            color = parseHexColor(element.color),
+            fontWeight = FontWeight.Bold,
+            textAlign = element.align.toTextAlign(),
+        )
+        if (selected) {
+            Surface(
+                onClick = onRemove,
+                shape = RoundedCornerShape(50),
+                color = Color.Black.copy(alpha = 0.55f),
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(20.dp),
+            ) {
+                Icon(
+                    Icons.Filled.Close,
+                    contentDescription = stringResource(R.string.stories_composer_remove_text),
+                    tint = Color.White,
+                    modifier = Modifier.padding(2.dp),
+                )
+            }
+        }
+    }
+}
+
+private fun StoryTextAlign.toTextAlign(): TextAlign = when (this) {
+    StoryTextAlign.LEFT -> TextAlign.Start
+    StoryTextAlign.CENTER -> TextAlign.Center
+    StoryTextAlign.RIGHT -> TextAlign.End
+}
+
+/** Parses a `RRGGBB` (or `#RRGGBB`) hex colour, falling back to white on anything unexpected. */
+private fun parseHexColor(hex: String): Color =
+    runCatching { Color(("ff" + hex.removePrefix("#")).toLong(16)) }.getOrDefault(Color.White)
 
 /**
  * Mini-preview strip of the multi-slide deck — the structural surface of the

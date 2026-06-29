@@ -38,6 +38,20 @@ Append-only log of gotchas and decisions that save time next run.
   the behaviour: `story-composer-multi-pending` flipped "second offline pick is rejected" →
   "second offline pick is appended". Keep the assertion strong (assert the new outcome
   precisely), record the flip + rationale in the run log, and the reviewer gate passes.
+- **One text field, two roles (caption vs on-canvas element):** rather than add a second editor,
+  `story-text-elements` routes the existing field by a derived `editorText`/`isEditingTextElement`
+  (selected element's text or the slide caption). `onTextChange` branches on
+  `_state.value.selectedTextElement?.id`. Keeps the canvas a single coherent surface and the SoT in
+  the deck. A dangling element selection (after a slide switch/remove) is dropped centrally in
+  `mirrorDraftToSelection` — an element id only lives on one slide, so "not on the selected slide ⇒
+  not editing". Don't clear in `applyDeck` per-op (it also runs on every pan gesture).
+- **Editor models can land before/after-but-separate from wire serialization** — but prefer wiring
+  it when the model already exists: `story-canvas-transform` shipped the per-slide transform without
+  publishing it; `story-text-elements` *did* serialize into the existing `StoryEffects.textObjects`,
+  so the slice is a complete vertical (no dead-end). Check `core/model` for an existing wire type
+  before deciding the publish path is out of scope.
+- **Private VM companion constants aren't visible to tests** — assert `errorMessage != null` (the
+  existing pattern for `MEDIA_LIMIT` etc.), don't reference `StoryComposerViewModel.X` from a test.
 - **Pure gesture resolvers (drag/swipe) — keep thresholds/slot widths as params** so the
   decision is fully unit-tested off the Composable (`StorySwipeResolver`, `SlideReorderResolver`).
   The Composable measures (`onSizeChanged`, `LocalDensity`), accumulates (`detectHorizontalDragGestures`

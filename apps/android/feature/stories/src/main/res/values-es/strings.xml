@@ -43,6 +43,10 @@
     <string name="stories_composer_add_slide">Añadir diapositiva</string>
     <string name="stories_composer_duplicate_slide">Duplicar diapositiva</string>
     <string name="stories_composer_remove_slide">Eliminar diapositiva</string>
+    <string name="stories_composer_add_text">Añadir texto</string>
+    <string name="stories_composer_text_placeholder">Escribe algo…</string>
+    <string name="stories_composer_remove_text">Eliminar texto</string>
+    <string name="stories_composer_text_caption">Pie de foto</string>
     <string name="stories_visibility_public">Público</string>
     <string name="stories_visibility_friends">Amigos</string>
     <string name="stories_visibility_community">Comunidad</string>

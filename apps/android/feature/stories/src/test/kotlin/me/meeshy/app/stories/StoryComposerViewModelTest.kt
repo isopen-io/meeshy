@@ -1053,4 +1053,132 @@ class StoryComposerViewModelTest {
         assertThat(vm.state.value.attachments.map { it.id }).containsExactly("m1")
         assertThat(vm.state.value.draft.mediaIds).containsExactly("m1")
     }
+
+    // --- on-canvas text elements ---
+
+    @Test
+    fun `onAddTextElement adds an empty element to the selected slide and edits it`() = runTest {
+        val vm = viewModel()
+
+        vm.onAddTextElement()
+
+        val state = vm.state.value
+        assertThat(state.selectedSlideTextElements).hasSize(1)
+        assertThat(state.isEditingTextElement).isTrue()
+        assertThat(state.selectedTextElement?.text).isEqualTo("")
+        assertThat(state.editorText).isEqualTo("")
+    }
+
+    @Test
+    fun `while editing an element onTextChange rewrites the element not the caption`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+
+        vm.onTextChange("Salut")
+
+        val state = vm.state.value
+        assertThat(state.selectedTextElement?.text).isEqualTo("Salut")
+        assertThat(state.editorText).isEqualTo("Salut")
+        assertThat(state.draft.text).isEqualTo("")
+        assertThat(state.deck.selectedSlide.text).isEqualTo("")
+        assertThat(state.canPublish).isTrue()
+    }
+
+    @Test
+    fun `an added but still-blank element does not make the story publishable`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        assertThat(vm.state.value.canPublish).isFalse()
+    }
+
+    @Test
+    fun `onDeselectTextElement returns the field to caption editing`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        vm.onTextChange("element text")
+
+        vm.onDeselectTextElement()
+        vm.onTextChange("caption text")
+
+        val state = vm.state.value
+        assertThat(state.isEditingTextElement).isFalse()
+        assertThat(state.draft.text).isEqualTo("caption text")
+        assertThat(state.selectedSlideTextElements.single().text).isEqualTo("element text")
+    }
+
+    @Test
+    fun `onSelectTextElement on an unknown id is inert`() = runTest {
+        val vm = viewModel()
+        vm.onSelectTextElement("ghost")
+        assertThat(vm.state.value.selectedTextElementId).isNull()
+    }
+
+    @Test
+    fun `onAddTextElement at the per-slide cap surfaces a warning and adds nothing`() = runTest {
+        val vm = viewModel()
+        repeat(StorySlideDeck.MAX_TEXT_ELEMENTS_PER_SLIDE) { vm.onAddTextElement() }
+        assertThat(vm.state.value.selectedSlideTextElements).hasSize(StorySlideDeck.MAX_TEXT_ELEMENTS_PER_SLIDE)
+
+        vm.onAddTextElement()
+
+        assertThat(vm.state.value.selectedSlideTextElements).hasSize(StorySlideDeck.MAX_TEXT_ELEMENTS_PER_SLIDE)
+        assertThat(vm.state.value.errorMessage).isNotNull()
+    }
+
+    @Test
+    fun `onTextElementMoved drags the element clamped to the canvas`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementMoved(id, dx = 0.9f, dy = -0.9f)
+
+        val moved = vm.state.value.selectedSlideTextElements.single()
+        assertThat(moved.x).isEqualTo(1f)
+        assertThat(moved.y).isEqualTo(0f)
+    }
+
+    @Test
+    fun `onRemoveTextElement removes the element and ends its editing`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        vm.onTextChange("bye")
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onRemoveTextElement(id)
+
+        val state = vm.state.value
+        assertThat(state.selectedSlideTextElements).isEmpty()
+        assertThat(state.isEditingTextElement).isFalse()
+    }
+
+    @Test
+    fun `switching slides ends element editing and the field follows the new caption`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        vm.onTextChange("on slide one")
+
+        vm.onAddSlide()
+
+        val state = vm.state.value
+        assertThat(state.isEditingTextElement).isFalse()
+        assertThat(state.editorText).isEqualTo("")
+        assertThat(state.deck.slides.first().elements.single().text).isEqualTo("on slide one")
+    }
+
+    @Test
+    fun `publish carries the text elements into storyEffects textObjects`() = runTest {
+        val vm = viewModel(user = MeeshyUser(id = "me", username = "me", systemLanguage = "fr"))
+        vm.onAddTextElement()
+        vm.onTextChange("Bonjour")
+        val request = slot<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(request), any()) } returns "cmid"
+
+        vm.publish()
+
+        val objects = request.captured.storyEffects?.textObjects.orEmpty()
+        assertThat(objects.map { it.text }).containsExactly("Bonjour")
+        assertThat(objects.single().sourceLanguage).isEqualTo("fr")
+        assertThat(request.captured.content).isNull()
+    }
 }

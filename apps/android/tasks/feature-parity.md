@@ -480,8 +480,27 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `StoryCanvasSurface` renders the selected slide's first media as a 9:16 background under a
       `graphicsLayer` + `detectTransformGestures` (glue only; the math is unit-tested in one place).
       Pending: FAB + bottom-band toolbar (Contenu/Effets), on-canvas text/sticker/drawing elements.
-- [ ] Text elements (≤5/slide): style (bold/italic/handwriting/typewriter/neon/retro), colour,
-      size, alignment, background (none/solid/glass), outline/stroke, RTL, fade timing
+- [~] Text elements (≤5/slide): style (bold/italic/handwriting/typewriter/neon/retro), colour,
+      size, alignment, background (none/solid/glass), outline/stroke, RTL, fade timing.
+      **Model + add/move/remove + publish done** (`story-text-elements`): a pure `StoryTextElement`
+      (id, text, `StoryTextStyle` bold/neon/typewriter/handwriting/classic, hex colour, `StoryTextAlign`
+      left/center/right, normalised `x`/`y`) with the clamp living in one place — `normalised()` /
+      `nudged(dx,dy)` keep the element inside the canvas `0f..1f`, and `toTextObject(lang)` maps to the
+      gateway `StoryTextObject` wire strings. The deck mirrors the media reducer per-slide
+      (`StorySlideDeck.addTextElementToSelected`/`removeTextElement`/`updateTextElement`/`moveTextElement`,
+      `MAX_TEXT_ELEMENTS_PER_SLIDE=5`, `selectedRemainingTextSlots`, `isWithinTextElementLimit`); a
+      slide carrying only a publishable element now publishes and `publishableSlides` counts it.
+      `StoryComposerDraft.toCreateStoryRequest` serialises publishable elements into
+      `storyEffects.textObjects` (blanks dropped, `storyEffects` null when empty). The VM adds
+      `onAddTextElement` (mints id, selects it for immediate typing, inert-with-warning at the cap),
+      routes `onTextChange` to the selected element **or** the slide caption (one field, two roles via
+      `editorText`/`isEditingTextElement`), `onSelectTextElement`/`onDeselectTextElement`,
+      `onTextElementMoved` (drag, clamped), `onRemoveTextElement`; switching/removing a slide ends
+      element editing (`mirrorDraftToSelection` drops a dangling selection). `StoryCanvasSurface`
+      renders each element centred at its normalised point, draggable / tappable / removable, with a
+      background tap to deselect (glue; px↔fraction division only, clamp is in the model). Surpasses
+      iOS (durable-outbox publish path). Pending: per-style typography rendering, size/background/
+      outline/RTL/fade, the in-place floating editor + tool bubbles below.
 - [ ] In-place floating text editor with tool bubbles + keyboard-aware canvas shift
 - [~] Media elements (≤10/slide): photo/video import, crop/edit, aspect-ratio preservation.
       **Upload foundation done** (`media-upload-api`): `MediaApi` multipart `POST /attachments/upload`

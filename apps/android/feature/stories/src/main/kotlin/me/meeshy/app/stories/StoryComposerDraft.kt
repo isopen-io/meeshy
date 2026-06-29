@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.net.api.CreateStoryRequest
 
 /**
@@ -26,6 +27,7 @@ data class StoryComposerDraft(
     val text: String = "",
     val visibility: StoryVisibility = StoryVisibility.PUBLIC,
     val mediaIds: List<String> = emptyList(),
+    val textElements: List<StoryTextElement> = emptyList(),
 ) {
     /** The content actually sent — surrounding whitespace is never published. */
     val trimmedText: String get() = text.trim()
@@ -39,6 +41,12 @@ data class StoryComposerDraft(
     /** True once at least one uploaded media is attached to the draft. */
     val hasMedia: Boolean get() = mediaIds.isNotEmpty()
 
+    /** The on-canvas text elements that carry publishable (non-blank) content. */
+    val publishableTextElements: List<StoryTextElement> get() = textElements.filter { it.isPublishable }
+
+    /** True once at least one on-canvas text element carries publishable content. */
+    val hasTextElements: Boolean get() = publishableTextElements.isNotEmpty()
+
     /** Within the per-story media cap ([MAX_MEDIA]) — parity with iOS's ≤10 rule. */
     val isWithinMediaLimit: Boolean get() = mediaIds.size <= MAX_MEDIA
 
@@ -50,11 +58,11 @@ data class StoryComposerDraft(
 
     /**
      * A draft is publishable when it carries real content — text **or** attached
-     * media — within both the character and media limits. A media-only story (no
-     * caption) is valid.
+     * media **or** a publishable on-canvas text element — within both the character
+     * and media limits. A media-only or text-element-only story (no caption) is valid.
      */
     val canPublish: Boolean
-        get() = (trimmedText.isNotEmpty() || hasMedia) && isWithinLimit && isWithinMediaLimit
+        get() = (trimmedText.isNotEmpty() || hasMedia || hasTextElements) && isWithinLimit && isWithinMediaLimit
 
     fun withText(value: String): StoryComposerDraft = copy(text = value)
 
@@ -62,19 +70,30 @@ data class StoryComposerDraft(
 
     fun withMediaIds(value: List<String>): StoryComposerDraft = copy(mediaIds = value)
 
+    fun withTextElements(value: List<StoryTextElement>): StoryComposerDraft = copy(textElements = value)
+
     /**
      * Maps the draft to the create-story wire request. [originalLanguage] is the
      * publisher's resolved content language (Prisme) so the gateway can seed
      * translations. [content] is omitted (null) for a media-only story; attached
-     * [mediaIds] ride along when present.
+     * [mediaIds] ride along when present; publishable on-canvas text elements are
+     * serialised into `storyEffects.textObjects` (blank elements are dropped), and
+     * `storyEffects` stays null when there is nothing to carry.
      */
     fun toCreateStoryRequest(originalLanguage: String): CreateStoryRequest = CreateStoryRequest(
         type = STORY_TYPE,
         content = trimmedText.takeIf { it.isNotEmpty() },
+        storyEffects = storyEffects(originalLanguage),
         visibility = visibility.wire,
         originalLanguage = originalLanguage,
         mediaIds = mediaIds.takeIf { it.isNotEmpty() },
     )
+
+    private fun storyEffects(originalLanguage: String): StoryEffects? =
+        publishableTextElements
+            .map { it.toTextObject(originalLanguage) }
+            .takeIf { it.isNotEmpty() }
+            ?.let { StoryEffects(textObjects = it) }
 
     companion object {
         const val MAX_CHARS: Int = 5000
