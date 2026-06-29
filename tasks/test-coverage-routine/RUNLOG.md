@@ -2390,4 +2390,23 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Production changes: none
 - Reviewer: PASS (rounds: 1) — all behavioral assertions, real boundaries, no tautologies, no production changes; strict-rejection assertions correctly omitted for schemas without .strict()
 - Notes / where the next run resumes: All validation schemas now ☑. Next slice: continue gateway manifest gap-fill — pick next batch of uncovered files from manifests/gateway.md (services/, routes/, or socketio/ sections)
-- Commit: 57a582f2 (squash-merged PR #1031 → main 2026-06-29T16:24Z)
+- Commit: 57a582f2 (squash-merged PR #1031 → main 2026-06-29T~16:30Z)
+
+## 2026-06-29T16:40Z — gateway-manifest-gap7 (conversation-preferences routes)
+- Targeted: routes/conversation-preferences.ts (634 lines — 5 routes: GET single, GET list, PUT upsert, DELETE, POST reorder)
+- Result: ☑ done
+- Coverage:
+  - routes/conversation-preferences.ts: 100% stmts / 100% funcs / 100% lines / 93.22% branches
+  - Uncovered branches (lines 50-56, 477): date-serialization ternaries and version fallback inside `toPreferencesPayload`, only reachable via fire-and-forget `broadcastToUser` which requires `socketIOHandler` decoration — not decorated in test isolation (no-op, safe skip)
+- Tests added: 26 tests in 1 new file
+  - New: `src/__tests__/unit/routes/conversation-preferences-routes.test.ts`
+    - GET single: stored prefs (isDefault: false), null → defaults (isDefault: true), anonymous 401, db error 500
+    - GET list: paginated list (length + isDefault:false + pagination.total), offset/limit params, anonymous 401, db error 500
+    - PUT upsert: pinned update, all fields passed to upsert (spy check), partial update (isMuted only), empty body, anonymous 401, db error 500
+    - DELETE: successful deletion (message match), findUnique called before delete (spy count), version+1 reset when prefs exist, version=0+1=1 when no prefs, P2025→404, generic 500, anonymous 401
+    - POST reorder: success (message match), updateMany called with correct where/data (spy), empty array graceful, anonymous 401, db error 500
+- Full suite: 322 suites / 9742 tests / 1 skipped — all thresholds met (stmts:75.22/branches:70.53/funcs:74.5/lines:75.41; floor 67/63/67/67)
+- Production changes: none
+- Reviewer: PASS (rounds: 1)
+- Notes / where the next run resumes: routes/conversation-preferences.ts ☑. Next slice: continue gateway manifest gap-fill — routes/friends.ts or next uncovered batch in manifests/gateway.md
+- Commit: 3196bdd9f782a228ab78b78126d32753876f756b (squash-merged PR #1038 → main 2026-06-29T16:43Z)

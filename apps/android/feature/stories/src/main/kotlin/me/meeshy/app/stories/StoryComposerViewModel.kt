@@ -224,6 +224,25 @@ class StoryComposerViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Restyles the on-canvas element [id] (inert when the id is unknown). Selection
+     * and editing are untouched — you style the element you are editing. The wire
+     * mapping ([StoryTextElement.toTextObject]) carries the style on publish.
+     */
+    fun onTextElementStyle(id: String, style: StoryTextStyle) {
+        _state.update { it.copy(deck = it.deck.updateTextElement(id) { element -> element.copy(style = style) }) }
+    }
+
+    /** Recolours the on-canvas element [id] ([color] is a `RRGGBB` hex; inert on unknown id). */
+    fun onTextElementColor(id: String, color: String) {
+        _state.update { it.copy(deck = it.deck.updateTextElement(id) { element -> element.copy(color = color) }) }
+    }
+
+    /** Realigns the on-canvas element [id]'s lines (inert on unknown id). */
+    fun onTextElementAlign(id: String, align: StoryTextAlign) {
+        _state.update { it.copy(deck = it.deck.updateTextElement(id) { element -> element.copy(align = align) }) }
+    }
+
     fun onVisibilityChange(visibility: StoryVisibility) {
         _state.update { it.copy(draft = it.draft.withVisibility(visibility)) }
     }
