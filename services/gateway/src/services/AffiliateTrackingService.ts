@@ -170,6 +170,7 @@ export class AffiliateTrackingService {
             });
           }
         } catch (sessionError) {
+          logger.error('Failed to persist affiliate session data', sessionError instanceof Error ? sessionError : new Error(String(sessionError)));
         }
       }
 

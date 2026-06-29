@@ -141,27 +141,21 @@ export class FirebaseNotificationService {
     }
 
     try {
-      // 2. Récupérer le FCM token de l'utilisateur depuis la DB
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { id: true }
+      // 2. Récupérer les FCM tokens de l'utilisateur depuis la DB
+      const pushTokens = await this.prisma.pushToken.findMany({
+        where: { userId, type: 'fcm' },
+        select: { token: true, id: true }
       });
 
-      if (!user) {
-        logger.debug(`[Notifications] User ${userId} not found for FCM push`);
+      if (pushTokens.length === 0) {
+        logger.debug(`[Notifications] No FCM tokens for user ${userId}`);
         return false;
       }
 
-      // TODO: Récupérer le fcmToken réel quand le champ existera
-      const fcmToken = null;
-
-      if (!fcmToken) {
-        return false;
-      }
-
-      // 3. Préparer le message Firebase
+      // 3. Préparer le message multicast Firebase
+      const tokens = pushTokens.map(t => t.token);
       const message = {
-        token: fcmToken,
+        tokens,
         notification: {
           title: notification.title,
           body: notification.content
@@ -190,16 +184,31 @@ export class FirebaseNotificationService {
         }
       };
 
-      // 4. Envoyer via Firebase (avec timeout)
-      await Promise.race([
-        admin.messaging().send(message),
-        new Promise((_, reject) =>
+      // 4. Envoyer via Firebase multicast (avec timeout)
+      const batchResponse = await Promise.race([
+        admin.messaging().sendEachForMulticast(message),
+        new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error('Firebase timeout')), 5000)
         )
       ]);
 
-      logger.debug(`[Notifications] ✅ Firebase push sent successfully to ${userId}`);
-      return true;
+      // Remove stale tokens that Firebase rejected
+      const staleTokenIds = batchResponse.responses
+        .map((r, i) => ({ r, token: pushTokens[i] }))
+        .filter(({ r }) => !r.success && (
+          r.error?.code === 'messaging/invalid-registration-token' ||
+          r.error?.code === 'messaging/registration-token-not-registered'
+        ))
+        .map(({ token }) => token.id);
+
+      if (staleTokenIds.length > 0) {
+        this.prisma.pushToken.deleteMany({ where: { id: { in: staleTokenIds } } })
+          .catch((err: unknown) => logger.error('[Notifications] Failed to delete stale FCM tokens', err instanceof Error ? err : new Error(String(err))));
+      }
+
+      const successCount = batchResponse.successCount;
+      logger.debug(`[Notifications] ✅ Firebase push sent to ${successCount}/${tokens.length} devices for user ${userId}`);
+      return successCount > 0;
 
     } catch (error: any) {
       // Logger l'erreur mais NE PAS crasher

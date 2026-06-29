@@ -241,7 +241,9 @@ export class PostTranslationService {
             confidenceScore: confidenceScore ?? 1,
             createdAt: new Date().toISOString(),
           },
-        }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch(() => {});
+        }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch((err: unknown) => {
+          log.error('PostTranslation: broadcast failed', err instanceof Error ? err : new Error(String(err)), { postId, targetLanguage });
+        });
       }
     } catch (err) {
       log.error('PostTranslation: persist failed', err, { postId, targetLanguage });
@@ -294,7 +296,9 @@ export class PostTranslationService {
               confidenceScore: confidenceScore ?? 1,
               createdAt: new Date().toISOString(),
             },
-          }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch(() => {});
+          }, post.authorId, post.visibility, post.visibilityUserIds ?? []).catch((err: unknown) => {
+            log.error('CommentTranslation: broadcast failed', err instanceof Error ? err : new Error(String(err)), { commentId, targetLanguage });
+          });
         }
       }
     } catch (err) {
