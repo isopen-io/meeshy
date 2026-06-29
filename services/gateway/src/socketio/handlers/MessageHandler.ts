@@ -53,7 +53,12 @@ import { AttachmentService } from '../../services/attachments/AttachmentService'
 import { MessageReadStatusService } from '../../services/MessageReadStatusService.js';
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService.js';
 import { validateSocketEvent } from '../../middleware/validation.js';
-import { SocketMessageSendSchema, SocketMessageSendWithAttachmentsSchema } from '../../validation/socket-event-schemas.js';
+import {
+  SocketMessageSendSchema,
+  SocketMessageSendWithAttachmentsSchema,
+  SocketMessageEditSchema,
+  SocketMessageDeleteSchema,
+} from '../../validation/socket-event-schemas.js';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 
 const handlerLogger = enhancedLogger.child({ module: 'MessageHandler' });
@@ -512,6 +517,228 @@ export class MessageHandler {
       handlerLogger.error('message:send-with-attachments failed', { error });
       this.stats.errors++;
       this._sendError(callback, 'Failed to send message', socket);
+    }
+  }
+
+  /**
+   * Handles real-time message editing via WebSocket.
+   * Mirrors the REST PUT /messages/:messageId logic but operates over socket
+   * so the edit is propagated without an HTTP round-trip.
+   *
+   * Permissions: only the message author can edit their own message.
+   * Anonymous users cannot edit (no stable identity → no ownership proof).
+   */
+  async handleMessageEdit(
+    socket: Socket,
+    data: { messageId: string; content: string },
+    callback?: (response: SocketIOResponse) => void
+  ): Promise<void> {
+    try {
+      const schemaValidation = validateSocketEvent(SocketMessageEditSchema, data);
+      if (schemaValidation.success === false) {
+        this._sendGenericError(callback, schemaValidation.error, socket);
+        return;
+      }
+      const validated = schemaValidation.data;
+
+      const userContext = this._getUserContext(socket);
+      if (!userContext || !userContext.userId || userContext.isAnonymous) {
+        this._sendGenericError(callback, 'Authentication required to edit messages', socket);
+        return;
+      }
+
+      const { userId } = userContext;
+
+      const message = await this.prisma.message.findFirst({
+        where: {
+          id: validated.messageId,
+          sender: { userId },
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+          conversationId: true,
+          senderId: true,
+          content: true,
+          originalLanguage: true,
+          sender: { select: { id: true, userId: true, displayName: true, avatar: true } },
+          attachments: { select: { id: true } },
+        },
+      });
+
+      if (!message) {
+        this._sendGenericError(callback, 'Message not found or you are not authorized to edit it', socket);
+        return;
+      }
+
+      const hasAttachments = message.attachments && message.attachments.length > 0;
+      if (!validated.content.trim() && !hasAttachments) {
+        this._sendGenericError(callback, 'Message content cannot be empty', socket);
+        return;
+      }
+
+      const updatedMessage = await this.prisma.message.update({
+        where: { id: validated.messageId },
+        data: {
+          content: validated.content.trim(),
+          isEdited: true,
+          editedAt: new Date(),
+          translations: null,
+        },
+        select: {
+          id: true,
+          conversationId: true,
+          content: true,
+          isEdited: true,
+          editedAt: true,
+          originalLanguage: true,
+          sender: { select: { id: true, userId: true, displayName: true, avatar: true } },
+        },
+      });
+
+      // Trigger async retranslation — fire-and-forget, non-blocking
+      const retranslationPayload = {
+        id: validated.messageId,
+        content: validated.content.trim(),
+        originalLanguage: message.originalLanguage,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+      };
+      (this.translationService as unknown as { _processRetranslationAsync: (id: string, msg: unknown) => Promise<void> })
+        ._processRetranslationAsync(validated.messageId, retranslationPayload)
+        .catch((err: unknown) => handlerLogger.warn('retranslation failed after socket edit', { messageId: validated.messageId, error: err }));
+
+      const editedPayload = {
+        ...updatedMessage,
+        conversationId: message.conversationId,
+        translations: [],
+      };
+
+      const room = ROOMS.conversation(message.conversationId);
+      this.io.to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, editedPayload);
+
+      callback?.({ success: true, data: { messageId: validated.messageId } });
+      handlerLogger.debug('message:edit processed', { messageId: validated.messageId, userId, conversationId: message.conversationId });
+    } catch (error: unknown) {
+      handlerLogger.error('message:edit failed', { error });
+      this._sendGenericError(callback, 'Failed to edit message', socket);
+    }
+  }
+
+  /**
+   * Handles real-time message deletion (soft delete) via WebSocket.
+   * Mirrors the REST DELETE /messages/:messageId logic.
+   *
+   * Permissions: message author OR conversation admin/moderator OR global ADMIN/BIGBOSS.
+   * Anonymous users cannot delete.
+   */
+  async handleMessageDelete(
+    socket: Socket,
+    data: { messageId: string },
+    callback?: (response: SocketIOResponse) => void
+  ): Promise<void> {
+    try {
+      const schemaValidation = validateSocketEvent(SocketMessageDeleteSchema, data);
+      if (schemaValidation.success === false) {
+        this._sendGenericError(callback, schemaValidation.error, socket);
+        return;
+      }
+      const validated = schemaValidation.data;
+
+      const userContext = this._getUserContext(socket);
+      if (!userContext || !userContext.userId || userContext.isAnonymous) {
+        this._sendGenericError(callback, 'Authentication required to delete messages', socket);
+        return;
+      }
+
+      const { userId } = userContext;
+
+      const message = await this.prisma.message.findFirst({
+        where: { id: validated.messageId, deletedAt: null },
+        select: {
+          id: true,
+          conversationId: true,
+          senderId: true,
+          sender: { select: { id: true, userId: true } },
+          conversation: {
+            select: {
+              createdAt: true,
+              participants: {
+                where: { userId, isActive: true },
+                select: { role: true },
+              },
+            },
+          },
+          attachments: { select: { id: true } },
+        },
+      });
+
+      if (!message) {
+        this._sendGenericError(callback, 'Message not found', socket);
+        return;
+      }
+
+      const memberRole = message.conversation.participants[0]?.role;
+      const isAuthor = message.sender?.userId === userId;
+
+      let canDelete = isAuthor || memberRole === 'admin' || memberRole === 'moderator';
+
+      // Lazy global role lookup — only when author + conversation-role checks fail
+      if (!canDelete) {
+        const userRecord = await this.prisma.user.findUnique({
+          where: { id: userId },
+          select: { role: true },
+        });
+        const globalRole = userRecord?.role;
+        canDelete = globalRole === 'ADMIN' || globalRole === 'BIGBOSS' || globalRole === 'MODERATOR';
+      }
+
+      if (!canDelete) {
+        this._sendGenericError(callback, 'You are not authorized to delete this message', socket);
+        return;
+      }
+
+      // Delete attachments (best-effort, non-blocking on individual failures)
+      if (message.attachments && message.attachments.length > 0) {
+        await Promise.allSettled(
+          message.attachments.map((att) => this.attachmentService.deleteAttachment(att.id))
+        );
+      }
+
+      // Soft delete: clear translations then set deletedAt
+      await this.prisma.message.update({
+        where: { id: validated.messageId },
+        data: { translations: null },
+      });
+      await this.prisma.message.update({
+        where: { id: validated.messageId },
+        data: { deletedAt: new Date() },
+      });
+
+      // Update conversation's lastMessageAt to the latest non-deleted message
+      const lastNonDeleted = await this.prisma.message.findFirst({
+        where: { conversationId: message.conversationId, deletedAt: null },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
+      });
+      await this.prisma.conversation.update({
+        where: { id: message.conversationId },
+        data: {
+          lastMessageAt: lastNonDeleted?.createdAt ?? message.conversation.createdAt,
+        },
+      });
+
+      const room = ROOMS.conversation(message.conversationId);
+      this.io.to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, {
+        messageId: validated.messageId,
+        conversationId: message.conversationId,
+      });
+
+      callback?.({ success: true, data: { messageId: validated.messageId } });
+      handlerLogger.debug('message:delete processed', { messageId: validated.messageId, userId, conversationId: message.conversationId });
+    } catch (error: unknown) {
+      handlerLogger.error('message:delete failed', { error });
+      this._sendGenericError(callback, 'Failed to delete message', socket);
     }
   }
 
@@ -1152,6 +1379,21 @@ export class MessageHandler {
     code?: string
   ): void {
     const errorResponse: SocketIOResponse<{ messageId: string }> = {
+      success: false,
+      error,
+      ...(code ? { code } : {})
+    };
+    if (callback) callback(errorResponse);
+    socket.emit(SERVER_EVENTS.ERROR, { message: error, ...(code ? { code } : {}) });
+  }
+
+  private _sendGenericError(
+    callback: ((response: SocketIOResponse) => void) | undefined,
+    error: string,
+    socket: Socket,
+    code?: string
+  ): void {
+    const errorResponse: SocketIOResponse = {
       success: false,
       error,
       ...(code ? { code } : {})
