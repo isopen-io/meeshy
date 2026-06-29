@@ -5,6 +5,7 @@ import { SecuritySanitizer } from '../../utils/sanitize';
 import {
   sendSuccess,
   sendForbidden,
+  sendBadRequest,
   sendNotFound,
   sendInternalError
 } from '../../utils/response.js';
@@ -88,9 +89,7 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
       const body = updateLinkSchema.parse(request.body);
 
       if (!isRegisteredUser(request.authContext)) {
-        return reply.status(403).send({
-          error: 'Utilisateur enregistré requis'
-        });
+        return sendForbidden(reply, 'Utilisateur enregistré requis');
       }
 
       const userId = request.authContext.registeredUser!.id;
@@ -151,11 +150,7 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          message: 'Données invalides',
-          errors: error.issues
-        });
+        return sendBadRequest(reply, 'Données invalides');
       }
       logError(fastify.log, 'Update link error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');
@@ -219,9 +214,7 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
       const body = updateLinkSchema.parse(request.body);
 
       if (!isRegisteredUser(request.authContext)) {
-        return reply.status(403).send({
-          error: 'Utilisateur enregistré requis'
-        });
+        return sendForbidden(reply, 'Utilisateur enregistré requis');
       }
 
       const userId = request.authContext.registeredUser!.id;
@@ -305,11 +298,7 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          message: 'Données invalides',
-          errors: error.issues
-        });
+        return sendBadRequest(reply, 'Données invalides');
       }
       logError(fastify.log, 'Update link error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');
