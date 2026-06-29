@@ -222,12 +222,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       sendSuccess(reply, sanitizedUser, { statusCode: 201, message: 'User created successfully' });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        reply.status(400).send({
-          success: false,
-          error: 'Validation error',
-          message: 'Invalid input data',
-          details: error.issues
-        });
+        sendBadRequest(reply, 'Invalid input data');
         return;
       }
 
@@ -302,12 +297,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       sendSuccess(reply, sanitizedUser, { message: 'User updated successfully' });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        reply.status(400).send({
-          success: false,
-          error: 'Validation error',
-          message: 'Invalid input data',
-          details: error.issues
-        });
+        sendBadRequest(reply, 'Invalid input data');
         return;
       }
 
@@ -379,12 +369,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       sendSuccess(reply, sanitizedUser, { message: `User role updated to ${validatedData.role}` });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        reply.status(400).send({
-          success: false,
-          error: 'Validation error',
-          message: 'Invalid input data',
-          details: error.issues
-        });
+        sendBadRequest(reply, 'Invalid input data');
         return;
       }
 
@@ -452,12 +437,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       sendSuccess(reply, sanitizedUser, { message: validatedData.isActive ? 'User activated' : 'User deactivated' });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        reply.status(400).send({
-          success: false,
-          error: 'Validation error',
-          message: 'Invalid input data',
-          details: error.issues
-        });
+        sendBadRequest(reply, 'Invalid input data');
         return;
       }
 
@@ -515,12 +495,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       sendSuccess(reply, { message: 'Password reset successfully' });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        reply.status(400).send({
-          success: false,
-          error: 'Validation error',
-          message: 'Invalid input data',
-          details: error.issues
-        });
+        sendBadRequest(reply, 'Invalid input data');
         return;
       }
 
@@ -763,12 +738,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       sendSuccess(reply, sanitizedUser, { message: validatedData.verified ? 'Email verified' : 'Email unverified' });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        reply.status(400).send({
-          success: false,
-          error: 'Validation error',
-          message: 'Invalid input data',
-          details: error.issues
-        });
+        sendBadRequest(reply, 'Invalid input data');
         return;
       }
 
@@ -832,12 +802,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       sendSuccess(reply, sanitizedUser, { message: validatedData.verified ? 'Phone verified' : 'Phone unverified' });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        reply.status(400).send({
-          success: false,
-          error: 'Validation error',
-          message: 'Invalid input data',
-          details: error.issues
-        });
+        sendBadRequest(reply, 'Invalid input data');
         return;
       }
 
@@ -906,12 +871,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       sendSuccess(reply, sanitizedUser, { message: `${validatedData.consentType} ${validatedData.enabled ? 'enabled' : 'disabled'}` });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        reply.status(400).send({
-          success: false,
-          error: 'Validation error',
-          message: 'Invalid input data',
-          details: error.issues
-        });
+        sendBadRequest(reply, 'Invalid input data');
         return;
       }
 
@@ -975,12 +935,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       sendSuccess(reply, sanitizedUser, { message: validatedData.verified ? 'Age verified' : 'Age unverified' });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        reply.status(400).send({
-          success: false,
-          error: 'Validation error',
-          message: 'Invalid input data',
-          details: error.issues
-        });
+        sendBadRequest(reply, 'Invalid input data');
         return;
       }
 

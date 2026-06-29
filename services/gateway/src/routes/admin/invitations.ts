@@ -225,10 +225,7 @@ export async function invitationRoutes(fastify: FastifyInstance) {
         });
     } catch (error) {
       logError(fastify.log, 'Get invitation details error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la récupération de l\'invitation'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération de l\'invitation');
     }
   });
 
