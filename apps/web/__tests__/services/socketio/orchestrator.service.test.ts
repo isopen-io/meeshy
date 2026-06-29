@@ -50,6 +50,8 @@ const mockTypOnTypingStart = jest.fn();
 const mockTypOnTypingStop = jest.fn();
 const mockTypGetListenerCount = jest.fn();
 const mockTypCleanup = jest.fn();
+const mockTypClearAllTypingState = jest.fn();
+const mockTypClearConversationTypingState = jest.fn();
 
 // PresenceService mocks
 const mockPresSetupEventListeners = jest.fn();
@@ -158,6 +160,8 @@ jest.mock('@/services/socketio/typing.service', () => ({
     onTypingStop: (...args: unknown[]) => mockTypOnTypingStop(...args),
     getListenerCount: (...args: unknown[]) => mockTypGetListenerCount(...args),
     cleanup: (...args: unknown[]) => mockTypCleanup(...args),
+    clearAllTypingState: (...args: unknown[]) => mockTypClearAllTypingState(...args),
+    clearConversationTypingState: (...args: unknown[]) => mockTypClearConversationTypingState(...args),
   })),
 }));
 

@@ -287,6 +287,106 @@ describe('TypingService', () => {
     });
   });
 
+  // ─── clearConversationTypingState ───────────────────────────────────────────
+
+  describe('clearConversationTypingState', () => {
+    it('removes typing users only for the specified conversation', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      socket._trigger('typing:start', makeEvent({ userId: 'u1', conversationId: 'conv-1' }));
+      socket._trigger('typing:start', makeEvent({ userId: 'u2', conversationId: 'conv-2' }));
+
+      service.clearConversationTypingState('conv-1');
+
+      expect(service.getTypingUsers('conv-1')).toEqual([]);
+      expect(service.getTypingUsers('conv-2')).toContain('u2');
+    });
+
+    it('notifies listeners with isTyping:false for each cleared user', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      service.onTyping(listener);
+      socket._trigger('typing:start', makeEvent({ userId: 'u1', conversationId: 'conv-1' }));
+      socket._trigger('typing:start', makeEvent({ userId: 'u2', conversationId: 'conv-1' }));
+      listener.mockClear();
+
+      service.clearConversationTypingState('conv-1');
+
+      const stoppedCalls = listener.mock.calls.filter(([e]) => e.isTyping === false);
+      expect(stoppedCalls).toHaveLength(2);
+      expect(stoppedCalls.map(([e]) => e.userId)).toEqual(expect.arrayContaining(['u1', 'u2']));
+    });
+
+    it('does not throw for unknown conversation', () => {
+      expect(() => service.clearConversationTypingState('nonexistent')).not.toThrow();
+    });
+
+    it('cancels the safety timeout for users in the cleared conversation', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      socket._trigger('typing:start', makeEvent({ userId: 'u1', conversationId: 'conv-1' }));
+
+      service.clearConversationTypingState('conv-1');
+
+      service.onTyping(listener);
+      jest.advanceTimersByTime(15000); // safety timeout would fire here
+      expect(listener).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── clearAllTypingState ────────────────────────────────────────────────────
+
+  describe('clearAllTypingState', () => {
+    it('immediately removes all typing users and notifies listeners with isTyping:false', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      service.onTyping(listener);
+      socket._trigger('typing:start', makeEvent({ userId: 'user-1', conversationId: 'conv-1' }));
+      socket._trigger('typing:start', makeEvent({ userId: 'user-2', conversationId: 'conv-1' }));
+      socket._trigger('typing:start', makeEvent({ userId: 'user-3', conversationId: 'conv-2' }));
+      listener.mockClear();
+
+      service.clearAllTypingState();
+
+      // All conversations cleared
+      expect(service.getTypingUsers('conv-1')).toEqual([]);
+      expect(service.getTypingUsers('conv-2')).toEqual([]);
+      // Listeners notified with isTyping: false for each cleared user
+      const stoppedCalls = listener.mock.calls.filter(([e]) => e.isTyping === false);
+      expect(stoppedCalls).toHaveLength(3);
+    });
+
+    it('cancels pending safety timeouts', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      socket._trigger('typing:start', makeEvent());
+
+      service.clearAllTypingState();
+
+      // After clear, advancing time should NOT trigger additional listener calls
+      const listener = jest.fn();
+      service.onTyping(listener);
+      jest.advanceTimersByTime(15000);
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it('preserves registered listeners after clearing state', () => {
+      const listener = jest.fn();
+      service.onTyping(listener);
+
+      service.clearAllTypingState();
+
+      expect(service.getListenerCount()).toBe(1);
+    });
+
+    it('does not throw when called with no active typing users', () => {
+      expect(() => service.clearAllTypingState()).not.toThrow();
+    });
+  });
+
   // ─── cleanup ────────────────────────────────────────────────────────────────
 
   describe('cleanup', () => {
