@@ -1110,6 +1110,16 @@ public extension MessageSocketProviding {
                               bytesSent: bytesSent, bytesReceived: bytesReceived)
     }
 
+    /// Shim that adds audio jitter passthrough; mocks can keep the old signatures.
+    func emitCallQualityReport(
+        callId: String, level: String, rtt: Double, packetLoss: Double,
+        bytesSent: Int, bytesReceived: Int, availableOutgoingBitrateBps: Int, jitterMs: Double
+    ) {
+        emitCallQualityReport(callId: callId, level: level, rtt: rtt, packetLoss: packetLoss,
+                              bytesSent: bytesSent, bytesReceived: bytesReceived,
+                              availableOutgoingBitrateBps: availableOutgoingBitrateBps)
+    }
+
     func emitCallReconnecting(callId: String, participantId: String, attempt: Int) {}
     func emitCallReconnected(callId: String, participantId: String) {}
     func emitCallJoinWithAck(callId: String) async -> Bool { false }
@@ -2211,7 +2221,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// are cumulative WebRTC counters; `level` is excellent|good|fair|poor.
     public func emitCallQualityReport(
         callId: String, level: String, rtt: Double, packetLoss: Double,
-        bytesSent: Int, bytesReceived: Int, availableOutgoingBitrateBps: Int = 0
+        bytesSent: Int, bytesReceived: Int, availableOutgoingBitrateBps: Int = 0,
+        jitterMs: Double = 0
     ) {
         var stats: [String: Any] = [
             "level": level,
@@ -2222,6 +2233,9 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         ]
         if availableOutgoingBitrateBps > 0 {
             stats["availableOutgoingBitrateBps"] = availableOutgoingBitrateBps
+        }
+        if jitterMs > 0 {
+            stats["jitterMs"] = jitterMs
         }
         socket?.emit("call:quality-report", ["callId": callId, "stats": stats])
     }
