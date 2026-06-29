@@ -1308,7 +1308,7 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   2. use-post-translation.ts: deviceLocale (4th Prisme priority) is not implemented in this hook — it lives at the gateway/user-preferences layer. The hook's resolvePreferredLanguage implements only systemLanguage > regionalLanguage > customDestinationLanguage > 'fr'. All 3 explicit tiers + fallback covered.
   3. Pre-existing web suite failures (19 suites) remain unchanged — pre-existing issue from missing @meeshy/shared dist on pnpm env; zero new failures introduced.
   4. Next sub-slice (next run): use-post-mutations.ts, use-post-socket-cache-sync.ts, use-reactions-query.ts, use-stories.ts, use-stories-realtime.ts, use-feed-realtime.ts, lib/story-transforms.ts
-- Commit: (see below)
+- Commit: 57a582f2 (squash-merged PR #1031 → main 2026-06-29T16:24Z)
 
 ## 2026-06-21T00:00Z — P2 Feed/posts/stories × web (remaining 7 modules — completes cell)
 - Targeted: `apps/web/hooks/queries/use-post-mutations.ts`, `use-post-socket-cache-sync.ts`, `use-reactions-query.ts`, `apps/web/hooks/social/use-stories.ts`, `use-stories-realtime.ts`, `use-feed-realtime.ts`, `apps/web/lib/story-transforms.ts`
