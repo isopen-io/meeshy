@@ -577,6 +577,108 @@ final class ConversationSyncEngineTests: XCTestCase {
     // MARK: - Sort persistence
 
     /// The sync engine MUST persist the cached list sorted by `lastMessageAt`
+    // MARK: - attachmentUpdated relay (Whisper/TTS enrichment)
+
+    /// When `message:attachment-updated` arrives for a closed conversation,
+    /// the sync engine must patch the cached message's attachment with the
+    /// new transcription so opening the chat later shows enriched data.
+    func test_attachmentUpdated_patchesTranscriptionInMessageCache() async {
+        let convId = "conv-att-upd-1"
+        let msgId = "msg-att-upd-1"
+        let attachmentId = "att-1"
+
+        let attachment = MeeshyMessageAttachment(id: attachmentId, mimeType: "audio/mp4")
+        var msg = TestFactories.makeMessage(id: msgId, conversationId: convId)
+        msg.attachments = [attachment]
+        try? await CacheCoordinator.shared.messages.save([msg], for: convId)
+
+        await engine.startSocketRelay()
+
+        let attJson: [String: Any] = [
+            "id": attachmentId,
+            "transcription": [
+                "text": "Hello world",
+                "language": "en",
+                "confidence": 0.98
+            ]
+        ]
+        let event = makeAttachmentUpdatedEvent(
+            conversationId: convId, messageId: msgId, attachmentJson: attJson
+        )
+
+        let exp = expectation(description: "messagesDidChange emitted")
+        engine.messagesDidChange
+            .first(where: { $0 == convId })
+            .sink { _ in exp.fulfill() }
+            .store(in: &cancellables)
+
+        mockMessageSocket.attachmentUpdated.send(event)
+
+        await fulfillment(of: [exp], timeout: 2.0)
+
+        let cached = await CacheCoordinator.shared.messages.load(for: convId).snapshot() ?? []
+        let cachedMsg = cached.first { $0.id == msgId }
+        XCTAssertEqual(cachedMsg?.attachments.first?.transcription?.text, "Hello world")
+        XCTAssertEqual(cachedMsg?.attachments.first?.transcription?.language, "en")
+        XCTAssertEqual(cachedMsg?.attachments.first?.transcription?.confidence, 0.98)
+    }
+
+    /// When the event carries new audio translations, they must be merged into
+    /// the cached attachment's `audioTranslations` dictionary.
+    func test_attachmentUpdated_patchesAudioTranslationsInMessageCache() async {
+        let convId = "conv-att-upd-2"
+        let msgId = "msg-att-upd-2"
+        let attachmentId = "att-2"
+
+        let attachment = MeeshyMessageAttachment(id: attachmentId, mimeType: "audio/mp4")
+        var msg = TestFactories.makeMessage(id: msgId, conversationId: convId)
+        msg.attachments = [attachment]
+        try? await CacheCoordinator.shared.messages.save([msg], for: convId)
+
+        await engine.startSocketRelay()
+
+        let attJson: [String: Any] = [
+            "id": attachmentId,
+            "translations": [
+                "fr": ["url": "https://cdn.meeshy.me/audio/fr.mp4", "durationMs": 3200, "format": "mp4", "cloned": true]
+            ]
+        ]
+        let event = makeAttachmentUpdatedEvent(
+            conversationId: convId, messageId: msgId, attachmentJson: attJson
+        )
+
+        let exp = expectation(description: "messagesDidChange emitted for translations")
+        engine.messagesDidChange
+            .first(where: { $0 == convId })
+            .sink { _ in exp.fulfill() }
+            .store(in: &cancellables)
+
+        mockMessageSocket.attachmentUpdated.send(event)
+
+        await fulfillment(of: [exp], timeout: 2.0)
+
+        let cached = await CacheCoordinator.shared.messages.load(for: convId).snapshot() ?? []
+        let cachedAtt = cached.first(where: { $0.id == msgId })?.attachments.first
+        XCTAssertEqual(cachedAtt?.audioTranslations?["fr"]?.url, "https://cdn.meeshy.me/audio/fr.mp4")
+        XCTAssertEqual(cachedAtt?.audioTranslations?["fr"]?.cloned, true)
+    }
+
+    /// An event for an unknown message ID must not crash and must not emit
+    /// messagesDidChange for a non-existent patch (the upsertPatch is a no-op
+    /// when the item is absent — but we do still emit messagesDidChange to
+    /// signal the UI to re-check; verify only no crash here).
+    func test_attachmentUpdated_unknownMessageId_doesNotCrash() async {
+        await engine.startSocketRelay()
+
+        let attJson: [String: Any] = ["id": "att-unknown"]
+        let event = makeAttachmentUpdatedEvent(
+            conversationId: "conv-unknown", messageId: "msg-unknown", attachmentJson: attJson
+        )
+
+        mockMessageSocket.attachmentUpdated.send(event)
+        try? await Task.sleep(nanoseconds: 200_000_000)
+    }
+
     /// DESC so cold-start cache reads land on the correct order without
     /// requiring the ViewModel to re-sort. Backend pagination order is not
     /// guaranteed to be timestamp-sorted (e.g. when delta sync interleaves
@@ -605,6 +707,24 @@ final class ConversationSyncEngineTests: XCTestCase {
 
         let cached = await CacheCoordinator.shared.conversations.load(for: "list").value ?? []
         XCTAssertEqual(cached.map(\.id), ["newest", "middle", "older"], "Cache must be persisted sorted by lastMessageAt DESC")
+    }
+
+    // MARK: - Helpers
+
+    private func makeAttachmentUpdatedEvent(
+        conversationId: String,
+        messageId: String,
+        attachmentJson: [String: Any]
+    ) -> AttachmentUpdatedEvent {
+        let wrapper: [String: Any] = [
+            "conversationId": conversationId,
+            "messageId": messageId,
+            "attachment": attachmentJson
+        ]
+        let data = try! JSONSerialization.data(withJSONObject: wrapper)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try! decoder.decode(AttachmentUpdatedEvent.self, from: data)
     }
 }
 

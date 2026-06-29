@@ -783,6 +783,14 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             }
             .store(in: &socketSubscriptions)
 
+        // Attachment content updated (Whisper transcription, NLLB+TTS audio translation)
+        messageSocket.attachmentUpdated
+            .sink { [weak self] event in
+                guard let self else { return }
+                Task { await self.handleAttachmentUpdated(event) }
+            }
+            .store(in: &socketSubscriptions)
+
         // Conversation closed
         messageSocket.conversationClosed
             .sink { [weak self] event in
@@ -1161,6 +1169,63 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
     private func handleAttachmentStatusUpdated(_ event: AttachmentStatusUpdatedEvent) async {
         // Trigger message refresh so UI can re-render attachment status indicators
+        _messagesDidChange.send(event.conversationId)
+    }
+
+    /// Patches the enriched attachment fields (Whisper transcription, NLLB+TTS audio
+    /// translations) into the cached `MeeshyMessage` for conversations that are not
+    /// currently open. The open-conversation path is handled by `ConversationSocketHandler`
+    /// which also updates the GRDB store and in-memory ViewModel dictionaries; this
+    /// handler ensures the `CacheCoordinator` message cache stays consistent for every
+    /// conversation, preventing stale previews after the user closes and reopens a chat.
+    private func handleAttachmentUpdated(_ event: AttachmentUpdatedEvent) async {
+        await cache.messages.upsertPatch(for: event.conversationId, itemId: event.messageId) { msg in
+            guard let idx = msg.attachments.firstIndex(where: { $0.id == event.attachment.id }) else { return }
+            let api = event.attachment
+            if let t = api.transcription {
+                msg.attachments[idx].transcription = MeeshyMessageAttachment.EmbeddedTranscription(
+                    text: t.resolvedText,
+                    language: t.language ?? "und",
+                    confidence: t.confidence,
+                    durationMs: t.durationMs,
+                    speakerCount: t.speakerCount,
+                    segments: t.segments?.map { s in
+                        MeeshyMessageAttachment.EmbeddedTranscription.TranscriptionSegmentData(
+                            text: s.text,
+                            startTime: s.startTime,
+                            endTime: s.endTime,
+                            speakerId: s.speakerId
+                        )
+                    }
+                )
+            }
+            if let translations = api.translations {
+                let mapped = translations.compactMapValues { t -> MeeshyMessageAttachment.EmbeddedAudioTranslation? in
+                    guard let url = t.url else { return nil }
+                    return MeeshyMessageAttachment.EmbeddedAudioTranslation(
+                        url: url,
+                        transcription: t.transcription,
+                        durationMs: t.durationMs,
+                        format: t.format,
+                        cloned: t.cloned,
+                        quality: t.quality,
+                        voiceModelId: t.voiceModelId,
+                        ttsModel: t.ttsModel,
+                        segments: t.segments?.map { s in
+                            MeeshyMessageAttachment.EmbeddedTranscription.TranscriptionSegmentData(
+                                text: s.text,
+                                startTime: s.startTime,
+                                endTime: s.endTime,
+                                speakerId: s.speakerId
+                            )
+                        }
+                    )
+                }
+                if !mapped.isEmpty {
+                    msg.attachments[idx].audioTranslations = mapped
+                }
+            }
+        }
         _messagesDidChange.send(event.conversationId)
     }
 
