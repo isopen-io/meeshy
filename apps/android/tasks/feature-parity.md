@@ -499,8 +499,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       element editing (`mirrorDraftToSelection` drops a dangling selection). `StoryCanvasSurface`
       renders each element centred at its normalised point, draggable / tappable / removable, with a
       background tap to deselect (glue; px↔fraction division only, clamp is in the model). Surpasses
-      iOS (durable-outbox publish path). Pending: per-style typography rendering, size/background/
-      outline/RTL/fade, the in-place floating editor + tool bubbles below.
+      iOS (durable-outbox publish path).
+      **Style picker + per-style rendering done** (`story-text-element-styling`): the *look* of each face
+      lives in one pure, Compose-agnostic place — `StoryTextStyle.typography()` → `StoryTextTypography`
+      (`fontWeight`/`italic`/`family`/`letterSpacingEm`/`glow`) over the `StoryTextFontFamily` token enum
+      (SANS/SERIF/MONOSPACE/CURSIVE), unit-tested per branch. The VM gains
+      `onTextElementStyle`/`onTextElementColor`/`onTextElementAlign` (one-line `updateTextElement`
+      wrappers, inert on unknown id, selection untouched). `TextElementLayer` renders
+      weight/slant/family/tracking + a neon glow `Shadow`; a `TextStyleToolbar` (style chips +
+      L/C/R `AlignToggle` + `ColorSwatch` palette) appears while editing an element. Pending:
+      size/background/outline/RTL/fade, the in-place floating editor + tool bubbles below.
 - [ ] In-place floating text editor with tool bubbles + keyboard-aware canvas shift
 - [~] Media elements (≤10/slide): photo/video import, crop/edit, aspect-ratio preservation.
       **Upload foundation done** (`media-upload-api`): `MediaApi` multipart `POST /attachments/upload`
