@@ -968,7 +968,8 @@ struct ConversationDashboardView: View {
             }
 
             return serverDaily.compactMap { entry in
-                guard let date = try? Date(entry.date, strategy: .dateTime.year().month().day().dashSeparator()),
+                // Server provides dates in "yyyy-MM-dd" format.
+                guard let date = try? Date(entry.date, strategy: .iso8601.year().month().day()),
                       date >= cutoff else { return nil }
                 return ActivityPoint(date: date, label: formattedDateLabel(date), count: entry.count)
             }
@@ -1117,7 +1118,7 @@ struct ConversationDashboardView: View {
         if n >= 1_000_000 { return String(format: "%.1fM", Double(n) / 1_000_000) }
         if n >= 10_000 { return String(format: "%.1fk", Double(n) / 1_000) }
         if n >= 1_000 {
-            return n.formatted(.number.grouping(.always))
+            return n.formatted()
         }
         return "\(n)"
     }
