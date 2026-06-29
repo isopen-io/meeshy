@@ -11,7 +11,7 @@ import os
 
 // MARK: - Call State
 
-enum CallState: Equatable {
+enum CallState: Equatable, Sendable {
     case idle
     case ringing(isOutgoing: Bool)
     /// Outgoing call: peer joined the room, we created and sent the SDP offer,
