@@ -2365,3 +2365,48 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   - translation-jobs tests use real `@meeshy/shared/types/api-schemas` (not mocked) + `ajv: { customOptions: { strict: false } }` for `example` keyword
 - Reviewer: PASS (CI green: all 15 checks passed; squash-merged)
 - Commit: 7e51b39f (squash-merged PR #1023 → main 2026-06-29T07:10Z)
+
+## 2026-06-29T11:45Z — gateway-manifest-gap6 (validation schemas ×5 + collectCoverageFrom expansion)
+- Targeted: validation/conversation-encryption-schemas.ts, validation/delete-account-schemas.ts, validation/message-read-status-schemas.ts, validation/messages-schemas.ts, validation/two-factor-schemas.ts
+- Result: ☑ done
+- Coverage:
+  - validation/conversation-encryption-schemas.ts: 100% lines / 100% branches / 100% functions
+  - validation/delete-account-schemas.ts: 100% lines / 100% branches / 100% functions
+  - validation/message-read-status-schemas.ts: 100% lines / 100% branches / 100% functions
+  - validation/messages-schemas.ts: 100% lines / 100% branches / 100% functions
+  - validation/two-factor-schemas.ts: 100% lines / 100% branches / 100% functions
+- Also confirmed ≥92% (100%) on pre-existing test files:
+  - utils/transcription.ts ☑ (100%/100% — test existed, manifest ticked)
+  - utils/participant-resolver.ts ☑ (100%/100% — test existed, manifest ticked)
+  - validation/socket-event-schemas.ts ☑ (100%/100% — test existed, manifest ticked)
+  - validation/call-schemas.ts ☑ (100%/100% — test existed, manifest [~]→[x])
+- Tests added: 118 new tests across 5 new test files
+  - New: `src/__tests__/unit/validation/conversation-encryption-schemas.test.ts` (12 tests): ConversationIdParamSchema (valid OID, 23-char, 25-char, non-hex, missing); SetEncryptionModeBodySchema (e2ee/server/hybrid, unknown, empty, missing)
+  - New: `src/__tests__/unit/validation/delete-account-schemas.test.ts` (11 tests): DeleteAccountBodySchema (exact phrase, wrong phrase, case variant, empty, missing, extra-fields strict); TokenQuerySchema (non-empty, single-char, empty, missing, extra-fields strict)
+  - New: `src/__tests__/unit/validation/message-read-status-schemas.test.ts` (24 tests): MessageIdParamSchema, ConversationIdParamSchema, ReadStatusesQuerySchema (single OID, comma-list, invalid OID in list, extra-fields strict), DeliveryReceiptParamsSchema (all fields, missing each, invalid format, strict)
+  - New: `src/__tests__/unit/validation/two-factor-schemas.test.ts` (19 tests): EnableBodySchema (6-char, 5-char, 7-char, empty, missing); DisableBodySchema (without/with code, 8-char max, 5-char/9-char boundary, empty password, missing); VerifyBodySchema (6-9 char range); BackupCodesBodySchema (6-char exact)
+  - New: `src/__tests__/unit/validation/messages-schemas.test.ts` (52 tests): MessageParamsSchema, AttachmentParamsSchema, MessageStatusDetailsQuerySchema (defaults via prefault, offset/limit transform, -1 offset, limit 0/100/101, filter enum all values, non-numeric, strict), AttachmentStatusDetailsQuerySchema (same + 5 filter variants), UpdateMessageBodySchema (all optional, strict, non-boolean), MessageStatusBodySchema (status enum, ISO timestamp, invalid timestamp, strict), AttachmentStatusBodySchema (action enum, optional fields, -1/0/1.5 playPositionMs, strict)
+- CI config change: jest.config.json `collectCoverageFrom` now includes `"src/validation/**/*.ts"` — validation schemas now measured in the global coverage floor
+- Production changes: none
+- Reviewer: PASS (rounds: 1) — all behavioral assertions, real boundaries, no tautologies, no production changes; strict-rejection assertions correctly omitted for schemas without .strict()
+- Notes / where the next run resumes: All validation schemas now ☑. Next slice: continue gateway manifest gap-fill — pick next batch of uncovered files from manifests/gateway.md (services/, routes/, or socketio/ sections)
+- Commit: 57a582f2 (squash-merged PR #1031 → main 2026-06-29T~16:30Z)
+
+## 2026-06-29T16:40Z — gateway-manifest-gap7 (conversation-preferences routes)
+- Targeted: routes/conversation-preferences.ts (634 lines — 5 routes: GET single, GET list, PUT upsert, DELETE, POST reorder)
+- Result: ☑ done
+- Coverage:
+  - routes/conversation-preferences.ts: 100% stmts / 100% funcs / 100% lines / 93.22% branches
+  - Uncovered branches (lines 50-56, 477): date-serialization ternaries and version fallback inside `toPreferencesPayload`, only reachable via fire-and-forget `broadcastToUser` which requires `socketIOHandler` decoration — not decorated in test isolation (no-op, safe skip)
+- Tests added: 26 tests in 1 new file
+  - New: `src/__tests__/unit/routes/conversation-preferences-routes.test.ts`
+    - GET single: stored prefs (isDefault: false), null → defaults (isDefault: true), anonymous 401, db error 500
+    - GET list: paginated list (length + isDefault:false + pagination.total), offset/limit params, anonymous 401, db error 500
+    - PUT upsert: pinned update, all fields passed to upsert (spy check), partial update (isMuted only), empty body, anonymous 401, db error 500
+    - DELETE: successful deletion (message match), findUnique called before delete (spy count), version+1 reset when prefs exist, version=0+1=1 when no prefs, P2025→404, generic 500, anonymous 401
+    - POST reorder: success (message match), updateMany called with correct where/data (spy), empty array graceful, anonymous 401, db error 500
+- Full suite: 322 suites / 9742 tests / 1 skipped — all thresholds met (stmts:75.22/branches:70.53/funcs:74.5/lines:75.41; floor 67/63/67/67)
+- Production changes: none
+- Reviewer: PASS (rounds: 1)
+- Notes / where the next run resumes: routes/conversation-preferences.ts ☑. Next slice: continue gateway manifest gap-fill — routes/friends.ts or next uncovered batch in manifests/gateway.md
+- Commit: 3196bdd9f782a228ab78b78126d32753876f756b (squash-merged PR #1038 → main 2026-06-29T16:43Z)

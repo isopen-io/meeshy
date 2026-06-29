@@ -2805,6 +2805,18 @@ final class CallManager: ObservableObject {
             }
             .store(in: &cancellables)
 
+        socket.callForcedLeave
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self, self.currentCallId == event.callId else { return }
+                Logger.calls.warning("call:force-leave received — ending call (callId=\(event.callId) reason=\(event.reason ?? "unspecified"))")
+                if let uuid = self.activeCallUUID {
+                    self.callProvider.reportCall(with: uuid, endedAt: Date(), reason: .failed)
+                }
+                self.endCallInternal(reason: .remote)
+            }
+            .store(in: &cancellables)
+
         socket.callIceServersRefreshed
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in

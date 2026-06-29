@@ -105,14 +105,11 @@ struct CallView: View {
                 EmptyView()
             }
 
-            // §4.3 — reconnecting banner: surfaced while an ICE restart recovers
-            // a dropped connection, layered over the frozen last frame without
-            // tearing down the call UI.
+            // §4.3 — reconnecting banner over the frozen last frame while an ICE restart recovers.
             if case .reconnecting = callManager.callState {
                 reconnectingBanner
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    // P2-iOS-9 — slide from top when motion is allowed; fade only
-                    // when reduce motion is on.
+                    // P2-iOS-9 — slide from top when motion is allowed; fade only when reduceMotion is on.
                     .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
             }
 
@@ -170,20 +167,20 @@ struct CallView: View {
             stopPulseAnimation()
         }
         .adaptiveOnChange(of: callManager.callState) { _, newState in
+            // Audit P2-iOS-11 — announce key call-state transitions for VoiceOver.
+            // `.ended` stays first so the end-of-call announcement lives right
+            // inside this handler (fires exactly once per state transition).
             switch newState {
-            // Audit P2-iOS-11 — announce the connecting state so VoiceOver
-            // users are informed when ICE negotiation begins (callee accepted,
-            // media handshake in progress). Without this, the transition from
-            // "ringing" to "connected" is silent — the user hears nothing for
-            // several seconds and may think the call failed.
+            case .ended:
+                UIAccessibility.post(notification: .announcement, argument: String(localized: "call.a11y.ended"))
             case .connecting:
+                // Announce connecting (ICE negotiation begun) so the silent
+                // ringing→connected gap doesn't read as a failed call.
                 UIAccessibility.post(notification: .announcement, argument: String(localized: "call.a11y.connecting", defaultValue: "Connexion en cours", bundle: .main))
             case .connected:
                 UIAccessibility.post(notification: .announcement, argument: String(localized: "call.a11y.connected"))
             case .reconnecting:
                 UIAccessibility.post(notification: .announcement, argument: String(localized: "call.a11y.reconnecting"))
-            case .ended:
-                UIAccessibility.post(notification: .announcement, argument: String(localized: "call.a11y.ended"))
             default:
                 break
             }

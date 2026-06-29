@@ -99,8 +99,7 @@ struct IncomingCallView: View {
                     .scaleEffect(ringScale)
                     .opacity(ringOpacity - Double(index) * 0.15)
                     .animation(
-                        reduceMotion
-                            ? nil
+                        reduceMotion ? nil
                             : .easeInOut(duration: 1.2)
                                 .repeatForever(autoreverses: true)
                                 .delay(Double(index) * 0.2),

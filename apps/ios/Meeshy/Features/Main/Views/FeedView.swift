@@ -72,6 +72,11 @@ struct FeedView: View {
     /// system share UI as soon as this is non-nil and clears it on dismiss.
     @State private var shareableLink: ShareableLink?
     @State private var editingPost: FeedPost?
+    /// Réel dont les commentaires sont présentés en feuille depuis le feed. Le
+    /// bouton « commentaire » d'une carte réel ouvre la `CommentsSheetView`
+    /// DIRECTEMENT (parité avec les cartes post du feed) au lieu de pousser le
+    /// viewer plein écran — l'utilisateur commente sans quitter le fil.
+    @State private var reelCommentsPost: FeedPost?
 
     // Post reaction state — hoisted to parent so socket events update all cards without
     // mutating FeedPost values (pure socket-driven path, mirrors FeedCommentsSheet pattern).
@@ -692,16 +697,12 @@ struct FeedView: View {
             },
             onLike: { _ in togglePostHeart(post: post) },
             onComment: { _ in
-                // Les commentaires d'un réel vivent dans le viewer plein écran
-                // (interactions riches) — même handoff que le tap média : on coupe
-                // la lecture muette du feed puis on présente le viewer sur ce post.
-                reelAutoplay.clear()
-                SharedAVPlayerManager.shared.pause()
+                // Le bouton commentaire d'un réel ouvre la feuille de commentaires
+                // DIRECTEMENT (parité avec les cartes post du feed) — l'utilisateur
+                // commente sans basculer dans le viewer plein écran. La lecture
+                // muette du feed continue derrière la feuille (translucide).
                 HapticFeedback.medium()
-                withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                    ReelsPresenter.shared.present(posts: viewModel.posts, startId: post.id)
-                }
-                Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
+                reelCommentsPost = post
             },
             onRepost: { postId in togglePostRepost(postId: postId) },
             onBookmark: { postId in togglePostBookmark(postId: postId) },
@@ -1411,6 +1412,11 @@ struct FeedView: View {
             // `meeshy.me/l/<token>` URL so every external touchpoint funnels
             // through the user's TrackingLink for attribution.
             ShareSheet(activityItems: [link.url])
+        }
+        .sheet(item: $reelCommentsPost) { post in
+            // Même feuille de commentaires que les cartes post (`FeedPostCard`) —
+            // ouverte directement depuis le bouton commentaire d'un réel du feed.
+            CommentsSheetView(post: post, accentColor: post.authorColor)
         }
         .sheet(item: $editingPost) { post in
             EditPostSheet(
