@@ -135,6 +135,42 @@ final class PushNotificationManagerTests: XCTestCase {
         XCTAssertEqual(sut.pendingNotificationPayload?.type, "new_message")
     }
 
+    /// A tapped social comment push must carry the comment ids so the app can
+    /// open the entity AND scroll to the exact comment / reply.
+    @MainActor
+    func test_handleNotification_setsPendingPayloadWithCommentIds() {
+        let (sut, defaults, _, suite) = makePushManagerSUT()
+        defer { tearDownDefaults(defaults, suiteName: suite) }
+
+        sut.handleNotification(userInfo: [
+            "type": "comment_reply",
+            "postId": "post-1",
+            "commentId": "reply-9",
+            "parentCommentId": "parent-3"
+        ])
+
+        XCTAssertEqual(sut.pendingNotificationPayload?.postId, "post-1")
+        XCTAssertEqual(sut.pendingNotificationPayload?.commentId, "reply-9")
+        XCTAssertEqual(sut.pendingNotificationPayload?.parentCommentId, "parent-3")
+    }
+
+    /// Empty/absent comment ids resolve to nil (not the empty string) so the
+    /// navigation falls back to "open post, no scroll" cleanly.
+    @MainActor
+    func test_handleNotification_emptyCommentId_resolvesToNil() {
+        let (sut, defaults, _, suite) = makePushManagerSUT()
+        defer { tearDownDefaults(defaults, suiteName: suite) }
+
+        sut.handleNotification(userInfo: [
+            "type": "post_like",
+            "postId": "post-1",
+            "commentId": ""
+        ])
+
+        XCTAssertNil(sut.pendingNotificationPayload?.commentId)
+        XCTAssertNil(sut.pendingNotificationPayload?.parentCommentId)
+    }
+
     /// After the root view navigates it calls `clearPendingNotification()` so
     /// the same intent is not re-consumed by a later subscriber (e.g. an
     /// iPhone↔iPad size-class flip that re-mounts the root view).

@@ -251,8 +251,8 @@ struct RootView: View {
                     case .dataExport:
                         DataExportView()
                             .navigationBarHidden(true)
-                    case .postDetail(let postId, let initialPost, let showComments):
-                        PostDetailView(postId: postId, initialPost: initialPost, showComments: showComments)
+                    case .postDetail(let postId, let initialPost, let showComments, let commentId, let parentCommentId):
+                        PostDetailView(postId: postId, initialPost: initialPost, showComments: showComments, targetCommentId: commentId, targetParentCommentId: parentCommentId)
                     case .bookmarks:
                         BookmarksView()
                             .navigationBarHidden(true)
@@ -308,6 +308,8 @@ struct RootView: View {
                         ReelsPlayerView(
                             seedPosts: launch.seedPosts,
                             startId: launch.startId,
+                            commentTargetId: launch.commentId,
+                            commentParentTargetId: launch.parentCommentId,
                             revealCompleted: reelsRevealCompleted,
                             safeArea: safeArea,
                             onClose: { closeReels() },
@@ -906,6 +908,12 @@ struct RootView: View {
         let conversationId: String?
         let messageId: String?
         let postId: String?
+        /// Commentaire ciblé (like/réponse/commentaire) — l'app ouvre l'entité
+        /// puis défile/surligne ce commentaire. `nil` = pas de cible commentaire.
+        let commentId: String?
+        /// Commentaire parent quand `commentId` est une réponse — l'app déplie le
+        /// fil du parent avant de défiler jusqu'à la réponse.
+        let parentCommentId: String?
         // Phase G — `metadata.postType` distinguishes a story-flavoured
         // post (`"STORY"`) from a regular feed post for `.postComment` /
         // `.commentReply`. May be `nil` when the gateway omits it; the
@@ -926,6 +934,8 @@ struct RootView: View {
             conversationId = notification.context?.conversationId
             messageId = notification.context?.messageId
             postId = notification.context?.postId ?? notification.metadata?.postId
+            commentId = notification.context?.commentId ?? notification.metadata?.commentId
+            parentCommentId = notification.context?.parentCommentId ?? notification.metadata?.parentCommentId
             postType = notification.metadata?.postType
             senderId = notification.senderId
             senderUsername = notification.senderName
@@ -937,6 +947,8 @@ struct RootView: View {
             conversationId = event.conversationId
             messageId = event.messageId
             postId = event.postId
+            commentId = event.commentId
+            parentCommentId = event.parentCommentId
             postType = event.postType
             senderId = event.senderId
             senderUsername = event.senderUsername
@@ -948,6 +960,8 @@ struct RootView: View {
             conversationId = payload.conversationId
             messageId = payload.messageId
             postId = payload.postId
+            commentId = payload.commentId
+            parentCommentId = payload.parentCommentId
             postType = payload.postType
             senderId = payload.senderId
             senderUsername = payload.senderUsername
@@ -1149,7 +1163,7 @@ struct RootView: View {
                 // carries a non-nil `expiresAt`). Falls back to the regular
                 // post-detail navigation otherwise.
                 if isReelNotification(ctx) {
-                    openReelFromNotification(postId: postId)
+                    openReelFromNotification(postId: postId, commentId: ctx.commentId, parentCommentId: ctx.parentCommentId)
                 } else if isStoryNotification(ctx, postId: postId) {
                     router.push(.storyNotificationTarget(
                         storyId: postId,
@@ -1157,7 +1171,13 @@ struct RootView: View {
                         context: ctx.storyContext
                     ))
                 } else {
-                    router.push(.postDetail(postId, nil, showComments: true))
+                    router.push(.postDetail(
+                        postId,
+                        nil,
+                        showComments: true,
+                        commentId: ctx.commentId,
+                        parentCommentId: ctx.parentCommentId
+                    ))
                 }
             } else if let conversationId = ctx.conversationId, !conversationId.isEmpty {
                 navigateToConversationById(conversationId)
@@ -1217,12 +1237,12 @@ struct RootView: View {
     /// Service Extension prefetches the tapped post into the feed cache via
     /// `NSEPendingPostConsumer`), then network as a fallback so the tap is never a
     /// dead end.
-    private func openReelFromNotification(postId: String) {
+    private func openReelFromNotification(postId: String, commentId: String? = nil, parentCommentId: String? = nil) {
         Task { @MainActor in
             await NSEPendingPostConsumer.shared.consumeAll()
 
             if let cached = await cachedReelSeed(for: postId) {
-                reelsPresenter.present(posts: [cached], startId: postId)
+                reelsPresenter.present(posts: [cached], startId: postId, commentId: commentId, parentCommentId: parentCommentId)
                 return
             }
 
@@ -1230,7 +1250,9 @@ struct RootView: View {
             if let apiPost = try? await PostService.shared.getPost(postId: postId) {
                 reelsPresenter.present(
                     posts: [apiPost.toFeedPost(preferredLanguages: preferred)],
-                    startId: postId
+                    startId: postId,
+                    commentId: commentId,
+                    parentCommentId: parentCommentId
                 )
             } else {
                 // Never a dead end: the universal post-detail surface renders any

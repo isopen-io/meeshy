@@ -784,6 +784,15 @@ export class NotificationService {
                 conversationType: params.context.conversationType || '',
                 messageId: params.context.messageId || '',
                 postId: params.context.postId || '',
+                // Comment navigation: the tapped social notification must land on the
+                // exact comment (open entity → comments sheet → scroll/highlight). The
+                // iOS NotificationPayload reads these to thread the commentId through to
+                // PostDetailView / the story comments overlay. `parentCommentId` lets the
+                // client expand the parent thread before scrolling to a reply.
+                commentId: params.context.commentId
+                  || (params.metadata && 'commentId' in params.metadata ? String(params.metadata.commentId ?? '') : ''),
+                parentCommentId: params.context.parentCommentId
+                  || (params.metadata && 'parentCommentId' in params.metadata ? String(params.metadata.parentCommentId ?? '') : ''),
                 postType: (params.metadata && 'postType' in params.metadata ? String(params.metadata.postType ?? '') : ''),
                 senderId: params.actor?.id || '',
                 senderUsername: params.actor?.username || '',
@@ -2524,6 +2533,9 @@ export class NotificationService {
     postId: string;
     commentAuthorId: string;
     commentId: string;
+    /** Identifiant du commentaire parent — permet au client de déplier le fil
+     *  parent puis de défiler/surligner la réponse (`commentId`). */
+    parentCommentId?: string;
     replyPreview: string;
     /** Extrait du commentaire parent — identifie À QUOI on répond. */
     parentCommentPreview?: string;
@@ -2570,6 +2582,8 @@ export class NotificationService {
 
       context: {
         postId: params.postId,
+        commentId: params.commentId,
+        ...(params.parentCommentId ? { parentCommentId: params.parentCommentId } : {}),
         ...(params.postCreatedAt ? { postCreatedAt: new Date(params.postCreatedAt).toISOString() } : {}),
         ...(params.postExpiresAt ? { postExpiresAt: new Date(params.postExpiresAt).toISOString() } : {}),
         ...(media?.thumbnailUrl
@@ -2581,6 +2595,7 @@ export class NotificationService {
         action: 'view_post',
         postId: params.postId,
         commentId: params.commentId,
+        ...(params.parentCommentId ? { parentCommentId: params.parentCommentId } : {}),
         commentPreview: this.truncateMessage(params.replyPreview),
         postType: params.postType ?? 'POST',
         ...(trimmedParent !== ''

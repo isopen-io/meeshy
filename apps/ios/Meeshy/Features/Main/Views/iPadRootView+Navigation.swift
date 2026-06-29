@@ -210,7 +210,13 @@ extension iPadRootView {
                         context: StoryNotificationContext.from(notification)
                     ))
                 } else {
-                    rightPanelRoute = .postDetail(postId, nil, showComments: true)
+                    rightPanelRoute = .postDetail(
+                        postId,
+                        nil,
+                        showComments: true,
+                        commentId: notification.context?.commentId ?? notification.metadata?.commentId,
+                        parentCommentId: notification.context?.parentCommentId ?? notification.metadata?.parentCommentId
+                    )
                 }
             }
 
@@ -300,7 +306,13 @@ extension iPadRootView {
                         context: makeStoryContext(from: event)
                     ))
                 } else {
-                    rightPanelRoute = .postDetail(postId, nil, showComments: true)
+                    rightPanelRoute = .postDetail(
+                        postId,
+                        nil,
+                        showComments: true,
+                        commentId: event.commentId,
+                        parentCommentId: event.parentCommentId
+                    )
                 }
             }
 
@@ -370,7 +382,13 @@ extension iPadRootView {
                         context: makeStoryContext(from: payload)
                     ))
                 } else {
-                    rightPanelRoute = .postDetail(postId, nil, showComments: true)
+                    rightPanelRoute = .postDetail(
+                        postId,
+                        nil,
+                        showComments: true,
+                        commentId: payload.commentId,
+                        parentCommentId: payload.parentCommentId
+                    )
                 }
             }
 

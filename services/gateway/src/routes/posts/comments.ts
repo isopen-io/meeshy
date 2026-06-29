@@ -211,6 +211,7 @@ export function registerCommentRoutes(
               postId,
               commentAuthorId: parentComment.authorId,
               commentId: comment.id,
+              parentCommentId: parsed.data.parentId,
               replyPreview: parsed.data.content,
               parentCommentPreview: parentComment.content?.slice(0, 80),
               // Précise « sur votre story/réel/… » + date côté client (du JJ/MM/AAAA HH:MM).

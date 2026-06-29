@@ -17,6 +17,12 @@ final class ReelsPresenter: ObservableObject {
         let id = UUID()
         var seedPosts: [FeedPost]
         var startId: String?
+        /// Comment targeted by a notification — when set, the reel auto-opens its
+        /// comments sheet and scrolls to / highlights this comment.
+        var commentId: String?
+        /// Parent comment when `commentId` is a reply — the sheet expands the
+        /// parent thread before scrolling to the reply.
+        var parentCommentId: String?
         static func == (lhs: Launch, rhs: Launch) -> Bool { lhs.id == rhs.id }
     }
 
@@ -25,8 +31,10 @@ final class ReelsPresenter: ObservableObject {
     private init() {}
 
     /// Opens the reels seeded from posts already on screen, starting on `startId`.
-    func present(posts: [FeedPost], startId: String?) {
-        launch = Launch(seedPosts: posts, startId: startId)
+    /// `commentId` (optional) opens the comments sheet on the seed reel and scrolls
+    /// to that comment — used by tapped reel comment notifications.
+    func present(posts: [FeedPost], startId: String?, commentId: String? = nil, parentCommentId: String? = nil) {
+        launch = Launch(seedPosts: posts, startId: startId, commentId: commentId, parentCommentId: parentCommentId)
     }
 
     /// Opens the reels with no seed (long-press launch); the view fetches a page.
@@ -48,6 +56,11 @@ final class ReelsPresenter: ObservableObject {
 struct ReelsPlayerView: View {
     let seedPosts: [FeedPost]
     let startId: String?
+    /// Comment targeted by a notification — when set, the seed reel auto-opens
+    /// its comments sheet and scrolls to / highlights this comment.
+    var commentTargetId: String? = nil
+    /// Parent comment when `commentTargetId` is a reply (expands the parent thread).
+    var commentParentTargetId: String? = nil
     /// `true` once the liquid reveal disc has reached full screen. Gates the
     /// first reel's playback: the video stays on its poster (PAUSED) during the
     /// reveal and only starts when this flips true (driven by RootView).
@@ -70,6 +83,11 @@ struct ReelsPlayerView: View {
 
     @StateObject private var viewModel = ReelsViewModel()
     @State private var commentsReel: FeedPost?
+    /// Comment target carried into the comments sheet when it auto-opens from a
+    /// notification. Cleared when the user opens comments manually so a later tap
+    /// never re-scrolls to the old target.
+    @State private var pendingCommentTargetId: String?
+    @State private var pendingCommentParentTargetId: String?
     @State private var edgeDrag: CGFloat = 0
     /// Immersive mode: when `true`, ALL chrome (back button, info overlay,
     /// action rail, scrub) is hidden for distraction-free viewing. Toggled on
@@ -96,7 +114,20 @@ struct ReelsPlayerView: View {
             backControls
         }
         .offset(x: max(0, edgeDrag))
-        .task { viewModel.seed(posts: seedPosts, startId: startId) }
+        .task {
+            viewModel.seed(posts: seedPosts, startId: startId)
+            // Reel comment notification: auto-open the comments sheet on the seed
+            // reel and scroll to the targeted comment. Brief delay so the reel is
+            // on screen first (the reveal disc settles), then present.
+            guard let cid = commentTargetId, !cid.isEmpty else { return }
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            let reel = seedPosts.first(where: { $0.id == startId }) ?? seedPosts.first ?? viewModel.reels.first
+            if let reel {
+                pendingCommentTargetId = cid
+                pendingCommentParentTargetId = commentParentTargetId
+                commentsReel = reel
+            }
+        }
         // Cycle de vie de la post room du réel actif (real-time du like). Idempotent
         // côté serveur : rejoindre/quitter une room déjà (non) jointe est un no-op,
         // donc une disparition transitoire du reveal se ré-auto-corrige. Le `leave`
@@ -128,6 +159,8 @@ struct ReelsPlayerView: View {
             CommentsSheetView(
                 post: reel,
                 accentColor: reel.authorColor,
+                targetCommentId: pendingCommentTargetId,
+                targetParentCommentId: pendingCommentParentTargetId,
                 onCommentSent: { postId in viewModel.didSendComment(postId: postId) }
             )
         }
@@ -212,7 +245,13 @@ struct ReelsPlayerView: View {
                 revealCompleted: revealCompleted,
                 viewModel: viewModel,
                 chromeHidden: $chromeHidden,
-                onComment: { commentsReel = reel },
+                onComment: {
+                    // Manual open: drop any notification target so we don't
+                    // re-scroll to a stale comment.
+                    pendingCommentTargetId = nil
+                    pendingCommentParentTargetId = nil
+                    commentsReel = reel
+                },
                 onShare: { shareReel(reel) },
                 onTapAuthorName: { openProfile(for: reel) },
                 onTapAvatar: { openAvatarDestination(for: reel) }

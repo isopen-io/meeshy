@@ -58,11 +58,10 @@ export interface PostDetailProps {
   commentsHasMore?: boolean;
   commentsLoadingMore?: boolean;
   onLike?: () => void;
+  onUnlike?: () => void;
   onReact?: (emoji: string) => void;
   onBookmark?: () => void;
-  isLiked?: boolean;
-  isBookmarked?: boolean;
-  userReaction?: string;
+  onUnbookmark?: () => void;
   onShare?: () => void;
   onRepost?: () => void;
   onDelete?: () => void;
@@ -74,6 +73,8 @@ export interface PostDetailProps {
   onUnlikeComment?: (commentId: string) => void;
   onDeleteComment?: (commentId: string) => void;
   onShowReplies?: (commentId: string) => void;
+  /** Commentaire ciblé par une navigation depuis une notification. */
+  targetCommentId?: string | null;
   className?: string;
 }
 
@@ -110,6 +111,7 @@ function PostDetail({
   onUnlikeComment,
   onDeleteComment,
   onShowReplies,
+  targetCommentId,
   className,
 }: PostDetailProps) {
   const [showReactionPicker, setShowReactionPicker] = useState(false);
@@ -348,6 +350,7 @@ function PostDetail({
           onDeleteComment={onDeleteComment}
           onSubmitComment={onSubmitComment}
           onShowReplies={onShowReplies}
+          targetCommentId={targetCommentId}
         />
       </div>
     </div>
