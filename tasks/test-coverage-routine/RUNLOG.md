@@ -2409,4 +2409,4 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Production changes: none
 - Reviewer: PASS (rounds: 1)
 - Notes / where the next run resumes: routes/conversation-preferences.ts ☑. Next slice: continue gateway manifest gap-fill — routes/friends.ts or next uncovered batch in manifests/gateway.md
-- Commit: (see below)
+- Commit: 3196bdd9f782a228ab78b78126d32753876f756b (squash-merged PR #1038 → main 2026-06-29T16:43Z)
