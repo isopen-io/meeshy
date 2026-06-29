@@ -133,6 +133,22 @@ export class SocialEventsHandler {
     this.io.to(ROOMS.feed(userId)).emit(event, data);
   }
 
+  /**
+   * Émission UNIQUE sur l'union de la feed room d'un utilisateur ET de la post
+   * room — déduplication Socket.IO incluse (`io.to([...])`). Un même socket
+   * présent dans LES DEUX rooms (typiquement l'auteur qui regarde sa propre
+   * story/statut : il est dans sa feed room ET dans la post room du viewer)
+   * reçoit l'événement EXACTEMENT une fois.
+   *
+   * Avant ce seam, `broadcastStoryReacted`/`broadcastStatusReacted` faisaient
+   * deux `.emit()` séparés (feed room PUIS post room) → l'auteur-viewer recevait
+   * `story:reacted` DEUX fois → le delta `+1` côté iOS s'appliquait deux fois →
+   * compteur de réactions affiché en `+2`. Miroir de `emitToFeedsAndPostRoom`.
+   */
+  private emitToUserFeedAndPostRoom(userId: string, postId: string, event: string, data: unknown): void {
+    this.io.to([ROOMS.feed(userId), ROOMS.post(postId)]).emit(event, data);
+  }
+
   // ==============================================
   // FEED ROOM MANAGEMENT
   // ==============================================
@@ -296,15 +312,14 @@ export class SocialEventsHandler {
   }
 
   broadcastStoryReacted(data: StoryReactedEventData, storyAuthorId: string): void {
-    // Notify the author (via their feed room)
-    this.emitToUser(storyAuthorId, SERVER_EVENTS.STORY_REACTED, data);
-    // Also broadcast to viewers currently watching the story room (ROOMS.post is separate from feed room — no overlap)
-    this.io.to(ROOMS.post(data.storyId)).emit(SERVER_EVENTS.STORY_REACTED, data);
+    // UN SEUL emit dédoublonné vers la feed room de l'auteur ET la story room
+    // des viewers. L'auteur qui regarde sa propre story est dans les deux rooms :
+    // sans dédup il recevait l'event deux fois → compteur `+2` (cf. helper).
+    this.emitToUserFeedAndPostRoom(storyAuthorId, data.storyId, SERVER_EVENTS.STORY_REACTED, data);
   }
 
   broadcastStoryUnreacted(data: StoryUnreactedEventData, storyAuthorId: string): void {
-    this.emitToUser(storyAuthorId, SERVER_EVENTS.STORY_UNREACTED, data);
-    this.io.to(ROOMS.post(data.storyId)).emit(SERVER_EVENTS.STORY_UNREACTED, data);
+    this.emitToUserFeedAndPostRoom(storyAuthorId, data.storyId, SERVER_EVENTS.STORY_UNREACTED, data);
   }
 
   // ==============================================
@@ -334,13 +349,13 @@ export class SocialEventsHandler {
   }
 
   broadcastStatusReacted(data: StatusReactedEventData, statusAuthorId: string): void {
-    this.emitToUser(statusAuthorId, SERVER_EVENTS.STATUS_REACTED, data);
-    this.io.to(ROOMS.post(data.statusId)).emit(SERVER_EVENTS.STATUS_REACTED, data);
+    // Même dédup que `broadcastStoryReacted` : l'auteur-viewer ne compte plus son
+    // émoji deux fois.
+    this.emitToUserFeedAndPostRoom(statusAuthorId, data.statusId, SERVER_EVENTS.STATUS_REACTED, data);
   }
 
   broadcastStatusUnreacted(data: StatusUnreactedEventData, statusAuthorId: string): void {
-    this.emitToUser(statusAuthorId, SERVER_EVENTS.STATUS_UNREACTED, data);
-    this.io.to(ROOMS.post(data.statusId)).emit(SERVER_EVENTS.STATUS_UNREACTED, data);
+    this.emitToUserFeedAndPostRoom(statusAuthorId, data.statusId, SERVER_EVENTS.STATUS_UNREACTED, data);
   }
 
   // ==============================================
