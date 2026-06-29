@@ -1321,6 +1321,90 @@ final class CallStatsReducerTests: XCTestCase {
     }
 }
 
+// MARK: - CallStats Codable backward-compatibility tests
+
+/// Guards that `CallStats.Codable` handles old persisted snapshots (UserDefaults)
+/// that were encoded before `jitterMs` was added. Decoding must succeed with
+/// `jitterMs == 0` instead of throwing `DecodingError.keyNotFound`.
+@MainActor
+final class CallStatsCodableTests: XCTestCase {
+
+    private func makeStats(jitterMs: Double = 12.5) -> CallStats {
+        CallStats(
+            roundTripTimeMs: 80, packetsLost: 3, bandwidth: 95_000,
+            bytesReceived: 90_000, codec: "opus",
+            inboundPacketsReceived: 150, inboundAudioPackets: 50,
+            inboundVideoPackets: 100, outboundPacketsSent: 120,
+            availableOutgoingBitrateBps: 250_000, jitterMs: jitterMs
+        )
+    }
+
+    func test_encode_decode_roundTrip_preservesAllFields() throws {
+        let original = makeStats(jitterMs: 18.3)
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(CallStats.self, from: data)
+        XCTAssertEqual(decoded.roundTripTimeMs, original.roundTripTimeMs, accuracy: 0.001)
+        XCTAssertEqual(decoded.packetsLost, original.packetsLost)
+        XCTAssertEqual(decoded.bandwidth, original.bandwidth)
+        XCTAssertEqual(decoded.bytesReceived, original.bytesReceived)
+        XCTAssertEqual(decoded.codec, original.codec)
+        XCTAssertEqual(decoded.inboundPacketsReceived, original.inboundPacketsReceived)
+        XCTAssertEqual(decoded.inboundAudioPackets, original.inboundAudioPackets)
+        XCTAssertEqual(decoded.inboundVideoPackets, original.inboundVideoPackets)
+        XCTAssertEqual(decoded.outboundPacketsSent, original.outboundPacketsSent)
+        XCTAssertEqual(decoded.availableOutgoingBitrateBps, original.availableOutgoingBitrateBps)
+        XCTAssertEqual(decoded.jitterMs, original.jitterMs, accuracy: 0.001)
+    }
+
+    func test_decode_legacyPayload_withoutJitterMs_succeedsWithZero() throws {
+        // Simulate a UserDefaults snapshot encoded before jitterMs was added.
+        // The JSON has all fields except "jitterMs" — decoding must not throw.
+        let json = """
+        {
+          "roundTripTimeMs": 80,
+          "packetsLost": 3,
+          "bandwidth": 95000,
+          "bytesReceived": 90000,
+          "codec": "opus",
+          "inboundPacketsReceived": 150,
+          "inboundAudioPackets": 50,
+          "inboundVideoPackets": 100,
+          "outboundPacketsSent": 120,
+          "availableOutgoingBitrateBps": 250000
+        }
+        """
+        let data = Data(json.utf8)
+        let stats = try JSONDecoder().decode(CallStats.self, from: data)
+        XCTAssertEqual(stats.jitterMs, 0, accuracy: 0.0001,
+            "Legacy snapshot without jitterMs must decode to jitterMs == 0")
+        XCTAssertEqual(stats.roundTripTimeMs, 80, accuracy: 0.001)
+        XCTAssertEqual(stats.codec, "opus")
+    }
+
+    func test_decode_nilCodec_decodesSuccessfully() throws {
+        let json = """
+        {
+          "roundTripTimeMs": 0, "packetsLost": 0, "bandwidth": 0,
+          "bytesReceived": 0, "inboundPacketsReceived": 0,
+          "inboundAudioPackets": 0, "inboundVideoPackets": 0,
+          "outboundPacketsSent": 0, "availableOutgoingBitrateBps": 0
+        }
+        """
+        let stats = try JSONDecoder().decode(CallStats.self, from: Data(json.utf8))
+        XCTAssertNil(stats.codec)
+        XCTAssertEqual(stats.jitterMs, 0, accuracy: 0.0001)
+    }
+
+    func test_encode_zeroJitter_notTruncated() throws {
+        // Encoding must always include jitterMs (even when 0) so future decoders
+        // can rely on the field being present in new-format snapshots.
+        let data = try JSONEncoder().encode(makeStats(jitterMs: 0))
+        let json = try XCTUnwrap(String(data: data, encoding: .utf8))
+        XCTAssertTrue(json.contains("jitterMs"),
+            "jitterMs must be encoded even when 0 so new decoders can read it")
+    }
+}
+
 // MARK: - CallReliabilityPolicy Tests
 
 final class CallReliabilityPolicyTests: XCTestCase {
