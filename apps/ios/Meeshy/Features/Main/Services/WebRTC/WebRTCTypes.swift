@@ -403,6 +403,17 @@ enum CallEndReason: Equatable, Sendable {
     case connectionLost
 }
 
+extension CallEndReason {
+    nonisolated static func == (lhs: CallEndReason, rhs: CallEndReason) -> Bool {
+        switch (lhs, rhs) {
+        case (.local, .local), (.remote, .remote), (.rejected, .rejected),
+             (.missed, .missed), (.connectionLost, .connectionLost): return true
+        case (.failed(let a), .failed(let b)): return a == b
+        default: return false
+        }
+    }
+}
+
 // MARK: - Call Display Mode
 
 enum CallDisplayMode: Sendable {
