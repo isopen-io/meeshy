@@ -59,6 +59,19 @@ enum CallState: Equatable, Sendable {
     }
 }
 
+extension CallState {
+    nonisolated static func == (lhs: CallState, rhs: CallState) -> Bool {
+        switch (lhs, rhs) {
+        case (.idle, .idle), (.offering, .offering),
+             (.connecting, .connecting), (.connected, .connected): return true
+        case (.ringing(let a), .ringing(let b)): return a == b
+        case (.reconnecting(let a), .reconnecting(let b)): return a == b
+        case (.ended(let a), .ended(let b)): return a == b
+        default: return false
+        }
+    }
+}
+
 // MARK: - Call Manager
 
 @MainActor

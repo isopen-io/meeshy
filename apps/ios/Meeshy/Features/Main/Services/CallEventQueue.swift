@@ -37,6 +37,15 @@ enum CallEventError: Error, Equatable, Sendable {
     case illegalTransition(from: CallState, event: String)
 }
 
+extension CallEventError {
+    nonisolated static func == (lhs: CallEventError, rhs: CallEventError) -> Bool {
+        switch (lhs, rhs) {
+        case (.illegalTransition(let f1, let e1), .illegalTransition(let f2, let e2)):
+            return f1 == f2 && e1 == e2
+        }
+    }
+}
+
 // MARK: - CallEventQueue
 
 /// Serial event queue for the call FSM. Owns the canonical client-side call
