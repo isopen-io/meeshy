@@ -94,7 +94,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/gateway/src/routes/user-deletions.ts`
 - [x] `services/gateway/src/routes/user-stats.ts`
 - [ ] `services/gateway/src/routes/users.ts`
-- [ ] `services/gateway/src/routes/voice-analysis.ts`
+- [x] `services/gateway/src/routes/voice-analysis.ts`
 - [ ] `services/gateway/src/routes/voice-profile.ts`
 - [ ] `services/gateway/src/routes/voice.ts`
 
@@ -114,10 +114,10 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [x] `services/gateway/src/routes/admin/posts.ts`
 - [x] `services/gateway/src/routes/admin/reports.ts`
 - [x] `services/gateway/src/routes/admin/roles.ts`
-- [ ] `services/gateway/src/routes/admin/services/PermissionsService.ts`
+- [x] `services/gateway/src/routes/admin/services/PermissionsService.ts`
 - [x] `services/gateway/src/routes/admin/system-rankings.ts`
 - [ ] `services/gateway/src/routes/admin/system.ts`
-- [ ] `services/gateway/src/routes/admin/types.ts`
+- [x] `services/gateway/src/routes/admin/types.ts`
 - [x] `services/gateway/src/routes/admin/users.ts`
 
 ## routes/attachments  (0/6 have a test)
@@ -157,7 +157,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [x] `services/gateway/src/routes/conversations/leave.ts`
 - [x] `services/gateway/src/routes/conversations/messages-advanced.ts`
 - [ ] `services/gateway/src/routes/conversations/messages.ts`
-- [~] `services/gateway/src/routes/conversations/participants.ts`
+- [x] `services/gateway/src/routes/conversations/participants.ts`
 - [x] `services/gateway/src/routes/conversations/search.ts`
 - [x] `services/gateway/src/routes/conversations/sharing.ts`
 - [x] `services/gateway/src/routes/conversations/stats.ts`
