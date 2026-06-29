@@ -1,10 +1,6 @@
 /**
  * link-helpers unit tests
  *
- * Tests deterministic/pure functions only.
- * generateInitialLinkId and generateConversationIdentifier are excluded
- * (they use Date.now/Math.random — non-deterministic by design).
- *
  * @jest-environment node
  */
 
@@ -12,6 +8,8 @@ import {
   createLegacyHybridRequest,
   resolveShareLinkId,
   generateFinalLinkId,
+  generateInitialLinkId,
+  generateConversationIdentifier,
   ensureUniqueShareLinkIdentifier,
 } from '../../../../routes/links/utils/link-helpers';
 import type { UnifiedAuthRequest } from '../../../../middleware/auth';
@@ -170,6 +168,67 @@ describe('resolveShareLinkId', () => {
 });
 
 // ---------------------------------------------------------------------------
+// generateInitialLinkId
+// ---------------------------------------------------------------------------
+
+describe('generateInitialLinkId', () => {
+  it('returns a string in the format YYMMDDHHMI_xxxxxxxx', () => {
+    const result = generateInitialLinkId();
+    expect(result).toMatch(/^\d{10}_[a-z0-9]{8}$/);
+  });
+
+  it('returns different values on consecutive calls (probabilistic)', () => {
+    const a = generateInitialLinkId();
+    const b = generateInitialLinkId();
+    // Extremely unlikely to be equal (1/36^8 chance)
+    expect(typeof a).toBe('string');
+    expect(typeof b).toBe('string');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// generateConversationIdentifier
+// ---------------------------------------------------------------------------
+
+describe('generateConversationIdentifier', () => {
+  it('returns a string starting with mshy_', () => {
+    expect(generateConversationIdentifier()).toMatch(/^mshy_/);
+  });
+
+  it('includes sanitized title when provided', () => {
+    const result = generateConversationIdentifier('My Conversation');
+    expect(result).toContain('my-conversation');
+    expect(result.startsWith('mshy_')).toBe(true);
+  });
+
+  it('strips special characters from title', () => {
+    const result = generateConversationIdentifier('Hello! World?');
+    expect(result).toMatch(/^mshy_helloworld-\d+$|^mshy_hello-world-\d+$/);
+  });
+
+  it('falls back to random ID when title is empty string', () => {
+    const result = generateConversationIdentifier('');
+    expect(result).toMatch(/^mshy_[a-z0-9]+-\d+$/);
+  });
+
+  it('falls back to random ID when title reduces to empty after sanitization', () => {
+    const result = generateConversationIdentifier('!!! ---');
+    expect(result).toMatch(/^mshy_[a-z0-9]+-\d+$/);
+  });
+
+  it('falls back to random ID when title is undefined', () => {
+    const result = generateConversationIdentifier(undefined);
+    expect(result).toMatch(/^mshy_[a-z0-9]+-\d+$/);
+  });
+
+  it('includes a numeric timestamp suffix', () => {
+    const result = generateConversationIdentifier('test');
+    // Suffix should be digits (YYYYMMDDHHMMSS format)
+    expect(result).toMatch(/-\d{14}$/);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // generateFinalLinkId
 // ---------------------------------------------------------------------------
 
@@ -234,5 +293,20 @@ describe('ensureUniqueShareLinkIdentifier', () => {
     const prisma = makePrisma(null);
     const result = await ensureUniqueShareLinkIdentifier(prisma, '   ');
     expect(result).toMatch(/^mshy_link-/);
+  });
+
+  it('increments counter past 1 when multiple conflicts exist (covers counter++ branch)', async () => {
+    const prisma = {
+      conversationShareLink: {
+        findFirst: jest.fn()
+          .mockResolvedValueOnce({ id: 'base' })         // base conflicts
+          .mockResolvedValueOnce({ id: 'ts' })           // base+timestamp conflicts
+          .mockResolvedValueOnce({ id: 'ts1' })          // base+timestamp+1 conflicts
+          .mockResolvedValueOnce(null),                  // base+timestamp+2 is free
+      },
+    } as any;
+    const result = await ensureUniqueShareLinkIdentifier(prisma, 'my-link');
+    expect(result).toMatch(/-2$/);
+    expect(prisma.conversationShareLink.findFirst).toHaveBeenCalledTimes(4);
   });
 });
