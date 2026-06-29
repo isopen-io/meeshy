@@ -777,6 +777,37 @@ export interface CallIceServersRefreshedEvent {
   readonly ttl: number;
 }
 
+/**
+ * Client → Server: force-leave a conversation's active call.
+ * Sent as a preflight before `call:initiate` to clean up zombie call sessions
+ * left by a previous client crash or disconnect without graceful teardown.
+ */
+export interface CallForceLeaveClientEvent {
+  readonly conversationId: string;
+}
+
+/**
+ * Server → Client: the gateway has force-ended the call.
+ * Emitted when a server-side cleanup (GC, admin action, heartbeat timeout)
+ * terminates a call. iOS/web clients subscribe to this on their personal
+ * user room so the call UI is dismissed cleanly without waiting for a WebRTC
+ * connection failure.
+ */
+export interface CallForceLeaveServerEvent {
+  readonly callId: string;
+  readonly reason?: string;
+}
+
+/**
+ * Client → Server: request fresh TURN credentials before TTL expiry.
+ * Clients send this at ~80% of the credential TTL so long calls always
+ * have valid TURN credentials available for ICE restarts.
+ * Gateway responds with `call:ice-servers-refreshed`.
+ */
+export interface CallRequestIceServersEvent {
+  readonly callId: string;
+}
+
 // ===== SOCKET.IO EVENT NAMES =====
 
 /**
