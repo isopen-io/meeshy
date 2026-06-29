@@ -180,4 +180,60 @@ class StoryComposerDraftTest {
         assertThat(StoryVisibility.COMMUNITY.wire).isEqualTo("COMMUNITY")
         assertThat(StoryVisibility.PRIVATE.wire).isEqualTo("PRIVATE")
     }
+
+    // --- text elements ---
+
+    @Test
+    fun `a text-element-only draft with no caption nor media can publish`() {
+        val draft = StoryComposerDraft(
+            text = "",
+            textElements = listOf(StoryTextElement(id = "e1", text = "Salut")),
+        )
+        assertThat(draft.hasTextElements).isTrue()
+        assertThat(draft.canPublish).isTrue()
+    }
+
+    @Test
+    fun `a draft whose only text element is blank cannot publish`() {
+        val draft = StoryComposerDraft(textElements = listOf(StoryTextElement(id = "e1", text = "   ")))
+        assertThat(draft.hasTextElements).isFalse()
+        assertThat(draft.canPublish).isFalse()
+    }
+
+    @Test
+    fun `withTextElements returns a new draft preserving text and media`() {
+        val original = StoryComposerDraft(text = "cap", mediaIds = listOf("m1"))
+        val updated = original.withTextElements(listOf(StoryTextElement(id = "e1", text = "hi")))
+        assertThat(updated.textElements.map { it.id }).containsExactly("e1")
+        assertThat(updated.text).isEqualTo("cap")
+        assertThat(updated.mediaIds).containsExactly("m1")
+        assertThat(original.textElements).isEmpty()
+    }
+
+    @Test
+    fun `toCreateStoryRequest serialises publishable text elements into storyEffects and drops blanks`() {
+        val request = StoryComposerDraft(
+            text = "",
+            textElements = listOf(
+                StoryTextElement(id = "e1", text = "Bonjour", style = StoryTextStyle.NEON, x = 0.2f, y = 0.8f),
+                StoryTextElement(id = "blank", text = "  "),
+            ),
+        ).toCreateStoryRequest(originalLanguage = "fr")
+
+        val objects = request.storyEffects?.textObjects.orEmpty()
+        assertThat(objects.map { it.id }).containsExactly("e1")
+        assertThat(objects.single().text).isEqualTo("Bonjour")
+        assertThat(objects.single().textStyle).isEqualTo("neon")
+        assertThat(objects.single().sourceLanguage).isEqualTo("fr")
+    }
+
+    @Test
+    fun `toCreateStoryRequest leaves storyEffects null when no text element is publishable`() {
+        val request = StoryComposerDraft(
+            text = "caption",
+            textElements = listOf(StoryTextElement(id = "blank", text = "")),
+        ).toCreateStoryRequest(originalLanguage = "en")
+        assertThat(request.storyEffects).isNull()
+        assertThat(request.content).isEqualTo("caption")
+    }
 }

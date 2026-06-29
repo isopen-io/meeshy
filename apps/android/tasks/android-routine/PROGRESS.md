@@ -128,15 +128,30 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 ## Next slice (pick one for the next run)
 
 Ordered by value:
-1. **Canvas toolbar/FAB** — the bottom-band toolbar (Contenu/Effets) + add-element FAB that
-   sits over the now-real 9:16 canvas. Glue-heavy; keep any selection/mode decision in a pure
-   helper or the VM.
-2. **Text elements** (≤5/slide): per-element style/colour/position — the on-canvas text model
-   (pure `StoryTextElement` + per-slide `elements` list, ≤5 cap, mirroring the media reducer).
-   Each element carries its own position/scale on the canvas (reuse the `StoryCanvasTransform`
-   clamp pattern for element placement).
-3. After Stories richness is sufficient, advance to the **Calls** area
+1. **Text element styling** — per-element style picker (bold/neon/typewriter/handwriting/classic),
+   colour, alignment, and per-style typography *rendering* on the canvas (the model already carries
+   `style`/`color`/`align`; this slice renders them and adds the picker UI + VM intents
+   `onTextElementStyle`/`onTextElementColor`/`onTextElementAlign`, each a one-line
+   `deck.updateTextElement` wrapper, fully testable).
+2. **In-place floating text editor** — tool bubbles over the selected element + keyboard-aware
+   canvas shift (the editing-selection plumbing — `selectedTextElementId`/`editorText` — already
+   exists; this is the floating UI + a pure "where to place the toolbar" helper).
+3. **Canvas toolbar/FAB** — the bottom-band toolbar (Contenu/Effets) grouping add-text / add-media;
+   glue-heavy, keep any mode decision in a pure helper or the VM.
+4. After Stories richness is sufficient, advance to the **Calls** area
    (`feature-parity.md` §"Calls").
+
+(`story-text-elements` ✅ shipped 2026-06-29 — this run; **on-canvas text elements are real**. A pure
+`StoryTextElement` (id/text/`StoryTextStyle`/hex colour/`StoryTextAlign`/normalised x,y) with the canvas
+clamp in one place (`normalised`/`nudged`) + a `toTextObject(lang)` gateway-wire mapper. The deck mirrors
+the media reducer per-slide (`addTextElementToSelected`/`removeTextElement`/`updateTextElement`/
+`moveTextElement`, ≤5/slide cap, `selectedRemainingTextSlots`, `isWithinTextElementLimit`); a
+text-element-only slide now publishes. `StoryComposerDraft.toCreateStoryRequest` serialises publishable
+elements into `storyEffects.textObjects` (blanks dropped). The VM adds add/select/deselect/move/remove
+intents and routes the single text field to the selected element **or** the slide caption
+(`editorText`/`isEditingTextElement`); switching slides ends element editing. `StoryCanvasSurface` renders
+each element centred-at-fraction, draggable/tappable/removable, with a background tap to deselect. +41
+tests (10 element, 16 deck, 5 draft, 10 VM). See run log.)
 
 (`story-canvas-transform` ✅ shipped 2026-06-29 — this run; **the 9:16 canvas is now real with
 pinch-zoom + drag-pan**. A pure per-slide `StoryCanvasTransform` (scale clamped 1–4×, offset clamped
@@ -243,6 +258,62 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-29 — slice `story-text-elements` ✅
+- **Branch:** `claude/apps/android/story-text-elements` (off `origin/main` @ `e638c712`).
+- **Housekeeping (step 0):** no open Android PR for the prior loop (`story-canvas-transform` merged);
+  `origin/main` carried every Android slice; branched this slice clean.
+- **What:** **on-canvas text elements** ("Next" #2, feature-parity §"Text elements (≤5/slide)"). The
+  composer canvas can now hold up to 5 draggable text elements per slide — add, position, edit, remove —
+  and they ride into publish via `storyEffects.textObjects`. Surpasses iOS by routing publish through the
+  durable outbox (the existing Android story path).
+- **Design (single source of truth, SDK purity):** the position clamp lives in **one pure place**,
+  `StoryTextElement` (`normalised()` / `nudged(dx,dy)` keep x,y in `0f..1f`); the deck mirrors the media
+  reducer exactly (an element id lives on one slide; total functions return the same instance when inert);
+  the single text field serves two roles via the pure-derived `editorText`/`isEditingTextElement` so the
+  canvas stays one coherent surface (no second editor). All in `:feature:stories` (product state, not an
+  SDK atom). The wire mapping reuses the existing `StoryTextObject`/`StoryEffects` model — no new types.
+- **Added/changed (production, `apps/android` only):**
+  - `StoryTextElement.kt` (new) — pure element + `StoryTextStyle`/`StoryTextAlign` enums (gateway `wire`
+    tokens), `isPublishable`, `normalised`/`nudged` (clamp), `toTextObject(lang)`, `CENTER`/`DEFAULT_COLOR`/
+    `clampCoord`.
+  - `StorySlide.elements: List<StoryTextElement>` (carried by `duplicate`); `StorySlideDeck`
+    `addTextElementToSelected`/`removeTextElement`/`updateTextElement`/`moveTextElement` +
+    `selectedRemainingTextSlots`/`selectedCanAddTextElement`/`hasTextElements`/`isWithinTextElementLimit`,
+    `MAX_TEXT_ELEMENTS_PER_SLIDE=5`, and `publishableSlides` now counts an element-only slide.
+  - `StoryComposerDraft.textElements` + `withTextElements`/`publishableTextElements`/`hasTextElements`;
+    `canPublish` admits a publishable element; `toCreateStoryRequest` serialises non-blank elements into
+    `storyEffects.textObjects` (null when none).
+  - `StoryComposerViewModel` — `onAddTextElement`/`onSelectTextElement`/`onDeselectTextElement`/
+    `onTextElementMoved`/`onRemoveTextElement`, `onTextChange` routes to element-vs-caption,
+    `selectedTextElementId` + derived `selectedTextElement`/`isEditingTextElement`/`editorText`/
+    `selectedSlideTextElements`; `canPublish` gates on the element cap + presence; `mirrorDraftToSelection`
+    drops a dangling element selection on slide change; `publishPlans` carries each slide's elements.
+  - `StoryComposerScreen` — `StoryCanvasSurface` renders the elements (centred at fraction, drag→
+    `onTextElementMoved` via px/size, tap→select, remove affordance, background tap→deselect); the field
+    binds `editorText`; an "Add text" button. +4 strings × 4 locales.
+- **TDD (red → green):** `StoryTextElementTest` +10 (defaults; blank/non-blank publishable; normalised
+  clamp + in-range untouched; nudged translate / edge-clamp both axes / identity preserved; toTextObject
+  wire tokens; enum wire coverage). `StorySlideDeckTextElementsTest` +16 (add to selected only / clamp /
+  dup-id inert / cap inert / remaining countdown; remove from any slide / unknown inert; update matching
+  only / re-clamp / unknown inert; move clamp / unknown inert; hasTextElements ignores blank;
+  element-only slide publishable; over-cap flagged; duplicate carries elements).
+  `StoryComposerDraftTest` +5 (element-only publishable / blank-only not; withTextElements; serialise +
+  drop blanks; storyEffects null when none). `StoryComposerViewModelTest` +10 (add+edit; route to element
+  not caption; blank not publishable; deselect→caption; unknown select inert; cap warning; drag clamp;
+  remove ends editing; slide switch ends editing; publish carries textObjects).
+- **Branch coverage (new logic):** every arm of the deck reducers (inert/cap/clamp/unknown), the
+  element clamp (in/over/under both axes), the `onTextChange` route (element vs caption), the
+  `mirrorDraftToSelection` still-selected vs dangling branch, `canPublish` element presence + cap, and the
+  draft serialise/empty branch are all hit. ≥90% branch + instruction on the added logic.
+- **Verification:** `./apps/android/meeshy.sh check` — **BUILD SUCCESSFUL** (`assembleDebug` + all
+  `testDebugUnitTest`, 836 tasks). Diff = `apps/android` only (4 prod Kotlin changed + 1 new, 4 strings,
+  2 test changed + 2 new).
+- **Reviewer gate:** PASS — scope `apps/android` only, no secrets / `local.properties` gitignored;
+  behavioural non-tautological tests through the public API; SDK purity (pure model is product state in
+  `:feature:*`); single source of truth (clamp + wire mapping each in one place, reuses `StoryTextObject`);
+  UDF (VM + immutable `StateFlow`, transitions pure); canvas/element Composables are glue;
+  colour/UX coherence (one coherent canvas surface, natural drag/tap gestures, deselect on background tap).
 
 ### 2026-06-29 — slice `story-canvas-transform` ✅
 - **Branch:** `claude/apps/android/story-canvas-transform` (off `origin/main`).
