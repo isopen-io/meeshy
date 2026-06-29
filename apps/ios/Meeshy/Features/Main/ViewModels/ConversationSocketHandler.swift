@@ -182,6 +182,10 @@ final class ConversationSocketHandler {
         typingTimer?.invalidate()
         typingIdleTimer?.invalidate()
         typingSafetyTimers.values.forEach { $0.invalidate() }
+        typingSafetyTimers.removeAll()
+        Task { @MainActor [weak self] in
+            self?.delegate?.typingUsernames.removeAll()
+        }
     }
 
     // MARK: - Deduplication
@@ -1022,7 +1026,13 @@ final class ConversationSocketHandler {
         messageSocket.didReconnect
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.triggerSyncIfNeeded()
+                guard let self else { return }
+                // Typing state from before the disconnect is stale — remote peers
+                // will re-emit typing:start only if they are still typing.
+                self.typingSafetyTimers.values.forEach { $0.invalidate() }
+                self.typingSafetyTimers.removeAll()
+                self.delegate?.typingUsernames.removeAll()
+                self.triggerSyncIfNeeded()
             }
             .store(in: &cancellables)
 
