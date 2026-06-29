@@ -86,8 +86,8 @@ class ConversationViewModel: ObservableObject {
         }
 
         _messageIdIndex = nil
-        _cachedLastReceivedIndex = nil
-        _cachedLastSentIndex = nil
+        _cachedLastReceivedIndex = .uncomputed
+        _cachedLastSentIndex = .uncomputed
 
         if structureChanged {
             _messagesByDate = nil
@@ -102,20 +102,33 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
-    // Double-optional: nil = not computed, .some(nil) = computed but no match, .some(.some(N)) = found at N
-    private var _cachedLastReceivedIndex: Int?? = nil
+    /// Two-state cache sentinel for Int? properties where both `nil` (absent)
+    /// and a concrete index are valid computed results. Replaces the `Int??`
+    /// pattern (`nil` = uncomputed, `.some(nil)` = absent) with explicit cases
+    /// that are immediately readable without knowing Swift nested-optional semantics.
+    private enum IndexCache {
+        case uncomputed
+        case resolved(Int?)
+
+        var index: Int? {
+            if case .resolved(let i) = self { return i }
+            return nil
+        }
+    }
+
+    private var _cachedLastReceivedIndex: IndexCache = .uncomputed
     var cachedLastReceivedIndex: Int? {
-        if let cached = _cachedLastReceivedIndex { return cached }
+        if case .resolved(let cached) = _cachedLastReceivedIndex { return cached }
         let result = messages.indices.last(where: { !messages[$0].isMe })
-        _cachedLastReceivedIndex = .some(result)
+        _cachedLastReceivedIndex = .resolved(result)
         return result
     }
 
-    private var _cachedLastSentIndex: Int?? = nil
+    private var _cachedLastSentIndex: IndexCache = .uncomputed
     var cachedLastSentIndex: Int? {
-        if let cached = _cachedLastSentIndex { return cached }
+        if case .resolved(let cached) = _cachedLastSentIndex { return cached }
         let result = messages.indices.last(where: { messages[$0].isMe })
-        _cachedLastSentIndex = .some(result)
+        _cachedLastSentIndex = .resolved(result)
         return result
     }
 
