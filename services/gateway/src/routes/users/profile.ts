@@ -24,6 +24,7 @@ import { authUserCacheKey } from '../../middleware/auth';
 import { getCacheStore } from '../../services/CacheStore';
 import { withMutationLog } from '../../utils/withMutationLog';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 
 const logger = enhancedLogger.child({ module: 'UserProfileRoutes' });
@@ -133,16 +134,16 @@ export async function updateUserProfile(fastify: FastifyInstance) {
 
       const updateData: any = {};
 
-      if (body.firstName !== undefined) updateData.firstName = capitalizeName(body.firstName);
-      if (body.lastName !== undefined) updateData.lastName = capitalizeName(body.lastName);
-      if (body.displayName !== undefined) updateData.displayName = normalizeDisplayName(body.displayName);
+      if (body.firstName !== undefined) updateData.firstName = SecuritySanitizer.sanitizeText(capitalizeName(body.firstName));
+      if (body.lastName !== undefined) updateData.lastName = SecuritySanitizer.sanitizeText(capitalizeName(body.lastName));
+      if (body.displayName !== undefined) updateData.displayName = SecuritySanitizer.sanitizeText(normalizeDisplayName(body.displayName));
       if (body.email !== undefined) updateData.email = normalizeEmail(body.email);
       if (body.phoneNumber !== undefined) {
         updateData.phoneNumber = (body.phoneNumber === '' || body.phoneNumber === null)
           ? null
           : normalizePhoneNumber(body.phoneNumber);
       }
-      if (body.bio !== undefined) updateData.bio = body.bio;
+      if (body.bio !== undefined) updateData.bio = SecuritySanitizer.sanitizeText(body.bio);
 
       if (body.systemLanguage !== undefined) updateData.systemLanguage = body.systemLanguage;
       if (body.regionalLanguage !== undefined) updateData.regionalLanguage = body.regionalLanguage;

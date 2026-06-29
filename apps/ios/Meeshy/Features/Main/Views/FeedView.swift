@@ -2,6 +2,7 @@ import SwiftUI
 import PhotosUI
 import CoreLocation
 import Combine
+import os
 import MeeshySDK
 import MeeshyUI
 
@@ -32,6 +33,7 @@ struct ShareableLink: Identifiable {
 
 // MARK: - Feed View
 struct FeedView: View {
+    private static let logger = Logger(subsystem: "me.meeshy.app", category: "feed")
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
@@ -1468,7 +1470,9 @@ struct FeedView: View {
                 // Mark recorded ONLY on success so a failed flush leaves the ids
                 // eligible to re-enqueue when the card next appears.
                 recordedImpressionIds.formUnion(batch)
-            } catch {}
+            } catch {
+                FeedView.logger.debug("impression flush failed (will retry): \(error.localizedDescription)")
+            }
         }
     }
 }

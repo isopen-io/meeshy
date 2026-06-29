@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import os
 import MeeshySDK
 
 struct AffiliateView: View {
@@ -269,6 +270,8 @@ final class AffiliateViewModel: ObservableObject {
     @Published var tokens: [AffiliateToken] = []
     @Published var isLoading = false
 
+    private static let logger = Logger(subsystem: "me.meeshy.app", category: "affiliate")
+
     func load() async {
         let cached = await CacheCoordinator.shared.affiliateTokens.load(for: "list")
         switch cached {
@@ -288,7 +291,9 @@ final class AffiliateViewModel: ObservableObject {
         do {
             tokens = try await AffiliateService.shared.listTokens()
             try? await CacheCoordinator.shared.affiliateTokens.save(tokens, for: "list")
-        } catch {}
+        } catch {
+            AffiliateViewModel.logger.error("affiliate tokens refresh failed: \(error.localizedDescription)")
+        }
         isLoading = false
     }
 

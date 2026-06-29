@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import os
 import MeeshySDK
 import MeeshyUI
 
@@ -14,6 +15,8 @@ final class UserProfileViewModel: ObservableObject {
     @Published var userStats: UserStats?
     @Published var isLoadingStats = false
     @Published var statsError: String?
+
+    private static let logger = Logger(subsystem: "me.meeshy.app", category: "profile")
 
     // MARK: - Dependencies
 
@@ -76,7 +79,9 @@ final class UserProfileViewModel: ObservableObject {
             hydrateProfileUserIfNeeded(from: user)
         } catch let APIError.serverError(code, _) where code == 403 {
             isBlockedByTarget = true
-        } catch {}
+        } catch {
+            UserProfileViewModel.logger.error("profile refresh failed: \(error.localizedDescription)")
+        }
     }
 
     private func hydrateProfileUserIfNeeded(from user: MeeshyUser?) {
