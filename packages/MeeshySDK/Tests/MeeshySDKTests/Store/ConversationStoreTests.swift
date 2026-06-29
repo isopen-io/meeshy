@@ -548,7 +548,8 @@ final class ConversationStoreTests: XCTestCase {
             lastMessageAt: t1
         ))
 
-        XCTAssertEqual(await store.conversation(id: "conv-1")?.lastMessageAt, t1)
+        let updatedConv = await store.conversation(id: "conv-1")
+        XCTAssertEqual(updatedConv?.lastMessageAt, t1)
     }
 
     func test_applyConversationUpdated_staleLastMessageAt_skippedButOtherFieldsApplied() async {
@@ -629,7 +630,8 @@ final class ConversationStoreTests: XCTestCase {
             conversationId: "conv-1"
         ))
 
-        XCTAssertEqual(await store.conversation(id: "conv-1")?.title, "Known Title",
+        let convAfterNilEvent = await store.conversation(id: "conv-1")
+        XCTAssertEqual(convAfterNilEvent?.title, "Known Title",
                        "all-nil event must not overwrite existing field values")
     }
 
