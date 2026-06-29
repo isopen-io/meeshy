@@ -170,23 +170,11 @@ struct CallView: View {
         .adaptiveOnChange(of: callManager.callState) { _, newState in
             switch newState {
             case .connected:
-                UIAccessibility.post(
-                    notification: .announcement,
-                    argument: String(localized: "call.a11y.connected",
-                                    defaultValue: "Appel connecté",
-                                    bundle: .main))
+                UIAccessibility.post(notification: .announcement, argument: String(localized: "call.a11y.connected"))
             case .reconnecting:
-                UIAccessibility.post(
-                    notification: .announcement,
-                    argument: String(localized: "call.a11y.reconnecting",
-                                    defaultValue: "Reconnexion en cours…",
-                                    bundle: .main))
+                UIAccessibility.post(notification: .announcement, argument: String(localized: "call.a11y.reconnecting"))
             case .ended:
-                UIAccessibility.post(
-                    notification: .announcement,
-                    argument: String(localized: "call.a11y.ended",
-                                    defaultValue: "Appel terminé",
-                                    bundle: .main))
+                UIAccessibility.post(notification: .announcement, argument: String(localized: "call.a11y.ended"))
             default:
                 break
             }
@@ -607,9 +595,7 @@ struct CallView: View {
                         .background(.ultraThinMaterial)
                         .clipShape(Capsule())
                         .padding(12)
-                        .accessibilityLabel(String(localized: "call.duration.a11y.label",
-                                                   defaultValue: "Durée de l'appel",
-                                                   bundle: .main))
+                        .accessibilityLabel(String(localized: "call.duration.a11y.label"))
                         .accessibilityValue(callManager.formattedDuration)
                         .accessibilityAddTraits(.updatesFrequently)
                     Spacer()
