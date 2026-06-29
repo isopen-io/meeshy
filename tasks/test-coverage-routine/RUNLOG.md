@@ -2425,4 +2425,4 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Full suite: 342 suites / 10468 tests / 1 skipped — all thresholds met (stmts:78.33/branches:73.35/funcs:78.14/lines:78.59; floor 67/63/67/67)
 - Reviewer: PASS (rounds: 1) — all behavioral assertions on HTTP outcomes; factory functions; deterministic; no production logic changed
 - Notes / where the next run resumes: routes/friends.ts ☑. Next slice: continue gateway manifest gap-fill — pick next uncovered batch from manifests/gateway.md routes/ or services/ sections
-- Commit: <sha-to-fill>
+- Commit: 9d42c0bbcfef43dfe03bf471d56bdaac588a26fb (squash-merged PR #1044 → main 2026-06-29T21:49Z)
