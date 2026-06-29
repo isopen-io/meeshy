@@ -927,8 +927,11 @@ final class CallReliabilityPolicyDefaultsTests: XCTestCase {
 
 // MARK: - CallPillStatus (minimised call pill never shows a running timer pre-connection)
 
+// Renamed from `CallPillStatusTests` to avoid an `invalid redeclaration` collision
+// with the dedicated suite in `FloatingCallPillViewTests.swift` (both PRs added a
+// `CallPillStatus` test class). Same target → class names must be unique.
 @MainActor
-final class CallPillStatusTests: XCTestCase {
+final class CallPillStatusMinimisedTests: XCTestCase {
 
     func test_connected_isConnected_showsDuration() {
         XCTAssertEqual(CallPillStatus.from(.connected), .connected)
@@ -2798,5 +2801,98 @@ final class CallManagerDTMFTests: XCTestCase {
             funcBody.contains("isEmpty"),
             "sendDTMF must guard against empty digit strings before forwarding"
         )
+    }
+}
+
+// MARK: - call:force-leave Server→Client Handler
+
+@MainActor
+final class CallManagerForcedLeaveTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_forcedLeave_subscriberPresent_inSetupSocketListeners() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("callForcedLeave"),
+            "setupSocketListeners must subscribe to the callForcedLeave Combine subject " +
+            "so the gateway can force-remove a participant and the iOS client tears down the call"
+        )
+    }
+
+    func test_forcedLeave_guardsOnCurrentCallId() throws {
+        let source = try callManagerSource()
+        guard let subRange = source.range(of: "callForcedLeave") else {
+            XCTFail("callForcedLeave subscription not found in CallManager.swift"); return
+        }
+        let window = String(source[subRange.lowerBound..<min(source.index(subRange.upperBound, offsetBy: 400), source.endIndex)])
+        XCTAssertTrue(
+            window.contains("currentCallId"),
+            "callForcedLeave handler must guard on currentCallId to discard stale events " +
+            "from a previous call cycle that arrive after state reset"
+        )
+    }
+
+    func test_forcedLeave_callsEndCallInternal_withRemoteReason() throws {
+        let source = try callManagerSource()
+        guard let subRange = source.range(of: "callForcedLeave") else {
+            XCTFail("callForcedLeave subscription not found in CallManager.swift"); return
+        }
+        let sinkEnd = source.range(of: ".store(in: &cancellables)", range: subRange.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
+        let block = String(source[subRange.lowerBound..<sinkEnd])
+        XCTAssertTrue(
+            block.contains("endCallInternal"),
+            "callForcedLeave handler must call endCallInternal to tear down the WebRTC session"
+        )
+        XCTAssertTrue(
+            block.contains(".remote"),
+            "callForcedLeave handler must end with reason .remote (the gateway is the remote actor " +
+            "initiating the force-remove, not the local user)"
+        )
+    }
+
+    func test_forcedLeave_reportsCallKitEndedOnActiveCall() throws {
+        let source = try callManagerSource()
+        guard let subRange = source.range(of: "callForcedLeave") else {
+            XCTFail("callForcedLeave subscription not found in CallManager.swift"); return
+        }
+        let sinkEnd = source.range(of: ".store(in: &cancellables)", range: subRange.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
+        let block = String(source[subRange.lowerBound..<sinkEnd])
+        XCTAssertTrue(
+            block.contains("reportCall") && block.contains("activeCallUUID"),
+            "callForcedLeave handler must report the call as ended to CallKit via " +
+            "callProvider.reportCall(with:endedAt:reason:) so the system call-ended UI appears"
+        )
+    }
+}
+
+// MARK: - CallForcedLeaveData Decodable
+
+final class CallForcedLeaveDataTests: XCTestCase {
+
+    func test_decode_withCallIdAndReason_succeeds() throws {
+        let json = """
+        {"callId":"abc123","reason":"admin_removed"}
+        """.data(using: .utf8)!
+        let event = try JSONDecoder().decode(CallForcedLeaveData.self, from: json)
+        XCTAssertEqual(event.callId, "abc123")
+        XCTAssertEqual(event.reason, "admin_removed")
+    }
+
+    func test_decode_withMissingReason_succeeds() throws {
+        let json = """
+        {"callId":"abc123"}
+        """.data(using: .utf8)!
+        let event = try JSONDecoder().decode(CallForcedLeaveData.self, from: json)
+        XCTAssertEqual(event.callId, "abc123")
+        XCTAssertNil(event.reason)
     }
 }

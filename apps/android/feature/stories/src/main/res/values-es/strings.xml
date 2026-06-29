@@ -47,6 +47,14 @@
     <string name="stories_composer_text_placeholder">Escribe algo…</string>
     <string name="stories_composer_remove_text">Eliminar texto</string>
     <string name="stories_composer_text_caption">Pie de foto</string>
+    <string name="stories_composer_style_bold">Negrita</string>
+    <string name="stories_composer_style_neon">Neón</string>
+    <string name="stories_composer_style_typewriter">Máquina</string>
+    <string name="stories_composer_style_handwriting">Manuscrita</string>
+    <string name="stories_composer_style_classic">Clásica</string>
+    <string name="stories_composer_align_left">Alinear a la izquierda</string>
+    <string name="stories_composer_align_center">Centrar</string>
+    <string name="stories_composer_align_right">Alinear a la derecha</string>
     <string name="stories_visibility_public">Público</string>
     <string name="stories_visibility_friends">Amigos</string>
     <string name="stories_visibility_community">Comunidad</string>

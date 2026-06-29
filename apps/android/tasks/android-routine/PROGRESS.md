@@ -128,18 +128,25 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 ## Next slice (pick one for the next run)
 
 Ordered by value:
-1. **Text element styling** — per-element style picker (bold/neon/typewriter/handwriting/classic),
-   colour, alignment, and per-style typography *rendering* on the canvas (the model already carries
-   `style`/`color`/`align`; this slice renders them and adds the picker UI + VM intents
-   `onTextElementStyle`/`onTextElementColor`/`onTextElementAlign`, each a one-line
-   `deck.updateTextElement` wrapper, fully testable).
-2. **In-place floating text editor** — tool bubbles over the selected element + keyboard-aware
+1. **In-place floating text editor** — tool bubbles over the selected element + keyboard-aware
    canvas shift (the editing-selection plumbing — `selectedTextElementId`/`editorText` — already
    exists; this is the floating UI + a pure "where to place the toolbar" helper).
-3. **Canvas toolbar/FAB** — the bottom-band toolbar (Contenu/Effets) grouping add-text / add-media;
+2. **Canvas toolbar/FAB** — the bottom-band toolbar (Contenu/Effets) grouping add-text / add-media;
    glue-heavy, keep any mode decision in a pure helper or the VM.
-4. After Stories richness is sufficient, advance to the **Calls** area
+3. After Stories richness is sufficient, advance to the **Calls** area
    (`feature-parity.md` §"Calls").
+
+(`story-text-element-styling` ✅ shipped 2026-06-29 — this run; **on-canvas text elements are now
+styleable**. A pure `StoryTextStyle.typography()` mapping (the single source of truth for how each of
+the five iOS faces renders) returns Compose-agnostic tokens — `StoryTextTypography`
+(`fontWeight`/`italic`/`family`/`letterSpacingEm`/`glow`) over the new `StoryTextFontFamily` enum
+(SANS/SERIF/MONOSPACE/CURSIVE) — so the canvas Composable stays glue and the rendering decision is
+unit-tested in one place. Three one-line VM intents
+`onTextElementStyle`/`onTextElementColor`/`onTextElementAlign` wrap `deck.updateTextElement` (inert on
+unknown id, selection/editing untouched). `TextElementLayer` now renders weight/slant/family/tracking
++ a neon glow `Shadow`; a `TextStyleToolbar` (shown while editing an element) offers five style chips,
+the L/C/R alignment toggle, and a colour-swatch row. +8 typography tests, +8 VM tests; +8 strings × 4
+locales. See run log.)
 
 (`story-text-elements` ✅ shipped 2026-06-29 — this run; **on-canvas text elements are real**. A pure
 `StoryTextElement` (id/text/`StoryTextStyle`/hex colour/`StoryTextAlign`/normalised x,y) with the canvas
@@ -258,6 +265,47 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-29 — slice `story-text-element-styling` ✅
+- **Branch:** `claude/apps/android/story-text-element-styling` (off `origin/main` @ `7f28c533`).
+- **Housekeeping (step 0):** no open Android PR (`story-text-elements` and every prior slice already on
+  `origin/main`); branched this slice clean off the latest main.
+- **What:** **per-element text styling** ("Next" #1, feature-parity §"Text elements"). On-canvas text
+  elements already carried `style`/`color`/`align`; this slice *renders* them and gives the user the
+  picker to change them. Five iOS-parity faces (bold / neon / typewriter / handwriting / classic),
+  a colour-swatch palette, and L/C/R alignment — all live on the element being edited.
+- **Design (single source of truth, SDK purity):** the *look* of each style lives in **one pure,
+  Compose-agnostic place**, `StoryTextStyle.typography()` → `StoryTextTypography`
+  (`fontWeight`/`italic`/`family`/`letterSpacingEm`/`glow`) over the new `StoryTextFontFamily` token
+  enum. Because the tokens hold no Compose types they unit-test on the JVM; the Composable maps a token
+  to `FontFamily`/`FontStyle`/`Shadow` at the glue layer. The three mutators are one-line
+  `deck.updateTextElement` wrappers (the clamp/identity rules already proven in the deck), so the VM stays
+  thin and inert-on-unknown-id falls straight out of the existing reducer. All in `:feature:stories`
+  (product styling, not an SDK atom).
+- **Added/changed (production, `apps/android` only):**
+  - `StoryTextElement.kt` — new `StoryTextFontFamily` enum, `StoryTextTypography` data class, and the pure
+    `StoryTextStyle.typography()` mapping (total over the five cases).
+  - `StoryComposerViewModel.kt` — `onTextElementStyle`/`onTextElementColor`/`onTextElementAlign` intents
+    (each a `deck.updateTextElement` copy; selection/editing untouched; inert on unknown id).
+  - `StoryComposerScreen.kt` — `TextElementLayer` now renders weight/slant/family/tracking + a neon glow
+    `Shadow`; `StoryTextFontFamily.toFontFamily()` glue; a `TextStyleToolbar` (style chips + `AlignToggle`
+    L/C/R + `ColorSwatch` row, shown only while editing an element) wired to the three new intents; a
+    `STORY_TEXT_COLORS` palette (white first).
+  - `strings.xml` (+ fr/es/pt) — 8 new strings (5 style names, 3 alignment content descriptions).
+- **Tests (TDD red → green, behaviour via public API):**
+  - `StoryTextTypographyTest` (new, +8): each of the five faces maps to its expected family/italic/glow,
+    bold heavier than classic, every weight in `100..900`, tracking never negative, and all five resolve
+    to **distinct** typographies (branch sweep over the `when`).
+  - `StoryComposerViewModelTest` (+8): restyle keeps text + position + editing; recolour/realign touch
+    only their field; each intent is **inert on an unknown id**; styling one of several elements leaves the
+    others; a fully restyled element carries `textStyle`/`textColor`/`textAlign` into the published object.
+- **Edge cases:** unknown-id inert (all three intents), single vs. several elements, default-state
+  preservation, publish round-trip of the wire tokens. No floor lowered, no test weakened.
+- **Verification:** `./apps/android/meeshy.sh check` → BUILD SUCCESSFUL (assembleDebug + all JVM unit
+  tests green).
+- **Reviewer gate:** PASS — diff is `apps/android` only (4 prod Kotlin/res files + 2 test files + tracking),
+  no production logic outside it, pure logic branch-swept, UDF/SSOT/SDK-purity honoured.
+- **Follow-ups (unchanged):** in-place floating text editor; canvas toolbar/FAB; then Calls.
 
 ### 2026-06-29 — slice `story-text-elements` ✅
 - **Branch:** `claude/apps/android/story-text-elements` (off `origin/main` @ `e638c712`).
