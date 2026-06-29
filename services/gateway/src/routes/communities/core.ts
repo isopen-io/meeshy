@@ -18,6 +18,7 @@ import { validatePagination } from '../../utils/pagination';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
+import { SecuritySanitizer } from '../../utils/sanitize.js';
 
 const logger = enhancedLogger.child({ module: 'CommunitiesCoreRoutes' });
 
@@ -431,9 +432,9 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
       // Creer la communaute ET automatiquement ajouter le createur comme membre ADMIN
       const community = await fastify.prisma.community.create({
         data: {
-          name: validatedData.name,
+          name: SecuritySanitizer.sanitizeText(validatedData.name),
           identifier: identifier,
-          description: validatedData.description,
+          description: validatedData.description !== undefined ? SecuritySanitizer.sanitizeText(validatedData.description) : undefined,
           avatar: validatedData.avatar,
           isPrivate: validatedData.isPrivate ?? true,
           createdBy: userId,
