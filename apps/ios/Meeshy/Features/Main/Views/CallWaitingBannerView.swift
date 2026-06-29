@@ -14,6 +14,10 @@ struct CallWaitingBannerView: View {
 
     @Binding var isVisible: Bool
     @State private var autoDismissTask: Task<Void, Never>?
+    // Audit P2-iOS-9 — respect the user's Reduce Motion preference; the
+    // banner uses a spring for its enter/exit animations; when reduce motion
+    // is on, collapse to a simple cross-fade.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(
         callerName: String,
@@ -82,7 +86,9 @@ struct CallWaitingBannerView: View {
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .padding(.horizontal, 12)
             .padding(.top, 8)
-            .transition(.move(edge: .top).combined(with: .opacity))
+            // P2-iOS-9 — slide from top when motion is allowed; fade only
+            // when reduce motion is on (no translational movement).
+            .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
             .accessibilityElement(children: .contain)
             .accessibilityLabel(String(localized: "call.waiting.banner.a11y", defaultValue: "Appel entrant de \(callerName)", bundle: .main))
             .onAppear {
@@ -106,8 +112,15 @@ struct CallWaitingBannerView: View {
     private func dismiss() {
         autoDismissTask?.cancel()
         autoDismissTask = nil
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+        // P2-iOS-9 — skip the spring when reduce motion is on; a bare
+        // assignment is effectively an instant cross-fade via SwiftUI's
+        // default transition, which honours the system preference.
+        if UIAccessibility.isReduceMotionEnabled {
             isVisible = false
+        } else {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                isVisible = false
+            }
         }
     }
 
@@ -118,8 +131,12 @@ struct CallWaitingBannerView: View {
         autoDismissTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(seconds))
             guard !Task.isCancelled else { return }
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            if UIAccessibility.isReduceMotionEnabled {
                 isVisible = false
+            } else {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    isVisible = false
+                }
             }
         }
     }

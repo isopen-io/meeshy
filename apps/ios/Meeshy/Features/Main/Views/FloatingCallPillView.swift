@@ -52,6 +52,10 @@ struct FloatingCallPillView: View {
     // does not inject CallManager via `.environmentObject(...)` either
     // (the singleton is the only source of truth).
     @ObservedObject private var callManager = CallManager.shared
+    // Audit P2-iOS-9 — respect the user's Reduce Motion preference. The
+    // slide-in/-out spring animation is the primary animation concern here;
+    // when reduce motion is on, collapse it to a simple cross-fade.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let pillHeight: CGFloat = 64
 
@@ -61,8 +65,10 @@ struct FloatingCallPillView: View {
                 // Pilule verre + contrôles blancs : on épingle le verre en
                 // sombre pour rester lisible quel que soit le mode système.
                 .environment(\.colorScheme, .dark)
-                .transition(.move(edge: .top).combined(with: .opacity))
-                .animation(.spring(response: 0.5, dampingFraction: 0.75), value: callManager.displayMode)
+                // P2-iOS-9 — slide-in from top when motion is allowed; fade
+                // only when reduce motion is on (no translational movement).
+                .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+                .animation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.75), value: callManager.displayMode)
                 .zIndex(999)
         }
     }
@@ -258,7 +264,7 @@ struct FloatingCallPillView: View {
     // MARK: - Actions
 
     private func expandToFullScreen() {
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.75)) {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.75)) {
             callManager.displayMode = .fullScreen
         }
         HapticFeedback.medium()

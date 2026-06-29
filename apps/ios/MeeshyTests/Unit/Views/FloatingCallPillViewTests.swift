@@ -1,0 +1,196 @@
+import XCTest
+@testable import Meeshy
+
+// MARK: - CallPillStatus Unit Tests
+
+@MainActor
+final class CallPillStatusTests: XCTestCase {
+
+    // MARK: - from(_ state:) mapping
+
+    func test_from_connected_returnsConnected() {
+        XCTAssertEqual(CallPillStatus.from(.connected), .connected)
+    }
+
+    func test_from_outgoingRinging_returnsRinging() {
+        XCTAssertEqual(CallPillStatus.from(.ringing(isOutgoing: true)), .ringing)
+    }
+
+    func test_from_incomingRinging_returnsRinging() {
+        XCTAssertEqual(CallPillStatus.from(.ringing(isOutgoing: false)), .ringing)
+    }
+
+    func test_from_offering_returnsConnecting() {
+        XCTAssertEqual(CallPillStatus.from(.offering), .connecting)
+    }
+
+    func test_from_connecting_returnsConnecting() {
+        XCTAssertEqual(CallPillStatus.from(.connecting), .connecting)
+    }
+
+    func test_from_reconnecting_returnsReconnecting() {
+        XCTAssertEqual(CallPillStatus.from(.reconnecting(attempt: 1)), .reconnecting)
+    }
+
+    func test_from_reconnecting_highAttempt_returnsReconnecting() {
+        XCTAssertEqual(CallPillStatus.from(.reconnecting(attempt: 5)), .reconnecting)
+    }
+
+    func test_from_idle_returnsConnecting_safeNonConnectedFallback() {
+        // The pill is hidden when `.idle` (isActive == false); mapping to
+        // `.connecting` ensures a stray render never displays a green "00:00".
+        XCTAssertEqual(CallPillStatus.from(.idle), .connecting)
+    }
+
+    func test_from_ended_returnsConnecting_safeNonConnectedFallback() {
+        XCTAssertEqual(CallPillStatus.from(.ended(reason: .local)), .connecting)
+        XCTAssertEqual(CallPillStatus.from(.ended(reason: .remote)), .connecting)
+        XCTAssertEqual(CallPillStatus.from(.ended(reason: .missed)), .connecting)
+        XCTAssertEqual(CallPillStatus.from(.ended(reason: .connectionLost)), .connecting)
+    }
+
+    // MARK: - isConnected
+
+    func test_isConnected_trueOnlyForConnected() {
+        XCTAssertTrue(CallPillStatus.connected.isConnected)
+        XCTAssertFalse(CallPillStatus.ringing.isConnected)
+        XCTAssertFalse(CallPillStatus.connecting.isConnected)
+        XCTAssertFalse(CallPillStatus.reconnecting.isConnected)
+    }
+
+    // MARK: - label
+
+    func test_label_emptyForConnected() {
+        XCTAssertEqual(CallPillStatus.connected.label, "")
+    }
+
+    func test_label_nonEmptyForNonConnectedStates() {
+        XCTAssertFalse(CallPillStatus.ringing.label.isEmpty,
+                       "ringing status label must not be empty — pill shows pre-connection text")
+        XCTAssertFalse(CallPillStatus.connecting.label.isEmpty,
+                       "connecting status label must not be empty — pill shows pre-connection text")
+        XCTAssertFalse(CallPillStatus.reconnecting.label.isEmpty,
+                       "reconnecting status label must not be empty — pill shows pre-connection text")
+    }
+}
+
+// MARK: - FloatingCallPillView Source Inspection Tests
+
+@MainActor
+final class FloatingCallPillViewTests: XCTestCase {
+
+    private func pillSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Views/
+            .deletingLastPathComponent()   // Unit/
+            .deletingLastPathComponent()   // MeeshyTests/
+            .deletingLastPathComponent()   // ios/
+            .appendingPathComponent("Meeshy/Features/Main/Views/FloatingCallPillView.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    // MARK: - Reduce Motion support
+
+    func test_pill_readsReduceMotionEnvironment() throws {
+        let source = try pillSource()
+        XCTAssertTrue(
+            source.contains("accessibilityReduceMotion"),
+            "FloatingCallPillView must read @Environment(\\.accessibilityReduceMotion) " +
+            "to conditionally skip animated transitions for motion-sensitive users."
+        )
+    }
+
+    func test_pill_transition_usesConditionalOpacityWhenReduceMotion() throws {
+        let source = try pillSource()
+        XCTAssertTrue(
+            source.contains("reduceMotion ? .opacity"),
+            "FloatingCallPillView transition must collapse to .opacity when reduceMotion " +
+            "is true — .move animations can trigger vestibular discomfort."
+        )
+    }
+
+    func test_pill_animation_isNilWhenReduceMotion() throws {
+        let source = try pillSource()
+        XCTAssertTrue(
+            source.contains("reduceMotion ? nil"),
+            "FloatingCallPillView spring animation must be nil when reduceMotion is true " +
+            "so the pill appears/disappears without a spring bounce."
+        )
+    }
+
+    func test_expandToFullScreen_respectsReduceMotion() throws {
+        let source = try pillSource()
+        XCTAssertTrue(
+            source.contains("reduceMotion ? nil : .spring(response: 0.5"),
+            "expandToFullScreen() must gate its withAnimation on reduceMotion — " +
+            "unconditional .spring when reduceMotion is enabled triggers a spring " +
+            "bounce that can cause vestibular discomfort."
+        )
+    }
+
+    // MARK: - Accessibility labels on controls
+
+    func test_muteButton_hasAccessibilityLabel() throws {
+        let source = try pillSource()
+        XCTAssertTrue(
+            source.contains("call.pill.mute") && source.contains("call.pill.unmute"),
+            "The mute button in FloatingCallPillView must carry dynamic accessibility labels " +
+            "reflecting the current mute state so VoiceOver announces the tap outcome."
+        )
+    }
+
+    func test_speakerButton_hasAccessibilityLabel() throws {
+        let source = try pillSource()
+        XCTAssertTrue(
+            source.contains("call.pill.speaker.on") && source.contains("call.pill.speaker.off"),
+            "The speaker button must carry dynamic accessibility labels reflecting the " +
+            "current speaker state."
+        )
+    }
+
+    func test_hangupButton_hasAccessibilityLabel() throws {
+        let source = try pillSource()
+        XCTAssertTrue(
+            source.contains("call.pill.hangup"),
+            "The hang-up button must carry an accessibility label so VoiceOver users " +
+            "can identify it without exploring by touch."
+        )
+    }
+
+    func test_expandButton_hasAccessibilityLabel() throws {
+        let source = try pillSource()
+        XCTAssertTrue(
+            source.contains("call.pill.expand"),
+            "The expand button must carry an accessibility label describing its function."
+        )
+    }
+
+    func test_pillContent_hasContainerAccessibilityLabel() throws {
+        let source = try pillSource()
+        XCTAssertTrue(
+            source.contains("call.pill.ongoing"),
+            "The pill container must carry a combined accessibility label so VoiceOver " +
+            "users can quickly identify an active call without having to explore each control."
+        )
+    }
+
+    func test_pillContent_hasTapToReturnHint() throws {
+        let source = try pillSource()
+        XCTAssertTrue(
+            source.contains("call.pill.tapToReturn"),
+            "The pill container must carry an accessibility hint explaining the tap action " +
+            "(return to full-screen call)."
+        )
+    }
+
+    // MARK: - Status text
+
+    func test_statusLine_showsDurationOnlyWhenConnected() throws {
+        let source = try pillSource()
+        XCTAssertTrue(
+            source.contains("pillStatus.isConnected ? formattedDuration"),
+            "The pill status line must show the live duration ONLY for the .connected state " +
+            "— pre-connection states must show a textual label, never 00:00."
+        )
+    }
+}
