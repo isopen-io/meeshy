@@ -373,6 +373,25 @@ export function buildMessageNotificationBodyI18n(lang: string, params: {
   return [base, badges].filter(Boolean).join(' ');
 }
 
+/**
+ * Notification types whose offline email is a genuine account-security alert
+ * (login, password, 2FA, lockout…). Used to (a) keep these in a separate
+ * email-throttle bucket so a social email can never suppress a security alert,
+ * and (b) route them to the security email template rather than the generic one.
+ */
+const SECURITY_EMAIL_NOTIFICATION_TYPES = new Set<string>([
+  'login_new_device',
+  'login_suspicious',
+  'suspicious_activity',
+  'password_changed',
+  'two_factor_enabled',
+  'two_factor_disabled',
+  'account_locked',
+  'security_alert',
+]);
+
+const isSecurityEmailType = (type: string): boolean => SECURITY_EMAIL_NOTIFICATION_TYPES.has(type);
+
 export class NotificationService {
   // Anti-spam: tracking des mentions récentes par paire (sender:recipient)
   private recentMentions: Map<string, number[]> = new Map();
@@ -804,7 +823,12 @@ export class NotificationService {
           if (sockets.length === 0) {
             const { getCacheStore } = await import('../CacheStore');
             const cache = getCacheStore();
-            const throttleKey = `notif:email:throttle:${params.userId}`;
+            // Per-category throttle: security alerts and social notifications
+            // use independent 5-min buckets, so a social email (mention, missed
+            // call) can never preempt a genuine security alert (new login,
+            // suspicious activity) for the same user within the window.
+            const throttleCategory = isSecurityEmailType(params.type) ? 'security' : 'social';
+            const throttleKey = `notif:email:throttle:${throttleCategory}:${params.userId}`;
             const canSend = await cache.setnx(throttleKey, '1', 300);
             if (canSend) {
               const user = await this.prisma.user.findUnique({
