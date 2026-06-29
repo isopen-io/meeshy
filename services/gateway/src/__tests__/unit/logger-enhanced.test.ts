@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, jest } from '@jest/globals';
 
 const stdoutWrites: string[] = [];
 
@@ -18,6 +18,7 @@ import {
   enhancedLogger,
   securityLogger,
   gwLog,
+  requestLogger,
 } from '../../utils/logger-enhanced';
 
 // ---------------------------------------------------------------------------
@@ -244,5 +245,105 @@ describe('performanceLogger.withTiming', () => {
 
     expect(endLog).toBeDefined();
     expect(endLog).toContain('"error":true');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// enhancedLogger.info (line 290) and child.info (line 351)
+// ---------------------------------------------------------------------------
+
+describe('enhancedLogger.info', () => {
+  it('info() without context writes to stdout', () => {
+    enhancedLogger.info('info message only');
+    expect(stdoutWrites.some(l => l.includes('info message only'))).toBe(true);
+  });
+
+  it('info() with context writes to stdout', () => {
+    enhancedLogger.info('info with context', { module: 'test', requestId: 'r1' });
+    expect(stdoutWrites.some(l => l.includes('info with context'))).toBe(true);
+  });
+
+  it('info() with array in context covers redactPII array branch (lines 44, 48)', () => {
+    enhancedLogger.info('array context', { tags: ['a', 'b', 'c'], count: 3 });
+    expect(stdoutWrites.some(l => l.includes('array context'))).toBe(true);
+  });
+});
+
+describe('enhancedLogger.child().info', () => {
+  it('child info() writes to stdout (line 351)', () => {
+    const child = enhancedLogger.child({ module: 'ChildInfo' });
+    child.info('child info message');
+    expect(stdoutWrites.some(l => l.includes('child info message'))).toBe(true);
+  });
+
+  it('child info() with context writes to stdout', () => {
+    const child = enhancedLogger.child({ module: 'ChildInfo' });
+    child.info('child info ctx', { key: 'val' });
+    expect(stdoutWrites.some(l => l.includes('child info ctx'))).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// requestLogger (lines 501-522)
+// ---------------------------------------------------------------------------
+
+describe('requestLogger', () => {
+  it('returns an async function that logs the incoming request and attaches requestId', async () => {
+    const middleware = requestLogger();
+    const request: any = {
+      id: 'req-test-1',
+      method: 'GET',
+      url: '/api/v1/test',
+      headers: { 'user-agent': 'jest-agent' },
+      ip: '127.0.0.1',
+    };
+    const addHookFns: Array<() => Promise<void>> = [];
+    const reply: any = {
+      statusCode: 200,
+      addHook: jest.fn((_name: string, fn: () => Promise<void>) => {
+        addHookFns.push(fn);
+      }),
+    };
+
+    await middleware(request, reply);
+
+    expect(request.requestId).toBe('req-test-1');
+    expect(reply.addHook).toHaveBeenCalledWith('onSend', expect.any(Function));
+    expect(stdoutWrites.some(l => l.includes('Incoming request'))).toBe(true);
+
+    // trigger the onSend hook to cover lines 518-528
+    await addHookFns[0]();
+    expect(stdoutWrites.some(l => l.includes('Request completed'))).toBe(true);
+  });
+
+  it('uses warn level when statusCode >= 400 (line 520)', async () => {
+    const middleware = requestLogger();
+    const request: any = {
+      method: 'POST', url: '/api/v1/fail',
+      headers: {}, ip: '0.0.0.0',
+    };
+    const addHookFns: Array<() => Promise<void>> = [];
+    const reply: any = {
+      statusCode: 500,
+      addHook: jest.fn((_name: string, fn: () => Promise<void>) => { addHookFns.push(fn); }),
+    };
+    await middleware(request, reply);
+    await addHookFns[0]();
+    expect(stdoutWrites.some(l => l.includes('Request completed'))).toBe(true);
+  });
+
+  it('generates a requestId when request.id is absent (line 503 fallback)', async () => {
+    const middleware = requestLogger();
+    const request: any = {
+      method: 'GET', url: '/health',
+      headers: {}, ip: '0.0.0.0',
+    };
+    const reply: any = {
+      statusCode: 200,
+      addHook: jest.fn(),
+    };
+    await middleware(request, reply);
+    expect(typeof request.requestId).toBe('string');
+    expect(request.requestId.startsWith('req_')).toBe(true);
   });
 });
