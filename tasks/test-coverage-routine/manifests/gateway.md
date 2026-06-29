@@ -76,9 +76,9 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/gateway/src/routes/conversation-encryption.ts`
 - [ ] `services/gateway/src/routes/conversation-preferences.ts`
 - [ ] `services/gateway/src/routes/friends.ts`
-- [ ] `services/gateway/src/routes/invitations.ts`
+- [x] `services/gateway/src/routes/invitations.ts`
 - [x] `services/gateway/src/routes/magic-link.ts`
-- [ ] `services/gateway/src/routes/maintenance.ts`
+- [x] `services/gateway/src/routes/maintenance.ts`
 - [x] `services/gateway/src/routes/mentions.ts`
 - [x] `services/gateway/src/routes/message-read-status.ts`
 - [ ] `services/gateway/src/routes/messages.ts`
@@ -90,9 +90,9 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/gateway/src/routes/translation-jobs.ts`
 - [ ] `services/gateway/src/routes/translation-non-blocking.ts`
 - [ ] `services/gateway/src/routes/translation.ts`
-- [ ] `services/gateway/src/routes/two-factor.ts`
+- [x] `services/gateway/src/routes/two-factor.ts`
 - [ ] `services/gateway/src/routes/user-deletions.ts`
-- [ ] `services/gateway/src/routes/user-stats.ts`
+- [x] `services/gateway/src/routes/user-stats.ts`
 - [ ] `services/gateway/src/routes/users.ts`
 - [ ] `services/gateway/src/routes/voice-analysis.ts`
 - [ ] `services/gateway/src/routes/voice-profile.ts`

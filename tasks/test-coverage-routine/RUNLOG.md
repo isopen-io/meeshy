@@ -2316,3 +2316,30 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Reviewer: PASS (CI green: Quality bun + Security checks passed; squash-merged)
 - Notes: All feature matrix cells for Linux-testable environments remain ☑/⊘. Manifest-level gap-fill (no new feature matrix cell). Manifest ticked: routes/magic-link.ts☑ routes/mentions.ts☑ routes/message-read-status.ts☑ routes/reactions.ts☑ validation/mentions-schemas.ts☑
 - Commit: 57ee8a99 (squash-merged PR #1017 → main 2026-06-29T02:12Z)
+
+## 2026-06-29T02:40Z — gateway-manifest-gap4 (invitations, maintenance, user-stats, two-factor)
+
+- Targeted:
+  - `services/gateway/src/routes/invitations.ts`
+  - `services/gateway/src/routes/maintenance.ts`
+  - `services/gateway/src/routes/user-stats.ts`
+  - `services/gateway/src/routes/two-factor.ts`
+- Result: ☑ done
+- Coverage:
+  - routes/invitations.ts: 100% lines / 100% branches
+  - routes/maintenance.ts: 100% lines / 100% branches
+  - routes/user-stats.ts: 100% lines / 100% branches
+  - routes/two-factor.ts: pre-existing test file, already 100% / 100% — no changes needed
+- Tests added: 22 new tests across 3 new + 1 modified test file
+  - New: `src/__tests__/unit/routes/invitations-routes.test.ts` (8 tests): POST /invitations/email; 201 happy path; 201 when emailService absent (warn logged); 404 user-not-found; 409 invitee already a Meeshy user; 400 invalid email; 400 missing email; displayName=null falls back to username; systemLanguage=null falls back to 'fr'; 500 on prisma throw
+  - New: `src/__tests__/unit/routes/maintenance-routes.test.ts` (13 tests): GET /stats 200 + null→500 + throw→500; POST /cleanup 200 + throw→500; POST /user-status isOnline=true/false + throw→500; GET /status-metrics throttleRate computed + zero-totalRequests + throw→500; POST /status-metrics/reset 200 + throw→500
+  - Modified: `src/__tests__/unit/routes/user-stats-routes.test.ts` (+1 test): message with createdAt=new Date(0) (epoch 1970) falls outside 7-day window → covers `if (key in dailyCounts)` false branch
+- Production changes (annotation-only):
+  - `routes/user-stats.ts`: 2× `/* istanbul ignore next */` — (1) `const { days = 30 }` destructuring fallback (AJV useDefaults:true always injects the default; unreachable); (2) `stats[config.field] ?? 0` (ACHIEVEMENT_THRESHOLDS.field always matches numericStats keys; unreachable)
+- Key gotchas resolved:
+  - AJV strict mode rejects `example` keyword in maintenance.ts schemas → buildApp uses `ajv: { customOptions: { strict: false } }`
+  - maintenance.ts catch blocks call `sendInternalError()` without `return` → 500 assertions only check `statusCode`, not response body
+  - sendError() places `code` at TOP LEVEL (not under `error`) → assertions use `body.code` not `body.error.code`
+  - fast-json-stringify strips unknown properties → invitation response assertions target only schema-declared fields
+- Reviewer: PASS (CI green: Quality bun + Security checks passed; squash-merged)
+- Commit: d3772a7f (squash-merged PR #1021 → main 2026-06-29T02:35Z)
