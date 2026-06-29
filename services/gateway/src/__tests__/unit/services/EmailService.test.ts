@@ -701,6 +701,78 @@ describe('EmailService', () => {
   });
 
   // ==============================================
+  // sendNotificationEmail — social/general notifications (Debt A)
+  // ==============================================
+
+  describe('sendNotificationEmail', () => {
+    const sendNotif = async (notificationType: string, language: string, details: string) => {
+      const { EmailService } = await getEmailServiceWithEnv({ BREVO_API_KEY: 'test-brevo-key' });
+      const service = new EmailService();
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'msg-123' }));
+      await service.sendNotificationEmail({
+        to: 'user@example.com',
+        name: 'jcnm',
+        language,
+        notificationType,
+        details,
+      });
+      return mockAxiosPost.mock.calls[0][1] as { subject: string; htmlContent: string };
+    };
+
+    it('renders a mention as a neutral notification (info box, no security framing)', async () => {
+      const payload = await sendNotif('user_mentioned', 'fr', '@jcnm bravo');
+      expect(payload.subject).toBe('Nouvelle mention - Meeshy');
+      expect(payload.htmlContent).toContain('@jcnm bravo');
+      // Neutral indigo info box, never the red warning styling.
+      expect(payload.htmlContent).toContain('class="info"');
+      expect(payload.htmlContent).not.toContain('class="warning"');
+    });
+
+    it('never applies the alarming security styling, even for a security alertType', async () => {
+      // sendNotificationEmail forces info styling regardless of the type.
+      const payload = await sendNotif('suspicious_activity', 'fr', 'x');
+      expect(payload.htmlContent).toContain('class="info"');
+      expect(payload.htmlContent).not.toContain('class="warning"');
+    });
+  });
+
+  // ==============================================
+  // i18n alert/notification labels — all 6 languages (Debt B)
+  // ==============================================
+
+  describe('label i18n — es/pt/it/de are localized, not French-fallback', () => {
+    const subjectFor = async (method: 'security' | 'notification', type: string, language: string) => {
+      const { EmailService } = await getEmailServiceWithEnv({ BREVO_API_KEY: 'test-brevo-key' });
+      const service = new EmailService();
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'msg-123' }));
+      if (method === 'security') {
+        await service.sendSecurityAlertEmail({ to: 'u@e.com', name: 'n', language, alertType: type, details: 'd' });
+      } else {
+        await service.sendNotificationEmail({ to: 'u@e.com', name: 'n', language, notificationType: type, details: 'd' });
+      }
+      const calls = mockAxiosPost.mock.calls;
+      return (calls[calls.length - 1][1] as { subject: string }).subject;
+    };
+
+    it('localizes a new-login security alert in es/pt/it/de', async () => {
+      expect(await subjectFor('security', 'login_new_device', 'es')).toContain('Nuevo inicio de sesión');
+      expect(await subjectFor('security', 'login_new_device', 'pt')).toContain('Novo início de sessão');
+      expect(await subjectFor('security', 'login_new_device', 'it')).toContain('Nuovo accesso');
+      expect(await subjectFor('security', 'login_new_device', 'de')).toContain('Neue Anmeldung');
+    });
+
+    it('localizes a mention notification in es/de (not French-fallback)', async () => {
+      const es = await subjectFor('notification', 'user_mentioned', 'es');
+      expect(es).toContain('Nueva mención');
+      expect(es).not.toContain('Nouvelle');
+
+      const de = await subjectFor('notification', 'user_mentioned', 'de');
+      expect(de).toContain('Neue Erwähnung');
+      expect(de).not.toContain('Nouvelle');
+    });
+  });
+
+  // ==============================================
   // SENDGRID PROVIDER TESTS
   // ==============================================
 

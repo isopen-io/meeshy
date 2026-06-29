@@ -737,6 +737,7 @@ describe('NotificationService — New Methods', () => {
 
       mockEmail = {
         sendSecurityAlertEmail: jest.fn().mockResolvedValue({ success: true }),
+        sendNotificationEmail: jest.fn().mockResolvedValue({ success: true }),
         sendLoginAlertEmail: jest.fn().mockResolvedValue({ success: true }),
       };
 
@@ -761,11 +762,13 @@ describe('NotificationService — New Methods', () => {
       await service.createMissedCallNotification({
         recipientUserId: 'u1', callerId: 'caller-1', conversationId: 'c1', callSessionId: 's1', callType: 'audio',
       });
-      expect(mockEmail.sendSecurityAlertEmail).toHaveBeenCalledTimes(1);
+      // Social notification → dedicated notification email (NOT the security template).
+      expect(mockEmail.sendNotificationEmail).toHaveBeenCalledTimes(1);
+      expect(mockEmail.sendSecurityAlertEmail).not.toHaveBeenCalled();
 
       await service.createPasswordChangedNotification({ recipientUserId: 'u1' });
-      // The social missed-call email must NOT have consumed the security bucket.
-      expect(mockEmail.sendSecurityAlertEmail).toHaveBeenCalledTimes(2);
+      // The social email must NOT have consumed the security bucket.
+      expect(mockEmail.sendSecurityAlertEmail).toHaveBeenCalledTimes(1);
     });
 
     it('still throttles repeated social emails to the same offline user (anti-spam preserved)', async () => {
@@ -775,7 +778,7 @@ describe('NotificationService — New Methods', () => {
       await service.createMissedCallNotification({
         recipientUserId: 'u1', callerId: 'caller-2', conversationId: 'c1', callSessionId: 's2', callType: 'audio',
       });
-      expect(mockEmail.sendSecurityAlertEmail).toHaveBeenCalledTimes(1);
+      expect(mockEmail.sendNotificationEmail).toHaveBeenCalledTimes(1);
     });
   });
 });

@@ -846,7 +846,7 @@ export class NotificationService {
                   }).catch(err => {
                     notificationLogger.error('Login alert email failed', { error: err, userId: params.userId });
                   });
-                } else {
+                } else if (isSecurityEmailType(params.type)) {
                   this.emailService.sendSecurityAlertEmail({
                     to: user.email,
                     name: user.username || 'User',
@@ -855,6 +855,18 @@ export class NotificationService {
                     details: params.content.substring(0, 500),
                   }).catch(err => {
                     notificationLogger.error('Immediate email failed', { error: err, userId: params.userId });
+                  });
+                } else {
+                  // Social / general notification (mention, missed call, …):
+                  // neutral notification email, never the security template.
+                  this.emailService.sendNotificationEmail({
+                    to: user.email,
+                    name: user.username || 'User',
+                    language: user.systemLanguage || 'fr',
+                    notificationType: params.type,
+                    details: params.content.substring(0, 500),
+                  }).catch(err => {
+                    notificationLogger.error('Immediate notification email failed', { error: err, userId: params.userId });
                   });
                 }
               }
