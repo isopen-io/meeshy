@@ -88,6 +88,10 @@ data class StoryComposerUiState(
     /** The offline-pending media of the **selected** slide, in slide order. */
     val selectedSlidePending: List<PendingMediaUpload>
         get() = deck.selectedSlide.mediaIds.mapNotNull { id -> pendingUploads.firstOrNull { it.cmid == id } }
+
+    /** The persisted 9:16 canvas pan/zoom of the **selected** slide — what the canvas renders. */
+    val selectedSlideTransform: StoryCanvasTransform
+        get() = deck.selectedSlide.transform
 }
 
 /**
@@ -168,6 +172,20 @@ class StoryComposerViewModel @Inject constructor(
 
     /** Switches the active slide to [id] (inert on unknown id). */
     fun onSelectSlide(id: String) = applyDeck { it.select(id) }
+
+    /**
+     * Applies one incremental pinch-zoom + drag-pan gesture from the 9:16 canvas to
+     * the **selected** slide's persisted [StoryCanvasTransform], clamped to the canvas
+     * bounds via the pure [StoryCanvasTransform.apply]. The Composable supplies the
+     * gesture deltas and the measured canvas size; all transform math is unit-tested
+     * in one place, so the canvas stays glue.
+     */
+    fun onCanvasTransform(panX: Float, panY: Float, zoom: Float, canvasWidth: Float, canvasHeight: Float) =
+        applyDeck { deck ->
+            deck.updateSelectedTransform(
+                deck.selectedSlide.transform.apply(panX, panY, zoom, canvasWidth, canvasHeight),
+            )
+        }
 
     /**
      * Applies a structural deck transform and re-syncs the editor buffer to the

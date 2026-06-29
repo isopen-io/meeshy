@@ -467,7 +467,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       removing a slide reclaims its media (drops the preview entries + cancels its durable rows).
       Surpasses iOS, where offline media drops on an upload failure. Pending: the 9:16 canvas + text
       styling below.
-- [ ] 9:16 canvas with pinch-zoom + drag-pan; FAB + bottom-band toolbar (Contenu/Effets)
+- [~] 9:16 canvas with pinch-zoom + drag-pan; FAB + bottom-band toolbar (Contenu/Effets).
+      **Pinch-zoom + drag-pan done** (`story-canvas-transform`): a pure per-slide
+      `StoryCanvasTransform` (`scale` clamped 1–4×, `offsetX/Y` clamped to the scaled-content
+      overflow) owns the gesture math — `apply(panX,panY,zoom,canvasW,canvasH)` multiplies the
+      scale by the gesture zoom then clamps the translation to the bounds of the **new** scale
+      (a pinch-in widens the pan range, a pinch-out tightens it and re-clamps a now-out-of-range
+      offset toward centre); a not-yet-measured (0px) canvas collapses the range without dividing
+      by zero, and `clampedTo(w,h)` re-clamps on resize. The transform is part of the slide's
+      identity (`StorySlide.transform`, carried by `duplicate`), persisted via
+      `StorySlideDeck.updateSelectedTransform` and driven by `StoryComposerViewModel.onCanvasTransform`.
+      `StoryCanvasSurface` renders the selected slide's first media as a 9:16 background under a
+      `graphicsLayer` + `detectTransformGestures` (glue only; the math is unit-tested in one place).
+      Pending: FAB + bottom-band toolbar (Contenu/Effets), on-canvas text/sticker/drawing elements.
 - [ ] Text elements (≤5/slide): style (bold/italic/handwriting/typewriter/neon/retro), colour,
       size, alignment, background (none/solid/glass), outline/stroke, RTL, fade timing
 - [ ] In-place floating text editor with tool bubbles + keyboard-aware canvas shift

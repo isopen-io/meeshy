@@ -38,6 +38,7 @@
     <string name="stories_composer_add_media_count">Adicionar (%1$d/%2$d)</string>
     <string name="stories_composer_remove_media">Remover</string>
     <string name="stories_composer_media_pending">Offline</string>
+    <string name="stories_composer_canvas">Tela do story — aperte para ampliar, arraste para mover</string>
     <string name="stories_composer_slide_label">Slide %1$d</string>
     <string name="stories_composer_add_slide">Adicionar slide</string>
     <string name="stories_composer_duplicate_slide">Duplicar slide</string>
