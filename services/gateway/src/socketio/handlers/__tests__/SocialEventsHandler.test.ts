@@ -504,4 +504,278 @@ describe('SocialEventsHandler', () => {
       expect(io.to).toHaveBeenCalledWith(`feed:${commentAuthorId}`);
     });
   });
+
+  describe('broadcastPostUpdated', () => {
+    it('emits post:updated to visibility-filtered friend feed rooms and author', async () => {
+      const { handler, io } = buildHandler();
+      const post = makePost({ visibility: 'PUBLIC' });
+
+      await handler.broadcastPostUpdated(post, AUTHOR_ID);
+
+      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      expect(rooms).toContain(`feed:${FRIEND_ID_1}`);
+      expect(rooms).toContain(`feed:${AUTHOR_ID}`);
+    });
+  });
+
+  describe('broadcastStoryUpdated', () => {
+    it('emits story:updated to visibility-filtered feed rooms', async () => {
+      const { handler, io } = buildHandler();
+      const story = makePost({ id: STORY_ID, type: 'STORY', visibility: 'FRIENDS' });
+
+      await handler.broadcastStoryUpdated(story, AUTHOR_ID);
+
+      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      expect(rooms).toContain(`feed:${FRIEND_ID_1}`);
+      expect(rooms).toContain(`feed:${AUTHOR_ID}`);
+    });
+
+    it('emits only to author when story visibility is PRIVATE', async () => {
+      const { handler, io } = buildHandler();
+      const story = makePost({ id: STORY_ID, type: 'STORY', visibility: 'PRIVATE' });
+
+      await handler.broadcastStoryUpdated(story, AUTHOR_ID);
+
+      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      expect(rooms).not.toContain(`feed:${FRIEND_ID_1}`);
+      expect(rooms).toContain(`feed:${AUTHOR_ID}`);
+    });
+  });
+
+  describe('broadcastStatusUpdated', () => {
+    it('emits status:updated to visibility-filtered recipients', async () => {
+      const { handler, io } = buildHandler();
+      const status = makePost({ id: STATUS_ID, type: 'STATUS', visibility: 'FRIENDS' });
+
+      await handler.broadcastStatusUpdated(status, AUTHOR_ID);
+
+      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      expect(rooms).toContain(`feed:${FRIEND_ID_1}`);
+    });
+  });
+
+  describe('broadcastStatusDeleted', () => {
+    it('emits status:deleted with statusId and authorId to friends', async () => {
+      const { handler, io } = buildHandler();
+
+      await handler.broadcastStatusDeleted(STATUS_ID, AUTHOR_ID);
+
+      const emitFn = io.to.mock.results[0].value.emit;
+      const [event, payload] = (emitFn as jest.Mock<any>).mock.calls[0] as [string, unknown];
+      expect(event).toBe('status:deleted');
+      expect(payload).toMatchObject({ statusId: STATUS_ID, authorId: AUTHOR_ID });
+    });
+
+    it('respects visibility when PRIVATE — emits only to author', async () => {
+      const { handler, io } = buildHandler();
+
+      await handler.broadcastStatusDeleted(STATUS_ID, AUTHOR_ID, 'PRIVATE', []);
+
+      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      expect(rooms).not.toContain(`feed:${FRIEND_ID_1}`);
+      expect(rooms).toContain(`feed:${AUTHOR_ID}`);
+    });
+  });
+
+  describe('broadcastPostTranslationUpdated', () => {
+    it('emits post:translation-updated to visibility-filtered friends and author', async () => {
+      const { handler, io } = buildHandler();
+      const data = { postId: POST_ID, translations: { en: 'Hello' } } as any;
+
+      await handler.broadcastPostTranslationUpdated(data, AUTHOR_ID);
+
+      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      expect(rooms).toContain(`feed:${FRIEND_ID_1}`);
+      expect(rooms).toContain(`feed:${AUTHOR_ID}`);
+    });
+  });
+
+  describe('broadcastCommentDeleted', () => {
+    it('emits comment:deleted to visibility-filtered rooms', async () => {
+      const { handler, io } = buildHandler();
+      const data = { commentId: COMMENT_ID, postId: POST_ID } as any;
+
+      await handler.broadcastCommentDeleted(data, AUTHOR_ID, 'PUBLIC', []);
+
+      const allRoomArgs = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r).flat();
+      expect(allRoomArgs.some((r: string) => r.includes('feed:') || r.includes('post:'))).toBe(true);
+    });
+  });
+
+  describe('broadcastCommentTranslationUpdated', () => {
+    it('emits comment:translation-updated to feed rooms and post room', async () => {
+      const { handler, io } = buildHandler();
+      const data = { commentId: COMMENT_ID, postId: POST_ID, translations: {} } as any;
+
+      await handler.broadcastCommentTranslationUpdated(data, AUTHOR_ID, 'PUBLIC', []);
+
+      const allRoomArgs = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r).flat();
+      expect(allRoomArgs.some((r: string) => r.includes('post:'))).toBe(true);
+    });
+  });
+
+  describe('broadcastCommentMediaUpdated', () => {
+    it('emits comment:media-updated to feed rooms and post room', async () => {
+      const { handler, io } = buildHandler();
+      const data = { commentId: COMMENT_ID, postId: POST_ID } as any;
+
+      await handler.broadcastCommentMediaUpdated(data, AUTHOR_ID, 'PUBLIC', []);
+
+      const allRoomArgs = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r).flat();
+      expect(allRoomArgs.some((r: string) => r.includes('post:'))).toBe(true);
+    });
+  });
+
+  describe('broadcastPostReposted', () => {
+    it('emits post:reposted to visibility-filtered feed rooms', async () => {
+      const { handler, io } = buildHandler();
+      const repost = makePost({ visibility: 'PUBLIC' });
+      const data = { postId: POST_ID, repost } as any;
+
+      await handler.broadcastPostReposted(data, AUTHOR_ID);
+
+      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      expect(rooms).toContain(`feed:${FRIEND_ID_1}`);
+    });
+  });
+
+  describe('getVisibilityFilteredRecipients — default visibility branch', () => {
+    it('falls back to friend list for unrecognized visibility string', async () => {
+      const { handler, io } = buildHandler();
+      const post = makePost({ visibility: 'UNKNOWN_VISIBILITY' });
+
+      await handler.broadcastPostCreated(post, AUTHOR_ID);
+
+      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      expect(rooms).toContain(`feed:${FRIEND_ID_1}`);
+      expect(rooms).toContain(`feed:${FRIEND_ID_2}`);
+    });
+  });
+
+  describe('friends cache eviction', () => {
+    it('evicts oldest entry when cache reaches 500 entries', async () => {
+      const prisma = {
+        friendRequest: {
+          findMany: jest.fn<any>().mockResolvedValue([]),
+        },
+      } as unknown as ReturnType<typeof makePrisma>;
+      const { handler } = buildHandler({ prisma });
+
+      for (let i = 0; i < 501; i++) {
+        await handler.broadcastPostDeleted(POST_ID, `evict-user-${i}`);
+      }
+
+      expect((prisma.friendRequest.findMany as jest.Mock<any>)).toHaveBeenCalledTimes(501);
+    });
+  });
+
+  describe('invalidateFriendsCache', () => {
+    it('removes the cached entry so the next call re-fetches from DB', async () => {
+      const prisma = makePrisma([FRIEND_ID_1]);
+      const { handler } = buildHandler({ prisma });
+
+      await handler.broadcastPostDeleted(POST_ID, AUTHOR_ID);
+      handler.invalidateFriendsCache(AUTHOR_ID);
+      await handler.broadcastPostDeleted(POST_ID, AUTHOR_ID);
+
+      expect((prisma.friendRequest.findMany as jest.Mock<any>)).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('null-coalescing fallback branches', () => {
+    it('broadcastPostCreated falls back to PUBLIC when post.visibility is undefined', async () => {
+      const { handler, io } = buildHandler();
+      const post = { id: POST_ID, authorId: AUTHOR_ID, visibilityUserIds: [] } as any;
+
+      await handler.broadcastPostCreated(post, AUTHOR_ID);
+
+      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      expect(rooms).toContain(`feed:${AUTHOR_ID}`);
+    });
+
+    it('broadcastPostCreated falls back to empty array when post.visibilityUserIds is undefined', async () => {
+      const { handler, io } = buildHandler();
+      const post = { id: POST_ID, authorId: AUTHOR_ID, visibility: 'PUBLIC' } as any;
+
+      await handler.broadcastPostCreated(post, AUTHOR_ID);
+
+      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      expect(rooms).toContain(`feed:${AUTHOR_ID}`);
+    });
+
+    it('broadcastPostUpdated falls back to PUBLIC when post.visibility is undefined', async () => {
+      const { handler, io } = buildHandler();
+      const post = { id: POST_ID, authorId: AUTHOR_ID, visibilityUserIds: [] } as any;
+
+      await handler.broadcastPostUpdated(post, AUTHOR_ID);
+
+      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      expect(rooms).toContain(`feed:${AUTHOR_ID}`);
+    });
+
+    it('broadcastPostUpdated falls back to empty array when post.visibilityUserIds is undefined', async () => {
+      const { handler, io } = buildHandler();
+      const post = { id: POST_ID, authorId: AUTHOR_ID, visibility: 'PUBLIC' } as any;
+
+      await handler.broadcastPostUpdated(post, AUTHOR_ID);
+
+      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      expect(rooms).toContain(`feed:${AUTHOR_ID}`);
+    });
+
+    it('broadcastPostReposted falls back to PUBLIC when repost is undefined', async () => {
+      const { handler, io } = buildHandler();
+      const data = { postId: POST_ID, originalPostId: 'orig-1' } as any;
+
+      await handler.broadcastPostReposted(data, AUTHOR_ID);
+
+      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      expect(rooms).toContain(`feed:${AUTHOR_ID}`);
+    });
+
+    it('broadcastStoryUpdated spreads undefined visibilityUserIds as empty array', async () => {
+      const { handler, io } = buildHandler();
+      const story = { id: STORY_ID, type: 'STORY', authorId: AUTHOR_ID, visibility: 'PUBLIC' } as any;
+
+      await handler.broadcastStoryUpdated(story, AUTHOR_ID);
+
+      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      expect(rooms).toContain(`feed:${AUTHOR_ID}`);
+    });
+
+    it('broadcastStatusUpdated spreads undefined visibilityUserIds as empty array', async () => {
+      const { handler, io } = buildHandler();
+      const status = { id: STATUS_ID, type: 'STATUS', authorId: AUTHOR_ID, visibility: 'PUBLIC' } as any;
+
+      await handler.broadcastStatusUpdated(status, AUTHOR_ID);
+
+      const rooms = (io.to as jest.Mock<any>).mock.calls.map(([r]: [unknown]) => r);
+      expect(rooms).toContain(`feed:${AUTHOR_ID}`);
+    });
+  });
+
+  describe('friends cache eviction — expired entries', () => {
+    it('deletes expired entries when cache reaches 500 entries', async () => {
+      const { handler } = buildHandler();
+      const cache = (handler as any).friendsCache as Map<string, { ids: string[]; expiresAt: number }>;
+
+      for (let i = 0; i < 500; i++) {
+        cache.set(`expired-${i}`, { ids: [], expiresAt: Date.now() - 1 });
+      }
+
+      await handler.broadcastPostDeleted(POST_ID, 'trigger-user');
+
+      expect(cache.size).toBeLessThan(500);
+    });
+  });
+
+  describe('getVisibilityFilteredRecipients — default visibilityUserIds', () => {
+    it('uses empty array as default when visibilityUserIds argument is omitted', async () => {
+      const { handler } = buildHandler();
+
+      const result = await (handler as any).getVisibilityFilteredRecipients(AUTHOR_ID, 'PUBLIC');
+
+      expect(Array.isArray(result)).toBe(true);
+    });
+  });
 });

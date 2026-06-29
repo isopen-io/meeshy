@@ -6,7 +6,7 @@
  * self-relation (parentId = null) et supprimer les commentaires AVANT les posts.
  */
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { ExpiredStoriesCleanupService } from '../../services/ExpiredStoriesCleanupService';
 
 type Comment = { id: string; postId: string; parentId: string | null };
@@ -77,6 +77,93 @@ function makeFakePrisma(opts: { storyIds: string[]; repostIds: string[]; comment
 
   return { prisma, calls, state };
 }
+
+function makeSimplePrisma() {
+  return {
+    post: {
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+    postComment: {
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+  };
+}
+
+describe('ExpiredStoriesCleanupService — start/stop lifecycle', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('start() immediately calls cleanup and sets up interval', async () => {
+    const prisma = makeSimplePrisma();
+    const service = new ExpiredStoriesCleanupService(prisma as any);
+
+    service.start(1000);
+
+    await Promise.resolve(); // let initial cleanup run
+    expect(prisma.post.updateMany).toHaveBeenCalled();
+
+    service.stop();
+  });
+
+  it('stop() clears the interval without throwing', async () => {
+    const prisma = makeSimplePrisma();
+    const service = new ExpiredStoriesCleanupService(prisma as any);
+
+    service.start(10_000);
+    service.stop();
+
+    // Call stop again to verify the early-return branch (no interval)
+    expect(() => service.stop()).not.toThrow();
+  });
+
+  it('scheduled cleanup runs when interval fires', async () => {
+    const prisma = makeSimplePrisma();
+    const service = new ExpiredStoriesCleanupService(prisma as any);
+
+    service.start(1000);
+    await Promise.resolve(); // initial cleanup
+    const callsBefore = (prisma.post.updateMany as jest.Mock<any>).mock.calls.length;
+
+    jest.advanceTimersByTime(1000);
+    await Promise.resolve();
+
+    expect((prisma.post.updateMany as jest.Mock<any>).mock.calls.length).toBeGreaterThan(callsBefore);
+    service.stop();
+  });
+});
+
+describe('ExpiredStoriesCleanupService — error handling', () => {
+  it('cleanup() catches soft-delete errors and continues to hard-delete pass', async () => {
+    const prisma = makeSimplePrisma();
+    (prisma.post.updateMany as jest.Mock<any>).mockRejectedValueOnce(new Error('updateMany failed'));
+
+    const service = new ExpiredStoriesCleanupService(prisma as any);
+    const result = await service.cleanup();
+
+    expect(result.softDeleted).toBe(0);
+    expect(prisma.post.findMany).toHaveBeenCalled(); // hard-delete pass still attempted
+  });
+
+  it('cleanup() catches hard-delete errors and returns partial result', async () => {
+    const prisma = makeSimplePrisma();
+    (prisma.post.updateMany as jest.Mock<any>).mockResolvedValue({ count: 2 });
+    (prisma.post.findMany as jest.Mock<any>).mockRejectedValueOnce(new Error('findMany failed'));
+
+    const service = new ExpiredStoriesCleanupService(prisma as any);
+    const result = await service.cleanup();
+
+    expect(result.softDeleted).toBe(2);
+    expect(result.hardDeleted).toBe(0);
+  });
+});
 
 describe('ExpiredStoriesCleanupService — hard-delete P2014 regression', () => {
   let consoleWarnSpy: ReturnType<typeof jest.spyOn>;
