@@ -168,4 +168,38 @@ final class CallWaitingBannerViewTests: XCTestCase {
             "in Light Mode where .ultraThinMaterial produces a light background."
         )
     }
+
+    // MARK: - Reduce Motion support
+
+    func test_banner_readsReduceMotionEnvironment() throws {
+        let source = try bannerSource()
+        XCTAssertTrue(
+            source.contains("accessibilityReduceMotion"),
+            "CallWaitingBannerView must read @Environment(\\.accessibilityReduceMotion) " +
+            "to conditionally skip animated transitions for motion-sensitive users."
+        )
+    }
+
+    func test_banner_transition_usesConditionalOpacityWhenReduceMotion() throws {
+        let source = try bannerSource()
+        XCTAssertTrue(
+            source.contains("reduceMotion ? .opacity"),
+            "CallWaitingBannerView transition must collapse to .opacity when reduceMotion " +
+            "is true — .move animations can trigger vestibular discomfort."
+        )
+    }
+
+    func test_dismiss_checksReduceMotionBeforeSpring() throws {
+        let source = try bannerSource()
+        guard let fnRange = source.range(of: "private func dismiss()") else {
+            XCTFail("dismiss() not found in CallWaitingBannerView.swift"); return
+        }
+        let end = source.index(fnRange.lowerBound, offsetBy: 400, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[fnRange.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("isReduceMotionEnabled"),
+            "dismiss() must check UIAccessibility.isReduceMotionEnabled before using " +
+            "withAnimation(.spring(...)) — motion-sensitive users must not see a spring bounce."
+        )
+    }
 }

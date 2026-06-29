@@ -106,4 +106,50 @@ final class CallViewAccessibilityTests: XCTestCase {
             "call UI components can reuse the same conditional hint pattern."
         )
     }
+
+    // MARK: - Connecting state VoiceOver announcement
+
+    func test_callState_connecting_postsVoiceOverAnnouncement() throws {
+        let source = try callViewSource()
+        XCTAssertTrue(
+            source.contains("call.a11y.connecting"),
+            "The .connecting call state must post a UIAccessibility.announcement so " +
+            "VoiceOver users are informed when ICE negotiation begins. Without this, " +
+            "the transition from ringing to connected is completely silent — several " +
+            "seconds during which the user hears nothing and may think the call failed."
+        )
+    }
+
+    func test_callState_connecting_announcementIsInOnChangeHandler() throws {
+        let source = try callViewSource()
+        guard let changeRange = source.range(of: "adaptiveOnChange(of: callManager.callState)") else {
+            XCTFail("CallView must use adaptiveOnChange to observe callState transitions")
+            return
+        }
+        let end = source.index(changeRange.lowerBound, offsetBy: 800, limitedBy: source.endIndex) ?? source.endIndex
+        let handler = String(source[changeRange.lowerBound ..< end])
+        XCTAssertTrue(
+            handler.contains("call.a11y.connecting"),
+            "The .connecting announcement must live inside the adaptiveOnChange(of: callManager.callState) " +
+            "handler alongside the .connected, .reconnecting, and .ended cases."
+        )
+    }
+
+    // MARK: - Reduce Motion in FloatingCallPillView
+
+    func test_reconnectingBanner_usesReduceMotionForTransition() throws {
+        let source = try callViewSource()
+        guard let bannerRange = source.range(of: "reconnecting banner") else {
+            XCTFail("CallView must have a reconnecting banner comment block")
+            return
+        }
+        let end = source.index(bannerRange.lowerBound, offsetBy: 500, limitedBy: source.endIndex) ?? source.endIndex
+        let vicinity = String(source[bannerRange.lowerBound ..< end])
+        XCTAssertTrue(
+            vicinity.contains("reduceMotion"),
+            "The reconnecting banner transition must check `reduceMotion` and collapse " +
+            "to .opacity for motion-sensitive users — the slide-from-top movement can " +
+            "trigger vestibular discomfort."
+        )
+    }
 }
