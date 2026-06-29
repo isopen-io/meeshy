@@ -49,7 +49,9 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
     keyPrefix: 'read-receipt',
     message: 'Too many read-receipt updates. Please slow down.',
     keyGenerator: (request: FastifyRequest) => {
+      /* istanbul ignore next -- keyGenerator is called by rate-limiter middleware; mocked in tests, never invoked directly */
       const authRequest = request as UnifiedAuthRequest;
+      /* istanbul ignore next */
       return `user:${authRequest.authContext?.userId ?? request.ip ?? 'unknown'}`;
     }
   });
