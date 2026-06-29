@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import os
 import MeeshySDK
 import MeeshyUI
 import Charts
@@ -183,6 +184,8 @@ final class UserStatsViewModel: ObservableObject {
     @Published var timeline: [TimelinePoint] = []
     @Published var isLoading = false
 
+    private static let logger = Logger(subsystem: "me.meeshy.app", category: "stats")
+
     func load() async {
         let userId = AuthManager.shared.currentUser?.id ?? ""
 
@@ -225,7 +228,9 @@ final class UserStatsViewModel: ObservableObject {
             timeline = t
             try? await CacheCoordinator.shared.stats.save([s], for: userId)
             try? await CacheCoordinator.shared.timeline.save(t, for: "timeline_\(userId)")
-        } catch {}
+        } catch {
+            UserStatsViewModel.logger.error("stats refresh failed: \(error.localizedDescription)")
+        }
         isLoading = false
     }
 }
