@@ -126,16 +126,16 @@ struct DownloadBadgeView: View {
                     .fill(accent.opacity(0.85))
                     .frame(width: 48, height: 48)
                 Image(systemName: "arrow.down.to.line")
-                    .font(.system(size: 22, weight: .bold))
+                    .font(MeeshyFont.relative(22, weight: .bold))
                     .foregroundColor(.white)
             }
             .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
 
             if !totalSizeText.isEmpty {
                 Text(totalSizeText)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(MeeshyFont.relative(11, weight: .semibold))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, MeeshySpacing.sm)
                     .padding(.vertical, 3)
                     .background(Capsule().fill(.black.opacity(0.55)))
             }
@@ -149,15 +149,15 @@ struct DownloadBadgeView: View {
                 Spacer()
                 HStack(spacing: 4) {
                     Image(systemName: "arrow.down.to.line")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(MeeshyFont.relative(11, weight: .bold))
                     if !totalSizeText.isEmpty {
                         Text(totalSizeText)
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .font(MeeshyFont.relative(10, weight: .semibold, design: .monospaced))
                     }
                 }
                 .foregroundColor(.white)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
+                .padding(.horizontal, MeeshySpacing.sm)
+                .padding(.vertical, MeeshySpacing.xs)
                 .background(
                     Capsule().fill(.ultraThinMaterial)
                         .overlay(Capsule().fill(accent.opacity(0.55)))
@@ -183,7 +183,7 @@ struct DownloadBadgeView: View {
 
                     if downloader.progress > 0 {
                         Text("\(Int(downloader.progress * 100))")
-                            .font(.system(size: 7, weight: .bold, design: .monospaced))
+                            .font(MeeshyFont.relative(7, weight: .bold, design: .monospaced))
                             .foregroundColor(.white)
                     } else {
                         RoundedRectangle(cornerRadius: 1.5)
@@ -194,7 +194,7 @@ struct DownloadBadgeView: View {
                 .frame(width: 24, height: 24)
 
                 Text("\(AttachmentDownloader.fmt(downloader.downloadedBytes))/\(totalSizeText)")
-                    .font(.system(size: 7, weight: .medium, design: .monospaced))
+                    .font(MeeshyFont.relative(7, weight: .medium, design: .monospaced))
                     .foregroundColor(.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
@@ -453,16 +453,7 @@ final class AttachmentDownloader: ObservableObject {
     }
 
     static func fmt(_ bytes: Int64) -> String {
-        let kb = Double(bytes) / 1024
-        if kb < 1 {
-            return String(format: String(localized: "media.size.bytes", bundle: .main), bytes)
-        }
-        if kb < 1024 {
-            let val = String(format: "%.0f", kb)
-            return String(format: String(localized: "media.size.kb", bundle: .main), val)
-        }
-        let val = String(format: "%.1f", kb / 1024)
-        return String(format: String(localized: "media.size.mb", bundle: .main), val)
+        bytes.formatted(.byteCount(style: .file))
     }
 }
 
@@ -475,7 +466,7 @@ struct CachedPlayIcon: View {
         Group {
             if isCached {
                 Image(systemName: "play.circle.fill")
-                    .font(.system(size: 36))
+                    .font(MeeshyFont.relative(36))
                     .foregroundStyle(.white, Color.black.opacity(0.4))
                     .shadow(color: .black.opacity(0.4), radius: 4, y: 2)
                     .transition(.scale(scale: 0.5).combined(with: .opacity))
