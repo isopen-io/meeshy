@@ -1243,6 +1243,46 @@ class StoryComposerViewModelTest {
     }
 
     @Test
+    fun `onTextElementTransform pinch-scales and rotates the edited element`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        vm.onTextChange("Salut")
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementTransform(id, scaleBy = 2f, rotateByDeg = 30f)
+
+        val element = vm.state.value.selectedSlideTextElements.single()
+        assertThat(element.scale).isWithin(1e-6f).of(2f)
+        assertThat(element.rotationDeg).isWithin(1e-4f).of(30f)
+        assertThat(element.text).isEqualTo("Salut")
+        assertThat(vm.state.value.isEditingTextElement).isTrue()
+    }
+
+    @Test
+    fun `onTextElementTransform accumulates across successive gestures and clamps`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementTransform(id, scaleBy = 2f, rotateByDeg = 0f)
+        vm.onTextElementTransform(id, scaleBy = 10f, rotateByDeg = 0f)
+
+        assertThat(vm.state.value.selectedSlideTextElements.single().scale)
+            .isEqualTo(StoryTextElement.MAX_SCALE)
+    }
+
+    @Test
+    fun `onTextElementTransform on an unknown id is inert`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val before = vm.state.value.selectedSlideTextElements.single()
+
+        vm.onTextElementTransform("ghost", scaleBy = 2f, rotateByDeg = 45f)
+
+        assertThat(vm.state.value.selectedSlideTextElements.single()).isEqualTo(before)
+    }
+
+    @Test
     fun `styling one element of several leaves the others untouched`() = runTest {
         val vm = viewModel()
         vm.onAddTextElement()

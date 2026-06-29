@@ -189,6 +189,15 @@ data class StorySlideDeck(
         updateTextElement(id) { it.nudged(dx, dy) }
 
     /**
+     * Pinch-scales and rotates the text element [id] by the incremental gesture
+     * deltas (clamped/wrapped by the pure [StoryTextElement.transformed]). Inert when
+     * the id is unknown. The on-canvas `detectTransformGestures` callback binds here so
+     * the transform math lives in one place alongside the move/style reducers.
+     */
+    fun transformTextElement(id: String, scaleBy: Float, rotateByDeg: Float): StorySlideDeck =
+        updateTextElement(id) { it.transformed(scaleBy, rotateByDeg) }
+
+    /**
      * Rewrites the **selected** slide's [text], leaving its id and media — and every
      * other slide and the selection — untouched. The editor binds here so each slide
      * keeps its own caption as the user moves between slides.

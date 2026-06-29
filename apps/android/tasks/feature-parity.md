@@ -521,7 +521,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       keyboard-aware shift — and the resolver keeps the toolbar inside the keyboard-free band.
       `StoryCanvasSurface` measures the selected element's half-height + the toolbar's height and offsets
       it (glue). Surpasses iOS's fixed bottom style bar. Pending: floating tool *bubbles* per element
-      handle (rotate/scale/delete chips) — the style toolbar bubble is the first of these.
+      handle (delete chip exists; rotate/scale now via direct gesture — see below).
+- [x] Per-element pinch-scale + rotate (`story-text-element-transform`): `StoryTextElement` carries a
+      `scale` (clamped `[0.3, 4]`) and `rotationDeg` (wrapped to the canonical `(-180, 180]` turn); the
+      pure `transformed(scaleBy, rotateByDeg)` applies an incremental pinch/rotate gesture with the
+      clamp/wrap rules in one unit-tested place (a non-finite/non-positive factor collapses to the
+      neutral value, never a broken element), `normalised()` re-pulls both fields into range, and
+      `toTextObject` carries `scale`/`rotation` onto the gateway wire. The deck's
+      `transformTextElement(id, scaleBy, rotateByDeg)` and the VM's `onTextElementTransform` mirror the
+      move/style reducers (inert on unknown id, selection/editing untouched). `TextElementLayer` binds a
+      single `detectTransformGestures` so one two-finger gesture pans **and** pinch-scales **and** rotates
+      the element, rendered via `graphicsLayer` (glue). A natural direct-manipulation gesture rather than
+      discrete handle chips. +21 tests (14 element, 4 deck, 3 VM).
 - [~] Media elements (≤10/slide): photo/video import, crop/edit, aspect-ratio preservation.
       **Upload foundation done** (`media-upload-api`): `MediaApi` multipart `POST /attachments/upload`
       (`files` parts) + `MediaRepository.upload()` → domain `UploadedMedia` (id = `mediaId`, url,

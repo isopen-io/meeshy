@@ -243,6 +243,17 @@ class StoryComposerViewModel @Inject constructor(
         _state.update { it.copy(deck = it.deck.updateTextElement(id) { element -> element.copy(align = align) }) }
     }
 
+    /**
+     * Pinch-scales / rotates the on-canvas element [id] by the incremental gesture
+     * deltas ([scaleBy] is the multiplicative pinch factor, [rotateByDeg] the additive
+     * rotation; clamped/wrapped by the pure [StoryTextElement.transformed]). Selection
+     * and editing are untouched — you transform the element you are manipulating — and
+     * an unknown id is inert. The wire mapping carries `scale`/`rotation` on publish.
+     */
+    fun onTextElementTransform(id: String, scaleBy: Float, rotateByDeg: Float) {
+        _state.update { it.copy(deck = it.deck.transformTextElement(id, scaleBy, rotateByDeg)) }
+    }
+
     fun onVisibilityChange(visibility: StoryVisibility) {
         _state.update { it.copy(draft = it.draft.withVisibility(visibility)) }
     }

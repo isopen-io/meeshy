@@ -130,9 +130,11 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 Ordered by value:
 1. **Canvas toolbar/FAB** — the bottom-band toolbar (Contenu/Effets) grouping add-text / add-media;
    glue-heavy, keep any mode decision in a pure helper or the VM.
-2. **Per-element transform handles** — rotate/scale handles on the selected text element (the style
-   toolbar bubble landed in `story-floating-toolbar`; this adds the manipulation chips). A pure
-   handle-hit / rotate-scale resolver carries the tests.
+2. ~~**Per-element transform handles**~~ ✅ shipped as `story-text-element-transform` (this run) — but
+   as a **direct pinch/rotate gesture** (more natural than discrete chips, per CLAUDE.md UX rule).
+   `StoryTextElement.scale`/`rotationDeg` + pure `transformed()` + `transformTextElement` reducer +
+   `onTextElementTransform` VM intent + `graphicsLayer`/`detectTransformGestures` glue. Wire carries
+   `scale`/`rotation`. Next refinement (optional): per-element delete/duplicate handle **chips**.
 3. After Stories richness is sufficient, advance to the **Calls** area
    (`feature-parity.md` §"Calls").
 
@@ -274,6 +276,59 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-29 — slice `story-text-element-transform` ✅
+- **Branch:** `claude/apps/android/story-text-element-transform` (off `origin/main` @ `c3963d5`).
+- **Housekeeping (step 0):** no open `claude/apps/android/*` PR (`list_pull_requests state=open` → 24 open
+  PRs, all dependabot or non-android `claude/*`; none on an `apps/android` branch). Branched clean off the
+  freshened `main`.
+- **What:** **per-element pinch-scale + rotate** on the story composer canvas ("Next" #2,
+  feature-parity §"In-place floating text editor"/handles). A selected on-canvas text element can now be
+  pinched to resize and twisted to rotate with one natural two-finger gesture, and the transform rides
+  into publish on the gateway wire (`StoryTextObject.scale`/`rotation`, already in the model, previously
+  always left at defaults). Chose a direct-manipulation gesture over discrete handle chips per the
+  CLAUDE.md "natural gestures / coherent single view" rule.
+- **Design (single source of truth, SDK purity):** the clamp/wrap rules live in **one pure place**,
+  `StoryTextElement` (`:feature:stories`, product UI math — not an SDK atom): `scale` clamped to
+  `[MIN_SCALE=0.3, MAX_SCALE=4]`, `rotationDeg` wrapped to the canonical half-open turn `(-180, 180]`
+  (any accumulated full turns reduce to one signed angle; `±180` both resolve to `180`). `clampScale`
+  collapses a non-finite factor to `DEFAULT_SCALE`; `normaliseRotation` collapses non-finite to `0`. The
+  incremental gesture op `transformed(scaleBy, rotateByDeg)` multiplies scale / adds rotation then
+  clamps+wraps, so a `scaleBy <= 0` or `NaN` can never poison the element. `normalised()` now re-pulls
+  **all** continuous fields (x/y/scale/rotation) into range, so every `updateTextElement` re-clamps for
+  free. The Composable stays glue (`detectTransformGestures` → VM; `graphicsLayer` scaleX/scaleY/rotationZ).
+- **Added/changed (production, `apps/android` only — all `:feature:stories`):**
+  - `StoryTextElement.kt` — `scale`/`rotationDeg` fields (+ DEFAULT/MIN/MAX/DEFAULT_ROTATION consts);
+    pure `clampScale`/`normaliseRotation`; `transformed(scaleBy, rotateByDeg)`; `normalised()` extended;
+    `toTextObject` now sets `scale`/`rotation`.
+  - `StorySlideDeck.kt` — `transformTextElement(id, scaleBy, rotateByDeg)` (inert on unknown id,
+    re-clamp via `updateTextElement`'s `.normalised()`).
+  - `StoryComposerViewModel.kt` — `onTextElementTransform(id, scaleBy, rotateByDeg)` (selection/editing
+    untouched, unknown-id inert).
+  - `StoryComposerScreen.kt` — `StoryCanvasSurface`/`TextElementLayer` thread an `onElementTransform`
+    callback; the per-element gesture switched `detectDragGestures` → `detectTransformGestures` (one
+    gesture pans+pinches+rotates); `graphicsLayer { scaleX/scaleY = scale; rotationZ = rotationDeg }`
+    renders it. Removed the now-unused `detectDragGestures` import. (Glue — JVM-exempt.)
+- **Tests (TDD red → green, behaviour via the public API): +21.**
+  - `StoryTextElementTest` (+14): defaults at rest; `transformed` scale multiply / clamp ceiling /
+    clamp floor / non-positive→floor / non-finite→default; rotation add / wrap-positive / wrap-negative;
+    identity+text+style+position preserved; `clampScale` bounds+passthrough+∞; `normaliseRotation`
+    canonical turn incl. `±180`/`360`/`540`/`270`/`NaN`; `normalised` clamps scale+wraps rotation /
+    leaves valid untouched; `toTextObject` carries scale+rotation.
+  - `StorySlideDeckTextElementsTest` (+4): applies; clamps; touches only the matching element; inert id.
+  - `StoryComposerViewModelTest` (+3): applies + keeps editing; accumulates across gestures + clamps;
+    inert id.
+  - Class totals after: `StoryTextElementTest`=25, `StorySlideDeckTextElementsTest`=20,
+    `StoryComposerViewModelTest`=91 — all green, 0 failures/errors.
+- **Branch sweep:** every arm of `clampScale` (finite-coerce both bounds + passthrough; non-finite),
+  `normaliseRotation` (non-finite; `<= -180`; `> 180`; passthrough), `transformed`, `transformTextElement`
+  (apply/clamp/isolation/inert), and `onTextElementTransform` (apply/accumulate/inert) is exercised.
+- **Verification:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL** (assembleDebug APK + all JVM
+  unit tests). Diff = `apps/android` only (7 files: 4 prod `:feature:stories`, 3 test). No SDK/web/gateway
+  /shared change — the `scale`/`rotation` wire fields already existed on `StoryTextObject`.
+- **Reviewer verdict:** **PASS** — scope/safety clean, behavioural tests via public API (no tautologies,
+  no floor lowered), edge cases (bounds, non-finite, unknown id, isolation) covered, SDK purity + single
+  source of truth (clamp/wrap in one place) + UDF respected, natural-gesture UX coherence.
 
 ### 2026-06-29 — slice `story-floating-toolbar` ✅
 - **Branch:** `claude/apps/android/story-floating-toolbar` (off `origin/main` @ `6cd1a3c`).
