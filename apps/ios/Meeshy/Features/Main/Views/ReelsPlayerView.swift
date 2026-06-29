@@ -765,6 +765,17 @@ private struct ReelActionButton: View {
                 }
             }
             .frame(width: 48)
+            // Élargit la zone sensible autour du glyph + compteur. La pile
+            // d'actions flotte au-dessus du `mediaLayer` qui porte le tap
+            // play/pause (`handleContentTap`) : sans cette extension, un tap qui
+            // manquait le glyph de quelques pixels traversait jusqu'au média et
+            // togglait la lecture au lieu d'activer le bouton (bug user
+            // 2026-06-28). `contentShape(Rectangle())` rend tout le rectangle
+            // élargi (padding inclus) sensible, et le padding vertical comble les
+            // gaps entre les boutons du rail.
+            .padding(.vertical, 6)
+            .padding(.horizontal, 6)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
