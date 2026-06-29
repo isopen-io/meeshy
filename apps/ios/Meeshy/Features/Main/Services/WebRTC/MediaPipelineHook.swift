@@ -18,7 +18,7 @@ struct CallContext: Sendable {
     let role: CallRole
     let peerId: String?
 
-    init(callId: String, isVideo: Bool, role: CallRole, peerId: String?) {
+    nonisolated init(callId: String, isVideo: Bool, role: CallRole, peerId: String?) {
         self.callId = callId
         self.isVideo = isVideo
         self.role = role

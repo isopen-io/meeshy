@@ -11,7 +11,7 @@ import os
 
 // MARK: - Call State
 
-enum CallState: Equatable {
+enum CallState: Equatable, Sendable {
     case idle
     case ringing(isOutgoing: Bool)
     /// Outgoing call: peer joined the room, we created and sent the SDP offer,
@@ -24,14 +24,14 @@ enum CallState: Equatable {
     case reconnecting(attempt: Int)
     case ended(reason: CallEndReason)
 
-    var isActive: Bool {
+    nonisolated var isActive: Bool {
         switch self {
         case .idle, .ended: return false
         default: return true
         }
     }
 
-    var isRinging: Bool {
+    nonisolated var isRinging: Bool {
         if case .ringing = self { return true }
         return false
     }
@@ -40,7 +40,7 @@ enum CallState: Equatable {
     /// `isActive` (which is `false` for both `.idle` AND `.ended`) because the
     /// UI must keep showing the end-of-call panel during the 1.5 s settle window
     /// that `CallManager.endCallInternal` holds before resetting to `.idle`.
-    var isEnded: Bool {
+    nonisolated var isEnded: Bool {
         if case .ended = self { return true }
         return false
     }
@@ -56,6 +56,19 @@ enum CallState: Equatable {
         displayMode: CallDisplayMode
     ) -> Bool {
         (callState.isActive || callState.isEnded) && displayMode == .fullScreen
+    }
+}
+
+extension CallState {
+    nonisolated static func == (lhs: CallState, rhs: CallState) -> Bool {
+        switch (lhs, rhs) {
+        case (.idle, .idle), (.offering, .offering),
+             (.connecting, .connecting), (.connected, .connected): return true
+        case (.ringing(let a), .ringing(let b)): return a == b
+        case (.reconnecting(let a), .reconnecting(let b)): return a == b
+        case (.ended(let a), .ended(let b)): return a == b
+        default: return false
+        }
     }
 }
 
