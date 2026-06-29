@@ -672,7 +672,7 @@ public struct NotificationBadge: View {
                     .frame(width: isPulsing ? 28 : 18, height: isPulsing ? 28 : 18)
 
                 Text("\(min(count, 99))")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(MeeshyFont.relative(10, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 18, height: 18)
                     .background(
