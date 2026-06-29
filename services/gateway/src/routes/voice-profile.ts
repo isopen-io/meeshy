@@ -15,7 +15,7 @@ import { createUnifiedAuthMiddleware, UnifiedAuthContext, UnifiedAuthRequest} fr
 import { ZMQSingleton } from '../services/ZmqSingleton';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
-import { sendSuccess, sendUnauthorized } from '../utils/response';
+import { sendSuccess, sendUnauthorized, sendBadRequest } from '../utils/response';
 
 const logger = enhancedLogger.child({ module: 'VoiceProfileRoutes' });
 
@@ -460,12 +460,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
       }
 
       if (!audioData || !audioFormat) {
-        return reply.status(400).send({
-          success: false,
-          error: 'INVALID_REQUEST',
-          errorCode: 'MISSING_AUDIO',
-          message: 'Audio file is required'
-        });
+        return sendBadRequest(reply, 'Audio file is required');
       }
 
       registerRequest = {
@@ -482,12 +477,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
 
     // Validate required fields
     if (!registerRequest.audioData || !registerRequest.audioFormat) {
-      return reply.status(400).send({
-        success: false,
-        error: 'INVALID_REQUEST',
-        errorCode: 'MISSING_AUDIO',
-        message: 'audioData and audioFormat are required'
-      });
+      return sendBadRequest(reply, 'audioData and audioFormat are required');
     }
 
     const result = await voiceProfileService.registerProfile(auth.registeredUser.id, registerRequest);
