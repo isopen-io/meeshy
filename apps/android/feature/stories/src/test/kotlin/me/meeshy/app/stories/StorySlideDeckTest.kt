@@ -264,8 +264,145 @@ class StorySlideDeckTest {
     }
 
     @Test
-    fun `publishableSlides is empty for a media-only deck with no text`() {
+    fun `publishableSlides is empty for a deck with neither text nor media`() {
         assertThat(deckOf("a", "b").publishableSlides).isEmpty()
+    }
+
+    @Test
+    fun `publishableSlides includes a media-only slide that has no text`() {
+        val deck = StorySlideDeck(
+            slides = listOf(
+                StorySlide(id = "a", text = "  "),
+                StorySlide(id = "b", mediaIds = listOf("m1")),
+            ),
+            selectedId = "a",
+        )
+        assertThat(deck.publishableSlides.map { it.id }).containsExactly("b")
+    }
+
+    @Test
+    fun `publishableSlides keeps text-and-media slides in order alongside text-only ones`() {
+        val deck = StorySlideDeck(
+            slides = listOf(
+                StorySlide(id = "a", text = "first"),
+                StorySlide(id = "b", text = "  ", mediaIds = listOf("m1")),
+                StorySlide(id = "c", text = "third", mediaIds = listOf("m2")),
+            ),
+            selectedId = "a",
+        )
+        assertThat(deck.publishableSlides.map { it.id }).containsExactly("a", "b", "c").inOrder()
+    }
+
+    // --- addMediaToSelected ---
+
+    @Test
+    fun `addMediaToSelected appends to the selected slide and leaves the others untouched`() {
+        val deck = deckOf("a", "b", selected = "b")
+        val after = deck.addMediaToSelected("m1")
+        assertThat(after.slides.first().mediaIds).isEmpty()
+        assertThat(after.selectedSlide.mediaIds).containsExactly("m1")
+        assertThat(after.selectedId).isEqualTo("b")
+    }
+
+    @Test
+    fun `addMediaToSelected appends in order so several media accumulate`() {
+        val deck = StorySlideDeck.single("a").addMediaToSelected("m1").addMediaToSelected("m2")
+        assertThat(deck.selectedSlide.mediaIds).containsExactly("m1", "m2").inOrder()
+    }
+
+    @Test
+    fun `addMediaToSelected of an already-present id is inert`() {
+        val deck = StorySlideDeck.single("a").addMediaToSelected("m1")
+        assertThat(deck.addMediaToSelected("m1")).isSameInstanceAs(deck)
+    }
+
+    @Test
+    fun `addMediaToSelected is inert once the selected slide is at the per-slide media cap`() {
+        val full = StorySlideDeck(
+            slides = listOf(
+                StorySlide(id = "a", mediaIds = (1..StorySlideDeck.MAX_MEDIA_PER_SLIDE).map { "m$it" }),
+            ),
+            selectedId = "a",
+        )
+        assertThat(full.selectedSlide.mediaIds).hasSize(StorySlideDeck.MAX_MEDIA_PER_SLIDE)
+        assertThat(full.addMediaToSelected("overflow")).isSameInstanceAs(full)
+    }
+
+    // --- removeMedia ---
+
+    @Test
+    fun `removeMedia drops the id from whichever slide holds it`() {
+        val deck = StorySlideDeck(
+            slides = listOf(
+                StorySlide(id = "a", mediaIds = listOf("m1", "m2")),
+                StorySlide(id = "b", mediaIds = listOf("m3")),
+            ),
+            selectedId = "a",
+        )
+        val after = deck.removeMedia("m3")
+        assertThat(after.slides.first().mediaIds).containsExactly("m1", "m2").inOrder()
+        assertThat(after.slides[1].mediaIds).isEmpty()
+        assertThat(after.selectedId).isEqualTo("a")
+    }
+
+    @Test
+    fun `removeMedia of an unknown id is inert`() {
+        val deck = StorySlideDeck.single("a").addMediaToSelected("m1")
+        assertThat(deck.removeMedia("nope")).isSameInstanceAs(deck)
+    }
+
+    // --- hasMedia / isWithinMediaLimit / selectedRemainingMediaSlots ---
+
+    @Test
+    fun `hasMedia is false for a deck with no attached media`() {
+        assertThat(deckOf("a", "b").hasMedia).isFalse()
+    }
+
+    @Test
+    fun `hasMedia is true when any slide carries media`() {
+        val deck = StorySlideDeck(
+            slides = listOf(StorySlide(id = "a"), StorySlide(id = "b", mediaIds = listOf("m1"))),
+            selectedId = "a",
+        )
+        assertThat(deck.hasMedia).isTrue()
+    }
+
+    @Test
+    fun `isWithinMediaLimit is true when every slide is within the per-slide cap`() {
+        val deck = StorySlideDeck(
+            slides = listOf(
+                StorySlide(id = "a", mediaIds = (1..StorySlideDeck.MAX_MEDIA_PER_SLIDE).map { "m$it" }),
+                StorySlide(id = "b", mediaIds = listOf("x")),
+            ),
+            selectedId = "a",
+        )
+        assertThat(deck.isWithinMediaLimit()).isTrue()
+    }
+
+    @Test
+    fun `isWithinMediaLimit is false when any slide exceeds the per-slide cap`() {
+        val deck = StorySlideDeck(
+            slides = listOf(
+                StorySlide(id = "a", mediaIds = (0..StorySlideDeck.MAX_MEDIA_PER_SLIDE).map { "m$it" }),
+            ),
+            selectedId = "a",
+        )
+        assertThat(deck.isWithinMediaLimit()).isFalse()
+    }
+
+    @Test
+    fun `selectedRemainingMediaSlots reflects free slots on the selected slide and never goes negative`() {
+        val deck = StorySlideDeck(
+            slides = listOf(StorySlide(id = "a", mediaIds = listOf("m1", "m2"))),
+            selectedId = "a",
+        )
+        assertThat(deck.selectedRemainingMediaSlots).isEqualTo(StorySlideDeck.MAX_MEDIA_PER_SLIDE - 2)
+
+        val over = StorySlideDeck(
+            slides = listOf(StorySlide(id = "a", mediaIds = (0..StorySlideDeck.MAX_MEDIA_PER_SLIDE).map { "m$it" })),
+            selectedId = "a",
+        )
+        assertThat(over.selectedRemainingMediaSlots).isEqualTo(0)
     }
 
     // --- isWithinTextLimit ---

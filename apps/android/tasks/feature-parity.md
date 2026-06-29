@@ -455,8 +455,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (`:feature:stories`) converts accumulated drag px + measured slot width into the whole-slot
       crossings, rounds a sub-half-slot drift to zero, clamps to the deck bounds, and degrades to
       the origin on a non-positive slot width; `SlideStrip` binds `detectHorizontalDragGestures` on
-      each chip and hands the resolved target to the already-tested `onMoveSlide`. Pending:
-      per-slide media (media is whole-story for now); the 9:16 canvas + text styling below.
+      each chip and hands the resolved target to the already-tested `onMoveSlide`. **Per-slide media
+      done** (`story-slide-media`): media now belongs to the **slide it was added to**, not the whole
+      story. The deck is the single source of truth (`StorySlideDeck.addMediaToSelected`/`removeMedia`/
+      `hasMedia`/`isWithinMediaLimit`/`selectedRemainingMediaSlots`, ≤10 media **per slide**); `draft`
+      mirrors the selected slide for media exactly as it already does for text. `onMediaPicked`
+      attaches to the selected slide (online ids or offline placeholders), the preview shows only the
+      **selected slide's** media (`selectedSlideAttachments`/`selectedSlidePending`), publish emits one
+      story **per publishable slide** (text **or** media — a media-only middle slide now publishes its
+      own media) carrying that slide's media and `dependsOn` only that slide's offline uploads, and
+      removing a slide reclaims its media (drops the preview entries + cancels its durable rows).
+      Surpasses iOS, where offline media drops on an upload failure. Pending: the 9:16 canvas + text
+      styling below.
 - [ ] 9:16 canvas with pinch-zoom + drag-pan; FAB + bottom-band toolbar (Contenu/Effets)
 - [ ] Text elements (≤5/slide): style (bold/italic/handwriting/typewriter/neon/retro), colour,
       size, alignment, background (none/solid/glass), outline/stroke, RTL, fade timing

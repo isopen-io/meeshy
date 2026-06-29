@@ -168,10 +168,10 @@ fun StoryComposerScreen(
                 },
             )
 
-            if (state.attachments.isNotEmpty() || state.pendingUploads.isNotEmpty()) {
+            if (state.selectedSlideAttachments.isNotEmpty() || state.selectedSlidePending.isNotEmpty()) {
                 MediaPreviewRow(
-                    attachments = state.attachments,
-                    pending = state.pendingUploads,
+                    attachments = state.selectedSlideAttachments,
+                    pending = state.selectedSlidePending,
                     onRemove = viewModel::onRemoveMedia,
                 )
             }

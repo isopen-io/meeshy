@@ -844,4 +844,170 @@ class StoryComposerViewModelTest {
         assertThat(vm.state.value.deck.selectedSlide.text).isEmpty()
         assertThat(vm.state.value.draft.text).isEmpty()
     }
+
+    // --- per-slide media ---
+
+    @Test
+    fun `picked media attaches to the selected slide, not the whole story`() = runTest {
+        val vm = viewModel()
+        vm.onTextChange("one")
+        vm.onAddSlide()
+        vm.onTextChange("two")
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m2")))
+
+        vm.onMediaPicked(listOf(item()))
+
+        val deck = vm.state.value.deck
+        assertThat(deck.slides.first().mediaIds).isEmpty()
+        assertThat(deck.slides[1].mediaIds).containsExactly("m2")
+        assertThat(vm.state.value.draft.mediaIds).containsExactly("m2")
+    }
+
+    @Test
+    fun `each published story carries only its own slide's media`() = runTest {
+        val vm = viewModel()
+        vm.onTextChange("one")
+        vm.onAddSlide()
+        vm.onTextChange("two")
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m2")))
+        vm.onMediaPicked(listOf(item()))
+        val requests = mutableListOf<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(requests), any()) } returns "cmid"
+
+        vm.publish()
+
+        assertThat(requests.map { it.content }).containsExactly("one", "two").inOrder()
+        assertThat(requests[0].mediaIds).isNull()
+        assertThat(requests[1].mediaIds).containsExactly("m2")
+    }
+
+    @Test
+    fun `an offline upload on a later slide gates only that slide's story`() = runTest {
+        val vm = viewModel()
+        vm.onTextChange("one")
+        vm.onAddSlide()
+        vm.onTextChange("two")
+        coEvery { media.upload(any()) } returns offline()
+        coEvery { uploadQueue.enqueue(any()) } returns "up-2"
+        vm.onMediaPicked(listOf(item()))
+        val requests = mutableListOf<CreateStoryRequest>()
+        val deps = mutableListOf<List<String>>()
+        coEvery { repo.enqueuePublish(capture(requests), capture(deps)) } returns "cmid"
+
+        vm.publish()
+
+        assertThat(deps[0]).isEmpty()
+        assertThat(deps[1]).containsExactly("up-2")
+        assertThat(requests[1].mediaIds).containsExactly("up-2")
+    }
+
+    @Test
+    fun `a media-only middle slide publishes its media between two text slides`() = runTest {
+        val vm = viewModel()
+        vm.onTextChange("one")
+        vm.onAddSlide()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m2")))
+        vm.onMediaPicked(listOf(item()))
+        vm.onAddSlide()
+        vm.onTextChange("three")
+        val requests = mutableListOf<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(requests), any()) } returns "cmid"
+
+        vm.publish()
+
+        assertThat(requests).hasSize(3)
+        assertThat(requests.map { it.content }).containsExactly("one", null, "three").inOrder()
+        assertThat(requests[1].mediaIds).containsExactly("m2")
+    }
+
+    @Test
+    fun `the preview shows only the selected slide's media`() = runTest {
+        val vm = viewModel()
+        vm.onAddSlide()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m2")))
+        vm.onMediaPicked(listOf(item()))
+        assertThat(vm.state.value.selectedSlideAttachments.map { it.id }).containsExactly("m2")
+        val firstSlideId = vm.state.value.deck.slides.first().id
+
+        vm.onSelectSlide(firstSlideId)
+
+        assertThat(vm.state.value.selectedSlideAttachments).isEmpty()
+        assertThat(vm.state.value.draft.mediaIds).isEmpty()
+    }
+
+    @Test
+    fun `media on a non-selected slide still lets the deck publish`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
+        vm.onMediaPicked(listOf(item()))
+
+        vm.onAddSlide()
+
+        assertThat(vm.state.value.draft.hasMedia).isFalse()
+        assertThat(vm.state.value.deck.hasMedia).isTrue()
+        assertThat(vm.state.value.canPublish).isTrue()
+    }
+
+    @Test
+    fun `the media cap is per-slide so a fresh slide can attach its own ten`() = runTest {
+        val vm = viewModel()
+        val full = (1..StorySlideDeck.MAX_MEDIA_PER_SLIDE).map { uploaded("a$it") }
+        coEvery { media.upload(any()) } returns NetworkResult.Success(full)
+        vm.onMediaPicked(List(StorySlideDeck.MAX_MEDIA_PER_SLIDE) { item("a$it.jpg") })
+        assertThat(vm.state.value.draft.isMediaFull).isTrue()
+
+        vm.onAddSlide()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("b1")))
+        vm.onMediaPicked(listOf(item("b.jpg")))
+
+        assertThat(vm.state.value.deck.slides[1].mediaIds).containsExactly("b1")
+        assertThat(vm.state.value.attachments).hasSize(StorySlideDeck.MAX_MEDIA_PER_SLIDE + 1)
+    }
+
+    @Test
+    fun `removing a slide drops its uploaded media from the preview pool`() = runTest {
+        val vm = viewModel()
+        vm.onTextChange("keep")
+        vm.onAddSlide()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m2")))
+        vm.onMediaPicked(listOf(item()))
+        val secondSlideId = vm.state.value.deck.slides[1].id
+
+        vm.onRemoveSlide(secondSlideId)
+
+        assertThat(vm.state.value.deck.size).isEqualTo(1)
+        assertThat(vm.state.value.attachments).isEmpty()
+        coVerify(exactly = 0) { uploadQueue.cancel(any()) }
+    }
+
+    @Test
+    fun `removing a slide cancels the durable uploads it carried`() = runTest {
+        val vm = viewModel()
+        vm.onTextChange("keep")
+        vm.onAddSlide()
+        coEvery { media.upload(any()) } returns offline()
+        coEvery { uploadQueue.enqueue(any()) } returns "up-1"
+        vm.onMediaPicked(listOf(item()))
+        val secondSlideId = vm.state.value.deck.slides[1].id
+
+        vm.onRemoveSlide(secondSlideId)
+
+        assertThat(vm.state.value.pendingUploads).isEmpty()
+        assertThat(vm.state.value.deck.size).isEqualTo(1)
+        coVerify(exactly = 1) { uploadQueue.cancel("up-1") }
+    }
+
+    @Test
+    fun `removing the last slide is inert and keeps its media`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
+        vm.onMediaPicked(listOf(item()))
+        val onlyId = vm.state.value.deck.slides.first().id
+
+        vm.onRemoveSlide(onlyId)
+
+        assertThat(vm.state.value.deck.size).isEqualTo(1)
+        assertThat(vm.state.value.attachments.map { it.id }).containsExactly("m1")
+        assertThat(vm.state.value.draft.mediaIds).containsExactly("m1")
+    }
 }
