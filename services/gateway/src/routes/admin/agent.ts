@@ -543,7 +543,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       if (!validateObjectId(conversationId, 'conversationId', reply)) return;
       const parsed = agentConfigSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.status(400).send({ success: false, message: 'Données invalides', errors: parsed.error.flatten() });
+        return sendBadRequest(reply, 'Données invalides');
       }
 
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -831,7 +831,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
     try {
       const parsed = llmConfigSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.status(400).send({ success: false, message: 'Données invalides', errors: parsed.error.flatten() });
+        return sendBadRequest(reply, 'Données invalides');
       }
 
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -1718,7 +1718,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
     try {
       const parsed = globalConfigSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.status(400).send({ success: false, message: 'Données invalides', errors: parsed.error.flatten() });
+        return sendBadRequest(reply, 'Données invalides');
       }
 
       let existing = await fastify.prisma.agentGlobalConfig.findFirst({ orderBy: { updatedAt: 'desc' } });
