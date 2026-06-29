@@ -128,13 +128,25 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 ## Next slice (pick one for the next run)
 
 Ordered by value:
-1. **9:16 canvas** — the per-slide canvas (pinch-zoom + drag-pan, FAB + bottom-band
-   toolbar). Larger; see `feature-parity.md` §"Stories composer". Push the pinch/pan math
-   into a pure resolver (cf. `SlideReorderResolver`) so the canvas transform is unit-tested.
+1. **Canvas toolbar/FAB** — the bottom-band toolbar (Contenu/Effets) + add-element FAB that
+   sits over the now-real 9:16 canvas. Glue-heavy; keep any selection/mode decision in a pure
+   helper or the VM.
 2. **Text elements** (≤5/slide): per-element style/colour/position — the on-canvas text model
    (pure `StoryTextElement` + per-slide `elements` list, ≤5 cap, mirroring the media reducer).
+   Each element carries its own position/scale on the canvas (reuse the `StoryCanvasTransform`
+   clamp pattern for element placement).
 3. After Stories richness is sufficient, advance to the **Calls** area
    (`feature-parity.md` §"Calls").
+
+(`story-canvas-transform` ✅ shipped 2026-06-29 — this run; **the 9:16 canvas is now real with
+pinch-zoom + drag-pan**. A pure per-slide `StoryCanvasTransform` (scale clamped 1–4×, offset clamped
+to the scaled-content overflow) owns the gesture math: `apply(pan,zoom,canvasW,canvasH)` multiplies
+scale by the gesture zoom then clamps translation to the **new** scale's bounds (pinch-out tightens +
+re-clamps toward centre; a 0px canvas collapses the range without div-by-zero), and `clampedTo` re-clamps
+on resize. The transform is part of the slide's identity (`StorySlide.transform`, carried by `duplicate`),
+persisted via `StorySlideDeck.updateSelectedTransform`, driven by `StoryComposerViewModel.onCanvasTransform`,
+and rendered by a glue `StoryCanvasSurface` (selected slide's first media as a 9:16 `graphicsLayer`
+background under `detectTransformGestures`). +16 transform tests, +3 deck tests, +3 VM tests. See run log.)
 
 (`story-slide-media` ✅ shipped 2026-06-29 — this run; **per-slide media**. Media now belongs to the
 slide it was added to, not the whole story. The deck is the single source of truth
@@ -231,6 +243,58 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-29 — slice `story-canvas-transform` ✅
+- **Branch:** `claude/apps/android/story-canvas-transform` (off `origin/main`).
+- **Housekeeping (step 0):** no open Android PR for the prior loop (`story-slide-media` PR #1026
+  squash-merged); `origin/main` carried every Android slice through #1026; branched this slice clean.
+- **What:** **9:16 canvas with pinch-zoom + drag-pan** ("Next" #1, feature-parity §Stories composer).
+  The composer gains a real central 9:16 canvas where the user pinches to zoom and drags to pan the
+  selected slide's media background; the pan/zoom **persists per slide** (it's part of the slide's
+  identity, carried by duplicate and into publish) — surpassing iOS's ephemeral, per-session canvas
+  state. Text/sticker/drawing **elements** layer on top in later slices.
+- **Design (single source of truth, SDK purity):** the gesture math lives in **one pure place**,
+  `StoryCanvasTransform` (in `:feature:stories`, product state — it's the slide model, not a stateless
+  SDK atom). `scale` clamps to `[1,4]`; `offsetX/Y` clamp to `maxOffset = (size·scale − size)/2` (the
+  symmetric overflow of the scaled content). `apply(panX,panY,zoom,canvasW,canvasH)` multiplies scale
+  by the gesture `zoom`, clamps it, then clamps the translated offset to the bounds of the **new**
+  scale — so a pinch-out tightens the pan range and snaps a now-out-of-range offset back toward centre,
+  a pinch-in widens it. A degenerate 0px canvas collapses the range (no divide-by-zero — there is no
+  division), `clampedTo(w,h)` re-clamps on a fresh/resized measurement, and `isIdentity` lets the
+  Composable skip `graphicsLayer` at rest.
+- **Added/changed (production, `apps/android` only):**
+  - `StoryCanvasTransform.kt` (new) — the pure transform value + resolver (`apply`/`clampedTo`/
+    `clampScale`/`maxOffset`/`clampOffset`/`isIdentity`, `MIN_SCALE=1`/`MAX_SCALE=4`/`IDENTITY`).
+  - `StorySlide.transform: StoryCanvasTransform = IDENTITY` — per-slide persisted canvas state
+    (carried by `duplicate`; default keeps the single-slide path byte-identical).
+  - `StorySlideDeck.updateSelectedTransform(transform)` — rewrites only the selected slide's transform
+    (text/media/selection untouched), mirroring `updateSelectedText`.
+  - `StoryComposerViewModel.onCanvasTransform(panX,panY,zoom,canvasW,canvasH)` — applies the gesture to
+    the selected slide via the pure `apply`, through the existing `applyDeck`; `StoryComposerUiState.
+    selectedSlideTransform` projects it for the screen.
+  - `StoryComposerScreen.StoryCanvasSurface` — glue 9:16 `Box` (`aspectRatio(9f/16f)`, surfaceVariant,
+    rounded clip, `semantics` label) rendering the selected slide's first media under a `graphicsLayer`
+    transform + `detectTransformGestures` forwarding pan/zoom + measured size to the VM. +1 string × 4 locales.
+- **TDD (red → green):** `StoryCanvasTransformTest` +16 (identity/defaults; scale clamp min/mid/max;
+  apply zoom-in/out clamp + multiply; rest-scale no-pan; maxOffset overflow; in-range pan both axes;
+  out-of-range symmetric clamp both axes; pan accumulation; zoom-out re-clamp toward centre; 0px canvas
+  no-div-by-zero; `clampedTo` snap + in-range untouched). `StorySlideDeckTest` +3
+  (updateSelectedTransform rewrites only selected / leaves text+media; duplicate carries transform).
+  `StoryComposerViewModelTest` +3 (onCanvasTransform applies pinch-pan; clamps to bounds; edits only the
+  selected slide + leaves editor text + exposes `selectedSlideTransform`). RED verified (unresolved
+  `StoryCanvasTransform`/`updateSelectedTransform`/`onCanvasTransform`).
+- **Branch coverage (new logic):** every arm of `apply` (zoom clamp ↑/↓/mid, offset clamp in/over/under,
+  0px collapse), `clampScale`/`maxOffset`/`clampOffset` boundaries, `isIdentity` true/false,
+  `clampedTo` in/out-of-range, `updateSelectedTransform` selected-vs-others, and the VM intent's
+  selected-only edit are all hit. ≥90% branch + instruction on the added logic.
+- **Verification:** `./apps/android/meeshy.sh check` — **BUILD SUCCESSFUL** (`assembleDebug` + all
+  `testDebugUnitTest`). `:feature:stories` `StoryCanvasTransformTest` 16, `StorySlideDeckTest` 50,
+  `StoryComposerViewModelTest` 70 — 0 failures. Diff = `apps/android` only (4 prod Kotlin, 4 strings,
+  3 test).
+- **Reviewer gate:** PASS — scope `apps/android` only, no secrets / `local.properties` gitignored;
+  behavioural non-tautological tests through the public API; SDK purity (pure transform is product
+  state in `:feature:*`, not an SDK atom); UDF (VM + immutable `StateFlow`, transitions pure); canvas
+  Composable is glue; colour/UX coherence (MaterialTheme surface, natural pinch/pan gestures).
 
 ### 2026-06-29 — slice `story-slide-media` ✅
 - **Branch:** `claude/apps/android/story-slide-media` (off `origin/main` @ `18be707b`).

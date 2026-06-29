@@ -38,6 +38,7 @@
     <string name="stories_composer_add_media_count">Añadir (%1$d/%2$d)</string>
     <string name="stories_composer_remove_media">Quitar</string>
     <string name="stories_composer_media_pending">Sin conexión</string>
+    <string name="stories_composer_canvas">Lienzo de la historia: pellizca para acercar, arrastra para mover</string>
     <string name="stories_composer_slide_label">Diapositiva %1$d</string>
     <string name="stories_composer_add_slide">Añadir diapositiva</string>
     <string name="stories_composer_duplicate_slide">Duplicar diapositiva</string>

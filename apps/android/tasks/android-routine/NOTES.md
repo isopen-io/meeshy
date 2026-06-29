@@ -508,3 +508,24 @@ Append-only log of gotchas and decisions that save time next run.
   ("when can I add", "always keep one", "what gets selected after a remove") → product orchestration,
   same module as `StoryComposerDraft`. An SDK atom would be agnostic to those policies. Grain test
   from `packages/MeeshySDK/CLAUDE.md` applied.
+
+## `story-canvas-transform` — pure 2D pan/zoom that *persists* per slide (2026-06-29)
+- **Persisted, not ephemeral.** The fullscreen image viewer's `ImageViewerTransform` (in `:sdk-ui`)
+  is throwaway per-session viewer state. The story canvas transform is **part of the slide's
+  identity** — it survives slide switches, is carried by `duplicate`, and rides into publish. So it
+  lives on `StorySlide.transform` in `:feature:stories` (product state), NOT as an SDK atom and NOT
+  in transient Compose `remember`. Same shape of clamp math, opposite lifecycle — don't conflate them.
+- **Clamp the offset to the *new* scale inside `apply`.** Order matters: compute `nextScale` first,
+  then clamp the translated offset to `maxOffset(size, nextScale)`. This makes a pinch-out tighten the
+  pan range *and* snap a now-out-of-range offset back toward centre in the same gesture. Clamping to
+  the old scale would let the content drift off-edge for one frame.
+- **`maxOffset = (size·scale − size)/2`** — the symmetric half-overflow of the scaled content. No
+  division anywhere, so a not-yet-measured 0px canvas just yields `0` (no div-by-zero guard needed);
+  a unit test pins this (`apply(.., canvasWidth=0f, canvasHeight=0f)` → offset 0).
+- **Composable stays glue.** All math is in the pure object; `StoryCanvasSurface` only measures the
+  canvas (`onSizeChanged`), forwards each `detectTransformGestures` callback verbatim to
+  `onCanvasTransform`, and applies the result via `graphicsLayer`. Zero testable decisions in Compose
+  → nothing lost to the JVM coverage gate. `isIdentity` lets it skip the layer at rest.
+- **Default field keeps existing tests byte-identical.** Adding `transform = IDENTITY` to `StorySlide`
+  with a default means every prior `StorySlide(id=..)` / deck test still constructs the same value —
+  only genuinely new per-slide-transform behaviour needed new tests.

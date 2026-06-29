@@ -6,10 +6,14 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -29,6 +33,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -47,12 +52,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -150,12 +158,20 @@ fun StoryComposerScreen(
                 onMove = viewModel::onMoveSlide,
             )
 
-            OutlinedTextField(
-                value = state.draft.text,
-                onValueChange = viewModel::onTextChange,
+            StoryCanvasSurface(
+                transform = state.selectedSlideTransform,
+                backgroundModel = state.selectedSlideAttachments.firstOrNull()?.let { it.thumbnailUrl ?: it.url }
+                    ?: state.selectedSlidePending.firstOrNull()?.item?.bytes,
+                onTransform = viewModel::onCanvasTransform,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
+            )
+
+            OutlinedTextField(
+                value = state.draft.text,
+                onValueChange = viewModel::onTextChange,
+                modifier = Modifier.fillMaxWidth(),
                 placeholder = { Text(stringResource(R.string.stories_composer_placeholder)) },
                 isError = !state.draft.isWithinLimit,
                 supportingText = {
@@ -210,6 +226,65 @@ fun StoryComposerScreen(
                 selected = state.draft.visibility,
                 onSelect = viewModel::onVisibilityChange,
             )
+        }
+    }
+}
+
+/**
+ * The 9:16 story canvas for the **selected** slide. Renders that slide's first
+ * media as the background (the upcoming text/sticker/drawing elements layer on top
+ * in later slices) and lets the user pinch-zoom + drag-pan it. All transform math
+ * lives in the pure, unit-tested [StoryCanvasTransform]: each `detectTransformGestures`
+ * callback is forwarded verbatim to [onTransform] together with the measured canvas
+ * size, and the resolved [transform] is applied as a `graphicsLayer`, so this
+ * Composable stays declarative glue. An empty slide shows the bare 9:16 frame.
+ */
+@Composable
+private fun StoryCanvasSurface(
+    transform: StoryCanvasTransform,
+    backgroundModel: Any?,
+    onTransform: (Float, Float, Float, Float, Float) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val canvasLabel = stringResource(R.string.stories_composer_canvas)
+    var canvasWidthPx by remember { mutableFloatStateOf(0f) }
+    var canvasHeightPx by remember { mutableFloatStateOf(0f) }
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .aspectRatio(9f / 16f)
+                .clip(RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .onSizeChanged {
+                    canvasWidthPx = it.width.toFloat()
+                    canvasHeightPx = it.height.toFloat()
+                }
+                .semantics { contentDescription = canvasLabel }
+                .pointerInput(Unit) {
+                    detectTransformGestures { _, pan, zoom, _ ->
+                        onTransform(pan.x, pan.y, zoom, canvasWidthPx, canvasHeightPx)
+                    }
+                },
+        ) {
+            if (backgroundModel != null) {
+                AsyncImage(
+                    model = backgroundModel,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            scaleX = transform.scale
+                            scaleY = transform.scale
+                            translationX = transform.offsetX
+                            translationY = transform.offsetY
+                        },
+                )
+            }
         }
     }
 }

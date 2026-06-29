@@ -2,14 +2,16 @@ package me.meeshy.app.stories
 
 /**
  * One slide of a multi-slide story draft. [id] is stable across the slide's life
- * (a duplicate mints a fresh one). For now a slide carries its caption [text] and
- * attached [mediaIds]; richer element-level content (text styling, audio, drawing)
- * layers on in later slices, reusing this same identity.
+ * (a duplicate mints a fresh one). A slide carries its caption [text], attached
+ * [mediaIds], and its 9:16 canvas [transform] (the persisted pan/zoom of its
+ * content); richer element-level content (text styling, audio, drawing) layers on
+ * in later slices, reusing this same identity.
  */
 data class StorySlide(
     val id: String,
     val text: String = "",
     val mediaIds: List<String> = emptyList(),
+    val transform: StoryCanvasTransform = StoryCanvasTransform.IDENTITY,
 )
 
 /**
@@ -112,6 +114,17 @@ data class StorySlideDeck(
     fun updateSelectedText(text: String): StorySlideDeck {
         val index = selectedIndex
         val next = slides.mapIndexed { i, slide -> if (i == index) slide.copy(text = text) else slide }
+        return copy(slides = next)
+    }
+
+    /**
+     * Rewrites the **selected** slide's canvas [transform], leaving its id, text, and
+     * media — and every other slide and the selection — untouched. The canvas binds
+     * here so each slide keeps its own pan/zoom as the user moves between slides.
+     */
+    fun updateSelectedTransform(transform: StoryCanvasTransform): StorySlideDeck {
+        val index = selectedIndex
+        val next = slides.mapIndexed { i, slide -> if (i == index) slide.copy(transform = transform) else slide }
         return copy(slides = next)
     }
 
