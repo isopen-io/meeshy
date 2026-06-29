@@ -97,6 +97,36 @@ export const SOCKET_RATE_LIMITS = {
     maxRequests: 20,
     windowMs: 60000, // 1 minute
     keyPrefix: 'socket:message:delete'
+  },
+  TYPING_INDICATOR: {
+    maxRequests: 60,
+    windowMs: 60000, // 1 minute — global guard; per-conversation 2s throttle is the primary gate
+    keyPrefix: 'socket:typing'
+  },
+  LOCATION_SHARE: {
+    maxRequests: 20,
+    windowMs: 60000, // 1 minute
+    keyPrefix: 'socket:location:share'
+  },
+  LOCATION_LIVE_UPDATE: {
+    maxRequests: 120,
+    windowMs: 60000, // 1 minute — allows ~2 GPS updates/sec (typical accuracy)
+    keyPrefix: 'socket:location:live-update'
+  },
+  LOCATION_LIVE_START: {
+    maxRequests: 10,
+    windowMs: 60000, // 1 minute
+    keyPrefix: 'socket:location:live-start'
+  },
+  LOCATION_LIVE_STOP: {
+    maxRequests: 10,
+    windowMs: 60000, // 1 minute
+    keyPrefix: 'socket:location:live-stop'
+  },
+  CONVERSATION_JOIN: {
+    maxRequests: 30,
+    windowMs: 60000, // 1 minute
+    keyPrefix: 'socket:conversation:join'
   }
 };
 
