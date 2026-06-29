@@ -15,6 +15,7 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketReactionAddSchema, SocketReactionRemoveSchema } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 
 const logger = enhancedLogger.child({ module: 'ReactionHandler' });
 
@@ -34,6 +35,7 @@ export class ReactionHandler {
   private reactionService: ReactionService;
   private connectedUsers: Map<string, SocketUser>;
   private socketToUser: Map<string, string>;
+  private rateLimiter = getSocketRateLimiter();
 
   constructor(deps: ReactionHandlerDependencies) {
     this.io = deps.io;
@@ -75,6 +77,16 @@ export class ReactionHandler {
       const user = userResult?.user;
       const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
+
+      const rateLimitAllowed = await this.rateLimiter.checkLimit(userId, SOCKET_RATE_LIMITS.REACTION_ADD);
+      if (!rateLimitAllowed) {
+        const info = this.rateLimiter.getRateLimitInfo(userId, SOCKET_RATE_LIMITS.REACTION_ADD);
+        if (callback) callback({ success: false, error: 'Rate limit exceeded' });
+        socket.emit(SERVER_EVENTS.ERROR, {
+          message: `Too many reactions. Please wait ${Math.ceil(info.resetIn / 1000)} seconds.`
+        });
+        return;
+      }
 
       const participantId = await this._resolveParticipantId(user, userId, isAnonymous, validated.messageId);
       if (!participantId) {
@@ -165,6 +177,16 @@ export class ReactionHandler {
       const user = userResult?.user;
       const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
+
+      const rateLimitAllowed = await this.rateLimiter.checkLimit(userId, SOCKET_RATE_LIMITS.REACTION_REMOVE);
+      if (!rateLimitAllowed) {
+        const info = this.rateLimiter.getRateLimitInfo(userId, SOCKET_RATE_LIMITS.REACTION_REMOVE);
+        if (callback) callback({ success: false, error: 'Rate limit exceeded' });
+        socket.emit(SERVER_EVENTS.ERROR, {
+          message: `Too many reaction changes. Please wait ${Math.ceil(info.resetIn / 1000)} seconds.`
+        });
+        return;
+      }
 
       const participantId = await this._resolveParticipantId(user, userId, isAnonymous, validated.messageId);
       if (!participantId) {

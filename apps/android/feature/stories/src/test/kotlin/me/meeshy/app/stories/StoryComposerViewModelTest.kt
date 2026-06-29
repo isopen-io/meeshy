@@ -753,6 +753,49 @@ class StoryComposerViewModelTest {
     }
 
     @Test
+    fun `onCanvasTransform applies the pinch-pan gesture to the selected slide's transform`() = runTest {
+        val vm = viewModel()
+
+        vm.onCanvasTransform(panX = 40f, panY = 60f, zoom = 2f, canvasWidth = 1000f, canvasHeight = 2000f)
+
+        val transform = vm.state.value.deck.selectedSlide.transform
+        assertThat(transform.scale).isEqualTo(2f)
+        assertThat(transform.offsetX).isEqualTo(40f)
+        assertThat(transform.offsetY).isEqualTo(60f)
+    }
+
+    @Test
+    fun `onCanvasTransform clamps the gesture to the canvas bounds`() = runTest {
+        val vm = viewModel()
+
+        // Zoom to 2x (limit on a 1000px axis = 500), then pan far past the edge.
+        vm.onCanvasTransform(panX = 9999f, panY = -9999f, zoom = 2f, canvasWidth = 1000f, canvasHeight = 1000f)
+
+        val transform = vm.state.value.deck.selectedSlide.transform
+        assertThat(transform.scale).isEqualTo(2f)
+        assertThat(transform.offsetX).isEqualTo(500f)
+        assertThat(transform.offsetY).isEqualTo(-500f)
+    }
+
+    @Test
+    fun `onCanvasTransform edits only the selected slide and leaves the editor text intact`() = runTest {
+        val vm = viewModel()
+        vm.onTextChange("a")
+        vm.onAddSlide()
+        vm.onTextChange("b")
+        val firstId = vm.state.value.deck.slides.first().id
+
+        vm.onCanvasTransform(panX = 0f, panY = 0f, zoom = 3f, canvasWidth = 1000f, canvasHeight = 1000f)
+
+        assertThat(vm.state.value.deck.selectedSlide.transform.scale).isEqualTo(3f)
+        assertThat(vm.state.value.deck.slides.first { it.id == firstId }.transform)
+            .isEqualTo(StoryCanvasTransform.IDENTITY)
+        // The caption editor still mirrors the selected slide's text.
+        assertThat(vm.state.value.draft.text).isEqualTo("b")
+        assertThat(vm.state.value.selectedSlideTransform.scale).isEqualTo(3f)
+    }
+
+    @Test
     fun `onSelectSlide of an unknown id is inert`() = runTest {
         val vm = viewModel()
         vm.onTextChange("x")

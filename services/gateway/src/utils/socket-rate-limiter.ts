@@ -72,6 +72,16 @@ export const SOCKET_RATE_LIMITS = {
     maxRequests: 60,
     windowMs: 10000, // 10 seconds (real-time transcription bursts)
     keyPrefix: 'socket:call:transcription'
+  },
+  REACTION_ADD: {
+    maxRequests: 30,
+    windowMs: 60000, // 1 minute — prevents emoji spam floods
+    keyPrefix: 'socket:reaction:add'
+  },
+  REACTION_REMOVE: {
+    maxRequests: 30,
+    windowMs: 60000, // 1 minute — mirrors add limit
+    keyPrefix: 'socket:reaction:remove'
   }
 };
 

@@ -1089,6 +1089,19 @@ final class ConversationSocketHandlerTests: XCTestCase {
         XCTAssertTrue(delegate.syncMissedCalled)
     }
 
+    func test_reconnect_clearsStaleTypingIndicators() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        delegate.typingUsernames = ["Alice", "Bob"]
+
+        socket.simulateReconnect()
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertTrue(delegate.typingUsernames.isEmpty,
+            "Reconnect must clear stale typing indicators (remote peers will re-emit if still typing)")
+    }
+
     func test_willEnterForeground_triggersSyncMissedMessages() async throws {
         let (sut, delegate, _) = makeSUT()
         _ = sut

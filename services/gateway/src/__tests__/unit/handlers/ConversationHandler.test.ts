@@ -399,6 +399,15 @@ describe('ConversationHandler', () => {
       expect(socket.leave).not.toHaveBeenCalled();
     });
 
+    it('emits error event when an exception occurs during leave', async () => {
+      const socket = makeSocket();
+      socket.leave = jest.fn().mockRejectedValue(new Error('socket error'));
+      const deps = makeDeps();
+      const handler = new ConversationHandler(deps);
+      await handler.handleConversationLeave(socket as any, LEAVE_PAYLOAD);
+      expect(socket.emit).toHaveBeenCalledWith('error', expect.objectContaining({ message: 'Failed to leave conversation' }));
+    });
+
   });
 
   // ─── sendConversationStatsToSocket ────────────────────────────────────────

@@ -228,6 +228,41 @@ class StorySlideDeckTest {
         assertThat(after.selectedSlide).isEqualTo(StorySlide(id = "a", text = "new", mediaIds = listOf("m1")))
     }
 
+    // --- updateSelectedTransform ---
+
+    @Test
+    fun `updateSelectedTransform rewrites only the selected slide's canvas transform`() {
+        val deck = deckOf("a", "b", "c", selected = "b")
+        val zoomed = StoryCanvasTransform(scale = 2f, offsetX = 50f, offsetY = -30f)
+        val after = deck.updateSelectedTransform(zoomed)
+        assertThat(after.slides.map { it.transform })
+            .containsExactly(StoryCanvasTransform.IDENTITY, zoomed, StoryCanvasTransform.IDENTITY)
+            .inOrder()
+        assertThat(after.selectedId).isEqualTo("b")
+    }
+
+    @Test
+    fun `updateSelectedTransform leaves the selected slide's text and media untouched`() {
+        val deck = StorySlideDeck(
+            slides = listOf(StorySlide(id = "a", text = "cap", mediaIds = listOf("m1"))),
+            selectedId = "a",
+        )
+        val after = deck.updateSelectedTransform(StoryCanvasTransform(scale = 3f))
+        assertThat(after.selectedSlide).isEqualTo(
+            StorySlide(id = "a", text = "cap", mediaIds = listOf("m1"), transform = StoryCanvasTransform(scale = 3f)),
+        )
+    }
+
+    @Test
+    fun `duplicate carries the source slide's canvas transform into the clone`() {
+        val deck = StorySlideDeck(
+            slides = listOf(StorySlide(id = "a", transform = StoryCanvasTransform(scale = 2.5f, offsetX = 12f))),
+            selectedId = "a",
+        )
+        val after = deck.duplicate(sourceId = "a", newId = "a2")
+        assertThat(after.slides[1].transform).isEqualTo(StoryCanvasTransform(scale = 2.5f, offsetX = 12f))
+    }
+
     // --- hasText / publishableSlides ---
 
     @Test
