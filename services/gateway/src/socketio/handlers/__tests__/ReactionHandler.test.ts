@@ -18,6 +18,7 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
   SERVER_EVENTS: {
     REACTION_ADDED: 'reaction:added',
     REACTION_REMOVED: 'reaction:removed',
+    ERROR: 'error',
   },
   ROOMS: {
     conversation: (id: string) => `conversation:${id}`,
@@ -34,6 +35,19 @@ jest.mock('../../../middleware/validation', () => ({
 
 jest.mock('../../../services/notifications/reactionNotify', () => ({
   notifyReactionAdded: jest.fn().mockResolvedValue(undefined),
+}));
+
+const mockCheckLimit = jest.fn<any>().mockResolvedValue(true);
+const mockGetRateLimitInfo = jest.fn<any>().mockReturnValue({ resetIn: 30000 });
+jest.mock('../../../utils/socket-rate-limiter', () => ({
+  getSocketRateLimiter: () => ({
+    checkLimit: (...args: unknown[]) => mockCheckLimit(...args),
+    getRateLimitInfo: (...args: unknown[]) => mockGetRateLimitInfo(...args),
+  }),
+  SOCKET_RATE_LIMITS: {
+    REACTION_ADD: { maxRequests: 30, windowMs: 60000, keyPrefix: 'socket:reaction:add' },
+    REACTION_REMOVE: { maxRequests: 30, windowMs: 60000, keyPrefix: 'socket:reaction:remove' },
+  },
 }));
 
 const { validateSocketEvent } = require('../../../middleware/validation');
@@ -120,6 +134,8 @@ function buildHandler(overrides: Record<string, any> = {}) {
 describe('ReactionHandler', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCheckLimit.mockResolvedValue(true);
+    mockGetRateLimitInfo.mockReturnValue({ resetIn: 30000 });
     (validateSocketEvent as jest.Mock<any>).mockImplementation((_schema: any, data: any) => ({
       success: true,
       data,
@@ -380,6 +396,77 @@ describe('ReactionHandler', () => {
       await expect(handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, callback)).resolves.toBeUndefined();
       // Callback still reported success — notification failure is fire-and-forget
       expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    });
+  });
+
+  // ── Rate limiting ────────────────────────────────────────────────────────
+
+  describe('rate limiting', () => {
+    it('rejects handleReactionAdd when rate limit exceeded', async () => {
+      mockCheckLimit.mockResolvedValueOnce(false);
+      mockGetRateLimitInfo.mockReturnValueOnce({ resetIn: 15000 });
+
+      const { handler } = buildHandler();
+      const socket = makeSocket();
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionAdd(socket, { messageId: MESSAGE_ID, emoji: '👍' }, callback);
+
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Rate limit exceeded' }));
+      expect((socket.emit as jest.Mock<any>)).toHaveBeenCalledWith(
+        'error',
+        expect.objectContaining({ message: expect.stringContaining('15') })
+      );
+    });
+
+    it('rejects handleReactionRemove when rate limit exceeded', async () => {
+      mockCheckLimit.mockResolvedValueOnce(false);
+      mockGetRateLimitInfo.mockReturnValueOnce({ resetIn: 20000 });
+
+      const { handler } = buildHandler();
+      const socket = makeSocket();
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionRemove(socket, { messageId: MESSAGE_ID, emoji: '👍' }, callback);
+
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Rate limit exceeded' }));
+      expect((socket.emit as jest.Mock<any>)).toHaveBeenCalledWith(
+        'error',
+        expect.objectContaining({ message: expect.stringContaining('20') })
+      );
+    });
+
+    it('allows handleReactionAdd when rate limit not exceeded', async () => {
+      mockCheckLimit.mockResolvedValue(true);
+
+      const { handler } = buildHandler();
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, callback);
+
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    });
+
+    it('does not call reactionService.addReaction when rate limited', async () => {
+      mockCheckLimit.mockResolvedValueOnce(false);
+      mockGetRateLimitInfo.mockReturnValueOnce({ resetIn: 5000 });
+
+      const { handler, reactionService } = buildHandler();
+
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' });
+
+      expect(reactionService.addReaction).not.toHaveBeenCalled();
+    });
+
+    it('does not call reactionService.removeReaction when rate limited', async () => {
+      mockCheckLimit.mockResolvedValueOnce(false);
+      mockGetRateLimitInfo.mockReturnValueOnce({ resetIn: 5000 });
+
+      const { handler, reactionService } = buildHandler();
+
+      await handler.handleReactionRemove(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' });
+
+      expect(reactionService.removeReaction).not.toHaveBeenCalled();
     });
   });
 });
