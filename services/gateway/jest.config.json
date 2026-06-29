@@ -36,6 +36,7 @@
     "src/socketio/**/*.ts",
     "src/utils/**/*.ts",
     "src/jobs/**/*.ts",
+    "src/validation/**/*.ts",
     "!src/**/*.d.ts",
     "!src/**/__tests__/**",
     "!src/main.ts",

@@ -522,6 +522,16 @@ final class CallManagerAudioSessionTests: XCTestCase {
             "byte counters must accumulate through ICE restart for the call summary."
         )
     }
+
+    func test_didCollectStats_propagatesJitterMsToQualityReport() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("jitterMs: stats.jitterMs"),
+            "webRTCService(_:didCollectStats:) must pass stats.jitterMs to emitCallQualityReport " +
+            "so the gateway call:quality-report event carries audio jitter data for diagnostics " +
+            "and the call-summary can surface Opus PLC degradation events."
+        )
+    }
 }
 
 // MARK: - P2PWebRTCClient — Perfect Negotiation Source Guards (W3C §3.4)

@@ -269,6 +269,12 @@ export class ReactionHandler {
       const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
 
+      const syncAllowed = await this.rateLimiter.checkLimit(userId, SOCKET_RATE_LIMITS.REACTION_ADD);
+      if (!syncAllowed) {
+        if (callback) callback({ success: false, error: 'Rate limit exceeded' });
+        return;
+      }
+
       const participantId = await this._resolveParticipantId(user, userId, isAnonymous, messageId);
       if (!participantId) {
         const errorResponse: SocketIOResponse<unknown> = { success: false, error: 'Could not resolve participant' };

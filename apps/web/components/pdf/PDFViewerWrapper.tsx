@@ -41,7 +41,7 @@ export const PDFViewerWrapper: React.FC<PDFViewerWrapperProps> = ({
   };
 
   const handleOpenInNewTab = () => {
-    window.open(attachmentFileUrl, '_blank');
+    window.open(attachmentFileUrl, '_blank', 'noopener,noreferrer');
   };
 
   // Truncate filename for mobile

@@ -23,6 +23,7 @@ import type {
 } from '@meeshy/shared/types/socketio-events';
 import { getConnectedUser, type SocketUser } from '../utils/socket-helpers';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 
 const logger = enhancedLogger.child({ module: 'LocationHandler' });
 
@@ -40,6 +41,7 @@ export class LocationHandler {
   private connectedUsers: Map<string, SocketUser>;
   private socketToUser: Map<string, string>;
   private normalizeConversationId: (conversationId: string) => Promise<string>;
+  private rateLimiter = getSocketRateLimiter();
 
   constructor(deps: LocationHandlerDependencies) {
     this.io = deps.io;
@@ -58,6 +60,12 @@ export class LocationHandler {
       const context = this._getUserContext(socket);
       if (!context) {
         this._sendError(callback, 'User not authenticated');
+        return;
+      }
+
+      const allowed = await this.rateLimiter.checkLimit(context.userId, SOCKET_RATE_LIMITS.LOCATION_SHARE);
+      if (!allowed) {
+        this._sendError(callback, 'Rate limit exceeded');
         return;
       }
 
@@ -104,6 +112,12 @@ export class LocationHandler {
       const context = this._getUserContext(socket);
       if (!context) {
         this._sendError(callback, 'User not authenticated');
+        return;
+      }
+
+      const allowed = await this.rateLimiter.checkLimit(context.userId, SOCKET_RATE_LIMITS.LOCATION_LIVE_START);
+      if (!allowed) {
+        this._sendError(callback, 'Rate limit exceeded');
         return;
       }
 
@@ -154,6 +168,9 @@ export class LocationHandler {
       const context = this._getUserContext(socket);
       if (!context) return;
 
+      const allowed = await this.rateLimiter.checkLimit(context.userId, SOCKET_RATE_LIMITS.LOCATION_LIVE_UPDATE);
+      if (!allowed) return;
+
       if (!this._validateCoordinates(data.latitude, data.longitude)) return;
 
       const participantId = await this._resolveParticipantId(context, data.conversationId);
@@ -186,6 +203,9 @@ export class LocationHandler {
     try {
       const context = this._getUserContext(socket);
       if (!context) return;
+
+      const allowed = await this.rateLimiter.checkLimit(context.userId, SOCKET_RATE_LIMITS.LOCATION_LIVE_STOP);
+      if (!allowed) return;
 
       const participantId = await this._resolveParticipantId(context, data.conversationId);
       if (!participantId) return;

@@ -511,6 +511,12 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
     /// pre-existing CONVERSATION_UPDATED payloads (rename, avatar change,
     /// etc.) that don't advance lastMessageAt.
     public let lastMessageAt: Date?
+    /// Populated by the message-driven `CONVERSATION_UPDATED` path
+    /// (`MessageHandler.ts`) so the client can update the conversation row's
+    /// preview without a separate fetch.
+    public let lastMessageId: String?
+    public let lastMessagePreview: String?
+    public let senderId: String?
     /// Optional because the gateway's message-driven CONVERSATION_UPDATED
     /// payload (handlers/MessageHandler.ts on every new message) only
     /// carries `{ conversationId, lastMessageAt, lastMessageId,
@@ -525,7 +531,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case conversationId, title, description, avatar, banner
         case defaultWriteRole, isAnnouncementChannel, slowModeSeconds, autoTranslateEnabled
-        case lastMessageAt, updatedBy, updatedAt
+        case lastMessageAt, lastMessageId, lastMessagePreview, senderId, updatedBy, updatedAt
     }
 
     public init(from decoder: Decoder) throws {
@@ -540,8 +546,45 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         slowModeSeconds = try container.decodeIfPresent(Int.self, forKey: .slowModeSeconds)
         autoTranslateEnabled = try container.decodeIfPresent(Bool.self, forKey: .autoTranslateEnabled)
         lastMessageAt = try container.decodeIfPresent(Date.self, forKey: .lastMessageAt)
+        lastMessageId = try container.decodeIfPresent(String.self, forKey: .lastMessageId)
+        lastMessagePreview = try container.decodeIfPresent(String.self, forKey: .lastMessagePreview)
+        senderId = try container.decodeIfPresent(String.self, forKey: .senderId)
         updatedBy = try container.decodeIfPresent(SocketEventUser.self, forKey: .updatedBy)
         updatedAt = try container.decode(String.self, forKey: .updatedAt)
+    }
+
+    public init(
+        conversationId: String,
+        title: String? = nil,
+        description: String? = nil,
+        avatar: String? = nil,
+        banner: String? = nil,
+        defaultWriteRole: String? = nil,
+        isAnnouncementChannel: Bool? = nil,
+        slowModeSeconds: Int? = nil,
+        autoTranslateEnabled: Bool? = nil,
+        lastMessageAt: Date? = nil,
+        lastMessageId: String? = nil,
+        lastMessagePreview: String? = nil,
+        senderId: String? = nil,
+        updatedBy: SocketEventUser? = nil,
+        updatedAt: String
+    ) {
+        self.conversationId = conversationId
+        self.title = title
+        self.description = description
+        self.avatar = avatar
+        self.banner = banner
+        self.defaultWriteRole = defaultWriteRole
+        self.isAnnouncementChannel = isAnnouncementChannel
+        self.slowModeSeconds = slowModeSeconds
+        self.autoTranslateEnabled = autoTranslateEnabled
+        self.lastMessageAt = lastMessageAt
+        self.lastMessageId = lastMessageId
+        self.lastMessagePreview = lastMessagePreview
+        self.senderId = senderId
+        self.updatedBy = updatedBy
+        self.updatedAt = updatedAt
     }
 }
 
@@ -741,6 +784,14 @@ public struct CallScreenCaptureAlertData: Decodable, Sendable {
     public let callId: String
     public let participantId: String
     public let isCapturing: Bool
+}
+
+/// Received when the gateway force-removes the current user from an active call.
+/// The gateway emits `call:force-leave` to the user's personal room so every
+/// device they have connected receives the event and tears down the call.
+public struct CallForcedLeaveData: Decodable, Sendable {
+    public let callId: String
+    public let reason: String?
 }
 
 // MARK: - Reaction Sync Event Data
@@ -949,6 +1000,9 @@ public enum ConnectionState: Equatable, Sendable {
 public protocol MessageSocketProviding: Sendable {
     func emitCallJoinWithAck(callId: String) async -> Bool
     var callScreenCaptureAlert: PassthroughSubject<CallScreenCaptureAlertData, Never> { get }
+    /// Fired when the gateway force-removes the current user from the call.
+    /// The client must tear down the call immediately (no user confirmation needed).
+    var callForcedLeave: PassthroughSubject<CallForcedLeaveData, Never> { get }
     var messageReceived: PassthroughSubject<APIMessage, Never> { get }
     var messageEdited: PassthroughSubject<APIMessage, Never> { get }
     var messageDeleted: PassthroughSubject<MessageDeletedEvent, Never> { get }
@@ -1097,6 +1151,16 @@ public extension MessageSocketProviding {
     ) {
         emitCallQualityReport(callId: callId, level: level, rtt: rtt, packetLoss: packetLoss,
                               bytesSent: bytesSent, bytesReceived: bytesReceived)
+    }
+
+    /// Shim that adds audio jitter passthrough; mocks can keep the old signatures.
+    func emitCallQualityReport(
+        callId: String, level: String, rtt: Double, packetLoss: Double,
+        bytesSent: Int, bytesReceived: Int, availableOutgoingBitrateBps: Int, jitterMs: Double
+    ) {
+        emitCallQualityReport(callId: callId, level: level, rtt: rtt, packetLoss: packetLoss,
+                              bytesSent: bytesSent, bytesReceived: bytesReceived,
+                              availableOutgoingBitrateBps: availableOutgoingBitrateBps)
     }
 
     func emitCallReconnecting(callId: String, participantId: String, attempt: Int) {}
@@ -1248,6 +1312,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let callIceServersRefreshed = PassthroughSubject<CallIceServersRefreshedData, Never>()
     public let callQualityAlert = PassthroughSubject<CallQualityAlertData, Never>()
     public let callScreenCaptureAlert = PassthroughSubject<CallScreenCaptureAlertData, Never>()
+    public let callForcedLeave = PassthroughSubject<CallForcedLeaveData, Never>()
 
     // Combine publishers — reactions sync, system, attachments, mentions
     public let reactionSynced = PassthroughSubject<ReactionSyncEvent, Never>()
@@ -2199,7 +2264,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// are cumulative WebRTC counters; `level` is excellent|good|fair|poor.
     public func emitCallQualityReport(
         callId: String, level: String, rtt: Double, packetLoss: Double,
-        bytesSent: Int, bytesReceived: Int, availableOutgoingBitrateBps: Int = 0
+        bytesSent: Int, bytesReceived: Int, availableOutgoingBitrateBps: Int = 0,
+        jitterMs: Double = 0
     ) {
         var stats: [String: Any] = [
             "level": level,
@@ -2210,6 +2276,9 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         ]
         if availableOutgoingBitrateBps > 0 {
             stats["availableOutgoingBitrateBps"] = availableOutgoingBitrateBps
+        }
+        if jitterMs > 0 {
+            stats["jitterMs"] = jitterMs
         }
         socket?.emit("call:quality-report", ["callId": callId, "stats": stats])
     }
@@ -2912,6 +2981,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(CallScreenCaptureAlertData.self, from: data) { [weak self] event in
                 self?.callScreenCaptureAlert.send(event)
+            }
+        }
+
+        socket.on("call:force-leave") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(CallForcedLeaveData.self, from: data) { [weak self] event in
+                self?.callForcedLeave.send(event)
             }
         }
 

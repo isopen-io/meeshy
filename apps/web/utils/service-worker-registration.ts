@@ -3,6 +3,8 @@
  * Gère l'enregistrement et le cycle de vie des Service Workers
  */
 
+import { sanitizeUrl } from './xss-protection';
+
 interface ServiceWorkerRegistrationOptions {
   /**
    * Activer le debug logging
@@ -175,10 +177,10 @@ class ServiceWorkerRegistrationManager {
 
     switch (data.type) {
       case 'NOTIFICATION_CLICKED':
-        // Gérer le clic sur notification
         this.log('Notification clicked, navigating to:', data.url);
         if (data.url) {
-          window.location.href = data.url;
+          const safeUrl = sanitizeUrl(String(data.url), ['https:', 'http:']);
+          if (safeUrl) window.location.href = safeUrl;
         }
         break;
 

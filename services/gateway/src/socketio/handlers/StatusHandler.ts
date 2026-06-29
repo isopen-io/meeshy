@@ -16,6 +16,7 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketTypingSchema } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 
 const logger = enhancedLogger.child({ module: 'StatusHandler' });
 
@@ -46,6 +47,7 @@ export class StatusHandler {
   private static readonly TYPING_THROTTLE_TTL_MS = 30_000;
   private static readonly TYPING_THROTTLE_CLEANUP_SIZE = 1_000;
   private typingThrottleCleanupTimer: ReturnType<typeof setInterval> | null = null;
+  private rateLimiter = getSocketRateLimiter();
 
   constructor(deps: StatusHandlerDependencies) {
     this.prisma = deps.prisma;
@@ -178,6 +180,9 @@ export class StatusHandler {
       logger.warn('typing:start — unauthenticated socket', { socketId: socket.id });
       return;
     }
+
+    const typingAllowed = await this.rateLimiter.checkLimit(userIdOrToken, SOCKET_RATE_LIMITS.TYPING_INDICATOR);
+    if (!typingAllowed) return;
 
     try {
       const normalizedId = await normalizeConversationId(

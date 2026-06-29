@@ -131,7 +131,7 @@ class ConversationListViewModel: ObservableObject {
             for (i, c) in conversations.enumerated() { index[c.id] = i }
             _convIdIndex = index
         }
-        return _convIdIndex![id]
+        return _convIdIndex?[id]
     }
 
     // MARK: - List Mutators (centralised write surface)
@@ -740,6 +740,11 @@ class ConversationListViewModel: ObservableObject {
                 if let autoTranslate = event.autoTranslateEnabled {
                     self.conversations[index].autoTranslateEnabled = autoTranslate
                 }
+                // Message-driven bump also carries the new preview text so
+                // the row shows the latest message without waiting for the
+                // next full sync (lastMessageTranslations arrive separately).
+                if let msgId = event.lastMessageId { self.conversations[index].lastMessageId = msgId }
+                if let preview = event.lastMessagePreview { self.conversations[index].lastMessagePreview = preview }
 
                 // Bump the row to the top when the gateway tells us a new
                 // message advanced lastMessageAt. We compare strictly

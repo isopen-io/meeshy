@@ -3,7 +3,7 @@
  */
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
+import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
 import { AudioTranslateService, AudioTranslateError } from '../../services/AudioTranslateService';
 import { logger } from '../../utils/logger';
 import {
@@ -536,11 +536,7 @@ export function registerAnalysisRoutes(
       return reply.status(statusCode).send({ success: true, data: result });
     } catch (error) {
       logger.error('[VoiceRoutes] Get health error:', error);
-      return reply.status(503).send({
-        success: false,
-        error: 'HEALTH_CHECK_FAILED',
-        message: error instanceof Error ? error.message : 'Unknown error'
-      });
+      return sendError(reply, 503, 'HEALTH_CHECK_FAILED', { message: error instanceof Error ? error.message : 'Unknown error' });
     }
   });
 
