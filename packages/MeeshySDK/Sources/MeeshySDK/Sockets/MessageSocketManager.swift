@@ -511,6 +511,12 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
     /// pre-existing CONVERSATION_UPDATED payloads (rename, avatar change,
     /// etc.) that don't advance lastMessageAt.
     public let lastMessageAt: Date?
+    /// Populated by the message-driven `CONVERSATION_UPDATED` path
+    /// (`MessageHandler.ts`) so the client can update the conversation row's
+    /// preview without a separate fetch.
+    public let lastMessageId: String?
+    public let lastMessagePreview: String?
+    public let senderId: String?
     /// Optional because the gateway's message-driven CONVERSATION_UPDATED
     /// payload (handlers/MessageHandler.ts on every new message) only
     /// carries `{ conversationId, lastMessageAt, lastMessageId,
@@ -525,7 +531,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case conversationId, title, description, avatar, banner
         case defaultWriteRole, isAnnouncementChannel, slowModeSeconds, autoTranslateEnabled
-        case lastMessageAt, updatedBy, updatedAt
+        case lastMessageAt, lastMessageId, lastMessagePreview, senderId, updatedBy, updatedAt
     }
 
     public init(from decoder: Decoder) throws {
@@ -540,8 +546,45 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         slowModeSeconds = try container.decodeIfPresent(Int.self, forKey: .slowModeSeconds)
         autoTranslateEnabled = try container.decodeIfPresent(Bool.self, forKey: .autoTranslateEnabled)
         lastMessageAt = try container.decodeIfPresent(Date.self, forKey: .lastMessageAt)
+        lastMessageId = try container.decodeIfPresent(String.self, forKey: .lastMessageId)
+        lastMessagePreview = try container.decodeIfPresent(String.self, forKey: .lastMessagePreview)
+        senderId = try container.decodeIfPresent(String.self, forKey: .senderId)
         updatedBy = try container.decodeIfPresent(SocketEventUser.self, forKey: .updatedBy)
         updatedAt = try container.decode(String.self, forKey: .updatedAt)
+    }
+
+    public init(
+        conversationId: String,
+        title: String? = nil,
+        description: String? = nil,
+        avatar: String? = nil,
+        banner: String? = nil,
+        defaultWriteRole: String? = nil,
+        isAnnouncementChannel: Bool? = nil,
+        slowModeSeconds: Int? = nil,
+        autoTranslateEnabled: Bool? = nil,
+        lastMessageAt: Date? = nil,
+        lastMessageId: String? = nil,
+        lastMessagePreview: String? = nil,
+        senderId: String? = nil,
+        updatedBy: SocketEventUser? = nil,
+        updatedAt: String
+    ) {
+        self.conversationId = conversationId
+        self.title = title
+        self.description = description
+        self.avatar = avatar
+        self.banner = banner
+        self.defaultWriteRole = defaultWriteRole
+        self.isAnnouncementChannel = isAnnouncementChannel
+        self.slowModeSeconds = slowModeSeconds
+        self.autoTranslateEnabled = autoTranslateEnabled
+        self.lastMessageAt = lastMessageAt
+        self.lastMessageId = lastMessageId
+        self.lastMessagePreview = lastMessagePreview
+        self.senderId = senderId
+        self.updatedBy = updatedBy
+        self.updatedAt = updatedAt
     }
 }
 

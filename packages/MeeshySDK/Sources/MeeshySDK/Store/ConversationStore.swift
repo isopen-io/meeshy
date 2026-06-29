@@ -410,6 +410,37 @@ public actor ConversationStore {
         publishList()
     }
 
+    /// Apply a `conversation:updated` socket event. Updates conversation
+    /// metadata and/or the last-message fields used for bump-to-top list
+    /// reordering. Only non-nil fields are applied (nil = "not provided by
+    /// this payload variant"). `lastMessageAt` is monotone: an incoming
+    /// value older than the current one is silently skipped so a stale
+    /// broadcast can't push a conversation down the list, while any other
+    /// fields in the same event (e.g. `title`) are still applied. No-op
+    /// for an unknown conversation (the next list refresh will catch up).
+    public func applyConversationUpdated(_ event: ConversationUpdatedStoreEvent) {
+        guard var conv = conversations[event.conversationId] else { return }
+
+        var changed = false
+
+        if let incoming = event.lastMessageAt, incoming > conv.lastMessageAt {
+            conv.lastMessageAt = incoming
+            changed = true
+        }
+        if let v = event.lastMessageId { conv.lastMessageId = v; changed = true }
+        if let v = event.lastMessagePreview { conv.lastMessagePreview = v; changed = true }
+        if let v = event.title { conv.title = v; changed = true }
+        if let v = event.avatar { conv.avatar = v; changed = true }
+        if let v = event.description { conv.description = v; changed = true }
+        if let v = event.banner { conv.banner = v; changed = true }
+        if let v = event.isAnnouncementChannel { conv.isAnnouncementChannel = v; changed = true }
+        if let v = event.defaultWriteRole { conv.defaultWriteRole = v; changed = true }
+        if let v = event.slowModeSeconds { conv.slowModeSeconds = v; changed = true }
+        if let v = event.autoTranslateEnabled { conv.autoTranslateEnabled = v; changed = true }
+
+        if changed { commit(conv) }
+    }
+
     // MARK: - Composite mutations
 
     /// Create a new category (server round-trip) then assign `convId` to it.
@@ -708,6 +739,55 @@ public struct ConversationDeletedEvent: Sendable, Hashable {
 
     public init(conversationId: String) {
         self.conversationId = conversationId
+    }
+}
+
+/// Store-owned input for `applyConversationUpdated`. Carries the fields
+/// the store cares about from the `conversation:updated` socket event.
+/// Both the message-driven path (bump-to-top: `lastMessageAt`,
+/// `lastMessageId`, `lastMessagePreview`) and the metadata-driven path
+/// (rename, avatar, etc.) share this type — unset fields are `nil` and
+/// skipped during application.
+public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
+    public let conversationId: String
+    public let lastMessageAt: Date?
+    public let lastMessageId: String?
+    public let lastMessagePreview: String?
+    public let title: String?
+    public let avatar: String?
+    public let description: String?
+    public let banner: String?
+    public let isAnnouncementChannel: Bool?
+    public let defaultWriteRole: String?
+    public let slowModeSeconds: Int?
+    public let autoTranslateEnabled: Bool?
+
+    public init(
+        conversationId: String,
+        lastMessageAt: Date? = nil,
+        lastMessageId: String? = nil,
+        lastMessagePreview: String? = nil,
+        title: String? = nil,
+        avatar: String? = nil,
+        description: String? = nil,
+        banner: String? = nil,
+        isAnnouncementChannel: Bool? = nil,
+        defaultWriteRole: String? = nil,
+        slowModeSeconds: Int? = nil,
+        autoTranslateEnabled: Bool? = nil
+    ) {
+        self.conversationId = conversationId
+        self.lastMessageAt = lastMessageAt
+        self.lastMessageId = lastMessageId
+        self.lastMessagePreview = lastMessagePreview
+        self.title = title
+        self.avatar = avatar
+        self.description = description
+        self.banner = banner
+        self.isAnnouncementChannel = isAnnouncementChannel
+        self.defaultWriteRole = defaultWriteRole
+        self.slowModeSeconds = slowModeSeconds
+        self.autoTranslateEnabled = autoTranslateEnabled
     }
 }
 

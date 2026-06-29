@@ -10,7 +10,7 @@ import { AttachmentTranslateService } from '../services/AttachmentTranslateServi
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest} from '../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
-import { sendSuccess } from '../utils/response.js';
+import { sendSuccess, sendError, sendUnauthorized, sendNotFound, sendInternalError } from '../utils/response.js';
 
 const logger = enhancedLogger.child({ module: 'TranslationJobsRoutes' });
 
@@ -213,20 +213,12 @@ export async function translationJobsRoutes(fastify: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         if (!translateService) {
-          return reply.status(503).send({
-            success: false,
-            error: 'Translation service not available',
-            code: 'SERVICE_UNAVAILABLE'
-          });
+          return sendError(reply, 503, 'Translation service not available', { code: 'SERVICE_UNAVAILABLE' });
         }
 
         const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext?.isAuthenticated) {
-          return reply.status(401).send({
-            success: false,
-            error: 'Authentication required',
-            code: 'UNAUTHORIZED'
-          });
+          return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
         }
 
         const { jobId } = request.params as { jobId: string };
@@ -235,21 +227,13 @@ export async function translationJobsRoutes(fastify: FastifyInstance) {
         const result = await translateService.getTranslationStatus(userId, jobId);
 
         if (!result.success) {
-          return reply.status(404).send({
-            success: false,
-            error: result.error,
-            code: result.errorCode
-          });
+          return sendNotFound(reply, result.error ?? 'Job not found', { code: result.errorCode });
         }
 
         return sendSuccess(reply, result.data);
       } catch (error: any) {
         logger.error('Error getting translation status', error as Error);
-        return reply.status(500).send({
-          success: false,
-          error: error.message || 'Error getting translation status',
-          code: 'STATUS_FAILED'
-        });
+        return sendInternalError(reply, error.message || 'Error getting translation status', { code: 'STATUS_FAILED' });
       }
     }
   );
@@ -298,20 +282,12 @@ export async function translationJobsRoutes(fastify: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         if (!translateService) {
-          return reply.status(503).send({
-            success: false,
-            error: 'Translation service not available',
-            code: 'SERVICE_UNAVAILABLE'
-          });
+          return sendError(reply, 503, 'Translation service not available', { code: 'SERVICE_UNAVAILABLE' });
         }
 
         const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext?.isAuthenticated) {
-          return reply.status(401).send({
-            success: false,
-            error: 'Authentication required',
-            code: 'UNAUTHORIZED'
-          });
+          return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
         }
 
         const { jobId } = request.params as { jobId: string };
@@ -320,21 +296,13 @@ export async function translationJobsRoutes(fastify: FastifyInstance) {
         const result = await translateService.cancelTranslation(userId, jobId);
 
         if (!result.success) {
-          return reply.status(400).send({
-            success: false,
-            error: result.error,
-            code: result.errorCode
-          });
+          return sendError(reply, 400, result.error ?? 'Cannot cancel job', { code: result.errorCode });
         }
 
         return sendSuccess(reply, result.data);
       } catch (error: any) {
         logger.error('Error cancelling translation', error as Error);
-        return reply.status(500).send({
-          success: false,
-          error: error.message || 'Error cancelling translation',
-          code: 'CANCEL_FAILED'
-        });
+        return sendInternalError(reply, error.message || 'Error cancelling translation', { code: 'CANCEL_FAILED' });
       }
     }
   );

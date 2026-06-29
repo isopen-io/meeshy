@@ -1660,7 +1660,7 @@ export function registerMessagesRoutes(
         messageId: result.data?.id
       });
 
-      return reply.send(result);
+      return sendSuccess(reply, result.data);
 
     } catch (error) {
       logger.error('Error in REST send message:', error);
