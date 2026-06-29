@@ -25,6 +25,12 @@ jest.mock('../../../middleware/auth', () => ({
   UnifiedAuthRequest: {},
 }));
 
+// withMutationLog: by default just calls op(); can be overridden per-test
+const mockWithMutationLog = jest.fn(({ op }: { op: () => Promise<unknown> }) => op());
+jest.mock('../../../utils/withMutationLog', () => ({
+  withMutationLog: (args: Record<string, unknown>) => mockWithMutationLog(args),
+}));
+
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
   friendRequestSchema: {
     type: 'object',
@@ -124,6 +130,7 @@ function makePrisma(opts: PrismaOpts = {}) {
     },
     friendRequest: {
       findFirst: mockFn(opt(opts.friendRequestFindFirst, null)),
+      findUnique: mockFn(opt(opts.friendRequestCreate, DB_FRIEND_REQUEST)), // used by onDuplicate
       create: mockFn(opt(opts.friendRequestCreate, DB_FRIEND_REQUEST)),
       findMany: mockFn(opt(opts.friendRequestFindMany, [DB_FRIEND_REQUEST])),
       count: mockFn(opt(opts.friendRequestCount, 1)),
@@ -141,14 +148,44 @@ function makePrisma(opts: PrismaOpts = {}) {
   };
 }
 
+// ─── Notification / social-events factories ───────────────────────────────────
+
+function makeNotifService() {
+  return {
+    createFriendRequestNotification: jest.fn().mockResolvedValue(undefined),
+    createFriendAcceptedNotification: jest.fn().mockResolvedValue(undefined),
+    createSystemNotification: jest.fn().mockResolvedValue(undefined),
+  };
+}
+
+function makeSocialEvents() {
+  return { invalidateFriendsCache: jest.fn() };
+}
+
 // ─── App builder ──────────────────────────────────────────────────────────────
 
-async function buildApp(prismaOpts: PrismaOpts = {}): Promise<FastifyInstance> {
+type BuildOpts = {
+  prismaOpts?: PrismaOpts;
+  notifService?: ReturnType<typeof makeNotifService> | null;
+  socialEvents?: ReturnType<typeof makeSocialEvents> | null;
+};
+
+async function buildApp(
+  prismaOptsOrFullOpts: PrismaOpts | BuildOpts = {},
+): Promise<FastifyInstance> {
+  // Accept either legacy PrismaOpts or new BuildOpts object
+  const isFullOpts = 'prismaOpts' in prismaOptsOrFullOpts || 'notifService' in prismaOptsOrFullOpts || 'socialEvents' in prismaOptsOrFullOpts;
+  const fullOpts: BuildOpts = isFullOpts ? (prismaOptsOrFullOpts as BuildOpts) : { prismaOpts: prismaOptsOrFullOpts as PrismaOpts };
+
+  const prismaOpts = fullOpts.prismaOpts ?? {};
+  const notifService = fullOpts.notifService !== undefined ? fullOpts.notifService : null;
+  const socialEventsDecor = fullOpts.socialEvents !== undefined ? fullOpts.socialEvents : null;
+
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
 
   app.decorate('prisma', makePrisma(prismaOpts) as unknown);
-  app.decorate('notificationService', null as unknown);
-  app.decorate('socialEvents', null as unknown);
+  app.decorate('notificationService', notifService);
+  app.decorate('socialEvents', socialEventsDecor);
   app.decorate('authenticate', async (req: FastifyRequest, reply: FastifyReply) => {
     const token = req.headers['authorization'];
     if (!token) {
@@ -166,8 +203,14 @@ async function buildApp(prismaOpts: PrismaOpts = {}): Promise<FastifyInstance> {
   const { friendRequestRoutes } = await import('../../../routes/friends');
   await app.register(friendRequestRoutes, { prefix: '' });
   await app.ready();
+
   return app;
 }
+
+// Reset withMutationLog to its default (just calls op()) before each test
+beforeEach(() => {
+  mockWithMutationLog.mockImplementation(({ op }: { op: () => Promise<unknown> }) => op());
+});
 
 // ─── POST /friend-requests ────────────────────────────────────────────────────
 
@@ -512,5 +555,302 @@ describe('DELETE /friend-requests/:id', () => {
     });
     expect(res.statusCode).toBe(500);
     await appErr.close();
+  });
+});
+
+// ─── POST — notification service and ZodError paths ──────────────────────────
+
+describe('POST /friend-requests — notification service', () => {
+  it('calls notificationService.createFriendRequestNotification when service is present', async () => {
+    const notifService = makeNotifService();
+    const app = await buildApp({ prismaOpts: { friendRequestFindFirst: null }, notifService });
+    await app.inject({
+      method: 'POST',
+      url: '/friend-requests',
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      body: JSON.stringify({ receiverId: RECEIVER_ID }),
+    });
+    expect(notifService.createFriendRequestNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ recipientUserId: RECEIVER_ID, requesterId: USER_ID, friendRequestId: FR_ID })
+    );
+    await app.close();
+  });
+
+  it('uses username as senderName when displayName is absent', async () => {
+    const notifService = makeNotifService();
+    const requestNoDisplay = { ...DB_FRIEND_REQUEST, sender: { ...DB_USER, displayName: null, username: 'alice_user' } };
+    const app = await buildApp({
+      prismaOpts: { friendRequestFindFirst: null, friendRequestCreate: requestNoDisplay as typeof DB_FRIEND_REQUEST },
+      notifService,
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/friend-requests',
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      body: JSON.stringify({ receiverId: RECEIVER_ID }),
+    });
+    expect(res.statusCode).toBe(201);
+    expect(notifService.createFriendRequestNotification).toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('uses firstName+lastName as senderName when displayName and username are absent', async () => {
+    const notifService = makeNotifService();
+    const requestNoNames = { ...DB_FRIEND_REQUEST, sender: { ...DB_USER, displayName: null, username: null, firstName: 'John', lastName: 'Doe' } };
+    const app = await buildApp({
+      prismaOpts: { friendRequestFindFirst: null, friendRequestCreate: requestNoNames as typeof DB_FRIEND_REQUEST },
+      notifService,
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/friend-requests',
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      body: JSON.stringify({ receiverId: RECEIVER_ID }),
+    });
+    expect(res.statusCode).toBe(201);
+    expect(notifService.createFriendRequestNotification).toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('returns 400 when body is missing receiverId (ZodError path)', async () => {
+    const app = await buildApp({ prismaOpts: { friendRequestFindFirst: null } });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/friend-requests',
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('covers onDuplicate path (withMutationLog duplicate replay)', async () => {
+    const notifService = makeNotifService();
+    mockWithMutationLog.mockImplementationOnce(async ({ onDuplicate }: { onDuplicate: (id: string) => Promise<unknown> }) =>
+      onDuplicate(FR_ID)
+    );
+    const app = await buildApp({ prismaOpts: { friendRequestFindFirst: null }, notifService });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/friend-requests',
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      body: JSON.stringify({ receiverId: RECEIVER_ID }),
+    });
+    expect(res.statusCode).toBe(201);
+    await app.close();
+  });
+});
+
+// ─── PATCH — notification service, social events and error paths ──────────────
+
+describe('PATCH /friend-requests/:id — notification service (accepted)', () => {
+  it('calls createFriendAcceptedNotification when accepted with notifService present', async () => {
+    const notifService = makeNotifService();
+    const app = await buildApp({
+      prismaOpts: { friendRequestFindFirst: DB_FRIEND_REQUEST, conversationFindFirst: null },
+      notifService,
+    });
+    await app.inject({
+      method: 'PATCH',
+      url: `/friend-requests/${FR_ID}`,
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'accepted' }),
+    });
+    expect(notifService.createFriendAcceptedNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ recipientUserId: USER_ID, accepterUserId: USER_ID })
+    );
+    await app.close();
+  });
+
+  it('calls createSystemNotification with rejection message when rejected', async () => {
+    const notifService = makeNotifService();
+    const rejectedRequest = { ...DB_FRIEND_REQUEST, status: 'rejected' };
+    const app = await buildApp({
+      prismaOpts: { friendRequestFindFirst: DB_FRIEND_REQUEST, friendRequestUpdate: rejectedRequest as typeof DB_FRIEND_REQUEST },
+      notifService,
+    });
+    await app.inject({
+      method: 'PATCH',
+      url: `/friend-requests/${FR_ID}`,
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'rejected' }),
+    });
+    expect(notifService.createSystemNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ recipientUserId: USER_ID, priority: 'low' })
+    );
+    expect(notifService.createFriendAcceptedNotification).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('uses receiver.username as receiverName when displayName absent', async () => {
+    const notifService = makeNotifService();
+    const rejectedRequest = { ...DB_FRIEND_REQUEST, status: 'rejected', receiver: { ...DB_USER, displayName: null, username: 'bob_u' } };
+    const app = await buildApp({
+      prismaOpts: { friendRequestFindFirst: DB_FRIEND_REQUEST, friendRequestUpdate: rejectedRequest as typeof DB_FRIEND_REQUEST },
+      notifService,
+    });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/friend-requests/${FR_ID}`,
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'rejected' }),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(notifService.createSystemNotification).toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('uses firstName+lastName as receiverName when displayName and username absent', async () => {
+    const notifService = makeNotifService();
+    const rejectedRequest = { ...DB_FRIEND_REQUEST, status: 'rejected', receiver: { ...DB_USER, displayName: null, username: null, firstName: 'Bob', lastName: 'J' } };
+    const app = await buildApp({
+      prismaOpts: { friendRequestFindFirst: DB_FRIEND_REQUEST, friendRequestUpdate: rejectedRequest as typeof DB_FRIEND_REQUEST },
+      notifService,
+    });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/friend-requests/${FR_ID}`,
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'rejected' }),
+    });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+describe('PATCH /friend-requests/:id — social events', () => {
+  it('calls invalidateFriendsCache for both users on accept when socialEvents present', async () => {
+    const socialEvents = makeSocialEvents();
+    const app = await buildApp({
+      prismaOpts: { friendRequestFindFirst: DB_FRIEND_REQUEST, conversationFindFirst: null },
+      socialEvents,
+    });
+    await app.inject({
+      method: 'PATCH',
+      url: `/friend-requests/${FR_ID}`,
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'accepted' }),
+    });
+    expect(socialEvents.invalidateFriendsCache).toHaveBeenCalledWith(USER_ID);
+    expect(socialEvents.invalidateFriendsCache).toHaveBeenCalledWith(RECEIVER_ID);
+    await app.close();
+  });
+
+  it('does not call invalidateFriendsCache on reject', async () => {
+    const socialEvents = makeSocialEvents();
+    const rejectedRequest = { ...DB_FRIEND_REQUEST, status: 'rejected' };
+    const app = await buildApp({
+      prismaOpts: { friendRequestFindFirst: DB_FRIEND_REQUEST, friendRequestUpdate: rejectedRequest as typeof DB_FRIEND_REQUEST },
+      socialEvents,
+    });
+    await app.inject({
+      method: 'PATCH',
+      url: `/friend-requests/${FR_ID}`,
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'rejected' }),
+    });
+    expect(socialEvents.invalidateFriendsCache).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+describe('PATCH /friend-requests/:id — notification error and onDuplicate', () => {
+  it('notification findMany error is swallowed (does not fail route)', async () => {
+    const app = await buildApp({
+      prismaOpts: {
+        friendRequestFindFirst: DB_FRIEND_REQUEST,
+        notificationFindMany: new Error('notification db crash'),
+      },
+    });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/friend-requests/${FR_ID}`,
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'accepted' }),
+    });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('marks only matching notifications as read and skips non-matching ones', async () => {
+    const matchingNotif = { ...DB_NOTIFICATION, id: 'match-notif', context: { friendRequestId: FR_ID } };
+    const otherNotif = { ...DB_NOTIFICATION, id: 'other-notif', context: { friendRequestId: 'other-id' } };
+    const app = await buildApp({
+      prismaOpts: {
+        friendRequestFindFirst: DB_FRIEND_REQUEST,
+        notificationFindMany: [matchingNotif, otherNotif],
+        conversationFindFirst: null,
+      },
+    });
+    await app.inject({
+      method: 'PATCH',
+      url: `/friend-requests/${FR_ID}`,
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'accepted' }),
+    });
+    const prisma = (app as unknown as { prisma: ReturnType<typeof makePrisma> }).prisma;
+    expect(prisma.notification.update).toHaveBeenCalledTimes(1);
+    expect(prisma.notification.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'match-notif' } })
+    );
+    await app.close();
+  });
+
+  it('covers onDuplicate path in PATCH (withMutationLog duplicate replay)', async () => {
+    mockWithMutationLog.mockImplementationOnce(async ({ onDuplicate }: { onDuplicate: (id: string) => Promise<unknown> }) =>
+      onDuplicate(FR_ID)
+    );
+    const app = await buildApp({
+      prismaOpts: { friendRequestFindFirst: DB_FRIEND_REQUEST, conversationFindFirst: null },
+    });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/friend-requests/${FR_ID}`,
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'accepted' }),
+    });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+// ─── PATCH — conversation creation displayName OR-chain fallbacks ─────────────
+
+describe('PATCH /friend-requests/:id — conversation displayName fallbacks', () => {
+  it('uses username as displayName when user.displayName is null in conversation creation', async () => {
+    const userNoDisplay = { ...DB_USER, displayName: null, username: 'sender_user' };
+    const app = await buildApp({
+      prismaOpts: {
+        friendRequestFindFirst: DB_FRIEND_REQUEST,
+        conversationFindFirst: null,
+        userFindUnique: userNoDisplay as typeof DB_USER,
+      },
+    });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/friend-requests/${FR_ID}`,
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'accepted' }),
+    });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('uses "User" as displayName when user is null in conversation creation', async () => {
+    const app = await buildApp({
+      prismaOpts: {
+        friendRequestFindFirst: DB_FRIEND_REQUEST,
+        conversationFindFirst: null,
+        userFindUnique: null,
+      },
+    });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/friend-requests/${FR_ID}`,
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'accepted' }),
+    });
+    expect(res.statusCode).toBe(200);
+    await app.close();
   });
 });
