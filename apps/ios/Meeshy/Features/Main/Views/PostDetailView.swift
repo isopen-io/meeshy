@@ -492,7 +492,7 @@ struct PostDetailView: View {
 
         // Only top-level sections carry a scroll anchor. For a reply, that's the
         // parent comment; otherwise the comment itself.
-        let sectionId = (targetParentCommentId?.isEmpty == false ? targetParentCommentId! : target)
+        let sectionId = targetParentCommentId.flatMap { $0.isEmpty ? nil : $0 } ?? target
         guard viewModel.topLevelComments.contains(where: { $0.id == sectionId }) else { return }
         didScrollToTargetComment = true
 

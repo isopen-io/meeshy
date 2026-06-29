@@ -734,6 +734,14 @@ export class MeeshySocketIOManager {
         try { await this.messageHandler.handleMessageSendWithAttachments(socket, data, callback); } catch (error) { logger.error('[MESSAGE_SEND_WITH_ATTACHMENTS] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
+      socket.on(CLIENT_EVENTS.MESSAGE_EDIT, async (data, callback) => {
+        try { await this.messageHandler.handleMessageEdit(socket, data, callback); } catch (error) { logger.error('[MESSAGE_EDIT] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
+      });
+
+      socket.on(CLIENT_EVENTS.MESSAGE_DELETE, async (data, callback) => {
+        try { await this.messageHandler.handleMessageDelete(socket, data, callback); } catch (error) { logger.error('[MESSAGE_DELETE] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
+      });
+
       socket.on(CLIENT_EVENTS.REQUEST_TRANSLATION, async (data: { messageId: string; targetLanguage: string }) => {
         // Rate limit: 10 requêtes/min par userId (multi-device inclus) pour éviter la saturation ZMQ
         const translationUserId = this.socketToUser.get(socket.id);

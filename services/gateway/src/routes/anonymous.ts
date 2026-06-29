@@ -3,6 +3,7 @@ import { z } from 'zod';
 import crypto from 'crypto';
 import { logError } from '../utils/logger';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../utils/response';
+import { SecuritySanitizer } from '../utils/sanitize';
 import {
   errorResponseSchema,
   anonymousParticipantSchema,
@@ -210,6 +211,8 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
     try {
       const { linkId } = request.params as { linkId: string };
       const body = joinAnonymousSchema.parse(request.body);
+      const firstName = SecuritySanitizer.sanitizeText(body.firstName);
+      const lastName = SecuritySanitizer.sanitizeText(body.lastName);
       const clientIP = request.ip || (request.headers['x-forwarded-for'] as string) || '127.0.0.1';
 
 
@@ -305,10 +308,10 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
         if (!body.username || body.username.trim() === '') {
           return sendBadRequest(reply, 'Le nom d\'utilisateur est obligatoire pour rejoindre cette conversation');
         }
-        username = body.username.trim();
+        username = SecuritySanitizer.sanitizeUsername(body.username.trim());
       } else {
         // Si l'username n'est pas requis, generer automatiquement
-        username = body.username?.trim() || generateNickname(body.firstName, body.lastName);
+        username = body.username ? SecuritySanitizer.sanitizeUsername(body.username) : generateNickname(firstName, lastName);
       }
 
       // 6. Verifier que le username n'est pas deja pris par un utilisateur enregistre
@@ -321,7 +324,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
 
       if (existingUser) {
         // Generer un username alternatif qui ne soit pas pris par un utilisateur enregistre
-        let suggestedUsername = generateNickname(body.firstName, body.lastName);
+        let suggestedUsername = generateNickname(firstName, lastName);
         let counter = 1;
 
         // Verifier si le username suggere est deja pris par un utilisateur enregistre
@@ -338,7 +341,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
           }
 
           // Ajouter un suffixe numerique
-          suggestedUsername = `${generateNickname(body.firstName, body.lastName)}${counter}`;
+          suggestedUsername = `${generateNickname(firstName, lastName)}${counter}`;
           counter++;
         }
 
@@ -361,7 +364,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
 
       if (existingParticipant) {
         // Generer un username alternatif unique pour cette conversation
-        let suggestedUsername = generateNickname(body.firstName, body.lastName);
+        let suggestedUsername = generateNickname(firstName, lastName);
         let counter = 1;
 
         // Verifier si le username suggere est deja pris et generer une alternative
@@ -389,7 +392,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
           }
 
           // Ajouter un suffixe numerique
-          suggestedUsername = `${generateNickname(body.firstName, body.lastName)}${counter}`;
+          suggestedUsername = `${generateNickname(firstName, lastName)}${counter}`;
           counter++;
         }
 
@@ -435,8 +438,8 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
               connectedAt: new Date()
             },
             profile: {
-              firstName: body.firstName,
-              lastName: body.lastName,
+              firstName: firstName,
+              lastName: lastName,
               username: username,
               email: body.email || null,
               birthday: body.birthday ? new Date(body.birthday) : null

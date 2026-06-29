@@ -134,6 +134,19 @@ export const SocketPostReactionRequestSyncSchema = z.object({
 
 export type SocketPostReactionRequestSyncData = z.infer<typeof SocketPostReactionRequestSyncSchema>;
 
+export const SocketMessageEditSchema = z.object({
+  messageId: mongoId,
+  content: z.string().min(1).max(MAX_CONTENT_BYTES),
+});
+
+export type SocketMessageEditData = z.infer<typeof SocketMessageEditSchema>;
+
+export const SocketMessageDeleteSchema = z.object({
+  messageId: mongoId,
+});
+
+export type SocketMessageDeleteData = z.infer<typeof SocketMessageDeleteSchema>;
+
 export const SocketAuthenticateSchema = z.object({
   userId: z.string().optional(),
   sessionToken: z.string().optional(),

@@ -120,8 +120,8 @@ extension ConversationView {
             editBanner: composerState.editingMessageId != nil
                 ? AnyView(composerEditBanner)
                 : nil,
-            replyBanner: composerState.pendingReplyReference != nil && composerState.editingMessageId == nil
-                ? AnyView(composerReplyBanner(composerState.pendingReplyReference!))
+            replyBanner: composerState.editingMessageId == nil
+                ? composerState.pendingReplyReference.map { AnyView(composerReplyBanner($0)) }
                 : nil,
             customAttachmentsPreview: (!composerState.pendingAttachments.isEmpty
                                         || !composerState.preparingAttachments.isEmpty

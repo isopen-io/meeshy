@@ -275,6 +275,12 @@ export class CommentReactionHandler {
       const userResult = getConnectedUser(userIdOrToken, this.connectedUsers);
       const userId = userResult?.realUserId || userIdOrToken;
 
+      const syncAllowed = await reactionRateLimiter.checkLimit(userId, COMMENT_REACTION_RATE_LIMIT);
+      if (!syncAllowed) {
+        if (callback) callback({ success: false, error: 'Rate limit exceeded' });
+        return;
+      }
+
       const reactionSync = await this.commentReactionService.getCommentReactions({
         commentId: data.commentId,
         currentUserId: userId,

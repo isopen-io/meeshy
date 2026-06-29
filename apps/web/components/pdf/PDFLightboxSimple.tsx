@@ -74,7 +74,7 @@ export const PDFLightboxSimple: React.FC<PDFLightboxSimpleProps> = ({
 
   const handleOpenInNewTab = () => {
     if (!attachment) return;
-    window.open(attachment.fileUrl, '_blank');
+    window.open(attachment.fileUrl, '_blank', 'noopener,noreferrer');
   };
 
   const handleIframeError = () => {

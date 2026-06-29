@@ -31,6 +31,7 @@ import type {
 import { buildCursorPaginationMeta } from '../../utils/pagination';
 import { sendWithETag } from '../../utils/etag';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { SecuritySanitizer } from '../../utils/sanitize.js';
 
 const logger = enhancedLogger.child({ module: 'conversations/core' });
 
@@ -762,7 +763,9 @@ export function registerCoreRoutes(
         'create-conversation'
       );
 
-      const { type, title, description, participantIds = [], communityId, identifier } = validatedData as { type: string; title?: string; description?: string; participantIds?: string[]; communityId?: string; identifier?: string };
+      const { type, title: rawTitle, description: rawDescription, participantIds = [], communityId, identifier } = validatedData as { type: string; title?: string; description?: string; participantIds?: string[]; communityId?: string; identifier?: string };
+      const title = rawTitle !== undefined ? SecuritySanitizer.sanitizeText(rawTitle) : undefined;
+      const description = rawDescription !== undefined ? SecuritySanitizer.sanitizeText(rawDescription) : undefined;
 
       // Utiliser le nouveau système d'authentification unifié
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -1052,7 +1055,7 @@ export function registerCoreRoutes(
   }, async (request, reply) => {
     try {
       const { id } = request.params;
-      const { title, description, avatar, banner, defaultWriteRole, isAnnouncementChannel, slowModeSeconds, autoTranslateEnabled } = request.body as {
+      const { title: rawTitle, description: rawDescription, avatar, banner, defaultWriteRole, isAnnouncementChannel, slowModeSeconds, autoTranslateEnabled } = request.body as {
         title?: string
         description?: string
         avatar?: string | null
@@ -1062,6 +1065,8 @@ export function registerCoreRoutes(
         slowModeSeconds?: number
         autoTranslateEnabled?: boolean
       };
+      const title = rawTitle !== undefined ? SecuritySanitizer.sanitizeText(rawTitle) : undefined;
+      const description = rawDescription !== undefined ? SecuritySanitizer.sanitizeText(rawDescription) : undefined;
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
 

@@ -91,8 +91,10 @@ struct LicensesView: View {
 
     // MARK: - License Card
 
+    @ViewBuilder
     private func licenseCard(_ license: OpenSourceLicense) -> some View {
-        Link(destination: URL(string: license.url)!) {
+        if let destination = URL(string: license.url) {
+        Link(destination: destination) {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(license.name)
@@ -132,6 +134,7 @@ struct LicensesView: View {
         }
         .accessibilityLabel(String(localized: "about.licenses.card.label", defaultValue: "\(license.name) par \(license.author), licence \(license.licenseType)", bundle: .main))
         .accessibilityHint(String(localized: "about.licenses.card.hint", defaultValue: "Ouvre le depot dans Safari", bundle: .main))
+        }
     }
 
     // MARK: - Helpers

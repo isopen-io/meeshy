@@ -403,7 +403,7 @@ export default function AdminShareLinksPage() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => window.open(`/tracked/${shareLink.linkId}`, '_blank')}>
+                              <DropdownMenuItem onClick={() => window.open(`/tracked/${shareLink.linkId}`, '_blank', 'noopener,noreferrer')}>
                                 <ExternalLink className="mr-2 h-4 w-4" />
                                 {t('shareLinks.open')}
                               </DropdownMenuItem>
@@ -426,7 +426,7 @@ export default function AdminShareLinksPage() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => window.open(`/tracked/${shareLink.linkId}`, '_blank')}
+                              onClick={() => window.open(`/tracked/${shareLink.linkId}`, '_blank', 'noopener,noreferrer')}
                             >
                               <ExternalLink className="h-4 w-4 mr-1" />
                               {t('shareLinks.open')}

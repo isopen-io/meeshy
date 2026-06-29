@@ -131,7 +131,7 @@ class ConversationListViewModel: ObservableObject {
             for (i, c) in conversations.enumerated() { index[c.id] = i }
             _convIdIndex = index
         }
-        return _convIdIndex![id]
+        return _convIdIndex?[id]
     }
 
     // MARK: - List Mutators (centralised write surface)

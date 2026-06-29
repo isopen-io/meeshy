@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { SecuritySanitizer } from '../../utils/sanitize';
 import { UserRoleEnum, ErrorCode } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
 import { UnifiedAuthRequest } from '../../middleware/auth';
@@ -191,8 +192,8 @@ export function registerSharingRoutes(
           linkId: initialLinkId, // Temporaire
           conversationId: conversationId,
           createdBy: currentUserId,
-          name: body.name,
-          description: body.description,
+          name: body.name ? SecuritySanitizer.sanitizeText(body.name) : body.name,
+          description: body.description ? SecuritySanitizer.sanitizeText(body.description) : body.description,
           maxUses: body.maxUses ?? undefined,
           maxConcurrentUsers: body.maxConcurrentUsers ?? undefined,
           maxUniqueSessions: body.maxUniqueSessions ?? undefined,

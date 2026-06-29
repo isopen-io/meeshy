@@ -328,6 +328,12 @@ export class PostReactionHandler {
       const userResult = getConnectedUser(userIdOrToken, this.connectedUsers);
       const userId = userResult?.realUserId || userIdOrToken;
 
+      const syncAllowed = await reactionRateLimiter.checkLimit(userId, POST_REACTION_RATE_LIMIT);
+      if (!syncAllowed) {
+        if (callback) callback({ success: false, error: 'Rate limit exceeded' });
+        return;
+      }
+
       const reactionSync = await this.postReactionService.getPostReactions({
         postId: data.postId,
         currentUserId: userId,
@@ -373,6 +379,12 @@ export class PostReactionHandler {
 
       const userResult = getConnectedUser(userIdOrToken, this.connectedUsers);
       const userId = userResult?.realUserId || userIdOrToken;
+
+      const joinAllowed = await reactionRateLimiter.checkLimit(userId, POST_REACTION_RATE_LIMIT);
+      if (!joinAllowed) {
+        if (callback) callback({ success: false, error: 'Rate limit exceeded' });
+        return;
+      }
 
       const post = await this.prisma.post.findUnique({
         where: { id: validated.postId },
@@ -421,6 +433,12 @@ export class PostReactionHandler {
       const userIdOrToken = this.socketToUser.get(socket.id);
       if (!userIdOrToken) {
         if (callback) callback({ success: false, error: 'User not authenticated' });
+        return;
+      }
+
+      const leaveAllowed = await reactionRateLimiter.checkLimit(userIdOrToken, POST_REACTION_RATE_LIMIT);
+      if (!leaveAllowed) {
+        if (callback) callback({ success: false, error: 'Rate limit exceeded' });
         return;
       }
 

@@ -172,8 +172,10 @@ struct SupportView: View {
             )
     }
 
+    @ViewBuilder
     private func supportLink(icon: String, title: String, url: String, color: String) -> some View {
-        Link(destination: URL(string: url)!) {
+        if let destination = URL(string: url) {
+        Link(destination: destination) {
             HStack(spacing: 12) {
                 fieldIcon(icon, color: color)
 
@@ -192,6 +194,7 @@ struct SupportView: View {
         }
         .accessibilityLabel(title)
         .accessibilityHint(String(localized: "support.a11y.opens", defaultValue: "Ouvre \(title)", bundle: .main))
+        }
     }
 
     private func infoRow(icon: String, title: String, value: String, color: String) -> some View {

@@ -102,7 +102,8 @@ export function registerDeleteForMeRoutes(
       })
 
       // Remove user from socket room silently
-      const io = socketIOHandler?.getManager()?.getIO()
+      const manager = socketIOHandler?.getManager()
+      const io = manager?.getIO()
       if (io) {
         const userSockets = await io.in(ROOMS.user(userId)).fetchSockets()
         await Promise.all(userSockets.map(s => s.leave(ROOMS.conversation(conversationId))))
@@ -111,6 +112,10 @@ export function registerDeleteForMeRoutes(
         // ConversationStore.applyConversationDeleted.
         const deletedPayload: ConversationDeletedEventData = { userId, conversationId }
         io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.CONVERSATION_DELETED, deletedPayload)
+
+        // Invalidate the 5-minute participantId cache so the now-inactive user
+        // cannot send messages to this conversation during the cache window.
+        manager?.invalidateParticipantCache?.(userId, conversationId)
       }
 
       return sendSuccess(reply, { conversationId, deletedAt: now.toISOString() })
