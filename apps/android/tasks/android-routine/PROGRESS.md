@@ -108,19 +108,33 @@ its own caption via pure `updateSelectedText`), publish stays **lossless** — `
 story per non-blank slide in order (first carries whole-story media + offline `dependsOn`), `canPublish`
 gates on the **whole deck** (an off-screen over-long slide blocks publish), and `StoryComposerScreen`
 renders a `SlideStrip` mini-preview (numbered selectable chips, Duplicate/Remove on the selected chip,
-"+" add chip capped at 10). The single-slide path stays byte-identical to before.
+"+" add chip capped at 10). The single-slide path stays byte-identical to before. Latest loop
+(`slide-drag-reorder`) closes that loop's **deferred drag-reorder gesture**: a horizontal drag on a
+slide chip now reorders it. A new pure `SlideReorderResolver.targetIndex(fromIndex, dragPx,
+slotWidthPx, slideCount)` converts the accumulated drag pixels + the measured slot width (chip width
++ spacing) into how many whole slots the chip crossed — a sub-half-slot drift rounds to zero (no
+accidental reorder), the result is clamped to the deck bounds, and a non-positive slot width / empty
+deck / out-of-range origin all degrade safely. `SlideStrip` binds `detectHorizontalDragGestures` on
+each chip and hands the resolved target to the already-tested `onMoveSlide`, so the move math lives
+in one pure, unit-tested place and the Composable stays glue.
 
 ## Next slice (pick one for the next run)
 
 Ordered by value:
-1. **Slide drag-reorder gesture** — bind a Compose drag handle in `SlideStrip` to the
-   already-wired/tested `onMoveSlide` intent (small; the `move` reducer is done).
+1. **Per-slide media** — move media off the whole-story draft onto the selected slide
+   (`StorySlide.mediaIds`), so each slide carries its own attachments. A pure reducer
+   addition (`StorySlideDeck.addMediaToSelected`/`removeMediaFromSelected`) + VM wiring.
 2. **9:16 canvas** — the per-slide canvas (pinch-zoom + drag-pan, FAB + bottom-band
    toolbar). Larger; see `feature-parity.md` §"Stories composer".
-3. **Per-slide media** — move media off the whole-story draft onto the selected slide
-   (`StorySlide.mediaIds`), so each slide carries its own attachments.
+3. **Text elements** (≤5/slide): per-element style/colour/position — the on-canvas text model.
 4. After Stories richness is sufficient, advance to the **Calls** area
    (`feature-parity.md` §"Calls").
+
+(`slide-drag-reorder` ✅ shipped 2026-06-29 — this run; the deferred **drag-reorder gesture** from
+the slide-deck loop. New pure `SlideReorderResolver.targetIndex` maps accumulated horizontal drag px
++ measured slot width to the clamped landing slot (sub-half-slot drift → no move; bounds-clamped;
+div-by-zero/empty/out-of-range safe), and `SlideStrip` binds `detectHorizontalDragGestures` on each
+chip to feed the already-tested `onMoveSlide`. +11 behavioural tests. See run log.)
 
 (`story-composer-slide-deck` ✅ shipped 2026-06-29 — this run; the multi-slide model is now **real in
 the composer**. `StoryComposerUiState.deck: StorySlideDeck`, the VM mints slide ids and exposes
@@ -199,6 +213,39 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-29 — slice `slide-drag-reorder` ✅
+- **Branch:** `claude/apps/android/slide-drag-reorder` (off `origin/main` @ `384826d3`).
+- **Housekeeping (step 0):** no open `claude/apps/android/*` PR (`list_pull_requests state=open` →
+  none of the 27 open PRs are `claude/apps/android/*`; prior loop `story-composer-slide-deck` already
+  squash-merged to `main`). Branched directly off the freshened `main`.
+- **What:** closes the deferred **drag-reorder gesture** ("Next" #1, feature-parity §E line 453).
+  The `move` reducer + `onMoveSlide` intent were already wired & tested last loop; this binds a
+  Compose drag handle to them through a new pure resolver — no production logic outside `apps/android`.
+- **Added (production, `apps/android` only):**
+  - `SlideReorderResolver.targetIndex(fromIndex, dragPx, slotWidthPx, slideCount)` (`:feature:stories`)
+    — pure mapping from accumulated horizontal drag px + measured slot width to the clamped landing
+    slot. `steps = round(dragPx / slotWidthPx)`; sub-half-slot drift rounds to 0 (no accidental
+    reorder); result clamped to `0..slideCount-1`; non-positive slot width or empty/origin-out-of-range
+    degrade safely (no div-by-zero, no throw). Mirrors the `StorySwipeResolver` "thresholds as params"
+    style so the decision is fully unit-tested off the Composable.
+  - `StoryComposerScreen.SlideStrip` — each chip now carries `onSizeChanged` (slot width) +
+    `detectHorizontalDragGestures`; on drag end it feeds the resolver and calls the existing
+    `onMoveSlide`. Glue only; the testable decision lives in the resolver.
+- **TDD (red → green):** `SlideReorderResolverTest` +11 (no-drag inert; sub-half-slot inert; right
+  past-half +1; left past-half −1; multi-slot crossing; clamp-far-right to last; clamp-far-left to 0;
+  single-slide nowhere-to-move; non-positive slot width → origin; out-of-range origin clamped;
+  empty deck → 0 no-throw). All 11 green. RED first verified (unresolved `SlideReorderResolver`
+  compile failure). No floor lowered, no test weakened; one expectation was corrected (2.5 rounds to
+  3, not 2 — value changed to 2.3 so the "several slots" assertion is unambiguous, not weakened).
+- **Branch coverage (new logic):** every arm of `targetIndex` is hit — `slideCount<=0`,
+  `slotWidthPx<=0`, the clamp lower/upper bounds, and the in-range round. ≥90% branch + instruction.
+- **Verification:** `./apps/android/meeshy.sh check` green (`assembleDebug` + `testDebugUnitTest`,
+  BUILD SUCCESSFUL). Diff is `apps/android` only.
+- **Reviewer gate:** PASS — scope `apps/android` only, behavioural tests through the public resolver
+  API, no tautologies, edge cases (empty/single/boundary/degenerate-width/out-of-range) covered, SDK
+  purity respected (pure resolver in `:feature:stories`, glue in the Composable), single source of
+  truth (reorder math in one pure place), UX coherence (natural horizontal drag → reorder).
 
 ### 2026-06-29 — slice `story-composer-slide-deck` ✅
 - **Branch:** `claude/apps/android/story-composer-slide-deck` (off `origin/main` @ `f4ff6b2cd`).

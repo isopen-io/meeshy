@@ -38,6 +38,14 @@ Append-only log of gotchas and decisions that save time next run.
   the behaviour: `story-composer-multi-pending` flipped "second offline pick is rejected" →
   "second offline pick is appended". Keep the assertion strong (assert the new outcome
   precisely), record the flip + rationale in the run log, and the reviewer gate passes.
+- **Pure gesture resolvers (drag/swipe) — keep thresholds/slot widths as params** so the
+  decision is fully unit-tested off the Composable (`StorySwipeResolver`, `SlideReorderResolver`).
+  The Composable measures (`onSizeChanged`, `LocalDensity`), accumulates (`detectHorizontalDragGestures`
+  with a local `totalDrag`), and on drag end calls the pure resolver → an existing tested intent.
+- **`Float.roundToInt()` rounds half **up** toward +∞** (`2.5 → 3`, but `-0.5 → 0`). When a
+  reorder/threshold test sits exactly on `.5` the expectation is ambiguous — pick a value clearly
+  above/below half (e.g. `2.3` not `2.5`) so the assertion is unambiguous, not flaky. Hit while
+  writing `SlideReorderResolverTest`.
 
 ## Outbox / durable chain
 - The durable upload→publish chain is two halves: (1) **gating** the dependent on

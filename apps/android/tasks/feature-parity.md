@@ -450,8 +450,12 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (`hasText`/`isWithinTextLimit` — an off-screen over-long slide blocks publish), not just the
       active slide. `StoryComposerScreen` renders a `SlideStrip` mini-preview (numbered selectable
       chips; selected chip carries Duplicate/Remove, Remove hidden on the last slide; trailing "+"
-      add chip disabled at the cap). Pending: drag-reorder **gesture** binding (the `onMoveSlide`
-      intent + `move` reducer are wired & tested — only the Compose drag handle is deferred);
+      add chip disabled at the cap). **Drag-reorder gesture done** (`slide-drag-reorder`): a
+      horizontal drag on a chip reorders it — the pure `SlideReorderResolver.targetIndex`
+      (`:feature:stories`) converts accumulated drag px + measured slot width into the whole-slot
+      crossings, rounds a sub-half-slot drift to zero, clamps to the deck bounds, and degrades to
+      the origin on a non-positive slot width; `SlideStrip` binds `detectHorizontalDragGestures` on
+      each chip and hands the resolved target to the already-tested `onMoveSlide`. Pending:
       per-slide media (media is whole-story for now); the 9:16 canvas + text styling below.
 - [ ] 9:16 canvas with pinch-zoom + drag-pan; FAB + bottom-band toolbar (Contenu/Effets)
 - [ ] Text elements (≤5/slide): style (bold/italic/handwriting/typewriter/neon/retro), colour,
