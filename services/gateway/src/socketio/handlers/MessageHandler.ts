@@ -549,6 +549,13 @@ export class MessageHandler {
 
       const { userId } = userContext;
 
+      const editRateLimitAllowed = await this.rateLimiter.checkLimit(userId, SOCKET_RATE_LIMITS.MESSAGE_EDIT);
+      if (!editRateLimitAllowed) {
+        const info = this.rateLimiter.getRateLimitInfo(userId, SOCKET_RATE_LIMITS.MESSAGE_EDIT);
+        this._sendGenericError(callback, `Rate limit exceeded. Please wait ${Math.ceil(info.resetIn / 1000)} seconds.`, socket);
+        return;
+      }
+
       const message = await this.prisma.message.findFirst({
         where: {
           id: validated.messageId,
@@ -652,6 +659,13 @@ export class MessageHandler {
       }
 
       const { userId } = userContext;
+
+      const deleteRateLimitAllowed = await this.rateLimiter.checkLimit(userId, SOCKET_RATE_LIMITS.MESSAGE_DELETE);
+      if (!deleteRateLimitAllowed) {
+        const info = this.rateLimiter.getRateLimitInfo(userId, SOCKET_RATE_LIMITS.MESSAGE_DELETE);
+        this._sendGenericError(callback, `Rate limit exceeded. Please wait ${Math.ceil(info.resetIn / 1000)} seconds.`, socket);
+        return;
+      }
 
       const message = await this.prisma.message.findFirst({
         where: { id: validated.messageId, deletedAt: null },

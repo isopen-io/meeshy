@@ -87,6 +87,16 @@ export const SOCKET_RATE_LIMITS = {
     maxRequests: 10,
     windowMs: 60000, // 1 minute — prevents credential stuffing via WS
     keyPrefix: 'socket:auth'
+  },
+  MESSAGE_EDIT: {
+    maxRequests: 20,
+    windowMs: 60000, // 1 minute — same budget as send; edits are less frequent
+    keyPrefix: 'socket:message:edit'
+  },
+  MESSAGE_DELETE: {
+    maxRequests: 20,
+    windowMs: 60000, // 1 minute
+    keyPrefix: 'socket:message:delete'
   }
 };
 
