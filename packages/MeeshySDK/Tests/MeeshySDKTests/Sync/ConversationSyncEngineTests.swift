@@ -473,6 +473,106 @@ final class ConversationSyncEngineTests: XCTestCase {
         XCTAssertEqual(cached.first?.userState.unreadCount, 4)
     }
 
+    // MARK: - handleReadStatusUpdated (multi-device read sync)
+
+    /// When the gateway broadcasts a "read" event for the current user (e.g. from
+    /// another device), the engine MUST apply the server-authoritative unreadCount
+    /// rather than hard-coding zero — the user may have only partially read.
+    func test_readStatusUpdated_ownRead_withAuthoritativeCount_setsExactCount() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        await seedConversations([("conv-read-1", 5)])
+        await engine.startSocketRelay()
+
+        let exp = expectation(description: "conversationsDidChange after own read")
+        engine.conversationsDidChange
+            .first()
+            .sink { _ in exp.fulfill() }
+            .store(in: &cancellables)
+
+        // In tests, currentUserId() returns "" (AuthManager has no current user).
+        let event = ReadStatusUpdateEvent(
+            conversationId: "conv-read-1",
+            participantId: "participant-1",
+            userId: "",
+            type: "read",
+            updatedAt: Date(),
+            summary: ReadStatusSummary(totalMembers: 1, deliveredCount: 1, readCount: 1),
+            lastReadAt: nil,
+            unreadCount: 3
+        )
+        mockMessageSocket.readStatusUpdated.send(event)
+
+        await fulfillment(of: [exp], timeout: 2.0)
+
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        XCTAssertEqual(cached.first?.userState.unreadCount, 3,
+                       "own read event must apply server-authoritative unreadCount, not hard-code 0")
+    }
+
+    /// When the gateway omits unreadCount (pre-rollout gateway), the engine must
+    /// fall back to 0 rather than leaving stale data.
+    func test_readStatusUpdated_ownRead_nilCount_fallsBackToZero() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        await seedConversations([("conv-read-nil", 7)])
+        await engine.startSocketRelay()
+
+        let exp = expectation(description: "conversationsDidChange after nil-count read")
+        engine.conversationsDidChange
+            .first()
+            .sink { _ in exp.fulfill() }
+            .store(in: &cancellables)
+
+        let event = ReadStatusUpdateEvent(
+            conversationId: "conv-read-nil",
+            participantId: "participant-1",
+            userId: "",
+            type: "read",
+            updatedAt: Date(),
+            summary: ReadStatusSummary(totalMembers: 1, deliveredCount: 1, readCount: 1),
+            lastReadAt: nil,
+            unreadCount: nil
+        )
+        mockMessageSocket.readStatusUpdated.send(event)
+
+        await fulfillment(of: [exp], timeout: 2.0)
+
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        XCTAssertEqual(cached.first?.userState.unreadCount, 0,
+                       "nil unreadCount must fall back to 0")
+    }
+
+    /// A "read" event for a DIFFERENT user must NOT mutate the current user's
+    /// unreadCount — it only advances the delivery status on their own messages.
+    func test_readStatusUpdated_otherUserRead_doesNotChangeUnreadCount() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        await seedConversations([("conv-read-other", 4)])
+        await engine.startSocketRelay()
+
+        let exp = expectation(description: "messagesDidChange emitted")
+        engine.messagesDidChange
+            .first(where: { $0 == "conv-read-other" })
+            .sink { _ in exp.fulfill() }
+            .store(in: &cancellables)
+
+        let event = ReadStatusUpdateEvent(
+            conversationId: "conv-read-other",
+            participantId: "participant-other",
+            userId: "some-other-user-id",
+            type: "read",
+            updatedAt: Date(),
+            summary: ReadStatusSummary(totalMembers: 2, deliveredCount: 2, readCount: 1),
+            lastReadAt: nil,
+            unreadCount: 0
+        )
+        mockMessageSocket.readStatusUpdated.send(event)
+
+        await fulfillment(of: [exp], timeout: 2.0)
+
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        XCTAssertEqual(cached.first?.userState.unreadCount, 4,
+                       "another user's read event must not modify the current user's unreadCount")
+    }
+
     // MARK: - Realtime last-message preview (edit / delete)
 
     /// Editing the conversation's LAST message must refresh the list-row preview

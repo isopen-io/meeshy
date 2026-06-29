@@ -1098,10 +1098,11 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         // a 'received' read-status:updated arrives moments later and wipes
         // it to 0 even though the conversation is still unread.
         if eventUserId == userId && event.type == "read" {
+            let authoritative = event.unreadCount ?? 0
             await cache.conversations.update(for: "list") { conversations in
                 var updated = conversations
                 if let idx = updated.firstIndex(where: { $0.id == event.conversationId }) {
-                    updated[idx].userState.unreadCount = 0
+                    updated[idx].userState.unreadCount = authoritative
                 }
                 return updated
             }
