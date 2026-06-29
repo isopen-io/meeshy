@@ -1019,6 +1019,12 @@ final class IceServerTURNValidationTests: XCTestCase {
         let hasTURN = IceServer.defaultServers.contains(where: \.hasTURNURL)
         XCTAssertFalse(hasTURN, "defaultServers are STUN-only fallbacks — the fault-log fires when TURN is absent")
     }
+
+    func test_defaultServers_containsCloudflareSTUN() {
+        let cfStun = "stun:stun.cloudflare.com:3478"
+        let has = IceServer.defaultServers.contains { $0.urls.contains(cfStun) }
+        XCTAssertTrue(has, "defaultServers must include Cloudflare STUN for multi-provider resilience against Google STUN outages")
+    }
 }
 
 // MARK: - CallStats.reduce() unit tests
@@ -1048,18 +1054,21 @@ final class CallStatsReducerTests: XCTestCase {
     }
 
     private func inboundRTP(id: String = "I01", kind: String = "audio", packets: Double = 10,
-                            lost: Double = 0, bytes: Double = 0, codecId: String? = nil) -> CallStats.RawEntry {
-        CallStats.RawEntry(
+                            lost: Double = 0, bytes: Double = 0, codecId: String? = nil,
+                            jitter: Double? = nil) -> CallStats.RawEntry {
+        var values: [String: Double] = [
+            "packetsReceived": packets,
+            "packetsLost": lost,
+            "bytesReceived": bytes
+        ]
+        if let j = jitter { values["jitter"] = j }
+        return CallStats.RawEntry(
             id: id,
             type: "inbound-rtp",
             kind: kind,
             codecId: codecId,
             mimeType: nil,
-            values: [
-                "packetsReceived": packets,
-                "packetsLost": lost,
-                "bytesReceived": bytes
-            ]
+            values: values
         )
     }
 
@@ -1099,6 +1108,7 @@ final class CallStatsReducerTests: XCTestCase {
         XCTAssertEqual(result.inboundVideoPackets, 0)
         XCTAssertEqual(result.outboundPacketsSent, 0)
         XCTAssertEqual(result.availableOutgoingBitrateBps, 0)
+        XCTAssertEqual(result.jitterMs, 0, accuracy: 0.0001)
     }
 
     // MARK: - candidate-pair
@@ -1179,6 +1189,49 @@ final class CallStatsReducerTests: XCTestCase {
         XCTAssertEqual(stats.bytesReceived, 5000)
     }
 
+    // MARK: - jitterMs
+
+    func test_reduce_jitter_audioEntry_convertedToMs() {
+        // libwebrtc reports jitter in seconds; reduce must multiply by 1000
+        let stats = CallStats.reduce(entries: [inboundRTP(kind: "audio", jitter: 0.015)])
+        XCTAssertEqual(stats.jitterMs, 15, accuracy: 0.001,
+            "jitter 0.015 s must be converted to 15 ms")
+    }
+
+    func test_reduce_jitter_averagedAcrossMultipleAudioStreams() {
+        let entries: [CallStats.RawEntry] = [
+            inboundRTP(id: "I01", kind: "audio", packets: 10, jitter: 0.010),
+            inboundRTP(id: "I02", kind: "audio", packets: 10, jitter: 0.030),
+        ]
+        let stats = CallStats.reduce(entries: entries)
+        XCTAssertEqual(stats.jitterMs, 20, accuracy: 0.001,
+            "(10ms + 30ms) / 2 = 20ms mean audio jitter")
+    }
+
+    func test_reduce_jitter_videoStreamExcludedFromMean() {
+        // Video jitter must not affect jitterMs — only Opus PLC is sensitive to audio jitter
+        let entries: [CallStats.RawEntry] = [
+            inboundRTP(id: "I01", kind: "audio", packets: 10, jitter: 0.020),
+            inboundRTP(id: "I02", kind: "video", packets: 30, jitter: 0.100),
+        ]
+        let stats = CallStats.reduce(entries: entries)
+        XCTAssertEqual(stats.jitterMs, 20, accuracy: 0.001,
+            "Video jitter (100 ms) must be excluded; only the audio jitter (20 ms) counts")
+    }
+
+    func test_reduce_jitter_zeroWhenNoAudioInbound() {
+        let stats = CallStats.reduce(entries: [inboundRTP(kind: "video", packets: 30, jitter: 0.050)])
+        XCTAssertEqual(stats.jitterMs, 0, accuracy: 0.0001,
+            "jitterMs must be 0 when there are no audio inbound-rtp entries")
+    }
+
+    func test_reduce_jitter_zeroWhenKeyAbsent() {
+        // Audio entry present but no 'jitter' key in values
+        let stats = CallStats.reduce(entries: [inboundRTP(kind: "audio", packets: 10)])
+        XCTAssertEqual(stats.jitterMs, 0, accuracy: 0.0001,
+            "jitterMs must be 0 when the 'jitter' key is absent from the stats entry")
+    }
+
     // MARK: - outbound-rtp
 
     func test_reduce_outboundRTP_packetsSentExtracted() {
@@ -1247,7 +1300,7 @@ final class CallStatsReducerTests: XCTestCase {
     func test_reduce_fullReport_allFieldsCorrect() {
         let entries: [CallStats.RawEntry] = [
             candidatePair(rtt: 0.08, bitrate: 250_000),
-            inboundRTP(id: "IA", kind: "audio", packets: 50, lost: 2, bytes: 10_000, codecId: "C1"),
+            inboundRTP(id: "IA", kind: "audio", packets: 50, lost: 2, bytes: 10_000, codecId: "C1", jitter: 0.012),
             inboundRTP(id: "IV", kind: "video", packets: 100, lost: 5, bytes: 80_000),
             outboundRTP(packets: 120, bytes: 95_000),
             codec(id: "C1", mimeType: "audio/opus"),
@@ -1263,6 +1316,8 @@ final class CallStatsReducerTests: XCTestCase {
         XCTAssertEqual(stats.outboundPacketsSent, 120)
         XCTAssertEqual(stats.bandwidth, 95_000)
         XCTAssertEqual(stats.codec, "opus")
+        XCTAssertEqual(stats.jitterMs, 12, accuracy: 0.001,
+            "Single audio stream jitter 0.012 s → 12 ms")
     }
 }
 

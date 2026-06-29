@@ -34,7 +34,9 @@ struct IceServer: Sendable {
         IceServer(urls: ["stun:stun.l.google.com:19302"], username: nil, credential: nil),
         IceServer(urls: ["stun:stun1.l.google.com:19302"], username: nil, credential: nil),
         IceServer(urls: ["stun:stun2.l.google.com:19302"], username: nil, credential: nil),
-        IceServer(urls: ["stun:stun6.l.google.com:19302"], username: nil, credential: nil)
+        IceServer(urls: ["stun:stun6.l.google.com:19302"], username: nil, credential: nil),
+        // Cloudflare STUN — second provider for resilience against Google STUN outages
+        IceServer(urls: ["stun:stun.cloudflare.com:3478"], username: nil, credential: nil)
     ]
 }
 
@@ -63,7 +65,7 @@ enum PeerConnectionState: String, Sendable {
 
 // MARK: - Call Stats
 
-struct CallStats: Equatable, Sendable, Codable {
+struct CallStats: Equatable, Sendable {
     let roundTripTimeMs: Double
     let packetsLost: Int
     let bandwidth: Int
@@ -86,6 +88,12 @@ struct CallStats: Equatable, Sendable, Codable {
     /// supported on this path. When non-zero this is a more authoritative signal
     /// than the RTT/loss heuristic for setting the video encoder ceiling.
     let availableOutgoingBitrateBps: Int
+    /// Mean audio jitter (milliseconds) averaged across all inbound-rtp audio
+    /// streams. Derived from the WebRTC `jitter` field (reported in seconds by
+    /// libwebrtc; multiplied by 1000 here). 0 = no audio inbound-rtp entry yet.
+    /// High jitter (> 30 ms) causes Opus PLC to degrade noticeably; this field
+    /// feeds the gateway `call:quality-report` so the summary can surface it.
+    let jitterMs: Double
 
     init(
         roundTripTimeMs: Double = 0,
@@ -97,7 +105,8 @@ struct CallStats: Equatable, Sendable, Codable {
         inboundAudioPackets: Int = 0,
         inboundVideoPackets: Int = 0,
         outboundPacketsSent: Int = 0,
-        availableOutgoingBitrateBps: Int = 0
+        availableOutgoingBitrateBps: Int = 0,
+        jitterMs: Double = 0
     ) {
         self.roundTripTimeMs = roundTripTimeMs
         self.packetsLost = packetsLost
@@ -109,6 +118,49 @@ struct CallStats: Equatable, Sendable, Codable {
         self.inboundVideoPackets = inboundVideoPackets
         self.outboundPacketsSent = outboundPacketsSent
         self.availableOutgoingBitrateBps = availableOutgoingBitrateBps
+        self.jitterMs = jitterMs
+    }
+}
+
+// MARK: - CallStats Codable (backward-compatible)
+
+extension CallStats: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case roundTripTimeMs, packetsLost, bandwidth, bytesReceived, codec
+        case inboundPacketsReceived, inboundAudioPackets, inboundVideoPackets
+        case outboundPacketsSent, availableOutgoingBitrateBps, jitterMs
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        roundTripTimeMs = try c.decode(Double.self, forKey: .roundTripTimeMs)
+        packetsLost = try c.decode(Int.self, forKey: .packetsLost)
+        bandwidth = try c.decode(Int.self, forKey: .bandwidth)
+        bytesReceived = try c.decode(Int.self, forKey: .bytesReceived)
+        codec = try c.decodeIfPresent(String.self, forKey: .codec)
+        inboundPacketsReceived = try c.decode(Int.self, forKey: .inboundPacketsReceived)
+        inboundAudioPackets = try c.decode(Int.self, forKey: .inboundAudioPackets)
+        inboundVideoPackets = try c.decode(Int.self, forKey: .inboundVideoPackets)
+        outboundPacketsSent = try c.decode(Int.self, forKey: .outboundPacketsSent)
+        availableOutgoingBitrateBps = try c.decode(Int.self, forKey: .availableOutgoingBitrateBps)
+        // Added after initial release — absent from persisted snapshots. Fall back to 0
+        // so old UserDefaults CallStats data continues to decode without error.
+        jitterMs = try c.decodeIfPresent(Double.self, forKey: .jitterMs) ?? 0
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(roundTripTimeMs, forKey: .roundTripTimeMs)
+        try c.encode(packetsLost, forKey: .packetsLost)
+        try c.encode(bandwidth, forKey: .bandwidth)
+        try c.encode(bytesReceived, forKey: .bytesReceived)
+        try c.encodeIfPresent(codec, forKey: .codec)
+        try c.encode(inboundPacketsReceived, forKey: .inboundPacketsReceived)
+        try c.encode(inboundAudioPackets, forKey: .inboundAudioPackets)
+        try c.encode(inboundVideoPackets, forKey: .inboundVideoPackets)
+        try c.encode(outboundPacketsSent, forKey: .outboundPacketsSent)
+        try c.encode(availableOutgoingBitrateBps, forKey: .availableOutgoingBitrateBps)
+        try c.encode(jitterMs, forKey: .jitterMs)
     }
 }
 
@@ -166,6 +218,8 @@ extension CallStats {
         var inboundVideo = 0
         var outbound = 0
         var primaryCodecId: String?
+        var audioJitterSum = 0.0
+        var audioJitterCount = 0
 
         let codecMime: [String: String] = entries.reduce(into: [:]) { map, entry in
             guard entry.type == "codec", let mime = entry.mimeType else { return }
@@ -180,7 +234,13 @@ extension CallStats {
             case "inbound-rtp":
                 if let lost = entry.values["packetsLost"] { packetsLost += Int(lost) }
                 let received = Int(entry.values["packetsReceived"] ?? 0)
-                if entry.kind == "video" { inboundVideo += received } else { inboundAudio += received }
+                if entry.kind == "video" {
+                    inboundVideo += received
+                } else {
+                    inboundAudio += received
+                    // libwebrtc reports jitter in seconds; accumulate for mean across audio streams
+                    if let j = entry.values["jitter"] { audioJitterSum += j; audioJitterCount += 1 }
+                }
                 bytesReceived += Int(entry.values["bytesReceived"] ?? 0)
                 if primaryCodecId == nil { primaryCodecId = entry.codecId }
             case "outbound-rtp":
@@ -195,6 +255,8 @@ extension CallStats {
             .flatMap { codecMime[$0] }
             .map { mime in mime.split(separator: "/").last.map(String.init) ?? mime }
 
+        let jitterMs = audioJitterCount > 0 ? (audioJitterSum / Double(audioJitterCount)) * 1000 : 0
+
         return CallStats(
             roundTripTimeMs: rtt,
             packetsLost: packetsLost,
@@ -205,7 +267,8 @@ extension CallStats {
             inboundAudioPackets: inboundAudio,
             inboundVideoPackets: inboundVideo,
             outboundPacketsSent: outbound,
-            availableOutgoingBitrateBps: availableOutgoingBitrateBps
+            availableOutgoingBitrateBps: availableOutgoingBitrateBps,
+            jitterMs: jitterMs
         )
     }
 }
