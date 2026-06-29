@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
 import { logError } from '../utils/logger';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { sendSuccess, sendNotFound, sendForbidden, sendBadRequest } from '../utils/response.js';
+import { sendSuccess, sendError, sendNotFound, sendForbidden, sendBadRequest } from '../utils/response.js';
 
 // Schémas de validation
 const TranslateRequestSchema = z.object({
@@ -674,12 +674,7 @@ export async function translationRoutes(fastify: FastifyInstance) {
       const testResult = await translationService.getTranslation(handleResult.messageId, 'fr');
 
       if (!testResult) {
-        return reply.send({
-          success: false,
-          error: 'TEST_FAILED',
-          message: 'Translation service test failed - no result available',
-          data: { message_id: handleResult.messageId }
-        });
+        return sendError(reply, 500, 'TEST_FAILED', { message: `Translation service test failed - no result available (messageId: ${handleResult.messageId})` });
       }
 
       return sendSuccess(reply, {
@@ -696,11 +691,7 @@ export async function translationRoutes(fastify: FastifyInstance) {
 
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown translation test error';
-      return reply.send({
-        success: false,
-        error: 'TEST_FAILED',
-        message: errorMessage
-      });
+      return sendError(reply, 500, 'TEST_FAILED', { message: errorMessage });
     }
   });
 }

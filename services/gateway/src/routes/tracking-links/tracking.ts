@@ -775,11 +775,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
 
       const result = await trackingLinkService.getAllTrackingLinks({ limit, offset, search });
 
-      return reply.send({
-        success: true,
-        trackingLinks: result.trackingLinks,
-        total: result.total
-      });
+      return sendSuccess(reply, { trackingLinks: result.trackingLinks, total: result.total });
     } catch (error) {
       logError(fastify.log, 'Admin get all tracking links error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');
@@ -837,11 +833,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
 
       const result = await trackingLinkService.getTrackingLinkClicks(trackingLink.id, limit, offset);
 
-      return reply.send({
-        success: true,
-        clicks: result.clicks,
-        total: result.total
-      });
+      return sendSuccess(reply, { clicks: result.clicks, total: result.total });
     } catch (error) {
       logError(fastify.log, 'Admin get tracking link clicks error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');

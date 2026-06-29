@@ -771,13 +771,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
     }
 
     // Add exists flag to indicate profile exists
-    return reply.send({
-      ...result,
-      data: {
-        ...result.data,
-        exists: true
-      }
-    });
+    return sendSuccess(reply, { ...result.data, exists: true });
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
