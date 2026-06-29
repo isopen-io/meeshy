@@ -24,14 +24,14 @@ enum CallState: Equatable, Sendable {
     case reconnecting(attempt: Int)
     case ended(reason: CallEndReason)
 
-    var isActive: Bool {
+    nonisolated var isActive: Bool {
         switch self {
         case .idle, .ended: return false
         default: return true
         }
     }
 
-    var isRinging: Bool {
+    nonisolated var isRinging: Bool {
         if case .ringing = self { return true }
         return false
     }
@@ -40,7 +40,7 @@ enum CallState: Equatable, Sendable {
     /// `isActive` (which is `false` for both `.idle` AND `.ended`) because the
     /// UI must keep showing the end-of-call panel during the 1.5 s settle window
     /// that `CallManager.endCallInternal` holds before resetting to `.idle`.
-    var isEnded: Bool {
+    nonisolated var isEnded: Bool {
         if case .ended = self { return true }
         return false
     }
@@ -51,7 +51,7 @@ enum CallState: Equatable, Sendable {
     /// gating purely on `isActive` dismissed the cover the instant the call
     /// ended, making that panel dead code. The cover only ever shows in
     /// `.fullScreen`; in `.pip` the floating pill carries the ended state.
-    static func shouldPresentFullScreenCover(
+    nonisolated static func shouldPresentFullScreenCover(
         callState: CallState,
         displayMode: CallDisplayMode
     ) -> Bool {
