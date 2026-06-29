@@ -51,7 +51,7 @@ enum CallState: Equatable, Sendable {
     /// gating purely on `isActive` dismissed the cover the instant the call
     /// ended, making that panel dead code. The cover only ever shows in
     /// `.fullScreen`; in `.pip` the floating pill carries the ended state.
-    nonisolated static func shouldPresentFullScreenCover(
+    static func shouldPresentFullScreenCover(
         callState: CallState,
         displayMode: CallDisplayMode
     ) -> Bool {
