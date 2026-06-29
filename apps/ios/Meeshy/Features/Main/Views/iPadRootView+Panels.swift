@@ -111,8 +111,8 @@ extension iPadRootView {
         case .dataExport:
             DataExportView()
                                 .navigationBarHidden(true)
-        case .postDetail(let postId, let initialPost, let showComments):
-            PostDetailView(postId: postId, initialPost: initialPost, showComments: showComments)
+        case .postDetail(let postId, let initialPost, let showComments, let commentId, let parentCommentId):
+            PostDetailView(postId: postId, initialPost: initialPost, showComments: showComments, targetCommentId: commentId, targetParentCommentId: parentCommentId)
                         case .bookmarks:
             BookmarksView()
                                 .navigationBarHidden(true)

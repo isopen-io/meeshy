@@ -180,6 +180,45 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
 
       expect(createdDataOfType('comment_reply').subtitle).toBe('Publication');
     });
+
+    it('porte commentId + parentCommentId en contexte ET metadata (navigation jusqu\'à la réponse)', async () => {
+      const PARENT_COMMENT_ID = 'dddddddddddddddddddddddd';
+      await service.createCommentReplyNotification({
+        actorId: ACTOR_ID,
+        postId: POST_ID,
+        commentAuthorId: RECIPIENT_ID,
+        commentId: COMMENT_ID,
+        parentCommentId: PARENT_COMMENT_ID,
+        replyPreview: 'Complètement d\'accord',
+        parentCommentPreview: 'Le meilleur resto de la ville',
+        postType: 'POST',
+      });
+
+      const created = createdDataOfType('comment_reply');
+      // Contexte : le client ouvre le post (postId), déplie le fil du parent
+      // (parentCommentId) puis défile/surligne la réponse (commentId).
+      expect(created.context.postId).toBe(POST_ID);
+      expect(created.context.commentId).toBe(COMMENT_ID);
+      expect(created.context.parentCommentId).toBe(PARENT_COMMENT_ID);
+      // Metadata : mêmes identifiants, pour le repli web/iOS qui lit metadata.
+      expect(created.metadata.commentId).toBe(COMMENT_ID);
+      expect(created.metadata.parentCommentId).toBe(PARENT_COMMENT_ID);
+    });
+
+    it('omet parentCommentId quand il n\'est pas fourni (réponse sans parent connu)', async () => {
+      await service.createCommentReplyNotification({
+        actorId: ACTOR_ID,
+        postId: POST_ID,
+        commentAuthorId: RECIPIENT_ID,
+        commentId: COMMENT_ID,
+        replyPreview: 'Oui !',
+      });
+
+      const created = createdDataOfType('comment_reply');
+      expect(created.context.commentId).toBe(COMMENT_ID);
+      expect(created.context.parentCommentId).toBeUndefined();
+      expect(created.metadata.parentCommentId).toBeUndefined();
+    });
   });
 
   describe('createCommentLikeNotification', () => {

@@ -129,6 +129,19 @@ export default function ReelPage() {
     }
   }, [current, shareMutation, toastCtx, t]);
 
+  // Reel comment notifications link to `/reel/:id#comment-:cid`. The reel player
+  // surfaces comments via the post-detail thread, so forward to it preserving the
+  // anchor — the post page scrolls to and highlights the exact comment. Replace
+  // (not push) so Back returns to where the user came from, not this redirect.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !postId) return;
+    const anchorCommentId = window.location.hash.match(/^#comment-(.+)$/)?.[1]
+      ?? new URLSearchParams(window.location.search).get('comment');
+    if (anchorCommentId) {
+      router.replace(`/feeds/post/${postId}#comment-${anchorCommentId}`);
+    }
+  }, [postId, router]);
+
   const onComment = useCallback(() => {
     if (current) router.push(`/feeds/post/${current.id}`);
   }, [current, router]);

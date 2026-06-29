@@ -9,6 +9,12 @@ struct PostDetailView: View {
     let postId: String
     var initialPost: FeedPost?
     var showComments: Bool = false
+    /// Commentaire ciblé par une navigation depuis une notification (like /
+    /// réponse / commentaire). L'écran défile jusqu'à lui et le surligne.
+    var targetCommentId: String?
+    /// Commentaire parent quand la cible est une réponse — l'écran déplie le fil
+    /// du parent puis défile jusqu'à ce fil (la réponse y apparaît).
+    var targetParentCommentId: String?
 
     @StateObject private var viewModel = PostDetailViewModel()
     /// Autocomplétion @mention pour le composer de commentaire — contexte `.post`,
@@ -17,10 +23,19 @@ struct PostDetailView: View {
     @StateObject private var mentionController: MentionComposerController
     private var theme: ThemeManager { ThemeManager.shared }
 
-    init(postId: String, initialPost: FeedPost? = nil, showComments: Bool = false) {
+    init(
+        postId: String,
+        initialPost: FeedPost? = nil,
+        showComments: Bool = false,
+        targetCommentId: String? = nil,
+        targetParentCommentId: String? = nil
+    ) {
         self.postId = postId
         self.initialPost = initialPost
-        self.showComments = showComments
+        // A comment target implies the comments section must be revealed.
+        self.showComments = showComments || targetCommentId != nil
+        self.targetCommentId = targetCommentId
+        self.targetParentCommentId = targetParentCommentId
         _mentionController = StateObject(wrappedValue: MentionComposerController(context: .post(id: postId)))
     }
     @EnvironmentObject private var statusViewModel: StatusViewModel
@@ -37,6 +52,11 @@ struct PostDetailView: View {
     @State private var commentBlurEnabled: Bool = false
     @State private var commentEffects: MessageEffects = .none
     @State private var composerFocusTrigger: Bool = false
+    /// Section de commentaire actuellement surlignée (cible d'une notification).
+    @State private var highlightedCommentId: String? = nil
+    /// Garde-fou : ne défile vers la cible qu'une seule fois (les commentaires
+    /// peuvent arriver après le premier rendu via le chargement paginé).
+    @State private var didScrollToTargetComment: Bool = false
     /// Texte du composer, lié au `UniversalComposerBar`. Permet de préremplir une
     /// @mention quand on répond à une réponse (niveau 2) — l'auteur ciblé est
     /// notifié via `user_mentioned` même si la réponse est reparentée à la racine.
@@ -423,6 +443,17 @@ struct PostDetailView: View {
                 replyPresenceResolver: { PresenceManager.shared.presenceMap[$0]?.state ?? .offline }
             )
             .padding(.horizontal, 16)
+            .padding(.vertical, highlightedCommentId == comment.id ? 6 : 0)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(hex: accentColor).opacity(highlightedCommentId == comment.id ? 0.12 : 0))
+                    .padding(.horizontal, 8)
+            )
+            .animation(.easeInOut(duration: 0.4), value: highlightedCommentId)
+            // Anchor for notification-driven navigation: scroll/highlight targets
+            // the top-level section. For a reply, the parent thread is expanded so
+            // the reply becomes visible right below this anchor.
+            .id("comment-\(comment.id)")
         }
 
         if viewModel.isLoadingComments {
@@ -439,6 +470,41 @@ struct PostDetailView: View {
                     .foregroundColor(MeeshyColors.indigo500)
             }
             .padding()
+        }
+    }
+
+    /// Notification → comment navigation. Scrolls to (and briefly highlights) the
+    /// targeted comment once it's loaded. For a reply, scrolls to the parent
+    /// section and expands its thread so the reply is revealed. Falls back to the
+    /// legacy "reveal comments + focus composer" behaviour when there's no target.
+    /// Runs once (guarded by `didScrollToTargetComment`); re-invoked as comments
+    /// page in until the target is present.
+    private func attemptScrollToTargetComment(using proxy: ScrollViewProxy) {
+        guard let target = targetCommentId, !target.isEmpty else {
+            if showComments && !didScrollToTargetComment {
+                didScrollToTargetComment = true
+                withAnimation { proxy.scrollTo("commentsSection", anchor: .top) }
+                composerFocusTrigger.toggle()
+            }
+            return
+        }
+        guard !didScrollToTargetComment else { return }
+
+        // Only top-level sections carry a scroll anchor. For a reply, that's the
+        // parent comment; otherwise the comment itself.
+        let sectionId = (targetParentCommentId?.isEmpty == false ? targetParentCommentId! : target)
+        guard viewModel.topLevelComments.contains(where: { $0.id == sectionId }) else { return }
+        didScrollToTargetComment = true
+
+        if let parentId = targetParentCommentId, !parentId.isEmpty,
+           !viewModel.expandedThreads.contains(parentId) {
+            Task { await viewModel.toggleThread(parentId, postId: postId) }
+        }
+
+        withAnimation { proxy.scrollTo("comment-\(sectionId)", anchor: .top) }
+        highlightedCommentId = sectionId
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.6) {
+            if highlightedCommentId == sectionId { highlightedCommentId = nil }
         }
     }
 
@@ -491,12 +557,15 @@ struct PostDetailView: View {
                         .onAppear {
                             if showComments {
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                                    withAnimation {
-                                        scrollProxy.scrollTo("commentsSection", anchor: .top)
-                                    }
-                                    composerFocusTrigger.toggle()
+                                    attemptScrollToTargetComment(using: scrollProxy)
                                 }
                             }
+                        }
+                        // Comments load asynchronously (and paginate), so the
+                        // target may not exist at first render. Retry the scroll
+                        // each time the loaded set changes until it lands once.
+                        .adaptiveOnChange(of: viewModel.topLevelComments.count) { _, _ in
+                            attemptScrollToTargetComment(using: scrollProxy)
                         }
                         .onReceive(CallManager.shared.$callState) { state in
                             isCallActive = state.isActive

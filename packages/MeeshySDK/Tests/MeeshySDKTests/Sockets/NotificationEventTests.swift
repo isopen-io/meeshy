@@ -153,6 +153,50 @@ final class NotificationEventTests: XCTestCase {
         XCTAssertNil(event.senderDisplayName)
     }
 
+    func test_socketNotificationEvent_commentReply_exposesCommentIds() throws {
+        let json = """
+        {
+            "id": "notif-reply",
+            "userId": "u2",
+            "type": "comment_reply",
+            "content": "a repondu a votre commentaire",
+            "actor": { "id": "actor2", "username": "bob" },
+            "context": {
+                "postId": "post123",
+                "commentId": "reply-9",
+                "parentCommentId": "parent-3"
+            },
+            "metadata": { "postType": "POST" }
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(SocketNotificationEvent.self, from: json)
+        XCTAssertEqual(event.notificationType, .commentReply)
+        XCTAssertEqual(event.postId, "post123")
+        XCTAssertEqual(event.commentId, "reply-9")
+        XCTAssertEqual(event.parentCommentId, "parent-3")
+    }
+
+    func test_socketNotificationEvent_commentId_fallsBackToMetadata() throws {
+        let json = """
+        {
+            "id": "notif-like",
+            "userId": "u2",
+            "type": "comment_like",
+            "content": "a reagi a votre commentaire",
+            "metadata": {
+                "postId": "post123",
+                "commentId": "c-77"
+            }
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(SocketNotificationEvent.self, from: json)
+        XCTAssertEqual(event.postId, "post123")
+        XCTAssertEqual(event.commentId, "c-77")
+        XCTAssertNil(event.parentCommentId)
+    }
+
     func test_socketNotificationEvent_gatewayFormat_noActorNoContext() throws {
         let json = """
         {

@@ -147,6 +147,11 @@ struct ThreadedCommentSection: View {
 struct CommentsSheetView: View {
     let post: FeedPost
     let accentColor: String
+    /// Comment targeted by a notification — the sheet scrolls to and highlights it
+    /// once loaded (for a reply, expands the parent thread first).
+    var targetCommentId: String? = nil
+    /// Parent comment when `targetCommentId` is a reply.
+    var targetParentCommentId: String? = nil
     var onSendComment: ((String, String, String?) -> Void)? = nil
     /// Fired with the post id AFTER a comment was successfully sent — lets a host
     /// (e.g. the reels viewer) bump its own comment counter. Optional; nil = no-op.
@@ -165,6 +170,10 @@ struct CommentsSheetView: View {
     @State private var selectedProfileUser: ProfileSheetUser?
     @State private var liveComments: [FeedComment]?
     @State private var liveCommentCount: Int?
+    /// Section de commentaire surlignée (cible d'une notification).
+    @State private var highlightedCommentId: String? = nil
+    /// Garde-fou : ne défile vers la cible qu'une seule fois.
+    @State private var didScrollToTargetComment: Bool = false
     @State private var composerLanguage: String = DefaultComposerLanguage.resolve()
     @State private var commentBlurEnabled: Bool = false
     @State private var commentEffects: MessageEffects = .none
@@ -204,11 +213,15 @@ struct CommentsSheetView: View {
     init(
         post: FeedPost,
         accentColor: String,
+        targetCommentId: String? = nil,
+        targetParentCommentId: String? = nil,
         onSendComment: ((String, String, String?) -> Void)? = nil,
         onCommentSent: ((_ postId: String) -> Void)? = nil
     ) {
         self.post = post
         self.accentColor = accentColor
+        self.targetCommentId = targetCommentId
+        self.targetParentCommentId = targetParentCommentId
         self.onSendComment = onSendComment
         self.onCommentSent = onCommentSent
         _mentionController = StateObject(wrappedValue: MentionComposerController(
@@ -271,6 +284,7 @@ struct CommentsSheetView: View {
                 .ignoresSafeArea()
 
                 VStack(spacing: 0) {
+                    ScrollViewReader { commentsProxy in
                     ScrollView(showsIndicators: false) {
                         LazyVStack(spacing: 0) {
                             ForEach(topLevelComments) { comment in
@@ -302,11 +316,26 @@ struct CommentsSheetView: View {
                                     replyStoryResolver: { storyViewModel.storyRingState(forUserId: $0) },
                                     replyPresenceResolver: { PresenceManager.shared.presenceMap[$0]?.state ?? .offline }
                                 )
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(Color(hex: accentColor).opacity(highlightedCommentId == comment.id ? 0.12 : 0))
+                                )
+                                .animation(.easeInOut(duration: 0.4), value: highlightedCommentId)
+                                .id("comment-\(comment.id)")
                             }
                         }
                         .padding(.horizontal, 16)
                         .padding(.bottom, 100)
                     }
+                    .onAppear {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            attemptScrollToTargetComment(using: commentsProxy)
+                        }
+                    }
+                    .adaptiveOnChange(of: topLevelComments.count) { _, _ in
+                        attemptScrollToTargetComment(using: commentsProxy)
+                    }
+                    } // ScrollViewReader
 
                     VStack(spacing: 0) {
                         if mentionController.activeQuery != nil {
@@ -496,6 +525,31 @@ struct CommentsSheetView: View {
                 }
                 await loadReplies(commentId: comment.id)
             }
+        }
+    }
+
+    // MARK: - Notification → comment scroll
+
+    /// Scrolls to (and briefly highlights) the comment targeted by a notification
+    /// once it's loaded. For a reply, scrolls to the parent section and expands its
+    /// thread so the reply is revealed. Runs once; re-invoked as comments load in.
+    private func attemptScrollToTargetComment(using proxy: ScrollViewProxy) {
+        guard let target = targetCommentId, !target.isEmpty, !didScrollToTargetComment else { return }
+
+        // Only top-level sections carry a scroll anchor. For a reply, that's the
+        // parent comment; otherwise the comment itself.
+        let sectionId = (targetParentCommentId?.isEmpty == false ? targetParentCommentId! : target)
+        guard topLevelComments.contains(where: { $0.id == sectionId }) else { return }
+        didScrollToTargetComment = true
+
+        if let parentId = targetParentCommentId, !parentId.isEmpty, !expandedThreads.contains(parentId) {
+            Task { await toggleThread(parentId) }
+        }
+
+        withAnimation { proxy.scrollTo("comment-\(sectionId)", anchor: .top) }
+        highlightedCommentId = sectionId
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.6) {
+            if highlightedCommentId == sectionId { highlightedCommentId = nil }
         }
     }
 

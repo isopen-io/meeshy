@@ -67,6 +67,12 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     message: {
       findUnique: jest.fn(),
     },
+    // Required by resolvePostMedia (social comment/reply notifications attach
+    // the post thumbnail to the push). Default returns null so no media branch
+    // runs; the comment-navigation push test relies only on context IDs.
+    postMedia: {
+      findFirst: jest.fn(),
+    },
   };
 
   return {
@@ -127,7 +133,7 @@ function makeNotif() {
   };
 }
 
-type PushPayload = { title: string; body: string };
+type PushPayload = { title: string; body: string; data?: Record<string, string> };
 
 describe('NotificationService — message push title/body', () => {
   let service: NotificationService;
@@ -408,6 +414,56 @@ describe('NotificationService — message push title/body', () => {
       expect(payload.title).toBe('Alice Martin');
       expect((payload as { subtitle?: string }).subtitle).toBe('Équipe Dev');
       expect(payload.body).toBe('Sprint +1🎬');
+    });
+  });
+
+  describe('social comment navigation push data', () => {
+    const POST_ID = 'aaaaaaaaaaaaaaaaaaaaaaaa';
+    const COMMENT_ID = 'bbbbbbbbbbbbbbbbbbbbbbbb';
+    const PARENT_COMMENT_ID = 'cccccccccccccccccccccccc';
+
+    beforeEach(() => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        username: 'bob',
+        displayName: 'Bob Commentateur',
+        avatar: null,
+      });
+      (prisma.postMedia.findFirst as jest.Mock).mockResolvedValue(null);
+    });
+
+    it('test_commentReplyPush_carriesCommentIdAndParentCommentId', async () => {
+      // The tapped push must let iOS open the post AND scroll to the reply:
+      // data.commentId targets the reply, data.parentCommentId lets the client
+      // expand the parent thread first.
+      await service.createCommentReplyNotification({
+        actorId: SENDER_ID,
+        postId: POST_ID,
+        commentAuthorId: RECIPIENT_ID,
+        commentId: COMMENT_ID,
+        parentCommentId: PARENT_COMMENT_ID,
+        replyPreview: 'Tout à fait',
+        postType: 'POST',
+      });
+
+      const data = lastPushPayload().data!;
+      expect(data.postId).toBe(POST_ID);
+      expect(data.commentId).toBe(COMMENT_ID);
+      expect(data.parentCommentId).toBe(PARENT_COMMENT_ID);
+    });
+
+    it('test_commentReplyPush_parentCommentIdEmptyWhenAbsent', async () => {
+      await service.createCommentReplyNotification({
+        actorId: SENDER_ID,
+        postId: POST_ID,
+        commentAuthorId: RECIPIENT_ID,
+        commentId: COMMENT_ID,
+        replyPreview: 'Top',
+        postType: 'POST',
+      });
+
+      const data = lastPushPayload().data!;
+      expect(data.commentId).toBe(COMMENT_ID);
+      expect(data.parentCommentId).toBe('');
     });
   });
 });

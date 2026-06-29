@@ -24,7 +24,7 @@ enum Route: Hashable {
     case shareLinks
     case communityLinks
     case dataExport
-    case postDetail(String, FeedPost? = nil, showComments: Bool = false)
+    case postDetail(String, FeedPost? = nil, showComments: Bool = false, commentId: String? = nil, parentCommentId: String? = nil)
     case bookmarks
     case starredMessages
     case friendRequests
@@ -92,7 +92,7 @@ extension Route {
             return "Liens communaute"
         case .dataExport:
             return "Export de donnees"
-        case .postDetail(_, let post, _):
+        case .postDetail(_, let post, _, _, _):
             return post?.author ?? "Publication"
         case .bookmarks:
             return "Signets"

@@ -819,6 +819,8 @@ public struct SocketNotificationEvent: Decodable, Sendable {
     public var conversationId: String? { context?.conversationId }
     public var messageId: String? { context?.messageId }
     public var postId: String? { context?.postId ?? metadata?.postId }
+    public var commentId: String? { context?.commentId ?? metadata?.commentId }
+    public var parentCommentId: String? { context?.parentCommentId ?? metadata?.parentCommentId }
     public var postType: String? { metadata?.postType }
     public var messagePreview: String? { metadata?.commentPreview }
     public var conversationTitle: String? { context?.conversationTitle }
@@ -861,11 +863,14 @@ public struct SocketNotificationContext: Decodable, Sendable {
     public let messageId: String?
     public let postId: String?
     public let commentId: String?
+    public let parentCommentId: String?
     public let friendRequestId: String?
 }
 
 public struct SocketNotificationMetadata: Decodable, Sendable {
     public let postId: String?
+    public let commentId: String?
+    public let parentCommentId: String?
     public let postType: String?
     public let commentPreview: String?
     public let emoji: String?
