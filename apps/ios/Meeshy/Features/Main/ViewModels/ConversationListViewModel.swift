@@ -1480,7 +1480,9 @@ class ConversationListViewModel: ObservableObject {
             let username = AuthManager.shared.currentUser?.username
             let msgs = response.data.reversed().map { $0.toMessage(currentUserId: userId, currentUsername: username) }
             previewMessages[conversationId] = msgs
-        } catch { }
+        } catch {
+            Logger.messages.warning("[ConversationList] previewMessages fetch failed for \(conversationId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     /// Précharge les messages des top 20 conversations qui n'ont pas encore de cache.
@@ -1523,7 +1525,9 @@ class ConversationListViewModel: ObservableObject {
                                 }
                                 try? await CacheCoordinator.shared.messages.save(Array(messages), for: conversationId)
                             }
-                        } catch { }
+                        } catch {
+                            Logger.messages.warning("[ConversationList] prefetch failed for \(conversationId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                        }
                     }
                 }
             }

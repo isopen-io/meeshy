@@ -588,6 +588,76 @@ describe('StatusHandler', () => {
       expect(() => handler.handleSocketDisconnecting(SOCKET_ID, broadcastFn)).not.toThrow();
       expect(broadcastFn).not.toHaveBeenCalled();
     });
+
+    it('suppresses typing:stop when another socket for same user is typing in the same conversation', async () => {
+      const SOCKET_1 = 'socket-device-1';
+      const SOCKET_2 = 'socket-device-2';
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const socket1 = makeSocket({ id: SOCKET_1 });
+      const socket2 = makeSocket({ id: SOCKET_2 });
+      const socketToUser = new Map([[SOCKET_1, USER_ID], [SOCKET_2, USER_ID]]);
+      const handler = makeHandler({ prisma, socketToUser });
+
+      mockNormalizeConversationId.mockResolvedValue(CONV_ID);
+
+      // Both sockets are typing in the same conversation
+      await handler.handleTypingStart(socket1, { conversationId: CONV_ID });
+      const throttleMap = (handler as any).typingThrottleMap as Map<string, number>;
+      throttleMap.clear();
+      await handler.handleTypingStart(socket2, { conversationId: CONV_ID });
+
+      // socket1 disconnects — socket2 is still typing in that conversation
+      const broadcastFn = jest.fn();
+      handler.handleSocketDisconnecting(SOCKET_1, broadcastFn, new Set([SOCKET_2]));
+
+      // typing:stop must NOT be broadcast because socket2 is still typing
+      expect(broadcastFn).not.toHaveBeenCalled();
+    });
+
+    it('broadcasts typing:stop when another socket exists but is NOT typing in the same conversation', async () => {
+      const SOCKET_1 = 'socket-device-1';
+      const SOCKET_2 = 'socket-device-2';
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const socket1 = makeSocket({ id: SOCKET_1 });
+      const socketToUser = new Map([[SOCKET_1, USER_ID], [SOCKET_2, USER_ID]]);
+      const handler = makeHandler({ prisma, socketToUser });
+
+      mockNormalizeConversationId.mockResolvedValue(CONV_ID);
+      await handler.handleTypingStart(socket1, { conversationId: CONV_ID });
+
+      // socket2 exists but is not tracked in activeTypers (not typing)
+      const broadcastFn = jest.fn();
+      handler.handleSocketDisconnecting(SOCKET_1, broadcastFn, new Set([SOCKET_2]));
+
+      // typing:stop MUST be broadcast because socket2 is not typing in this conversation
+      expect(broadcastFn).toHaveBeenCalledWith(
+        ROOMS.conversation(CONV_ID),
+        SERVER_EVENTS.TYPING_STOP,
+        expect.objectContaining({ userId: USER_ID, isTyping: false })
+      );
+    });
+
+    it('broadcasts typing:stop when otherSocketIds is undefined (single device)', async () => {
+      const dbUser = { id: USER_ID, username: 'alice', firstName: null, lastName: null, displayName: 'Alice' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+
+      mockNormalizeConversationId.mockResolvedValue(CONV_ID);
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+
+      const broadcastFn = jest.fn();
+      handler.handleSocketDisconnecting(SOCKET_ID, broadcastFn, undefined);
+
+      expect(broadcastFn).toHaveBeenCalledTimes(1);
+      expect(broadcastFn).toHaveBeenCalledWith(
+        ROOMS.conversation(CONV_ID),
+        SERVER_EVENTS.TYPING_STOP,
+        expect.objectContaining({ userId: USER_ID, isTyping: false })
+      );
+    });
   });
 
   // ── clearTypingThrottle ─────────────────────────────────────────────────────
