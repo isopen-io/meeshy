@@ -173,9 +173,9 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       const trackingLink = await trackingLinkService.createTrackingLink({
         originalUrl: body.originalUrl,
         name: body.name ? SecuritySanitizer.sanitizeText(body.name) : body.name,
-        campaign: body.campaign,
-        source: body.source,
-        medium: body.medium,
+        campaign: body.campaign ? SecuritySanitizer.sanitizeText(body.campaign) : body.campaign,
+        source: body.source ? SecuritySanitizer.sanitizeText(body.source) : body.source,
+        medium: body.medium ? SecuritySanitizer.sanitizeText(body.medium) : body.medium,
         createdBy,
         conversationId: body.conversationId,
         messageId: body.messageId,
