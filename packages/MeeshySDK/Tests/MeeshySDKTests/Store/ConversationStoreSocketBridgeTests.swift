@@ -30,6 +30,7 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
     @MainActor
     private struct BridgeEnv {
         let bridge: ConversationStoreSocketBridge
+        let conversationUpdated = PassthroughSubject<ConversationUpdatedEvent, Never>()
         let deleted = PassthroughSubject<ConversationDeletedSocketEvent, Never>()
         let prefsUpdated = PassthroughSubject<UserPreferencesConversationUpdatedSocketEvent, Never>()
         let reordered = PassthroughSubject<UserPreferencesReorderedSocketEvent, Never>()
@@ -46,6 +47,7 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
                 currentUserId: { currentUserId }
             )
             bridge.activate(
+                conversationUpdated: conversationUpdated.eraseToAnyPublisher(),
                 conversationDeleted: deleted.eraseToAnyPublisher(),
                 userPreferencesUpdated: prefsUpdated.eraseToAnyPublisher(),
                 userPreferencesReordered: reordered.eraseToAnyPublisher(),
@@ -103,6 +105,99 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
             try? await Task.sleep(nanoseconds: 15_000_000)
         }
         return await condition()
+    }
+
+    private func makeConversationUpdatedEvent(
+        conversationId: String,
+        lastMessageAt: Date? = nil,
+        lastMessageId: String? = nil,
+        lastMessagePreview: String? = nil,
+        title: String? = nil
+    ) -> ConversationUpdatedEvent {
+        ConversationUpdatedEvent(
+            conversationId: conversationId,
+            title: title,
+            lastMessageAt: lastMessageAt,
+            lastMessageId: lastMessageId,
+            lastMessagePreview: lastMessagePreview,
+            updatedAt: "2024-01-01T00:00:00.000Z"
+        )
+    }
+
+    // MARK: conversation:updated
+
+    func test_conversationUpdated_newerLastMessageAt_bumpsConversationToTop() async {
+        let store = makeStore()
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        let t1 = Date(timeIntervalSince1970: 1_700_001_000)
+        await store.hydrate(makeConv(id: "c1"))  // lastMessageAt = t0
+        var c2 = makeConv(id: "c2")
+        c2.lastMessageAt = t1
+        await store.hydrate(c2)
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()))
+
+        let t2 = Date(timeIntervalSince1970: 1_700_002_000)
+        env.conversationUpdated.send(makeConversationUpdatedEvent(conversationId: "c1", lastMessageAt: t2))
+
+        let applied = await waitUntil { (await store.conversation(id: "c1"))?.lastMessageAt == t2 }
+        XCTAssertTrue(applied, "bridge must route conversation:updated → applyConversationUpdated for lastMessageAt")
+    }
+
+    func test_conversationUpdated_staleLastMessageAt_dropped() async {
+        let store = makeStore()
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        await store.hydrate(makeConv(id: "c1"))  // lastMessageAt = t0
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()))
+
+        let olderDate = Date(timeIntervalSince1970: 1_699_000_000)
+        env.conversationUpdated.send(makeConversationUpdatedEvent(conversationId: "c1", lastMessageAt: olderDate))
+
+        let overwritten = await waitUntil { (await store.conversation(id: "c1"))?.lastMessageAt != t0 }
+        XCTAssertFalse(overwritten, "a stale lastMessageAt must not overwrite the current value")
+    }
+
+    func test_conversationUpdated_lastMessageId_andPreview_applied() async {
+        let store = makeStore()
+        await store.hydrate(makeConv(id: "c1"))
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()))
+
+        let newAt = Date(timeIntervalSince1970: 1_700_002_000)
+        env.conversationUpdated.send(makeConversationUpdatedEvent(
+            conversationId: "c1",
+            lastMessageAt: newAt,
+            lastMessageId: "msg-99",
+            lastMessagePreview: "Hello!"
+        ))
+
+        let applied = await waitUntil {
+            let c = await store.conversation(id: "c1")
+            return c?.lastMessageId == "msg-99" && c?.lastMessagePreview == "Hello!"
+        }
+        XCTAssertTrue(applied, "bridge must apply lastMessageId and lastMessagePreview from conversation:updated")
+    }
+
+    func test_conversationUpdated_metadataTitle_applied() async {
+        let store = makeStore()
+        await store.hydrate(makeConv(id: "c1"))
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()))
+
+        env.conversationUpdated.send(makeConversationUpdatedEvent(conversationId: "c1", title: "New Group Name"))
+
+        let applied = await waitUntil { (await store.conversation(id: "c1"))?.title == "New Group Name" }
+        XCTAssertTrue(applied, "bridge must apply title updates from conversation:updated")
+    }
+
+    func test_conversationUpdated_unknownConversation_ignoredSilently() async {
+        let store = makeStore()
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()))
+
+        let newAt = Date(timeIntervalSince1970: 1_700_002_000)
+        env.conversationUpdated.send(makeConversationUpdatedEvent(conversationId: "unknown", lastMessageAt: newAt))
+
+        // No crash, no state corruption — just wait a moment.
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        let conv = await store.conversation(id: "unknown")
+        XCTAssertNil(conv, "a conversation:updated for an unknown id must be silently ignored")
     }
 
     // MARK: ConversationStore routes

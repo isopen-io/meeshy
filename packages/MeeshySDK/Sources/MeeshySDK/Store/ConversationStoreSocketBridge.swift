@@ -9,6 +9,8 @@ import Combine
 /// store-agnostic.
 ///
 /// Scope — the broadcasts routed to the store:
+/// - `conversation:updated`        → `ConversationStore.applyConversationUpdated`
+///   (bump-to-top on new message + metadata changes: title, avatar, …)
 /// - `conversation:deleted`        → `ConversationStore.applyConversationDeleted`
 /// - `user:preferences-updated` (conversation scope, versioned)
 ///                                 → `ConversationStore.applyRemote`
@@ -53,6 +55,7 @@ public final class ConversationStoreSocketBridge {
     /// Wire the shared socket manager's broadcasts to the stores.
     public func activate(socket: MessageSocketManager = .shared) {
         activate(
+            conversationUpdated: socket.conversationUpdated.eraseToAnyPublisher(),
             conversationDeleted: socket.conversationDeleted.eraseToAnyPublisher(),
             userPreferencesUpdated: socket.userPreferencesConversationUpdated.eraseToAnyPublisher(),
             userPreferencesReordered: socket.userPreferencesReordered.eraseToAnyPublisher(),
@@ -67,6 +70,7 @@ public final class ConversationStoreSocketBridge {
     /// Publisher-injected variant (testable without a live socket). Idempotent:
     /// drops any prior subscriptions before re-wiring.
     func activate(
+        conversationUpdated: AnyPublisher<ConversationUpdatedEvent, Never>,
         conversationDeleted: AnyPublisher<ConversationDeletedSocketEvent, Never>,
         userPreferencesUpdated: AnyPublisher<UserPreferencesConversationUpdatedSocketEvent, Never>,
         userPreferencesReordered: AnyPublisher<UserPreferencesReorderedSocketEvent, Never>,
@@ -80,6 +84,10 @@ public final class ConversationStoreSocketBridge {
         let store = self.store
         let categoryStore = self.categoryStore
         let currentUserId = self.currentUserId
+
+        conversationUpdated.sink { event in
+            Task { await store.applyConversationUpdated(Self.mapConversationUpdated(event)) }
+        }.store(in: &cancellables)
 
         conversationDeleted.sink { event in
             Task { await store.applyConversationDeleted(ConversationDeletedEvent(conversationId: event.conversationId)) }
@@ -138,6 +146,27 @@ public final class ConversationStoreSocketBridge {
     /// Drop all subscriptions (e.g. on logout).
     public func deactivate() {
         cancellables.removeAll()
+    }
+
+    /// Map a `conversation:updated` socket event onto the store's input value
+    /// type. Pure + `nonisolated` so the sink can build it before hopping to
+    /// the store actor.
+    nonisolated static func mapConversationUpdated(
+        _ event: ConversationUpdatedEvent
+    ) -> ConversationUpdatedStoreEvent {
+        ConversationUpdatedStoreEvent(
+            conversationId: event.conversationId,
+            lastMessageAt: event.lastMessageAt,
+            lastMessageId: event.lastMessageId,
+            lastMessagePreview: event.lastMessagePreview,
+            title: event.title,
+            avatar: event.avatar,
+            description: event.description,
+            banner: event.banner,
+            isAnnouncementChannel: event.isAnnouncementChannel,
+            slowModeSeconds: event.slowModeSeconds,
+            autoTranslateEnabled: event.autoTranslateEnabled
+        )
     }
 
     /// Map the conversation-scope socket payload onto the store's input value
