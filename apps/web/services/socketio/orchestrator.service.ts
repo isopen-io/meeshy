@@ -557,7 +557,7 @@ export class SocketIOOrchestrator {
     return this.messagingService.onMessageAttachmentUpdated(listener);
   }
 
-  onPendingMessagesDelivered(listener: (data: { count: number }) => void): UnsubscribeFn {
+  onPendingMessagesDelivered(listener: (data: { count: number; conversationIds: string[] }) => void): UnsubscribeFn {
     return this.messagingService.onPendingMessagesDelivered(listener);
   }
 

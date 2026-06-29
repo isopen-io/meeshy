@@ -739,10 +739,10 @@ describe('MessagingService', () => {
         svc.onPendingMessagesDelivered(listener);
         svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
 
-        socket._trigger(SERVER_EVENTS_MOCK.PENDING_MESSAGES_DELIVERED, { count: 3 });
+        socket._trigger(SERVER_EVENTS_MOCK.PENDING_MESSAGES_DELIVERED, { count: 3, conversationIds: ['c-1'] });
         await Promise.resolve();
 
-        expect(listener).toHaveBeenCalledWith({ count: 3 });
+        expect(listener).toHaveBeenCalledWith({ count: 3, conversationIds: ['c-1'] });
       });
     });
 

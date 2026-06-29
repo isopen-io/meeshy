@@ -35,7 +35,7 @@ let conversationParticipantUnbannedCallback: ((data: { conversationId: string; u
 let conversationClosedCallback: ((data: { conversationId: string; closedBy: string; closedAt: string }) => void) | null = null;
 let categoryChangedCallback: (() => void) | null = null;
 let messageAttachmentUpdatedCallback: ((data: { conversationId: string; messageId: string; attachment: unknown }) => void) | null = null;
-let pendingMessagesDeliveredCallback: ((data: { count: number }) => void) | null = null;
+let pendingMessagesDeliveredCallback: ((data: { count: number; conversationIds: string[] }) => void) | null = null;
 let linkMessageNewCallback: ((data: { message: Record<string, unknown> }) => void) | null = null;
 let conversationJoinErrorCallback: ((data: { conversationId: string; reason: string; message: string }) => void) | null = null;
 let messagePinnedCallback: ((data: { messageId: string; conversationId: string; pinnedBy: string; pinnedAt: string }) => void) | null = null;
@@ -120,7 +120,7 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
       messageAttachmentUpdatedCallback = callback;
       return jest.fn();
     },
-    onPendingMessagesDelivered: (callback: (data: { count: number }) => void) => {
+    onPendingMessagesDelivered: (callback: (data: { count: number; conversationIds: string[] }) => void) => {
       pendingMessagesDeliveredCallback = callback;
       return jest.fn();
     },
@@ -836,14 +836,35 @@ describe('useSocketCacheSync', () => {
   });
 
   describe('Pending Messages Delivered Handler', () => {
-    it('invalidates messages and conversations queries when pending messages are delivered', () => {
+    it('invalidates targeted conversations when conversationIds provided', () => {
       const { wrapper, queryClient } = createWrapperWithClient();
       const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
 
       renderHook(() => useSocketCacheSync({ conversationId: 'conv-1' }), { wrapper });
 
       act(() => {
-        pendingMessagesDeliveredCallback?.({ count: 3 });
+        pendingMessagesDeliveredCallback?.({ count: 2, conversationIds: ['conv-a', 'conv-b'] });
+      });
+
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: ['messages', 'list', 'conv-a', 'infinite'] })
+      );
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: ['messages', 'list', 'conv-b', 'infinite'] })
+      );
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: ['conversations'] })
+      );
+    });
+
+    it('falls back to active conversationId when conversationIds is empty', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+      const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-1' }), { wrapper });
+
+      act(() => {
+        pendingMessagesDeliveredCallback?.({ count: 3, conversationIds: [] });
       });
 
       expect(invalidateSpy).toHaveBeenCalledWith(

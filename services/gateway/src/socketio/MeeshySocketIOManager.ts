@@ -371,7 +371,8 @@ export class MeeshySocketIOManager {
       for (const entry of pending) {
         socket.emit(SERVER_EVENTS.MESSAGE_NEW, entry.payload);
       }
-      socket.emit(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, { count: pending.length });
+      const affectedConversationIds = [...new Set(pending.map(e => e.conversationId))];
+      socket.emit(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, { count: pending.length, conversationIds: affectedConversationIds });
 
       // Emit delivery receipts to senders so their checkmarks advance from
       // "sent" (single tick) to "delivered" (double tick) as soon as the

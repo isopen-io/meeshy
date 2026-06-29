@@ -91,9 +91,10 @@ final class ConversationSocketHandler {
     //     entries from blocking legitimate re-delivers after long gaps).
     //   • When the table exceeds dedupMaxSize the oldest half is pruned
     //     to keep memory bounded even during reconnect bursts.
-    // Replacing the old Set+Array approach which had no time dimension.
-    private static let dedupMaxSize: Int = 1000
-    private static let dedupMaxAge: TimeInterval = 10 * 60 // 10 minutes
+    // TTL matches the server-side delivery queue retention (48h) so messages
+    // queued while offline for up to 48h cannot replay after cache eviction.
+    private static let dedupMaxSize: Int = 10_000
+    private static let dedupMaxAge: TimeInterval = 48 * 60 * 60 // 48 hours — matches DELIVERY_QUEUE_TTL_SECONDS
     private var recentMessageTimestamps: [String: Date] = [:]
 
     // Typing emission state. `nonisolated(unsafe)` is REQUIRED (not cosmetic):
