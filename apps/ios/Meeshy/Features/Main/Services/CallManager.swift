@@ -3113,8 +3113,18 @@ final class CallManager: ObservableObject {
     // MARK: - Duration Formatting
 
     var formattedDuration: String {
-        let minutes = Int(callDuration) / 60
-        let seconds = Int(callDuration) % 60
+        Self.formatDuration(callDuration)
+    }
+
+    /// Pure helper — extracted for unit-testability without touching `callDuration`.
+    nonisolated static func formatDuration(_ duration: TimeInterval) -> String {
+        let total = Int(duration)
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let seconds = total % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
+        }
         return String(format: "%02d:%02d", minutes, seconds)
     }
 }

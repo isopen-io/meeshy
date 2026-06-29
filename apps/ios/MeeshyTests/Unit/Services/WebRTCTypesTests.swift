@@ -1649,3 +1649,83 @@ final class CallReliabilityPolicyTests: XCTestCase {
         XCTAssertEqual(outcome, .retry)
     }
 }
+
+// MARK: - DataChannelTranscriptionMessage Decodable
+
+final class DataChannelTranscriptionMessageTests: XCTestCase {
+
+    func test_decode_fullMessage_succeeds() throws {
+        let json = """
+        {
+            "type": "transcription-segment",
+            "text": "Bonjour le monde",
+            "speakerId": "user_abc",
+            "startTime": 1.23,
+            "isFinal": true,
+            "language": "fr",
+            "translatedText": "Hello world",
+            "translatedLanguage": "en"
+        }
+        """.data(using: .utf8)!
+        let msg = try JSONDecoder().decode(DataChannelTranscriptionMessage.self, from: json)
+        XCTAssertEqual(msg.type, "transcription-segment")
+        XCTAssertEqual(msg.text, "Bonjour le monde")
+        XCTAssertEqual(msg.speakerId, "user_abc")
+        XCTAssertEqual(msg.startTime, 1.23, accuracy: 0.001)
+        XCTAssertTrue(msg.isFinal)
+        XCTAssertEqual(msg.language, "fr")
+        XCTAssertEqual(msg.translatedText, "Hello world")
+        XCTAssertEqual(msg.translatedLanguage, "en")
+    }
+
+    func test_decode_withNilOptionals_succeeds() throws {
+        let json = """
+        {
+            "type": "transcription-segment",
+            "text": "Test",
+            "speakerId": "uid",
+            "startTime": 0.0,
+            "isFinal": false,
+            "language": "en"
+        }
+        """.data(using: .utf8)!
+        let msg = try JSONDecoder().decode(DataChannelTranscriptionMessage.self, from: json)
+        XCTAssertNil(msg.translatedText)
+        XCTAssertNil(msg.translatedLanguage)
+    }
+
+    func test_decode_pingMessage_failsBecauseOfMissingRequiredFields() {
+        // Ping messages sent by startDataChannelPing are {"type":"ping"} — they
+        // deliberately fail to decode as DataChannelTranscriptionMessage. The
+        // receiver uses try? and silently discards non-transcription messages.
+        let json = """
+        {"type":"ping"}
+        """.data(using: .utf8)!
+        XCTAssertNil(try? JSONDecoder().decode(DataChannelTranscriptionMessage.self, from: json),
+                     "Ping messages must not decode as DataChannelTranscriptionMessage — " +
+                     "the receiver correctly ignores them via try?")
+    }
+
+    func test_decode_partialFinalFlag_false() throws {
+        let json = """
+        {"type":"t","text":"hi","speakerId":"s","startTime":0,"isFinal":false,"language":"en"}
+        """.data(using: .utf8)!
+        let msg = try JSONDecoder().decode(DataChannelTranscriptionMessage.self, from: json)
+        XCTAssertFalse(msg.isFinal)
+    }
+
+    func test_type_isSendable() {
+        // Compile-time check — DataChannelTranscriptionMessage must be Sendable
+        // since it crosses the WebRTC nonisolated boundary into the @MainActor Task.
+        let _: any Sendable = DataChannelTranscriptionMessage(
+            type: "transcription-segment",
+            text: "x",
+            speakerId: "y",
+            startTime: 0,
+            isFinal: true,
+            language: "fr",
+            translatedText: nil,
+            translatedLanguage: nil
+        )
+    }
+}
