@@ -111,7 +111,9 @@ struct CallView: View {
             if case .reconnecting = callManager.callState {
                 reconnectingBanner
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .transition(.move(edge: .top).combined(with: .opacity))
+                    // P2-iOS-9 — slide from top when motion is allowed; fade only
+                    // when reduce motion is on.
+                    .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
             }
 
             // Effects overlay — accessible dans tous les etats actifs (pas seulement connected)
@@ -169,6 +171,13 @@ struct CallView: View {
         }
         .adaptiveOnChange(of: callManager.callState) { _, newState in
             switch newState {
+            // Audit P2-iOS-11 — announce the connecting state so VoiceOver
+            // users are informed when ICE negotiation begins (callee accepted,
+            // media handshake in progress). Without this, the transition from
+            // "ringing" to "connected" is silent — the user hears nothing for
+            // several seconds and may think the call failed.
+            case .connecting:
+                UIAccessibility.post(notification: .announcement, argument: String(localized: "call.a11y.connecting", defaultValue: "Connexion en cours", bundle: .main))
             case .connected:
                 UIAccessibility.post(notification: .announcement, argument: String(localized: "call.a11y.connected"))
             case .reconnecting:
