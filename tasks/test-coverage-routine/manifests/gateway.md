@@ -422,27 +422,27 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [x] `services/gateway/src/utils/logger.ts`
 - [~] `services/gateway/src/utils/normalize.ts`
 - [~] `services/gateway/src/utils/pagination.ts`
-- [ ] `services/gateway/src/utils/participant-resolver.ts`
+- [x] `services/gateway/src/utils/participant-resolver.ts`
 - [x] `services/gateway/src/utils/rate-limiter.ts`
 - [x] `services/gateway/src/utils/response.ts`
 - [~] `services/gateway/src/utils/sanitize.ts`
 - [~] `services/gateway/src/utils/session-token.ts`
 - [~] `services/gateway/src/utils/socket-broadcast.ts`
 - [x] `services/gateway/src/utils/socket-rate-limiter.ts`
-- [ ] `services/gateway/src/utils/transcription.ts`
+- [x] `services/gateway/src/utils/transcription.ts`
 - [~] `services/gateway/src/utils/translation-transformer.ts`
 - [x] `services/gateway/src/utils/withMutationLog.ts`
 
-## validation  (1/11 have a test)
+## validation  (9/11 have a test)
 
 - [x] `services/gateway/src/validation/admin-schemas.ts`
-- [~] `services/gateway/src/validation/call-schemas.ts`
-- [ ] `services/gateway/src/validation/conversation-encryption-schemas.ts`
-- [ ] `services/gateway/src/validation/delete-account-schemas.ts`
+- [x] `services/gateway/src/validation/call-schemas.ts`
+- [x] `services/gateway/src/validation/conversation-encryption-schemas.ts`
+- [x] `services/gateway/src/validation/delete-account-schemas.ts`
 - [x] `services/gateway/src/validation/helpers.ts`
 - [x] `services/gateway/src/validation/mentions-schemas.ts`
-- [ ] `services/gateway/src/validation/message-read-status-schemas.ts`
-- [ ] `services/gateway/src/validation/messages-schemas.ts`
+- [x] `services/gateway/src/validation/message-read-status-schemas.ts`
+- [x] `services/gateway/src/validation/messages-schemas.ts`
 - [x] `services/gateway/src/validation/notification-schemas.ts`
-- [ ] `services/gateway/src/validation/socket-event-schemas.ts`
-- [ ] `services/gateway/src/validation/two-factor-schemas.ts`
+- [x] `services/gateway/src/validation/socket-event-schemas.ts`
+- [x] `services/gateway/src/validation/two-factor-schemas.ts`
