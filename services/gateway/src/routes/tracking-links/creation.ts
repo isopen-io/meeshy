@@ -17,6 +17,7 @@ import {
   enrichTrackingLink
 } from './types';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
+import { SecuritySanitizer } from '../../utils/sanitize';
 
 /**
  * Routes de création et gestion des liens de tracking
@@ -171,7 +172,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
 
       const trackingLink = await trackingLinkService.createTrackingLink({
         originalUrl: body.originalUrl,
-        name: body.name,
+        name: body.name ? SecuritySanitizer.sanitizeText(body.name) : body.name,
         campaign: body.campaign,
         source: body.source,
         medium: body.medium,
