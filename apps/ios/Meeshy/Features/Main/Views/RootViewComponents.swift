@@ -2,6 +2,7 @@ import SwiftUI
 import Combine
 import MeeshySDK
 import MeeshyUI
+import os
 
 // MARK: - Extracted from RootView.swift
 
@@ -211,7 +212,9 @@ struct ThemedFeedOverlay: View {
                             postBookmarkedIds.insert(p.id)
                         }
                     }
-                } catch { }
+                } catch {
+                    Logger.network.error("bookmarks refresh failed: \(error.localizedDescription)")
+                }
             }
             return
         }

@@ -842,7 +842,9 @@ struct MessageDetailSheet: View {
                     translations[t.targetLanguage] = t.translatedContent
                 }
             }
-        } catch { }
+        } catch {
+            Logger.network.error("translation fetch failed: \(error.localizedDescription)")
+        }
     }
 
     private static func languageName(for code: String) -> String {
@@ -2367,7 +2369,9 @@ struct MessageDetailSheet: View {
             do {
                 let statuses = try await AttachmentService.shared.getStatusDetails(attachmentId: attachment.id)
                 attachmentStatuses[attachment.id] = statuses
-            } catch { }
+            } catch {
+                Logger.network.error("attachment status fetch failed for \(attachment.id): \(error.localizedDescription)")
+            }
         }
     }
 
