@@ -131,6 +131,41 @@ class StorySlideDeckTextElementsTest {
         assertThat(deck.moveTextElement("z", dx = 0.1f, dy = 0.1f)).isSameInstanceAs(deck)
     }
 
+    // --- transformTextElement ---
+
+    @Test
+    fun `transformTextElement pinch-scales and rotates the matching element`() {
+        val deck = deckOf(StorySlide(id = "a", elements = listOf(element("e1"))))
+        val after = deck.transformTextElement("e1", scaleBy = 2f, rotateByDeg = 30f)
+        val stored = after.selectedSlide.elements.single()
+        assertThat(stored.scale).isWithin(1e-6f).of(2f)
+        assertThat(stored.rotationDeg).isWithin(1e-4f).of(30f)
+    }
+
+    @Test
+    fun `transformTextElement clamps the scale to the canvas bounds`() {
+        val deck = deckOf(StorySlide(id = "a", elements = listOf(element("e1"))))
+        val after = deck.transformTextElement("e1", scaleBy = 100f, rotateByDeg = 0f)
+        assertThat(after.selectedSlide.elements.single().scale).isEqualTo(StoryTextElement.MAX_SCALE)
+    }
+
+    @Test
+    fun `transformTextElement touches only the matching element`() {
+        val deck = deckOf(
+            StorySlide(id = "a", elements = listOf(element("e1"), element("e2"))),
+        )
+        val after = deck.transformTextElement("e1", scaleBy = 1.5f, rotateByDeg = 10f)
+        val others = after.selectedSlide.elements.single { it.id == "e2" }
+        assertThat(others.scale).isEqualTo(StoryTextElement.DEFAULT_SCALE)
+        assertThat(others.rotationDeg).isEqualTo(StoryTextElement.DEFAULT_ROTATION)
+    }
+
+    @Test
+    fun `transformTextElement is inert on an unknown id`() {
+        val deck = deckOf(StorySlide(id = "a", elements = listOf(element("e1"))))
+        assertThat(deck.transformTextElement("z", scaleBy = 2f, rotateByDeg = 10f)).isSameInstanceAs(deck)
+    }
+
     // --- aggregate / publishable rules ---
 
     @Test

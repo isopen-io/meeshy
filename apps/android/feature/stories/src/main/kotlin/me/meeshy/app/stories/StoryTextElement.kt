@@ -118,12 +118,39 @@ data class StoryTextElement(
     val align: StoryTextAlign = StoryTextAlign.CENTER,
     val x: Float = CENTER,
     val y: Float = CENTER,
+    val scale: Float = DEFAULT_SCALE,
+    val rotationDeg: Float = DEFAULT_ROTATION,
 ) {
     /** True once the element carries content worth publishing (non-blank text). */
     val isPublishable: Boolean get() = text.isNotBlank()
 
-    /** A copy with [x]/[y] clamped into the canvas `0f..1f`, leaving everything else. */
-    fun normalised(): StoryTextElement = copy(x = clampCoord(x), y = clampCoord(y))
+    /**
+     * A copy with every continuous field pulled back into its legal range: [x]/[y]
+     * clamped into the canvas `0f..1f`, [scale] clamped to `[MIN_SCALE, MAX_SCALE]`,
+     * and [rotationDeg] wrapped into `(-180, 180]`. Total even on a non-finite input
+     * (`NaN`/∞ collapse to the field's neutral value), so the deck reducer and the
+     * canvas Composable can stay glue while the only real rules live in one place.
+     */
+    fun normalised(): StoryTextElement = copy(
+        x = clampCoord(x),
+        y = clampCoord(y),
+        scale = clampScale(scale),
+        rotationDeg = normaliseRotation(rotationDeg),
+    )
+
+    /**
+     * Applies one incremental pinch/rotate gesture: multiplies [scale] by the
+     * gesture's [scaleBy] factor (clamped to `[MIN_SCALE, MAX_SCALE]`) and adds
+     * [rotateByDeg] to [rotationDeg] (wrapped into `(-180, 180]`), leaving the
+     * position, text, and style untouched. A degenerate factor (`scaleBy <= 0`,
+     * `NaN`) collapses to the neutral value rather than producing a broken element.
+     * The clamp/wrap rules — the only real logic — live here so the Composable that
+     * binds `detectTransformGestures` stays glue.
+     */
+    fun transformed(scaleBy: Float, rotateByDeg: Float): StoryTextElement = copy(
+        scale = clampScale(scale * scaleBy),
+        rotationDeg = normaliseRotation(rotationDeg + rotateByDeg),
+    )
 
     /**
      * Translates the element by the normalised deltas [dx]/[dy] (canvas fractions),
@@ -145,6 +172,8 @@ data class StoryTextElement(
         text = text,
         x = x.toDouble(),
         y = y.toDouble(),
+        scale = scale.toDouble(),
+        rotation = rotationDeg.toDouble(),
         textStyle = style.wire,
         textColor = color,
         textAlign = align.wire,
@@ -158,7 +187,41 @@ data class StoryTextElement(
         /** Default text colour — white, hex without the leading `#` (gateway parity). */
         const val DEFAULT_COLOR: String = "FFFFFF"
 
+        /** At-rest scale — the element renders at its intrinsic size. */
+        const val DEFAULT_SCALE: Float = 1f
+
+        /** Smallest a user can pinch an element down to (still legible/grabbable). */
+        const val MIN_SCALE: Float = 0.3f
+
+        /** Pinch ceiling — parity with the canvas/image-viewer 4× cap. */
+        const val MAX_SCALE: Float = 4f
+
+        /** At-rest rotation — upright. */
+        const val DEFAULT_ROTATION: Float = 0f
+
         /** Clamps a normalised coordinate into the visible canvas `0f..1f`. */
         fun clampCoord(value: Float): Float = value.coerceIn(0f, 1f)
+
+        /**
+         * Clamps a scale factor into `[MIN_SCALE, MAX_SCALE]`. A non-finite value
+         * (`NaN`/∞ — e.g. a divide-by-zero gesture) collapses to [DEFAULT_SCALE]
+         * rather than poisoning the element.
+         */
+        fun clampScale(value: Float): Float =
+            if (value.isFinite()) value.coerceIn(MIN_SCALE, MAX_SCALE) else DEFAULT_SCALE
+
+        /**
+         * Wraps a rotation in degrees into the canonical half-open turn `(-180, 180]`,
+         * so any number of accumulated full turns reduces to one signed angle and
+         * `+180`/`-180` resolve to the same `180`. A non-finite input collapses to
+         * [DEFAULT_ROTATION].
+         */
+        fun normaliseRotation(deg: Float): Float {
+            if (!deg.isFinite()) return DEFAULT_ROTATION
+            var wrapped = deg % 360f
+            if (wrapped <= -180f) wrapped += 360f
+            if (wrapped > 180f) wrapped -= 360f
+            return wrapped
+        }
     }
 }

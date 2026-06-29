@@ -9,7 +9,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -189,6 +188,7 @@ fun StoryComposerScreen(
                 onTransform = viewModel::onCanvasTransform,
                 onElementTap = viewModel::onSelectTextElement,
                 onElementDrag = viewModel::onTextElementMoved,
+                onElementTransform = viewModel::onTextElementTransform,
                 onElementRemove = viewModel::onRemoveTextElement,
                 onBackgroundTap = viewModel::onDeselectTextElement,
                 modifier = Modifier
@@ -320,6 +320,7 @@ private fun StoryCanvasSurface(
     onTransform: (Float, Float, Float, Float, Float) -> Unit,
     onElementTap: (String) -> Unit,
     onElementDrag: (String, Float, Float) -> Unit,
+    onElementTransform: (String, Float, Float) -> Unit,
     onElementRemove: (String) -> Unit,
     onBackgroundTap: () -> Unit,
     modifier: Modifier = Modifier,
@@ -380,6 +381,7 @@ private fun StoryCanvasSurface(
                             onElementDrag(element.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx)
                         }
                     },
+                    onTransform = { zoom, rotationDeg -> onElementTransform(element.id, zoom, rotationDeg) },
                     onRemove = { onElementRemove(element.id) },
                     onMeasured = { size ->
                         if (element.id == selectedElement?.id) selectedHalfHeightPx = size.height / 2f
@@ -428,6 +430,7 @@ private fun TextElementLayer(
     canvasHeightPx: Float,
     onTap: () -> Unit,
     onDrag: (Float, Float) -> Unit,
+    onTransform: (Float, Float) -> Unit,
     onRemove: () -> Unit,
     onMeasured: (IntSize) -> Unit = {},
 ) {
@@ -440,15 +443,20 @@ private fun TextElementLayer(
                     y = (element.y * canvasHeightPx - sizePx.height / 2f).roundToInt(),
                 )
             }
+            .graphicsLayer {
+                scaleX = element.scale
+                scaleY = element.scale
+                rotationZ = element.rotationDeg
+            }
             .onSizeChanged {
                 sizePx = it
                 onMeasured(it)
             }
             .pointerInput(element.id) { detectTapGestures { onTap() } }
             .pointerInput(element.id) {
-                detectDragGestures { change, dragAmount ->
-                    change.consume()
-                    onDrag(dragAmount.x, dragAmount.y)
+                detectTransformGestures { _, pan, zoom, rotation ->
+                    onDrag(pan.x, pan.y)
+                    onTransform(zoom, rotation)
                 }
             }
             .background(

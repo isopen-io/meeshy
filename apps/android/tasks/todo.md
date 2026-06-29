@@ -4,19 +4,20 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Stories) — slice `story-text-element-styling` ✅
-Makes **on-canvas text elements styleable**: per-style typography rendering + a style/colour/alignment picker.
+## This loop (Phase: Stories) — slice `story-text-element-transform` ✅ (PR #1045)
+Adds **per-element pinch-scale + rotate** to the composer canvas — a selected text element resizes
+and rotates with one natural two-finger gesture, and the transform rides into publish on the wire.
 
-- [x] Pure `StoryTextStyle.typography()` → `StoryTextTypography` (`fontWeight`/`italic`/`family`/
-      `letterSpacingEm`/`glow`) over the new `StoryTextFontFamily` enum — Compose-agnostic, JVM-testable.
-- [x] VM intents `onTextElementStyle`/`onTextElementColor`/`onTextElementAlign` (one-line
-      `deck.updateTextElement` wrappers; inert on unknown id; selection/editing untouched).
-- [x] `TextElementLayer` renders weight/slant/family/tracking + neon glow `Shadow`; `TextStyleToolbar`
-      (5 style chips + L/C/R `AlignToggle` + `ColorSwatch` palette) shown while editing an element.
-- [x] +8 strings × 4 locales (5 style names, 3 alignment content descriptions).
-- [x] TDD: `StoryTextTypographyTest` +8, `StoryComposerViewModelTest` +8. No floor lowered, no test weakened.
-- [x] `./apps/android/meeshy.sh check` green (assembleDebug + all unit tests).
+- [x] Pure `StoryTextElement`: `scale` (clamped `[0.3, 4]`) + `rotationDeg` (wrapped `(-180, 180]`);
+      `clampScale`/`normaliseRotation` (non-finite → neutral); `transformed(scaleBy, rotateByDeg)`;
+      `normalised()` extended to all continuous fields; `toTextObject` carries `scale`/`rotation`.
+- [x] Deck `transformTextElement` + VM `onTextElementTransform` (inert on unknown id; selection untouched).
+- [x] `TextElementLayer` switched `detectDragGestures` → `detectTransformGestures` (one gesture
+      pans+pinches+rotates); rendered via `graphicsLayer { scaleX/scaleY/rotationZ }` (glue, JVM-exempt).
+- [x] TDD +21: `StoryTextElementTest` +14, `StorySlideDeckTextElementsTest` +4,
+      `StoryComposerViewModelTest` +3. No floor lowered, no test weakened. No new strings.
+- [x] `./apps/android/meeshy.sh check` green (assembleDebug + all unit tests). Diff = `apps/android` only.
 
 ## Next loop (see PROGRESS.md "Next")
-1. In-place floating text editor (tool bubbles + keyboard-aware shift).
-2. Canvas toolbar/FAB (Contenu/Effets); then on to the **Calls** area.
+1. Canvas toolbar/FAB (Contenu/Effets grouping add-text / add-media).
+2. Then on to the **Calls** area (`feature-parity.md` §"Calls").
