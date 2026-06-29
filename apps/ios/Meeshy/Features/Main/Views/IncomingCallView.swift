@@ -57,6 +57,21 @@ struct IncomingCallView: View {
             actionButtons
                 .padding(.bottom, 80)
         }
+        .onAppear {
+            let callerName = callManager.remoteUsername
+                ?? String(localized: "call.incoming.unknown_caller", defaultValue: "Inconnu", bundle: .main)
+            let callTypeLabel = callManager.isVideoEnabled
+                ? String(localized: "call.incoming.video", defaultValue: "Appel video entrant", bundle: .main)
+                : String(localized: "call.incoming.audio", defaultValue: "Appel entrant", bundle: .main)
+            UIAccessibility.post(
+                notification: .screenChanged,
+                argument: String(
+                    localized: "call.incoming.a11y.announced",
+                    defaultValue: "\(callTypeLabel), \(callerName)",
+                    bundle: .main
+                )
+            )
+        }
     }
 
     // MARK: - Ring Animation

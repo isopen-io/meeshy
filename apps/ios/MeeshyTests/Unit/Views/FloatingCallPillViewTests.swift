@@ -118,6 +118,16 @@ final class FloatingCallPillViewTests: XCTestCase {
         )
     }
 
+    func test_expandToFullScreen_respectsReduceMotion() throws {
+        let source = try pillSource()
+        XCTAssertTrue(
+            source.contains("reduceMotion ? nil : .spring(response: 0.5"),
+            "expandToFullScreen() must gate its withAnimation on reduceMotion — " +
+            "unconditional .spring when reduceMotion is enabled triggers a spring " +
+            "bounce that can cause vestibular discomfort."
+        )
+    }
+
     // MARK: - Accessibility labels on controls
 
     func test_muteButton_hasAccessibilityLabel() throws {

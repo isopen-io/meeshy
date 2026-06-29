@@ -264,7 +264,7 @@ struct FloatingCallPillView: View {
     // MARK: - Actions
 
     private func expandToFullScreen() {
-        withAnimation(.spring(response: 0.5, dampingFraction: 0.75)) {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.75)) {
             callManager.displayMode = .fullScreen
         }
         HapticFeedback.medium()
