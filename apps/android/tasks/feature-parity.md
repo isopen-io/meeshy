@@ -508,8 +508,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       wrappers, inert on unknown id, selection untouched). `TextElementLayer` renders
       weight/slant/family/tracking + a neon glow `Shadow`; a `TextStyleToolbar` (style chips +
       L/C/R `AlignToggle` + `ColorSwatch` palette) appears while editing an element. Pending:
-      size/background/outline/RTL/fade, the in-place floating editor + tool bubbles below.
-- [ ] In-place floating text editor with tool bubbles + keyboard-aware canvas shift
+      size/background/outline/RTL/fade.
+- [~] In-place floating text editor with tool bubbles + keyboard-aware canvas shift
+      **Floating style toolbar + keyboard-aware shift done** (`story-floating-toolbar`): while a text
+      element is edited the `TextStyleToolbar` no longer sits in a fixed bottom band — it floats
+      in-place over the canvas, anchored just clear of the element. The vertical anchor is decided by
+      the pure, unit-tested `StoryToolbarPlacement.resolve(elementCenterY, elementHalfHeight,
+      toolbarHeight, canvasHeight, gap)` → `ToolbarPlacement(topPx, ToolbarSide.ABOVE|BELOW)`: BELOW
+      when the toolbar fits beneath the element, otherwise ABOVE, clamped into the canvas so it never
+      spills off the top or past the bottom (boundary-exact, degenerate-canvas safe). The composer
+      applies `imePadding`, so the canvas measurement already excludes the soft keyboard — the
+      keyboard-aware shift — and the resolver keeps the toolbar inside the keyboard-free band.
+      `StoryCanvasSurface` measures the selected element's half-height + the toolbar's height and offsets
+      it (glue). Surpasses iOS's fixed bottom style bar. Pending: floating tool *bubbles* per element
+      handle (rotate/scale/delete chips) — the style toolbar bubble is the first of these.
 - [~] Media elements (≤10/slide): photo/video import, crop/edit, aspect-ratio preservation.
       **Upload foundation done** (`media-upload-api`): `MediaApi` multipart `POST /attachments/upload`
       (`files` parts) + `MediaRepository.upload()` → domain `UploadedMedia` (id = `mediaId`, url,

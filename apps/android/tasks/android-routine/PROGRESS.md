@@ -128,13 +128,22 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 ## Next slice (pick one for the next run)
 
 Ordered by value:
-1. **In-place floating text editor** — tool bubbles over the selected element + keyboard-aware
-   canvas shift (the editing-selection plumbing — `selectedTextElementId`/`editorText` — already
-   exists; this is the floating UI + a pure "where to place the toolbar" helper).
-2. **Canvas toolbar/FAB** — the bottom-band toolbar (Contenu/Effets) grouping add-text / add-media;
+1. **Canvas toolbar/FAB** — the bottom-band toolbar (Contenu/Effets) grouping add-text / add-media;
    glue-heavy, keep any mode decision in a pure helper or the VM.
+2. **Per-element transform handles** — rotate/scale handles on the selected text element (the style
+   toolbar bubble landed in `story-floating-toolbar`; this adds the manipulation chips). A pure
+   handle-hit / rotate-scale resolver carries the tests.
 3. After Stories richness is sufficient, advance to the **Calls** area
    (`feature-parity.md` §"Calls").
+
+(`story-floating-toolbar` ✅ shipped 2026-06-29 — this run; **the style toolbar now floats in-place**
+over the canvas instead of a fixed bottom band. A pure `StoryToolbarPlacement.resolve(...)` →
+`ToolbarPlacement(topPx, ToolbarSide)` decides the anchor: BELOW the selected element when the toolbar
+fits beneath it, otherwise ABOVE, clamped into the canvas (boundary-exact, degenerate-canvas safe).
+The composer applies `imePadding` so the measured canvas already excludes the soft keyboard (the
+keyboard-aware shift), and `StoryCanvasSurface` measures the selected element's half-height + the
+toolbar height and offsets the floating `TextStyleToolbar` to the resolved Y. +9 placement tests; no
+new strings. Surpasses iOS's fixed bottom style bar. See run log.)
 
 (`story-text-element-styling` ✅ shipped 2026-06-29 — this run; **on-canvas text elements are now
 styleable**. A pure `StoryTextStyle.typography()` mapping (the single source of truth for how each of
@@ -265,6 +274,52 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-29 — slice `story-floating-toolbar` ✅
+- **Branch:** `claude/apps/android/story-floating-toolbar` (off `origin/main` @ `6cd1a3c`).
+- **Housekeeping (step 0):** no open `claude/apps/android/*` PR (`list_pull_requests state=open
+  head=isopen-io:claude/apps/android` → `[]`; every prior slice already squash-merged). Branched clean
+  off the freshened `main`.
+- **What:** **in-place floating style toolbar** ("Next" #1, feature-parity §"In-place floating text
+  editor"). The `TextStyleToolbar` previously sat in a fixed bottom column below the canvas; it now
+  **floats over the canvas**, anchored just clear of the element being edited, and the composer shifts
+  for the keyboard so the toolbar always lands in view. Surpasses iOS's fixed bottom style bar.
+- **Design (single source of truth, SDK purity):** the placement decision lives in **one pure place**,
+  `StoryToolbarPlacement.resolve(elementCenterYpx, elementHalfHeightPx, toolbarHeightPx, canvasHeightPx,
+  gapPx)` → `ToolbarPlacement(topPx, ToolbarSide.ABOVE|BELOW)`. BELOW when `belowTop + toolbarHeight <=
+  canvasHeight` (the band beneath the element fits the toolbar), otherwise ABOVE clamped into
+  `[0, (canvasHeight - toolbarHeight).coerceAtLeast(0)]` — so the toolbar is never pushed off the top or
+  past the bottom, and a canvas shorter than the toolbar pins it to the top. The **canvas itself** is the
+  keyboard-aware region: the composer Column gains `imePadding()`, so when the keyboard opens the weighted
+  9:16 canvas shrinks to the keyboard-free area and the resolver (fed that shrunk `canvasHeightPx`,
+  `keyboardInset` folded into the measurement) keeps the toolbar visible — no fragile window-coordinate
+  math, every resolver param is live. All in `:feature:stories` (product UI math, not an SDK atom).
+- **Added/changed (production, `apps/android` only):**
+  - `StoryToolbarPlacement.kt` (new) — `ToolbarSide` enum, `ToolbarPlacement` data class, the pure
+    `resolve(...)` (total; below-fits / above / clamp-top / clamp-bottom / degenerate-canvas arms).
+  - `StoryComposerScreen.kt` — root Column gains `imePadding()`; `StoryCanvasSurface` takes
+    `selectedElement: StoryTextElement?` + a `floatingToolbar` slot, measures the selected element's
+    half-height (`TextElementLayer.onMeasured`) and the toolbar's height, and offsets the floating
+    `TextStyleToolbar` (translucent `surface` chip, rounded) to `placement.topPx`. The fixed bottom-band
+    toolbar block was removed (the toolbar now only renders floating while editing an element).
+- **Tests (TDD red → green, behaviour via the public resolver API):** `StoryToolbarPlacementTest` (new,
+  +9): sits below when it fits; goes above on bottom-overflow; a shrunken (keyboard) canvas forces above;
+  clamps to the top for a high element; clamps off the bottom in a tight band; a canvas shorter than the
+  toolbar pins to top; gap honoured below **and** above; the exact-fit boundary still sits below.
+- **Edge cases:** boundary `==` (exact fit → BELOW), degenerate `canvasHeight < toolbarHeight`
+  (`coerceAtLeast(0)` → top), high element (clamp to 0), tight band (clamp to `clampMax`), gap on both
+  sides. No floor lowered, no test weakened; assertions are exact computed pixels (no tautology).
+- **Branch coverage (new logic):** every arm of `resolve` hit — below-fits, above in-range, above
+  clamp-low (→0), above clamp-high (→clampMax incl. the `coerceAtLeast` floor). ≥90% branch + instruction.
+- **Verification:** `./apps/android/meeshy.sh check` (`assembleDebug` + all `testDebugUnitTest`, 836
+  tasks) — **BUILD SUCCESSFUL**. `StoryToolbarPlacementTest` 9/9 green. Diff = `apps/android` only
+  (1 new prod Kotlin, 1 prod Kotlin changed, 1 new test, tracking docs).
+- **Reviewer gate:** PASS — scope `apps/android` only, no secrets / `local.properties` gitignored;
+  behavioural non-tautological tests through the public API; SDK purity (pure placement math is composer
+  **product** state in `:feature:stories`, glue in the Composable); single source of truth (anchor
+  decision in one pure place); UDF (VM + immutable `StateFlow` untouched); colour/UX coherence (toolbar
+  uses `MaterialTheme` surface, floats by natural anchor, keyboard-aware via `imePadding`).
+- **Follow-ups:** canvas toolbar/FAB (Contenu/Effets); per-element rotate/scale transform handles; then Calls.
 
 ### 2026-06-29 — slice `story-text-element-styling` ✅
 - **Branch:** `claude/apps/android/story-text-element-styling` (off `origin/main` @ `7f28c533`).
