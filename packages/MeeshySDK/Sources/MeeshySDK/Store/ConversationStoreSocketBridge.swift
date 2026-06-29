@@ -146,6 +146,7 @@ public final class ConversationStoreSocketBridge {
 
         didReconnect.sink {
             Task { await store.flushOutbox() }
+            Task { try? await categoryStore.hydrate() }
         }.store(in: &cancellables)
     }
 

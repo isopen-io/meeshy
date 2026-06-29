@@ -204,6 +204,24 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
 
     // MARK: didReconnect
 
+    func test_didReconnect_rehydratesCategoryStore() async {
+        let service = MockCategoryWriter()
+        let freshCat = ConversationCategory(id: "cat-1", name: "Work", color: nil, icon: nil, order: 0, isExpanded: true)
+        service.listResult = [freshCat]
+        let categoryStore = UserCategoryStore(service: service)
+
+        let env = BridgeEnv(store: makeStore(), categoryStore: categoryStore)
+
+        env.didReconnect.send(())
+
+        let hydrated = await waitUntil { service.listCallCount >= 1 }
+        XCTAssertTrue(hydrated, "didReconnect must trigger categoryStore.hydrate() to resync server-side deletions")
+
+        // The store must reflect the fresh list returned by the mock.
+        let resynced = await waitUntil { await categoryStore.categories().contains { $0.id == "cat-1" } }
+        XCTAssertTrue(resynced, "categoryStore must hold the fresh category after hydrate on reconnect")
+    }
+
     func test_didReconnect_flushesOutbox() async throws {
         let prefs = MockPreferenceWriter()
         // First call will fail transiently so the mutation queues in the outbox.
