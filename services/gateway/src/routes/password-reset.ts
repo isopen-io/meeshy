@@ -188,7 +188,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
       });
 
       // Always return 200 OK with generic message (prevents email enumeration)
-      return reply.status(200).send(result);
+      return sendSuccess(reply, undefined, { message: result.message });
 
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -406,37 +406,25 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
       });
 
       if (!resetToken) {
-        return reply.send({
-          valid: false,
-          requires2FA: false
-        });
+        return sendSuccess(reply, { valid: false, requires2FA: false });
       }
 
       // Check if token is expired
       if (resetToken.expiresAt < new Date()) {
-        return reply.send({
-          valid: false,
-          requires2FA: false
-        });
+        return sendSuccess(reply, { valid: false, requires2FA: false });
       }
 
       // Check if token was already used
       if (resetToken.usedAt) {
-        return reply.send({
-          valid: false,
-          requires2FA: false
-        });
+        return sendSuccess(reply, { valid: false, requires2FA: false });
       }
 
       // Check if token is revoked
       if (resetToken.isRevoked) {
-        return reply.send({
-          valid: false,
-          requires2FA: false
-        });
+        return sendSuccess(reply, { valid: false, requires2FA: false });
       }
 
-      return reply.send({
+      return sendSuccess(reply, {
         valid: true,
         requires2FA: !!resetToken.user.twoFactorSecret,
         expiresAt: resetToken.expiresAt.toISOString()
@@ -530,7 +518,11 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         userAgent
       });
 
-      return reply.send(result);
+      if (!result.success) {
+        return sendBadRequest(reply, (result as any).error);
+      }
+      const { success: _s1, ...data1 } = result as any;
+      return sendSuccess(reply, data1);
     } catch (error) {
       if (error instanceof z.ZodError) {
         return sendBadRequest(reply, 'validation_error');
@@ -612,7 +604,11 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         userAgent
       });
 
-      return reply.send(result);
+      if (!result.success) {
+        return sendBadRequest(reply, (result as any).error);
+      }
+      const { success: _s2, ...data2 } = result as any;
+      return sendSuccess(reply, data2);
     } catch (error) {
       if (error instanceof z.ZodError) {
         return sendBadRequest(reply, 'validation_error');
@@ -688,7 +684,11 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         userAgent
       });
 
-      return reply.send(result);
+      if (!result.success) {
+        return sendBadRequest(reply, (result as any).error);
+      }
+      const { success: _s3, ...data3 } = result as any;
+      return sendSuccess(reply, data3);
     } catch (error) {
       if (error instanceof z.ZodError) {
         return sendBadRequest(reply, 'validation_error');
@@ -749,7 +749,10 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
 
       const result = await phonePasswordResetService.resendCode(body.tokenId, ipAddress);
 
-      return reply.send(result);
+      if (!result.success) {
+        return sendBadRequest(reply, (result as any).error);
+      }
+      return sendSuccess(reply, undefined);
     } catch (error) {
       if (error instanceof z.ZodError) {
         return sendBadRequest(reply, 'validation_error');
