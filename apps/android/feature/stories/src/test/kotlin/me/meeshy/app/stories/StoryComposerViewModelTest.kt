@@ -640,4 +640,208 @@ class StoryComposerViewModelTest {
         assertThat(vm.state.value.pendingUploads).isEmpty()
         assertThat(vm.state.value.draft.mediaIds).isEmpty()
     }
+
+    // --- multi-slide deck ---
+
+    @Test
+    fun `the composer starts with a single empty selected slide`() = runTest {
+        val vm = viewModel()
+
+        assertThat(vm.state.value.deck.size).isEqualTo(1)
+        assertThat(vm.state.value.deck.selectedSlide.text).isEmpty()
+    }
+
+    @Test
+    fun `onTextChange writes the text into the selected slide and mirrors the editor`() = runTest {
+        val vm = viewModel()
+
+        vm.onTextChange("hello")
+
+        assertThat(vm.state.value.deck.selectedSlide.text).isEqualTo("hello")
+        assertThat(vm.state.value.draft.text).isEqualTo("hello")
+    }
+
+    @Test
+    fun `onAddSlide appends a new empty selected slide and clears the editor`() = runTest {
+        val vm = viewModel()
+        vm.onTextChange("first")
+
+        vm.onAddSlide()
+
+        val deck = vm.state.value.deck
+        assertThat(deck.size).isEqualTo(2)
+        assertThat(deck.selectedSlide.text).isEmpty()
+        assertThat(deck.slides.first().text).isEqualTo("first")
+        assertThat(vm.state.value.draft.text).isEmpty()
+    }
+
+    @Test
+    fun `each slide keeps its own text as the selection moves`() = runTest {
+        val vm = viewModel()
+        vm.onTextChange("one")
+        vm.onAddSlide()
+        vm.onTextChange("two")
+        val firstId = vm.state.value.deck.slides.first().id
+
+        vm.onSelectSlide(firstId)
+
+        assertThat(vm.state.value.deck.selectedSlide.text).isEqualTo("one")
+        assertThat(vm.state.value.draft.text).isEqualTo("one")
+    }
+
+    @Test
+    fun `onAddSlide is inert at the slide cap`() = runTest {
+        val vm = viewModel()
+
+        repeat(StorySlideDeck.MAX_SLIDES + 3) { vm.onAddSlide() }
+
+        assertThat(vm.state.value.deck.size).isEqualTo(StorySlideDeck.MAX_SLIDES)
+    }
+
+    @Test
+    fun `onDuplicateSelectedSlide clones the selected slide's text and selects the clone`() = runTest {
+        val vm = viewModel()
+        vm.onTextChange("dup me")
+
+        vm.onDuplicateSelectedSlide()
+
+        val deck = vm.state.value.deck
+        assertThat(deck.size).isEqualTo(2)
+        assertThat(deck.slides.map { it.text }).containsExactly("dup me", "dup me")
+        assertThat(deck.selectedIndex).isEqualTo(1)
+        assertThat(vm.state.value.draft.text).isEqualTo("dup me")
+    }
+
+    @Test
+    fun `onRemoveSlide drops the slide and refreshes the editor from the new selection`() = runTest {
+        val vm = viewModel()
+        vm.onTextChange("keep")
+        vm.onAddSlide()
+        vm.onTextChange("remove")
+        val secondId = vm.state.value.deck.slides[1].id
+
+        vm.onRemoveSlide(secondId)
+
+        assertThat(vm.state.value.deck.size).isEqualTo(1)
+        assertThat(vm.state.value.draft.text).isEqualTo("keep")
+    }
+
+    @Test
+    fun `onRemoveSlide is inert on the last remaining slide`() = runTest {
+        val vm = viewModel()
+        vm.onTextChange("solo")
+        val id = vm.state.value.deck.slides.first().id
+
+        vm.onRemoveSlide(id)
+
+        assertThat(vm.state.value.deck.size).isEqualTo(1)
+        assertThat(vm.state.value.draft.text).isEqualTo("solo")
+    }
+
+    @Test
+    fun `onMoveSlide reorders slides and preserves the selection by id`() = runTest {
+        val vm = viewModel()
+        vm.onTextChange("a")
+        vm.onAddSlide()
+        vm.onTextChange("b")
+        val firstId = vm.state.value.deck.slides.first().id
+
+        vm.onMoveSlide(firstId, toIndex = 1)
+
+        assertThat(vm.state.value.deck.slides.map { it.text }).containsExactly("b", "a").inOrder()
+        assertThat(vm.state.value.deck.selectedSlide.text).isEqualTo("b")
+    }
+
+    @Test
+    fun `onSelectSlide of an unknown id is inert`() = runTest {
+        val vm = viewModel()
+        vm.onTextChange("x")
+
+        vm.onSelectSlide("nope")
+
+        assertThat(vm.state.value.deck.selectedSlide.text).isEqualTo("x")
+        assertThat(vm.state.value.draft.text).isEqualTo("x")
+    }
+
+    @Test
+    fun `canPublish is false when a non-selected slide exceeds the character limit`() = runTest {
+        val vm = viewModel()
+        vm.onTextChange("ok")
+        vm.onAddSlide()
+        vm.onTextChange("x".repeat(StoryComposerDraft.MAX_CHARS + 1))
+        val firstId = vm.state.value.deck.slides.first().id
+
+        vm.onSelectSlide(firstId)
+
+        assertThat(vm.state.value.draft.isWithinLimit).isTrue()
+        assertThat(vm.state.value.canPublish).isFalse()
+    }
+
+    @Test
+    fun `publish enqueues one story per non-blank slide in order`() = runTest {
+        val vm = viewModel()
+        vm.onTextChange("one")
+        vm.onAddSlide()
+        vm.onTextChange("two")
+        val requests = mutableListOf<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(requests), any()) } returns "cmid"
+
+        vm.publish()
+
+        coVerify(exactly = 2) { repo.enqueuePublish(any(), any()) }
+        coVerify(exactly = 1) { workManager.enqueue(any<OneTimeWorkRequest>()) }
+        assertThat(requests.map { it.content }).containsExactly("one", "two").inOrder()
+    }
+
+    @Test
+    fun `publish skips a blank slide between content slides`() = runTest {
+        val vm = viewModel()
+        vm.onTextChange("one")
+        vm.onAddSlide()
+        vm.onAddSlide()
+        vm.onTextChange("three")
+        val requests = mutableListOf<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(requests), any()) } returns "cmid"
+
+        vm.publish()
+
+        assertThat(requests.map { it.content }).containsExactly("one", "three").inOrder()
+    }
+
+    @Test
+    fun `multi-slide publish carries media and prerequisites only on the first story`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns offline()
+        coEvery { uploadQueue.enqueue(any()) } returns "up-1"
+        vm.onMediaPicked(listOf(item()))
+        vm.onTextChange("one")
+        vm.onAddSlide()
+        vm.onTextChange("two")
+        val requests = mutableListOf<CreateStoryRequest>()
+        val deps = mutableListOf<List<String>>()
+        coEvery { repo.enqueuePublish(capture(requests), capture(deps)) } returns "cmid"
+
+        vm.publish()
+
+        assertThat(requests).hasSize(2)
+        assertThat(requests[0].mediaIds).containsExactly("up-1")
+        assertThat(requests[1].mediaIds).isNull()
+        assertThat(deps[0]).containsExactly("up-1")
+        assertThat(deps[1]).isEmpty()
+    }
+
+    @Test
+    fun `publish resets to a single empty slide on success`() = runTest {
+        val vm = viewModel()
+        vm.onTextChange("one")
+        vm.onAddSlide()
+        vm.onTextChange("two")
+        coEvery { repo.enqueuePublish(any(), any()) } returns "cmid"
+
+        vm.publish()
+
+        assertThat(vm.state.value.deck.size).isEqualTo(1)
+        assertThat(vm.state.value.deck.selectedSlide.text).isEmpty()
+        assertThat(vm.state.value.draft.text).isEmpty()
+    }
 }

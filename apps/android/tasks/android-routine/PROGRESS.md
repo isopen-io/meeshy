@@ -101,28 +101,33 @@ appended (and a single offline pick carrying **several** items now stages each o
 story on **all** pending cmids (`enqueuePublish(.., dependsOn = pendingUploads.map { cmid })`), per-tile
 remove cancels only that durable row, and the preview renders N "Offline" tiles. `queueDurably` stages one
 item at a time so partial progress survives a mid-batch enqueue failure. Surpasses iOS, which drops a pick
-on an offline upload.
+on an offline upload. Latest loop (`story-composer-slide-deck`) makes the **multi-slide model real in the
+composer**: `StoryComposerUiState` carries a `deck: StorySlideDeck`, the VM mints slide ids and exposes
+add/duplicate/remove/move/select intents (the editor binds to the selected slide's text, each slide keeps
+its own caption via pure `updateSelectedText`), publish stays **lossless** — `publishRequests` emits one
+story per non-blank slide in order (first carries whole-story media + offline `dependsOn`), `canPublish`
+gates on the **whole deck** (an off-screen over-long slide blocks publish), and `StoryComposerScreen`
+renders a `SlideStrip` mini-preview (numbered selectable chips, Duplicate/Remove on the selected chip,
+"+" add chip capped at 10). The single-slide path stays byte-identical to before.
 
 ## Next slice (pick one for the next run)
 
 Ordered by value:
-1. **Slide-deck ViewModel wiring** — wire the new pure `StorySlideDeck` reducer into
-   `StoryComposerViewModel` (mint slide ids, expose the deck in `StoryComposerUiState`)
-   and add a **slide mini-preview strip** to `StoryComposerScreen` (add/duplicate/
-   remove/reorder/select gestures). Makes the multi-slide model real in the UI.
+1. **Slide drag-reorder gesture** — bind a Compose drag handle in `SlideStrip` to the
+   already-wired/tested `onMoveSlide` intent (small; the `move` reducer is done).
 2. **9:16 canvas** — the per-slide canvas (pinch-zoom + drag-pan, FAB + bottom-band
    toolbar). Larger; see `feature-parity.md` §"Stories composer".
-3. After Stories richness is sufficient, advance to the **Calls** area
+3. **Per-slide media** — move media off the whole-story draft onto the selected slide
+   (`StorySlide.mediaIds`), so each slide carries its own attachments.
+4. After Stories richness is sufficient, advance to the **Calls** area
    (`feature-parity.md` §"Calls").
 
-(`story-slide-deck` ✅ shipped 2026-06-28 — this run; the **pure foundation of the multi-slide
-composer**. New `StorySlide` model + `StorySlideDeck` reducer (`:feature:stories`): structural
-CRUD — `addSlide`/`duplicate`/`removeSlide`/`move`/`select` — with the iOS **≤10-slides cap**
-(`MAX_SLIDES`/`canAddSlide`/`isFull`) and the **always-≥1-slide** invariant (`canRemoveSlide`,
-removal reselects the slide that takes the removed one's place). Total functions: every
-inapplicable op (cap reached, last slide, unknown id, no-op move) returns the same instance.
-Ids are caller-supplied so the reducer stays pure/deterministic. The ViewModel/screen wiring +
-mini-preview strip is the next slice. See run log.)
+(`story-composer-slide-deck` ✅ shipped 2026-06-29 — this run; the multi-slide model is now **real in
+the composer**. `StoryComposerUiState.deck: StorySlideDeck`, the VM mints slide ids and exposes
+`onAddSlide`/`onDuplicateSelectedSlide`/`onRemoveSlide`/`onMoveSlide`/`onSelectSlide` (editor bound to
+the selected slide's text via pure `updateSelectedText`), publish stays **lossless** — one story per
+non-blank slide in order (first carries whole-story media + deps), `canPublish` gates on the whole deck,
+and `StoryComposerScreen` renders a `SlideStrip` mini-preview. Drag-reorder gesture deferred. See run log.)
 
 (`story-composer-multi-pending` ✅ shipped 2026-06-28 — this run; the composer's offline staging is now
 **multi-pending**: `StoryComposerUiState.pendingUploads: List<PendingMediaUpload>`, every transient-failed
@@ -194,6 +199,58 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-29 — slice `story-composer-slide-deck` ✅
+- **Branch:** `claude/apps/android/story-composer-slide-deck` (off `origin/main` @ `f4ff6b2cd`).
+- **Housekeeping (step 0):** no open `claude/apps/android/*` PR (`list_pull_requests state=open
+  head=isopen-io:claude/apps/android` → `[]`; prior loop `story-slide-deck` squash-merged as #1014).
+  Branched directly off the freshened `main`.
+- **What:** makes the multi-slide model **real in the composer** ("Next" #1, feature-parity §E
+  line 433). Wires the pure `StorySlideDeck` reducer into `StoryComposerViewModel`, binds the editor
+  to the **selected slide's** text (each slide keeps its own caption), and renders a `SlideStrip`
+  mini-preview in `StoryComposerScreen`. Publish stays **lossless across slides**: one story per
+  non-blank slide, in order.
+- **Added/changed (production, `apps/android` only):**
+  - `StorySlideDeck` (`:feature:stories`) — pure additions: `hasText`, `publishableSlides`
+    (non-blank slides in order), `isWithinTextLimit(maxChars)` (every slide within the cap),
+    `updateSelectedText(text)` (rewrites only the selected slide's text, id/media/order/selection
+    intact). All pure, deterministic — no clock/random.
+  - `StoryComposerUiState` — new `deck: StorySlideDeck` (default `single(newSlideId())`); `canPublish`
+    now gates on the **whole deck** (`deck.hasText || draft.hasMedia` &&
+    `deck.isWithinTextLimit(MAX_CHARS)` && media cap && not in flight) so an off-screen over-long
+    slide blocks publish.
+  - `StoryComposerViewModel` — `onTextChange` writes the selected slide (+ mirrors `draft.text`);
+    new intents `onAddSlide`/`onDuplicateSelectedSlide`/`onRemoveSlide`/`onMoveSlide`/`onSelectSlide`
+    via a private `applyDeck{}` that re-syncs the editor to the (possibly new) selected slide's text.
+    Slide ids minted with `UUID` at the impure VM edge (reducer stays pure). `publish` → new pure
+    `publishRequests`: **one story per non-blank slide** in deck order; the first carries whole-story
+    media + offline `dependsOn`, later slides are text-only; a media-only deck still emits one
+    media-bearing story. Single-slide path is byte-identical to before.
+  - `StoryComposerScreen` — `SlideStrip` composable (numbered selectable `FilterChip`s; selected chip
+    carries Duplicate/Remove, Remove hidden on the last slide; trailing "+" `AssistChip` disabled at
+    the cap). Glue only — every decision read off the unit-tested deck. +4 strings × 4 locales.
+- **TDD (red → green):** `StorySlideDeckTest` +12 (updateSelectedText rewrites-only-selected /
+  media-untouched; hasText false-blank / whitespace-ignored / true; publishableSlides order-filter /
+  empty; isWithinTextLimit all-within / any-exceeds / raw-length-counts-whitespace). 34/34 green.
+  `StoryComposerViewModelTest` +18 (starts single slide; onTextChange writes slide+mirror;
+  add appends+clears / inert-at-cap; per-slide text survives selection move; duplicate clones+selects
+  clone; remove drops+refreshes-editor / inert-on-last; move reorders+preserves-selection;
+  select-unknown inert; canPublish false on off-screen over-long slide; publish one-per-non-blank-slide
+  in order / skips blank between content / media+deps only on first / resets to single empty slide).
+  57/57 green. No floor lowered, no test weakened; ids read off state (no exact-id tautology).
+- **Verification:** `:feature:stories:testDebugUnitTest` (`StorySlideDeckTest` 34/34 +
+  `StoryComposerViewModelTest` 57/57, failures=0 errors=0); full `./apps/android/meeshy.sh check`
+  (`assembleDebug` + all `testDebugUnitTest`) **BUILD SUCCESSFUL**. Diff = `apps/android` only
+  (3 prod Kotlin, 4 strings, 2 test).
+- **Reviewer gate:** PASS — scope clean (apps/android only, no secrets, `local.properties` gitignored);
+  behavioural non-tautological tests through the public API; SDK purity (deck is composer **product**
+  state in `:feature:stories`; id-minting at the impure VM edge keeps the reducer pure); single source
+  of truth (`draft.text == selectedSlide.text` invariant held by one writer `applyDeck`); UDF
+  (immutable `StateFlow`, pure reducer transitions); UX coherence (theme chips, selected highlight,
+  no dead end — publish is lossless across slides). Surpasses iOS by gating publish on the whole deck.
+- **Note / next:** drag-reorder **gesture** binding deferred (the `onMoveSlide` intent + `move`
+  reducer are wired & tested — only the Compose drag handle remains); per-slide media still
+  whole-story. Next: the **9:16 canvas** ("Next" #2) — per-slide pinch-zoom/drag-pan + toolbar.
 
 ### 2026-06-28 — slice `story-slide-deck` ✅
 - **Branch:** `claude/apps/android/story-slide-deck` (off `origin/main` @ `bf4cd477`).

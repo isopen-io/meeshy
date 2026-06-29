@@ -21,10 +21,16 @@ import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.api.CreateStoryRequest
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.story.StoryRepository
+import java.util.UUID
 import javax.inject.Inject
+
+/** Mints a fresh, collision-free slide id. The pure [StorySlideDeck] reducer stays
+ * deterministic — id generation lives here, at the impure ViewModel edge. */
+private fun newSlideId(): String = UUID.randomUUID().toString()
 
 /**
  * A media attachment durably queued offline: its bytes live in `MediaBlobStore`
@@ -50,13 +56,25 @@ data class PendingMediaUpload(
 @Immutable
 data class StoryComposerUiState(
     val draft: StoryComposerDraft = StoryComposerDraft(),
+    val deck: StorySlideDeck = StorySlideDeck.single(newSlideId()),
     val attachments: List<UploadedMedia> = emptyList(),
     val pendingUploads: List<PendingMediaUpload> = emptyList(),
     val isUploadingMedia: Boolean = false,
     val isPublishing: Boolean = false,
     val errorMessage: String? = null,
 ) {
-    val canPublish: Boolean get() = draft.canPublish && !isPublishing && !isUploadingMedia
+    /**
+     * Publishable when some slide carries text **or** media is attached, every slide
+     * is within the character cap, the media cap holds, and nothing is in flight.
+     * The whole **deck** gates publishing — not just the slide currently being
+     * edited — so an over-long off-screen slide still blocks the action.
+     */
+    val canPublish: Boolean
+        get() = (deck.hasText || draft.hasMedia) &&
+            deck.isWithinTextLimit(StoryComposerDraft.MAX_CHARS) &&
+            draft.isWithinMediaLimit &&
+            !isPublishing &&
+            !isUploadingMedia
 
     /** Every media id carried into the wire request: uploaded ids then the offline placeholders. */
     internal val draftMediaIds: List<String>
@@ -93,11 +111,42 @@ class StoryComposerViewModel @Inject constructor(
     val published: SharedFlow<Unit> = _published.asSharedFlow()
 
     fun onTextChange(text: String) {
-        _state.update { it.copy(draft = it.draft.withText(text), errorMessage = null) }
+        _state.update {
+            val deck = it.deck.updateSelectedText(text)
+            it.copy(draft = it.draft.withText(text), deck = deck, errorMessage = null)
+        }
     }
 
     fun onVisibilityChange(visibility: StoryVisibility) {
         _state.update { it.copy(draft = it.draft.withVisibility(visibility)) }
+    }
+
+    /** Appends a fresh empty slide and selects it (inert at the ≤10-slide cap); the
+     * editor follows the new selection, so it clears to the empty slide's text. */
+    fun onAddSlide() = applyDeck { it.addSlide(newSlideId()) }
+
+    /** Inserts a clone of the selected slide right after it and selects the clone. */
+    fun onDuplicateSelectedSlide() = applyDeck { it.duplicate(it.selectedId, newSlideId()) }
+
+    /** Removes the slide [id] (inert on the last remaining slide / unknown id). */
+    fun onRemoveSlide(id: String) = applyDeck { it.removeSlide(id) }
+
+    /** Reorders the slide [id] to [toIndex] (selection preserved by id). */
+    fun onMoveSlide(id: String, toIndex: Int) = applyDeck { it.move(id, toIndex) }
+
+    /** Switches the active slide to [id] (inert on unknown id). */
+    fun onSelectSlide(id: String) = applyDeck { it.select(id) }
+
+    /**
+     * Applies a structural deck transform and re-syncs the editor buffer to the
+     * (possibly new) selected slide's text, keeping `draft.text == selected slide`
+     * the single invariant the screen relies on.
+     */
+    private inline fun applyDeck(transform: (StorySlideDeck) -> StorySlideDeck) {
+        _state.update {
+            val deck = transform(it.deck)
+            it.copy(deck = deck, draft = it.draft.withText(deck.selectedSlide.text))
+        }
     }
 
     /**
@@ -216,10 +265,14 @@ class StoryComposerViewModel @Inject constructor(
         _state.update { it.copy(isPublishing = true, errorMessage = null) }
         viewModelScope.launch {
             try {
-                storyRepository.enqueuePublish(
-                    current.draft.toCreateStoryRequest(resolvePublishLanguage()),
-                    dependsOn = current.pendingUploads.map(PendingMediaUpload::cmid),
-                )
+                val requests = publishRequests(current, resolvePublishLanguage())
+                val prerequisites = current.pendingUploads.map(PendingMediaUpload::cmid)
+                requests.forEachIndexed { index, request ->
+                    storyRepository.enqueuePublish(
+                        request,
+                        dependsOn = if (index == 0) prerequisites else emptyList(),
+                    )
+                }
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
                 _state.update { StoryComposerUiState() }
                 _published.tryEmit(Unit)
@@ -228,6 +281,28 @@ class StoryComposerViewModel @Inject constructor(
             } catch (e: Throwable) {
                 _state.update { it.copy(isPublishing = false, errorMessage = e.message ?: "Publish failed") }
             }
+        }
+    }
+
+    /**
+     * Maps the deck to the wire requests, lossless across all slides until per-slide
+     * effect serialization lands: **one story per non-blank slide**, in deck order.
+     * The first story carries the whole-story media + offline prerequisites (the
+     * later text-only slides carry neither). A media-only deck (no slide has text)
+     * still emits a single media-bearing story.
+     */
+    private fun publishRequests(current: StoryComposerUiState, language: String): List<CreateStoryRequest> {
+        val texts = current.deck.publishableSlides.map(StorySlide::text)
+        if (texts.isEmpty()) {
+            return listOf(current.draft.withText("").toCreateStoryRequest(language))
+        }
+        return texts.mapIndexed { index, text ->
+            val draft = if (index == 0) {
+                current.draft.withText(text)
+            } else {
+                StoryComposerDraft(text = text, visibility = current.draft.visibility)
+            }
+            draft.toCreateStoryRequest(language)
         }
     }
 

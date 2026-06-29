@@ -51,6 +51,26 @@ data class StorySlideDeck(
     /** The currently selected slide. */
     val selectedSlide: StorySlide get() = slides[selectedIndex]
 
+    /** At least one slide carries publishable (non-blank) text. */
+    val hasText: Boolean get() = slides.any { it.text.isNotBlank() }
+
+    /** The slides that would each become a published story — those with non-blank text, in order. */
+    val publishableSlides: List<StorySlide> get() = slides.filter { it.text.isNotBlank() }
+
+    /** Every slide's raw text is within [maxChars] (surrounding whitespace counts). */
+    fun isWithinTextLimit(maxChars: Int): Boolean = slides.all { it.text.length <= maxChars }
+
+    /**
+     * Rewrites the **selected** slide's [text], leaving its id and media — and every
+     * other slide and the selection — untouched. The editor binds here so each slide
+     * keeps its own caption as the user moves between slides.
+     */
+    fun updateSelectedText(text: String): StorySlideDeck {
+        val index = selectedIndex
+        val next = slides.mapIndexed { i, slide -> if (i == index) slide.copy(text = text) else slide }
+        return copy(slides = next)
+    }
+
     /**
      * Appends a fresh empty slide with [newId] and selects it. Inert (same
      * instance) when the cap is reached or [newId] already exists.

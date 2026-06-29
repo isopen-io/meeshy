@@ -15,10 +15,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -130,6 +134,14 @@ fun StoryComposerScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            SlideStrip(
+                deck = state.deck,
+                onSelect = viewModel::onSelectSlide,
+                onAdd = viewModel::onAddSlide,
+                onDuplicate = viewModel::onDuplicateSelectedSlide,
+                onRemove = viewModel::onRemoveSlide,
+            )
+
             OutlinedTextField(
                 value = state.draft.text,
                 onValueChange = viewModel::onTextChange,
@@ -189,6 +201,67 @@ fun StoryComposerScreen(
             VisibilityRow(
                 selected = state.draft.visibility,
                 onSelect = viewModel::onVisibilityChange,
+            )
+        }
+    }
+}
+
+/**
+ * Mini-preview strip of the multi-slide deck — the structural surface of the
+ * upcoming canvas. Each slide is a numbered, selectable chip (tap to switch); the
+ * selected chip carries Duplicate / Remove actions (Remove hidden on the last
+ * remaining slide). A trailing "+" chip appends a slide, disabled at the ≤10 cap.
+ * Pure glue: every decision (cap, can-remove, selection) is read off the already
+ * unit-tested [StorySlideDeck]; this only renders it and forwards intents.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SlideStrip(
+    deck: StorySlideDeck,
+    onSelect: (String) -> Unit,
+    onAdd: () -> Unit,
+    onDuplicate: () -> Unit,
+    onRemove: (String) -> Unit,
+) {
+    LazyRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        itemsIndexed(deck.slides, key = { _, slide -> slide.id }) { index, slide ->
+            val selected = slide.id == deck.selectedId
+            FilterChip(
+                selected = selected,
+                onClick = { onSelect(slide.id) },
+                label = { Text(stringResource(R.string.stories_composer_slide_label, index + 1)) },
+                trailingIcon = if (selected && deck.canRemoveSlide) {
+                    {
+                        IconButton(onClick = { onRemove(slide.id) }, modifier = Modifier.size(18.dp)) {
+                            Icon(
+                                Icons.Filled.Close,
+                                contentDescription = stringResource(R.string.stories_composer_remove_slide),
+                            )
+                        }
+                    }
+                } else {
+                    null
+                },
+            )
+        }
+        item {
+            IconButton(onClick = onDuplicate, enabled = deck.canAddSlide) {
+                Icon(
+                    Icons.Filled.ContentCopy,
+                    contentDescription = stringResource(R.string.stories_composer_duplicate_slide),
+                )
+            }
+        }
+        item {
+            AssistChip(
+                onClick = onAdd,
+                enabled = deck.canAddSlide,
+                label = { Text(stringResource(R.string.stories_composer_add_slide)) },
+                leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) },
             )
         }
     }
