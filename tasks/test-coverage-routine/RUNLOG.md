@@ -2287,4 +2287,32 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   - `services/CaptchaService.ts`: `/* istanbul ignore next */` on `validateStatus: (status) => status < 500` — axios-internal callback never invoked through module-level mock
 - Reviewer: PASS (rounds: 1)
 - Notes: All feature matrix cells for Linux-testable environments remain ☑/⊘. Manifest-level gap-fill (no new feature matrix cell). Manifest ticked: services/CaptchaService.ts☑ services/TURNCredentialService.ts☑ services/MultiLevelJobMappingCache.ts☑ routes/auth/types.ts☑
-- Commit: (see PR claude/coverage/gateway-manifest-gap2)
+- Commit: 65ef3e96 (squash-merged PR #1013 → main 2026-06-29T01:13Z)
+
+## 2026-06-29T01:53Z — gateway-manifest-gap3 (magic-link, mentions, message-read-status, reactions)
+
+- Targeted:
+  - `services/gateway/src/routes/magic-link.ts`
+  - `services/gateway/src/routes/mentions.ts`
+  - `services/gateway/src/routes/message-read-status.ts`
+  - `services/gateway/src/routes/reactions.ts`
+- Result: ☑ done
+- Coverage:
+  - routes/magic-link.ts: 100% lines / 100% branches
+  - routes/mentions.ts: 100% lines / 100% branches
+  - routes/message-read-status.ts: 100% lines / 92.72% branches
+  - routes/reactions.ts: 100% lines / 100% branches
+  - Gateway global: 309 suites / 9460 tests / 1 skipped (all pass)
+- Tests added: 138 new tests across 4 new + 1 modified test files
+  - New: `src/__tests__/unit/routes/magic-link-routes.test.ts` (36 tests): all 3 endpoints (POST request, GET validate, POST validate); rememberDevice/expiresIn branch; markSessionTrusted call count; fast-json-stringify schema stripping accounted for; Fastify AJV pre-validation vs handler validation distinguished
+  - New: `src/__tests__/unit/routes/reactions-routes.test.ts` (39 tests): all 4 endpoints; participantId resolution from context vs DB; emoji URL-decode; fire-and-forget notifyReactionAdded; own-reactions-only 403
+  - New: `src/__tests__/unit/routes/message-read-status-extra.test.ts` (30 tests): GET read-status + GET read-statuses; outer-catch blocks for all 3 POST handlers; broadcastReadStatusUpdate happy path; 403 membership-null paths; delivery-receipt message-not-found 404; mark-as-read/received/delivery-receipt 500 paths
+  - New: `src/__tests__/unit/routes/mentions-suggestions.test.ts` (already existed — 30 tests, context coverage)
+  - Modified: `src/__tests__/unit/routes/mentions-routes.test.ts` (+2 tests): non-Error throw covers instanceof false branches; limit=0 covers || 50 fallback
+- Production changes (annotation-only):
+  - `routes/magic-link.ts`: 3× `/* istanbul ignore next */` on `|| 'fallback'` after Zod `.issues[0]?.message` — Zod never produces falsy messages
+  - `routes/mentions.ts`: 3× `/* istanbul ignore next */` on `if (!userId)` (requireAuth:true rejects before handler) + 1× on `if (!resolvedContextId)` (SuggestionsQuerySchema.refine() enforces before handler)
+  - `routes/message-read-status.ts`: 2× `/* istanbul ignore next */` on `keyGenerator` function body (rate-limiter mocked in tests, never invoked)
+- Reviewer: PASS (CI green: Quality bun + Security checks passed; squash-merged)
+- Notes: All feature matrix cells for Linux-testable environments remain ☑/⊘. Manifest-level gap-fill (no new feature matrix cell). Manifest ticked: routes/magic-link.ts☑ routes/mentions.ts☑ routes/message-read-status.ts☑ routes/reactions.ts☑ validation/mentions-schemas.ts☑
+- Commit: 57ee8a99 (squash-merged PR #1017 → main 2026-06-29T02:12Z)

@@ -77,15 +77,15 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/gateway/src/routes/conversation-preferences.ts`
 - [ ] `services/gateway/src/routes/friends.ts`
 - [ ] `services/gateway/src/routes/invitations.ts`
-- [ ] `services/gateway/src/routes/magic-link.ts`
+- [x] `services/gateway/src/routes/magic-link.ts`
 - [ ] `services/gateway/src/routes/maintenance.ts`
-- [ ] `services/gateway/src/routes/mentions.ts`
-- [ ] `services/gateway/src/routes/message-read-status.ts`
+- [x] `services/gateway/src/routes/mentions.ts`
+- [x] `services/gateway/src/routes/message-read-status.ts`
 - [ ] `services/gateway/src/routes/messages.ts`
 - [x] `services/gateway/src/routes/notifications.ts`
 - [ ] `services/gateway/src/routes/password-reset.ts`
 - [x] `services/gateway/src/routes/push-tokens.ts`
-- [ ] `services/gateway/src/routes/reactions.ts`
+- [x] `services/gateway/src/routes/reactions.ts`
 - [ ] `services/gateway/src/routes/signal-protocol.ts`
 - [ ] `services/gateway/src/routes/translation-jobs.ts`
 - [ ] `services/gateway/src/routes/translation-non-blocking.ts`
@@ -440,7 +440,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/gateway/src/validation/conversation-encryption-schemas.ts`
 - [ ] `services/gateway/src/validation/delete-account-schemas.ts`
 - [x] `services/gateway/src/validation/helpers.ts`
-- [ ] `services/gateway/src/validation/mentions-schemas.ts`
+- [x] `services/gateway/src/validation/mentions-schemas.ts`
 - [ ] `services/gateway/src/validation/message-read-status-schemas.ts`
 - [ ] `services/gateway/src/validation/messages-schemas.ts`
 - [x] `services/gateway/src/validation/notification-schemas.ts`
