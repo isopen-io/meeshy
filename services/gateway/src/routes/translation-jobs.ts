@@ -213,12 +213,12 @@ export async function translationJobsRoutes(fastify: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         if (!translateService) {
-          return sendError(reply, 503, 'Translation service not available', { message: 'SERVICE_UNAVAILABLE' });
+          return sendError(reply, 503, 'Translation service not available', { code: 'SERVICE_UNAVAILABLE' });
         }
 
         const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext?.isAuthenticated) {
-          return sendUnauthorized(reply, 'Authentication required');
+          return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
         }
 
         const { jobId } = request.params as { jobId: string };
@@ -227,13 +227,13 @@ export async function translationJobsRoutes(fastify: FastifyInstance) {
         const result = await translateService.getTranslationStatus(userId, jobId);
 
         if (!result.success) {
-          return sendNotFound(reply, result.error ?? 'Job not found');
+          return sendNotFound(reply, result.error ?? 'Job not found', { code: result.errorCode });
         }
 
         return sendSuccess(reply, result.data);
       } catch (error: any) {
         logger.error('Error getting translation status', error as Error);
-        return sendInternalError(reply, error.message || 'Error getting translation status');
+        return sendInternalError(reply, error.message || 'Error getting translation status', { code: 'STATUS_FAILED' });
       }
     }
   );
@@ -282,12 +282,12 @@ export async function translationJobsRoutes(fastify: FastifyInstance) {
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         if (!translateService) {
-          return sendError(reply, 503, 'Translation service not available', { message: 'SERVICE_UNAVAILABLE' });
+          return sendError(reply, 503, 'Translation service not available', { code: 'SERVICE_UNAVAILABLE' });
         }
 
         const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext?.isAuthenticated) {
-          return sendUnauthorized(reply, 'Authentication required');
+          return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
         }
 
         const { jobId } = request.params as { jobId: string };
@@ -296,13 +296,13 @@ export async function translationJobsRoutes(fastify: FastifyInstance) {
         const result = await translateService.cancelTranslation(userId, jobId);
 
         if (!result.success) {
-          return sendError(reply, 400, result.error ?? 'Cannot cancel job', { message: result.errorCode });
+          return sendError(reply, 400, result.error ?? 'Cannot cancel job', { code: result.errorCode });
         }
 
         return sendSuccess(reply, result.data);
       } catch (error: any) {
         logger.error('Error cancelling translation', error as Error);
-        return sendInternalError(reply, error.message || 'Error cancelling translation');
+        return sendInternalError(reply, error.message || 'Error cancelling translation', { code: 'CANCEL_FAILED' });
       }
     }
   );

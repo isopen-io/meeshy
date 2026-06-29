@@ -317,13 +317,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
 
       const statusCode = errorCode === 'CALL_NOT_FOUND' ? 404 : 400;
 
-      return reply.status(statusCode).send({
-        success: false,
-        error: {
-          code: errorCode,
-          message
-        }
-      });
+      return sendError(reply, statusCode, errorCode, { message });
     }
   });
 
@@ -439,7 +433,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       });
 
       if (!membership) {
-        return sendForbidden(reply, 'You do not have access to this call');
+        return sendForbidden(reply, 'NOT_A_PARTICIPANT');
       }
 
       // Only initiator or admin/moderator can end call
@@ -449,7 +443,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         membership.role === 'moderator';
 
       if (!canEndCall) {
-        return sendForbidden(reply, 'Only the call initiator or conversation moderators can end the call');
+        return sendForbidden(reply, 'PERMISSION_DENIED');
       }
 
       const endParticipantId = authRequest.authContext.participantId || membership?.id;
@@ -613,13 +607,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
 
       const statusCode = errorCode === 'CALL_NOT_FOUND' ? 404 : 400;
 
-      return reply.status(statusCode).send({
-        success: false,
-        error: {
-          code: errorCode,
-          message
-        }
-      });
+      return sendError(reply, statusCode, errorCode, { message });
     }
   });
 
@@ -743,7 +731,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
           membership?.role === 'admin' || membership?.role === 'moderator';
 
         if (!isModerator) {
-          return sendForbidden(reply, 'You can only leave your own participation');
+          return sendForbidden(reply, 'PERMISSION_DENIED');
         }
       }
 
@@ -884,7 +872,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       });
 
       if (!membership) {
-        return sendForbidden(reply, 'You are not a member of this conversation');
+        return sendForbidden(reply, 'NOT_A_PARTICIPANT');
       }
 
       const callSession = await callService.getActiveCallForConversation(
@@ -895,7 +883,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
     } catch (error: any) {
       logger.error('❌ REST: Error getting active call', error);
 
-      return sendInternalError(reply, 'Failed to get active call');
+      return sendInternalError(reply, 'INTERNAL_ERROR');
     }
   });
 
@@ -967,7 +955,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       const userId = authRequest.authContext.userId;
 
       if (!userId) {
-        return sendUnauthorized(reply, 'Authentication required');
+        return sendUnauthorized(reply, 'NOT_AUTHENTICATED');
       }
 
       logger.info('📞 REST: Getting active call for user (crash recovery)', {
@@ -1003,14 +991,14 @@ export default async function callRoutes(fastify: FastifyInstance) {
       });
 
       if (!activeCall) {
-        return sendNotFound(reply, 'No active call found');
+        return sendNotFound(reply, 'NO_ACTIVE_CALL');
       }
 
       return sendSuccess(reply, activeCall);
     } catch (error: any) {
       logger.error('❌ REST: Error getting active call for user', error);
 
-      return sendInternalError(reply, 'Failed to get active call');
+      return sendInternalError(reply, 'INTERNAL_ERROR');
     }
   });
 
@@ -1118,7 +1106,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       const userId = authRequest.authContext.userId;
 
       if (!userId) {
-        return sendUnauthorized(reply, 'Authentication required');
+        return sendUnauthorized(reply, 'NOT_AUTHENTICATED');
       }
 
       const parsed = callHistoryQuerySchema.safeParse(request.query);
@@ -1133,7 +1121,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       });
     } catch (error: any) {
       logger.error('❌ REST: Error listing call history', error);
-      return sendInternalError(reply, 'Failed to get call history');
+      return sendInternalError(reply, 'INTERNAL_ERROR', { message: 'Failed to get call history' });
     }
   });
 }

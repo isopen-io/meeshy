@@ -194,7 +194,7 @@ export function createPreferenceRouter<T>(
           return sendSuccess(reply, (updated as any)[category] as T);
         } catch (error: any) {
           if (error.name === 'ZodError') {
-            return sendBadRequest(reply, 'Invalid preference data');
+            return sendBadRequest(reply, 'VALIDATION_ERROR');
           }
 
           fastify.log.error({ error, category }, 'Error updating preferences');
@@ -303,7 +303,7 @@ export function createPreferenceRouter<T>(
           return sendSuccess(reply, (updated as any)[category] as T);
         } catch (error: any) {
           if (error.name === 'ZodError') {
-            return sendBadRequest(reply, 'Invalid preference data');
+            return sendBadRequest(reply, 'VALIDATION_ERROR');
           }
 
           fastify.log.error({ error, category }, 'Error partially updating preferences');
