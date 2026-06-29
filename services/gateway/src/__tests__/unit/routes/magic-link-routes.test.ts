@@ -164,7 +164,7 @@ describe('MagicLink Routes', () => {
       const body = response.json();
       expect(body.success).toBe(true);
       expect(body.message).toBe('If an account exists, a login link has been sent.');
-      expect(body.expiresInSeconds).toBe(600);
+      expect(body.data.expiresInSeconds).toBe(600);
     });
 
     it('passes rememberDevice=false by default to the service', async () => {

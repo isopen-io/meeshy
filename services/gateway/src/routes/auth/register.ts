@@ -11,7 +11,7 @@ import { getRequestContext } from '../../services/GeoIPService';
 import { createRegisterRateLimiter, createAuthGlobalRateLimiter } from '../../utils/rate-limiter.js';
 import { AuthRouteContext, formatUserResponse } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
-import { sendSuccess, sendBadRequest, sendInternalError } from '../../utils/response.js';
+import { sendSuccess, sendError, sendBadRequest, sendInternalError } from '../../utils/response.js';
 
 const logger = enhancedLogger.child({ module: 'AuthRegisterRoute' });
 
@@ -174,12 +174,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
 
       // Erreur générique avec détails en dev
       const isDev = process.env.NODE_ENV !== 'production';
-      reply.status(500).send({
-        success: false,
-        error: isDev ? errorMessage : 'Erreur lors de la création du compte',
-        code: 'REGISTRATION_ERROR',
-        ...(isDev && { details: errorStack })
-      });
+      sendError(reply, 500, isDev ? errorMessage : 'Erreur lors de la création du compte', { code: 'REGISTRATION_ERROR' });
     }
   });
 

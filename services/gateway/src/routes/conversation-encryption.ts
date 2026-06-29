@@ -179,14 +179,7 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
 
         // Check if encryption is already enabled (immutable)
         if (conversation.encryptionEnabledAt) {
-          return reply.status(400).send({
-            success: false,
-            error: 'Encryption already enabled for this conversation (cannot be changed)',
-            data: {
-              currentMode: conversation.encryptionMode,
-              enabledAt: conversation.encryptionEnabledAt
-            }
-          });
+          return sendBadRequest(reply, 'Encryption already enabled for this conversation (cannot be changed)');
         }
 
         // Check permission to enable encryption
@@ -269,15 +262,11 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
 
         logger.info('Encryption enabled for conversation', { conversationId, mode });
 
-        return reply.send({
-          success: true,
-          data: getEncryptionStatus({
-            encryptionEnabledAt: updatedConversation.encryptionEnabledAt,
-            encryptionMode: updatedConversation.encryptionMode,
-            encryptionEnabledBy: updatedConversation.encryptionEnabledBy,
-          }),
-          message: `${encryptionLabels[mode]} encryption enabled successfully`
-        });
+        return sendSuccess(reply, getEncryptionStatus({
+          encryptionEnabledAt: updatedConversation.encryptionEnabledAt,
+          encryptionMode: updatedConversation.encryptionMode,
+          encryptionEnabledBy: updatedConversation.encryptionEnabledBy,
+        }), { message: `${encryptionLabels[mode]} encryption enabled successfully` });
 
       } catch (error) {
         logger.error('Error enabling encryption', error as Error);
