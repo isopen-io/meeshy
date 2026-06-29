@@ -185,6 +185,7 @@ export class ConversationHandler {
       }
     } catch (error) {
       logger.error('conversation:leave failed', { error });
+      socket.emit(SERVER_EVENTS.ERROR, { message: 'Failed to leave conversation' });
     }
   }
 

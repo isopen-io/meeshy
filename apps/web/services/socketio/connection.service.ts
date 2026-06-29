@@ -186,6 +186,13 @@ export class ConnectionService {
       this.emitStatusChange();
     });
 
+    socket.on('reconnect_failed', () => {
+      this.state.isConnecting = false;
+      logger.warn('[Socket]', `reconnection failed after ${this.maxReconnectAttempts} attempts`);
+      if (onError) onError(new Error('reconnect_failed'));
+      this.emitStatusChange();
+    });
+
     socket.on(SERVER_EVENTS.AUTHENTICATED, (data: any) => {
       this.currentUser = data.user;
       if (onAuthenticated) onAuthenticated(data.user);

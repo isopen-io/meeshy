@@ -233,6 +233,9 @@ export class SocketIOOrchestrator {
    */
   private onDisconnected(reason: string): void {
     logger.debug('[SocketIOOrchestrator]', 'Disconnected', { reason });
+    // Clear stale typing indicators immediately — server-side state is gone.
+    // Without this, indicators linger until the 15-second safety timeout fires.
+    this.typingService.clearAllTypingState();
   }
 
   /**
@@ -470,6 +473,10 @@ export class SocketIOOrchestrator {
   }
 
   leaveConversation(conversationOrId: any): void {
+    const conversationId = typeof conversationOrId === 'string'
+      ? conversationOrId
+      : (conversationOrId?.id ?? conversationOrId?.identifier ?? '');
+    this.typingService.clearConversationTypingState(conversationId);
     this.connectionService.leaveConversation(conversationOrId);
   }
 
