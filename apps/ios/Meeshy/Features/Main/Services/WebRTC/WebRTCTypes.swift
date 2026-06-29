@@ -567,6 +567,10 @@ nonisolated enum QualityThresholds {
     /// severe degradation (24 kbps = speech quality floor for Opus).
     static let minBitrate: Int = 24_000
     static let defaultBitrate: Int = 64_000
+    /// Audio jitter above this threshold (ms) triggers a cap to `minBitrate`.
+    /// Opus PLC degrades noticeably when jitter exceeds ~30 ms; shedding encoder
+    /// complexity gives the jitter buffer headroom to absorb the spikes.
+    static let highJitterThresholdMs: Double = 30.0
     /// SDP-level absolute codec minimum set in `RTCRtpEncodingParameters`.
     /// Lower than `minBitrate` so the encoder can survive an extreme network
     /// event even after the adaptation algorithm has already reduced to 24 kbps.

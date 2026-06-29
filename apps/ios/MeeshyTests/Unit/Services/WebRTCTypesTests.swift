@@ -75,6 +75,24 @@ final class QualityThresholdsAudioBitrateTests: XCTestCase {
                        "Stats collection cadence — also the minimum gap between quality-level transitions (debounce)")
     }
 
+    func test_highJitterThresholdMs_is30ms() {
+        XCTAssertEqual(QualityThresholds.highJitterThresholdMs, 30.0, accuracy: 0.001,
+                       "Opus PLC degrades noticeably above ~30 ms jitter; this threshold triggers minBitrate cap")
+    }
+
+    func test_highJitterThresholdMs_isPositive() {
+        XCTAssertGreaterThan(QualityThresholds.highJitterThresholdMs, 0,
+                             "A zero threshold would always cap audio bitrate regardless of network conditions")
+    }
+
+    func test_highJitterThresholdMs_belowExcellentRTT() {
+        // Jitter can be high even on low-latency paths (buffering variability).
+        // The threshold must be small enough to detect real PLC degradation before
+        // RTT/loss signals fire. 30ms < 100ms (excellentRTT) confirms orthogonality.
+        XCTAssertLessThan(QualityThresholds.highJitterThresholdMs, QualityThresholds.excellentRTT,
+                          "highJitterThresholdMs must be < excellentRTT to catch jitter-induced degradation on otherwise-healthy paths")
+    }
+
     func test_videoFairRTT_is200ms() {
         XCTAssertEqual(QualityThresholds.videoFairRTT, 200.0, accuracy: 0.001,
                        "RTT boundary between good and fair video tiers (200 ms)")
