@@ -116,19 +116,37 @@ slotWidthPx, slideCount)` converts the accumulated drag pixels + the measured sl
 accidental reorder), the result is clamped to the deck bounds, and a non-positive slot width / empty
 deck / out-of-range origin all degrade safely. `SlideStrip` binds `detectHorizontalDragGestures` on
 each chip and hands the resolved target to the already-tested `onMoveSlide`, so the move math lives
-in one pure, unit-tested place and the Composable stays glue.
+in one pure, unit-tested place and the Composable stays glue. Latest loop (`story-slide-media`) moves
+media **onto the slide it was added to** (not the whole story): the deck is the single source of truth
+(`addMediaToSelected`/`removeMedia`/`hasMedia`/`isWithinMediaLimit`/`selectedRemainingMediaSlots`, ≤10
+**per slide**) and `draft` mirrors the selected slide for media just as it does for text, so the single-
+slide path stays byte-identical. The preview shows only the selected slide's media, publish emits one
+story **per publishable slide** (text **or** media — a media-only slide now publishes) carrying that
+slide's media and `dependsOn` only that slide's offline uploads, and removing a slide reclaims its media
+(prunes the preview pools + cancels its durable rows). Surpasses iOS, which drops an offline pick.
 
 ## Next slice (pick one for the next run)
 
 Ordered by value:
-1. **Per-slide media** — move media off the whole-story draft onto the selected slide
-   (`StorySlide.mediaIds`), so each slide carries its own attachments. A pure reducer
-   addition (`StorySlideDeck.addMediaToSelected`/`removeMediaFromSelected`) + VM wiring.
-2. **9:16 canvas** — the per-slide canvas (pinch-zoom + drag-pan, FAB + bottom-band
-   toolbar). Larger; see `feature-parity.md` §"Stories composer".
-3. **Text elements** (≤5/slide): per-element style/colour/position — the on-canvas text model.
-4. After Stories richness is sufficient, advance to the **Calls** area
+1. **9:16 canvas** — the per-slide canvas (pinch-zoom + drag-pan, FAB + bottom-band
+   toolbar). Larger; see `feature-parity.md` §"Stories composer". Push the pinch/pan math
+   into a pure resolver (cf. `SlideReorderResolver`) so the canvas transform is unit-tested.
+2. **Text elements** (≤5/slide): per-element style/colour/position — the on-canvas text model
+   (pure `StoryTextElement` + per-slide `elements` list, ≤5 cap, mirroring the media reducer).
+3. After Stories richness is sufficient, advance to the **Calls** area
    (`feature-parity.md` §"Calls").
+
+(`story-slide-media` ✅ shipped 2026-06-29 — this run; **per-slide media**. Media now belongs to the
+slide it was added to, not the whole story. The deck is the single source of truth
+(`StorySlideDeck.addMediaToSelected`/`removeMedia`/`hasMedia`/`isWithinMediaLimit`/
+`selectedRemainingMediaSlots`, ≤10 media **per slide**); `draft` mirrors the selected slide for media
+exactly as it already does for text, so the single-slide path stays byte-identical and most existing
+tests pass unchanged. `onMediaPicked` attaches to the selected slide (online ids or offline
+placeholders), the preview shows only the selected slide's media
+(`selectedSlideAttachments`/`selectedSlidePending`), publish emits one story **per publishable slide**
+(text **or** media) carrying that slide's media and `dependsOn` only that slide's offline uploads, and
+removing a slide reclaims its media (drops preview entries + cancels its durable rows). +13 deck tests,
++10 VM tests. See run log.)
 
 (`slide-drag-reorder` ✅ shipped 2026-06-29 — this run; the deferred **drag-reorder gesture** from
 the slide-deck loop. New pure `SlideReorderResolver.targetIndex` maps accumulated horizontal drag px
@@ -213,6 +231,57 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-29 — slice `story-slide-media` ✅
+- **Branch:** `claude/apps/android/story-slide-media` (off `origin/main` @ `18be707b`).
+- **Housekeeping (step 0):** the prior loop's PR **#1020 `slide-drag-reorder`** was open — merged it
+  first (all 15 CI checks green, diff `apps/android` only, base `384826d3` an ancestor of `main`, the
+  only main-since changes were gateway-coverage commits touching nothing under `apps/android` → clean
+  rebase). Squash-merged as `18be707b`, synced local `main`, then branched this slice.
+- **What:** **per-slide media** ("Next" #1, feature-parity §E "Multi-slide composer"). Media now
+  belongs to the **slide it was added to**, not the whole story. Surpasses iOS (which drops an offline
+  pick on upload failure) by keeping the durable offline chain intact per-slide.
+- **Design (single source of truth):** the **deck** owns media; `draft` mirrors the *selected slide*
+  for media exactly as it already did for text (`mirrorDraftToSelection`), so the single-slide path is
+  byte-identical and nearly every existing test passes unchanged — only genuinely new per-slide
+  behaviour needed new tests.
+- **Added/changed (production, `apps/android` only):**
+  - `StorySlideDeck` (`:feature:stories`) — pure additions: `addMediaToSelected(mediaId)` (append to
+    the selected slide, dedup + ≤`MAX_MEDIA_PER_SLIDE` cap, inert otherwise), `removeMedia(mediaId)`
+    (drop from whichever slide holds it, inert when absent), `hasMedia`, `isWithinMediaLimit()`,
+    `selectedRemainingMediaSlots`, and `publishableSlides` now = non-blank text **or** attached media
+    (a media-only slide publishes). `MAX_MEDIA_PER_SLIDE = 10`.
+  - `StoryComposerViewModel` — `onMediaPicked` reads free slots off the selected slide and routes the
+    uploaded ids / offline cmids onto it (deck); `mirrorDraftToSelection` re-points `draft` at the
+    selected slide's text+media after every deck change; `onRemoveSlide` reclaims the removed slide's
+    media (prunes the global preview pools + cancels its durable `UPLOAD_MEDIA` rows); `canPublish`
+    gates on `deck.hasMedia`/`deck.isWithinMediaLimit()`; new `publishPlans` emits one request **per
+    publishable slide** carrying that slide's media and `dependsOn` only that slide's offline uploads.
+  - `StoryComposerUiState` — `selectedSlideAttachments`/`selectedSlidePending` project the global pools
+    onto the selected slide (in slide order) for the preview; dropped the now-unused `draftMediaIds`.
+  - `StoryComposerScreen` — the preview row renders the **selected slide's** media (glue only).
+- **TDD (red → green):** `StorySlideDeckTest` +13 (addMediaToSelected append/order/dedup/cap-inert;
+  removeMedia from-any-slide / unknown-inert; hasMedia false/true; isWithinMediaLimit within/exceeds;
+  selectedRemainingMediaSlots free/never-negative; publishableSlides media-only included / text+media
+  order; renamed the no-content case). `StoryComposerViewModelTest` +10 (picked media → selected slide;
+  each story carries only its slide's media; offline upload on a later slide gates only that story;
+  media-only middle slide publishes between text slides; preview shows only the selected slide; media
+  on a non-selected slide still lets the deck publish; per-slide cap lets a fresh slide attach its own
+  ten; removing a slide drops its uploaded media / cancels its durable rows; removing the last slide is
+  inert and keeps its media). RED verified (unresolved `addMediaToSelected`/`selectedSlideAttachments`).
+- **Branch coverage (new logic):** every arm of the new deck methods hit (dedup, cap, inert, present/
+  absent); VM media routing covered online + offline + cap + slide-removal-cleanup (pending & non-
+  pending) + last-slide-inert. ≥90% branch + instruction on the added logic.
+- **Verification:** `./apps/android/meeshy.sh check` (`assembleDebug` + all `testDebugUnitTest`) **BUILD
+  SUCCESSFUL**. `:feature:stories` 67 (`StoryComposerViewModelTest`) + 47 (`StorySlideDeckTest`), 0
+  failures. Diff = `apps/android` only (3 prod Kotlin, 2 test).
+- **Reviewer gate:** PASS — scope `apps/android` only, no secrets / `local.properties` gitignored;
+  behavioural non-tautological tests through the public API; SDK purity (pure media reducer in the
+  composer **product** module `:feature:stories`, glue in the Composable); single source of truth (deck
+  owns media, `draft` is a mirror — `mirrorDraftToSelection` the one writer); UDF (immutable
+  `StateFlow`, pure deck transitions); edge cases (empty/dedup/cap/unknown-id/last-slide-inert/offline-
+  cancel); UX coherence (preview tracks the selected slide, slide removal leaves no orphan upload).
+  Surpasses iOS per-slide while preserving the durable offline chain.
 
 ### 2026-06-29 — slice `slide-drag-reorder` ✅
 - **Branch:** `claude/apps/android/slide-drag-reorder` (off `origin/main` @ `384826d3`).

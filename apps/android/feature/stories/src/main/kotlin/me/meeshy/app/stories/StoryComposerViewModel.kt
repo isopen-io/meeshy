@@ -64,21 +64,30 @@ data class StoryComposerUiState(
     val errorMessage: String? = null,
 ) {
     /**
-     * Publishable when some slide carries text **or** media is attached, every slide
-     * is within the character cap, the media cap holds, and nothing is in flight.
-     * The whole **deck** gates publishing — not just the slide currently being
-     * edited — so an over-long off-screen slide still blocks the action.
+     * Publishable when some slide carries text **or** media, every slide is within
+     * the character cap, the per-slide media cap holds, and nothing is in flight. The
+     * whole **deck** gates publishing — not just the slide currently being edited — so
+     * an over-long off-screen slide, or media on an off-screen slide, both count.
      */
     val canPublish: Boolean
-        get() = (deck.hasText || draft.hasMedia) &&
+        get() = (deck.hasText || deck.hasMedia) &&
             deck.isWithinTextLimit(StoryComposerDraft.MAX_CHARS) &&
-            draft.isWithinMediaLimit &&
+            deck.isWithinMediaLimit() &&
             !isPublishing &&
             !isUploadingMedia
 
-    /** Every media id carried into the wire request: uploaded ids then the offline placeholders. */
-    internal val draftMediaIds: List<String>
-        get() = attachments.map(UploadedMedia::id) + pendingUploads.map(PendingMediaUpload::cmid)
+    /**
+     * The uploaded media of the **selected** slide, in slide order — the preview the
+     * composer renders for the slide currently being edited. [attachments] is the
+     * global pool (one entry per upload across all slides); this projects it onto the
+     * selected slide via that slide's [StorySlide.mediaIds].
+     */
+    val selectedSlideAttachments: List<UploadedMedia>
+        get() = deck.selectedSlide.mediaIds.mapNotNull { id -> attachments.firstOrNull { it.id == id } }
+
+    /** The offline-pending media of the **selected** slide, in slide order. */
+    val selectedSlidePending: List<PendingMediaUpload>
+        get() = deck.selectedSlide.mediaIds.mapNotNull { id -> pendingUploads.firstOrNull { it.cmid == id } }
 }
 
 /**
@@ -128,8 +137,31 @@ class StoryComposerViewModel @Inject constructor(
     /** Inserts a clone of the selected slide right after it and selects the clone. */
     fun onDuplicateSelectedSlide() = applyDeck { it.duplicate(it.selectedId, newSlideId()) }
 
-    /** Removes the slide [id] (inert on the last remaining slide / unknown id). */
-    fun onRemoveSlide(id: String) = applyDeck { it.removeSlide(id) }
+    /**
+     * Removes the slide [id] (inert on the last remaining slide / unknown id) and
+     * reclaims its media: each of the removed slide's media ids is dropped from the
+     * global preview pools, and any offline-pending upload among them is **cancelled**
+     * ([MediaUploadQueue.cancel]) so a slide thrown away never leaves an orphaned
+     * `UPLOAD_MEDIA` row streaming bytes to a story it no longer belongs to.
+     */
+    fun onRemoveSlide(id: String) {
+        val before = _state.value.deck
+        val removed = before.slides.firstOrNull { it.id == id } ?: return
+        val after = before.removeSlide(id)
+        if (after === before) return
+        val droppedMedia = removed.mediaIds.toSet()
+        val pendingToCancel = _state.value.pendingUploads
+            .filter { it.cmid in droppedMedia }
+            .map(PendingMediaUpload::cmid)
+        _state.update {
+            it.copy(
+                deck = after,
+                attachments = it.attachments.filterNot { media -> media.id in droppedMedia },
+                pendingUploads = it.pendingUploads.filterNot { pending -> pending.cmid in droppedMedia },
+            ).mirrorDraftToSelection()
+        }
+        pendingToCancel.forEach { cancelDurableUpload(it) }
+    }
 
     /** Reorders the slide [id] to [toIndex] (selection preserved by id). */
     fun onMoveSlide(id: String, toIndex: Int) = applyDeck { it.move(id, toIndex) }
@@ -139,15 +171,16 @@ class StoryComposerViewModel @Inject constructor(
 
     /**
      * Applies a structural deck transform and re-syncs the editor buffer to the
-     * (possibly new) selected slide's text, keeping `draft.text == selected slide`
-     * the single invariant the screen relies on.
+     * (possibly new) selected slide's text **and** media, keeping `draft` a faithful
+     * mirror of the selected slide — the single invariant the screen relies on.
      */
     private inline fun applyDeck(transform: (StorySlideDeck) -> StorySlideDeck) {
-        _state.update {
-            val deck = transform(it.deck)
-            it.copy(deck = deck, draft = it.draft.withText(deck.selectedSlide.text))
-        }
+        _state.update { it.copy(deck = transform(it.deck)).mirrorDraftToSelection() }
     }
+
+    /** Re-points [StoryComposerUiState.draft] at the selected slide's text + media. */
+    private fun StoryComposerUiState.mirrorDraftToSelection(): StoryComposerUiState =
+        copy(draft = draft.withText(deck.selectedSlide.text).withMediaIds(deck.selectedSlide.mediaIds))
 
     /**
      * Uploads freshly-picked media and attaches the returned ids to the draft.
@@ -165,7 +198,7 @@ class StoryComposerViewModel @Inject constructor(
      */
     fun onMediaPicked(items: List<MediaUploadItem>) {
         if (items.isEmpty() || _state.value.isUploadingMedia) return
-        val remaining = _state.value.draft.remainingMediaSlots
+        val remaining = _state.value.deck.selectedRemainingMediaSlots
         if (remaining <= 0) {
             _state.update { it.copy(errorMessage = MEDIA_LIMIT) }
             return
@@ -192,8 +225,9 @@ class StoryComposerViewModel @Inject constructor(
             return
         }
         _state.update {
-            val next = it.copy(attachments = it.attachments + uploaded, isUploadingMedia = false)
-            next.copy(draft = next.draft.withMediaIds(next.draftMediaIds))
+            val deck = uploaded.fold(it.deck) { acc, media -> acc.addMediaToSelected(media.id) }
+            it.copy(deck = deck, attachments = it.attachments + uploaded, isUploadingMedia = false)
+                .mirrorDraftToSelection()
         }
     }
 
@@ -219,8 +253,11 @@ class StoryComposerViewModel @Inject constructor(
         items.forEach { item ->
             val cmid = mediaUploadQueue.enqueue(item)
             _state.update {
-                val next = it.copy(pendingUploads = it.pendingUploads + PendingMediaUpload(cmid = cmid, item = item))
-                next.copy(draft = next.draft.withMediaIds(next.draftMediaIds), errorMessage = null)
+                it.copy(
+                    deck = it.deck.addMediaToSelected(cmid),
+                    pendingUploads = it.pendingUploads + PendingMediaUpload(cmid = cmid, item = item),
+                    errorMessage = null,
+                ).mirrorDraftToSelection()
             }
         }
         _state.update { it.copy(isUploadingMedia = false) }
@@ -237,12 +274,13 @@ class StoryComposerViewModel @Inject constructor(
     fun onRemoveMedia(id: String) {
         val wasPending = _state.value.pendingUploads.any { it.cmid == id }
         _state.update {
+            val deck = it.deck.removeMedia(id)
             val next = if (wasPending) {
-                it.copy(pendingUploads = it.pendingUploads.filterNot { pending -> pending.cmid == id })
+                it.copy(deck = deck, pendingUploads = it.pendingUploads.filterNot { pending -> pending.cmid == id })
             } else {
-                it.copy(attachments = it.attachments.filterNot { media -> media.id == id })
+                it.copy(deck = deck, attachments = it.attachments.filterNot { media -> media.id == id })
             }
-            next.copy(draft = next.draft.withMediaIds(next.draftMediaIds))
+            next.mirrorDraftToSelection()
         }
         if (wasPending) cancelDurableUpload(id)
     }
@@ -265,13 +303,8 @@ class StoryComposerViewModel @Inject constructor(
         _state.update { it.copy(isPublishing = true, errorMessage = null) }
         viewModelScope.launch {
             try {
-                val requests = publishRequests(current, resolvePublishLanguage())
-                val prerequisites = current.pendingUploads.map(PendingMediaUpload::cmid)
-                requests.forEachIndexed { index, request ->
-                    storyRepository.enqueuePublish(
-                        request,
-                        dependsOn = if (index == 0) prerequisites else emptyList(),
-                    )
+                publishPlans(current, resolvePublishLanguage()).forEach { plan ->
+                    storyRepository.enqueuePublish(plan.request, dependsOn = plan.dependsOn)
                 }
                 workManager.enqueue(OutboxFlushWorker.buildRequest())
                 _state.update { StoryComposerUiState() }
@@ -284,25 +317,28 @@ class StoryComposerViewModel @Inject constructor(
         }
     }
 
+    /** One publishable slide's wire request paired with the offline uploads it must wait on. */
+    private data class PublishPlan(val request: CreateStoryRequest, val dependsOn: List<String>)
+
     /**
-     * Maps the deck to the wire requests, lossless across all slides until per-slide
-     * effect serialization lands: **one story per non-blank slide**, in deck order.
-     * The first story carries the whole-story media + offline prerequisites (the
-     * later text-only slides carry neither). A media-only deck (no slide has text)
-     * still emits a single media-bearing story.
+     * Maps the deck to one wire request **per publishable slide** (non-blank text or
+     * attached media), in deck order. Each story carries **its own** slide's media —
+     * media now belongs to the slide it was added to, not the whole story — and
+     * `dependsOn` only the offline uploads staged on that same slide, so the drainer
+     * gates each story on exactly its own prerequisites and grafts the real ids in.
      */
-    private fun publishRequests(current: StoryComposerUiState, language: String): List<CreateStoryRequest> {
-        val texts = current.deck.publishableSlides.map(StorySlide::text)
-        if (texts.isEmpty()) {
-            return listOf(current.draft.withText("").toCreateStoryRequest(language))
-        }
-        return texts.mapIndexed { index, text ->
-            val draft = if (index == 0) {
-                current.draft.withText(text)
-            } else {
-                StoryComposerDraft(text = text, visibility = current.draft.visibility)
-            }
-            draft.toCreateStoryRequest(language)
+    private fun publishPlans(current: StoryComposerUiState, language: String): List<PublishPlan> {
+        val pendingCmids = current.pendingUploads.mapTo(mutableSetOf(), PendingMediaUpload::cmid)
+        return current.deck.publishableSlides.map { slide ->
+            val draft = StoryComposerDraft(
+                text = slide.text,
+                visibility = current.draft.visibility,
+                mediaIds = slide.mediaIds,
+            )
+            PublishPlan(
+                request = draft.toCreateStoryRequest(language),
+                dependsOn = slide.mediaIds.filter { it in pendingCmids },
+            )
         }
     }
 
