@@ -74,7 +74,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/gateway/src/routes/communities.ts`
 - [x] `services/gateway/src/routes/community-preferences.ts`
 - [x] `services/gateway/src/routes/conversation-encryption.ts`
-- [ ] `services/gateway/src/routes/conversation-preferences.ts`
+- [x] `services/gateway/src/routes/conversation-preferences.ts`
 - [ ] `services/gateway/src/routes/friends.ts`
 - [x] `services/gateway/src/routes/invitations.ts`
 - [x] `services/gateway/src/routes/magic-link.ts`

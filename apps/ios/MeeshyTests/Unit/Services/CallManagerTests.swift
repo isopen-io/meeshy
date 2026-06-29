@@ -927,8 +927,11 @@ final class CallReliabilityPolicyDefaultsTests: XCTestCase {
 
 // MARK: - CallPillStatus (minimised call pill never shows a running timer pre-connection)
 
+// Renamed from `CallPillStatusTests` to avoid an `invalid redeclaration` collision
+// with the dedicated suite in `FloatingCallPillViewTests.swift` (both PRs added a
+// `CallPillStatus` test class). Same target → class names must be unique.
 @MainActor
-final class CallPillStatusTests: XCTestCase {
+final class CallPillStatusMinimisedTests: XCTestCase {
 
     func test_connected_isConnected_showsDuration() {
         XCTAssertEqual(CallPillStatus.from(.connected), .connected)

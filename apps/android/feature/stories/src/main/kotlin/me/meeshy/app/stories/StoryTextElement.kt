@@ -27,6 +27,78 @@ enum class StoryTextAlign(val wire: String) {
 }
 
 /**
+ * The font family family-class a style renders in. Kept as a pure token (no Compose
+ * type) so the style→typography decision is unit-testable on the JVM; the Composable
+ * maps each token to the matching `FontFamily` at the glue layer.
+ */
+enum class StoryTextFontFamily {
+    SANS,
+    SERIF,
+    MONOSPACE,
+    CURSIVE,
+}
+
+/**
+ * The pure, Compose-agnostic typography of a [StoryTextStyle]: the weight, slant,
+ * family-class, letter tracking, and whether the style carries a neon glow. This is
+ * the single source of truth for how each style looks — the on-canvas Composable and
+ * (later) the viewer reader both consume it, so the rendering decision is tested in
+ * one place and never duplicated across surfaces.
+ *
+ * [fontWeight] is the standard 100..900 axis; [letterSpacingEm] is em-relative
+ * tracking (never negative).
+ */
+data class StoryTextTypography(
+    val fontWeight: Int,
+    val italic: Boolean,
+    val family: StoryTextFontFamily,
+    val letterSpacingEm: Float,
+    val glow: Boolean,
+)
+
+/**
+ * Maps a style to its [StoryTextTypography] — the iOS-parity look of each of the five
+ * cases. Total over the enum so the canvas Composable stays glue.
+ */
+fun StoryTextStyle.typography(): StoryTextTypography = when (this) {
+    StoryTextStyle.BOLD -> StoryTextTypography(
+        fontWeight = 800,
+        italic = false,
+        family = StoryTextFontFamily.SANS,
+        letterSpacingEm = 0f,
+        glow = false,
+    )
+    StoryTextStyle.NEON -> StoryTextTypography(
+        fontWeight = 700,
+        italic = false,
+        family = StoryTextFontFamily.SANS,
+        letterSpacingEm = 0.05f,
+        glow = true,
+    )
+    StoryTextStyle.TYPEWRITER -> StoryTextTypography(
+        fontWeight = 500,
+        italic = false,
+        family = StoryTextFontFamily.MONOSPACE,
+        letterSpacingEm = 0.03f,
+        glow = false,
+    )
+    StoryTextStyle.HANDWRITING -> StoryTextTypography(
+        fontWeight = 400,
+        italic = true,
+        family = StoryTextFontFamily.CURSIVE,
+        letterSpacingEm = 0f,
+        glow = false,
+    )
+    StoryTextStyle.CLASSIC -> StoryTextTypography(
+        fontWeight = 400,
+        italic = false,
+        family = StoryTextFontFamily.SERIF,
+        letterSpacingEm = 0f,
+        glow = false,
+    )
+}
+
+/**
  * Pure, immutable model of one on-canvas text element of a story slide. Position
  * ([x]/[y]) is normalised to the canvas `0f..1f` (centre = `0.5, 0.5`), exactly as
  * iOS's `StoryTextObject`/`StoryTextPosition`, so it is resolution-independent and
