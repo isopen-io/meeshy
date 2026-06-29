@@ -434,6 +434,7 @@ public actor ConversationStore {
         if let v = event.description { conv.description = v; changed = true }
         if let v = event.banner { conv.banner = v; changed = true }
         if let v = event.isAnnouncementChannel { conv.isAnnouncementChannel = v; changed = true }
+        if let v = event.defaultWriteRole { conv.defaultWriteRole = v; changed = true }
         if let v = event.slowModeSeconds { conv.slowModeSeconds = v; changed = true }
         if let v = event.autoTranslateEnabled { conv.autoTranslateEnabled = v; changed = true }
 
@@ -757,6 +758,7 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
     public let description: String?
     public let banner: String?
     public let isAnnouncementChannel: Bool?
+    public let defaultWriteRole: String?
     public let slowModeSeconds: Int?
     public let autoTranslateEnabled: Bool?
 
@@ -770,6 +772,7 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
         description: String? = nil,
         banner: String? = nil,
         isAnnouncementChannel: Bool? = nil,
+        defaultWriteRole: String? = nil,
         slowModeSeconds: Int? = nil,
         autoTranslateEnabled: Bool? = nil
     ) {
@@ -782,6 +785,7 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
         self.description = description
         self.banner = banner
         self.isAnnouncementChannel = isAnnouncementChannel
+        self.defaultWriteRole = defaultWriteRole
         self.slowModeSeconds = slowModeSeconds
         self.autoTranslateEnabled = autoTranslateEnabled
     }

@@ -164,6 +164,7 @@ public final class ConversationStoreSocketBridge {
             description: event.description,
             banner: event.banner,
             isAnnouncementChannel: event.isAnnouncementChannel,
+            defaultWriteRole: event.defaultWriteRole,
             slowModeSeconds: event.slowModeSeconds,
             autoTranslateEnabled: event.autoTranslateEnabled
         )
