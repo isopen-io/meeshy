@@ -131,6 +131,9 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
         await withBudget("sync.conversations") {
             await ConversationSyncEngine.shared.syncSinceLastCheckpoint()
         }
+        await withBudget("conversationStore.flushOutbox") {
+            await ConversationStore.shared.flushOutbox()
+        }
         await withBudget("push.retryPending") {
             await PushDeliveryReceiptService.shared.flushPending()
         }

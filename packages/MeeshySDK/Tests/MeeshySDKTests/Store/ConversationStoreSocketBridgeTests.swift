@@ -39,6 +39,7 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
         let categoryUpdated = PassthroughSubject<CategorySocketEvent, Never>()
         let categoryDeleted = PassthroughSubject<CategoryDeletedSocketEvent, Never>()
         let categoriesReordered = PassthroughSubject<CategoriesReorderedSocketEvent, Never>()
+        let didReconnect = PassthroughSubject<Void, Never>()
 
         init(store: ConversationStore, categoryStore: UserCategoryStore, currentUserId: String? = "me") {
             bridge = ConversationStoreSocketBridge(
@@ -55,7 +56,8 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
                 categoryCreated: categoryCreated.eraseToAnyPublisher(),
                 categoryUpdated: categoryUpdated.eraseToAnyPublisher(),
                 categoryDeleted: categoryDeleted.eraseToAnyPublisher(),
-                categoriesReordered: categoriesReordered.eraseToAnyPublisher()
+                categoriesReordered: categoriesReordered.eraseToAnyPublisher(),
+                didReconnect: didReconnect.eraseToAnyPublisher()
             )
         }
     }
@@ -198,6 +200,35 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 50_000_000)
         let conv = await store.conversation(id: "unknown")
         XCTAssertNil(conv, "a conversation:updated for an unknown id must be silently ignored")
+    }
+
+    // MARK: didReconnect
+
+    func test_didReconnect_flushesOutbox() async throws {
+        let prefs = MockPreferenceWriter()
+        // First call will fail transiently so the mutation queues in the outbox.
+        prefs.errorToThrow = MeeshyError.server(statusCode: 503, message: "down")
+        let outboxPath = FileManager.default.temporaryDirectory
+            .appendingPathComponent("bridge-reconnect-\(UUID().uuidString).db").path
+        let store = ConversationStore(
+            preferenceService: prefs,
+            conversationService: MockLifecycleWriter(),
+            outbox: ConversationStateOutbox(dbPath: outboxPath)
+        )
+        await store.hydrate(makeConv(id: "c1"))
+        // Pin the conversation — transient failure keeps it in the outbox.
+        try await store.apply(.setPinned(true), for: "c1")
+        XCTAssertEqual(prefs.calls.count, 1, "setup: transient call must have been attempted")
+
+        // Now let the mock succeed so the flush can drain the outbox.
+        prefs.errorToThrow = nil
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()))
+
+        env.didReconnect.send(())
+
+        // Outbox flush retries the queued preference mutation → 2nd call.
+        let flushed = await waitUntil { prefs.calls.count >= 2 }
+        XCTAssertTrue(flushed, "didReconnect must trigger flushOutbox, retrying the queued preference mutation")
     }
 
     // MARK: ConversationStore routes

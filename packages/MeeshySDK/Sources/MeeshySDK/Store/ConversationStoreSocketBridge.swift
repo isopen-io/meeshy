@@ -63,7 +63,8 @@ public final class ConversationStoreSocketBridge {
             categoryCreated: socket.categoryCreated.eraseToAnyPublisher(),
             categoryUpdated: socket.categoryUpdated.eraseToAnyPublisher(),
             categoryDeleted: socket.categoryDeleted.eraseToAnyPublisher(),
-            categoriesReordered: socket.categoriesReordered.eraseToAnyPublisher()
+            categoriesReordered: socket.categoriesReordered.eraseToAnyPublisher(),
+            didReconnect: socket.didReconnect.eraseToAnyPublisher()
         )
     }
 
@@ -78,7 +79,8 @@ public final class ConversationStoreSocketBridge {
         categoryCreated: AnyPublisher<CategorySocketEvent, Never>,
         categoryUpdated: AnyPublisher<CategorySocketEvent, Never>,
         categoryDeleted: AnyPublisher<CategoryDeletedSocketEvent, Never>,
-        categoriesReordered: AnyPublisher<CategoriesReorderedSocketEvent, Never>
+        categoriesReordered: AnyPublisher<CategoriesReorderedSocketEvent, Never>,
+        didReconnect: AnyPublisher<Void, Never> = Empty().eraseToAnyPublisher()
     ) {
         cancellables.removeAll()
         let store = self.store
@@ -140,6 +142,10 @@ public final class ConversationStoreSocketBridge {
         categoriesReordered.sink { event in
             let updates = event.updates.map { (id: $0.categoryId, order: $0.order) }
             Task { await categoryStore.applyRemote(.reordered(updates: updates)) }
+        }.store(in: &cancellables)
+
+        didReconnect.sink {
+            Task { await store.flushOutbox() }
         }.store(in: &cancellables)
     }
 
