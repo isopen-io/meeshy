@@ -170,17 +170,11 @@ struct CallView: View {
         .adaptiveOnChange(of: callManager.callState) { _, newState in
             switch newState {
             case .connected:
-                UIAccessibility.post(
-                    notification: .announcement,
-                    argument: String(localized: "call.a11y.connected",
-                                    defaultValue: "Appel connecté",
-                                    bundle: .main))
+                UIAccessibility.post(notification: .announcement, argument: String(localized: "call.a11y.connected"))
             case .reconnecting:
-                UIAccessibility.post(
-                    notification: .announcement,
-                    argument: String(localized: "call.a11y.reconnecting",
-                                    defaultValue: "Reconnexion en cours…",
-                                    bundle: .main))
+                UIAccessibility.post(notification: .announcement, argument: String(localized: "call.a11y.reconnecting"))
+            case .ended:
+                UIAccessibility.post(notification: .announcement, argument: String(localized: "call.a11y.ended"))
             default:
                 break
             }
@@ -591,7 +585,6 @@ struct CallView: View {
             videoStream(local: swapStreams, contentMode: primaryVideoContentMode)
                 .ignoresSafeArea()
 
-            // Duration badge top-left (respects the safe area).
             VStack {
                 HStack {
                     Text(callManager.formattedDuration)
@@ -602,6 +595,8 @@ struct CallView: View {
                         .background(.ultraThinMaterial)
                         .clipShape(Capsule())
                         .padding(12)
+                        .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                        .accessibilityValue(callManager.formattedDuration)
                         .accessibilityAddTraits(.updatesFrequently)
                     Spacer()
                 }
@@ -1216,7 +1211,7 @@ struct CallView: View {
         }
         .pressable()
         .accessibilityLabel(label)
-        .accessibilityHint(hint ?? "")
+        .optionalAccessibilityHint(hint)
         .callToggleAccessibility(isToggle: isToggle, isActive: isActive)
     }
 
@@ -1347,6 +1342,17 @@ private extension View {
         self
             .frame(width: diameter, height: diameter)
             .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.error)
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func optionalAccessibilityHint(_ hint: String?) -> some View {
+        if let h = hint {
+            self.accessibilityHint(h)
+        } else {
+            self
+        }
     }
 }
 
