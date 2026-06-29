@@ -256,25 +256,28 @@ struct AboutView: View {
         .accessibilityElement(children: .combine)
     }
 
+    @ViewBuilder
     private func linkRow(icon: String, title: String, url: String, color: String) -> some View {
-        Link(destination: URL(string: url)!) {
-            HStack(spacing: 12) {
-                fieldIcon(icon, color: color)
+        if let destination = URL(string: url) {
+            Link(destination: destination) {
+                HStack(spacing: 12) {
+                    fieldIcon(icon, color: color)
 
-                Text(title)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(theme.textPrimary)
+                    Text(title)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(theme.textPrimary)
 
-                Spacer()
+                    Spacer()
 
-                Image(systemName: "arrow.up.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(Color(hex: color))
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Color(hex: color))
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .accessibilityLabel(title)
+            .accessibilityHint(String(localized: "about.link.hint", defaultValue: "Ouvre \(title) dans Safari", bundle: .main))
         }
-        .accessibilityLabel(title)
-        .accessibilityHint(String(localized: "about.link.hint", defaultValue: "Ouvre \(title) dans Safari", bundle: .main))
     }
 }

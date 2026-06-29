@@ -84,7 +84,7 @@ extension ConversationListView {
         } label: {
             Label(
                 conversation.userState.reaction != nil
-                    ? String(localized: "context.favorite_active", defaultValue: "Favori \(conversation.userState.reaction!)")
+                    ? String(localized: "context.favorite_active", defaultValue: "Favori \(conversation.userState.reaction ?? "")")
                     : String(localized: "context.favorite", defaultValue: "Favori"),
                 systemImage: conversation.userState.reaction != nil ? "star.fill" : "star"
             )
