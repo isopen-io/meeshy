@@ -119,23 +119,30 @@ final class CallEventQueueOutgoingTests: XCTestCase {
         let queue = CallEventQueue()
 
         try await queue.handle(.outgoingStarted(callId: "c1", isVideo: true, peerId: "p1"))
-        XCTAssertEqual(await queue.state, .ringing(isOutgoing: true))
+        let state1 = await queue.state
+        XCTAssertEqual(state1, .ringing(isOutgoing: true))
 
         try await queue.handle(.peerJoined)
-        XCTAssertEqual(await queue.state, .offering)
+        let state2 = await queue.state
+        XCTAssertEqual(state2, .offering)
 
         try await queue.handle(.negotiating)
-        XCTAssertEqual(await queue.state, .connecting)
+        let state3 = await queue.state
+        XCTAssertEqual(state3, .connecting)
 
         try await queue.handle(.established)
-        XCTAssertEqual(await queue.state, .connected)
+        let state4 = await queue.state
+        XCTAssertEqual(state4, .connected)
 
         try await queue.handle(.ended(reason: .local))
-        XCTAssertEqual(await queue.state, .ended(reason: .local))
+        let state5 = await queue.state
+        XCTAssertEqual(state5, .ended(reason: .local))
 
         try await queue.handle(.reset)
-        XCTAssertEqual(await queue.state, .idle)
-        XCTAssertNil(await queue.currentCallId)
+        let state6 = await queue.state
+        let callId = await queue.currentCallId
+        XCTAssertEqual(state6, .idle)
+        XCTAssertNil(callId)
     }
 }
 
@@ -173,16 +180,20 @@ final class CallEventQueueIncomingTests: XCTestCase {
         let queue = CallEventQueue()
 
         try await queue.handle(.incomingReceived(callId: "c2", isVideo: false, peerId: "p2"))
-        XCTAssertEqual(await queue.state, .ringing(isOutgoing: false))
+        let state1 = await queue.state
+        XCTAssertEqual(state1, .ringing(isOutgoing: false))
 
         try await queue.handle(.negotiating)
-        XCTAssertEqual(await queue.state, .connecting)
+        let state2 = await queue.state
+        XCTAssertEqual(state2, .connecting)
 
         try await queue.handle(.established)
-        XCTAssertEqual(await queue.state, .connected)
+        let state3 = await queue.state
+        XCTAssertEqual(state3, .connected)
 
         try await queue.handle(.ended(reason: .remote))
-        XCTAssertEqual(await queue.state, .ended(reason: .remote))
+        let state4 = await queue.state
+        XCTAssertEqual(state4, .ended(reason: .remote))
     }
 }
 
@@ -206,13 +217,15 @@ final class CallEventQueueReconnectTests: XCTestCase {
         try await queue.handle(.peerJoined)
         try await queue.handle(.negotiating)
         try await queue.handle(.established)
-        XCTAssertEqual(await queue.state, .connected)
+        let state = await queue.state
+        XCTAssertEqual(state, .connected)
     }
 
     func test_reconnecting_fromConnected_transitionsToReconnecting() async throws {
         let queue = try await makeConnected()
         try await queue.handle(.reconnecting(attempt: 1))
-        XCTAssertEqual(await queue.state, .reconnecting(attempt: 1))
+        let state = await queue.state
+        XCTAssertEqual(state, .reconnecting(attempt: 1))
     }
 
     func test_reconnecting_fromConnecting_transitionsToReconnecting() async throws {
@@ -221,34 +234,40 @@ final class CallEventQueueReconnectTests: XCTestCase {
         try await queue.handle(.peerJoined)
         try await queue.handle(.negotiating)
         try await queue.handle(.reconnecting(attempt: 1))
-        XCTAssertEqual(await queue.state, .reconnecting(attempt: 1))
+        let state = await queue.state
+        XCTAssertEqual(state, .reconnecting(attempt: 1))
     }
 
     func test_reconnecting_fromReconnecting_escalatesAttempt() async throws {
         let queue = try await makeConnected()
         try await queue.handle(.reconnecting(attempt: 1))
         try await queue.handle(.reconnecting(attempt: 2))
-        XCTAssertEqual(await queue.state, .reconnecting(attempt: 2))
+        let state = await queue.state
+        XCTAssertEqual(state, .reconnecting(attempt: 2))
     }
 
     func test_reconnected_fromReconnecting_transitionsToConnected() async throws {
         let queue = try await makeConnected()
         try await queue.handle(.reconnecting(attempt: 1))
         try await queue.handle(.reconnected)
-        XCTAssertEqual(await queue.state, .connected)
+        let state = await queue.state
+        XCTAssertEqual(state, .connected)
     }
 
     func test_fullReconnectFlow() async throws {
         let queue = try await makeConnected()
 
         try await queue.handle(.reconnecting(attempt: 1))
-        XCTAssertEqual(await queue.state, .reconnecting(attempt: 1))
+        let state1 = await queue.state
+        XCTAssertEqual(state1, .reconnecting(attempt: 1))
 
         try await queue.handle(.reconnecting(attempt: 2))
-        XCTAssertEqual(await queue.state, .reconnecting(attempt: 2))
+        let state2 = await queue.state
+        XCTAssertEqual(state2, .reconnecting(attempt: 2))
 
         try await queue.handle(.reconnected)
-        XCTAssertEqual(await queue.state, .connected)
+        let state3 = await queue.state
+        XCTAssertEqual(state3, .connected)
     }
 }
 
@@ -264,7 +283,8 @@ final class CallEventQueueEndedResetTests: XCTestCase {
         try await queue.handle(.negotiating)
         try await queue.handle(.established)
         try await queue.handle(.ended(reason: .local))
-        XCTAssertEqual(await queue.state, .ended(reason: .local))
+        let state = await queue.state
+        XCTAssertEqual(state, .ended(reason: .local))
     }
 
     func test_ended_fromConnecting_transitionsToEnded() async throws {
@@ -273,14 +293,16 @@ final class CallEventQueueEndedResetTests: XCTestCase {
         try await queue.handle(.peerJoined)
         try await queue.handle(.negotiating)
         try await queue.handle(.ended(reason: .connectionLost))
-        XCTAssertEqual(await queue.state, .ended(reason: .connectionLost))
+        let state = await queue.state
+        XCTAssertEqual(state, .ended(reason: .connectionLost))
     }
 
     func test_ended_fromRinging_transitionsToEnded() async throws {
         let queue = CallEventQueue()
         try await queue.handle(.incomingReceived(callId: "c2", isVideo: false, peerId: "p2"))
         try await queue.handle(.ended(reason: .rejected))
-        XCTAssertEqual(await queue.state, .ended(reason: .rejected))
+        let state = await queue.state
+        XCTAssertEqual(state, .ended(reason: .rejected))
     }
 
     func test_ended_fromReconnecting_transitionsToEnded() async throws {
@@ -291,7 +313,8 @@ final class CallEventQueueEndedResetTests: XCTestCase {
         try await queue.handle(.established)
         try await queue.handle(.reconnecting(attempt: 1))
         try await queue.handle(.ended(reason: .connectionLost))
-        XCTAssertEqual(await queue.state, .ended(reason: .connectionLost))
+        let state = await queue.state
+        XCTAssertEqual(state, .ended(reason: .connectionLost))
     }
 
     func test_reset_fromConnected_transitionsToIdle() async throws {
@@ -301,28 +324,33 @@ final class CallEventQueueEndedResetTests: XCTestCase {
         try await queue.handle(.negotiating)
         try await queue.handle(.established)
         try await queue.handle(.reset)
-        XCTAssertEqual(await queue.state, .idle)
+        let state = await queue.state
+        XCTAssertEqual(state, .idle)
     }
 
     func test_reset_clearsCurrentCallId() async throws {
         let queue = CallEventQueue()
         try await queue.handle(.outgoingStarted(callId: "c1", isVideo: false, peerId: "p1"))
         try await queue.handle(.reset)
-        XCTAssertNil(await queue.currentCallId)
+        let callId = await queue.currentCallId
+        XCTAssertNil(callId)
     }
 
     func test_reset_clearsCurrentContext() async throws {
         let queue = CallEventQueue()
         try await queue.handle(.outgoingStarted(callId: "c1", isVideo: false, peerId: "p1"))
         try await queue.handle(.reset)
-        XCTAssertNil(await queue.currentContext)
+        let context = await queue.currentContext
+        XCTAssertNil(context)
     }
 
     func test_reset_fromIdle_remainsIdle() async throws {
         let queue = CallEventQueue()
         try await queue.handle(.reset)
-        XCTAssertEqual(await queue.state, .idle)
-        XCTAssertEqual(await queue.version, 1)
+        let state = await queue.state
+        let version = await queue.version
+        XCTAssertEqual(state, .idle)
+        XCTAssertEqual(version, 1)
     }
 
     func test_reset_fromEnded_transitionsToIdle() async throws {
@@ -330,7 +358,8 @@ final class CallEventQueueEndedResetTests: XCTestCase {
         try await queue.handle(.outgoingStarted(callId: "c1", isVideo: false, peerId: "p1"))
         try await queue.handle(.ended(reason: .remote))
         try await queue.handle(.reset)
-        XCTAssertEqual(await queue.state, .idle)
+        let state = await queue.state
+        XCTAssertEqual(state, .idle)
     }
 }
 
@@ -429,8 +458,10 @@ final class CallEventQueueIllegalTransitionTests: XCTestCase {
             try await queue.handle(.established)
         } catch {}
 
-        XCTAssertEqual(await queue.state, .ringing(isOutgoing: true))
-        XCTAssertEqual(await queue.version, versionBefore)
+        let state = await queue.state
+        let version = await queue.version
+        XCTAssertEqual(state, .ringing(isOutgoing: true))
+        XCTAssertEqual(version, versionBefore)
     }
 
     func test_illegalTransition_doesNotClearCallId() async throws {
@@ -441,7 +472,8 @@ final class CallEventQueueIllegalTransitionTests: XCTestCase {
             try await queue.handle(.reconnected)
         } catch {}
 
-        XCTAssertEqual(await queue.currentCallId, "c1")
+        let callId = await queue.currentCallId
+        XCTAssertEqual(callId, "c1")
     }
 }
 
@@ -452,19 +484,24 @@ final class CallEventQueueVersionTests: XCTestCase {
 
     func test_eachAcceptedTransition_incrementsVersion() async throws {
         let queue = CallEventQueue()
-        XCTAssertEqual(await queue.version, 0)
+        let v0 = await queue.version
+        XCTAssertEqual(v0, 0)
 
         try await queue.handle(.outgoingStarted(callId: "c1", isVideo: false, peerId: "p1"))
-        XCTAssertEqual(await queue.version, 1)
+        let v1 = await queue.version
+        XCTAssertEqual(v1, 1)
 
         try await queue.handle(.peerJoined)
-        XCTAssertEqual(await queue.version, 2)
+        let v2 = await queue.version
+        XCTAssertEqual(v2, 2)
 
         try await queue.handle(.negotiating)
-        XCTAssertEqual(await queue.version, 3)
+        let v3 = await queue.version
+        XCTAssertEqual(v3, 3)
 
         try await queue.handle(.established)
-        XCTAssertEqual(await queue.version, 4)
+        let v4 = await queue.version
+        XCTAssertEqual(v4, 4)
     }
 
     func test_illegalTransition_doesNotIncrementVersion() async throws {
@@ -474,13 +511,15 @@ final class CallEventQueueVersionTests: XCTestCase {
 
         do { try await queue.handle(.reconnected) } catch {}
 
-        XCTAssertEqual(await queue.version, versionBefore)
+        let version = await queue.version
+        XCTAssertEqual(version, versionBefore)
     }
 
     func test_reset_incrementsVersion() async throws {
         let queue = CallEventQueue()
         try await queue.handle(.reset)
-        XCTAssertEqual(await queue.version, 1)
+        let version = await queue.version
+        XCTAssertEqual(version, 1)
     }
 }
 
