@@ -1,6 +1,7 @@
 import { validatePagination } from '../utils/pagination';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
+import { SecuritySanitizer } from '../utils/sanitize';
 import { logError } from '../utils/logger';
 import { sendSuccess, sendPaginatedSuccess, sendNotFound, sendConflict, sendInternalError } from '../utils/response.js';
 import type { NotificationService } from '../services/notifications/NotificationService';
@@ -129,7 +130,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
           data: {
             senderId: userId,
             receiverId: body.receiverId,
-            message: body.message
+            message: body.message ? SecuritySanitizer.sanitizeText(body.message) : undefined
           },
           include: friendRequestInclude
         }),

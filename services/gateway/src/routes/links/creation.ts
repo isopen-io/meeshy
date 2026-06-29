@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
+import { SecuritySanitizer } from '../../utils/sanitize';
 import {
   sendSuccess,
   sendForbidden,
@@ -220,8 +221,8 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
           data: {
             identifier: conversationIdentifier,
             type: 'public',
-            title: body.name || 'Conversation partagée',
-            description: body.description,
+            title: body.name ? SecuritySanitizer.sanitizeText(body.name) : 'Conversation partagée',
+            description: body.description ? SecuritySanitizer.sanitizeText(body.description) : undefined,
             participants: {
               create: [{
                 userId,
@@ -261,8 +262,8 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
           linkId: initialLinkId,
           conversationId: conversationId!,
           createdBy: userId,
-          name: body.name,
-          description: body.description,
+          name: body.name ? SecuritySanitizer.sanitizeText(body.name) : body.name,
+          description: body.description ? SecuritySanitizer.sanitizeText(body.description) : body.description,
           maxUses: body.maxUses,
           maxConcurrentUsers: body.maxConcurrentUsers,
           maxUniqueSessions: body.maxUniqueSessions,

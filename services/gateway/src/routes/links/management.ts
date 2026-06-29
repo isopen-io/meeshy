@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
+import { SecuritySanitizer } from '../../utils/sanitize';
 import {
   sendSuccess,
   sendForbidden,
@@ -125,8 +126,8 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
       const updatedLink = await fastify.prisma.conversationShareLink.update({
         where: { id: conversationShareLinkId },
         data: {
-          name: body.name,
-          description: body.description,
+          name: body.name ? SecuritySanitizer.sanitizeText(body.name) : body.name,
+          description: body.description ? SecuritySanitizer.sanitizeText(body.description) : body.description,
           maxUses: body.maxUses,
           maxConcurrentUsers: body.maxConcurrentUsers,
           maxUniqueSessions: body.maxUniqueSessions,
@@ -253,8 +254,8 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
 
       const updateData: any = {};
 
-      if (body.name !== undefined) updateData.name = body.name;
-      if (body.description !== undefined) updateData.description = body.description;
+      if (body.name !== undefined) updateData.name = SecuritySanitizer.sanitizeText(body.name);
+      if (body.description !== undefined) updateData.description = SecuritySanitizer.sanitizeText(body.description);
       if (body.maxUses !== undefined) updateData.maxUses = body.maxUses;
       if (body.maxConcurrentUsers !== undefined) updateData.maxConcurrentUsers = body.maxConcurrentUsers;
       if (body.maxUniqueSessions !== undefined) updateData.maxUniqueSessions = body.maxUniqueSessions;
