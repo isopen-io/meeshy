@@ -743,6 +743,14 @@ public struct CallScreenCaptureAlertData: Decodable, Sendable {
     public let isCapturing: Bool
 }
 
+/// Received when the gateway force-removes the current user from an active call.
+/// The gateway emits `call:force-leave` to the user's personal room so every
+/// device they have connected receives the event and tears down the call.
+public struct CallForcedLeaveData: Decodable, Sendable {
+    public let callId: String
+    public let reason: String?
+}
+
 // MARK: - Reaction Sync Event Data
 
 public struct ReactionSyncEvent: Decodable, Sendable {
@@ -949,6 +957,9 @@ public enum ConnectionState: Equatable, Sendable {
 public protocol MessageSocketProviding: Sendable {
     func emitCallJoinWithAck(callId: String) async -> Bool
     var callScreenCaptureAlert: PassthroughSubject<CallScreenCaptureAlertData, Never> { get }
+    /// Fired when the gateway force-removes the current user from the call.
+    /// The client must tear down the call immediately (no user confirmation needed).
+    var callForcedLeave: PassthroughSubject<CallForcedLeaveData, Never> { get }
     var messageReceived: PassthroughSubject<APIMessage, Never> { get }
     var messageEdited: PassthroughSubject<APIMessage, Never> { get }
     var messageDeleted: PassthroughSubject<MessageDeletedEvent, Never> { get }
@@ -1248,6 +1259,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let callIceServersRefreshed = PassthroughSubject<CallIceServersRefreshedData, Never>()
     public let callQualityAlert = PassthroughSubject<CallQualityAlertData, Never>()
     public let callScreenCaptureAlert = PassthroughSubject<CallScreenCaptureAlertData, Never>()
+    public let callForcedLeave = PassthroughSubject<CallForcedLeaveData, Never>()
 
     // Combine publishers — reactions sync, system, attachments, mentions
     public let reactionSynced = PassthroughSubject<ReactionSyncEvent, Never>()
@@ -2912,6 +2924,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(CallScreenCaptureAlertData.self, from: data) { [weak self] event in
                 self?.callScreenCaptureAlert.send(event)
+            }
+        }
+
+        socket.on("call:force-leave") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(CallForcedLeaveData.self, from: data) { [weak self] event in
+                self?.callForcedLeave.send(event)
             }
         }
 
