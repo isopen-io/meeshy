@@ -228,7 +228,7 @@ final class WebRTCTypesTests: XCTestCase {
 
     func test_defaultIceServers_hasGoogleStun() {
         let servers = IceServer.defaultServers
-        XCTAssertEqual(servers.count, 4)
+        XCTAssertEqual(servers.count, 5)
         XCTAssertTrue(servers[0].urls.first?.contains("stun.l.google.com") ?? false)
     }
 

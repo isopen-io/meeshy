@@ -315,7 +315,7 @@ public actor ConversationStore {
     /// Store's internal dispatch path. Call at app foreground and on
     /// network reachability changes.
     public func flushOutbox() async {
-        await outbox.flush { [weak self] task in
+        await outbox.flush(force: true) { [weak self] task in
             guard let self else { return .failedTransient(reason: "store deallocated") }
             let result = await self.dispatch(task)
             // Outbox dispatch outcome maps 1:1 to the local result, minus

@@ -56,6 +56,12 @@ describe('parseAgentAdminEvent', () => {
     expect(parseAgentAdminEvent('not json')).toBeNull();
     expect(parseAgentAdminEvent('{"kind":"scan","conversationId":42}')).toBeNull();
   });
+
+  it('rejects non-object JSON primitives (null, number)', () => {
+    expect(parseAgentAdminEvent('null')).toBeNull();
+    expect(parseAgentAdminEvent('42')).toBeNull();
+    expect(parseAgentAdminEvent('"a string"')).toBeNull();
+  });
 });
 
 describe('AgentAdminRelay', () => {
@@ -106,5 +112,57 @@ describe('AgentAdminRelay', () => {
 
     expect(subscriber.unsubscribe).toHaveBeenCalledWith(AGENT_ADMIN_EVENT_CHANNEL);
     expect(subscriber.quit).toHaveBeenCalled();
+  });
+
+  it('does nothing on stop when never started', async () => {
+    const relay = new AgentAdminRelay(mockIO.io, () => subscriber as never);
+    await expect(relay.stop()).resolves.toBeUndefined();
+    expect(subscriber.unsubscribe).not.toHaveBeenCalled();
+  });
+
+  it('does not start twice when start() is called again', async () => {
+    const relay = new AgentAdminRelay(mockIO.io, () => subscriber as never);
+    await relay.start();
+    await relay.start();
+    expect(subscriber.subscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns without subscribing when factory returns null', async () => {
+    const relay = new AgentAdminRelay(mockIO.io, () => null);
+    await expect(relay.start()).resolves.toBeUndefined();
+    expect(subscriber.subscribe).not.toHaveBeenCalled();
+  });
+
+  it('uses createDefaultSubscriber (no REDIS_URL) and returns without subscribing', async () => {
+    const saved = process.env.REDIS_URL;
+    delete process.env.REDIS_URL;
+    try {
+      const relay = new AgentAdminRelay(mockIO.io);
+      await expect(relay.start()).resolves.toBeUndefined();
+      expect(subscriber.subscribe).not.toHaveBeenCalled();
+    } finally {
+      if (saved !== undefined) process.env.REDIS_URL = saved;
+    }
+  });
+
+  it('logs redis error events without throwing', async () => {
+    const relay = new AgentAdminRelay(mockIO.io, () => subscriber as never);
+    await relay.start();
+    expect(() => subscriber._emit('error', new Error('connection refused'))).not.toThrow();
+  });
+
+  it('handles unsubscribe rejection gracefully on stop', async () => {
+    subscriber.unsubscribe.mockRejectedValueOnce(new Error('unsubscribe failed'));
+    const relay = new AgentAdminRelay(mockIO.io, () => subscriber as never);
+    await relay.start();
+    await expect(relay.stop()).resolves.toBeUndefined();
+    expect(subscriber.quit).toHaveBeenCalled();
+  });
+
+  it('handles quit rejection gracefully on stop', async () => {
+    subscriber.quit.mockRejectedValueOnce(new Error('quit failed'));
+    const relay = new AgentAdminRelay(mockIO.io, () => subscriber as never);
+    await relay.start();
+    await expect(relay.stop()).resolves.toBeUndefined();
   });
 });

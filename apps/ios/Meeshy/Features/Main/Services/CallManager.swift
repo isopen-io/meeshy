@@ -3364,7 +3364,8 @@ extension CallManager: WebRTCServiceDelegate {
                 packetLoss: packetLossPercent,
                 bytesSent: stats.bandwidth,
                 bytesReceived: stats.bytesReceived,
-                availableOutgoingBitrateBps: stats.availableOutgoingBitrateBps
+                availableOutgoingBitrateBps: stats.availableOutgoingBitrateBps,
+                jitterMs: stats.jitterMs
             )
 
             // Feed the graceful-degradation survival layer. One sample per quality
