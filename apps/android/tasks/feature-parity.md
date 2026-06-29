@@ -437,8 +437,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       and the **always-≥1-slide** invariant (`canRemoveSlide`; removal reselects the slide taking the
       removed one's place). Total functions — every inapplicable op (cap reached, last slide, unknown
       id, no-op move) returns the same instance; ids are caller-supplied so the reducer stays pure.
-      Pending: ViewModel wiring (mint ids, expose deck in `StoryComposerUiState`) + the mini-preview
-      strip UI in `StoryComposerScreen`.
+      **ViewModel wiring + strip done** (`story-composer-slide-deck`): `StoryComposerUiState` now
+      carries `deck: StorySlideDeck` (default a single empty slide); the VM mints slide ids
+      (`UUID`, at the impure edge — reducer stays pure) and exposes `onAddSlide`/
+      `onDuplicateSelectedSlide`/`onRemoveSlide`/`onMoveSlide`/`onSelectSlide`, each re-syncing the
+      editor buffer to the (possibly new) selected slide's text so `draft.text == selectedSlide.text`
+      holds. Per-slide text via pure `StorySlideDeck.updateSelectedText`; `onTextChange` writes the
+      selected slide. **Lossless publish across slides**: `publishRequests` emits **one story per
+      non-blank slide** in deck order (pure `publishableSlides`), the first carrying the whole-story
+      media + offline `dependsOn` prerequisites; a media-only deck still emits one media-bearing story
+      (single-slide behaviour byte-identical to before). `canPublish` now gates on the **whole deck**
+      (`hasText`/`isWithinTextLimit` — an off-screen over-long slide blocks publish), not just the
+      active slide. `StoryComposerScreen` renders a `SlideStrip` mini-preview (numbered selectable
+      chips; selected chip carries Duplicate/Remove, Remove hidden on the last slide; trailing "+"
+      add chip disabled at the cap). Pending: drag-reorder **gesture** binding (the `onMoveSlide`
+      intent + `move` reducer are wired & tested — only the Compose drag handle is deferred);
+      per-slide media (media is whole-story for now); the 9:16 canvas + text styling below.
 - [ ] 9:16 canvas with pinch-zoom + drag-pan; FAB + bottom-band toolbar (Contenu/Effets)
 - [ ] Text elements (≤5/slide): style (bold/italic/handwriting/typewriter/neon/retro), colour,
       size, alignment, background (none/solid/glass), outline/stroke, RTL, fade timing

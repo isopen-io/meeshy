@@ -4,23 +4,25 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Stories) — slice `story-composer-multi-pending` ✅
-Lifts the composer's offline staging from **one** pending upload to a **list**, completing the durable
-offline upload→publish chain end-to-end from the UI (the SDK multi-dependency primitive landed last loop).
+## This loop (Phase: Stories) — slice `story-composer-slide-deck` ✅
+Makes the multi-slide model **real in the composer**: wires the pure `StorySlideDeck` reducer into the
+ViewModel + a `SlideStrip` mini-preview, with lossless multi-slide publish.
 
-- [x] `StoryComposerUiState.pendingUpload?` → `pendingUploads: List<PendingMediaUpload>`; `draftMediaIds`
-      appends every pending cmid after the uploaded ids.
-- [x] `onUploadFailed` drops the single-pending guard: any transient error durably queues **every**
-      accepted item (already capped to free slots); permanent (4xx) still surfaces + stages nothing.
-- [x] `queueDurably(items)` enqueues + stages one-at-a-time so a mid-batch failure keeps staged items.
-- [x] `onRemoveMedia` removes one pending from the list + cancels **only that** durable row.
-- [x] `publish(dependsOn = pendingUploads.map { cmid })`; `MediaPreviewRow` renders N "Offline" tiles.
-- [x] TDD: `StoryComposerViewModelTest` — 3 single-pending tests adapted to the list, 2 behaviours
-      flipped (reject→append, batch-error→stage-each), +5 new (batch staging, second-pick append,
-      offline batch truncated to free slots, publish gates on all ids, remove-one keeps rest + cancels
-      only its row, first staged survives mid-batch failure). No test weakened, no floor lowered.
+- [x] `StorySlideDeck` pure additions: `hasText`, `publishableSlides`, `isWithinTextLimit(max)`,
+      `updateSelectedText(text)` (rewrites only the selected slide).
+- [x] `StoryComposerUiState.deck: StorySlideDeck`; `canPublish` gates on the **whole deck** (off-screen
+      over-long slide blocks publish).
+- [x] VM mints slide ids (`UUID`, impure edge); `onTextChange` writes the selected slide; new intents
+      `onAddSlide`/`onDuplicateSelectedSlide`/`onRemoveSlide`/`onMoveSlide`/`onSelectSlide` via private
+      `applyDeck{}` re-syncing the editor (`draft.text == selectedSlide.text`).
+- [x] `publishRequests`: **one story per non-blank slide** in order; first carries media + `dependsOn`;
+      media-only deck still emits one media-bearing story; single-slide byte-identical to before.
+- [x] `StoryComposerScreen` `SlideStrip` (selectable numbered chips, Duplicate/Remove on selected,
+      "+" add capped at 10); +4 strings × 4 locales.
+- [x] TDD: `StorySlideDeckTest` +12 (34/34), `StoryComposerViewModelTest` +18 (57/57). No floor lowered,
+      no test weakened.
 - [x] `./apps/android/meeshy.sh check` green (assembleDebug + all unit tests).
 
 ## Next loop (see PROGRESS.md "Next")
-1. Multi-slide canvas (9:16 add/remove/reorder slides).
-2. Then advance to the **Calls** area.
+1. Slide drag-reorder gesture (bind `onMoveSlide` to a Compose drag handle).
+2. 9:16 canvas; then per-slide media; then advance to the **Calls** area.

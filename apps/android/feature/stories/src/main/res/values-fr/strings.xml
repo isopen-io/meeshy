@@ -38,6 +38,10 @@
     <string name="stories_composer_add_media_count">Ajouter (%1$d/%2$d)</string>
     <string name="stories_composer_remove_media">Retirer</string>
     <string name="stories_composer_media_pending">Hors ligne</string>
+    <string name="stories_composer_slide_label">Diapo %1$d</string>
+    <string name="stories_composer_add_slide">Ajouter une diapo</string>
+    <string name="stories_composer_duplicate_slide">Dupliquer la diapo</string>
+    <string name="stories_composer_remove_slide">Supprimer la diapo</string>
     <string name="stories_visibility_public">Public</string>
     <string name="stories_visibility_friends">Amis</string>
     <string name="stories_visibility_community">Communauté</string>

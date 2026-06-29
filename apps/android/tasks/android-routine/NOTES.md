@@ -23,6 +23,17 @@ Append-only log of gotchas and decisions that save time next run.
 - For distinct sequential stub returns, MockK `coEvery { … } returnsMany listOf("a","b")`;
   for "succeed once then fail", `… returns "a" andThenThrows Exception(…)`. Used to test
   multi-pending staging (each `enqueue` returns a distinct cmid) and mid-batch failures.
+- **Non-deterministic id minting in a VM, tested without injection:** when a VM mints ids
+  inline (`UUID.randomUUID()` like `StoryCommentsViewModel`), don't fight Hilt to inject a
+  `() -> String` (a function type has no Hilt binding). Instead assert **structure** and read
+  ids back off the state (`vm.state.value.deck.slides[i].id`) to drive the next op — fully
+  behavioural, no exact-id tautology. Used for `story-composer-slide-deck` slide intents.
+- **Editor-buffer ↔ selected-item mirror:** the composer keeps `draft.text == deck.selectedSlide.text`
+  as a one-writer invariant (a single private `applyDeck{}` re-syncs the buffer on every structural
+  op). This is an accepted "active editor buffer" pattern, not a SoT violation — the deck is the SoT,
+  the draft is the live editing view of its selected slide.
+- **MockK capture-all into a `mutableListOf`:** `coEvery { repo.enqueuePublish(capture(reqs), capture(deps)) }`
+  collects **every** call's arg in order — perfect for asserting a publish loop (one row per slide).
 - **Flipping a behavioural test is not weakening it** when the slice *intentionally* changes
   the behaviour: `story-composer-multi-pending` flipped "second offline pick is rejected" →
   "second offline pick is appended". Keep the assertion strong (assert the new outcome

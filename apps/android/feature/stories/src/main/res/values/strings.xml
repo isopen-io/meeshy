@@ -38,6 +38,10 @@
     <string name="stories_composer_add_media_count">Add more (%1$d/%2$d)</string>
     <string name="stories_composer_remove_media">Remove</string>
     <string name="stories_composer_media_pending">Offline</string>
+    <string name="stories_composer_slide_label">Slide %1$d</string>
+    <string name="stories_composer_add_slide">Add slide</string>
+    <string name="stories_composer_duplicate_slide">Duplicate slide</string>
+    <string name="stories_composer_remove_slide">Remove slide</string>
     <string name="stories_visibility_public">Public</string>
     <string name="stories_visibility_friends">Friends</string>
     <string name="stories_visibility_community">Community</string>

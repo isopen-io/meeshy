@@ -206,4 +206,92 @@ class StorySlideDeckTest {
         assertThat(deck.selectedIndex).isEqualTo(1)
         assertThat(deck.selectedSlide.id).isEqualTo("b")
     }
+
+    // --- updateSelectedText ---
+
+    @Test
+    fun `updateSelectedText rewrites only the selected slide and preserves the rest`() {
+        val deck = deckOf("a", "b", "c", selected = "b")
+        val after = deck.updateSelectedText("middle")
+        assertThat(after.slides.map { it.text }).containsExactly("", "middle", "").inOrder()
+        assertThat(after.slides.map { it.id }).containsExactly("a", "b", "c").inOrder()
+        assertThat(after.selectedId).isEqualTo("b")
+    }
+
+    @Test
+    fun `updateSelectedText leaves the selected slide's media untouched`() {
+        val deck = StorySlideDeck(
+            slides = listOf(StorySlide(id = "a", text = "old", mediaIds = listOf("m1"))),
+            selectedId = "a",
+        )
+        val after = deck.updateSelectedText("new")
+        assertThat(after.selectedSlide).isEqualTo(StorySlide(id = "a", text = "new", mediaIds = listOf("m1")))
+    }
+
+    // --- hasText / publishableSlides ---
+
+    @Test
+    fun `hasText is false for a deck of blank slides`() {
+        assertThat(deckOf("a", "b").hasText).isFalse()
+    }
+
+    @Test
+    fun `hasText ignores whitespace-only slides`() {
+        val deck = StorySlideDeck(slides = listOf(StorySlide(id = "a", text = "   ")), selectedId = "a")
+        assertThat(deck.hasText).isFalse()
+    }
+
+    @Test
+    fun `hasText is true when any slide carries non-blank text`() {
+        val deck = StorySlideDeck(
+            slides = listOf(StorySlide(id = "a"), StorySlide(id = "b", text = "hi")),
+            selectedId = "a",
+        )
+        assertThat(deck.hasText).isTrue()
+    }
+
+    @Test
+    fun `publishableSlides keeps only non-blank slides in order`() {
+        val deck = StorySlideDeck(
+            slides = listOf(
+                StorySlide(id = "a", text = "first"),
+                StorySlide(id = "b", text = "   "),
+                StorySlide(id = "c", text = "third"),
+            ),
+            selectedId = "a",
+        )
+        assertThat(deck.publishableSlides.map { it.id }).containsExactly("a", "c").inOrder()
+    }
+
+    @Test
+    fun `publishableSlides is empty for a media-only deck with no text`() {
+        assertThat(deckOf("a", "b").publishableSlides).isEmpty()
+    }
+
+    // --- isWithinTextLimit ---
+
+    @Test
+    fun `isWithinTextLimit is true when every slide is within the cap`() {
+        val deck = StorySlideDeck(
+            slides = listOf(StorySlide(id = "a", text = "abc"), StorySlide(id = "b", text = "de")),
+            selectedId = "a",
+        )
+        assertThat(deck.isWithinTextLimit(3)).isTrue()
+    }
+
+    @Test
+    fun `isWithinTextLimit is false when any slide exceeds the cap`() {
+        val deck = StorySlideDeck(
+            slides = listOf(StorySlide(id = "a", text = "ok"), StorySlide(id = "b", text = "toolong")),
+            selectedId = "a",
+        )
+        assertThat(deck.isWithinTextLimit(3)).isFalse()
+    }
+
+    @Test
+    fun `isWithinTextLimit counts raw length including surrounding whitespace`() {
+        val deck = StorySlideDeck(slides = listOf(StorySlide(id = "a", text = "ab ")), selectedId = "a")
+        assertThat(deck.isWithinTextLimit(2)).isFalse()
+        assertThat(deck.isWithinTextLimit(3)).isTrue()
+    }
 }
