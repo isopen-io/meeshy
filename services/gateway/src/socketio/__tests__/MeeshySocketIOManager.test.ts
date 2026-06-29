@@ -101,6 +101,8 @@ jest.mock('../../services/PrivacyPreferencesService', () => ({
         showOnlineStatus: true,
         showLastSeen: true,
       }),
+      // Returns an empty Map by default → showReadReceipts falsy → drain delivery skipped
+      getPreferencesForUsers: jest.fn().mockResolvedValue(new Map()),
     };
     return mockPrivacyPrefsServiceInstance;
   }),
@@ -310,6 +312,11 @@ jest.mock('../../services/ReactionService.js', () => ({
 jest.mock('../../services/MessageReadStatusService.js', () => ({
   MessageReadStatusService: jest.fn().mockImplementation(() => ({
     getUnreadCountsForParticipants: jest.fn().mockResolvedValue(new Map()),
+    getUnreadCountsForUser: jest.fn().mockResolvedValue(new Map()),
+    markMessagesAsReceived: jest.fn().mockResolvedValue(undefined),
+    getLatestMessageSummary: jest.fn().mockResolvedValue({
+      totalMembers: 2, deliveredCount: 1, readCount: 0,
+    }),
   })),
 }));
 
@@ -1733,7 +1740,7 @@ describe('MeeshySocketIOManager', () => {
       await (manager as any)._drainPendingMessages(socket, 'user-drain');
       expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-p1', conversationId: 'conv-1' });
       expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-p2', conversationId: 'conv-1' });
-      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, { count: 2 });
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, expect.objectContaining({ count: 2 }));
     });
   });
 
@@ -3704,7 +3711,7 @@ describe('MeeshySocketIOManager', () => {
       await (manager as any)._drainPendingMessages(socket, 'user-drain-pending');
 
       expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.objectContaining({ id: 'msg-p1' }));
-      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, { count: 2 });
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, expect.objectContaining({ count: 2 }));
     });
 
     it('catches drain() errors without throwing (line 365)', async () => {
@@ -3714,6 +3721,126 @@ describe('MeeshySocketIOManager', () => {
 
       await expect(
         (manager as any)._drainPendingMessages(socket, 'user-drain-err-3')
+      ).resolves.not.toThrow();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // 87b. _emitDeliveryForDrainedMessages
+  // -------------------------------------------------------------------------
+
+  describe('_emitDeliveryForDrainedMessages', () => {
+    function makeReadStatusSvc() {
+      return {
+        getUnreadCountsForParticipants: jest.fn().mockResolvedValue(new Map()),
+        getUnreadCountsForUser: jest.fn().mockResolvedValue(new Map()),
+        markMessagesAsReceived: jest.fn().mockResolvedValue(undefined),
+        getLatestMessageSummary: jest.fn().mockResolvedValue({
+          totalMembers: 2, deliveredCount: 1, readCount: 0,
+        }),
+      };
+    }
+
+    function makePrivacySvc(userId: string, showReadReceipts: boolean) {
+      const prefMap = new Map([[userId, { showReadReceipts }]]);
+      return {
+        getPreferences: jest.fn(),
+        getPreferencesForUsers: jest.fn().mockResolvedValue(prefMap),
+      };
+    }
+
+    it('skips markMessagesAsReceived when showReadReceipts is false', async () => {
+      const userId = 'user-drain-priv';
+      const readStatusSvc = makeReadStatusSvc();
+      (manager as any).privacyPreferencesService = makePrivacySvc(userId, false);
+      (manager as any).readStatusService = readStatusSvc;
+
+      const pending = [
+        { messageId: 'msg-1', conversationId: '507f1f77bcf86cd799439201', payload: {}, enqueuedAt: 1 },
+      ];
+
+      await (manager as any)._emitDeliveryForDrainedMessages(userId, pending);
+
+      expect(readStatusSvc.markMessagesAsReceived).not.toHaveBeenCalled();
+    });
+
+    it('marks received and emits READ_STATUS_UPDATED per conversation when showReadReceipts is true', async () => {
+      const userId = 'user-drain-receipts';
+      const convId1 = '507f1f77bcf86cd799439211';
+      const convId2 = '507f1f77bcf86cd799439212';
+      const readStatusSvc = makeReadStatusSvc();
+
+      (manager as any).privacyPreferencesService = makePrivacySvc(userId, true);
+      (manager as any).readStatusService = readStatusSvc;
+
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-1', conversationId: convId1 },
+        { id: 'part-2', conversationId: convId2 },
+      ]);
+
+      const pending = [
+        { messageId: 'msg-a', conversationId: convId1, payload: {}, enqueuedAt: 1 },
+        { messageId: 'msg-b', conversationId: convId2, payload: {}, enqueuedAt: 2 },
+      ];
+
+      await (manager as any)._emitDeliveryForDrainedMessages(userId, pending);
+
+      expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledTimes(2);
+      expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith('part-1', convId1, 'msg-a');
+      expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith('part-2', convId2, 'msg-b');
+      expect(ioState.toEmit).toHaveBeenCalledWith(
+        SERVER_EVENTS.READ_STATUS_UPDATED,
+        expect.objectContaining({ conversationId: convId1, userId, type: 'received' })
+      );
+      expect(ioState.toEmit).toHaveBeenCalledWith(
+        SERVER_EVENTS.READ_STATUS_UPDATED,
+        expect.objectContaining({ conversationId: convId2, userId, type: 'received' })
+      );
+    });
+
+    it('keeps only the latest messageId when same conversationId appears multiple times', async () => {
+      const userId = 'user-drain-dedup';
+      const convId = '507f1f77bcf86cd799439213';
+      const readStatusSvc = makeReadStatusSvc();
+
+      (manager as any).privacyPreferencesService = makePrivacySvc(userId, true);
+      (manager as any).readStatusService = readStatusSvc;
+
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-dedup', conversationId: convId },
+      ]);
+
+      const pending = [
+        { messageId: 'msg-old-1', conversationId: convId, payload: {}, enqueuedAt: 1 },
+        { messageId: 'msg-old-2', conversationId: convId, payload: {}, enqueuedAt: 2 },
+        { messageId: 'msg-latest', conversationId: convId, payload: {}, enqueuedAt: 3 },
+      ];
+
+      await (manager as any)._emitDeliveryForDrainedMessages(userId, pending);
+
+      expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledTimes(1);
+      expect(readStatusSvc.markMessagesAsReceived).toHaveBeenCalledWith('part-dedup', convId, 'msg-latest');
+    });
+
+    it('does not propagate when markMessagesAsReceived throws (Promise.allSettled)', async () => {
+      const userId = 'user-drain-throws';
+      const convId = '507f1f77bcf86cd799439214';
+      const readStatusSvc = makeReadStatusSvc();
+      readStatusSvc.markMessagesAsReceived.mockRejectedValue(new Error('DB down'));
+
+      (manager as any).privacyPreferencesService = makePrivacySvc(userId, true);
+      (manager as any).readStatusService = readStatusSvc;
+
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-throws', conversationId: convId },
+      ]);
+
+      const pending = [
+        { messageId: 'msg-x', conversationId: convId, payload: {}, enqueuedAt: 1 },
+      ];
+
+      await expect(
+        (manager as any)._emitDeliveryForDrainedMessages(userId, pending)
       ).resolves.not.toThrow();
     });
   });

@@ -573,11 +573,19 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       queryClient.invalidateQueries({ queryKey: queryKeys.preferences.categories() });
     };
 
-    // Handler for message:pending-delivered — queued outgoing messages were delivered after reconnect
-    const handlePendingMessagesDelivered = () => {
-      if (conversationId) {
+    // Handler for message:pending-delivered — queued messages delivered on reconnect.
+    // Use targeted per-conversation invalidation to avoid a broad cache flush.
+    const handlePendingMessagesDelivered = (data: { count: number; conversationIds: string[] }) => {
+      const affected = data?.conversationIds ?? [];
+      if (affected.length > 0) {
+        for (const convId of affected) {
+          queryClient.invalidateQueries({ queryKey: queryKeys.messages.infinite(convId) });
+        }
+      } else if (conversationId) {
+        // Fallback for old server versions without conversationIds
         queryClient.invalidateQueries({ queryKey: queryKeys.messages.infinite(conversationId) });
       }
+      // Always refresh conversation list to update lastMessageAt / unread counts
       queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
     };
 

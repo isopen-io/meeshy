@@ -60,6 +60,7 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 import type { ZmqAgentClient } from '../services/zmq-agent/ZmqAgentClient';
 import { MentionService } from '../services/MentionService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
+import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 
 // Logger dédié pour SocketIOManager
 const logger = enhancedLogger.child({ module: 'SocketIOManager' });
@@ -370,10 +371,72 @@ export class MeeshySocketIOManager {
       for (const entry of pending) {
         socket.emit(SERVER_EVENTS.MESSAGE_NEW, entry.payload);
       }
-      socket.emit(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, { count: pending.length });
+      const affectedConversationIds = [...new Set(pending.map(e => e.conversationId))];
+      socket.emit(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, { count: pending.length, conversationIds: affectedConversationIds });
+
+      // Emit delivery receipts to senders so their checkmarks advance from
+      // "sent" (single tick) to "delivered" (double tick) as soon as the
+      // messages land on the recipient's device — matching WhatsApp / iMessage
+      // behaviour instead of waiting for the user to open the conversation.
+      this._emitDeliveryForDrainedMessages(userId, pending).catch(err => {
+        logger.warn('Failed to emit delivery receipts for drained messages', { userId, error: err });
+      });
     } catch (error) {
       logger.warn('Failed to drain pending messages', { userId, error });
     }
+  }
+
+  /**
+   * After draining queued messages to a reconnecting user, mark those
+   * messages as "received" on their behalf and broadcast `read-status:updated`
+   * to the conversation rooms so senders see the delivery checkmark advance.
+   *
+   * Respects the user's `showReadReceipts` privacy preference.
+   * Batches the participant lookup across all affected conversations in a
+   * single Prisma query to minimise round-trips on the reconnect path.
+   */
+  private async _emitDeliveryForDrainedMessages(
+    userId: string,
+    pending: QueuedMessagePayload[]
+  ): Promise<void> {
+    // Check privacy preference first — single cheap cached call.
+    const prefMap = await this.privacyPreferencesService.getPreferencesForUsers([
+      { id: userId, isAnonymous: false },
+    ]);
+    if (!prefMap.get(userId)?.showReadReceipts) return;
+
+    // Group by conversationId, keeping the last (newest) messageId per conv
+    // so we call markMessagesAsReceived once per conversation.
+    const convLatest = new Map<string, string>();
+    for (const entry of pending) {
+      convLatest.set(entry.conversationId, entry.messageId);
+    }
+
+    // Batch-resolve participant rows for all affected conversations.
+    const participantRows = await this.prisma.participant.findMany({
+      where: { userId, conversationId: { in: [...convLatest.keys()] }, isActive: true },
+      select: { id: true, conversationId: true },
+    });
+
+    await Promise.allSettled(
+      participantRows.map(async ({ id: participantId, conversationId }) => {
+        const latestMessageId = convLatest.get(conversationId);
+        if (!latestMessageId) return;
+
+        await this.readStatusService.markMessagesAsReceived(participantId, conversationId, latestMessageId);
+
+        const summary = await this.readStatusService.getLatestMessageSummary(conversationId);
+        this.io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.READ_STATUS_UPDATED, {
+          conversationId,
+          participantId,
+          userId,
+          type: 'received' as const,
+          updatedAt: new Date(),
+          summary,
+        });
+        logger.debug('drain delivery receipt emitted', { userId, conversationId, latestMessageId });
+      })
+    );
   }
 
   /**

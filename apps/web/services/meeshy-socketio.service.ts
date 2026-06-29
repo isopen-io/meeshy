@@ -394,7 +394,7 @@ class MeeshySocketIOService {
     return this.orchestrator.onMessageAttachmentUpdated(listener);
   }
 
-  public onPendingMessagesDelivered(listener: (data: { count: number }) => void): () => void {
+  public onPendingMessagesDelivered(listener: (data: { count: number; conversationIds: string[] }) => void): () => void {
     return this.orchestrator.onPendingMessagesDelivered(listener);
   }
 

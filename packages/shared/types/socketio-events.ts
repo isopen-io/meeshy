@@ -1268,8 +1268,8 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.NOTIFICATION_DELETED]: (data: NotificationDeletedEventData) => void;
   [SERVER_EVENTS.NOTIFICATION_COUNTS]: (data: NotificationCountsEventData) => void;
 
-  // Delivery queue
-  [SERVER_EVENTS.PENDING_MESSAGES_DELIVERED]: (data: { count: number }) => void;
+  // Delivery queue — includes affected conversationIds so clients can scope invalidation
+  [SERVER_EVENTS.PENDING_MESSAGES_DELIVERED]: (data: { count: number; conversationIds: string[] }) => void;
 
   // Conversation lifecycle
   [SERVER_EVENTS.CONVERSATION_UPDATED]: (data: ConversationUpdatedEventData) => void;
