@@ -9,9 +9,18 @@ const clientMessageIdSchema = z
   .string()
   .regex(CLIENT_MESSAGE_ID_REGEX, 'Invalid clientMessageId format (expected cid_<uuid v4 lowercase>)');
 
+// Safety ceiling for message content. Runtime per-role validation (MAX_MESSAGE_LENGTH=4000)
+// is the precise limit for plaintext messages; encrypted payloads may be larger, so we
+// use a generous ceiling here that only blocks truly abusive payloads.
+const MAX_CONTENT_BYTES = 100_000;
+
+// Maximum attachment IDs per message — mirrors MessageValidator.ts (regular conversations: 100).
+// Enforced at schema level to reject bulk-fake-attachment DoS before DB lookups start.
+const MAX_ATTACHMENT_IDS = 100;
+
 export const SocketMessageSendSchema = z.object({
-  conversationId: z.string(),
-  content: z.string(),
+  conversationId: z.string().min(1).max(255),
+  content: z.string().max(MAX_CONTENT_BYTES),
   originalLanguage: z.string().optional(),
   messageType: z.string().optional(),
   replyToId: mongoId.optional(),
@@ -30,10 +39,10 @@ export const SocketMessageSendSchema = z.object({
 export type SocketMessageSendData = z.infer<typeof SocketMessageSendSchema>;
 
 export const SocketMessageSendWithAttachmentsSchema = z.object({
-  conversationId: z.string(),
-  content: z.string(),
+  conversationId: z.string().min(1).max(255),
+  content: z.string().max(MAX_CONTENT_BYTES),
   originalLanguage: z.string().optional(),
-  attachmentIds: z.array(mongoId).min(1),
+  attachmentIds: z.array(mongoId).min(1).max(MAX_ATTACHMENT_IDS),
   replyToId: mongoId.optional(),
   storyReplyToId: mongoId.optional(),
   clientMessageId: clientMessageIdSchema,
@@ -49,13 +58,13 @@ export const SocketTranslationRequestSchema = z.object({
 export type SocketTranslationRequestData = z.infer<typeof SocketTranslationRequestSchema>;
 
 export const SocketConversationJoinSchema = z.object({
-  conversationId: z.string(),
+  conversationId: z.string().min(1).max(255),
 });
 
 export type SocketConversationJoinData = z.infer<typeof SocketConversationJoinSchema>;
 
 export const SocketConversationLeaveSchema = z.object({
-  conversationId: z.string(),
+  conversationId: z.string().min(1).max(255),
 });
 
 export type SocketConversationLeaveData = z.infer<typeof SocketConversationLeaveSchema>;
