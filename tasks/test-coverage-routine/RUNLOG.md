@@ -2343,3 +2343,25 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   - fast-json-stringify strips unknown properties → invitation response assertions target only schema-declared fields
 - Reviewer: PASS (CI green: Quality bun + Security checks passed; squash-merged)
 - Commit: d3772a7f (squash-merged PR #1021 → main 2026-06-29T02:35Z)
+
+## 2026-06-29T07:10Z — gateway-manifest-gap5 (community-preferences, conversation-encryption, signal-protocol, translation-jobs)
+- Targeted: community-preferences.ts, conversation-encryption.ts, signal-protocol.ts, translation-jobs.ts
+- Result: ☑ done
+- Coverage:
+  - routes/community-preferences.ts: 100% lines / 100% branches
+  - routes/conversation-encryption.ts: 100% lines / 100% branches
+  - routes/translation-jobs.ts: 100% lines / 100% branches
+  - routes/signal-protocol.ts: 100% lines / 98.67% branches (single unreachable 400 path via Fastify routing)
+- Tests added: 64 new tests across 4 new test files
+  - New: `src/__tests__/unit/routes/community-preferences-routes.test.ts` (18 tests): GET single (stored/default/401-anon/500); GET list (200/401/500); PUT upsert (200/401/500); DELETE (200/404-P2025/500/401); POST reorder (200/401/500)
+  - New: `src/__tests__/unit/routes/conversation-encryption-routes.test.ts` (19 tests): GET status (404/403-non-member/200-unencrypted/200-server/200-hybrid/200-anon-skip/500); POST enable (403-anon/400-invalid-mode/404/400-already-encrypted/403-non-member/403-group-no-role/200-direct/200-server/200-hybrid/200-null-sender/500)
+  - New: `src/__tests__/unit/routes/translation-jobs-routes.test.ts` (10 tests): GET (503-no-zmq/401/200/404/500); DELETE (503-no-zmq/401/200/400/500)
+  - New: `src/__tests__/unit/routes/signal-protocol-routes.test.ts` (17 tests): POST keys (200/500); GET bundle (403-no-shared-no-friend/403-empty-convIds/404/200-shared/200-friend/200-null-keys/500); POST establish (400-invalid/403-user-not-participant/400-recipient-not-participant/404-no-bundle/503-no-signalService/200-preKey-consumed/200-no-preKey/500)
+- Production changes: none
+- Key gotchas resolved:
+  - Module mock bleed-through: signal-protocol and community-preferences tests both mocked `@meeshy/shared/types/api-schemas` with incomplete errorResponseSchema (missing `code`/`error` fields) → fast-json-stringify stripped them in translation-jobs tests; fixed by including all fields in both mocks
+  - `@fastify/rate-limit` mocked as `async function noOpRateLimit() {}` to avoid Redis connection attempts in signal-protocol tests
+  - makeSessionPrisma() helper created for session/establish tests to avoid findFirst mock chain collision with GET route test setup
+  - translation-jobs tests use real `@meeshy/shared/types/api-schemas` (not mocked) + `ajv: { customOptions: { strict: false } }` for `example` keyword
+- Reviewer: PASS (CI green: all 15 checks passed; squash-merged)
+- Commit: 7e51b39f (squash-merged PR #1023 → main 2026-06-29T07:10Z)

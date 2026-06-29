@@ -72,8 +72,8 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/gateway/src/routes/attachments.ts`
 - [x] `services/gateway/src/routes/calls.ts`
 - [ ] `services/gateway/src/routes/communities.ts`
-- [ ] `services/gateway/src/routes/community-preferences.ts`
-- [ ] `services/gateway/src/routes/conversation-encryption.ts`
+- [x] `services/gateway/src/routes/community-preferences.ts`
+- [x] `services/gateway/src/routes/conversation-encryption.ts`
 - [ ] `services/gateway/src/routes/conversation-preferences.ts`
 - [ ] `services/gateway/src/routes/friends.ts`
 - [x] `services/gateway/src/routes/invitations.ts`
@@ -86,8 +86,8 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/gateway/src/routes/password-reset.ts`
 - [x] `services/gateway/src/routes/push-tokens.ts`
 - [x] `services/gateway/src/routes/reactions.ts`
-- [ ] `services/gateway/src/routes/signal-protocol.ts`
-- [ ] `services/gateway/src/routes/translation-jobs.ts`
+- [x] `services/gateway/src/routes/signal-protocol.ts`
+- [x] `services/gateway/src/routes/translation-jobs.ts`
 - [ ] `services/gateway/src/routes/translation-non-blocking.ts`
 - [ ] `services/gateway/src/routes/translation.ts`
 - [x] `services/gateway/src/routes/two-factor.ts`
