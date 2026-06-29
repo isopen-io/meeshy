@@ -9,6 +9,7 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import jwt from 'jsonwebtoken';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketAuthenticateSchema } from '../../validation/socket-event-schemas.js';
+import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 
@@ -102,6 +103,18 @@ export class AuthHandler {
         return;
       }
       const validated = schemaValidation.data;
+
+      // Rate-limit auth attempts by IP to prevent credential stuffing.
+      // Key: socket IP so the limit spans multiple socket connections from the same host.
+      const clientIp = socket.handshake.address ?? socket.id;
+      const rateLimiter = getSocketRateLimiter();
+      const allowed = await rateLimiter.checkLimit(clientIp, SOCKET_RATE_LIMITS.SOCKET_AUTH);
+      if (!allowed) {
+        logger.warn('socket auth rate limit exceeded', { ip: clientIp, socketId: socket.id });
+        socket.emit(SERVER_EVENTS.ERROR, { message: 'Too many authentication attempts. Please wait before retrying.', code: 'RATE_LIMIT_EXCEEDED' });
+        socket.disconnect(true);
+        return;
+      }
 
       const { sessionToken, language, token } = validated;
 

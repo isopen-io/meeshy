@@ -82,6 +82,11 @@ export const SOCKET_RATE_LIMITS = {
     maxRequests: 30,
     windowMs: 60000, // 1 minute — mirrors add limit
     keyPrefix: 'socket:reaction:remove'
+  },
+  SOCKET_AUTH: {
+    maxRequests: 10,
+    windowMs: 60000, // 1 minute — prevents credential stuffing via WS
+    keyPrefix: 'socket:auth'
   }
 };
 
