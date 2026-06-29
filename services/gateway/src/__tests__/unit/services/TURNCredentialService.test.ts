@@ -99,6 +99,19 @@ describe('TURNCredentialService — production security guard', () => {
     });
   });
 
+  it('throws when NODE_ENV=production and TURN_SECRET is set but shorter than 32 characters', () => {
+    withEnv({ NODE_ENV: 'production', TURN_SECRET: 'short_custom_secret' }, () => {
+      expect(() => new TURNCredentialService()).toThrow('[SECURITY]');
+      expect(() => new TURNCredentialService()).toThrow('32 characters');
+    });
+  });
+
+  it('throws when NODE_ENV=staging and TURN_SECRET is set but shorter than 32 characters', () => {
+    withEnv({ NODE_ENV: 'staging', TURN_SECRET: 'too_short_stg' }, () => {
+      expect(() => new TURNCredentialService()).toThrow('[SECURITY]');
+    });
+  });
+
   it('does NOT throw in dev even when no TURN_SECRET is set', () => {
     withEnv({ NODE_ENV: 'development', TURN_SECRET: undefined }, () => {
       expect(() => new TURNCredentialService()).not.toThrow();
