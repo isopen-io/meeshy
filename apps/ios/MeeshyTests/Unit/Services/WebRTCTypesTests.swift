@@ -1652,6 +1652,11 @@ final class CallReliabilityPolicyTests: XCTestCase {
 
 // MARK: - DataChannelTranscriptionMessage Decodable
 
+// @MainActor required: DataChannelTranscriptionMessage is defined in the app target
+// with SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor, so its Decodable init and all stored
+// property getters are @MainActor-isolated. The test bundle uses nonisolated by default,
+// so this class must explicitly opt into @MainActor to access those members.
+@MainActor
 final class DataChannelTranscriptionMessageTests: XCTestCase {
 
     func test_decode_fullMessage_succeeds() throws {
@@ -1668,14 +1673,24 @@ final class DataChannelTranscriptionMessageTests: XCTestCase {
         }
         """.data(using: .utf8)!
         let msg = try JSONDecoder().decode(DataChannelTranscriptionMessage.self, from: json)
-        XCTAssertEqual(msg.type, "transcription-segment")
-        XCTAssertEqual(msg.text, "Bonjour le monde")
-        XCTAssertEqual(msg.speakerId, "user_abc")
-        XCTAssertEqual(msg.startTime, 1.23, accuracy: 0.001)
-        XCTAssertTrue(msg.isFinal)
-        XCTAssertEqual(msg.language, "fr")
-        XCTAssertEqual(msg.translatedText, "Hello world")
-        XCTAssertEqual(msg.translatedLanguage, "en")
+        // Capture @MainActor-isolated properties before XCTAssert autoclosures
+        // (XCTAssert* @autoclosure params are nonisolated — can't access @MainActor members directly).
+        let type = msg.type
+        let text = msg.text
+        let speakerId = msg.speakerId
+        let startTime = msg.startTime
+        let isFinal = msg.isFinal
+        let language = msg.language
+        let translatedText = msg.translatedText
+        let translatedLanguage = msg.translatedLanguage
+        XCTAssertEqual(type, "transcription-segment")
+        XCTAssertEqual(text, "Bonjour le monde")
+        XCTAssertEqual(speakerId, "user_abc")
+        XCTAssertEqual(startTime, 1.23, accuracy: 0.001)
+        XCTAssertTrue(isFinal)
+        XCTAssertEqual(language, "fr")
+        XCTAssertEqual(translatedText, "Hello world")
+        XCTAssertEqual(translatedLanguage, "en")
     }
 
     func test_decode_withNilOptionals_succeeds() throws {
@@ -1690,8 +1705,10 @@ final class DataChannelTranscriptionMessageTests: XCTestCase {
         }
         """.data(using: .utf8)!
         let msg = try JSONDecoder().decode(DataChannelTranscriptionMessage.self, from: json)
-        XCTAssertNil(msg.translatedText)
-        XCTAssertNil(msg.translatedLanguage)
+        let translatedText = msg.translatedText
+        let translatedLanguage = msg.translatedLanguage
+        XCTAssertNil(translatedText)
+        XCTAssertNil(translatedLanguage)
     }
 
     func test_decode_pingMessage_failsBecauseOfMissingRequiredFields() {
@@ -1701,7 +1718,10 @@ final class DataChannelTranscriptionMessageTests: XCTestCase {
         let json = """
         {"type":"ping"}
         """.data(using: .utf8)!
-        XCTAssertNil(try? JSONDecoder().decode(DataChannelTranscriptionMessage.self, from: json),
+        // Decode outside autoclosure: @MainActor-isolated decode must not run
+        // inside the nonisolated @autoclosure of XCTAssertNil.
+        let result = try? JSONDecoder().decode(DataChannelTranscriptionMessage.self, from: json)
+        XCTAssertNil(result,
                      "Ping messages must not decode as DataChannelTranscriptionMessage — " +
                      "the receiver correctly ignores them via try?")
     }
@@ -1711,7 +1731,8 @@ final class DataChannelTranscriptionMessageTests: XCTestCase {
         {"type":"t","text":"hi","speakerId":"s","startTime":0,"isFinal":false,"language":"en"}
         """.data(using: .utf8)!
         let msg = try JSONDecoder().decode(DataChannelTranscriptionMessage.self, from: json)
-        XCTAssertFalse(msg.isFinal)
+        let isFinal = msg.isFinal
+        XCTAssertFalse(isFinal)
     }
 
     func test_type_isSendable() {
