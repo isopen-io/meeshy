@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
@@ -166,6 +167,7 @@ fun StoryComposerScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .imePadding()
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -183,7 +185,7 @@ fun StoryComposerScreen(
                 backgroundModel = state.selectedSlideAttachments.firstOrNull()?.let { it.thumbnailUrl ?: it.url }
                     ?: state.selectedSlidePending.firstOrNull()?.item?.bytes,
                 textElements = state.selectedSlideTextElements,
-                selectedElementId = state.selectedTextElementId,
+                selectedElement = state.selectedTextElement,
                 onTransform = viewModel::onCanvasTransform,
                 onElementTap = viewModel::onSelectTextElement,
                 onElementDrag = viewModel::onTextElementMoved,
@@ -192,6 +194,16 @@ fun StoryComposerScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
+                floatingToolbar = {
+                    state.selectedTextElement?.let { element ->
+                        TextStyleToolbar(
+                            element = element,
+                            onStyle = { style -> viewModel.onTextElementStyle(element.id, style) },
+                            onColor = { color -> viewModel.onTextElementColor(element.id, color) },
+                            onAlign = { align -> viewModel.onTextElementAlign(element.id, align) },
+                        )
+                    }
+                },
             )
 
             OutlinedTextField(
@@ -224,16 +236,6 @@ fun StoryComposerScreen(
                     )
                 },
             )
-
-            state.selectedTextElement?.let { element ->
-                TextStyleToolbar(
-                    element = element,
-                    onStyle = { style -> viewModel.onTextElementStyle(element.id, style) },
-                    onColor = { color -> viewModel.onTextElementColor(element.id, color) },
-                    onAlign = { align -> viewModel.onTextElementAlign(element.id, align) },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
 
             OutlinedButton(
                 onClick = viewModel::onAddTextElement,
@@ -301,23 +303,34 @@ fun StoryComposerScreen(
  * [StoryTextElement]: each gesture callback is forwarded verbatim (pixels divided by
  * the measured canvas size into normalised fractions), so this Composable stays
  * declarative glue. A tap on the empty canvas deselects ([onBackgroundTap]).
+ *
+ * While a text element is being edited the [floatingToolbar] floats in-place just
+ * clear of that element — above or below it, clamped inside the canvas — at the
+ * vertical anchor decided by the pure, unit-tested [StoryToolbarPlacement] (fed the
+ * element's measured centre/half-height, the toolbar's measured height, and the
+ * keyboard-shrunk canvas height). The composer applies `imePadding`, so the canvas
+ * already excludes the soft keyboard and the toolbar always lands in view.
  */
 @Composable
 private fun StoryCanvasSurface(
     transform: StoryCanvasTransform,
     backgroundModel: Any?,
     textElements: List<StoryTextElement>,
-    selectedElementId: String?,
+    selectedElement: StoryTextElement?,
     onTransform: (Float, Float, Float, Float, Float) -> Unit,
     onElementTap: (String) -> Unit,
     onElementDrag: (String, Float, Float) -> Unit,
     onElementRemove: (String) -> Unit,
     onBackgroundTap: () -> Unit,
     modifier: Modifier = Modifier,
+    floatingToolbar: @Composable () -> Unit = {},
 ) {
     val canvasLabel = stringResource(R.string.stories_composer_canvas)
     var canvasWidthPx by remember { mutableFloatStateOf(0f) }
     var canvasHeightPx by remember { mutableFloatStateOf(0f) }
+    var selectedHalfHeightPx by remember { mutableFloatStateOf(0f) }
+    var toolbarHeightPx by remember { mutableFloatStateOf(0f) }
+    val gapPx = with(LocalDensity.current) { 8.dp.toPx() }
     Box(
         modifier = modifier,
         contentAlignment = Alignment.Center,
@@ -358,7 +371,7 @@ private fun StoryCanvasSurface(
             textElements.forEach { element ->
                 TextElementLayer(
                     element = element,
-                    selected = element.id == selectedElementId,
+                    selected = element.id == selectedElement?.id,
                     canvasWidthPx = canvasWidthPx,
                     canvasHeightPx = canvasHeightPx,
                     onTap = { onElementTap(element.id) },
@@ -368,7 +381,33 @@ private fun StoryCanvasSurface(
                         }
                     },
                     onRemove = { onElementRemove(element.id) },
+                    onMeasured = { size ->
+                        if (element.id == selectedElement?.id) selectedHalfHeightPx = size.height / 2f
+                    },
                 )
+            }
+            if (selectedElement != null) {
+                val placement = StoryToolbarPlacement.resolve(
+                    elementCenterYpx = selectedElement.y * canvasHeightPx,
+                    elementHalfHeightPx = selectedHalfHeightPx,
+                    toolbarHeightPx = toolbarHeightPx,
+                    canvasHeightPx = canvasHeightPx,
+                    gapPx = gapPx,
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .offset { IntOffset(0, placement.topPx.roundToInt()) }
+                        .padding(horizontal = 8.dp)
+                        .onSizeChanged { toolbarHeightPx = it.height.toFloat() }
+                        .background(
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                            shape = RoundedCornerShape(12.dp),
+                        )
+                        .padding(8.dp),
+                ) {
+                    floatingToolbar()
+                }
             }
         }
     }
@@ -390,6 +429,7 @@ private fun TextElementLayer(
     onTap: () -> Unit,
     onDrag: (Float, Float) -> Unit,
     onRemove: () -> Unit,
+    onMeasured: (IntSize) -> Unit = {},
 ) {
     var sizePx by remember { mutableStateOf(IntSize.Zero) }
     Box(
@@ -400,7 +440,10 @@ private fun TextElementLayer(
                     y = (element.y * canvasHeightPx - sizePx.height / 2f).roundToInt(),
                 )
             }
-            .onSizeChanged { sizePx = it }
+            .onSizeChanged {
+                sizePx = it
+                onMeasured(it)
+            }
             .pointerInput(element.id) { detectTapGestures { onTap() } }
             .pointerInput(element.id) {
                 detectDragGestures { change, dragAmount ->
