@@ -2410,3 +2410,19 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Reviewer: PASS (rounds: 1)
 - Notes / where the next run resumes: routes/conversation-preferences.ts ☑. Next slice: continue gateway manifest gap-fill — routes/friends.ts or next uncovered batch in manifests/gateway.md
 - Commit: 3196bdd9f782a228ab78b78126d32753876f756b (squash-merged PR #1038 → main 2026-06-29T16:43Z)
+
+## 2026-06-29T~20:00Z — gateway-manifest-gap8 (routes/friends.ts)
+- Targeted: `services/gateway/src/routes/friends.ts` (682 lines — 5 routes: POST send, GET received, GET sent, PATCH respond, DELETE cancel)
+- Result: ☑ done
+- Coverage:
+  - routes/friends.ts: 100% stmts / 100% funcs / 100% lines / 97.5% branches
+  - Uncovered branch (line 531): implicit else of `} else if (body.status === 'rejected') {` — AJV enum['accepted','rejected'] makes any third value structurally unreachable before handler runs; `/* istanbul ignore else */` applied
+- Tests added: +16 tests (41 total in file, was 25)
+  - Modified: `src/__tests__/unit/routes/friends-routes.test.ts`
+  - New suites: POST notification service (createFriendRequestNotification called; username/firstName+lastName senderName fallbacks; ZodError 400 path; onDuplicate replay); PATCH notification service accepted (createFriendAcceptedNotification; createSystemNotification for reject; receiver name fallbacks); PATCH social events (invalidateFriendsCache both users on accept; not called on reject); PATCH notification error and onDuplicate (findMany error swallowed; matching/non-matching filter; onDuplicate replay); PATCH conversation displayName fallbacks (username branch; null→'User' branch)
+- Production changes (annotation-only):
+  - `routes/friends.ts`: 4× `/* istanbul ignore */` — (1)(2) GET /received and GET /sent `const { offset, limit }` destructuring defaults (AJV applies schema defaults before handler); (3) `/* istanbul ignore else */` on `else if (body.status === 'rejected')` (AJV enum); (4) `/* istanbul ignore next */` on `if (error instanceof z.ZodError)` catch (AJV body enum pre-validation)
+- Full suite: 342 suites / 10468 tests / 1 skipped — all thresholds met (stmts:78.33/branches:73.35/funcs:78.14/lines:78.59; floor 67/63/67/67)
+- Reviewer: PASS (rounds: 1) — all behavioral assertions on HTTP outcomes; factory functions; deterministic; no production logic changed
+- Notes / where the next run resumes: routes/friends.ts ☑. Next slice: continue gateway manifest gap-fill — pick next uncovered batch from manifests/gateway.md routes/ or services/ sections
+- Commit: <sha-to-fill>
