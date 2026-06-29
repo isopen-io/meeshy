@@ -6,7 +6,9 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -19,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
@@ -30,6 +33,9 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.FormatAlignCenter
+import androidx.compose.material.icons.filled.FormatAlignLeft
+import androidx.compose.material.icons.filled.FormatAlignRight
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
@@ -37,6 +43,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -57,6 +64,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -66,11 +74,14 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import kotlin.math.roundToInt
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -213,6 +224,16 @@ fun StoryComposerScreen(
                     )
                 },
             )
+
+            state.selectedTextElement?.let { element ->
+                TextStyleToolbar(
+                    element = element,
+                    onStyle = { style -> viewModel.onTextElementStyle(element.id, style) },
+                    onColor = { color -> viewModel.onTextElementColor(element.id, color) },
+                    onAlign = { align -> viewModel.onTextElementAlign(element.id, align) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
 
             OutlinedButton(
                 onClick = viewModel::onAddTextElement,
@@ -394,11 +415,23 @@ private fun TextElementLayer(
             .padding(horizontal = 8.dp, vertical = 4.dp),
         contentAlignment = Alignment.Center,
     ) {
+        val typography = element.style.typography()
+        val textColor = parseHexColor(element.color)
         Text(
             text = element.text.ifBlank { stringResource(R.string.stories_composer_text_placeholder) },
-            color = parseHexColor(element.color),
-            fontWeight = FontWeight.Bold,
+            color = textColor,
+            fontWeight = FontWeight(typography.fontWeight),
+            fontStyle = if (typography.italic) FontStyle.Italic else FontStyle.Normal,
+            fontFamily = typography.family.toFontFamily(),
+            letterSpacing = typography.letterSpacingEm.em,
             textAlign = element.align.toTextAlign(),
+            style = if (typography.glow) {
+                LocalTextStyle.current.copy(
+                    shadow = Shadow(color = textColor, blurRadius = 24f),
+                )
+            } else {
+                LocalTextStyle.current
+            },
         )
         if (selected) {
             Surface(
@@ -424,6 +457,113 @@ private fun StoryTextAlign.toTextAlign(): TextAlign = when (this) {
     StoryTextAlign.LEFT -> TextAlign.Start
     StoryTextAlign.CENTER -> TextAlign.Center
     StoryTextAlign.RIGHT -> TextAlign.End
+}
+
+private fun StoryTextFontFamily.toFontFamily(): FontFamily = when (this) {
+    StoryTextFontFamily.SANS -> FontFamily.SansSerif
+    StoryTextFontFamily.SERIF -> FontFamily.Serif
+    StoryTextFontFamily.MONOSPACE -> FontFamily.Monospace
+    StoryTextFontFamily.CURSIVE -> FontFamily.Cursive
+}
+
+/** The on-canvas text colour palette — hex (no `#`), [StoryTextElement.DEFAULT_COLOR] first. */
+private val STORY_TEXT_COLORS = listOf(
+    StoryTextElement.DEFAULT_COLOR,
+    "000000",
+    "FF3B30",
+    "FF9500",
+    "FFCC00",
+    "34C759",
+    "007AFF",
+    "AF52DE",
+    "FF2D55",
+)
+
+private fun StoryTextStyle.labelRes(): Int = when (this) {
+    StoryTextStyle.BOLD -> R.string.stories_composer_style_bold
+    StoryTextStyle.NEON -> R.string.stories_composer_style_neon
+    StoryTextStyle.TYPEWRITER -> R.string.stories_composer_style_typewriter
+    StoryTextStyle.HANDWRITING -> R.string.stories_composer_style_handwriting
+    StoryTextStyle.CLASSIC -> R.string.stories_composer_style_classic
+}
+
+/**
+ * Styling controls for the [element] currently being edited — the iOS-parity style
+ * picker (five faces), the alignment toggle, and the colour swatches. Pure glue: each
+ * affordance forwards its choice to a ViewModel intent ([onStyle]/[onColor]/[onAlign])
+ * whose logic is unit-tested; selection highlighting reads straight off the element.
+ */
+@Composable
+private fun TextStyleToolbar(
+    element: StoryTextElement,
+    onStyle: (StoryTextStyle) -> Unit,
+    onColor: (String) -> Unit,
+    onAlign: (StoryTextAlign) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(StoryTextStyle.entries) { style ->
+                FilterChip(
+                    selected = element.style == style,
+                    onClick = { onStyle(style) },
+                    label = { Text(stringResource(style.labelRes())) },
+                )
+            }
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            AlignToggle(StoryTextAlign.LEFT, element.align, onAlign)
+            AlignToggle(StoryTextAlign.CENTER, element.align, onAlign)
+            AlignToggle(StoryTextAlign.RIGHT, element.align, onAlign)
+        }
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(STORY_TEXT_COLORS) { hex ->
+                ColorSwatch(
+                    hex = hex,
+                    selected = element.color.equals(hex, ignoreCase = true),
+                    onClick = { onColor(hex) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AlignToggle(
+    align: StoryTextAlign,
+    current: StoryTextAlign,
+    onAlign: (StoryTextAlign) -> Unit,
+) {
+    val (icon, label) = when (align) {
+        StoryTextAlign.LEFT -> Icons.Filled.FormatAlignLeft to R.string.stories_composer_align_left
+        StoryTextAlign.CENTER -> Icons.Filled.FormatAlignCenter to R.string.stories_composer_align_center
+        StoryTextAlign.RIGHT -> Icons.Filled.FormatAlignRight to R.string.stories_composer_align_right
+    }
+    val selected = align == current
+    IconButton(onClick = { onAlign(align) }) {
+        Icon(
+            icon,
+            contentDescription = stringResource(label),
+            tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun ColorSwatch(hex: String, selected: Boolean, onClick: () -> Unit) {
+    val ring = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+    Box(
+        modifier = Modifier
+            .size(28.dp)
+            .clip(RoundedCornerShape(50))
+            .background(parseHexColor(hex))
+            .border(BorderStroke(if (selected) 2.dp else 1.dp, ring), RoundedCornerShape(50))
+            .pointerInput(hex) { detectTapGestures { onClick() } }
+            .semantics { contentDescription = "#$hex" },
+    )
 }
 
 /** Parses a `RRGGBB` (or `#RRGGBB`) hex colour, falling back to white on anything unexpected. */

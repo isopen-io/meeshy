@@ -1167,6 +1167,117 @@ class StoryComposerViewModelTest {
     }
 
     @Test
+    fun `onTextElementStyle restyles the edited element and leaves text and position`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        vm.onTextChange("Salut")
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementStyle(id, StoryTextStyle.NEON)
+
+        val element = vm.state.value.selectedSlideTextElements.single()
+        assertThat(element.style).isEqualTo(StoryTextStyle.NEON)
+        assertThat(element.text).isEqualTo("Salut")
+        assertThat(element.x).isEqualTo(StoryTextElement.CENTER)
+        assertThat(element.y).isEqualTo(StoryTextElement.CENTER)
+        assertThat(vm.state.value.isEditingTextElement).isTrue()
+    }
+
+    @Test
+    fun `onTextElementStyle on an unknown id is inert`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val before = vm.state.value.selectedSlideTextElements.single()
+
+        vm.onTextElementStyle("ghost", StoryTextStyle.HANDWRITING)
+
+        assertThat(vm.state.value.selectedSlideTextElements.single()).isEqualTo(before)
+    }
+
+    @Test
+    fun `onTextElementColor recolours only the edited element`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementColor(id, "FF0000")
+
+        val element = vm.state.value.selectedSlideTextElements.single()
+        assertThat(element.color).isEqualTo("FF0000")
+        assertThat(element.style).isEqualTo(StoryTextStyle.BOLD)
+    }
+
+    @Test
+    fun `onTextElementColor on an unknown id is inert`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+
+        vm.onTextElementColor("ghost", "FF0000")
+
+        assertThat(vm.state.value.selectedSlideTextElements.single().color)
+            .isEqualTo(StoryTextElement.DEFAULT_COLOR)
+    }
+
+    @Test
+    fun `onTextElementAlign realigns only the edited element`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementAlign(id, StoryTextAlign.LEFT)
+
+        val element = vm.state.value.selectedSlideTextElements.single()
+        assertThat(element.align).isEqualTo(StoryTextAlign.LEFT)
+        assertThat(element.style).isEqualTo(StoryTextStyle.BOLD)
+    }
+
+    @Test
+    fun `onTextElementAlign on an unknown id is inert`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+
+        vm.onTextElementAlign("ghost", StoryTextAlign.RIGHT)
+
+        assertThat(vm.state.value.selectedSlideTextElements.single().align)
+            .isEqualTo(StoryTextAlign.CENTER)
+    }
+
+    @Test
+    fun `styling one element of several leaves the others untouched`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val first = vm.state.value.selectedTextElement!!.id
+        vm.onAddTextElement()
+        val second = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementStyle(first, StoryTextStyle.CLASSIC)
+
+        val elements = vm.state.value.selectedSlideTextElements.associateBy { it.id }
+        assertThat(elements.getValue(first).style).isEqualTo(StoryTextStyle.CLASSIC)
+        assertThat(elements.getValue(second).style).isEqualTo(StoryTextStyle.BOLD)
+    }
+
+    @Test
+    fun `a restyled element carries its style into the published text object`() = runTest {
+        val vm = viewModel(user = MeeshyUser(id = "me", username = "me", systemLanguage = "fr"))
+        vm.onAddTextElement()
+        vm.onTextChange("Bonjour")
+        val id = vm.state.value.selectedTextElement!!.id
+        vm.onTextElementStyle(id, StoryTextStyle.NEON)
+        vm.onTextElementColor(id, "00FF00")
+        vm.onTextElementAlign(id, StoryTextAlign.LEFT)
+        val request = slot<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(request), any()) } returns "cmid"
+
+        vm.publish()
+
+        val obj = request.captured.storyEffects?.textObjects.orEmpty().single()
+        assertThat(obj.textStyle).isEqualTo(StoryTextStyle.NEON.wire)
+        assertThat(obj.textColor).isEqualTo("00FF00")
+        assertThat(obj.textAlign).isEqualTo(StoryTextAlign.LEFT.wire)
+    }
+
+    @Test
     fun `publish carries the text elements into storyEffects textObjects`() = runTest {
         val vm = viewModel(user = MeeshyUser(id = "me", username = "me", systemLanguage = "fr"))
         vm.onAddTextElement()
