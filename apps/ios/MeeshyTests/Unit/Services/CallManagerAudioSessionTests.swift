@@ -3526,11 +3526,10 @@ final class CallViewVideoWatchdogSourceGuardTests: XCTestCase {
         )
     }
 
-    func test_screenCaptureMonitoring_usesNotificationObject_forScreenResolution() throws {
-        // Regression guard: the notification observer must use the UIScreen from the
-        // notification's `object` field (the specific screen that changed) rather than
-        // querying UIScreen.main. This correctly supports multi-screen scenarios and
-        // avoids the deprecated UIScreen.main accessor.
+    func test_screenCaptureMonitoring_usesConnectedScenes_forMultiScreenDetection() throws {
+        // Regression guard (Swift 6): Notification is not Sendable and cannot be captured
+        // into a Task { @MainActor } closure. The observer must query connectedScenes on the
+        // MainActor instead, which also correctly handles multi-screen (Stage Manager, Catalyst).
         let source = try callManagerSource()
 
         guard let fnRange = source.range(of: "private func startScreenCaptureMonitoring()") else {
@@ -3541,15 +3540,17 @@ final class CallViewVideoWatchdogSourceGuardTests: XCTestCase {
         let fnBody = String(source[fnRange.lowerBound ..< endIdx])
 
         XCTAssertTrue(
-            fnBody.contains("notification.object as? UIScreen"),
-            "startScreenCaptureMonitoring() notification closure must use " +
-            "`notification.object as? UIScreen` to obtain the changed screen without UIScreen.main."
+            fnBody.contains("UIApplication.shared.connectedScenes"),
+            "startScreenCaptureMonitoring() must use UIApplication.shared.connectedScenes " +
+            "to detect screen capture — UIScreen.main is deprecated in iOS 16+ and Notification " +
+            "is not Sendable in Swift 6 (cannot be captured into Task { @MainActor })."
         )
     }
 
-    func test_screenCaptureMonitoring_notificationObserver_capturesNotification() throws {
-        // Regression guard: the observer closure must accept `notification` (not `_`)
-        // so it can access notification.object for iOS 16+ UIScreen.main deprecation fix.
+    func test_screenCaptureMonitoring_doesNotCaptureNotification_intoTask() throws {
+        // Regression guard (Swift 6): capturing `notification` (non-Sendable) into a
+        // Task { @MainActor } closure is a hard compile error under -swift-version 6 with
+        // NonisolatedNonsendingByDefault. The observer closure must use `_ in`.
         let source = try callManagerSource()
 
         guard let fnRange = source.range(of: "private func startScreenCaptureMonitoring()") else {
@@ -3559,10 +3560,10 @@ final class CallViewVideoWatchdogSourceGuardTests: XCTestCase {
         let endIdx = source.index(fnRange.lowerBound, offsetBy: 800, limitedBy: source.endIndex) ?? source.endIndex
         let fnBody = String(source[fnRange.lowerBound ..< endIdx])
 
-        XCTAssertTrue(
-            fnBody.contains("{ [weak self] notification in"),
-            "startScreenCaptureMonitoring() observer closure must receive `notification` (not `_`) " +
-            "to access notification.object for the screen reference."
+        XCTAssertFalse(
+            fnBody.contains("notification.object"),
+            "startScreenCaptureMonitoring() must not reference notification.object inside the " +
+            "Task { @MainActor } closure — Notification is not Sendable in Swift 6."
         )
     }
 }
