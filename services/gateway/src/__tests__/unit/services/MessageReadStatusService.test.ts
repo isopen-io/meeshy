@@ -2391,41 +2391,105 @@ describe('MessageReadStatusService', () => {
   });
 
   describe('getUnreadCountsForParticipants', () => {
+    const msg = (iso: string) => ({ createdAt: new Date(iso) });
+
     it('returns empty map for empty participants array', async () => {
       const result = await service.getUnreadCountsForParticipants([], testConversationId, 'sender-1');
       expect(result).toEqual(new Map());
       expect(mockPrisma.conversationReadCursor.findMany).not.toHaveBeenCalled();
+      expect(mockPrisma.message.findMany).not.toHaveBeenCalled();
     });
 
-    it('returns unread counts for participants using cursors', async () => {
-      const since = new Date('2024-01-01T10:00:00Z');
+    it('derives distinct per-participant counts from a single message fetch (mixed floors)', async () => {
+      // p1 floor = cursor 10:00, p2 floor = joinedAt 08:00, p3 floor = cursor 12:00.
       mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
-        { participantId: 'p1', lastReadAt: since },
+        { participantId: 'p1', lastReadAt: new Date('2024-01-01T10:00:00Z') },
+        { participantId: 'p3', lastReadAt: new Date('2024-01-01T12:00:00Z') },
       ]);
-      mockPrisma.message.count.mockResolvedValue(3);
+      // Candidate messages (same set for everyone — only the floor differs).
+      mockPrisma.message.findMany.mockResolvedValue([
+        msg('2024-01-01T09:00:00Z'),
+        msg('2024-01-01T11:00:00Z'),
+        msg('2024-01-01T11:30:00Z'),
+        msg('2024-01-01T13:00:00Z'),
+      ]);
 
       const participants = [
         { id: 'p1', joinedAt: new Date('2024-01-01T00:00:00Z') },
-        { id: 'p2', joinedAt: null },
+        { id: 'p2', joinedAt: new Date('2024-01-01T08:00:00Z') },
+        { id: 'p3', joinedAt: new Date('2024-01-01T00:00:00Z') },
       ];
 
       const result = await service.getUnreadCountsForParticipants(
         participants, testConversationId, 'sender-x'
       );
 
+      // p1 floor 10:00 → {11:00, 11:30, 13:00} = 3
       expect(result.get('p1')).toBe(3);
-      expect(result.get('p2')).toBe(3);
+      // p2 floor 08:00 → {09:00, 11:00, 11:30, 13:00} = 4
+      expect(result.get('p2')).toBe(4);
+      // p3 floor 12:00 → {13:00} = 1
+      expect(result.get('p3')).toBe(1);
+      // Single fetch, not one-per-participant.
+      expect(mockPrisma.message.findMany).toHaveBeenCalledTimes(1);
+    });
+
+    it('counts all candidate messages for a participant with no floor (no cursor, no joinedAt)', async () => {
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+      mockPrisma.message.findMany.mockResolvedValue([
+        msg('2024-01-01T09:00:00Z'),
+        msg('2024-01-01T10:00:00Z'),
+      ]);
+
+      const result = await service.getUnreadCountsForParticipants(
+        [{ id: 'p1', joinedAt: null }], testConversationId, 'sender-x'
+      );
+
+      expect(result.get('p1')).toBe(2);
+    });
+
+    it('excludes a message whose createdAt equals the floor (strict gt)', async () => {
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
+        { participantId: 'p1', lastReadAt: new Date('2024-01-01T10:00:00Z') },
+      ]);
+      mockPrisma.message.findMany.mockResolvedValue([
+        msg('2024-01-01T10:00:00Z'), // exactly at the floor → excluded
+        msg('2024-01-01T10:00:01Z'),
+      ]);
+
+      const result = await service.getUnreadCountsForParticipants(
+        [{ id: 'p1', joinedAt: null }], testConversationId, 'sender-x'
+      );
+
+      expect(result.get('p1')).toBe(1);
+    });
+
+    it('produces correct counts even when the fetched rows are not pre-sorted', async () => {
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+      mockPrisma.message.findMany.mockResolvedValue([
+        msg('2024-01-01T13:00:00Z'),
+        msg('2024-01-01T09:00:00Z'),
+        msg('2024-01-01T11:00:00Z'),
+      ]);
+
+      const result = await service.getUnreadCountsForParticipants(
+        [{ id: 'p1', joinedAt: new Date('2024-01-01T10:00:00Z') }], testConversationId, 'sender-x'
+      );
+
+      // floor 10:00 → {11:00, 13:00} = 2
+      expect(result.get('p1')).toBe(2);
     });
 
     it('returns zero-count map when DB throws', async () => {
       mockPrisma.conversationReadCursor.findMany.mockRejectedValue(new Error('DB error'));
-      const participants = [{ id: 'p1', joinedAt: null }];
+      const participants = [{ id: 'p1', joinedAt: null }, { id: 'p2', joinedAt: null }];
 
       const result = await service.getUnreadCountsForParticipants(
         participants, testConversationId, 'sender-x'
       );
 
       expect(result.get('p1')).toBe(0);
+      expect(result.get('p2')).toBe(0);
     });
   });
 

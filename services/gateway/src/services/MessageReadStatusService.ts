@@ -20,6 +20,22 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 const logger = enhancedLogger.child({ module: 'MessageReadStatusService' });
 
 
+/**
+ * Number of timestamps in `sortedMs` (ascending) strictly greater than `floorMs`.
+ * Upper-bound binary search: first index whose value is `> floorMs`, so values equal to
+ * the floor stay excluded (strict `gt` semantics).
+ */
+function countAfter(sortedMs: ReadonlyArray<number>, floorMs: number): number {
+  let lo = 0;
+  let hi = sortedMs.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (sortedMs[mid] > floorMs) hi = mid;
+    else lo = mid + 1;
+  }
+  return sortedMs.length - lo;
+}
+
 // Helper pour retry des transactions en cas de deadlock (P2034)
 async function withRetry<T>(
   operation: () => Promise<T>,
@@ -175,9 +191,15 @@ export class MessageReadStatusService {
 
   /**
    * Batched variant for multiple participants in the same conversation.
-   * Reduces N×3 DB queries to 1 cursor batch + 1 participant batch + N parallel counts.
-   * Returns a Map<participantId, unreadCount>. Accepts pre-resolved participant rows
-   * (id + joinedAt) to avoid redundant participant lookups.
+   *
+   * The candidate message set ({conversationId, deletedAt:null, senderId:{not:senderId}})
+   * is IDENTICAL for every participant — `senderId` is the single message author. Only the
+   * per-participant `floor` (lastReadAt ?? joinedAt) varies (`createdAt > floor`). So the
+   * per-participant counts are partitions of one createdAt-sorted set: we fetch that set ONCE
+   * (timestamps only, from the most-behind floor onward) and bucket each participant via an
+   * in-memory upper-bound search. Replaces N `message.count` index scans with 1 `findMany`,
+   * decoupling DB load from group size. Output is byte-for-byte identical to the per-count
+   * variant (strict `gt`, same `where` exclusions). Returns a Map<participantId, unreadCount>.
    */
   async getUnreadCountsForParticipants(
     participants: ReadonlyArray<{ id: string; joinedAt: Date | null }>,
@@ -196,24 +218,37 @@ export class MessageReadStatusService {
       });
       const cursorMap = new Map(cursors.map((c) => [c.participantId, c.lastReadAt]));
 
-      // Run message counts in parallel, one per participant
-      const results = await Promise.all(
-        participants.map(async (p) => {
-          const lastReadAt = cursorMap.get(p.id) ?? null;
-          const floor: Date | null = lastReadAt ?? p.joinedAt ?? null;
-          const count = await this.prisma.message.count({
-            where: {
-              conversationId,
-              deletedAt: null,
-              senderId: { not: senderId },
-              ...(floor ? { createdAt: { gt: floor } } : {}),
-            },
-          });
-          return [p.id, count] as const;
-        })
-      );
+      const floors = participants.map((p) => ({
+        id: p.id,
+        floor: (cursorMap.get(p.id) ?? p.joinedAt) ?? null,
+      }));
 
-      return new Map(results);
+      // A null floor means "count everything" → the common fetch must start from the very
+      // beginning. Otherwise start from the earliest (most-behind) floor.
+      const floorMin = floors.some((f) => f.floor === null)
+        ? null
+        : new Date(Math.min(...floors.map((f) => (f.floor as Date).getTime())));
+
+      // Single read: createdAt of every candidate message at/after the common floor.
+      const messages = await this.prisma.message.findMany({
+        where: {
+          conversationId,
+          deletedAt: null,
+          senderId: { not: senderId },
+          ...(floorMin ? { createdAt: { gt: floorMin } } : {}),
+        },
+        select: { createdAt: true },
+        orderBy: { createdAt: "asc" },
+      });
+      // Sort in-process so correctness never depends on the driver's row ordering.
+      const sortedMs = messages.map((m) => m.createdAt.getTime()).sort((a, b) => a - b);
+
+      return new Map(
+        floors.map(({ id, floor }) => [
+          id,
+          floor === null ? sortedMs.length : countAfter(sortedMs, floor.getTime()),
+        ])
+      );
     } catch (error) {
       logger.error("[MessageReadStatus] Error batch-computing unread counts", error);
       return new Map(participants.map((p) => [p.id, 0]));
