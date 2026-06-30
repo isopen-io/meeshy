@@ -38,11 +38,11 @@ export const HeaderTagsBar = memo(function HeaderTagsBar({
             {categoryName}
           </Badge>
         )}
-        {tags.map((tag, index) => {
+        {tags.map((tag) => {
           const colors = getTagColor(tag);
           return (
             <Badge
-              key={index}
+              key={tag}
               variant="outline"
               className={cn(
                 "h-6 px-3 text-xs font-medium border flex-shrink-0 shadow-sm",
