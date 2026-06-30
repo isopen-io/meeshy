@@ -152,22 +152,24 @@ struct StatusBubbleOverlay: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
-        .background(
+        // iOS 26 Liquid Glass thought-bubble (floating over the avatar list — not
+        // nested in glass). The SDK Compatibility atom owns the gating + the
+        // `.ultraThinMaterial` fallback; the brand-accent hairline stroke is kept
+        // as an explicit overlay (the atom's single-tint model can't express a
+        // gradient stroke) and the elevation shadow is preserved.
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(
-                            LinearGradient(
-                                colors: [Color(hex: status.avatarColor).opacity(0.3), Color.white.opacity(0.1)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 0.5
-                        )
+                .stroke(
+                    LinearGradient(
+                        colors: [Color(hex: status.avatarColor).opacity(0.3), Color.white.opacity(0.1)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 0.5
                 )
-                .shadow(color: Color.black.opacity(0.1), radius: 10, y: 4)
         )
+        .shadow(color: Color.black.opacity(0.1), radius: 10, y: 4)
     }
 
     // MARK: - Audio Player
