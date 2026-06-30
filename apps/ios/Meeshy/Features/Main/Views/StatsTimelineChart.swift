@@ -51,7 +51,7 @@ struct StatsTimelineChart: View {
                     .foregroundStyle(theme.textMuted.opacity(0.15))
             }
         }
-        .accessibilityLabel("Graphique d'activite sur 30 jours")
+        .accessibilityLabel(String(localized: "stats.timeline.chart.a11y", defaultValue: "Graphique d'activité sur 30 jours", bundle: .main))
     }
 
     private func shortDate(_ dateString: String) -> String {

@@ -132,7 +132,7 @@ extension UniversalComposerBar {
                 .contentShape(Rectangle())
             }
             .accessibilityLabel(String(localized: "composer.recording.cancel", defaultValue: "Cancel recording", bundle: .main))
-            .accessibilityHint("Supprime le message vocal en cours")
+            .accessibilityHint(String(localized: "composer.recording.cancel.hint", defaultValue: "Supprime le message vocal en cours", bundle: .main))
 
             // Live waveform — fills available horizontal space.
             // Marked accessibilityHidden: purely decorative, timer conveys state.
@@ -191,7 +191,7 @@ extension UniversalComposerBar {
             }
             .animation(.easeInOut(duration: 0.2), value: canSend)
             .accessibilityLabel(String(localized: "composer.recording.stopAndAttach", defaultValue: "Stop and add to attachments", bundle: .main))
-            .accessibilityHint("Place le message vocal dans les pieces jointes pour l'editer avant l'envoi")
+            .accessibilityHint(String(localized: "composer.recording.stopAndAttach.hint", defaultValue: "Place le message vocal dans les pièces jointes pour l'éditer avant l'envoi", bundle: .main))
 
             // Send button — stops recording and sends the message immediately
             // (raw, no preview). Disabled below the minimum duration to prevent
