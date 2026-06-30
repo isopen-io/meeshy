@@ -185,6 +185,11 @@ struct StatusBubbleOverlay: View {
                     .frame(width: 18, height: 18)
                     .background(Circle().fill(Color(hex: status.avatarColor)))
             }
+            .accessibilityLabel(
+                audioPlayer.isPlaying
+                    ? String(localized: "status.bubble.audio.stop", defaultValue: "Arrêter l'écoute", bundle: .main)
+                    : String(localized: "status.bubble.audio.play", defaultValue: "Écouter l'humeur", bundle: .main)
+            )
 
             ProgressView(value: audioPlayer.progress)
                 .progressViewStyle(.linear)
