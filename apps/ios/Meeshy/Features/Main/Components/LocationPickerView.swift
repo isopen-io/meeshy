@@ -97,11 +97,12 @@ struct LocationPickerView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(.ultraThinMaterial)
-                .shadow(color: .black.opacity(0.1), radius: 8, y: 2)
-        )
+        // iOS 26 Liquid Glass — floating search bar over the map. The SDK
+        // Compatibility wrapper owns the gating + the .ultraThinMaterial fallback.
+        // Neutral (no tint): a search bar reads as OS chrome, not conversation content.
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .shadow(color: .black.opacity(0.1), radius: 8, y: 2)
         .padding(.horizontal, 16)
         .padding(.top, 8)
         .overlay(alignment: .top) {
@@ -159,7 +160,10 @@ struct LocationPickerView: View {
                 }
             }
         }
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 12), tint: Color(hex: accentColor).opacity(0.12))
+        // iOS 26 Liquid Glass — floating results dropdown over the map. Neutral
+        // glass (chrome); clip so the row dividers don't poke past the rounded corners.
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
         .padding(.horizontal, 16)
     }
@@ -262,11 +266,11 @@ struct LocationPickerView: View {
             }
         }
         .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .shadow(color: .black.opacity(0.1), radius: 12, y: -4)
-        )
+        // iOS 26 Liquid Glass — floating bottom action card over the map. Neutral
+        // glass; the inner accent CTA + secondary button stay as fills ON the glass.
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .shadow(color: .black.opacity(0.1), radius: 12, y: -4)
         .padding(.horizontal, 12)
         .padding(.bottom, 8)
     }

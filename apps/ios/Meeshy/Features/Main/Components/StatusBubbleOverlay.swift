@@ -152,12 +152,12 @@ struct StatusBubbleOverlay: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
-        // iOS 26 Liquid Glass thought-bubble (floating over the avatar list — not
-        // nested in glass). The SDK Compatibility atom owns the gating + the
-        // `.ultraThinMaterial` fallback; the brand-accent hairline stroke is kept
-        // as an explicit overlay (the atom's single-tint model can't express a
-        // gradient stroke) and the elevation shadow is preserved.
+        // iOS 26 Liquid Glass — floating mood bubble. The SDK Compatibility wrapper
+        // owns the gating + the .ultraThinMaterial fallback. The avatar-tinted
+        // gradient hairline + elevation shadow stay as overlays ON the glass
+        // (same idiom as FloatingCallPillView: adaptiveGlass + stroke overlay + shadow).
         .adaptiveGlass(in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(
