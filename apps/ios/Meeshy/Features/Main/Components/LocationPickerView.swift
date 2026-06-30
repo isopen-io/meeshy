@@ -160,10 +160,10 @@ struct LocationPickerView: View {
                 }
             }
         }
-        // iOS 26 Liquid Glass — floating results dropdown over the map. Neutral
-        // glass (chrome); clip so the row dividers don't poke past the rounded corners.
+        // Neutral Liquid Glass: a search-results dropdown floating over the map
+        // is suggestion chrome, not content — kept neutral for the same reason
+        // as the @mention autocomplete bar (no accent tint on chrome surfaces).
         .adaptiveGlass(in: RoundedRectangle(cornerRadius: 12))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
         .padding(.horizontal, 16)
     }
