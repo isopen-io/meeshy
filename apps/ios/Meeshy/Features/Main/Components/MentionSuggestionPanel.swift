@@ -59,7 +59,7 @@ struct MentionSuggestionPanel: View {
             }
         }
         .frame(maxHeight: 200)
-        .adaptiveGlass(in: Rectangle())
+        .adaptiveGlass(in: Rectangle(), tint: Color(hex: accentColor).opacity(0.14))
     }
 
     /// Three shimmering placeholder rows shown while waiting for API results.
