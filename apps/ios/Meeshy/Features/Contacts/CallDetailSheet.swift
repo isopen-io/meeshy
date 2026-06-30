@@ -41,7 +41,7 @@ struct CallDetailSheet: View {
                 presenceState: (record.peer?.isOnline ?? false) ? .online : .offline
             )
             Text(name)
-                .font(.title3.weight(.bold))
+                .font(MeeshyFont.relative(20, weight: .bold))
                 .foregroundColor(theme.textPrimary)
             HStack(spacing: 6) {
                 Image(systemName: record.isVideo ? "video.fill" : "phone.fill")
@@ -111,7 +111,7 @@ struct CallDetailSheet: View {
             detailRow(
                 icon: "calendar",
                 label: String(localized: "calls.detail.date", defaultValue: "Date", bundle: .main),
-                value: Self.fullDateFormatter.string(from: record.startedAt)
+                value: record.startedAt.formatted(date: .medium, time: .shortened)
             )
             if !record.durationLabel.isEmpty {
                 detailRow(
@@ -137,7 +137,7 @@ struct CallDetailSheet: View {
         }
         .padding(.vertical, 4)
         .background(theme.backgroundSecondary)
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
     }
 
     private func detailRow(icon: String, label: String, value: String) -> some View {
@@ -154,14 +154,7 @@ struct CallDetailSheet: View {
                 .font(.subheadline.weight(.medium))
                 .foregroundColor(theme.textPrimary)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.md)
     }
-
-    private static let fullDateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateStyle = .medium
-        f.timeStyle = .short
-        return f
-    }()
 }
