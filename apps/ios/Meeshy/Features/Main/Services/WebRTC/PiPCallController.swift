@@ -11,8 +11,8 @@
 //  par des callbacks injectés.
 //
 //  Le protocole `PiPCallProviding` est WebRTC-free (UIView + AnyObject) pour que
-//  `CallManager`/`CallView` l'utilisent sans garde de compilation. L'implémentation
-//  et le singleton sont compilés conditionnellement ; sinon `NoOpPiPController`.
+//  `CallManager`/`CallView` l'utilisent sans `#if`. L'implémentation et le choix
+//  du singleton sont gardés sous garde de compilation WebRTC ; sinon `NoOpPiPController`.
 //
 
 import AVKit
@@ -209,14 +209,14 @@ extension PiPCallController: AVPictureInPictureControllerDelegate {
 
 extension PiPCallController {
 
-    private func attachRenderer() {
+    func attachRenderer() {
         guard renderer == nil, let remoteTrack else { return }
         let renderer = PiPVideoRenderer(displayLayer: surfaceView.displayLayer, maxFrameRate: desiredFrameRate)
         remoteTrack.add(renderer)
         self.renderer = renderer
     }
 
-    private func detachRenderer() {
+    func detachRenderer() {
         if let renderer, let remoteTrack {
             remoteTrack.remove(renderer)
         }
@@ -229,7 +229,7 @@ extension PiPCallController {
         flushSurface()
     }
 
-    private func flushSurface() {
+    func flushSurface() {
         if #available(iOS 17.0, *) {
             surfaceView.displayLayer.sampleBufferRenderer.flush()
         } else {
