@@ -48,6 +48,16 @@
     <string name="stories_composer_remove_text">Remove text</string>
     <string name="stories_composer_add_sticker">Sticker</string>
     <string name="stories_composer_remove_sticker">Remove sticker</string>
+    <string name="stories_composer_sticker_search">Search emoji…</string>
+    <string name="stories_composer_sticker_no_results">No stickers found</string>
+    <string name="stories_composer_sticker_cat_smileys">Smileys</string>
+    <string name="stories_composer_sticker_cat_animals">Animals</string>
+    <string name="stories_composer_sticker_cat_food">Food</string>
+    <string name="stories_composer_sticker_cat_activities">Activities</string>
+    <string name="stories_composer_sticker_cat_travel">Travel</string>
+    <string name="stories_composer_sticker_cat_objects">Objects</string>
+    <string name="stories_composer_sticker_cat_symbols">Symbols</string>
+    <string name="stories_composer_sticker_cat_flags">Flags</string>
     <string name="stories_composer_text_caption">Caption</string>
     <string name="stories_composer_style_bold">Bold</string>
     <string name="stories_composer_style_neon">Neon</string>

@@ -44,6 +44,15 @@ Append-only log of gotchas and decisions that save time next run.
   the behaviour: `story-composer-multi-pending` flipped "second offline pick is rejected" →
   "second offline pick is appended". Keep the assertion strong (assert the new outcome
   precisely), record the flip + rationale in the run log, and the reviewer gate passes.
+- **A "duplicate-free across categories" invariant pays for itself as a RED test.** `story-sticker-picker-search`'s
+  `all is … duplicate-free` test caught `⭐` accidentally placed in both OBJECTS and SYMBOLS on the first run
+  — exactly the kind of hand-curated-data slip that silently breaks `distinct`/counts. Assert structural
+  invariants (`containsNoDuplicates`, `hasSize(sum of parts)`, `isInOrder`) over curated catalogues, not just
+  spot-checks of individual entries.
+- **Encode "search ignores the active tab" as a pure reducer, not Compose state.** The product rule (a
+  non-blank query searches across all categories) lives in `StickerPickerState.visibleEmojis`, so it is
+  unit-tested with a one-liner (`state.withQuery("heart").visibleEmojis contains ❤️` while the tab is ANIMALS)
+  and the dialog never has to branch. Same grain as `ComposerBandState` — push the decision out of the Composable.
 - **One text field, two roles (caption vs on-canvas element):** rather than add a second editor,
   `story-text-elements` routes the existing field by a derived `editorText`/`isEditingTextElement`
   (selected element's text or the slide caption). `onTextChange` branches on

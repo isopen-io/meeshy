@@ -135,8 +135,12 @@ Ordered by value:
    publish on `storyEffects.filter`. See run log. **Emoji stickers** ✅ shipped as `story-sticker-elements`
    (this run) — on-canvas `StoryStickerElement` (drag/pinch/rotate/remove) + Contenu "Sticker" tile +
    emoji-grid picker, serialised to `storyEffects.stickerObjects`. **Next real Effets tiles:** on-canvas
-   **freehand drawing**, then **backgrounds** (pastel / gradient / image), then the timeline; and a
-   **categorised + searchable** sticker picker to replace the flat built-in palette.
+   **freehand drawing**, then **backgrounds** (pastel / gradient / image), then the timeline. The
+   **categorised + searchable** sticker picker ✅ shipped as `story-sticker-picker-search` (this run) —
+   pure `StickerCatalog` (8 categories, keyworded search, `search(query, category?)`) + pure
+   `StickerPickerState` reducer (a non-blank query searches across **all** categories, iOS parity);
+   the dialog is now a search field + `FilterChip` tabs + filtered grid + empty-state. Replaces the
+   flat `STORY_STICKER_EMOJIS`. +22 tests. See run log.
 0. ~~**Z-order management (front/back, forward/backward)**~~ ✅ shipped as `story-text-element-zorder`
    (this run) — pure `StorySlideDeck.reorderTextElement(id, StoryZOrder)` restacks an element within its
    slide's paint order (list order = z-order), inert at the extremes / unknown id / single element;
@@ -308,6 +312,55 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-30 — slice `story-sticker-picker-search` ⚠ blocked (PR #1135, merge-blocked on red `main`)
+- **Status:** implementation + tests + reviewer gate all **DONE/PASS**; merge **blocked** by a
+  **pre-existing, unrelated** failure on `main`. The monorepo CI's `Test web` job fails on a single
+  web a11y test — `__tests__/components/conversations/invite-user-modal.test.tsx:493`
+  (`getByRole('button', { name: 'John Doe déjà sélectionné' })` → `toBeDisabled`); **1 failed /
+  10 769 passed**, all in that one web file. My diff is `apps/android` only and touches **zero** web
+  code, so it cannot have caused this — it is the same broken-`main` regression open PR #1131 documents
+  and carries the fix for. I can't fix it here (editing `invite-user-modal.tsx` is web production logic,
+  which breaks the "diff is apps/android only" hard gate). **Unblock:** once `main` goes green (a fix
+  like #1131 merges), rebase this branch onto it (`update_pull_request_branch`) → CI re-runs green →
+  squash-merge. The `*/8 min` self-check cron (`b4133933`) re-checks and will rebase + merge when `main`
+  is green. **Do NOT merge past this red CI** (hard rule).
+- **Branch:** `claude/apps/android/story-sticker-picker-search` (off `origin/main` @ `a751730f`).
+- **Housekeeping (step 0):** no open `claude/apps/android/*` PR (`list_pull_requests state=open` → only
+  dependabot + non-android `claude/*` branches: #1133 ios-calls, #1132 translator, #1131 gateway, #1130
+  gateway-coverage). Branched clean off the freshened `origin/main`.
+- **What:** the **categorised + searchable** emoji sticker picker (feature-parity §Stories + audit
+  part-21 `StickerPickerView`), replacing the old flat `STORY_STICKER_EMOJIS` palette. iOS parity: 8
+  category tabs (smileys/animals/food/activities/travel/objects/symbols/flags) + a search field; a
+  non-blank query searches across **all** categories.
+- **Design (single source of truth, SDK purity):** two pure types in `:feature:stories` (composer
+  product logic, mirroring where `StoryStickerElement` lives). `StickerCatalog` — `enum StickerCategory`
+  (8, tab order), `data class StickerEntry(emoji, category, keywords)`, the curated catalogue (~16
+  keyworded emojis/category, every glyph in exactly one category so `all` is duplicate-free),
+  `inCategory(cat)`, `all`, and `search(query, category?)`: trim+lowercase substring over keywords **or**
+  the glyph itself, blank query ⇒ whole scope unfiltered, result preserves catalogue order + `distinct`.
+  `StickerPickerState(category, query)` — the product reducer: `isSearching` (non-blank), `visibleEmojis`
+  (global `search` while searching so the tab is intentionally ignored, else the tab's emojis),
+  `withCategory`/`withQuery` (inert/same-instance on no-op). The decision lives in one unit-tested place;
+  the dialog stays glue.
+- **Changed (production — all `:feature:stories`, `apps/android` only):** `StickerCatalog.kt` (new),
+  `StoryComposerScreen.kt` (`StickerPickerDialog` → search field + `FilterChip` tab row + filtered grid +
+  empty-state; removed `STORY_STICKER_EMOJIS`), `values{,-fr,-es,-pt}/strings.xml` (10 strings × 4 locales:
+  search hint, no-results, 8 category labels).
+- **Tests (+22, red→green):** `StickerCatalogTest` — catalogue shape (every category non-empty,
+  `inCategory` order, `all` = concat + duplicate-free + tab order), search (blank ⇒ scope, category-scoped
+  blank, keyword match, case-insensitive + trim, substring, spans-all-categories, category-scoped excludes
+  others, glyph match, no-match ⇒ empty, order-preserving + distinct), reducer (default smileys/not-
+  searching, tab select, whitespace not searching, query searches-all-ignoring-tab, clear ⇒ tab,
+  `withCategory`/`withQuery` inert, select-tab-while-searching keeps global result). First RED caught a
+  real duplicate (`⭐` in OBJECTS+SYMBOLS) → fixed to `☮️`. No floor lowered, no test weakened.
+- **Edge cases:** empty/blank/whitespace query, no-match (empty grid → empty-state), single-category
+  scope, glyph-as-query, duplicate-free, idempotent reducer transitions (same instance).
+- **Verify:** `./gradlew assembleDebug testDebugUnitTest` → **BUILD SUCCESSFUL** (debug APK assembles; all
+  modules' unit tests green; `StickerCatalogTest` 22/22). Diff = `apps/android` only.
+- **Reviewer gate:** PASS — pure behaviour through the public API, no tautologies, SDK purity respected
+  (pure catalogue/reducer in `:feature:stories`, dialog is glue), single source of truth (catalogue
+  replaces the flat palette), UX coherence (natural tabs + live search, no dead-end — empty-state).
 
 ### 2026-06-30 — slice `story-sticker-elements` ✅
 - **Branch:** `claude/apps/android/story-sticker-elements` (off `origin/main` @ `d06d5ec`).

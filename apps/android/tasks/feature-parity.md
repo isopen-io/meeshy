@@ -569,7 +569,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       upload-then-publish outbox chain (SOTA follow-up).
 - [ ] Audio elements (≤5/slide): voice recording (60s), audio file import, on-canvas player widget
 - [ ] Freehand drawing layer (pen/marker/eraser, colour, width, undo/redo/clear)
-- [~] Emoji sticker picker — **on-canvas sticker elements done** (`story-sticker-elements`): a pure
+- [x] Emoji sticker picker — **categorised + searchable** (`story-sticker-picker-search`): a pure
+      `StickerCatalog` (8 iOS-parity categories — smileys/animals/food/activities/travel/objects/
+      symbols/flags, ~16 keyworded emojis each, every glyph in exactly one category) owns the emoji
+      data + a pure `search(query, category?)` (trim+lowercase substring over keywords or the glyph
+      itself; blank query ⇒ whole scope; result preserves catalogue order, duplicate-free). A pure
+      `StickerPickerState(category, query)` reducer encodes the product rule — a non-blank query
+      searches **across every category** (iOS parity) and hides the tab row, otherwise the active tab
+      shows; `withCategory`/`withQuery` are inert on no-op. The picker dialog becomes glue: a search
+      field + `FilterChip` tab row + filtered grid + empty-state. +22 tests. Replaces the old flat
+      `STORY_STICKER_EMOJIS` palette.
+- [x] Emoji sticker picker — **on-canvas sticker elements done** (`story-sticker-elements`): a pure
       `StoryStickerElement` (id/emoji/normalised x,y/scale/rotation) reusing [StoryTextElement]'s
       canvas-geometry clamps (the single source of truth) + a `toSticker()` gateway-wire mapper
       (`StoryEffects.stickerObjects`). The deck mirrors the text-element reducer per-slide
@@ -580,8 +590,8 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       add/select/deselect/move/transform/remove intents with selection mutually exclusive vs the
       text-element edit; a "Sticker" tile in the Contenu drawer opens an emoji-grid picker, and each
       on-canvas sticker is draggable / pinch-rotatable / removable (glue mirroring `TextElementLayer`).
-      +50 tests (15 model, 21 deck, 5 draft, ~12 VM). Pending: **categorised + searchable** picker (the
-      built-in palette is a flat curated set today).
+      +50 tests (15 model, 21 deck, 5 draft, ~12 VM). Categorised + searchable picker shipped above
+      (`story-sticker-picker-search`).
 - [ ] Backgrounds: random pastel, colour/gradient palette, image, looping/non-looping video
 - [x] 8 photo filters (vintage/bw/warm/cool/dramatic/vivid/fade/chrome) with intensity
       (`story-photo-filters`): the look of each preset lives in **one** pure, Compose-agnostic place —
