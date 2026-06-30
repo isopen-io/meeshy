@@ -1129,6 +1129,7 @@ public protocol MessageSocketProviding: Sendable {
     func emitCallBackgrounded(callId: String, participantId: String)
     func emitCallForegrounded(callId: String, participantId: String)
     func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool)
+    func emitCallAnalytics(callId: String, payload: [String: Any])
 }
 
 // MARK: - Protocol Default-Arg Convenience
@@ -1173,6 +1174,7 @@ public extension MessageSocketProviding {
     func emitCallBackgrounded(callId: String, participantId: String) {}
     func emitCallForegrounded(callId: String, participantId: String) {}
     func emitCallScreenCaptureDetected(callId: String, participantId: String, isCapturing: Bool) {}
+    func emitCallAnalytics(callId: String, payload: [String: Any]) {}
 
     func sendWithAttachments(
         conversationId: String,
@@ -2160,6 +2162,14 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             "participantId": participantId,
             "isCapturing": isCapturing
         ])
+    }
+
+    /// Emits a `call:analytics` event with aggregated call metrics at session end.
+    /// Fire-and-forget — the gateway persists the summary for observability dashboards.
+    public func emitCallAnalytics(callId: String, payload: [String: Any]) {
+        var data = payload
+        data["callId"] = callId
+        socket?.emit("call:analytics", data)
     }
 
     /// Reports whether the app is in the FOREGROUND so the gateway can decide,

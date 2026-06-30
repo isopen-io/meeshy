@@ -34,7 +34,8 @@ import {
   socketRequestIceServersSchema,
   socketCallBackgroundedSchema,
   socketCallForegroundedSchema,
-  socketCallScreenCaptureDetectedSchema
+  socketCallScreenCaptureDetectedSchema,
+  socketCallAnalyticsSchema
 } from '../validation/call-schemas';
 import { getSocketRateLimiter, checkSocketRateLimit, SOCKET_RATE_LIMITS } from '../utils/socket-rate-limiter';
 import { ZmqTranslationClient } from '../services/zmq-translation';
@@ -2187,6 +2188,57 @@ export class CallEventsHandler {
         });
       } catch (error) {
         logger.error('Error handling call:screen-capture-detected', { error });
+      }
+    });
+
+    // ─── call:analytics ──────────────────────────────────────────────────────
+    // Fire-and-forget lifecycle telemetry emitted once at call end by iOS.
+    // Validated and logged; no response sent back to the client.
+    socket.on(CALL_EVENTS.ANALYTICS, async (data: {
+      callId: string;
+      setupTimeMs: number;
+      durationSeconds: number;
+      reconnectionCount: number;
+      networkTransitions: number;
+      averageRtt: number;
+      averagePacketLoss: number;
+      maxPacketLoss: number;
+      codec: string;
+      effectsUsed: string[];
+      filtersUsed: boolean;
+      transcriptionUsed: boolean;
+      qualityDistribution: { excellent: number; good: number; fair: number; poor: number };
+      platform: string;
+      deviceModel: string;
+      isVideo: boolean;
+      endReason: string;
+    }) => {
+      try {
+        const userId = getUserId(socket.id);
+        if (!userId) return;
+        rememberAuth(userId);
+
+        const validation = validateSocketEvent(socketCallAnalyticsSchema, data);
+        if (!validation.success) return;
+
+        logger.info('📞 Socket: call:analytics received', {
+          callId: data.callId,
+          platform: data.platform,
+          durationSeconds: data.durationSeconds,
+          setupTimeMs: data.setupTimeMs,
+          reconnectionCount: data.reconnectionCount,
+          networkTransitions: data.networkTransitions,
+          averageRtt: data.averageRtt,
+          averagePacketLoss: data.averagePacketLoss,
+          maxPacketLoss: data.maxPacketLoss,
+          codec: data.codec,
+          isVideo: data.isVideo,
+          endReason: data.endReason,
+          qualityDistribution: data.qualityDistribution,
+          userId,
+        });
+      } catch (error) {
+        logger.error('Error handling call:analytics', { error });
       }
     });
 
