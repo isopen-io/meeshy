@@ -76,7 +76,9 @@ struct CallEffectsOverlay: View {
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 12)
-        .background(.ultraThinMaterial)
+        // Capsule flottante en Liquid Glass natif (iOS 26+) — 1:1 avec
+        // `FloatingCallPillView`/`MiniAudioPlayerBar` (52i). Neutre : chrome OS.
+        .adaptiveGlass(in: Capsule())
         .clipShape(Capsule())
     }
 

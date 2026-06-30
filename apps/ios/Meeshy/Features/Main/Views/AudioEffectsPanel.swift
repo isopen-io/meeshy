@@ -21,7 +21,10 @@ struct AudioEffectsPanel: View {
             }
         }
         .padding(16)
-        .background(.ultraThinMaterial)
+        // Liquid Glass natif (iOS 26+) sur la surface flottante neutre — chrome
+        // d'effets content-agnostic, sans teinte marque (registre QuickType bar).
+        // Fallback `.ultraThinMaterial` + hairline pré-26 via l'atome SDK.
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg))
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
         .padding(.horizontal, 16)
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: selectedEffect)
