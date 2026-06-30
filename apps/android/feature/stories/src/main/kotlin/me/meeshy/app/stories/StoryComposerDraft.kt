@@ -1,6 +1,7 @@
 package me.meeshy.app.stories
 
 import me.meeshy.sdk.model.StoryEffects
+import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.net.api.CreateStoryRequest
 
 /**
@@ -28,6 +29,8 @@ data class StoryComposerDraft(
     val visibility: StoryVisibility = StoryVisibility.PUBLIC,
     val mediaIds: List<String> = emptyList(),
     val textElements: List<StoryTextElement> = emptyList(),
+    val filter: StoryFilter? = null,
+    val filterIntensity: Float = StoryFilterMatrix.DEFAULT_INTENSITY,
 ) {
     /** The content actually sent — surrounding whitespace is never published. */
     val trimmedText: String get() = text.trim()
@@ -72,12 +75,15 @@ data class StoryComposerDraft(
 
     fun withTextElements(value: List<StoryTextElement>): StoryComposerDraft = copy(textElements = value)
 
+    fun withFilter(value: StoryFilter?): StoryComposerDraft = copy(filter = value)
+
     /**
      * Maps the draft to the create-story wire request. [originalLanguage] is the
      * publisher's resolved content language (Prisme) so the gateway can seed
      * translations. [content] is omitted (null) for a media-only story; attached
      * [mediaIds] ride along when present; publishable on-canvas text elements are
-     * serialised into `storyEffects.textObjects` (blank elements are dropped), and
+     * serialised into `storyEffects.textObjects` (blank elements are dropped), the
+     * selected photo [filter] (+ its strength) rides on `storyEffects.filter`, and
      * `storyEffects` stays null when there is nothing to carry.
      */
     fun toCreateStoryRequest(originalLanguage: String): CreateStoryRequest = CreateStoryRequest(
@@ -89,11 +95,15 @@ data class StoryComposerDraft(
         mediaIds = mediaIds.takeIf { it.isNotEmpty() },
     )
 
-    private fun storyEffects(originalLanguage: String): StoryEffects? =
-        publishableTextElements
-            .map { it.toTextObject(originalLanguage) }
-            .takeIf { it.isNotEmpty() }
-            ?.let { StoryEffects(textObjects = it) }
+    private fun storyEffects(originalLanguage: String): StoryEffects? {
+        val textObjects = publishableTextElements.map { it.toTextObject(originalLanguage) }
+        if (textObjects.isEmpty() && filter == null) return null
+        return StoryEffects(
+            textObjects = textObjects,
+            filter = filter?.wireValue(),
+            filterIntensity = filter?.let { StoryFilterMatrix.clampIntensity(filterIntensity).toDouble() },
+        )
+    }
 
     companion object {
         const val MAX_CHARS: Int = 5000

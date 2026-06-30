@@ -571,7 +571,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Freehand drawing layer (pen/marker/eraser, colour, width, undo/redo/clear)
 - [ ] Emoji sticker picker (categorised + searchable)
 - [ ] Backgrounds: random pastel, colour/gradient palette, image, looping/non-looping video
-- [ ] 8 photo filters (vintage/bw/warm/cool/dramatic/vivid/fade/chrome) with intensity
+- [x] 8 photo filters (vintage/bw/warm/cool/dramatic/vivid/fade/chrome) with intensity
+      (`story-photo-filters`): the look of each preset lives in **one** pure, Compose-agnostic place —
+      `StoryFilterMatrix.baseMatrix(StoryFilter)` → a `StoryColorMatrix` (4×5 `List<Float>`, value
+      equality so it unit-tests on the JVM); `effectiveMatrix(filter, intensity)` blends the base toward
+      the neutral `IDENTITY` by a clamped/guarded strength (0 → no effect, 1 → full, non-finite → full),
+      and `StoryFilter.wireValue()` is the single enum→token mapping kept beside the matrices. Per-slide
+      state: `StorySlide.filter`/`filterIntensity` + the deck reducers `setSelectedFilter`/
+      `setSelectedFilterIntensity` (clamp in one place); the VM exposes `onSelectFilter`/
+      `onFilterIntensityChange` and the derived `selectedSlideFilterMatrix`. The Effets drawer gains a
+      None + 8-chip filter row and a strength `Slider` (shown only while a filter is active); the canvas
+      `AsyncImage` renders `ColorFilter.colorMatrix(...)` live; publish carries the look on
+      `storyEffects.filter`/`filterIntensity` (a filter-only slide still emits a `storyEffects` payload).
+      +31 tests (21 matrix, 10 deck) + 7 VM + 5 draft; +11 strings × 4 locales. Mirrors iOS's per-slide
+      photo filter with an adjustable strength.
 - [~] Frosted-glass text backdrops; safe-zone overlay; snap-to-guide + out-of-bounds warning
       **Snap-to-guide + out-of-bounds warning done** (`story-canvas-snap-guides`): a pure
       `StorySnapResolver.resolve(x, y, …)` → `SnapResult(x, y, verticalGuide, horizontalGuide,

@@ -59,6 +59,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -76,6 +77,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -108,6 +111,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.UploadedMedia
 
 /**
@@ -197,6 +201,7 @@ fun StoryComposerScreen(
                 transform = state.selectedSlideTransform,
                 backgroundModel = state.selectedSlideAttachments.firstOrNull()?.let { it.thumbnailUrl ?: it.url }
                     ?: state.selectedSlidePending.firstOrNull()?.item?.bytes,
+                colorMatrix = state.selectedSlideFilterMatrix,
                 textElements = state.selectedSlideTextElements,
                 selectedElement = state.selectedTextElement,
                 onTransform = viewModel::onCanvasTransform,
@@ -266,6 +271,8 @@ fun StoryComposerScreen(
             ComposerControlsLayer(
                 band = state.band,
                 visibility = state.draft.visibility,
+                selectedFilter = state.selectedSlideFilter,
+                filterIntensity = state.selectedSlideFilterIntensity,
                 canAddText = state.deck.selectedCanAddTextElement,
                 isUploadingMedia = state.isUploadingMedia,
                 isMediaFull = state.draft.isMediaFull,
@@ -283,6 +290,8 @@ fun StoryComposerScreen(
                     }
                 },
                 onSelectVisibility = viewModel::onVisibilityChange,
+                onSelectFilter = viewModel::onSelectFilter,
+                onFilterIntensityChange = viewModel::onFilterIntensityChange,
             )
         }
     }
@@ -302,6 +311,8 @@ fun StoryComposerScreen(
 private fun ComposerControlsLayer(
     band: ComposerBandState,
     visibility: StoryVisibility,
+    selectedFilter: StoryFilter?,
+    filterIntensity: Float,
     canAddText: Boolean,
     isUploadingMedia: Boolean,
     isMediaFull: Boolean,
@@ -313,6 +324,8 @@ private fun ComposerControlsLayer(
     onAddText: () -> Unit,
     onPickMedia: () -> Unit,
     onSelectVisibility: (StoryVisibility) -> Unit,
+    onSelectFilter: (StoryFilter?) -> Unit,
+    onFilterIntensityChange: (Float) -> Unit,
 ) {
     val swipeThresholdPx = with(LocalDensity.current) { 48.dp.toPx() }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -347,11 +360,21 @@ private fun ComposerControlsLayer(
                         onAddText = onAddText,
                         onPickMedia = onPickMedia,
                     )
-                    BandCategory.EFFETS -> VisibilityRow(
-                        selected = visibility,
-                        onSelect = onSelectVisibility,
+                    BandCategory.EFFETS -> Column(
                         modifier = Modifier.padding(12.dp),
-                    )
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        FilterRow(
+                            selected = selectedFilter,
+                            intensity = filterIntensity,
+                            onSelect = onSelectFilter,
+                            onIntensityChange = onFilterIntensityChange,
+                        )
+                        VisibilityRow(
+                            selected = visibility,
+                            onSelect = onSelectVisibility,
+                        )
+                    }
                     null -> Unit
                 }
             }
@@ -475,6 +498,7 @@ private fun BandTile(
 private fun StoryCanvasSurface(
     transform: StoryCanvasTransform,
     backgroundModel: Any?,
+    colorMatrix: StoryColorMatrix,
     textElements: List<StoryTextElement>,
     selectedElement: StoryTextElement?,
     onTransform: (Float, Float, Float, Float, Float) -> Unit,
@@ -534,6 +558,7 @@ private fun StoryCanvasSurface(
                     model = backgroundModel,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
+                    colorFilter = ColorFilter.colorMatrix(ColorMatrix(colorMatrix.values.toFloatArray())),
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer {
@@ -1068,6 +1093,69 @@ private fun StoryVisibility.labelRes(): Int = when (this) {
     StoryVisibility.FRIENDS -> R.string.stories_visibility_friends
     StoryVisibility.COMMUNITY -> R.string.stories_visibility_community
     StoryVisibility.PRIVATE -> R.string.stories_visibility_private
+}
+
+/**
+ * The Effets drawer's photo-filter picker: a "None" chip plus one chip per
+ * [StoryFilter] preset (selecting toggles the slide's filter), and — only while a
+ * filter is active — a strength slider. All per-slide; the deck holds the state and
+ * the colour math lives in [StoryFilterMatrix], so this stays glue.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FilterRow(
+    selected: StoryFilter?,
+    intensity: Float,
+    onSelect: (StoryFilter?) -> Unit,
+    onIntensityChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            item {
+                FilterChip(
+                    selected = selected == null,
+                    onClick = { onSelect(null) },
+                    label = { Text(stringResource(R.string.stories_composer_filter_none)) },
+                )
+            }
+            items(StoryFilter.entries) { filter ->
+                FilterChip(
+                    selected = filter == selected,
+                    onClick = { onSelect(filter) },
+                    label = { Text(stringResource(filter.labelRes())) },
+                )
+            }
+        }
+        if (selected != null) {
+            val intensityLabel = stringResource(R.string.stories_composer_filter_intensity)
+            Slider(
+                value = intensity,
+                onValueChange = onIntensityChange,
+                valueRange = 0f..1f,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics { contentDescription = intensityLabel },
+            )
+        }
+    }
+}
+
+private fun StoryFilter.labelRes(): Int = when (this) {
+    StoryFilter.VINTAGE -> R.string.stories_composer_filter_vintage
+    StoryFilter.BW -> R.string.stories_composer_filter_bw
+    StoryFilter.WARM -> R.string.stories_composer_filter_warm
+    StoryFilter.COOL -> R.string.stories_composer_filter_cool
+    StoryFilter.DRAMATIC -> R.string.stories_composer_filter_dramatic
+    StoryFilter.VIVID -> R.string.stories_composer_filter_vivid
+    StoryFilter.FADE -> R.string.stories_composer_filter_fade
+    StoryFilter.CHROME -> R.string.stories_composer_filter_chrome
 }
 
 /**
