@@ -216,46 +216,41 @@ export function InviteUserModal({
                     const isSelected = selectedUsers.some(u => u.id === user.id);
                     const displayName = user.displayName || `${user.firstName} ${user.lastName}`.trim() || user.username;
                     return (
-                    <div
+                    <button
                       key={user.id}
+                      type="button"
                       role="button"
                       tabIndex={isSelected ? -1 : 0}
-                      aria-disabled={isSelected}
-                      aria-label={`${t('inviteModal.add')} ${displayName}`}
-                      className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-                      onClick={() => !isSelected && addUserToSelection(user)}
+                      disabled={isSelected}
+                      aria-label={isSelected
+                        ? t('inviteModal.selectedUserAria', { name: displayName })
+                        : t('inviteModal.addUserAria', { name: displayName })}
+                      onClick={() => addUserToSelection(user)}
                       onKeyDown={(e) => {
                         if (!isSelected && (e.key === 'Enter' || e.key === ' ')) {
                           e.preventDefault();
                           addUserToSelection(user);
                         }
                       }}
+                      className="flex w-full items-center justify-between gap-3 p-3 rounded-lg border text-left enabled:cursor-pointer enabled:hover:bg-accent/50 disabled:opacity-100 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                     >
-                      <div className="flex items-center gap-3">
+                      <span className="flex items-center gap-3">
                         <Avatar className="h-8 w-8">
                           <AvatarImage src={user.avatar} />
                           <AvatarFallback>
                             {getUserInitials(user)}
                           </AvatarFallback>
                         </Avatar>
-                        <div>
-                          <p className="font-medium">
-                            {displayName}
-                          </p>
-                          <p className="text-sm text-muted-foreground">@{user.username}</p>
-                        </div>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        tabIndex={-1}
-                        aria-hidden="true"
-                        disabled={isSelected}
-                      >
+                        <span className="block">
+                          <span className="block font-medium">{displayName}</span>
+                          <span className="block text-sm text-muted-foreground">@{user.username}</span>
+                        </span>
+                      </span>
+                      <span className="inline-flex items-center text-sm font-medium shrink-0">
                         <UserPlus className="h-4 w-4 mr-1" />
                         {isSelected ? t('inviteModal.selected') : t('inviteModal.add')}
-                      </Button>
-                    </div>
+                      </span>
+                    </button>
                     );
                   })}
                 </div>
