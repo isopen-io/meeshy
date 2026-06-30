@@ -113,6 +113,18 @@ public struct StoryMediaReference: Codable, Sendable {
     /// unrecoverable failure (or the video never uploads). Pure, side-effect
     /// free atom; audio refs are tagged explicitly by callers and never routed
     /// through here.
+    ///
+    /// CLOSED-SET ASSUMPTION (F4): the extension is lowercased before lookup so
+    /// `.MP4`/`.MOV` resolve correctly. The set `{mp4, mov, m4v}` is the single
+    /// point deciding offline-replay recoverability; it is sound because every
+    /// caller feeds a clean local DISK path — `TimelineViewModel+OfflinePublish`
+    /// and `StoryQueueMigrator` pass `URL.path`, which already strips any query
+    /// string / fragment — so a URL-shaped path (e.g. `clip.mp4?token=…`) cannot
+    /// reach here. Anything outside the set (unknown / empty / dotfile-without-
+    /// extension) defaults to "image": images dominate and a mis-tagged image is
+    /// harmless, whereas a mis-tagged video fails loudly via the disk-existence /
+    /// decode path rather than corrupting silently. Update the set in lockstep if
+    /// the composer ever exports a new video container.
     public static func inferVisualMediaType(forPath path: String) -> String {
         let ext = (path as NSString).pathExtension.lowercased()
         return videoFileExtensions.contains(ext) ? "video" : "image"

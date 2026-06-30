@@ -61,4 +61,59 @@ final class TimelineOfflinePayloadSchemaTests: XCTestCase {
         XCTAssertEqual(mediaObjects.map(\.id), ["clip-1"],
                        "The timeline's mediaObjects must survive into the [StorySlide] payload")
     }
+
+    // MARK: - F5 — ALL timeline collections survive the [StorySlide] round-trip
+
+    /// Builds a project carrying every timeline collection (media + audio + text +
+    /// clipTransitions) and asserts each survives the SAME encode/decode the offline
+    /// queue/executor uses. Pre-F5 only `mediaObjects` ids were pinned, so a
+    /// regression dropping `clipTransitions` / `textObjects` / `audioPlayerObjects`
+    /// on flush would have kept CI green. (Documents the SCOPE LIMITATION too: only
+    /// the timeline-modelled fields are covered — non-timeline slide effects like
+    /// `effects.background` / `filter` / `drawingStrokes` are NOT carried because the
+    /// source slide is unreachable from `TimelineViewModel`; see
+    /// `buildOfflineQueueItem`.)
+    func test_buildOfflineQueueItem_decodedSlideCarriesAllTimelineCollections() async throws {
+        var media = StoryMediaObject(id: "clip-1", postMediaId: "clip-1", kind: .video, aspectRatio: 1.0)
+        media.startTime = 0
+        media.duration = 4
+        var mediaB = StoryMediaObject(id: "clip-2", postMediaId: "clip-2", kind: .video, aspectRatio: 1.0)
+        mediaB.startTime = 4
+        mediaB.duration = 4
+        let audio = StoryAudioPlayerObject(id: "audio-1", postMediaId: "audio-1",
+                                           startTime: 1, duration: 3)
+        let text = StoryTextObject(id: "text-1", text: "Bonjour")
+        let transition = StoryClipTransition(id: "tx-1", fromClipId: "clip-1",
+                                             toClipId: "clip-2", kind: .crossfade,
+                                             duration: 0.5)
+        let project = TimelineProject(
+            slideId: "slide-1",
+            slideDuration: 10,
+            mediaObjects: [media, mediaB],
+            audioPlayerObjects: [audio],
+            textObjects: [text],
+            clipTransitions: [transition]
+        )
+
+        let vm = makeSUT(project: project)
+        await vm.awaitConfigured()
+
+        let item = vm.buildOfflineQueueItem(visibility: .public, originalLanguage: "fr")
+        let payload = try XCTUnwrap(item.slidePayloadJSON.data(using: .utf8))
+        let slide = try XCTUnwrap(
+            makeExecutorDecoder().decode([StorySlide].self, from: payload).first
+        )
+
+        XCTAssertEqual(try XCTUnwrap(slide.effects.mediaObjects).map(\.id),
+                       ["clip-1", "clip-2"], "mediaObjects must survive the payload")
+        XCTAssertEqual(try XCTUnwrap(slide.effects.audioPlayerObjects).map(\.id),
+                       ["audio-1"], "audioPlayerObjects must survive the payload")
+        XCTAssertEqual(slide.effects.textObjects.map(\.id),
+                       ["text-1"], "textObjects must survive the payload")
+        let transitions = try XCTUnwrap(slide.effects.clipTransitions)
+        XCTAssertEqual(transitions.map(\.id), ["tx-1"],
+                       "clipTransitions must survive the payload")
+        XCTAssertEqual(transitions.first?.kind, .crossfade,
+                       "clipTransition fields (kind) must survive the payload")
+    }
 }

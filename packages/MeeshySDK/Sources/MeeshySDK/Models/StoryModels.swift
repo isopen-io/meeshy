@@ -2006,13 +2006,18 @@ extension StoryItem {
                 if medias[i].duration == nil, let dur = feed?.duration, dur > 0 {
                     medias[i].duration = Double(dur)
                 }
-                // Hydrate `aspectRatio` legacy (≈1.0, sentinelle des drafts/payloads
-                // antérieurs au champ) depuis `FeedMedia.width/height`. Sans ça un
-                // média non-carré venu d'un payload sans aspectRatio s'affichait
-                // squishé (carré) dans le reader alors que le canvas/snapshot le
-                // dimensionnent via `aspectRatio`. Les stories forward-écrites (ratio
-                // réel ≠ 1.0) ne sont jamais touchées — parité avec l'hydratation
-                // de `duration` ci-dessus (fix proportions 2026-06-30).
+                // Hydrate `aspectRatio` (≈1.0, sentinelle) depuis `FeedMedia
+                // .width/height`. Ce n'est PAS un simple repli legacy : le
+                // composer stampe TOUJOURS `aspectRatio: 1.0` à l'add-media
+                // (`StoryComposerViewModel` ~l.1101, TODO Phase 2/3 « compute
+                // real aspectRatio from asset »), donc cette hydratation
+                // read-time est la source de dimensionnement PRIMAIRE pour
+                // quasi toutes les stories actuelles — sans elle un média
+                // non-carré s'affiche squishé (carré) dans le reader alors que
+                // le canvas/snapshot le dimensionnent via `aspectRatio`. Les
+                // (rares) stories portant déjà un ratio réel ≠ 1.0 ne sont
+                // jamais touchées — parité avec l'hydratation de `duration`
+                // ci-dessus (fix proportions 2026-06-30).
                 if abs(medias[i].aspectRatio - 1.0) < 0.05,
                    let w = feed?.width, let h = feed?.height, w > 0, h > 0 {
                     medias[i].aspectRatio = Double(w) / Double(h)
@@ -2030,16 +2035,20 @@ extension StoryItem {
             effects.audioPlayerObjects = audios
         }
 
-        // Keep the static background URL (StoryItem.media[0]) whenever the slide
-        // has NO `isBackground` StoryMediaObject — a slide can carry a static bg
-        // photo published as media[0] alongside foreground mediaObjects, and the
-        // old `mediaObjects.isEmpty == false` guard nulled the bg the moment ANY
-        // foreground object existed. Only modern stories whose background IS a
-        // mediaObject (`resolvedBackgroundMedia != nil`) keep `mediaURL = nil` so
-        // `StoryRenderer.renderBackground` doesn't feed a post id to the resolver.
-        let legacyMediaURL: String? = effects.resolvedBackgroundMedia == nil
-            ? self.media.first?.url
-            : nil
+        // `slide.mediaURL` ne survit QUE pour les stories purement legacy (aucun
+        // `effects.mediaObjects`). Dès qu'un `StoryMediaObject` existe on laisse
+        // `mediaURL = nil` (cf. docstring ci-dessus) : `StoryRenderer
+        // .renderBackground` route le BG via `mediaObjects`, et un `mediaURL`
+        // non-nil ferait deux dégâts — (1) il passe `slide.id` (= post id) au
+        // resolver keyé sur `FeedMedia.id`, donc le BG ne résout jamais ;
+        // (2) il pré-empte le repli `effects.background` / `.solidColor(.black)`,
+        // rendant NOIRES les stories modernes foreground-only (sans objet
+        // isBackground). KNOWN DEFERRED : le cas « photo bg statique (media[0])
+        // + foreground mediaObject » perd donc son fond. Le fix propre = router
+        // l'URL via `directURLIfAny` dans `renderBackground` (chemin BG legacy
+        // commun) PUIS vérifier sur device — non tenté ici car il touche le
+        // chemin partagé et exige une validation reader réelle.
+        let legacyMediaURL: String? = effects.mediaObjects?.isEmpty == false ? nil : self.media.first?.url
         return StorySlide(
             id: self.id,
             mediaURL: legacyMediaURL,

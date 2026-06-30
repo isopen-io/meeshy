@@ -73,13 +73,19 @@ struct StoryItemRenderableSlideTests {
         #expect(abs(ratio - 1.7) < 0.001)
     }
 
-    // MARK: - WS5.4 — static background URL preserved when no isBackground media object
+    // MARK: - legacy mediaURL routing (F1 revert: any mediaObject nulls mediaURL)
 
-    @Test func toRenderableSlide_keepsStaticBackgroundURL_whenNoIsBackgroundMediaObject() {
-        // Static bg photo published as StoryItem.media[0] (NOT an isBackground
-        // StoryMediaObject) alongside ONE foreground mediaObject. The slide must
-        // keep media[0].url as its legacy mediaURL — the foreground object must
-        // not null the background.
+    @Test func toRenderableSlide_staticBgWithForeground_currentlyDropsBg_deferred() {
+        // KNOWN DEFERRED limitation (adversarial-review F1): a static bg photo
+        // published as StoryItem.media[0] (NOT an isBackground StoryMediaObject)
+        // alongside a foreground mediaObject currently LOSES its background —
+        // `mediaURL` is nulled the moment ANY mediaObject exists. The WS5.4
+        // attempt to preserve it was reverted because the only consumer,
+        // `StoryRenderer.renderBackground`, discards the URL and feeds `slide.id`
+        // (a post id) to a resolver keyed on `FeedMedia.id`, so the bg never
+        // resolved AND a non-nil mediaURL pre-empted the solid-color fallback —
+        // turning modern foreground-only stories BLACK. The proper fix routes the
+        // URL via `directURLIfAny` in renderBackground + on-device verification.
         let foreground = StoryMediaObject(id: "fg", postMediaId: "fg-media",
                                           kind: .image, aspectRatio: 1.5,
                                           isBackground: false)
@@ -93,7 +99,25 @@ struct StoryItemRenderableSlideTests {
                              expiresAt: nil, isViewed: false)
 
         let slide = item.toRenderableSlide(preferredLanguages: [])
-        #expect(slide.mediaURL == "https://cdn.example.com/bg.jpg")
+        #expect(slide.mediaURL == nil)
+    }
+
+    @Test func toRenderableSlide_keepsLegacyMediaURL_whenNoMediaObjects() {
+        // Pure legacy story (no `effects.mediaObjects` at all): the static bg
+        // asset lives directly in StoryItem.media[0] and MUST survive as the
+        // slide's legacy mediaURL. This is the original behavior the F1 revert
+        // preserves.
+        var effects = StoryEffects()
+        effects.textObjects = [StoryTextObject(id: "t1", text: "hi")]
+        let bg = FeedMedia(id: "bg-media", type: .image,
+                           url: "https://cdn.example.com/legacy-bg.jpg",
+                           thumbnailColor: "000000")
+        let item = StoryItem(id: "story-1", content: nil, media: [bg],
+                             storyEffects: effects, createdAt: Date(),
+                             expiresAt: nil, isViewed: false)
+
+        let slide = item.toRenderableSlide(preferredLanguages: [])
+        #expect(slide.mediaURL == "https://cdn.example.com/legacy-bg.jpg")
     }
 
     @Test func toRenderableSlide_nullsLegacyMediaURL_whenBackgroundIsMediaObject() {
