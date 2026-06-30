@@ -1,32 +1,32 @@
-# Plan de correction — Itération 67w (Web)
+# Plan de correction — Itération 67w (web)
 
-> Base de départ : `main` HEAD (resync avant démarrage). Branche : `claude/practical-fermat-wjf1f7`.
-> Scope : `apps/web` exclusivement. Thème : a11y clavier + correction ARIA (liste conversations + tuile audio).
+**Date** : 2026-06-30
+**Branche** : `claude/practical-fermat-vfe7ah` (depuis `main` HEAD post-#872)
+**Cible** : `app/auth/verify-phone/page.tsx` + `locales/en/auth.json`
 
-## Objectifs (cluster cohérent)
-1. **Bug ARIA dupliqué** `AudioEffectTile` → conserver le label accessible descriptif.
-2. **Clavier en-tête de section** `ConversationGroup` → activable/focusable au clavier + `aria-expanded`.
-3. **Focus-visible** `ConversationItem` → anneau de focus pour la navigation clavier (WCAG 2.4.7).
-4. **Clé de liste stable** `HeaderTagsBar` → `key={tag}`.
+## Problème
+- `auth.verifyPhone` (25 clés) présent en `fr/es/pt` mais **absent de `en/auth.json`** (locale
+  fallback) → utilisateurs interface EN voient **toutes les clés i18n brutes** sur la page de
+  vérification téléphone (deep-link onboarding). Rupture Prisme.
+- 27 occurrences de l'anti-pattern `t('verifyPhone.X') || 'FR'` (dead-code + flash-of-raw-keys,
+  secours FR figé).
 
 ## Étapes
-- [x] Audit clavier/ARIA (sous-agent Explore) → cluster liste de conversations + AudioEffectTile.
-- [x] Vérifier chaque constat sur le code réel (file:line confirmés).
-- [x] Confirmer CI verte sur `main` (les rouges de l'ère #872 sont soldés en aval).
-- [x] **RED** : test `ConversationGroup.test.tsx` (clavier) + mise à jour `AudioEffectTile.test.tsx`.
-- [x] **GREEN** : 4 corrections composants.
-- [x] `jest` 2 suites ciblées → **42/42 passed**.
-- [x] Vérifier absence de régression TS imputable au diff (les 6 erreurs `ConversationItem` sont pré-existantes — `shared/dist` non build local).
-- [x] Docs analyse + plan + tracking.
-- [ ] Commit + push + PR + CI `Quality (bun)` + merge `main`.
-- [ ] Supprimer la branche après merge ; mettre à jour le pointeur autoritaire.
+1. [x] Vérifier l'absence de PR web en vol (`list_pull_requests`) → surface orthogonale.
+2. [x] Confirmer la parité : `en` manque tout le namespace `verifyPhone` (fr/es/pt = 25 clés).
+3. [x] Ajouter `auth.verifyPhone.*` (25 clés) à `en/auth.json` — insertion comme dernier sibling
+   sous `auth`, indentation 2-espaces préservée, JSON valide.
+4. [x] Convertir les 27 `t('verifyPhone.X') || 'FR'` → `t('verifyPhone.X', 'EN')` (secours natif
+   anti-flash, valeur EN exacte). Préfixes `data.error || …` préservés.
+5. [x] Vérifs : parité `en`==`fr`==`es`==`pt` (diff=0), JSON valides, grep anti-pattern=0,
+   parenthèses/accolades équilibrées.
+6. [ ] Commit + push `claude/practical-fermat-vfe7ah`.
+7. [ ] PR → CI vert (gate : `Test web` + `Quality (bun)`) → merge dans `main`.
+8. [ ] Post-merge : mettre à jour `branch-tracking.md` (base 68w = `main` HEAD), supprimer la
+   branche.
 
-## Gating CI (rappel tracking)
-- **Gater** sur la suite jest spécifique aux fichiers modifiés + `Quality (bun)`.
-- `Test web` / `Test shared` : historiquement non fiables (rouges pré-existants hors-web) ; vérifier qu'ils ne sont pas régressés *par ce diff* (ils ne le sont pas — scope a11y/conversations/audio).
-
-## Différé (candidats a11y clavier hors-cluster, itérations futures)
-- `components/video-calls/DraggableParticipantOverlay.tsx` (~l.132) : `<div onClick>` plein écran sans clavier.
-- `components/video-calls/AudioEffectsPanel.tsx` (~l.60) : div cliquable sans rôle/clavier.
-- Autres `role="button"` custom sans anneau `focus-visible`.
-- `preferences.reducedMotion` applicatif (toggle quasi no-op) — distinct du `prefers-reduced-motion` global déjà câblé.
+## Risques / Mitigations
+- **Régression de test** : aucun test ne référence `verify-phone` → risque nul ; les mocks `t`
+  renvoient la clé, le 2ᵉ arg string est inerte.
+- **Build** : `node_modules` absent localement → typecheck/build délégués au CI.
+- **Collision** : aucune PR web ouverte au moment du démarrage → orthogonal.
