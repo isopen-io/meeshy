@@ -208,36 +208,44 @@ export function InviteUserModal({
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {searchResults.map(user => (
-                    <div
-                      key={user.id}
-                      className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 cursor-pointer"
-                      onClick={() => addUserToSelection(user)}
-                    >
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8">
-                          <AvatarImage src={user.avatar} />
-                          <AvatarFallback>
-                            {getUserInitials(user)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-medium">
-                            {user.displayName || `${user.firstName} ${user.lastName}`.trim() || user.username}
-                          </p>
-                          <p className="text-sm text-muted-foreground">@{user.username}</p>
-                        </div>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={selectedUsers.some(u => u.id === user.id)}
+                  {searchResults.map(user => {
+                    const isSelected = selectedUsers.some(u => u.id === user.id);
+                    const displayName =
+                      user.displayName || `${user.firstName} ${user.lastName}`.trim() || user.username;
+                    const actionLabel = isSelected ? t('inviteModal.selected') : t('inviteModal.add');
+                    return (
+                      <button
+                        key={user.id}
+                        type="button"
+                        onClick={() => addUserToSelection(user)}
+                        disabled={isSelected}
+                        aria-label={`${actionLabel} ${displayName}`}
+                        className="w-full flex items-center justify-between gap-3 p-3 rounded-lg border text-left transition-colors hover:bg-accent/50 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-default disabled:opacity-70"
                       >
-                        <UserPlus className="h-4 w-4 mr-1" />
-                        {selectedUsers.some(u => u.id === user.id) ? t('inviteModal.selected') : t('inviteModal.add')}
-                      </Button>
-                    </div>
-                  ))}
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Avatar className="h-8 w-8">
+                            <AvatarImage src={user.avatar} />
+                            <AvatarFallback>
+                              {getUserInitials(user)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="min-w-0">
+                            <p className="font-medium truncate">{displayName}</p>
+                            <p className="text-sm text-muted-foreground truncate">@{user.username}</p>
+                          </div>
+                        </div>
+                        <span
+                          aria-hidden="true"
+                          className={`inline-flex shrink-0 items-center rounded-md border px-2.5 py-1 text-sm ${
+                            isSelected ? 'text-muted-foreground' : 'text-foreground'
+                          }`}
+                        >
+                          <UserPlus className="h-4 w-4 mr-1" />
+                          {actionLabel}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </ScrollArea>

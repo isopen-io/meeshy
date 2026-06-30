@@ -640,6 +640,37 @@ describe('InviteUserModal', () => {
     });
   });
 
+  describe('Search Result Accessibility (keyboard)', () => {
+    it('exposes each search result row as a focusable native button with an accessible name', async () => {
+      render(<InviteUserModal {...defaultProps} />);
+
+      const searchInput = screen.getByPlaceholderText('Rechercher des utilisateurs...');
+      fireEvent.change(searchInput, { target: { value: 'john' } });
+
+      await new Promise(resolve => setTimeout(resolve, 350));
+
+      const row = await screen.findByRole('button', { name: 'Ajouter John Doe' });
+      // Native <button> => keyboard-operable (Enter/Space) for free, focusable, not a souris-only <div>
+      expect(row.tagName).toBe('BUTTON');
+      expect(row).not.toBeDisabled();
+    });
+
+    it('marks the row button disabled with a "Selected" accessible name once chosen', async () => {
+      render(<InviteUserModal {...defaultProps} />);
+
+      const searchInput = screen.getByPlaceholderText('Rechercher des utilisateurs...');
+      fireEvent.change(searchInput, { target: { value: 'john' } });
+
+      await new Promise(resolve => setTimeout(resolve, 350));
+
+      const row = await screen.findByRole('button', { name: 'Ajouter John Doe' });
+      fireEvent.click(row);
+
+      const selectedRow = screen.getByRole('button', { name: 'Sélectionné John Doe' });
+      expect(selectedRow).toBeDisabled();
+    });
+  });
+
   describe('Cancel Button', () => {
     it('should call onClose when cancel button is clicked', () => {
       const onClose = jest.fn();
