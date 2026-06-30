@@ -306,6 +306,7 @@ struct LoginView: View {
                         )
                 }
                 .bounceOnTap(scale: 0.90)
+                .accessibilityLabel(String(localized: "a11y.back", bundle: .main))
 
                 accountAvatar(account, size: 40)
 

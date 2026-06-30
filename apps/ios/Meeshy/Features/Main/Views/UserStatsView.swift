@@ -38,6 +38,7 @@ struct UserStatsView: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
             }
+            .accessibilityLabel(String(localized: "a11y.back", bundle: .main))
 
             Spacer()
 

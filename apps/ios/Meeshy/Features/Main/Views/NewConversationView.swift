@@ -117,6 +117,7 @@ struct NewConversationView: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(MeeshyColors.indigo400)
             }
+            .accessibilityLabel(String(localized: "a11y.back", bundle: .main))
 
             Spacer()
 
