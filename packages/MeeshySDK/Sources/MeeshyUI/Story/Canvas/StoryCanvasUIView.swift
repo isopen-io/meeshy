@@ -2645,9 +2645,43 @@ public final class StoryCanvasUIView: UIView {
         editDisplayLink = nil
     }
 
+    private var lastEditBackdropTimestamp: CFTimeInterval = 0
+
     @objc private func editTick(_ link: CADisplayLink) {
-        // Gesture handlers (Tasks 2.7-2.8) drive their own rebuilds; this tick
-        // exists to keep the 120 Hz clock alive on ProMotion while editing.
+        // Gesture handlers drive their own rebuilds; the tick keeps the 120 Hz
+        // clock alive on ProMotion while editing AND (WS2.1) re-feeds the glass
+        // text backdrop so it tracks a playing video background between rebuilds.
+        refreshEditGlassBackdropIfNeeded(now: link.timestamp)
+    }
+
+    /// WS2.1 — keep glass-style text backdrops in sync with a PLAYING video
+    /// background while editing. `rebuildLayers()` only re-captures the backdrop
+    /// on a model mutation, so without this the glass blur froze on the video
+    /// frame present at the last rebuild. Bounded to the narrow "glass text over
+    /// a video bg, in edit" case: it no-ops for static (image/color) backgrounds
+    /// (the backdrop can't change between rebuilds) and `captureCanvasBackdrop`
+    /// itself short-circuits when the slide carries no glass text. Throttled to
+    /// ~18 fps via `StoryEditBackdropThrottle` since the link runs up to 120 Hz.
+    /// Reuses the exact capture path of `rebuildLayers` (same `geometry`,
+    /// `currentTime`, languages) so the crop geometry can't drift.
+    private func refreshEditGlassBackdropIfNeeded(now: CFTimeInterval) {
+        guard mode == .edit, case .video = backgroundLayer.kind else { return }
+        guard StoryEditBackdropThrottle.shouldEmit(now: now, last: lastEditBackdropTimestamp) else { return }
+        lastEditBackdropTimestamp = now
+        backdropCapture.invalidate()
+        _ = backdropCapture.captureCanvasBackdrop(slide: slide,
+                                                  geometry: geometry,
+                                                  time: currentTime,
+                                                  mode: mode,
+                                                  languages: readerContext.preferredLanguages)
+        // Re-feed the already-attached text layers in place — no rebuildLayers().
+        // `setBackdropTexture` is a no-op on a non-glass text layer (its glass
+        // backdrop sublayer is nil), so the filter is the crop work, which the
+        // capture skips entirely when no glass text exists.
+        itemsContainer.sublayers?.forEach { sub in
+            guard let textLayer = sub as? StoryTextLayer else { return }
+            textLayer.setBackdropTexture(backdropCapture.cropRegion(textLayer.frame))
+        }
     }
 
     // MARK: - Gesture wiring

@@ -20,7 +20,7 @@ WS1 (proportions) → WS5 (structure/Prisme) → WS3 (autoplay, +WS3.7) → WS4 
 - [x] WS1.5 `toRenderableSlide` : hydrater `aspectRatio` legacy depuis `FeedMedia.width/height` (+2 tests)
 
 ## WS2 — Effets immédiats dans le canvas (req 1) [MEDIUM, SDK] ⏳ EN COURS (suivant dans l'ordre)
-- [ ] WS2.1 Glass backdrop per-frame en édition (fond vidéo) : `editTick` (no-op), gaté+throttlé ~15-20fps, re-feed `setBackdropTexture` sans full rebuild
+- [~] WS2.1 Glass backdrop per-frame en édition (fond vidéo) : `editTick` re-feed throttlé ~18fps (`StoryEditBackdropThrottle`), gaté `mode==.edit && case .video`, re-capture `backdropCapture` (mêmes geometry/currentTime que rebuildLayers) + re-feed `StoryTextLayer` glass en place, SANS `rebuildLayers()`. ✅ compile + unit-test (6) + régression canvas (6) vert 18.2. ⚠️ RESTE smoke device : confirmer que le `CARenderer` de `StoryBackdropCapture` capture la frame VIDÉO live (sinon backdrop reste statique = inerte, pas de régression)
 - [ ] WS2.2 `filterAppliesToEntireSlide` inerte : câbler OU retirer (défaut : retirer le code mort)
 - [ ] WS2.3 (opt) bake filtre intensité hors main-thread ; WS2.4 (opt) retirer Metal orphelin `StoryFilteredLayer`
 
