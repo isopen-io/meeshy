@@ -1153,6 +1153,64 @@ class StoryComposerViewModelTest {
     }
 
     @Test
+    fun `onDuplicateTextElement clones the edited element, offsets it, and selects the copy`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        vm.onTextChange("Salut")
+        val original = vm.state.value.selectedTextElement!!
+
+        vm.onDuplicateTextElement(original.id)
+
+        val state = vm.state.value
+        assertThat(state.selectedSlideTextElements).hasSize(2)
+        val copy = state.selectedTextElement!!
+        assertThat(copy.id).isNotEqualTo(original.id)
+        assertThat(copy.text).isEqualTo("Salut")
+        assertThat(copy.x).isGreaterThan(original.x)
+        assertThat(copy.y).isGreaterThan(original.y)
+        assertThat(state.isEditingTextElement).isTrue()
+    }
+
+    @Test
+    fun `onDuplicateTextElement carries the source style onto the copy`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        vm.onTextChange("Hola")
+        val original = vm.state.value.selectedTextElement!!
+        vm.onTextElementStyle(original.id, StoryTextStyle.NEON)
+
+        vm.onDuplicateTextElement(original.id)
+
+        val copy = vm.state.value.selectedTextElement!!
+        assertThat(copy.style).isEqualTo(StoryTextStyle.NEON)
+        assertThat(copy.text).isEqualTo("Hola")
+    }
+
+    @Test
+    fun `onDuplicateTextElement at the per-slide cap surfaces a warning and adds nothing`() = runTest {
+        val vm = viewModel()
+        repeat(StorySlideDeck.MAX_TEXT_ELEMENTS_PER_SLIDE) { vm.onAddTextElement() }
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onDuplicateTextElement(id)
+
+        assertThat(vm.state.value.selectedSlideTextElements).hasSize(StorySlideDeck.MAX_TEXT_ELEMENTS_PER_SLIDE)
+        assertThat(vm.state.value.errorMessage).isNotNull()
+    }
+
+    @Test
+    fun `onDuplicateTextElement on an unknown id is inert and selects nothing new`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        vm.onDeselectTextElement()
+
+        vm.onDuplicateTextElement("ghost")
+
+        assertThat(vm.state.value.selectedSlideTextElements).hasSize(1)
+        assertThat(vm.state.value.selectedTextElementId).isNull()
+    }
+
+    @Test
     fun `switching slides ends element editing and the field follows the new caption`() = runTest {
         val vm = viewModel()
         vm.onAddTextElement()
@@ -1331,5 +1389,71 @@ class StoryComposerViewModelTest {
         assertThat(objects.map { it.text }).containsExactly("Bonjour")
         assertThat(objects.single().sourceLanguage).isEqualTo("fr")
         assertThat(request.captured.content).isNull()
+    }
+
+    // --- Bottom-band toolbar (Contenu / Effets) -----------------------------
+
+    @Test
+    fun `the band starts hidden`() = runTest {
+        val vm = viewModel()
+        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Hidden)
+    }
+
+    @Test
+    fun `tapping a band FAB opens that category`() = runTest {
+        val vm = viewModel()
+
+        vm.onBandFabTap(BandCategory.CONTENU)
+
+        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Tiles(BandCategory.CONTENU))
+    }
+
+    @Test
+    fun `tapping the open category FAB again closes the band`() = runTest {
+        val vm = viewModel()
+        vm.onBandFabTap(BandCategory.EFFETS)
+
+        vm.onBandFabTap(BandCategory.EFFETS)
+
+        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Hidden)
+    }
+
+    @Test
+    fun `tapping the other FAB switches the open category`() = runTest {
+        val vm = viewModel()
+        vm.onBandFabTap(BandCategory.CONTENU)
+
+        vm.onBandFabTap(BandCategory.EFFETS)
+
+        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Tiles(BandCategory.EFFETS))
+    }
+
+    @Test
+    fun `dismissing the band hides it`() = runTest {
+        val vm = viewModel()
+        vm.onBandFabTap(BandCategory.CONTENU)
+
+        vm.onBandDismiss()
+
+        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Hidden)
+    }
+
+    @Test
+    fun `swapping the band category flips contenu to effets`() = runTest {
+        val vm = viewModel()
+        vm.onBandFabTap(BandCategory.CONTENU)
+
+        vm.onBandSwapCategory()
+
+        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Tiles(BandCategory.EFFETS))
+    }
+
+    @Test
+    fun `swapping the band category is inert while hidden`() = runTest {
+        val vm = viewModel()
+
+        vm.onBandSwapCategory()
+
+        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Hidden)
     }
 }
