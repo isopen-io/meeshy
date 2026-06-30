@@ -209,6 +209,7 @@
       "participantRemoved": "Participant removed",
       "removeParticipantError": "Error removing participant",
       "searchParticipants": "Search participants...",
+      "searchOrAddParticipants": "Search or add a member...",
       "noOneOnline": "No one online",
       "you": "you",
       "removeFromGroup": "Remove from group",
