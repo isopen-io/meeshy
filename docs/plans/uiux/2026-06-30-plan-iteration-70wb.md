@@ -1,6 +1,7 @@
-# Plan — Itération 70w (Web)
+# Plan — Itération 70wb (Web)
 
-> **Scope** : `apps/web` exclusivement. Base : `main` HEAD (a89618a, post-#1077 ; 68w/#1082 inclus). Branche : `claude/practical-fermat-d18nnl`.
+> **Scope** : `apps/web` exclusivement. Base : `main` HEAD. Branche : `claude/practical-fermat-d18nnl`.
+> **Note de label** : `70w` pris en parallèle par #1088 (`PhoneResetFlow` i18n) → cette itération renommée **70wb** (surface disjointe `InviteUserModal`).
 
 ## Objectif
 Rendre opérables au clavier (Enter/Espace), focusables et correctement exposés au lecteur d'écran les **résultats de recherche du modal d'invitation** (`InviteUserModal`), aujourd'hui souris-only — et corriger le **bug latent** du bouton « Ajouter » sans `onClick` (inerte au clavier). Catégorie « différé prioritaire 70w+ » du pointeur autoritaire.
@@ -24,5 +25,5 @@ Rendre opérables au clavier (Enter/Espace), focusables et correctement exposés
 - [x] jest `invite-user-modal` 27/27 (25 existants + 2 nouveaux).
 - [ ] CI verte sur la PR, merge `main`, branche supprimée.
 
-## ✅ PLAN EXÉCUTÉ (70w — 2026-06-30)
+## ✅ PLAN EXÉCUTÉ (70wb — 2026-06-30)
 Code/tests/docs faits. Reste : merge `main` après CI verte. Suite (71w+) : audit a11y clavier restant (admin agent Badges, AudioEffectsTimeline seek, details-sidebar édition au clic) — cf. analyse 70w § différé. ⚠️ Ne pas toucher `create-link-modal/*` (69w/#1084).

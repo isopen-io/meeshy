@@ -1,5 +1,6 @@
-# Analyse UI/UX — Itération 70w (Web)
+# Analyse UI/UX — Itération 70wb (Web)
 
+> **Note de label** : l'étiquette `70w` a été prise en parallèle par #1088 (`PhoneResetFlow` i18n, mergée sur `main`). Cette itération est renommée **70wb** (surface disjointe : `InviteUserModal`, aucun fichier code en commun).
 > **Scope** : `apps/web` **exclusivement**. Les vues iOS ne servent que de référence de parité (couleurs/features naturelles Meeshy), jamais d'objet de revue.
 > **Thème** : accessibilité clavier (WCAG 2.1.1 *Keyboard* / 4.1.2 *Name, Role, Value* / 2.4.7 *Focus Visible*) des **résultats de recherche du modal d'invitation d'utilisateurs** (`InviteUserModal`) — lignes cliquables `<div onClick>` souris-only, **doublées d'un `<Button>` mort** (sans `onClick`). Catégorie « **différé prioritaire 70w+** » du pointeur autoritaire (a11y clavier des `<div onClick>` non-`<button>` HORS `video-calls` / liste de conversations / `create-link-modal`, ce dernier en vol via 69w/#1084).
 
@@ -29,7 +30,7 @@ Le différé prioritaire visait l'audit transverse des `<div onClick>` / `role="
 
 ---
 
-## ✅ ANALYSE CORRIGÉE & COMPLÈTE (70w — 2026-06-30)
+## ✅ ANALYSE CORRIGÉE & COMPLÈTE (70wb — 2026-06-30)
 Les 2 constats sont **corrigés et testés** (en attente merge `main`). **NE PLUS re-flagger** :
 - `invite-user-modal.tsx` lignes de résultat de recherche — clavier/`role`/nom accessible (soldé) ;
 - `invite-user-modal.tsx` `<Button>` « Ajouter » inerte sans `onClick` (bug latent soldé : remplacé par pastille décorative, l'action vit sur la ligne-`<button>`).
