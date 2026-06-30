@@ -3503,12 +3503,26 @@ final class CallViewVideoWatchdogSourceGuardTests: XCTestCase {
         )
     }
 
-    // MARK: - Screen Capture Monitoring (iOS 16+ deprecation guard)
+}
+
+// MARK: - Screen Capture Monitoring (iOS 16+ deprecation guard)
+
+@MainActor
+final class CallManagerScreenCaptureMonitoringTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
 
     func test_screenCaptureMonitoring_doesNotUseUIScreenMain_isCaptured() throws {
         // Regression guard: UIScreen.main is deprecated in iOS 16+ for multi-window apps.
-        // startScreenCaptureMonitoring() must read isCaptured from the notification's object
-        // (the specific UIScreen that changed) or from UIWindowScene, never from UIScreen.main.
+        // startScreenCaptureMonitoring() must never use UIScreen.main.isCaptured.
         let source = try callManagerSource()
 
         guard let fnRange = source.range(of: "private func startScreenCaptureMonitoring()") else {
@@ -3521,8 +3535,8 @@ final class CallViewVideoWatchdogSourceGuardTests: XCTestCase {
         XCTAssertFalse(
             fnBody.contains("UIScreen.main.isCaptured"),
             "startScreenCaptureMonitoring() must not use UIScreen.main.isCaptured — " +
-            "UIScreen.main is deprecated in iOS 16+. Read isCaptured from notification.object as? UIScreen " +
-            "or via UIApplication.shared.connectedScenes → UIWindowScene → .screen.isCaptured."
+            "UIScreen.main is deprecated in iOS 16+. Use UIApplication.shared.connectedScenes " +
+            "→ UIWindowScene → .screen.isCaptured instead."
         )
     }
 
