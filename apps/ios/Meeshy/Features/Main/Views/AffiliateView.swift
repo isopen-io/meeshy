@@ -247,7 +247,7 @@ struct AffiliateView: View {
             } label: {
                 Image(systemName: "square.and.arrow.up")
                     .font(.system(size: 16))
-                    .foregroundColor(Color(hex: "2ECC71"))
+                    .foregroundColor(MeeshyColors.success)
             }
 
             Button {
