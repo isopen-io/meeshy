@@ -361,11 +361,15 @@ final class ConversationSocketHandler {
                         // Persist server ACK (state machine) via actor — store
                         // observation will surface the delivery-status change.
                         if let persistence = self.persistence {
-                            _ = try? await persistence.applyEvent(
-                                localId: tempId,
-                                event: .serverAck(serverId: apiMsg.id, at: serverMsg.updatedAt)
-                            )
-                            Logger.messages.info("SendFlow PENDING->SENT (socket broadcast) tempId=\(tempId, privacy: .public) serverId=\(apiMsg.id, privacy: .public) transport=broadcast")
+                            do {
+                                _ = try await persistence.applyEvent(
+                                    localId: tempId,
+                                    event: .serverAck(serverId: apiMsg.id, at: serverMsg.updatedAt)
+                                )
+                                Logger.messages.info("SendFlow PENDING->SENT (socket broadcast) tempId=\(tempId, privacy: .public) serverId=\(apiMsg.id, privacy: .public) transport=broadcast")
+                            } catch {
+                                Logger.messages.error("Persistence serverAck failed: \(error, privacy: .public) tempId=\(tempId, privacy: .public)")
+                            }
                             // Persist server-confirmed content/attachments/reactions
                             // so the store snapshot reflects ground-truth values.
                             // `nil` attachments/reactions are preserved by
@@ -376,22 +380,26 @@ final class ConversationSocketHandler {
                                 : try? JSONEncoder().encode(serverMsg.attachments)
                             let reactionsJson = serverMsg.reactions.isEmpty ? nil
                                 : try? JSONEncoder().encode(serverMsg.reactions)
-                            try? await persistence.updateServerAckedFields(
-                                localId: tempId,
-                                content: reconciledContent,
-                                attachmentsJson: attachmentsJson,
-                                reactionsJson: reactionsJson,
-                                pinnedAt: serverMsg.pinnedAt,
-                                pinnedBy: serverMsg.pinnedBy,
-                                isEdited: serverMsg.isEdited,
-                                editedAt: serverMsg.editedAt,
-                                deletedAt: serverMsg.deletedAt,
-                                deliveredCount: serverMsg.deliveredCount,
-                                readCount: serverMsg.readCount,
-                                deliveredToAllAt: serverMsg.deliveredToAllAt,
-                                readByAllAt: serverMsg.readByAllAt,
-                                updatedAt: serverMsg.updatedAt
-                            )
+                            do {
+                                try await persistence.updateServerAckedFields(
+                                    localId: tempId,
+                                    content: reconciledContent,
+                                    attachmentsJson: attachmentsJson,
+                                    reactionsJson: reactionsJson,
+                                    pinnedAt: serverMsg.pinnedAt,
+                                    pinnedBy: serverMsg.pinnedBy,
+                                    isEdited: serverMsg.isEdited,
+                                    editedAt: serverMsg.editedAt,
+                                    deletedAt: serverMsg.deletedAt,
+                                    deliveredCount: serverMsg.deliveredCount,
+                                    readCount: serverMsg.readCount,
+                                    deliveredToAllAt: serverMsg.deliveredToAllAt,
+                                    readByAllAt: serverMsg.readByAllAt,
+                                    updatedAt: serverMsg.updatedAt
+                                )
+                            } catch {
+                                Logger.messages.error("Persistence updateServerAckedFields failed: \(error, privacy: .public) tempId=\(tempId, privacy: .public)")
+                            }
                         }
                         // Persist using server id so a future cold-start REST
                         // fetch reconciles cleanly without duplicates.
@@ -416,10 +424,14 @@ final class ConversationSocketHandler {
                                 // store observation surfaces the update to the view.
                                 let refreshed = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username)
                                 let attachmentsJson = try? JSONEncoder().encode(refreshed.attachments)
-                                try? await persistence.updateAttachmentsJson(
-                                    localId: existing.id,
-                                    attachmentsJson: attachmentsJson
-                                )
+                                do {
+                                    try await persistence.updateAttachmentsJson(
+                                        localId: existing.id,
+                                        attachmentsJson: attachmentsJson
+                                    )
+                                } catch {
+                                    Logger.messages.error("Persistence updateAttachmentsJson failed: \(error, privacy: .public) messageId=\(existing.id, privacy: .public)")
+                                }
                             }
                         }
                         return
@@ -784,7 +796,13 @@ final class ConversationSocketHandler {
                 guard let self, let persistence = self.persistence else { return }
                 // Touch the record so the store observation fires and
                 // bubbles re-render with the updated attachment status.
-                Task { try? await persistence.touchUpdatedAt(localId: event.messageId) }
+                Task {
+                    do {
+                        try await persistence.touchUpdatedAt(localId: event.messageId)
+                    } catch {
+                        Logger.messages.error("Persistence touchUpdatedAt failed: \(error, privacy: .public) messageId=\(event.messageId, privacy: .public)")
+                    }
+                }
             }
             .store(in: &cancellables)
 
@@ -816,10 +834,16 @@ final class ConversationSocketHandler {
                     : nil
                 if let persistence = self.persistence {
                     // Write through persistence; store observation surfaces the count update.
-                    Task { try? await persistence.updateViewOnceCount(
-                        localId: event.messageId,
-                        count: event.viewOnceCount
-                    ) }
+                    Task {
+                        do {
+                            try await persistence.updateViewOnceCount(
+                                localId: event.messageId,
+                                count: event.viewOnceCount
+                            )
+                        } catch {
+                            Logger.messages.error("Persistence updateViewOnceCount failed: \(error, privacy: .public) messageId=\(event.messageId, privacy: .public)")
+                        }
+                    }
                 }
                 // Eviction is media-cache housekeeping; not a messages array mutation.
                 if event.isFullyConsumed {
@@ -888,7 +912,11 @@ final class ConversationSocketHandler {
                                     sourceLanguage: t.sourceLanguage,
                                     receivedAt: Date()
                                 )
-                                try? await persistence.saveTranslation(record)
+                                do {
+                                    try await persistence.saveTranslation(record)
+                                } catch {
+                                    Logger.messages.error("Persistence saveTranslation failed: \(error, privacy: .public) messageId=\(t.messageId, privacy: .public) lang=\(t.targetLanguage, privacy: .public)")
+                                }
                             }
                         }
                     }
