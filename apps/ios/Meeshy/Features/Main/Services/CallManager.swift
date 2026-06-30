@@ -3352,14 +3352,15 @@ extension CallManager: WebRTCServiceDelegate {
 
     nonisolated func webRTCService(_ service: WebRTCService, didChangeQualityLevel level: VideoQualityLevel, from previous: VideoQualityLevel) {
         Task { @MainActor [weak self] in
-            guard self != nil else { return }
+            guard let self, case .connected = self.callState else { return }
             guard UIAccessibility.isReduceMotionEnabled == false else { return }
+            let generator = UINotificationFeedbackGenerator()
             switch level {
             case .poor, .critical:
-                UINotificationFeedbackGenerator().notificationOccurred(.error)
+                generator.notificationOccurred(.error)
             case .excellent, .good:
                 if previous <= .fair {
-                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                    generator.notificationOccurred(.success)
                 }
             case .fair:
                 break
