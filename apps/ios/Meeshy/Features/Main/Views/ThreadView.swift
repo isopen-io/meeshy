@@ -48,6 +48,7 @@ struct ThreadView: View {
                     .font(.callout.weight(.semibold))
                     .foregroundColor(Color(hex: accentColor))
             }
+            .accessibilityLabel(String(localized: "a11y.back", bundle: .main))
 
             Spacer()
 
