@@ -16,6 +16,19 @@ struct MentionSuggestionPanel: View {
 
     private var theme: ThemeManager { ThemeManager.shared }
 
+    /// Top-rounded surface: the panel is pinned to the top edge of the composer,
+    /// so only the leading/trailing top corners are rounded — it reads as a card
+    /// rising above the input rather than a detached pill.
+    private var panelShape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            topLeadingRadius: 16,
+            bottomLeadingRadius: 0,
+            bottomTrailingRadius: 0,
+            topTrailingRadius: 16,
+            style: .continuous
+        )
+    }
+
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 0) {
@@ -59,7 +72,8 @@ struct MentionSuggestionPanel: View {
             }
         }
         .frame(maxHeight: 200)
-        .background(.ultraThinMaterial)
+        .clipShape(panelShape)
+        .adaptiveGlass(in: panelShape)
     }
 
     /// Three shimmering placeholder rows shown while waiting for API results.
@@ -88,5 +102,7 @@ struct MentionSuggestionPanel: View {
                 .frame(minHeight: 44)
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(String(localized: "composer.mention.loading", defaultValue: "Loading mentions", bundle: .main))
     }
 }
