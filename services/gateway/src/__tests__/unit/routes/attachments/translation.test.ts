@@ -369,3 +369,81 @@ describe('POST /attachments/:id/transcribe — force re-transcription', () => {
     await app.close();
   });
 });
+
+// ─── POST /attachments/:id/transcribe — unauthenticated (line 334) ───────────
+
+describe('POST /attachments/:id/transcribe — unauthenticated', () => {
+  it('returns 401 when auth context is not authenticated', async () => {
+    const { app } = await buildApp({ auth: 'unauthenticated' });
+    const res = await app.inject({
+      method: 'POST', url: `/attachments/${ATTACHMENT_ID}/transcribe`,
+      payload: {},
+    });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+});
+
+// ─── POST /attachments/:id/transcribe — attachment not found (line 348) ──────
+
+describe('POST /attachments/:id/transcribe — attachment not found', () => {
+  it('returns 404 when messageAttachment.findUnique returns null', async () => {
+    const prisma = makePrisma();
+    prisma.messageAttachment.findUnique = jest.fn<any>().mockResolvedValue(null);
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST', url: `/attachments/${ATTACHMENT_ID}/transcribe`,
+      payload: {},
+    });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+});
+
+// ─── POST /attachments/:id/transcribe — existingData null (line 366) ─────────
+
+describe('POST /attachments/:id/transcribe — getAttachmentWithTranscription returns null', () => {
+  it('returns 404 when translationService.getAttachmentWithTranscription returns null', async () => {
+    const translationService = makeTranslationService();
+    translationService.getAttachmentWithTranscription = jest.fn<any>().mockResolvedValue(null);
+    const { app } = await buildApp({ translationService });
+    const res = await app.inject({
+      method: 'POST', url: `/attachments/${ATTACHMENT_ID}/transcribe`,
+      payload: {},
+    });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+});
+
+// ─── POST /attachments/:id/transcribe — transcribeAttachment returns null (line 385) ─
+
+describe('POST /attachments/:id/transcribe — transcribeAttachment returns null', () => {
+  it('returns 500 when transcribeAttachment returns null', async () => {
+    const translationService = makeTranslationService();
+    translationService.transcribeAttachment = jest.fn<any>().mockResolvedValue(null);
+    const { app } = await buildApp({ translationService });
+    const res = await app.inject({
+      method: 'POST', url: `/attachments/${ATTACHMENT_ID}/transcribe`,
+      payload: {},
+    });
+    expect(res.statusCode).toBe(500);
+    await app.close();
+  });
+});
+
+// ─── POST /attachments/:id/transcribe — throws (lines 396-397) ───────────────
+
+describe('POST /attachments/:id/transcribe — unexpected error', () => {
+  it('returns 500 when transcribeAttachment throws', async () => {
+    const translationService = makeTranslationService();
+    translationService.transcribeAttachment = jest.fn<any>().mockRejectedValue(new Error('ZMQ failure'));
+    const { app } = await buildApp({ translationService });
+    const res = await app.inject({
+      method: 'POST', url: `/attachments/${ATTACHMENT_ID}/transcribe`,
+      payload: {},
+    });
+    expect(res.statusCode).toBe(500);
+    await app.close();
+  });
+});

@@ -12,6 +12,7 @@
 
 import { describe, it, expect, jest, beforeAll, afterAll } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
+import multipart from '@fastify/multipart';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -279,5 +280,131 @@ describe('POST /api/v1/voice/transcribe — AudioTranslateError from transcribeO
     expect(res.statusCode).toBe(500);
     const body = res.json();
     expect(body.error).toBe('TRANSCRIBE_TIMEOUT');
+  });
+});
+
+// ─── POST /transcribe — attachmentId success path (line 706) ─────────────────
+// When getAttachmentWithTranscription returns no transcription yet, and
+// transcribeAttachment returns a valid result, line 706 is reached.
+
+describe('POST /api/v1/voice/transcribe — attachmentId, transcribeAttachment succeeds (line 706)', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    app = await buildApp(); // default: getAttachmentWithTranscription → transcription: null, transcribeAttachment → { taskId }
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 200 with taskId and status processing when transcribeAttachment succeeds', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: `${PREFIX}/transcribe`,
+      payload: { attachmentId: ATTACHMENT_ID },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.success).toBe(true);
+    expect(body.data.status).toBe('processing');
+    expect(body.data.taskId).toBe(JOB_ID);
+  });
+});
+
+// ─── POST /transcribe — multipart file upload (lines 616-628) ────────────────
+// Register @fastify/multipart so request.parts() is available.
+
+async function buildAppWithMultipart(opts: {
+  audioService?: ReturnType<typeof makeAudioService>;
+  translationService?: ReturnType<typeof makeTranslationService> | null;
+} = {}): Promise<FastifyInstance> {
+  const {
+    audioService = makeAudioService(),
+    translationService = makeTranslationService(),
+  } = opts;
+
+  const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+  await app.register(multipart, { limits: { fileSize: 10 * 1024 * 1024, files: 5 } });
+
+  // @fastify/multipart leaves request.body = null; AJV would reject "body must be object".
+  // Fix it in preValidation so AJV sees {} and the handler runs normally.
+  app.addHook('preValidation', async (req) => {
+    if ((req.body === null || req.body === undefined) && req.headers['content-type']?.includes('multipart/form-data')) {
+      (req as any).body = {};
+    }
+  });
+
+  app.addHook('preHandler', async (req) => {
+    (req as any).user = { userId: USER_ID, role: 'user' };
+  });
+
+  registerTranslationRoutes(app, audioService, translationService ?? undefined, PREFIX);
+  await app.ready();
+  return app;
+}
+
+describe('POST /api/v1/voice/transcribe — multipart file upload (lines 616-624)', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    app = await buildAppWithMultipart();
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 200 when multipart file is provided (covers lines 616-624)', async () => {
+    const boundary = '----FormBoundaryABC123';
+    const body = [
+      `--${boundary}`,
+      'Content-Disposition: form-data; name="file"; filename="audio.wav"',
+      'Content-Type: audio/wav',
+      '',
+      'fake-audio-binary-content',
+      `--${boundary}--`,
+    ].join('\r\n');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `${PREFIX}/transcribe`,
+      headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
+      payload: body,
+    });
+    expect(res.statusCode).toBe(200);
+    const data = res.json();
+    expect(data.success).toBe(true);
+    expect(data.data.status).toBe('completed');
+  });
+});
+
+describe('POST /api/v1/voice/transcribe — multipart with field values (lines 625-628)', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    app = await buildAppWithMultipart();
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('handles language and audioFormat fields in multipart (covers lines 625-628)', async () => {
+    const boundary = '----FormBoundaryDEF456';
+    const body = [
+      `--${boundary}`,
+      'Content-Disposition: form-data; name="file"; filename="speech.mp3"',
+      'Content-Type: audio/mpeg',
+      '',
+      'fake-mp3-data',
+      `--${boundary}`,
+      'Content-Disposition: form-data; name="language"',
+      '',
+      'en',
+      `--${boundary}`,
+      'Content-Disposition: form-data; name="audioFormat"',
+      '',
+      'mp3',
+      `--${boundary}--`,
+    ].join('\r\n');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `${PREFIX}/transcribe`,
+      headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
+      payload: body,
+    });
+    expect(res.statusCode).toBe(200);
+    const data = res.json();
+    expect(data.success).toBe(true);
   });
 });

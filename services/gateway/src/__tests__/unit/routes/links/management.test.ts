@@ -318,3 +318,33 @@ describe('PATCH /links/:linkId — DB error', () => {
     await app.close();
   });
 });
+
+// ─── PUT /links/:id — Zod validation error (line 153) ────────────────────────
+// maxUses: 1.5 passes AJV (type: number, minimum: 1) but fails Zod (.int())
+
+describe('PUT /links/:id — Zod validation error', () => {
+  it('returns 400 when body fails Zod validation (non-integer maxUses)', async () => {
+    const { app } = await buildApp();
+    const res = await app.inject({
+      method: 'PUT', url: `/links/${LINK_DB_ID}`,
+      payload: { maxUses: 1.5 },
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+});
+
+// ─── PATCH /links/:linkId — Zod validation error (line 301) ──────────────────
+// maxUses: 1.5 passes AJV (type: number, minimum: 1) but fails Zod (.int())
+
+describe('PATCH /links/:linkId — Zod validation error', () => {
+  it('returns 400 when body fails Zod validation (non-integer maxUses)', async () => {
+    const { app } = await buildApp();
+    const res = await app.inject({
+      method: 'PATCH', url: `/links/${LINK_ID}`,
+      payload: { maxUses: 1.5 },
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+});
