@@ -22,6 +22,7 @@ import { useUser } from '@/stores';
 import { useSocketIOMessaging } from '@/hooks/use-socketio-messaging';
 import { OnlineIndicator } from '@/components/ui/online-indicator';
 import { getUserStatus } from '@/lib/user-status';
+import { formatPresenceLabel, presenceColorClass } from '@/utils/presence-format';
 import { buildApiUrl } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
 import { ConversationDropdown } from '@/components/contacts/ConversationDropdown';
@@ -45,7 +46,8 @@ export default function ProfilePage({ params }: ProfilePageProps) {
   const router = useRouter();
   const { t } = useI18n('profile');
   const { t: tCommon } = useI18n('common');
-  
+  const { t: tContacts, locale } = useI18n('contacts');
+
   const [user, setUser] = useState<User | null>(null);
   const [stats, setStats] = useState<UserStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -347,13 +349,15 @@ export default function ProfilePage({ params }: ProfilePageProps) {
                         {getUserDisplayName(user).slice(0, 2).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
-                    {/* Online status indicator with 3 states: green (online), orange (away), grey (offline) */}
-                    <OnlineIndicator
-                      isOnline={getUserStatus(user) === 'online'}
-                      status={getUserStatus(user)}
-                      size="lg"
-                      className="absolute bottom-1 right-1"
-                    />
+                    {/* Pastille de présence — masquée si la présence n'est pas montrable (isOnline null) */}
+                    {(user.isOnline as boolean | null) != null && (
+                      <OnlineIndicator
+                        isOnline={getUserStatus(user) === 'online'}
+                        status={getUserStatus(user)}
+                        size="lg"
+                        className="absolute bottom-1 right-1"
+                      />
+                    )}
                   </div>
                   
                   <div className="flex-1 space-y-4">
@@ -362,7 +366,22 @@ export default function ProfilePage({ params }: ProfilePageProps) {
                         {getUserDisplayName(user)}
                       </h2>
                       {user.username && (
-                        <p className="text-gray-600 dark:text-gray-400">@{user.username}</p>
+                        <p className="text-gray-600 dark:text-gray-400">
+                          @{user.username}
+                          {(user.lastActiveAt as Date | string | null) != null && (
+                            <>
+                              {' · '}
+                              <span className={presenceColorClass(user.lastActiveAt, user.isOnline as boolean | null)}>
+                                {formatPresenceLabel({
+                                  lastActiveAt: user.lastActiveAt,
+                                  isOnline: user.isOnline as boolean | null,
+                                  t: tContacts,
+                                  locale,
+                                })}
+                              </span>
+                            </>
+                          )}
+                        </p>
                       )}
                     </div>
 

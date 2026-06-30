@@ -36,3 +36,18 @@ export const resolvePresenceVisibility = (input: PresenceVisibilityInput): Prese
   if (!input.targetShowOnlineStatus) return HIDDEN;
   return { showOnline: true, showLastSeenTimestamp: input.targetShowLastSeen };
 };
+
+/**
+ * Applique le résultat de visibilité sur un objet profil, sans mutation.
+ * `showOnline:false` ⇒ `isOnline=null` (non montrable, pas de pastille).
+ */
+export const applyPresenceVisibility = <
+  T extends { isOnline: boolean | null; lastActiveAt: Date | null },
+>(
+  profile: T,
+  visibility: PresenceVisibility,
+): Omit<T, 'isOnline' | 'lastActiveAt'> & { isOnline: boolean | null; lastActiveAt: Date | null } => ({
+  ...profile,
+  isOnline: visibility.showOnline ? profile.isOnline : null,
+  lastActiveAt: visibility.showLastSeenTimestamp ? profile.lastActiveAt : null,
+});

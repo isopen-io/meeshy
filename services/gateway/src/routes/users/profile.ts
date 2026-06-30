@@ -26,6 +26,7 @@ import { withMutationLog } from '../../utils/withMutationLog';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
+import { gateProfilePresence, getOptionalAuth } from './presence-gate';
 
 const logger = enhancedLogger.child({ module: 'UserProfileRoutes' });
 
@@ -737,6 +738,7 @@ export async function updateUsername(fastify: FastifyInstance) {
  */
 export async function getUserByUsername(fastify: FastifyInstance) {
   fastify.get('/u/:username', {
+    preValidation: [getOptionalAuth(fastify.prisma)],
     schema: {
       description: 'Get public user profile by username. Returns public information only (excludes email, phone, password). Case-insensitive username matching.',
       tags: ['users'],
@@ -765,7 +767,7 @@ export async function getUserByUsername(fastify: FastifyInstance) {
                 banner: { type: 'string', nullable: true },
                 bio: { type: 'string', nullable: true },
                 role: { type: 'string' },
-                isOnline: { type: 'boolean' },
+                isOnline: { type: ['boolean', 'null'] },
                 lastActiveAt: { type: 'string', format: 'date-time', nullable: true },
                 voicePublic: { type: 'boolean' },
                 voiceSampleUrl: { type: 'string', nullable: true },
@@ -805,6 +807,7 @@ export async function getUserByUsername(fastify: FastifyInstance) {
           role: true,
           isOnline: true,
           lastActiveAt: true,
+          deactivatedAt: true,
           createdAt: true,
           voiceModel: { select: voiceModelSelect }
         }
@@ -817,7 +820,7 @@ export async function getUserByUsername(fastify: FastifyInstance) {
 
       fastify.log.info(`[USER_PROFILE_U] User found: ${user.username} (${user.id})`);
 
-      return sendSuccess(reply, withVoiceFields(user));
+      return sendSuccess(reply, await gateProfilePresence(fastify, request, withVoiceFields(user)));
 
     } catch (error) {
       logError(fastify.log, 'Get user profile error:', error);
@@ -831,6 +834,7 @@ export async function getUserByUsername(fastify: FastifyInstance) {
  */
 export async function getUserById(fastify: FastifyInstance) {
   fastify.get('/users/:id', {
+    preValidation: [getOptionalAuth(fastify.prisma)],
     schema: {
       description: 'Get public user profile by MongoDB ID or username. Returns public information including language settings. Automatically detects whether ID is MongoDB ObjectId or username.',
       tags: ['users'],
@@ -859,7 +863,7 @@ export async function getUserById(fastify: FastifyInstance) {
                 bio: { type: 'string', nullable: true },
                 role: { type: 'string' },
                 banner: { type: 'string', nullable: true },
-                isOnline: { type: 'boolean' },
+                isOnline: { type: ['boolean', 'null'] },
                 lastActiveAt: { type: 'string', format: 'date-time', nullable: true },
                 voicePublic: { type: 'boolean' },
                 voiceSampleUrl: { type: 'string', nullable: true },
@@ -944,7 +948,7 @@ export async function getUserById(fastify: FastifyInstance) {
         isMeeshyer: true,
       };
 
-      return sendSuccess(reply, publicUserProfile);
+      return sendSuccess(reply, await gateProfilePresence(fastify, request, publicUserProfile));
 
     } catch (error) {
       logError(fastify.log, 'Get user profile error:', error);
@@ -1042,6 +1046,7 @@ function buildPublicProfile(user: Record<string, unknown>) {
 
 export async function getUserByEmail(fastify: FastifyInstance) {
   fastify.get('/users/email/:email', {
+    preValidation: [getOptionalAuth(fastify.prisma)],
     schema: {
       description: 'Get public user profile by email address (case-insensitive)',
       tags: ['users'],
@@ -1080,7 +1085,7 @@ export async function getUserByEmail(fastify: FastifyInstance) {
         return sendNotFound(reply, 'User not found');
       }
 
-      return sendSuccess(reply, buildPublicProfile(user));
+      return sendSuccess(reply, buildPublicProfile(await gateProfilePresence(fastify, request, user)));
     } catch (error) {
       logError(fastify.log, 'Get user by email error:', error);
       return sendInternalError(reply, 'Internal server error');
@@ -1090,6 +1095,7 @@ export async function getUserByEmail(fastify: FastifyInstance) {
 
 export async function getUserByIdDedicated(fastify: FastifyInstance) {
   fastify.get('/users/id/:id', {
+    preValidation: [getOptionalAuth(fastify.prisma)],
     schema: {
       description: 'Get public user profile by MongoDB ObjectId',
       tags: ['users'],
@@ -1133,7 +1139,7 @@ export async function getUserByIdDedicated(fastify: FastifyInstance) {
         return sendNotFound(reply, 'User not found');
       }
 
-      return sendSuccess(reply, buildPublicProfile(user));
+      return sendSuccess(reply, buildPublicProfile(await gateProfilePresence(fastify, request, user)));
     } catch (error) {
       logError(fastify.log, 'Get user by ID error:', error);
       return sendInternalError(reply, 'Internal server error');
@@ -1143,6 +1149,7 @@ export async function getUserByIdDedicated(fastify: FastifyInstance) {
 
 export async function getUserByPhone(fastify: FastifyInstance) {
   fastify.get('/users/phone/:phone', {
+    preValidation: [getOptionalAuth(fastify.prisma)],
     schema: {
       description: 'Get public user profile by phone number. Accepts digits with optional country code prefix (e.g. 336199909344 or +336199909344). Normalizes to E.164 format for lookup.',
       tags: ['users'],
@@ -1189,7 +1196,7 @@ export async function getUserByPhone(fastify: FastifyInstance) {
         return sendNotFound(reply, 'User not found');
       }
 
-      return sendSuccess(reply, buildPublicProfile(user));
+      return sendSuccess(reply, buildPublicProfile(await gateProfilePresence(fastify, request, user)));
     } catch (error) {
       logError(fastify.log, 'Get user by phone error:', error);
       return sendInternalError(reply, 'Internal server error');
