@@ -166,7 +166,7 @@ export function GroupsLayout({ selectedGroupIdentifier }: GroupsLayoutProps) {
 
   // Copier l'identifiant
   const copyIdentifier = useCallback(
-    async (identifier: string, e?: React.MouseEvent) => {
+    async (identifier: string, e?: React.MouseEvent | React.KeyboardEvent) => {
       e?.stopPropagation();
       try {
         const displayIdentifier = identifier.replace(/^mshy_/, '');

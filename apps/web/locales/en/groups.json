@@ -73,6 +73,10 @@
       "cancel": "Cancel",
       "create": "Create"
     },
+    "card": {
+      "openLabel": "Open {name}",
+      "copyIdentifier": "Copy identifier {identifier}"
+    },
     "list": {
       "communities": "Communities",
       "newCommunity": "New community",
