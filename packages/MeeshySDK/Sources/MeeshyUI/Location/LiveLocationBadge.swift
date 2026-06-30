@@ -17,7 +17,7 @@ public struct LiveLocationBadge: View {
     public var body: some View {
         HStack(spacing: 8) {
             Circle()
-                .fill(Color(hex: "2ECC71"))
+                .fill(MeeshyColors.success)
                 .frame(width: 8, height: 8)
                 .scaleEffect(isPulsing ? 1.3 : 1.0)
                 .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: isPulsing)

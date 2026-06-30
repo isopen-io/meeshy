@@ -472,8 +472,8 @@ public struct MeeshyAvatar: View {
 
     private var dotColor: Color {
         switch effectivePresence {
-        case .online: return Color(hex: "2ECC71")
-        case .away: return Color(hex: "F39C12")
+        case .online: return MeeshyColors.success
+        case .away: return MeeshyColors.warning
         case .offline: return .clear
         }
     }
