@@ -60,6 +60,12 @@ struct FeedPostCard: View {
     var authorStoryRing: StoryRingState = .none
     var onViewAuthorStory: (() -> Void)? = nil
 
+    /// Feed autoplay coordinator (RF2). Passed as a plain `let` — NOT observed —
+    /// so election changes never invalidate this leaf card; the inner
+    /// `ReelRepostEmbedContainer` observes it. `nil` keeps the static-poster
+    /// fallback (e.g. profile lists with no feed-level autoplay).
+    var reelAutoplay: ReelFeedAutoplayCoordinator? = nil
+
     // Lecture directe sans @ObservedObject — leaf view rendue dans un ForEach,
     // évite que chaque changement de thème force un re-render de toutes les cards.
     private var theme: ThemeManager { ThemeManager.shared }
@@ -89,6 +95,31 @@ struct FeedPostCard: View {
         if value >= 1_000 { return String(format: "%.1fk", Double(value) / 1_000) }
         return "\(value)"
     }
+
+    /// Compact preview descriptor for the media carried by a reposted POST/STATUS
+    /// (RF1). Holds the first media (rendered as a thumbnail) and the total count
+    /// (drives a "+N" badge).
+    struct RepostMediaPreview: Equatable {
+        let primary: FeedMedia
+        let count: Int
+        static func == (lhs: RepostMediaPreview, rhs: RepostMediaPreview) -> Bool {
+            lhs.primary.id == rhs.primary.id && lhs.count == rhs.count
+        }
+    }
+
+    /// Resolver for the reposted POST/STATUS quote-block media preview. Returns
+    /// `nil` when the repost carries no media — text-only reposts then keep their
+    /// byte-identical layout (the preview block is skipped). Otherwise the first
+    /// media + total count. Pure; unit-tested.
+    static func repostMediaPreviewModel(for repost: RepostContent) -> RepostMediaPreview? {
+        guard let primary = repost.media.first else { return nil }
+        return RepostMediaPreview(primary: primary, count: repost.media.count)
+    }
+
+    /// Tap target for the reposted quote block (incl. its media preview): ALWAYS
+    /// the original reposted post (`repost.id`), never the reposter's outer card
+    /// (`post.id`). Routed through the enclosing repost Button. Pure; unit-tested.
+    static func repostTapTargetId(for repost: RepostContent) -> String { repost.id }
 
     /// VoiceOver label for the tappable media preview. Distinguishes a video
     /// from an image (and falls back to a generic "media" wording for mixed or
@@ -351,11 +382,21 @@ struct FeedPostCard: View {
                 } else if isReelRepost {
                     // Repost-of-REEL: a reel's content lives in media/caption, never
                     // in `content`, so the legacy quote block rendered blank (and the
-                    // POST card drops the reel badge). Render a rich reel preview.
-                    ReelRepostEmbedCell(
-                        post: post,
-                        onTap: { post.repost.map { onTapRepost?($0.id) } }
-                    )
+                    // POST card drops the reel badge). Render a rich reel preview with
+                    // inline muted autoplay (RF2) when a feed coordinator is provided;
+                    // otherwise the static-poster cell.
+                    if let reelAutoplay {
+                        ReelRepostEmbedContainer(
+                            coordinator: reelAutoplay,
+                            post: post,
+                            onTap: { post.repost.map { onTapRepost?($0.id) } }
+                        )
+                    } else {
+                        ReelRepostEmbedCell(
+                            post: post,
+                            onTap: { post.repost.map { onTapRepost?($0.id) } }
+                        )
+                    }
                 } else {
                     // Media preview (outside nav tap target — has its own fullscreen gesture)
                     if post.hasMedia {
@@ -645,7 +686,7 @@ struct FeedPostCard: View {
     private func repostView(_ repost: RepostContent) -> some View {
         Button {
             HapticFeedback.light()
-            onTapRepost?(repost.id)
+            onTapRepost?(Self.repostTapTargetId(for: repost))
         } label: {
             VStack(alignment: .leading, spacing: 10) {
                 // Original author
@@ -681,6 +722,14 @@ struct FeedPostCard: View {
                         .font(.footnote)
                         .foregroundColor(theme.textSecondary)
                         .lineLimit(4)
+                }
+
+                // Reposted media (RF1) — a reposted POST/STATUS carrying images or
+                // video rendered text-only before this; show a compact thumbnail
+                // preview reusing the own-media building blocks. No AVPlayer: the
+                // surrounding Button routes the tap to the ORIGINAL reposted post.
+                if let mediaModel = Self.repostMediaPreviewModel(for: repost) {
+                    repostMediaPreview(mediaModel)
                 }
 
                 // Original stats

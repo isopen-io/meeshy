@@ -149,6 +149,33 @@ extension FeedPostCard {
         }
     }
 
+    // Compact media preview for a reposted POST/STATUS quote block (RF1). Reuses
+    // `galleryImageView` (image fill + video play glyph / audio waveform overlay)
+    // bounded to a short thumbnail, with a "+N" badge when the repost carries more
+    // than one media. No tap gesture and no AVPlayer: the enclosing repost Button
+    // already routes the tap to the ORIGINAL reposted post, so the media is hidden
+    // from VoiceOver (the Button is the interactive element).
+    @ViewBuilder
+    func repostMediaPreview(_ model: FeedPostCard.RepostMediaPreview) -> some View {
+        ZStack(alignment: .bottomTrailing) {
+            galleryImageView(model.primary)
+                .frame(maxWidth: .infinity)
+                .frame(height: 160)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+
+            if model.count > 1 {
+                Text("+\(model.count - 1)")
+                    .font(.caption2.weight(.bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(Color.black.opacity(0.6)))
+                    .padding(8)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
     // Gallery-specific image view (no individual rounding)
     func galleryImageView(_ media: FeedMedia) -> some View {
         ZStack {

@@ -113,6 +113,34 @@ final class ReelFeedAutoplayCoordinatorTests: XCTestCase {
         // The pending election must not resurrect an active reel after clear().
         XCTAssertNil(sut.activeReelId)
     }
+
+    // MARK: - RF2 — cell-identity election (same reel native + reposted)
+
+    /// MANDATORY review correction: when the SAME reel appears BOTH as a native
+    /// reel card AND inside a repost cell, the two cells report DISTINCT election
+    /// ids — the native card keys on the reel's own post id, the repost cell on the
+    /// reposter's OUTER post id (`ReelRepostEmbedCell.reelCellId`). The coordinator
+    /// elects a single id, so exactly ONE surface is ever active and the two never
+    /// fight over the single shared `AVPlayerLayer`.
+    func test_election_sameReelNativeAndReposted_exactlyOneSurfaceActive() async {
+        let nativeCellId = "reelX"   // native reel card: its own post id (== reel id)
+        let repostCellId = "outerPostB" // repost cell: the reposter's OUTER post id
+        XCTAssertNotEqual(nativeCellId, repostCellId,
+                          "Repost cells must key on the outer post id, not the reposted reel id")
+
+        let sut = makeSUT()
+        // The repost cell is more centered (viewport mid = 400) → it wins.
+        sut.update(frames: [frame(nativeCellId, midY: 150), frame(repostCellId, midY: 400)],
+                   viewportMinY: 0, viewportMaxY: 800)
+        await waitForActiveReel(sut, toEqual: repostCellId)
+
+        let nativeActive = sut.activeReelId == nativeCellId
+        let repostActive = sut.activeReelId == repostCellId
+        XCTAssertTrue(repostActive)
+        XCTAssertFalse(nativeActive)
+        XCTAssertFalse(nativeActive && repostActive,
+                       "Two surfaces must never both bind the single shared player")
+    }
 }
 
 /// WS3.1 — the single open-autostart gate shared by a reel's audio and video
