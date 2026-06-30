@@ -156,3 +156,188 @@ describe('POST /api/v1/voice/feedback — success', () => {
     await app.close();
   });
 });
+
+// ─── GET /api/v1/voice/history ────────────────────────────────────────────────
+
+describe('GET /api/v1/voice/history — unauthenticated', () => {
+  it('returns 401 when userId is not available', async () => {
+    const { app } = await buildApp({ authenticated: false });
+    const res = await app.inject({ method: 'GET', url: `${PREFIX}/history` });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+});
+
+describe('GET /api/v1/voice/history — success', () => {
+  it('returns 200 with history data', async () => {
+    const historyResult = { items: [{ id: 'h-1', sourceLanguage: 'en', targetLanguage: 'fr' }], total: 1, limit: 50, offset: 0, hasMore: false };
+    const service = makeAudioTranslateService({ getHistory: jest.fn<any>().mockResolvedValue(historyResult) });
+    const { app } = await buildApp({ service });
+    const res = await app.inject({ method: 'GET', url: `${PREFIX}/history` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
+    await app.close();
+  });
+});
+
+describe('GET /api/v1/voice/history — service error', () => {
+  it('returns 500 when service throws', async () => {
+    const service = makeAudioTranslateService({ getHistory: jest.fn<any>().mockRejectedValue(new Error('DB error')) });
+    const { app } = await buildApp({ service });
+    const res = await app.inject({ method: 'GET', url: `${PREFIX}/history` });
+    expect(res.statusCode).toBe(500);
+    await app.close();
+  });
+});
+
+// ─── GET /api/v1/voice/stats ──────────────────────────────────────────────────
+
+describe('GET /api/v1/voice/stats — unauthenticated', () => {
+  it('returns 401 when userId is not available', async () => {
+    const { app } = await buildApp({ authenticated: false });
+    const res = await app.inject({ method: 'GET', url: `${PREFIX}/stats` });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+});
+
+describe('GET /api/v1/voice/stats — success', () => {
+  it('returns 200 with stats data', async () => {
+    const stats = { totalTranslations: 10, totalMinutes: 5, languagesUsed: ['en', 'fr'], avgProcessingTime: 1.2, feedbackRating: 4.5 };
+    const service = makeAudioTranslateService({ getUserStats: jest.fn<any>().mockResolvedValue(stats) });
+    const { app } = await buildApp({ service });
+    const res = await app.inject({ method: 'GET', url: `${PREFIX}/stats?period=week` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
+    await app.close();
+  });
+});
+
+describe('GET /api/v1/voice/stats — service error', () => {
+  it('returns 500 when service throws', async () => {
+    const service = makeAudioTranslateService({ getUserStats: jest.fn<any>().mockRejectedValue(new Error('DB error')) });
+    const { app } = await buildApp({ service });
+    const res = await app.inject({ method: 'GET', url: `${PREFIX}/stats` });
+    expect(res.statusCode).toBe(500);
+    await app.close();
+  });
+});
+
+// ─── GET /api/v1/voice/admin/metrics ─────────────────────────────────────────
+
+describe('GET /api/v1/voice/admin/metrics — unauthenticated', () => {
+  it('returns 401 when userId is not available', async () => {
+    const { app } = await buildApp({ authenticated: false });
+    const res = await app.inject({ method: 'GET', url: `${PREFIX}/admin/metrics` });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+});
+
+describe('GET /api/v1/voice/admin/metrics — non-admin', () => {
+  it('returns 403 when user is not admin', async () => {
+    const { app } = await buildApp({ authenticated: true });
+    const res = await app.inject({ method: 'GET', url: `${PREFIX}/admin/metrics` });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+});
+
+describe('GET /api/v1/voice/admin/metrics — admin success', () => {
+  it('returns 200 with metrics when user is admin', async () => {
+    const metrics = { activeJobs: 2, queuedJobs: 5, completionRate: 0.98, uptime: 99999 };
+    const service = makeAudioTranslateService({ getSystemMetrics: jest.fn<any>().mockResolvedValue(metrics) });
+    const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    app.addHook('preHandler', async (req) => {
+      (req as any).user = { userId: USER_ID, role: 'admin' };
+    });
+    registerAnalysisRoutes(app, service, PREFIX);
+    await app.ready();
+    const res = await app.inject({ method: 'GET', url: `${PREFIX}/admin/metrics` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
+    await app.close();
+  });
+});
+
+describe('GET /api/v1/voice/admin/metrics — service error', () => {
+  it('returns 500 when service throws', async () => {
+    const service = makeAudioTranslateService({ getSystemMetrics: jest.fn<any>().mockRejectedValue(new Error('metrics error')) });
+    const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    app.addHook('preHandler', async (req) => {
+      (req as any).user = { userId: USER_ID, role: 'admin' };
+    });
+    registerAnalysisRoutes(app, service, PREFIX);
+    await app.ready();
+    const res = await app.inject({ method: 'GET', url: `${PREFIX}/admin/metrics` });
+    expect(res.statusCode).toBe(500);
+    await app.close();
+  });
+});
+
+// ─── GET /api/v1/voice/health ─────────────────────────────────────────────────
+
+describe('GET /api/v1/voice/health — healthy', () => {
+  it('returns 200 when service is healthy', async () => {
+    const service = makeAudioTranslateService({ getHealthStatus: jest.fn<any>().mockResolvedValue({ status: 'healthy', services: {} }) });
+    const { app } = await buildApp({ service });
+    const res = await app.inject({ method: 'GET', url: `${PREFIX}/health` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.status).toBe('healthy');
+    await app.close();
+  });
+});
+
+describe('GET /api/v1/voice/health — degraded', () => {
+  it('returns 200 when service is degraded', async () => {
+    const service = makeAudioTranslateService({ getHealthStatus: jest.fn<any>().mockResolvedValue({ status: 'degraded', services: {} }) });
+    const { app } = await buildApp({ service });
+    const res = await app.inject({ method: 'GET', url: `${PREFIX}/health` });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+describe('GET /api/v1/voice/health — unhealthy', () => {
+  it('returns 503 when service is unhealthy', async () => {
+    const service = makeAudioTranslateService({ getHealthStatus: jest.fn<any>().mockResolvedValue({ status: 'unhealthy', services: {} }) });
+    const { app } = await buildApp({ service });
+    const res = await app.inject({ method: 'GET', url: `${PREFIX}/health` });
+    expect(res.statusCode).toBe(503);
+    await app.close();
+  });
+});
+
+describe('GET /api/v1/voice/health — service error', () => {
+  it('returns 503 when getHealthStatus throws', async () => {
+    const service = makeAudioTranslateService({ getHealthStatus: jest.fn<any>().mockRejectedValue(new Error('health check failed')) });
+    const { app } = await buildApp({ service });
+    const res = await app.inject({ method: 'GET', url: `${PREFIX}/health` });
+    expect(res.statusCode).toBe(503);
+    await app.close();
+  });
+});
+
+// ─── GET /api/v1/voice/languages ─────────────────────────────────────────────
+
+describe('GET /api/v1/voice/languages — success', () => {
+  it('returns 200 with supported languages', async () => {
+    const langs = { languages: [{ code: 'en', name: 'English' }], totalCount: 1 };
+    const service = makeAudioTranslateService({ getSupportedLanguages: jest.fn<any>().mockResolvedValue(langs) });
+    const { app } = await buildApp({ service });
+    const res = await app.inject({ method: 'GET', url: `${PREFIX}/languages` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
+    await app.close();
+  });
+});
+
+describe('GET /api/v1/voice/languages — service error', () => {
+  it('returns 500 when service throws', async () => {
+    const service = makeAudioTranslateService({ getSupportedLanguages: jest.fn<any>().mockRejectedValue(new Error('lang error')) });
+    const { app } = await buildApp({ service });
+    const res = await app.inject({ method: 'GET', url: `${PREFIX}/languages` });
+    expect(res.statusCode).toBe(500);
+    await app.close();
+  });
+});
