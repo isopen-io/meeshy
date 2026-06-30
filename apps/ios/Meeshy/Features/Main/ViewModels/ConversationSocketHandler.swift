@@ -1087,6 +1087,11 @@ final class ConversationSocketHandler {
         Task { [weak self] in
             await self?.delegate?.syncMissedMessages()
             await PendingStatusQueue.shared.flush()
+            // Flush the OfflineQueue on socket reconnect. OutboxRetryScheduler
+            // covers the network-reconnect path (NWPathMonitor) but a socket
+            // reconnect without a NW path change (e.g. server restart) would
+            // leave queued outbox records stranded until the next foreground.
+            await OutboxFlushTrigger.flushNow()
         }
     }
 

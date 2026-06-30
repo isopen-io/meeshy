@@ -23,10 +23,22 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
     private var contentHandler: ((UNNotificationContent) -> Void)?
     private var bestAttemptContent: UNMutableNotificationContent?
 
+    // Timestamp recorded at the very start of didReceive so that each download
+    // can cap its URLRequest timeout to what's left in the OS budget.
+    private var extensionStartTime: Date = .distantPast
+
+    // The OS grants the NSE ~30 s. We reserve 3 s at the end for INSendMessageIntent
+    // construction + contentHandler invocation, giving downloads 27 s total.
+    private static let nseBudget: TimeInterval = 27
+    // Never start a download with less than 2 s left — it would almost certainly
+    // time out mid-transfer and leave the extension hung right up to the OS kill.
+    private static let minDownloadBudget: TimeInterval = 2
+
     override func didReceive(
         _ request: UNNotificationRequest,
         withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void
     ) {
+        extensionStartTime = Date()
         self.contentHandler = contentHandler
         bestAttemptContent = request.content.mutableCopy() as? UNMutableNotificationContent
 
@@ -623,17 +635,26 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
 
     /// Generic data download for any push payload URL (avatar or message media).
     /// Fire-and-forget — completion is invoked exactly once, with nil on any failure.
+    ///
+    /// The timeout is dynamically capped to the remaining OS budget so that a slow
+    /// download never holds the notification hostage past the 30 s kill deadline.
+    /// If the remaining budget is below `minDownloadBudget` the download is skipped
+    /// immediately (completion(nil)) — better to deliver without rich content than
+    /// to let the extension be killed mid-transfer with no content at all.
     private func downloadData(
         from url: URL,
         completion: @escaping (Data?) -> Void
     ) {
+        let elapsed = Date().timeIntervalSince(extensionStartTime)
+        let budgetRemaining = Self.nseBudget - elapsed
+        guard budgetRemaining > Self.minDownloadBudget else {
+            completion(nil)
+            return
+        }
+        // Cap to 12 s max per download; reduce proportionally as budget shrinks.
+        let timeout = min(12, budgetRemaining)
         nonisolated(unsafe) let completion = completion
-        // Bound the request. The NSE has a hard ~30 s budget and the rich
-        // attachment (media preview / avatar) is OPTIONAL — a slow download must
-        // not hold the whole notification hostage. The default 60 s timeout
-        // exceeds the budget, so the system would kill the extension and the
-        // notification would land late, possibly without any rich content.
-        let request = URLRequest(url: url, timeoutInterval: 12)
+        let request = URLRequest(url: url, timeoutInterval: timeout)
         let task = URLSession.shared.dataTask(with: request) { data, _, error in
             guard let data, error == nil else {
                 completion(nil)
