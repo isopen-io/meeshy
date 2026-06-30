@@ -1,4 +1,5 @@
 import type { User } from '@meeshy/shared/types';
+import { getUserDisplayName as resolveDisplayName } from '@/utils/user-display-name';
 
 /**
  * Génère les initiales d'un utilisateur à partir de ses informations
@@ -64,35 +65,8 @@ export function getMessageInitials(message: unknown): string {
  * @returns Le nom d'affichage
  */
 export function getUserDisplayName(user: User | null | undefined): string {
-  if (!user) {
-    return 'Utilisateur inconnu';
-  }
-
-  // Priorité 1: displayName
-  if (user.displayName) {
-    return user.displayName;
-  }
-
-  // Priorité 2: firstName + lastName
-  if (user.firstName && user.lastName) {
-    return `${user.firstName} ${user.lastName}`;
-  }
-
-  // Priorité 3: firstName seulement
-  if (user.firstName) {
-    return user.firstName;
-  }
-
-  // Priorité 4: lastName seulement
-  if (user.lastName) {
-    return user.lastName;
-  }
-
-  // Priorité 5: username
-  if (user.username) {
-    return user.username;
-  }
-
-  // Fallback
-  return 'Utilisateur inconnu';
+  // Délègue à la source unique `utils/user-display-name` (priorité
+  // displayName > firstName+lastName > username, fallback `'Utilisateur inconnu'`,
+  // avec trim des valeurs blanches) — pas de réimplémentation locale.
+  return resolveDisplayName(user);
 }
