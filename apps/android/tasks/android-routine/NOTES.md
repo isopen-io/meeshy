@@ -62,6 +62,17 @@ Append-only log of gotchas and decisions that save time next run.
   decision is fully unit-tested off the Composable (`StorySwipeResolver`, `SlideReorderResolver`).
   The Composable measures (`onSizeChanged`, `LocalDensity`), accumulates (`detectHorizontalDragGestures`
   with a local `totalDrag`), and on drag end calls the pure resolver → an existing tested intent.
+- **Float interpolation drifts at the endpoints — short-circuit them.** `a + (b - a) * 1f` is
+  **not** bit-equal to `b` for many floats (1-ULP error), so a lerp tested with `isEqualTo(b)` at
+  `t = 1` (and `isEqualTo(a)` at `t = 0`) fails. Don't switch the test to a tolerance and lose
+  exactness — make `blend` return `this`/`other` directly when `k ≤ 0` / `k ≥ 1`. It's also the
+  correct design: "full-strength filter == base matrix" should be exact. Hit on `story-photo-filters`
+  (3 reds: `blend at one`, `non-finite → full`, VM `selecting a filter`).
+- **Model a small fixed-size numeric vector as `List<Float>`, not `FloatArray`, when you want value
+  equality in tests.** `FloatArray` uses reference equality (a `data class` over it won't compare by
+  content), breaking `assertThat(matrix).isEqualTo(other)`. `StoryColorMatrix` wraps a 20-element
+  `List<Float>` (value equality, JVM-testable) and the Composable only does `values.toFloatArray()`
+  at the glue boundary to feed Compose `ColorMatrix`.
 - **`Float.roundToInt()` rounds half **up** toward +∞** (`2.5 → 3`, but `-0.5 → 0`). When a
   reorder/threshold test sits exactly on `.5` the expectation is ambiguous — pick a value clearly
   above/below half (e.g. `2.3` not `2.5`) so the assertion is unambiguous, not flaky. Hit while

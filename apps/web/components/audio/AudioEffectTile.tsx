@@ -118,9 +118,6 @@ export function AudioEffectTile({
           enabled && 'ring-2 ring-white/20',
           className
         )}
-        role="button"
-        tabIndex={0}
-        aria-label={effectName}
         onClick={handleTileClick}
         onKeyDown={handleTileKeyDown}
       >
