@@ -378,8 +378,8 @@ export const socketCallAnalyticsSchema = z.object({
   averageRtt: z.number().nonnegative(),
   averagePacketLoss: z.number().nonnegative(),
   maxPacketLoss: z.number().nonnegative(),
-  codec: z.string(),
-  effectsUsed: z.array(z.string()),
+  codec: z.string().max(50),
+  effectsUsed: z.array(z.string().max(50)).max(50),
   filtersUsed: z.boolean(),
   transcriptionUsed: z.boolean(),
   qualityDistribution: z.object({
@@ -388,9 +388,9 @@ export const socketCallAnalyticsSchema = z.object({
     fair: z.number().min(0).max(1),
     poor: z.number().min(0).max(1),
   }),
-  platform: z.string(),
-  deviceModel: z.string(),
+  platform: z.string().max(50),
+  deviceModel: z.string().max(100),
   isVideo: z.boolean(),
-  endReason: z.string(),
+  endReason: z.string().max(50),
 });
 export type SocketCallAnalyticsInput = z.infer<typeof socketCallAnalyticsSchema>;
