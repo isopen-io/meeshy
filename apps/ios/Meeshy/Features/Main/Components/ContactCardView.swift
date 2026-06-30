@@ -3,6 +3,7 @@ import Combine
 import Contacts
 import ContactsUI
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Contact Card View (displayed inside a message bubble)
 
@@ -111,9 +112,29 @@ struct ContactCardView: View {
             )
         }
         .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(String(format: String(localized: "contact-card.a11y-label", defaultValue: "Contact partage: %@", bundle: .main), contact.fullName))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Self.accessibilityLabel(for: contact))
         .accessibilityHint(String(localized: "contact-card.a11y-hint", defaultValue: "Appuyer pour ouvrir le contact", bundle: .main))
+    }
+
+    // MARK: - Accessibility
+
+    /// Composes the full VoiceOver label for a shared contact card.
+    ///
+    /// The visible rows (phone numbers, emails) are otherwise lost to VoiceOver:
+    /// an explicit `.accessibilityLabel` overrides any `children: .combine` merge,
+    /// so the shared phone/email values must be folded into the label explicitly.
+    static func accessibilityLabel(for contact: SharedContact) -> String {
+        var parts = [
+            String(format: String(localized: "contact-card.a11y-label", defaultValue: "Contact partage: %@", bundle: .main), contact.fullName)
+        ]
+        if !contact.phoneNumbers.isEmpty {
+            parts.append(String(format: String(localized: "contact-card.a11y-phones", defaultValue: "Telephone: %@", bundle: .main), contact.phoneNumbers.joined(separator: ", ")))
+        }
+        if !contact.emails.isEmpty {
+            parts.append(String(format: String(localized: "contact-card.a11y-emails", defaultValue: "E-mail: %@", bundle: .main), contact.emails.joined(separator: ", ")))
+        }
+        return parts.joined(separator: ", ")
     }
 }
 
