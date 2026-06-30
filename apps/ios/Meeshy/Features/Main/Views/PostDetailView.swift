@@ -1542,30 +1542,44 @@ struct PostDetailView: View {
         VStack(spacing: 8) {
             // Single media
             if mediaList.count == 1, let media = mediaList.first {
-                detailSingleMedia(media)
+                detailSingleMedia(media, isPrimaryVideo: media.id == primaryAutoplayVideoId)
             } else {
-                // Visual grid
+                // Visual grid (multi-media videos render as tap-to-play thumbnails
+                // here — they never autoplay).
                 if !visualMedia.isEmpty {
                     detailVisualGrid(visualMedia)
                 }
-                // Audio players
+                // Audio players (never a video → never the primary autoplay video)
                 ForEach(audioMedia) { media in
-                    detailSingleMedia(media)
+                    detailSingleMedia(media, isPrimaryVideo: false)
                 }
                 // Documents
                 ForEach(docMedia) { media in
-                    detailSingleMedia(media)
+                    detailSingleMedia(media, isPrimaryVideo: false)
                 }
                 // Locations
                 ForEach(locMedia) { media in
-                    detailSingleMedia(media)
+                    detailSingleMedia(media, isPrimaryVideo: false)
                 }
             }
         }
     }
 
+    /// The single video that autoplays on open (F2): deterministic own > repost.
+    /// The first `.video` of the post's own media; if the post has no own video,
+    /// the first `.video` of the repost's media. `nil` when neither has a video.
+    /// Only this media id gets `autoplayOnAppear: true` — every other video stays
+    /// tap-to-play so two videos (own + repost) never fight over the single
+    /// `SharedAVPlayerManager` (last-to-appear-wins flicker / clobbered load).
+    private var primaryAutoplayVideoId: String? {
+        guard let post = displayPost else { return nil }
+        if let own = post.media.first(where: { $0.type == .video }) { return own.id }
+        if let reposted = post.repost?.media.first(where: { $0.type == .video }) { return reposted.id }
+        return nil
+    }
+
     @ViewBuilder
-    private func detailSingleMedia(_ media: FeedMedia) -> some View {
+    private func detailSingleMedia(_ media: FeedMedia, isPrimaryVideo: Bool) -> some View {
         switch media.type {
         case .image:
             let aspectRatio: CGFloat? = {
@@ -1600,6 +1614,17 @@ struct PostDetailView: View {
                     frame: .card,
                     availability: availability,
                     performance: .inline,
+                    // WS3.7 / D2 / F2 — detail media is a focused view: autoplay
+                    // the PRIMARY video (with sound) on appear. The feed and every
+                    // other call site keep the default (tap-to-play, muted). Only
+                    // the primary video (deterministic own > repost, see
+                    // `primaryAutoplayVideoId`) autoplays — a post + repost each
+                    // with a video would otherwise both hit the single
+                    // `SharedAVPlayerManager` and clobber each other.
+                    autoplayOnAppear: isPrimaryVideo,
+                    // F5 — detail = sound on. The mute intent is now an opaque SDK
+                    // param; the product decision lives here, app-side.
+                    autoplayMuted: false,
                     onDownload: onDownload,
                     onExpand: { openMediaFullscreen(media) }
                 )

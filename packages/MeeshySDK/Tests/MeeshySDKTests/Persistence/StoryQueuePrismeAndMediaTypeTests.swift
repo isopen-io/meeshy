@@ -62,6 +62,35 @@ struct StoryQueuePrismeAndMediaTypeTests {
         #expect(StoryMediaReference.inferVisualMediaType(forPath: "/tmp/noext") == "image")
     }
 
+    // MARK: - WS5.3 / F4 — extension edge cases (documents the closed-set boundary)
+
+    @Test func inferVisualMediaType_uppercaseMP4_returnsVideo() {
+        // Lowercasing before lookup — an uppercase container extension still
+        // resolves as video (regression guard for the case-insensitivity).
+        #expect(StoryMediaReference.inferVisualMediaType(forPath: "/tmp/clip.MP4") == "video")
+    }
+
+    @Test func inferVisualMediaType_hiddenFileWithVideoExtension_returnsVideo() {
+        // A leading-dot (hidden) file that STILL carries a real extension keeps
+        // its kind — `NSString.pathExtension` reads the trailing ".mp4".
+        #expect(StoryMediaReference.inferVisualMediaType(forPath: "/tmp/.hidden.mp4") == "video")
+    }
+
+    @Test func inferVisualMediaType_dotfileWithoutExtension_returnsImage() {
+        // A pure dotfile (".gitignore") has NO extension per `NSString`
+        // semantics → falls back to the "image" default. Documents the boundary.
+        #expect(StoryMediaReference.inferVisualMediaType(forPath: "/tmp/.gitignore") == "image")
+    }
+
+    @Test func inferVisualMediaType_queryStringPath_returnsImage_closedSetBoundary() {
+        // A URL-shaped path with a query string CANNOT occur from the real
+        // callers (they feed `URL.path`, which strips the query), so the closed
+        // set treats `mp4?token=abc` as an unknown extension → "image". This
+        // pins the documented assumption: if a future caller ever passes a raw
+        // URL string here, this test fails loudly and forces a decision.
+        #expect(StoryMediaReference.inferVisualMediaType(forPath: "/tmp/movie.mp4?token=abc") == "image")
+    }
+
     // MARK: - WS5.3 — converter tags a queued .mp4 as video, .jpg as image
 
     @Test func convert_tagsMp4AsVideo_andJpgAsImage() {

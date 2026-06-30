@@ -10,6 +10,7 @@ export * from './conversation-helpers.js';
 export * from './attachment-validators.js';
 export * from './language-normalize.js';
 export * from './notification-strings.js';
+export * from './duration-format.js';
 export { getSenderUserId } from './sender-identity.js';
 export {
   generateClientMessageId,
