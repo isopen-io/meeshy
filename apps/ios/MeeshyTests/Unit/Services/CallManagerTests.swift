@@ -2952,6 +2952,223 @@ final class CallForcedLeaveDataTests: XCTestCase {
     }
 }
 
+// MARK: - CallManager.formatDuration (pure helper)
+
+/// `formatDuration` was extracted as a `nonisolated static` so it is testable
+/// without touching `callDuration` (which is `private(set)`). These tests also
+/// act as a regression guard against the pre-fix bug where calls ≥ 1 hour were
+/// shown as "65:00" instead of "1:05:00".
+@MainActor
+final class CallManagerFormatDurationTests: XCTestCase {
+
+    func test_formatDuration_zero_showsDoubleZero() {
+        XCTAssertEqual(CallManager.formatDuration(0), "00:00")
+    }
+
+    func test_formatDuration_oneSecond_showsZeroZeroZeroOne() {
+        XCTAssertEqual(CallManager.formatDuration(1), "00:01")
+    }
+
+    func test_formatDuration_59seconds_noLeadingMinute() {
+        XCTAssertEqual(CallManager.formatDuration(59), "00:59")
+    }
+
+    func test_formatDuration_oneMinute_showsZeroOneZeroZero() {
+        XCTAssertEqual(CallManager.formatDuration(60), "01:00")
+    }
+
+    func test_formatDuration_90seconds_showsOneMinute30Seconds() {
+        XCTAssertEqual(CallManager.formatDuration(90), "01:30")
+    }
+
+    func test_formatDuration_59Minutes59Seconds_maxSubHour() {
+        XCTAssertEqual(CallManager.formatDuration(3599), "59:59")
+    }
+
+    func test_formatDuration_exactlyOneHour_showsHHMMSS() {
+        // Pre-fix: was "60:00"; post-fix: "1:00:00"
+        XCTAssertEqual(CallManager.formatDuration(3600), "1:00:00")
+    }
+
+    func test_formatDuration_oneHourFiveMinutes_showsHHMMSS() {
+        // Pre-fix: was "65:00"; post-fix: "1:05:00"
+        XCTAssertEqual(CallManager.formatDuration(3900), "1:05:00")
+    }
+
+    func test_formatDuration_twoHours_showsHHMMSS() {
+        XCTAssertEqual(CallManager.formatDuration(7200), "2:00:00")
+    }
+
+    func test_formatDuration_twoHours30MinutesAndSomeSeconds() {
+        // 2h 30m 45s = 9045s
+        XCTAssertEqual(CallManager.formatDuration(9045), "2:30:45")
+    }
+
+    func test_formatDuration_oneHour59Minutes59Seconds() {
+        // 7199 = 1*3600 + 59*60 + 59
+        XCTAssertEqual(CallManager.formatDuration(7199), "1:59:59")
+    }
+
+    func test_formatDuration_fractionalSecondsAreTruncated() {
+        // 90.9 seconds → 01:30 (truncate, not round)
+        XCTAssertEqual(CallManager.formatDuration(90.9), "01:30")
+    }
+
+    func test_formatDuration_subHour_doesNotShowHours() {
+        // Ensure < 1 h keeps the compact MM:SS format
+        let result = CallManager.formatDuration(3599)
+        XCTAssertFalse(result.contains(":") && result.split(separator: ":").count == 3,
+                       "sub-hour duration must use MM:SS not HH:MM:SS; got \(result)")
+    }
+
+    func test_formatDuration_oneHour_usesThreeComponents() {
+        let result = CallManager.formatDuration(3600)
+        XCTAssertEqual(result.split(separator: ":").count, 3,
+                       "≥1 h duration must use H:MM:SS format; got \(result)")
+    }
+
+    func test_formatDuration_minutesAndSecondsArePaddedToTwoDigits() {
+        // 1h 5m 3s → "1:05:03" (not "1:5:3")
+        XCTAssertEqual(CallManager.formatDuration(3600 + 5 * 60 + 3), "1:05:03")
+    }
+}
+
+// MARK: - Proximity Monitoring Source Audit
+
+/// Verifies that `updateProximityMonitoring` is correctly wired to both
+/// `callState` and `isVideoEnabled`, and that the condition is right:
+/// monitoring is ON only during audio-only active calls.
+@MainActor
+final class CallManagerProximityMonitoringTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_updateProximityMonitoring_isCalledFromCallStateDidSet() throws {
+        let source = try callManagerSource()
+        guard let didSetRange = source.range(of: "var callState: CallState") else {
+            XCTFail("callState property not found"); return
+        }
+        let afterCallState = String(source[didSetRange.upperBound...])
+        guard let didSetBlock = afterCallState.range(of: "didSet") else {
+            XCTFail("callState didSet not found"); return
+        }
+        let nextProp = afterCallState.range(of: "\n    @Published", range: didSetBlock.upperBound..<afterCallState.endIndex)?.lowerBound
+            ?? afterCallState.endIndex
+        let block = String(afterCallState[didSetBlock.lowerBound..<nextProp])
+        XCTAssertTrue(
+            block.contains("updateProximityMonitoring()"),
+            "callState.didSet must call updateProximityMonitoring() so the sensor is " +
+            "disabled when a call ends and enabled when a call becomes active"
+        )
+    }
+
+    func test_updateProximityMonitoring_isCalledFromIsVideoEnabledDidSet() throws {
+        let source = try callManagerSource()
+        guard let videoDidSetRange = source.range(of: "var isVideoEnabled: Bool") else {
+            XCTFail("isVideoEnabled property not found"); return
+        }
+        let after = String(source[videoDidSetRange.upperBound...])
+        guard let didSet = after.range(of: "didSet") else {
+            XCTFail("isVideoEnabled didSet not found"); return
+        }
+        let nextBrace = after.range(of: "}", range: didSet.upperBound..<after.endIndex)?.upperBound ?? after.endIndex
+        let block = String(after[didSet.lowerBound..<nextBrace])
+        XCTAssertTrue(
+            block.contains("updateProximityMonitoring()"),
+            "isVideoEnabled.didSet must call updateProximityMonitoring() so the sensor " +
+            "transitions correctly between audio-only and video modes"
+        )
+    }
+
+    func test_updateProximityMonitoring_enablesOnlyForAudioOnlyActiveCall() throws {
+        let source = try callManagerSource()
+        guard let fnRange = source.range(of: "private func updateProximityMonitoring()") else {
+            XCTFail("updateProximityMonitoring not found"); return
+        }
+        let after = String(source[fnRange.upperBound...])
+        guard let bodyEnd = after.range(of: "\n    }") else {
+            XCTFail("updateProximityMonitoring body end not found"); return
+        }
+        let body = String(after[after.startIndex..<bodyEnd.upperBound])
+        XCTAssertTrue(
+            body.contains("callState.isActive") && body.contains("isVideoEnabled"),
+            "updateProximityMonitoring must gate on `callState.isActive && !isVideoEnabled` — " +
+            "proximity monitoring must only be active during audio-only active calls"
+        )
+        XCTAssertTrue(
+            body.contains("isProximityMonitoringEnabled"),
+            "updateProximityMonitoring must write to UIDevice.current.isProximityMonitoringEnabled"
+        )
+    }
+}
+
+// MARK: - Route Change Default Branch Audit
+
+/// Verifies that the `default:` branch of `handleAudioRouteChange` calls
+/// `applySpeakerRoute()`. The default case handles wakeFromSleep, categoryChange,
+/// and other OS-driven transitions — all require re-applying the speaker route
+/// because iOS may silently reset the output port during these transitions.
+@MainActor
+final class CallManagerRouteChangeDefaultTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func routeChangeBody(in source: String) -> String? {
+        guard let fnRange = source.range(of: "private func handleAudioRouteChange(reasonRaw:") else { return nil }
+        let after = source[fnRange.upperBound...]
+        guard let endRange = after.range(of: "\n    }") else { return nil }
+        return String(after[after.startIndex..<endRange.upperBound])
+    }
+
+    func test_handleAudioRouteChange_default_callsApplySpeakerRoute() throws {
+        let source = try callManagerSource()
+        guard let body = routeChangeBody(in: source) else {
+            XCTFail("handleAudioRouteChange not found"); return
+        }
+        guard let defaultRange = body.range(of: "default:") else {
+            XCTFail("default: case not found in handleAudioRouteChange"); return
+        }
+        let afterDefault = String(body[defaultRange.upperBound...])
+        // The closing `}` of the switch ends the default case.
+        let endOfDefault = afterDefault.range(of: "\n        }")?.lowerBound ?? afterDefault.endIndex
+        let defaultBlock = String(afterDefault[afterDefault.startIndex..<endOfDefault])
+        XCTAssertTrue(
+            defaultBlock.contains("applySpeakerRoute()"),
+            "handleAudioRouteChange default: must call applySpeakerRoute() to handle " +
+            "wakeFromSleep, categoryChange, and other OS-driven route transitions that " +
+            "reset the output port without a specific case"
+        )
+    }
+
+    func test_handleAudioRouteChange_hasDefaultCase_coveringWakeFromSleep() throws {
+        let source = try callManagerSource()
+        guard let body = routeChangeBody(in: source) else {
+            XCTFail("handleAudioRouteChange not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("default:"),
+            "handleAudioRouteChange must have a default: case to handle wakeFromSleep " +
+            "and other non-explicit route change reasons"
+        )
+    }
+}
+
 // MARK: - rejectPendingCall guard
 
 @MainActor
