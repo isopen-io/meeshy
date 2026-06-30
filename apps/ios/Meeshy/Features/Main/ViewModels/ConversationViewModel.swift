@@ -4084,8 +4084,7 @@ extension ConversationViewModel: ConversationSocketDelegate {
         Logger.socket.info("Participant \(participantId) role changed to \(newRole)")
         _topActiveMembers = nil
         let convId = conversationId
-        Task { [weak self] in
-            guard self != nil else { return }
+        Task {
             await CacheCoordinator.shared.participants.invalidate(for: convId)
         }
         objectWillChange.send()
