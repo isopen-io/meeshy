@@ -53,6 +53,22 @@ data class PendingMediaUpload(
 )
 
 /**
+ * Transient on-canvas feedback shown **only while an element is being dragged**: which
+ * alignment guide line(s) the element has snapped onto ([verticalGuide]/[horizontalGuide],
+ * normalised positions; `null` when that axis is free) and whether the element is still
+ * inside the safe zone ([withinSafeZone] = `false` ⇒ the canvas flashes an out-of-bounds
+ * warning). It is cleared the instant the drag ends, so it never lingers as state. The
+ * snap math itself lives in the pure [StorySnapResolver]; this just carries its verdict
+ * to the Composable.
+ */
+@Immutable
+data class SnapFeedback(
+    val verticalGuide: Float?,
+    val horizontalGuide: Float?,
+    val withinSafeZone: Boolean,
+)
+
+/**
  * Immutable state of the story composer. [canPublish] is derived from the draft
  * and gated while a publish or media upload is in flight. [attachments] hold the
  * already-uploaded media for the on-screen preview; [pendingUploads] are the media
@@ -67,6 +83,7 @@ data class StoryComposerUiState(
     val attachments: List<UploadedMedia> = emptyList(),
     val pendingUploads: List<PendingMediaUpload> = emptyList(),
     val selectedTextElementId: String? = null,
+    val snapFeedback: SnapFeedback? = null,
     val band: ComposerBandState = ComposerBandState.Hidden,
     val isUploadingMedia: Boolean = false,
     val isPublishing: Boolean = false,
@@ -209,12 +226,35 @@ class StoryComposerViewModel @Inject constructor(
     }
 
     /**
-     * Drags the on-canvas element [id] by the normalised canvas deltas [dx]/[dy]
-     * (clamped by the pure [StoryTextElement.nudged]); selection and editing are
-     * untouched. The Composable converts drag pixels to fractions.
+     * Drags the on-canvas element [id] by the normalised canvas deltas [dx]/[dy], with
+     * **magnetic snapping**: the resulting centre is run through the pure
+     * [StorySnapResolver], which locks each axis onto the nearest alignment guide within
+     * its threshold and reports the active guide lines + safe-zone verdict as transient
+     * [SnapFeedback] (cleared by [onTextElementDragEnd]). The element is then moved by the
+     * snap-adjusted delta through the existing [StorySlideDeck.moveTextElement] path, so
+     * the canvas clamp still lives in one place. Selection and editing are untouched, and
+     * an unknown id (or one not on the selected, draggable slide) is inert. The Composable
+     * converts drag pixels to fractions and renders the returned guides/warning.
      */
     fun onTextElementMoved(id: String, dx: Float, dy: Float) {
-        _state.update { it.copy(deck = it.deck.moveTextElement(id, dx, dy)) }
+        _state.update { state ->
+            val element = state.deck.selectedSlide.elements.firstOrNull { it.id == id }
+                ?: return@update state
+            val snap = StorySnapResolver.resolve(element.x + dx, element.y + dy)
+            state.copy(
+                deck = state.deck.moveTextElement(id, snap.x - element.x, snap.y - element.y),
+                snapFeedback = SnapFeedback(snap.verticalGuide, snap.horizontalGuide, snap.withinSafeZone),
+            )
+        }
+    }
+
+    /**
+     * Ends an on-canvas drag: drops the transient [SnapFeedback] so the guide lines and
+     * any out-of-bounds warning disappear the moment the finger lifts. Inert when no
+     * feedback is showing, so a stray drag-end never churns state.
+     */
+    fun onTextElementDragEnd() {
+        _state.update { if (it.snapFeedback == null) it else it.copy(snapFeedback = null) }
     }
 
     /**

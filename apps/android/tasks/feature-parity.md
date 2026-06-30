@@ -572,7 +572,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Emoji sticker picker (categorised + searchable)
 - [ ] Backgrounds: random pastel, colour/gradient palette, image, looping/non-looping video
 - [ ] 8 photo filters (vintage/bw/warm/cool/dramatic/vivid/fade/chrome) with intensity
-- [ ] Frosted-glass text backdrops; safe-zone overlay; snap-to-guide + out-of-bounds warning
+- [~] Frosted-glass text backdrops; safe-zone overlay; snap-to-guide + out-of-bounds warning
+      **Snap-to-guide + out-of-bounds warning done** (`story-canvas-snap-guides`): a pure
+      `StorySnapResolver.resolve(x, y, …)` → `SnapResult(x, y, verticalGuide, horizontalGuide,
+      withinSafeZone)` is the single source of truth for where a dragged element settles. Each axis
+      **independently** locks onto the nearest in-range alignment guide (rule-of-thirds + centre)
+      within `SNAP_THRESHOLD`; outside it the axis stays at its clamped candidate; a non-finite
+      candidate collapses to the canvas centre and out-of-canvas values clamp into `0f..1f`.
+      `withinSafeZone` flags a centre that drifts inside the `SAFE_ZONE_INSET` edge margin. The
+      existing `onTextElementMoved` drag now routes its resulting centre through the resolver and
+      moves the element by the **snap-adjusted** delta (reusing `StorySlideDeck.moveTextElement`,
+      no new reducer), exposing the live guides + safe-zone verdict as transient
+      `StoryComposerUiState.snapFeedback` (cleared by `onTextElementDragEnd` on lift). The canvas
+      draws the active guide line(s) (accent `primary`) and an `error`-coloured warning border when
+      out of bounds; the drag-end signal is a non-consuming `Final`-pass `awaitEachGesture` that
+      runs alongside the transform detector (glue). A natural magnetic-alignment gesture — surpasses
+      iOS, whose snapping has no per-axis guide overlay here. +25 tests (18 resolver, 7 VM). Pending:
+      frosted-glass text backdrops, persistent safe-zone overlay grid.
 - [ ] Z-order management (front/back, forward/backward) persisted for WYSIWYG playback
 - [~] Multi-element context menu (edit, duplicate, reorder, delete) — **edit** (tap-to-select +
       caption/element routing), **delete** (per-element remove handle), and **duplicate**
