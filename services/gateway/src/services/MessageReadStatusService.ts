@@ -14,6 +14,7 @@
  */
 
 import { PrismaClient, Message, Prisma } from "@meeshy/shared/prisma/client";
+import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { enhancedLogger } from '../utils/logger-enhanced';
 
 // Logger dédié pour MessageReadStatusService
@@ -755,7 +756,7 @@ export class MessageReadStatusService {
         const participant = participantById.get(participantId);
         if (!participant) continue; // orphan/inactive — participant deleted/banned/inactive
 
-        const avatarURL = participant.avatar ?? participant.user?.avatar ?? null;
+        const avatarURL = resolveParticipantAvatar(participant);
 
         const cursor = cursorByParticipant.get(participantId);
         const cursorDelivered =
@@ -841,7 +842,7 @@ export class MessageReadStatusService {
         list.push({
           participantId: entry.participantId,
           displayName: participant.displayName,
-          avatarURL: participant.avatar ?? participant.user?.avatar ?? null,
+          avatarURL: resolveParticipantAvatar(participant),
           lastPlayPositionMs: entry.lastPlayPositionMs ?? null,
           listenedComplete: entry.listenedComplete,
           lastWatchPositionMs: entry.lastWatchPositionMs ?? null,
@@ -865,7 +866,7 @@ export class MessageReadStatusService {
         notSeenBy.push({
           participantId: p.id,
           displayName: p.displayName,
-          avatarURL: p.user?.avatar ?? null,
+          avatarURL: resolveParticipantAvatar(p),
         });
       }
 

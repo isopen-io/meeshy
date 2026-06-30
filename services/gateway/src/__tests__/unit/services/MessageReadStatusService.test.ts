@@ -774,6 +774,34 @@ describe('MessageReadStatusService', () => {
       expect(result.notSeenCount).toBe(0);
     });
 
+    // Regression: the `notSeenBy` list must resolve avatars with the SAME rule as
+    // `receivedBy`/`readBy` — participant-local avatar first, then the linked user
+    // avatar. A participant with only a local avatar (no `user.avatar`) was showing
+    // `null` in `notSeenBy` while showing its photo in the other lists for the SAME
+    // message. Source of truth: resolveParticipantAvatar (@meeshy/shared).
+    it('should resolve the participant-local avatar in notSeenBy, consistent with the other lists', async () => {
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: testMessageId,
+        createdAt: new Date('2025-01-01T10:00:00Z'),
+        senderId: testParticipantId,
+        anonymousSenderId: null,
+        conversationId: testConversationId,
+      });
+      // User2 has a local participant avatar but no linked user avatar, and has not
+      // seen the message (no cursor, not the sender) → lands in notSeenBy.
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: testParticipantId, displayName: 'User1', avatar: null, user: null },
+        { id: testParticipantId2, displayName: 'User2', avatar: 'local.jpg', user: null },
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+
+      expect(result.notSeenBy).toHaveLength(1);
+      expect(result.notSeenBy[0].participantId).toBe(testParticipantId2);
+      expect(result.notSeenBy[0].avatarURL).toBe('local.jpg');
+    });
+
     it('should expose per-participant media consumption positions for the message attachments', async () => {
       const messageCreatedAt = new Date('2025-01-01T10:00:00Z');
       mockPrisma.message.findUnique.mockResolvedValue({
