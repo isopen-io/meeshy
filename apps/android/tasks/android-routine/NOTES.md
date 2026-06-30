@@ -3,6 +3,12 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Environment
+- ⚠ **Always rebase the slice onto `origin/main`, never local `main`.** Fresh containers ship a
+  stale local `main`, and `git pull origin main` can hard-fail with `Need to specify how to
+  reconcile divergent branches` (no merge/rebase strategy configured) — which silently leaves you on
+  the stale tree. A branch cut from it **loses the previous merged slice** (e.g. `story-canvas-snap-guides`
+  was first cut without PR #1045's `scale`/`rotation` fields). Recipe: `git fetch origin main && git
+  checkout -B claude/apps/android/<slice> origin/main`. Verify a known recent symbol is present before coding.
 - Fresh container has **no Android SDK**. Install per `ROUTINE.md` recipe (~2 min).
 - JDK 21 preinstalled; modules target JVM 17 — fine.
 - First Gradle run downloads the whole toolchain (slow); run it in the
@@ -543,3 +549,53 @@ Append-only log of gotchas and decisions that save time next run.
 - **Default field keeps existing tests byte-identical.** Adding `transform = IDENTITY` to `StorySlide`
   with a default means every prior `StorySlide(id=..)` / deck test still constructs the same value —
   only genuinely new per-slide-transform behaviour needed new tests.
+
+## `story-text-element-transform` — per-element pinch/rotate (2026-06-29)
+- **Extend `normalised()`, don't bolt clamps onto every mutator.** Adding `scale`/`rotationDeg` to
+  `StoryTextElement`, I made `normalised()` re-pull *all* continuous fields (x/y/scale/rotation) into
+  range. Because the deck's `updateTextElement` already calls `.normalised()` after every transform,
+  every reducer (move/style/transform) re-clamps for free — one place, no per-mutator clamp drift.
+  `transformed()` still clamps directly too (mirrors `nudged`), so the value is sane even if called
+  raw; `normalised()` is then idempotent.
+- **Non-finite is a real gesture input.** A `detectTransformGestures` zoom can be `0`/`NaN` on a
+  degenerate pinch. `clampScale` guards `isFinite()` → `DEFAULT_SCALE` (coerceIn would pass `NaN`
+  straight through — `NaN.coerceIn` returns `NaN` because every comparison is false). `normaliseRotation`
+  guards the same. Both have a unit test pinning the non-finite arm.
+- **Rotation wrap = `(-180, 180]`.** `% 360` then `+360` if `<= -180`, `-360` if `> 180`. `-180` maps
+  to `180` so `±180` are one canonical value; `360`→`0`, `540`→`180`, `270`→`-90`. Tested each arm.
+- **One gesture, three effects.** Switching the per-element `detectDragGestures` → `detectTransformGestures`
+  lets a single two-finger gesture pan (→ `onTextElementMoved`) *and* pinch-scale + rotate (→
+  `onTextElementTransform`). Single-finger drag still pans. More natural than separate handle chips
+  (CLAUDE.md UX rule). The Composable forwards `zoom`/`rotation` verbatim — zero testable decision lost
+  to the JVM gate; `graphicsLayer { scaleX/scaleY/rotationZ }` renders around the layer centre while the
+  `offset` keeps using the *unscaled* measured size, so centring stays correct under scale.
+- **Wire fields already existed.** `StoryTextObject.scale`/`rotation` were on the `:core:model` port
+  from day one but always left at defaults; this slice is purely `:feature:stories` consuming them — no
+  SDK/model change, keeps the diff `apps/android`-only.
+
+## `story-canvas-snap-guides` — magnetic snap + safe-zone on drag (2026-06-30)
+- **Snap the delta, reuse the reducer.** Rather than add an absolute `placeTextElement` reducer (which
+  would orphan `moveTextElement`/`nudged`), the snap-aware `onTextElementMoved` computes the resolver's
+  snapped centre, then moves by `snap.x - element.x` / `snap.y - element.y` through the **existing**
+  `StorySlideDeck.moveTextElement` delta path. One reducer, no orphan, the canvas clamp still lives in
+  `nudged`. The existing corner-clamp test (`drag 0.9,-0.9 → (1,0)`) stays green untouched because the
+  far corner is beyond every guide's threshold (snapping is a no-op there) — proof a magnetic enhancement
+  need not break the raw-move contract.
+- **Per-axis independent snap.** `resolve` snaps x against vertical guides and y against horizontal guides
+  separately, so an element can lock to the centre column while its row slides free — matches iOS. Guides
+  are `[1/3, 0.5, 2/3]` on each axis (rule-of-thirds + centre). Min guide gap (0.167) ≫ threshold (0.025),
+  so a centre is ever within threshold of at most one guide — `minByOrNull` then a single threshold check
+  is enough; no tie-breaking needed.
+- **`coerceIn` doesn't guard `NaN` (again).** Snap's `clampCoord` does `if (value.isFinite()) coerceIn(0,1)
+  else CENTER`. A `NaN`/∞ drag candidate (degenerate gesture) collapses to the canvas centre instead of
+  poisoning the position. Same lesson as `clampScale` — pin the non-finite arm with a test.
+- **Transient feedback, cleared on lift.** Guide lines + the out-of-bounds verdict live in
+  `StoryComposerUiState.snapFeedback: SnapFeedback?` — set during drag, cleared by `onTextElementDragEnd()`.
+  It's *transient UI feedback*, never persisted on the element; the element only carries its snapped x/y.
+- **Compose drag-end without reimplementing `detectTransformGestures`.** That detector never returns (its
+  internal `awaitEachGesture` loops forever), so you can't append an `onEnd` after it, and a parallel
+  detector on the **Main** pass would see consumed events and cancel early. Pattern that works: a second
+  `pointerInput` running `awaitEachGesture { awaitFirstDown(false); do { awaitPointerEvent(Final) } while
+  (changes.any { pressed }) ; onDragEnd() }`. The **`Final`** pass observes events *after* the transform
+  detector consumed them and only watches `pressed`, so it fires exactly on lift without stealing the
+  gesture. Pure glue (JVM-exempt); the testable decision (clear vs keep) is the VM's `onTextElementDragEnd`.

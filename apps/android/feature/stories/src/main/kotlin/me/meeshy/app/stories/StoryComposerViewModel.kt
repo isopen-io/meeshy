@@ -35,6 +35,10 @@ private fun newSlideId(): String = UUID.randomUUID().toString()
 /** Mints a fresh, collision-free text-element id (same impure-edge rationale). */
 private fun newTextElementId(): String = UUID.randomUUID().toString()
 
+/** Normalised canvas offset given to a duplicated element so the copy is visibly
+ * clear of its source rather than hidden directly behind it. */
+private const val DUPLICATE_ELEMENT_OFFSET: Float = 0.04f
+
 /**
  * A media attachment durably queued offline: its bytes live in `MediaBlobStore`
  * and an `UPLOAD_MEDIA` outbox row is enqueued, both keyed by [cmid]. The publish
@@ -46,6 +50,22 @@ private fun newTextElementId(): String = UUID.randomUUID().toString()
 data class PendingMediaUpload(
     val cmid: String,
     val item: MediaUploadItem,
+)
+
+/**
+ * Transient on-canvas feedback shown **only while an element is being dragged**: which
+ * alignment guide line(s) the element has snapped onto ([verticalGuide]/[horizontalGuide],
+ * normalised positions; `null` when that axis is free) and whether the element is still
+ * inside the safe zone ([withinSafeZone] = `false` ⇒ the canvas flashes an out-of-bounds
+ * warning). It is cleared the instant the drag ends, so it never lingers as state. The
+ * snap math itself lives in the pure [StorySnapResolver]; this just carries its verdict
+ * to the Composable.
+ */
+@Immutable
+data class SnapFeedback(
+    val verticalGuide: Float?,
+    val horizontalGuide: Float?,
+    val withinSafeZone: Boolean,
 )
 
 /**
@@ -63,6 +83,8 @@ data class StoryComposerUiState(
     val attachments: List<UploadedMedia> = emptyList(),
     val pendingUploads: List<PendingMediaUpload> = emptyList(),
     val selectedTextElementId: String? = null,
+    val snapFeedback: SnapFeedback? = null,
+    val band: ComposerBandState = ComposerBandState.Hidden,
     val isUploadingMedia: Boolean = false,
     val isPublishing: Boolean = false,
     val errorMessage: String? = null,
@@ -204,12 +226,35 @@ class StoryComposerViewModel @Inject constructor(
     }
 
     /**
-     * Drags the on-canvas element [id] by the normalised canvas deltas [dx]/[dy]
-     * (clamped by the pure [StoryTextElement.nudged]); selection and editing are
-     * untouched. The Composable converts drag pixels to fractions.
+     * Drags the on-canvas element [id] by the normalised canvas deltas [dx]/[dy], with
+     * **magnetic snapping**: the resulting centre is run through the pure
+     * [StorySnapResolver], which locks each axis onto the nearest alignment guide within
+     * its threshold and reports the active guide lines + safe-zone verdict as transient
+     * [SnapFeedback] (cleared by [onTextElementDragEnd]). The element is then moved by the
+     * snap-adjusted delta through the existing [StorySlideDeck.moveTextElement] path, so
+     * the canvas clamp still lives in one place. Selection and editing are untouched, and
+     * an unknown id (or one not on the selected, draggable slide) is inert. The Composable
+     * converts drag pixels to fractions and renders the returned guides/warning.
      */
     fun onTextElementMoved(id: String, dx: Float, dy: Float) {
-        _state.update { it.copy(deck = it.deck.moveTextElement(id, dx, dy)) }
+        _state.update { state ->
+            val element = state.deck.selectedSlide.elements.firstOrNull { it.id == id }
+                ?: return@update state
+            val snap = StorySnapResolver.resolve(element.x + dx, element.y + dy)
+            state.copy(
+                deck = state.deck.moveTextElement(id, snap.x - element.x, snap.y - element.y),
+                snapFeedback = SnapFeedback(snap.verticalGuide, snap.horizontalGuide, snap.withinSafeZone),
+            )
+        }
+    }
+
+    /**
+     * Ends an on-canvas drag: drops the transient [SnapFeedback] so the guide lines and
+     * any out-of-bounds warning disappear the moment the finger lifts. Inert when no
+     * feedback is showing, so a stray drag-end never churns state.
+     */
+    fun onTextElementDragEnd() {
+        _state.update { if (it.snapFeedback == null) it else it.copy(snapFeedback = null) }
     }
 
     /**
@@ -243,8 +288,63 @@ class StoryComposerViewModel @Inject constructor(
         _state.update { it.copy(deck = it.deck.updateTextElement(id) { element -> element.copy(align = align) }) }
     }
 
+    /**
+     * Pinch-scales / rotates the on-canvas element [id] by the incremental gesture
+     * deltas ([scaleBy] is the multiplicative pinch factor, [rotateByDeg] the additive
+     * rotation; clamped/wrapped by the pure [StoryTextElement.transformed]). Selection
+     * and editing are untouched — you transform the element you are manipulating — and
+     * an unknown id is inert. The wire mapping carries `scale`/`rotation` on publish.
+     */
+    fun onTextElementTransform(id: String, scaleBy: Float, rotateByDeg: Float) {
+        _state.update { it.copy(deck = it.deck.transformTextElement(id, scaleBy, rotateByDeg)) }
+    }
+
+    /**
+     * Duplicates the on-canvas element [id] (which must live on the selected slide):
+     * mints a fresh id, inserts a clone of every styled field just after the source —
+     * nudged by [DUPLICATE_ELEMENT_OFFSET] so the copy is visibly offset — and selects
+     * the copy so the user can immediately move/style it. Inert when [id] is not on the
+     * selected slide; inert-with-a-warning once the slide is at the ≤5-element cap. The
+     * clone/cap rules live in the pure [StorySlideDeck.duplicateTextElement].
+     */
+    fun onDuplicateTextElement(id: String) {
+        val before = _state.value.deck
+        if (before.selectedSlide.elements.none { it.id == id }) return
+        if (!before.selectedCanAddTextElement) {
+            _state.update { it.copy(errorMessage = TEXT_ELEMENT_LIMIT) }
+            return
+        }
+        val newId = newTextElementId()
+        _state.update {
+            it.copy(
+                deck = it.deck.duplicateTextElement(id, newId, DUPLICATE_ELEMENT_OFFSET, DUPLICATE_ELEMENT_OFFSET),
+                selectedTextElementId = newId,
+                errorMessage = null,
+            )
+        }
+    }
+
     fun onVisibilityChange(visibility: StoryVisibility) {
         _state.update { it.copy(draft = it.draft.withVisibility(visibility)) }
+    }
+
+    /**
+     * Toggles the bottom-band drawer for [category] (the Contenu / Effets FABs): opens
+     * it, switches category, or closes it per the pure [ComposerBandState.tapFab]. All
+     * band navigation state lives in the unit-tested [ComposerBandState].
+     */
+    fun onBandFabTap(category: BandCategory) {
+        _state.update { it.copy(band = it.band.tapFab(category)) }
+    }
+
+    /** Dismisses the band drawer (swipe-down gesture) — back to FAB-only. */
+    fun onBandDismiss() {
+        _state.update { it.copy(band = it.band.swipeDown()) }
+    }
+
+    /** Swaps the open band to the other category (horizontal swipe); inert while hidden. */
+    fun onBandSwapCategory() {
+        _state.update { it.copy(band = it.band.swipeHorizontal()) }
     }
 
     /** Appends a fresh empty slide and selects it (inert at the ≤10-slide cap); the

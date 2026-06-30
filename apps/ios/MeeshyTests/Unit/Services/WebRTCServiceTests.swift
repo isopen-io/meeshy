@@ -593,9 +593,9 @@ final class AdjustBitrateAudioEncodingSourceGuardTests: XCTestCase {
     func test_adjustBitrate_callsApplyAudioEncoding_whenBitrateChanges() throws {
         let src = try webRTCServiceSource()
         XCTAssertTrue(
-            src.contains("client.applyAudioEncoding(maxBitrateBps: newBitrate)"),
-            "adjustBitrate must call client.applyAudioEncoding(maxBitrateBps:) when the bitrate changes — " +
-            "omitting this means the audio encoder never actually sheds bandwidth despite the computed level."
+            src.contains("client.applyAudioEncoding(maxBitrateBps: effectiveBitrate)"),
+            "adjustBitrate must call client.applyAudioEncoding(maxBitrateBps:) with effectiveBitrate " +
+            "(which applies the jitter gate) — omitting this means the audio encoder never actually sheds bandwidth."
         )
     }
 
@@ -609,6 +609,63 @@ final class AdjustBitrateAudioEncodingSourceGuardTests: XCTestCase {
             src.contains("guard let stats = await self.client.getStats() else { continue }"),
             "The quality monitor nil-stats guard must use `continue` (skip tick) not `return` (exit loop) — " +
             "a `return` here kills all future quality monitoring for the call."
+        )
+    }
+}
+
+// MARK: - Jitter-aware bitrate gate source guards
+
+/// `adjustBitrate` applies a jitter gate after the RTT/loss tier selection:
+/// when `stats.jitterMs > QualityThresholds.highJitterThresholdMs` the effective
+/// bitrate is capped to `minBitrate` regardless of RTT/loss signal.
+/// High jitter degrades Opus PLC even on a low-latency path; shedding encoder
+/// complexity gives the jitter buffer headroom to absorb the spikes.
+@MainActor
+final class AdjustBitrateJitterGateSourceGuardTests: XCTestCase {
+
+    private func webRTCServiceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_adjustBitrate_jitterGate_comparesAgainstHighJitterThreshold() throws {
+        let src = try webRTCServiceSource()
+        XCTAssertTrue(
+            src.contains("stats.jitterMs > QualityThresholds.highJitterThresholdMs"),
+            "adjustBitrate must gate on QualityThresholds.highJitterThresholdMs — " +
+            "a hardcoded literal here would silently diverge from the tested constant."
+        )
+    }
+
+    func test_adjustBitrate_jitterGate_capsToMinBitrate() throws {
+        let src = try webRTCServiceSource()
+        XCTAssertTrue(
+            src.contains("? QualityThresholds.minBitrate : newBitrate"),
+            "When jitterMs exceeds the threshold the effective bitrate must be minBitrate — " +
+            "any other fallback value leaves the Opus encoder at a bitrate too high for the jitter buffer to compensate."
+        )
+    }
+
+    func test_adjustBitrate_jitterGate_producesEffectiveBitrate() throws {
+        let src = try webRTCServiceSource()
+        XCTAssertTrue(
+            src.contains("let effectiveBitrate = stats.jitterMs > QualityThresholds.highJitterThresholdMs"),
+            "The jitter gate must produce an `effectiveBitrate` binding that downstream code uses for both " +
+            "the applyAudioEncoding call and the change-detection guard (currentBitrate comparison)."
+        )
+    }
+
+    func test_adjustBitrate_jitterGate_logsJitterTagWhenCapped() throws {
+        let src = try webRTCServiceSource()
+        XCTAssertTrue(
+            src.contains("jitter=%.0fms[capped]"),
+            "When jitter caps the bitrate the log message must include a [capped] tag so operators " +
+            "can distinguish a jitter-driven reduction from a network-congestion-driven one."
         )
     }
 }

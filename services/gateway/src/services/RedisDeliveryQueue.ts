@@ -96,7 +96,14 @@ export class RedisDeliveryQueue {
         const rawEntries = await redis.eval(DRAIN_LUA, 1, key);
 
         if (!Array.isArray(rawEntries)) return [];
-        return (rawEntries as string[]).map(raw => JSON.parse(raw) as QueuedMessagePayload);
+        return (rawEntries as string[]).flatMap(raw => {
+          try {
+            return [JSON.parse(raw) as QueuedMessagePayload];
+          } catch {
+            logger.error('RedisDeliveryQueue: malformed entry in drain, dropping', { userId, raw: raw.substring(0, 120) });
+            return [];
+          }
+        });
       } catch (error) {
         logger.warn('Redis drain failed, falling back to memory', { userId, error });
       }
@@ -115,7 +122,14 @@ export class RedisDeliveryQueue {
         const key = queueKey(userId);
         const end = limit ? limit - 1 : -1;
         const rawEntries = await redis.lrange(key, 0, end);
-        return rawEntries.map(raw => JSON.parse(raw) as QueuedMessagePayload);
+        return rawEntries.flatMap(raw => {
+          try {
+            return [JSON.parse(raw) as QueuedMessagePayload];
+          } catch {
+            logger.error('RedisDeliveryQueue: malformed entry in peek, dropping', { userId, raw: raw.substring(0, 120) });
+            return [];
+          }
+        });
       } catch (error) {
         logger.warn('Redis peek failed, falling back to memory', { userId, error });
       }
@@ -156,8 +170,13 @@ export class RedisDeliveryQueue {
           for (const key of keys) {
             const entries = await redis.lrange(key, 0, -1);
             const fresh = entries.filter(raw => {
-              const parsed = JSON.parse(raw) as QueuedMessagePayload;
-              return new Date(parsed.enqueuedAt).getTime() > cutoff;
+              try {
+                const parsed = JSON.parse(raw) as QueuedMessagePayload;
+                return new Date(parsed.enqueuedAt).getTime() > cutoff;
+              } catch {
+                logger.error('RedisDeliveryQueue: malformed entry in cleanup, dropping', { key, raw: raw.substring(0, 120) });
+                return false;
+              }
             });
 
             const removed = entries.length - fresh.length;

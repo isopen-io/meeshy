@@ -1139,6 +1139,87 @@ class StoryComposerViewModelTest {
     }
 
     @Test
+    fun `onTextElementMoved snaps a small drag onto the centre guide and reports it`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementMoved(id, dx = 0.015f, dy = 0f)
+
+        val element = vm.state.value.selectedSlideTextElements.single()
+        // Without snapping the centre would drift to 0.515; the magnet holds it at 0.5.
+        assertThat(element.x).isEqualTo(StoryTextElement.CENTER)
+        val feedback = vm.state.value.snapFeedback!!
+        assertThat(feedback.verticalGuide).isEqualTo(0.5f)
+        assertThat(feedback.horizontalGuide).isEqualTo(0.5f)
+        assertThat(feedback.withinSafeZone).isTrue()
+    }
+
+    @Test
+    fun `onTextElementMoved past the threshold drags free with no guide lines`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementMoved(id, dx = 0.2f, dy = 0.2f)
+
+        val element = vm.state.value.selectedSlideTextElements.single()
+        assertThat(element.x).isWithin(1e-4f).of(0.7f)
+        assertThat(element.y).isWithin(1e-4f).of(0.7f)
+        val feedback = vm.state.value.snapFeedback!!
+        assertThat(feedback.verticalGuide).isNull()
+        assertThat(feedback.horizontalGuide).isNull()
+    }
+
+    @Test
+    fun `onTextElementMoved toward the edge reports out of the safe zone`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementMoved(id, dx = 0.49f, dy = 0f)
+
+        assertThat(vm.state.value.snapFeedback!!.withinSafeZone).isFalse()
+    }
+
+    @Test
+    fun `onTextElementMoved on an unknown id leaves the element and shows no feedback`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val before = vm.state.value.selectedSlideTextElements.single()
+
+        vm.onTextElementMoved("ghost", dx = 0.1f, dy = 0.1f)
+
+        assertThat(vm.state.value.selectedSlideTextElements.single()).isEqualTo(before)
+        assertThat(vm.state.value.snapFeedback).isNull()
+    }
+
+    @Test
+    fun `onTextElementDragEnd clears the snap feedback but keeps the element placed`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+        vm.onTextElementMoved(id, dx = 0.015f, dy = 0f)
+        assertThat(vm.state.value.snapFeedback).isNotNull()
+
+        vm.onTextElementDragEnd()
+
+        assertThat(vm.state.value.snapFeedback).isNull()
+        assertThat(vm.state.value.selectedSlideTextElements.single().x).isEqualTo(StoryTextElement.CENTER)
+    }
+
+    @Test
+    fun `onTextElementDragEnd is inert when no drag feedback is showing`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val before = vm.state.value
+
+        vm.onTextElementDragEnd()
+
+        assertThat(vm.state.value).isSameInstanceAs(before)
+    }
+
+    @Test
     fun `onRemoveTextElement removes the element and ends its editing`() = runTest {
         val vm = viewModel()
         vm.onAddTextElement()
@@ -1150,6 +1231,64 @@ class StoryComposerViewModelTest {
         val state = vm.state.value
         assertThat(state.selectedSlideTextElements).isEmpty()
         assertThat(state.isEditingTextElement).isFalse()
+    }
+
+    @Test
+    fun `onDuplicateTextElement clones the edited element, offsets it, and selects the copy`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        vm.onTextChange("Salut")
+        val original = vm.state.value.selectedTextElement!!
+
+        vm.onDuplicateTextElement(original.id)
+
+        val state = vm.state.value
+        assertThat(state.selectedSlideTextElements).hasSize(2)
+        val copy = state.selectedTextElement!!
+        assertThat(copy.id).isNotEqualTo(original.id)
+        assertThat(copy.text).isEqualTo("Salut")
+        assertThat(copy.x).isGreaterThan(original.x)
+        assertThat(copy.y).isGreaterThan(original.y)
+        assertThat(state.isEditingTextElement).isTrue()
+    }
+
+    @Test
+    fun `onDuplicateTextElement carries the source style onto the copy`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        vm.onTextChange("Hola")
+        val original = vm.state.value.selectedTextElement!!
+        vm.onTextElementStyle(original.id, StoryTextStyle.NEON)
+
+        vm.onDuplicateTextElement(original.id)
+
+        val copy = vm.state.value.selectedTextElement!!
+        assertThat(copy.style).isEqualTo(StoryTextStyle.NEON)
+        assertThat(copy.text).isEqualTo("Hola")
+    }
+
+    @Test
+    fun `onDuplicateTextElement at the per-slide cap surfaces a warning and adds nothing`() = runTest {
+        val vm = viewModel()
+        repeat(StorySlideDeck.MAX_TEXT_ELEMENTS_PER_SLIDE) { vm.onAddTextElement() }
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onDuplicateTextElement(id)
+
+        assertThat(vm.state.value.selectedSlideTextElements).hasSize(StorySlideDeck.MAX_TEXT_ELEMENTS_PER_SLIDE)
+        assertThat(vm.state.value.errorMessage).isNotNull()
+    }
+
+    @Test
+    fun `onDuplicateTextElement on an unknown id is inert and selects nothing new`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        vm.onDeselectTextElement()
+
+        vm.onDuplicateTextElement("ghost")
+
+        assertThat(vm.state.value.selectedSlideTextElements).hasSize(1)
+        assertThat(vm.state.value.selectedTextElementId).isNull()
     }
 
     @Test
@@ -1243,6 +1382,46 @@ class StoryComposerViewModelTest {
     }
 
     @Test
+    fun `onTextElementTransform pinch-scales and rotates the edited element`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        vm.onTextChange("Salut")
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementTransform(id, scaleBy = 2f, rotateByDeg = 30f)
+
+        val element = vm.state.value.selectedSlideTextElements.single()
+        assertThat(element.scale).isWithin(1e-6f).of(2f)
+        assertThat(element.rotationDeg).isWithin(1e-4f).of(30f)
+        assertThat(element.text).isEqualTo("Salut")
+        assertThat(vm.state.value.isEditingTextElement).isTrue()
+    }
+
+    @Test
+    fun `onTextElementTransform accumulates across successive gestures and clamps`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementTransform(id, scaleBy = 2f, rotateByDeg = 0f)
+        vm.onTextElementTransform(id, scaleBy = 10f, rotateByDeg = 0f)
+
+        assertThat(vm.state.value.selectedSlideTextElements.single().scale)
+            .isEqualTo(StoryTextElement.MAX_SCALE)
+    }
+
+    @Test
+    fun `onTextElementTransform on an unknown id is inert`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val before = vm.state.value.selectedSlideTextElements.single()
+
+        vm.onTextElementTransform("ghost", scaleBy = 2f, rotateByDeg = 45f)
+
+        assertThat(vm.state.value.selectedSlideTextElements.single()).isEqualTo(before)
+    }
+
+    @Test
     fun `styling one element of several leaves the others untouched`() = runTest {
         val vm = viewModel()
         vm.onAddTextElement()
@@ -1291,5 +1470,71 @@ class StoryComposerViewModelTest {
         assertThat(objects.map { it.text }).containsExactly("Bonjour")
         assertThat(objects.single().sourceLanguage).isEqualTo("fr")
         assertThat(request.captured.content).isNull()
+    }
+
+    // --- Bottom-band toolbar (Contenu / Effets) -----------------------------
+
+    @Test
+    fun `the band starts hidden`() = runTest {
+        val vm = viewModel()
+        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Hidden)
+    }
+
+    @Test
+    fun `tapping a band FAB opens that category`() = runTest {
+        val vm = viewModel()
+
+        vm.onBandFabTap(BandCategory.CONTENU)
+
+        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Tiles(BandCategory.CONTENU))
+    }
+
+    @Test
+    fun `tapping the open category FAB again closes the band`() = runTest {
+        val vm = viewModel()
+        vm.onBandFabTap(BandCategory.EFFETS)
+
+        vm.onBandFabTap(BandCategory.EFFETS)
+
+        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Hidden)
+    }
+
+    @Test
+    fun `tapping the other FAB switches the open category`() = runTest {
+        val vm = viewModel()
+        vm.onBandFabTap(BandCategory.CONTENU)
+
+        vm.onBandFabTap(BandCategory.EFFETS)
+
+        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Tiles(BandCategory.EFFETS))
+    }
+
+    @Test
+    fun `dismissing the band hides it`() = runTest {
+        val vm = viewModel()
+        vm.onBandFabTap(BandCategory.CONTENU)
+
+        vm.onBandDismiss()
+
+        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Hidden)
+    }
+
+    @Test
+    fun `swapping the band category flips contenu to effets`() = runTest {
+        val vm = viewModel()
+        vm.onBandFabTap(BandCategory.CONTENU)
+
+        vm.onBandSwapCategory()
+
+        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Tiles(BandCategory.EFFETS))
+    }
+
+    @Test
+    fun `swapping the band category is inert while hidden`() = runTest {
+        val vm = viewModel()
+
+        vm.onBandSwapCategory()
+
+        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Hidden)
     }
 }

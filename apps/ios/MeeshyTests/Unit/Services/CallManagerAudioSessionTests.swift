@@ -522,6 +522,16 @@ final class CallManagerAudioSessionTests: XCTestCase {
             "byte counters must accumulate through ICE restart for the call summary."
         )
     }
+
+    func test_didCollectStats_propagatesJitterMsToQualityReport() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("jitterMs: stats.jitterMs"),
+            "webRTCService(_:didCollectStats:) must pass stats.jitterMs to emitCallQualityReport " +
+            "so the gateway call:quality-report event carries audio jitter data for diagnostics " +
+            "and the call-summary can surface Opus PLC degradation events."
+        )
+    }
 }
 
 // MARK: - P2PWebRTCClient — Perfect Negotiation Source Guards (W3C §3.4)
@@ -3490,6 +3500,84 @@ final class CallViewVideoWatchdogSourceGuardTests: XCTestCase {
             body.contains("videoConnectWatchdogSeconds"),
             "connectingVideoPlaceholder watchdog must reference videoConnectWatchdogSeconds " +
             "constant — not a bare numeric literal — so the threshold is tuneable in one place."
+        )
+    }
+
+}
+
+// MARK: - Screen Capture Monitoring (iOS 16+ deprecation guard)
+
+@MainActor
+final class CallManagerScreenCaptureMonitoringTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_screenCaptureMonitoring_doesNotUseUIScreenMain_isCaptured() throws {
+        // Regression guard: UIScreen.main is deprecated in iOS 16+ for multi-window apps.
+        // startScreenCaptureMonitoring() must never use UIScreen.main.isCaptured.
+        let source = try callManagerSource()
+
+        guard let fnRange = source.range(of: "private func startScreenCaptureMonitoring()") else {
+            XCTFail("startScreenCaptureMonitoring() not found in CallManager.swift")
+            return
+        }
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        XCTAssertFalse(
+            fnBody.contains("UIScreen.main.isCaptured"),
+            "startScreenCaptureMonitoring() must not use UIScreen.main.isCaptured — " +
+            "UIScreen.main is deprecated in iOS 16+. Use UIApplication.shared.connectedScenes " +
+            "→ UIWindowScene → .screen.isCaptured instead."
+        )
+    }
+
+    func test_screenCaptureMonitoring_usesConnectedScenes_forMultiScreenDetection() throws {
+        // Regression guard (Swift 6): Notification is not Sendable and cannot be captured
+        // into a Task { @MainActor } closure. The observer must query connectedScenes on the
+        // MainActor instead, which also correctly handles multi-screen (Stage Manager, Catalyst).
+        let source = try callManagerSource()
+
+        guard let fnRange = source.range(of: "private func startScreenCaptureMonitoring()") else {
+            XCTFail("startScreenCaptureMonitoring() not found in CallManager.swift")
+            return
+        }
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        XCTAssertTrue(
+            fnBody.contains("UIApplication.shared.connectedScenes"),
+            "startScreenCaptureMonitoring() must use UIApplication.shared.connectedScenes " +
+            "to detect screen capture — UIScreen.main is deprecated in iOS 16+ and Notification " +
+            "is not Sendable in Swift 6 (cannot be captured into Task { @MainActor })."
+        )
+    }
+
+    func test_screenCaptureMonitoring_doesNotCaptureNotification_intoTask() throws {
+        // Regression guard (Swift 6): capturing `notification` (non-Sendable) into a
+        // Task { @MainActor } closure is a hard compile error under -swift-version 6 with
+        // NonisolatedNonsendingByDefault. The observer closure must use `_ in`.
+        let source = try callManagerSource()
+
+        guard let fnRange = source.range(of: "private func startScreenCaptureMonitoring()") else {
+            XCTFail("startScreenCaptureMonitoring() not found in CallManager.swift")
+            return
+        }
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        XCTAssertFalse(
+            fnBody.contains("notification.object"),
+            "startScreenCaptureMonitoring() must not reference notification.object inside the " +
+            "Task { @MainActor } closure — Notification is not Sendable in Swift 6."
         )
     }
 }

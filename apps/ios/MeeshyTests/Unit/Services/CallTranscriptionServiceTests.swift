@@ -130,6 +130,93 @@ final class CallTranscriptionServiceTests: XCTestCase {
         XCTAssertTrue(sut.segments.isEmpty)
     }
 
+    // MARK: - Pre-role Buffer (undecided)
+
+    func test_receiveRemoteSegment_asUndecided_doesNotAddToSegments() {
+        let sut = makeSUT()
+        // role defaults to .undecided
+
+        sut.receiveRemoteSegment(makeSegment(text: "early"))
+
+        XCTAssertTrue(
+            sut.segments.isEmpty,
+            "Segments must not appear before role is resolved — the overlay would " +
+            "display content attributed to the wrong speaker or in the wrong state."
+        )
+    }
+
+    func test_receiveRemoteSegment_asUndecided_thenFollower_replaysBuffer() {
+        let sut = makeSUT()
+
+        let s1 = makeSegment(text: "first", startTime: 0)
+        let s2 = makeSegment(text: "second", startTime: 1)
+        sut.receiveRemoteSegment(s1)
+        sut.receiveRemoteSegment(s2)
+
+        // Role resolves to follower after segments arrived
+        sut.resolveRole(localCapability: .none, remoteCapability: .standard, isInitiator: true)
+
+        XCTAssertEqual(sut.segments.count, 2, "Buffered segments must be replayed when role resolves to follower")
+        XCTAssertEqual(sut.segments[0].text, "first")
+        XCTAssertEqual(sut.segments[1].text, "second")
+    }
+
+    func test_receiveRemoteSegment_asUndecided_thenLeader_discardsBuffer() {
+        let sut = makeSUT()
+
+        sut.receiveRemoteSegment(makeSegment(text: "buffered"))
+
+        sut.resolveRole(localCapability: .standard, remoteCapability: .none, isInitiator: true)
+
+        XCTAssertTrue(
+            sut.segments.isEmpty,
+            "Buffered segments from undecided phase must be discarded when role resolves to leader."
+        )
+    }
+
+    func test_receiveRemoteSegment_asUndecided_bufferCapAtTen() {
+        let sut = makeSUT()
+
+        for i in 0..<15 {
+            sut.receiveRemoteSegment(makeSegment(text: "seg \(i)", startTime: Double(i)))
+        }
+
+        sut.resolveRole(localCapability: .none, remoteCapability: .standard, isInitiator: true)
+
+        XCTAssertEqual(
+            sut.segments.count, 10,
+            "Buffer cap of 10 must prevent unbounded accumulation when DataChannel " +
+            "segments arrive long before capability exchange completes."
+        )
+    }
+
+    func test_receiveRemoteSegment_asUndecided_afterResolvedToFollower_addedDirectly() {
+        let sut = makeSUT()
+        sut.resolveRole(localCapability: .none, remoteCapability: .standard, isInitiator: true)
+
+        sut.receiveRemoteSegment(makeSegment(text: "post-resolve"))
+
+        XCTAssertEqual(sut.segments.count, 1)
+        XCTAssertEqual(sut.segments.first?.text, "post-resolve")
+    }
+
+    func test_resetForCallEnd_clearsPendingBuffer() {
+        let sut = makeSUT()
+        // Buffer two segments in undecided state
+        sut.receiveRemoteSegment(makeSegment(text: "a"))
+        sut.receiveRemoteSegment(makeSegment(text: "b"))
+
+        sut.resetForCallEnd()
+
+        // After reset, resolving to follower should NOT replay stale segments
+        sut.resolveRole(localCapability: .none, remoteCapability: .standard, isInitiator: true)
+        XCTAssertTrue(
+            sut.segments.isEmpty,
+            "resetForCallEnd must purge the pending buffer so stale segments from a " +
+            "previous call never appear in the next call."
+        )
+    }
+
     // MARK: - Displayed Segments
 
     func test_displayedSegments_limitsToMaxDisplayed() {

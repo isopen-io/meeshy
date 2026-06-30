@@ -543,7 +543,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       if (!validateObjectId(conversationId, 'conversationId', reply)) return;
       const parsed = agentConfigSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.status(400).send({ success: false, message: 'Données invalides', errors: parsed.error.flatten() });
+        return sendBadRequest(reply, 'Données invalides');
       }
 
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -607,7 +607,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         );
       }
 
-      return reply.send({ success: true, data: config, cacheInvalidation: invalidationStatus });
+      return sendSuccess(reply, { ...config, cacheInvalidation: invalidationStatus });
     } catch (error) {
       logError(fastify.log, 'Error upserting agent config:', error);
       return sendInternalError(reply, 'Erreur serveur');
@@ -831,7 +831,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
     try {
       const parsed = llmConfigSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.status(400).send({ success: false, message: 'Données invalides', errors: parsed.error.flatten() });
+        return sendBadRequest(reply, 'Données invalides');
       }
 
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -858,13 +858,10 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       // service to rebuild its LLM router — without this the new settings
       // sit in Mongo unused until the next agent restart.
       const invalidationStatus = await broadcastInvalidation({ global: true });
-      return reply.send({
-        success: true,
-        data: {
-          ...safeConfig,
-          hasApiKey: !!apiKeyEncrypted,
-          hasFallbackApiKey: !!fallbackApiKeyEncrypted,
-        },
+      return sendSuccess(reply, {
+        ...safeConfig,
+        hasApiKey: !!apiKeyEncrypted,
+        hasFallbackApiKey: !!fallbackApiKeyEncrypted,
         cacheInvalidation: invalidationStatus,
       });
     } catch (error) {
@@ -918,21 +915,17 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       }
       const invalidationStatus = await broadcastInvalidation({ conversationId });
 
-      return reply.send({
-        success: true,
-        data: {
-          conversationId,
-          deleted: {
-            configs: config.count,
-            roles: roles.count,
-            summaries: summary.count,
-            analytics: analytic.count,
-            redisKeys: redisKeysDeleted,
-          },
+      return sendSuccess(reply, {
+        conversationId,
+        deleted: {
+          configs: config.count,
+          roles: roles.count,
+          summaries: summary.count,
+          analytics: analytic.count,
+          redisKeys: redisKeysDeleted,
         },
         cacheInvalidation: invalidationStatus,
-        message: 'Reset conversation effectué',
-      });
+      }, { message: 'Reset conversation effectué' });
     } catch (error) {
       logError(fastify.log, 'Error during conversation reset:', error);
       return sendInternalError(reply, 'Erreur lors du reset conversation');
@@ -992,20 +985,16 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       // profile from a stale cached config.
       const invalidationStatus = await broadcastInvalidation({ global: true });
 
-      return reply.send({
-        success: true,
-        data: {
-          userId,
-          deleted: {
-            roles: roles.count,
-            globalProfiles: globalProfile.count,
-            redisProfilesCleaned: profilesCleaned,
-            cooldownsCleared: cooldownKeys.length,
-          },
+      return sendSuccess(reply, {
+        userId,
+        deleted: {
+          roles: roles.count,
+          globalProfiles: globalProfile.count,
+          redisProfilesCleaned: profilesCleaned,
+          cooldownsCleared: cooldownKeys.length,
         },
         cacheInvalidation: invalidationStatus,
-        message: 'Reset utilisateur effectué',
-      });
+      }, { message: 'Reset utilisateur effectué' });
     } catch (error) {
       logError(fastify.log, 'Error during user reset:', error);
       return sendInternalError(reply, 'Erreur lors du reset utilisateur');
@@ -1045,21 +1034,17 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       // the next scan rebuilds from a clean slate.
       const invalidationStatus = await broadcastInvalidation({ global: true });
 
-      return reply.send({
-        success: true,
-        data: {
-          deleted: {
-            configs: configs.count,
-            roles: roles.count,
-            summaries: summaries.count,
-            analytics: analytics.count,
-            globalProfiles: globalProfiles.count,
-            redisKeys: redisKeysDeleted,
-          },
+      return sendSuccess(reply, {
+        deleted: {
+          configs: configs.count,
+          roles: roles.count,
+          summaries: summaries.count,
+          analytics: analytics.count,
+          globalProfiles: globalProfiles.count,
+          redisKeys: redisKeysDeleted,
         },
         cacheInvalidation: invalidationStatus,
-        message: 'Reset complet effectué',
-      });
+      }, { message: 'Reset complet effectué' });
     } catch (error) {
       logError(fastify.log, 'Error during agent reset:', error);
       return sendInternalError(reply, 'Erreur lors du reset agent');
@@ -1733,7 +1718,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
     try {
       const parsed = globalConfigSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.status(400).send({ success: false, message: 'Données invalides', errors: parsed.error.flatten() });
+        return sendBadRequest(reply, 'Données invalides');
       }
 
       let existing = await fastify.prisma.agentGlobalConfig.findFirst({ orderBy: { updatedAt: 'desc' } });
@@ -1755,7 +1740,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         );
       }
 
-      return reply.send({ success: true, data: config, cacheInvalidation: invalidationStatus });
+      return sendSuccess(reply, { ...config, cacheInvalidation: invalidationStatus });
     } catch (error) {
       logError(fastify.log, 'Error upserting global agent config:', error);
       return sendInternalError(reply, 'Erreur serveur');

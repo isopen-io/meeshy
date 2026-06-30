@@ -128,13 +128,40 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 ## Next slice (pick one for the next run)
 
 Ordered by value:
-1. **In-place floating text editor** — tool bubbles over the selected element + keyboard-aware
-   canvas shift (the editing-selection plumbing — `selectedTextElementId`/`editorText` — already
-   exists; this is the floating UI + a pure "where to place the toolbar" helper).
-2. **Canvas toolbar/FAB** — the bottom-band toolbar (Contenu/Effets) grouping add-text / add-media;
+0. ~~**Snap-to-guide + out-of-bounds warning**~~ ✅ shipped as `story-canvas-snap-guides` (this run) —
+   pure `StorySnapResolver` (per-axis nearest-guide snap + safe-zone verdict) reused through the existing
+   element-drag path, with an accent guide-line overlay + warning border. See run log.
+1. **Canvas toolbar/FAB** — the bottom-band toolbar (Contenu/Effets) grouping add-text / add-media;
    glue-heavy, keep any mode decision in a pure helper or the VM.
-3. After Stories richness is sufficient, advance to the **Calls** area
+2. ~~**Per-element transform handles**~~ ✅ shipped as `story-text-element-transform` (this run) — but
+   as a **direct pinch/rotate gesture** (more natural than discrete chips, per CLAUDE.md UX rule).
+3. ~~**Canvas toolbar/FAB**~~ ✅ shipped as `story-composer-band` (this run) — the two-FAB
+   (Contenu/Effets) bottom band, the pure value-type port of iOS `BandStateMachine`. Pure
+   `ComposerBandState` (Hidden | Tiles(category)) + `tapFab`/`swipeDown`/`swipeHorizontal` owns the
+   navigation; Contenu drawer = Texte/Médias tiles, Effets drawer = visibility chips. **Next refinement:**
+   real **Effets tiles** (filters / drawing / timeline) once those features land — currently Effets only
+   surfaces visibility. Then the on-canvas **sticker / drawing** elements.
+4. ~~**Per-element transform handles**~~ ✅ shipped as `story-text-element-transform` — as a
+   **direct pinch/rotate gesture** (more natural than discrete chips, per CLAUDE.md UX rule).
+   `StoryTextElement.scale`/`rotationDeg` + pure `transformed()` + `transformTextElement` reducer +
+   `onTextElementTransform` VM intent + `graphicsLayer`/`detectTransformGestures` glue. Wire carries
+   `scale`/`rotation`. **Per-element duplicate** ✅ shipped as `story-text-element-duplicate` (this run) —
+   pure `StorySlideDeck.duplicateTextElement` clones every styled field as a fresh id just after the
+   source on its slide, nudged by a small clamped offset, inert on unknown/collision/cap;
+   `onDuplicateTextElement` selects the copy + warns at the cap; a `ContentCopy` handle in the floating
+   `TextStyleToolbar`. **Next composer-richness refinement:** a unified multi-element context menu +
+   z-order **reorder** (per-element delete already exists).
+5. After Stories richness is sufficient, advance to the **Calls** area
    (`feature-parity.md` §"Calls").
+
+(`story-floating-toolbar` ✅ shipped 2026-06-29 — this run; **the style toolbar now floats in-place**
+over the canvas instead of a fixed bottom band. A pure `StoryToolbarPlacement.resolve(...)` →
+`ToolbarPlacement(topPx, ToolbarSide)` decides the anchor: BELOW the selected element when the toolbar
+fits beneath it, otherwise ABOVE, clamped into the canvas (boundary-exact, degenerate-canvas safe).
+The composer applies `imePadding` so the measured canvas already excludes the soft keyboard (the
+keyboard-aware shift), and `StoryCanvasSurface` measures the selected element's half-height + the
+toolbar height and offsets the floating `TextStyleToolbar` to the resolved Y. +9 placement tests; no
+new strings. Surpasses iOS's fixed bottom style bar. See run log.)
 
 (`story-text-element-styling` ✅ shipped 2026-06-29 — this run; **on-canvas text elements are now
 styleable**. A pure `StoryTextStyle.typography()` mapping (the single source of truth for how each of
@@ -265,6 +292,253 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-30 — slice `story-canvas-snap-guides` ✅
+- **Branch:** `claude/apps/android/story-canvas-snap-guides` (off `origin/main` @ `49c7576`).
+- **Housekeeping (step 0):** no open `claude/apps/android/*` PR (the prior slice's PR #1045 is **merged**;
+  `list_pull_requests state=open` shows only dependabot/non-android `claude/*` branches). ⚠ Pitfall hit &
+  fixed: `git pull origin main` failed (`Need to specify how to reconcile divergent branches` — no pull
+  strategy configured), and the local `main` was **stale** (missing PR #1045). A branch cut from it lost
+  the `scale`/`rotation` fields. Recovered with `git fetch origin main && git checkout -B <slice> origin/main`.
+  **Lesson recorded in NOTES.md:** always rebase the slice onto `origin/main`, never local `main`.
+- **What:** **snap-to-guide + out-of-bounds (safe-zone) warning** for on-canvas element dragging
+  (feature-parity §Stories "Frosted-glass … safe-zone overlay; snap-to-guide + out-of-bounds warning").
+  Dragging a text element now magnetically locks each axis onto the nearest alignment guide (rule-of-thirds
+  + centre) and flashes an out-of-bounds border when the centre drifts into the edge margin. A natural
+  magnetic-alignment gesture — surpasses iOS, which lacks a per-axis guide overlay here.
+- **Design (SDK purity, single source of truth):** the snap math lives in **one** pure place,
+  `StorySnapResolver.resolve(x, y, verticalGuides, horizontalGuides, threshold, safeZoneInset)` →
+  `SnapResult(x, y, verticalGuide, horizontalGuide, withinSafeZone)`. Each axis snaps **independently**
+  (nearest in-range guide within `SNAP_THRESHOLD=0.025`; else the clamped candidate); non-finite →
+  canvas centre; out-of-canvas → clamped `0f..1f`; `withinSafeZone` uses `SAFE_ZONE_INSET=0.06`. **Reuse,
+  no new reducer:** `onTextElementMoved` now runs its resulting centre through the resolver and moves the
+  element by the snap-**adjusted** delta via the existing `StorySlideDeck.moveTextElement` path, exposing
+  the live guides + verdict as transient `StoryComposerUiState.snapFeedback` (immutable `SnapFeedback`),
+  cleared by the new `onTextElementDragEnd()` on lift. The Composable stays glue: a `Canvas` draws the
+  active guide line(s) (accent `primary`) + an `error` warning border, and a non-consuming `Final`-pass
+  `awaitEachGesture` next to the transform detector signals lift.
+- **Changed (production — all `:feature:stories`, `apps/android` only):**
+  - `StorySnapResolver.kt` (new) — pure `SnapResult` + `StorySnapResolver` (guides/threshold/inset consts,
+    per-axis `snapAxis`, `withinSafeZone`, non-finite/clamp handling).
+  - `StoryComposerViewModel.kt` — `SnapFeedback` immutable type, `StoryComposerUiState.snapFeedback`,
+    snap-aware `onTextElementMoved`, new `onTextElementDragEnd`.
+  - `StoryComposerScreen.kt` — guide-line `Canvas` overlay, safe-zone warning border, `onDragEnd` wiring +
+    `Final`-pass drag-end detector (glue).
+- **Tests (TDD red → green, behaviour via public API): +25**
+  - `StorySnapResolverTest` (+18): free drag; between-guides-no-snap; centre snap (both axes); thirds snap;
+    independent axes; threshold inclusive boundary; just-past-threshold free; non-positive threshold off;
+    empty guides; out-of-range guides filtered; only-out-of-range no-snap; out-of-canvas clamp; non-finite →
+    centre; safe-zone inclusive inset; out-of-bounds left/right/bottom.
+  - `StoryComposerViewModelTest` (+7): centre-snap holds element + reports guides; past-threshold free no
+    guides; edge drag → out-of-safe-zone; unknown-id inert (no feedback); existing clamp test preserved;
+    drag-end clears feedback keeps placement; drag-end inert when no feedback (same-instance).
+  - **Branch sweep:** every arm of `snapAxis` (threshold≤0 / empty / nearest-within / nearest-beyond),
+    `clampCoord` (finite / non-finite), `withinSafeZone` (in / out per edge), and the VM intents (known /
+    unknown id, feedback present / absent) is exercised.
+- **Verification:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL** (assembleDebug APK + all JVM
+  unit tests; `:feature:stories` 494 tests green). Diff = `apps/android` only (3 source + 2 test + tracking).
+  **Reviewer rubric: PASS** — pure logic ≥90% branch, behaviour-only tests, no floor lowered, reuse over new
+  reducer, accent-coherent guides, natural gesture, no dead-end.
+### 2026-06-30 — slice `story-text-element-duplicate` ✅
+- **Branch:** `claude/apps/android/story-text-element-duplicate` (off `origin/main` @ `f6af058`).
+- **Housekeeping (step 0):** no open `claude/apps/android/*` PR (`list_pull_requests state=open
+  head=isopen-io:claude/apps/android` → `[]`; every prior slice already squash-merged, incl.
+  `story-composer-band` as #1052). Branched clean off the freshened `main`.
+- **What:** **per-element duplicate** (named follow-up of `story-text-element-transform`;
+  feature-parity §"Multi-element context menu (edit, duplicate, reorder, delete)"). A selected
+  on-canvas text element gains a duplicate handle in the floating style toolbar — one tap clones it,
+  offset just clear of the original, and selects the copy so the user can immediately move/style it.
+  No new gateway-wire model: a cloned element serialises through the existing `toTextObject`.
+- **Design (single source of truth, SDK purity):** the clone/cap/offset rules live in **one pure
+  place**, `StorySlideDeck.duplicateTextElement(sourceId, newId, dx, dy)` (`:feature:stories`, composer
+  **product** state — not an SDK atom): finds the slide holding the source, inserts a `copy(id=newId)`
+  (carrying every styled field) **immediately after it**, nudged by `dx/dy` and clamped into the canvas
+  via the already-tested `StoryTextElement.nudged`, and is inert (same instance) on an unknown source
+  id, a colliding new id, or a slide already at the `MAX_TEXT_ELEMENTS_PER_SLIDE` cap — so the
+  ≤5-per-slide invariant holds in one place. The deck doesn't own selection; the VM does. The VM intent
+  `onDuplicateTextElement(id)` mints the id (impure edge), warns-without-adding at the cap (mirrors
+  `onAddTextElement`), applies the pure reducer, and selects the copy. The Composable stays glue (a
+  `ContentCopy` `IconButton` in the `TextStyleToolbar`).
+- **Added/changed (production, `apps/android` only — all `:feature:stories`):**
+  - `StorySlideDeck.kt` — new pure `duplicateTextElement(sourceId, newId, dx, dy)` (collision/unknown/cap
+    guards + after-source insertion + clamped offset).
+  - `StoryComposerViewModel.kt` — `onDuplicateTextElement(id)` intent (selected-slide guard → cap warning
+    → mint id → pure duplicate → select copy); new `DUPLICATE_ELEMENT_OFFSET = 0.04f` const.
+  - `StoryComposerScreen.kt` — `TextStyleToolbar` gains an `onDuplicate` slot rendered as a `ContentCopy`
+    handle next to the alignment toggles; wired to `onDuplicateTextElement`. (Glue — JVM-exempt.)
+  - `strings.xml` (+ fr/es/pt) — 1 new string (duplicate-element content description).
+- **Tests (TDD red → green, behaviour via the public API): +11.**
+  - `StorySlideDeckTextElementsTest` (+7): clones content with the new id right after the source;
+    copies every styled field (text/style/colour/align/scale/rotation); offsets + clamps the clone into
+    the canvas; duplicates an element on a **non-selected** slide (selection untouched); inert on unknown
+    source id; inert on colliding new id; inert at the per-slide cap.
+  - `StoryComposerViewModelTest` (+4): clones the edited element, offsets it, and selects the copy;
+    carries the source style onto the copy; at the cap surfaces a warning and adds nothing; unknown id
+    is inert and selects nothing new.
+- **Branch sweep:** every arm of `duplicateTextElement` (collision-inert, unknown-inert, cap-inert,
+  success-insert-after) and `onDuplicateTextElement` (not-on-slide-inert, cap-warning, success-select)
+  is exercised. ≥90% branch + instruction on the new pure logic.
+- **Verification:** `./apps/android/meeshy.sh test` → **BUILD SUCCESSFUL** (all JVM unit tests;
+  `StorySlideDeckTextElementsTest` 27/27, `StoryComposerViewModelTest` 102/102, 0 failures);
+  `./apps/android/meeshy.sh build` → **BUILD SUCCESSFUL** (`assembleDebug` APK). Diff = `apps/android`
+  only (3 prod Kotlin, 4 strings, 2 test, tracking docs).
+- **Reviewer verdict:** **PASS** — scope `apps/android` only, no secrets / `local.properties` gitignored;
+  behavioural non-tautological tests through the public API (no floor lowered); SDK purity (clone/cap
+  rules pure in `:feature:stories`, glue in the Composable); single source of truth (clone + clamp each
+  in one place, reuses `nudged`); UDF (VM + immutable `StateFlow`, transition pure); edge cases
+  (unknown/collision/cap/non-selected-slide/offset-clamp); colour/UX coherence (duplicate handle uses
+  `MaterialTheme` onSurfaceVariant tint, natural placement beside the align toggles, copy auto-selected).
+- **Follow-ups:** unified multi-element context menu + z-order reorder; real Effets tiles; then Calls.
+
+### 2026-06-30 — slice `story-composer-band` ✅
+- **Branch:** `claude/apps/android/story-composer-band` (off `origin/main` @ `4dee364`).
+- **Housekeeping (step 0):** no open `claude/apps/android/*` PR (`list_pull_requests state=open
+  head=isopen-io:claude/apps/android` → `[]`; every prior slice already squash-merged). Branched clean
+  off the freshened `main`.
+- **What:** **the composer's FAB + bottom-band toolbar** ("Next" #1, feature-parity §"9:16 canvas …
+  FAB + bottom-band toolbar (Contenu/Effets)"). The flat add-text / add-media / visibility buttons are
+  replaced by a two-FAB (Contenu / Effets) bottom band that animates a tools drawer in above the FABs —
+  the **pure value-type port of iOS `BandStateMachine`** (audit part-21: "Excellent design; carry it
+  over verbatim … ideal candidate for shared unit-tested code").
+- **Design (single source of truth, SDK purity):** all band navigation lives in **one pure place**,
+  `ComposerBandState` (`:feature:stories` — composer **product** state, not an SDK atom): a sealed
+  `Hidden | Tiles(BandCategory)` with `BandCategory {CONTENU, EFFETS}` (+ `swapped`) and the total
+  transitions `tapFab(category)` (open / switch / toggle-close), `swipeDown()` (dismiss), and
+  `swipeHorizontal()` (swap, inert while hidden); `activeCategory`/`isVisible` derive the render.
+  `ComposerContentTile {TEXT, MEDIA}` + `ComposerBand.contentTiles` enumerate the Contenu tiles. The
+  VM holds `band` and applies the pure transitions (`onBandFabTap`/`onBandDismiss`/`onBandSwapCategory`);
+  the Composable is glue (two `ExtendedFloatingActionButton`s, an `AnimatedVisibility` drawer showing
+  Contenu tiles → existing `onAddTextElement` / system picker, or the Effets `VisibilityRow`, with
+  swipe-down-to-dismiss + swipe-horizontal-to-swap `detectVerticalDragGestures`/`detectHorizontalDrag`).
+- **Added/changed (production, `apps/android` only — all `:feature:stories`):**
+  - `ComposerBandState.kt` (new) — `BandCategory` (+`swapped`), `ComposerContentTile` (+`category`),
+    sealed `ComposerBandState` (`Hidden`/`Tiles` + `activeCategory`/`isVisible`/`tapFab`/`swipeDown`/
+    `swipeHorizontal`), `ComposerBand.contentTiles`.
+  - `StoryComposerViewModel.kt` — `StoryComposerUiState.band: ComposerBandState = Hidden`;
+    `onBandFabTap`/`onBandDismiss`/`onBandSwapCategory` intents (each a one-line pure-transition copy).
+  - `StoryComposerScreen.kt` — the flat add-text/add-media/visibility block replaced by a glue
+    `ComposerControlsLayer` (FAB row + animated drawer), `BandFab`, `ContentTilesRow`, `BandTile`;
+    `VisibilityRow` gains a `modifier` param. Removed the now-unused fixed buttons.
+  - `strings.xml` (+ fr/es/pt) — 3 new strings (Contenu / Effets / close-tools content desc).
+- **Tests (TDD red → green, behaviour via the public API): +18.**
+  - `ComposerBandStateTest` (new, +11): `swapped` round-trip; content-tile category; hidden has no
+    active category / not visible; open band exposes category + visible; `tapFab` open-from-hidden /
+    toggle-close-same / switch-other (both categories); `swipeDown` from any state incl. already-hidden;
+    `swipeHorizontal` swap (both) + inert-while-hidden; `contentTiles` order.
+  - `StoryComposerViewModelTest` (+7): band starts hidden; FAB opens category; same-FAB toggle-closes;
+    other-FAB switches; dismiss hides; swap flips Contenu→Effets; swap inert while hidden.
+- **Branch sweep:** every arm of `tapFab` (same→Hidden, other→switch, hidden→open), `swipeHorizontal`
+  (Tiles→swap, Hidden→inert), `swipeDown`, `activeCategory`/`isVisible` (both variants), `swapped`
+  (both) and `category` are exercised. ≥90% branch + instruction on the new pure logic.
+- **Verification:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL** (`assembleDebug` APK + all
+  JVM unit tests, 836 tasks). `ComposerBandStateTest` 11/11, `StoryComposerViewModelTest` (band) 7/7.
+  Diff = `apps/android` only (3 prod Kotlin incl. 1 new, 4 strings, 2 test incl. 1 new, tracking docs).
+- **Reviewer verdict:** **PASS** — scope `apps/android` only, no secrets / `local.properties` gitignored;
+  behavioural non-tautological tests through the public API (no floor lowered); SDK purity (pure band
+  state is composer **product** state in `:feature:stories`, glue in the Composable); single source of
+  truth (all band navigation in one pure value type); UDF (VM + immutable `StateFlow`, transitions pure);
+  colour/UX coherence (FABs use `MaterialTheme` primary / secondaryContainer, natural tap + swipe
+  gestures, both categories carry real content so no dead-end drawer, dismissal returns to FAB-only).
+- **Follow-ups:** real Effets tiles (filters / drawing / timeline); on-canvas sticker / drawing elements.
+
+### 2026-06-29 — slice `story-text-element-transform` ✅
+- **Branch:** `claude/apps/android/story-text-element-transform` (off `origin/main` @ `c3963d5`).
+- **Housekeeping (step 0):** no open `claude/apps/android/*` PR (`list_pull_requests state=open` → 24 open
+  PRs, all dependabot or non-android `claude/*`; none on an `apps/android` branch). Branched clean off the
+  freshened `main`.
+- **What:** **per-element pinch-scale + rotate** on the story composer canvas ("Next" #2,
+  feature-parity §"In-place floating text editor"/handles). A selected on-canvas text element can now be
+  pinched to resize and twisted to rotate with one natural two-finger gesture, and the transform rides
+  into publish on the gateway wire (`StoryTextObject.scale`/`rotation`, already in the model, previously
+  always left at defaults). Chose a direct-manipulation gesture over discrete handle chips per the
+  CLAUDE.md "natural gestures / coherent single view" rule.
+- **Design (single source of truth, SDK purity):** the clamp/wrap rules live in **one pure place**,
+  `StoryTextElement` (`:feature:stories`, product UI math — not an SDK atom): `scale` clamped to
+  `[MIN_SCALE=0.3, MAX_SCALE=4]`, `rotationDeg` wrapped to the canonical half-open turn `(-180, 180]`
+  (any accumulated full turns reduce to one signed angle; `±180` both resolve to `180`). `clampScale`
+  collapses a non-finite factor to `DEFAULT_SCALE`; `normaliseRotation` collapses non-finite to `0`. The
+  incremental gesture op `transformed(scaleBy, rotateByDeg)` multiplies scale / adds rotation then
+  clamps+wraps, so a `scaleBy <= 0` or `NaN` can never poison the element. `normalised()` now re-pulls
+  **all** continuous fields (x/y/scale/rotation) into range, so every `updateTextElement` re-clamps for
+  free. The Composable stays glue (`detectTransformGestures` → VM; `graphicsLayer` scaleX/scaleY/rotationZ).
+- **Added/changed (production, `apps/android` only — all `:feature:stories`):**
+  - `StoryTextElement.kt` — `scale`/`rotationDeg` fields (+ DEFAULT/MIN/MAX/DEFAULT_ROTATION consts);
+    pure `clampScale`/`normaliseRotation`; `transformed(scaleBy, rotateByDeg)`; `normalised()` extended;
+    `toTextObject` now sets `scale`/`rotation`.
+  - `StorySlideDeck.kt` — `transformTextElement(id, scaleBy, rotateByDeg)` (inert on unknown id,
+    re-clamp via `updateTextElement`'s `.normalised()`).
+  - `StoryComposerViewModel.kt` — `onTextElementTransform(id, scaleBy, rotateByDeg)` (selection/editing
+    untouched, unknown-id inert).
+  - `StoryComposerScreen.kt` — `StoryCanvasSurface`/`TextElementLayer` thread an `onElementTransform`
+    callback; the per-element gesture switched `detectDragGestures` → `detectTransformGestures` (one
+    gesture pans+pinches+rotates); `graphicsLayer { scaleX/scaleY = scale; rotationZ = rotationDeg }`
+    renders it. Removed the now-unused `detectDragGestures` import. (Glue — JVM-exempt.)
+- **Tests (TDD red → green, behaviour via the public API): +21.**
+  - `StoryTextElementTest` (+14): defaults at rest; `transformed` scale multiply / clamp ceiling /
+    clamp floor / non-positive→floor / non-finite→default; rotation add / wrap-positive / wrap-negative;
+    identity+text+style+position preserved; `clampScale` bounds+passthrough+∞; `normaliseRotation`
+    canonical turn incl. `±180`/`360`/`540`/`270`/`NaN`; `normalised` clamps scale+wraps rotation /
+    leaves valid untouched; `toTextObject` carries scale+rotation.
+  - `StorySlideDeckTextElementsTest` (+4): applies; clamps; touches only the matching element; inert id.
+  - `StoryComposerViewModelTest` (+3): applies + keeps editing; accumulates across gestures + clamps;
+    inert id.
+  - Class totals after: `StoryTextElementTest`=25, `StorySlideDeckTextElementsTest`=20,
+    `StoryComposerViewModelTest`=91 — all green, 0 failures/errors.
+- **Branch sweep:** every arm of `clampScale` (finite-coerce both bounds + passthrough; non-finite),
+  `normaliseRotation` (non-finite; `<= -180`; `> 180`; passthrough), `transformed`, `transformTextElement`
+  (apply/clamp/isolation/inert), and `onTextElementTransform` (apply/accumulate/inert) is exercised.
+- **Verification:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL** (assembleDebug APK + all JVM
+  unit tests). Diff = `apps/android` only (7 files: 4 prod `:feature:stories`, 3 test). No SDK/web/gateway
+  /shared change — the `scale`/`rotation` wire fields already existed on `StoryTextObject`.
+- **Reviewer verdict:** **PASS** — scope/safety clean, behavioural tests via public API (no tautologies,
+  no floor lowered), edge cases (bounds, non-finite, unknown id, isolation) covered, SDK purity + single
+  source of truth (clamp/wrap in one place) + UDF respected, natural-gesture UX coherence.
+
+### 2026-06-29 — slice `story-floating-toolbar` ✅
+- **Branch:** `claude/apps/android/story-floating-toolbar` (off `origin/main` @ `6cd1a3c`).
+- **Housekeeping (step 0):** no open `claude/apps/android/*` PR (`list_pull_requests state=open
+  head=isopen-io:claude/apps/android` → `[]`; every prior slice already squash-merged). Branched clean
+  off the freshened `main`.
+- **What:** **in-place floating style toolbar** ("Next" #1, feature-parity §"In-place floating text
+  editor"). The `TextStyleToolbar` previously sat in a fixed bottom column below the canvas; it now
+  **floats over the canvas**, anchored just clear of the element being edited, and the composer shifts
+  for the keyboard so the toolbar always lands in view. Surpasses iOS's fixed bottom style bar.
+- **Design (single source of truth, SDK purity):** the placement decision lives in **one pure place**,
+  `StoryToolbarPlacement.resolve(elementCenterYpx, elementHalfHeightPx, toolbarHeightPx, canvasHeightPx,
+  gapPx)` → `ToolbarPlacement(topPx, ToolbarSide.ABOVE|BELOW)`. BELOW when `belowTop + toolbarHeight <=
+  canvasHeight` (the band beneath the element fits the toolbar), otherwise ABOVE clamped into
+  `[0, (canvasHeight - toolbarHeight).coerceAtLeast(0)]` — so the toolbar is never pushed off the top or
+  past the bottom, and a canvas shorter than the toolbar pins it to the top. The **canvas itself** is the
+  keyboard-aware region: the composer Column gains `imePadding()`, so when the keyboard opens the weighted
+  9:16 canvas shrinks to the keyboard-free area and the resolver (fed that shrunk `canvasHeightPx`,
+  `keyboardInset` folded into the measurement) keeps the toolbar visible — no fragile window-coordinate
+  math, every resolver param is live. All in `:feature:stories` (product UI math, not an SDK atom).
+- **Added/changed (production, `apps/android` only):**
+  - `StoryToolbarPlacement.kt` (new) — `ToolbarSide` enum, `ToolbarPlacement` data class, the pure
+    `resolve(...)` (total; below-fits / above / clamp-top / clamp-bottom / degenerate-canvas arms).
+  - `StoryComposerScreen.kt` — root Column gains `imePadding()`; `StoryCanvasSurface` takes
+    `selectedElement: StoryTextElement?` + a `floatingToolbar` slot, measures the selected element's
+    half-height (`TextElementLayer.onMeasured`) and the toolbar's height, and offsets the floating
+    `TextStyleToolbar` (translucent `surface` chip, rounded) to `placement.topPx`. The fixed bottom-band
+    toolbar block was removed (the toolbar now only renders floating while editing an element).
+- **Tests (TDD red → green, behaviour via the public resolver API):** `StoryToolbarPlacementTest` (new,
+  +9): sits below when it fits; goes above on bottom-overflow; a shrunken (keyboard) canvas forces above;
+  clamps to the top for a high element; clamps off the bottom in a tight band; a canvas shorter than the
+  toolbar pins to top; gap honoured below **and** above; the exact-fit boundary still sits below.
+- **Edge cases:** boundary `==` (exact fit → BELOW), degenerate `canvasHeight < toolbarHeight`
+  (`coerceAtLeast(0)` → top), high element (clamp to 0), tight band (clamp to `clampMax`), gap on both
+  sides. No floor lowered, no test weakened; assertions are exact computed pixels (no tautology).
+- **Branch coverage (new logic):** every arm of `resolve` hit — below-fits, above in-range, above
+  clamp-low (→0), above clamp-high (→clampMax incl. the `coerceAtLeast` floor). ≥90% branch + instruction.
+- **Verification:** `./apps/android/meeshy.sh check` (`assembleDebug` + all `testDebugUnitTest`, 836
+  tasks) — **BUILD SUCCESSFUL**. `StoryToolbarPlacementTest` 9/9 green. Diff = `apps/android` only
+  (1 new prod Kotlin, 1 prod Kotlin changed, 1 new test, tracking docs).
+- **Reviewer gate:** PASS — scope `apps/android` only, no secrets / `local.properties` gitignored;
+  behavioural non-tautological tests through the public API; SDK purity (pure placement math is composer
+  **product** state in `:feature:stories`, glue in the Composable); single source of truth (anchor
+  decision in one pure place); UDF (VM + immutable `StateFlow` untouched); colour/UX coherence (toolbar
+  uses `MaterialTheme` surface, floats by natural anchor, keyboard-aware via `imePadding`).
+- **Follow-ups:** canvas toolbar/FAB (Contenu/Effets); per-element rotate/scale transform handles; then Calls.
 
 ### 2026-06-29 — slice `story-text-element-styling` ✅
 - **Branch:** `claude/apps/android/story-text-element-styling` (off `origin/main` @ `7f28c533`).

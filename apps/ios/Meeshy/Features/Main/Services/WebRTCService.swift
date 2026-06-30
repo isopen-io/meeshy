@@ -81,6 +81,13 @@ final class WebRTCService {
     }
 
     deinit {
+        // Belt-and-suspenders: cancel all in-flight tasks so they stop
+        // referencing self as soon as the object is deallocated, rather than
+        // waiting for the next [weak self] guard to fire. Task.cancel() is
+        // nonisolated and safe to call from any context.
+        qualityMonitorTask?.cancel()
+        disconnectDebounceTask?.cancel()
+        flushCandidatesTask?.cancel()
         Logger.webrtc.info("WebRTCService deinit")
     }
 
@@ -322,17 +329,23 @@ final class WebRTCService {
         } else {
             newBitrate = QualityThresholds.minBitrate
         }
+        // Jitter > 30ms degrades Opus PLC; cap to minBitrate even on a low-RTT path.
+        let effectiveBitrate = stats.jitterMs > QualityThresholds.highJitterThresholdMs
+            ? QualityThresholds.minBitrate : newBitrate
 
-        if newBitrate != currentBitrate {
-            currentBitrate = newBitrate
+        if effectiveBitrate != currentBitrate {
+            currentBitrate = effectiveBitrate
             // Apply the new ceiling to the live audio sender so the encoder
             // actually sheds bandwidth — previously this was only logged.
-            client.applyAudioEncoding(maxBitrateBps: newBitrate)
+            client.applyAudioEncoding(maxBitrateBps: effectiveBitrate)
             let lossPct = String(format: "%.1f%%", lossRatio * 100)
             let bweMbps = stats.availableOutgoingBitrateBps > 0
                 ? String(format: " bwe=%.1fMbps", Double(stats.availableOutgoingBitrateBps) / 1_000_000)
                 : ""
-            Logger.webrtc.info("Audio bitrate adjusted to \(newBitrate / 1000)kbps (RTT: \(rtt)ms, loss: \(lossPct)\(bweMbps))")
+            let jitterTag = stats.jitterMs > QualityThresholds.highJitterThresholdMs
+                ? String(format: " jitter=%.0fms[capped]", stats.jitterMs)
+                : ""
+            Logger.webrtc.info("Audio bitrate adjusted to \(effectiveBitrate / 1000)kbps (RTT: \(rtt)ms, loss: \(lossPct)\(bweMbps)\(jitterTag))")
         }
 
         // §5.6 — a thermal transition must re-apply the encoder ceiling even

@@ -131,6 +131,41 @@ class StorySlideDeckTextElementsTest {
         assertThat(deck.moveTextElement("z", dx = 0.1f, dy = 0.1f)).isSameInstanceAs(deck)
     }
 
+    // --- transformTextElement ---
+
+    @Test
+    fun `transformTextElement pinch-scales and rotates the matching element`() {
+        val deck = deckOf(StorySlide(id = "a", elements = listOf(element("e1"))))
+        val after = deck.transformTextElement("e1", scaleBy = 2f, rotateByDeg = 30f)
+        val stored = after.selectedSlide.elements.single()
+        assertThat(stored.scale).isWithin(1e-6f).of(2f)
+        assertThat(stored.rotationDeg).isWithin(1e-4f).of(30f)
+    }
+
+    @Test
+    fun `transformTextElement clamps the scale to the canvas bounds`() {
+        val deck = deckOf(StorySlide(id = "a", elements = listOf(element("e1"))))
+        val after = deck.transformTextElement("e1", scaleBy = 100f, rotateByDeg = 0f)
+        assertThat(after.selectedSlide.elements.single().scale).isEqualTo(StoryTextElement.MAX_SCALE)
+    }
+
+    @Test
+    fun `transformTextElement touches only the matching element`() {
+        val deck = deckOf(
+            StorySlide(id = "a", elements = listOf(element("e1"), element("e2"))),
+        )
+        val after = deck.transformTextElement("e1", scaleBy = 1.5f, rotateByDeg = 10f)
+        val others = after.selectedSlide.elements.single { it.id == "e2" }
+        assertThat(others.scale).isEqualTo(StoryTextElement.DEFAULT_SCALE)
+        assertThat(others.rotationDeg).isEqualTo(StoryTextElement.DEFAULT_ROTATION)
+    }
+
+    @Test
+    fun `transformTextElement is inert on an unknown id`() {
+        val deck = deckOf(StorySlide(id = "a", elements = listOf(element("e1"))))
+        assertThat(deck.transformTextElement("z", scaleBy = 2f, rotateByDeg = 10f)).isSameInstanceAs(deck)
+    }
+
     // --- aggregate / publishable rules ---
 
     @Test
@@ -166,5 +201,94 @@ class StorySlideDeckTextElementsTest {
         val deck = deckOf(StorySlide(id = "a", elements = listOf(element("e1", text = "carry"))))
         val after = deck.duplicate(sourceId = "a", newId = "a2")
         assertThat(after.slides[1].elements.single().text).isEqualTo("carry")
+    }
+
+    // --- duplicateTextElement ---
+
+    @Test
+    fun `duplicateTextElement clones content with the new id right after the source`() {
+        val deck = deckOf(
+            StorySlide(
+                id = "a",
+                elements = listOf(
+                    element("e1", text = "first"),
+                    element("e2", text = "second"),
+                ),
+            ),
+        )
+        val after = deck.duplicateTextElement(sourceId = "e1", newId = "e1c", dx = 0.04f, dy = 0.04f)
+        val ids = after.selectedSlide.elements.map { it.id }
+        assertThat(ids).containsExactly("e1", "e1c", "e2").inOrder()
+        val clone = after.selectedSlide.elements[1]
+        assertThat(clone.text).isEqualTo("first")
+    }
+
+    @Test
+    fun `duplicateTextElement copies every styled field onto the clone`() {
+        val source = StoryTextElement(
+            id = "e1",
+            text = "styled",
+            style = StoryTextStyle.NEON,
+            color = "00FF00",
+            align = StoryTextAlign.RIGHT,
+            scale = 2f,
+            rotationDeg = 45f,
+        )
+        val deck = deckOf(StorySlide(id = "a", elements = listOf(source)))
+        val clone = deck.duplicateTextElement(sourceId = "e1", newId = "e1c", dx = 0f, dy = 0f)
+            .selectedSlide.elements.single { it.id == "e1c" }
+        assertThat(clone.text).isEqualTo("styled")
+        assertThat(clone.style).isEqualTo(StoryTextStyle.NEON)
+        assertThat(clone.color).isEqualTo("00FF00")
+        assertThat(clone.align).isEqualTo(StoryTextAlign.RIGHT)
+        assertThat(clone.scale).isEqualTo(2f)
+        assertThat(clone.rotationDeg).isEqualTo(45f)
+    }
+
+    @Test
+    fun `duplicateTextElement offsets the clone and clamps into the canvas`() {
+        val deck = deckOf(StorySlide(id = "a", elements = listOf(element("e1", x = 0.5f, y = 0.98f))))
+        val clone = deck.duplicateTextElement(sourceId = "e1", newId = "e1c", dx = 0.04f, dy = 0.04f)
+            .selectedSlide.elements.single { it.id == "e1c" }
+        assertThat(clone.x).isWithin(1e-6f).of(0.54f)
+        assertThat(clone.y).isEqualTo(1f)
+    }
+
+    @Test
+    fun `duplicateTextElement duplicates an element living on a non-selected slide`() {
+        val deck = deckOf(
+            StorySlide(id = "a"),
+            StorySlide(id = "b", elements = listOf(element("e1", text = "onB"))),
+            selected = "a",
+        )
+        val after = deck.duplicateTextElement(sourceId = "e1", newId = "e1c", dx = 0f, dy = 0f)
+        assertThat(after.slides[1].elements.map { it.id }).containsExactly("e1", "e1c").inOrder()
+        assertThat(after.slides[0].elements).isEmpty()
+        assertThat(after.selectedId).isEqualTo("a")
+    }
+
+    @Test
+    fun `duplicateTextElement is inert when the source id is unknown`() {
+        val deck = deckOf(StorySlide(id = "a", elements = listOf(element("e1"))))
+        assertThat(deck.duplicateTextElement(sourceId = "ghost", newId = "x", dx = 0f, dy = 0f)).isSameInstanceAs(deck)
+    }
+
+    @Test
+    fun `duplicateTextElement is inert when the new id already exists`() {
+        val deck = deckOf(
+            StorySlide(id = "a", elements = listOf(element("e1"), element("e2"))),
+        )
+        assertThat(deck.duplicateTextElement(sourceId = "e1", newId = "e2", dx = 0f, dy = 0f)).isSameInstanceAs(deck)
+    }
+
+    @Test
+    fun `duplicateTextElement is inert when the holding slide is at the cap`() {
+        val full = deckOf(
+            StorySlide(
+                id = "a",
+                elements = (1..StorySlideDeck.MAX_TEXT_ELEMENTS_PER_SLIDE).map { element("e$it") },
+            ),
+        )
+        assertThat(full.duplicateTextElement(sourceId = "e1", newId = "e1c", dx = 0f, dy = 0f)).isSameInstanceAs(full)
     }
 }

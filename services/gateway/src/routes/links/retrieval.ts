@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
-import { sendSuccess } from '../../utils/response.js';
+import { sendSuccess, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
 import {
   createUnifiedAuthMiddleware,
   UnifiedAuthRequest
@@ -124,10 +124,7 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
       const shareLink = await findShareLinkByIdentifier(fastify.prisma, identifier);
 
       if (!shareLink) {
-        return reply.status(404).send({
-          success: false,
-          message: 'Lien de partage non trouvé'
-        });
+        return sendNotFound(reply, 'Lien de partage non trouvé');
       }
 
       // Vérifier les permissions d'accès
@@ -149,10 +146,7 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
       }
 
       if (!hasAccess) {
-        return reply.status(403).send({
-          success: false,
-          message: 'Accès non autorisé à ce lien'
-        });
+        return sendForbidden(reply, 'Accès non autorisé à ce lien');
       }
 
       const { limit = '50', offset = '0' } = request.query as { limit?: string; offset?: string };
@@ -280,10 +274,7 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       logError(fastify.log, 'Get link info error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 }

@@ -75,7 +75,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [x] `services/gateway/src/routes/community-preferences.ts`
 - [x] `services/gateway/src/routes/conversation-encryption.ts`
 - [x] `services/gateway/src/routes/conversation-preferences.ts`
-- [ ] `services/gateway/src/routes/friends.ts`
+- [x] `services/gateway/src/routes/friends.ts`
 - [x] `services/gateway/src/routes/invitations.ts`
 - [x] `services/gateway/src/routes/magic-link.ts`
 - [x] `services/gateway/src/routes/maintenance.ts`
@@ -129,13 +129,13 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/gateway/src/routes/attachments/types.ts`
 - [ ] `services/gateway/src/routes/attachments/upload.ts`
 
-## routes/auth  (0/7 have a test)
+## routes/auth  (2/7 have a test)
 
 - [ ] `services/gateway/src/routes/auth/index.ts`
-- [ ] `services/gateway/src/routes/auth/login.ts`
+- [x] `services/gateway/src/routes/auth/login.ts`
 - [ ] `services/gateway/src/routes/auth/magic-link.ts`
 - [ ] `services/gateway/src/routes/auth/phone-transfer.ts`
-- [ ] `services/gateway/src/routes/auth/register.ts`
+- [x] `services/gateway/src/routes/auth/register.ts`
 - [ ] `services/gateway/src/routes/auth/revoke-all-sessions.ts`
 - [x] `services/gateway/src/routes/auth/types.ts`
 
@@ -192,15 +192,15 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/gateway/src/routes/me/preferences/preference-router-factory.ts`
 - [ ] `services/gateway/src/routes/me/preferences/types.ts`
 
-## routes/posts  (0/7 have a test)
+## routes/posts  (7/7 have a test)
 
-- [ ] `services/gateway/src/routes/posts/audio.ts`
-- [ ] `services/gateway/src/routes/posts/comments.ts`
-- [ ] `services/gateway/src/routes/posts/core.ts`
-- [ ] `services/gateway/src/routes/posts/feed.ts`
-- [ ] `services/gateway/src/routes/posts/index.ts`
-- [ ] `services/gateway/src/routes/posts/interactions.ts`
-- [ ] `services/gateway/src/routes/posts/types.ts`
+- [x] `services/gateway/src/routes/posts/audio.ts`
+- [x] `services/gateway/src/routes/posts/comments.ts`
+- [x] `services/gateway/src/routes/posts/core.ts`
+- [x] `services/gateway/src/routes/posts/feed.ts`
+- [x] `services/gateway/src/routes/posts/index.ts`
+- [x] `services/gateway/src/routes/posts/interactions.ts`
+- [x] `services/gateway/src/routes/posts/types.ts`
 
 ## routes/tracking-links  (0/4 have a test)
 

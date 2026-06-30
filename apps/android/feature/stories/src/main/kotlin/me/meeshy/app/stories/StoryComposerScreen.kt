@@ -7,12 +7,16 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +24,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
@@ -37,9 +42,11 @@ import androidx.compose.material.icons.filled.FormatAlignCenter
 import androidx.compose.material.icons.filled.FormatAlignLeft
 import androidx.compose.material.icons.filled.FormatAlignRight
 import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -63,9 +70,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -82,6 +91,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
+import kotlin.math.abs
 import kotlin.math.roundToInt
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -166,6 +176,7 @@ fun StoryComposerScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .imePadding()
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -183,15 +194,29 @@ fun StoryComposerScreen(
                 backgroundModel = state.selectedSlideAttachments.firstOrNull()?.let { it.thumbnailUrl ?: it.url }
                     ?: state.selectedSlidePending.firstOrNull()?.item?.bytes,
                 textElements = state.selectedSlideTextElements,
-                selectedElementId = state.selectedTextElementId,
+                selectedElement = state.selectedTextElement,
                 onTransform = viewModel::onCanvasTransform,
                 onElementTap = viewModel::onSelectTextElement,
                 onElementDrag = viewModel::onTextElementMoved,
+                onElementDragEnd = viewModel::onTextElementDragEnd,
+                onElementTransform = viewModel::onTextElementTransform,
                 onElementRemove = viewModel::onRemoveTextElement,
                 onBackgroundTap = viewModel::onDeselectTextElement,
+                snapFeedback = state.snapFeedback,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
+                floatingToolbar = {
+                    state.selectedTextElement?.let { element ->
+                        TextStyleToolbar(
+                            element = element,
+                            onStyle = { style -> viewModel.onTextElementStyle(element.id, style) },
+                            onColor = { color -> viewModel.onTextElementColor(element.id, color) },
+                            onAlign = { align -> viewModel.onTextElementAlign(element.id, align) },
+                            onDuplicate = { viewModel.onDuplicateTextElement(element.id) },
+                        )
+                    }
+                },
             )
 
             OutlinedTextField(
@@ -225,28 +250,6 @@ fun StoryComposerScreen(
                 },
             )
 
-            state.selectedTextElement?.let { element ->
-                TextStyleToolbar(
-                    element = element,
-                    onStyle = { style -> viewModel.onTextElementStyle(element.id, style) },
-                    onColor = { color -> viewModel.onTextElementColor(element.id, color) },
-                    onAlign = { align -> viewModel.onTextElementAlign(element.id, align) },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-
-            OutlinedButton(
-                onClick = viewModel::onAddTextElement,
-                enabled = state.deck.selectedCanAddTextElement,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.Filled.TextFields, contentDescription = null)
-                Text(
-                    text = stringResource(R.string.stories_composer_add_text),
-                    modifier = Modifier.padding(start = 8.dp),
-                )
-            }
-
             if (state.selectedSlideAttachments.isNotEmpty() || state.selectedSlidePending.isNotEmpty()) {
                 MediaPreviewRow(
                     attachments = state.selectedSlideAttachments,
@@ -255,41 +258,195 @@ fun StoryComposerScreen(
                 )
             }
 
-            OutlinedButton(
-                onClick = {
+            ComposerControlsLayer(
+                band = state.band,
+                visibility = state.draft.visibility,
+                canAddText = state.deck.selectedCanAddTextElement,
+                isUploadingMedia = state.isUploadingMedia,
+                isMediaFull = state.draft.isMediaFull,
+                mediaCount = state.draft.mediaIds.size,
+                hasMedia = state.draft.hasMedia,
+                onFabTap = viewModel::onBandFabTap,
+                onDismiss = viewModel::onBandDismiss,
+                onSwapCategory = viewModel::onBandSwapCategory,
+                onAddText = viewModel::onAddTextElement,
+                onPickMedia = {
                     when (StoryMediaPicker.modeFor(state.draft.remainingMediaSlots)) {
                         StoryMediaPickMode.Single -> pickSingle.launch(imageAndVideo)
                         StoryMediaPickMode.Multiple -> pickMultiple.launch(imageAndVideo)
                         StoryMediaPickMode.None -> Unit
                     }
                 },
-                enabled = !state.isUploadingMedia && !state.draft.isMediaFull,
-                modifier = Modifier.fillMaxWidth(),
+                onSelectVisibility = viewModel::onVisibilityChange,
+            )
+        }
+    }
+}
+
+/**
+ * The bottom-band tools toolbar — parity with iOS's composer FAB column + bottom band
+ * (`Contenu` / `Effets`). Two FABs toggle a tools drawer that animates in above them;
+ * the drawer shows the active [BandCategory]'s tools — Contenu's add-text / add-media
+ * tiles, or Effets' visibility chips. Which category is showing, and whether the drawer
+ * is open at all, is decided by the pure, unit-tested [ComposerBandState]; this
+ * Composable only renders that state and forwards intents. The drawer is dismissable by
+ * a downward swipe and swaps category on a horizontal swipe — natural gestures routed
+ * through [onDismiss] / [onSwapCategory].
+ */
+@Composable
+private fun ComposerControlsLayer(
+    band: ComposerBandState,
+    visibility: StoryVisibility,
+    canAddText: Boolean,
+    isUploadingMedia: Boolean,
+    isMediaFull: Boolean,
+    mediaCount: Int,
+    hasMedia: Boolean,
+    onFabTap: (BandCategory) -> Unit,
+    onDismiss: () -> Unit,
+    onSwapCategory: () -> Unit,
+    onAddText: () -> Unit,
+    onPickMedia: () -> Unit,
+    onSelectVisibility: (StoryVisibility) -> Unit,
+) {
+    val swipeThresholdPx = with(LocalDensity.current) { 48.dp.toPx() }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        AnimatedVisibility(visible = band.isVisible) {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .pointerInput(Unit) {
+                        var total = 0f
+                        detectVerticalDragGestures(
+                            onDragStart = { total = 0f },
+                            onDragEnd = { if (total > swipeThresholdPx) onDismiss() },
+                        ) { change, dy -> change.consume(); total += dy }
+                    }
+                    .pointerInput(Unit) {
+                        var total = 0f
+                        detectHorizontalDragGestures(
+                            onDragStart = { total = 0f },
+                            onDragEnd = { if (abs(total) > swipeThresholdPx) onSwapCategory() },
+                        ) { change, dx -> change.consume(); total += dx }
+                    },
             ) {
-                if (state.isUploadingMedia) {
-                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                } else {
-                    Icon(Icons.Filled.AddPhotoAlternate, contentDescription = null)
+                when (band.activeCategory) {
+                    BandCategory.CONTENU -> ContentTilesRow(
+                        canAddText = canAddText,
+                        isUploadingMedia = isUploadingMedia,
+                        isMediaFull = isMediaFull,
+                        mediaCount = mediaCount,
+                        hasMedia = hasMedia,
+                        onAddText = onAddText,
+                        onPickMedia = onPickMedia,
+                    )
+                    BandCategory.EFFETS -> VisibilityRow(
+                        selected = visibility,
+                        onSelect = onSelectVisibility,
+                        modifier = Modifier.padding(12.dp),
+                    )
+                    null -> Unit
                 }
-                Text(
-                    text = if (state.draft.hasMedia) {
-                        stringResource(
-                            R.string.stories_composer_add_media_count,
-                            state.draft.mediaIds.size,
-                            StoryComposerDraft.MAX_MEDIA,
-                        )
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            BandFab(
+                icon = Icons.Filled.Add,
+                label = stringResource(R.string.stories_composer_band_contenu),
+                active = band.activeCategory == BandCategory.CONTENU,
+                onClick = { onFabTap(BandCategory.CONTENU) },
+            )
+            BandFab(
+                icon = Icons.Filled.Tune,
+                label = stringResource(R.string.stories_composer_band_effets),
+                active = band.activeCategory == BandCategory.EFFETS,
+                onClick = { onFabTap(BandCategory.EFFETS) },
+            )
+        }
+    }
+}
+
+/** One bottom-band FAB. Brand-coloured when its category's drawer is open. */
+@Composable
+private fun BandFab(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    active: Boolean,
+    onClick: () -> Unit,
+) {
+    val container = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondaryContainer
+    val content = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondaryContainer
+    ExtendedFloatingActionButton(
+        onClick = onClick,
+        containerColor = container,
+        contentColor = content,
+        icon = { Icon(icon, contentDescription = null) },
+        text = { Text(label) },
+    )
+}
+
+/** The Contenu drawer's tiles — add-text and pick-media — rendered in [ComposerBand.contentTiles] order. */
+@Composable
+private fun ContentTilesRow(
+    canAddText: Boolean,
+    isUploadingMedia: Boolean,
+    isMediaFull: Boolean,
+    mediaCount: Int,
+    hasMedia: Boolean,
+    onAddText: () -> Unit,
+    onPickMedia: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        ComposerBand.contentTiles.forEach { tile ->
+            when (tile) {
+                ComposerContentTile.TEXT -> BandTile(
+                    icon = { Icon(Icons.Filled.TextFields, contentDescription = null) },
+                    label = stringResource(R.string.stories_composer_add_text),
+                    enabled = canAddText,
+                    onClick = onAddText,
+                    modifier = Modifier.weight(1f),
+                )
+                ComposerContentTile.MEDIA -> BandTile(
+                    icon = {
+                        if (isUploadingMedia) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(Icons.Filled.AddPhotoAlternate, contentDescription = null)
+                        }
+                    },
+                    label = if (hasMedia) {
+                        stringResource(R.string.stories_composer_add_media_count, mediaCount, StoryComposerDraft.MAX_MEDIA)
                     } else {
                         stringResource(R.string.stories_composer_add_media)
                     },
-                    modifier = Modifier.padding(start = 8.dp),
+                    enabled = !isUploadingMedia && !isMediaFull,
+                    onClick = onPickMedia,
+                    modifier = Modifier.weight(1f),
                 )
             }
-
-            VisibilityRow(
-                selected = state.draft.visibility,
-                onSelect = viewModel::onVisibilityChange,
-            )
         }
+    }
+}
+
+/** A single content-drawer tile: an icon over a label, forwarding [onClick]. Glue. */
+@Composable
+private fun BandTile(
+    icon: @Composable () -> Unit,
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    OutlinedButton(onClick = onClick, enabled = enabled, modifier = modifier) {
+        icon()
+        Text(label, modifier = Modifier.padding(start = 8.dp))
     }
 }
 
@@ -301,23 +458,43 @@ fun StoryComposerScreen(
  * [StoryTextElement]: each gesture callback is forwarded verbatim (pixels divided by
  * the measured canvas size into normalised fractions), so this Composable stays
  * declarative glue. A tap on the empty canvas deselects ([onBackgroundTap]).
+ *
+ * While a text element is being edited the [floatingToolbar] floats in-place just
+ * clear of that element — above or below it, clamped inside the canvas — at the
+ * vertical anchor decided by the pure, unit-tested [StoryToolbarPlacement] (fed the
+ * element's measured centre/half-height, the toolbar's measured height, and the
+ * keyboard-shrunk canvas height). The composer applies `imePadding`, so the canvas
+ * already excludes the soft keyboard and the toolbar always lands in view.
  */
 @Composable
 private fun StoryCanvasSurface(
     transform: StoryCanvasTransform,
     backgroundModel: Any?,
     textElements: List<StoryTextElement>,
-    selectedElementId: String?,
+    selectedElement: StoryTextElement?,
     onTransform: (Float, Float, Float, Float, Float) -> Unit,
     onElementTap: (String) -> Unit,
     onElementDrag: (String, Float, Float) -> Unit,
+    onElementDragEnd: () -> Unit,
+    onElementTransform: (String, Float, Float) -> Unit,
     onElementRemove: (String) -> Unit,
     onBackgroundTap: () -> Unit,
+    snapFeedback: SnapFeedback?,
     modifier: Modifier = Modifier,
+    floatingToolbar: @Composable () -> Unit = {},
 ) {
     val canvasLabel = stringResource(R.string.stories_composer_canvas)
+    val guideColor = MaterialTheme.colorScheme.primary
+    val warnBorder = if (snapFeedback?.withinSafeZone == false) {
+        BorderStroke(2.dp, MaterialTheme.colorScheme.error)
+    } else {
+        null
+    }
     var canvasWidthPx by remember { mutableFloatStateOf(0f) }
     var canvasHeightPx by remember { mutableFloatStateOf(0f) }
+    var selectedHalfHeightPx by remember { mutableFloatStateOf(0f) }
+    var toolbarHeightPx by remember { mutableFloatStateOf(0f) }
+    val gapPx = with(LocalDensity.current) { 8.dp.toPx() }
     Box(
         modifier = modifier,
         contentAlignment = Alignment.Center,
@@ -328,6 +505,13 @@ private fun StoryCanvasSurface(
                 .aspectRatio(9f / 16f)
                 .clip(RoundedCornerShape(16.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
+                .then(
+                    if (warnBorder != null) {
+                        Modifier.border(warnBorder, RoundedCornerShape(16.dp))
+                    } else {
+                        Modifier
+                    },
+                )
                 .onSizeChanged {
                     canvasWidthPx = it.width.toFloat()
                     canvasHeightPx = it.height.toFloat()
@@ -355,10 +539,30 @@ private fun StoryCanvasSurface(
                         },
                 )
             }
+            if (snapFeedback != null) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    snapFeedback.verticalGuide?.let { gx ->
+                        drawLine(
+                            color = guideColor,
+                            start = Offset(gx * size.width, 0f),
+                            end = Offset(gx * size.width, size.height),
+                            strokeWidth = 2f,
+                        )
+                    }
+                    snapFeedback.horizontalGuide?.let { gy ->
+                        drawLine(
+                            color = guideColor,
+                            start = Offset(0f, gy * size.height),
+                            end = Offset(size.width, gy * size.height),
+                            strokeWidth = 2f,
+                        )
+                    }
+                }
+            }
             textElements.forEach { element ->
                 TextElementLayer(
                     element = element,
-                    selected = element.id == selectedElementId,
+                    selected = element.id == selectedElement?.id,
                     canvasWidthPx = canvasWidthPx,
                     canvasHeightPx = canvasHeightPx,
                     onTap = { onElementTap(element.id) },
@@ -367,8 +571,36 @@ private fun StoryCanvasSurface(
                             onElementDrag(element.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx)
                         }
                     },
+                    onDragEnd = onElementDragEnd,
+                    onTransform = { zoom, rotationDeg -> onElementTransform(element.id, zoom, rotationDeg) },
                     onRemove = { onElementRemove(element.id) },
+                    onMeasured = { size ->
+                        if (element.id == selectedElement?.id) selectedHalfHeightPx = size.height / 2f
+                    },
                 )
+            }
+            if (selectedElement != null) {
+                val placement = StoryToolbarPlacement.resolve(
+                    elementCenterYpx = selectedElement.y * canvasHeightPx,
+                    elementHalfHeightPx = selectedHalfHeightPx,
+                    toolbarHeightPx = toolbarHeightPx,
+                    canvasHeightPx = canvasHeightPx,
+                    gapPx = gapPx,
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .offset { IntOffset(0, placement.topPx.roundToInt()) }
+                        .padding(horizontal = 8.dp)
+                        .onSizeChanged { toolbarHeightPx = it.height.toFloat() }
+                        .background(
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                            shape = RoundedCornerShape(12.dp),
+                        )
+                        .padding(8.dp),
+                ) {
+                    floatingToolbar()
+                }
             }
         }
     }
@@ -389,7 +621,10 @@ private fun TextElementLayer(
     canvasHeightPx: Float,
     onTap: () -> Unit,
     onDrag: (Float, Float) -> Unit,
+    onDragEnd: () -> Unit,
+    onTransform: (Float, Float) -> Unit,
     onRemove: () -> Unit,
+    onMeasured: (IntSize) -> Unit = {},
 ) {
     var sizePx by remember { mutableStateOf(IntSize.Zero) }
     Box(
@@ -400,12 +635,32 @@ private fun TextElementLayer(
                     y = (element.y * canvasHeightPx - sizePx.height / 2f).roundToInt(),
                 )
             }
-            .onSizeChanged { sizePx = it }
+            .graphicsLayer {
+                scaleX = element.scale
+                scaleY = element.scale
+                rotationZ = element.rotationDeg
+            }
+            .onSizeChanged {
+                sizePx = it
+                onMeasured(it)
+            }
             .pointerInput(element.id) { detectTapGestures { onTap() } }
             .pointerInput(element.id) {
-                detectDragGestures { change, dragAmount ->
-                    change.consume()
-                    onDrag(dragAmount.x, dragAmount.y)
+                detectTransformGestures { _, pan, zoom, rotation ->
+                    onDrag(pan.x, pan.y)
+                    onTransform(zoom, rotation)
+                }
+            }
+            .pointerInput(element.id) {
+                // Observes the Final pass without consuming, so it fires the moment
+                // the drag/pinch lifts (every pointer up) — clearing the snap guides —
+                // while the transform detector above still owns the gesture deltas.
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    do {
+                        val event = awaitPointerEvent(PointerEventPass.Final)
+                    } while (event.changes.any { it.pressed })
+                    onDragEnd()
                 }
             }
             .background(
@@ -499,6 +754,7 @@ private fun TextStyleToolbar(
     onStyle: (StoryTextStyle) -> Unit,
     onColor: (String) -> Unit,
     onAlign: (StoryTextAlign) -> Unit,
+    onDuplicate: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -518,6 +774,13 @@ private fun TextStyleToolbar(
             AlignToggle(StoryTextAlign.LEFT, element.align, onAlign)
             AlignToggle(StoryTextAlign.CENTER, element.align, onAlign)
             AlignToggle(StoryTextAlign.RIGHT, element.align, onAlign)
+            IconButton(onClick = onDuplicate) {
+                Icon(
+                    Icons.Filled.ContentCopy,
+                    contentDescription = stringResource(R.string.stories_composer_duplicate_element),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(STORY_TEXT_COLORS) { hex ->
@@ -745,9 +1008,10 @@ private fun MediaThumbnail(
 private fun VisibilityRow(
     selected: StoryVisibility,
     onSelect: (StoryVisibility) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     LazyRow(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

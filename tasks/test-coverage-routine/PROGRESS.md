@@ -155,7 +155,7 @@ Measured 2026-06-14. Commands run after `pnpm install` + `cd packages/shared && 
 | Suite | Command | Line % | Branch % | Recorded |
 |-------|---------|:------:|:--------:|:--------:|
 | web | `pnpm --filter web test:coverage` | 42.97 | 35.17 | 2026-06-22 (post P2 Theme/accent color × web; +1 test for use-resolved-theme dark→light transition; date-format+tag-colors already at 100%; stmts:42.21/branch:35.17/funcs:39.16/lines:42.97; threshold floor unchanged lines:42/branches:34/statements:41/functions:38 — new measurements already above floor) |
-| gateway | `pnpm --filter gateway test:coverage` | ~75.4 (local) / ~70.7 (CI est.) | ~70.5 (local) / ~66.0 (CI est.) | 2026-06-29 (post gateway-manifest-gap7: routes/conversation-preferences.ts 100%/93.22%; 322 suites / 9742 tests / 1 skipped; threshold floor unchanged lines:67/branches:63/statements:67/functions:67 — CI-bun-calibrated gap ~4.5pp, floors safe) |
+| gateway | `pnpm --filter gateway test:coverage` | ~93.06 (local node) / ~88.5 (CI bun est.) | ~85.83 (local node) / ~81.3 (CI bun est.) | 2026-06-30 (post gateway-posts-routes: routes/posts/* 7 files ≥92% line+branch; 402 suites / 11755 tests / 1 skipped; threshold floor ratcheted lines:67→79/branches:63→72/statements:67→78/functions:67→77 — CI-bun-calibrated gap ~4.5pp, 8-9pp headroom) |
 | translator | `.venv/bin/python -m pytest tests/ -m "not slow and not gpu" --cov=src` | ~39 | n/a | 2026-06-19 (post P1 Voice/audio × translator; +127 tests covering 6 modules; fail_under ratcheted 37→39; diarization GPU methods pragma'd) |
 | iOS | `./apps/ios/meeshy.sh test` | n/a | n/a | not measurable (no macOS/Xcode in CI env) |
 | android | `apps/android/meeshy.sh test` | n/a | n/a | not measurable (no Android SDK in CI env) |

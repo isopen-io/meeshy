@@ -131,12 +131,14 @@ export class ReactionHandler {
       };
       if (callback) callback(successResponse);
 
-      // Broadcaster l'événement
+      // Fire-and-forget post-success side-effects so errors in broadcast or
+      // notification do not confuse the already-confirmed client response.
       if (message) {
-        await this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_ADDED);
+        this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_ADDED)
+          .catch(err => logger.error('reaction:add broadcast failed', { error: err, conversationId: message.conversationId }));
       }
-
-      await this._createReactionNotification(validated.messageId, validated.emoji, userId, isAnonymous, reaction.id);
+      // _createReactionNotification handles errors internally; void to be explicit.
+      void this._createReactionNotification(validated.messageId, validated.emoji, userId, isAnonymous, reaction.id);
     } catch (error: unknown) {
       logger.error('reaction:add failed', { error });
       const errorResponse: SocketIOResponse<unknown> = {
@@ -232,7 +234,8 @@ export class ReactionHandler {
       if (callback) callback(successResponse);
 
       if (message) {
-        await this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_REMOVED);
+        this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_REMOVED)
+          .catch(err => logger.error('reaction:remove broadcast failed', { error: err, conversationId: message.conversationId }));
       }
     } catch (error: unknown) {
       logger.error('reaction:remove failed', { error });
@@ -269,7 +272,7 @@ export class ReactionHandler {
       const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
 
-      const syncAllowed = await this.rateLimiter.checkLimit(userId, SOCKET_RATE_LIMITS.REACTION_ADD);
+      const syncAllowed = await this.rateLimiter.checkLimit(userId, SOCKET_RATE_LIMITS.REACTION_SYNC);
       if (!syncAllowed) {
         if (callback) callback({ success: false, error: 'Rate limit exceeded' });
         return;

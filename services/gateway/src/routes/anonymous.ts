@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { logError } from '../utils/logger';
-import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../utils/response';
+import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../utils/response';
 import { SecuritySanitizer } from '../utils/sanitize';
 import {
   errorResponseSchema,
@@ -234,31 +234,19 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
 
       // 2. Verifications de validite du lien
       if (!shareLink.isActive) {
-        return reply.status(410).send({
-          success: false,
-          message: 'Ce lien n\'est plus actif'
-        });
+        return sendError(reply, 410, 'LINK_INACTIVE', { message: 'Ce lien n\'est plus actif' });
       }
 
       if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {
-        return reply.status(410).send({
-          success: false,
-          message: 'Ce lien a expire'
-        });
+        return sendError(reply, 410, 'LINK_EXPIRED', { message: 'Ce lien a expire' });
       }
 
       if (shareLink.maxUses && shareLink.currentUses >= shareLink.maxUses) {
-        return reply.status(410).send({
-          success: false,
-          message: 'Ce lien a atteint sa limite d\'utilisation'
-        });
+        return sendError(reply, 410, 'LINK_MAX_USES', { message: 'Ce lien a atteint sa limite d\'utilisation' });
       }
 
       if (shareLink.maxConcurrentUsers && shareLink.currentConcurrentUsers >= shareLink.maxConcurrentUsers) {
-        return reply.status(429).send({
-          success: false,
-          message: 'Nombre maximum d\'utilisateurs concurrent atteint'
-        });
+        return sendError(reply, 429, 'MAX_CONCURRENT_USERS', { message: 'Nombre maximum d\'utilisateurs concurrent atteint' });
       }
 
       // 3. Verifications de securite/restrictions
@@ -284,11 +272,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
 
       // 4. Verifier si un compte est requis (bloque l'acces anonyme)
       if (shareLink.requireAccount) {
-        return reply.status(403).send({
-          success: false,
-          message: 'Un compte est requis pour rejoindre cette conversation',
-          requiresAccount: true
-        });
+        return sendForbidden(reply, 'REQUIRES_ACCOUNT', { message: 'Un compte est requis pour rejoindre cette conversation' });
       }
 
       // 5. Verifier si l'email est requis
@@ -345,11 +329,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
           counter++;
         }
 
-        return reply.status(409).send({
-          success: false,
-          message: 'Ce nom d\'utilisateur est deja utilise par un membre du site',
-          suggestedNickname: suggestedUsername
-        });
+        return sendError(reply, 409, 'USERNAME_TAKEN', { message: 'Ce nom d\'utilisateur est deja utilise par un membre du site' });
       }
 
       // 7. Verifier que le username n'est pas deja pris dans cette conversation
@@ -396,11 +376,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
           counter++;
         }
 
-        return reply.status(409).send({
-          success: false,
-          message: 'Ce nom d\'utilisateur est deja utilise dans cette conversation',
-          suggestedNickname: suggestedUsername
-        });
+        return sendError(reply, 409, 'USERNAME_TAKEN_IN_CONVERSATION', { message: 'Ce nom d\'utilisateur est deja utilise dans cette conversation' });
       }
 
       // 8. Generer le sessionToken unique
@@ -600,24 +576,15 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
       }) : null;
 
       if (!shareLink) {
-        return reply.status(410).send({
-          success: false,
-          message: 'Le lien a ete desactive'
-        });
+        return sendError(reply, 410, 'LINK_DEACTIVATED', { message: 'Le lien a ete desactive' });
       }
 
       if (!shareLink.isActive) {
-        return reply.status(410).send({
-          success: false,
-          message: 'Le lien a ete desactive'
-        });
+        return sendError(reply, 410, 'LINK_DEACTIVATED', { message: 'Le lien a ete desactive' });
       }
 
       if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {
-        return reply.status(410).send({
-          success: false,
-          message: 'Le lien a expire'
-        });
+        return sendError(reply, 410, 'LINK_EXPIRED', { message: 'Le lien a expire' });
       }
 
       await fastify.prisma.participant.update({
@@ -899,24 +866,15 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
 
       // Verifications de base
       if (!shareLink.isActive) {
-        return reply.status(410).send({
-          success: false,
-          message: 'Ce lien n\'est plus actif'
-        });
+        return sendError(reply, 410, 'LINK_INACTIVE', { message: 'Ce lien n\'est plus actif' });
       }
 
       if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {
-        return reply.status(410).send({
-          success: false,
-          message: 'Ce lien a expire'
-        });
+        return sendError(reply, 410, 'LINK_EXPIRED', { message: 'Ce lien a expire' });
       }
 
       if (shareLink.maxUses && shareLink.currentUses >= shareLink.maxUses) {
-        return reply.status(410).send({
-          success: false,
-          message: 'Ce lien a atteint sa limite d\'utilisation'
-        });
+        return sendError(reply, 410, 'LINK_MAX_USES', { message: 'Ce lien a atteint sa limite d\'utilisation' });
       }
 
       // Recuperer les statistiques de la conversation

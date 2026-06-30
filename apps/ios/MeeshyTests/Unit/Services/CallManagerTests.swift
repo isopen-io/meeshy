@@ -228,7 +228,7 @@ final class WebRTCTypesTests: XCTestCase {
 
     func test_defaultIceServers_hasGoogleStun() {
         let servers = IceServer.defaultServers
-        XCTAssertEqual(servers.count, 4)
+        XCTAssertEqual(servers.count, 5)
         XCTAssertTrue(servers[0].urls.first?.contains("stun.l.google.com") ?? false)
     }
 
@@ -1123,53 +1123,108 @@ final class VideoSurvivalControllerIntegrationTests: XCTestCase {
 
 /// Behavioural tests for `CallManager.preferredCallLanguage(for:)`.
 /// Pure static function: no network, no singletons, no async.
-/// Priority order: systemLanguage > regionalLanguage > "fr" fallback.
+/// Full 5-level Prisme Linguistique chain:
+///   1. systemLanguage > 2. regionalLanguage > 3. customDestinationLanguage > 4. deviceLocale > 5. "fr"
 @MainActor
 final class CallManagerPreferredCallLanguageTests: XCTestCase {
 
     private func makeUser(
         systemLanguage: String? = nil,
-        regionalLanguage: String? = nil
+        regionalLanguage: String? = nil,
+        customDestinationLanguage: String? = nil,
+        deviceLocale: String? = nil
     ) -> MeeshyUser {
         MeeshyUser(id: "u1", username: "testuser",
                    systemLanguage: systemLanguage,
-                   regionalLanguage: regionalLanguage)
+                   regionalLanguage: regionalLanguage,
+                   customDestinationLanguage: customDestinationLanguage,
+                   deviceLocale: deviceLocale)
     }
+
+    // MARK: Priority 5 — fallback
 
     func test_nilUser_returnsFrFallback() {
         XCTAssertEqual(CallManager.preferredCallLanguage(for: nil), "fr")
     }
 
+    func test_allNil_returnsFrFallback() {
+        let user = makeUser()
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "fr")
+    }
+
+    // MARK: Priority 1 — systemLanguage
+
     func test_systemLanguagePresent_returnsSystemLanguage() {
-        let user = makeUser(systemLanguage: "en", regionalLanguage: "es")
+        let user = makeUser(systemLanguage: "en", regionalLanguage: "es",
+                            customDestinationLanguage: "de", deviceLocale: "fr_FR")
         XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "en")
     }
+
+    func test_systemLanguagePrioritisedOverRegional() {
+        let user = makeUser(systemLanguage: "de", regionalLanguage: "fr")
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "de")
+    }
+
+    func test_systemLanguageUsedEvenWhenRegionalIsFrench() {
+        let user = makeUser(systemLanguage: "zh", regionalLanguage: "fr")
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "zh")
+    }
+
+    func test_onlySystemLanguage_noRegional_returnsSystem() {
+        let user = makeUser(systemLanguage: "ar")
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "ar")
+    }
+
+    // MARK: Priority 2 — regionalLanguage
 
     func test_systemLanguageNil_regionalPresent_returnsRegionalLanguage() {
         let user = makeUser(systemLanguage: nil, regionalLanguage: "es")
         XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "es")
     }
 
-    func test_bothLanguagesNil_returnsFrFallback() {
-        let user = makeUser(systemLanguage: nil, regionalLanguage: nil)
+    func test_regionalLanguagePrioritisedOverCustomDestination() {
+        let user = makeUser(systemLanguage: nil, regionalLanguage: "it",
+                            customDestinationLanguage: "de", deviceLocale: "fr_FR")
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "it")
+    }
+
+    // MARK: Priority 3 — customDestinationLanguage
+
+    func test_systemAndRegionalNil_customDestinationPresent_returnsCustom() {
+        let user = makeUser(customDestinationLanguage: "pt")
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "pt")
+    }
+
+    func test_customDestinationPrioritisedOverDeviceLocale() {
+        let user = makeUser(customDestinationLanguage: "ko", deviceLocale: "fr_FR")
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "ko")
+    }
+
+    // MARK: Priority 4 — deviceLocale
+
+    func test_allNilExceptDeviceLocale_returnsNormalisedLocale() {
+        // deviceLocale "fr_FR" normalises to "fr"
+        let user = makeUser(deviceLocale: "fr_FR")
         XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "fr")
     }
 
-    func test_systemLanguagePrioritisedOverRegional() {
-        // Prisme Linguistique: priority 1 (systemLanguage) beats priority 2 (regionalLanguage)
-        let user = makeUser(systemLanguage: "de", regionalLanguage: "fr")
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "de")
+    func test_deviceLocale_hyphenFormat_normalisedToISO639() {
+        // "zh-Hant-HK" → normalised to "zh" by MeeshyUser.normalizeLanguageCode
+        let user = makeUser(deviceLocale: "zh-Hant-HK")
+        let result = CallManager.preferredCallLanguage(for: user)
+        XCTAssertFalse(result.isEmpty, "deviceLocale must yield a non-empty language code")
+        XCTAssertEqual(result, MeeshyUser.normalizeLanguageCode("zh-Hant-HK") ?? "fr")
     }
 
-    func test_systemLanguageUsedEvenWhenRegionalIsFrench() {
-        // When both are set, the explicit systemLanguage wins — "fr" regional must not shadow it
-        let user = makeUser(systemLanguage: "zh", regionalLanguage: "fr")
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "zh")
+    func test_deviceLocale_underscoreFormat_normalisedToISO639() {
+        let user = makeUser(deviceLocale: "en_US")
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "en")
     }
 
-    func test_onlySystemLanguage_noRegional_returnsSystem() {
-        let user = makeUser(systemLanguage: "ar", regionalLanguage: nil)
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "ar")
+    func test_deviceLocale_notUsedWhenRegionalPresent() {
+        // Prisme rule: priority 2 (regional) beats priority 4 (deviceLocale)
+        let user = makeUser(regionalLanguage: "es", deviceLocale: "fr_FR")
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "es")
     }
 }
 
@@ -2894,5 +2949,538 @@ final class CallForcedLeaveDataTests: XCTestCase {
         let event = try JSONDecoder().decode(CallForcedLeaveData.self, from: json)
         XCTAssertEqual(event.callId, "abc123")
         XCTAssertNil(event.reason)
+    }
+}
+
+// MARK: - CallManager.formatDuration (pure helper)
+
+/// `formatDuration` was extracted as a `nonisolated static` so it is testable
+/// without touching `callDuration` (which is `private(set)`). These tests also
+/// act as a regression guard against the pre-fix bug where calls ≥ 1 hour were
+/// shown as "65:00" instead of "1:05:00".
+@MainActor
+final class CallManagerFormatDurationTests: XCTestCase {
+
+    func test_formatDuration_zero_showsDoubleZero() {
+        XCTAssertEqual(CallManager.formatDuration(0), "00:00")
+    }
+
+    func test_formatDuration_oneSecond_showsZeroZeroZeroOne() {
+        XCTAssertEqual(CallManager.formatDuration(1), "00:01")
+    }
+
+    func test_formatDuration_59seconds_noLeadingMinute() {
+        XCTAssertEqual(CallManager.formatDuration(59), "00:59")
+    }
+
+    func test_formatDuration_oneMinute_showsZeroOneZeroZero() {
+        XCTAssertEqual(CallManager.formatDuration(60), "01:00")
+    }
+
+    func test_formatDuration_90seconds_showsOneMinute30Seconds() {
+        XCTAssertEqual(CallManager.formatDuration(90), "01:30")
+    }
+
+    func test_formatDuration_59Minutes59Seconds_maxSubHour() {
+        XCTAssertEqual(CallManager.formatDuration(3599), "59:59")
+    }
+
+    func test_formatDuration_exactlyOneHour_showsHHMMSS() {
+        // Pre-fix: was "60:00"; post-fix: "1:00:00"
+        XCTAssertEqual(CallManager.formatDuration(3600), "1:00:00")
+    }
+
+    func test_formatDuration_oneHourFiveMinutes_showsHHMMSS() {
+        // Pre-fix: was "65:00"; post-fix: "1:05:00"
+        XCTAssertEqual(CallManager.formatDuration(3900), "1:05:00")
+    }
+
+    func test_formatDuration_twoHours_showsHHMMSS() {
+        XCTAssertEqual(CallManager.formatDuration(7200), "2:00:00")
+    }
+
+    func test_formatDuration_twoHours30MinutesAndSomeSeconds() {
+        // 2h 30m 45s = 9045s
+        XCTAssertEqual(CallManager.formatDuration(9045), "2:30:45")
+    }
+
+    func test_formatDuration_oneHour59Minutes59Seconds() {
+        // 7199 = 1*3600 + 59*60 + 59
+        XCTAssertEqual(CallManager.formatDuration(7199), "1:59:59")
+    }
+
+    func test_formatDuration_fractionalSecondsAreTruncated() {
+        // 90.9 seconds → 01:30 (truncate, not round)
+        XCTAssertEqual(CallManager.formatDuration(90.9), "01:30")
+    }
+
+    func test_formatDuration_subHour_doesNotShowHours() {
+        // Ensure < 1 h keeps the compact MM:SS format
+        let result = CallManager.formatDuration(3599)
+        XCTAssertFalse(result.contains(":") && result.split(separator: ":").count == 3,
+                       "sub-hour duration must use MM:SS not HH:MM:SS; got \(result)")
+    }
+
+    func test_formatDuration_oneHour_usesThreeComponents() {
+        let result = CallManager.formatDuration(3600)
+        XCTAssertEqual(result.split(separator: ":").count, 3,
+                       "≥1 h duration must use H:MM:SS format; got \(result)")
+    }
+
+    func test_formatDuration_minutesAndSecondsArePaddedToTwoDigits() {
+        // 1h 5m 3s → "1:05:03" (not "1:5:3")
+        XCTAssertEqual(CallManager.formatDuration(3600 + 5 * 60 + 3), "1:05:03")
+    }
+}
+
+// MARK: - Proximity Monitoring Source Audit
+
+/// Verifies that `updateProximityMonitoring` is correctly wired to both
+/// `callState` and `isVideoEnabled`, and that the condition is right:
+/// monitoring is ON only during audio-only active calls.
+@MainActor
+final class CallManagerProximityMonitoringTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_updateProximityMonitoring_isCalledFromCallStateDidSet() throws {
+        let source = try callManagerSource()
+        guard let didSetRange = source.range(of: "var callState: CallState") else {
+            XCTFail("callState property not found"); return
+        }
+        let afterCallState = String(source[didSetRange.upperBound...])
+        guard let didSetBlock = afterCallState.range(of: "didSet") else {
+            XCTFail("callState didSet not found"); return
+        }
+        let nextProp = afterCallState.range(of: "\n    @Published", range: didSetBlock.upperBound..<afterCallState.endIndex)?.lowerBound
+            ?? afterCallState.endIndex
+        let block = String(afterCallState[didSetBlock.lowerBound..<nextProp])
+        XCTAssertTrue(
+            block.contains("updateProximityMonitoring()"),
+            "callState.didSet must call updateProximityMonitoring() so the sensor is " +
+            "disabled when a call ends and enabled when a call becomes active"
+        )
+    }
+
+    func test_updateProximityMonitoring_isCalledFromIsVideoEnabledDidSet() throws {
+        let source = try callManagerSource()
+        guard let videoDidSetRange = source.range(of: "var isVideoEnabled: Bool") else {
+            XCTFail("isVideoEnabled property not found"); return
+        }
+        let after = String(source[videoDidSetRange.upperBound...])
+        guard let didSet = after.range(of: "didSet") else {
+            XCTFail("isVideoEnabled didSet not found"); return
+        }
+        let nextBrace = after.range(of: "}", range: didSet.upperBound..<after.endIndex)?.upperBound ?? after.endIndex
+        let block = String(after[didSet.lowerBound..<nextBrace])
+        XCTAssertTrue(
+            block.contains("updateProximityMonitoring()"),
+            "isVideoEnabled.didSet must call updateProximityMonitoring() so the sensor " +
+            "transitions correctly between audio-only and video modes"
+        )
+    }
+
+    func test_updateProximityMonitoring_enablesOnlyForAudioOnlyActiveCall() throws {
+        let source = try callManagerSource()
+        guard let fnRange = source.range(of: "private func updateProximityMonitoring()") else {
+            XCTFail("updateProximityMonitoring not found"); return
+        }
+        let after = String(source[fnRange.upperBound...])
+        guard let bodyEnd = after.range(of: "\n    }") else {
+            XCTFail("updateProximityMonitoring body end not found"); return
+        }
+        let body = String(after[after.startIndex..<bodyEnd.upperBound])
+        XCTAssertTrue(
+            body.contains("callState.isActive") && body.contains("isVideoEnabled"),
+            "updateProximityMonitoring must gate on `callState.isActive && !isVideoEnabled` — " +
+            "proximity monitoring must only be active during audio-only active calls"
+        )
+        XCTAssertTrue(
+            body.contains("isProximityMonitoringEnabled"),
+            "updateProximityMonitoring must write to UIDevice.current.isProximityMonitoringEnabled"
+        )
+    }
+}
+
+// MARK: - Route Change Default Branch Audit
+
+/// Verifies that the `default:` branch of `handleAudioRouteChange` calls
+/// `applySpeakerRoute()`. The default case handles wakeFromSleep, categoryChange,
+/// and other OS-driven transitions — all require re-applying the speaker route
+/// because iOS may silently reset the output port during these transitions.
+@MainActor
+final class CallManagerRouteChangeDefaultTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func routeChangeBody(in source: String) -> String? {
+        guard let fnRange = source.range(of: "private func handleAudioRouteChange(reasonRaw:") else { return nil }
+        let after = source[fnRange.upperBound...]
+        guard let endRange = after.range(of: "\n    }") else { return nil }
+        return String(after[after.startIndex..<endRange.upperBound])
+    }
+
+    func test_handleAudioRouteChange_default_callsApplySpeakerRoute() throws {
+        let source = try callManagerSource()
+        guard let body = routeChangeBody(in: source) else {
+            XCTFail("handleAudioRouteChange not found"); return
+        }
+        guard let defaultRange = body.range(of: "default:") else {
+            XCTFail("default: case not found in handleAudioRouteChange"); return
+        }
+        let afterDefault = String(body[defaultRange.upperBound...])
+        // The closing `}` of the switch ends the default case.
+        let endOfDefault = afterDefault.range(of: "\n        }")?.lowerBound ?? afterDefault.endIndex
+        let defaultBlock = String(afterDefault[afterDefault.startIndex..<endOfDefault])
+        XCTAssertTrue(
+            defaultBlock.contains("applySpeakerRoute()"),
+            "handleAudioRouteChange default: must call applySpeakerRoute() to handle " +
+            "wakeFromSleep, categoryChange, and other OS-driven route transitions that " +
+            "reset the output port without a specific case"
+        )
+    }
+
+    func test_handleAudioRouteChange_hasDefaultCase_coveringWakeFromSleep() throws {
+        let source = try callManagerSource()
+        guard let body = routeChangeBody(in: source) else {
+            XCTFail("handleAudioRouteChange not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("default:"),
+            "handleAudioRouteChange must have a default: case to handle wakeFromSleep " +
+            "and other non-explicit route change reasons"
+        )
+    }
+}
+
+// MARK: - rejectPendingCall guard
+
+@MainActor
+final class RejectPendingCallTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(of signature: String, in source: String) -> String? {
+        guard let range = source.range(of: signature) else { return nil }
+        let nextFunc = [
+            source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<nextFunc])
+    }
+
+    func test_rejectPendingCall_guardsPendingCallExists() throws {
+        // If no pending call is present, rejectPendingCall() must be a no-op.
+        // Without this guard, calling rejectPendingCall() with no pendingIncomingCall
+        // would attempt to emit a call:end for a nil callId, sending garbage to the gateway.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func rejectPendingCall()", in: source) else {
+            XCTFail("rejectPendingCall() not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("guard let pending = pendingIncomingCall"),
+            "rejectPendingCall() must guard `pendingIncomingCall != nil` before emitting — " +
+            "calling it when no pending call exists must be a no-op."
+        )
+    }
+
+    func test_rejectPendingCall_emitsCallEndWithPendingCallId() throws {
+        // rejectPendingCall() must emit call:end (emitCallEnd) so the gateway
+        // tears down the pending call session and notifies the waiting peer.
+        // Missing this emit would leave the peer's call ringing indefinitely.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func rejectPendingCall()", in: source) else {
+            XCTFail("rejectPendingCall() not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("emitCallEnd(callId: pending.callId)"),
+            "rejectPendingCall() must call emitCallEnd(callId: pending.callId) — " +
+            "the gateway needs call:end to tear down the waiting call and notify the peer."
+        )
+    }
+
+    func test_rejectPendingCall_clearsPendingIncomingCall() throws {
+        // After rejection, pendingIncomingCall must be cleared so a subsequent
+        // incoming call is not mistakenly treated as a waiting call.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func rejectPendingCall()", in: source) else {
+            XCTFail("rejectPendingCall() not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("pendingIncomingCall = nil"),
+            "rejectPendingCall() must set pendingIncomingCall = nil after rejection — " +
+            "leaving it set would incorrectly show a waiting-call banner for a call that was rejected."
+        )
+    }
+
+    func test_rejectPendingCall_dismissesCallWaitingBanner() throws {
+        // After rejection, the call waiting banner must be hidden so the UI
+        // does not continue to show a dismissed call.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func rejectPendingCall()", in: source) else {
+            XCTFail("rejectPendingCall() not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("showCallWaitingBanner = false"),
+            "rejectPendingCall() must set showCallWaitingBanner = false after rejection — " +
+            "the call waiting banner must be hidden once the pending call is dismissed."
+        )
+    }
+
+    func test_rejectPendingCall_emitCallEnd_beforeClearingPending() throws {
+        // emitCallEnd must happen before pendingIncomingCall is cleared so the callId
+        // is still available when the socket event fires. Reversing this order would
+        // emit call:end with a nil/stale callId.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func rejectPendingCall()", in: source) else {
+            XCTFail("rejectPendingCall() not found in CallManager.swift"); return
+        }
+        guard let emitRange = body.range(of: "emitCallEnd(callId: pending.callId)"),
+              let clearRange = body.range(of: "pendingIncomingCall = nil") else {
+            XCTFail("Expected emitCallEnd and pendingIncomingCall = nil in rejectPendingCall()"); return
+        }
+        XCTAssertLessThan(
+            emitRange.lowerBound,
+            clearRange.lowerBound,
+            "rejectPendingCall() must emit call:end BEFORE clearing pendingIncomingCall — " +
+            "callId must still be available when the socket emit fires."
+        )
+    }
+}
+
+// MARK: - Quality Label Mapping (§gateway connection quality ladder)
+
+/// `CallManager.connectionQualityLabel(for:)` collapses the client's 5-tier ladder
+/// into the 4-tier string expected by the gateway's `call:quality-report` schema.
+/// Tests are pure static — no singletons, no network.
+@MainActor
+final class CallManagerConnectionQualityLabelTests: XCTestCase {
+
+    func test_excellent_mapsToExcellent() {
+        XCTAssertEqual(CallManager.connectionQualityLabel(for: .excellent), "excellent")
+    }
+
+    func test_good_mapsToGood() {
+        XCTAssertEqual(CallManager.connectionQualityLabel(for: .good), "good")
+    }
+
+    func test_fair_mapsToFair() {
+        XCTAssertEqual(CallManager.connectionQualityLabel(for: .fair), "fair")
+    }
+
+    func test_poor_mapsToPoor() {
+        XCTAssertEqual(CallManager.connectionQualityLabel(for: .poor), "poor")
+    }
+
+    func test_critical_collapsesToPoor() {
+        // Gateway has no "critical" tier; critical collapses to "poor" so
+        // the report schema never rejects the call:quality-report event.
+        XCTAssertEqual(CallManager.connectionQualityLabel(for: .critical), "poor")
+    }
+
+    func test_poorAndCritical_bothMapToPoor() {
+        XCTAssertEqual(
+            CallManager.connectionQualityLabel(for: .poor),
+            CallManager.connectionQualityLabel(for: .critical),
+            "poor and critical must both map to 'poor' — gateway's 4-tier ladder has no critical tier"
+        )
+    }
+}
+
+// MARK: - TURN Refresh TTL Guard (§scheduleTURNCredentialRefresh)
+
+/// Source-level guards verifying `scheduleTURNCredentialRefresh` protects
+/// against a malformed or zero TTL from the gateway that would cause an
+/// immediate tight-loop of TURN credential requests.
+@MainActor
+final class CallManagerTURNRefreshGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func refreshBody(_ source: String) -> String? {
+        guard let start = source.range(of: "func scheduleTURNCredentialRefresh") else { return nil }
+        let end = source.range(of: "\n    private func ", range: start.upperBound..<source.endIndex)?.lowerBound
+                ?? source.range(of: "\n    func ", range: start.upperBound..<source.endIndex)?.lowerBound
+                ?? source.endIndex
+        return String(source[start.lowerBound..<end])
+    }
+
+    func test_turnRefreshScheduler_existsInSource() throws {
+        let source = try callManagerSource()
+        XCTAssertNotNil(
+            source.range(of: "func scheduleTURNCredentialRefresh"),
+            "scheduleTURNCredentialRefresh must exist in CallManager.swift — " +
+            "without it, TURN credentials are never proactively refreshed during a call."
+        )
+    }
+
+    func test_turnRefreshScheduler_hasMinimumTTLGuard() throws {
+        let source = try callManagerSource()
+        guard let body = refreshBody(source) else {
+            XCTFail("scheduleTURNCredentialRefresh body not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("guard ttl >= 60") || body.contains("ttl < 60"),
+            "scheduleTURNCredentialRefresh must guard against TTL < 60s to prevent " +
+            "a tight request loop when the gateway sends a malformed or zero TTL."
+        )
+    }
+
+    func test_turnRefreshScheduler_cancelsExistingTask_beforeRescheduling() throws {
+        let source = try callManagerSource()
+        guard let body = refreshBody(source) else {
+            XCTFail("scheduleTURNCredentialRefresh body not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("turnRefreshTask?.cancel()"),
+            "scheduleTURNCredentialRefresh must cancel the existing task before creating a " +
+            "new one — otherwise duplicate refresh requests accumulate over a long call."
+        )
+    }
+
+    func test_turnRefreshScheduler_uses80PercentOfTTL() throws {
+        let source = try callManagerSource()
+        guard let body = refreshBody(source) else {
+            XCTFail("scheduleTURNCredentialRefresh body not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("ttl * 0.8"),
+            "scheduleTURNCredentialRefresh must schedule the refresh at 80% of TTL " +
+            "to ensure credentials are renewed before they expire (leaving a 20% safety window)."
+        )
+    }
+
+    func test_turnRefreshScheduler_guardCallIsActiveBeforeEmitting() throws {
+        let source = try callManagerSource()
+        guard let body = refreshBody(source) else {
+            XCTFail("scheduleTURNCredentialRefresh body not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("callState.isActive"),
+            "The deferred TURN refresh Task must guard `callState.isActive` before emitting — " +
+            "a refresh emitted after call end would waste a TURN credential request."
+        )
+    }
+}
+
+// MARK: - Socket Reconnect Media Re-Sync (§P1-30 / audit P1-30)
+
+/// Source-level guards verifying that after a Socket.IO reconnect, the
+/// socket reconnect handler re-syncs both video and audio state to the peer.
+/// Without this, the peer's displayed media state diverges from reality for
+/// the remainder of the call.
+@MainActor
+final class CallManagerSocketReconnectMediaResyncTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func reconnectHandlerBody(_ source: String) -> String? {
+        guard let range = source.range(of: "socket.didReconnect") else { return nil }
+        // Bound to the sink closure body
+        let sliceStart = range.lowerBound
+        let sliceEnd = source.range(of: ".store(in: &cancellables)", range: range.upperBound..<source.endIndex)?
+            .upperBound ?? source.endIndex
+        return String(source[sliceStart..<sliceEnd])
+    }
+
+    func test_socketReconnect_reEmitsCallJoin() throws {
+        let source = try callManagerSource()
+        guard let body = reconnectHandlerBody(source) else {
+            XCTFail("socket.didReconnect handler not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("emitCallJoinWithAck(callId:"),
+            "Socket reconnect handler must re-emit call:join so the gateway re-admits us " +
+            "to the call room — without this, ICE candidates and call:ended are silently dropped."
+        )
+    }
+
+    func test_socketReconnect_resyncsVideoState() throws {
+        let source = try callManagerSource()
+        guard let body = reconnectHandlerBody(source) else {
+            XCTFail("socket.didReconnect handler not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("emitCallToggleVideo"),
+            "Socket reconnect handler must re-sync video state via emitCallToggleVideo — " +
+            "the gateway resets per-participant media when a socket disconnects."
+        )
+    }
+
+    func test_socketReconnect_resyncsAudioState() throws {
+        let source = try callManagerSource()
+        guard let body = reconnectHandlerBody(source) else {
+            XCTFail("socket.didReconnect handler not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("emitCallToggleAudio"),
+            "Socket reconnect handler must re-sync audio mute state via emitCallToggleAudio — " +
+            "the gateway defaults to mic-live after reconnect, so explicit re-sync is required."
+        )
+    }
+
+    func test_socketReconnect_requestsFreshTURNCredentials() throws {
+        let source = try callManagerSource()
+        guard let body = reconnectHandlerBody(source) else {
+            XCTFail("socket.didReconnect handler not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("emitRequestIceServers"),
+            "Socket reconnect handler must request fresh TURN credentials — " +
+            "the socket may have been down long enough for credentials to near expiry."
+        )
+    }
+
+    func test_socketReconnect_cancelsOldTURNRefreshTask_beforeRequesting() throws {
+        let source = try callManagerSource()
+        guard let body = reconnectHandlerBody(source) else {
+            XCTFail("socket.didReconnect handler not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("turnRefreshTask?.cancel()"),
+            "Socket reconnect must cancel the periodic TURN refresh task before requesting " +
+            "fresh credentials — otherwise the old deadline fires in parallel causing duplicate requests."
+        )
     }
 }

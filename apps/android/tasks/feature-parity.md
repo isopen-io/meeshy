@@ -479,7 +479,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `StorySlideDeck.updateSelectedTransform` and driven by `StoryComposerViewModel.onCanvasTransform`.
       `StoryCanvasSurface` renders the selected slide's first media as a 9:16 background under a
       `graphicsLayer` + `detectTransformGestures` (glue only; the math is unit-tested in one place).
-      Pending: FAB + bottom-band toolbar (Contenu/Effets), on-canvas text/sticker/drawing elements.
+      **FAB + bottom-band toolbar done** (`story-composer-band`): the flat add-text / add-media /
+      visibility buttons are replaced by a two-FAB (Contenu / Effets) bottom band — the pure value-type
+      port of iOS `BandStateMachine`. `ComposerBandState` (`Hidden` | `Tiles(BandCategory)`) +
+      `BandCategory.swapped` + `ComposerContentTile` own the navigation: `tapFab(category)` opens /
+      switches / toggle-closes the drawer, `swipeDown()` dismisses, `swipeHorizontal()` swaps category
+      (inert while hidden); `activeCategory`/`isVisible` derive the render. The drawer shows the Contenu
+      tiles (Texte → `onAddTextElement`, Médias → system picker) or the Effets visibility chips, with
+      natural swipe-to-dismiss / swipe-to-swap gestures (glue). All decisions live in one unit-tested
+      place; the VM holds `band` and applies the pure transitions (`onBandFabTap`/`onBandDismiss`/
+      `onBandSwapCategory`). +18 tests (11 state machine, 7 VM). Pending: Effets tiles (filters / drawing
+      / timeline), on-canvas sticker/drawing elements.
 - [~] Text elements (≤5/slide): style (bold/italic/handwriting/typewriter/neon/retro), colour,
       size, alignment, background (none/solid/glass), outline/stroke, RTL, fade timing.
       **Model + add/move/remove + publish done** (`story-text-elements`): a pure `StoryTextElement`
@@ -508,8 +518,31 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       wrappers, inert on unknown id, selection untouched). `TextElementLayer` renders
       weight/slant/family/tracking + a neon glow `Shadow`; a `TextStyleToolbar` (style chips +
       L/C/R `AlignToggle` + `ColorSwatch` palette) appears while editing an element. Pending:
-      size/background/outline/RTL/fade, the in-place floating editor + tool bubbles below.
-- [ ] In-place floating text editor with tool bubbles + keyboard-aware canvas shift
+      size/background/outline/RTL/fade.
+- [~] In-place floating text editor with tool bubbles + keyboard-aware canvas shift
+      **Floating style toolbar + keyboard-aware shift done** (`story-floating-toolbar`): while a text
+      element is edited the `TextStyleToolbar` no longer sits in a fixed bottom band — it floats
+      in-place over the canvas, anchored just clear of the element. The vertical anchor is decided by
+      the pure, unit-tested `StoryToolbarPlacement.resolve(elementCenterY, elementHalfHeight,
+      toolbarHeight, canvasHeight, gap)` → `ToolbarPlacement(topPx, ToolbarSide.ABOVE|BELOW)`: BELOW
+      when the toolbar fits beneath the element, otherwise ABOVE, clamped into the canvas so it never
+      spills off the top or past the bottom (boundary-exact, degenerate-canvas safe). The composer
+      applies `imePadding`, so the canvas measurement already excludes the soft keyboard — the
+      keyboard-aware shift — and the resolver keeps the toolbar inside the keyboard-free band.
+      `StoryCanvasSurface` measures the selected element's half-height + the toolbar's height and offsets
+      it (glue). Surpasses iOS's fixed bottom style bar. Pending: floating tool *bubbles* per element
+      handle (delete chip exists; rotate/scale now via direct gesture — see below).
+- [x] Per-element pinch-scale + rotate (`story-text-element-transform`): `StoryTextElement` carries a
+      `scale` (clamped `[0.3, 4]`) and `rotationDeg` (wrapped to the canonical `(-180, 180]` turn); the
+      pure `transformed(scaleBy, rotateByDeg)` applies an incremental pinch/rotate gesture with the
+      clamp/wrap rules in one unit-tested place (a non-finite/non-positive factor collapses to the
+      neutral value, never a broken element), `normalised()` re-pulls both fields into range, and
+      `toTextObject` carries `scale`/`rotation` onto the gateway wire. The deck's
+      `transformTextElement(id, scaleBy, rotateByDeg)` and the VM's `onTextElementTransform` mirror the
+      move/style reducers (inert on unknown id, selection/editing untouched). `TextElementLayer` binds a
+      single `detectTransformGestures` so one two-finger gesture pans **and** pinch-scales **and** rotates
+      the element, rendered via `graphicsLayer` (glue). A natural direct-manipulation gesture rather than
+      discrete handle chips. +21 tests (14 element, 4 deck, 3 VM).
 - [~] Media elements (≤10/slide): photo/video import, crop/edit, aspect-ratio preservation.
       **Upload foundation done** (`media-upload-api`): `MediaApi` multipart `POST /attachments/upload`
       (`files` parts) + `MediaRepository.upload()` → domain `UploadedMedia` (id = `mediaId`, url,
@@ -539,9 +572,32 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Emoji sticker picker (categorised + searchable)
 - [ ] Backgrounds: random pastel, colour/gradient palette, image, looping/non-looping video
 - [ ] 8 photo filters (vintage/bw/warm/cool/dramatic/vivid/fade/chrome) with intensity
-- [ ] Frosted-glass text backdrops; safe-zone overlay; snap-to-guide + out-of-bounds warning
+- [~] Frosted-glass text backdrops; safe-zone overlay; snap-to-guide + out-of-bounds warning
+      **Snap-to-guide + out-of-bounds warning done** (`story-canvas-snap-guides`): a pure
+      `StorySnapResolver.resolve(x, y, …)` → `SnapResult(x, y, verticalGuide, horizontalGuide,
+      withinSafeZone)` is the single source of truth for where a dragged element settles. Each axis
+      **independently** locks onto the nearest in-range alignment guide (rule-of-thirds + centre)
+      within `SNAP_THRESHOLD`; outside it the axis stays at its clamped candidate; a non-finite
+      candidate collapses to the canvas centre and out-of-canvas values clamp into `0f..1f`.
+      `withinSafeZone` flags a centre that drifts inside the `SAFE_ZONE_INSET` edge margin. The
+      existing `onTextElementMoved` drag now routes its resulting centre through the resolver and
+      moves the element by the **snap-adjusted** delta (reusing `StorySlideDeck.moveTextElement`,
+      no new reducer), exposing the live guides + safe-zone verdict as transient
+      `StoryComposerUiState.snapFeedback` (cleared by `onTextElementDragEnd` on lift). The canvas
+      draws the active guide line(s) (accent `primary`) and an `error`-coloured warning border when
+      out of bounds; the drag-end signal is a non-consuming `Final`-pass `awaitEachGesture` that
+      runs alongside the transform detector (glue). A natural magnetic-alignment gesture — surpasses
+      iOS, whose snapping has no per-axis guide overlay here. +25 tests (18 resolver, 7 VM). Pending:
+      frosted-glass text backdrops, persistent safe-zone overlay grid.
 - [ ] Z-order management (front/back, forward/backward) persisted for WYSIWYG playback
-- [ ] Multi-element context menu (edit, duplicate, reorder, delete)
+- [~] Multi-element context menu (edit, duplicate, reorder, delete) — **edit** (tap-to-select +
+      caption/element routing), **delete** (per-element remove handle), and **duplicate**
+      (`story-text-element-duplicate`) done. Duplicate: pure `StorySlideDeck.duplicateTextElement`
+      clones every styled field as a fresh id right after the source on its slide, nudged by a small
+      normalised offset (clamped into the canvas) so the copy is visible, inert when the source id is
+      unknown / the new id collides / the slide is at the ≤5 cap; `StoryComposerViewModel.onDuplicateTextElement`
+      mints the id, selects the copy, and warns-without-adding at the cap; a duplicate `ContentCopy`
+      handle sits in the floating `TextStyleToolbar`. Pending: reorder (z-order), a unified context menu.
 - [ ] Per-element + per-slide duration; background designation toggle (1 visual + 1 audio/slide)
 - [ ] Repost flow: clone source story + locked attribution badge
 - [ ] Draft save/restore with media persistence + lost-media detection / re-capture prompt

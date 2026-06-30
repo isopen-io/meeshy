@@ -189,11 +189,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Données invalides',
-          details: error.issues
-        });
+        return sendBadRequest(reply, 'Données invalides');
       }
       if (error instanceof Error && error.message === 'Token already exists') {
         return sendConflict(reply, 'Ce token existe déjà');
@@ -592,13 +588,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
 
       const updatedLink = await trackingLinkService.deactivateTrackingLink(token);
 
-      return reply.send({
-        success: true,
-        data: {
-          trackingLink: updatedLink
-        },
-        message: 'Lien désactivé avec succès'
-      });
+      return sendSuccess(reply, { trackingLink: updatedLink }, { message: 'Lien désactivé avec succès' });
 
     } catch (error) {
       logError(fastify.log, 'Deactivate tracking link error:', error);
@@ -827,13 +817,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         newToken: body.newToken
       });
 
-      return reply.send({
-        success: true,
-        data: {
-          trackingLink: enrichTrackingLink(updatedLink, request)
-        },
-        message: 'Lien mis à jour avec succès'
-      });
+      return sendSuccess(reply, { trackingLink: enrichTrackingLink(updatedLink, request) }, { message: 'Lien mis à jour avec succès' });
 
     } catch (error) {
       if (error instanceof Error) {

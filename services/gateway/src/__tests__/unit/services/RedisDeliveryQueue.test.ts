@@ -941,3 +941,59 @@ describe('RedisDeliveryQueue (Redis dedup via eval)', () => {
     expect(await queue.size('user-r2')).toBe(1); // llen returns 1
   });
 });
+
+// ─── Malformed JSON resilience (new try-catch in drain/peek/cleanup) ──────────
+
+describe('RedisDeliveryQueue (malformed JSON resilience)', () => {
+  test('drain — drops malformed entry and returns only valid ones', async () => {
+    const valid = makePayload({ messageId: 'valid-msg' });
+    const redis = makeMockRedis({
+      eval: jest.fn().mockResolvedValue([JSON.stringify(valid), 'not-valid-json{{{'])
+    });
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+
+    const drained = await queue.drain('user-r');
+
+    expect(drained).toHaveLength(1);
+    expect(drained[0].messageId).toBe('valid-msg');
+  });
+
+  test('drain — returns empty array when all entries are malformed', async () => {
+    const redis = makeMockRedis({
+      eval: jest.fn().mockResolvedValue(['{bad', 'also-bad}'])
+    });
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+
+    expect(await queue.drain('user-r')).toEqual([]);
+  });
+
+  test('peek — drops malformed entry and returns only valid ones', async () => {
+    const valid = makePayload({ messageId: 'peek-valid' });
+    const redis = makeMockRedis({
+      lrange: jest.fn().mockResolvedValue(['{corrupt', JSON.stringify(valid)])
+    });
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+
+    const peeked = await queue.peek('user-r');
+
+    expect(peeked).toHaveLength(1);
+    expect(peeked[0].messageId).toBe('peek-valid');
+  });
+
+  test('cleanup — drops malformed entry (counts as stale removal)', async () => {
+    const valid = makePayload({ messageId: 'cleanup-valid', enqueuedAt: new Date().toISOString() });
+    const pipeline = makePipeline([[null, 1]]);
+    const redis = makeMockRedis({
+      scan: jest.fn().mockResolvedValue(['0', ['delivery:queue:u1']]),
+      lrange: jest.fn().mockResolvedValue(['{bad-json', JSON.stringify(valid)]),
+      pipeline: jest.fn().mockReturnValue(pipeline),
+    });
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+
+    const removed = await queue.cleanup();
+
+    // Malformed entry is filtered out (removed), valid entry survives
+    expect(removed).toBe(1);
+    expect(pipeline.rpush).toHaveBeenCalled(); // valid entry re-pushed
+  });
+});

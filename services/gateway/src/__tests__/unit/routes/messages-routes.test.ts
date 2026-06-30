@@ -19,6 +19,7 @@ const mockResolveConversationId = jest.fn<any>().mockResolvedValue('resolved-con
 const mockCanAccessConversation = jest.fn<any>().mockResolvedValue(true);
 const mockSendSuccess = jest.fn<any>((reply: any, data: any, meta?: any) => {
   reply._body = { success: true, data, ...meta };
+  reply.send(reply._body);
   return reply;
 });
 const mockSendBadRequest = jest.fn<any>((reply: any, msg: any, extra?: any) => {

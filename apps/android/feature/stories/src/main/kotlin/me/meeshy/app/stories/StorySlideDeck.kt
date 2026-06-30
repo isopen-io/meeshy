@@ -189,6 +189,38 @@ data class StorySlideDeck(
         updateTextElement(id) { it.nudged(dx, dy) }
 
     /**
+     * Pinch-scales and rotates the text element [id] by the incremental gesture
+     * deltas (clamped/wrapped by the pure [StoryTextElement.transformed]). Inert when
+     * the id is unknown. The on-canvas `detectTransformGestures` callback binds here so
+     * the transform math lives in one place alongside the move/style reducers.
+     */
+    fun transformTextElement(id: String, scaleBy: Float, rotateByDeg: Float): StorySlideDeck =
+        updateTextElement(id) { it.transformed(scaleBy, rotateByDeg) }
+
+    /**
+     * Inserts a clone of the text element [sourceId] (carrying every styled field) as
+     * a new element [newId] immediately after it on whichever slide holds it, nudged by
+     * the normalised canvas deltas [dx]/[dy] (clamped by [StoryTextElement.nudged]) so
+     * the copy is visibly offset rather than hidden behind the original. Inert (same
+     * instance) when [sourceId] is unknown, [newId] already exists on any slide, or the
+     * holding slide is at the [MAX_TEXT_ELEMENTS_PER_SLIDE] cap — so the ≤5-per-slide
+     * invariant holds in one place and the caller stays glue. The selection (which the
+     * deck does not own) is left to the ViewModel.
+     */
+    fun duplicateTextElement(sourceId: String, newId: String, dx: Float, dy: Float): StorySlideDeck {
+        if (slides.any { slide -> slide.elements.any { it.id == newId } }) return this
+        val slideIndex = slides.indexOfFirst { slide -> slide.elements.any { it.id == sourceId } }
+        if (slideIndex < 0) return this
+        val slide = slides[slideIndex]
+        if (slide.elements.size >= MAX_TEXT_ELEMENTS_PER_SLIDE) return this
+        val sourceIndex = slide.elements.indexOfFirst { it.id == sourceId }
+        val clone = slide.elements[sourceIndex].copy(id = newId).nudged(dx, dy)
+        val nextElements = slide.elements.toMutableList().apply { add(sourceIndex + 1, clone) }
+        val next = slides.mapIndexed { i, s -> if (i == slideIndex) s.copy(elements = nextElements) else s }
+        return copy(slides = next)
+    }
+
+    /**
      * Rewrites the **selected** slide's [text], leaving its id and media — and every
      * other slide and the selection — untouched. The editor binds here so each slide
      * keeps its own caption as the user moves between slides.

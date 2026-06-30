@@ -38,6 +38,10 @@ import type {
   CallTranslationEnabledEvent,
   CallTranscriptionResultEvent,
   CallAlreadyAnsweredEvent,
+  CallForceLeaveClientEvent,
+  CallForceLeaveServerEvent,
+  CallRequestIceServersEvent,
+  CallIceServersRefreshedEvent,
 } from './video-call.js';
 
 // Import pour les événements sociaux (posts, stories, statuts, commentaires)
@@ -161,6 +165,10 @@ export const SERVER_EVENTS = {
   CALL_TRANSCRIPTION_RESULT: 'call:transcription-result',
   CALL_ALREADY_ANSWERED: 'call:already-answered',
   CALL_SCREEN_CAPTURE_ALERT: 'call:screen-capture-alert',
+  /** Server-side GC/admin forced the call to end — clients should dismiss call UI. */
+  CALL_FORCE_LEAVE: 'call:force-leave',
+  /** Gateway pushes fresh TURN credentials to the client after a `call:request-ice-servers` event. */
+  CALL_ICE_SERVERS_REFRESHED: 'call:ice-servers-refreshed',
   READ_STATUS_UPDATED: 'read-status:updated',
   MESSAGE_CONSUMED: 'message:consumed',
   PARTICIPANT_ROLE_UPDATED: 'participant:role-updated',
@@ -373,6 +381,12 @@ export const CLIENT_EVENTS = {
   CALL_AUDIO_CHUNK: 'call:audio-chunk',
   CALL_QUALITY_FEEDBACK: 'call:quality-feedback',
   CALL_SCREEN_CAPTURE_DETECTED: 'call:screen-capture-detected',
+  /** Preflight sent before `call:initiate` to evict zombie call sessions. */
+  CALL_FORCE_LEAVE: 'call:force-leave',
+  /** Reconnect probe: client asks gateway if an active call still exists. */
+  CALL_CHECK_ACTIVE: 'call:check-active',
+  /** Request fresh TURN credentials before the current TTL expires. */
+  CALL_REQUEST_ICE_SERVERS: 'call:request-ice-servers',
 
   // --- Location sharing ---
   LOCATION_SHARE: 'location:share',
@@ -1181,6 +1195,8 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CALL_TRANSCRIPTION_RESULT]: (data: CallTranscriptionResultEvent) => void;
   [SERVER_EVENTS.CALL_ALREADY_ANSWERED]: (data: CallAlreadyAnsweredEvent) => void;
   [SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT]: (data: CallScreenCaptureEvent) => void;
+  [SERVER_EVENTS.CALL_FORCE_LEAVE]: (data: CallForceLeaveServerEvent) => void;
+  [SERVER_EVENTS.CALL_ICE_SERVERS_REFRESHED]: (data: CallIceServersRefreshedEvent) => void;
   [SERVER_EVENTS.CONVERSATION_NEW]: (data: ConversationNewEventData) => void;
   [SERVER_EVENTS.READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
   [SERVER_EVENTS.MESSAGE_CONSUMED]: (data: MessageConsumedEventData) => void;
@@ -1463,6 +1479,9 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.CALL_AUDIO_CHUNK]: (data: CallAudioChunkEvent) => void;
   [CLIENT_EVENTS.CALL_QUALITY_FEEDBACK]: (data: CallQualityFeedbackEvent) => void;
   [CLIENT_EVENTS.CALL_SCREEN_CAPTURE_DETECTED]: (data: CallScreenCaptureEvent) => void;
+  [CLIENT_EVENTS.CALL_FORCE_LEAVE]: (data: CallForceLeaveClientEvent) => void;
+  [CLIENT_EVENTS.CALL_CHECK_ACTIVE]: () => void;
+  [CLIENT_EVENTS.CALL_REQUEST_ICE_SERVERS]: (data: CallRequestIceServersEvent) => void;
 
   // Location sharing
   [CLIENT_EVENTS.LOCATION_SHARE]: (data: LocationShareData, callback?: (response: SocketIOResponse<LocationSharedEventData>) => void) => void;

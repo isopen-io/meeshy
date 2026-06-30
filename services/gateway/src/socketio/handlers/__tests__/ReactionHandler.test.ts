@@ -47,6 +47,7 @@ jest.mock('../../../utils/socket-rate-limiter', () => ({
   SOCKET_RATE_LIMITS: {
     REACTION_ADD: { maxRequests: 30, windowMs: 60000, keyPrefix: 'socket:reaction:add' },
     REACTION_REMOVE: { maxRequests: 30, windowMs: 60000, keyPrefix: 'socket:reaction:remove' },
+    REACTION_SYNC: { maxRequests: 120, windowMs: 60000, keyPrefix: 'socket:reaction:sync' },
   },
 }));
 
@@ -467,6 +468,140 @@ describe('ReactionHandler', () => {
       await handler.handleReactionRemove(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' });
 
       expect(reactionService.removeReaction).not.toHaveBeenCalled();
+    });
+
+    it('rejects handleReactionSync when its own rate bucket is exhausted', async () => {
+      mockCheckLimit.mockResolvedValueOnce(false);
+
+      const { handler } = buildHandler();
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionSync(makeSocket(), MESSAGE_ID, callback);
+
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Rate limit exceeded' }));
+    });
+
+    it('handleReactionSync rate limit is independent from handleReactionAdd', async () => {
+      // First call exhausts REACTION_ADD
+      mockCheckLimit
+        .mockResolvedValueOnce(false)   // REACTION_ADD is exhausted
+        .mockResolvedValueOnce(true);   // REACTION_SYNC is still open
+
+      const { handler } = buildHandler();
+
+      // Add is blocked
+      const addCallback = jest.fn<any>();
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, addCallback);
+      expect(addCallback).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+
+      // Sync succeeds on its own bucket
+      const syncCallback = jest.fn<any>();
+      await handler.handleReactionSync(makeSocket(), MESSAGE_ID, syncCallback);
+      expect(syncCallback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    });
+
+    it('does not call reactionService.getMessageReactions when sync rate limited', async () => {
+      mockCheckLimit.mockResolvedValueOnce(false);
+
+      const { handler, reactionService } = buildHandler();
+
+      await handler.handleReactionSync(makeSocket(), MESSAGE_ID);
+
+      expect(reactionService.getMessageReactions).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── Anonymous user reactions ─────────────────────────────────────────────
+
+  describe('anonymous user reactions', () => {
+    const ANON_SESSION_TOKEN = 'anon-session-xyz';
+    const ANON_PARTICIPANT_ID = 'anon-participant-abc';
+    const ANON_SOCKET_ID = 'socket-anon-999';
+
+    function buildAnonHandler(reactionOverrides: Record<string, any> = {}) {
+      const anonUsers = new Map<string, any>();
+      anonUsers.set(ANON_SESSION_TOKEN, {
+        id: ANON_SESSION_TOKEN,
+        socketId: ANON_SOCKET_ID,
+        isAnonymous: true,
+        participantId: ANON_PARTICIPANT_ID,
+        language: 'fr',
+      });
+
+      const anonSocketToUser = new Map<string, string>();
+      anonSocketToUser.set(ANON_SOCKET_ID, ANON_SESSION_TOKEN);
+
+      return buildHandler({
+        connectedUsers: anonUsers,
+        socketToUser: anonSocketToUser,
+        reactionService: makeReactionService(reactionOverrides),
+      });
+    }
+
+    function makeAnonSocket() {
+      return makeSocket(ANON_SOCKET_ID);
+    }
+
+    it('anonymous user can add a reaction using their participantId directly', async () => {
+      const { handler, reactionService } = buildAnonHandler();
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionAdd(makeAnonSocket(), { messageId: MESSAGE_ID, emoji: '🔥' }, callback);
+
+      expect(reactionService.addReaction).toHaveBeenCalledWith(
+        expect.objectContaining({ participantId: ANON_PARTICIPANT_ID })
+      );
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    });
+
+    it('anonymous user can remove a reaction using their participantId directly', async () => {
+      const { handler, reactionService } = buildAnonHandler();
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionRemove(makeAnonSocket(), { messageId: MESSAGE_ID, emoji: '🔥' }, callback);
+
+      expect(reactionService.removeReaction).toHaveBeenCalledWith(
+        expect.objectContaining({ participantId: ANON_PARTICIPANT_ID })
+      );
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    });
+
+    it('anonymous user can sync reactions using their participantId directly', async () => {
+      const reactions = [{ emoji: '👋', count: 1 }];
+      const { handler, reactionService } = buildAnonHandler({
+        getMessageReactions: jest.fn<any>().mockResolvedValue(reactions),
+      });
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionSync(makeAnonSocket(), MESSAGE_ID, callback);
+
+      expect(reactionService.getMessageReactions).toHaveBeenCalledWith(
+        expect.objectContaining({ currentParticipantId: ANON_PARTICIPANT_ID })
+      );
+      expect(callback).toHaveBeenCalledWith({ success: true, data: reactions });
+    });
+
+    it('anonymous user without participantId cannot add reaction', async () => {
+      const anonUsers = new Map<string, any>();
+      anonUsers.set(ANON_SESSION_TOKEN, {
+        id: ANON_SESSION_TOKEN,
+        socketId: ANON_SOCKET_ID,
+        isAnonymous: true,
+        participantId: undefined, // no participant assigned
+        language: 'fr',
+      });
+
+      const anonSocketToUser = new Map<string, string>();
+      anonSocketToUser.set(ANON_SOCKET_ID, ANON_SESSION_TOKEN);
+
+      const { handler } = buildHandler({ connectedUsers: anonUsers, socketToUser: anonSocketToUser });
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionAdd(makeAnonSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, callback);
+
+      expect(callback).toHaveBeenCalledWith(
+        expect.objectContaining({ success: false, error: 'Could not resolve participant' })
+      );
     });
   });
 });

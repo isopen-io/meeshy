@@ -440,7 +440,11 @@ struct OutboxDispatcher: OutboxDispatching {
             queryItems: nil,
             headers: ["X-Client-Mutation-Id": payload.clientMutationId]
         )
-        for path in uploadedLocalPaths { try? FileManager.default.removeItem(atPath: path) }
+        for path in uploadedLocalPaths {
+            do { try FileManager.default.removeItem(atPath: path) } catch {
+                logger.warning("createPost: failed to remove temp file \(path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
+        }
         logger.info("createPost dispatched cmid=\(payload.clientMutationId, privacy: .public)")
     }
 
@@ -675,7 +679,11 @@ struct OutboxDispatcher: OutboxDispatching {
                 // reclaimed by `OutboxFlusher.cleanupLocalFiles(for:)` when
                 // the outbox record terminates (applied or exhausted), which
                 // now sweeps both `localAudioPath` and `localAudioPaths`.
-                for path in uploadedPaths { try? FileManager.default.removeItem(atPath: path) }
+                for path in uploadedPaths {
+                    do { try FileManager.default.removeItem(atPath: path) } catch {
+                        logger.warning("audio dispatch: failed to remove temp file \(path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    }
+                }
 
                 await reconcileSuccessfulMessageSend(
                     clientMessageId: item.clientMessageId,
@@ -753,7 +761,11 @@ struct OutboxDispatcher: OutboxDispatching {
                     )
                 }
 
-                for path in uploadedPaths { try? FileManager.default.removeItem(atPath: path) }
+                for path in uploadedPaths {
+                    do { try FileManager.default.removeItem(atPath: path) } catch {
+                        logger.warning("media dispatch: failed to remove temp file \(path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    }
+                }
 
                 await reconcileSuccessfulMessageSend(
                     clientMessageId: item.clientMessageId,

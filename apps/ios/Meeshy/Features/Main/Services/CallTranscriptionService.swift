@@ -155,6 +155,11 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     private enum Constants {
         static let maxDisplayedSegments = 5
         static let segmentRetentionLimit = 50
+        /// Segments received before role negotiation completes are buffered up to
+        /// this cap and replayed if we resolve to `.follower`. Prevents silent data
+        /// loss when the leader pushes segments via DataChannel before the
+        /// capability exchange message arrives on the signalling channel.
+        static let pendingSegmentsBufferCap = 10
     }
 
     // MARK: - Published State
@@ -184,6 +189,9 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     private var localUserId = ""
     private var remoteUserId = ""
     private var allSegments: [TranscriptionSegment] = []
+    /// Segments buffered while `role == .undecided`. Replayed when role resolves
+    /// to `.follower`; discarded when role resolves to `.leader` or on call end.
+    private var pendingRemoteSegments: [TranscriptionSegment] = []
 
     // MARK: - Permission
 
@@ -245,6 +253,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
 
         allSegments.removeAll()
         segments.removeAll()
+        pendingRemoteSegments.removeAll()
         isTranscribing = false
         lastError = nil
 
@@ -493,12 +502,14 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     ) {
         if localCapability == .none && remoteCapability == .none {
             role = .undecided
+            pendingRemoteSegments.removeAll()
             callsLogger.info("Neither peer can transcribe")
             return
         }
 
         if remoteCapability == .none {
             role = .leader
+            pendingRemoteSegments.removeAll()
             callsLogger.info("Local is only capable peer → leader")
             return
         }
@@ -506,29 +517,60 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         if localCapability == .none {
             role = .follower
             callsLogger.info("Remote is only capable peer → follower")
+            flushPendingSegments()
             return
         }
 
         if localCapability > remoteCapability {
             role = .leader
+            pendingRemoteSegments.removeAll()
             callsLogger.info("Local has higher capability → leader")
         } else if remoteCapability > localCapability {
             role = .follower
             callsLogger.info("Remote has higher capability → follower")
+            flushPendingSegments()
         } else {
-            role = isInitiator ? .leader : .follower
-            callsLogger.info("Tie broken by initiator role → \(isInitiator ? "leader" : "follower")")
+            let becomeLeader = isInitiator
+            role = becomeLeader ? .leader : .follower
+            callsLogger.info("Tie broken by initiator role → \(becomeLeader ? "leader" : "follower")")
+            if becomeLeader {
+                pendingRemoteSegments.removeAll()
+            } else {
+                flushPendingSegments()
+            }
         }
     }
 
-    // MARK: - Follower Mode: Receive segments from leader
+    private func flushPendingSegments() {
+        guard !pendingRemoteSegments.isEmpty else { return }
+        let buffered = pendingRemoteSegments
+        pendingRemoteSegments.removeAll()
+        callsLogger.info("Replaying \(buffered.count) buffered segment(s) after role resolved to follower")
+        for segment in buffered {
+            appendSegmentAsFollower(segment)
+        }
+    }
 
-    func receiveRemoteSegment(_ segment: TranscriptionSegment) {
-        guard role == .follower else { return }
+    private func appendSegmentAsFollower(_ segment: TranscriptionSegment) {
         allSegments.append(segment)
         if allSegments.count > Constants.segmentRetentionLimit {
             allSegments = Array(allSegments.suffix(Constants.segmentRetentionLimit))
         }
         segments = allSegments.sorted { $0.startTime < $1.startTime }
+    }
+
+    // MARK: - Follower Mode: Receive segments from leader
+
+    func receiveRemoteSegment(_ segment: TranscriptionSegment) {
+        switch role {
+        case .follower:
+            appendSegmentAsFollower(segment)
+        case .undecided:
+            if pendingRemoteSegments.count < Constants.pendingSegmentsBufferCap {
+                pendingRemoteSegments.append(segment)
+            }
+        case .leader:
+            break
+        }
     }
 }
