@@ -111,7 +111,7 @@ struct CallDetailSheet: View {
             detailRow(
                 icon: "calendar",
                 label: String(localized: "calls.detail.date", defaultValue: "Date", bundle: .main),
-                value: record.startedAt.formatted(date: .medium, time: .shortened)
+                value: record.startedAt.formatted(date: .abbreviated, time: .shortened)
             )
             if !record.durationLabel.isEmpty {
                 detailRow(
