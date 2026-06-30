@@ -597,6 +597,13 @@ export class NotificationService {
     context: NotificationContext;
     metadata: NotificationMetadata;
     expiresAt?: Date;
+    /**
+     * Forwarded to APNs `apns-collapse-id` / FCM `collapseKey` so undelivered
+     * pushes pile up into one banner instead of spamming the device when it
+     * reconnects. Scope it per-conversation (`conv-${conversationId}`), never
+     * per-message — a per-message id is unique by construction and never
+     * collapses anything.
+     */
     collapseId?: string;
     /**
      * Langue résolue du destinataire (Prisme-first). Fournie par les méthodes
@@ -1092,7 +1099,7 @@ export class NotificationService {
       type: 'new_message',
       priority: 'normal',
       content,
-      collapseId: `msg-${params.messageId}`,
+      collapseId: `conv-${params.conversationId}`,
       lang: recipientLang,
 
       actor: {
@@ -1178,7 +1185,7 @@ export class NotificationService {
       type: 'user_mentioned',
       priority: 'high',
       content: params.messagePreview,
-      collapseId: `msg-${params.messageId}`,
+      collapseId: `conv-${params.conversationId}`,
 
       actor: {
         id: params.mentionerUserId,
@@ -2231,7 +2238,7 @@ export class NotificationService {
       type: 'message_reply',
       priority: 'normal',
       content: params.messagePreview,
-      collapseId: `msg-${params.messageId}`,
+      collapseId: `conv-${params.conversationId}`,
 
       actor: {
         id: params.replierUserId,

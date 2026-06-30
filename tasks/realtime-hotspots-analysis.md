@@ -98,9 +98,9 @@ Pour un DM 1-1 c'est 1-2 documents. Pour un groupe de 50 utilisateurs c'est 50 `
 **Origine** : fire-and-forget côté handler → **n'impacte pas l'ACK sender** mais détermine quand le destinataire voit la notif système.
 
 **Pistes de fix** (déjà identifiés Phase A) :
-1. **Retry exponentiel** sur erreurs transitoires (`InternalServerError`, `ServiceUnavailable`).
-2. **Cleanup token agressif** : invalider après 1-2 failures `BadDeviceToken` / `Unregistered` au lieu de 3 — sinon 3 messages successifs vers un token mort = 3 round-trips ratés.
-3. **`collapse-id` systématique** sur les notifs message d'une même conversation pour éviter les pile-ups.
+1. **Retry exponentiel** sur erreurs transitoires (`InternalServerError`, `ServiceUnavailable`). — ⚠️ encore OPEN : `sendViaAPNS`/`sendViaFCM` n'ont toujours aucune logique de retry/backoff (juste circuit breaker).
+2. **Cleanup token agressif** : invalider après 1-2 failures `BadDeviceToken` / `Unregistered` au lieu de 3 — sinon 3 messages successifs vers un token mort = 3 round-trips ratés. — ⚠️ encore OPEN (`handleFailedToken` reste à 3 strikes ; risque de désactiver des tokens valides sur erreurs transitoires si on baisse trop vite, à traiter avec une classification erreur transitoire/permanente).
+3. **`collapse-id` systématique** sur les notifs message d'une même conversation pour éviter les pile-ups. — ✅ **corrigé 2026-06-30** : `NotificationService.createMessageNotification/createMentionNotification/createReplyNotification` utilisaient `msg-${messageId}` (unique par message, ne collapsait jamais rien). Passé à `conv-${conversationId}` (scope conversation, partagé entre tous les messages/mentions/réponses d'une même conv). Tests : `NotificationService.collapseId.test.ts`.
 4. **Vérifier `apnsEnvironment` mismatch** : si beaucoup de `BadDeviceToken`, c'est probablement un Debug build qui envoie sandbox alors que la clé est en prod.
 
 ### Hotspot #5 — `messaging.detectLanguage` 🟡
