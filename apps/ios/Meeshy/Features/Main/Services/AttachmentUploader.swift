@@ -68,17 +68,33 @@ final class AttachmentUploader: AttachmentUploading {
     }
 
     /// JPEG re-encode until `.count <= maxSizeKB * 1024`.
+    /// Uses binary search over the [0.1, 0.8] quality range to find the highest
+    /// quality that fits within the size budget in O(log n) iterations instead of
+    /// the previous linear O(n) descent.
     /// Public static so test code can verify the size invariant
     /// without touching the network path.
     static func compress(_ data: Data, maxSizeKB: Int) -> Data {
         guard let image = UIImage(data: data) else { return data }
-        var compression: CGFloat = 0.8
-        var compressed = image.jpegData(compressionQuality: compression) ?? data
-        while compressed.count > maxSizeKB * 1024, compression > 0.1 {
-            compression -= 0.1
-            compressed = image.jpegData(compressionQuality: compression) ?? data
+        let targetBytes = maxSizeKB * 1024
+        // Fast-path: already within budget at maximum quality.
+        if let best = image.jpegData(compressionQuality: 0.8), best.count <= targetBytes {
+            return best
         }
-        return compressed
+        var lo: CGFloat = 0.1
+        var hi: CGFloat = 0.8
+        var result = image.jpegData(compressionQuality: lo) ?? data
+        // Binary search: 5 iterations covers the 0.1–0.8 range at ~0.02 granularity.
+        for _ in 0..<5 {
+            let mid = (lo + hi) / 2
+            guard let candidate = image.jpegData(compressionQuality: mid) else { break }
+            if candidate.count <= targetBytes {
+                result = candidate
+                lo = mid
+            } else {
+                hi = mid
+            }
+        }
+        return result
     }
 
     private struct UploadResponse: Decodable {
