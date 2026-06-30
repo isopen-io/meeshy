@@ -91,19 +91,22 @@ struct ContactCardView: View {
             }
             .padding(12)
             .frame(width: 240)
-            .background(
+            // iOS 26 Liquid Glass card. The bubble it sits in uses a solid/gradient
+            // fill (not glass), so native glass samples it cleanly — no glass-in-glass.
+            // The SDK Compatibility atom owns the gating + the `.ultraThinMaterial`
+            // fallback; the brand-accent hairline stroke is kept as an explicit overlay
+            // (the atom's single-tint model can't express a gradient stroke). Refines
+            // the 52i deferral of this card now that the stroke is preserved explicitly.
+            .adaptiveGlass(in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(
-                                LinearGradient(
-                                    colors: [Color(hex: accentColor).opacity(0.3), Color(hex: accentColor).opacity(0.1)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
-                            )
+                    .stroke(
+                        LinearGradient(
+                            colors: [Color(hex: accentColor).opacity(0.3), Color(hex: accentColor).opacity(0.1)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
                     )
             )
         }
