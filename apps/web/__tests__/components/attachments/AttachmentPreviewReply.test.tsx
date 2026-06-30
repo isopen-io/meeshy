@@ -541,7 +541,7 @@ describe('AttachmentPreviewReply', () => {
       expect(textButton).toHaveAttribute('tabindex', '0');
     });
 
-    it('opens image lightbox via Enter key (WCAG 2.1.1)', async () => {
+    it('opens image lightbox on Enter key', async () => {
       const attachments = [
         createMockAttachment({
           mimeType: 'image/jpeg',
@@ -559,43 +559,7 @@ describe('AttachmentPreviewReply', () => {
       });
     });
 
-    it('opens PDF lightbox via Space key (WCAG 2.1.1)', async () => {
-      const attachments = [
-        createMockAttachment({
-          mimeType: 'application/pdf',
-          fileName: 'doc.pdf',
-        }),
-      ];
-
-      render(<AttachmentPreviewReply attachments={attachments} />);
-
-      const pdfButton = screen.getByRole('button', { name: /ouvrir le pdf/i });
-      fireEvent.keyDown(pdfButton, { key: ' ' });
-
-      await waitFor(() => {
-        expect(screen.getByTestId('mock-lightbox')).toBeInTheDocument();
-      });
-    });
-
-    it('opens text lightbox via Enter key (WCAG 2.1.1)', async () => {
-      const attachments = [
-        createMockAttachment({
-          mimeType: 'text/plain',
-          fileName: 'notes.txt',
-        }),
-      ];
-
-      render(<AttachmentPreviewReply attachments={attachments} />);
-
-      const textButton = screen.getByRole('button', { name: /ouvrir le fichier texte/i });
-      fireEvent.keyDown(textButton, { key: 'Enter' });
-
-      await waitFor(() => {
-        expect(screen.getByTestId('mock-lightbox')).toBeInTheDocument();
-      });
-    });
-
-    it('ignores non-activation keys on interactive previews', () => {
+    it('opens image lightbox on Space key', async () => {
       const attachments = [
         createMockAttachment({
           mimeType: 'image/jpeg',
@@ -606,9 +570,63 @@ describe('AttachmentPreviewReply', () => {
       render(<AttachmentPreviewReply attachments={attachments} />);
 
       const imageButton = screen.getByRole('button', { name: /ouvrir l'image/i });
-      fireEvent.keyDown(imageButton, { key: 'a' });
+      fireEvent.keyDown(imageButton, { key: ' ' });
 
-      expect(screen.queryByTestId('image-lightbox')).not.toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByTestId('image-lightbox')).toBeInTheDocument();
+      });
+    });
+
+    it('opens PDF lightbox on Enter key', async () => {
+      const attachments = [
+        createMockAttachment({
+          mimeType: 'application/pdf',
+          fileName: 'document.pdf',
+        }),
+      ];
+
+      render(<AttachmentPreviewReply attachments={attachments} />);
+
+      const pdfButton = screen.getByRole('button', { name: /ouvrir le pdf/i });
+      fireEvent.keyDown(pdfButton, { key: 'Enter' });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('mock-lightbox')).toBeInTheDocument();
+      });
+    });
+
+    it('opens text lightbox on Space key', async () => {
+      const attachments = [
+        createMockAttachment({
+          mimeType: 'text/plain',
+          fileName: 'notes.txt',
+        }),
+      ];
+
+      render(<AttachmentPreviewReply attachments={attachments} />);
+
+      const textButton = screen.getByRole('button', { name: /ouvrir le fichier texte/i });
+      fireEvent.keyDown(textButton, { key: ' ' });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('mock-lightbox')).toBeInTheDocument();
+      });
+    });
+
+    it('does not open a lightbox on an unrelated key', () => {
+      const attachments = [
+        createMockAttachment({
+          mimeType: 'application/pdf',
+          fileName: 'document.pdf',
+        }),
+      ];
+
+      render(<AttachmentPreviewReply attachments={attachments} />);
+
+      const pdfButton = screen.getByRole('button', { name: /ouvrir le pdf/i });
+      fireEvent.keyDown(pdfButton, { key: 'a' });
+
+      expect(screen.queryByTestId('mock-lightbox')).not.toBeInTheDocument();
     });
   });
 
