@@ -21,7 +21,7 @@ WS1 (proportions) → WS5 (structure/Prisme) → WS3 (autoplay, +WS3.7) → WS4 
 
 ## WS2 — Effets immédiats dans le canvas (req 1) [MEDIUM, SDK] ⏳ EN COURS (suivant dans l'ordre)
 - [~] WS2.1 Glass backdrop per-frame en édition (fond vidéo) : `editTick` re-feed throttlé ~18fps (`StoryEditBackdropThrottle`), gaté `mode==.edit && case .video`, re-capture `backdropCapture` (mêmes geometry/currentTime que rebuildLayers) + re-feed `StoryTextLayer` glass en place, SANS `rebuildLayers()`. ✅ compile + unit-test (6) + régression canvas (6) vert 18.2. ⚠️ RESTE smoke device : confirmer que le `CARenderer` de `StoryBackdropCapture` capture la frame VIDÉO live (sinon backdrop reste statique = inerte, pas de régression)
-- [ ] WS2.2 `filterAppliesToEntireSlide` inerte : câbler OU retirer (défaut : retirer le code mort)
+- [x] WS2.2 `filterAppliesToEntireSlide` inerte → RETIRÉ (code mort : déclaré protocole/concret/mock, lu nulle part en prod, seulement round-trip dans un test de conformance). Supprimé des 4 sites ; build vert + conformance 3/3 sur 18.2
 - [ ] WS2.3 (opt) bake filtre intensité hors main-thread ; WS2.4 (opt) retirer Metal orphelin `StoryFilteredLayer`
 
 ## WS3 — Autoplay audio+vidéo à l'ouverture, tout call site (req 3) [HIGH, app+SDK] ✅ COMMITTÉ `6429f0d0b`

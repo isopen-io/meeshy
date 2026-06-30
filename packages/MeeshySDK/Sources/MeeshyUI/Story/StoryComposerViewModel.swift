@@ -157,7 +157,6 @@ protocol StoryComposerProviding: AnyObject {
     // MARK: Filter
     var selectedFilter: String? { get set }
     var filterIntensity: Double { get set }
-    var filterAppliesToEntireSlide: Bool { get set }
     func applyFilter(_ name: String?)
     func updateFilterIntensity(_ value: Double)
 
@@ -720,8 +719,6 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
 
     @Published var selectedFilter: String?
     @Published var filterIntensity: Double = 1.0
-    /// When true, filter applies to the entire slide (all layers). When false (default), only background.
-    @Published var filterAppliesToEntireSlide: Bool = false
 
     func applyFilter(_ name: String?) {
         selectedFilter = name
