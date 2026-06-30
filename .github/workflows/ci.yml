@@ -58,7 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup bun
         if: env.PACKAGE_MANAGER == 'bun'
@@ -146,7 +146,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup bun
         if: env.PACKAGE_MANAGER == 'bun'
@@ -242,7 +242,7 @@ jobs:
     needs: quality
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Node.js and package manager setup for Prisma CLI
       - name: Setup bun
@@ -341,7 +341,7 @@ jobs:
     needs: quality
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Node.js and package manager setup for Prisma CLI
       - name: Setup bun
@@ -452,7 +452,7 @@ jobs:
     needs: quality
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Node.js and package manager setup for Prisma CLI
       - name: Setup bun
@@ -575,7 +575,7 @@ jobs:
     needs: quality
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup bun
         if: env.PACKAGE_MANAGER == 'bun'
@@ -691,7 +691,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[e2e]')
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup bun
         if: env.PACKAGE_MANAGER == 'bun'
@@ -751,7 +751,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Run Trivy
         uses: aquasecurity/trivy-action@master
@@ -778,7 +778,7 @@ jobs:
     needs: quality
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup bun
         if: env.PACKAGE_MANAGER == 'bun'
@@ -848,7 +848,7 @@ jobs:
     needs: [quality, test, prisma]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup bun
         if: env.PACKAGE_MANAGER == 'bun'
