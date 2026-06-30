@@ -63,6 +63,7 @@ data class StoryComposerUiState(
     val attachments: List<UploadedMedia> = emptyList(),
     val pendingUploads: List<PendingMediaUpload> = emptyList(),
     val selectedTextElementId: String? = null,
+    val band: ComposerBandState = ComposerBandState.Hidden,
     val isUploadingMedia: Boolean = false,
     val isPublishing: Boolean = false,
     val errorMessage: String? = null,
@@ -256,6 +257,25 @@ class StoryComposerViewModel @Inject constructor(
 
     fun onVisibilityChange(visibility: StoryVisibility) {
         _state.update { it.copy(draft = it.draft.withVisibility(visibility)) }
+    }
+
+    /**
+     * Toggles the bottom-band drawer for [category] (the Contenu / Effets FABs): opens
+     * it, switches category, or closes it per the pure [ComposerBandState.tapFab]. All
+     * band navigation state lives in the unit-tested [ComposerBandState].
+     */
+    fun onBandFabTap(category: BandCategory) {
+        _state.update { it.copy(band = it.band.tapFab(category)) }
+    }
+
+    /** Dismisses the band drawer (swipe-down gesture) — back to FAB-only. */
+    fun onBandDismiss() {
+        _state.update { it.copy(band = it.band.swipeDown()) }
+    }
+
+    /** Swaps the open band to the other category (horizontal swipe); inert while hidden. */
+    fun onBandSwapCategory() {
+        _state.update { it.copy(band = it.band.swipeHorizontal()) }
     }
 
     /** Appends a fresh empty slide and selects it (inert at the ≤10-slide cap); the
