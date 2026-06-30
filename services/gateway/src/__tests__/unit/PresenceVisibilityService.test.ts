@@ -133,3 +133,76 @@ describe('PresenceVisibilityService.resolveForTarget', () => {
     ).toEqual({ showOnline: false, showLastSeenTimestamp: false });
   });
 });
+
+function makeBatchMocks(state: {
+  friendIds?: string[];
+  affiliateIds?: string[];
+  blockedTargetIds?: string[];
+  viewerBlocks?: string[];
+  deactivatedIds?: string[];
+  coParticipantIds?: string[];
+}) {
+  const prisma = {
+    user: {
+      findMany: jest.fn<any>().mockImplementation(({ where }: any) => {
+        if (where?.blockedUserIds?.has) {
+          return Promise.resolve((state.blockedTargetIds ?? []).map((id) => ({ id })));
+        }
+        const ids: string[] = where?.id?.in ?? [];
+        return Promise.resolve(ids.map((id) => ({ id, deactivatedAt: (state.deactivatedIds ?? []).includes(id) ? new Date() : null })));
+      }),
+      findUnique: jest.fn<any>().mockResolvedValue({ blockedUserIds: state.viewerBlocks ?? [] }),
+    },
+    friendRequest: {
+      findMany: jest.fn<any>().mockResolvedValue((state.friendIds ?? []).map((id) => ({ senderId: id, receiverId: VIEWER }))),
+    },
+    affiliateRelation: {
+      findMany: jest.fn<any>().mockResolvedValue((state.affiliateIds ?? []).map((id) => ({ affiliateUserId: VIEWER, referredUserId: id }))),
+    },
+    participant: {
+      findMany: jest.fn<any>().mockImplementation(({ where }: any) =>
+        where?.userId === VIEWER
+          ? Promise.resolve([{ conversationId: 'c1' }])
+          : Promise.resolve((state.coParticipantIds ?? []).map((id) => ({ userId: id }))),
+      ),
+    },
+  } as any;
+  const privacy = {
+    getPreferencesForUsers: jest.fn<any>().mockImplementation((arr: Array<{ id: string }>) =>
+      Promise.resolve(new Map(arr.map(({ id }) => [id, makePrefs()]))),
+    ),
+  } as any;
+  return { service: new PresenceVisibilityService(prisma, privacy), prisma };
+}
+
+describe('PresenceVisibilityService.resolveForTargets (batch)', () => {
+  const IDS = ['friend', 'stranger', 'blocked', 'mate'];
+
+  it('returns FULL for everyone to a moderator without per-id queries', async () => {
+    const { service, prisma } = makeBatchMocks({});
+    const map = await service.resolveForTargets({ userId: VIEWER, role: 'MODERATOR' }, IDS);
+    expect(map.get('stranger')).toEqual({ showOnline: true, showLastSeenTimestamp: true });
+    expect(prisma.friendRequest.findMany).not.toHaveBeenCalled();
+  });
+
+  it('resolves per-id visibility for a regular viewer', async () => {
+    const { service } = makeBatchMocks({
+      friendIds: ['friend'],
+      blockedTargetIds: ['blocked'],
+      coParticipantIds: ['mate'],
+    });
+    const map = await service.resolveForTargets({ userId: VIEWER, role: 'USER' }, IDS, {
+      allowConversationContext: true,
+    });
+    expect(map.get('friend')).toEqual({ showOnline: true, showLastSeenTimestamp: true });
+    expect(map.get('stranger')).toEqual({ showOnline: false, showLastSeenTimestamp: false });
+    expect(map.get('blocked')).toEqual({ showOnline: false, showLastSeenTimestamp: false });
+    expect(map.get('mate')).toEqual({ showOnline: true, showLastSeenTimestamp: true });
+  });
+
+  it('hides everyone from an anonymous viewer', async () => {
+    const { service } = makeBatchMocks({ friendIds: ['friend'] });
+    const map = await service.resolveForTargets(null, IDS);
+    expect(map.get('friend')).toEqual({ showOnline: false, showLastSeenTimestamp: false });
+  });
+});
