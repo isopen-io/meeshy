@@ -568,6 +568,8 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         case .undecided:
             if pendingRemoteSegments.count < Constants.pendingSegmentsBufferCap {
                 pendingRemoteSegments.append(segment)
+            } else {
+                callsLogger.warning("Transcription pending buffer full (\(Constants.pendingSegmentsBufferCap)) — dropping segment id=\(segment.id) speaker=\(segment.speakerId)")
             }
         case .leader:
             break

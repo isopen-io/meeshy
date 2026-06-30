@@ -3654,3 +3654,129 @@ final class CallManagerAnalyticsTests: XCTestCase {
         )
     }
 }
+
+// MARK: - CXCallUpdate hasVideo on A/V toggle (audit Phase 3)
+
+/// Verifies that `toggleVideo` reports an updated `CXCallUpdate` to CallKit after a
+/// successful audio↔video transition.  Without this, the system call screen, Recents
+/// list, and CarPlay continue to show the wrong media type for the remainder of the call.
+@MainActor
+final class CallManagerToggleVideoCXUpdateTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// toggleVideo must call `callProvider.reportCall(with:updated:)` with `hasVideo`
+    /// set to the new value so CallKit's Recents and lock screen reflect the switch.
+    func test_toggleVideo_reportsUpdatedCXCallUpdateToCallKit() throws {
+        let source = try callManagerSource()
+        guard let funcRange = source.range(of: "videoToggleTask = Task") else {
+            XCTFail("videoToggleTask block not found in CallManager.swift"); return
+        }
+        let searchEnd = source.range(
+            of: "func switchCamera()",
+            range: funcRange.upperBound..<source.endIndex
+        )?.lowerBound ?? source.endIndex
+        let toggleBody = String(source[funcRange.lowerBound..<searchEnd])
+
+        XCTAssertTrue(
+            toggleBody.contains("update.hasVideo = target"),
+            "toggleVideo must set update.hasVideo = target on CXCallUpdate so CallKit " +
+            "shows the correct call type (audio vs video) in Recents and the lock screen."
+        )
+        XCTAssertTrue(
+            toggleBody.contains("callProvider.reportCall(with: uuid, updated: update)"),
+            "toggleVideo must call callProvider.reportCall(with:updated:) after the A/V " +
+            "switch succeeds to inform CallKit of the new media type."
+        )
+        XCTAssertTrue(
+            toggleBody.contains("callUsesCallKit"),
+            "toggleVideo must guard CXCallUpdate reporting behind callUsesCallKit to avoid " +
+            "calling CXProvider methods when CallKit is not active (Mac / foreground in-app calls)."
+        )
+    }
+}
+
+// MARK: - Audio Session Opus alignment (audit Phase 3)
+
+/// Verifies that `configureAudioSession` sets the preferred sample rate (48 kHz) and
+/// I/O buffer duration (20 ms) that align with Opus's native codec parameters.
+/// These are best-effort hints that eliminate a sample-rate conversion stage inside
+/// AVFoundation and reduce packetization jitter for Opus frames.
+@MainActor
+final class CallManagerAudioSessionOpusAlignmentTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func configureAudioSessionBody(in source: String) -> String? {
+        guard let funcRange = source.range(of: "private func configureAudioSession()") else {
+            return nil
+        }
+        let end = source.range(
+            of: "\n    fileprivate func applySpeakerRoute()",
+            range: funcRange.upperBound..<source.endIndex
+        )?.lowerBound ?? source.endIndex
+        return String(source[funcRange.lowerBound..<end])
+    }
+
+    func test_configureAudioSession_setsPreferredSampleRate48kHz() throws {
+        let source = try callManagerSource()
+        guard let body = configureAudioSessionBody(in: source) else {
+            XCTFail("configureAudioSession not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("setPreferredSampleRate(48_000)"),
+            "configureAudioSession must request 48 kHz from AVAudioSession to avoid a " +
+            "resampling stage between AVFoundation and Opus's native 48 kHz sample rate."
+        )
+    }
+
+    func test_configureAudioSession_setsPreferredIOBufferDuration20ms() throws {
+        let source = try callManagerSource()
+        guard let body = configureAudioSessionBody(in: source) else {
+            XCTFail("configureAudioSession not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("setPreferredIOBufferDuration(0.02)"),
+            "configureAudioSession must request a 20 ms I/O buffer duration to match " +
+            "Opus's default frame size and reduce packetization jitter."
+        )
+    }
+
+    func test_didActivate_reappliesOpusAlignedAudioHints() throws {
+        let source = try callManagerSource()
+        guard let funcRange = source.range(of: "func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession)") else {
+            XCTFail("CXProvider didActivate not found in CallManager.swift"); return
+        }
+        let end = source.range(
+            of: "func provider(_ provider: CXProvider, didDeactivate",
+            range: funcRange.upperBound..<source.endIndex
+        )?.lowerBound ?? source.endIndex
+        let body = String(source[funcRange.lowerBound..<end])
+        XCTAssertTrue(
+            body.contains("setPreferredSampleRate(48_000)"),
+            "CXProvider.didActivate must re-apply the 48 kHz preferred sample rate after " +
+            "CallKit activates the audio session (CallKit's own activation may reset it)."
+        )
+        XCTAssertTrue(
+            body.contains("setPreferredIOBufferDuration(0.02)"),
+            "CXProvider.didActivate must re-apply the 20 ms preferred I/O buffer duration " +
+            "after CallKit activates the audio session."
+        )
+    }
+}
