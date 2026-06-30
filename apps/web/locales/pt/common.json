@@ -181,6 +181,7 @@
       "messageDeletedByOther": "Uma mensagem foi excluída",
       "modifyError": "Erro ao modificar mensagem",
       "editError": "Erro ao editar mensagem",
+      "contentRequired": "Conteúdo obrigatório",
       "deleteError": "Erro ao excluir mensagem",
       "replyTo": "Responder a esta mensagem",
       "messageFound": "Mensagem encontrada!",

@@ -181,6 +181,7 @@
       "messageDeletedByOther": "A message has been deleted",
       "modifyError": "Error modifying message",
       "editError": "Error editing message",
+      "contentRequired": "Content required",
       "deleteError": "Error deleting message",
       "replyTo": "Reply to this message",
       "messageFound": "Message found!",
