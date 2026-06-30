@@ -7,6 +7,7 @@ import { Badge } from './Badge';
 import { Button } from './Button';
 import { Check, X, Clock, RotateCcw } from 'lucide-react';
 import type { FriendRequest } from '@/types/contacts';
+import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
 
 export type FriendRequestAction = 'accept' | 'reject' | 'cancel' | 'resend';
 
@@ -37,14 +38,11 @@ function formatRelativeDate(
   locale?: string
 ): string {
   const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / 86400000);
+  const bucket = classifyRelativeTime(date.getTime(), Date.now());
 
-  if (diffDays === 0) return t('status.justNow');
-  if (diffDays === 1) return t('status.daysAgo', { count: 1 });
-  if (diffDays < 7) return t('status.daysAgo', { count: diffDays });
-  return date.toLocaleDateString(locale);
+  if (bucket.unit === 'days') return t('status.daysAgo', { count: bucket.value });
+  if (bucket.unit === 'beyond') return date.toLocaleDateString(locale);
+  return t('status.justNow');
 }
 
 export const FriendRequestCard = memo(function FriendRequestCard({
