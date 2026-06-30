@@ -3,7 +3,7 @@ import { isGlobalModerator } from '@meeshy/shared/types/role-types';
 import type { GlobalUserRoleType } from '@meeshy/shared/types/role-types';
 import { resolvePresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
 import type { PresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
-import type { PrivacyPreferencesService } from './PrivacyPreferencesService';
+import { PrivacyPreferencesService } from './PrivacyPreferencesService';
 
 export type PresenceViewer = { readonly userId: string; readonly role: GlobalUserRoleType } | null;
 export type PresenceTarget = { readonly id: string; readonly deactivatedAt?: Date | null };
@@ -114,4 +114,16 @@ export class PresenceVisibilityService {
     });
     return !!shared;
   }
+}
+
+let singleton: PresenceVisibilityService | null = null;
+
+/**
+ * Instance partagée pour les routes (cache de préférences mutualisé entre handlers).
+ */
+export function getPresenceVisibilityService(prisma: PrismaClient): PresenceVisibilityService {
+  if (!singleton) {
+    singleton = new PresenceVisibilityService(prisma, new PrivacyPreferencesService(prisma));
+  }
+  return singleton;
 }
