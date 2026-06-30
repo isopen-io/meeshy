@@ -2426,3 +2426,25 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Reviewer: PASS (rounds: 1) — all behavioral assertions on HTTP outcomes; factory functions; deterministic; no production logic changed
 - Notes / where the next run resumes: routes/friends.ts ☑. Next slice: continue gateway manifest gap-fill — pick next uncovered batch from manifests/gateway.md routes/ or services/ sections
 - Commit: 9d42c0bbcfef43dfe03bf471d56bdaac588a26fb (squash-merged PR #1044 → main 2026-06-29T21:49Z)
+
+## 2026-06-30T02:00Z — gateway-posts-routes (routes/posts/*)
+- Targeted: `services/gateway/src/routes/posts/` — all 7 files: audio.ts, comments.ts, core.ts, feed.ts, index.ts, interactions.ts, types.ts
+- Result: ☑ done
+- Coverage (local node):
+  - audio.ts:        100% stmts / 100% funcs / 100% lines / 96.15% branches (dead branch: EXT_TO_MIME `?? 'application/octet-stream'` — ALLOWED_AUDIO_EXT and EXT_TO_MIME key sets are identical, making fallback unreachable)
+  - comments.ts:     100% stmts / 100% funcs / 100% lines / 100% branches
+  - core.ts:         100% stmts / 100% funcs / 100% lines / 95.27% branches (dead branches: Zod `.default('POST')` / visibility defaults / Zod-guaranteed non-null fields)
+  - feed.ts:         100% stmts / 100% funcs / 100% lines / 100% branches
+  - index.ts:        100% stmts / 100% funcs / 100% lines / 100% branches
+  - interactions.ts: 99.31% stmts / 96.66% funcs / 100% lines / 97.9% branches (dead: RepostSchema `parsed.success` always true for boolean coercion via Zod)
+  - types.ts:        97.95% stmts / 100% funcs / 97.91% lines / 95.83% branches
+- Global gateway: stmts:92.34/branches:85.83/funcs:90.38/lines:93.06 (local node); est. CI bun: stmts:~87.8/branches:~81.3/funcs:~85.9/lines:~88.6
+- Tests added: 3808 net insertions across 5 modified + 2 new test files
+  - Modified: audio.test.ts (+181), comments.test.ts (+1040), core.test.ts (+950), feed.test.ts (+206), interactions.test.ts (+1110)
+  - New: index.test.ts, types.test.ts
+  - Total suite: 402 suites / 11755 tests / 1 skipped
+- Production changes: none (test-only diff)
+- Reviewer: PASS (rounds: 1) — all tests assert HTTP status codes and/or response body fields via inject(); factory functions; all services mocked at module boundaries; no shared mutable state; fire-and-forget .catch paths covered via setImmediate flush; dead-code branches confirmed structurally unreachable
+- coverageThreshold ratcheted: lines:67→79 / branches:63→72 / statements:67→78 / functions:67→77 (8-9pp below CI bun estimate)
+- Notes / where the next run resumes: routes/posts/* ☑ (all 7 files). Next slice: continue gateway manifest gap-fill — pick next low-coverage batch from manifests/gateway.md (routes/tracking-links/, routes/users/, routes/auth/login+register, or routes/anonymous.ts)
+- Commit: b1c99a3 (pending PR → main)

@@ -192,15 +192,15 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/gateway/src/routes/me/preferences/preference-router-factory.ts`
 - [ ] `services/gateway/src/routes/me/preferences/types.ts`
 
-## routes/posts  (0/7 have a test)
+## routes/posts  (7/7 have a test)
 
-- [ ] `services/gateway/src/routes/posts/audio.ts`
-- [ ] `services/gateway/src/routes/posts/comments.ts`
-- [ ] `services/gateway/src/routes/posts/core.ts`
-- [ ] `services/gateway/src/routes/posts/feed.ts`
-- [ ] `services/gateway/src/routes/posts/index.ts`
-- [ ] `services/gateway/src/routes/posts/interactions.ts`
-- [ ] `services/gateway/src/routes/posts/types.ts`
+- [x] `services/gateway/src/routes/posts/audio.ts`
+- [x] `services/gateway/src/routes/posts/comments.ts`
+- [x] `services/gateway/src/routes/posts/core.ts`
+- [x] `services/gateway/src/routes/posts/feed.ts`
+- [x] `services/gateway/src/routes/posts/index.ts`
+- [x] `services/gateway/src/routes/posts/interactions.ts`
+- [x] `services/gateway/src/routes/posts/types.ts`
 
 ## routes/tracking-links  (0/4 have a test)
 
