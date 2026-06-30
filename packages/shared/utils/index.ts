@@ -13,6 +13,7 @@ export * from './notification-strings.js';
 export * from './duration-format.js';
 export * from './relative-time.js';
 export * from './calendar-date.js';
+export * from './presence-visibility.js';
 export { getSenderUserId } from './sender-identity.js';
 export {
   generateClientMessageId,
