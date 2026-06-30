@@ -12,7 +12,7 @@
 //
 //  Le protocole `PiPCallProviding` est WebRTC-free (UIView + AnyObject) pour que
 //  `CallManager`/`CallView` l'utilisent sans `#if`. L'implémentation et le choix
-//  du singleton sont gardés `#if canImport(WebRTC)` ; sinon `NoOpPiPController`.
+//  du singleton sont gardés sous garde de compilation WebRTC ; sinon `NoOpPiPController`.
 //
 
 import AVKit
@@ -170,35 +170,6 @@ final class PiPCallController: NSObject, PiPCallProviding {
         onStop = nil
     }
 
-    // MARK: - Renderer attach/detach (un seul chemin lourd à la fois)
-
-    private func attachRenderer() {
-        guard renderer == nil, let remoteTrack else { return }
-        let renderer = PiPVideoRenderer(displayLayer: surfaceView.displayLayer, maxFrameRate: desiredFrameRate)
-        remoteTrack.add(renderer)
-        self.renderer = renderer
-    }
-
-    private func detachRenderer() {
-        if let renderer, let remoteTrack {
-            remoteTrack.remove(renderer)
-        }
-        renderer = nil
-        // Fuite — vider la file du layer (le surfaceView est un singleton
-        // persistant) pour ne pas retenir de CMSampleBuffer entre deux sessions.
-        // `renderer.reset()` (async, [weak self]) ne suffisait pas : le renderer
-        // est libéré avant que le flush ne tourne. On flush ici sur le main,
-        // sûr car plus aucun enqueue ne suivra (renderer détaché + nil).
-        flushSurface()
-    }
-
-    private func flushSurface() {
-        if #available(iOS 17.0, *) {
-            surfaceView.displayLayer.sampleBufferRenderer.flush()
-        } else {
-            surfaceView.displayLayer.flush()
-        }
-    }
 }
 
 // MARK: - AVPictureInPictureControllerDelegate
@@ -232,6 +203,39 @@ extension PiPCallController: AVPictureInPictureControllerDelegate {
         Logger.pipController.error("PiP failed to start: \(error.localizedDescription, privacy: .public)")
         detachRenderer()
         onStop?()
+    }
+}
+
+// MARK: - Renderer attach/detach (un seul chemin lourd à la fois)
+
+private extension PiPCallController {
+
+    func attachRenderer() {
+        guard renderer == nil, let remoteTrack else { return }
+        let renderer = PiPVideoRenderer(displayLayer: surfaceView.displayLayer, maxFrameRate: desiredFrameRate)
+        remoteTrack.add(renderer)
+        self.renderer = renderer
+    }
+
+    func detachRenderer() {
+        if let renderer, let remoteTrack {
+            remoteTrack.remove(renderer)
+        }
+        renderer = nil
+        // Fuite — vider la file du layer (le surfaceView est un singleton
+        // persistant) pour ne pas retenir de CMSampleBuffer entre deux sessions.
+        // `renderer.reset()` (async, [weak self]) ne suffisait pas : le renderer
+        // est libéré avant que le flush ne tourne. On flush ici sur le main,
+        // sûr car plus aucun enqueue ne suivra (renderer détaché + nil).
+        flushSurface()
+    }
+
+    func flushSurface() {
+        if #available(iOS 17.0, *) {
+            surfaceView.displayLayer.sampleBufferRenderer.flush()
+        } else {
+            surfaceView.displayLayer.flush()
+        }
     }
 }
 
