@@ -376,7 +376,8 @@
       "scrollRight": "Scroll right"
     },
     "closePanel": "Close audio effects panel",
-    "clonedVoice": "Cloned voice"
+    "clonedVoice": "Cloned voice",
+    "moreInfo": "More information"
   },
   "microphone": {
     "noMicDetected": "No microphone detected.",
