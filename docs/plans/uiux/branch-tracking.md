@@ -14,6 +14,27 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR iOS AUTORITAIRE (suffixe `i`) — mis à jour 72i** — piste indépendante des itérations web.
+> - **Dernière itération iOS en cours : `72i`** (Dynamic Type / a11y de la feuille de commentaires
+>   du fil `FeedCommentsSheet.swift` — `CommentsSheetView` + `CommentRowView` + `ThreadedCommentSection`
+>   + aperçu de post : **23** `.font(.system(size:))` figés → `MeeshyFont.relative(...)` (corps du
+>   commentaire `contentFont` 14/15 + nom d'auteur `authorFont` 13/14 + méta + compteurs + glyphes
+>   inline accolés à un libellé ; tailles variables/ternaires préservées). **5 call-sites gardés figés** :
+>   boutons fermer/annuler (chrome à frame fixe 32×32 / 24×24), 2 toggles drapeau de langue (soulignement
+>   actif largeur fixe 10×1.5), icône `translate` décorative a11y-hidden). Branche `claude/upbeat-euler-4viur6`,
+>   base = `main` HEAD `43676dd3`.
+> - **71i (en vol, PR #1137)** = Dynamic Type flux 2FA `TwoFactorSetupView.swift` (3 écrans, 30 conversions ;
+>   fichier distinct, aucune collision). **70i (mergé)** = `ContactCardView` palette + a11y VoiceOver.
+>   **55i** = `ConversationInfoSheet` Dynamic Type (51 conversions, sweep pur sans test — modèle suivi par 71i/72i).
+> - **Base de départ 73i : `main` HEAD** (toujours resync sur `main` avant de commencer ; supprimer la branche mergée).
+> - **Différé prioritaire iOS 73i+ : Dynamic Type grandes surfaces restantes** — `ConversationDashboardView` (43),
+>   `StoryViewerView+Content` (38), `VoiceProfileManageView` (31), `FeedView+Attachments` (30),
+>   `AudioFullscreenView` (26) — un écran/lot, même doctrine (texte + glyphes inline accolés ; chrome à frame
+>   fixe + contrôles précis + héros décoratifs ≥ 40 pt gardés figés). Puis **Glass adoption (reste)** :
+>   `MessageOverlayMenu` (gros fichier, glow réglé — lot dédié `AdaptiveGlassContainer`). **NE PAS re-flagger** :
+>   `FeedCommentsSheet` (Dynamic Type soldé 72i), `TwoFactorSetupView` (71i), `EmojiFullPickerSheet`/
+>   `EmojiKeyboardPanel` (verre derrière scroll = anti-lisibilité HIG). Voir analyse 72i § Différés.
+>
 > **POINTEUR AUTORITAIRE WEB (mis à jour 70wb)** — source fiable = § History (append-only) ; le tableau Current State a divergé (lignes dupliquées par agents parallèles).
 > - **Dernière itération web mergée : `70w` → PR #1088** (i18n `PhoneResetFlow.tsx` — 56 `t()||'FR'` → `t(k,'EN')` + clé EN manquante `phoneReset.identityHint`). Antérieures : 69w #1084 (a11y create-link modal), 68w #1082, 67w #1078.
 > - **⚠️ Collision de numéro `70w`** : deux itérations web parallèles ont pris `70w`. `claude/practical-fermat-w9pjo3` (PhoneResetFlow, mergée #1088) garde `70w` ; la présente (invite-user-modal a11y, branche `claude/practical-fermat-mql80f`) est renommée **`70wb`** (convention `wb`). Surfaces disjointes (auth/ vs conversations/) — aucun conflit de code.
@@ -523,3 +544,5 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 | 69i | claude/upbeat-euler-6wx5br (iOS épuration palette `ContactCardView` : icône téléphone `Color(hex:"2ECC71")` → `MeeshyColors.success`, icône e-mail `Color(hex:"3498DB")` → `MeeshyColors.info` ; `+ import MeeshyUI` (type nommé, pattern frère) ; solde le différé « Palette tokens » de 68i ; accent déterministe conversation préservé. Gate = CI `ios-tests.yml`) | ⏳ | ⏳ |
 | 69i | claude/upbeat-euler-gzrxp1 (iOS épuration palette sémantique — solde + élargit le différé 68i : **tous** les verts/oranges génériques hors-charte (`#2ECC71`/`#3498DB`/`#F39C12`) exprimant un état *sémantique* (online/away/confirmé/prêt/live) → tokens `MeeshyColors.success`/`.warning`/`.info` sur 8 fichiers : `ContactCardView` (app, +`import MeeshyUI` ; tél→success, email→info), `MeeshyAvatar`/`UserIdentityBar` dots présence (online→success, away→warning), `UserProfileSheet.e2eeBadge` ×4 (chiffrement confirmé→success), `VoiceRecordingView`/`VoiceProfileWizardView`/`VoiceProfileManageView` checkmarks « prêt »→success, `LiveLocationBadge` dot live→success. Ladders catégoriels arc-en-ciel (Story pickers, `TagInputView`, `speakerPalette`, `ColorGeneration`) **laissés intacts** (décision charte unique différée). Pur swap literal→token, 0 logique, 0 test neuf (couverture structurelle CI + smoke présence existants). Gate = CI `ios-tests.yml`.) | ⏳ | ⏳ |
 | 69i | claude/upbeat-euler-5s13ta (iOS épuration palette + Dynamic Type `ContactCardView` : icône téléphone `#2ECC71` → `MeeshyColors.success`, email `#3498DB` → `MeeshyColors.info` ; polices figées `.system(size:)` → styles sémantiques scalables `.caption2`/`.subheadline`/`.caption`/`.footnote` + `minimumScaleFactor` 0.85/0.8 ; `accentColor` marque + glyphe avatar fixe préservés ; solde différé palette 52i/53i/68i ; 0 test/snapshot couplé) | ⏳ | ⏳ |
+| 71i | claude/upbeat-euler-8btkin (iOS Dynamic Type flux 2FA `TwoFactorSetupView.swift` — 3 écrans setup/disable/backup-codes : 30 `.font(.system(size:))` figés → `MeeshyFont.relative(...)` (texte + petites icônes inline 12–13 pt, weight/design préservés dont `.monospaced`) ; 9 icônes héros décoratives 40/50/80 pt gardées figées ; 2ᵉ commit déblocage CI = suppression vue morte `ReplyThreadOverlay.swift`. PR #1137. Gate = CI `ios-tests.yml`) | #1137 | ⏳ |
+| 72i | claude/upbeat-euler-4viur6 (iOS Dynamic Type feuille de commentaires du fil `FeedCommentsSheet.swift` — `CommentsSheetView`+`CommentRowView`+`ThreadedCommentSection`+aperçu post : 23 `.font(.system(size:))` figés → `MeeshyFont.relative(...)` (corps commentaire `contentFont` 14/15 + auteur `authorFont` 13/14 + méta/compteurs + glyphes inline accolés à un libellé ; tailles variables/ternaires préservées) ; 5 call-sites gardés figés (boutons fermer/annuler chrome frame fixe 32×32/24×24, 2 toggles drapeau langue soulignement fixe 10×1.5, icône `translate` décorative a11y-hidden). Sweep pur, 0 test neuf (parité 55i/71i). Gate = CI `ios-tests.yml`) | ⏳ | ⏳ |
