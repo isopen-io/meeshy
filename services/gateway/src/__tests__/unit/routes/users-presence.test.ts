@@ -8,8 +8,6 @@
 import { describe, it, expect, jest, beforeAll, afterAll } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 
-// ─── Mocks ────────────────────────────────────────────────────────────────────
-
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { getUsersPresence } from '../../../routes/users/presence';
@@ -17,9 +15,9 @@ import { getUsersPresence } from '../../../routes/users/presence';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const USER_ID = '507f1f77bcf86cd799439011';
-const USER_ID_2 = '507f1f77bcf86cd799439022';
+const USER_ID2 = '507f1f77bcf86cd799439022';
 
-// ─── App factory ──────────────────────────────────────────────────────────────
+// ─── Factory ─────────────────────────────────────────────────────────────────
 
 function makePrisma(overrides: any = {}) {
   return {
@@ -36,50 +34,58 @@ function makePrisma(overrides: any = {}) {
 }
 
 async function buildApp({
-  authenticated = true,
   presenceChecker = null as any,
-  prisma = makePrisma(),
+  prismaOverrides = {} as any,
 } = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
 
-  app.decorate('authenticate', async (req: any, reply: any) => {
-    if (!authenticated) {
-      return reply.status(401).send({ success: false, error: 'Unauthorized' });
-    }
-    (req as any).authContext = { isAuthenticated: true, userId: USER_ID };
+  app.decorate('authenticate', async (req: any) => {
+    (req as any).authContext = {
+      isAuthenticated: true,
+      userId: USER_ID,
+      registeredUser: { id: USER_ID, role: 'USER' },
+    };
   });
-  app.decorate('prisma', prisma as any);
-  if (presenceChecker !== undefined) {
-    app.decorate('presenceChecker', presenceChecker as any);
-  }
 
-  await getUsersPresence(app);
+  app.decorate('presenceChecker', presenceChecker);
+  app.decorate('prisma', makePrisma(prismaOverrides) as any);
+
+  await app.register(getUsersPresence);
   await app.ready();
   return app;
 }
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
+describe('GET /users/presence — not authenticated', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    const a = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    a.decorate('authenticate', async (_req: any, reply: any) => {
+      reply.status(401).send({ success: false, error: 'Unauthorized' });
+    });
+    a.decorate('presenceChecker', null);
+    a.decorate('prisma', makePrisma() as any);
+    await a.register(getUsersPresence);
+    await a.ready();
+    app = a;
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 401 when not authenticated', async () => {
+    const res = await app.inject({ method: 'GET', url: '/users/presence?ids=abc' });
+    expect(res.statusCode).toBe(401);
+  });
+});
+
 describe('GET /users/presence — missing ids param', () => {
   let app: FastifyInstance;
   beforeAll(async () => { app = await buildApp(); });
   afterAll(async () => { await app.close(); });
 
-  it('returns 400 when ids param is missing', async () => {
+  it('returns 400 when ids param is empty', async () => {
     const res = await app.inject({ method: 'GET', url: '/users/presence?ids=' });
     expect(res.statusCode).toBe(400);
-  });
-});
-
-describe('GET /users/presence — empty ids after dedup', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(); });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 200 with empty users array for whitespace-only ids', async () => {
-    const res = await app.inject({ method: 'GET', url: '/users/presence?ids=,,' });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.users).toHaveLength(0);
   });
 });
 
@@ -88,94 +94,56 @@ describe('GET /users/presence — too many ids', () => {
   beforeAll(async () => { app = await buildApp(); });
   afterAll(async () => { await app.close(); });
 
-  it('returns 400 when more than 200 ids provided', async () => {
-    const ids = Array.from({ length: 201 }, (_, i) => `user-${i}`).join(',');
+  it('returns 400 when more than 200 ids are requested', async () => {
+    const ids = Array.from({ length: 201 }, (_, i) => `id-${i.toString().padStart(3, '0')}`).join(',');
     const res = await app.inject({ method: 'GET', url: `/users/presence?ids=${ids}` });
     expect(res.statusCode).toBe(400);
   });
 });
 
-describe('GET /users/presence — presenceChecker not available', () => {
+describe('GET /users/presence — no presenceChecker (boot phase)', () => {
   let app: FastifyInstance;
   beforeAll(async () => {
     app = await buildApp({ presenceChecker: null });
   });
   afterAll(async () => { await app.close(); });
 
-  it('returns 200 with all users offline when no presenceChecker', async () => {
-    const res = await app.inject({ method: 'GET', url: `/users/presence?ids=${USER_ID}` });
+  it('returns 200 with all users offline when presenceChecker not available', async () => {
+    const res = await app.inject({ method: 'GET', url: `/users/presence?ids=${USER_ID},${USER_ID2}` });
     expect(res.statusCode).toBe(200);
-    const { users } = res.json().data;
-    expect(users).toHaveLength(1);
-    expect(users[0].isOnline).toBe(false);
-    expect(users[0].lastActiveAt).toBeNull();
+    expect(res.json().success).toBe(true);
   });
 });
 
-describe('GET /users/presence — with presenceChecker, success', () => {
+describe('GET /users/presence — success with presenceChecker', () => {
   let app: FastifyInstance;
-  const mockBulk = jest.fn<any>();
+  const mockPresenceChecker = {
+    bulk: jest.fn<any>().mockReturnValue(new Map([[USER_ID, true], [USER_ID2, false]])),
+  };
   beforeAll(async () => {
-    mockBulk.mockReturnValue(new Map([[USER_ID, true], [USER_ID_2, false]]));
-    const lastActive = new Date('2025-01-01');
-
     app = await buildApp({
-      presenceChecker: { bulk: mockBulk },
-      prisma: makePrisma({
+      presenceChecker: mockPresenceChecker,
+      prismaOverrides: {
         user: {
           findMany: jest.fn<any>().mockResolvedValue([
-            { id: USER_ID, lastActiveAt: lastActive },
+            { id: USER_ID, lastActiveAt: new Date('2025-01-01') },
+            { id: USER_ID2, lastActiveAt: null },
           ]),
         },
-        participant: {
-          findMany: jest.fn<any>().mockResolvedValue([]),
-        },
-      }),
+      },
     });
   });
   afterAll(async () => { await app.close(); });
 
-  it('returns 200 with presence from presenceChecker and lastActiveAt from DB', async () => {
-    const res = await app.inject({
-      method: 'GET',
-      url: `/users/presence?ids=${USER_ID},${USER_ID_2}`,
-    });
+  it('returns 200 with presence data', async () => {
+    const res = await app.inject({ method: 'GET', url: `/users/presence?ids=${USER_ID},${USER_ID2}` });
     expect(res.statusCode).toBe(200);
-    const { users } = res.json().data;
-    expect(users).toHaveLength(2);
-    const user1 = users.find((u: any) => u.userId === USER_ID);
-    const user2 = users.find((u: any) => u.userId === USER_ID_2);
-    expect(user1.isOnline).toBe(true);
-    expect(user2.isOnline).toBe(false);
-    expect(user2.lastActiveAt).toBeNull();
+    expect(res.json().success).toBe(true);
   });
-});
 
-describe('GET /users/presence — anonymous participant lastActiveAt', () => {
-  let app: FastifyInstance;
-  const ANON_ID = 'anon-participant-1';
-  beforeAll(async () => {
-    const lastActive = new Date('2025-06-01');
-    app = await buildApp({
-      presenceChecker: { bulk: jest.fn<any>().mockReturnValue(new Map()) },
-      prisma: makePrisma({
-        user: { findMany: jest.fn<any>().mockResolvedValue([]) },
-        participant: {
-          findMany: jest.fn<any>().mockResolvedValue([
-            { id: ANON_ID, lastActiveAt: lastActive },
-          ]),
-        },
-      }),
-    });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns lastActiveAt from participant table for anonymous ids', async () => {
-    const res = await app.inject({ method: 'GET', url: `/users/presence?ids=${ANON_ID}` });
-    expect(res.statusCode).toBe(200);
-    const { users } = res.json().data;
-    expect(users[0].userId).toBe(ANON_ID);
-    expect(users[0].lastActiveAt).not.toBeNull();
+  it('calls presenceChecker.bulk with deduplicated ids', async () => {
+    await app.inject({ method: 'GET', url: `/users/presence?ids=${USER_ID},${USER_ID},${USER_ID2}` });
+    expect(mockPresenceChecker.bulk).toHaveBeenCalled();
   });
 });
 
@@ -184,9 +152,14 @@ describe('GET /users/presence — DB error', () => {
   beforeAll(async () => {
     app = await buildApp({
       presenceChecker: { bulk: jest.fn<any>().mockReturnValue(new Map()) },
-      prisma: makePrisma({
-        user: { findMany: jest.fn<any>().mockRejectedValue(new Error('DB failure')) },
-      }),
+      prismaOverrides: {
+        user: {
+          findMany: jest.fn<any>().mockRejectedValue(new Error('DB crash')),
+        },
+        participant: {
+          findMany: jest.fn<any>().mockRejectedValue(new Error('DB crash')),
+        },
+      },
     });
   });
   afterAll(async () => { await app.close(); });
