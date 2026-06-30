@@ -14,6 +14,12 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 73i)** — source fiable = § History (append-only).
+> - **Dernière itération iOS : `73i`** → branche `claude/upbeat-euler-fymio6` (i18n/a11y : élimine 7 littéraux FR codés en dur dans `accessibilityLabel`/`Hint` sur 6 fichiers → `String(localized:defaultValue:bundle:)` EN, supprime la rupture Prisme VoiceOver ; + déblocage compile `main` : suppression vue morte `ReplyThreadOverlay.swift`). Base = `main` HEAD `a7eadac`.
+> - **⚠️ Compile `main` cassée avant 73i** : `ReplyThreadOverlay.swift` (collision merge 69i) appelle `ReplyThreadLoader` supprimé → toute PR iOS rouge. 73i (et #1137/71i) corrigent par suppression de la vue morte. Si déjà mergée par une autre PR au moment du merge 73i → `delete/delete` = pas de conflit.
+> - **PR iOS en vol au démarrage 73i** : #1137 (71i Dynamic Type 2FA), #1139 (72i Dynamic Type comments). 73i orthogonal (thème i18n a11y littéraux, fichiers disjoints).
+> - **Base de départ itération iOS suivante : `main` HEAD** (toujours resync sur `main` ; supprimer la branche mergée). Prochain candidat = **population catalog uniforme du namespace a11y** (traduire ×5 langues toutes les clés `String(localized:)` extractibles d'un coup) ou **sweep `accessibilityLabel`/`Hint` littéraux restants**.
+
 > **POINTEUR AUTORITAIRE WEB (mis à jour 70wb)** — source fiable = § History (append-only) ; le tableau Current State a divergé (lignes dupliquées par agents parallèles).
 > - **Dernière itération web mergée : `70w` → PR #1088** (i18n `PhoneResetFlow.tsx` — 56 `t()||'FR'` → `t(k,'EN')` + clé EN manquante `phoneReset.identityHint`). Antérieures : 69w #1084 (a11y create-link modal), 68w #1082, 67w #1078.
 > - **⚠️ Collision de numéro `70w`** : deux itérations web parallèles ont pris `70w`. `claude/practical-fermat-w9pjo3` (PhoneResetFlow, mergée #1088) garde `70w` ; la présente (invite-user-modal a11y, branche `claude/practical-fermat-mql80f`) est renommée **`70wb`** (convention `wb`). Surfaces disjointes (auth/ vs conversations/) — aucun conflit de code.
@@ -342,6 +348,7 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 
 | Iteration | Branch | PR | Merged |
 |-----------|--------|----|--------|
+| 73i | claude/upbeat-euler-fymio6 (iOS i18n/a11y — élimination des **littéraux français codés en dur** dans 7 modificateurs d'accessibilité / 6 fichiers : `BubbleStandardLayout` hint blur-reveal, `StatsTimelineChart` label graphe, `StoryViewerView+Canvas` hint navigation, `StoryRepostEmbedCell` hint ouverture, `UniversalComposerBar+Recording` ×2 hints enreg., `MessageOverlayMenu` label play/pause + hint durée → `String(localized:defaultValue:bundle:)` avec defaultValue EN aligné sur les libellés frères du même contrôle (`bubble.content.hidden`, `story.repost.by`, `composer.recording.cancel`…). Supprime la rupture Prisme « français forcé pour tous les utilisateurs VoiceOver ». 9 clés extractibles (`bubble.content.reveal.hint`, `stats.timeline.chart.a11y`, `story.viewer.navigation.hint`, `story.repost.open.hint`, `composer.recording.cancel.hint`, `composer.recording.stopAndAttach.hint`, `audio.pause`, `audio.play`, `audio.duration.hint`). PAS d'édition catalog (clés sœurs absentes aussi → population uniforme du namespace a11y différée). + **déblocage compile `main`** : suppression vue morte `ReplyThreadOverlay.swift` (appelait `ReplyThreadLoader` supprimé par collision 69i `7d26cd91`/`7652e001`) — achève l'intention 69i, pbxproj non édité (XcodeGen régénère). Base = `main` HEAD `a7eadac`. Gate = CI `iOS Tests`.) | ⏳ | ⏳ |
 | 1 | feat/uiux-iter1 | (early) | ✅ |
 | 2–12 | feat/uiux-iter{N} | various | ✅ |
 | 13 | feat/uiux-iter13 | #407 | ✅ |
