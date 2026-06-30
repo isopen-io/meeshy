@@ -479,7 +479,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `StorySlideDeck.updateSelectedTransform` and driven by `StoryComposerViewModel.onCanvasTransform`.
       `StoryCanvasSurface` renders the selected slide's first media as a 9:16 background under a
       `graphicsLayer` + `detectTransformGestures` (glue only; the math is unit-tested in one place).
-      Pending: FAB + bottom-band toolbar (Contenu/Effets), on-canvas text/sticker/drawing elements.
+      **FAB + bottom-band toolbar done** (`story-composer-band`): the flat add-text / add-media /
+      visibility buttons are replaced by a two-FAB (Contenu / Effets) bottom band — the pure value-type
+      port of iOS `BandStateMachine`. `ComposerBandState` (`Hidden` | `Tiles(BandCategory)`) +
+      `BandCategory.swapped` + `ComposerContentTile` own the navigation: `tapFab(category)` opens /
+      switches / toggle-closes the drawer, `swipeDown()` dismisses, `swipeHorizontal()` swaps category
+      (inert while hidden); `activeCategory`/`isVisible` derive the render. The drawer shows the Contenu
+      tiles (Texte → `onAddTextElement`, Médias → system picker) or the Effets visibility chips, with
+      natural swipe-to-dismiss / swipe-to-swap gestures (glue). All decisions live in one unit-tested
+      place; the VM holds `band` and applies the pure transitions (`onBandFabTap`/`onBandDismiss`/
+      `onBandSwapCategory`). +18 tests (11 state machine, 7 VM). Pending: Effets tiles (filters / drawing
+      / timeline), on-canvas sticker/drawing elements.
 - [~] Text elements (≤5/slide): style (bold/italic/handwriting/typewriter/neon/retro), colour,
       size, alignment, background (none/solid/glass), outline/stroke, RTL, fade timing.
       **Model + add/move/remove + publish done** (`story-text-elements`): a pure `StoryTextElement`
