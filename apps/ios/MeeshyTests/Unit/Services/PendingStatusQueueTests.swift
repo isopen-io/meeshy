@@ -221,16 +221,13 @@ final class PendingStatusQueueTests: XCTestCase {
     func test_pendingCount_matchesEnqueuedCount() async {
         let (sut, _) = makeSUT()
 
-        let initialCount = await sut.pendingCount()
-        XCTAssertEqual(initialCount, 0)
+        XCTAssertEqual(await sut.pendingCount(), 0)
 
         await sut.enqueue(.init(conversationId: "c1", type: "read", timestamp: Date()))
-        let countAfterFirst = await sut.pendingCount()
-        XCTAssertEqual(countAfterFirst, 1)
+        XCTAssertEqual(await sut.pendingCount(), 1)
 
         await sut.enqueue(.init(conversationId: "c2", type: "received", timestamp: Date()))
-        let countAfterSecond = await sut.pendingCount()
-        XCTAssertEqual(countAfterSecond, 2)
+        XCTAssertEqual(await sut.pendingCount(), 2)
     }
 
     // MARK: - clearAll()
@@ -242,8 +239,7 @@ final class PendingStatusQueueTests: XCTestCase {
         await sut.enqueue(.init(conversationId: "c2", type: "read", timestamp: Date()))
         await sut.clearAll()
 
-        let count = await sut.pendingCount()
-        XCTAssertEqual(count, 0)
+        XCTAssertEqual(await sut.pendingCount(), 0)
     }
 
     // MARK: - flush()
@@ -276,8 +272,7 @@ final class PendingStatusQueueTests: XCTestCase {
         await sut.enqueue(.init(conversationId: "c1", type: "read", timestamp: Date()))
         await sut.flush()
 
-        let count = await sut.pendingCount()
-        XCTAssertEqual(count, 0)
+        XCTAssertEqual(await sut.pendingCount(), 0)
     }
 
     func test_flush_retainsFailedActions_whenAPIThrows() async {
@@ -287,8 +282,7 @@ final class PendingStatusQueueTests: XCTestCase {
         await sut.enqueue(.init(conversationId: "c1", type: "read", timestamp: Date()))
         await sut.flush()
 
-        let count = await sut.pendingCount()
-        XCTAssertEqual(count, 1,
+        XCTAssertEqual(await sut.pendingCount(), 1,
                        "failed actions must remain for next retry")
     }
 
@@ -302,8 +296,7 @@ final class PendingStatusQueueTests: XCTestCase {
 
         XCTAssertEqual(client.callCount, 0,
                        "empty conversationId actions must be silently dropped")
-        let count = await sut.pendingCount()
-        XCTAssertEqual(count, 0)
+        XCTAssertEqual(await sut.pendingCount(), 0)
     }
 
     func test_flush_dropsExpiredActions_olderThan24h() async {
@@ -315,8 +308,7 @@ final class PendingStatusQueueTests: XCTestCase {
 
         XCTAssertEqual(client.callCount, 0,
                        "expired actions (> 24h old) must be discarded without API calls")
-        let count = await sut.pendingCount()
-        XCTAssertEqual(count, 0)
+        XCTAssertEqual(await sut.pendingCount(), 0)
     }
 
     func test_flush_processesMultipleActions_inOrder() async {
@@ -352,8 +344,7 @@ final class PendingStatusQueueTests: XCTestCase {
         await sut.enqueue(.init(conversationId: "fail-conv", type: "read", timestamp: Date()))
         await sut.flush()
 
-        let count = await sut.pendingCount()
-        XCTAssertEqual(count, 2,
+        XCTAssertEqual(await sut.pendingCount(), 2,
                        "all actions must be retained when all API calls fail")
         XCTAssertEqual(client.callCount, 2,
                        "both endpoints must be attempted even though both fail")
