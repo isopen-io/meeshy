@@ -36,6 +36,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.FormatAlignCenter
@@ -43,6 +45,8 @@ import androidx.compose.material.icons.filled.FormatAlignLeft
 import androidx.compose.material.icons.filled.FormatAlignRight
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.VerticalAlignBottom
+import androidx.compose.material.icons.filled.VerticalAlignTop
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -214,6 +218,7 @@ fun StoryComposerScreen(
                             onColor = { color -> viewModel.onTextElementColor(element.id, color) },
                             onAlign = { align -> viewModel.onTextElementAlign(element.id, align) },
                             onDuplicate = { viewModel.onDuplicateTextElement(element.id) },
+                            onReorder = { op -> viewModel.onReorderTextElement(element.id, op) },
                         )
                     }
                 },
@@ -755,6 +760,7 @@ private fun TextStyleToolbar(
     onColor: (String) -> Unit,
     onAlign: (StoryTextAlign) -> Unit,
     onDuplicate: () -> Unit,
+    onReorder: (StoryZOrder) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -780,6 +786,23 @@ private fun TextStyleToolbar(
                     contentDescription = stringResource(R.string.stories_composer_duplicate_element),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ZOrderButton(Icons.Filled.VerticalAlignBottom, R.string.stories_composer_zorder_to_back) {
+                onReorder(StoryZOrder.TO_BACK)
+            }
+            ZOrderButton(Icons.Filled.ArrowDownward, R.string.stories_composer_zorder_backward) {
+                onReorder(StoryZOrder.BACKWARD)
+            }
+            ZOrderButton(Icons.Filled.ArrowUpward, R.string.stories_composer_zorder_forward) {
+                onReorder(StoryZOrder.FORWARD)
+            }
+            ZOrderButton(Icons.Filled.VerticalAlignTop, R.string.stories_composer_zorder_to_front) {
+                onReorder(StoryZOrder.TO_FRONT)
             }
         }
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -811,6 +834,21 @@ private fun AlignToggle(
             icon,
             contentDescription = stringResource(label),
             tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun ZOrderButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    labelRes: Int,
+    onClick: () -> Unit,
+) {
+    IconButton(onClick = onClick) {
+        Icon(
+            icon,
+            contentDescription = stringResource(labelRes),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

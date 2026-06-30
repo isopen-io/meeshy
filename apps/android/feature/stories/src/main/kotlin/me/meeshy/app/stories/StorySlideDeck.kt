@@ -1,6 +1,15 @@
 package me.meeshy.app.stories
 
 /**
+ * A z-order restack of an on-canvas text element within its slide's paint order.
+ * The slide's `elements` list order *is* the paint order — index 0 is the back,
+ * the last index the front — so these map onto a list move:
+ * [TO_BACK]/[TO_FRONT] jump to either end, [BACKWARD]/[FORWARD] step one place.
+ * Mirrors the iOS composer's front/back + forward/backward layering controls.
+ */
+enum class StoryZOrder { TO_BACK, BACKWARD, FORWARD, TO_FRONT }
+
+/**
  * One slide of a multi-slide story draft. [id] is stable across the slide's life
  * (a duplicate mints a fresh one). A slide carries its caption [text], attached
  * [mediaIds], and its 9:16 canvas [transform] (the persisted pan/zoom of its
@@ -217,6 +226,31 @@ data class StorySlideDeck(
         val clone = slide.elements[sourceIndex].copy(id = newId).nudged(dx, dy)
         val nextElements = slide.elements.toMutableList().apply { add(sourceIndex + 1, clone) }
         val next = slides.mapIndexed { i, s -> if (i == slideIndex) s.copy(elements = nextElements) else s }
+        return copy(slides = next)
+    }
+
+    /**
+     * Restacks the on-canvas text element [id] within its holding slide's paint order
+     * per [op] (the list order *is* the z-order: index 0 = back, last = front). The
+     * other elements keep their relative order and every other slide and the selection
+     * are untouched. Inert (same instance) when [id] is unknown or the move would not
+     * change the order (already at the extreme, a single-element slide), so the ≤1
+     * paint-order invariant lives in one place and the caller stays glue.
+     */
+    fun reorderTextElement(id: String, op: StoryZOrder): StorySlideDeck {
+        val slideIndex = slides.indexOfFirst { slide -> slide.elements.any { it.id == id } }
+        if (slideIndex < 0) return this
+        val elements = slides[slideIndex].elements
+        val from = elements.indexOfFirst { it.id == id }
+        val target = when (op) {
+            StoryZOrder.TO_BACK -> 0
+            StoryZOrder.BACKWARD -> from - 1
+            StoryZOrder.FORWARD -> from + 1
+            StoryZOrder.TO_FRONT -> elements.lastIndex
+        }.coerceIn(0, elements.lastIndex)
+        if (target == from) return this
+        val restacked = elements.toMutableList().apply { add(target, removeAt(from)) }
+        val next = slides.mapIndexed { i, s -> if (i == slideIndex) s.copy(elements = restacked) else s }
         return copy(slides = next)
     }
 

@@ -128,7 +128,14 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 ## Next slice (pick one for the next run)
 
 Ordered by value:
-0. ~~**Snap-to-guide + out-of-bounds warning**~~ ✅ shipped as `story-canvas-snap-guides` (this run) —
+0. ~~**Z-order management (front/back, forward/backward)**~~ ✅ shipped as `story-text-element-zorder`
+   (this run) — pure `StorySlideDeck.reorderTextElement(id, StoryZOrder)` restacks an element within its
+   slide's paint order (list order = z-order), inert at the extremes / unknown id / single element;
+   4-button z-order row in the floating toolbar. See run log.
+   **Next composer-richness:** a single unified long-press context menu consolidating
+   edit/duplicate/reorder/delete; then on-canvas **sticker / drawing** elements and the real **Effets
+   tiles** (filters / drawing / timeline).
+0b. ~~**Snap-to-guide + out-of-bounds warning**~~ ✅ shipped as `story-canvas-snap-guides` —
    pure `StorySnapResolver` (per-axis nearest-guide snap + safe-zone verdict) reused through the existing
    element-drag path, with an accent guide-line overlay + warning border. See run log.
 1. **Canvas toolbar/FAB** — the bottom-band toolbar (Contenu/Effets) grouping add-text / add-media;
@@ -292,6 +299,50 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-30 — slice `story-text-element-zorder` ✅
+- **Branch:** `claude/apps/android/story-text-element-zorder` (off `origin/main` @ `de08134`).
+- **Housekeeping (step 0):** the prior slice's PR **#1048** (`story-canvas-snap-guides`) was found **open
+  with merge conflicts** (main had advanced past its base with `story-composer-band` + the gateway test
+  slices). Fetched both refs, **rebased the PR branch onto `origin/main`**, resolved 3 conflicts —
+  `StoryComposerViewModel.kt` (kept **both** `band` + `snapFeedback` state fields),
+  `StoryComposerScreen.kt` (kept **both** import sets), `PROGRESS.md` (kept **both** next-slice + run-log
+  entries) — per the "keep BOTH sides" rule. Verified the resolution with `meeshy.sh check` (BUILD
+  SUCCESSFUL) before pushing. The maintainer then squash/merge-committed #1048 to `main` (commit
+  `de08134`); local `main` reset to it (clean, no markers). Branched this slice off that fresh `main`.
+- **What:** **z-order management** for on-canvas text elements (feature-parity §Stories "Z-order
+  management (front/back, forward/backward) persisted for WYSIWYG playback" — now checked). The slide's
+  `elements` list order *is* the paint order (index 0 = back, last = front, matching the canvas
+  `forEach` render), so restacking an element = a list move within its slide. A 4-button z-order row in
+  the floating `TextStyleToolbar` (send-to-back / backward / forward / bring-to-front) drives it.
+- **Design (SDK purity, single source of truth):** the order rule lives in **one** pure place,
+  `StorySlideDeck.reorderTextElement(id, op: StoryZOrder)`. The new top-level `StoryZOrder` enum
+  (`TO_BACK | BACKWARD | FORWARD | TO_FRONT`) maps to a target index (`0` / `from-1` / `from+1` /
+  `lastIndex`) `coerceIn`-clamped to the list bounds; `target == from` (already-extreme / single
+  element) and an unknown id both return the **same instance**. Only the element's holding slide is
+  restacked (located by id, so it works on a non-selected slide); the others and the selection are
+  untouched. `StoryComposerViewModel.onReorderTextElement` wraps it and keeps the same **state**
+  instance on an inert move (`deck === state.deck` ⇒ no `copy`), so an inert tap never churns
+  recomposition. Selection/editing untouched — you restack the element you're editing.
+- **Changed (production — all `:feature:stories`, `apps/android` only):**
+  - `StorySlideDeck.kt` — new `StoryZOrder` enum + pure `reorderTextElement` reducer.
+  - `StoryComposerViewModel.kt` — `onReorderTextElement` intent (same-instance on inert).
+  - `StoryComposerScreen.kt` — z-order row in `TextStyleToolbar` + `ZOrderButton` glue + 4 icon imports.
+  - `values{,-fr,-es,-pt}/strings.xml` — 4 z-order content-description strings × 4 locales.
+- **Tests (TDD red → green, behaviour via public API): +16**
+  - `StorySlideDeckZOrderTest` (+13): TO_FRONT/TO_BACK move + keep others' order; FORWARD/BACKWARD
+    single-step swap; each op inert at its extreme; unknown id inert (all ops); single-element slide
+    inert (all ops); restacks only the holding slide; finds element on a non-selected slide + preserves
+    selection; preserves the moved element's content.
+  - `StoryComposerViewModelTest` (+3): TO_BACK restacks + keeps the element selected + still editing;
+    TO_FRONT restacks; unknown id leaves the **same** state instance.
+  - **Branch sweep:** every arm of the `when(op)` (4), the `coerceIn` bound + `target == from` inert
+    arm, the `slideIndex < 0` inert arm, and the VM same-instance vs copy arms are exercised.
+- **Verification:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL** (assembleDebug APK + all JVM
+  unit tests; `StorySlideDeckZOrderTest` 13/13, the 3 VM cases green). Diff = `apps/android` only
+  (3 source + 4 strings + 2 test + tracking). **Reviewer rubric: PASS** — pure logic full branch
+  coverage, behaviour-only tests (incl. same-instance no-churn), no floor lowered, reuse of the
+  existing slide/element model (no new reducer family), accent-coherent toolbar, no dead-end.
 
 ### 2026-06-30 — slice `story-canvas-snap-guides` ✅
 - **Branch:** `claude/apps/android/story-canvas-snap-guides` (off `origin/main` @ `49c7576`).

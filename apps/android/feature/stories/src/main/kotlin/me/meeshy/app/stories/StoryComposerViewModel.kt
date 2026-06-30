@@ -307,6 +307,21 @@ class StoryComposerViewModel @Inject constructor(
      * selected slide; inert-with-a-warning once the slide is at the ≤5-element cap. The
      * clone/cap rules live in the pure [StorySlideDeck.duplicateTextElement].
      */
+    /**
+     * Restacks the on-canvas element [id] within its slide's paint order per [op]
+     * (back / one-step-back / one-step-forward / front). Selection and editing are
+     * untouched — you restack the element you are editing — and an inert move (unknown
+     * id, already at the extreme, single element) leaves the state instance unchanged
+     * so it never churns recomposition. The order rules live in the pure
+     * [StorySlideDeck.reorderTextElement].
+     */
+    fun onReorderTextElement(id: String, op: StoryZOrder) {
+        _state.update { state ->
+            val deck = state.deck.reorderTextElement(id, op)
+            if (deck === state.deck) state else state.copy(deck = deck)
+        }
+    }
+
     fun onDuplicateTextElement(id: String) {
         val before = _state.value.deck
         if (before.selectedSlide.elements.none { it.id == id }) return
