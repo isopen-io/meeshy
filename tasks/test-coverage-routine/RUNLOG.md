@@ -2524,5 +2524,6 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   - Error without message: `new Error(); err.message = ''` triggers `||` fallback in `error.message || 'Error uploading files'`
 - Reviewer: PASS (rounds: 1) — behavioral assertions via app.inject(); factory functions; non-tautological; 100%/100% coverage on targeted file
 - coverageThreshold: not ratcheted this run (production code touched; waiting for human merge)
-- Manifest ticked: routes/attachments/upload.ts ⚠ (pending PR #1068 human merge)
-- Commit: fb7ee62 (PR #1068 open — human review required before merge)
+- Manifest ticked: routes/attachments/upload.ts☑
+- coverageThreshold ratcheted: lines:82→86 / branches:75→79 / statements:81→85 / functions:78→82 (~9pp below CI bun estimate; local 95.54/88.85/94.76/91.7)
+- Commit: fb7ee62 (squash-merged PR #1068 → main 2026-06-30T~11:40Z)

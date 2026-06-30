@@ -127,7 +127,7 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/gateway/src/routes/attachments/metadata.ts`
 - [ ] `services/gateway/src/routes/attachments/translation.ts`
 - [ ] `services/gateway/src/routes/attachments/types.ts`
-- [ ] `services/gateway/src/routes/attachments/upload.ts`
+- [x] `services/gateway/src/routes/attachments/upload.ts`
 
 ## routes/auth  (2/7 have a test)
 

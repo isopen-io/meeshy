@@ -60,10 +60,10 @@
   "moduleFileExtensions": ["ts", "js", "json"],
   "coverageThreshold": {
     "global": {
-      "lines": 82,
-      "branches": 75,
-      "statements": 81,
-      "functions": 78
+      "lines": 86,
+      "branches": 79,
+      "statements": 85,
+      "functions": 82
     }
   }
 }
