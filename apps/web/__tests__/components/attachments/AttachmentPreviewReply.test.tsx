@@ -540,6 +540,76 @@ describe('AttachmentPreviewReply', () => {
       const textButton = screen.getByRole('button', { name: /ouvrir le fichier texte/i });
       expect(textButton).toHaveAttribute('tabindex', '0');
     });
+
+    it('opens image lightbox via Enter key (WCAG 2.1.1)', async () => {
+      const attachments = [
+        createMockAttachment({
+          mimeType: 'image/jpeg',
+          fileUrl: 'https://example.com/photo.jpg',
+        }),
+      ];
+
+      render(<AttachmentPreviewReply attachments={attachments} />);
+
+      const imageButton = screen.getByRole('button', { name: /ouvrir l'image/i });
+      fireEvent.keyDown(imageButton, { key: 'Enter' });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('image-lightbox')).toBeInTheDocument();
+      });
+    });
+
+    it('opens PDF lightbox via Space key (WCAG 2.1.1)', async () => {
+      const attachments = [
+        createMockAttachment({
+          mimeType: 'application/pdf',
+          fileName: 'doc.pdf',
+        }),
+      ];
+
+      render(<AttachmentPreviewReply attachments={attachments} />);
+
+      const pdfButton = screen.getByRole('button', { name: /ouvrir le pdf/i });
+      fireEvent.keyDown(pdfButton, { key: ' ' });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('mock-lightbox')).toBeInTheDocument();
+      });
+    });
+
+    it('opens text lightbox via Enter key (WCAG 2.1.1)', async () => {
+      const attachments = [
+        createMockAttachment({
+          mimeType: 'text/plain',
+          fileName: 'notes.txt',
+        }),
+      ];
+
+      render(<AttachmentPreviewReply attachments={attachments} />);
+
+      const textButton = screen.getByRole('button', { name: /ouvrir le fichier texte/i });
+      fireEvent.keyDown(textButton, { key: 'Enter' });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('mock-lightbox')).toBeInTheDocument();
+      });
+    });
+
+    it('ignores non-activation keys on interactive previews', () => {
+      const attachments = [
+        createMockAttachment({
+          mimeType: 'image/jpeg',
+          fileUrl: 'https://example.com/photo.jpg',
+        }),
+      ];
+
+      render(<AttachmentPreviewReply attachments={attachments} />);
+
+      const imageButton = screen.getByRole('button', { name: /ouvrir l'image/i });
+      fireEvent.keyDown(imageButton, { key: 'a' });
+
+      expect(screen.queryByTestId('image-lightbox')).not.toBeInTheDocument();
+    });
   });
 
   describe('Read-only Arrays', () => {

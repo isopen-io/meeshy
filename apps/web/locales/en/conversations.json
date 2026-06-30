@@ -524,7 +524,10 @@
       "add": "Add",
       "cancel": "Cancel",
       "inviting": "Inviting...",
-      "inviteButton": "Invite {count} user(s)"
+      "inviteButton": "Invite {count} user(s)",
+      "addUserAria": "Add {name}",
+      "selectedUserAria": "{name} already selected",
+      "removeUserAria": "Remove {name}"
     },
     "drawer": {
       "title": "Options",

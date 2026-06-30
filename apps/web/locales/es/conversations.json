@@ -549,7 +549,10 @@
       "add": "Añadir",
       "cancel": "Cancelar",
       "inviting": "Invitando...",
-      "inviteButton": "Invitar a {count} usuario(s)"
+      "inviteButton": "Invitar a {count} usuario(s)",
+      "addUserAria": "Añadir a {name}",
+      "selectedUserAria": "{name} ya seleccionado",
+      "removeUserAria": "Quitar a {name}"
     },
     "drawer": {
       "title": "Opciones",
