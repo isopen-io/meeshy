@@ -3179,7 +3179,7 @@ final class CallManagerNetworkMonitorSourceGuardTests: XCTestCase {
             XCTFail("networkMonitor.pathUpdateHandler not found in CallManager.swift"); return
         }
         // Scan forward far enough to cover the full handler block.
-        let endIdx = source.index(pathHandlerRange.lowerBound, offsetBy: 2000, limitedBy: source.endIndex) ?? source.endIndex
+        let endIdx = source.index(pathHandlerRange.lowerBound, offsetBy: 3000, limitedBy: source.endIndex) ?? source.endIndex
         let handlerBody = String(source[pathHandlerRange.lowerBound ..< endIdx])
 
         XCTAssertTrue(
