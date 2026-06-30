@@ -41,51 +41,54 @@ struct ContactCardView: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(String(localized: "contact-card.shared", defaultValue: "Contact partage", bundle: .main))
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.caption2.weight(.semibold))
                             .foregroundColor(Color(hex: accentColor).opacity(0.8))
                             .textCase(.uppercase)
                             .tracking(0.5)
 
                         Text(contact.fullName)
-                            .font(.system(size: 14, weight: .bold))
+                            .font(.subheadline.weight(.bold))
                             .foregroundColor(theme.textPrimary)
                             .lineLimit(1)
+                            .minimumScaleFactor(0.85)
                     }
 
                     Spacer()
 
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.caption.weight(.semibold))
                         .foregroundColor(theme.textMuted)
                 }
 
-                // Phone numbers
+                // Phone numbers — green is the canonical "call" affordance (semantic success token).
                 ForEach(contact.phoneNumbers, id: \.self) { phone in
                     HStack(spacing: 8) {
                         Image(systemName: "phone.fill")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(Color(hex: "2ECC71"))
+                            .font(.caption.weight(.medium))
+                            .foregroundColor(MeeshyColors.success)
                             .frame(width: 20)
 
                         Text(phone)
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.footnote.weight(.medium))
                             .foregroundColor(theme.textPrimary)
                             .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
                 }
 
-                // Emails
+                // Emails — blue is the canonical "message/info" affordance (semantic info token).
                 ForEach(contact.emails, id: \.self) { email in
                     HStack(spacing: 8) {
                         Image(systemName: "envelope.fill")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(Color(hex: "3498DB"))
+                            .font(.caption.weight(.medium))
+                            .foregroundColor(MeeshyColors.info)
                             .frame(width: 20)
 
                         Text(email)
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.footnote.weight(.medium))
                             .foregroundColor(theme.textPrimary)
                             .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
                 }
             }
