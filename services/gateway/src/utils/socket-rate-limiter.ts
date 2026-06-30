@@ -83,6 +83,13 @@ export const SOCKET_RATE_LIMITS = {
     windowMs: 60000, // 1 minute — mirrors add limit
     keyPrefix: 'socket:reaction:remove'
   },
+  REACTION_SYNC: {
+    maxRequests: 120,
+    windowMs: 60000, // 1 minute — read-only, triggered on conversation open; must not be
+    // blocked by the stricter REACTION_ADD write limit or users can't view reactions after
+    // hitting the emoji-send budget.
+    keyPrefix: 'socket:reaction:sync'
+  },
   SOCKET_AUTH: {
     maxRequests: 10,
     windowMs: 60000, // 1 minute — prevents credential stuffing via WS

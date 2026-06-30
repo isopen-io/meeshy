@@ -169,7 +169,6 @@ final class PiPCallController: NSObject, PiPCallProviding {
         onRestoreUI = nil
         onStop = nil
     }
-
 }
 
 // MARK: - AVPictureInPictureControllerDelegate
@@ -208,7 +207,7 @@ extension PiPCallController: AVPictureInPictureControllerDelegate {
 
 // MARK: - Renderer attach/detach (un seul chemin lourd à la fois)
 
-private extension PiPCallController {
+extension PiPCallController {
 
     func attachRenderer() {
         guard renderer == nil, let remoteTrack else { return }

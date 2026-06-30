@@ -188,7 +188,7 @@ export class AuthHandler {
 
     try {
       if (user.id && typeof user.id === 'string') {
-        await Promise.all([
+        await Promise.allSettled([
           socket.join(ROOMS.user(user.id)),
           socket.join(ROOMS.feed(user.id)),
         ]);
@@ -438,8 +438,12 @@ export class AuthHandler {
         });
       }
 
-      await Promise.all(conversations.map(conv => socket.join(ROOMS.conversation(conv.conversationId))));
-      logger.debug('user joined conversation rooms', { userId, count: conversations.length });
+      const joinResults = await Promise.allSettled(conversations.map(conv => socket.join(ROOMS.conversation(conv.conversationId))));
+      const failedJoins = joinResults.filter(r => r.status === 'rejected');
+      if (failedJoins.length > 0) {
+        logger.warn('some conversation room joins failed', { userId, failed: failedJoins.length, total: conversations.length });
+      }
+      logger.debug('user joined conversation rooms', { userId, count: conversations.length - failedJoins.length });
     } catch (error) {
       logger.error('error joining conversations for user', { userId, error });
     }

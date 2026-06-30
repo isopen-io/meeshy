@@ -128,13 +128,20 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 ## Next slice (pick one for the next run)
 
 Ordered by value:
-1. ~~**Canvas toolbar/FAB**~~ ✅ shipped as `story-composer-band` (this run) — the two-FAB
+0. ~~**Snap-to-guide + out-of-bounds warning**~~ ✅ shipped as `story-canvas-snap-guides` (this run) —
+   pure `StorySnapResolver` (per-axis nearest-guide snap + safe-zone verdict) reused through the existing
+   element-drag path, with an accent guide-line overlay + warning border. See run log.
+1. **Canvas toolbar/FAB** — the bottom-band toolbar (Contenu/Effets) grouping add-text / add-media;
+   glue-heavy, keep any mode decision in a pure helper or the VM.
+2. ~~**Per-element transform handles**~~ ✅ shipped as `story-text-element-transform` (this run) — but
+   as a **direct pinch/rotate gesture** (more natural than discrete chips, per CLAUDE.md UX rule).
+3. ~~**Canvas toolbar/FAB**~~ ✅ shipped as `story-composer-band` (this run) — the two-FAB
    (Contenu/Effets) bottom band, the pure value-type port of iOS `BandStateMachine`. Pure
    `ComposerBandState` (Hidden | Tiles(category)) + `tapFab`/`swipeDown`/`swipeHorizontal` owns the
    navigation; Contenu drawer = Texte/Médias tiles, Effets drawer = visibility chips. **Next refinement:**
    real **Effets tiles** (filters / drawing / timeline) once those features land — currently Effets only
    surfaces visibility. Then the on-canvas **sticker / drawing** elements.
-2. ~~**Per-element transform handles**~~ ✅ shipped as `story-text-element-transform` — as a
+4. ~~**Per-element transform handles**~~ ✅ shipped as `story-text-element-transform` — as a
    **direct pinch/rotate gesture** (more natural than discrete chips, per CLAUDE.md UX rule).
    `StoryTextElement.scale`/`rotationDeg` + pure `transformed()` + `transformTextElement` reducer +
    `onTextElementTransform` VM intent + `graphicsLayer`/`detectTransformGestures` glue. Wire carries
@@ -144,7 +151,7 @@ Ordered by value:
    `onDuplicateTextElement` selects the copy + warns at the cap; a `ContentCopy` handle in the floating
    `TextStyleToolbar`. **Next composer-richness refinement:** a unified multi-element context menu +
    z-order **reorder** (per-element delete already exists).
-3. After Stories richness is sufficient, advance to the **Calls** area
+5. After Stories richness is sufficient, advance to the **Calls** area
    (`feature-parity.md` §"Calls").
 
 (`story-floating-toolbar` ✅ shipped 2026-06-29 — this run; **the style toolbar now floats in-place**
@@ -286,6 +293,52 @@ After Stories richness is sufficient, advance to the **Calls** area
 
 ## Run log
 
+### 2026-06-30 — slice `story-canvas-snap-guides` ✅
+- **Branch:** `claude/apps/android/story-canvas-snap-guides` (off `origin/main` @ `49c7576`).
+- **Housekeeping (step 0):** no open `claude/apps/android/*` PR (the prior slice's PR #1045 is **merged**;
+  `list_pull_requests state=open` shows only dependabot/non-android `claude/*` branches). ⚠ Pitfall hit &
+  fixed: `git pull origin main` failed (`Need to specify how to reconcile divergent branches` — no pull
+  strategy configured), and the local `main` was **stale** (missing PR #1045). A branch cut from it lost
+  the `scale`/`rotation` fields. Recovered with `git fetch origin main && git checkout -B <slice> origin/main`.
+  **Lesson recorded in NOTES.md:** always rebase the slice onto `origin/main`, never local `main`.
+- **What:** **snap-to-guide + out-of-bounds (safe-zone) warning** for on-canvas element dragging
+  (feature-parity §Stories "Frosted-glass … safe-zone overlay; snap-to-guide + out-of-bounds warning").
+  Dragging a text element now magnetically locks each axis onto the nearest alignment guide (rule-of-thirds
+  + centre) and flashes an out-of-bounds border when the centre drifts into the edge margin. A natural
+  magnetic-alignment gesture — surpasses iOS, which lacks a per-axis guide overlay here.
+- **Design (SDK purity, single source of truth):** the snap math lives in **one** pure place,
+  `StorySnapResolver.resolve(x, y, verticalGuides, horizontalGuides, threshold, safeZoneInset)` →
+  `SnapResult(x, y, verticalGuide, horizontalGuide, withinSafeZone)`. Each axis snaps **independently**
+  (nearest in-range guide within `SNAP_THRESHOLD=0.025`; else the clamped candidate); non-finite →
+  canvas centre; out-of-canvas → clamped `0f..1f`; `withinSafeZone` uses `SAFE_ZONE_INSET=0.06`. **Reuse,
+  no new reducer:** `onTextElementMoved` now runs its resulting centre through the resolver and moves the
+  element by the snap-**adjusted** delta via the existing `StorySlideDeck.moveTextElement` path, exposing
+  the live guides + verdict as transient `StoryComposerUiState.snapFeedback` (immutable `SnapFeedback`),
+  cleared by the new `onTextElementDragEnd()` on lift. The Composable stays glue: a `Canvas` draws the
+  active guide line(s) (accent `primary`) + an `error` warning border, and a non-consuming `Final`-pass
+  `awaitEachGesture` next to the transform detector signals lift.
+- **Changed (production — all `:feature:stories`, `apps/android` only):**
+  - `StorySnapResolver.kt` (new) — pure `SnapResult` + `StorySnapResolver` (guides/threshold/inset consts,
+    per-axis `snapAxis`, `withinSafeZone`, non-finite/clamp handling).
+  - `StoryComposerViewModel.kt` — `SnapFeedback` immutable type, `StoryComposerUiState.snapFeedback`,
+    snap-aware `onTextElementMoved`, new `onTextElementDragEnd`.
+  - `StoryComposerScreen.kt` — guide-line `Canvas` overlay, safe-zone warning border, `onDragEnd` wiring +
+    `Final`-pass drag-end detector (glue).
+- **Tests (TDD red → green, behaviour via public API): +25**
+  - `StorySnapResolverTest` (+18): free drag; between-guides-no-snap; centre snap (both axes); thirds snap;
+    independent axes; threshold inclusive boundary; just-past-threshold free; non-positive threshold off;
+    empty guides; out-of-range guides filtered; only-out-of-range no-snap; out-of-canvas clamp; non-finite →
+    centre; safe-zone inclusive inset; out-of-bounds left/right/bottom.
+  - `StoryComposerViewModelTest` (+7): centre-snap holds element + reports guides; past-threshold free no
+    guides; edge drag → out-of-safe-zone; unknown-id inert (no feedback); existing clamp test preserved;
+    drag-end clears feedback keeps placement; drag-end inert when no feedback (same-instance).
+  - **Branch sweep:** every arm of `snapAxis` (threshold≤0 / empty / nearest-within / nearest-beyond),
+    `clampCoord` (finite / non-finite), `withinSafeZone` (in / out per edge), and the VM intents (known /
+    unknown id, feedback present / absent) is exercised.
+- **Verification:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL** (assembleDebug APK + all JVM
+  unit tests; `:feature:stories` 494 tests green). Diff = `apps/android` only (3 source + 2 test + tracking).
+  **Reviewer rubric: PASS** — pure logic ≥90% branch, behaviour-only tests, no floor lowered, reuse over new
+  reducer, accent-coherent guides, natural gesture, no dead-end.
 ### 2026-06-30 — slice `story-text-element-duplicate` ✅
 - **Branch:** `claude/apps/android/story-text-element-duplicate` (off `origin/main` @ `f6af058`).
 - **Housekeeping (step 0):** no open `claude/apps/android/*` PR (`list_pull_requests state=open
