@@ -128,8 +128,12 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 ## Next slice (pick one for the next run)
 
 Ordered by value:
-1. **Canvas toolbar/FAB** — the bottom-band toolbar (Contenu/Effets) grouping add-text / add-media;
-   glue-heavy, keep any mode decision in a pure helper or the VM.
+1. ~~**Canvas toolbar/FAB**~~ ✅ shipped as `story-composer-band` (this run) — the two-FAB
+   (Contenu/Effets) bottom band, the pure value-type port of iOS `BandStateMachine`. Pure
+   `ComposerBandState` (Hidden | Tiles(category)) + `tapFab`/`swipeDown`/`swipeHorizontal` owns the
+   navigation; Contenu drawer = Texte/Médias tiles, Effets drawer = visibility chips. **Next refinement:**
+   real **Effets tiles** (filters / drawing / timeline) once those features land — currently Effets only
+   surfaces visibility. Then the on-canvas **sticker / drawing** elements.
 2. ~~**Per-element transform handles**~~ ✅ shipped as `story-text-element-transform` (this run) — but
    as a **direct pinch/rotate gesture** (more natural than discrete chips, per CLAUDE.md UX rule).
    `StoryTextElement.scale`/`rotationDeg` + pure `transformed()` + `transformTextElement` reducer +
@@ -276,6 +280,57 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-30 — slice `story-composer-band` ✅
+- **Branch:** `claude/apps/android/story-composer-band` (off `origin/main` @ `4dee364`).
+- **Housekeeping (step 0):** no open `claude/apps/android/*` PR (`list_pull_requests state=open
+  head=isopen-io:claude/apps/android` → `[]`; every prior slice already squash-merged). Branched clean
+  off the freshened `main`.
+- **What:** **the composer's FAB + bottom-band toolbar** ("Next" #1, feature-parity §"9:16 canvas …
+  FAB + bottom-band toolbar (Contenu/Effets)"). The flat add-text / add-media / visibility buttons are
+  replaced by a two-FAB (Contenu / Effets) bottom band that animates a tools drawer in above the FABs —
+  the **pure value-type port of iOS `BandStateMachine`** (audit part-21: "Excellent design; carry it
+  over verbatim … ideal candidate for shared unit-tested code").
+- **Design (single source of truth, SDK purity):** all band navigation lives in **one pure place**,
+  `ComposerBandState` (`:feature:stories` — composer **product** state, not an SDK atom): a sealed
+  `Hidden | Tiles(BandCategory)` with `BandCategory {CONTENU, EFFETS}` (+ `swapped`) and the total
+  transitions `tapFab(category)` (open / switch / toggle-close), `swipeDown()` (dismiss), and
+  `swipeHorizontal()` (swap, inert while hidden); `activeCategory`/`isVisible` derive the render.
+  `ComposerContentTile {TEXT, MEDIA}` + `ComposerBand.contentTiles` enumerate the Contenu tiles. The
+  VM holds `band` and applies the pure transitions (`onBandFabTap`/`onBandDismiss`/`onBandSwapCategory`);
+  the Composable is glue (two `ExtendedFloatingActionButton`s, an `AnimatedVisibility` drawer showing
+  Contenu tiles → existing `onAddTextElement` / system picker, or the Effets `VisibilityRow`, with
+  swipe-down-to-dismiss + swipe-horizontal-to-swap `detectVerticalDragGestures`/`detectHorizontalDrag`).
+- **Added/changed (production, `apps/android` only — all `:feature:stories`):**
+  - `ComposerBandState.kt` (new) — `BandCategory` (+`swapped`), `ComposerContentTile` (+`category`),
+    sealed `ComposerBandState` (`Hidden`/`Tiles` + `activeCategory`/`isVisible`/`tapFab`/`swipeDown`/
+    `swipeHorizontal`), `ComposerBand.contentTiles`.
+  - `StoryComposerViewModel.kt` — `StoryComposerUiState.band: ComposerBandState = Hidden`;
+    `onBandFabTap`/`onBandDismiss`/`onBandSwapCategory` intents (each a one-line pure-transition copy).
+  - `StoryComposerScreen.kt` — the flat add-text/add-media/visibility block replaced by a glue
+    `ComposerControlsLayer` (FAB row + animated drawer), `BandFab`, `ContentTilesRow`, `BandTile`;
+    `VisibilityRow` gains a `modifier` param. Removed the now-unused fixed buttons.
+  - `strings.xml` (+ fr/es/pt) — 3 new strings (Contenu / Effets / close-tools content desc).
+- **Tests (TDD red → green, behaviour via the public API): +18.**
+  - `ComposerBandStateTest` (new, +11): `swapped` round-trip; content-tile category; hidden has no
+    active category / not visible; open band exposes category + visible; `tapFab` open-from-hidden /
+    toggle-close-same / switch-other (both categories); `swipeDown` from any state incl. already-hidden;
+    `swipeHorizontal` swap (both) + inert-while-hidden; `contentTiles` order.
+  - `StoryComposerViewModelTest` (+7): band starts hidden; FAB opens category; same-FAB toggle-closes;
+    other-FAB switches; dismiss hides; swap flips Contenu→Effets; swap inert while hidden.
+- **Branch sweep:** every arm of `tapFab` (same→Hidden, other→switch, hidden→open), `swipeHorizontal`
+  (Tiles→swap, Hidden→inert), `swipeDown`, `activeCategory`/`isVisible` (both variants), `swapped`
+  (both) and `category` are exercised. ≥90% branch + instruction on the new pure logic.
+- **Verification:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL** (`assembleDebug` APK + all
+  JVM unit tests, 836 tasks). `ComposerBandStateTest` 11/11, `StoryComposerViewModelTest` (band) 7/7.
+  Diff = `apps/android` only (3 prod Kotlin incl. 1 new, 4 strings, 2 test incl. 1 new, tracking docs).
+- **Reviewer verdict:** **PASS** — scope `apps/android` only, no secrets / `local.properties` gitignored;
+  behavioural non-tautological tests through the public API (no floor lowered); SDK purity (pure band
+  state is composer **product** state in `:feature:stories`, glue in the Composable); single source of
+  truth (all band navigation in one pure value type); UDF (VM + immutable `StateFlow`, transitions pure);
+  colour/UX coherence (FABs use `MaterialTheme` primary / secondaryContainer, natural tap + swipe
+  gestures, both categories carry real content so no dead-end drawer, dismissal returns to FAB-only).
+- **Follow-ups:** real Effets tiles (filters / drawing / timeline); on-canvas sticker / drawing elements.
 
 ### 2026-06-29 — slice `story-text-element-transform` ✅
 - **Branch:** `claude/apps/android/story-text-element-transform` (off `origin/main` @ `c3963d5`).
