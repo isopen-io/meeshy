@@ -59,7 +59,11 @@ struct MentionSuggestionPanel: View {
             }
         }
         .frame(maxHeight: 200)
-        .background(.ultraThinMaterial)
+        // iOS 26 Liquid Glass surface for the floating autocomplete strip above the
+        // composer (SDK Compatibility wrapper owns the gating + the
+        // `.ultraThinMaterial` fallback). Content-agnostic, so no tint — the panel
+        // reads as native glass on iOS 26+ and as a blurred material before.
+        .adaptiveGlass(in: Rectangle())
     }
 
     /// Three shimmering placeholder rows shown while waiting for API results.

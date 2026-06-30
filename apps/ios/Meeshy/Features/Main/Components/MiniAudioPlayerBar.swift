@@ -178,7 +178,11 @@ struct MiniAudioPlayerBar: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.ultraThinMaterial)
+        // iOS 26 Liquid Glass capsule (SDK Compatibility wrapper owns the gating +
+        // the `.ultraThinMaterial` fallback). Mirrors `FloatingCallPillView` — a
+        // neutral floating capsule reads as native glass on iOS 26+ and degrades
+        // to a blurred material with a hairline edge before. No tint: content-agnostic.
+        .adaptiveGlass(in: Capsule())
         .clipShape(Capsule())
         .padding(.horizontal, 12)
         .contentShape(Rectangle())
