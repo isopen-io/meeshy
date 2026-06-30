@@ -134,11 +134,16 @@ Ordered by value:
    navigation; Contenu drawer = Texte/Médias tiles, Effets drawer = visibility chips. **Next refinement:**
    real **Effets tiles** (filters / drawing / timeline) once those features land — currently Effets only
    surfaces visibility. Then the on-canvas **sticker / drawing** elements.
-2. ~~**Per-element transform handles**~~ ✅ shipped as `story-text-element-transform` (this run) — but
-   as a **direct pinch/rotate gesture** (more natural than discrete chips, per CLAUDE.md UX rule).
+2. ~~**Per-element transform handles**~~ ✅ shipped as `story-text-element-transform` — as a
+   **direct pinch/rotate gesture** (more natural than discrete chips, per CLAUDE.md UX rule).
    `StoryTextElement.scale`/`rotationDeg` + pure `transformed()` + `transformTextElement` reducer +
    `onTextElementTransform` VM intent + `graphicsLayer`/`detectTransformGestures` glue. Wire carries
-   `scale`/`rotation`. Next refinement (optional): per-element delete/duplicate handle **chips**.
+   `scale`/`rotation`. **Per-element duplicate** ✅ shipped as `story-text-element-duplicate` (this run) —
+   pure `StorySlideDeck.duplicateTextElement` clones every styled field as a fresh id just after the
+   source on its slide, nudged by a small clamped offset, inert on unknown/collision/cap;
+   `onDuplicateTextElement` selects the copy + warns at the cap; a `ContentCopy` handle in the floating
+   `TextStyleToolbar`. **Next composer-richness refinement:** a unified multi-element context menu +
+   z-order **reorder** (per-element delete already exists).
 3. After Stories richness is sufficient, advance to the **Calls** area
    (`feature-parity.md` §"Calls").
 
@@ -280,6 +285,57 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-30 — slice `story-text-element-duplicate` ✅
+- **Branch:** `claude/apps/android/story-text-element-duplicate` (off `origin/main` @ `f6af058`).
+- **Housekeeping (step 0):** no open `claude/apps/android/*` PR (`list_pull_requests state=open
+  head=isopen-io:claude/apps/android` → `[]`; every prior slice already squash-merged, incl.
+  `story-composer-band` as #1052). Branched clean off the freshened `main`.
+- **What:** **per-element duplicate** (named follow-up of `story-text-element-transform`;
+  feature-parity §"Multi-element context menu (edit, duplicate, reorder, delete)"). A selected
+  on-canvas text element gains a duplicate handle in the floating style toolbar — one tap clones it,
+  offset just clear of the original, and selects the copy so the user can immediately move/style it.
+  No new gateway-wire model: a cloned element serialises through the existing `toTextObject`.
+- **Design (single source of truth, SDK purity):** the clone/cap/offset rules live in **one pure
+  place**, `StorySlideDeck.duplicateTextElement(sourceId, newId, dx, dy)` (`:feature:stories`, composer
+  **product** state — not an SDK atom): finds the slide holding the source, inserts a `copy(id=newId)`
+  (carrying every styled field) **immediately after it**, nudged by `dx/dy` and clamped into the canvas
+  via the already-tested `StoryTextElement.nudged`, and is inert (same instance) on an unknown source
+  id, a colliding new id, or a slide already at the `MAX_TEXT_ELEMENTS_PER_SLIDE` cap — so the
+  ≤5-per-slide invariant holds in one place. The deck doesn't own selection; the VM does. The VM intent
+  `onDuplicateTextElement(id)` mints the id (impure edge), warns-without-adding at the cap (mirrors
+  `onAddTextElement`), applies the pure reducer, and selects the copy. The Composable stays glue (a
+  `ContentCopy` `IconButton` in the `TextStyleToolbar`).
+- **Added/changed (production, `apps/android` only — all `:feature:stories`):**
+  - `StorySlideDeck.kt` — new pure `duplicateTextElement(sourceId, newId, dx, dy)` (collision/unknown/cap
+    guards + after-source insertion + clamped offset).
+  - `StoryComposerViewModel.kt` — `onDuplicateTextElement(id)` intent (selected-slide guard → cap warning
+    → mint id → pure duplicate → select copy); new `DUPLICATE_ELEMENT_OFFSET = 0.04f` const.
+  - `StoryComposerScreen.kt` — `TextStyleToolbar` gains an `onDuplicate` slot rendered as a `ContentCopy`
+    handle next to the alignment toggles; wired to `onDuplicateTextElement`. (Glue — JVM-exempt.)
+  - `strings.xml` (+ fr/es/pt) — 1 new string (duplicate-element content description).
+- **Tests (TDD red → green, behaviour via the public API): +11.**
+  - `StorySlideDeckTextElementsTest` (+7): clones content with the new id right after the source;
+    copies every styled field (text/style/colour/align/scale/rotation); offsets + clamps the clone into
+    the canvas; duplicates an element on a **non-selected** slide (selection untouched); inert on unknown
+    source id; inert on colliding new id; inert at the per-slide cap.
+  - `StoryComposerViewModelTest` (+4): clones the edited element, offsets it, and selects the copy;
+    carries the source style onto the copy; at the cap surfaces a warning and adds nothing; unknown id
+    is inert and selects nothing new.
+- **Branch sweep:** every arm of `duplicateTextElement` (collision-inert, unknown-inert, cap-inert,
+  success-insert-after) and `onDuplicateTextElement` (not-on-slide-inert, cap-warning, success-select)
+  is exercised. ≥90% branch + instruction on the new pure logic.
+- **Verification:** `./apps/android/meeshy.sh test` → **BUILD SUCCESSFUL** (all JVM unit tests;
+  `StorySlideDeckTextElementsTest` 27/27, `StoryComposerViewModelTest` 102/102, 0 failures);
+  `./apps/android/meeshy.sh build` → **BUILD SUCCESSFUL** (`assembleDebug` APK). Diff = `apps/android`
+  only (3 prod Kotlin, 4 strings, 2 test, tracking docs).
+- **Reviewer verdict:** **PASS** — scope `apps/android` only, no secrets / `local.properties` gitignored;
+  behavioural non-tautological tests through the public API (no floor lowered); SDK purity (clone/cap
+  rules pure in `:feature:stories`, glue in the Composable); single source of truth (clone + clamp each
+  in one place, reuses `nudged`); UDF (VM + immutable `StateFlow`, transition pure); edge cases
+  (unknown/collision/cap/non-selected-slide/offset-clamp); colour/UX coherence (duplicate handle uses
+  `MaterialTheme` onSurfaceVariant tint, natural placement beside the align toggles, copy auto-selected).
+- **Follow-ups:** unified multi-element context menu + z-order reorder; real Effets tiles; then Calls.
 
 ### 2026-06-30 — slice `story-composer-band` ✅
 - **Branch:** `claude/apps/android/story-composer-band` (off `origin/main` @ `4dee364`).

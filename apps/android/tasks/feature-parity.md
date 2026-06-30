@@ -574,7 +574,14 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] 8 photo filters (vintage/bw/warm/cool/dramatic/vivid/fade/chrome) with intensity
 - [ ] Frosted-glass text backdrops; safe-zone overlay; snap-to-guide + out-of-bounds warning
 - [ ] Z-order management (front/back, forward/backward) persisted for WYSIWYG playback
-- [ ] Multi-element context menu (edit, duplicate, reorder, delete)
+- [~] Multi-element context menu (edit, duplicate, reorder, delete) — **edit** (tap-to-select +
+      caption/element routing), **delete** (per-element remove handle), and **duplicate**
+      (`story-text-element-duplicate`) done. Duplicate: pure `StorySlideDeck.duplicateTextElement`
+      clones every styled field as a fresh id right after the source on its slide, nudged by a small
+      normalised offset (clamped into the canvas) so the copy is visible, inert when the source id is
+      unknown / the new id collides / the slide is at the ≤5 cap; `StoryComposerViewModel.onDuplicateTextElement`
+      mints the id, selects the copy, and warns-without-adding at the cap; a duplicate `ContentCopy`
+      handle sits in the floating `TextStyleToolbar`. Pending: reorder (z-order), a unified context menu.
 - [ ] Per-element + per-slide duration; background designation toggle (1 visual + 1 audio/slide)
 - [ ] Repost flow: clone source story + locked attribution badge
 - [ ] Draft save/restore with media persistence + lost-media detection / re-capture prompt
