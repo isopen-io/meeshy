@@ -127,13 +127,16 @@ struct ReplyThreadOverlay: View {
             }
         }
         .frame(maxHeight: maxHeight)
-        .background(
+        // Liquid Glass iOS 26 natif sur le card flottant (chrome au-dessus du contenu) ;
+        // teinte d'accent conservee + liseré de marque sur le verre. Repli < iOS 26 :
+        // `.ultraThinMaterial` teinté + hairline via l'atome (cf. 51i/68i).
+        .adaptiveGlass(
+            in: RoundedRectangle(cornerRadius: 18, style: .continuous),
+            tint: Color(hex: accentColor).opacity(0.18)
+        )
+        .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(theme.surfaceGradient(tint: accentColor))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(theme.border(tint: accentColor), lineWidth: 1)
-                )
+                .stroke(theme.border(tint: accentColor), lineWidth: 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .padding(.horizontal, 16)
@@ -146,6 +149,7 @@ struct ReplyThreadOverlay: View {
             .frame(width: 36, height: 4)
             .padding(.top, 10)
             .padding(.bottom, 4)
+            .accessibilityHidden(true)
     }
 
     private var header: some View {
@@ -172,6 +176,7 @@ struct ReplyThreadOverlay: View {
                     .font(.title3)
                     .foregroundColor(theme.textMuted)
             }
+            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -366,6 +371,7 @@ struct ReplyThreadOverlay: View {
         }
         .padding(16)
         .shimmer()
+        .accessibilityHidden(true)
     }
 
     // MARK: - Actions
