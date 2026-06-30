@@ -2488,4 +2488,4 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Reviewer: PASS (rounds: 1) — all behavioral assertions via HTTP inject(); factory functions; no mutable shared state; no production code changed; all 424 suites pass
 - coverageThreshold ratcheted: lines:79→82 / branches:72→75 / statements:78→81 / functions:77→78 (~9pp below CI bun estimate)
 - Manifest ticked: routes/auth/login.ts☑ routes/auth/register.ts☑
-- Commit: (pending PR → main)
+- Commit: d10da72 (squash-merged PR #1056 → main 2026-06-30T07:00Z)
