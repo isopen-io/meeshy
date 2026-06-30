@@ -1055,6 +1055,9 @@ public protocol MessageSocketProviding: Sendable {
     var audioTranslationFailed: PassthroughSubject<AudioTranslationFailedEvent, Never> { get }
     var transcriptionFailed: PassthroughSubject<TranscriptionFailedEvent, Never> { get }
     var didReconnect: PassthroughSubject<Void, Never> { get }
+    /// Fires after each heartbeat round-trip with the measured RTT in milliseconds.
+    /// Subscribers can use this to display connection quality indicators.
+    var connectionRTT: PassthroughSubject<Double, Never> { get }
     var notificationReceived: PassthroughSubject<SocketNotificationEvent, Never> { get }
     /// Fired when the gateway emits SERVER_EVENTS.CONVERSATION_NEW (a fresh
     /// conversation was created — the user is now a participant). Replaces
@@ -1281,6 +1284,9 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // Combine publisher — reconnection (fires after successful reconnect)
     public let didReconnect = PassthroughSubject<Void, Never>()
+
+    // Combine publisher — heartbeat RTT (fires after each heartbeat:ack with ms value)
+    public let connectionRTT = PassthroughSubject<Double, Never>()
 
     // Combine publishers — notifications
     public let notificationReceived = PassthroughSubject<SocketNotificationEvent, Never>()
@@ -1621,7 +1627,10 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         heartbeatTimer?.invalidate()
         heartbeatTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
             guard let self else { return }
-            self.socket?.emit("heartbeat")
+            // Include clientTime so the gateway can compute round-trip latency
+            // and return it in heartbeat:ack for connection quality monitoring.
+            let clientTimeMs = Int64(Date().timeIntervalSince1970 * 1000)
+            self.socket?.emit("heartbeat", ["clientTime": clientTimeMs])
         }
     }
 
@@ -2383,6 +2392,30 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             // trigger a silent token refresh, and even that preserves the
             // session on failure.
             Logger.socket.error("MessageSocket error: \(data)")
+        }
+
+        // --- Heartbeat ACK — measure RTT ---
+        socket.on("heartbeat:ack") { [weak self] data, _ in
+            guard let self else { return }
+            guard let payload = data.first as? [String: Any],
+                  let serverTimeStr = payload["serverTime"] as? String else { return }
+            // Compute RTT from latencyHintMs when available (server computed it from
+            // clientTime we sent). Fall back to wall-clock if the field is absent.
+            let rtt: Double
+            if let hint = payload["latencyHintMs"] as? Double {
+                rtt = hint * 2 // hint is one-way; double for round-trip
+            } else {
+                // No server-computed hint: approximate from current wall time vs serverTime.
+                let isoFormatter = ISO8601DateFormatter()
+                isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                if let serverDate = isoFormatter.date(from: serverTimeStr) {
+                    rtt = abs(Date().timeIntervalSince(serverDate)) * 1000 // ms
+                } else {
+                    return
+                }
+            }
+            Logger.socket.debug("heartbeat:ack RTT=\(rtt, format: .fixed(precision: 1))ms serverTime=\(serverTimeStr, privacy: .public)")
+            self.connectionRTT.send(rtt)
         }
 
         // --- Message events ---
