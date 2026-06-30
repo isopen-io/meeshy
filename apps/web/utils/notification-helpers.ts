@@ -11,6 +11,7 @@ import {
   type NotificationIcon
 } from '@/types/notification';
 import { getUserDisplayName } from './user-display-name';
+import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
 
 // Type pour la fonction de traduction
 type TranslateFunction = (key: string, params?: Record<string, string>) => string;
@@ -214,18 +215,20 @@ export function formatNotificationTimeAgo(
   const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
   if (isNaN(date.getTime())) return '';
 
-  const diffMinutes = Math.floor((Date.now() - date.getTime()) / (1000 * 60));
+  const bucket = classifyRelativeTime(date.getTime(), Date.now());
 
-  if (diffMinutes < 1) return t('timeAgo.now');
-  if (diffMinutes < 60) return t('timeAgo.minute').replace('{count}', String(diffMinutes));
-
-  const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) return t('timeAgo.hour').replace('{count}', String(diffHours));
-
-  const diffDays = Math.floor(diffHours / 24);
-  if (diffDays < 7) return t('timeAgo.day').replace('{count}', String(diffDays));
-
-  return date.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
+  switch (bucket.unit) {
+    case 'now':
+      return t('timeAgo.now');
+    case 'minutes':
+      return t('timeAgo.minute').replace('{count}', String(bucket.value));
+    case 'hours':
+      return t('timeAgo.hour').replace('{count}', String(bucket.value));
+    case 'days':
+      return t('timeAgo.day').replace('{count}', String(bucket.value));
+    case 'beyond':
+      return date.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
+  }
 }
 
 /**

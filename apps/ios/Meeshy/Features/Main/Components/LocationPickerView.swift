@@ -159,11 +159,8 @@ struct LocationPickerView: View {
                 }
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(.ultraThinMaterial)
-                .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
-        )
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 12), tint: Color(hex: accentColor).opacity(0.12))
+        .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
         .padding(.horizontal, 16)
     }
 

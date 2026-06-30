@@ -178,7 +178,11 @@ struct MiniAudioPlayerBar: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.ultraThinMaterial)
+        // iOS 26 Liquid Glass capsule — the SDK Compatibility wrapper owns the
+        // gating + the `.ultraThinMaterial` fallback. Inner controls stay as
+        // vibrancy fills ON the glass (Apple HIG: don't nest glass in glass).
+        // Same atom + pattern as the floating call pill.
+        .adaptiveGlass(in: Capsule())
         .clipShape(Capsule())
         .padding(.horizontal, 12)
         .contentShape(Rectangle())

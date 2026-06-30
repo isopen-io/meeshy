@@ -73,10 +73,12 @@ struct MentionSuggestionPanel: View {
         }
         .frame(maxHeight: 200)
         .clipShape(panelShape)
-        .adaptiveGlass(in: panelShape)
+        .adaptiveGlass(in: Rectangle(), tint: Color(hex: accentColor).opacity(0.14))
     }
 
     /// Three shimmering placeholder rows shown while waiting for API results.
+    /// Decorative — hidden from VoiceOver so the rotor never stops on empty
+    /// shimmer shapes while results stream in.
     private var mentionSkeletonRows: some View {
         VStack(spacing: 0) {
             ForEach(0..<3, id: \.self) { _ in

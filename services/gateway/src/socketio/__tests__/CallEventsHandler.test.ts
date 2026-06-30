@@ -132,6 +132,7 @@ jest.mock('@meeshy/shared/types/video-call', () => ({
     FOREGROUNDED: 'call:foregrounded',
     SCREEN_CAPTURE_DETECTED: 'call:screen-capture-detected',
     SCREEN_CAPTURE_ALERT: 'call:screen-capture-alert',
+    ANALYTICS: 'call:analytics',
   },
   CALL_ERROR_CODES: {
     NOT_AUTHENTICATED: 'NOT_AUTHENTICATED',
@@ -3219,6 +3220,53 @@ describe('CallEventsHandler', () => {
         participantId: PARTICIPANT_ID,
         isCapturing: false,
       });
+    });
+  });
+
+  // ── call:analytics ───────────────────────────────────────────────────────
+
+  describe('call:analytics', () => {
+    const validAnalyticsData = {
+      callId: CALL_ID,
+      setupTimeMs: 1250,
+      durationSeconds: 65.4,
+      reconnectionCount: 0,
+      networkTransitions: 1,
+      averageRtt: 42.5,
+      averagePacketLoss: 0.3,
+      maxPacketLoss: 2.1,
+      codec: 'opus',
+      effectsUsed: [],
+      filtersUsed: false,
+      transcriptionUsed: false,
+      qualityDistribution: { excellent: 0.9, good: 0.1, fair: 0.0, poor: 0.0 },
+      platform: 'ios',
+      deviceModel: 'iPhone',
+      isVideo: false,
+      endReason: 'local',
+    };
+
+    it('returns early when no userId', async () => {
+      const { socket, getUserId } = setupWithSocket();
+      getUserId.mockReturnValue(undefined);
+      await socket._trigger('call:analytics', validAnalyticsData);
+      // Fire-and-forget handler — no side effects on unauthenticated socket.
+      expect(socket.emit).not.toHaveBeenCalled();
+    });
+
+    it('returns early when validation fails', async () => {
+      const { socket } = setupWithSocket();
+      mockValidateSocketEvent.mockReturnValue({ success: false });
+      await socket._trigger('call:analytics', { callId: 'bad' });
+      expect(socket.emit).not.toHaveBeenCalled();
+    });
+
+    it('does not emit any socket event on success (fire-and-forget)', async () => {
+      const { socket } = setupWithSocket();
+      await socket._trigger('call:analytics', validAnalyticsData);
+      // analytics is log-only — no response emitted back to client
+      expect(socket.emit).not.toHaveBeenCalled();
+      expect(socket.to).not.toHaveBeenCalled();
     });
   });
 });
