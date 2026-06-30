@@ -19,31 +19,32 @@ WS1 (proportions) → WS5 (structure/Prisme) → WS3 (autoplay, +WS3.7) → WS4 
 - [x] WS1.4 `StoryMediaLayer.layoutSublayers()` (nonisolated) : sync `avPlayerLayer.frame`+cornerRadius
 - [x] WS1.5 `toRenderableSlide` : hydrater `aspectRatio` legacy depuis `FeedMedia.width/height` (+2 tests)
 
-## WS2 — Effets immédiats dans le canvas (req 1) [MEDIUM, SDK]
+## WS2 — Effets immédiats dans le canvas (req 1) [MEDIUM, SDK] ⏳ EN COURS (suivant dans l'ordre)
 - [ ] WS2.1 Glass backdrop per-frame en édition (fond vidéo) : `editTick` (no-op), gaté+throttlé ~15-20fps, re-feed `setBackdropTexture` sans full rebuild
 - [ ] WS2.2 `filterAppliesToEntireSlide` inerte : câbler OU retirer (défaut : retirer le code mort)
 - [ ] WS2.3 (opt) bake filtre intensité hors main-thread ; WS2.4 (opt) retirer Metal orphelin `StoryFilteredLayer`
 
-## WS3 — Autoplay audio+vidéo à l'ouverture, tout call site (req 3) [HIGH, app+SDK]
-- [ ] WS3.1 Reels AUDIO autostart : `ReelPageView.startActiveAudioIfNeeded()` ~ `ReelVideoView.drive()` + gate `shouldStartActiveMedia` (onAppear + change isActive + change revealCompleted)
-- [ ] WS3.2 `StoryCanvasUIView.startAudioPlayback()` : `guard !MediaSessionCoordinator.shared.isCallActive`
-- [ ] WS3.3 Unifier démarrage vidéo fg sur `alignToTimelineThenPlay` (drop raw play())
-- [ ] WS3.4 Waveform/karaoké reader piloté par `ReaderAudioMixer.clipElapsedSeconds` (clock unique)
-- [ ] WS3.5 Documenter contrat `StoryReaderPrefetcher.activate(.play)`
+## WS3 — Autoplay audio+vidéo à l'ouverture, tout call site (req 3) [HIGH, app+SDK] ✅ COMMITTÉ `6429f0d0b`
+- [x] WS3.1 Reels AUDIO autostart : `ReelPageView.startActiveAudioIfNeeded()` ~ `ReelVideoView.drive()` + gate `shouldStartActiveMedia` (onAppear + change isActive + change revealCompleted)
+- [x] WS3.2 `StoryCanvasUIView.startAudioPlayback()` : `guard !MediaSessionCoordinator.shared.isCallActive`
+- [x] WS3.3 Unifier démarrage vidéo fg sur `alignToTimelineThenPlay` (drop raw play())
+- [x] WS3.4 Waveform/karaoké reader piloté par `ReaderAudioMixer.clipElapsedSeconds` (clock unique)
+- [ ] WS3.5 Documenter contrat `StoryReaderPrefetcher.activate(.play)` (doc — non vérifié)
 - [x] ~~WS3.6 (D3) Notif commentaires/réactions~~ → ABANDONNÉ (garder pause IG)
-- [ ] WS3.7 (D2) Flag opt-in `autoplayOnAppear` sur `MeeshyVideoPlayer(.inline)`/`_InlineRenderer` ; activé aux call sites DÉTAILS (PostDetailView own + repost vidéo) avec son ; Feed reste tap/muet
+- [x] WS3.7 (D2) Flag opt-in `autoplayOnAppear` sur `MeeshyVideoPlayer(.inline)`/`_InlineRenderer` ; activé aux call sites DÉTAILS (PostDetailView own + repost vidéo) avec son ; Feed reste tap/muet
 
-## WS4 — Reposts média + son (req 4) [app, corrigé par la critique]
-- [ ] WS4.RF1 `FeedPostCard.repostView` : afficher `repost.media` (helpers own-media), gaté `!isEmpty`, tap → POST ORIGINAL
-- [ ] WS4.RF2 `ReelRepostEmbedCell` : réel inline via `ReelFeedVideoSurface` (moteur unique, muet) — **élection par identité de CELLULE**, poster fallback
-- [ ] WS4.RF3 `PostDetailView` story-repost : `mute:false`+`isPaused` **ET câbler suivi visibilité** sur canvas repost (fuite audio hors-écran = défaut critique #1) ; `StoryDetailPlaybackPolicy` partagé
+## WS4 — Reposts média + son (req 4) [app, corrigé par la critique] ✅ COMMITTÉ `5f66730f2` + vert 18.2 (27/27)
+- [x] WS4.RF1 `FeedPostCard.repostView` : afficher `repost.media` (helpers own-media), gaté `!isEmpty`, tap → POST ORIGINAL — `repostMediaPreviewModel`/`repostTapTargetId` testés
+- [x] WS4.RF2 `ReelRepostEmbedCell` : réel inline via `ReelFeedVideoSurface` (moteur unique, muet) — **élection par identité de CELLULE** (`reelCellId = post.id`), poster fallback ; `ReelRepostEmbedContainer` + `.equatable()` ; vérifié single-surface
+- [x] WS4.RF3 `PostDetailView` story-repost : `mute:false`+`isPaused` via `storyCanvasContainer` partagé (suivi visibilité câblé sur les 2 chemins) ; `StoryDetailPlaybackPolicy` partagé
+  - [x] WS4.RF3-fix (review #1) : `StoryCanvasUIView.startAudioPlayback()` → `guard !isPlaybackPaused` (ferme la fuite audio hors-écran sur ré-entrée async, pré-existante héritée du chemin natif) + test `CanvasAudioLifecycleTests`
 - [x] ~~WS4.RF4 (D1) Son Feed~~ → ABANDONNÉ (Feed reste muet)
 
-## WS5 — Structure story / Prisme (req 1 structure) [HIGH, SDK+app]
-- [ ] WS5.1 Persister `originalLanguage` dans publish offline/queue (champ optionnel + threading + migrator + bootstrap)
-- [ ] WS5.2 Payload Timeline publish = `[StorySlide]` (pas `TimelineProject`) → match unique décodeur
-- [ ] WS5.3 Préserver type vidéo dans converters offline (sniff extension)
-- [ ] WS5.4 `toRenderableSlide` : garder bg statique quand `effects.resolvedBackgroundMedia == nil`
+## WS5 — Structure story / Prisme (req 1 structure) [HIGH, SDK+app] ✅ COMMITTÉ `5513bc4a8` (sauf 5.4)
+- [x] WS5.1 Persister `originalLanguage` dans publish offline/queue (champ optionnel + threading + migrator + bootstrap)
+- [x] WS5.2 Payload Timeline publish = `[StorySlide]` (pas `TimelineProject`) → match unique décodeur
+- [x] WS5.3 Préserver type vidéo dans converters offline (sniff extension)
+- [ ] WS5.4 `toRenderableSlide` : garder bg statique quand `effects.resolvedBackgroundMedia == nil` — ⚠️ TENTÉ PUIS REVERTÉ (`b39a4c15f`, cassait le rendu) ; à reprendre proprement
 
 ## WS6 — Refactor < 1000 LOC (req 5) [MEDIUM, SDK, mécanique behavior-preserving]
 Cible : Canvas 3771→~700 · ComposerView 2566→~700 · ComposerVM 1788→~620. 26 fichiers (extensions même-type).

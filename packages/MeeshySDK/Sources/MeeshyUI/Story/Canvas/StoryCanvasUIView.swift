@@ -1113,6 +1113,16 @@ public final class StoryCanvasUIView: UIView {
         // rappelle `startAudioPlayback()`. Miroir du gate composer
         // (StoryTimelineEngine).
         guard !MediaSessionCoordinator.shared.isCallActive else { return }
+        // Off-screen / host-pause gate (RF3) : le funnel audio est ré-entré de
+        // façon asynchrone (`reconfigureAudioForPlayback` Task, `fireContentReady
+        // IfNeeded`) APRÈS le chargement média. Si l'hôte a posé `setPaused(true)`
+        // entre-temps (slide scrollée hors-écran en PostDetail, ou appel actif),
+        // ces ré-entrées ne doivent PAS rallumer le mixer sous une slide gelée —
+        // sinon l'audio fuit hors-écran. Le détail repost passe désormais en
+        // `mute: false`, donc ce gate central (et non plus le backstop `mute`) est
+        // l'unique garant. La reprise repasse par `setStoryPlaybackPaused(false)`
+        // qui remet `isPlaybackPaused = false` AVANT de rappeler cette méthode.
+        guard !isPlaybackPaused else { return }
         // Gate "all media loaded": ne pas démarrer l'audio bg tant que les
         // autres médias chargeables (image bg + foreground videos) ne sont
         // pas prêts. `fireContentReadyIfNeeded()` consomme le drapeau dès que
