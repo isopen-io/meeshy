@@ -1046,6 +1046,7 @@ function buildPublicProfile(user: Record<string, unknown>) {
 
 export async function getUserByEmail(fastify: FastifyInstance) {
   fastify.get('/users/email/:email', {
+    preValidation: [getOptionalAuth(fastify.prisma)],
     schema: {
       description: 'Get public user profile by email address (case-insensitive)',
       tags: ['users'],
@@ -1084,7 +1085,7 @@ export async function getUserByEmail(fastify: FastifyInstance) {
         return sendNotFound(reply, 'User not found');
       }
 
-      return sendSuccess(reply, buildPublicProfile(user));
+      return sendSuccess(reply, buildPublicProfile(await gateProfilePresence(fastify, request, user)));
     } catch (error) {
       logError(fastify.log, 'Get user by email error:', error);
       return sendInternalError(reply, 'Internal server error');
@@ -1094,6 +1095,7 @@ export async function getUserByEmail(fastify: FastifyInstance) {
 
 export async function getUserByIdDedicated(fastify: FastifyInstance) {
   fastify.get('/users/id/:id', {
+    preValidation: [getOptionalAuth(fastify.prisma)],
     schema: {
       description: 'Get public user profile by MongoDB ObjectId',
       tags: ['users'],
@@ -1137,7 +1139,7 @@ export async function getUserByIdDedicated(fastify: FastifyInstance) {
         return sendNotFound(reply, 'User not found');
       }
 
-      return sendSuccess(reply, buildPublicProfile(user));
+      return sendSuccess(reply, buildPublicProfile(await gateProfilePresence(fastify, request, user)));
     } catch (error) {
       logError(fastify.log, 'Get user by ID error:', error);
       return sendInternalError(reply, 'Internal server error');
@@ -1147,6 +1149,7 @@ export async function getUserByIdDedicated(fastify: FastifyInstance) {
 
 export async function getUserByPhone(fastify: FastifyInstance) {
   fastify.get('/users/phone/:phone', {
+    preValidation: [getOptionalAuth(fastify.prisma)],
     schema: {
       description: 'Get public user profile by phone number. Accepts digits with optional country code prefix (e.g. 336199909344 or +336199909344). Normalizes to E.164 format for lookup.',
       tags: ['users'],
@@ -1193,7 +1196,7 @@ export async function getUserByPhone(fastify: FastifyInstance) {
         return sendNotFound(reply, 'User not found');
       }
 
-      return sendSuccess(reply, buildPublicProfile(user));
+      return sendSuccess(reply, buildPublicProfile(await gateProfilePresence(fastify, request, user)));
     } catch (error) {
       logError(fastify.log, 'Get user by phone error:', error);
       return sendInternalError(reply, 'Internal server error');
