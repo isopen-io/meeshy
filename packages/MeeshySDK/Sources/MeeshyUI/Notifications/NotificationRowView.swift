@@ -159,7 +159,7 @@ public struct NotificationRowView: View {
         if let date = try? Date(string, strategy: .iso8601) {
             return date
         }
-        return try? Date(string, strategy: .iso8601.includingFractionalSeconds())
+        return try? Date(string, strategy: Date.ISO8601FormatStyle(includingFractionalSeconds: true))
     }
 
     private var relativeTime: String {
