@@ -3484,3 +3484,172 @@ final class CallManagerSocketReconnectMediaResyncTests: XCTestCase {
         )
     }
 }
+
+// MARK: - CallAnalytics emission guards
+
+/// Guards that call analytics telemetry is correctly tracked and emitted at call end.
+/// The `emitCallAnalyticsIfNeeded` method must be called before any state teardown
+/// in `endCallInternal` so it can read live state (callDuration, codec, effects, etc.).
+@MainActor
+final class CallManagerAnalyticsTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func endCallInternalBody(in source: String) -> String? {
+        guard let funcRange = source.range(of: "func endCallInternal") else { return nil }
+        let bodyEnd = source.range(of: "\n    // MARK:", range: funcRange.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        return String(source[funcRange.lowerBound..<bodyEnd])
+    }
+
+    private func emitAnalyticsBody(in source: String) -> String? {
+        guard let funcRange = source.range(of: "func emitCallAnalyticsIfNeeded") else { return nil }
+        let bodyEnd = source.range(of: "\n    private func ", range: funcRange.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        return String(source[funcRange.lowerBound..<bodyEnd])
+    }
+
+    /// `analyticsCallInitiatedDate` must be set in `startCall` so that setup time
+    /// correctly measures the interval from call initiation to first connected state.
+    func test_startCall_setsAnalyticsCallInitiatedDate() throws {
+        let source = try callManagerSource()
+        guard let funcRange = source.range(of: "func startCall(conversationId:") else {
+            XCTFail("startCall not found in CallManager.swift"); return
+        }
+        let bodyEnd = source.range(of: "\n    func ", range: funcRange.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        let body = String(source[funcRange.lowerBound..<bodyEnd])
+        XCTAssertTrue(
+            body.contains("analyticsCallInitiatedDate = Date()"),
+            "startCall must stamp analyticsCallInitiatedDate so setupTimeMs measures " +
+            "the interval from initiation to first connected state."
+        )
+    }
+
+    /// `analyticsCallInitiatedDate` must be set in `handleIncomingCallNotification`
+    /// so that incoming call setup time is measured from ring to connected.
+    func test_handleIncomingCallNotification_setsAnalyticsCallInitiatedDate() throws {
+        let source = try callManagerSource()
+        guard let funcRange = source.range(of: "func handleIncomingCallNotification(callId:") else {
+            XCTFail("handleIncomingCallNotification not found in CallManager.swift"); return
+        }
+        let bodyEnd = source.range(of: "\n    func ", range: funcRange.upperBound..<source.endIndex)?.lowerBound
+            ?? source.endIndex
+        let body = String(source[funcRange.lowerBound..<bodyEnd])
+        XCTAssertTrue(
+            body.contains("analyticsCallInitiatedDate = Date()"),
+            "handleIncomingCallNotification must stamp analyticsCallInitiatedDate so setupTimeMs " +
+            "measures the interval from incoming ring to first connected state."
+        )
+    }
+
+    /// `emitCallAnalyticsIfNeeded` must be called in `endCallInternal` BEFORE
+    /// `activeAudioEffect = nil` and `callStartDate = nil` — it reads these live values.
+    func test_endCallInternal_emitsAnalyticsBeforeStateReset() throws {
+        let source = try callManagerSource()
+        guard let body = endCallInternalBody(in: source) else {
+            XCTFail("endCallInternal not found in CallManager.swift"); return
+        }
+        guard let analyticsIdx = body.range(of: "emitCallAnalyticsIfNeeded(reason:")?.lowerBound else {
+            XCTFail("emitCallAnalyticsIfNeeded not found in endCallInternal"); return
+        }
+        guard let effectIdx = body.range(of: "activeAudioEffect = nil")?.lowerBound else {
+            XCTFail("activeAudioEffect = nil not found in endCallInternal"); return
+        }
+        XCTAssertTrue(
+            analyticsIdx < effectIdx,
+            "emitCallAnalyticsIfNeeded must fire before activeAudioEffect = nil — " +
+            "analytics reads the active effect state to include in the payload."
+        )
+    }
+
+    /// The analytics payload must include `setupTimeMs` computed from
+    /// `analyticsCallInitiatedDate`, not from `callStartDate` (which is set at
+    /// connect time, not initiation time — same instant as `analyticsConnectedDate`).
+    func test_emitCallAnalyticsIfNeeded_usesInitiatedDateForSetupTime() throws {
+        let source = try callManagerSource()
+        guard let body = emitAnalyticsBody(in: source) else {
+            XCTFail("emitCallAnalyticsIfNeeded not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("analyticsCallInitiatedDate"),
+            "setupTimeMs must use analyticsCallInitiatedDate (set at call initiation) — " +
+            "using callStartDate would always produce 0 because it is set at the same " +
+            "instant as analyticsConnectedDate (both in transitionToConnected)."
+        )
+        XCTAssertFalse(
+            body.contains("timeIntervalSince(callStartDate"),
+            "setupTimeMs must not reference callStartDate — it is set simultaneously with " +
+            "analyticsConnectedDate and would always yield 0 ms setup time."
+        )
+    }
+
+    /// The `emitCallAnalytics` socket call must pass `callId` in the payload so the
+    /// gateway can associate the analytics with the correct call document.
+    func test_emitCallAnalyticsIfNeeded_passesCallIdToSocket() throws {
+        let source = try callManagerSource()
+        guard let body = emitAnalyticsBody(in: source) else {
+            XCTFail("emitCallAnalyticsIfNeeded not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("emitCallAnalytics(callId: callId"),
+            "Analytics must be emitted via emitCallAnalytics(callId:payload:) with the " +
+            "current callId so the gateway can correlate them with the call record."
+        )
+    }
+
+    /// Analytics accumulators must all be reset inside `emitCallAnalyticsIfNeeded`
+    /// after emission, so a subsequent call starts with a clean slate.
+    func test_emitCallAnalyticsIfNeeded_resetsAllAccumulators() throws {
+        let source = try callManagerSource()
+        guard let body = emitAnalyticsBody(in: source) else {
+            XCTFail("emitCallAnalyticsIfNeeded not found in CallManager.swift"); return
+        }
+        let accumulators = [
+            "analyticsCallInitiatedDate = nil",
+            "analyticsConnectedDate = nil",
+            "analyticsNetworkTransitions = 0",
+            "analyticsQualitySeconds = [:]",
+            "analyticsLastQualityDate = nil",
+            "analyticsCurrentLevel = nil",
+            "analyticsRttSum = 0",
+            "analyticsSampleCount = 0",
+            "analyticsMaxPacketLoss = 0",
+            "analyticsPacketLossSum = 0",
+            "analyticsEffectsUsed = []",
+        ]
+        for accumulator in accumulators {
+            XCTAssertTrue(
+                body.contains(accumulator),
+                "emitCallAnalyticsIfNeeded must reset \(accumulator) — " +
+                "otherwise the next call inherits stale telemetry from the previous one."
+            )
+        }
+    }
+
+    /// The analytics `ANALYTICS` event key must be defined in `CALL_EVENTS` in the
+    /// shared TypeScript types so gateway can route the telemetry correctly.
+    func test_sharedTypes_definesAnalyticsCallEvent() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("packages/shared/types/video-call.ts")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(
+            source.contains("ANALYTICS: 'call:analytics'"),
+            "packages/shared/types/video-call.ts CALL_EVENTS must define ANALYTICS: 'call:analytics' " +
+            "so the gateway can recognize and route iOS analytics payloads."
+        )
+    }
+}
