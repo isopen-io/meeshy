@@ -530,6 +530,20 @@ public actor OfflineQueue {
         pendingCountSubject.publisher
     }
 
+    /// Backing subject for `nearCapacityPublisher`.
+    private nonisolated let nearCapacitySubject = SendableCurrentValueSubject<Bool>(false)
+
+    /// Fires `true` when the queue is at or above 80% of `maxQueueSize` (400
+    /// of 500 slots occupied), `false` once it drops back below the threshold.
+    /// UI components should surface a warning so the user knows older messages
+    /// may be evicted before connectivity is restored.
+    public nonisolated var nearCapacityPublisher: AnyPublisher<Bool, Never> {
+        nearCapacitySubject.publisher.removeDuplicates().eraseToAnyPublisher()
+    }
+
+    /// Synchronous snapshot — readable from any context without awaiting the actor.
+    public nonisolated var isNearCapacity: Bool { nearCapacitySubject.value }
+
     /// Backing subject for `pendingUIItemsPublisher`. Mirrors the
     /// `.pending`/`.inflight`/`.failed` outbox rows as `OutboxUIItem` snapshots
     /// for the `SyncPill` UI. Kept `nonisolated` so SwiftUI bodies can read it
@@ -553,7 +567,13 @@ public actor OfflineQueue {
             .eraseToAnyPublisher()
     }
 
-    private static let maxQueueSize = 100
+    private static let maxQueueSize = 500
+
+    /// Items-at-risk threshold: when the queue reaches this count the
+    /// `nearCapacityPublisher` fires `true` so the UI can warn the user.
+    /// Set at 80% of the max to give a meaningful heads-up before messages
+    /// are silently evicted.
+    private static let nearCapacityThreshold = maxQueueSize * 4 / 5
 
     /// Subdirectory under `Documents/` that holds pending audio files referenced
     /// by `OfflineQueueItem.localAudioPath`. Created lazily.
@@ -774,7 +794,9 @@ public actor OfflineQueue {
     /// re-renders on the same touchpoints.
     private func refreshPendingCount() async {
         guard let pool = outboxPool else {
-            pendingCountSubject.send(items.count)
+            let inMemoryCount = items.count
+            pendingCountSubject.send(inMemoryCount)
+            nearCapacitySubject.send(inMemoryCount >= Self.nearCapacityThreshold)
             pendingUIItemsSubject.send([])
             return
         }
@@ -790,6 +812,7 @@ public actor OfflineQueue {
                 .fetchCount(db)
         }) ?? items.count
         pendingCountSubject.send(count)
+        nearCapacitySubject.send(count >= Self.nearCapacityThreshold)
         await refreshPendingUIItems()
     }
 

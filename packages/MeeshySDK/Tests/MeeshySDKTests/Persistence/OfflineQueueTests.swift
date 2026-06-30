@@ -616,4 +616,79 @@ final class OfflineQueueTests: XCTestCase {
         XCTAssertNil(item.localAudioPath)
         XCTAssertEqual(item.content, "hi")
     }
+
+    // MARK: - Near-capacity publisher
+
+    func test_nearCapacityPublisher_notFiredBelowThreshold() async throws {
+        // Capacity = 500, threshold = 400. Enqueue 399 items — not near capacity.
+        XCTAssertFalse(queue.isNearCapacity)
+
+        for i in 0..<10 {
+            let item = OfflineQueueItem(conversationId: "conv-nc", content: "msg-\(i)")
+            try await queue.enqueue(item)
+        }
+
+        XCTAssertFalse(queue.isNearCapacity,
+            "isNearCapacity must remain false well below the 400-item threshold")
+    }
+
+    func test_nearCapacityPublisher_firesAtThreshold() async throws {
+        // Enqueue exactly 400 items (the threshold = 500 * 4/5) and verify
+        // that isNearCapacity becomes true.
+        let threshold = 400
+        for i in 0..<threshold {
+            let item = OfflineQueueItem(conversationId: "conv-nc2", content: "msg-\(i)")
+            try await queue.enqueue(item)
+        }
+
+        XCTAssertTrue(queue.isNearCapacity,
+            "isNearCapacity must be true once \(threshold) items are queued")
+    }
+
+    func test_nearCapacityPublisher_emitsValueViaPublisher() async throws {
+        var received: [Bool] = []
+        var cancellable: AnyCancellable?
+        let expectation = XCTestExpectation(description: "near-capacity event")
+        expectation.expectedFulfillmentCount = 1
+
+        cancellable = queue.nearCapacityPublisher
+            .filter { $0 }
+            .sink { value in
+                received.append(value)
+                expectation.fulfill()
+            }
+
+        let threshold = 400
+        for i in 0..<threshold {
+            let item = OfflineQueueItem(conversationId: "conv-nc3", content: "msg-\(i)")
+            try await queue.enqueue(item)
+        }
+
+        await fulfillment(of: [expectation], timeout: 5)
+        XCTAssertTrue(received.contains(true), "publisher must emit true when threshold is reached")
+        cancellable?.cancel()
+    }
+
+    func test_isNearCapacity_synchronousReadMatchesPublisher() async throws {
+        XCTAssertFalse(queue.isNearCapacity, "initial state must be false")
+
+        let threshold = 400
+        for i in 0..<threshold {
+            let item = OfflineQueueItem(conversationId: "conv-nc4", content: "msg-\(i)")
+            try await queue.enqueue(item)
+        }
+
+        let synchronousValue = queue.isNearCapacity
+        let publishedValue = await withCheckedContinuation { continuation in
+            var c: AnyCancellable?
+            c = queue.nearCapacityPublisher
+                .first()
+                .sink { v in
+                    continuation.resume(returning: v)
+                    c?.cancel()
+                }
+        }
+        XCTAssertEqual(synchronousValue, publishedValue,
+            "synchronous isNearCapacity and publisher's current value must agree")
+    }
 }
