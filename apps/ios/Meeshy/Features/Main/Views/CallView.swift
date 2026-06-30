@@ -117,6 +117,21 @@ struct CallView: View {
                     .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
             }
 
+            // §4.4 — remote peer quality alert. Gateway emits `call:quality-alert`
+            // when the remote end reports sustained poor stats; CallManager sets
+            // `isRemoteQualityDegraded`. Stacked below the reconnecting banner
+            // (extra top padding) so both can be visible simultaneously.
+            if callManager.isRemoteQualityDegraded {
+                let hasReconnectingBanner: Bool = {
+                    if case .reconnecting = callManager.callState { return true }
+                    return false
+                }()
+                remoteQualityDegradedBanner
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .padding(.top, hasReconnectingBanner ? 52 : 0)
+                    .transition(.opacity)
+            }
+
             // Effects overlay — accessible dans tous les etats actifs (pas seulement connected)
             if callManager.callState.isActive && !callManager.callState.isRinging {
                 CallEffectsOverlay(
@@ -205,6 +220,14 @@ struct CallView: View {
                                     defaultValue: "Qualité réseau restaurée",
                                     bundle: .main))
             }
+        }
+        .adaptiveOnChange(of: callManager.isRemoteQualityDegraded) { _, isDegraded in
+            guard isDegraded else { return }
+            UIAccessibility.post(
+                notification: .announcement,
+                argument: String(localized: "call.a11y.remote.quality.poor",
+                                defaultValue: "Réseau faible chez votre contact",
+                                bundle: .main))
         }
     }
 
@@ -561,6 +584,31 @@ struct CallView: View {
         .padding(.top, 8)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(String(localized: "call.reconnecting", defaultValue: "Reconnexion…", bundle: .main))
+    }
+
+    /// §4.4 — remote peer quality alert. Appears when `callManager.isRemoteQualityDegraded`
+    /// is set by the `call:quality-alert` socket event emitted by the gateway.
+    /// Mirrors FaceTime's "Contact has a poor connection" indicator.
+    private var remoteQualityDegradedBanner: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "wifi.exclamationmark")
+                .font(.system(size: 12, weight: .semibold))
+                .accessibilityHidden(true)
+            Text(String(localized: "call.remote.quality.degraded",
+                        defaultValue: "Réseau faible chez votre contact",
+                        bundle: .main))
+                .font(.footnote.weight(.semibold))
+                .foregroundColor(.white)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(Capsule().fill(MeeshyColors.warning.opacity(0.85)))
+        .shadow(color: Color.black.opacity(0.15), radius: 6, y: 2)
+        .padding(.top, 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(String(localized: "call.remote.quality.degraded",
+                                   defaultValue: "Réseau faible chez votre contact",
+                                   bundle: .main))
     }
 
     private var connectionQualityColor: Color {
