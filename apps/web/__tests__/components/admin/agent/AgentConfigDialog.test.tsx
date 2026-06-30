@@ -113,12 +113,13 @@ jest.mock('@/components/ui/label', () => ({
 }));
 
 jest.mock('@/components/ui/badge', () => ({
-  Badge: ({ children, onClick, variant }: any) => (
+  Badge: ({ children, onClick, variant, ...rest }: any) => (
     <span
       data-testid="badge"
       data-variant={variant}
       onClick={onClick}
       style={{ cursor: 'pointer' }}
+      {...rest}
     >
       {children}
     </span>
@@ -724,6 +725,59 @@ describe('AgentConfigDialog — form interactions', () => {
     // Currently excluded (destructive) — click to un-exclude
     fireEvent.click(userBadge!);
     expect(userBadge).toHaveAttribute('data-variant', 'outline');
+  });
+
+  it('exposes role badges as keyboard-operable toggle buttons', async () => {
+    render(
+      <AgentConfigDialog
+        open={true}
+        onOpenChange={jest.fn()}
+        config={makeConfig({ excludedRoles: ['USER'] })}
+        onSave={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId('dialog')).toBeInTheDocument());
+    const badges = screen.getAllByTestId('badge');
+    const userBadge = badges.find(b => b.textContent === 'USER')!;
+    const adminBadge = badges.find(b => b.textContent === 'ADMIN')!;
+    expect(userBadge).toHaveAttribute('role', 'button');
+    expect(userBadge).toHaveAttribute('tabindex', '0');
+    expect(userBadge).toHaveAttribute('aria-pressed', 'true');
+    expect(adminBadge).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('toggles a role badge into excludedRoles via the Enter key', async () => {
+    render(
+      <AgentConfigDialog
+        open={true}
+        onOpenChange={jest.fn()}
+        config={makeConfig({ excludedRoles: [] })}
+        onSave={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId('dialog')).toBeInTheDocument());
+    const userBadge = screen.getAllByTestId('badge').find(b => b.textContent === 'USER')!;
+    fireEvent.keyDown(userBadge, { key: 'Enter' });
+    expect(userBadge).toHaveAttribute('data-variant', 'destructive');
+    expect(userBadge).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('toggles a role badge via the Space key and ignores neutral keys', async () => {
+    render(
+      <AgentConfigDialog
+        open={true}
+        onOpenChange={jest.fn()}
+        config={makeConfig({ excludedRoles: [] })}
+        onSave={jest.fn()}
+      />,
+    );
+    await waitFor(() => expect(screen.getByTestId('dialog')).toBeInTheDocument());
+    const userBadge = screen.getAllByTestId('badge').find(b => b.textContent === 'USER')!;
+    fireEvent.keyDown(userBadge, { key: 'Tab' });
+    expect(userBadge).toHaveAttribute('data-variant', 'outline');
+    fireEvent.keyDown(userBadge, { key: ' ' });
+    expect(userBadge).toHaveAttribute('data-variant', 'destructive');
+    expect(userBadge).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('updates weekdayMaxMessages input', async () => {
