@@ -152,22 +152,25 @@ struct StatusBubbleOverlay: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
-        .background(
+        // Bulle flottante content-agnostic → Liquid Glass natif iOS 26 (HIG) via
+        // l'atome SDK `adaptiveGlass` (dégrade en .ultraThinMaterial + liseré pré-26).
+        // Le stroke dégradé accent (couleur de l'humeur) et l'ombre sont conservés
+        // EN SURCOUCHE du verre — le modèle mono-teinte de l'atome ne les remplace
+        // pas, on les superpose. Pas de glass-sur-glass : overlay autonome, non
+        // imbriqué dans une autre surface verre.
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(
-                            LinearGradient(
-                                colors: [Color(hex: status.avatarColor).opacity(0.3), Color.white.opacity(0.1)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 0.5
-                        )
+                .stroke(
+                    LinearGradient(
+                        colors: [Color(hex: status.avatarColor).opacity(0.3), Color.white.opacity(0.1)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 0.5
                 )
-                .shadow(color: Color.black.opacity(0.1), radius: 10, y: 4)
         )
+        .shadow(color: Color.black.opacity(0.1), radius: 10, y: 4)
     }
 
     // MARK: - Audio Player
@@ -183,6 +186,11 @@ struct StatusBubbleOverlay: View {
                     .frame(width: 18, height: 18)
                     .background(Circle().fill(Color(hex: status.avatarColor)))
             }
+            .accessibilityLabel(
+                audioPlayer.isPlaying
+                    ? String(localized: "status.bubble.audio.stop", defaultValue: "Arrêter l'écoute", bundle: .main)
+                    : String(localized: "status.bubble.audio.play", defaultValue: "Écouter l'humeur", bundle: .main)
+            )
 
             ProgressView(value: audioPlayer.progress)
                 .progressViewStyle(.linear)
