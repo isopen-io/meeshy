@@ -60,4 +60,10 @@ exclu varie par conversation — audit dédié). Puis F2 dès fenêtre staging.
 - [x] Vérif type — `tsc --noEmit` gateway : **300 erreurs identiques au baseline** (33 dans le
       fichier), toutes dues au client Prisma non généré (CDN engines bloqué par le proxy local) ;
       **0 nouvelle erreur** introduite. CI génère le client → type-check vert en CI.
-- [ ] Phase C — CI verte, mergé dans main
+- [~] Phase C — PR #1131 ouverte. **Déblocage CI** : `main` était silencieusement rouge (CI
+      *skip* sur le commit release `[skip ci]`) — un merge antérieur avait combiné deux designs
+      a11y divergents de `invite-user-modal` (nom accessible statique + inner button `aria-hidden`),
+      cassant `invite-user-modal.test.tsx` (`toBeDisabled` sur un `div[role=button]`). Réconcilié
+      en une `<button>` native (commit `b22ece44`) : `role=button`+`tabIndex`+`onKeyDown` (clavier),
+      `disabled` natif + `aria-label` conditionnel (`addUserAria`/`selectedUserAria`, clés déjà
+      présentes en 4 locales). Suite **30/30**. CI re-lancée ; merge automatique dès le vert (cron).
