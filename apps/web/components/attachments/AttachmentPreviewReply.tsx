@@ -110,26 +110,57 @@ export const AttachmentPreviewReply = React.memo(function AttachmentPreviewReply
     return separated;
   }, [attachmentsWithUrls]);
 
-  // Handler pour ouvrir lightbox d'image
-  const handleImageClick = useCallback((index: number) => (e: React.MouseEvent) => {
-    e.stopPropagation();
+  // Actions d'ouverture (découplées de l'événement) pour activation souris ET clavier
+  const openImageLightbox = useCallback((index: number) => {
     setImageLightboxIndex(index);
     setImageLightboxOpen(true);
   }, []);
 
-  // Handler pour ouvrir lightbox PDF
-  const handlePdfClick = useCallback((pdf: UploadedAttachmentResponse) => (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const openPdfLightbox = useCallback((pdf: UploadedAttachmentResponse) => {
     setSelectedPdf(pdf);
     setPdfLightboxOpen(true);
   }, []);
 
-  // Handler pour ouvrir lightbox texte
-  const handleTextClick = useCallback((text: UploadedAttachmentResponse) => (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const openTextLightbox = useCallback((text: UploadedAttachmentResponse) => {
     setSelectedText(text);
     setTextLightboxOpen(true);
   }, []);
+
+  // Activation clavier (Enter/Espace) pour les éléments role="button" non natifs (WCAG 2.1.1)
+  const activateOnKey = useCallback(
+    (action: () => void) => (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        e.stopPropagation();
+        action();
+      }
+    },
+    []
+  );
+
+  const handleImageClick = useCallback(
+    (index: number) => (e: React.MouseEvent) => {
+      e.stopPropagation();
+      openImageLightbox(index);
+    },
+    [openImageLightbox]
+  );
+
+  const handlePdfClick = useCallback(
+    (pdf: UploadedAttachmentResponse) => (e: React.MouseEvent) => {
+      e.stopPropagation();
+      openPdfLightbox(pdf);
+    },
+    [openPdfLightbox]
+  );
+
+  const handleTextClick = useCallback(
+    (text: UploadedAttachmentResponse) => (e: React.MouseEvent) => {
+      e.stopPropagation();
+      openTextLightbox(text);
+    },
+    [openTextLightbox]
+  );
 
 
   if (!attachmentsWithUrls.length) {
@@ -151,9 +182,10 @@ export const AttachmentPreviewReply = React.memo(function AttachmentPreviewReply
           return (
             <div
               key={attachment.id}
-              className="relative rounded overflow-hidden border border-white/20 dark:border-gray-600/20 flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+              className="relative rounded overflow-hidden border border-white/20 dark:border-gray-600/20 flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-1"
               style={{ width: 60, height: 60 }}
               onClick={handleImageClick(index)}
+              onKeyDown={activateOnKey(() => openImageLightbox(index))}
               role="button"
               tabIndex={0}
               aria-label={t('actions.openImageNamed', { name: attachment.originalName || attachment.fileName })}
@@ -217,12 +249,13 @@ export const AttachmentPreviewReply = React.memo(function AttachmentPreviewReply
           <div
             key={attachment.id}
             className={cn(
-              "flex items-center gap-2 px-3 py-2 rounded cursor-pointer hover:opacity-80 transition-opacity",
+              "flex items-center gap-2 px-3 py-2 rounded cursor-pointer hover:opacity-80 transition-opacity outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-1",
               isOwnMessage
                 ? "bg-white/10 text-white/90"
                 : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
             )}
             onClick={handlePdfClick(attachment)}
+            onKeyDown={activateOnKey(() => openPdfLightbox(attachment))}
             role="button"
             tabIndex={0}
             aria-label={t('actions.openPdfNamed', { name: attachment.fileName })}
@@ -239,12 +272,13 @@ export const AttachmentPreviewReply = React.memo(function AttachmentPreviewReply
           <div
             key={attachment.id}
             className={cn(
-              "flex items-center gap-2 px-3 py-2 rounded cursor-pointer hover:opacity-80 transition-opacity",
+              "flex items-center gap-2 px-3 py-2 rounded cursor-pointer hover:opacity-80 transition-opacity outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-1",
               isOwnMessage
                 ? "bg-white/10 text-white/90"
                 : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
             )}
             onClick={handleTextClick(attachment)}
+            onKeyDown={activateOnKey(() => openTextLightbox(attachment))}
             role="button"
             tabIndex={0}
             aria-label={t('actions.openTextFileNamed', { name: attachment.fileName })}
