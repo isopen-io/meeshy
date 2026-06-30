@@ -2352,14 +2352,16 @@ final class CallManager: ObservableObject {
         } ?? -1
 
         let totalSecs = analyticsQualitySeconds.values.reduce(0, +)
-        let qualityDistribution: [String: Double] = totalSecs > 0
-            ? [
-                "excellent": (analyticsQualitySeconds[.excellent] ?? 0) / totalSecs,
-                "good":      (analyticsQualitySeconds[.good] ?? 0) / totalSecs,
-                "fair":      (analyticsQualitySeconds[.fair] ?? 0) / totalSecs,
-                "poor":      ((analyticsQualitySeconds[.poor] ?? 0) + (analyticsQualitySeconds[.critical] ?? 0)) / totalSecs
-              ]
-            : ["excellent": 1.0, "good": 0.0, "fair": 0.0, "poor": 0.0]
+        let qualityDistribution: [String: Double]
+        if totalSecs > 0 {
+            let e = (analyticsQualitySeconds[.excellent] ?? 0) / totalSecs
+            let g = (analyticsQualitySeconds[.good] ?? 0) / totalSecs
+            let f = (analyticsQualitySeconds[.fair] ?? 0) / totalSecs
+            let p = ((analyticsQualitySeconds[.poor] ?? 0) + (analyticsQualitySeconds[.critical] ?? 0)) / totalSecs
+            qualityDistribution = ["excellent": e, "good": g, "fair": f, "poor": p]
+        } else {
+            qualityDistribution = ["excellent": 1.0, "good": 0.0, "fair": 0.0, "poor": 0.0]
+        }
 
         let averageRtt = analyticsSampleCount > 0
             ? analyticsRttSum / Double(analyticsSampleCount) : 0
