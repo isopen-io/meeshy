@@ -307,6 +307,15 @@ struct MeeshyApp: App {
                     // This runs at every boot (not just once) so items from the
                     // previous session are retried as soon as the app is active.
                     Task.detached(priority: .background) {
+                        // bootRecovery resets any rows that were left in the
+                        // `.inflight` state by a prior crash mid-dispatch. Without
+                        // this, those rows are invisible to flush() (which only
+                        // selects `.pending`) until the next background/foreground
+                        // cycle triggers BackgroundTransitionCoordinator which also
+                        // calls bootRecovery. SwiftUI's onChange(of:scenePhase) does
+                        // NOT fire on the initial `.active` state, so the coordinator
+                        // path is skipped on cold start.
+                        _ = try? await OfflineQueue.shared.bootRecovery()
                         let flusher = OutboxFlusher(
                             pool: bootPool,
                             dispatcher: OutboxDispatcher(),
