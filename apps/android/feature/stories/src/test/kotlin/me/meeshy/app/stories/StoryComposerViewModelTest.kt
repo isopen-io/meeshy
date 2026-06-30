@@ -1332,4 +1332,70 @@ class StoryComposerViewModelTest {
         assertThat(objects.single().sourceLanguage).isEqualTo("fr")
         assertThat(request.captured.content).isNull()
     }
+
+    // --- Bottom-band toolbar (Contenu / Effets) -----------------------------
+
+    @Test
+    fun `the band starts hidden`() = runTest {
+        val vm = viewModel()
+        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Hidden)
+    }
+
+    @Test
+    fun `tapping a band FAB opens that category`() = runTest {
+        val vm = viewModel()
+
+        vm.onBandFabTap(BandCategory.CONTENU)
+
+        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Tiles(BandCategory.CONTENU))
+    }
+
+    @Test
+    fun `tapping the open category FAB again closes the band`() = runTest {
+        val vm = viewModel()
+        vm.onBandFabTap(BandCategory.EFFETS)
+
+        vm.onBandFabTap(BandCategory.EFFETS)
+
+        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Hidden)
+    }
+
+    @Test
+    fun `tapping the other FAB switches the open category`() = runTest {
+        val vm = viewModel()
+        vm.onBandFabTap(BandCategory.CONTENU)
+
+        vm.onBandFabTap(BandCategory.EFFETS)
+
+        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Tiles(BandCategory.EFFETS))
+    }
+
+    @Test
+    fun `dismissing the band hides it`() = runTest {
+        val vm = viewModel()
+        vm.onBandFabTap(BandCategory.CONTENU)
+
+        vm.onBandDismiss()
+
+        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Hidden)
+    }
+
+    @Test
+    fun `swapping the band category flips contenu to effets`() = runTest {
+        val vm = viewModel()
+        vm.onBandFabTap(BandCategory.CONTENU)
+
+        vm.onBandSwapCategory()
+
+        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Tiles(BandCategory.EFFETS))
+    }
+
+    @Test
+    fun `swapping the band category is inert while hidden`() = runTest {
+        val vm = viewModel()
+
+        vm.onBandSwapCategory()
+
+        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Hidden)
+    }
 }

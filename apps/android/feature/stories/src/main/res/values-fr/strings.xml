@@ -55,6 +55,9 @@
     <string name="stories_composer_align_left">Aligner à gauche</string>
     <string name="stories_composer_align_center">Centrer</string>
     <string name="stories_composer_align_right">Aligner à droite</string>
+    <string name="stories_composer_band_contenu">Contenu</string>
+    <string name="stories_composer_band_effets">Effets</string>
+    <string name="stories_composer_band_dismiss">Fermer les outils</string>
     <string name="stories_visibility_public">Public</string>
     <string name="stories_visibility_friends">Amis</string>
     <string name="stories_visibility_community">Communauté</string>
