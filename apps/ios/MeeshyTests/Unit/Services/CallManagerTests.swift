@@ -3644,6 +3644,7 @@ final class CallManagerAnalyticsTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
+            .deletingLastPathComponent()
             .appendingPathComponent("packages/shared/types/video-call.ts")
         let source = try String(contentsOf: url, encoding: .utf8)
         XCTAssertTrue(

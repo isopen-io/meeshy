@@ -2010,9 +2010,8 @@ final class CallManager: ObservableObject {
         // Preserve the call start time and running duration on reconnect so the
         // timer does not reset to 0:00 mid-call after an ICE restart.
         if !wasReconnecting {
-            let now = Date()
-            callStartDate = now
-            analyticsConnectedDate = now
+            callStartDate = Date()
+            analyticsConnectedDate = callStartDate
             callDuration = 0
         }
         reconnectAttempt = 0
