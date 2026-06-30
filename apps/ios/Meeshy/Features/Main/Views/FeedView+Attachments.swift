@@ -1008,7 +1008,7 @@ struct FeedComposerSheet: View {
                     }
                 } else if attachment.type == .location {
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(LinearGradient(colors: [Color(hex: "2ECC71"), Color(hex: "27AE60")], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .fill(LinearGradient(colors: [MeeshyColors.success, MeeshyColors.successDeep], startPoint: .topLeading, endPoint: .bottomTrailing))
                         .frame(width: 72, height: 72)
                         .overlay(
                             Image(systemName: "mappin.circle.fill")
