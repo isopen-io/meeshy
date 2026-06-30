@@ -1528,6 +1528,14 @@ final class CallManager: ObservableObject {
                 // controller never fights a manual toggle (and re-evaluates fresh).
                 self.videoSurvivalController.reset()
 
+                // Inform CallKit of the updated media type so the call appears
+                // as audio or video in the lock screen, Recents, and Car Play.
+                if let uuid = self.activeCallUUID, self.callUsesCallKit {
+                    let update = CXCallUpdate()
+                    update.hasVideo = target
+                    self.callProvider.reportCall(with: uuid, updated: update)
+                }
+
                 // P0-3 — tell the peer so it shows our avatar placeholder instead
                 // of a frozen last frame. Gateway broadcasts to the other peer only.
                 if let callId = self.currentCallId {
@@ -2591,6 +2599,13 @@ final class CallManager: ObservableObject {
                 // *instance* preference, NOT a CategoryOptions flag — best-effort
                 // (it throws on iOS-app-on-Mac, where it is unsupported).
                 try? session.session.setPrefersNoInterruptionsFromSystemAlerts(true)
+                // Align AVFoundation's I/O with Opus's native codec parameters.
+                // 48 kHz avoids a sample-rate conversion stage inside the driver;
+                // 20 ms buffer matches Opus's default frame duration and reduces
+                // packetization jitter. Both are best-effort hints — the OS may
+                // silently ignore them when the hardware doesn't support the value.
+                try? session.session.setPreferredSampleRate(48_000)
+                try? session.session.setPreferredIOBufferDuration(0.02)
                 Logger.calls.info("RTCAudioSession pre-configured — video: \(isVideo), activeNow=\(activateNow)")
             } catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == 4099 {
                 // "Session deactivation failed" — le call précédent a laissé
@@ -3719,6 +3734,11 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
             rtc.lockForConfiguration()
             rtc.audioSessionDidActivate(audioSession)
             rtc.isAudioEnabled = true
+            // Re-apply Opus-aligned I/O preferences now that CallKit owns
+            // the session — setConfiguration earlier set them, but CallKit's
+            // own activation may reset hardware-level parameters. Best-effort.
+            try? audioSession.setPreferredSampleRate(48_000)
+            try? audioSession.setPreferredIOBufferDuration(0.02)
             rtc.unlockForConfiguration()
         }
 

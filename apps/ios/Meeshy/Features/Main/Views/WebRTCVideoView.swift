@@ -1,6 +1,8 @@
 import SwiftUI
 import os
 
+private let videoLogger = Logger(subsystem: "me.meeshy.app", category: "calls")
+
 #if canImport(WebRTC)
 import WebRTC
 
@@ -68,6 +70,9 @@ struct CallVideoView: View {
         if let rtcTrack = track as? RTCVideoTrack {
             WebRTCVideoView(track: rtcTrack, mirror: mirror, contentMode: contentMode)
         } else {
+            if let unexpected = track {
+                let _ = videoLogger.error("CallVideoView: unexpected track type \(type(of: unexpected)) — expected RTCVideoTrack")
+            }
             Color.black
                 .overlay(
                     Image(systemName: "video.slash")
