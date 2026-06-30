@@ -12,6 +12,12 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ---
 
+> **POINTEUR iOS AUTORITAIRE (suffixe `i`) — mis à jour 71i** — piste indépendante des itérations web. Source fiable = § History (append-only).
+> - **Itération iOS en cours : `71i` → branche `claude/upbeat-euler-mulqrg`** (Dynamic Type flow sécurité 2FA `TwoFactorSetupView.swift` : 28 `.font(.system(size:))` texte/icône-inline → `MeeshyFont.relative` (poids+design préservés) sur les 3 sous-vues Setup/Disable/BackupCodes ; gardés figés 9 glyphes hero illustratifs + 2 grilles monospace de codes de secours bornées 2 colonnes + commentés). Base = `main` HEAD `d5f4a3f` (post #1153). Gate = CI `ios-tests.yml`.
+> - **70i** = `ContactCardView` épuration palette (`#2ECC71`→`success`, `#3498DB`→`info`) + complétude VoiceOver (téléphones/e-mails). 69i = idem palette+Dynamic Type. 68i = Liquid Glass `GlobalSearchView`+`MentionSuggestionPanel`. 55i = Dynamic Type `ConversationInfoSheet`.
+> - **Base de départ 72i : `main` HEAD** (toujours resync sur `main` avant de commencer ; supprimer la branche mergée).
+> - **Différé prioritaire iOS 72i+** : (a) **Dynamic Type grandes surfaces restantes** (un écran à la fois) — `ConversationDashboardView` (43), `StoryViewerView+Content` (38), `InviteFriendsSheet` (33), `VoiceProfileManageView` (31), `FeedView+Attachments` (30), `FeedCommentsSheet` (28), `AudioFullscreenView` (26)… ; (b) **Glass adoption (reste)** — sheets plein écran `ConversationView` (`.ultraThinMaterial` multiple, vérifier verre-sur-verre), `MessageOverlayMenu` (gros fichier → `AdaptiveGlassContainer`) ; (c) **ladder catégoriel arc-en-ciel** + tints `sectionHeader` hex `"3498DB"` (`ReportUserView`/`SupportView`/`PrivacySettingsView`) via `theme.surfaceGradient(tint:)`. **NE PLUS re-flagger** `TwoFactorSetupView` (Dynamic Type soldé 71i), ni `ContactCardView` (palette/a11y soldés 69i/70i).
+
 ## Current State
 
 > **POINTEUR AUTORITAIRE WEB (mis à jour 70wb)** — source fiable = § History (append-only) ; le tableau Current State a divergé (lignes dupliquées par agents parallèles).
