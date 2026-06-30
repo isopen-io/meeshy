@@ -152,22 +152,24 @@ struct StatusBubbleOverlay: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)
-        .background(
+        // iOS 26 Liquid Glass — floating mood bubble. The SDK Compatibility wrapper
+        // owns the gating + the .ultraThinMaterial fallback. The avatar-tinted
+        // gradient hairline + elevation shadow stay as overlays ON the glass
+        // (same idiom as FloatingCallPillView: adaptiveGlass + stroke overlay + shadow).
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(
-                            LinearGradient(
-                                colors: [Color(hex: status.avatarColor).opacity(0.3), Color.white.opacity(0.1)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 0.5
-                        )
+                .stroke(
+                    LinearGradient(
+                        colors: [Color(hex: status.avatarColor).opacity(0.3), Color.white.opacity(0.1)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 0.5
                 )
-                .shadow(color: Color.black.opacity(0.1), radius: 10, y: 4)
         )
+        .shadow(color: Color.black.opacity(0.1), radius: 10, y: 4)
     }
 
     // MARK: - Audio Player
