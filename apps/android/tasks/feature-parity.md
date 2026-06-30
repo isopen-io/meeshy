@@ -569,7 +569,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       upload-then-publish outbox chain (SOTA follow-up).
 - [ ] Audio elements (≤5/slide): voice recording (60s), audio file import, on-canvas player widget
 - [ ] Freehand drawing layer (pen/marker/eraser, colour, width, undo/redo/clear)
-- [ ] Emoji sticker picker (categorised + searchable)
+- [~] Emoji sticker picker — **on-canvas sticker elements done** (`story-sticker-elements`): a pure
+      `StoryStickerElement` (id/emoji/normalised x,y/scale/rotation) reusing [StoryTextElement]'s
+      canvas-geometry clamps (the single source of truth) + a `toSticker()` gateway-wire mapper
+      (`StoryEffects.stickerObjects`). The deck mirrors the text-element reducer per-slide
+      (`addStickerToSelected`/`removeSticker`/`updateSticker`/`moveSticker`/`transformSticker`,
+      `MAX_STICKERS_PER_SLIDE=30`, `selectedRemainingStickerSlots`, `isWithinStickerLimit`,
+      `hasStickers`); a sticker-only slide now publishes. `StoryComposerDraft.toCreateStoryRequest`
+      serialises publishable stickers into `storyEffects.stickerObjects` (blanks dropped). The VM adds
+      add/select/deselect/move/transform/remove intents with selection mutually exclusive vs the
+      text-element edit; a "Sticker" tile in the Contenu drawer opens an emoji-grid picker, and each
+      on-canvas sticker is draggable / pinch-rotatable / removable (glue mirroring `TextElementLayer`).
+      +50 tests (15 model, 21 deck, 5 draft, ~12 VM). Pending: **categorised + searchable** picker (the
+      built-in palette is a flat curated set today).
 - [ ] Backgrounds: random pastel, colour/gradient palette, image, looping/non-looping video
 - [x] 8 photo filters (vintage/bw/warm/cool/dramatic/vivid/fade/chrome) with intensity
       (`story-photo-filters`): the look of each preset lives in **one** pure, Compose-agnostic place —

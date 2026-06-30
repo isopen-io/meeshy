@@ -36,6 +36,9 @@ private fun newSlideId(): String = UUID.randomUUID().toString()
 /** Mints a fresh, collision-free text-element id (same impure-edge rationale). */
 private fun newTextElementId(): String = UUID.randomUUID().toString()
 
+/** Mints a fresh, collision-free sticker id (same impure-edge rationale). */
+private fun newStickerId(): String = UUID.randomUUID().toString()
+
 /** Normalised canvas offset given to a duplicated element so the copy is visibly
  * clear of its source rather than hidden directly behind it. */
 private const val DUPLICATE_ELEMENT_OFFSET: Float = 0.04f
@@ -84,6 +87,7 @@ data class StoryComposerUiState(
     val attachments: List<UploadedMedia> = emptyList(),
     val pendingUploads: List<PendingMediaUpload> = emptyList(),
     val selectedTextElementId: String? = null,
+    val selectedStickerId: String? = null,
     val snapFeedback: SnapFeedback? = null,
     val band: ComposerBandState = ComposerBandState.Hidden,
     val isUploadingMedia: Boolean = false,
@@ -98,10 +102,11 @@ data class StoryComposerUiState(
      * off-screen slide, or media/elements on an off-screen slide, all count.
      */
     val canPublish: Boolean
-        get() = (deck.hasText || deck.hasMedia || deck.hasTextElements) &&
+        get() = (deck.hasText || deck.hasMedia || deck.hasTextElements || deck.hasStickers) &&
             deck.isWithinTextLimit(StoryComposerDraft.MAX_CHARS) &&
             deck.isWithinMediaLimit() &&
             deck.isWithinTextElementLimit() &&
+            deck.isWithinStickerLimit() &&
             !isPublishing &&
             !isUploadingMedia
 
@@ -125,6 +130,19 @@ data class StoryComposerUiState(
     /** The on-canvas text elements of the **selected** slide, in z-order, for rendering. */
     val selectedSlideTextElements: List<StoryTextElement>
         get() = deck.selectedSlide.elements
+
+    /** The on-canvas stickers of the **selected** slide, in order, for rendering. */
+    val selectedSlideStickers: List<StoryStickerElement>
+        get() = deck.selectedSlide.stickers
+
+    /**
+     * The sticker currently selected for manipulation — the [selectedStickerId]
+     * resolved against the **selected** slide. Null when nothing is selected or the id
+     * no longer lives on the selected slide (e.g. after a slide switch), so the screen
+     * never shows a stale remove handle.
+     */
+    val selectedSticker: StoryStickerElement?
+        get() = selectedStickerId?.let { id -> deck.selectedSlide.stickers.firstOrNull { it.id == id } }
 
     /** The photo filter applied to the **selected** slide, or null when none is set. */
     val selectedSlideFilter: StoryFilter?
@@ -226,7 +244,12 @@ class StoryComposerViewModel @Inject constructor(
         }
         val id = newTextElementId()
         _state.update {
-            it.copy(deck = it.deck.addTextElementToSelected(StoryTextElement(id = id)), selectedTextElementId = id, errorMessage = null)
+            it.copy(
+                deck = it.deck.addTextElementToSelected(StoryTextElement(id = id)),
+                selectedTextElementId = id,
+                selectedStickerId = null,
+                errorMessage = null,
+            )
         }
     }
 
@@ -234,7 +257,7 @@ class StoryComposerViewModel @Inject constructor(
     fun onSelectTextElement(id: String) {
         _state.update {
             if (it.deck.selectedSlide.elements.none { element -> element.id == id }) it
-            else it.copy(selectedTextElementId = id)
+            else it.copy(selectedTextElementId = id, selectedStickerId = null)
         }
     }
 
@@ -357,6 +380,75 @@ class StoryComposerViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Adds an on-canvas emoji sticker [emoji] to the selected slide (clamped to the
+     * canvas centre by the deck) and selects it so the user can immediately drag /
+     * pinch / remove it. A blank emoji is ignored (nothing to place). Inert-with-a-
+     * warning once the selected slide is at the [StorySlideDeck.MAX_STICKERS_PER_SLIDE]
+     * cap. Selecting the new sticker clears any text-element editing so the canvas keeps
+     * a single selected object.
+     */
+    fun onAddSticker(emoji: String) {
+        if (emoji.isBlank()) return
+        val before = _state.value.deck
+        if (!before.selectedCanAddSticker) {
+            _state.update { it.copy(errorMessage = STICKER_LIMIT) }
+            return
+        }
+        val id = newStickerId()
+        _state.update {
+            it.copy(
+                deck = it.deck.addStickerToSelected(StoryStickerElement(id = id, emoji = emoji)),
+                selectedStickerId = id,
+                selectedTextElementId = null,
+                errorMessage = null,
+            )
+        }
+    }
+
+    /** Selects the sticker [id] for manipulation (inert when it is not on the selected
+     * slide); clears any text-element editing so only one object is selected. */
+    fun onSelectSticker(id: String) {
+        _state.update {
+            if (it.deck.selectedSlide.stickers.none { sticker -> sticker.id == id }) it
+            else it.copy(selectedStickerId = id, selectedTextElementId = null)
+        }
+    }
+
+    /** Deselects the active sticker — the remove handle disappears. Inert when none is selected. */
+    fun onDeselectSticker() {
+        _state.update { if (it.selectedStickerId == null) it else it.copy(selectedStickerId = null) }
+    }
+
+    /**
+     * Removes the sticker [id] from whichever slide holds it, clearing the selection
+     * when it was the selected one so the canvas stops showing its remove handle.
+     */
+    fun onRemoveSticker(id: String) {
+        _state.update {
+            val selected = if (it.selectedStickerId == id) null else it.selectedStickerId
+            it.copy(deck = it.deck.removeSticker(id), selectedStickerId = selected)
+        }
+    }
+
+    /**
+     * Drags the sticker [id] by the normalised canvas deltas [dx]/[dy] (clamped by the
+     * pure [StorySlideDeck.moveSticker]). Inert when the id is unknown. The Composable
+     * converts drag pixels to fractions.
+     */
+    fun onStickerMoved(id: String, dx: Float, dy: Float) {
+        _state.update { it.copy(deck = it.deck.moveSticker(id, dx, dy)) }
+    }
+
+    /**
+     * Pinch-scales / rotates the sticker [id] by the incremental gesture deltas
+     * (clamped/wrapped by the pure [StoryStickerElement.transformed]). Inert when the id
+     * is unknown. Selection is untouched — you transform the sticker you are manipulating.
+     */
+    fun onStickerTransform(id: String, scaleBy: Float, rotateByDeg: Float) {
+        _state.update { it.copy(deck = it.deck.transformSticker(id, scaleBy, rotateByDeg)) }
+    }
+
     fun onVisibilityChange(visibility: StoryVisibility) {
         _state.update { it.copy(draft = it.draft.withVisibility(visibility)) }
     }
@@ -464,9 +556,12 @@ class StoryComposerViewModel @Inject constructor(
     private fun StoryComposerUiState.mirrorDraftToSelection(): StoryComposerUiState {
         val elementId = selectedTextElementId
         val stillSelected = elementId != null && deck.selectedSlide.elements.any { it.id == elementId }
+        val stickerId = selectedStickerId
+        val stickerStillSelected = stickerId != null && deck.selectedSlide.stickers.any { it.id == stickerId }
         return copy(
             draft = draft.withText(deck.selectedSlide.text).withMediaIds(deck.selectedSlide.mediaIds),
             selectedTextElementId = if (stillSelected) elementId else null,
+            selectedStickerId = if (stickerStillSelected) stickerId else null,
         )
     }
 
@@ -623,6 +718,7 @@ class StoryComposerViewModel @Inject constructor(
                 visibility = current.draft.visibility,
                 mediaIds = slide.mediaIds,
                 textElements = slide.elements,
+                stickers = slide.stickers,
                 filter = slide.filter,
                 filterIntensity = slide.filterIntensity,
             )
@@ -644,5 +740,7 @@ class StoryComposerViewModel @Inject constructor(
         const val MEDIA_LIMIT = "You can attach up to ${StoryComposerDraft.MAX_MEDIA} items"
         const val TEXT_ELEMENT_LIMIT =
             "You can add up to ${StorySlideDeck.MAX_TEXT_ELEMENTS_PER_SLIDE} text elements per slide"
+        const val STICKER_LIMIT =
+            "You can add up to ${StorySlideDeck.MAX_STICKERS_PER_SLIDE} stickers per slide"
     }
 }

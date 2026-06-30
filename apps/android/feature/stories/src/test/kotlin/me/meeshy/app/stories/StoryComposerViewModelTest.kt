@@ -1649,4 +1649,164 @@ class StoryComposerViewModelTest {
         assertThat(vm.state.value.selectedTextElement?.id).isEqualTo(elementId)
         assertThat(vm.state.value.selectedSlideFilter).isEqualTo(StoryFilter.FADE)
     }
+
+    // --- stickers ---
+
+    @Test
+    fun `onAddSticker adds the emoji to the selected slide and selects it`() = runTest {
+        val vm = viewModel()
+
+        vm.onAddSticker("😀")
+
+        val state = vm.state.value
+        assertThat(state.selectedSlideStickers).hasSize(1)
+        assertThat(state.selectedSticker?.emoji).isEqualTo("😀")
+        assertThat(state.canPublish).isTrue()
+    }
+
+    @Test
+    fun `onAddSticker ignores a blank emoji`() = runTest {
+        val vm = viewModel()
+
+        vm.onAddSticker("  ")
+
+        assertThat(vm.state.value.selectedSlideStickers).isEmpty()
+        assertThat(vm.state.value.selectedStickerId).isNull()
+    }
+
+    @Test
+    fun `adding a sticker clears an in-progress text element edit`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        assertThat(vm.state.value.isEditingTextElement).isTrue()
+
+        vm.onAddSticker("🎉")
+
+        assertThat(vm.state.value.isEditingTextElement).isFalse()
+        assertThat(vm.state.value.selectedSticker?.emoji).isEqualTo("🎉")
+    }
+
+    @Test
+    fun `selecting a text element clears a selected sticker`() = runTest {
+        val vm = viewModel()
+        vm.onAddSticker("😀")
+        vm.onAddTextElement()
+        val elementId = vm.state.value.selectedTextElement!!.id
+
+        // de-select then re-select the text element to exercise onSelectTextElement
+        vm.onSelectSticker(vm.state.value.selectedSlideStickers.single().id)
+        assertThat(vm.state.value.selectedTextElementId).isNull()
+        vm.onSelectTextElement(elementId)
+
+        assertThat(vm.state.value.selectedStickerId).isNull()
+        assertThat(vm.state.value.selectedTextElementId).isEqualTo(elementId)
+    }
+
+    @Test
+    fun `onAddSticker at the per-slide cap surfaces a warning and adds nothing`() = runTest {
+        val vm = viewModel()
+        repeat(StorySlideDeck.MAX_STICKERS_PER_SLIDE) { vm.onAddSticker("😀") }
+        assertThat(vm.state.value.selectedSlideStickers).hasSize(StorySlideDeck.MAX_STICKERS_PER_SLIDE)
+
+        vm.onAddSticker("🎉")
+
+        assertThat(vm.state.value.selectedSlideStickers).hasSize(StorySlideDeck.MAX_STICKERS_PER_SLIDE)
+        assertThat(vm.state.value.errorMessage).isNotNull()
+    }
+
+    @Test
+    fun `onSelectSticker on an unknown id is inert`() = runTest {
+        val vm = viewModel()
+        vm.onSelectSticker("ghost")
+        assertThat(vm.state.value.selectedStickerId).isNull()
+    }
+
+    @Test
+    fun `onStickerMoved drags the sticker clamped to the canvas`() = runTest {
+        val vm = viewModel()
+        vm.onAddSticker("😀")
+        val id = vm.state.value.selectedSlideStickers.single().id
+
+        vm.onStickerMoved(id, dx = 0.6f, dy = -0.9f)
+
+        val moved = vm.state.value.selectedSlideStickers.single()
+        assertThat(moved.x).isEqualTo(1f)
+        assertThat(moved.y).isEqualTo(0f)
+    }
+
+    @Test
+    fun `onStickerTransform scales and rotates the sticker and accumulates`() = runTest {
+        val vm = viewModel()
+        vm.onAddSticker("😀")
+        val id = vm.state.value.selectedSlideStickers.single().id
+
+        vm.onStickerTransform(id, scaleBy = 2f, rotateByDeg = 20f)
+        vm.onStickerTransform(id, scaleBy = 1.5f, rotateByDeg = 10f)
+
+        val t = vm.state.value.selectedSlideStickers.single()
+        assertThat(t.scale).isEqualTo(3f)
+        assertThat(t.rotationDeg).isEqualTo(30f)
+    }
+
+    @Test
+    fun `onStickerTransform on an unknown id leaves the deck unchanged`() = runTest {
+        val vm = viewModel()
+        vm.onAddSticker("😀")
+        val before = vm.state.value.deck
+
+        vm.onStickerTransform("ghost", scaleBy = 2f, rotateByDeg = 0f)
+
+        assertThat(vm.state.value.deck).isEqualTo(before)
+    }
+
+    @Test
+    fun `onRemoveSticker removes it and clears the selection when it was selected`() = runTest {
+        val vm = viewModel()
+        vm.onAddSticker("😀")
+        val id = vm.state.value.selectedSlideStickers.single().id
+
+        vm.onRemoveSticker(id)
+
+        assertThat(vm.state.value.selectedSlideStickers).isEmpty()
+        assertThat(vm.state.value.selectedStickerId).isNull()
+    }
+
+    @Test
+    fun `onDeselectSticker drops the selection`() = runTest {
+        val vm = viewModel()
+        vm.onAddSticker("😀")
+        assertThat(vm.state.value.selectedStickerId).isNotNull()
+
+        vm.onDeselectSticker()
+
+        assertThat(vm.state.value.selectedStickerId).isNull()
+        assertThat(vm.state.value.selectedSlideStickers).hasSize(1)
+    }
+
+    @Test
+    fun `switching slides clears a stale sticker selection`() = runTest {
+        val vm = viewModel()
+        vm.onAddSticker("😀")
+        val firstSlide = vm.state.value.deck.selectedId
+        assertThat(vm.state.value.selectedStickerId).isNotNull()
+
+        vm.onAddSlide()
+
+        assertThat(vm.state.value.deck.selectedId).isNotEqualTo(firstSlide)
+        assertThat(vm.state.value.selectedSticker).isNull()
+    }
+
+    @Test
+    fun `publish carries the slide's stickers into the wire request`() = runTest {
+        val vm = viewModel()
+        val request = slot<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(request), any()) } returns "cmid"
+        vm.onAddSticker("🎉")
+
+        vm.publish()
+
+        coVerify(exactly = 1) { repo.enqueuePublish(any(), any()) }
+        assertThat(request.captured.storyEffects?.stickerObjects?.map { it.emoji }).containsExactly("🎉")
+        assertThat(request.captured.content).isNull()
+    }
 }

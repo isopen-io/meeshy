@@ -29,6 +29,7 @@ data class StoryComposerDraft(
     val visibility: StoryVisibility = StoryVisibility.PUBLIC,
     val mediaIds: List<String> = emptyList(),
     val textElements: List<StoryTextElement> = emptyList(),
+    val stickers: List<StoryStickerElement> = emptyList(),
     val filter: StoryFilter? = null,
     val filterIntensity: Float = StoryFilterMatrix.DEFAULT_INTENSITY,
 ) {
@@ -50,6 +51,12 @@ data class StoryComposerDraft(
     /** True once at least one on-canvas text element carries publishable content. */
     val hasTextElements: Boolean get() = publishableTextElements.isNotEmpty()
 
+    /** The on-canvas stickers that carry a publishable (non-blank) emoji. */
+    val publishableStickers: List<StoryStickerElement> get() = stickers.filter { it.isPublishable }
+
+    /** True once at least one on-canvas sticker carries a publishable emoji. */
+    val hasStickers: Boolean get() = publishableStickers.isNotEmpty()
+
     /** Within the per-story media cap ([MAX_MEDIA]) — parity with iOS's ≤10 rule. */
     val isWithinMediaLimit: Boolean get() = mediaIds.size <= MAX_MEDIA
 
@@ -65,7 +72,8 @@ data class StoryComposerDraft(
      * and media limits. A media-only or text-element-only story (no caption) is valid.
      */
     val canPublish: Boolean
-        get() = (trimmedText.isNotEmpty() || hasMedia || hasTextElements) && isWithinLimit && isWithinMediaLimit
+        get() = (trimmedText.isNotEmpty() || hasMedia || hasTextElements || hasStickers) &&
+            isWithinLimit && isWithinMediaLimit
 
     fun withText(value: String): StoryComposerDraft = copy(text = value)
 
@@ -75,6 +83,8 @@ data class StoryComposerDraft(
 
     fun withTextElements(value: List<StoryTextElement>): StoryComposerDraft = copy(textElements = value)
 
+    fun withStickers(value: List<StoryStickerElement>): StoryComposerDraft = copy(stickers = value)
+
     fun withFilter(value: StoryFilter?): StoryComposerDraft = copy(filter = value)
 
     /**
@@ -82,9 +92,10 @@ data class StoryComposerDraft(
      * publisher's resolved content language (Prisme) so the gateway can seed
      * translations. [content] is omitted (null) for a media-only story; attached
      * [mediaIds] ride along when present; publishable on-canvas text elements are
-     * serialised into `storyEffects.textObjects` (blank elements are dropped), the
-     * selected photo [filter] (+ its strength) rides on `storyEffects.filter`, and
-     * `storyEffects` stays null when there is nothing to carry.
+     * serialised into `storyEffects.textObjects` (blank elements are dropped),
+     * publishable stickers into `storyEffects.stickerObjects`, the selected photo
+     * [filter] (+ its strength) rides on `storyEffects.filter`, and `storyEffects`
+     * stays null when there is nothing to carry.
      */
     fun toCreateStoryRequest(originalLanguage: String): CreateStoryRequest = CreateStoryRequest(
         type = STORY_TYPE,
@@ -97,9 +108,11 @@ data class StoryComposerDraft(
 
     private fun storyEffects(originalLanguage: String): StoryEffects? {
         val textObjects = publishableTextElements.map { it.toTextObject(originalLanguage) }
-        if (textObjects.isEmpty() && filter == null) return null
+        val stickerObjects = publishableStickers.map { it.toSticker() }
+        if (textObjects.isEmpty() && stickerObjects.isEmpty() && filter == null) return null
         return StoryEffects(
             textObjects = textObjects,
+            stickerObjects = stickerObjects.takeIf { it.isNotEmpty() },
             filter = filter?.wireValue(),
             filterIntensity = filter?.let { StoryFilterMatrix.clampIntensity(filterIntensity).toDouble() },
         )

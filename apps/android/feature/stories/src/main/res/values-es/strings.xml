@@ -46,6 +46,8 @@
     <string name="stories_composer_add_text">Añadir texto</string>
     <string name="stories_composer_text_placeholder">Escribe algo…</string>
     <string name="stories_composer_remove_text">Eliminar texto</string>
+    <string name="stories_composer_add_sticker">Sticker</string>
+    <string name="stories_composer_remove_sticker">Eliminar sticker</string>
     <string name="stories_composer_text_caption">Pie de foto</string>
     <string name="stories_composer_style_bold">Negrita</string>
     <string name="stories_composer_style_neon">Neón</string>

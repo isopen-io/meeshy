@@ -21,7 +21,8 @@ enum class BandCategory {
  */
 enum class ComposerContentTile {
     TEXT,
-    MEDIA;
+    MEDIA,
+    STICKER;
 
     /** Every content tile belongs to [BandCategory.CONTENU]. */
     val category: BandCategory get() = BandCategory.CONTENU
