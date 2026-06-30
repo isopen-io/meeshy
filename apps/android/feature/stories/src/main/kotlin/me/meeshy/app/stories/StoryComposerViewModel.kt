@@ -35,6 +35,10 @@ private fun newSlideId(): String = UUID.randomUUID().toString()
 /** Mints a fresh, collision-free text-element id (same impure-edge rationale). */
 private fun newTextElementId(): String = UUID.randomUUID().toString()
 
+/** Normalised canvas offset given to a duplicated element so the copy is visibly
+ * clear of its source rather than hidden directly behind it. */
+private const val DUPLICATE_ELEMENT_OFFSET: Float = 0.04f
+
 /**
  * A media attachment durably queued offline: its bytes live in `MediaBlobStore`
  * and an `UPLOAD_MEDIA` outbox row is enqueued, both keyed by [cmid]. The publish
@@ -253,6 +257,31 @@ class StoryComposerViewModel @Inject constructor(
      */
     fun onTextElementTransform(id: String, scaleBy: Float, rotateByDeg: Float) {
         _state.update { it.copy(deck = it.deck.transformTextElement(id, scaleBy, rotateByDeg)) }
+    }
+
+    /**
+     * Duplicates the on-canvas element [id] (which must live on the selected slide):
+     * mints a fresh id, inserts a clone of every styled field just after the source —
+     * nudged by [DUPLICATE_ELEMENT_OFFSET] so the copy is visibly offset — and selects
+     * the copy so the user can immediately move/style it. Inert when [id] is not on the
+     * selected slide; inert-with-a-warning once the slide is at the ≤5-element cap. The
+     * clone/cap rules live in the pure [StorySlideDeck.duplicateTextElement].
+     */
+    fun onDuplicateTextElement(id: String) {
+        val before = _state.value.deck
+        if (before.selectedSlide.elements.none { it.id == id }) return
+        if (!before.selectedCanAddTextElement) {
+            _state.update { it.copy(errorMessage = TEXT_ELEMENT_LIMIT) }
+            return
+        }
+        val newId = newTextElementId()
+        _state.update {
+            it.copy(
+                deck = it.deck.duplicateTextElement(id, newId, DUPLICATE_ELEMENT_OFFSET, DUPLICATE_ELEMENT_OFFSET),
+                selectedTextElementId = newId,
+                errorMessage = null,
+            )
+        }
     }
 
     fun onVisibilityChange(visibility: StoryVisibility) {

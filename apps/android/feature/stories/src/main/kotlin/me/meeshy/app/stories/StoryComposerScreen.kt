@@ -206,6 +206,7 @@ fun StoryComposerScreen(
                             onStyle = { style -> viewModel.onTextElementStyle(element.id, style) },
                             onColor = { color -> viewModel.onTextElementColor(element.id, color) },
                             onAlign = { align -> viewModel.onTextElementAlign(element.id, align) },
+                            onDuplicate = { viewModel.onDuplicateTextElement(element.id) },
                         )
                     }
                 },
@@ -697,6 +698,7 @@ private fun TextStyleToolbar(
     onStyle: (StoryTextStyle) -> Unit,
     onColor: (String) -> Unit,
     onAlign: (StoryTextAlign) -> Unit,
+    onDuplicate: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -716,6 +718,13 @@ private fun TextStyleToolbar(
             AlignToggle(StoryTextAlign.LEFT, element.align, onAlign)
             AlignToggle(StoryTextAlign.CENTER, element.align, onAlign)
             AlignToggle(StoryTextAlign.RIGHT, element.align, onAlign)
+            IconButton(onClick = onDuplicate) {
+                Icon(
+                    Icons.Filled.ContentCopy,
+                    contentDescription = stringResource(R.string.stories_composer_duplicate_element),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(STORY_TEXT_COLORS) { hex ->

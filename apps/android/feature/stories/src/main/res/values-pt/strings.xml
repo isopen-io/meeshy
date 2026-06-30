@@ -55,6 +55,7 @@
     <string name="stories_composer_align_left">Alinhar à esquerda</string>
     <string name="stories_composer_align_center">Centralizar</string>
     <string name="stories_composer_align_right">Alinhar à direita</string>
+    <string name="stories_composer_duplicate_element">Duplicar elemento</string>
     <string name="stories_composer_band_contenu">Conteúdo</string>
     <string name="stories_composer_band_effets">Efeitos</string>
     <string name="stories_composer_band_dismiss">Fechar ferramentas</string>
