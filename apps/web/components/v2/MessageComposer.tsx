@@ -5,6 +5,7 @@ import { Tooltip } from './Tooltip';
 import { useMentions } from '@/hooks/composer/useMentions';
 import { MentionAutocomplete } from '@/components/common/MentionAutocomplete';
 import { useI18n } from '@/hooks/use-i18n';
+import { formatFileSize } from '@meeshy/shared/types/attachment';
 
 export interface Attachment {
   id: string;
@@ -130,12 +131,6 @@ function formatDuration(seconds: number): string {
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
   return `${mins}:${secs.toString().padStart(2, '0')}`;
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export const MessageComposer = forwardRef<
