@@ -2583,4 +2583,4 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - Reviewer: PASS (rounds: 1) — behavioral assertions via HTTP inject(); no production logic changed; all 478 suites pass
 - coverageThreshold ratcheted: lines:86→95 / branches:79→88 / statements:85→94 / functions:82→92
 - Manifest ticked: routes/users/blocking.ts☑ contact-change.ts☑ devices.ts☑ index.ts☑ preferences.ts☑ presence.ts☑ profile.ts☑
-- Commit: TBD (pending push → PR → squash-merge)
+- Commit: a782ddc (PR #1130 → squash-merge pending CI + merge)
