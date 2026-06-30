@@ -76,8 +76,7 @@ struct CallEffectsOverlay: View {
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 12)
-        .background(.ultraThinMaterial)
-        .clipShape(Capsule())
+        .adaptiveGlass(in: Capsule())
     }
 
     private func toolbarButton(icon: String, label: String, isActive: Bool, panel: EffectsPanelType) -> some View {
