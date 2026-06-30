@@ -1292,6 +1292,48 @@ class StoryComposerViewModelTest {
     }
 
     @Test
+    fun `onReorderTextElement sends the edited element to the back and keeps it selected`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val first = vm.state.value.selectedTextElement!!.id
+        vm.onAddTextElement()
+        val second = vm.state.value.selectedTextElement!!.id
+
+        vm.onReorderTextElement(second, StoryZOrder.TO_BACK)
+
+        assertThat(vm.state.value.selectedSlideTextElements.map { it.id })
+            .containsExactly(second, first).inOrder()
+        assertThat(vm.state.value.selectedTextElementId).isEqualTo(second)
+        assertThat(vm.state.value.isEditingTextElement).isTrue()
+    }
+
+    @Test
+    fun `onReorderTextElement brings the edited element to the front`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val first = vm.state.value.selectedTextElement!!.id
+        vm.onAddTextElement()
+        val second = vm.state.value.selectedTextElement!!.id
+
+        vm.onReorderTextElement(first, StoryZOrder.TO_FRONT)
+
+        assertThat(vm.state.value.selectedSlideTextElements.map { it.id })
+            .containsExactly(second, first).inOrder()
+    }
+
+    @Test
+    fun `onReorderTextElement on an unknown id leaves the state unchanged`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        vm.onAddTextElement()
+        val before = vm.state.value
+
+        vm.onReorderTextElement("ghost", StoryZOrder.TO_FRONT)
+
+        assertThat(vm.state.value).isSameInstanceAs(before)
+    }
+
+    @Test
     fun `switching slides ends element editing and the field follows the new caption`() = runTest {
         val vm = viewModel()
         vm.onAddTextElement()
