@@ -175,7 +175,22 @@ export class MessageReadStatusService {
 
   /**
    * Batched variant for multiple participants in the same conversation.
-   * Reduces N×3 DB queries to 1 cursor batch + 1 participant batch + N parallel counts.
+   *
+   * Fires on the hottest path — `MessageHandler._updateUnreadCounts` calls this on
+   * EVERY `message:new` for every participant. All participants share an IDENTICAL
+   * count predicate (`conversationId`, `deletedAt: null`, `senderId ≠ <sender>`);
+   * the ONLY per-participant variance is the lower `createdAt` floor. N counts over
+   * the same ordered set is therefore N searches in one array — collapsed here into
+   * **1 cursor batch + 1 `message.findMany`** (index-backed by
+   * `[conversationId, deletedAt, createdAt]`) + N in-memory upper-bound binary
+   * searches. Output is byte-identical to the previous N parallel `message.count`.
+   *
+   * Counting floor per participant: `cursor.lastReadAt → joinedAt → null` (no floor).
+   * The `findMany` lower bound is the OLDEST floor across participants, so only the
+   * messages any participant could count are fetched once; a `null` floor (never read,
+   * no `joinedAt`) drops the bound entirely — the same full set the old unbounded
+   * `count` scanned, but in a single round-trip instead of N.
+   *
    * Returns a Map<participantId, unreadCount>. Accepts pre-resolved participant rows
    * (id + joinedAt) to avoid redundant participant lookups.
    */
@@ -196,24 +211,52 @@ export class MessageReadStatusService {
       });
       const cursorMap = new Map(cursors.map((c) => [c.participantId, c.lastReadAt]));
 
-      // Run message counts in parallel, one per participant
-      const results = await Promise.all(
-        participants.map(async (p) => {
-          const lastReadAt = cursorMap.get(p.id) ?? null;
-          const floor: Date | null = lastReadAt ?? p.joinedAt ?? null;
-          const count = await this.prisma.message.count({
-            where: {
-              conversationId,
-              deletedAt: null,
-              senderId: { not: senderId },
-              ...(floor ? { createdAt: { gt: floor } } : {}),
-            },
-          });
-          return [p.id, count] as const;
-        })
-      );
+      // Per-participant counting floor (ms). `lastReadAt → joinedAt → null` — identical
+      // reduction to the previous `lastReadAt ?? p.joinedAt ?? null`.
+      const floors = participants.map((p) => ({
+        id: p.id,
+        floorMs: ((cursorMap.get(p.id) ?? p.joinedAt)?.getTime() ?? null) as number | null,
+      }));
 
-      return new Map(results);
+      // A null floor counts every candidate message (no lower bound). If ANY participant
+      // is unbounded we must fetch the full history; otherwise the oldest floor is enough.
+      const hasUnboundedFloor = floors.some((f) => f.floorMs === null);
+      const minFloorMs = hasUnboundedFloor
+        ? null
+        : Math.min(...floors.map((f) => f.floorMs as number));
+
+      // ONE query replaces N parallel counts. Same predicate as the old per-participant
+      // count (`senderId ≠ <sender>`); `orderBy createdAt asc` walks the index in order.
+      const rows = await this.prisma.message.findMany({
+        where: {
+          conversationId,
+          deletedAt: null,
+          senderId: { not: senderId },
+          ...(minFloorMs !== null ? { createdAt: { gt: new Date(minFloorMs) } } : {}),
+        },
+        select: { createdAt: true },
+        orderBy: { createdAt: "asc" },
+      });
+      // Ascending timestamps. JS sort is a defensive net (the DB already returns index
+      // order) so the binary search holds regardless of the source ordering.
+      const timestamps = rows.map((r) => r.createdAt.getTime()).sort((a, b) => a - b);
+
+      // unread(F) = count of timestamps strictly > F. Upper-bound binary search on the
+      // ascending array: first index where ts > F → `length - lo`. Strict `>` mirrors the
+      // old `createdAt: { gt: floor }` (a message at exactly the floor is not counted).
+      const countAbove = (floorMs: number | null): number => {
+        if (floorMs === null) return timestamps.length;
+        let lo = 0;
+        let hi = timestamps.length;
+        while (lo < hi) {
+          const mid = (lo + hi) >>> 1;
+          if (timestamps[mid] > floorMs) hi = mid;
+          else lo = mid + 1;
+        }
+        return timestamps.length - lo;
+      };
+
+      return new Map(floors.map((f) => [f.id, countAbove(f.floorMs)]));
     } catch (error) {
       logger.error("[MessageReadStatus] Error batch-computing unread counts", error);
       return new Map(participants.map((p) => [p.id, 0]));
