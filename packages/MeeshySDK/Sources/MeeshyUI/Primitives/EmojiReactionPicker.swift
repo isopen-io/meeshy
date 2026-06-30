@@ -156,7 +156,7 @@ public struct EmojiReactionPicker: View {
         }
         .padding(.horizontal, 10 * scale)
         .padding(.vertical, 6 * scale)
-        .background(stripBackground)
+        .modifier(QuickReactionStripChrome(style: style))
     }
 
     private var scrollableQuickEmojiStrip: some View {
@@ -187,22 +187,7 @@ public struct EmojiReactionPicker: View {
             expandButton
                 .padding(.trailing, 10 * scale)
         }
-        .background(stripBackground)
-    }
-
-    private var stripBackground: some View {
-        Group {
-            if style == .dark {
-                Capsule().fill(.ultraThinMaterial)
-                    .overlay(Capsule().fill(Color.black.opacity(0.2)))
-                    .overlay(Capsule().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
-                    .shadow(color: .black.opacity(0.3), radius: 12, y: 4)
-            } else {
-                Capsule().fill(.regularMaterial)
-                    .overlay(Capsule().stroke(Color.gray.opacity(0.15), lineWidth: 0.5))
-                    .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
-            }
-        }
+        .modifier(QuickReactionStripChrome(style: style))
     }
 
     private func reactToEmoji(_ emoji: String) {
@@ -212,6 +197,49 @@ public struct EmojiReactionPicker: View {
             withAnimation { reactedEmoji = nil }
         }
         onReact?(emoji)
+    }
+}
+
+// MARK: - Quick-reaction capsule chrome (Liquid Glass on iOS 26)
+
+/// Floating chrome of the quick-reaction capsule (the pill behind the emoji
+/// strip). On iOS 26 it renders real Liquid Glass via the shared `adaptiveGlass`
+/// atom — the capsule samples whatever sits behind it (the message list, the
+/// long-press scrim, a full-screen story), so it adapts to any backdrop without
+/// the manual dark veil. Pre-iOS-26 keeps the exact style-driven material so the
+/// forced-`.dark` contexts (e.g. the story sidebar in a light-mode system) stay
+/// dark. The elevation shadow lives outside the glass — a floating-overlay cue,
+/// as on `ContextActionMenu` / `FloatingCallPillView` (no-shadow flatten rule
+/// excepted for floating chrome).
+private struct QuickReactionStripChrome: ViewModifier {
+    let style: EmojiReactionPicker.Style
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content
+                .adaptiveGlass(in: Capsule())
+                .shadow(
+                    color: .black.opacity(style == .dark ? 0.3 : 0.08),
+                    radius: style == .dark ? 12 : 8,
+                    y: style == .dark ? 4 : 2
+                )
+        } else {
+            content.background(legacyBackground)
+        }
+    }
+
+    @ViewBuilder
+    private var legacyBackground: some View {
+        if style == .dark {
+            Capsule().fill(.ultraThinMaterial)
+                .overlay(Capsule().fill(Color.black.opacity(0.2)))
+                .overlay(Capsule().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
+                .shadow(color: .black.opacity(0.3), radius: 12, y: 4)
+        } else {
+            Capsule().fill(.regularMaterial)
+                .overlay(Capsule().stroke(Color.gray.opacity(0.15), lineWidth: 0.5))
+                .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
+        }
     }
 }
 

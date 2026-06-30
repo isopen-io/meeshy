@@ -20,9 +20,10 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 > - **Différé prioritaire 65w+ : classe `t()||fallback`** (~220 occ / ~36 fichiers restants — admin, settings, layout, video-calls/audio-effects, conversations divers, hooks recovery) par lots **bornés et orthogonaux** aux PR en vol. Vérifier les PR ouvertes avant de choisir une surface.
 >
 > **POINTEUR iOS (suffixe `i`)** — piste indépendante des itérations web.
-> - **Dernière itération iOS : `52i`** (adoption Liquid Glass lot 2 : `MentionSuggestionPanel` + `MiniAudioPlayerBar` → `adaptiveGlass`). Base = `main` HEAD `19682db` (post #1072).
-> - **Base de départ 53i : `main` HEAD** (toujours resync sur `main` avant de commencer).
-> - **Différé prioritaire iOS 53i+ : Glass adoption (reste)** — `MessageOverlayMenu` (reaction picker, vérifier glass-in-glass), `LocationPickerView` (sheet, lot dédié), `MessageInfoSheet`, `InviteFriendsSheet`, `StatusBubbleOverlay`. Puis ladder catégoriel arc-en-ciel + grandes surfaces polices figées. Voir analyse 52i § Différés.
+> - **Dernière itération iOS : `53i`** (adoption Liquid Glass lot 3 : capsule du quick-reaction picker `EmojiReactionPicker.stripBackground` → `adaptiveGlass` natif iOS 26 + fallback `style`-driven préservé pré-26 ; couvre les 4 surfaces partagées dont `MessageOverlayMenu.emojiQuickBar`). Branche `claude/upbeat-euler-b625oe`, base = `main` HEAD.
+> - **52i** = `MentionSuggestionPanel` + `MiniAudioPlayerBar` → `adaptiveGlass` (commit `f777a95`, mergé ; doc d'analyse/plan non committé à l'époque — rattrapé via History).
+> - **Base de départ 54i : `main` HEAD** (toujours resync sur `main` avant de commencer ; supprimer la branche mergée).
+> - **Différé prioritaire iOS 54i+ : Glass adoption (reste)** — `LocationPickerView` (sheet, lot dédié), `ContactCardView` (carte vs sheet à arbitrer), wrapper réactions pièce jointe `BubbleStandardLayout+Media`. **NE PAS re-flagger** comme dette : `EmojiFullPickerSheet.sheetBackground` + `EmojiKeyboardPanel` (surfaces de contenu, verre derrière scroll = anti-lisibilité HIG) ni `MessageOverlayMenu.panelBackground` (feuille détail). Puis ladder catégoriel arc-en-ciel + grandes surfaces polices figées. Voir analyses 52i/53i § Différés.
 > **POINTEUR AUTORITAIRE (mis à jour 67w)** — le tableau Current State ci-dessous a divergé (lignes dupliquées par des agents parallèles résolvant des conflits par ajout ; cf. § History pour la source fiable, append-only).
 > - **Dernière itération web mergée : `68w` → PR (a11y clavier contrôles plein écran appel vidéo — `DraggableParticipantOverlay` + `VideoCallInterface`)** — branche `claude/practical-fermat-ug7okk`. (67w = #1078, a11y clavier liste conversations + ARIA tuile audio.)
 > - **Base de départ 69w : `main` HEAD** (toujours resync sur `main` avant de commencer ; supprimer la branche mergée).
@@ -238,6 +239,8 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 | 49i | claude/upbeat-euler-c48142 (SDK MeeshyUI palette) | #630 | ✅ |
 | 50w | claude/focused-brown-u6wp8r (i18n/a11y audio/media/v2) | #641 | ✅ |
 | 51i | claude/upbeat-euler-oc9dm6 (Liquid Glass context menu) | #651 | ✅ |
+| 52i | (commit `f777a95`) (Liquid Glass lot 2 : MentionSuggestionPanel + MiniAudioPlayerBar) | — | ✅ |
+| 53i | claude/upbeat-euler-b625oe (Liquid Glass lot 3 : capsule EmojiReactionPicker → adaptiveGlass iOS 26 + fallback style-driven préservé) | ⏳ | ⏳ |
 | 52w | claude/practical-fermat-whger0 (i18n ranking type labels) | #765 | ✅ |
 | 53w | claude/practical-fermat-isk47b (i18n+a11y liste conv v2) | #766 | ✅ |
 | 53wb | claude/practical-fermat-i7juiv (i18n page reel deep-link) | #764 | ✅ |
