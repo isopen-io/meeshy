@@ -249,7 +249,7 @@ public final class StoryMediaLayer: CALayer {
     /// côté rendu. Le cadre foreground (`StoryCanvasUIView.applyForegroundFrames`)
     /// pose son `border` sur ce même layer : bordure et image héritent donc
     /// exactement du même arrondi, sans constante dupliquée.
-    static let cornerRadiusFraction: CGFloat = 0.06
+    nonisolated static let cornerRadiusFraction: CGFloat = 0.06
 
     /// Base design size (in 1080-référentiel pixels) of a media before user `scale`
     /// is layered on. Envelope is 65 % of the short canvas side, fitted to aspect.
@@ -271,6 +271,27 @@ public final class StoryMediaLayer: CALayer {
             return CGSize(width: target * ratio, height: target)
         }
         return CGSize(width: target, height: target / ratio)
+    }
+
+    /// Resynchronise l'`AVPlayerLayer` hébergé (et le `cornerRadius`) sur les
+    /// `bounds` courants. `configureVideo` ne pose `avPlayerLayer.frame` qu'à la
+    /// création, et le fast-path gesture (`StoryCanvasUIView`) mute `bounds`
+    /// directement sans recréer le player (réutilisation via `replaceCurrentItem`)
+    /// — sans ça la vidéo foreground gardait son ancienne taille pendant que le
+    /// cadre/bordure grandissait : elle ne remplissait plus son cadre d'effet à
+    /// la bonne proportion (bug resize / player recyclé). `CATransaction` désactive
+    /// l'animation implicite pour ne pas introduire de tween par tick en `.play`.
+    public override nonisolated func layoutSublayers() {
+        super.layoutSublayers()
+        let targetRadius = min(bounds.width, bounds.height) * Self.cornerRadiusFraction
+        let needsRadius = abs(cornerRadius - targetRadius) > 0.01
+        let needsPlayerFrame = avPlayerLayer != nil && avPlayerLayer?.frame != bounds
+        guard needsRadius || needsPlayerFrame else { return }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        if needsRadius { cornerRadius = targetRadius }
+        if needsPlayerFrame { avPlayerLayer?.frame = bounds }
+        CATransaction.commit()
     }
 
     // MARK: - URL resolution
