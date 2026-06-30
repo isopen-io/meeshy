@@ -54,6 +54,10 @@ final class WebRTCService {
     // connection is closed — prevents post-teardown addIceCandidate calls
     // against a disposed RTCPeerConnection (which throw and log spurious errors).
     private var flushCandidatesTask: Task<Void, Never>?
+    // Tracks a single live addIceCandidate task (when remote description is
+    // already set). Cancelled in close() so it cannot outlive teardown and
+    // attempt addIceCandidate on a disposed peer connection.
+    private var pendingCandidateTask: Task<Void, Never>?
 
     private(set) var currentBitrate: Int = QualityThresholds.defaultBitrate
     private(set) var currentQualityLevel: VideoQualityLevel = .excellent
@@ -88,6 +92,7 @@ final class WebRTCService {
         qualityMonitorTask?.cancel()
         disconnectDebounceTask?.cancel()
         flushCandidatesTask?.cancel()
+        pendingCandidateTask?.cancel()
         Logger.webrtc.info("WebRTCService deinit")
     }
 
@@ -176,9 +181,11 @@ final class WebRTCService {
             Logger.webrtc.debug("Buffered ICE candidate (no remote description yet), count=\(self.iceCandidateBuffer.count)")
             return
         }
-        Task {
+        pendingCandidateTask?.cancel()
+        pendingCandidateTask = Task { [weak self] in
+            guard let self else { return }
             do {
-                try await client.addIceCandidate(candidate)
+                try await self.client.addIceCandidate(candidate)
             } catch WebRTCError.noPeerConnection {
                 // Expected after call teardown: peerConnection is nil once
                 // disconnect() runs. Log at debug to avoid error noise in
@@ -458,6 +465,8 @@ final class WebRTCService {
         disconnectDebounceTask = nil
         flushCandidatesTask?.cancel()
         flushCandidatesTask = nil
+        pendingCandidateTask?.cancel()
+        pendingCandidateTask = nil
         client.disconnect()
         iceCandidateBuffer.removeAll()
         hasRemoteDescription = false

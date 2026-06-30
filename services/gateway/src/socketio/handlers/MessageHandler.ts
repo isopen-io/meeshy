@@ -240,8 +240,8 @@ export class MessageHandler {
         messageType: validated.messageType || 'text',
         replyToId: validated.replyToId,
         storyReplyToId: validated.storyReplyToId,
-        forwardedFromId: data.forwardedFromId,
-        forwardedFromConversationId: data.forwardedFromConversationId,
+        forwardedFromId: validated.forwardedFromId,
+        forwardedFromConversationId: validated.forwardedFromConversationId,
         encryptedPayload: data.encryptedPayload as MessageRequest['encryptedPayload'],
         // Effets de message — parité avec POST /messages. Le bitfield final
         // `effectFlags` est recomposé par `MessageProcessor.saveMessage`
@@ -444,8 +444,8 @@ export class MessageHandler {
         messageType: 'text',
         replyToId: validated.replyToId,
         storyReplyToId: validated.storyReplyToId,
-        forwardedFromId: data.forwardedFromId,
-        forwardedFromConversationId: data.forwardedFromConversationId,
+        forwardedFromId: validated.forwardedFromId,
+        forwardedFromConversationId: validated.forwardedFromConversationId,
         isAnonymous,
         // Aligner avec GatewayMessage: attachments are passed as IDs for linking
         attachmentIds: validated.attachmentIds,
