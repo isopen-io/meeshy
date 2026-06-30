@@ -2080,10 +2080,16 @@ final class CallManager: ObservableObject {
             forName: UIScreen.capturedDidChangeNotification,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
+        ) { [weak self] notification in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                let isCapturing = UIScreen.main.isCaptured
+                // UIScreen.main is deprecated in iOS 16+. Use the screen from the
+                // notification object (the specific UIScreen that changed), falling back
+                // to querying all connected window scenes to avoid UIScreen.main.
+                let isCapturing = (notification.object as? UIScreen)?.isCaptured
+                    ?? UIApplication.shared.connectedScenes
+                        .compactMap { $0 as? UIWindowScene }
+                        .contains { $0.screen.isCaptured }
                 Logger.calls.info("Screen capture state changed: \(isCapturing)")
                 if let callId = self.currentCallId {
                     let userId = AuthManager.shared.currentUser?.id ?? ""

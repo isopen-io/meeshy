@@ -2896,3 +2896,107 @@ final class CallForcedLeaveDataTests: XCTestCase {
         XCTAssertNil(event.reason)
     }
 }
+
+// MARK: - rejectPendingCall guard
+
+@MainActor
+final class RejectPendingCallTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(of signature: String, in source: String) -> String? {
+        guard let range = source.range(of: signature) else { return nil }
+        let nextFunc = [
+            source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<nextFunc])
+    }
+
+    func test_rejectPendingCall_guardsPendingCallExists() throws {
+        // If no pending call is present, rejectPendingCall() must be a no-op.
+        // Without this guard, calling rejectPendingCall() with no pendingIncomingCall
+        // would attempt to emit a call:end for a nil callId, sending garbage to the gateway.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func rejectPendingCall()", in: source) else {
+            XCTFail("rejectPendingCall() not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("guard let pending = pendingIncomingCall"),
+            "rejectPendingCall() must guard `pendingIncomingCall != nil` before emitting — " +
+            "calling it when no pending call exists must be a no-op."
+        )
+    }
+
+    func test_rejectPendingCall_emitsCallEndWithPendingCallId() throws {
+        // rejectPendingCall() must emit call:end (emitCallEnd) so the gateway
+        // tears down the pending call session and notifies the waiting peer.
+        // Missing this emit would leave the peer's call ringing indefinitely.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func rejectPendingCall()", in: source) else {
+            XCTFail("rejectPendingCall() not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("emitCallEnd(callId: pending.callId)"),
+            "rejectPendingCall() must call emitCallEnd(callId: pending.callId) — " +
+            "the gateway needs call:end to tear down the waiting call and notify the peer."
+        )
+    }
+
+    func test_rejectPendingCall_clearsPendingIncomingCall() throws {
+        // After rejection, pendingIncomingCall must be cleared so a subsequent
+        // incoming call is not mistakenly treated as a waiting call.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func rejectPendingCall()", in: source) else {
+            XCTFail("rejectPendingCall() not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("pendingIncomingCall = nil"),
+            "rejectPendingCall() must set pendingIncomingCall = nil after rejection — " +
+            "leaving it set would incorrectly show a waiting-call banner for a call that was rejected."
+        )
+    }
+
+    func test_rejectPendingCall_dismissesCallWaitingBanner() throws {
+        // After rejection, the call waiting banner must be hidden so the UI
+        // does not continue to show a dismissed call.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func rejectPendingCall()", in: source) else {
+            XCTFail("rejectPendingCall() not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("showCallWaitingBanner = false"),
+            "rejectPendingCall() must set showCallWaitingBanner = false after rejection — " +
+            "the call waiting banner must be hidden once the pending call is dismissed."
+        )
+    }
+
+    func test_rejectPendingCall_emitCallEnd_beforeClearingPending() throws {
+        // emitCallEnd must happen before pendingIncomingCall is cleared so the callId
+        // is still available when the socket event fires. Reversing this order would
+        // emit call:end with a nil/stale callId.
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func rejectPendingCall()", in: source) else {
+            XCTFail("rejectPendingCall() not found in CallManager.swift"); return
+        }
+        guard let emitRange = body.range(of: "emitCallEnd(callId: pending.callId)"),
+              let clearRange = body.range(of: "pendingIncomingCall = nil") else {
+            XCTFail("Expected emitCallEnd and pendingIncomingCall = nil in rejectPendingCall()"); return
+        }
+        XCTAssertLessThan(
+            emitRange.lowerBound,
+            clearRange.lowerBound,
+            "rejectPendingCall() must emit call:end BEFORE clearing pendingIncomingCall — " +
+            "callId must still be available when the socket emit fires."
+        )
+    }
+}

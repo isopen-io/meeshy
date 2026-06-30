@@ -3502,4 +3502,67 @@ final class CallViewVideoWatchdogSourceGuardTests: XCTestCase {
             "constant — not a bare numeric literal — so the threshold is tuneable in one place."
         )
     }
+
+    // MARK: - Screen Capture Monitoring (iOS 16+ deprecation guard)
+
+    func test_screenCaptureMonitoring_doesNotUseUIScreenMain_isCaptured() throws {
+        // Regression guard: UIScreen.main is deprecated in iOS 16+ for multi-window apps.
+        // startScreenCaptureMonitoring() must read isCaptured from the notification's object
+        // (the specific UIScreen that changed) or from UIWindowScene, never from UIScreen.main.
+        let source = try callManagerSource()
+
+        guard let fnRange = source.range(of: "private func startScreenCaptureMonitoring()") else {
+            XCTFail("startScreenCaptureMonitoring() not found in CallManager.swift")
+            return
+        }
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 800, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        XCTAssertFalse(
+            fnBody.contains("UIScreen.main.isCaptured"),
+            "startScreenCaptureMonitoring() must not use UIScreen.main.isCaptured — " +
+            "UIScreen.main is deprecated in iOS 16+. Read isCaptured from notification.object as? UIScreen " +
+            "or via UIApplication.shared.connectedScenes → UIWindowScene → .screen.isCaptured."
+        )
+    }
+
+    func test_screenCaptureMonitoring_usesNotificationObject_forScreenResolution() throws {
+        // Regression guard: the notification observer must use the UIScreen from the
+        // notification's `object` field (the specific screen that changed) rather than
+        // querying UIScreen.main. This correctly supports multi-screen scenarios and
+        // avoids the deprecated UIScreen.main accessor.
+        let source = try callManagerSource()
+
+        guard let fnRange = source.range(of: "private func startScreenCaptureMonitoring()") else {
+            XCTFail("startScreenCaptureMonitoring() not found in CallManager.swift")
+            return
+        }
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 800, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        XCTAssertTrue(
+            fnBody.contains("notification.object as? UIScreen"),
+            "startScreenCaptureMonitoring() notification closure must use " +
+            "`notification.object as? UIScreen` to obtain the changed screen without UIScreen.main."
+        )
+    }
+
+    func test_screenCaptureMonitoring_notificationObserver_capturesNotification() throws {
+        // Regression guard: the observer closure must accept `notification` (not `_`)
+        // so it can access notification.object for iOS 16+ UIScreen.main deprecation fix.
+        let source = try callManagerSource()
+
+        guard let fnRange = source.range(of: "private func startScreenCaptureMonitoring()") else {
+            XCTFail("startScreenCaptureMonitoring() not found in CallManager.swift")
+            return
+        }
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 800, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        XCTAssertTrue(
+            fnBody.contains("{ [weak self] notification in"),
+            "startScreenCaptureMonitoring() observer closure must receive `notification` (not `_`) " +
+            "to access notification.object for the screen reference."
+        )
+    }
 }
