@@ -622,7 +622,11 @@ export async function searchUsers(fastify: FastifyInstance) {
 
       // Gate de présence : un résultat de recherche n'expose lastActiveAt/isOnline
       // que pour les contacts (ami/affilié) ou modérateur+ (critère strict).
-      const viewer = viewerFromAuthContext((request as AuthenticatedRequest).authContext);
+      const viewer = viewerFromAuthContext(
+        (request as FastifyRequest & {
+          authContext?: { type?: string; userId?: string; registeredUser?: { role?: string } | null };
+        }).authContext,
+      );
       const visibilityMap = await getPresenceVisibilityService(fastify.prisma).resolveForTargets(
         viewer,
         users.map(u => u.id),
