@@ -599,3 +599,26 @@ Append-only log of gotchas and decisions that save time next run.
   (changes.any { pressed }) ; onDragEnd() }`. The **`Final`** pass observes events *after* the transform
   detector consumed them and only watches `pressed`, so it fires exactly on lift without stealing the
   gesture. Pure glue (JVM-exempt); the testable decision (clear vs keep) is the VM's `onTextElementDragEnd`.
+
+## `story-text-element-zorder` — z-order restack (2026-06-30)
+- **The list order IS the z-order.** The canvas renders `slide.elements.forEach { TextElementLayer(...) }`,
+  so later items paint on top → index 0 = back, `lastIndex` = front. Z-order needs **no new field on the
+  element** — restacking is a pure list move within the holding slide. `TO_BACK`→0, `TO_FRONT`→lastIndex,
+  `BACKWARD`→from-1, `FORWARD`→from+1, all `coerceIn(0, lastIndex)`; `target == from` ⇒ inert (same
+  instance). This keeps the model minimal and the publish serialisation unchanged (order already rides).
+- **Same-`when`, four arms, one `coerceIn` covers all boundaries.** Mapping each `StoryZOrder` to a target
+  index then a single clamp + `target == from` guard collapses "already at front/back" and "single
+  element" into one inert path — no per-op boundary branches to miss. Test sweep: 4 op-arms × (move +
+  inert-at-extreme) + unknown-id + single-element + cross-slide isolation = full branch coverage in 13
+  reducer tests.
+- **VM must guard `copy` to keep the same-instance contract.** `_state.update { it.copy(deck = reducer(...)) }`
+  always mints a NEW `UiState` even when the reducer returned the same deck — so `isSameInstanceAs(before)`
+  would fail and an inert tap churns recomposition. Pattern: `val deck = state.deck.reorder(...); if (deck
+  === state.deck) state else state.copy(deck = deck)`. Same shape as `onTextElementDragEnd`'s null-guard.
+  Always pair a "returns same instance when inert" reducer with this guard at the VM edge.
+- **Step-0 conflict recovery (PR #1048).** A prior slice's PR can still be **open with conflicts** when
+  main advanced past its base. Recipe: `git fetch origin main <pr-branch>`; `git checkout -B <pr-branch>
+  origin/<pr-branch>`; `git rebase origin/main`; resolve keeping **both** sides (additive state fields /
+  imports / doc entries); `meeshy.sh check`; `git push --force-with-lease` (fall back to a plain `push -u`
+  if the remote ref was deleted out from under you → "couldn't find remote ref"). Verify with the merge
+  tool; the maintainer may merge it concurrently — re-`get` the PR to confirm `merged:true` before moving on.

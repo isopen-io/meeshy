@@ -589,15 +589,27 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       runs alongside the transform detector (glue). A natural magnetic-alignment gesture — surpasses
       iOS, whose snapping has no per-axis guide overlay here. +25 tests (18 resolver, 7 VM). Pending:
       frosted-glass text backdrops, persistent safe-zone overlay grid.
-- [ ] Z-order management (front/back, forward/backward) persisted for WYSIWYG playback
+- [x] Z-order management (front/back, forward/backward) persisted for WYSIWYG playback
+      (`story-text-element-zorder`): the slide's `elements` list order *is* the paint order (index 0 =
+      back, last = front), so a pure `StorySlideDeck.reorderTextElement(id, StoryZOrder)` restacks the
+      element within its holding slide — `TO_BACK`/`TO_FRONT` jump to either end, `BACKWARD`/`FORWARD`
+      step one place (target index `coerceIn`-clamped to the list bounds). Inert (same instance) on an
+      unknown id, an already-at-the-extreme move, or a single-element slide; only the holding slide is
+      restacked and the selection is preserved. `StoryComposerViewModel.onReorderTextElement` wraps it
+      and keeps the same state instance on an inert move (no recomposition churn). The floating
+      `TextStyleToolbar` gains a 4-button z-order row (send-to-back / backward / forward / bring-to-front)
+      whose order rides into publish via the existing element serialisation. +16 tests (13 reducer, 3 VM);
+      +4 strings × 4 locales. Mirrors iOS's front/back + forward/backward layering controls.
 - [~] Multi-element context menu (edit, duplicate, reorder, delete) — **edit** (tap-to-select +
-      caption/element routing), **delete** (per-element remove handle), and **duplicate**
-      (`story-text-element-duplicate`) done. Duplicate: pure `StorySlideDeck.duplicateTextElement`
+      caption/element routing), **delete** (per-element remove handle), **duplicate**
+      (`story-text-element-duplicate`), and **reorder** (`story-text-element-zorder`, z-order row in the
+      floating toolbar) done. Duplicate: pure `StorySlideDeck.duplicateTextElement`
       clones every styled field as a fresh id right after the source on its slide, nudged by a small
       normalised offset (clamped into the canvas) so the copy is visible, inert when the source id is
       unknown / the new id collides / the slide is at the ≤5 cap; `StoryComposerViewModel.onDuplicateTextElement`
       mints the id, selects the copy, and warns-without-adding at the cap; a duplicate `ContentCopy`
-      handle sits in the floating `TextStyleToolbar`. Pending: reorder (z-order), a unified context menu.
+      handle sits in the floating `TextStyleToolbar`. Pending: a single unified long-press context menu
+      consolidating these per-element actions.
 - [ ] Per-element + per-slide duration; background designation toggle (1 visual + 1 audio/slide)
 - [ ] Repost flow: clone source story + locked attribution badge
 - [ ] Draft save/restore with media persistence + lost-media detection / re-capture prompt
