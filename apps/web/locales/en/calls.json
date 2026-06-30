@@ -126,6 +126,10 @@
     "waiting": {
       "forParticipant": "Waiting for participant...",
       "noVideo": "No video"
+    },
+    "info": {
+      "participant": "{count} participant",
+      "participants": "{count} participants"
     }
   }
 }
