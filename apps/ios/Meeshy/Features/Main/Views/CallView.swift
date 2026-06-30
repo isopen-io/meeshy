@@ -39,6 +39,10 @@ struct CallView: View {
     // spinning forever (the media auto-repair / ICE-restart is §5.8).
     @State private var videoConnectSlow = false
     private let videoConnectWatchdogSeconds: UInt64 = 12
+    // §H2 — After 6s in .offering with no answer, surface a calmer label
+    // so the user knows the call is ringing, not stuck.
+    @State private var sdpOfferSlow = false
+    private let sdpOfferSlowSeconds: UInt64 = 6
 
     var body: some View {
         ZStack {
@@ -266,11 +270,26 @@ struct CallView: View {
                 .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
                 .padding(.bottom, 8)
 
-            // Status text
-            Text(String(localized: "call.outgoing.ringing", defaultValue: "Appel en cours...", bundle: .main))
-                .font(.callout.weight(.medium))
-                .foregroundColor(.white.opacity(0.7))
-                .padding(.bottom, 8)
+            // §H2 — Status: "Appel en cours…" until 6s have elapsed, then the
+            // calmer "En attente du correspondant…" so the user knows the ring
+            // is reaching the peer (not a silent failure). The watchdog task
+            // below drives this flag and auto-cancels on state transition.
+            VStack(spacing: 4) {
+                Text(sdpOfferSlow
+                    ? String(localized: "call.outgoing.waiting", defaultValue: "En attente du correspondant…", bundle: .main)
+                    : String(localized: "call.outgoing.ringing", defaultValue: "Appel en cours...", bundle: .main))
+                    .font(.callout.weight(.medium))
+                    .foregroundColor(.white.opacity(0.7))
+                if sdpOfferSlow {
+                    Text(String(localized: "call.outgoing.waiting.hint", defaultValue: "Le correspondant n'a pas encore répondu.", bundle: .main))
+                        .font(.caption2)
+                        .foregroundColor(.white.opacity(0.45))
+                        .multilineTextAlignment(.center)
+                        .transition(.opacity)
+                }
+            }
+            .padding(.bottom, 8)
+            .animation(.easeInOut(duration: 0.3), value: sdpOfferSlow)
 
             // Call type badge
             callTypeBadge
@@ -286,6 +305,19 @@ struct CallView: View {
                 endCallButton
             }
             .padding(.bottom, 80)
+        }
+        .task {
+            sdpOfferSlow = false
+            try? await Task.sleep(nanoseconds: sdpOfferSlowSeconds * 1_000_000_000)
+            if !Task.isCancelled {
+                withAnimation(.easeInOut(duration: 0.3)) { sdpOfferSlow = true }
+                UIAccessibility.post(
+                    notification: .announcement,
+                    argument: String(localized: "call.outgoing.waiting",
+                                    defaultValue: "En attente du correspondant…",
+                                    bundle: .main)
+                )
+            }
         }
     }
 

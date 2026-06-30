@@ -332,3 +332,209 @@ describe('GET /posts/bookmarks — service error', () => {
     await app.close();
   });
 });
+
+// ─── collectPostContents — embedded comments branch ───────────────────────────
+
+describe('GET /posts/feed — items with embedded comments resolve mentions', () => {
+  it('returns 200 when posts have embedded comments with content', async () => {
+    mockGetFeed.mockResolvedValueOnce({
+      items: [
+        { id: 'p1', content: 'Hello world', comments: [{ content: 'Nice comment' }, { content: null }] },
+        { id: 'p2', content: null, comments: [] },
+      ],
+      hasMore: false,
+      nextCursor: null,
+    });
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: '/posts/feed' });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+describe('GET /posts/feed/stories — with story content and embedded comments', () => {
+  it('returns 200 and collects contents from embedded story comments', async () => {
+    mockGetStories.mockResolvedValueOnce([
+      { id: 's1', content: 'Story content', comments: [{ content: 'Story comment' }] },
+    ]);
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: '/posts/feed/stories' });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+// ─── GET /posts/feed/reels — embedded comments branch (lines 103-116) ────────
+
+describe('GET /posts/feed/reels — with reel items and embedded comments', () => {
+  it('returns 200 and collects content from embedded reel comments', async () => {
+    mockGetReels.mockResolvedValueOnce({
+      items: [
+        { id: 'r1', content: 'Reel content', comments: [{ content: 'Reel comment' }, { content: null }] },
+      ],
+      hasMore: false,
+      nextCursor: null,
+    });
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: '/posts/feed/reels' });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+// ─── GET /posts/feed/statuses — embedded comments branch (lines 141-146) ─────
+
+describe('GET /posts/feed/statuses — with status items and embedded comments', () => {
+  it('returns 200 and collects content from embedded status comments', async () => {
+    mockGetStatuses.mockResolvedValueOnce({
+      items: [
+        { id: 'st1', content: 'Status content', comments: [{ content: 'Status comment' }] },
+      ],
+      hasMore: false,
+      nextCursor: null,
+    });
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: '/posts/feed/statuses' });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+// ─── GET /posts/feed/statuses/discover — embedded comments branch (lines 171-238) ─
+
+describe('GET /posts/feed/statuses/discover — with items and embedded comments', () => {
+  it('returns 200 and collects content from embedded discover status comments', async () => {
+    mockGetDiscoverStatuses.mockResolvedValueOnce({
+      items: [
+        { id: 'ds1', content: 'Discover content', comments: [{ content: 'Discover comment' }] },
+      ],
+      hasMore: false,
+      nextCursor: null,
+    });
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: '/posts/feed/statuses/discover' });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+// ─── GET /posts/user/:userId — embedded comments branch (lines 171-238) ──────
+
+describe('GET /posts/user/:userId — with user posts and embedded comments', () => {
+  it('returns 200 and collects content from embedded comments in user posts', async () => {
+    mockGetUserPosts.mockResolvedValueOnce({
+      items: [
+        { id: 'up1', content: 'User post', comments: [{ content: 'User post comment' }] },
+      ],
+      hasMore: false,
+      nextCursor: null,
+    });
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: `/posts/user/${USER_ID}` });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+// ─── GET /posts/community/:communityId — embedded comments branch (lines 171-238) ─
+
+describe('GET /posts/community/:communityId — with community posts and embedded comments', () => {
+  it('returns 200 and collects content from embedded comments in community posts', async () => {
+    mockGetCommunityFeed.mockResolvedValueOnce({
+      items: [
+        { id: 'cp1', content: 'Community post', comments: [{ content: 'Community comment' }] },
+      ],
+      hasMore: false,
+      nextCursor: null,
+    });
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: '/posts/community/comm-001' });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+// ─── GET /posts/bookmarks — embedded comments branch (lines 263-270) ─────────
+
+describe('GET /posts/bookmarks — with bookmarked posts and embedded comments', () => {
+  it('returns 200 and collects content from embedded comments in bookmarks', async () => {
+    mockGetBookmarks.mockResolvedValueOnce({
+      items: [
+        { id: 'bk1', content: 'Bookmarked post', comments: [{ content: 'Bookmark comment' }] },
+      ],
+      hasMore: false,
+      nextCursor: null,
+    });
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: '/posts/bookmarks' });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+// ─── Query parse fallback branches (false branch of query.success ternaries) ──
+// Each route has: const { cursor, limit } = query.success ? ... : { cursor: undefined, limit: 20 }
+// Sending an invalid query type triggers the false branch
+
+describe('GET /posts/feed — invalid limit uses fallback defaults', () => {
+  it('returns 200 using default limit when limit is invalid type', async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: '/posts/feed?limit=notanumber' });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+describe('GET /posts/feed/reels — invalid limit uses fallback defaults', () => {
+  it('returns 200 using default limit when limit is invalid type', async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: '/posts/feed/reels?limit=notanumber' });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+describe('GET /posts/feed/statuses — invalid limit uses fallback defaults', () => {
+  it('returns 200 using default limit when limit is invalid type', async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: '/posts/feed/statuses?limit=notanumber' });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+describe('GET /posts/feed/statuses/discover — invalid limit uses fallback defaults', () => {
+  it('returns 200 using default limit when limit is invalid type', async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: '/posts/feed/statuses/discover?limit=notanumber' });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+describe('GET /posts/user/:userId — invalid limit uses fallback defaults', () => {
+  it('returns 200 using default limit when limit is invalid type', async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: `/posts/user/${USER_ID}?limit=notanumber` });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+describe('GET /posts/community/:communityId — invalid limit uses fallback defaults', () => {
+  it('returns 200 using default limit when limit is invalid type', async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: '/posts/community/comm-001?limit=notanumber' });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+describe('GET /posts/bookmarks — invalid limit uses fallback defaults', () => {
+  it('returns 200 using default limit when limit is invalid type', async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: '/posts/bookmarks?limit=notanumber' });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});

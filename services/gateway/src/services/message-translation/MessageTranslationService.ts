@@ -535,6 +535,14 @@ export class MessageTranslationService extends EventEmitter {
 
 
   /**
+   * Public entry-point for retranslating an edited message.
+   * Fire-and-forget: callers should `.catch()` the returned promise.
+   */
+  async retranslateMessageAsync(messageId: string, messageData: MessageData): Promise<void> {
+    return this._processRetranslationAsync(messageId, messageData);
+  }
+
+  /**
    * Traite une retraduction d'un message existant
    * OPTIMISATION: Filtre automatiquement les langues cibles identiques à la langue source
    * pour éviter les traductions inutiles (ex: fr → fr)

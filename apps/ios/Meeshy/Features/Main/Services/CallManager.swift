@@ -2083,7 +2083,13 @@ final class CallManager: ObservableObject {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                let isCapturing = UIScreen.main.isCaptured
+                // Swift 6: Notification is not Sendable — avoid capturing it into the Task.
+                // Query all connected window scenes on the MainActor instead. This is
+                // correct for multi-screen setups (Stage Manager, external displays) and
+                // avoids UIScreen.main (deprecated in iOS 16+).
+                let isCapturing = UIApplication.shared.connectedScenes
+                    .compactMap { $0 as? UIWindowScene }
+                    .contains { $0.screen.isCaptured }
                 Logger.calls.info("Screen capture state changed: \(isCapturing)")
                 if let callId = self.currentCallId {
                     let userId = AuthManager.shared.currentUser?.id ?? ""
@@ -2986,10 +2992,19 @@ final class CallManager: ObservableObject {
     }
 
     /// Resolves the preferred transcription/call language for a participant per
-    /// Prisme Linguistique: systemLanguage > regionalLanguage > "fr" fallback.
+    /// Prisme Linguistique (full 5-level chain, mirroring `MeeshyUser.preferredContentLanguages`):
+    ///   1. `systemLanguage`            — primary in-app preference
+    ///   2. `regionalLanguage`          — secondary in-app preference
+    ///   3. `customDestinationLanguage` — per-conversation override
+    ///   4. `deviceLocale`              — OS-level locale (4th priority, normalised to ISO 639-1)
+    ///   5. `"fr"`                      — ultimate fallback
     /// Pure + static — no side effects, no async, safe to unit test directly.
     static func preferredCallLanguage(for user: MeeshyUser?) -> String {
-        user?.systemLanguage ?? user?.regionalLanguage ?? "fr"
+        user?.systemLanguage
+            ?? user?.regionalLanguage
+            ?? user?.customDestinationLanguage
+            ?? MeeshyUser.normalizeLanguageCode(user?.deviceLocale)
+            ?? "fr"
     }
 
     // MARK: - Socket Emit Helpers

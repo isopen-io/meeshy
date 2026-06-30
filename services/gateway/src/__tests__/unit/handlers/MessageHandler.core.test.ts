@@ -3398,7 +3398,7 @@ describe('MessageHandler.handleMessageEdit', () => {
     const existingMessage = makeExistingMessage();
     const updatedMessage = makeUpdatedMessage();
     const retranslationAsync: any = jest.fn(async () => undefined);
-    const mockTranslationService = { _processRetranslationAsync: retranslationAsync };
+    const mockTranslationService = { retranslateMessageAsync: retranslationAsync };
     const prisma = makeMockPrisma({
       message: {
         findFirst: jest.fn(async () => existingMessage),
@@ -3440,7 +3440,7 @@ describe('MessageHandler.handleMessageEdit', () => {
       },
     });
     const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma });
-    (handler as any).translationService = { _processRetranslationAsync: jest.fn(async () => undefined) };
+    (handler as any).translationService = { retranslateMessageAsync: jest.fn(async () => undefined) };
 
     await handler.handleMessageEdit(socket, makeEditData({ content: '  trimmed  ' }), callback);
 
@@ -3474,7 +3474,7 @@ describe('MessageHandler.handleMessageEdit', () => {
       },
     });
     const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma });
-    (handler as any).translationService = { _processRetranslationAsync: jest.fn(async () => undefined) };
+    (handler as any).translationService = { retranslateMessageAsync: jest.fn(async () => undefined) };
     await expect(handler.handleMessageEdit(socket, makeEditData())).resolves.not.toThrow();
   });
 });

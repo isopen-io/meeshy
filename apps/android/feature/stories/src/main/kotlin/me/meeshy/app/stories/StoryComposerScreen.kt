@@ -12,9 +12,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,9 +42,11 @@ import androidx.compose.material.icons.filled.FormatAlignCenter
 import androidx.compose.material.icons.filled.FormatAlignLeft
 import androidx.compose.material.icons.filled.FormatAlignRight
 import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -87,6 +91,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
+import kotlin.math.abs
 import kotlin.math.roundToInt
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -208,6 +213,7 @@ fun StoryComposerScreen(
                             onStyle = { style -> viewModel.onTextElementStyle(element.id, style) },
                             onColor = { color -> viewModel.onTextElementColor(element.id, color) },
                             onAlign = { align -> viewModel.onTextElementAlign(element.id, align) },
+                            onDuplicate = { viewModel.onDuplicateTextElement(element.id) },
                         )
                     }
                 },
@@ -244,18 +250,6 @@ fun StoryComposerScreen(
                 },
             )
 
-            OutlinedButton(
-                onClick = viewModel::onAddTextElement,
-                enabled = state.deck.selectedCanAddTextElement,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.Filled.TextFields, contentDescription = null)
-                Text(
-                    text = stringResource(R.string.stories_composer_add_text),
-                    modifier = Modifier.padding(start = 8.dp),
-                )
-            }
-
             if (state.selectedSlideAttachments.isNotEmpty() || state.selectedSlidePending.isNotEmpty()) {
                 MediaPreviewRow(
                     attachments = state.selectedSlideAttachments,
@@ -264,41 +258,195 @@ fun StoryComposerScreen(
                 )
             }
 
-            OutlinedButton(
-                onClick = {
+            ComposerControlsLayer(
+                band = state.band,
+                visibility = state.draft.visibility,
+                canAddText = state.deck.selectedCanAddTextElement,
+                isUploadingMedia = state.isUploadingMedia,
+                isMediaFull = state.draft.isMediaFull,
+                mediaCount = state.draft.mediaIds.size,
+                hasMedia = state.draft.hasMedia,
+                onFabTap = viewModel::onBandFabTap,
+                onDismiss = viewModel::onBandDismiss,
+                onSwapCategory = viewModel::onBandSwapCategory,
+                onAddText = viewModel::onAddTextElement,
+                onPickMedia = {
                     when (StoryMediaPicker.modeFor(state.draft.remainingMediaSlots)) {
                         StoryMediaPickMode.Single -> pickSingle.launch(imageAndVideo)
                         StoryMediaPickMode.Multiple -> pickMultiple.launch(imageAndVideo)
                         StoryMediaPickMode.None -> Unit
                     }
                 },
-                enabled = !state.isUploadingMedia && !state.draft.isMediaFull,
-                modifier = Modifier.fillMaxWidth(),
+                onSelectVisibility = viewModel::onVisibilityChange,
+            )
+        }
+    }
+}
+
+/**
+ * The bottom-band tools toolbar — parity with iOS's composer FAB column + bottom band
+ * (`Contenu` / `Effets`). Two FABs toggle a tools drawer that animates in above them;
+ * the drawer shows the active [BandCategory]'s tools — Contenu's add-text / add-media
+ * tiles, or Effets' visibility chips. Which category is showing, and whether the drawer
+ * is open at all, is decided by the pure, unit-tested [ComposerBandState]; this
+ * Composable only renders that state and forwards intents. The drawer is dismissable by
+ * a downward swipe and swaps category on a horizontal swipe — natural gestures routed
+ * through [onDismiss] / [onSwapCategory].
+ */
+@Composable
+private fun ComposerControlsLayer(
+    band: ComposerBandState,
+    visibility: StoryVisibility,
+    canAddText: Boolean,
+    isUploadingMedia: Boolean,
+    isMediaFull: Boolean,
+    mediaCount: Int,
+    hasMedia: Boolean,
+    onFabTap: (BandCategory) -> Unit,
+    onDismiss: () -> Unit,
+    onSwapCategory: () -> Unit,
+    onAddText: () -> Unit,
+    onPickMedia: () -> Unit,
+    onSelectVisibility: (StoryVisibility) -> Unit,
+) {
+    val swipeThresholdPx = with(LocalDensity.current) { 48.dp.toPx() }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        AnimatedVisibility(visible = band.isVisible) {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .pointerInput(Unit) {
+                        var total = 0f
+                        detectVerticalDragGestures(
+                            onDragStart = { total = 0f },
+                            onDragEnd = { if (total > swipeThresholdPx) onDismiss() },
+                        ) { change, dy -> change.consume(); total += dy }
+                    }
+                    .pointerInput(Unit) {
+                        var total = 0f
+                        detectHorizontalDragGestures(
+                            onDragStart = { total = 0f },
+                            onDragEnd = { if (abs(total) > swipeThresholdPx) onSwapCategory() },
+                        ) { change, dx -> change.consume(); total += dx }
+                    },
             ) {
-                if (state.isUploadingMedia) {
-                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                } else {
-                    Icon(Icons.Filled.AddPhotoAlternate, contentDescription = null)
+                when (band.activeCategory) {
+                    BandCategory.CONTENU -> ContentTilesRow(
+                        canAddText = canAddText,
+                        isUploadingMedia = isUploadingMedia,
+                        isMediaFull = isMediaFull,
+                        mediaCount = mediaCount,
+                        hasMedia = hasMedia,
+                        onAddText = onAddText,
+                        onPickMedia = onPickMedia,
+                    )
+                    BandCategory.EFFETS -> VisibilityRow(
+                        selected = visibility,
+                        onSelect = onSelectVisibility,
+                        modifier = Modifier.padding(12.dp),
+                    )
+                    null -> Unit
                 }
-                Text(
-                    text = if (state.draft.hasMedia) {
-                        stringResource(
-                            R.string.stories_composer_add_media_count,
-                            state.draft.mediaIds.size,
-                            StoryComposerDraft.MAX_MEDIA,
-                        )
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            BandFab(
+                icon = Icons.Filled.Add,
+                label = stringResource(R.string.stories_composer_band_contenu),
+                active = band.activeCategory == BandCategory.CONTENU,
+                onClick = { onFabTap(BandCategory.CONTENU) },
+            )
+            BandFab(
+                icon = Icons.Filled.Tune,
+                label = stringResource(R.string.stories_composer_band_effets),
+                active = band.activeCategory == BandCategory.EFFETS,
+                onClick = { onFabTap(BandCategory.EFFETS) },
+            )
+        }
+    }
+}
+
+/** One bottom-band FAB. Brand-coloured when its category's drawer is open. */
+@Composable
+private fun BandFab(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    active: Boolean,
+    onClick: () -> Unit,
+) {
+    val container = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondaryContainer
+    val content = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondaryContainer
+    ExtendedFloatingActionButton(
+        onClick = onClick,
+        containerColor = container,
+        contentColor = content,
+        icon = { Icon(icon, contentDescription = null) },
+        text = { Text(label) },
+    )
+}
+
+/** The Contenu drawer's tiles — add-text and pick-media — rendered in [ComposerBand.contentTiles] order. */
+@Composable
+private fun ContentTilesRow(
+    canAddText: Boolean,
+    isUploadingMedia: Boolean,
+    isMediaFull: Boolean,
+    mediaCount: Int,
+    hasMedia: Boolean,
+    onAddText: () -> Unit,
+    onPickMedia: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        ComposerBand.contentTiles.forEach { tile ->
+            when (tile) {
+                ComposerContentTile.TEXT -> BandTile(
+                    icon = { Icon(Icons.Filled.TextFields, contentDescription = null) },
+                    label = stringResource(R.string.stories_composer_add_text),
+                    enabled = canAddText,
+                    onClick = onAddText,
+                    modifier = Modifier.weight(1f),
+                )
+                ComposerContentTile.MEDIA -> BandTile(
+                    icon = {
+                        if (isUploadingMedia) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(Icons.Filled.AddPhotoAlternate, contentDescription = null)
+                        }
+                    },
+                    label = if (hasMedia) {
+                        stringResource(R.string.stories_composer_add_media_count, mediaCount, StoryComposerDraft.MAX_MEDIA)
                     } else {
                         stringResource(R.string.stories_composer_add_media)
                     },
-                    modifier = Modifier.padding(start = 8.dp),
+                    enabled = !isUploadingMedia && !isMediaFull,
+                    onClick = onPickMedia,
+                    modifier = Modifier.weight(1f),
                 )
             }
-
-            VisibilityRow(
-                selected = state.draft.visibility,
-                onSelect = viewModel::onVisibilityChange,
-            )
         }
+    }
+}
+
+/** A single content-drawer tile: an icon over a label, forwarding [onClick]. Glue. */
+@Composable
+private fun BandTile(
+    icon: @Composable () -> Unit,
+    label: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    OutlinedButton(onClick = onClick, enabled = enabled, modifier = modifier) {
+        icon()
+        Text(label, modifier = Modifier.padding(start = 8.dp))
     }
 }
 
@@ -606,6 +754,7 @@ private fun TextStyleToolbar(
     onStyle: (StoryTextStyle) -> Unit,
     onColor: (String) -> Unit,
     onAlign: (StoryTextAlign) -> Unit,
+    onDuplicate: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -625,6 +774,13 @@ private fun TextStyleToolbar(
             AlignToggle(StoryTextAlign.LEFT, element.align, onAlign)
             AlignToggle(StoryTextAlign.CENTER, element.align, onAlign)
             AlignToggle(StoryTextAlign.RIGHT, element.align, onAlign)
+            IconButton(onClick = onDuplicate) {
+                Icon(
+                    Icons.Filled.ContentCopy,
+                    contentDescription = stringResource(R.string.stories_composer_duplicate_element),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(STORY_TEXT_COLORS) { hex ->
@@ -852,9 +1008,10 @@ private fun MediaThumbnail(
 private fun VisibilityRow(
     selected: StoryVisibility,
     onSelect: (StoryVisibility) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     LazyRow(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
