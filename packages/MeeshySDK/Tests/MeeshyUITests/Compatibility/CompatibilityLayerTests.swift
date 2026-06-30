@@ -88,13 +88,11 @@ final class CompatibilityLayerTests: XCTestCase {
             .frame(maxHeight: 200)
             .adaptiveGlass(in: Rectangle())
 
-        // Capsule chrome — floating control toolbars/pills over content
-        // (call-effects toolbar, in-conversation search header, mini audio bar).
-        // Guards the iter-69i adoption sites (and the pre-existing
-        // FloatingCallPillView / MiniAudioPlayerBar capsules).
-        _ = Text("toolbar")
-            .frame(maxWidth: .infinity)
-            .adaptiveGlass(in: Capsule(), tint: .white.opacity(0.12))
+        // Capsule chrome floating above call video (duration badge / effects
+        // toolbar pill) — guards the iter-69i adoption sites.
+        _ = Text("00:42")
+            .padding(.horizontal, 10)
+            .adaptiveGlass(in: Capsule())
     }
 
     @MainActor

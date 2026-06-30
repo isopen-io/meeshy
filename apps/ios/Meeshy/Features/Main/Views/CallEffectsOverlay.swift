@@ -76,7 +76,11 @@ struct CallEffectsOverlay: View {
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 12)
+        // iOS 26 Liquid Glass — floating control toolbar above the call video
+        // (textbook Apple chrome-over-content). SDK Compatibility wrapper owns
+        // the gating + `.ultraThinMaterial` fallback. Applied after sizing.
         .adaptiveGlass(in: Capsule())
+        .clipShape(Capsule())
     }
 
     private func toolbarButton(icon: String, label: String, isActive: Bool, panel: EffectsPanelType) -> some View {

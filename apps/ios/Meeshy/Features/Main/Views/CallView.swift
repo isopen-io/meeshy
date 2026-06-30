@@ -678,7 +678,10 @@ struct CallView: View {
                         .foregroundColor(.white)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
-                        .background(.ultraThinMaterial)
+                        // iOS 26 Liquid Glass — floating duration badge over the
+                        // full-bleed video stream (SDK Compatibility wrapper gates
+                        // the native effect / `.ultraThinMaterial` fallback).
+                        .adaptiveGlass(in: Capsule())
                         .clipShape(Capsule())
                         .padding(12)
                         .accessibilityLabel(String(localized: "call.duration.a11y.label"))
@@ -948,7 +951,10 @@ struct CallView: View {
             }
         }
         .padding(12)
-        .background(.ultraThinMaterial)
+        // iOS 26 Liquid Glass — floating live-transcript panel over the video
+        // stream (same chrome-over-content family as the duration badge / effects
+        // toolbar). SDK Compatibility wrapper gates native effect / fallback.
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 12))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .padding(.horizontal, 16)
         .padding(.bottom, 100)
