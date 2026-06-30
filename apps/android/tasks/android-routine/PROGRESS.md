@@ -2,7 +2,13 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → **Stories (in progress)** → Calls → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → **Calls (started)** → rest`
+
+> Calls kicked off 2026-06-30 with the pure call-lifecycle FSM (`core:model`
+> `me.meeshy.sdk.model.call` — `CallState`/`CallEndReason`/`CallEvent`/`CallStateMachine`). Next:
+> a `:feature:calls` `CallViewModel` (UDF `StateFlow<CallUiState>` driving the FSM via intents) +
+> a minimal call screen (ringing/connecting/connected/ended) so the FSM has a real consumer, then
+> the WebRTC/signalling plumbing. See the Calls plan in the run log + `feature-parity.md §H`.
 
 Stories so far: tray (ring carousel) + cross-group viewer playback engine +
 quick-reaction strip + swipe gestures + realtime reaction socket deltas +
@@ -127,6 +133,25 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
+**Now in the Calls area** (`feature-parity.md §H`). The pure FSM (`core:model`
+`me.meeshy.sdk.model.call`) landed 2026-06-30. Ordered by value:
+1. **`:feature:calls` `CallViewModel` + minimal call screen** — a new Gradle module
+   (`include(":feature:calls")`) with a UDF `CallViewModel` exposing `StateFlow<CallUiState>` derived
+   from `CallState`, driving `CallStateMachine.reduce` from intents (accept/decline/hang-up) and
+   socket/remote events, plus a thin Compose screen rendering ringing/connecting/connected/ended
+   (accent-coherent, natural dismiss). Gives the FSM a real consumer (no dead end). Keep all
+   decisions in the VM/FSM; the screen stays glue.
+2. **Call signalling event models + socket mapping** — Kotlin payload types for `call:initiate`/
+   `:offer`/`:answer`/`:ice-candidate`/`:ended`/`:missed`/`:media-toggled` (parity with iOS
+   `CallManager` emit/listen tables) + a pure mapper from socket frames → `CallEvent`.
+3. **`CallDirection` (incoming/outgoing/missed, raw-degrades to incoming) + `CallMediaType`
+   (audioOnly/audioVideo)** + call-history row model — the remaining pure call enums from iOS
+   `CallModels.swift`/`WebRTCTypes.swift`, feeding a missed/recent-calls list.
+
+Then the heavier WebRTC/Telecom/FCM-full-screen-intent plumbing (glue-heavy; push every testable
+decision into pure helpers/the VM).
+
+--- Stories backlog (area is rich; revisit only if Calls stalls) ---
 Ordered by value:
 0aa. ~~**8 photo filters with intensity**~~ ✅ shipped as `story-photo-filters` (this run) — pure
    `StoryFilterMatrix` (Compose-agnostic `StoryColorMatrix` + per-preset `baseMatrix` + intensity-blended
@@ -312,6 +337,50 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-30 — slice `call-state-machine` ✅ shipped (PR pending → squash-merge) + unblocked & merged `story-sticker-picker-search` (PR #1135)
+- **Step 0 (housekeeping):** the prior run's PR #1135 (`story-sticker-picker-search`) was open and
+  ⚠ blocked on a **pre-existing red `main`** (the `Test web` a11y failure in `invite-user-modal.test.tsx`).
+  `main` has since gone **green** (the fix merged; HEAD `c261f0bd` CI = success). Rebased #1135 onto current
+  `main` (clean, apps/android-only), re-ran CI → **all green** (the once-red `Test web` now passes),
+  local `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL**, then **squash-merged** to `main`
+  (`876f9087`). Hard-rule honoured: never merged past the red CI; merged only once `main` was green.
+- **Then advanced one phase** into the **Calls** area (Stories richness is now sufficient — composer
+  has slides/deck/per-slide media/text-elements/stickers/filters/z-order/snap/canvas-transform/toolbar,
+  all non-UI files tested).
+- **What:** the first Calls brick — a **pure call-lifecycle FSM** in `core:model`
+  (`me.meeshy.sdk.model.call`), the single source of truth the future `:feature:calls` wiring drives.
+  - `CallState` (Idle / Ringing(isOutgoing) / Offering / Connecting / Connected / Reconnecting(attempt) /
+    Ended(reason)) with derived flags `isActive`/`isRinging`/`isEnded`/`canStart`.
+  - `CallEndReason` (Local / Remote / Rejected / Missed / ConnectionLost / Failed(message)) — faithful
+    port of iOS `WebRTCTypes.CallEndReason` incl. the message-carrying `Failed`.
+  - `CallEvent` — the 15 lifecycle triggers (StartOutgoing/ReceiveIncoming/ParticipantJoined/
+    LocalAnswer/RemoteAnswer/MediaConnected/ConnectionStalled/ReconnectFailed/Reject/LocalHangUp/
+    RemoteHangUp/RingTimeout/ConnectionFailed(msg)/Settle).
+  - `CallStateMachine.reduce(state, event, maxReconnectAttempts = 3)` — total, side-effect-free,
+    faithfully mirroring the iOS `CallManager` transition table (outgoing: ringing→offering→connecting→
+    connected; incoming: ringing→connecting→connected; connected→reconnecting on stall; reconnect budget
+    of 3 → `Ended(ConnectionLost)`; ringing timeout → `Missed`; incoming decline → `Rejected`). Every
+    inapplicable event is **inert** (same state); terminal `Ended` only leaves via `Settle` → `Idle`, so
+    the machine always settles and never loops. **Surpasses iOS**, where a real FSM validator is only a
+    P1 "todo" in its calls SOTA plan.
+- **Why `core:model` (not a new `:feature:calls` module):** the FSM is a stateless pure building block
+  (SDK-purity grain test → agnostic, parameter-driven, no product orchestration), and `core:model`
+  already hosts the codebase's pure domain logic (`EmojiUsageRanker`, `ConversationFilter`,
+  `LanguageResolver`). Keeps the slice tight (no Gradle-module wiring) and the FSM reusable by both the
+  app and the SDK. The `:feature:calls` ViewModel + minimal screen that *consume* it are the next slice.
+- **Tests (+31, red → green):** `CallStateMachineTest` (`core:model`). RED captured first (types
+  unresolved). Branch sweep — every `when` arm exercised, including: idle ignores mid-call events;
+  outgoing ringing ignores local-answer & reject; incoming ringing ignores participant-join; offering
+  ignores the (cancelled) ring timeout; connecting ignores a pre-media stall; connected ignores a
+  redundant media-connected; the reconnect-budget boundary (`attempt >= max` → `ConnectionLost`, both
+  default max=3 and max=1); ended is inert and keeps its original reason; plus three end-to-end folds
+  (outgoing happy path, incoming happy path, stall→reconnect→recover).
+- **Verification:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL** (debug APK assembles, all
+  modules' JVM unit tests green; `CallStateMachineTest` 31/31). Diff is `apps/android` only.
+- **Reviewer gate:** PASS — pure stateless building block (SDK-purity respected), behaviour tested
+  through the public `reduce` API (no tautologies, no reflection), near-total branch coverage incl. the
+  inert/no-op and boundary arms, no coverage floor touched.
 
 ### 2026-06-30 — slice `story-sticker-picker-search` ⚠ blocked (PR #1135, merge-blocked on red `main`)
 - **Status:** implementation + tests + reviewer gate all **DONE/PASS**; merge **blocked** by a

@@ -660,3 +660,30 @@ Append-only log of gotchas and decisions that save time next run.
   sticker), each select/add intent must clear the *other*'s selection (`selectedTextElementId = null` when
   selecting a sticker and vice-versa), and `mirrorDraftToSelection` must drop *both* stale ids on a slide
   switch — otherwise a slide change can leave a phantom remove-handle on an object not on the visible slide.
+
+## Decisions (cont.) — Calls area kickoff (2026-06-30)
+- **Calls started with the pure FSM, not the WebRTC plumbing.** First Calls brick = a pure
+  call-lifecycle reducer (`core:model` `me.meeshy.sdk.model.call`: `CallState`/`CallEndReason`/
+  `CallEvent`/`CallStateMachine.reduce`). Faithful port of iOS `CallManager.CallState` +
+  `WebRTCTypes.CallEndReason`. The transition table is THE thing to get right (iOS only validates it
+  informally — a real FSM validator is a P1 todo in `tasks/calls-sota-plan-2026-06-05.md`), so it's the
+  highest-leverage, most-testable first slice. WebRTC/Telecom/FCM plumbing is glue-heavy → comes after.
+- **Why `core:model` and not a new `:feature:calls` module yet.** SDK-purity grain test: the FSM is a
+  stateless, parameter-driven building block agnostic to product orchestration → it belongs with the
+  codebase's other pure domain logic (`EmojiUsageRanker`, `ConversationFilter`, `LanguageResolver`),
+  not behind new-module wiring. The `:feature:calls` VM + screen that *consume* it (giving it a real,
+  non-orphan consumer) are the very next slice. A pure FSM in `core:model` is NOT a dead-end screen —
+  the reviewer's "no dead-end screens" is about navigation/UX, and SDK-purity explicitly endorses
+  stateless building blocks.
+- **FSM shape that keeps branch coverage honest + safe:** model phase only (media-type/mute live
+  alongside, never inside the state — matches iOS); make every inapplicable (state, event) pair
+  **inert** (return the same state) so the machine is total and idempotent; let terminal `Ended` leave
+  only via `Settle`→`Idle` so it always settles and never loops. A shared `terminal(event)` helper maps
+  the from-any-active-phase enders (LocalHangUp/RemoteHangUp/ConnectionFailed) so each per-state `when`
+  stays short. Reconnect budget (`attempt >= maxReconnectAttempts`, default 3 per iOS) → boundary tests
+  at both default max=3 and max=1.
+- **Merge-gate: unblock-then-merge a stale ⚠-blocked PR before the new slice.** PR #1135 had been
+  blocked on a pre-existing red `main` (web a11y test). Step 0 each run: if the prior PR is blocked on
+  `main`, re-check `main`'s latest CI — once green, rebase the blocked branch onto it
+  (`git rebase origin/main`, force-with-lease push), re-run CI, and squash-merge once green. Never merge
+  past red CI; the red must be gone (fixed on `main`), not bypassed.
