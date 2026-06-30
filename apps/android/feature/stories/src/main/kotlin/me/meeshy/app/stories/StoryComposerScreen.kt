@@ -6,10 +6,13 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -67,9 +70,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -193,9 +198,11 @@ fun StoryComposerScreen(
                 onTransform = viewModel::onCanvasTransform,
                 onElementTap = viewModel::onSelectTextElement,
                 onElementDrag = viewModel::onTextElementMoved,
+                onElementDragEnd = viewModel::onTextElementDragEnd,
                 onElementTransform = viewModel::onTextElementTransform,
                 onElementRemove = viewModel::onRemoveTextElement,
                 onBackgroundTap = viewModel::onDeselectTextElement,
+                snapFeedback = state.snapFeedback,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
@@ -468,13 +475,21 @@ private fun StoryCanvasSurface(
     onTransform: (Float, Float, Float, Float, Float) -> Unit,
     onElementTap: (String) -> Unit,
     onElementDrag: (String, Float, Float) -> Unit,
+    onElementDragEnd: () -> Unit,
     onElementTransform: (String, Float, Float) -> Unit,
     onElementRemove: (String) -> Unit,
     onBackgroundTap: () -> Unit,
+    snapFeedback: SnapFeedback?,
     modifier: Modifier = Modifier,
     floatingToolbar: @Composable () -> Unit = {},
 ) {
     val canvasLabel = stringResource(R.string.stories_composer_canvas)
+    val guideColor = MaterialTheme.colorScheme.primary
+    val warnBorder = if (snapFeedback?.withinSafeZone == false) {
+        BorderStroke(2.dp, MaterialTheme.colorScheme.error)
+    } else {
+        null
+    }
     var canvasWidthPx by remember { mutableFloatStateOf(0f) }
     var canvasHeightPx by remember { mutableFloatStateOf(0f) }
     var selectedHalfHeightPx by remember { mutableFloatStateOf(0f) }
@@ -490,6 +505,13 @@ private fun StoryCanvasSurface(
                 .aspectRatio(9f / 16f)
                 .clip(RoundedCornerShape(16.dp))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
+                .then(
+                    if (warnBorder != null) {
+                        Modifier.border(warnBorder, RoundedCornerShape(16.dp))
+                    } else {
+                        Modifier
+                    },
+                )
                 .onSizeChanged {
                     canvasWidthPx = it.width.toFloat()
                     canvasHeightPx = it.height.toFloat()
@@ -517,6 +539,26 @@ private fun StoryCanvasSurface(
                         },
                 )
             }
+            if (snapFeedback != null) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    snapFeedback.verticalGuide?.let { gx ->
+                        drawLine(
+                            color = guideColor,
+                            start = Offset(gx * size.width, 0f),
+                            end = Offset(gx * size.width, size.height),
+                            strokeWidth = 2f,
+                        )
+                    }
+                    snapFeedback.horizontalGuide?.let { gy ->
+                        drawLine(
+                            color = guideColor,
+                            start = Offset(0f, gy * size.height),
+                            end = Offset(size.width, gy * size.height),
+                            strokeWidth = 2f,
+                        )
+                    }
+                }
+            }
             textElements.forEach { element ->
                 TextElementLayer(
                     element = element,
@@ -529,6 +571,7 @@ private fun StoryCanvasSurface(
                             onElementDrag(element.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx)
                         }
                     },
+                    onDragEnd = onElementDragEnd,
                     onTransform = { zoom, rotationDeg -> onElementTransform(element.id, zoom, rotationDeg) },
                     onRemove = { onElementRemove(element.id) },
                     onMeasured = { size ->
@@ -578,6 +621,7 @@ private fun TextElementLayer(
     canvasHeightPx: Float,
     onTap: () -> Unit,
     onDrag: (Float, Float) -> Unit,
+    onDragEnd: () -> Unit,
     onTransform: (Float, Float) -> Unit,
     onRemove: () -> Unit,
     onMeasured: (IntSize) -> Unit = {},
@@ -605,6 +649,18 @@ private fun TextElementLayer(
                 detectTransformGestures { _, pan, zoom, rotation ->
                     onDrag(pan.x, pan.y)
                     onTransform(zoom, rotation)
+                }
+            }
+            .pointerInput(element.id) {
+                // Observes the Final pass without consuming, so it fires the moment
+                // the drag/pinch lifts (every pointer up) — clearing the snap guides —
+                // while the transform detector above still owns the gesture deltas.
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    do {
+                        val event = awaitPointerEvent(PointerEventPass.Final)
+                    } while (event.changes.any { it.pressed })
+                    onDragEnd()
                 }
             }
             .background(
