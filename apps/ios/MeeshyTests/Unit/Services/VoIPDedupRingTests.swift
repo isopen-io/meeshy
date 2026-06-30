@@ -112,4 +112,22 @@ final class VoIPDedupRingTests: XCTestCase {
         ring.insert("c1", now: t0)
         XCTAssertFalse(ring.contains("c1", now: t0.addingTimeInterval(3600)))
     }
+
+    // MARK: - Insert also purges
+
+    func test_insert_alsoRemovesExpiredEntries() {
+        // insert() calls purgeExpired() before appending, so old entries are
+        // evicted on any write — not only on contains(). This matters under
+        // capacity pressure: without purge-on-insert the capacity check fires
+        // and drops the oldest (possibly still live) entry.
+        var ring = VoIPDedupRing(capacity: 10, ttl: 30)
+        let t0 = Date(timeIntervalSince1970: 1_000_000)
+        ring.insert("c1", now: t0)
+        ring.insert("c2", now: t0.addingTimeInterval(1))
+        XCTAssertEqual(ring.count, 2)
+        // Inserting at t0+60 (beyond 30s TTL) should purge c1 and c2 first.
+        ring.insert("c3", now: t0.addingTimeInterval(60))
+        XCTAssertEqual(ring.count, 1, "Expired entries must be purged by insert(), leaving only c3")
+        XCTAssertTrue(ring.contains("c3", now: t0.addingTimeInterval(60)))
+    }
 }

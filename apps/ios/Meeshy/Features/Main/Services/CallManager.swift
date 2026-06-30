@@ -3567,10 +3567,15 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
         // already managed by didDeactivate/didActivate; we only handle video here
         // so the peer receives a proper "camera off" signal instead of a frozen
         // last frame during the hold.
+        // CallKit contract: fulfill() synchronously before the delegate method
+        // returns, matching the pattern used for CXAnswerCallAction and
+        // CXEndCallAction. Fulfilling inside a Task delays settlement to the next
+        // main-runloop tick, which violates the contract and can cause CallKit to
+        // time out the action.
         let isOnHold = action.isOnHold
+        action.fulfill()
         Task { @MainActor [weak self] in
             self?.manager?.handleHold(isOnHold)
-            action.fulfill()
         }
     }
 
