@@ -29,7 +29,11 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -40,6 +44,7 @@ import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.FormatAlignCenter
 import androidx.compose.material.icons.filled.FormatAlignLeft
 import androidx.compose.material.icons.filled.FormatAlignRight
@@ -47,6 +52,7 @@ import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VerticalAlignBottom
 import androidx.compose.material.icons.filled.VerticalAlignTop
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -98,6 +104,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -163,6 +170,17 @@ fun StoryComposerScreen(
 
     val imageAndVideo = PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo)
 
+    var showStickerPicker by remember { mutableStateOf(false) }
+    if (showStickerPicker) {
+        StickerPickerDialog(
+            onPick = { emoji ->
+                viewModel.onAddSticker(emoji)
+                showStickerPicker = false
+            },
+            onDismiss = { showStickerPicker = false },
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -204,13 +222,22 @@ fun StoryComposerScreen(
                 colorMatrix = state.selectedSlideFilterMatrix,
                 textElements = state.selectedSlideTextElements,
                 selectedElement = state.selectedTextElement,
+                stickers = state.selectedSlideStickers,
+                selectedStickerId = state.selectedStickerId,
                 onTransform = viewModel::onCanvasTransform,
                 onElementTap = viewModel::onSelectTextElement,
                 onElementDrag = viewModel::onTextElementMoved,
                 onElementDragEnd = viewModel::onTextElementDragEnd,
                 onElementTransform = viewModel::onTextElementTransform,
                 onElementRemove = viewModel::onRemoveTextElement,
-                onBackgroundTap = viewModel::onDeselectTextElement,
+                onStickerTap = viewModel::onSelectSticker,
+                onStickerDrag = viewModel::onStickerMoved,
+                onStickerTransform = viewModel::onStickerTransform,
+                onStickerRemove = viewModel::onRemoveSticker,
+                onBackgroundTap = {
+                    viewModel.onDeselectTextElement()
+                    viewModel.onDeselectSticker()
+                },
                 snapFeedback = state.snapFeedback,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -274,6 +301,7 @@ fun StoryComposerScreen(
                 selectedFilter = state.selectedSlideFilter,
                 filterIntensity = state.selectedSlideFilterIntensity,
                 canAddText = state.deck.selectedCanAddTextElement,
+                canAddSticker = state.deck.selectedCanAddSticker,
                 isUploadingMedia = state.isUploadingMedia,
                 isMediaFull = state.draft.isMediaFull,
                 mediaCount = state.draft.mediaIds.size,
@@ -282,6 +310,7 @@ fun StoryComposerScreen(
                 onDismiss = viewModel::onBandDismiss,
                 onSwapCategory = viewModel::onBandSwapCategory,
                 onAddText = viewModel::onAddTextElement,
+                onAddSticker = { showStickerPicker = true },
                 onPickMedia = {
                     when (StoryMediaPicker.modeFor(state.draft.remainingMediaSlots)) {
                         StoryMediaPickMode.Single -> pickSingle.launch(imageAndVideo)
@@ -314,6 +343,7 @@ private fun ComposerControlsLayer(
     selectedFilter: StoryFilter?,
     filterIntensity: Float,
     canAddText: Boolean,
+    canAddSticker: Boolean,
     isUploadingMedia: Boolean,
     isMediaFull: Boolean,
     mediaCount: Int,
@@ -322,6 +352,7 @@ private fun ComposerControlsLayer(
     onDismiss: () -> Unit,
     onSwapCategory: () -> Unit,
     onAddText: () -> Unit,
+    onAddSticker: () -> Unit,
     onPickMedia: () -> Unit,
     onSelectVisibility: (StoryVisibility) -> Unit,
     onSelectFilter: (StoryFilter?) -> Unit,
@@ -353,11 +384,13 @@ private fun ComposerControlsLayer(
                 when (band.activeCategory) {
                     BandCategory.CONTENU -> ContentTilesRow(
                         canAddText = canAddText,
+                        canAddSticker = canAddSticker,
                         isUploadingMedia = isUploadingMedia,
                         isMediaFull = isMediaFull,
                         mediaCount = mediaCount,
                         hasMedia = hasMedia,
                         onAddText = onAddText,
+                        onAddSticker = onAddSticker,
                         onPickMedia = onPickMedia,
                     )
                     BandCategory.EFFETS -> Column(
@@ -419,11 +452,13 @@ private fun BandFab(
 @Composable
 private fun ContentTilesRow(
     canAddText: Boolean,
+    canAddSticker: Boolean,
     isUploadingMedia: Boolean,
     isMediaFull: Boolean,
     mediaCount: Int,
     hasMedia: Boolean,
     onAddText: () -> Unit,
+    onAddSticker: () -> Unit,
     onPickMedia: () -> Unit,
 ) {
     Row(
@@ -456,6 +491,13 @@ private fun ContentTilesRow(
                     },
                     enabled = !isUploadingMedia && !isMediaFull,
                     onClick = onPickMedia,
+                    modifier = Modifier.weight(1f),
+                )
+                ComposerContentTile.STICKER -> BandTile(
+                    icon = { Icon(Icons.Filled.EmojiEmotions, contentDescription = null) },
+                    label = stringResource(R.string.stories_composer_add_sticker),
+                    enabled = canAddSticker,
+                    onClick = onAddSticker,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -501,12 +543,18 @@ private fun StoryCanvasSurface(
     colorMatrix: StoryColorMatrix,
     textElements: List<StoryTextElement>,
     selectedElement: StoryTextElement?,
+    stickers: List<StoryStickerElement>,
+    selectedStickerId: String?,
     onTransform: (Float, Float, Float, Float, Float) -> Unit,
     onElementTap: (String) -> Unit,
     onElementDrag: (String, Float, Float) -> Unit,
     onElementDragEnd: () -> Unit,
     onElementTransform: (String, Float, Float) -> Unit,
     onElementRemove: (String) -> Unit,
+    onStickerTap: (String) -> Unit,
+    onStickerDrag: (String, Float, Float) -> Unit,
+    onStickerTransform: (String, Float, Float) -> Unit,
+    onStickerRemove: (String) -> Unit,
     onBackgroundTap: () -> Unit,
     snapFeedback: SnapFeedback?,
     modifier: Modifier = Modifier,
@@ -607,6 +655,22 @@ private fun StoryCanvasSurface(
                     onMeasured = { size ->
                         if (element.id == selectedElement?.id) selectedHalfHeightPx = size.height / 2f
                     },
+                )
+            }
+            stickers.forEach { sticker ->
+                StickerLayer(
+                    sticker = sticker,
+                    selected = sticker.id == selectedStickerId,
+                    canvasWidthPx = canvasWidthPx,
+                    canvasHeightPx = canvasHeightPx,
+                    onTap = { onStickerTap(sticker.id) },
+                    onDrag = { dxPx, dyPx ->
+                        if (canvasWidthPx > 0f && canvasHeightPx > 0f) {
+                            onStickerDrag(sticker.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx)
+                        }
+                    },
+                    onTransform = { zoom, rotationDeg -> onStickerTransform(sticker.id, zoom, rotationDeg) },
+                    onRemove = { onStickerRemove(sticker.id) },
                 )
             }
             if (selectedElement != null) {
@@ -738,6 +802,120 @@ private fun TextElementLayer(
     }
 }
 
+/**
+ * One on-canvas emoji sticker: placed at its normalised ([StoryStickerElement.x],
+ * [StoryStickerElement.y]) of the measured canvas (centred on that point), draggable,
+ * pinch/rotate-able with one gesture, tappable to select, and — when selected —
+ * carrying a small remove affordance. The normalised→pixel placement and the
+ * pixel→normalised drag delta are the only arithmetic here; the clamp lives in the
+ * pure [StoryStickerElement]. Mirrors [TextElementLayer]; pure glue.
+ */
+@Composable
+private fun StickerLayer(
+    sticker: StoryStickerElement,
+    selected: Boolean,
+    canvasWidthPx: Float,
+    canvasHeightPx: Float,
+    onTap: () -> Unit,
+    onDrag: (Float, Float) -> Unit,
+    onTransform: (Float, Float) -> Unit,
+    onRemove: () -> Unit,
+) {
+    var sizePx by remember { mutableStateOf(IntSize.Zero) }
+    Box(
+        modifier = Modifier
+            .offset {
+                IntOffset(
+                    x = (sticker.x * canvasWidthPx - sizePx.width / 2f).roundToInt(),
+                    y = (sticker.y * canvasHeightPx - sizePx.height / 2f).roundToInt(),
+                )
+            }
+            .graphicsLayer {
+                scaleX = sticker.scale
+                scaleY = sticker.scale
+                rotationZ = sticker.rotationDeg
+            }
+            .onSizeChanged { sizePx = it }
+            .pointerInput(sticker.id) { detectTapGestures { onTap() } }
+            .pointerInput(sticker.id) {
+                detectTransformGestures { _, pan, zoom, rotation ->
+                    onDrag(pan.x, pan.y)
+                    onTransform(zoom, rotation)
+                }
+            }
+            .background(
+                color = if (selected) Color.Black.copy(alpha = 0.25f) else Color.Transparent,
+                shape = RoundedCornerShape(8.dp),
+            )
+            .padding(4.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text = sticker.emoji, fontSize = STICKER_BASE_FONT_SIZE)
+        if (selected) {
+            Surface(
+                onClick = onRemove,
+                shape = RoundedCornerShape(50),
+                color = Color.Black.copy(alpha = 0.55f),
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(20.dp),
+            ) {
+                Icon(
+                    Icons.Filled.Close,
+                    contentDescription = stringResource(R.string.stories_composer_remove_sticker),
+                    tint = Color.White,
+                    modifier = Modifier.padding(2.dp),
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The emoji sticker picker — a simple grid of the built-in [STORY_STICKER_EMOJIS].
+ * Tapping an emoji forwards it to [onPick] (which adds it to the canvas and closes the
+ * dialog). The categorised + searchable picker is a tracked follow-up; this gives the
+ * sticker feature a real entry point. Pure glue.
+ */
+@Composable
+private fun StickerPickerDialog(
+    onPick: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.stories_composer_cancel))
+            }
+        },
+        title = { Text(stringResource(R.string.stories_composer_add_sticker)) },
+        text = {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(STICKER_PICKER_COLUMNS),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                gridItems(STORY_STICKER_EMOJIS) { emoji ->
+                    Text(
+                        text = emoji,
+                        fontSize = STICKER_PICKER_FONT_SIZE,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { onPick(emoji) }
+                            .padding(8.dp),
+                    )
+                }
+            }
+        },
+    )
+}
+
+private const val STICKER_PICKER_COLUMNS = 6
+private val STICKER_PICKER_FONT_SIZE = 28.sp
+
 private fun StoryTextAlign.toTextAlign(): TextAlign = when (this) {
     StoryTextAlign.LEFT -> TextAlign.Start
     StoryTextAlign.CENTER -> TextAlign.Center
@@ -750,6 +928,21 @@ private fun StoryTextFontFamily.toFontFamily(): FontFamily = when (this) {
     StoryTextFontFamily.MONOSPACE -> FontFamily.Monospace
     StoryTextFontFamily.CURSIVE -> FontFamily.Cursive
 }
+
+/** The intrinsic on-canvas emoji size before per-sticker [StoryStickerElement.scale]. */
+private val STICKER_BASE_FONT_SIZE = 48.sp
+
+/**
+ * The built-in emoji palette offered by the sticker picker. A curated common set —
+ * the categorised + searchable picker is a tracked follow-up; this gives the feature
+ * a real, non-dead-end entry point today.
+ */
+private val STORY_STICKER_EMOJIS = listOf(
+    "😀", "😂", "😍", "😎", "🥳", "😭", "😡", "🤔",
+    "👍", "👏", "🙏", "💪", "🔥", "✨", "⭐", "💯",
+    "❤️", "💔", "💖", "🎉", "🎂", "🎁", "🌈", "☀️",
+    "🌙", "⚡", "🍕", "🍔", "☕", "🍺", "⚽", "🏆",
+)
 
 /** The on-canvas text colour palette — hex (no `#`), [StoryTextElement.DEFAULT_COLOR] first. */
 private val STORY_TEXT_COLORS = listOf(

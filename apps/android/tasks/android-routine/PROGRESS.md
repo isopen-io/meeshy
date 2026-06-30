@@ -132,8 +132,11 @@ Ordered by value:
    `StoryFilterMatrix` (Compose-agnostic `StoryColorMatrix` + per-preset `baseMatrix` + intensity-blended
    `effectiveMatrix` + `StoryFilter.wireValue`), per-slide `StorySlide.filter`/`filterIntensity` deck
    reducers, live `ColorFilter` on the canvas + None/8-chip + strength `Slider` Effets tile, carried into
-   publish on `storyEffects.filter`. See run log. **Next real Effets tiles:** on-canvas **freehand
-   drawing** and **emoji stickers**, then **backgrounds** (pastel / gradient / image), then the timeline.
+   publish on `storyEffects.filter`. See run log. **Emoji stickers** ✅ shipped as `story-sticker-elements`
+   (this run) — on-canvas `StoryStickerElement` (drag/pinch/rotate/remove) + Contenu "Sticker" tile +
+   emoji-grid picker, serialised to `storyEffects.stickerObjects`. **Next real Effets tiles:** on-canvas
+   **freehand drawing**, then **backgrounds** (pastel / gradient / image), then the timeline; and a
+   **categorised + searchable** sticker picker to replace the flat built-in palette.
 0. ~~**Z-order management (front/back, forward/backward)**~~ ✅ shipped as `story-text-element-zorder`
    (this run) — pure `StorySlideDeck.reorderTextElement(id, StoryZOrder)` restacks an element within its
    slide's paint order (list order = z-order), inert at the extremes / unknown id / single element;
@@ -305,6 +308,61 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-30 — slice `story-sticker-elements` ✅
+- **Branch:** `claude/apps/android/story-sticker-elements` (off `origin/main` @ `d06d5ec`).
+- **Housekeeping (step 0):** no open `claude/apps/android/*` PR (`list_pull_requests state=open` → only
+  dependabot + non-android `claude/*` branches; the prior slice `story-photo-filters` is already merged).
+  Branched clean off the freshened `origin/main`.
+- **What:** **on-canvas emoji stickers** for story slides — the second **real Contenu/Effets tile**
+  (feature-parity §Stories "Emoji sticker picker"). A user taps a "Sticker" tile in the Contenu drawer,
+  picks an emoji from a grid, and it lands on the 9:16 canvas where it can be dragged, pinch-zoomed/rotated
+  and removed; it rides into publish on the existing `StoryEffects.stickerObjects` wire (no dead end — the
+  gateway model `StorySticker` already existed).
+- **Design (single source of truth, SDK purity):** pure immutable `StoryStickerElement`
+  (`:feature:stories`, composer **product** state) mirroring `StoryTextElement` — normalised `x/y`, clamped
+  `scale`, wrapped `rotationDeg`, `isPublishable`, `normalised`/`transformed`/`nudged`, `toSticker()` wire.
+  To keep canvas geometry in **one** place it **reuses** `StoryTextElement.clampCoord`/`clampScale`/
+  `normaliseRotation`. The deck is the source of truth: `StorySlide.stickers` + total reducers
+  `addStickerToSelected`/`removeSticker`/`updateSticker`/`moveSticker`/`transformSticker` (same-instance
+  when inert), `MAX_STICKERS_PER_SLIDE=30` (iOS has no hard composer cap — generous SOTA bound),
+  `hasStickers`/`isWithinStickerLimit`/`selectedRemainingStickerSlots`/`selectedCanAddSticker`;
+  `publishableSlides` now admits a sticker-only slide. The VM adds
+  `onAddSticker`/`onSelectSticker`/`onDeselectSticker`/`onRemoveSticker`/`onStickerMoved`/
+  `onStickerTransform` with sticker selection **mutually exclusive** vs the text-element edit (each clears
+  the other; a slide switch clears a stale selection in `mirrorDraftToSelection`). `publishPlans` threads
+  each slide's stickers into its per-slide draft.
+- **Changed (production — all `:feature:stories`, `apps/android` only):** `StoryStickerElement.kt` (new),
+  `StorySlideDeck.kt`, `StoryComposerDraft.kt`, `StoryComposerViewModel.kt`, `ComposerBandState.kt`
+  (`ComposerContentTile.STICKER`), `StoryComposerScreen.kt` (Contenu Sticker tile → `StickerPickerDialog`
+  emoji grid; on-canvas `StickerLayer` drag/pinch/rotate/remove; `StoryCanvasSurface` threads sticker
+  state — glue), `values{,-fr,-es,-pt}/strings.xml` (2 strings × 4 locales).
+- **Tests (TDD red → green, behaviour via public API): +~53.** `StoryStickerElementTest` (new, +15) —
+  defaults, publishability, normalised coord/scale/rotation/non-finite/no-op, transformed clamps + wrap +
+  isolation, nudged clamp/free, toSticker. `StorySlideDeckStickersTest` (new, +21) — add selected-only/
+  clamp/preserve-selection/dup-inert/cap-inert, remaining-slots, remove holding/unknown, update
+  match-reclamp/unknown, move clamp/unknown, transform scale+rotate/clamp/isolation/unknown, limit at/over,
+  hasStickers blank vs real, sticker-only publishable, blank-only not. `StoryComposerDraftTest` (+5) —
+  stickerObjects serialise + drop blanks, sticker-only payload, no-sticker null, sticker-only publishable,
+  blank-only not. `StoryComposerViewModelTest` (+~12) — add+select+publishable, blank ignored, add clears
+  text edit, select-text clears sticker, cap warning, select-unknown inert, move clamp, transform
+  accumulate, transform-unknown unchanged, remove clears selection, deselect, slide-switch clears stale,
+  publish carries stickerObjects. `ComposerBandStateTest` — STICKER tile category + contentTiles order.
+- **Verification:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL** (assembleDebug APK + full
+  `testDebugUnitTest`, 836 tasks; `:feature:stories` green incl. the new suites). Diff = `apps/android`
+  only (6 prod Kotlin incl. 1 new, 4 strings, 4 test incl. 2 new, tracking docs).
+- **Reviewer verdict:** **PASS** — scope `apps/android` only, no secrets / `local.properties` gitignored;
+  behavioural non-tautological tests through the public API (no floor lowered; 2 band tests *expanded*,
+  not weakened); SDK purity (sticker math + reducers product state in `:feature:stories`, glue in the
+  Composable, wire `StorySticker` reused from `core/model`); single source of truth (geometry reused from
+  `StoryTextElement`, wire token reused); UDF (VM + immutable `StateFlow`, transitions pure); edge cases
+  (cap, dup id, unknown id inert, blank emoji, clamp, per-slide isolation, mutual-exclusive selection,
+  slide-switch stale clear); colour/UX coherence (EmojiEmotions tile in the Contenu drawer like the other
+  tiles, natural drag/pinch/remove mirroring text elements, picker places a publishable sticker — no dead
+  end).
+- **Follow-ups:** the **categorised + searchable** sticker picker (palette is a flat curated set today);
+  remaining Effets tiles (freehand drawing, backgrounds, timeline); a unified multi-element context menu;
+  then advance to **Calls**.
 
 ### 2026-06-30 — slice `story-photo-filters` ✅
 - **Branch:** `claude/apps/android/story-photo-filters` (off `origin/main` @ `444a983`).

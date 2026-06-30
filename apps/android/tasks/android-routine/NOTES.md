@@ -633,3 +633,21 @@ Append-only log of gotchas and decisions that save time next run.
   imports / doc entries); `meeshy.sh check`; `git push --force-with-lease` (fall back to a plain `push -u`
   if the remote ref was deleted out from under you → "couldn't find remote ref"). Verify with the merge
   tool; the maintainer may merge it concurrently — re-`get` the PR to confirm `merged:true` before moving on.
+- **Reuse canvas geometry across element types (`story-sticker-elements`).** A new on-canvas object
+  (sticker) shares the *exact* clamp/wrap rules of `StoryTextElement` (coord `0..1`, scale `0.3..4`,
+  rotation `(-180,180]`). Don't re-derive them — call `StoryTextElement.clampCoord`/`clampScale`/
+  `normaliseRotation` from the new model so the geometry lives in **one** unit-tested place. Reads slightly
+  oddly ("a sticker using a text-element companion") but it's pure canvas math and keeps single-source-of-
+  truth. Mirror the deck reducer family verbatim (`add*ToSelected`/`remove*`/`update*`/`move*`/`transform*`)
+  so most behaviour falls out of the established, tested pattern.
+- **`when(tile)` exhaustiveness is your friend.** Adding `ComposerContentTile.STICKER` made the screen's
+  `when (tile)` non-exhaustive → compiler error until the new branch was wired. Free guarantee that a new
+  enum content-tile can't be silently unrendered (a dead-end tile). Same for any `when` over a sealed/enum.
+- **Grid `items` vs list `items` import clash.** `StoryComposerScreen` already imports
+  `androidx.compose.foundation.lazy.items` (LazyRow). For a `LazyVerticalGrid` use
+  `import androidx.compose.foundation.lazy.grid.items as gridItems` to disambiguate — importing both
+  un-aliased compiles but is fragile; the alias is explicit.
+- **Mutually-exclusive canvas selection.** When two selectable object kinds share a canvas (text element vs
+  sticker), each select/add intent must clear the *other*'s selection (`selectedTextElementId = null` when
+  selecting a sticker and vice-versa), and `mirrorDraftToSelection` must drop *both* stale ids on a slide
+  switch — otherwise a slide change can leave a phantom remove-handle on an object not on the visible slide.

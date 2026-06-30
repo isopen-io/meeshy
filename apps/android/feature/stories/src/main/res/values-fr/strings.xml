@@ -46,6 +46,8 @@
     <string name="stories_composer_add_text">Ajouter du texte</string>
     <string name="stories_composer_text_placeholder">Écrivez quelque chose…</string>
     <string name="stories_composer_remove_text">Supprimer le texte</string>
+    <string name="stories_composer_add_sticker">Sticker</string>
+    <string name="stories_composer_remove_sticker">Supprimer le sticker</string>
     <string name="stories_composer_text_caption">Légende</string>
     <string name="stories_composer_style_bold">Gras</string>
     <string name="stories_composer_style_neon">Néon</string>
