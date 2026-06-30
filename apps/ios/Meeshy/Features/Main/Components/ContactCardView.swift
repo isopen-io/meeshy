@@ -3,6 +3,7 @@ import Combine
 import Contacts
 import ContactsUI
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Contact Card View (displayed inside a message bubble)
 
@@ -64,7 +65,7 @@ struct ContactCardView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "phone.fill")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(Color(hex: "2ECC71"))
+                            .foregroundColor(MeeshyColors.success)
                             .frame(width: 20)
 
                         Text(phone)
@@ -79,7 +80,7 @@ struct ContactCardView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "envelope.fill")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(Color(hex: "3498DB"))
+                            .foregroundColor(MeeshyColors.info)
                             .frame(width: 20)
 
                         Text(email)
