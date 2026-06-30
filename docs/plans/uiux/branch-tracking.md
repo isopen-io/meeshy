@@ -14,10 +14,10 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
-> **POINTEUR AUTORITAIRE (mis à jour 64w)** — le tableau ci-dessous a divergé (lignes Current State dupliquées par des agents parallèles résolvant des conflits par ajout ; cf. § History pour la source fiable, append-only).
-> - **Dernière itération web mergée : `64w` → PR #857 ✅** (main HEAD `a8b3eae`).
-> - **Base de départ 65w : `main` HEAD** (toujours resync sur `main` avant de commencer).
-> - **Différé prioritaire 65w+ : classe `t()||fallback`** (~220 occ / ~36 fichiers restants — admin, settings, layout, video-calls/audio-effects, conversations divers, hooks recovery) par lots **bornés et orthogonaux** aux PR en vol. Vérifier les PR ouvertes avant de choisir une surface.
+> **POINTEUR AUTORITAIRE (mis à jour 67w)** — le tableau ci-dessous a divergé (lignes Current State dupliquées par des agents parallèles résolvant des conflits par ajout ; cf. § History pour la source fiable, append-only).
+> - **Dernière itération web mergée : `66w` → PR #872 ✅** ; **67w en vol** (branche `claude/practical-fermat-vfe7ah`, `auth/verify-phone` + parité `en/auth.json`).
+> - **Base de départ 68w : `main` HEAD** (toujours resync sur `main` avant de commencer).
+> - **Différé prioritaire 68w+ : classe `t()||fallback`** (PhoneResetFlow, ConversationLayout, participants-drawer, settings/page, contacts/page, LastMessagePreview…) par lots **bornés et orthogonaux** aux PR en vol. **Leçon 67w** : vérifier la **parité `en`** des clés ciblées (une locale fallback peut manquer un namespace entier que fr/es/pt possèdent → flash-of-raw-keys EN-only). Vérifier les PR ouvertes avant de choisir une surface.
 
 | Field | Value |
 |-------|-------|
@@ -293,6 +293,7 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 | 63wb | claude/practical-fermat-m1o8ha (a11y — `<MotionConfig reducedMotion="user">` global : TOUTES les animations Framer Motion respectent `prefers-reduced-motion`, WCAG 2.3.3 ; 55 fichiers couverts sans changement par composant) | #862 | ✅ |
 | 65w (doublon) | claude/practical-fermat-8tc8x4 (anti-pattern ConversationSettingsModal — DOUBLON de #864) | #867 | ❌ fermée |
 | 66w | claude/practical-fermat-8tc8x4 (anti-pattern `t()\|\|fallback` page deep-link stats lien suivi `links/tracked/[token]` : 15 occ. + 8 clés `links.tracking.*` dont 7 absentes des 4 locales + `details.unexpectedError`) | #872 | ✅ |
+| 67w | claude/practical-fermat-vfe7ah (anti-pattern `t()\|\|fallback` page `auth/verify-phone` : 27 occ. + **namespace `auth.verifyPhone` (25 clés) ENTIÈREMENT absent de `en/auth.json`** — locale fallback → utilisateurs EN voyaient les clés brutes sur tout l'écran ; fr/es/pt l'avaient déjà. Parité `en` rétablie.) | (en vol) | ⏳ |
 
 > **⚠️ MAIN ROUGE — `Test shared` (hors-web, NON causé par les itérations web)** : depuis le commit `3281f32` (« chore(deps): migrate zod 3.25.76 → 4.4.3 (shared + gateway, lockstep) », 2026-06-22 10:58 UTC), le job CI **`Test shared`** échoue sur `main`. Cause : `packages/shared/types/preferences/__tests__/preferences.test.ts:362` — en zod **v4**, `Schema.partial()` **conserve les `.default()`** (`PrivacyPreferenceSchema.partial().parse({showOnlineStatus:false})` renvoie `showLastSeen: true` au lieu de `undefined`). Reproduit en local sur `main` pristine ⇒ **régression de migration zod v4**, indépendante des PR web (les PR web mergent quand même : check non bloquant). **À traiter hors-scope web** (propriétaire migration zod/shared) : soit aligner le test sur la sémantique v4, soit introduire un `*UpdateSchema` sans `.default()` pour les PATCH partiels. **NE PAS corriger dans une itération web** (scope `apps/web` exclusif, propriétaire = migration zod/shared).
 
