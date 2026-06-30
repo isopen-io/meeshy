@@ -1,73 +1,42 @@
-# Plan — Iteration 52i (2026-06-30) — iOS Liquid Glass : dropdowns de suggestion flottants
+# Plan — Iteration 52i (2026-06-30) — iOS only
 
 ## Objectif
-Adopter l'atome `.adaptiveGlass` (Liquid Glass iOS 26 + fallback gracieux pré-26) sur la
-famille UX « dropdown de suggestion flottant au-dessus du contenu », en continuation du
-ladder Glass amorcé en 51i. Bornée : 2 surfaces, même atome, empreinte préservée.
+Poursuivre l'adoption Liquid Glass iOS 26 sur le chrome flottant, surface
+`MentionSuggestionPanel` (différé 51i), + corriger l'exposition VoiceOver de son squelette.
+Borné, épuré, orthogonal aux PR web/android en vol.
 
-## Périmètre (iOS exclusivement)
-- `apps/ios/Meeshy/Features/Main/Components/MentionSuggestionPanel.swift`
-- `apps/ios/Meeshy/Features/Main/Components/LocationPickerView.swift`
+## Base de départ
+`main` HEAD `769f55a` (resync de la branche `claude/upbeat-euler-q436x8` sur `origin/main`
+avant de commencer — voir `branch-tracking.md`).
 
 ## Étapes
-1. [x] Vérifier la clip-shape de `MentionSuggestionPanel` (demande explicite 51i) → monté
-   flush au-dessus du composer, pleine largeur, sans coin arrondi → conserver l'empreinte
-   via `Rectangle()`.
-2. [x] `MentionSuggestionPanel:62` : `.background(.ultraThinMaterial)` →
-   `.adaptiveGlass(in: Rectangle(), tint: Color(hex: accentColor).opacity(0.14))`.
-3. [x] `LocationPickerView` dropdown résultats (L162-166) :
-   `.background(RoundedRectangle.fill(.ultraThinMaterial).shadow)` →
-   `.adaptiveGlass(in: RoundedRectangle(cornerRadius: 12), tint: Color(hex: accentColor).opacity(0.12))`
-   + `.shadow(...)` (ombre préservée en aval, pattern `ContextActionMenu`).
-4. [x] Vérifier imports (`MeeshyUI` expose `adaptiveGlass` + `Color(hex:)`) — OK pour les
-   deux fichiers.
-5. [ ] Commit + push branche `claude/upbeat-euler-mekcd1`.
-6. [ ] CI `ios-tests.yml` verte (compile Xcode 26.1.x — seul gate fiable, pas de build Linux).
-7. [ ] Merge dans `main`, mettre à jour `branch-tracking.md`, supprimer la branche.
+- [x] Resync branche sur `origin/main` HEAD.
+- [x] Audit des candidats verre différés (51i) : `MentionSuggestionPanel`, `ContactCardView`,
+      `LocationPickerView`. Choix `MentionSuggestionPanel` (clip-shape simple : panneau
+      épinglé au-dessus du composer → coins hauts arrondis).
+- [x] Vérifier l'API `adaptiveGlass(in:tint:)` + son fallback (façonné, clip OK).
+- [x] Vérifier les 2 call-sites (`FeedCommentsSheet`, `PostDetailView`) : panneau full-width
+      pinné au top du composer → `UnevenRoundedRectangle` top-rounded.
+- [x] `.background(.ultraThinMaterial)` → `.clipShape(panelShape) + .adaptiveGlass(in: panelShape)`
+      (neutre, non teinté : surface de lecture).
+- [x] Squelette `mentionSkeletonRows` : `.accessibilityElement(children: .ignore)` +
+      `accessibilityLabel` localisé `composer.mention.loading` (secours natif).
+- [x] Vérifier qu'aucun test n'asserte `.ultraThinMaterial` / le panneau (aucun).
+- [x] Rédiger analyse + plan + mettre à jour `branch-tracking.md`.
+- [ ] Commit + push sur `claude/upbeat-euler-q436x8`.
+- [ ] Ouvrir PR ; attendre CI `iOS Tests` verte (compile = build gate, pas de build Linux).
+- [ ] Merger dans `main` ; mettre à jour `branch-tracking.md` (pointeur 52i mergé).
+
+## Fichiers touchés
+- `apps/ios/Meeshy/Features/Main/Components/MentionSuggestionPanel.swift` (prod, ~+20 lignes).
+- `docs/analyses/uiux/2026-06-30-iteration-52i.md`, `docs/plans/uiux/2026-06-30-plan-iteration-52i.md`,
+  `docs/plans/uiux/branch-tracking.md`.
 
 ## Vérification
-- Pas de build local (Linux sans SwiftUI) → la CI iOS est le gate de compile.
-- API publique `adaptiveGlass` inchangée ; aucun test SDK existant impacté.
-- Empreinte/layout préservés (Rectangle pour le mention panel ; RoundedRect+shadow pour le
-  location dropdown).
+- CI `ios-tests.yml` : `xcodegen generate` + compile Xcode 26.1.x (gate). `UnevenRoundedRectangle`
+  iOS 16+, `adaptiveGlass` exporté par MeeshyUI (déjà importé) → compile attendue.
+- Pas de test neuf : swap visuel sans logique testable (cf. 51i). Les tests existants restent verts
+  (aucun n'asserte cette surface).
 
-## Risques / mitigations
-- Risque : régression visuelle teinte trop forte → opacités basses (0.14 / 0.12), discrètes.
-- Risque : fallback hairline du Rectangle sur le mention panel → lit comme séparateur subtil
-  contre le composer, acceptable.
-
-## Non-objectifs (différés)
-- `CallEffectsOverlay`, `GlobalSearchView` (lot glass suivant), cartes d'effets MARGINAL,
-  ladder catégoriel, polices figées.
-# Plan — Iteration 52i (2026-06-30)
-
-## Objectif
-iOS only. **Adoption native iOS 26 Liquid Glass — lot 2** sur deux surfaces flottantes
-neutres et content-agnostic, via l'atome SDK `adaptiveGlass`. Itération bornée, « épurée » :
-2 fichiers, swaps 1:1 fidèles, aucune surcharge ajoutée.
-
-## Base
-- Branche : `claude/upbeat-euler-q2nl32` (resynchronisée sur `main` HEAD `19682db`, post #1072).
-
-## Changements
-
-### 1. `apps/ios/.../Components/MentionSuggestionPanel.swift` (app)
-- [x] `.background(.ultraThinMaterial)` → `.adaptiveGlass(in: Rectangle())` (neutre, pas de
-      teinte — chrome OS comme la QuickType bar). Clip-shape vérifiée : aucune → `Rectangle()`.
-- [x] Doc-comment inline.
-
-### 2. `apps/ios/.../Components/MiniAudioPlayerBar.swift` (app)
-- [x] `.background(.ultraThinMaterial)` → `.adaptiveGlass(in: Capsule())` avant le
-      `.clipShape(Capsule())` existant (1:1 avec `FloatingCallPillView`).
-- [x] Doc-comment inline (HIG glass-in-glass).
-
-## Vérification
-- [x] Les deux fichiers importent déjà `MeeshyUI` (où vit `adaptiveGlass`).
-- [x] Aucune édition `project.pbxproj` (XcodeGen globbe les `.swift`).
-- [x] `MiniAudioPlayerBarTests` comportemental (visibilité/taps/routing) → inchangé.
-- [ ] CI `ios-tests.yml` verte (compile + tests simulateur).
-
-## Merge
-- [ ] PR → `main`, merge après CI verte. Supprimer la branche.
-- [ ] `branch-tracking.md` : dernière itération iOS = 52i, base suivante = main post-merge.
-</content>
+## Risque / rollback
+Diff confiné à 1 composant. Rollback = restaurer `.background(.ultraThinMaterial)`.
