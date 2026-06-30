@@ -39,8 +39,11 @@ final class NSEPendingMessageConsumer {
         var consumedFiles: [URL] = []
         for item in pending {
             guard let apiMsg = try? decoder.decode(APIMessage.self, from: item.data) else {
-                // Corrupt payload — drop it instead of re-reading it every launch.
-                try? fm.removeItem(at: item.url)
+                // Corrupt payload — log and drop so it isn't re-read every launch.
+                logger.error("NSE prefetch decode failed for \(item.conversationId, privacy: .public) — dropping \(item.url.lastPathComponent, privacy: .public)")
+                do { try fm.removeItem(at: item.url) } catch {
+                    logger.error("NSE prefetch file removal failed: \(error.localizedDescription, privacy: .public)")
+                }
                 continue
             }
             decodedAPIMessages.append(apiMsg)

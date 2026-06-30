@@ -275,7 +275,9 @@ final class ConversationSocketHandler {
     // Guard against runaway timer growth in large conversations: beyond this
     // cap we skip scheduling a new timer (the oldest entry stays at its current
     // timeout, which is the desired no-op for very large groups).
-    private static let typingSafetyTimerCap = 200
+    // Cap set to 1000 to support large group chats (500+ participants) without
+    // silently dropping typing indicators mid-conversation.
+    private static let typingSafetyTimerCap = 1_000
 
     private func resetTypingSafetyTimer(for username: String) {
         if typingSafetyTimers[username] == nil,
