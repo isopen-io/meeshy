@@ -313,7 +313,18 @@ After Stories richness is sufficient, advance to the **Calls** area
 
 ## Run log
 
-### 2026-06-30 — slice `story-sticker-picker-search` ✅
+### 2026-06-30 — slice `story-sticker-picker-search` ⚠ blocked (PR #1135, merge-blocked on red `main`)
+- **Status:** implementation + tests + reviewer gate all **DONE/PASS**; merge **blocked** by a
+  **pre-existing, unrelated** failure on `main`. The monorepo CI's `Test web` job fails on a single
+  web a11y test — `__tests__/components/conversations/invite-user-modal.test.tsx:493`
+  (`getByRole('button', { name: 'John Doe déjà sélectionné' })` → `toBeDisabled`); **1 failed /
+  10 769 passed**, all in that one web file. My diff is `apps/android` only and touches **zero** web
+  code, so it cannot have caused this — it is the same broken-`main` regression open PR #1131 documents
+  and carries the fix for. I can't fix it here (editing `invite-user-modal.tsx` is web production logic,
+  which breaks the "diff is apps/android only" hard gate). **Unblock:** once `main` goes green (a fix
+  like #1131 merges), rebase this branch onto it (`update_pull_request_branch`) → CI re-runs green →
+  squash-merge. The `*/8 min` self-check cron (`b4133933`) re-checks and will rebase + merge when `main`
+  is green. **Do NOT merge past this red CI** (hard rule).
 - **Branch:** `claude/apps/android/story-sticker-picker-search` (off `origin/main` @ `a751730f`).
 - **Housekeeping (step 0):** no open `claude/apps/android/*` PR (`list_pull_requests state=open` → only
   dependabot + non-android `claude/*` branches: #1133 ios-calls, #1132 translator, #1131 gateway, #1130
