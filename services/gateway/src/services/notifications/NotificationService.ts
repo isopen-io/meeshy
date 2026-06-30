@@ -24,6 +24,7 @@ import {
 } from '@meeshy/shared/types/preferences';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
+import { formatClock } from '@meeshy/shared/utils/duration-format';
 import { notificationString, buildNotificationDisplay, type NotificationStringKey } from '@meeshy/shared/utils/notification-strings';
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
 import { SecuritySanitizer } from '../../utils/sanitize';
@@ -33,10 +34,7 @@ import { EmailService } from '../EmailService';
 import { getCommunityCoMemberIds } from '../posts/communityVisibility';
 
 function formatDuration(ms: number): string {
-  const totalSeconds = Math.round(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return minutes > 0 ? `${minutes}:${String(seconds).padStart(2, '0')}` : `0:${String(seconds).padStart(2, '0')}`;
+  return formatClock(Math.round(ms / 1000));
 }
 
 function formatFileSize(bytes: number): string {
