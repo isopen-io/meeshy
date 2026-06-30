@@ -34,10 +34,16 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
     /// IDs d'utilisateurs ciblés (ONLY) ou exclus (EXCEPT). Optionnel pour
     /// rester rétro-compatible avec les rows persistés avant ce champ.
     public let visibilityUserIds: [String]?
+    /// Langue source (Prisme Linguistique) du contenu de la story. Persistée
+    /// pour que le gateway puisse router NLLB-200/TTS au flush et que le reader
+    /// résolve le texte/audio dans la langue préférée du viewer. Optionnelle pour
+    /// rester rétro-compatible avec les rows persistés avant ce champ (→ `nil`).
+    public let originalLanguage: String?
 
     enum CodingKeys: String, CodingKey {
         case id, tempStoryId, visibility, slidesPayload, repostOfId
         case mediaReferences, createdAt, retryCount, lastError, visibilityUserIds
+        case originalLanguage
     }
 
     public init(
@@ -46,7 +52,8 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         repostOfId: String? = nil,
         mediaReferences: [StoryMediaReference] = [],
         tempStoryId: String? = nil,
-        visibilityUserIds: [String]? = nil
+        visibilityUserIds: [String]? = nil,
+        originalLanguage: String? = nil
     ) {
         let queueId = UUID().uuidString
         self.id = queueId
@@ -59,6 +66,7 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         self.retryCount = 0
         self.lastError = nil
         self.visibilityUserIds = visibilityUserIds
+        self.originalLanguage = originalLanguage
     }
 
     public init(from decoder: Decoder) throws {
@@ -73,6 +81,7 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         self.retryCount = try container.decodeIfPresent(Int.self, forKey: .retryCount) ?? 0
         self.lastError = try container.decodeIfPresent(String.self, forKey: .lastError)
         self.visibilityUserIds = try container.decodeIfPresent([String].self, forKey: .visibilityUserIds)
+        self.originalLanguage = try container.decodeIfPresent(String.self, forKey: .originalLanguage)
     }
 }
 
@@ -92,6 +101,21 @@ public struct StoryMediaReference: Codable, Sendable {
         self.elementId = elementId
         self.mediaType = mediaType
         self.localFilePath = localFilePath
+    }
+
+    /// File extensions (case-insensitive) treated as video containers.
+    private static let videoFileExtensions: Set<String> = ["mp4", "mov", "m4v"]
+
+    /// Infers a visual `mediaType` ("video" or "image") from a file path's
+    /// extension. The offline-queue converters only know a flat disk path (not
+    /// the original media kind), so without this a queued `.mp4` would be
+    /// re-tagged as "image" and replay via `UIImage(contentsOfFile:)` → nil →
+    /// unrecoverable failure (or the video never uploads). Pure, side-effect
+    /// free atom; audio refs are tagged explicitly by callers and never routed
+    /// through here.
+    public static func inferVisualMediaType(forPath path: String) -> String {
+        let ext = (path as NSString).pathExtension.lowercased()
+        return videoFileExtensions.contains(ext) ? "video" : "image"
     }
 }
 

@@ -154,12 +154,12 @@ private struct StoryOfflineRetryableError: Error, Sendable {
 extension StoryQueueItemConverter {
 
     /// Rebuilds a `StoryOfflineQueueItem` from a unified `StoryPublishQueueItem`.
-    /// The conversion is lossy only for `originalLanguage` (not represented in
-    /// the publish item). `slideIds` are recovered from the serialized slide
-    /// payload — NOT from `mediaReferences`, whose `elementId`s are media
-    /// object ids, not slide ids. Callers that round-trip the same item
-    /// observe the original `id` via `tempStoryId` which the forward converter
-    /// carries through.
+    /// `originalLanguage` round-trips through the publish item now that the
+    /// latter persists it (Prisme Linguistique). `slideIds` are recovered from
+    /// the serialized slide payload — NOT from `mediaReferences`, whose
+    /// `elementId`s are media object ids, not slide ids. Callers that round-trip
+    /// the same item observe the original `id` via `tempStoryId` which the
+    /// forward converter carries through.
     public static func reverse(_ unified: StoryPublishQueueItem) -> StoryOfflineQueueItem {
         let payloadString = String(data: unified.slidesPayload, encoding: .utf8) ?? "{}"
         let mediaPairs = unified.mediaReferences
@@ -183,7 +183,7 @@ extension StoryQueueItemConverter {
             slidePayloadJSON: payloadString,
             mediaURLPaths: mediaPaths,
             audioURLPaths: audioPaths,
-            originalLanguage: nil,
+            originalLanguage: unified.originalLanguage,
             visibility: unified.visibility
         )
     }

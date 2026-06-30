@@ -159,15 +159,22 @@ extension TimelineViewModel {
             }
         }
 
-        // Serialize the full TimelineProject as JSON so the queue can replay it
-        // with the same media + transitions + keyframes + text on reconnect.
+        // Serialize the project as a single-element `[StorySlide]` so the queue
+        // can replay it through the ONE executor (`StoryViewModel
+        // .executeQueuedPublish`), which decodes `[StorySlide].self`. Encoding a
+        // bare `TimelineProject` here would fail that decode → the composed story
+        // is dropped as unrecoverable. `TimelineProject.apply` carries the
+        // mediaObjects / audioPlayerObjects / textObjects / clipTransitions onto
+        // the slide so no timeline content is lost on reconnect.
         let payloadJSON: String = {
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
-            guard let data = try? encoder.encode(project),
+            var slide = StorySlide(id: project.slideId)
+            project.apply(to: &slide)
+            guard let data = try? encoder.encode([slide]),
                   let json = String(data: data, encoding: .utf8) else {
                 offlinePublishLogger.error(
-                    "Failed to serialise TimelineProject for offline queue — falling back to empty payload"
+                    "Failed to serialise timeline slide for offline queue — falling back to empty payload"
                 )
                 return "{}"
             }

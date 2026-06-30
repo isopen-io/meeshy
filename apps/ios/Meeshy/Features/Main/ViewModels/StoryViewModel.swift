@@ -130,7 +130,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             loadedImages: media.loadedImages,
             loadedVideoURLs: media.loadedVideoURLs,
             loadedAudioURLs: media.loadedAudioURLs,
-            originalLanguage: nil,
+            originalLanguage: item.originalLanguage,
             visibility: item.visibility,
             visibilityUserIds: item.visibilityUserIds ?? []
         )
@@ -694,6 +694,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     loadedImages: loadedImages,
                     loadedVideoURLs: loadedVideoURLs,
                     loadedAudioURLs: loadedAudioURLs,
+                    originalLanguage: originalLanguage,
                     visibility: visibility,
                     visibilityUserIds: visibilityUserIds
                 )
@@ -749,6 +750,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         loadedImages: [String: UIImage],
         loadedVideoURLs: [String: URL],
         loadedAudioURLs: [String: URL],
+        originalLanguage: String? = nil,
         visibility: String,
         visibilityUserIds: [String]
     ) async {
@@ -820,7 +822,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             repostOfId: nil,
             mediaReferences: mediaReferences,
             tempStoryId: tempStoryId,
-            visibilityUserIds: visibilityUserIds
+            visibilityUserIds: visibilityUserIds,
+            originalLanguage: originalLanguage
         )
         _ = await StoryPublishQueue.shared.enqueue(item)
 

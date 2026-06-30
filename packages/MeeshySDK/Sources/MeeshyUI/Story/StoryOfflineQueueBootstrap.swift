@@ -90,8 +90,9 @@ public final class StoryOfflineQueueBootstrap {
     ///
     /// Maps `StoryOfflineQueueItem` -> `StoryPublishQueueItem`:
     ///   - `slidePayloadJSON` (UTF-8 string) -> `slidesPayload` (Data)
-    ///   - `mediaURLPaths` -> `[StoryMediaReference]` tagged as `image`
+    ///   - `mediaURLPaths` -> `[StoryMediaReference]` tagged `video`/`image` (by extension)
     ///   - `audioURLPaths` -> `[StoryMediaReference]` tagged as `audio`
+    ///   - `originalLanguage` is propagated for the Prisme Linguistique pipeline
     ///   - `visibility` is propagated verbatim
     ///
     /// Returns `true` when the publish queue accepts the item (so the offline
@@ -109,7 +110,11 @@ public final class StoryOfflineQueueBootstrap {
         }
 
         let mediaRefs = item.mediaURLPaths.map { (elementId, path) in
-            StoryMediaReference(elementId: elementId, mediaType: "image", localFilePath: path)
+            StoryMediaReference(
+                elementId: elementId,
+                mediaType: StoryMediaReference.inferVisualMediaType(forPath: path),
+                localFilePath: path
+            )
         }
         let audioRefs = item.audioURLPaths.map { (elementId, path) in
             StoryMediaReference(elementId: elementId, mediaType: "audio", localFilePath: path)
@@ -119,7 +124,8 @@ public final class StoryOfflineQueueBootstrap {
             visibility: item.visibility,
             slidesPayload: payload,
             repostOfId: nil,
-            mediaReferences: mediaRefs + audioRefs
+            mediaReferences: mediaRefs + audioRefs,
+            originalLanguage: item.originalLanguage
         )
 
         let accepted = await bridge.enqueueForPublish(publishItem)

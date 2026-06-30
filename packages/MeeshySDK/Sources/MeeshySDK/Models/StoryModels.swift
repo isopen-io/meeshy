@@ -2001,10 +2001,21 @@ extension StoryItem {
         // `FeedMedia` côté API). Fix user-reporté 2026-05-28 « il n'y a
         // plus le respect de la durée des média dynamique ».
         if var medias = effects.mediaObjects, !medias.isEmpty {
-            for i in medias.indices where medias[i].duration == nil {
-                if let feed = self.media.first(where: { $0.id == medias[i].postMediaId }),
-                   let dur = feed.duration, dur > 0 {
+            for i in medias.indices {
+                let feed = self.media.first(where: { $0.id == medias[i].postMediaId })
+                if medias[i].duration == nil, let dur = feed?.duration, dur > 0 {
                     medias[i].duration = Double(dur)
+                }
+                // Hydrate `aspectRatio` legacy (≈1.0, sentinelle des drafts/payloads
+                // antérieurs au champ) depuis `FeedMedia.width/height`. Sans ça un
+                // média non-carré venu d'un payload sans aspectRatio s'affichait
+                // squishé (carré) dans le reader alors que le canvas/snapshot le
+                // dimensionnent via `aspectRatio`. Les stories forward-écrites (ratio
+                // réel ≠ 1.0) ne sont jamais touchées — parité avec l'hydratation
+                // de `duration` ci-dessus (fix proportions 2026-06-30).
+                if abs(medias[i].aspectRatio - 1.0) < 0.05,
+                   let w = feed?.width, let h = feed?.height, w > 0, h > 0 {
+                    medias[i].aspectRatio = Double(w) / Double(h)
                 }
             }
             effects.mediaObjects = medias
@@ -2019,9 +2030,16 @@ extension StoryItem {
             effects.audioPlayerObjects = audios
         }
 
-        let legacyMediaURL: String? = effects.mediaObjects?.isEmpty == false
-            ? nil
-            : self.media.first?.url
+        // Keep the static background URL (StoryItem.media[0]) whenever the slide
+        // has NO `isBackground` StoryMediaObject — a slide can carry a static bg
+        // photo published as media[0] alongside foreground mediaObjects, and the
+        // old `mediaObjects.isEmpty == false` guard nulled the bg the moment ANY
+        // foreground object existed. Only modern stories whose background IS a
+        // mediaObject (`resolvedBackgroundMedia != nil`) keep `mediaURL = nil` so
+        // `StoryRenderer.renderBackground` doesn't feed a post id to the resolver.
+        let legacyMediaURL: String? = effects.resolvedBackgroundMedia == nil
+            ? self.media.first?.url
+            : nil
         return StorySlide(
             id: self.id,
             mediaURL: legacyMediaURL,
