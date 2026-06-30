@@ -59,7 +59,12 @@ struct MentionSuggestionPanel: View {
             }
         }
         .frame(maxHeight: 200)
-        .background(.ultraThinMaterial)
+        // iOS 26 Liquid Glass on the floating autocomplete bar — neutral chrome,
+        // like the system QuickType bar (no brand tint: it reads as OS chrome, not
+        // content). The SDK Compatibility atom gates the real `glassEffect` and
+        // degrades to an `.ultraThinMaterial` blur pre-iOS-26. Same atom as the
+        // floating call pill. Applied LAST, after sizing, per the atom's contract.
+        .adaptiveGlass(in: Rectangle())
     }
 
     /// Three shimmering placeholder rows shown while waiting for API results.
