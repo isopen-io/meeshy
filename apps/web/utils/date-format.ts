@@ -2,6 +2,8 @@
  * Utilitaire de formatage de dates relatives avec support i18n
  */
 
+import { classifyCalendarDay, classifyRelativeTime } from '@meeshy/shared';
+
 const DEFAULT_LOCALE = 'fr';
 
 export interface DateFormatOptions {
@@ -36,49 +38,30 @@ export function formatRelativeDate(
   const messageDate = typeof date === 'string' ? new Date(date) : date;
   const now = new Date();
 
-  // Calculer les différences
-  const diffMs = now.getTime() - messageDate.getTime();
-  const diffMinutes = Math.floor(diffMs / (1000 * 60));
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const day = classifyCalendarDay(messageDate.getTime(), now.getTime());
 
-  // Calculer la différence en jours (en comparant les dates à minuit)
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const messageDateStart = new Date(
-    messageDate.getFullYear(),
-    messageDate.getMonth(),
-    messageDate.getDate()
-  );
-  const diffTime = todayStart.getTime() - messageDateStart.getTime();
-  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-  // Moins d'une minute
-  if (diffMinutes < 1) {
-    return t('justNow');
+  // Aujourd'hui : granularité intra-journée (instant / minutes / heures)
+  if (day.unit === 'today') {
+    const elapsed = classifyRelativeTime(messageDate.getTime(), now.getTime());
+    switch (elapsed.unit) {
+      case 'now':
+        return t('justNow');
+      case 'minutes':
+        return t('minutesAgo', { minutes: elapsed.value });
+      case 'hours':
+        return t('hoursAgo', { hours: elapsed.value });
+      default:
+        // Intra-journée : jamais days/beyond ; repli défensif sur l'heure.
+        return formatTime(messageDate, locale);
+    }
   }
 
-  // Moins d'une heure
-  if (diffMinutes < 60) {
-    return t('minutesAgo', { minutes: diffMinutes });
+  if (day.unit === 'yesterday') {
+    return t('yesterday', { time: formatTime(messageDate, locale) });
   }
 
-  // Moins de 24h (aujourd'hui)
-  if (diffHours < 24 && diffDays === 0) {
-    return t('hoursAgo', { hours: diffHours });
-  }
-
-  // Hier
-  if (diffDays === 1) {
-    const time = formatTime(messageDate, locale);
-    return t('yesterday', { time });
-  }
-
-  // Cette semaine (moins de 7 jours)
-  if (diffDays < 7) {
-    const dayName = messageDate.toLocaleDateString(locale, { weekday: 'short' });
-    const time = formatTime(messageDate, locale);
-    // Capitaliser la première lettre du jour
-    const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
-    return `${capitalizedDay} ${time}`;
+  if (day.unit === 'thisWeek') {
+    return formatWeekday(messageDate, locale);
   }
 
   // Plus ancien (>= 7 jours) : afficher la date complète simplifiée
@@ -107,34 +90,21 @@ export function formatConversationDate(
   const messageDate = typeof date === 'string' ? new Date(date) : date;
   const now = new Date();
 
-  // Calculer la différence en jours (en comparant les dates à minuit)
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const messageDateStart = new Date(
-    messageDate.getFullYear(),
-    messageDate.getMonth(),
-    messageDate.getDate()
-  );
-  const diffTime = todayStart.getTime() - messageDateStart.getTime();
-  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  const day = classifyCalendarDay(messageDate.getTime(), now.getTime());
 
   // Si c'est aujourd'hui, afficher seulement l'heure
-  if (diffDays === 0) {
+  if (day.unit === 'today') {
     return formatTime(messageDate, locale);
   }
 
   // Si c'est hier
-  if (diffDays === 1) {
-    const time = formatTime(messageDate, locale);
-    return t('yesterday', { time });
+  if (day.unit === 'yesterday') {
+    return t('yesterday', { time: formatTime(messageDate, locale) });
   }
 
   // Si c'est dans les 7 derniers jours, afficher le jour de la semaine + heure
-  if (diffDays < 7) {
-    const dayName = messageDate.toLocaleDateString(locale, { weekday: 'short' });
-    const time = formatTime(messageDate, locale);
-    // Capitaliser la première lettre du jour
-    const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
-    return `${capitalizedDay} ${time}`;
+  if (day.unit === 'thisWeek') {
+    return formatWeekday(messageDate, locale);
   }
 
   // Si c'est plus ancien, afficher la date complète simplifiée
@@ -172,6 +142,13 @@ function formatTime(date: Date, locale: string): string {
     minute: '2-digit',
     hour12: false,
   });
+}
+
+function formatWeekday(date: Date, locale: string): string {
+  const dayName = date.toLocaleDateString(locale, { weekday: 'short' });
+  // Capitaliser la première lettre du jour
+  const capitalizedDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+  return `${capitalizedDay} ${formatTime(date, locale)}`;
 }
 
 function formatShortFullDate(date: Date, locale: string): string {

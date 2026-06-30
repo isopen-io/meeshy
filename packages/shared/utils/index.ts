@@ -12,6 +12,7 @@ export * from './language-normalize.js';
 export * from './notification-strings.js';
 export * from './duration-format.js';
 export * from './relative-time.js';
+export * from './calendar-day.js';
 export { getSenderUserId } from './sender-identity.js';
 export {
   generateClientMessageId,

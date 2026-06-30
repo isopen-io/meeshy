@@ -12,6 +12,7 @@ import {
 } from '@/types/notification';
 import { getUserDisplayName } from './user-display-name';
 import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
+import { classifyCalendarDay } from '@meeshy/shared/utils/calendar-day';
 
 // Type pour la fonction de traduction
 type TranslateFunction = (key: string, params?: Record<string, string>) => string;
@@ -249,39 +250,37 @@ export function formatContentPublishedAt(
   if (isNaN(date.getTime())) return '';
 
   const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMinutes = Math.floor(diffMs / (1000 * 60));
-
-  if (diffMinutes < 0) {
-    return date.toLocaleDateString(locale, {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    }) + ' ' + date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
-  }
-
-  if (diffMinutes < 1) return t('timeAgo.now');
-  if (diffMinutes < 60) return t('timeAgo.minute').replace('{count}', String(diffMinutes));
-
-  const diffHours = Math.floor(diffMinutes / 60);
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startOfYesterday = new Date(startOfToday.getTime() - 86400000);
   const time = date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+  const absolute = () =>
+    `${date.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' })} ${time}`;
 
-  if (date.getTime() >= startOfToday.getTime()) {
-    return t('timeAgo.hour').replace('{count}', String(diffHours));
+  // Futur : date + heure absolues
+  if (date.getTime() > now.getTime()) return absolute();
+
+  const day = classifyCalendarDay(date.getTime(), now.getTime());
+
+  // Aujourd'hui : granularité intra-journée (instant / minutes / heures)
+  if (day.unit === 'today') {
+    const elapsed = classifyRelativeTime(date.getTime(), now.getTime());
+    switch (elapsed.unit) {
+      case 'now':
+        return t('timeAgo.now');
+      case 'minutes':
+        return t('timeAgo.minute').replace('{count}', String(elapsed.value));
+      case 'hours':
+        return t('timeAgo.hour').replace('{count}', String(elapsed.value));
+      default:
+        // Intra-journée : jamais days/beyond ; repli défensif sur l'absolu.
+        return absolute();
+    }
   }
 
-  if (date.getTime() >= startOfYesterday.getTime()) {
+  if (day.unit === 'yesterday') {
     return t('timeAgo.yesterdayAt').replace('{time}', time);
   }
 
-  const absoluteDate = date.toLocaleDateString(locale, {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
-  return `${absoluteDate} ${time}`;
+  // Cette semaine ou plus ancien : date + heure absolues
+  return absolute();
 }
 
 /**
