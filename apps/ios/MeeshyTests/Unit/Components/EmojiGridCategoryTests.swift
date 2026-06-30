@@ -10,6 +10,11 @@ import XCTest
 /// every case must resolve to a non-empty, distinct name so no category is
 /// ever announced as another, and identity (`rawValue`) stays decoupled from
 /// the display layer.
+///
+/// `@MainActor` because the project default `SWIFT_DEFAULT_ACTOR_ISOLATION =
+/// MainActor` makes `localizedName` main-actor-isolated, while the test bundle
+/// runs nonisolated by default (mirrors `ContactCardViewTests`).
+@MainActor
 final class EmojiGridCategoryTests: XCTestCase {
 
     func test_localizedName_isNonEmptyForEveryCase() {
