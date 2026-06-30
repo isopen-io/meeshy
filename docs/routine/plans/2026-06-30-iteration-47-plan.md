@@ -42,6 +42,16 @@ Iter 48+ : **F25a** (email RFC 5322) après validation que la stricte ne casse a
 d'inscription/contact ; sinon **F25b** (façade téléphone) ou nouveau scout (avatar-color/initials,
 slug/url, groupBy/chunk). F2/F10/F21 dès qu'une fenêtre staging/backfill existe.
 
+## Incidents de merge (parallélisme multi-agents)
+- **Clobber iter-46** : un commit parallèle (`0f7e3312`, présence Lot 3/6) avait réintroduit le
+  `formatFileSize` local divergent dans `MessageComposer.tsx` (annulant iter-46). Conflit résolu
+  en **restaurant les deux délégations** (`formatFileSize`→shared, `formatDuration`→wrapper).
+- **Régression gateway pré-existante sur `main`** : la même Lot 3/6 a ajouté `presence-gate.ts`
+  (`getOptionalAuth` → `createUnifiedAuthMiddleware`) et l'a câblée dans `getUserById`, sans mettre
+  à jour le mock `auth` de `profile.test.ts` → **7 tests `Test gateway` en échec sur `main`**.
+  Fix drive-by **test-only** : ajout de `createUnifiedAuthMiddleware: jest.fn(() => async () => {})`
+  au mock. `profile.test.ts` **46/46** vert localement. Débloque la CI gateway de toute la routine.
+
 ## Statut (mis à jour en fin d'itération)
 - [x] Phase A — `MessageComposer.tsx` : `formatDuration` inline supprimé, import de
       `@/utils/audio-formatters`. message-composer + integration verts.
