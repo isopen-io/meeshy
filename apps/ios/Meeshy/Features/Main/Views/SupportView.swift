@@ -9,7 +9,7 @@ struct SupportView: View {
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
 
-    private let accentColor = "27AE60"
+    private let accentColor = MeeshyColors.successHex
 
     private var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
@@ -98,13 +98,13 @@ struct SupportView: View {
 
     private var contactSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: String(localized: "support.contact.title", defaultValue: "Nous contacter", bundle: .main), icon: "envelope.fill", color: "3498DB")
+            sectionHeader(title: String(localized: "support.contact.title", defaultValue: "Nous contacter", bundle: .main), icon: "envelope.fill", color: MeeshyColors.infoHex)
 
             VStack(spacing: 0) {
-                supportLink(icon: "envelope.fill", title: String(localized: "support.contact.email", defaultValue: "Email support", bundle: .main), url: "mailto:support@meeshy.me", color: "3498DB")
-                supportLink(icon: "at", title: String(localized: "support.contact.twitter", defaultValue: "Twitter / X", bundle: .main), url: "https://twitter.com/meeshy", color: "3498DB")
+                supportLink(icon: "envelope.fill", title: String(localized: "support.contact.email", defaultValue: "Email support", bundle: .main), url: "mailto:support@meeshy.me", color: MeeshyColors.infoHex)
+                supportLink(icon: "at", title: String(localized: "support.contact.twitter", defaultValue: "Twitter / X", bundle: .main), url: "https://twitter.com/meeshy", color: MeeshyColors.infoHex)
             }
-            .background(sectionBackground(tint: "3498DB"))
+            .background(sectionBackground(tint: MeeshyColors.infoHex))
         }
     }
 
@@ -112,13 +112,13 @@ struct SupportView: View {
 
     private var reportSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: String(localized: "support.report.title", defaultValue: "Signaler un probleme", bundle: .main), icon: "exclamationmark.bubble.fill", color: "E67E22")
+            sectionHeader(title: String(localized: "support.report.title", defaultValue: "Signaler un probleme", bundle: .main), icon: "exclamationmark.bubble.fill", color: MeeshyColors.warningHex)
 
             VStack(spacing: 0) {
-                supportLink(icon: "ladybug.fill", title: String(localized: "support.report.bug", defaultValue: "Signaler un bug", bundle: .main), url: "mailto:bugs@meeshy.me?subject=Bug%20Report%20-%20Meeshy%20iOS", color: "E67E22")
-                supportLink(icon: "lightbulb.fill", title: String(localized: "support.report.feature", defaultValue: "Suggerer une fonctionnalite", bundle: .main), url: "mailto:features@meeshy.me?subject=Feature%20Suggestion%20-%20Meeshy%20iOS", color: "E67E22")
+                supportLink(icon: "ladybug.fill", title: String(localized: "support.report.bug", defaultValue: "Signaler un bug", bundle: .main), url: "mailto:bugs@meeshy.me?subject=Bug%20Report%20-%20Meeshy%20iOS", color: MeeshyColors.warningHex)
+                supportLink(icon: "lightbulb.fill", title: String(localized: "support.report.feature", defaultValue: "Suggerer une fonctionnalite", bundle: .main), url: "mailto:features@meeshy.me?subject=Feature%20Suggestion%20-%20Meeshy%20iOS", color: MeeshyColors.warningHex)
             }
-            .background(sectionBackground(tint: "E67E22"))
+            .background(sectionBackground(tint: MeeshyColors.warningHex))
         }
     }
 
@@ -126,14 +126,14 @@ struct SupportView: View {
 
     private var infoSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: String(localized: "support.info.title", defaultValue: "Informations", bundle: .main), icon: "info.circle", color: "6B7280")
+            sectionHeader(title: String(localized: "support.info.title", defaultValue: "Informations", bundle: .main), icon: "info.circle", color: MeeshyColors.neutral500Hex)
 
             VStack(spacing: 0) {
-                infoRow(icon: "sparkles", title: String(localized: "support.info.version", defaultValue: "Version", bundle: .main), value: appVersion, color: "6B7280")
-                infoRow(icon: "hammer.fill", title: String(localized: "support.info.build", defaultValue: "Build", bundle: .main), value: buildNumber, color: "6B7280")
-                infoRow(icon: "apple.logo", title: String(localized: "support.info.platform", defaultValue: "Plateforme", bundle: .main), value: "iOS \(UIDevice.current.systemVersion)", color: "6B7280")
+                infoRow(icon: "sparkles", title: String(localized: "support.info.version", defaultValue: "Version", bundle: .main), value: appVersion, color: MeeshyColors.neutral500Hex)
+                infoRow(icon: "hammer.fill", title: String(localized: "support.info.build", defaultValue: "Build", bundle: .main), value: buildNumber, color: MeeshyColors.neutral500Hex)
+                infoRow(icon: "apple.logo", title: String(localized: "support.info.platform", defaultValue: "Plateforme", bundle: .main), value: "iOS \(UIDevice.current.systemVersion)", color: MeeshyColors.neutral500Hex)
             }
-            .background(sectionBackground(tint: "6B7280"))
+            .background(sectionBackground(tint: MeeshyColors.neutral500Hex))
         }
     }
 
