@@ -220,7 +220,7 @@ struct InviteFriendsSheet: View {
             }
             .buttonStyle(.plain)
             .disabled(shareURL == nil)
-            .accessibilityLabel("Copier le lien d'invitation")
+            .accessibilityLabel(String(localized: "invite.a11y.copyLink", defaultValue: "Copy invitation link", bundle: .main))
         }
         .padding(16)
         .background(
@@ -307,7 +307,7 @@ struct InviteFriendsSheet: View {
                 )
             }
             .disabled(isCreating && createdLink == nil)
-            .accessibilityLabel("Partager le lien d'invitation")
+            .accessibilityLabel(String(localized: "invite.a11y.shareLink", defaultValue: "Share invitation link", bundle: .main))
 
             if let error = errorMessage {
                 HStack(spacing: 6) {
@@ -338,7 +338,7 @@ struct InviteFriendsSheet: View {
                     .font(.system(size: 10, weight: .semibold))
             }
             .foregroundColor(theme.textSecondary)
-            .accessibilityLabel("Personnaliser les options du lien")
+            .accessibilityLabel(String(localized: "invite.a11y.customizeOptions", defaultValue: "Customize link options", bundle: .main))
         }
     }
 
