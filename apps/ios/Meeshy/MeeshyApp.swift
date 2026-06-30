@@ -34,6 +34,10 @@ struct MeeshyApp: App {
         !hasCompletedOnboarding && !authManager.isAuthenticated
     }
 
+    // Kept alive for the process lifetime so the Combine pipeline is never
+    // deallocated. A static var on the App struct survives SwiftUI re-evaluations.
+    private static var nearCapacityCancellable: AnyCancellable?
+
     init() {
         // Task 1.3 — register the BGProcessingTask identifier BEFORE the
         // scene is created. `BGTaskScheduler.register` MUST run before
@@ -53,6 +57,23 @@ struct MeeshyApp: App {
         // nonisolated flag — the SDK stays call-agnostic (SDK purity).
         MessageSocketManager.shared.isCallActiveGuard = { CallManager.isCallActiveFlag }
         SocialSocketManager.shared.isCallActiveGuard = { CallManager.isCallActiveFlag }
+
+        // Surface a one-shot toast when the offline outbox reaches 80% of its
+        // 500-item capacity. removeDuplicates() in nearCapacityPublisher ensures
+        // the toast fires exactly once per true→false→true crossing, not on
+        // every new enqueue while near capacity.
+        Self.nearCapacityCancellable = OfflineQueue.shared.nearCapacityPublisher
+            .filter { $0 }
+            .receive(on: DispatchQueue.main)
+            .sink { _ in
+                Task { @MainActor in
+                    FeedbackToastManager.shared.showError(
+                        String(localized: "offline.queue.near_capacity",
+                               defaultValue: "File d'envoi presque pleine — reconnectez-vous pour vider la file.",
+                               bundle: .main)
+                    )
+                }
+            }
     }
 
     var body: some Scene {
