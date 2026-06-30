@@ -18,6 +18,7 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.media.MediaRepository
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
+import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
@@ -124,6 +125,23 @@ data class StoryComposerUiState(
     /** The on-canvas text elements of the **selected** slide, in z-order, for rendering. */
     val selectedSlideTextElements: List<StoryTextElement>
         get() = deck.selectedSlide.elements
+
+    /** The photo filter applied to the **selected** slide, or null when none is set. */
+    val selectedSlideFilter: StoryFilter?
+        get() = deck.selectedSlide.filter
+
+    /** The **selected** slide's filter strength (0..1) — what the Effets slider shows. */
+    val selectedSlideFilterIntensity: Float
+        get() = deck.selectedSlide.filterIntensity
+
+    /**
+     * The effective colour matrix the canvas renders for the **selected** slide's
+     * media — the neutral identity when no filter is set, otherwise the filter blended
+     * toward identity by its strength. Computed in one pure place
+     * ([StoryFilterMatrix.effectiveMatrix]) so the Composable stays glue.
+     */
+    val selectedSlideFilterMatrix: StoryColorMatrix
+        get() = StoryFilterMatrix.effectiveMatrix(selectedSlideFilter, selectedSlideFilterIntensity)
 
     /**
      * The text element currently being edited — the [selectedTextElementId] resolved
@@ -416,6 +434,19 @@ class StoryComposerViewModel @Inject constructor(
         }
 
     /**
+     * Sets (or clears, with null) the **selected** slide's photo filter — the Effets
+     * drawer's filter picker. Per-slide: each slide keeps its own look. The selection
+     * and any in-progress element edit are preserved (a filter touches no element).
+     */
+    fun onSelectFilter(filter: StoryFilter?) = applyDeck { it.setSelectedFilter(filter) }
+
+    /**
+     * Sets the **selected** slide's filter strength (clamped in the deck via the pure
+     * [StoryFilterMatrix.clampIntensity]) — the Effets drawer's intensity slider.
+     */
+    fun onFilterIntensityChange(intensity: Float) = applyDeck { it.setSelectedFilterIntensity(intensity) }
+
+    /**
      * Applies a structural deck transform and re-syncs the editor buffer to the
      * (possibly new) selected slide's text **and** media, keeping `draft` a faithful
      * mirror of the selected slide — the single invariant the screen relies on.
@@ -592,6 +623,8 @@ class StoryComposerViewModel @Inject constructor(
                 visibility = current.draft.visibility,
                 mediaIds = slide.mediaIds,
                 textElements = slide.elements,
+                filter = slide.filter,
+                filterIntensity = slide.filterIntensity,
             )
             PublishPlan(
                 request = draft.toCreateStoryRequest(language),

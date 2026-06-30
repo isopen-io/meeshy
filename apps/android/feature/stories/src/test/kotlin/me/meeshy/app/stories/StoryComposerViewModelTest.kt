@@ -21,6 +21,7 @@ import me.meeshy.sdk.media.MediaRepository
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
@@ -1578,5 +1579,74 @@ class StoryComposerViewModelTest {
         vm.onBandSwapCategory()
 
         assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Hidden)
+    }
+
+    @Test
+    fun `selecting a filter applies it to the selected slide`() = runTest {
+        val vm = viewModel()
+
+        vm.onSelectFilter(StoryFilter.VINTAGE)
+
+        assertThat(vm.state.value.selectedSlideFilter).isEqualTo(StoryFilter.VINTAGE)
+        assertThat(vm.state.value.selectedSlideFilterMatrix)
+            .isEqualTo(StoryFilterMatrix.baseMatrix(StoryFilter.VINTAGE))
+    }
+
+    @Test
+    fun `clearing a filter returns the canvas to the identity matrix`() = runTest {
+        val vm = viewModel()
+        vm.onSelectFilter(StoryFilter.BW)
+
+        vm.onSelectFilter(null)
+
+        assertThat(vm.state.value.selectedSlideFilter).isNull()
+        assertThat(vm.state.value.selectedSlideFilterMatrix).isEqualTo(StoryColorMatrix.IDENTITY)
+    }
+
+    @Test
+    fun `changing the filter intensity clamps and blends toward identity`() = runTest {
+        val vm = viewModel()
+        vm.onSelectFilter(StoryFilter.DRAMATIC)
+
+        vm.onFilterIntensityChange(0.5f)
+
+        assertThat(vm.state.value.selectedSlideFilterIntensity).isEqualTo(0.5f)
+        assertThat(vm.state.value.selectedSlideFilterMatrix)
+            .isEqualTo(StoryColorMatrix.IDENTITY.blend(StoryFilterMatrix.baseMatrix(StoryFilter.DRAMATIC), 0.5f))
+    }
+
+    @Test
+    fun `the filter intensity is clamped above one`() = runTest {
+        val vm = viewModel()
+        vm.onSelectFilter(StoryFilter.COOL)
+
+        vm.onFilterIntensityChange(9f)
+
+        assertThat(vm.state.value.selectedSlideFilterIntensity).isEqualTo(1f)
+    }
+
+    @Test
+    fun `a filter stays on its own slide when the selection moves`() = runTest {
+        val vm = viewModel()
+        val firstSlideId = vm.state.value.deck.selectedId
+        vm.onSelectFilter(StoryFilter.WARM)
+        vm.onAddSlide()
+
+        assertThat(vm.state.value.selectedSlideFilter).isNull()
+
+        vm.onSelectSlide(firstSlideId)
+        assertThat(vm.state.value.selectedSlideFilter).isEqualTo(StoryFilter.WARM)
+    }
+
+    @Test
+    fun `selecting a filter keeps an in-progress text element edit`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val elementId = vm.state.value.selectedTextElement?.id
+
+        vm.onSelectFilter(StoryFilter.FADE)
+
+        assertThat(vm.state.value.selectedTextElement?.id).isEqualTo(elementId)
+        assertThat(vm.state.value.selectedSlideFilter).isEqualTo(StoryFilter.FADE)
     }
 }

@@ -835,6 +835,7 @@ export const CALL_EVENTS = {
   BACKGROUNDED: 'call:backgrounded',
   FOREGROUNDED: 'call:foregrounded',
   SCREEN_CAPTURE_DETECTED: 'call:screen-capture-detected',
+  ANALYTICS: 'call:analytics',
 
   // Server → Client (peer notification)
   SCREEN_CAPTURE_ALERT: 'call:screen-capture-alert',

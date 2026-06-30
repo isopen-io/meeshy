@@ -1,6 +1,7 @@
 package me.meeshy.app.stories
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.StoryFilter
 import org.junit.Test
 
 /**
@@ -235,5 +236,50 @@ class StoryComposerDraftTest {
         ).toCreateStoryRequest(originalLanguage = "en")
         assertThat(request.storyEffects).isNull()
         assertThat(request.content).isEqualTo("caption")
+    }
+
+    @Test
+    fun `toCreateStoryRequest carries a selected photo filter and its strength`() {
+        val request = StoryComposerDraft(
+            text = "hello",
+            filter = StoryFilter.VINTAGE,
+            filterIntensity = 0.4f,
+        ).toCreateStoryRequest(originalLanguage = "en")
+
+        assertThat(request.storyEffects?.filter).isEqualTo("vintage")
+        assertThat(request.storyEffects?.filterIntensity).isWithin(1e-4).of(0.4)
+    }
+
+    @Test
+    fun `a filter-only draft still produces a storyEffects payload`() {
+        val request = StoryComposerDraft(
+            text = "",
+            filter = StoryFilter.BW,
+        ).toCreateStoryRequest(originalLanguage = "en")
+
+        assertThat(request.storyEffects).isNotNull()
+        assertThat(request.storyEffects?.filter).isEqualTo("bw")
+        assertThat(request.storyEffects?.textObjects).isEmpty()
+    }
+
+    @Test
+    fun `no filter leaves the storyEffects filter fields null`() {
+        val request = StoryComposerDraft(
+            textElements = listOf(StoryTextElement(id = "e1", text = "hi")),
+        ).toCreateStoryRequest(originalLanguage = "en")
+
+        assertThat(request.storyEffects).isNotNull()
+        assertThat(request.storyEffects?.filter).isNull()
+        assertThat(request.storyEffects?.filterIntensity).isNull()
+    }
+
+    @Test
+    fun `a clamped strength rides onto the wire`() {
+        val request = StoryComposerDraft(
+            filter = StoryFilter.WARM,
+            filterIntensity = 2.5f,
+        ).toCreateStoryRequest(originalLanguage = "en")
+
+        assertThat(request.storyEffects?.filterIntensity).isWithin(1e-4).of(1.0)
     }
 }

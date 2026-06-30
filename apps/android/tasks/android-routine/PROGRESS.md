@@ -128,6 +128,12 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 ## Next slice (pick one for the next run)
 
 Ordered by value:
+0aa. ~~**8 photo filters with intensity**~~ ✅ shipped as `story-photo-filters` (this run) — pure
+   `StoryFilterMatrix` (Compose-agnostic `StoryColorMatrix` + per-preset `baseMatrix` + intensity-blended
+   `effectiveMatrix` + `StoryFilter.wireValue`), per-slide `StorySlide.filter`/`filterIntensity` deck
+   reducers, live `ColorFilter` on the canvas + None/8-chip + strength `Slider` Effets tile, carried into
+   publish on `storyEffects.filter`. See run log. **Next real Effets tiles:** on-canvas **freehand
+   drawing** and **emoji stickers**, then **backgrounds** (pastel / gradient / image), then the timeline.
 0. ~~**Z-order management (front/back, forward/backward)**~~ ✅ shipped as `story-text-element-zorder`
    (this run) — pure `StorySlideDeck.reorderTextElement(id, StoryZOrder)` restacks an element within its
    slide's paint order (list order = z-order), inert at the extremes / unknown id / single element;
@@ -299,6 +305,74 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-06-30 — slice `story-photo-filters` ✅
+- **Branch:** `claude/apps/android/story-photo-filters` (off `origin/main` @ `444a983`).
+- **Housekeeping (step 0):** no open `claude/apps/android/*` PR (`list_pull_requests state=open
+  head=isopen-io:claude/apps/android` → `[]`; the prior slice `story-text-element-zorder` is merged as
+  **#1062**). Branched clean off the freshened `origin/main`.
+- **What:** **8 photo filters with adjustable strength** for story slides (feature-parity §Stories
+  "8 photo filters … with intensity" — now checked; the first **real Effets tile**, which previously
+  surfaced only visibility). Each slide can apply one of the iOS presets (vintage / b&w / warm / cool /
+  dramatic / vivid / fade / chrome) and dial its strength; the canvas shows it live and it rides into
+  publish. The wire already had `StoryFilter` + `StoryEffects.filter`/`filterIntensity`, so it is no
+  dead end.
+- **Design (single source of truth, SDK purity):** the *look* lives in **one** pure, Compose-agnostic
+  place — `StoryFilterMatrix` (`:feature:stories`, composer product math): `StoryColorMatrix` wraps a
+  20-float 4×5 matrix as a `List<Float>` (value equality so it JVM-tests), `baseMatrix(StoryFilter)`
+  gives each preset's full matrix, and `effectiveMatrix(filter, intensity)` blends the base toward the
+  neutral `IDENTITY` by `clampIntensity` (0 ⇒ identity, 1 ⇒ base, non-finite ⇒ full default); `blend`
+  short-circuits the `k≤0`/`k≥1` endpoints so "full strength == base" is exact (no float drift) and
+  `StoryFilter.wireValue()` is the lone enum→gateway-token mapping, kept beside the matrices so the look
+  and the wire value never diverge. Per-slide state: `StorySlide.filter`/`filterIntensity` + the deck
+  reducers `setSelectedFilter`/`setSelectedFilterIntensity` (clamp in one place, only the selected slide,
+  selection preserved; `duplicate` carries the look for free). The VM adds `onSelectFilter`/
+  `onFilterIntensityChange` (one-line `applyDeck`, element-edit selection preserved) and the derived
+  `selectedSlideFilter`/`selectedSlideFilterIntensity`/`selectedSlideFilterMatrix`. The composer draft
+  gains `filter`/`filterIntensity`; `storyEffects()` now emits a payload when there are text objects
+  **or** a filter (a filter-only slide still serialises), and `publishPlans` threads each slide's look.
+- **Changed (production — all `:feature:stories`, `apps/android` only):**
+  - `StoryFilterMatrix.kt` (new) — `StoryColorMatrix` (+`IDENTITY`/`blend`), `StoryFilterMatrix`
+    (`DEFAULT_INTENSITY`/`clampIntensity`/`baseMatrix`/`effectiveMatrix`), `StoryFilter.wireValue()`.
+  - `StorySlideDeck.kt` — `StorySlide.filter`/`filterIntensity`; `setSelectedFilter`/
+    `setSelectedFilterIntensity` reducers.
+  - `StoryComposerViewModel.kt` — derived filter state; `onSelectFilter`/`onFilterIntensityChange`;
+    per-slide publish draft carries the look.
+  - `StoryComposerDraft.kt` — `filter`/`filterIntensity` + `withFilter`; `storyEffects` serialises the
+    filter + clamped strength.
+  - `StoryComposerScreen.kt` — canvas `AsyncImage` `ColorFilter.colorMatrix(...)`; `FilterRow` (None + 8
+    chips) + strength `Slider` in the Effets drawer (glue).
+  - `values{,-fr,-es,-pt}/strings.xml` — 11 strings × 4 locales (intensity label, None, 8 names).
+- **Tests (TDD red → green, behaviour via public API): +43.**
+  - `StoryFilterMatrixTest` (new, +21): identity shape + 20-component require; blend at 0/1/half +
+    negative/over-one clamp; effectiveMatrix null/0/1/half/clamp-both/non-finite; clampIntensity bounds +
+    non-finite→default; every preset ≠ identity; all 8 distinct; BW row-equality; wireValue per preset +
+    all distinct.
+  - `StorySlideDeckFilterTest` (new, +10): fresh slide defaults; setSelectedFilter selected-only /
+    preserves selection / clears with null / leaves text+media; setSelectedFilterIntensity sets /
+    clamps over / clamps under / selected-only; duplicate carries the look.
+  - `StoryComposerViewModelTest` (+7): select applies + matrix; clear → identity matrix; intensity
+    blends; intensity clamp; filter stays on its slide across selection; select keeps element edit.
+  - `StoryComposerDraftTest` (+5): filter + strength on the wire; filter-only payload; no-filter null
+    fields; clamped strength on the wire.
+  - **Branch sweep:** every arm of `blend` (k≤0 / k≥1 / interior), `clampIntensity` (finite / non-finite),
+    `effectiveMatrix` (null / filter), `baseMatrix` (all 8), `wireValue` (all 8), and both deck reducers
+    (selected vs other slide) is exercised.
+- **RED→GREEN note:** the first run had 3 reds — `blend(.., 1f)` drifted by an ULP (`a+(b-a)*1f ≠ b` in
+  float), so `isEqualTo(base)` failed at full strength. Fixed by short-circuiting the blend endpoints
+  (also the correct design: exact identity/base at the extremes). Recorded in NOTES.md.
+- **Verification:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL** (assembleDebug APK + all JVM
+  unit tests, 836 tasks; `StoryFilterMatrixTest` 21/21, `StorySlideDeckFilterTest` 10/10, 0 failures).
+  Diff = `apps/android` only (5 prod Kotlin incl. 1 new, 4 strings, 3 test incl. 2 new, tracking docs).
+- **Reviewer verdict:** **PASS** — scope `apps/android` only, no secrets / `local.properties` gitignored;
+  behavioural non-tautological tests through the public API (no floor lowered); SDK purity (filter math +
+  reducers are composer **product** state in `:feature:stories`, glue in the Composable, wire enum reused
+  from `core/model`); single source of truth (matrices + wire token + clamp each in one place); UDF (VM +
+  immutable `StateFlow`, transitions pure); edge cases (intensity 0/1/clamp/non-finite, null filter,
+  per-slide isolation, duplicate-carry); colour/UX coherence (Effets chips reuse Material `FilterChip`
+  like the visibility row, live canvas preview, filter-only slide still publishes — no dead end).
+- **Follow-ups:** the remaining Effets tiles (freehand drawing, emoji stickers, backgrounds, timeline);
+  then a unified multi-element context menu; then advance to **Calls**.
 
 ### 2026-06-30 — slice `story-text-element-zorder` ✅
 - **Branch:** `claude/apps/android/story-text-element-zorder` (off `origin/main` @ `de08134`).

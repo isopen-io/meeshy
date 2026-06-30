@@ -168,7 +168,13 @@ final class CallManager: ObservableObject {
     /// `displayMode` : tant qu'il est vrai, la `FloatingCallPillView` in-app est
     /// masquée pour éviter le doublon visuel au retour au premier plan.
     @Published private(set) var isSystemPiPActive: Bool = false
-    @Published private(set) var activeAudioEffect: AudioEffectConfig?
+    @Published private(set) var activeAudioEffect: AudioEffectConfig? {
+        didSet {
+            if let effect = activeAudioEffect {
+                analyticsEffectsUsed.insert(effect.effectType.rawValue)
+            }
+        }
+    }
     @Published private(set) var hasLocalVideoTrack = false
     @Published private(set) var hasRemoteVideoTrack = false
     /// Outbound video auto-suspended by the graceful-degradation survival layer
@@ -279,6 +285,21 @@ final class CallManager: ObservableObject {
     private var lastCallWasOutgoing: Bool = false
     private var callStartDate: Date?
     private var reconnectAttempt = 0
+
+    // MARK: - Analytics accumulators (reset in endCallInternal)
+    private var analyticsCallInitiatedDate: Date?
+    private var analyticsConnectedDate: Date?
+    private var analyticsNetworkTransitions: Int = 0
+    private var analyticsQualitySeconds: [VideoQualityLevel: Double] = [:]
+    private var analyticsLastQualityDate: Date?
+    private var analyticsCurrentLevel: VideoQualityLevel?
+    private var analyticsRttSum: Double = 0
+    private var analyticsSampleCount: Int = 0
+    private var analyticsMaxPacketLoss: Double = 0
+    private var analyticsPacketLossSum: Double = 0
+    private var analyticsEffectsUsed: Set<String> = []
+    private var analyticsVideoFiltersUsed: Bool = false
+
     /// Periodic refresh of TURN credentials before TTL expiry. Cancelled on call end.
     private var turnRefreshTask: Task<Void, Never>?
     private var participantJoinedCancellable: AnyCancellable?
@@ -608,6 +629,8 @@ final class CallManager: ObservableObject {
             Logger.calls.warning("Cannot start call: already in state \(String(describing: self.callState))")
             return
         }
+
+        analyticsCallInitiatedDate = Date()
 
         // Optimistic local state — `currentCallId` is reassigned to the real
         // gateway-issued ObjectId once the ACK lands.
@@ -976,6 +999,7 @@ final class CallManager: ObservableObject {
             return
         }
 
+        analyticsCallInitiatedDate = Date()
         currentCallId = callId
         remoteUserId = fromUserId
         remoteUsername = fromUsername
@@ -1987,6 +2011,7 @@ final class CallManager: ObservableObject {
         // timer does not reset to 0:00 mid-call after an ICE restart.
         if !wasReconnecting {
             callStartDate = Date()
+            analyticsConnectedDate = callStartDate
             callDuration = 0
         }
         reconnectAttempt = 0
@@ -2249,6 +2274,9 @@ final class CallManager: ObservableObject {
                 case .connected, .reconnecting: isInActiveCall = true
                 default: isInActiveCall = false
                 }
+                if interfaceChanged && isInActiveCall {
+                    self.analyticsNetworkTransitions += 1
+                }
                 guard isInActiveCall else { return }
 
                 if path.status != .satisfied {
@@ -2309,6 +2337,73 @@ final class CallManager: ObservableObject {
         UserDefaults.standard.set(data, forKey: lastCallSummaryDefaultsKey)
     }
 
+    private func emitCallAnalyticsIfNeeded(reason: CallEndReason) {
+        guard let callId = currentCallId else { return }
+
+        // Flush the final quality-level window into the distribution table.
+        let now = Date()
+        if let prevDate = analyticsLastQualityDate, let prevLevel = analyticsCurrentLevel {
+            analyticsQualitySeconds[prevLevel, default: 0] += now.timeIntervalSince(prevDate)
+        }
+
+        let setupTimeMs: Int = analyticsConnectedDate.map {
+            Int($0.timeIntervalSince(analyticsCallInitiatedDate ?? $0) * 1000)
+        } ?? -1
+
+        let totalSecs = analyticsQualitySeconds.values.reduce(0, +)
+        let qualityDistribution: [String: Double]
+        if totalSecs > 0 {
+            let e = (analyticsQualitySeconds[.excellent] ?? 0) / totalSecs
+            let g = (analyticsQualitySeconds[.good] ?? 0) / totalSecs
+            let f = (analyticsQualitySeconds[.fair] ?? 0) / totalSecs
+            let p = ((analyticsQualitySeconds[.poor] ?? 0) + (analyticsQualitySeconds[.critical] ?? 0)) / totalSecs
+            qualityDistribution = ["excellent": e, "good": g, "fair": f, "poor": p]
+        } else {
+            qualityDistribution = ["excellent": 1.0, "good": 0.0, "fair": 0.0, "poor": 0.0]
+        }
+
+        let averageRtt = analyticsSampleCount > 0
+            ? analyticsRttSum / Double(analyticsSampleCount) : 0
+        let averagePacketLoss = analyticsSampleCount > 0
+            ? analyticsPacketLossSum / Double(analyticsSampleCount) : 0
+        let codec = lastKnownStats?.codec ?? "unknown"
+        let filtersUsed = analyticsVideoFiltersUsed || webRTCService.videoFilters.config.isEnabled
+
+        let payload: [String: Any] = [
+            "setupTimeMs":         setupTimeMs,
+            "durationSeconds":     callDuration,
+            "reconnectionCount":   reconnectAttempt,
+            "networkTransitions":  analyticsNetworkTransitions,
+            "averageRtt":          averageRtt,
+            "averagePacketLoss":   averagePacketLoss,
+            "maxPacketLoss":       analyticsMaxPacketLoss,
+            "codec":               codec,
+            "effectsUsed":         Array(analyticsEffectsUsed),
+            "filtersUsed":         filtersUsed,
+            "transcriptionUsed":   transcriptionService.isTranscribing,
+            "qualityDistribution": qualityDistribution,
+            "platform":            "ios",
+            "deviceModel":         UIDevice.current.model,
+            "isVideo":             isVideoEnabled,
+            "endReason":           String(describing: reason)
+        ]
+        MessageSocketManager.shared.emitCallAnalytics(callId: callId, payload: payload)
+
+        // Reset accumulators so a subsequent call starts clean.
+        analyticsCallInitiatedDate = nil
+        analyticsConnectedDate = nil
+        analyticsNetworkTransitions = 0
+        analyticsQualitySeconds = [:]
+        analyticsLastQualityDate = nil
+        analyticsCurrentLevel = nil
+        analyticsRttSum = 0
+        analyticsSampleCount = 0
+        analyticsMaxPacketLoss = 0
+        analyticsPacketLossSum = 0
+        analyticsEffectsUsed = []
+        analyticsVideoFiltersUsed = false
+    }
+
     private func endCallInternal(reason: CallEndReason) {
         // CALL-FIX 2026-06-06 — stop any ringing loop + play the "ended" cue, but
         // ONLY if the call was actually active (ringing/connecting/connected). The
@@ -2361,6 +2456,9 @@ final class CallManager: ObservableObject {
         pendingRemoteOffer = nil
         pendingIceCandidates = []
         thermalMonitor.stopMonitoring()
+        // Snapshot analytics before state is torn down so the payload has access
+        // to callId, callDuration, callStartDate, activeAudioEffect, etc.
+        emitCallAnalyticsIfNeeded(reason: reason)
         activeAudioEffect = nil
         hasLocalVideoTrack = false
         hasRemoteVideoTrack = false
@@ -3393,6 +3491,21 @@ extension CallManager: WebRTCServiceDelegate {
                 availableOutgoingBitrateBps: stats.availableOutgoingBitrateBps,
                 jitterMs: stats.jitterMs
             )
+
+            // Accumulate quality distribution and RTT/loss running stats.
+            let now = Date()
+            if let prevDate = self.analyticsLastQualityDate, let prevLevel = self.analyticsCurrentLevel {
+                self.analyticsQualitySeconds[prevLevel, default: 0] += now.timeIntervalSince(prevDate)
+            }
+            self.analyticsLastQualityDate = now
+            self.analyticsCurrentLevel = level
+            self.analyticsRttSum += stats.roundTripTimeMs
+            self.analyticsSampleCount += 1
+            self.analyticsPacketLossSum += packetLossPercent
+            self.analyticsMaxPacketLoss = max(self.analyticsMaxPacketLoss, packetLossPercent)
+            if self.webRTCService.videoFilters.config.isEnabled {
+                self.analyticsVideoFiltersUsed = true
+            }
 
             // Feed the graceful-degradation survival layer. One sample per quality
             // tick; the controller's time-based hysteresis decides if a sustained
