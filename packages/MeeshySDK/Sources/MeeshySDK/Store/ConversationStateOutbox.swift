@@ -122,9 +122,9 @@ public actor ConversationStateOutbox {
             try? Self.createSchema(in: disk)
             return disk
         }
-        let fallback = (try? DatabaseQueue()) ?? {
-            try! DatabaseQueue()  // swiftlint:disable:this force_try
-        }()
+        guard let fallback = try? DatabaseQueue() else {
+            fatalError("[ConversationStateOutbox] Cannot create in-memory GRDB queue — out of memory")
+        }
         try? Self.createSchema(in: fallback)
         return fallback
     }

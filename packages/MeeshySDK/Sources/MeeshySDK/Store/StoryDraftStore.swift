@@ -39,10 +39,10 @@ public final class StoryDraftStore: @unchecked Sendable {
             return disk
         }
         Logger.cache.warning("[StoryDraftStore] Disk queue unavailable at \(path), falling back to in-memory")
-        return (try? DatabaseQueue()) ?? {
-            // Last-resort path; `DatabaseQueue()` is trivially constructible.
-            try! DatabaseQueue()  // swiftlint:disable:this force_try
-        }()
+        guard let mem = try? DatabaseQueue() else {
+            fatalError("[StoryDraftStore] Cannot create in-memory GRDB queue — out of memory")
+        }
+        return mem
     }
 
     private func createSchema() throws {

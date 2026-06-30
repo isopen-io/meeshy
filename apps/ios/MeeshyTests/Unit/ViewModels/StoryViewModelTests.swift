@@ -1090,6 +1090,58 @@ final class StoryViewModelTests: XCTestCase {
         await StoryPublishQueue.shared.clearAll()
     }
 
+    // MARK: - F3 — originalLanguage forwarded on the publish entry points (Prisme)
+
+    /// The offline enqueue entry point must STAMP the resolved source language
+    /// onto the persisted `StoryPublishQueueItem` so the gateway routes NLLB-200
+    /// on flush. Pre-WS5.1 this argument was hardcoded `nil` (Prisme regression):
+    /// a non-nil `originalLanguage` here must survive into the queue.
+    func test_enqueueStoryForOfflinePublish_forwardsOriginalLanguage() async throws {
+        await StoryPublishQueue.shared.clearAll()
+
+        await sut.enqueueStoryForOfflinePublish(
+            slides: [Self.makeTextOnlySlide(content: "Hallo")],
+            slideImages: [:],
+            loadedImages: [:],
+            loadedVideoURLs: [:],
+            loadedAudioURLs: [:],
+            originalLanguage: "de",
+            visibility: "PUBLIC",
+            visibilityUserIds: []
+        )
+
+        let items = await StoryPublishQueue.shared.pendingItems
+        XCTAssertEqual(items.first?.originalLanguage, "de",
+                       "the resolved source language must be persisted onto the queue item")
+
+        await StoryPublishQueue.shared.clearAll()
+    }
+
+    /// The queued-REPLAY entry point (`executeQueuedPublish`) must thread the
+    /// item's persisted `originalLanguage` into the `createStory` call. This is
+    /// the previously-buggy path (hardcoded nil before WS5.1) and has no other
+    /// app-side coverage — a missed argument here would silently drop the source
+    /// language on every offline story that flushes after reconnect.
+    func test_executeQueuedPublish_forwardsOriginalLanguageToCreateStory() async throws {
+        mockAPI.authToken = "test-token"
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let payload = try encoder.encode([Self.makeTextOnlySlide(content: "Hej")])
+        let item = StoryPublishQueueItem(
+            visibility: "PUBLIC",
+            slidesPayload: payload,
+            originalLanguage: "sv"
+        )
+        mockPostService.createStoryResult = .success(Self.makeStoryAPIPost(
+            id: "post-sv", content: "Hej", authorId: "a1", authorUsername: "alice"
+        ))
+
+        _ = try await sut.executeQueuedPublish(item: item)
+
+        XCTAssertEqual(mockPostService.lastCreateStoryOriginalLanguage, "sv",
+                       "the queued item's originalLanguage must reach createStory on replay")
+    }
+
     // MARK: - Realtime story reactions (it.23 — story:reacted/unreacted wiring)
 
     func test_applyStoryReactionDelta_reacted_incrementsCount() {

@@ -530,13 +530,17 @@ export class CallEventsHandler {
       try {
         const userId = getUserId(socket.id);
         if (!userId) {
+          ack?.({ success: false, error: 'User not authenticated' } as unknown as CallInitiateAck);
           socket.emit(CALL_EVENTS.ERROR, {
             code: 'NOT_AUTHENTICATED',
             message: 'User not authenticated'
           } as CallError);
           return;
         }
-        if (denyAnonymous()) return;
+        if (denyAnonymous()) {
+          ack?.({ success: false, error: 'Anonymous users cannot initiate calls' } as unknown as CallInitiateAck);
+          return;
+        }
         rememberAuth(userId);
 
         // CVE-002: Rate limiting check
@@ -547,12 +551,16 @@ export class CallEventsHandler {
           this.rateLimiter,
           CALL_EVENTS.ERROR
         );
-        if (!rateLimitPassed) return;
+        if (!rateLimitPassed) {
+          ack?.({ success: false, error: 'Rate limit exceeded' } as unknown as CallInitiateAck);
+          return;
+        }
 
         // CVE-006: Validate input data
         const validation = validateSocketEvent(socketInitiateCallSchema, data);
         if (isValidationFailure(validation)) {
           const { error: validationError, details: validationDetails } = validation;
+          ack?.({ success: false, error: validationError } as unknown as CallInitiateAck);
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.VALIDATION_ERROR,
             message: validationError,
@@ -571,6 +579,7 @@ export class CallEventsHandler {
         // Resolve participantId from userId + conversationId
         const participantId = await this.resolveParticipantId(userId, data.conversationId);
         if (!participantId) {
+          ack?.({ success: false, error: 'You are not a participant in this conversation' } as unknown as CallInitiateAck);
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
             message: 'You are not a participant in this conversation'

@@ -114,3 +114,61 @@ final class ReelFeedAutoplayCoordinatorTests: XCTestCase {
         XCTAssertNil(sut.activeReelId)
     }
 }
+
+/// WS3.1 — the single open-autostart gate shared by a reel's audio and video
+/// paths (`ReelPageView.shouldStartActiveMedia` / `ReelVideoView.drive`): an
+/// active reel starts its media only once the liquid reveal has completed and no
+/// call owns the audio session.
+final class ReelMediaAutostartGateTests: XCTestCase {
+
+    func test_starts_whenActiveAndRevealedAndNoCall() {
+        XCTAssertTrue(ReelMediaAutostart.shouldStart(isActive: true, revealCompleted: true, isCallActive: false))
+    }
+
+    func test_doesNotStart_whenInactive() {
+        XCTAssertFalse(ReelMediaAutostart.shouldStart(isActive: false, revealCompleted: true, isCallActive: false))
+    }
+
+    func test_doesNotStart_beforeRevealCompletes() {
+        XCTAssertFalse(ReelMediaAutostart.shouldStart(isActive: true, revealCompleted: false, isCallActive: false),
+                       "The first reel holds on its poster until the liquid reveal completes")
+    }
+
+    func test_doesNotStart_duringCall() {
+        XCTAssertFalse(ReelMediaAutostart.shouldStart(isActive: true, revealCompleted: true, isCallActive: true),
+                       "An active call owns the audio session — never start reel media over it")
+    }
+
+    // MARK: Audio open-autostart idempotency (F4/F6)
+
+    /// `startActiveAudioIfNeeded` guards on `shouldLoadAudio(currentUrl:url:)`:
+    /// calling it twice with the SAME (already-loaded) url must NOT restart the
+    /// engine — a re-render / reveal flip must leave in-place audio untouched.
+    func test_shouldLoadAudio_falseWhenSameUrl() {
+        XCTAssertFalse(
+            ReelMediaAutostart.shouldLoadAudio(currentUrl: "https://cdn/a.mp3", url: "https://cdn/a.mp3"),
+            "Same url already loaded — autostart must be a no-op (no restart)")
+    }
+
+    /// A `file://` url already loaded in its NORMALIZED form (what
+    /// `AudioPlaybackManager.playLocal` stores) must also be a no-op — the F6 fix
+    /// compares against the stored (normalized) value, not the raw string.
+    func test_shouldLoadAudio_falseWhenSameNormalizedFileUrl() {
+        let normalized = URL(string: "file:///tmp/voice.m4a")!.absoluteString
+        XCTAssertFalse(
+            ReelMediaAutostart.shouldLoadAudio(currentUrl: normalized, url: normalized),
+            "A file:// url already loaded in normalized form must not restart")
+    }
+
+    func test_shouldLoadAudio_trueWhenDifferentUrl() {
+        XCTAssertTrue(
+            ReelMediaAutostart.shouldLoadAudio(currentUrl: "https://cdn/a.mp3", url: "https://cdn/b.mp3"),
+            "A different url (e.g. a flag-tapped TTS language) must (re)load")
+    }
+
+    func test_shouldLoadAudio_trueWhenNothingLoaded() {
+        XCTAssertTrue(
+            ReelMediaAutostart.shouldLoadAudio(currentUrl: nil, url: "https://cdn/a.mp3"),
+            "A fresh engine (no url) must load on open")
+    }
+}

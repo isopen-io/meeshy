@@ -1,5 +1,7 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.StoryFilter
+
 /**
  * A z-order restack of an on-canvas text element within its slide's paint order.
  * The slide's `elements` list order *is* the paint order — index 0 is the back,
@@ -22,6 +24,8 @@ data class StorySlide(
     val mediaIds: List<String> = emptyList(),
     val transform: StoryCanvasTransform = StoryCanvasTransform.IDENTITY,
     val elements: List<StoryTextElement> = emptyList(),
+    val filter: StoryFilter? = null,
+    val filterIntensity: Float = StoryFilterMatrix.DEFAULT_INTENSITY,
 )
 
 /**
@@ -273,6 +277,29 @@ data class StorySlideDeck(
     fun updateSelectedTransform(transform: StoryCanvasTransform): StorySlideDeck {
         val index = selectedIndex
         val next = slides.mapIndexed { i, slide -> if (i == index) slide.copy(transform = transform) else slide }
+        return copy(slides = next)
+    }
+
+    /**
+     * Sets the **selected** slide's photo [filter] (null clears it), leaving its id,
+     * text, media, and canvas transform — and every other slide and the selection —
+     * untouched. The Effets filter picker binds here so each slide keeps its own look.
+     */
+    fun setSelectedFilter(filter: StoryFilter?): StorySlideDeck {
+        val index = selectedIndex
+        val next = slides.mapIndexed { i, slide -> if (i == index) slide.copy(filter = filter) else slide }
+        return copy(slides = next)
+    }
+
+    /**
+     * Sets the **selected** slide's filter [intensity] (clamped/guarded by
+     * [StoryFilterMatrix.clampIntensity]), leaving every other slide and the selection
+     * untouched. The strength slider binds here so the clamp lives in one place.
+     */
+    fun setSelectedFilterIntensity(intensity: Float): StorySlideDeck {
+        val clamped = StoryFilterMatrix.clampIntensity(intensity)
+        val index = selectedIndex
+        val next = slides.mapIndexed { i, slide -> if (i == index) slide.copy(filterIntensity = clamped) else slide }
         return copy(slides = next)
     }
 

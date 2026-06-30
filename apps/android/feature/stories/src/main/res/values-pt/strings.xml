@@ -67,4 +67,14 @@
     <string name="stories_visibility_friends">Amigos</string>
     <string name="stories_visibility_community">Comunidade</string>
     <string name="stories_visibility_private">Apenas eu</string>
+    <string name="stories_composer_filter_intensity">Intensidade do filtro</string>
+    <string name="stories_composer_filter_none">Nenhum</string>
+    <string name="stories_composer_filter_vintage">Vintage</string>
+    <string name="stories_composer_filter_bw">P&amp;B</string>
+    <string name="stories_composer_filter_warm">Quente</string>
+    <string name="stories_composer_filter_cool">Frio</string>
+    <string name="stories_composer_filter_dramatic">Dramático</string>
+    <string name="stories_composer_filter_vivid">Vívido</string>
+    <string name="stories_composer_filter_fade">Esmaecido</string>
+    <string name="stories_composer_filter_chrome">Cromo</string>
 </resources>

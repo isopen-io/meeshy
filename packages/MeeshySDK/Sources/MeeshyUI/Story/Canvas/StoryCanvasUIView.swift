@@ -1103,6 +1103,16 @@ public final class StoryCanvasUIView: UIView {
     /// the default fade envelope — consistently every time.
     private func startAudioPlayback() {
         guard mode == .play else { return }
+        // Call-safety gate (WS3.2) : ouvrir un reader pendant un appel ne doit
+        // PAS faire tourner l'AVAudioEngine du reader sur la session détenue par
+        // l'appel. La reprise post-appel est déclenchée par l'événement
+        // `MediaSessionCoordinator.callEndedShouldResume` (F3) — émis sur le front
+        // descendant de `setCallActive`, car le teardown WebRTC/RTCAudioSession
+        // in-process NE poste PAS de façon fiable une fin d'interruption système.
+        // Cet événement est géré dans `observeAudioSessionEvents` ci-dessous, qui
+        // rappelle `startAudioPlayback()`. Miroir du gate composer
+        // (StoryTimelineEngine).
+        guard !MediaSessionCoordinator.shared.isCallActive else { return }
         // Gate "all media loaded": ne pas démarrer l'audio bg tant que les
         // autres médias chargeables (image bg + foreground videos) ne sont
         // pas prêts. `fireContentReadyIfNeeded()` consomme le drapeau dès que
@@ -1159,7 +1169,13 @@ public final class StoryCanvasUIView: UIView {
                 switch event {
                 case .interruptionBegan, .routeChangedOldDeviceUnavailable:
                     self.audioMixer.pause()
-                case .interruptionEndedShouldResume:
+                case .interruptionEndedShouldResume, .callEndedShouldResume:
+                    // `.callEndedShouldResume` (F3) : un appel VoIP vient de se
+                    // terminer ; le teardown in-process ne poste pas de fin
+                    // d'interruption système, donc l'audio du reader gaté à
+                    // `startAudioPlayback` resterait muet jusqu'au prochain
+                    // changement de slide. On le relance ici, mêmes gardes que la
+                    // fin d'interruption.
                     // `!isPlaybackPaused` : si l'utilisateur était en pause
                     // (long-press latch / pause UI) au moment de
                     // l'interruption, la fin d'interruption ne doit PAS
@@ -1913,9 +1929,19 @@ public final class StoryCanvasUIView: UIView {
                 // `.play` retenu hors écran (préemption / cross-fade sortant) ne
                 // doit pas relancer ses foreground players.
                 if window != nil {
+                    // F7 — DELIBERATE double-cover. Setting
+                    // `foregroundVideosPlaybackActive = true` raises each layer's
+                    // `isPlaybackActive`, whose didSet aligns+plays layers attached
+                    // BEFORE GO. The `forEachMediaLayer { startAlignedIfActive() }`
+                    // second pass then also starts layers that attach AFTER GO; for
+                    // already-aligned layers it is a NO-OP (the didSet idempotency
+                    // guard skips them, and `alignToTimelineThenPlay`'s `play()` is
+                    // a no-op when already playing + the seek only fires past the
+                    // drift seuil). Both passes route through the single drift-aware
+                    // path, replacing the raw `forEachAVPlayer { play() }` that
+                    // bypassed timeline alignment (open-at-t>0 could flash frame 0).
                     foregroundVideosPlaybackActive = true
-                    // isPlaybackActive.didSet has an idempotency guard; call play() directly so already-attached players always start.
-                    forEachAVPlayer { $0.play() }
+                    forEachMediaLayer { $0.startAlignedIfActive() }
                 }
                 startAudioPlayback()
             }
