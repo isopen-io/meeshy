@@ -152,4 +152,80 @@ final class CallViewAccessibilityTests: XCTestCase {
             "trigger vestibular discomfort."
         )
     }
+
+    // MARK: - Video quality VoiceOver announcement
+
+    func test_liveVideoQualityLevel_postsVoiceOverAnnouncement() throws {
+        let source = try callViewSource()
+        XCTAssertTrue(
+            source.contains("liveVideoQualityLevel"),
+            "CallView must observe liveVideoQualityLevel to announce quality changes."
+        )
+        XCTAssertTrue(
+            source.contains("call.a11y.quality"),
+            "CallView must post a VoiceOver announcement when video quality degrades so " +
+            "blind users are informed the video stream is degraded — they cannot see the " +
+            "visual quality indicator and would otherwise have no feedback."
+        )
+    }
+
+    func test_qualityAnnouncement_isInsideLiveQualityOnChangeHandler() throws {
+        let source = try callViewSource()
+        guard let changeRange = source.range(of: "liveVideoQualityLevel") else {
+            XCTFail("CallView must observe liveVideoQualityLevel via adaptiveOnChange")
+            return
+        }
+        let end = source.index(changeRange.lowerBound, offsetBy: 600, limitedBy: source.endIndex) ?? source.endIndex
+        let handler = String(source[changeRange.lowerBound ..< end])
+        XCTAssertTrue(
+            handler.contains("call.a11y.quality"),
+            "The quality VoiceOver announcement must live inside the liveVideoQualityLevel " +
+            "onChange handler so it fires on every quality transition, not just once."
+        )
+    }
+
+    // MARK: - Video suspended tile accessibility
+
+    func test_videoSuspendedTile_hasAccessibilityLabel() throws {
+        let source = try callViewSource()
+        XCTAssertTrue(
+            source.contains("localVideoSuspendedTile"),
+            "CallView must define a localVideoSuspendedTile for the audio-only survival state."
+        )
+        XCTAssertTrue(
+            source.contains("call.video.suspended.a11y") || source.contains("video.suspended"),
+            "The video-suspended tile must carry an accessibility label so VoiceOver users " +
+            "know the camera was paused to preserve the call on a poor network — without " +
+            "it they see a frozen frame with no context."
+        )
+    }
+
+    // MARK: - callToggleAccessibility compound modifier
+
+    func test_callControlButton_usesCallToggleAccessibilityModifier() throws {
+        let source = try callViewSource()
+        XCTAssertTrue(
+            source.contains("callToggleAccessibility"),
+            "callControlButton must apply the callToggleAccessibility modifier to bundle " +
+            "label, hint, trait, and value into a single reusable modifier — avoids " +
+            "repeated .accessibilityLabel/.accessibilityHint chains that drift out of sync."
+        )
+    }
+
+    // MARK: - End call button accessibility
+
+    func test_endCallButton_hasDestructiveTrait() throws {
+        let source = try callViewSource()
+        guard let endCallRange = source.range(of: "endCallGlass") else {
+            XCTFail("CallView must define endCallGlass for the end call button")
+            return
+        }
+        let end = source.index(endCallRange.lowerBound, offsetBy: 600, limitedBy: source.endIndex) ?? source.endIndex
+        let vicinity = String(source[endCallRange.lowerBound ..< end])
+        XCTAssertTrue(
+            vicinity.contains("call.end.a11y") || vicinity.contains("accessibilityLabel"),
+            "The end call button must carry an explicit accessibility label — its red " +
+            "colour alone does not convey the destructive action to VoiceOver users."
+        )
+    }
 }
