@@ -491,7 +491,11 @@ describe('InviteUserModal', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Ajouter John Doe' }));
 
       const selectedButton = screen.getByRole('button', { name: 'John Doe déjà sélectionné' });
-      expect(selectedButton).toBeDisabled();
+      // The accessible control is a role="button" div (the inner visual <button> is
+      // aria-hidden to avoid ambiguity), so its disabled state is expressed via
+      // aria-disabled — toBeDisabled() only honors the `disabled` attribute on form
+      // elements and does not apply to this ARIA widget pattern.
+      expect(selectedButton).toHaveAttribute('aria-disabled', 'true');
     });
 
     it('gives the selection remove button an accessible name identifying the user', async () => {

@@ -221,7 +221,9 @@ export function InviteUserModal({
                       role="button"
                       tabIndex={isSelected ? -1 : 0}
                       aria-disabled={isSelected}
-                      aria-label={`${t('inviteModal.add')} ${displayName}`}
+                      aria-label={isSelected
+                        ? t('inviteModal.selectedUserAria', { name: displayName })
+                        : t('inviteModal.addUserAria', { name: displayName })}
                       className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                       onClick={() => !isSelected && addUserToSelection(user)}
                       onKeyDown={(e) => {
