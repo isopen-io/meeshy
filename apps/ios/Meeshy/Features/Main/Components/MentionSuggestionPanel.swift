@@ -59,15 +59,12 @@ struct MentionSuggestionPanel: View {
             }
         }
         .frame(maxHeight: 200)
-        // iOS 26 Liquid Glass on the floating autocomplete bar — neutral chrome,
-        // like the system QuickType bar (no brand tint: it reads as OS chrome, not
-        // content). The SDK Compatibility atom gates the real `glassEffect` and
-        // degrades to an `.ultraThinMaterial` blur pre-iOS-26. Same atom as the
-        // floating call pill. Applied LAST, after sizing, per the atom's contract.
-        .adaptiveGlass(in: Rectangle())
+        .adaptiveGlass(in: Rectangle(), tint: Color(hex: accentColor).opacity(0.14))
     }
 
     /// Three shimmering placeholder rows shown while waiting for API results.
+    /// Decorative — hidden from VoiceOver so the rotor never stops on empty
+    /// shimmer shapes while results stream in.
     private var mentionSkeletonRows: some View {
         VStack(spacing: 0) {
             ForEach(0..<3, id: \.self) { _ in
@@ -93,5 +90,6 @@ struct MentionSuggestionPanel: View {
                 .frame(minHeight: 44)
             }
         }
+        .accessibilityHidden(true)
     }
 }
