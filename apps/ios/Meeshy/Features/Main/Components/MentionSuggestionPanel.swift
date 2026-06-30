@@ -59,7 +59,12 @@ struct MentionSuggestionPanel: View {
             }
         }
         .frame(maxHeight: 200)
-        .adaptiveGlass(in: Rectangle(), tint: Color(hex: accentColor).opacity(0.14))
+        // Neutral Liquid Glass (no accent tint): an autocomplete bar floating
+        // above the composer is input-assistance chrome (like the QuickType
+        // bar), not conversation content — an accent tint would read as content.
+        // Accent tint stays reserved for message-content surfaces (e.g. the
+        // long-press ContextActionMenu).
+        .adaptiveGlass(in: Rectangle())
     }
 
     /// Three shimmering placeholder rows shown while waiting for API results.

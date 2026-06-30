@@ -1,73 +1,44 @@
-# Plan — Iteration 52i (2026-06-30) — iOS Liquid Glass : dropdowns de suggestion flottants
+# Plan — Iteration 52i (2026-06-30) — iOS Liquid Glass : surfaces flottantes content-agnostic (consolidé)
+
+> **Note de consolidation (réconciliation 53i)** : deux agents iOS parallèles ont produit un
+> « 52i » se chevauchant (`MentionSuggestionPanel`). Le merge a concaténé ce fichier et gardé
+> silencieusement une version teintée du panneau de mentions, contredisant la décision
+> documentée « neutre, pas de teinte ». Ce fichier est la version consolidée ; la divergence
+> de teinte a été corrigée en 53i (voir `2026-06-30-plan-iteration-53i.md`).
 
 ## Objectif
-Adopter l'atome `.adaptiveGlass` (Liquid Glass iOS 26 + fallback gracieux pré-26) sur la
-famille UX « dropdown de suggestion flottant au-dessus du contenu », en continuation du
-ladder Glass amorcé en 51i. Bornée : 2 surfaces, même atome, empreinte préservée.
+iOS only. **Adoption native iOS 26 Liquid Glass** sur des surfaces flottantes
+content-agnostic via l'atome SDK `adaptiveGlass` (établi 51i). Itération bornée, « épurée » :
+swaps 1:1 fidèles, aucune surcharge.
 
-## Périmètre (iOS exclusivement)
-- `apps/ios/Meeshy/Features/Main/Components/MentionSuggestionPanel.swift`
-- `apps/ios/Meeshy/Features/Main/Components/LocationPickerView.swift`
+## Surfaces livrées (mergées : #1075 + #1083)
+1. `apps/ios/.../Components/MentionSuggestionPanel.swift` — barre d'autocomplétion `@mention`
+   flottant au-dessus du composer : `.background(.ultraThinMaterial)` → `.adaptiveGlass(in: Rectangle())`.
+   **Neutre, sans teinte** (chrome d'assistance saisie, comme la QuickType bar — une barre
+   teintée accent lirait comme du contenu). Clip-shape vérifiée : aucune → `Rectangle()`.
+   Skeleton rows marquées `.accessibilityHidden(true)` (décoratives).
+2. `apps/ios/.../Components/MiniAudioPlayerBar.swift` — mini-lecteur capsule flottant :
+   `.background(.ultraThinMaterial)` → `.adaptiveGlass(in: Capsule())` avant le
+   `.clipShape(Capsule())` existant (1:1 avec `FloatingCallPillView`, HIG glass-in-glass).
+3. `apps/ios/.../Components/LocationPickerView.swift` — dropdown de résultats de recherche
+   de lieu (flotte au-dessus de la carte) : `RoundedRectangle.fill(.ultraThinMaterial).shadow`
+   → `.adaptiveGlass(in: RoundedRectangle(12))` + `.shadow` aval. **Neutre** (même famille
+   « dropdown de suggestion = chrome » que le panneau de mentions).
 
-## Étapes
-1. [x] Vérifier la clip-shape de `MentionSuggestionPanel` (demande explicite 51i) → monté
-   flush au-dessus du composer, pleine largeur, sans coin arrondi → conserver l'empreinte
-   via `Rectangle()`.
-2. [x] `MentionSuggestionPanel:62` : `.background(.ultraThinMaterial)` →
-   `.adaptiveGlass(in: Rectangle(), tint: Color(hex: accentColor).opacity(0.14))`.
-3. [x] `LocationPickerView` dropdown résultats (L162-166) :
-   `.background(RoundedRectangle.fill(.ultraThinMaterial).shadow)` →
-   `.adaptiveGlass(in: RoundedRectangle(cornerRadius: 12), tint: Color(hex: accentColor).opacity(0.12))`
-   + `.shadow(...)` (ombre préservée en aval, pattern `ContextActionMenu`).
-4. [x] Vérifier imports (`MeeshyUI` expose `adaptiveGlass` + `Color(hex:)`) — OK pour les
-   deux fichiers.
-5. [ ] Commit + push branche `claude/upbeat-euler-mekcd1`.
-6. [ ] CI `ios-tests.yml` verte (compile Xcode 26.1.x — seul gate fiable, pas de build Linux).
-7. [ ] Merge dans `main`, mettre à jour `branch-tracking.md`, supprimer la branche.
-
-## Vérification
-- Pas de build local (Linux sans SwiftUI) → la CI iOS est le gate de compile.
-- API publique `adaptiveGlass` inchangée ; aucun test SDK existant impacté.
-- Empreinte/layout préservés (Rectangle pour le mention panel ; RoundedRect+shadow pour le
-  location dropdown).
-
-## Risques / mitigations
-- Risque : régression visuelle teinte trop forte → opacités basses (0.14 / 0.12), discrètes.
-- Risque : fallback hairline du Rectangle sur le mention panel → lit comme séparateur subtil
-  contre le composer, acceptable.
-
-## Non-objectifs (différés)
-- `CallEffectsOverlay`, `GlobalSearchView` (lot glass suivant), cartes d'effets MARGINAL,
-  ladder catégoriel, polices figées.
-# Plan — Iteration 52i (2026-06-30)
-
-## Objectif
-iOS only. **Adoption native iOS 26 Liquid Glass — lot 2** sur deux surfaces flottantes
-neutres et content-agnostic, via l'atome SDK `adaptiveGlass`. Itération bornée, « épurée » :
-2 fichiers, swaps 1:1 fidèles, aucune surcharge ajoutée.
-
-## Base
-- Branche : `claude/upbeat-euler-q2nl32` (resynchronisée sur `main` HEAD `19682db`, post #1072).
-
-## Changements
-
-### 1. `apps/ios/.../Components/MentionSuggestionPanel.swift` (app)
-- [x] `.background(.ultraThinMaterial)` → `.adaptiveGlass(in: Rectangle())` (neutre, pas de
-      teinte — chrome OS comme la QuickType bar). Clip-shape vérifiée : aucune → `Rectangle()`.
-- [x] Doc-comment inline.
-
-### 2. `apps/ios/.../Components/MiniAudioPlayerBar.swift` (app)
-- [x] `.background(.ultraThinMaterial)` → `.adaptiveGlass(in: Capsule())` avant le
-      `.clipShape(Capsule())` existant (1:1 avec `FloatingCallPillView`).
-- [x] Doc-comment inline (HIG glass-in-glass).
+## Règle de teinte dégagée (canonique)
+- **Surface chrome d'assistance / suggestion flottante** (autocomplétion, dropdown de
+  recherche, mini-lecteur) → glass **neutre** (pas de teinte accent).
+- **Surface agissant sur un contenu précis** (menu long-press d'un message — `ContextActionMenu`,
+  51i) → glass **teinté accent** de la conversation.
 
 ## Vérification
-- [x] Les deux fichiers importent déjà `MeeshyUI` (où vit `adaptiveGlass`).
-- [x] Aucune édition `project.pbxproj` (XcodeGen globbe les `.swift`).
-- [x] `MiniAudioPlayerBarTests` comportemental (visibilité/taps/routing) → inchangé.
-- [ ] CI `ios-tests.yml` verte (compile + tests simulateur).
+- Les fichiers importent déjà `MeeshyUI` (où vit `adaptiveGlass` + `Color(hex:)`).
+- Aucune édition `project.pbxproj` (XcodeGen globbe les `.swift`).
+- Tests `MiniAudioPlayerBarTests` comportementaux inchangés.
+- Gate = CI `ios-tests.yml` (compile Xcode 26.1.x — pas de build local Linux).
 
-## Merge
-- [ ] PR → `main`, merge après CI verte. Supprimer la branche.
-- [ ] `branch-tracking.md` : dernière itération iOS = 52i, base suivante = main post-merge.
-</content>
+## Différés → 53i+
+- `MessageOverlayMenu` (reaction picker, vérifier glass-in-glass), `MessageInfoSheet`,
+  `InviteFriendsSheet`, `StatusBubbleOverlay`, `CallEffectsOverlay` toolbar pill,
+  `GlobalSearchView` (famille recherche). Puis ladder catégoriel arc-en-ciel + grandes
+  surfaces polices figées.

@@ -159,7 +159,10 @@ struct LocationPickerView: View {
                 }
             }
         }
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 12), tint: Color(hex: accentColor).opacity(0.12))
+        // Neutral Liquid Glass: a search-results dropdown floating over the map
+        // is suggestion chrome, not content — kept neutral for the same reason
+        // as the @mention autocomplete bar (no accent tint on chrome surfaces).
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
         .padding(.horizontal, 16)
     }
