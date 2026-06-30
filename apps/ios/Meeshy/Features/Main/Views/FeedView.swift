@@ -817,7 +817,11 @@ struct FeedView: View {
                 storyViewerCoordinator.present(
                     StoryViewerRequest(id: post.authorId, startAtFirstUnviewed: true, singleGroup: true)
                 )
-            }
+            },
+            // RF2: a POST that reposts a REEL renders inside FeedPostCard (not the
+            // immersive reel card) — hand it the shared autoplay coordinator so the
+            // embedded reel plays muted/inline, elected against the native reels.
+            reelAutoplay: reelAutoplay
         )
         .equatable()
     }

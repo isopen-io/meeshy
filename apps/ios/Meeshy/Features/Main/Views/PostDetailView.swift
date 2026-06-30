@@ -1245,17 +1245,19 @@ struct PostDetailView: View {
                 }
             }
 
-            // Story-type repost — render the canvas
+            // Story-type repost — render the canvas. Unmuted to match the native
+            // story detail (RF3); the SHARED `storyCanvasContainer` brings the SAME
+            // off-screen + call-aware pause wiring, so the repost canvas can't play
+            // with sound while scrolled off-screen.
             if isStoryRepost {
-                StoryReaderRepresentable(
-                    repost: repost,
-                    preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
-                    mute: true
+                storyCanvasContainer(
+                    StoryReaderRepresentable(
+                        repost: repost,
+                        preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
+                        mute: false,
+                        isPaused: StoryDetailPlaybackPolicy.isPaused(visible: storyCanvasVisible, callActive: isCallActive)
+                    )
                 )
-                .aspectRatio(9.0 / 16.0, contentMode: .fit)
-                .frame(maxWidth: 460)
-                .frame(maxWidth: .infinity, alignment: .center)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
                 .padding(.horizontal, 12)
                 .padding(.bottom, 8)
             } else if !repost.media.isEmpty {
@@ -1505,18 +1507,30 @@ struct PostDetailView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 32)
         } else {
-            StoryReaderRepresentable(
-                feedPost: post,
-                preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
-                mute: false,
-                isPaused: !storyCanvasVisible || isCallActive
+            storyCanvasContainer(
+                StoryReaderRepresentable(
+                    feedPost: post,
+                    preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
+                    mute: false,
+                    isPaused: StoryDetailPlaybackPolicy.isPaused(visible: storyCanvasVisible, callActive: isCallActive)
+                )
             )
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+        }
+    }
+
+    /// Shared canvas wrapper for BOTH the native story and the STORY-repost paths
+    /// (RF3): identical sizing + the GeometryReader/`StoryCanvasFrameKey`/
+    /// `onPreferenceChange` visibility tracking that updates `storyCanvasVisible`.
+    /// Extracting it guarantees the off-screen pause wiring can't exist on one path
+    /// and be missing on the other (which would leak audio on the repost path).
+    private func storyCanvasContainer(_ reader: StoryReaderRepresentable) -> some View {
+        reader
             .aspectRatio(9.0 / 16.0, contentMode: .fit)
             .frame(maxWidth: 460)
             .frame(maxWidth: .infinity, alignment: .center)
             .clipShape(RoundedRectangle(cornerRadius: 12))
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
             .background(
                 GeometryReader { geo in
                     Color.clear.preference(key: StoryCanvasFrameKey.self,
@@ -1527,7 +1541,6 @@ struct PostDetailView: View {
                 let h = scrollViewportHeight > 0 ? scrollViewportHeight : frame.maxY + 1
                 storyCanvasVisible = StoryCanvasVisibility.isVisible(canvasFrame: frame, viewportHeight: h)
             }
-        }
     }
 
     // MARK: - Media Views
