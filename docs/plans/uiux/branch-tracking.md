@@ -14,6 +14,24 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR iOS AUTORITAIRE (suffixe `i`) — mis à jour 71i** — piste indépendante des itérations web.
+> - **Dernière itération iOS en cours : `71i`** (Dynamic Type / a11y du flux de sécurité 2FA
+>   `TwoFactorSetupView.swift` — 3 écrans setup/disable/backup-codes : **30** `.font(.system(size:))`
+>   figés → `MeeshyFont.relative(...)` (texte + petites icônes inline 12–13 pt, weight/design préservés
+>   dont `.monospaced`) ; **9 icônes héros décoratives 40/50/80 pt gardées figées** pour préserver la
+>   hiérarchie visuelle). Branche `claude/upbeat-euler-8btkin`, base = `main` HEAD `b3867b39`.
+> - **70i (mergé)** = `ContactCardView` palette (hex `#2ECC71`/`#3498DB` → `MeeshyColors.success`/`.info`)
+>   + a11y VoiceOver (annonce téléphones/e-mails) — déjà dans `main`. **69i** = `ContactCardView` palette/Dynamic Type.
+>   **68i** = Liquid Glass champ recherche + `MentionSuggestionPanel`. **55i** = `ConversationInfoSheet`
+>   Dynamic Type (51 conversions, sweep pur sans test — modèle suivi par 71i).
+> - **Base de départ 72i : `main` HEAD** (toujours resync sur `main` avant de commencer ; supprimer la branche mergée).
+> - **Différé prioritaire iOS 72i+ : Dynamic Type grandes surfaces restantes** — `StoryViewerView+Content` (38),
+>   `VoiceProfileManageView` (31), `FeedView+Attachments` (30), `FeedCommentsSheet` (28), `AudioFullscreenView` (26),
+>   `ConversationDashboardView` (43) — un écran/lot, même doctrine (texte + glyphes inline ; héros décoratifs ≥ 40 pt figés).
+>   Puis **Glass adoption (reste)** : `MessageOverlayMenu` (gros fichier, glow réglé — lot dédié `AdaptiveGlassContainer`).
+>   **NE PAS re-flagger** : `ReplyThreadOverlay` (déjà `.adaptiveGlass`, scrim de fond OK), `EmojiFullPickerSheet`/
+>   `EmojiKeyboardPanel` (verre derrière scroll = anti-lisibilité HIG). Voir analyse 71i § Différés.
+>
 > **POINTEUR AUTORITAIRE WEB (mis à jour 70wb)** — source fiable = § History (append-only) ; le tableau Current State a divergé (lignes dupliquées par agents parallèles).
 > - **Dernière itération web mergée : `70w` → PR #1088** (i18n `PhoneResetFlow.tsx` — 56 `t()||'FR'` → `t(k,'EN')` + clé EN manquante `phoneReset.identityHint`). Antérieures : 69w #1084 (a11y create-link modal), 68w #1082, 67w #1078.
 > - **⚠️ Collision de numéro `70w`** : deux itérations web parallèles ont pris `70w`. `claude/practical-fermat-w9pjo3` (PhoneResetFlow, mergée #1088) garde `70w` ; la présente (invite-user-modal a11y, branche `claude/practical-fermat-mql80f`) est renommée **`70wb`** (convention `wb`). Surfaces disjointes (auth/ vs conversations/) — aucun conflit de code.
