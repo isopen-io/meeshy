@@ -577,11 +577,27 @@ describe('AttachmentPreviewReply', () => {
       });
     });
 
+    it('does not open image lightbox on a neutral key', () => {
+      const attachments = [
+        createMockAttachment({
+          mimeType: 'image/jpeg',
+          fileUrl: 'https://example.com/photo.jpg',
+        }),
+      ];
+
+      render(<AttachmentPreviewReply attachments={attachments} />);
+
+      const imageButton = screen.getByRole('button', { name: /ouvrir l'image/i });
+      fireEvent.keyDown(imageButton, { key: 'Tab' });
+
+      expect(screen.queryByTestId('image-lightbox')).not.toBeInTheDocument();
+    });
+
     it('opens PDF lightbox on Enter key', async () => {
       const attachments = [
         createMockAttachment({
           mimeType: 'application/pdf',
-          fileName: 'document.pdf',
+          fileName: 'doc.pdf',
         }),
       ];
 
@@ -611,22 +627,6 @@ describe('AttachmentPreviewReply', () => {
       await waitFor(() => {
         expect(screen.getByTestId('mock-lightbox')).toBeInTheDocument();
       });
-    });
-
-    it('does not open a lightbox on an unrelated key', () => {
-      const attachments = [
-        createMockAttachment({
-          mimeType: 'application/pdf',
-          fileName: 'document.pdf',
-        }),
-      ];
-
-      render(<AttachmentPreviewReply attachments={attachments} />);
-
-      const pdfButton = screen.getByRole('button', { name: /ouvrir le pdf/i });
-      fireEvent.keyDown(pdfButton, { key: 'a' });
-
-      expect(screen.queryByTestId('mock-lightbox')).not.toBeInTheDocument();
     });
   });
 
