@@ -1139,6 +1139,87 @@ class StoryComposerViewModelTest {
     }
 
     @Test
+    fun `onTextElementMoved snaps a small drag onto the centre guide and reports it`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementMoved(id, dx = 0.015f, dy = 0f)
+
+        val element = vm.state.value.selectedSlideTextElements.single()
+        // Without snapping the centre would drift to 0.515; the magnet holds it at 0.5.
+        assertThat(element.x).isEqualTo(StoryTextElement.CENTER)
+        val feedback = vm.state.value.snapFeedback!!
+        assertThat(feedback.verticalGuide).isEqualTo(0.5f)
+        assertThat(feedback.horizontalGuide).isEqualTo(0.5f)
+        assertThat(feedback.withinSafeZone).isTrue()
+    }
+
+    @Test
+    fun `onTextElementMoved past the threshold drags free with no guide lines`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementMoved(id, dx = 0.2f, dy = 0.2f)
+
+        val element = vm.state.value.selectedSlideTextElements.single()
+        assertThat(element.x).isWithin(1e-4f).of(0.7f)
+        assertThat(element.y).isWithin(1e-4f).of(0.7f)
+        val feedback = vm.state.value.snapFeedback!!
+        assertThat(feedback.verticalGuide).isNull()
+        assertThat(feedback.horizontalGuide).isNull()
+    }
+
+    @Test
+    fun `onTextElementMoved toward the edge reports out of the safe zone`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementMoved(id, dx = 0.49f, dy = 0f)
+
+        assertThat(vm.state.value.snapFeedback!!.withinSafeZone).isFalse()
+    }
+
+    @Test
+    fun `onTextElementMoved on an unknown id leaves the element and shows no feedback`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val before = vm.state.value.selectedSlideTextElements.single()
+
+        vm.onTextElementMoved("ghost", dx = 0.1f, dy = 0.1f)
+
+        assertThat(vm.state.value.selectedSlideTextElements.single()).isEqualTo(before)
+        assertThat(vm.state.value.snapFeedback).isNull()
+    }
+
+    @Test
+    fun `onTextElementDragEnd clears the snap feedback but keeps the element placed`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+        vm.onTextElementMoved(id, dx = 0.015f, dy = 0f)
+        assertThat(vm.state.value.snapFeedback).isNotNull()
+
+        vm.onTextElementDragEnd()
+
+        assertThat(vm.state.value.snapFeedback).isNull()
+        assertThat(vm.state.value.selectedSlideTextElements.single().x).isEqualTo(StoryTextElement.CENTER)
+    }
+
+    @Test
+    fun `onTextElementDragEnd is inert when no drag feedback is showing`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val before = vm.state.value
+
+        vm.onTextElementDragEnd()
+
+        assertThat(vm.state.value).isSameInstanceAs(before)
+    }
+
+    @Test
     fun `onRemoveTextElement removes the element and ends its editing`() = runTest {
         val vm = viewModel()
         vm.onAddTextElement()
