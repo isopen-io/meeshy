@@ -24,6 +24,9 @@ jest.mock('@/hooks/useI18n', () => ({
         'inviteModal.inviteSuccess': `${params?.count ?? 0} utilisateur(s) invité(s) avec succès`,
         'inviteModal.partialError': `${params?.count ?? 0} invitation(s) ont échoué`,
         'inviteModal.inviteError': 'Erreur lors de l\'invitation',
+        'inviteModal.addUserAria': `Ajouter ${params?.name ?? ''}`,
+        'inviteModal.selectedUserAria': `${params?.name ?? ''} déjà sélectionné`,
+        'inviteModal.removeUserAria': `Retirer ${params?.name ?? ''}`,
       };
       return translations[key] || key;
     },
@@ -80,7 +83,7 @@ jest.mock('@/components/ui/dialog', () => ({
 }));
 
 jest.mock('@/components/ui/button', () => ({
-  Button: ({ children, onClick, disabled, variant, size, className }: any) => (
+  Button: ({ children, onClick, disabled, variant, size, className, ...rest }: any) => (
     <button
       onClick={onClick}
       disabled={disabled}
@@ -88,6 +91,7 @@ jest.mock('@/components/ui/button', () => ({
       data-size={size}
       className={className}
       data-testid="button"
+      {...rest}
     >
       {children}
     </button>
@@ -338,11 +342,7 @@ describe('InviteUserModal', () => {
         expect(screen.getByText('John Doe')).toBeInTheDocument();
       });
 
-      // Click on user row to select
-      const userRow = screen.getByText('John Doe').closest('[class*="cursor-pointer"]');
-      if (userRow) {
-        fireEvent.click(userRow);
-      }
+      fireEvent.click(screen.getByRole('button', { name: 'Ajouter John Doe' }));
 
       // Check that user is in selected users section
       expect(screen.getByText('Utilisateurs sélectionnés (1)')).toBeInTheDocument();
@@ -361,10 +361,7 @@ describe('InviteUserModal', () => {
         expect(screen.getByText('John Doe')).toBeInTheDocument();
       });
 
-      const userRow = screen.getByText('John Doe').closest('[class*="cursor-pointer"]');
-      if (userRow) {
-        fireEvent.click(userRow);
-      }
+      fireEvent.click(screen.getByRole('button', { name: 'Ajouter John Doe' }));
 
       expect(screen.getByText('Inviter 1 utilisateur(s)')).toBeInTheDocument();
     });
@@ -382,11 +379,7 @@ describe('InviteUserModal', () => {
         expect(screen.getByText('John Doe')).toBeInTheDocument();
       });
 
-      // Select user
-      const userRow = screen.getByText('John Doe').closest('[class*="cursor-pointer"]');
-      if (userRow) {
-        fireEvent.click(userRow);
-      }
+      fireEvent.click(screen.getByRole('button', { name: 'Ajouter John Doe' }));
 
       // Find and click the remove button in the badge
       const badges = screen.getAllByTestId('badge');
@@ -414,14 +407,71 @@ describe('InviteUserModal', () => {
         expect(screen.getByText('John Doe')).toBeInTheDocument();
       });
 
-      // Select user
-      const userRow = screen.getByText('John Doe').closest('[class*="cursor-pointer"]');
-      if (userRow) {
-        fireEvent.click(userRow);
-      }
+      fireEvent.click(screen.getByRole('button', { name: 'Ajouter John Doe' }));
 
       // The button should now say "Sélectionné"
       expect(screen.getByText('Sélectionné')).toBeInTheDocument();
+    });
+  });
+
+  describe('Accessibility', () => {
+    it('exposes a descriptive accessible name on each search-result add button', async () => {
+      render(<InviteUserModal {...defaultProps} />);
+
+      const searchInput = screen.getByPlaceholderText('Rechercher des utilisateurs...');
+      fireEvent.change(searchInput, { target: { value: 'john' } });
+
+      await new Promise(resolve => setTimeout(resolve, 350));
+
+      await waitFor(() => {
+        expect(screen.getByText('John Doe')).toBeInTheDocument();
+      });
+
+      // The explicit "Add" button is the real, keyboard-operable control
+      // and names the user it acts on (no ambiguous "Add"/"Add"/"Add").
+      const addButton = screen.getByRole('button', { name: 'Ajouter John Doe' });
+      expect(addButton).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'Ajouter Jane Smith' })).toBeInTheDocument();
+    });
+
+    it('marks the add button disabled with a "already selected" name once chosen', async () => {
+      render(<InviteUserModal {...defaultProps} />);
+
+      const searchInput = screen.getByPlaceholderText('Rechercher des utilisateurs...');
+      fireEvent.change(searchInput, { target: { value: 'john' } });
+
+      await new Promise(resolve => setTimeout(resolve, 350));
+
+      await waitFor(() => {
+        expect(screen.getByText('John Doe')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Ajouter John Doe' }));
+
+      const selectedButton = screen.getByRole('button', { name: 'John Doe déjà sélectionné' });
+      expect(selectedButton).toBeDisabled();
+    });
+
+    it('gives the selection remove button an accessible name identifying the user', async () => {
+      render(<InviteUserModal {...defaultProps} />);
+
+      const searchInput = screen.getByPlaceholderText('Rechercher des utilisateurs...');
+      fireEvent.change(searchInput, { target: { value: 'john' } });
+
+      await new Promise(resolve => setTimeout(resolve, 350));
+
+      await waitFor(() => {
+        expect(screen.getByText('John Doe')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Ajouter John Doe' }));
+
+      // The icon-only remove control in the selected badge is now named.
+      const removeButton = screen.getByRole('button', { name: 'Retirer John Doe' });
+      expect(removeButton).toBeInTheDocument();
+
+      fireEvent.click(removeButton);
+      expect(screen.getByText('Inviter 0 utilisateur(s)')).toBeInTheDocument();
     });
   });
 
@@ -439,11 +489,7 @@ describe('InviteUserModal', () => {
         expect(screen.getByText('John Doe')).toBeInTheDocument();
       });
 
-      // Select user
-      const userRow = screen.getByText('John Doe').closest('[class*="cursor-pointer"]');
-      if (userRow) {
-        fireEvent.click(userRow);
-      }
+      fireEvent.click(screen.getByRole('button', { name: 'Ajouter John Doe' }));
 
       // Click invite
       const inviteButton = screen.getByText('Inviter 1 utilisateur(s)');
@@ -476,10 +522,7 @@ describe('InviteUserModal', () => {
         expect(screen.getByText('John Doe')).toBeInTheDocument();
       });
 
-      const userRow = screen.getByText('John Doe').closest('[class*="cursor-pointer"]');
-      if (userRow) {
-        fireEvent.click(userRow);
-      }
+      fireEvent.click(screen.getByRole('button', { name: 'Ajouter John Doe' }));
 
       const inviteButton = screen.getByText('Inviter 1 utilisateur(s)');
       fireEvent.click(inviteButton);
@@ -508,10 +551,7 @@ describe('InviteUserModal', () => {
         expect(screen.getByText('John Doe')).toBeInTheDocument();
       });
 
-      const userRow = screen.getByText('John Doe').closest('[class*="cursor-pointer"]');
-      if (userRow) {
-        fireEvent.click(userRow);
-      }
+      fireEvent.click(screen.getByRole('button', { name: 'Ajouter John Doe' }));
 
       const inviteButton = screen.getByText('Inviter 1 utilisateur(s)');
       fireEvent.click(inviteButton);
@@ -536,10 +576,7 @@ describe('InviteUserModal', () => {
         expect(screen.getByText('John Doe')).toBeInTheDocument();
       });
 
-      const userRow = screen.getByText('John Doe').closest('[class*="cursor-pointer"]');
-      if (userRow) {
-        fireEvent.click(userRow);
-      }
+      fireEvent.click(screen.getByRole('button', { name: 'Ajouter John Doe' }));
 
       const inviteButton = screen.getByText('Inviter 1 utilisateur(s)');
       fireEvent.click(inviteButton);
@@ -574,10 +611,7 @@ describe('InviteUserModal', () => {
         expect(screen.getByText('John Doe')).toBeInTheDocument();
       });
 
-      const userRow = screen.getByText('John Doe').closest('[class*="cursor-pointer"]');
-      if (userRow) {
-        fireEvent.click(userRow);
-      }
+      fireEvent.click(screen.getByRole('button', { name: 'Ajouter John Doe' }));
 
       const inviteButton = screen.getByText('Inviter 1 utilisateur(s)');
       fireEvent.click(inviteButton);
@@ -626,10 +660,7 @@ describe('InviteUserModal', () => {
         expect(screen.getByText('John Doe')).toBeInTheDocument();
       });
 
-      const userRow = screen.getByText('John Doe').closest('[class*="cursor-pointer"]');
-      if (userRow) {
-        fireEvent.click(userRow);
-      }
+      fireEvent.click(screen.getByRole('button', { name: 'Ajouter John Doe' }));
 
       const inviteButton = screen.getByText('Inviter 1 utilisateur(s)');
       fireEvent.click(inviteButton);
@@ -664,11 +695,7 @@ describe('InviteUserModal', () => {
         expect(screen.getByText('John Doe')).toBeInTheDocument();
       });
 
-      // Select user
-      const userRow = screen.getByText('John Doe').closest('[class*="cursor-pointer"]');
-      if (userRow) {
-        fireEvent.click(userRow);
-      }
+      fireEvent.click(screen.getByRole('button', { name: 'Ajouter John Doe' }));
 
       // Close and reopen
       const cancelButton = screen.getByText('Annuler');

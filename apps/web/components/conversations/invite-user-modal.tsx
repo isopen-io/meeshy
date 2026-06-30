@@ -172,7 +172,9 @@ export function InviteUserModal({
             <div className="space-y-2">
               <h4 className="text-sm font-medium">{t('inviteModal.selectedUsers', { count: selectedUsers.length })}</h4>
               <div className="flex flex-wrap gap-2">
-                {selectedUsers.map(user => (
+                {selectedUsers.map(user => {
+                  const userName = user.displayName || `${user.firstName} ${user.lastName}`.trim() || user.username;
+                  return (
                   <Badge key={user.id} variant="secondary" className="flex items-center gap-2">
                     <Avatar className="h-4 w-4">
                       <AvatarImage src={user.avatar} />
@@ -181,18 +183,20 @@ export function InviteUserModal({
                       </AvatarFallback>
                     </Avatar>
                     <span className="text-xs">
-                      {user.displayName || `${user.firstName} ${user.lastName}`.trim() || user.username}
+                      {userName}
                     </span>
                     <Button
                       variant="ghost"
                       size="sm"
                       className="h-4 w-4 p-0 hover:bg-destructive hover:text-destructive-foreground"
                       onClick={() => removeUserFromSelection(user.id)}
+                      aria-label={t('inviteModal.removeUserAria', { name: userName })}
                     >
                       <X className="h-3 w-3" />
                     </Button>
                   </Badge>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -208,11 +212,13 @@ export function InviteUserModal({
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {searchResults.map(user => (
+                  {searchResults.map(user => {
+                    const userName = user.displayName || `${user.firstName} ${user.lastName}`.trim() || user.username;
+                    const isSelected = selectedUsers.some(u => u.id === user.id);
+                    return (
                     <div
                       key={user.id}
-                      className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 cursor-pointer"
-                      onClick={() => addUserToSelection(user)}
+                      className="flex items-center justify-between p-3 rounded-lg border"
                     >
                       <div className="flex items-center gap-3">
                         <Avatar className="h-8 w-8">
@@ -223,7 +229,7 @@ export function InviteUserModal({
                         </Avatar>
                         <div>
                           <p className="font-medium">
-                            {user.displayName || `${user.firstName} ${user.lastName}`.trim() || user.username}
+                            {userName}
                           </p>
                           <p className="text-sm text-muted-foreground">@{user.username}</p>
                         </div>
@@ -231,13 +237,18 @@ export function InviteUserModal({
                       <Button
                         variant="outline"
                         size="sm"
-                        disabled={selectedUsers.some(u => u.id === user.id)}
+                        onClick={() => addUserToSelection(user)}
+                        disabled={isSelected}
+                        aria-label={isSelected
+                          ? t('inviteModal.selectedUserAria', { name: userName })
+                          : t('inviteModal.addUserAria', { name: userName })}
                       >
                         <UserPlus className="h-4 w-4 mr-1" />
-                        {selectedUsers.some(u => u.id === user.id) ? t('inviteModal.selected') : t('inviteModal.add')}
+                        {isSelected ? t('inviteModal.selected') : t('inviteModal.add')}
                       </Button>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </ScrollArea>
