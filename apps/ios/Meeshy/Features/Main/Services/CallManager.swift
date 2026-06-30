@@ -2083,7 +2083,13 @@ final class CallManager: ObservableObject {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                let isCapturing = UIScreen.main.isCaptured
+                // Swift 6: Notification is not Sendable — avoid capturing it into the Task.
+                // Query all connected window scenes on the MainActor instead. This is
+                // correct for multi-screen setups (Stage Manager, external displays) and
+                // avoids UIScreen.main (deprecated in iOS 16+).
+                let isCapturing = UIApplication.shared.connectedScenes
+                    .compactMap { $0 as? UIWindowScene }
+                    .contains { $0.screen.isCaptured }
                 Logger.calls.info("Screen capture state changed: \(isCapturing)")
                 if let callId = self.currentCallId {
                     let userId = AuthManager.shared.currentUser?.id ?? ""
