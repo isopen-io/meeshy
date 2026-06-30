@@ -772,7 +772,14 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] System call UI (Telecom/ConnectionService) + ringback tone
 - [ ] Incoming-call delivery via FCM data push when backgrounded/killed (full-screen intent)
 - [ ] Call reconnection on network change (ICE restart)
-- [ ] Call states: ringing/connecting/connected/ended; PiP / floating call pill
+- [~] Call states: ringing/connecting/connected/ended; PiP / floating call pill —
+      **pure call-lifecycle FSM landed** (`core:model` `me.meeshy.sdk.model.call`):
+      `CallState` (Idle/Ringing(isOutgoing)/Offering/Connecting/Connected/Reconnecting(attempt)/
+      Ended(reason)) + `CallEndReason` (Local/Remote/Rejected/Missed/ConnectionLost/Failed(msg)) +
+      `CallEvent` + total side-effect-free `CallStateMachine.reduce(state, event)` faithfully
+      mirroring iOS `CallManager`/`WebRTCTypes` transitions (incl. the 3-attempt reconnect budget →
+      `ConnectionLost`). SSOT the `:feature:calls` wiring will drive — surpasses iOS, where the FSM
+      validator is only a P1 todo. 31 behavioural tests. PiP/call-pill UI + the WebRTC plumbing pending.
 - [ ] Live in-call transcription overlay (on-device speech-to-text, leader/follower)
 - [ ] In-call translation data channel (dual-stream clean audio)
 - [ ] In-call video filters (colour presets, low-light boost, background blur, skin smoothing)
