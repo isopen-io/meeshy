@@ -76,6 +76,17 @@ final class CompatibilityLayerTests: XCTestCase {
         _ = Image(systemName: "phone.down.fill")
             .frame(width: 56, height: 56)
             .adaptiveGlassProminent(in: Circle(), tint: .red)
+
+        // Non-circular shapes used by floating control chrome (search field
+        // pill, mention autocomplete panel) must resolve the generic `Shape`
+        // overload too — guards the iter-68i adoption sites.
+        _ = Text("search")
+            .frame(maxWidth: .infinity)
+            .adaptiveGlass(in: RoundedRectangle(cornerRadius: 20))
+
+        _ = Text("mentions")
+            .frame(maxHeight: 200)
+            .adaptiveGlass(in: Rectangle())
     }
 
     @MainActor

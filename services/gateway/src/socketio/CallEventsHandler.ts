@@ -34,7 +34,8 @@ import {
   socketRequestIceServersSchema,
   socketCallBackgroundedSchema,
   socketCallForegroundedSchema,
-  socketCallScreenCaptureDetectedSchema
+  socketCallScreenCaptureDetectedSchema,
+  socketCallAnalyticsSchema
 } from '../validation/call-schemas';
 import { getSocketRateLimiter, checkSocketRateLimit, SOCKET_RATE_LIMITS } from '../utils/socket-rate-limiter';
 import { ZmqTranslationClient } from '../services/zmq-translation';
@@ -530,13 +531,17 @@ export class CallEventsHandler {
       try {
         const userId = getUserId(socket.id);
         if (!userId) {
+          ack?.({ success: false, error: 'User not authenticated' } as unknown as CallInitiateAck);
           socket.emit(CALL_EVENTS.ERROR, {
             code: 'NOT_AUTHENTICATED',
             message: 'User not authenticated'
           } as CallError);
           return;
         }
-        if (denyAnonymous()) return;
+        if (denyAnonymous()) {
+          ack?.({ success: false, error: 'Anonymous users cannot initiate calls' } as unknown as CallInitiateAck);
+          return;
+        }
         rememberAuth(userId);
 
         // CVE-002: Rate limiting check
@@ -547,12 +552,16 @@ export class CallEventsHandler {
           this.rateLimiter,
           CALL_EVENTS.ERROR
         );
-        if (!rateLimitPassed) return;
+        if (!rateLimitPassed) {
+          ack?.({ success: false, error: 'Rate limit exceeded' } as unknown as CallInitiateAck);
+          return;
+        }
 
         // CVE-006: Validate input data
         const validation = validateSocketEvent(socketInitiateCallSchema, data);
         if (isValidationFailure(validation)) {
           const { error: validationError, details: validationDetails } = validation;
+          ack?.({ success: false, error: validationError } as unknown as CallInitiateAck);
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.VALIDATION_ERROR,
             message: validationError,
@@ -571,6 +580,7 @@ export class CallEventsHandler {
         // Resolve participantId from userId + conversationId
         const participantId = await this.resolveParticipantId(userId, data.conversationId);
         if (!participantId) {
+          ack?.({ success: false, error: 'You are not a participant in this conversation' } as unknown as CallInitiateAck);
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
             message: 'You are not a participant in this conversation'
@@ -2178,6 +2188,57 @@ export class CallEventsHandler {
         });
       } catch (error) {
         logger.error('Error handling call:screen-capture-detected', { error });
+      }
+    });
+
+    // ─── call:analytics ──────────────────────────────────────────────────────
+    // Fire-and-forget lifecycle telemetry emitted once at call end by iOS.
+    // Validated and logged; no response sent back to the client.
+    socket.on(CALL_EVENTS.ANALYTICS, async (data: {
+      callId: string;
+      setupTimeMs: number;
+      durationSeconds: number;
+      reconnectionCount: number;
+      networkTransitions: number;
+      averageRtt: number;
+      averagePacketLoss: number;
+      maxPacketLoss: number;
+      codec: string;
+      effectsUsed: string[];
+      filtersUsed: boolean;
+      transcriptionUsed: boolean;
+      qualityDistribution: { excellent: number; good: number; fair: number; poor: number };
+      platform: string;
+      deviceModel: string;
+      isVideo: boolean;
+      endReason: string;
+    }) => {
+      try {
+        const userId = getUserId(socket.id);
+        if (!userId) return;
+        rememberAuth(userId);
+
+        const validation = validateSocketEvent(socketCallAnalyticsSchema, data);
+        if (!validation.success) return;
+
+        logger.info('📞 Socket: call:analytics received', {
+          callId: data.callId,
+          platform: data.platform,
+          durationSeconds: data.durationSeconds,
+          setupTimeMs: data.setupTimeMs,
+          reconnectionCount: data.reconnectionCount,
+          networkTransitions: data.networkTransitions,
+          averageRtt: data.averageRtt,
+          averagePacketLoss: data.averagePacketLoss,
+          maxPacketLoss: data.maxPacketLoss,
+          codec: data.codec,
+          isVideo: data.isVideo,
+          endReason: data.endReason,
+          qualityDistribution: data.qualityDistribution,
+          userId,
+        });
+      } catch (error) {
+        logger.error('Error handling call:analytics', { error });
       }
     });
 

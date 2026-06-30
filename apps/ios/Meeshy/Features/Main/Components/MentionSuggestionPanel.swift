@@ -63,6 +63,8 @@ struct MentionSuggestionPanel: View {
     }
 
     /// Three shimmering placeholder rows shown while waiting for API results.
+    /// Decorative — hidden from VoiceOver so the rotor never stops on empty
+    /// shimmer shapes while results stream in.
     private var mentionSkeletonRows: some View {
         VStack(spacing: 0) {
             ForEach(0..<3, id: \.self) { _ in
@@ -88,5 +90,6 @@ struct MentionSuggestionPanel: View {
                 .frame(minHeight: 44)
             }
         }
+        .accessibilityHidden(true)
     }
 }
