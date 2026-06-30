@@ -1,24 +1,30 @@
-# Plan de correction — Itération 69w (Web)
+# Plan — Itération 69w (Web)
 
-> **Scope** : `apps/web` exclusivement. Base `main` HEAD `b0c15b6`. Branche `claude/practical-fermat-47i08j`.
-> **Thème** : a11y clavier (WCAG 2.1.1 / 2.4.7) des previews d'attachments en zone de réponse.
+> **Scope** : `apps/web` exclusivement. Base : `main` HEAD (db5cf6e, post-#1082/68w). Branche : `claude/practical-fermat-vbsdvr`.
 
-## Problème
-`components/attachments/AttachmentPreviewReply.tsx` : 3 previews (`image`, `PDF`, `texte`) en `role="button"` + `tabIndex={0}`
-sans `onKeyDown` → focusables mais inactivables au clavier ; aucun anneau de focus visible.
+## Objectif
+Solder le cluster d'accessibilité clavier du **modal de création de lien de conversation** : rendre opérables au clavier (Enter/Space), focusables et correctement exposés au lecteur d'écran tous les contrôles de configuration aujourd'hui souris-only. Catégorie « différé prioritaire 69w+ » du pointeur autoritaire 68w.
 
-## Correctifs
-1. **Découplage action/événement** : extraire `openImageLightbox` / `openPdfLightbox` / `openTextLightbox` (actions pures
-   `useCallback`), réutilisées par souris **et** clavier.
-2. **Helper `activateOnKey(action)`** : `Enter`/`Espace` → `preventDefault` + `stopPropagation` + `action()` (idiome 68w).
-3. **`onKeyDown={activateOnKey(...)}`** sur les 3 éléments interactifs.
-4. **`focus-visible:ring-2 ring-purple-500 ring-offset-1` + `outline-none`** sur les 3 éléments (focus visible, charte violette).
-5. **Tests** : +4 cas d'activation réelle (Enter/Espace/no-op) dans le bloc `Accessibility`.
+## Étapes
+1. **Audit ciblé** `apps/web` (hors clusters 67w/68w) → liste rankée de `<div onClick>`/`role`-less. Cluster retenu : `create-link-modal/`. ✅
+2. **LanguagesSection.tsx** : `CardHeader` repliable → `role="button"` + `tabIndex={0}` + `aria-expanded` + `onKeyDown` Enter/Space + `focus-visible`. ✅
+3. **PermissionsSection.tsx** : idem. ✅
+4. **SelectableSquare.tsx** (substitut de case réutilisé partout dans le modal) → `role="checkbox"` + `aria-checked` + `aria-label` + `aria-disabled` + `tabIndex` (−1 si disabled) + `onKeyDown` Enter/Space (no-op si disabled) + `focus-visible`. ✅
+5. **Tests** : 2 nouvelles suites (16 cas) + non-régression. ✅
+6. **CI vert** → merge `main` via PR → supprimer branche → MAJ branch-tracking. ⏳
 
-## Vérifications (faites)
-- [x] `AttachmentPreviewReply.test.tsx` : 33 passed (29 → 33).
-- [x] Répertoire `attachments/` : 7 suites / 235 passed / 3 skipped.
-- [x] Aucune nouvelle clé i18n (aria-labels préexistants ×4 locales).
-- [x] Audit transverse : 0 `role="button"` sans `onKeyDown` (même fichier) restant sur `components/`+`app/`.
+## Contraintes
+- 0 nouvelle clé i18n (libellés/titres existants = nom accessible).
+- Pattern clavier identique à 67w/68w (inline `onKeyDown`, pas de hook partagé — aucun n'existe).
+- Token `focus-visible:ring-ring` (standard shadcn, déjà utilisé `ui/button`, `ui/tabs`).
+- Aucune modification de comportement souris (clic préservé, testé).
 
-## Statut : ✅ CORRIGÉ & TESTÉ — prêt merge `main`.
+## Critères d'acceptation
+- [x] En-têtes Langues/Permissions activables clavier + `aria-expanded`.
+- [x] `SelectableSquare` = checkbox accessible (toutes ses instances).
+- [x] jest ciblé 16/16 + non-régression 25/25.
+- [x] `tsc --noEmit` 0 erreur sur le diff.
+- [ ] CI verte sur la PR, merge `main`, branche supprimée.
+
+## ✅ PLAN EXÉCUTÉ (69w — 2026-06-30)
+Toutes les étapes de code/tests/docs faites. Reste : merge `main` après CI verte. Suite (70w+) : audit a11y clavier restant (admin agent Badges, AudioEffectsTimeline, details-sidebar, invite-user-modal) — cf. analyse 69w § différé.
