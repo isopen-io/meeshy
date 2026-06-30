@@ -2366,7 +2366,7 @@ final class CallManager: ObservableObject {
         let averagePacketLoss = analyticsSampleCount > 0
             ? analyticsPacketLossSum / Double(analyticsSampleCount) : 0
         let codec = lastKnownStats?.codec ?? "unknown"
-        let filtersUsed = webRTCService.videoFilters.config.isEnabled
+        let filtersUsed = analyticsVideoFiltersUsed || webRTCService.videoFilters.config.isEnabled
 
         let payload: [String: Any] = [
             "setupTimeMs":         setupTimeMs,
@@ -3502,6 +3502,9 @@ extension CallManager: WebRTCServiceDelegate {
             self.analyticsSampleCount += 1
             self.analyticsPacketLossSum += packetLossPercent
             self.analyticsMaxPacketLoss = max(self.analyticsMaxPacketLoss, packetLossPercent)
+            if self.webRTCService.videoFilters.config.isEnabled {
+                self.analyticsVideoFiltersUsed = true
+            }
 
             // Feed the graceful-degradation survival layer. One sample per quality
             // tick; the controller's time-based hysteresis decides if a sustained
