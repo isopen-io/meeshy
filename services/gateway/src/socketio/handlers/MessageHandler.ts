@@ -611,8 +611,7 @@ export class MessageHandler {
         conversationId: message.conversationId,
         senderId: message.senderId,
       };
-      (this.translationService as unknown as { _processRetranslationAsync: (id: string, msg: unknown) => Promise<void> })
-        ._processRetranslationAsync(validated.messageId, retranslationPayload)
+      this.translationService.retranslateMessageAsync(validated.messageId, retranslationPayload)
         .catch((err: unknown) => handlerLogger.warn('retranslation failed after socket edit', { messageId: validated.messageId, error: err }));
 
       const editedPayload = {
@@ -719,14 +718,10 @@ export class MessageHandler {
         );
       }
 
-      // Soft delete: clear translations then set deletedAt
+      // Soft delete: atomically clear translations and set deletedAt in one write
       await this.prisma.message.update({
         where: { id: validated.messageId },
-        data: { translations: null },
-      });
-      await this.prisma.message.update({
-        where: { id: validated.messageId },
-        data: { deletedAt: new Date() },
+        data: { translations: null, deletedAt: new Date() },
       });
 
       // Update conversation's lastMessageAt to the latest non-deleted message

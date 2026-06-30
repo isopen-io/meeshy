@@ -45,6 +45,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let audioTranslationCompleted = PassthroughSubject<AudioTranslationEvent, Never>()
     let audioTranslationFailed = PassthroughSubject<AudioTranslationFailedEvent, Never>()
     let didReconnect = PassthroughSubject<Void, Never>()
+    let connectionRTT = PassthroughSubject<Double, Never>()
     let notificationReceived = PassthroughSubject<SocketNotificationEvent, Never>()
     let conversationNew = PassthroughSubject<ConversationNewEvent, Never>()
     let notificationRead = PassthroughSubject<NotificationReadEvent, Never>()
