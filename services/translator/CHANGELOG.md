@@ -1,6 +1,6 @@
-# @meeshy/gateway
+# @meeshy/translator
 
-## 1.2.0
+## 1.1.0
 
 ### Minor Changes
 
@@ -33,22 +33,24 @@
   - Architecture monorepo avec Turborepo
   - CI/CD GitHub Actions complet
 
-### Patch Changes
+- c3a5bdd: Migration Transformers 5.0 + Cache LRU intelligent
 
-- Updated dependencies [4c888a2]
-  - @meeshy/shared@1.1.0
+  **Migration Transformers 5.0.0**:
 
-## 1.0.40
+  - Architecture actuelle 100% compatible (0 modification code)
+  - Quantization 4-bit disponible: -75% mémoire (574MB → 144MB)
+  - Kernels optimisés: -20 à -30% latence
+  - vLLM ready pour scalabilité future
 
-### Patch Changes
+  **Cache LRU**:
 
-- Mise en place du système de versioning automatisé avec Changesets
+  - Gestion automatique des paires de langues fréquentes
+  - Hit rate 95% sur scénarios réalistes
+  - Thread-safe avec métriques détaillées
+  - Prépare architecture multi-modèles
 
-  - Ajout de Changesets pour la gestion sémantique des versions
-  - Script de synchronisation package.json → VERSION files
-  - Workflow de release automatisé avec tags Docker multiples
-  - Tags Docker avec SemVer (1.0.41) et date/heure (20260124.143022)
-  - Documentation complète du système de versioning
+  **Fichiers ajoutés**:
 
-- Updated dependencies
-  - @meeshy/shared@1.0.1
+  - src/utils/pipeline_cache.py (cache LRU)
+  - Tests complets (test_lru_cache.py, test_transformers5\*.py)
+  - Documentation exhaustive (migration, modèles alternatifs)
