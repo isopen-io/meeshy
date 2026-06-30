@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Attachment } from '@meeshy/shared/types/attachment';
-import { getAttachmentType } from '@meeshy/shared/types/attachment';
+import { getAttachmentType, formatFileSize } from '@meeshy/shared/types/attachment';
 
 interface AttachmentDetailsProps {
   attachment: Attachment;
@@ -54,15 +54,6 @@ export function AttachmentDetails({
       return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }
     return `${minutes}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  // Fonction pour formater la taille de fichier
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
   };
 
   // Obtenir l'icône et les détails selon le type
