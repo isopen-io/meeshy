@@ -8,6 +8,7 @@ import { Button } from './Button';
 import { Check, X, Clock, RotateCcw } from 'lucide-react';
 import type { FriendRequest } from '@/types/contacts';
 import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
+import { getUserDisplayName } from '@/utils/user-display-name';
 
 export type FriendRequestAction = 'accept' | 'reject' | 'cancel' | 'resend';
 
@@ -23,13 +24,6 @@ export interface FriendRequestCardProps {
 function getOtherUser(request: FriendRequest, currentUserId?: string) {
   const isSender = request.senderId === currentUserId;
   return isSender ? request.receiver : request.sender;
-}
-
-function getUserDisplayName(user?: { displayName?: string; firstName?: string; lastName?: string; username?: string }) {
-  if (!user) return '?';
-  if (user.displayName) return user.displayName;
-  const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
-  return fullName || user.username || '?';
 }
 
 function formatRelativeDate(
@@ -55,7 +49,7 @@ export const FriendRequestCard = memo(function FriendRequestCard({
 }: FriendRequestCardProps) {
   const isSender = request.senderId === currentUserId;
   const otherUser = getOtherUser(request, currentUserId);
-  const displayName = getUserDisplayName(otherUser);
+  const displayName = getUserDisplayName(otherUser, '?');
 
   return (
     <div
