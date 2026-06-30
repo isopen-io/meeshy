@@ -87,6 +87,12 @@ final class CompatibilityLayerTests: XCTestCase {
         _ = Text("mentions")
             .frame(maxHeight: 200)
             .adaptiveGlass(in: Rectangle())
+
+        // Capsule chrome floating above call video (duration badge / effects
+        // toolbar pill) — guards the iter-69i adoption sites.
+        _ = Text("00:42")
+            .padding(.horizontal, 10)
+            .adaptiveGlass(in: Capsule())
     }
 
     @MainActor
