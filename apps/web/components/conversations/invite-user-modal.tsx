@@ -213,12 +213,23 @@ export function InviteUserModal({
               ) : (
                 <div className="space-y-2">
                   {searchResults.map(user => {
-                    const userName = user.displayName || `${user.firstName} ${user.lastName}`.trim() || user.username;
                     const isSelected = selectedUsers.some(u => u.id === user.id);
+                    const displayName = user.displayName || `${user.firstName} ${user.lastName}`.trim() || user.username;
                     return (
                     <div
                       key={user.id}
-                      className="flex items-center justify-between p-3 rounded-lg border"
+                      role="button"
+                      tabIndex={isSelected ? -1 : 0}
+                      aria-disabled={isSelected}
+                      aria-label={`${t('inviteModal.add')} ${displayName}`}
+                      className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                      onClick={() => !isSelected && addUserToSelection(user)}
+                      onKeyDown={(e) => {
+                        if (!isSelected && (e.key === 'Enter' || e.key === ' ')) {
+                          e.preventDefault();
+                          addUserToSelection(user);
+                        }
+                      }}
                     >
                       <div className="flex items-center gap-3">
                         <Avatar className="h-8 w-8">
@@ -229,7 +240,7 @@ export function InviteUserModal({
                         </Avatar>
                         <div>
                           <p className="font-medium">
-                            {userName}
+                            {displayName}
                           </p>
                           <p className="text-sm text-muted-foreground">@{user.username}</p>
                         </div>
@@ -237,11 +248,9 @@ export function InviteUserModal({
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => addUserToSelection(user)}
+                        tabIndex={-1}
+                        aria-hidden="true"
                         disabled={isSelected}
-                        aria-label={isSelected
-                          ? t('inviteModal.selectedUserAria', { name: userName })
-                          : t('inviteModal.addUserAria', { name: userName })}
                       >
                         <UserPlus className="h-4 w-4 mr-1" />
                         {isSelected ? t('inviteModal.selected') : t('inviteModal.add')}

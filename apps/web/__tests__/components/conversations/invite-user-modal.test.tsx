@@ -348,6 +348,48 @@ describe('InviteUserModal', () => {
       expect(screen.getByText('Utilisateurs sélectionnés (1)')).toBeInTheDocument();
     });
 
+    it('should add user to selection via keyboard (Enter)', async () => {
+      render(<InviteUserModal {...defaultProps} />);
+
+      const searchInput = screen.getByPlaceholderText('Rechercher des utilisateurs...');
+      fireEvent.change(searchInput, { target: { value: 'john' } });
+
+      await new Promise(resolve => setTimeout(resolve, 350));
+
+      await waitFor(() => {
+        expect(screen.getByText('John Doe')).toBeInTheDocument();
+      });
+
+      const userRow = screen.getByText('John Doe').closest('[role="button"]');
+      expect(userRow).not.toBeNull();
+      expect(userRow).toHaveAttribute('tabindex', '0');
+      if (userRow) {
+        fireEvent.keyDown(userRow, { key: 'Enter' });
+      }
+
+      expect(screen.getByText('Utilisateurs sélectionnés (1)')).toBeInTheDocument();
+    });
+
+    it('should add user to selection via keyboard (Space)', async () => {
+      render(<InviteUserModal {...defaultProps} />);
+
+      const searchInput = screen.getByPlaceholderText('Rechercher des utilisateurs...');
+      fireEvent.change(searchInput, { target: { value: 'john' } });
+
+      await new Promise(resolve => setTimeout(resolve, 350));
+
+      await waitFor(() => {
+        expect(screen.getByText('John Doe')).toBeInTheDocument();
+      });
+
+      const userRow = screen.getByText('John Doe').closest('[role="button"]');
+      if (userRow) {
+        fireEvent.keyDown(userRow, { key: ' ' });
+      }
+
+      expect(screen.getByText('Utilisateurs sélectionnés (1)')).toBeInTheDocument();
+    });
+
     it('should update invite button count when users selected', async () => {
       render(<InviteUserModal {...defaultProps} />);
 
