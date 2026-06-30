@@ -269,7 +269,7 @@ export class ReactionHandler {
       const userId = userResult?.realUserId || userIdOrToken;
       const isAnonymous = user?.isAnonymous || false;
 
-      const syncAllowed = await this.rateLimiter.checkLimit(userId, SOCKET_RATE_LIMITS.REACTION_ADD);
+      const syncAllowed = await this.rateLimiter.checkLimit(userId, SOCKET_RATE_LIMITS.REACTION_SYNC);
       if (!syncAllowed) {
         if (callback) callback({ success: false, error: 'Rate limit exceeded' });
         return;
