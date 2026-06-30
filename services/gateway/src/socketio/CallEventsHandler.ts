@@ -154,11 +154,6 @@ export class CallEventsHandler {
     return null;
   }
 
-  /* istanbul ignore next -- dead code: Socket.IO RemoteSocket proxies don't embed custom props; use getUserId() callback instead */
-  private getSocketUserId(sock: any): string | undefined {
-    return sock.userId || sock.data?.userId;
-  }
-
   private async resolveParticipantId(userId: string, conversationId: string): Promise<string | null> {
     const participant = await this.prisma.participant.findFirst({
       where: { userId, conversationId, isActive: true },
@@ -975,14 +970,12 @@ export class CallEventsHandler {
         // Broadcast to all OTHER call participants with per-user TURN credentials (§3.4)
         // The caller needs iceServers from this event to configure WebRTC before creating SDP offer
         //
-        // CRITIQUE — utiliser `getUserId(socketId)` (résolution via connectionMap)
-        // PAS `this.getSocketUserId(remoteSocket)` : Socket.IO `fetchSockets()`
-        // retourne des `RemoteSocket` proxies qui n'embarquent PAS les propriétés
-        // server-side custom (comme `.userId` ou `.data.userId`). Sans la
-        // résolution via connectionMap, `remoteUserId` était toujours undefined,
-        // entraînant le fallback STUN-only à chaque broadcast — ICE échouait
-        // sur tout call entre devices derrière des NATs distincts (simulator
-        // ↔ device cellulaire, par ex.).
+        // CRITIQUE — utiliser `getUserId(socketId)` (résolution via connectionMap).
+        // Socket.IO `fetchSockets()` retourne des `RemoteSocket` proxies qui
+        // n'embarquent PAS les propriétés server-side custom. Sans la résolution via
+        // connectionMap, `remoteUserId` serait toujours undefined, entraînant le
+        // fallback STUN-only à chaque broadcast — ICE échouait sur tout call entre
+        // devices derrière des NATs distincts (simulator ↔ device cellulaire, par ex.).
         const socketsInRoom = await io.in(ROOMS.call(data.callId)).fetchSockets();
         for (const remoteSocket of socketsInRoom) {
           if (remoteSocket.id === socket.id) continue;

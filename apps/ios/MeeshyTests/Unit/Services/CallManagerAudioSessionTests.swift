@@ -2424,6 +2424,35 @@ final class CallManagerHoldTests: XCTestCase {
             "arriving within the 1.5s settle window after a held+ended call would " +
             "otherwise inherit stale hold state and suppress the user's camera")
     }
+
+    /// CallKit contract: CXSetHeldCallAction.fulfill() must be called synchronously
+    /// before the delegate method returns, NOT inside a Task {} block. Fulfilling
+    /// inside a Task delays settlement to the next main-runloop tick, which violates
+    /// the contract (CallKit can time out the action) and is inconsistent with the
+    /// synchronous pattern used for CXAnswerCallAction and CXEndCallAction.
+    func test_cxSetHeldCallAction_fulfillCalledSynchronouslyBeforeTask() throws {
+        let source = try callManagerSource()
+
+        guard let handlerStart = source.range(of: "perform action: CXSetHeldCallAction)") else {
+            XCTFail("CXSetHeldCallAction handler not found in CallManager.swift"); return
+        }
+        // Grab enough context to contain the handler body (≈20 lines).
+        let bodyEnd = source.index(handlerStart.lowerBound, offsetBy: 800, limitedBy: source.endIndex) ?? source.endIndex
+        let handlerBody = String(source[handlerStart.lowerBound ..< bodyEnd])
+
+        guard let fulfillRange = handlerBody.range(of: "action.fulfill()") else {
+            XCTFail("CXSetHeldCallAction handler must call action.fulfill()"); return
+        }
+        guard let taskRange = handlerBody.range(of: "Task {") else {
+            XCTFail("CXSetHeldCallAction handler must contain a Task {} block for async work"); return
+        }
+        XCTAssertTrue(
+            fulfillRange.lowerBound < taskRange.lowerBound,
+            "CXSetHeldCallAction: action.fulfill() must appear BEFORE Task {} — " +
+            "CallKit requires synchronous settlement before the delegate method returns. " +
+            "Fulfilling inside Task delays it to the next run-loop tick and can cause " +
+            "CallKit to time out the action.")
+    }
 }
 
 // MARK: - Audio interruption recovery hardening
