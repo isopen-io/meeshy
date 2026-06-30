@@ -129,13 +129,13 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 - [ ] `services/gateway/src/routes/attachments/types.ts`
 - [ ] `services/gateway/src/routes/attachments/upload.ts`
 
-## routes/auth  (0/7 have a test)
+## routes/auth  (2/7 have a test)
 
 - [ ] `services/gateway/src/routes/auth/index.ts`
-- [ ] `services/gateway/src/routes/auth/login.ts`
+- [x] `services/gateway/src/routes/auth/login.ts`
 - [ ] `services/gateway/src/routes/auth/magic-link.ts`
 - [ ] `services/gateway/src/routes/auth/phone-transfer.ts`
-- [ ] `services/gateway/src/routes/auth/register.ts`
+- [x] `services/gateway/src/routes/auth/register.ts`
 - [ ] `services/gateway/src/routes/auth/revoke-all-sessions.ts`
 - [x] `services/gateway/src/routes/auth/types.ts`
 

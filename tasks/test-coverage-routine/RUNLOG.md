@@ -2448,3 +2448,44 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - coverageThreshold ratcheted: lines:67→79 / branches:63→72 / statements:67→78 / functions:67→77 (8-9pp below CI bun estimate)
 - Notes / where the next run resumes: routes/posts/* ☑ (all 7 files). Next slice: continue gateway manifest gap-fill — pick next low-coverage batch from manifests/gateway.md (routes/tracking-links/, routes/users/, routes/auth/login+register, or routes/anonymous.ts)
 - Commit: b1c99a3 (pending PR → main)
+
+## 2026-06-30T — gateway-services-gap1 (routes/auth/login.ts + routes/auth/register.ts)
+- Targeted:
+  - `services/gateway/src/routes/auth/login.ts`
+  - `services/gateway/src/routes/auth/register.ts`
+- Result: ☑ done
+- Coverage (local node):
+  - routes/auth/login.ts:    100% stmts / 100% funcs / 100% lines / 95.83% branches
+  - routes/auth/register.ts: 100% stmts / 100% funcs / 100% lines / 92.75% branches
+  - Global gateway: stmts:94.43/branches:88.35/funcs:91.67/lines:95.22 (local node); est. CI bun: stmts:~89.9/branches:~83.8/funcs:~87.2/lines:~90.7
+- Tests added: 13 + 11 = 24 new tests across 2 new test files
+  - New: `src/__tests__/unit/routes/auth/login-extended.test.ts` (13 tests):
+    - Untrusted session, no notificationService (line 126 false branch) → 200
+    - rememberDevice:true + markSessionTrusted succeeds, returns false (warn), throws → all 200
+    - Notification .catch fires when createLoginNewDeviceNotification rejects → 200
+    - POST /login/2fa empty twoFactorToken → 400 (line 220 guard)
+    - POST /login/2fa untrusted session, no notificationService (line 238 false branch) → 200
+    - POST /login/2fa untrusted session fires notification; notification rejects → both 200
+    - POST /login/2fa rememberDevice:true + markSessionTrusted succeeds, returns false, throws → all 200
+    - POST /logout logout returns false (false branch of if(loggedOut)) → 200
+  - New: `src/__tests__/unit/routes/auth/register-extended.test.ts` (11 tests):
+    - POST /register invalid phone transfer token → 400 (requires firstName/lastName in payload to reach handler)
+    - POST /register INVALID_EMAIL / INVALID_PASSWORD / INVALID_USERNAME authService.register throws → 400
+    - POST /register valid token + executeRegistrationTransfer fails → 200 (logs error, still creates user)
+    - GET /check-availability username taken → usernameAvailable:false + suggestions[]
+    - GET /check-availability phone validation failure (normalizer returns {isValid:false}) → phoneNumberValid:false
+    - GET /check-availability normalizer returns null → phoneNumberAvailable:false
+    - GET /check-availability prisma.user.findFirst throws → 500
+    - POST /force-init success → 200 "Database initialized successfully"
+    - POST /force-init initializeDatabase throws → 500
+- Production changes: none (test-only diff)
+- Key gotchas resolved:
+  - register.ts schema requires firstName+lastName+email+password(minLength:8) — incomplete payloads rejected by Fastify AJV before handler runs; all tests include full required payload
+  - validateSchema mock in login tests passes through rememberDevice from payload data: `jest.fn((_schema: any, data: any) => ({ ..., rememberDevice: (data as any)?.rememberDevice ?? false }))`
+  - normalizePhoneWithCountry mock uses explicit typed wrapper (not spread): `(phone: string, country: string) => mockNormalizePhoneWithCountry(phone, country)` to avoid TS2556
+  - mockInitializeDatabase wired through InitService class constructor in jest.mock factory
+  - Fire-and-forget chains flushed with `await Promise.resolve()` before assertions on mock call counts
+- Reviewer: PASS (rounds: 1) — all behavioral assertions via HTTP inject(); factory functions; no mutable shared state; no production code changed; all 424 suites pass
+- coverageThreshold ratcheted: lines:79→82 / branches:72→75 / statements:78→81 / functions:77→78 (~9pp below CI bun estimate)
+- Manifest ticked: routes/auth/login.ts☑ routes/auth/register.ts☑
+- Commit: d10da72 (squash-merged PR #1056 → main 2026-06-30T07:00Z)

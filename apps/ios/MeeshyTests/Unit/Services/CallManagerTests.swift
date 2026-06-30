@@ -1123,53 +1123,108 @@ final class VideoSurvivalControllerIntegrationTests: XCTestCase {
 
 /// Behavioural tests for `CallManager.preferredCallLanguage(for:)`.
 /// Pure static function: no network, no singletons, no async.
-/// Priority order: systemLanguage > regionalLanguage > "fr" fallback.
+/// Full 5-level Prisme Linguistique chain:
+///   1. systemLanguage > 2. regionalLanguage > 3. customDestinationLanguage > 4. deviceLocale > 5. "fr"
 @MainActor
 final class CallManagerPreferredCallLanguageTests: XCTestCase {
 
     private func makeUser(
         systemLanguage: String? = nil,
-        regionalLanguage: String? = nil
+        regionalLanguage: String? = nil,
+        customDestinationLanguage: String? = nil,
+        deviceLocale: String? = nil
     ) -> MeeshyUser {
         MeeshyUser(id: "u1", username: "testuser",
                    systemLanguage: systemLanguage,
-                   regionalLanguage: regionalLanguage)
+                   regionalLanguage: regionalLanguage,
+                   customDestinationLanguage: customDestinationLanguage,
+                   deviceLocale: deviceLocale)
     }
+
+    // MARK: Priority 5 — fallback
 
     func test_nilUser_returnsFrFallback() {
         XCTAssertEqual(CallManager.preferredCallLanguage(for: nil), "fr")
     }
 
+    func test_allNil_returnsFrFallback() {
+        let user = makeUser()
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "fr")
+    }
+
+    // MARK: Priority 1 — systemLanguage
+
     func test_systemLanguagePresent_returnsSystemLanguage() {
-        let user = makeUser(systemLanguage: "en", regionalLanguage: "es")
+        let user = makeUser(systemLanguage: "en", regionalLanguage: "es",
+                            customDestinationLanguage: "de", deviceLocale: "fr_FR")
         XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "en")
     }
+
+    func test_systemLanguagePrioritisedOverRegional() {
+        let user = makeUser(systemLanguage: "de", regionalLanguage: "fr")
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "de")
+    }
+
+    func test_systemLanguageUsedEvenWhenRegionalIsFrench() {
+        let user = makeUser(systemLanguage: "zh", regionalLanguage: "fr")
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "zh")
+    }
+
+    func test_onlySystemLanguage_noRegional_returnsSystem() {
+        let user = makeUser(systemLanguage: "ar")
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "ar")
+    }
+
+    // MARK: Priority 2 — regionalLanguage
 
     func test_systemLanguageNil_regionalPresent_returnsRegionalLanguage() {
         let user = makeUser(systemLanguage: nil, regionalLanguage: "es")
         XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "es")
     }
 
-    func test_bothLanguagesNil_returnsFrFallback() {
-        let user = makeUser(systemLanguage: nil, regionalLanguage: nil)
+    func test_regionalLanguagePrioritisedOverCustomDestination() {
+        let user = makeUser(systemLanguage: nil, regionalLanguage: "it",
+                            customDestinationLanguage: "de", deviceLocale: "fr_FR")
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "it")
+    }
+
+    // MARK: Priority 3 — customDestinationLanguage
+
+    func test_systemAndRegionalNil_customDestinationPresent_returnsCustom() {
+        let user = makeUser(customDestinationLanguage: "pt")
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "pt")
+    }
+
+    func test_customDestinationPrioritisedOverDeviceLocale() {
+        let user = makeUser(customDestinationLanguage: "ko", deviceLocale: "fr_FR")
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "ko")
+    }
+
+    // MARK: Priority 4 — deviceLocale
+
+    func test_allNilExceptDeviceLocale_returnsNormalisedLocale() {
+        // deviceLocale "fr_FR" normalises to "fr"
+        let user = makeUser(deviceLocale: "fr_FR")
         XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "fr")
     }
 
-    func test_systemLanguagePrioritisedOverRegional() {
-        // Prisme Linguistique: priority 1 (systemLanguage) beats priority 2 (regionalLanguage)
-        let user = makeUser(systemLanguage: "de", regionalLanguage: "fr")
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "de")
+    func test_deviceLocale_hyphenFormat_normalisedToISO639() {
+        // "zh-Hant-HK" → normalised to "zh" by MeeshyUser.normalizeLanguageCode
+        let user = makeUser(deviceLocale: "zh-Hant-HK")
+        let result = CallManager.preferredCallLanguage(for: user)
+        XCTAssertFalse(result.isEmpty, "deviceLocale must yield a non-empty language code")
+        XCTAssertEqual(result, MeeshyUser.normalizeLanguageCode("zh-Hant-HK") ?? "fr")
     }
 
-    func test_systemLanguageUsedEvenWhenRegionalIsFrench() {
-        // When both are set, the explicit systemLanguage wins — "fr" regional must not shadow it
-        let user = makeUser(systemLanguage: "zh", regionalLanguage: "fr")
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "zh")
+    func test_deviceLocale_underscoreFormat_normalisedToISO639() {
+        let user = makeUser(deviceLocale: "en_US")
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "en")
     }
 
-    func test_onlySystemLanguage_noRegional_returnsSystem() {
-        let user = makeUser(systemLanguage: "ar", regionalLanguage: nil)
-        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "ar")
+    func test_deviceLocale_notUsedWhenRegionalPresent() {
+        // Prisme rule: priority 2 (regional) beats priority 4 (deviceLocale)
+        let user = makeUser(regionalLanguage: "es", deviceLocale: "fr_FR")
+        XCTAssertEqual(CallManager.preferredCallLanguage(for: user), "es")
     }
 }
 
@@ -2997,6 +3052,218 @@ final class RejectPendingCallTests: XCTestCase {
             clearRange.lowerBound,
             "rejectPendingCall() must emit call:end BEFORE clearing pendingIncomingCall — " +
             "callId must still be available when the socket emit fires."
+        )
+    }
+}
+
+// MARK: - Quality Label Mapping (§gateway connection quality ladder)
+
+/// `CallManager.connectionQualityLabel(for:)` collapses the client's 5-tier ladder
+/// into the 4-tier string expected by the gateway's `call:quality-report` schema.
+/// Tests are pure static — no singletons, no network.
+@MainActor
+final class CallManagerConnectionQualityLabelTests: XCTestCase {
+
+    func test_excellent_mapsToExcellent() {
+        XCTAssertEqual(CallManager.connectionQualityLabel(for: .excellent), "excellent")
+    }
+
+    func test_good_mapsToGood() {
+        XCTAssertEqual(CallManager.connectionQualityLabel(for: .good), "good")
+    }
+
+    func test_fair_mapsToFair() {
+        XCTAssertEqual(CallManager.connectionQualityLabel(for: .fair), "fair")
+    }
+
+    func test_poor_mapsToPoor() {
+        XCTAssertEqual(CallManager.connectionQualityLabel(for: .poor), "poor")
+    }
+
+    func test_critical_collapsesToPoor() {
+        // Gateway has no "critical" tier; critical collapses to "poor" so
+        // the report schema never rejects the call:quality-report event.
+        XCTAssertEqual(CallManager.connectionQualityLabel(for: .critical), "poor")
+    }
+
+    func test_poorAndCritical_bothMapToPoor() {
+        XCTAssertEqual(
+            CallManager.connectionQualityLabel(for: .poor),
+            CallManager.connectionQualityLabel(for: .critical),
+            "poor and critical must both map to 'poor' — gateway's 4-tier ladder has no critical tier"
+        )
+    }
+}
+
+// MARK: - TURN Refresh TTL Guard (§scheduleTURNCredentialRefresh)
+
+/// Source-level guards verifying `scheduleTURNCredentialRefresh` protects
+/// against a malformed or zero TTL from the gateway that would cause an
+/// immediate tight-loop of TURN credential requests.
+@MainActor
+final class CallManagerTURNRefreshGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func refreshBody(_ source: String) -> String? {
+        guard let start = source.range(of: "func scheduleTURNCredentialRefresh") else { return nil }
+        let end = source.range(of: "\n    private func ", range: start.upperBound..<source.endIndex)?.lowerBound
+                ?? source.range(of: "\n    func ", range: start.upperBound..<source.endIndex)?.lowerBound
+                ?? source.endIndex
+        return String(source[start.lowerBound..<end])
+    }
+
+    func test_turnRefreshScheduler_existsInSource() throws {
+        let source = try callManagerSource()
+        XCTAssertNotNil(
+            source.range(of: "func scheduleTURNCredentialRefresh"),
+            "scheduleTURNCredentialRefresh must exist in CallManager.swift — " +
+            "without it, TURN credentials are never proactively refreshed during a call."
+        )
+    }
+
+    func test_turnRefreshScheduler_hasMinimumTTLGuard() throws {
+        let source = try callManagerSource()
+        guard let body = refreshBody(source) else {
+            XCTFail("scheduleTURNCredentialRefresh body not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("guard ttl >= 60") || body.contains("ttl < 60"),
+            "scheduleTURNCredentialRefresh must guard against TTL < 60s to prevent " +
+            "a tight request loop when the gateway sends a malformed or zero TTL."
+        )
+    }
+
+    func test_turnRefreshScheduler_cancelsExistingTask_beforeRescheduling() throws {
+        let source = try callManagerSource()
+        guard let body = refreshBody(source) else {
+            XCTFail("scheduleTURNCredentialRefresh body not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("turnRefreshTask?.cancel()"),
+            "scheduleTURNCredentialRefresh must cancel the existing task before creating a " +
+            "new one — otherwise duplicate refresh requests accumulate over a long call."
+        )
+    }
+
+    func test_turnRefreshScheduler_uses80PercentOfTTL() throws {
+        let source = try callManagerSource()
+        guard let body = refreshBody(source) else {
+            XCTFail("scheduleTURNCredentialRefresh body not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("ttl * 0.8"),
+            "scheduleTURNCredentialRefresh must schedule the refresh at 80% of TTL " +
+            "to ensure credentials are renewed before they expire (leaving a 20% safety window)."
+        )
+    }
+
+    func test_turnRefreshScheduler_guardCallIsActiveBeforeEmitting() throws {
+        let source = try callManagerSource()
+        guard let body = refreshBody(source) else {
+            XCTFail("scheduleTURNCredentialRefresh body not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("callState.isActive"),
+            "The deferred TURN refresh Task must guard `callState.isActive` before emitting — " +
+            "a refresh emitted after call end would waste a TURN credential request."
+        )
+    }
+}
+
+// MARK: - Socket Reconnect Media Re-Sync (§P1-30 / audit P1-30)
+
+/// Source-level guards verifying that after a Socket.IO reconnect, the
+/// socket reconnect handler re-syncs both video and audio state to the peer.
+/// Without this, the peer's displayed media state diverges from reality for
+/// the remainder of the call.
+@MainActor
+final class CallManagerSocketReconnectMediaResyncTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func reconnectHandlerBody(_ source: String) -> String? {
+        guard let range = source.range(of: "socket.didReconnect") else { return nil }
+        // Bound to the sink closure body
+        let sliceStart = range.lowerBound
+        let sliceEnd = source.range(of: ".store(in: &cancellables)", range: range.upperBound..<source.endIndex)?
+            .upperBound ?? source.endIndex
+        return String(source[sliceStart..<sliceEnd])
+    }
+
+    func test_socketReconnect_reEmitsCallJoin() throws {
+        let source = try callManagerSource()
+        guard let body = reconnectHandlerBody(source) else {
+            XCTFail("socket.didReconnect handler not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("emitCallJoinWithAck(callId:"),
+            "Socket reconnect handler must re-emit call:join so the gateway re-admits us " +
+            "to the call room — without this, ICE candidates and call:ended are silently dropped."
+        )
+    }
+
+    func test_socketReconnect_resyncsVideoState() throws {
+        let source = try callManagerSource()
+        guard let body = reconnectHandlerBody(source) else {
+            XCTFail("socket.didReconnect handler not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("emitCallToggleVideo"),
+            "Socket reconnect handler must re-sync video state via emitCallToggleVideo — " +
+            "the gateway resets per-participant media when a socket disconnects."
+        )
+    }
+
+    func test_socketReconnect_resyncsAudioState() throws {
+        let source = try callManagerSource()
+        guard let body = reconnectHandlerBody(source) else {
+            XCTFail("socket.didReconnect handler not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("emitCallToggleAudio"),
+            "Socket reconnect handler must re-sync audio mute state via emitCallToggleAudio — " +
+            "the gateway defaults to mic-live after reconnect, so explicit re-sync is required."
+        )
+    }
+
+    func test_socketReconnect_requestsFreshTURNCredentials() throws {
+        let source = try callManagerSource()
+        guard let body = reconnectHandlerBody(source) else {
+            XCTFail("socket.didReconnect handler not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("emitRequestIceServers"),
+            "Socket reconnect handler must request fresh TURN credentials — " +
+            "the socket may have been down long enough for credentials to near expiry."
+        )
+    }
+
+    func test_socketReconnect_cancelsOldTURNRefreshTask_beforeRequesting() throws {
+        let source = try callManagerSource()
+        guard let body = reconnectHandlerBody(source) else {
+            XCTFail("socket.didReconnect handler not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("turnRefreshTask?.cancel()"),
+            "Socket reconnect must cancel the periodic TURN refresh task before requesting " +
+            "fresh credentials — otherwise the old deadline fires in parallel causing duplicate requests."
         )
     }
 }
