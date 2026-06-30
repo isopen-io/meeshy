@@ -3529,7 +3529,7 @@ final class CallManagerScreenCaptureMonitoringTests: XCTestCase {
             XCTFail("startScreenCaptureMonitoring() not found in CallManager.swift")
             return
         }
-        let endIdx = source.index(fnRange.lowerBound, offsetBy: 800, limitedBy: source.endIndex) ?? source.endIndex
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
         let fnBody = String(source[fnRange.lowerBound ..< endIdx])
 
         XCTAssertFalse(
@@ -3550,7 +3550,7 @@ final class CallManagerScreenCaptureMonitoringTests: XCTestCase {
             XCTFail("startScreenCaptureMonitoring() not found in CallManager.swift")
             return
         }
-        let endIdx = source.index(fnRange.lowerBound, offsetBy: 800, limitedBy: source.endIndex) ?? source.endIndex
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
         let fnBody = String(source[fnRange.lowerBound ..< endIdx])
 
         XCTAssertTrue(
@@ -3571,7 +3571,7 @@ final class CallManagerScreenCaptureMonitoringTests: XCTestCase {
             XCTFail("startScreenCaptureMonitoring() not found in CallManager.swift")
             return
         }
-        let endIdx = source.index(fnRange.lowerBound, offsetBy: 800, limitedBy: source.endIndex) ?? source.endIndex
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
         let fnBody = String(source[fnRange.lowerBound ..< endIdx])
 
         XCTAssertFalse(
