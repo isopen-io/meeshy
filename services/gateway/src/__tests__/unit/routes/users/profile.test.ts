@@ -29,6 +29,7 @@ jest.mock('../../../../utils/logger-enhanced.js', () => ({
 
 jest.mock('../../../../middleware/auth', () => ({
   authUserCacheKey: jest.fn((id: string) => `auth:user:${id}`),
+  createUnifiedAuthMiddleware: jest.fn(() => async () => {}),
 }));
 
 jest.mock('../../../../services/CacheStore', () => ({
