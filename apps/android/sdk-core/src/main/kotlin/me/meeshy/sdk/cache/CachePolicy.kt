@@ -54,5 +54,13 @@ data class CachePolicy(
             freshForMillis = 60_000L,
             keepForMillis = 24 * 60 * 60_000L,
         )
+
+        // The call journal changes only when a call ends; the list is fresh for a
+        // minute and kept for the gateway's 3-month sliding window so a returning
+        // user always sees their recent calls instantly, cold or offline.
+        val CallHistory = CachePolicy(
+            freshForMillis = 60_000L,
+            keepForMillis = 90L * 24 * 60 * 60_000L,
+        )
     }
 }

@@ -22,9 +22,13 @@
 > field-for-field (ISO-8601 timestamps as strings, keeping the module date-dependency-free), with pure
 > display accessors (`directionKind`/`isMissed`, `mediaType`, four-tier `displayName`, `avatarUrl`,
 > `durationLabel`, `dataLabel`) as the single tested SSOT a future missed/recent-calls list renders.
-> **Next:** fold `events` into `CallViewModel` (`viewModelScope`) once the call-id lifecycle exists (an
-> `initiate`-ACK slice); the call-history repository (REST + Room cache) + list UI; then the
-> WebRTC/Telecom/FCM plumbing. See the run log + `feature-parity.md §H`.
+> On 2026-07-01 the **call-history repository** landed (slice `call-history-repository`): `:core:network`
+> `CallHistoryApi`, `:core:database` `CallHistoryEntity`/`CallHistoryDao` (DB v6→v7), and `:sdk-core`
+> `CallHistoryRepository` — a cache-first SWR `historyStream()` (via `CallHistoryCacheSource`, port of
+> `StoryCacheSource`) plus a cursor-paginated `fetchPage → CallHistoryPage`.
+> **Next:** the recent/missed-calls **list UI** (`:feature:calls`) over `historyStream()`; fold `events`
+> into `CallViewModel` (`viewModelScope`) once the call-id lifecycle exists (an `initiate`-ACK slice);
+> then the WebRTC/Telecom/FCM plumbing. See the run log + `feature-parity.md §H`.
 
 Stories so far: tray (ring carousel) + cross-group viewer playback engine +
 quick-reaction strip + swipe gestures + realtime reaction socket deltas +
@@ -172,8 +176,12 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
    and `CallRecord` mirroring the gateway `CallHistoryItem` REST contract (`GET /api/v1/calls/history`)
    field-for-field, with pure display accessors (`directionKind`/`isMissed`, `mediaType`, four-tier
    `displayName`, `avatarUrl`, `durationLabel`, `dataLabel`) as the SSOT a missed/recent-calls list
-   renders. +22 tests. See run log. **Next:** the call-history **repository** (REST fetch + Room cache,
-   cache-first) then the list **UI**.
+   renders. +22 tests. See run log. The **repository** ✅ shipped as `call-history-repository`
+   (2026-07-01) — `:core:network` `CallHistoryApi`, `:core:database` `CallHistoryEntity`/`CallHistoryDao`
+   (DB v6→v7), and `:sdk-core` `CallHistoryRepository` (cache-first SWR `historyStream()` via
+   `CallHistoryCacheSource` + cursor-paginated `fetchPage → CallHistoryPage`). +17 tests. See run log.
+   **Next:** the recent/missed-calls **list UI** (`:feature:calls`) reading `historyStream()` and
+   rendering each `CallRecord` through its pure display accessors.
 4. ~~**Socket subscription → VM wiring**~~ ✅ the **subscription half** shipped as `call-signal-manager`
    (2026-07-01) — `:sdk-core` `CallSignalManager` (parity with `MessageSocketManager`/`SocialSocketManager`)
    listens to all 8 inbound `call:*` frames, routes each through `CallSignalMapper`, and republishes the
@@ -376,6 +384,48 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-01 — slice `call-history-repository` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration (the 27 open PRs on `main` are all
+  iOS-a11y / web / gateway `claude/*` branches, none `claude/apps/android/*`). Branched
+  `claude/apps/android/call-history-repository` off freshly-fetched `origin/main` (`3c0a74e6`, PR #1235).
+- **Slice:** the call-history **repository** — the REST + Room cache-first layer the recent/missed-calls
+  list UI will read. Vertical slice across three modules, each mirroring the established Stories SWR:
+  - `:core:network` `CallHistoryApi` — `GET calls/history?cursor&limit&filter` → `ApiResponse<List<CallRecord>>`
+    (decodes 1:1 into the `:core:model` `CallRecord`), wired into `MeeshyApi.callHistory` + `NetworkModule`.
+  - `:core:database` `CallHistoryEntity` (`call_history` table: serialized payload + `startedAt`
+    epoch-millis for ordering + `cachedAt`) and `CallHistoryDao` (`observeAll` newest-first,
+    `upsertAll`/`deleteNotIn`/`clear`). Registered in `MeeshyDatabase` (**v6→v7**, existing destructive
+    fallback) + `DatabaseModule` provider.
+  - `:sdk-core` `CallHistoryCacheSource` (Room-backed `SwrCacheSource`, port of `StoryCacheSource`:
+    cold cache → `null`, synced-empty distinguished, `sync_meta` freshness, transactional persist that
+    prunes rows absent from the latest fetch) + `CallHistoryRepository`: `historyStream()` cache-first
+    SWR (`CachePolicy.CallHistory` = fresh 60s / keep the gateway's 90-day window), `refresh()`, and a
+    cursor-paginated raw `fetchPage(cursor, limit, missedOnly) → CallHistoryPage(records, nextCursor,
+    hasMore)` the list UI drives for older pages (folds the full `ApiResponse` envelope so pagination
+    survives, unlike `apiCall` which discards it).
+- **TDD red → green:** `CallHistoryDaoTest` (+5) and `CallHistoryRepositoryTest` (+12) first. **17** new
+  behavioural tests through the public API: DAO order/upsert-replace/deleteNotIn/clear; repo cold-cache
+  `Empty`, refresh persist + sync-meta, refresh prune (row absent from 2nd sync removed), `Fresh`
+  after refresh, `CallHistorySyncException` carrying the API error; `fetchPage` pagination
+  cursor+hasMore, no-pagination → null/false, cursor+limit+`all` filter forwarding (`coVerify`),
+  `missed` filter when `missedOnly`, failed-envelope → `Failure` with message, network-exception →
+  `Failure`. Every `when`/`if` arm in the new code is hit.
+- **Verification:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL** (debug APK assembles + all
+  JVM unit tests green). Note: one Robolectric `MavenArtifactFetcher` SSL flake on the first
+  `:core:database` run (proxy download of the `android-all` jar); a re-run was green — environment
+  network flake, not a test defect (see NOTES.md).
+- **Reviewer gate:** PASS. Scope = `apps/android` only (12 files, 7 new / 5 edits), no secrets, no
+  `local.properties`. Behavioural tests, no tautologies, no floor lowered. SDK purity: the repository is a
+  stateless building block in `:sdk-core` (the cache→network cascade is the generic `cacheFirstFlow`
+  helper; no product "when to X" rule). Cache-first (instant-app); the call-journal display SSOT stays in
+  `:core:model`. Edge cases: empty/cold cache, prune, failure paths (sync + network + failed envelope),
+  pagination present/absent, both filters.
+- **Next:** the recent/missed-calls **list UI** in `:feature:calls` — a `CallHistoryViewModel`
+  (`StateFlow<CallHistoryUiState>` over `historyStream()`, `distinct` fresh/stale/empty handling +
+  pull-to-refresh + paging via `fetchPage`) and an accent-coherent list rendering each `CallRecord` via
+  its pure display accessors; then fold `CallSignalManager.events` into `CallViewModel` once the
+  `initiate`-ACK call-id lifecycle lands.
 
 ### 2026-07-01 — slice `call-history-model` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration (the open PRs on `main` are all
