@@ -14,6 +14,28 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 95i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> - **95i (en cours, branche `claude/upbeat-euler-rod5v3`, base `main` HEAD `5deacf76`)** :
+>   Dynamic Type + VoiceOver de `CommunityLinkDetailView` (détail d'un lien communautaire : en-tête,
+>   barre d'actions Copier/Partager/Identifier, cartes stat, section infos). **9/10** `.font(.system(size:))`
+>   → `MeeshyFont.relative(...)` (weight + `.monospaced` de l'URL préservés). **1/10 figé** = glyphe héros
+>   `person.3.fill` 26 pt dans cercle fixe 60×60 (glyphe wide, doctrine 86i/91i) + `.accessibilityHidden`.
+>   VoiceOver : 3 glyphes décoratifs masqués, `.combine` sur `communityStatCard`, `.isHeader` sur en-tête
+>   « INFORMATIONS ». Palette (`communityAccent`/`success`/`theme.*`) + i18n catalogue déjà en place → intacts.
+>   1 fichier, 0 logique / 0 clé i18n / 0 test neuf (parité 55i/74i/86i/88i/90i/91i). Gate = CI `ios-tests.yml`.
+> - **⚠️ FORTE CONTENTION iOS (run 2026-07-01)** : ~12 PR iOS ouvertes. Surfaces PRISES : SupportView
+>   (#1262), AffiliateView (#1245/#1238/#1267), EffectsPicker (#1261), AddParticipantSheet (#1256),
+>   NotificationSettingsView (#1252), TwoFactorSetupView (#1248), SharePickerView (#1246/#1243),
+>   MemberManagementSection (#1244), LocationPickerView (#1242/#1240), ConversationPreferencesTab (#1241),
+>   NewConversationView (#1237). **Vérifier `list_pull_requests` AVANT de choisir une surface.** `94i` saturé
+>   → cette itération a pris **`95i`** sur `CommunityLinkDetailView` (aucune PR ouverte, surface disjointe).
+> - **⚠️ `CommunityLinkDetailView` SOLDÉ (ne plus reprendre Dynamic Type)** : 9 sites → `relative`, 1 glyphe
+>   héros figé à dessein (cercle fixe 60×60). Distinct de `CommunityLinksView` (soldé 91i #1236).
+> - **Base de départ 96i : `main` HEAD** (toujours resync sur `main` ; supprimer la branche mergée).
+> - **Différé prioritaire iOS 96i+** : Dynamic Type `StoryViewerView+Content` (~97, coordonner i18n),
+>   `FeedView+Attachments` (~65), `ConversationView+Composer` (lot prudent) ; audit palette hexes proches
+>   (checkmark `#4ADE80`→`success`) ; Glass `MessageOverlayMenu` via `AdaptiveGlassContainer`.
+
 > **POINTEUR AUTORITAIRE iOS (mis à jour 91i)** — source fiable = § History (append-only).
 > - **Dernière itération iOS : `91i`** → branche `claude/upbeat-euler-l5yima` (Dynamic Type + VoiceOver `CommunityLinksView.swift` : 13/15 `.font(.system(size:))` → `MeeshyFont.relative` ; 2 figés commentés = héros état-vide 40pt + glyphe 14pt dans cercle fixe 40×40, tous deux `.accessibilityHidden` ; `.isHeader` ×2 titre+section, `.combine` carte stat + état vide, `.accessibilityHidden` glyphes décoratifs ; 0 logique/0 i18n/0 test neuf). Base = `main` HEAD `af1fe619`. Gate = CI `iOS Tests`.
 > - **90i réel mergé** = `MagicLinkView` (#1221). **4 PR « 90i » parallèles en vol au démarrage 91i** : `DataExportView` (#1226), `FeedCommentsSheet` (#1228), `MagicLinkView` doublon (#1225), `NewConversationView` (#1224). 91i orthogonal = `CommunityLinksView` (surface neuve, 0 collision).
