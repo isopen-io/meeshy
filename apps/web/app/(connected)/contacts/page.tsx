@@ -26,6 +26,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { apiService } from '@/services/api.service';
 import type { ContactTab, ContactSortOption, FriendRequest } from '@/types/contacts';
 import type { BlockedUser, User } from '@meeshy/shared/types';
+import { getUserDisplayName } from '@/utils/user-display-name';
 import {
   Users,
   UserCheck,
@@ -48,12 +49,6 @@ import {
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
 type TFn = (key: string, params?: Record<string, unknown>) => string;
-
-function userDisplayName(u?: User | null): string {
-  if (!u) return '';
-  const full = [u.firstName, u.lastName].filter(Boolean).join(' ').trim();
-  return u.displayName || full || u.username || '';
-}
 
 function formatLastSeen(t: TFn, locale: string, isOnline: boolean, lastActiveAt?: string): string {
   if (isOnline) return t('status.online');
@@ -275,7 +270,7 @@ export default function ContactsPage() {
       const isIncoming = request.receiverId === user?.id;
       const other: User | undefined = isIncoming ? request.sender : request.receiver;
       const otherId = isIncoming ? request.senderId : request.receiverId;
-      const name = userDisplayName(other) || otherId;
+      const name = getUserDisplayName(other, '') || otherId;
       return (
         <RowShell
           key={request.id}
