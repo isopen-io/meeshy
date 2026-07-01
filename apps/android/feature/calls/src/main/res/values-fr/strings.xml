@@ -18,4 +18,14 @@
     <string name="call_action_close">Fermer</string>
     <string name="call_start_audio">Appel audio</string>
     <string name="call_start_video">Appel vidéo</string>
+    <string name="call_history_title">Appels</string>
+    <string name="call_history_filter_all">Tous</string>
+    <string name="call_history_filter_missed">Manqués</string>
+    <string name="call_history_empty">Aucun appel</string>
+    <string name="call_history_empty_missed">Aucun appel manqué</string>
+    <string name="call_history_yesterday">Hier</string>
+    <string name="call_history_incoming">Appel entrant</string>
+    <string name="call_history_outgoing">Appel sortant</string>
+    <string name="call_history_missed">Appel manqué</string>
+    <string name="call_history_retry">Réessayer</string>
 </resources>
