@@ -14,6 +14,20 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 107i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> - **107i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `1e12f2d7`)** :
+>   Dynamic Type + VoiceOver de `FeedPostCard+Media` (rendu média des posts feed). **10/13**
+>   `.font(.system(size:))` → `MeeshyFont.relative` (durées vidéo/audio `.monospaced`, nom fichier/
+>   taille/pages doc, nom lieu/coordonnées, badge `+N`, glyphe `arrow.up.right`). **3 glyphes figés**
+>   (cadres fixes, doctrine 86i) : `play.fill` 12 (cercle 30/36), `doc.fill` 24 (48×56),
+>   `mappin.circle.fill` 28 (64×64). **6 `.accessibilityHidden`** (overlays galerie vidéo/audio,
+>   badge `+N`, glyphes doc/mappin/arrow décoratifs). 1 fichier, 0 logique, 0 test/clé i18n neuve ;
+>   cellule de liste → 0 `@ObservedObject` ajouté. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ 106i pris par un autre agent** (PR #1301 `AudioEffectsPanel`) → cette itération = **107i**.
+> - **⚠️ `FeedPostCard+Media` a11y/DynamicType SOLDÉ** : ne plus reprendre les 3 glyphes figés.
+> - **Base de départ 108i : `main` HEAD** (toujours resync ; supprimer la branche mergée).
+>   Candidats 108i+ : `StoryTrayView` (9), `StoryViewerView+Sidebar` (10), `ReelsPlayerView` (7).
+
 > **POINTEUR AUTORITAIRE iOS (mis à jour 105i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
 > - **105i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `61257034`)** :
 >   a11y VoiceOver de `FeedView+Attachments` (tuiles de pièces jointes du composer feed). Typo déjà
