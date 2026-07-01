@@ -1294,6 +1294,10 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       const cleanupManager = this.socketIOHandler.getManager();
       if (cleanupManager) {
         this.callCleanupService.attachSocketServer(cleanupManager.getIO());
+        // RC-4 — share the socket layer's CallService so the heartbeat-GC
+        // tier (spec section 2.6) observes real in-memory heartbeat state
+        // instead of staying permanently unwired.
+        this.callCleanupService.setCallService(cleanupManager.getCallService());
       } else {
         logger.warn('[GWY] CallCleanupService starting without Socket.IO server — clients will not receive force-end broadcasts');
       }
