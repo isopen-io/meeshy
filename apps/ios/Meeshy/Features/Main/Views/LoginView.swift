@@ -106,7 +106,7 @@ struct LoginView: View {
                         )
                     )
                     .shadow(color: MeeshyColors.purple700.opacity(isDark ? 0.5 : 0.25), radius: 12, x: 0, y: 4)
-                    .padding(.bottom, 48)
+                    .padding(.bottom, MeeshySpacing.xxxl + MeeshySpacing.lg)
                     .accessibilityAddTraits(.isHeader)
 
                 if authManager.requires2FA {
@@ -205,7 +205,7 @@ struct LoginView: View {
         }
         .padding(.horizontal, MeeshySpacing.xxxl)
         .opacity(showFields ? 1 : 0)
-        .offset(y: showFields ? 0 : 30)
+        .offset(y: showFields ? 0 : MeeshySpacing.xxxl)
     }
 
     private var savedAccountsList: some View {
@@ -298,7 +298,7 @@ struct LoginView: View {
                     }
                 } label: {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(MeeshyFont.relative(16, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                         .frame(width: 36, height: 36)
                         .background(
@@ -483,7 +483,7 @@ struct LoginView: View {
         }
         .padding(.horizontal, MeeshySpacing.xxxl)
         .opacity(showFields ? 1 : 0)
-        .offset(y: showFields ? 0 : 30)
+        .offset(y: showFields ? 0 : MeeshySpacing.xxxl)
     }
 
     // MARK: - Reusable subviews
@@ -576,7 +576,7 @@ struct LoginView: View {
             if showCustomInput || selectedEnv == .custom {
                 HStack(spacing: MeeshySpacing.sm) {
                     TextField("gate.example.com", text: $customHost)
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .font(MeeshyFont.relative(13, weight: .medium, design: .monospaced))
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .focused($focusedField, equals: .customHost)
@@ -589,7 +589,7 @@ struct LoginView: View {
                     } label: {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(MeeshyColors.brandGradient)
-                            .font(.system(size: 18))
+                            .font(MeeshyFont.relative(18))
                     }
                     .disabled(customHost.trimmingCharacters(in: .whitespaces).isEmpty)
                     .bounceOnTap(scale: 0.90)
@@ -609,7 +609,7 @@ struct LoginView: View {
             }
 
             Text(String(format: String(localized: "auth.login.server_origin", defaultValue: "Connecté à : %@", bundle: .main), MeeshyConfig.shared.serverOrigin))
-                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                .font(MeeshyFont.relative(10, weight: .regular, design: .monospaced))
                 .foregroundColor(theme.textMuted.opacity(0.5))
         }
     }
@@ -710,7 +710,7 @@ struct LoginView: View {
         }
         .padding(.horizontal, MeeshySpacing.xxxl)
         .opacity(showFields ? 1 : 0)
-        .offset(y: showFields ? 0 : 30)
+        .offset(y: showFields ? 0 : MeeshySpacing.xxxl)
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                 focusedField = .twoFactorCode
