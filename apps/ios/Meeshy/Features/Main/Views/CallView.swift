@@ -592,7 +592,7 @@ struct CallView: View {
     private var remoteQualityDegradedBanner: some View {
         HStack(spacing: 6) {
             Image(systemName: "wifi.exclamationmark")
-                .font(.system(size: 12, weight: .semibold))
+                .font(MeeshyFont.relative(12, weight: .semibold))
                 .accessibilityHidden(true)
             Text(String(localized: "call.remote.quality.degraded",
                         defaultValue: "Réseau faible chez votre contact",
@@ -768,7 +768,7 @@ struct CallView: View {
                     .accessibilityHidden(true)
                 HStack(spacing: 6) {
                     Image(systemName: "video.slash.fill")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .accessibilityHidden(true)
                     Text(String(localized: "call.video.remoteOff", defaultValue: "Caméra désactivée", bundle: .main))
                         .font(.footnote.weight(.medium))
@@ -1262,7 +1262,7 @@ struct CallView: View {
     private var callTypeBadge: some View {
         HStack(spacing: 6) {
             Image(systemName: callManager.isVideoEnabled ? "video.fill" : "phone.fill")
-                .font(.system(size: 12, weight: .semibold))
+                .font(MeeshyFont.relative(12, weight: .semibold))
                 .accessibilityHidden(true)
             Text(callManager.isVideoEnabled ? String(localized: "call.type.video", defaultValue: "Appel vidéo", bundle: .main) : String(localized: "call.type.audio", defaultValue: "Appel audio", bundle: .main))
                 .font(.caption2.weight(.semibold))
