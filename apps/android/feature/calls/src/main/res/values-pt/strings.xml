@@ -18,4 +18,14 @@
     <string name="call_action_close">Fechar</string>
     <string name="call_start_audio">Chamada de áudio</string>
     <string name="call_start_video">Videochamada</string>
+    <string name="call_history_title">Chamadas</string>
+    <string name="call_history_filter_all">Todas</string>
+    <string name="call_history_filter_missed">Perdidas</string>
+    <string name="call_history_empty">Nenhuma chamada ainda</string>
+    <string name="call_history_empty_missed">Sem chamadas perdidas</string>
+    <string name="call_history_yesterday">Ontem</string>
+    <string name="call_history_incoming">Chamada recebida</string>
+    <string name="call_history_outgoing">Chamada realizada</string>
+    <string name="call_history_missed">Chamada perdida</string>
+    <string name="call_history_retry">Tentar novamente</string>
 </resources>

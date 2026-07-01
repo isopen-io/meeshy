@@ -818,7 +818,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `viewModelScope` (needs the call-id lifecycle from an `initiate`-ACK slice), the ACK-based
       `call:initiate` + WebRTC-plumbing emits (`request-ice-servers`/`heartbeat`/`quality-report`/
       `reconnecting`/`reconnected`), and the app-level `attach()` lifecycle caller.
-- [~] Call history / journal (recent + missed calls list, direction, duration, data usage) —
+- [x] Call history / journal (recent + missed calls list, direction, duration, data usage) —
       **pure call-journal model landed** (slice `call-history-model`): `core:model`
       `me.meeshy.sdk.model.call` gains `CallDirection` (incoming/outgoing/missed, `fromRaw` degrades
       unknown → incoming, parity with iOS `CallDirection(raw:)`), `CallMediaType` (audioOnly/audioVideo,
@@ -840,7 +840,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       will drive for older pages. +17 behavioural tests (DAO order/upsert/deleteNotIn/clear; cold-cache
       Empty, refresh persist + prune + sync-meta, Fresh-after-refresh, sync-exception, fetchPage
       pagination/no-pagination/all+missed filter forwarding/failed-envelope/network-exception). The
-      recent/missed-calls **list UI** is the pending follow-up.
+      recent/missed-calls **list UI landed** (slice `call-history-list`): a UDF `CallHistoryViewModel`
+      (`StateFlow<CallHistoryUiState>` over `historyStream()`) with cache-first SWR flags (skeleton only
+      on cold empty), a client-side missed-only filter, cursor-paged infinite scroll via `fetchPage`
+      (de-dup, cursor advance, `hasMore`/re-entrancy/failure gating), and pull-to-refresh that resets
+      paging — backed by pure `CallHistoryList` (combine+filter) and `CallTimeLabel` (ISO → relative
+      label), rendered by an accent-coherent `CallHistoryScreen` (avatar rows, direction icon with
+      missed=error colour, relative time, All/Missed filter chips, skeleton/empty states). +30
+      behavioural tests. **Pending follow-up:** a Calls-tab navigation entry (`:app`) once the app shell
+      exposes one, and folding `CallSignalManager.events` into `CallViewModel` (needs the `initiate`-ACK
+      call-id lifecycle).
 
 ## I. Communities
 - [ ] Community creation (name, `mshy_` identifier, description, emoji, privacy, initial members)
