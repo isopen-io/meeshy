@@ -3,11 +3,16 @@ package me.meeshy.sdk.socket
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.sdk.model.call.CallEvent
+import me.meeshy.sdk.model.call.CallInitiateAckParser
+import me.meeshy.sdk.model.call.CallInitiateResult
 import me.meeshy.sdk.model.call.CallSignalMapper
 import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.resume
 
 /**
  * Subscribes to the call-domain Socket.IO events (ARCHITECTURE.md §3) and mirrors
@@ -43,6 +48,34 @@ class CallSignalManager @Inject constructor(
 
     // --- Outbound emit table (parity with iOS MessageSocketManager) ---
 
+    /**
+     * Places an outgoing call: emits `call:initiate` and awaits the gateway ACK
+     * that mints the real [me.meeshy.sdk.model.call.CallInitiateAck] — the
+     * MongoDB `callId` every subsequent outbound emit is keyed by, plus the
+     * per-user ICE servers WebRTC must be configured with before any SDP offer.
+     * Parity with the iOS `emitCallInitiate(conversationId:isVideo:)`.
+     *
+     * The wire outcome is decided once by the pure [CallInitiateAckParser]; this
+     * method only owns the transport (payload keys + the ACK timeout). No ACK
+     * within [INITIATE_ACK_TIMEOUT_MS] — or an ACK whose first argument is not a
+     * JSON object — yields [CallInitiateResult.Timeout].
+     */
+    suspend fun emitInitiate(conversationId: String, isVideo: Boolean): CallInitiateResult {
+        val payload = JSONObject()
+            .put("conversationId", conversationId)
+            .put("type", if (isVideo) "video" else "audio")
+        val raw = withTimeoutOrNull(INITIATE_ACK_TIMEOUT_MS) {
+            suspendCancellableCoroutine { continuation ->
+                socketManager.emit("call:initiate", payload) { args ->
+                    if (continuation.isActive) {
+                        continuation.resume((args.firstOrNull() as? JSONObject)?.toString())
+                    }
+                }
+            }
+        }
+        return raw?.let(CallInitiateAckParser::parse) ?: CallInitiateResult.Timeout
+    }
+
     /** Join the call room after answering / on reconnect. */
     fun emitJoin(callId: String) = emit("call:join", callId)
 
@@ -75,6 +108,9 @@ class CallSignalManager @Inject constructor(
     }
 
     private companion object {
+        /** Matches the iOS `emitCallInitiate` 10 s ACK budget. */
+        const val INITIATE_ACK_TIMEOUT_MS = 10_000L
+
         val INBOUND_EVENTS = listOf(
             "call:initiated",
             "call:signal",
