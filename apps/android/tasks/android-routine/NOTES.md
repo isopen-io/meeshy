@@ -15,6 +15,12 @@ Append-only log of gotchas and decisions that save time next run.
   background and poll the output file.
 - `./apps/android/meeshy.sh check` = `assembleDebug` + `testDebugUnitTest`.
   Full clean check ≈ 2.5 min once dependencies are cached.
+- ⚠ **Robolectric artifact-fetch SSL flake.** The first Robolectric run in a fresh container downloads
+  the `android-all-instrumented` jar from Maven through the agent proxy; that download can fail with
+  `SSLHandshakeException` inside `MavenArtifactFetcher` (surfaces as ONE test in a class "failing" with an
+  `AssertionError`/`EOFException` cause — not a real assertion failure). It is a network flake: simply
+  **re-run the same test task** and it passes once the jar is cached. Don't chase it as a code bug.
+  Seen in `call-history-repository` on `:core:database`'s first run.
 
 ## Serialization gotchas
 - ⚠ **Never put a `private companion object` on a `@Serializable` class.** The plugin generates the

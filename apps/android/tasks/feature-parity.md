@@ -831,7 +831,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (`M:SS`/`H:MM:SS`, empty at zero), `dataLabel` (deterministic locale-independent byte ladder, null
       when no counters / zero total). +22 behavioural tests (every direction arm incl. unknown, name/avatar
       fallbacks, hour boundary, byte-ladder + guards, gateway-shaped JSON decode with/without peer). The
-      call-history repository (REST fetch + Room cache) + list UI are the pending follow-ups.
+      call-history repository landed (slice `call-history-repository`): `:core:network`
+      `CallHistoryApi` (`GET calls/history?cursor&limit&filter`), `:core:database` `CallHistoryEntity`/
+      `CallHistoryDao` (DB v6→v7, destructive fallback), and `:sdk-core` `CallHistoryRepository` — a
+      cache-first SWR stream (`historyStream()` via `CallHistoryCacheSource`, port of the `StoryCacheSource`
+      pattern, `CachePolicy.CallHistory` fresh 60s / keep the 3-month window) plus a cursor-paginated raw
+      `fetchPage(cursor, limit, missedOnly) → CallHistoryPage(records, nextCursor, hasMore)` the list UI
+      will drive for older pages. +17 behavioural tests (DAO order/upsert/deleteNotIn/clear; cold-cache
+      Empty, refresh persist + prune + sync-meta, Fresh-after-refresh, sync-exception, fetchPage
+      pagination/no-pagination/all+missed filter forwarding/failed-envelope/network-exception). The
+      recent/missed-calls **list UI** is the pending follow-up.
 
 ## I. Communities
 - [ ] Community creation (name, `mshy_` identifier, description, emoji, privacy, initial members)
