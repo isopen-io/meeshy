@@ -1022,14 +1022,19 @@ describe('CallEventsHandler', () => {
       expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({ code: 'NOT_A_PARTICIPANT' }));
     });
 
-    it('updates media and broadcasts to call room', async () => {
+    it('updates media and uses socket.to (excludes sender)', async () => {
       mockCallServiceUpdateParticipantMedia.mockResolvedValue(undefined);
       const { socket, io } = setupWithSocket();
 
       await socket._trigger('call:toggle-audio', validData);
 
       expect(mockCallServiceUpdateParticipantMedia).toHaveBeenCalledWith(CALL_ID, PARTICIPANT_ID, 'audio', false);
-      expect(io.to).toHaveBeenCalledWith(`call:${CALL_ID}`);
+      // P0-3 — the sender already applied its own mic state locally and must
+      // NOT receive its own call:media-toggled echo (iOS reads any received
+      // event as the REMOTE peer's state). `io.to` would wrongly include the
+      // sender; `socket.to` excludes it, mirroring call:toggle-video below.
+      expect(socket.to).toHaveBeenCalledWith(`call:${CALL_ID}`);
+      expect(io.to).not.toHaveBeenCalled();
     });
 
     it('relays the real error code/message when updateParticipantMedia throws a coded error', async () => {

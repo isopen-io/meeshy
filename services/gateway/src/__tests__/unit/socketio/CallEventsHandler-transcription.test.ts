@@ -36,6 +36,7 @@ jest.mock('../../../middleware/validation', () => ({
 }));
 
 const mockCheckLimit = jest.fn<() => Promise<boolean>>().mockResolvedValue(true);
+const mockCheckSocketRateLimit = jest.fn<() => Promise<boolean>>().mockResolvedValue(true);
 jest.mock('../../../utils/socket-rate-limiter', () => ({
   SocketRateLimiter: jest.fn().mockImplementation(() => ({
     checkLimit: mockCheckLimit,
@@ -45,9 +46,10 @@ jest.mock('../../../utils/socket-rate-limiter', () => ({
     checkLimit: mockCheckLimit,
     destroy: jest.fn(),
   }),
-  checkSocketRateLimit: jest.fn().mockResolvedValue(true),
+  checkSocketRateLimit: mockCheckSocketRateLimit,
   SOCKET_RATE_LIMITS: {
     MESSAGE_SEND: { maxRequests: 20, windowMs: 60000, keyPrefix: 'socket:message:send' },
+    CALL_TRANSCRIPTION_SEGMENT: { maxRequests: 60, windowMs: 10000, keyPrefix: 'socket:call:transcription' },
   },
 }));
 
@@ -130,6 +132,44 @@ describe('CallEventsHandler — call:transcription-segment relay', () => {
   beforeEach(() => {
     // Default: validateSocketEvent returns success for well-formed data
     (validateSocketEvent as jest.MockedFunction<any>).mockReturnValue({ success: true });
+    mockCheckSocketRateLimit.mockClear();
+    mockCheckSocketRateLimit.mockResolvedValue(true);
+  });
+
+  describe('rate limiting', () => {
+    it('checks the rate limit before relaying a segment', async () => {
+      const prisma = makePrisma({
+        callSessionFindUnique: jest.fn<any>()
+          .mockResolvedValueOnce({ conversationId: VALID_CONV_ID })
+          .mockResolvedValueOnce({ status: 'active', metadata: null }),
+        participantFindFirst: jest.fn<any>().mockResolvedValue({ id: 'participant-1' }),
+      });
+      const { socket, handlers, roomEmit } = makeSocket();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, {} as any, () => SPEAKER_ID);
+
+      await handlers[CALL_EVENTS.TRANSCRIPTION_SEGMENT](VALID_SEGMENT);
+
+      expect(mockCheckSocketRateLimit).toHaveBeenCalledTimes(1);
+      expect(roomEmit).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT relay the segment when the rate limit is exceeded', async () => {
+      mockCheckSocketRateLimit.mockResolvedValueOnce(false);
+      const prisma = makePrisma();
+      const { socket, handlers, roomEmit, directEmit } = makeSocket();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, {} as any, () => SPEAKER_ID);
+
+      await handlers[CALL_EVENTS.TRANSCRIPTION_SEGMENT](VALID_SEGMENT);
+
+      expect(roomEmit).not.toHaveBeenCalled();
+      // The handler itself must not emit a second error on top of whatever
+      // checkSocketRateLimit already reports to the sender.
+      expect(directEmit).not.toHaveBeenCalled();
+    });
   });
 
   describe('happy path: participant in active call', () => {

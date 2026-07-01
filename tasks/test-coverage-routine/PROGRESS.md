@@ -155,7 +155,7 @@ Measured 2026-06-14. Commands run after `pnpm install` + `cd packages/shared && 
 | Suite | Command | Line % | Branch % | Recorded |
 |-------|---------|:------:|:--------:|:--------:|
 | web | `pnpm --filter web test:coverage` | 42.97 | 35.17 | 2026-06-22 (post P2 Theme/accent color × web; +1 test for use-resolved-theme dark→light transition; date-format+tag-colors already at 100%; stmts:42.21/branch:35.17/funcs:39.16/lines:42.97; threshold floor unchanged lines:42/branches:34/statements:41/functions:38 — new measurements already above floor) |
-| gateway | `pnpm --filter gateway test:coverage` | 96.4 (local node) | 89.88 (local node) | 2026-06-30 (post gateway-routes-users: all 7 routes/users modules to ≥92% line+branch; 478 suites / 13268 tests / 1 skipped; threshold floor ratcheted lines:86→87/branches:79→80/statements:85→86/functions:82→83 — CI-bun-calibrated ~9.5pp gap from local-node 96.4/89.88/95.61/93.08) |
+| gateway | `pnpm --filter gateway test:coverage` | 94.86 (local node) | 88.49 (local node) | 2026-07-01 (post gateway-manifest-gap9-communities: routes/communities/{members,search,settings}.ts branch gap-fill to ≥92%; 482 suites / 13327 tests / 1 skipped; threshold floor unchanged lines:87/branches:80/statements:86/functions:83 — still comfortably above floor; not ratcheted since this run's global lines% (94.86) is below the prior 96.4 baseline, natural drift from unrelated files landing meanwhile — see lessons.md #32 on the local-node/CI-bun gap) |
 | translator | `.venv/bin/python -m pytest tests/ -m "not slow and not gpu" --cov=src` | ~39 | n/a | 2026-06-19 (post P1 Voice/audio × translator; +127 tests covering 6 modules; fail_under ratcheted 37→39; diarization GPU methods pragma'd) |
 | iOS | `./apps/ios/meeshy.sh test` | n/a | n/a | not measurable (no macOS/Xcode in CI env) |
 | android | `apps/android/meeshy.sh test` | n/a | n/a | not measurable (no Android SDK in CI env) |
@@ -178,6 +178,20 @@ Measured 2026-06-14. Commands run after `pnpm install` + `cd packages/shared && 
    `packages/shared/encryption/index.ts` → 95 test suites error (Jest can't load modules that
    import this); total web coverage therefore understates actual testable coverage.
 7. **Shared coverage already strong**: 95.22% line / 92.17% branch — already at target.
+
+## Findings flagged for human follow-up (not fixed by the routine — production/architecture calls)
+
+- **2026-07-01 — Dead code: `services/gateway/src/routes/communities.ts` vs `routes/communities/`.**
+  `server.ts` does `import { communityRoutes } from './routes/communities'`. Because both
+  `routes/communities.ts` (a 2047-line standalone monolith with its own full route implementations)
+  and `routes/communities/index.ts` (a re-export of the split `core.ts`/`members.ts`/`search.ts`/
+  `settings.ts` modules) exist side by side, Node/TS `moduleResolution: "node"` resolves the **file**
+  before the **directory** — so the monolith `communities.ts` is what actually runs in production, and
+  the split `routes/communities/*` directory is currently unreachable dead code (it has its own test
+  suite, so it wasn't wasted testing effort, just not exercising the live path). A human should decide
+  whether to delete the orphaned monolith and repoint the import at the split module, or delete the
+  split directory — either way this is a production-logic change, out of scope for a test-coverage-only
+  slice. See RUNLOG.md `gateway-manifest-gap9-communities` for the detail.
 
 ### Web test failure root cause
 `packages/shared/encryption/index.ts` re-exports `./encryption-service.js` (compiled JS path).

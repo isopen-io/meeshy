@@ -1669,7 +1669,12 @@ export class CallEventsHandler {
           data.enabled
         );
 
-        // Broadcast to all call participants
+        // P0-3 — broadcast to the OTHER participants only, mirroring the video
+        // toggle handler below. The sender already updated its own mic state
+        // locally and must NOT receive its own echo: iOS treats any received
+        // call:media-toggled as the REMOTE peer's state (drives the muted
+        // indicator). `io.to` incorrectly included the sender, corrupting the
+        // sender's own view of the peer's mute state on every self-toggle.
         const toggleEvent: CallMediaToggleEvent = {
           callId: data.callId,
           participantId: audioParticipantId,
@@ -1677,7 +1682,7 @@ export class CallEventsHandler {
           enabled: data.enabled
         };
 
-        io.to(ROOMS.call(data.callId)).emit(
+        socket.to(ROOMS.call(data.callId)).emit(
           CALL_EVENTS.MEDIA_TOGGLED,
           toggleEvent
         );
@@ -2028,6 +2033,16 @@ export class CallEventsHandler {
       try {
         const userId = getUserId(socket.id);
         if (!userId) return;
+
+        // Rate limiting — SOCKET_RATE_LIMITS.CALL_TRANSCRIPTION_SEGMENT was
+        // defined but never enforced, leaving this handler unthrottled: every
+        // final segment triggers a DB read (and potentially a ZMQ translation
+        // request), so a flooding client could amplify load onto the DB and
+        // the translator service.
+        const rateLimitPassed = await checkSocketRateLimit(
+          socket, userId, SOCKET_RATE_LIMITS.CALL_TRANSCRIPTION_SEGMENT, this.rateLimiter, CALL_EVENTS.ERROR
+        );
+        if (!rateLimitPassed) return;
 
         const validation = validateSocketEvent(socketTranscriptionSegmentSchema, data);
         if (!validation.success) return;
