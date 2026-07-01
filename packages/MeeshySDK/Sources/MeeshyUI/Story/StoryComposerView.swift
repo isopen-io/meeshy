@@ -189,6 +189,7 @@ public struct StoryComposerView: View {
         sheetModifiers
         .alert(String(localized: "story.composer.resumeStory", defaultValue: "Reprendre votre story ?", bundle: .module), isPresented: $showRestoreDraftAlert) {
             Button(String(localized: "story.composer.resume", defaultValue: "Reprendre", bundle: .module)) { restoreDraft() }
+                .tint(MeeshyColors.indigo500)
             Button(String(localized: "story.composer.clearDraft", defaultValue: "Effacer le brouillon", bundle: .module), role: .destructive) { clearAllDrafts() }
         } message: {
             Text(String(localized: "story.composer.unpublishedDraft", defaultValue: "Vous avez un brouillon non publie.", bundle: .module))
@@ -197,9 +198,15 @@ public struct StoryComposerView: View {
             String(localized: "story.composer.quitWithoutPublishing", defaultValue: "Quitter sans publier ?", bundle: .module),
             isPresented: $showDiscardAlert
         ) {
+            // `.tint` explicite : le composer hérite de `.preferredColorScheme(.dark)`
+            // (StoryViewerView) qui traverse la présentation ; sur iOS 26 l'alerte est
+            // dessinée sur verre clair → sans teinte, le label des boutons sans rôle /
+            // .cancel devient quasi-blanc et illisible. L'indigo reste lisible partout.
             Button(String(localized: "story.composer.save", defaultValue: "Sauvegarder", bundle: .module)) { saveDraftAndDismiss() }
+                .tint(MeeshyColors.indigo500)
             Button(String(localized: "story.composer.quit", defaultValue: "Quitter", bundle: .module), role: .destructive) { cancelAndDismiss() }
             Button(String(localized: "story.composer.cancelAction", defaultValue: "Annuler", bundle: .module), role: .cancel) { }
+                .tint(MeeshyColors.indigo500)
         }
         .alert(
             String(localized: "story.composer.mediaLostTitle", defaultValue: "Médias indisponibles", bundle: .module),
@@ -209,6 +216,7 @@ public struct StoryComposerView: View {
             )
         ) {
             Button(String(localized: "story.composer.ok", defaultValue: "OK", bundle: .module)) { lostMediaCount = 0 }
+                .tint(MeeshyColors.indigo500)
         } message: {
             Text(
                 lostMediaCount == 1
