@@ -8,6 +8,23 @@
 
 **Tech Stack :** SwiftUI (plancher iOS 16), Swift 6.2, XCTest, XcodeGen (globbing récursif — nouveaux `.swift` auto-inclus), UICollectionView host (`MessageListViewController`), `adaptiveGlass` (Liquid Glass iOS 26 + fallback material).
 
+## Avancement (2026-07-01)
+
+**Livré, buildé vert, committé sur `main` (16 tests unitaires verts) :**
+- ✅ Phase 1 complète — `MessageDetailSheet` décomposé en 7 vues dédiées (`MessageDetail/`).
+- ✅ Task 2.1 `MessageActionResolver` (+9 tests), 2.2 `ContextAction` star/thread/pin, 2.3 `MessageActionsMenu`, 2.4 `MessageMoreSheet`.
+- ✅ Task 3.1 `BubbleSwipeResistance` (+7 tests), 3.2 swipe résistant audio/vidéo câblé (`BubbleSwipeContainer` + call site).
+- ✅ Task 2.6 (partiel) — affordances rapides (tap coches / réactions / traduire) routées vers `MessageMoreSheet` natif ; picker complet via `EmojiPickerSheet`.
+- ✅ `MediaDoubleTapGestures` créé (pas encore posé sur les bulles).
+
+**Reste (à faire avec vérification visuelle simulateur) :**
+- ⬜ **Task 2.5 — fusion overlay native-lean** (LE cœur visuel) : long-press → un seul overlay = barre réactions (haut) + bulle + `MessageActionsMenu` (liste verticale, bas). Approche recommandée : gonfler `topPadding` de `OverlayLayoutInput` de la hauteur de la barre réactions (réserve l'espace au-dessus SANS modifier le moteur → tests `MessageOverlayLayoutEngineTests` préservés) ; `menuSize` = taille de `MessageActionsMenu` ; basculer `actionsForOverlay`→`MessageActionResolver.primaryActions` et `handleContextOverlayAction`→`PrimaryAction` ; embarquer `EmojiReactionPicker` en haut ; supprimer l'indirection « React → MessageOverlayMenu ».
+- ⬜ Suppression de `MessageOverlayMenu.swift` + `MessageDetailSheet.swift` (une fois 2.5 fait — ils ne seront plus référencés).
+- ⬜ Task 3.3 — `isScrubbing` bout-en-bout (priorité totale au scrubber ; aujourd'hui seuil relevé seulement).
+- ⬜ Task 3.4/3.5 — double-tap-réagir posé sur toutes les bulles (composant `MediaDoubleTapGestures` prêt) ; réutiliser l'état `emojiOnlyMode`/`quickReactionMessageId` existant.
+
+Commits : `7daa30375`, `f0df2bfc8`, `4396cf5a3`, `5c8983674` (+ spec `69a540fe8`, plan `3ece23f32`).
+
 ## Global Constraints
 
 - **Plancher iOS 16.0** — `NavigationStack`, `.sheet`, `presentationDetents`, `.onTapGesture(count:2)` OK ; Liquid Glass via `adaptiveGlass` (dégrade < iOS 26) ; complétion d'animation via `withAnimationCompletion` (natif 17 + fallback 16).
