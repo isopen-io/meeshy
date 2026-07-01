@@ -14,6 +14,19 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 108i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> - **108i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `100e4725`)** :
+>   Dynamic Type de `StoryViewerView+Sidebar` (sidebar + header du visualiseur de stories).
+>   Boutons déjà bien étiquetés VoiceOver ; **6/10** `.font(.system(size:))` → `MeeshyFont.relative`
+>   (nom d'auteur, timeAgo, glyphe repost, « via @… », glyphe horloge, temps restant). **4 glyphes
+>   figés** (déjà étiquetés bouton) : drapeau + `plus` (cercles fixes 38×38, doctrine 86i),
+>   `ellipsis` + `xmark` (chrome 36×36, doctrine 82i). 1 fichier, 0 logique, 0 test/clé i18n neuve.
+>   0 contention (0 PR ouverte). Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `StoryViewerView+Sidebar` Dynamic Type SOLDÉ** : ne plus reprendre les 4 glyphes figés.
+>   Différé 109i+ : `.accessibilityValue` timeAgo/expiry sur le bouton profil du header (label override
+>   masque ces infos VoiceOver). Candidats : `StoryTrayView` (9), `ReelsPlayerView` (7), `OnboardingStepViews` (7).
+> - **Base de départ 109i : `main` HEAD** (toujours resync ; branche mergée supprimée au merge).
+
 > **POINTEUR AUTORITAIRE iOS (mis à jour 107i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
 > - **107i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `1e12f2d7`)** :
 >   Dynamic Type + VoiceOver de `FeedPostCard+Media` (rendu média des posts feed). **10/13**

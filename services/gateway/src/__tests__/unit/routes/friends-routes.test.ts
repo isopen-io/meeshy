@@ -155,6 +155,7 @@ function makeNotifService() {
     createFriendRequestNotification: jest.fn().mockResolvedValue(undefined),
     createFriendAcceptedNotification: jest.fn().mockResolvedValue(undefined),
     createSystemNotification: jest.fn().mockResolvedValue(undefined),
+    emitFriendRequestCancelled: jest.fn(),
   };
 }
 
@@ -168,18 +169,20 @@ type BuildOpts = {
   prismaOpts?: PrismaOpts;
   notifService?: ReturnType<typeof makeNotifService> | null;
   socialEvents?: ReturnType<typeof makeSocialEvents> | null;
+  authUserId?: string;
 };
 
 async function buildApp(
   prismaOptsOrFullOpts: PrismaOpts | BuildOpts = {},
 ): Promise<FastifyInstance> {
   // Accept either legacy PrismaOpts or new BuildOpts object
-  const isFullOpts = 'prismaOpts' in prismaOptsOrFullOpts || 'notifService' in prismaOptsOrFullOpts || 'socialEvents' in prismaOptsOrFullOpts;
+  const isFullOpts = 'prismaOpts' in prismaOptsOrFullOpts || 'notifService' in prismaOptsOrFullOpts || 'socialEvents' in prismaOptsOrFullOpts || 'authUserId' in prismaOptsOrFullOpts;
   const fullOpts: BuildOpts = isFullOpts ? (prismaOptsOrFullOpts as BuildOpts) : { prismaOpts: prismaOptsOrFullOpts as PrismaOpts };
 
   const prismaOpts = fullOpts.prismaOpts ?? {};
   const notifService = fullOpts.notifService !== undefined ? fullOpts.notifService : null;
   const socialEventsDecor = fullOpts.socialEvents !== undefined ? fullOpts.socialEvents : null;
+  const authUserId = fullOpts.authUserId ?? USER_ID;
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
 
@@ -193,7 +196,7 @@ async function buildApp(
       return;
     }
     (req as unknown as Record<string, unknown>).user = {
-      userId: USER_ID,
+      userId: authUserId,
       username: 'testuser',
       email: 'test@example.com',
       role: 'USER',
@@ -555,6 +558,62 @@ describe('DELETE /friend-requests/:id', () => {
     });
     expect(res.statusCode).toBe(500);
     await appErr.close();
+  });
+
+  it('emits FRIEND_REQUEST_CANCELLED to the receiver when the sender cancels', async () => {
+    const notifService = makeNotifService();
+    const appAsSender = await buildApp({
+      prismaOpts: { friendRequestFindFirst: DB_FRIEND_REQUEST },
+      notifService,
+      authUserId: USER_ID, // DB_FRIEND_REQUEST.senderId
+    });
+    const res = await appAsSender.inject({
+      method: 'DELETE',
+      url: `/friend-requests/${FR_ID}`,
+      headers: AUTH,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(notifService.emitFriendRequestCancelled).toHaveBeenCalledWith({
+      recipientUserId: RECEIVER_ID,
+      friendRequestId: FR_ID,
+      cancelledBy: USER_ID,
+    });
+    await appAsSender.close();
+  });
+
+  it('emits FRIEND_REQUEST_CANCELLED to the sender when the receiver removes it', async () => {
+    const notifService = makeNotifService();
+    const appAsReceiver = await buildApp({
+      prismaOpts: { friendRequestFindFirst: DB_FRIEND_REQUEST },
+      notifService,
+      authUserId: RECEIVER_ID, // DB_FRIEND_REQUEST.receiverId
+    });
+    const res = await appAsReceiver.inject({
+      method: 'DELETE',
+      url: `/friend-requests/${FR_ID}`,
+      headers: AUTH,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(notifService.emitFriendRequestCancelled).toHaveBeenCalledWith({
+      recipientUserId: USER_ID,
+      friendRequestId: FR_ID,
+      cancelledBy: RECEIVER_ID,
+    });
+    await appAsReceiver.close();
+  });
+
+  it('does not throw when notificationService is absent', async () => {
+    const appNoNotif = await buildApp({
+      prismaOpts: { friendRequestFindFirst: DB_FRIEND_REQUEST },
+      notifService: null,
+    });
+    const res = await appNoNotif.inject({
+      method: 'DELETE',
+      url: `/friend-requests/${FR_ID}`,
+      headers: AUTH,
+    });
+    expect(res.statusCode).toBe(200);
+    await appNoNotif.close();
   });
 });
 
