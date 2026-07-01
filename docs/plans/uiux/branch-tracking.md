@@ -18,6 +18,31 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 > - **Dernière itération iOS : `91i`** → branche `claude/upbeat-euler-l5yima` (Dynamic Type + VoiceOver `CommunityLinksView.swift` : 13/15 `.font(.system(size:))` → `MeeshyFont.relative` ; 2 figés commentés = héros état-vide 40pt + glyphe 14pt dans cercle fixe 40×40, tous deux `.accessibilityHidden` ; `.isHeader` ×2 titre+section, `.combine` carte stat + état vide, `.accessibilityHidden` glyphes décoratifs ; 0 logique/0 i18n/0 test neuf). Base = `main` HEAD `af1fe619`. Gate = CI `iOS Tests`.
 > - **90i réel mergé** = `MagicLinkView` (#1221). **4 PR « 90i » parallèles en vol au démarrage 91i** : `DataExportView` (#1226), `FeedCommentsSheet` (#1228), `MagicLinkView` doublon (#1225), `NewConversationView` (#1224). 91i orthogonal = `CommunityLinksView` (surface neuve, 0 collision).
 > - **Base de départ itération iOS suivante : `main` HEAD** (toujours resync sur `main` ; supprimer la branche mergée). Prochain candidat = `CommunityLinkDetailView` (10 sites), `MemberManagementSection` (17), `AffiliateView` (17 Dynamic Type), `AddParticipantSheet` (14), `SharePickerView` (14).
+> **POINTEUR iOS AUTORITAIRE (mis à jour 95i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> - **95i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `8ecbeb5f`)** :
+>   Dynamic Type + VoiceOver + sélection de contenu de `CommunityLinkDetailView` (détail lien
+>   communauté). **8/10** `.font(.system(size:))` → `MeeshyFont.relative(...)` (weight +
+>   `design: .monospaced` préservés : titre `link.name`, URL jonction, libellé/valeur/label de
+>   `communityStatCard`, labels/valeurs de `infoRow`, libellé bouton d'action). **2/10 glyphes
+>   figés** + commentaire : héros `person.3.fill` 26pt (cercle fixe 60×60) et icône barre d'actions
+>   22pt (cadre fixe 52×52), tous deux `.accessibilityHidden`. **VoiceOver** : `.combine` sur
+>   `communityStatCard` + `infoRow`, `.isHeader` sur titre INFORMATIONS, `hidden` sur glyphes
+>   décoratifs. **Sélection native** : `.textSelection(.enabled)` sur URL jonction + valeurs infoRow
+>   (copie partielle identifiant/lien). Palette accent communauté déterministe + gradients de surface
+>   déjà conformes → intacts. 1 fichier, 0 logique / 0 clé i18n / 0 test neuf (parité 55i/86i/91i).
+>   Gate = CI `iOS Tests`.
+> - **⚠️ CONTENTION (essaim d'agents iOS)** : au démarrage 95i, PR ouvertes sur `SharePickerView`
+>   (#1246/#1243), `AffiliateView` (#1245/#1238), `MemberManagementSection` (#1244),
+>   `AddParticipantSheet` (#1256), `LocationPickerView` (#1242), `NotificationSettingsView` (#1252),
+>   `TwoFactorSetupView` (#1248), `SupportView` (#1262), `UserStatsView` (#1269), `AboutView` (#1268),
+>   `EffectsPicker` (#1261), `ConversationPreferencesTab` (#1241). `CommunityLinkDetailView` = surface
+>   disjointe, 0 PR → 0 collision. Numéro **95i** = > 94i (numéros essaim) pour éviter collision.
+> - **⚠️ `CommunityLinkDetailView` SOLDÉ** : 8 sites → `relative`, 2 glyphes figés à dessein
+>   (cercle 60×60 / cadre 52×52). Ne plus reprendre Dynamic Type dessus.
+> - **Base de départ 96i : `main` HEAD** (toujours resync sur `main` ; supprimer la branche mergée).
+> - **Différé prioritaire iOS 96i+** : `MessageOverlayMenu` (21, Glass + Dynamic Type, lot dédié),
+>   `ConversationView+Composer` (22, lot prudent), `FeedView+Attachments` (14), `AudioFullscreenView`
+>   (7) ; audit palette hexes proches ; adoption Liquid Glass ciblée.
 > **POINTEUR iOS AUTORITAIRE (mis à jour 93i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
 > - **93i (terminée, branche `claude/upbeat-euler-512kep`, base `main` HEAD `33f89430`)** :
 >   Dynamic Type de `LocationPickerView` (sélecteur de lieu MapKit). **15/17** `.font(.system(size:))`
