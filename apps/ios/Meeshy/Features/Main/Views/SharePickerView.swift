@@ -96,6 +96,7 @@ struct SharePickerView: View {
                 .frame(width: 3, height: 32)
 
             contentIcon
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(contentLabel)
@@ -114,6 +115,7 @@ struct SharePickerView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.02))
+        .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder
@@ -267,6 +269,7 @@ struct SharePickerView: View {
                         Text("\u{2022}")
                             .font(MeeshyFont.relative(10))
                             .foregroundColor(theme.textMuted)
+                            .accessibilityHidden(true)
                         Text(preview)
                             .font(MeeshyFont.relative(12))
                             .foregroundColor(theme.textMuted)
@@ -274,6 +277,7 @@ struct SharePickerView: View {
                     }
                 }
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -292,10 +296,13 @@ struct SharePickerView: View {
         // colonne d'action au fil du réglage Dynamic Type (doctrine 86i, contrôle
         // à taille fixe). Tap target ≥44pt garanti par le padding de ligne.
         if sentToIds.contains(conv.id) {
+            // Fixed control-sized status glyph (26pt): fills the row's trailing action
+            // slot at a deliberate control size, not reading text (74i/86i doctrine).
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 26))
                 .foregroundColor(MeeshyColors.success)
                 .transition(.scale.combined(with: .opacity))
+                .accessibilityLabel(String(localized: "share.sent", defaultValue: "Envoy\u{00e9}", bundle: .main))
         } else if sendingToId == conv.id {
             ProgressView()
                 .scaleEffect(0.8)
@@ -304,6 +311,7 @@ struct SharePickerView: View {
             Button {
                 shareToConversation(conv)
             } label: {
+                // Fixed control-sized action glyph (26pt): control size, not reading text.
                 Image(systemName: "paperplane.circle.fill")
                     .font(.system(size: 26))
                     .foregroundColor(MeeshyColors.indigo400)
