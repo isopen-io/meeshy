@@ -14,10 +14,14 @@
 
 export function truncateFilename(filename: string, maxLength: number = 32): string {
   if (filename.length <= maxLength) return filename;
-  const ext = filename.split('.').pop() || '';
-  const nameWithoutExt = filename.substring(0, filename.lastIndexOf('.'));
-  const truncatedName = nameWithoutExt.substring(0, maxLength - ext.length - 4) + '...';
-  return `${truncatedName}.${ext}`;
+  const dotIndex = filename.lastIndexOf('.');
+  const hasExtension = dotIndex > 0;
+  const ext = hasExtension ? filename.slice(dotIndex + 1) : '';
+  const nameWithoutExt = hasExtension ? filename.slice(0, dotIndex) : filename;
+  const reserved = 3 + (hasExtension ? ext.length + 1 : 0);
+  const keep = Math.max(1, maxLength - reserved);
+  const truncatedName = nameWithoutExt.slice(0, keep) + '...';
+  return hasExtension ? `${truncatedName}.${ext}` : truncatedName;
 }
 
 export function truncateText(

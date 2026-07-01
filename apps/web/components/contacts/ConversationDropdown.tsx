@@ -15,6 +15,7 @@ import { conversationsService } from '@/services';
 import { Conversation } from '@meeshy/shared/types';
 import { useI18n } from '@/hooks/useI18n';
 import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
+import { truncateText } from '@/utils/truncate';
 
 interface ConversationDropdownProps {
   userId: string;
@@ -40,14 +41,6 @@ function formatShortDate(
     default:
       return date.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit', year: 'numeric' });
   }
-}
-
-/**
- * Tronque un texte à une longueur maximale
- */
-function truncateText(text: string, maxLength: number): string {
-  if (text.length <= maxLength) return text;
-  return text.substring(0, maxLength) + '...';
 }
 
 export function ConversationDropdown({
@@ -135,7 +128,7 @@ export function ConversationDropdown({
             <span className="font-medium">{t('actions.continueConversation')}</span>
             {latestConversation?.lastMessage && (
               <span className="text-xs opacity-80 max-w-[150px] truncate">
-                {truncateText(latestConversation.lastMessage.content, 30)}
+                {truncateText(latestConversation.lastMessage.content, 30).truncated}
               </span>
             )}
           </div>
@@ -214,7 +207,7 @@ export function ConversationDropdown({
                     </div>
                     {conv.lastMessage && (
                       <p className="text-xs text-muted-foreground dark:text-gray-400 mt-1 truncate">
-                        {truncateText(conv.lastMessage.content, 50)}
+                        {truncateText(conv.lastMessage.content, 50).truncated}
                       </p>
                     )}
                     {conv.lastActivityAt && (

@@ -13,9 +13,23 @@ describe('truncateFilename', () => {
     expect(out.length).toBeLessThanOrEqual(20);
   });
 
-  it('handles a filename with no extension', () => {
+  it('handles a filename with no extension without duplicating the name', () => {
     const out = truncateFilename('averylongnamewithoutanyextensionhere', 16);
-    expect(out).toContain('...');
+    expect(out).toBe('averylongname...');
+    expect(out.length).toBeLessThanOrEqual(16);
+  });
+
+  it('handles a dotfile (leading dot, no real extension)', () => {
+    const out = truncateFilename('.averylonggitignorefilename', 16);
+    expect(out).toBe('.averylonggit...');
+    expect(out.length).toBeLessThanOrEqual(16);
+  });
+
+  it('never returns a result longer than the input', () => {
+    const input = 'a-file-that-is-quite-a-bit-longer-than-the-limit.tar.gz';
+    const out = truncateFilename(input, 20);
+    expect(out.length).toBeLessThanOrEqual(input.length);
+    expect(out.endsWith('.gz')).toBe(true);
   });
 });
 
