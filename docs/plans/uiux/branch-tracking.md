@@ -14,6 +14,27 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR iOS AUTORITAIRE (mis à jour 93i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> - **93i (terminée, branche `claude/upbeat-euler-512kep`, base `main` HEAD `33f89430`)** :
+>   Dynamic Type de `LocationPickerView` (sélecteur de lieu MapKit). **15/17** `.font(.system(size:))`
+>   → `MeeshyFont.relative(...)` (weight + `.monospaced` des coordonnées préservés ; titre toolbar,
+>   barre de recherche + champ + croix, lignes de résultat, carte basse adresse/géocodage/prompt/
+>   coordonnées, boutons « Ma position » / « Confirmer »). **2/17 glyphes figés** + commentaire :
+>   marqueur d'annotation carte `mappin.circle.fill` 36pt (overlay MapKit, hors flux Dynamic Type)
+>   et `mappin` 12pt contraint dans badge 28×28 (doctrine 86i) ; **3 masquages VoiceOver** décoratifs.
+>   Liquid Glass (`.adaptiveGlass` ×3) + palette accent déterministe déjà en place → intacts. 1 fichier,
+>   0 logique / 0 clé i18n / 0 test neuf (parité 55i/74i/86i/88i/90i). Gate = CI `ios-tests.yml`.
+> - **⚠️ CONTENTION (essaim d'agents iOS)** : `90i` réel = `MagicLinkView` (mergé #1224). `91i`/`92i`
+>   saturés (AffiliateView ×4 #1233/34/35/38, NewConversationView #1237, CommunityLinksView #1236,
+>   DataExportView #1231). Ma PR #1225 (MagicLinkView 90i) devenue `dirty`/redondante → branche
+>   repurposée sur `LocationPickerView` (surface disjointe, 0 PR). Numéro **93i** = prochain libre.
+> - **⚠️ `LocationPickerView` SOLDÉ (ne plus reprendre Dynamic Type)** : 15 sites → `relative`, 2
+>   glyphes figés à dessein (marqueur carte / badge fixe). Liquid Glass déjà adopté.
+> - **Base de départ 94i : `main` HEAD** (toujours resync sur `main` ; supprimer la branche mergée).
+> - **Différé prioritaire iOS 94i+** : Dynamic Type `MemberManagementSection`, `StoryViewerView+Content`
+>   (coordonner i18n), `ConversationView+Composer` (lot prudent) ; audit palette hexes proches ;
+>   Glass `MessageOverlayMenu` via `AdaptiveGlassContainer`.
+
 > **POINTEUR AUTORITAIRE iOS (mis à jour 73i)** — source fiable = § History (append-only).
 > - **Dernière itération iOS : `73i`** → branche `claude/upbeat-euler-fymio6` (i18n/a11y : élimine 7 littéraux FR codés en dur dans `accessibilityLabel`/`Hint` sur 6 fichiers → `String(localized:defaultValue:bundle:)` EN, supprime la rupture Prisme VoiceOver ; + déblocage compile `main` : suppression vue morte `ReplyThreadOverlay.swift`). Base = `main` HEAD `a7eadac`.
 > - **⚠️ Compile `main` cassée avant 73i** : `ReplyThreadOverlay.swift` (collision merge 69i) appelle `ReplyThreadLoader` supprimé → toute PR iOS rouge. 73i (et #1137/71i) corrigent par suppression de la vue morte. Si déjà mergée par une autre PR au moment du merge 73i → `delete/delete` = pas de conflit.
