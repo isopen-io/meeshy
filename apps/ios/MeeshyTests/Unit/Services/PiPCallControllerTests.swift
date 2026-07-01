@@ -199,4 +199,27 @@ final class PiPCallControllerSourceTests: XCTestCase {
             "configure must forward autoStart to canStartPictureInPictureAutomaticallyFromInline so the system manages automatic PiP entry"
         )
     }
+
+    // MARK: - Frame-rate reset on tearDown
+
+    func test_tearDown_resetsDesiredFrameRate() {
+        // `PiPCallController` is a singleton (`static let shared`) reused across
+        // calls. Without resetting `desiredFrameRate` in tearDown, a thermally
+        // throttled fps set via `setMaxFrameRate` during one call would silently
+        // carry over as the starting fps of the NEXT call's PiP.
+        // "func tearDown() {\n" (multi-line body) uniquely matches the real
+        // `PiPCallController` implementation — the protocol requirement has no
+        // body at all, and `NoOpPiPController`'s is a same-line `{}`.
+        let teardownRange = Self.source.range(of: "func tearDown() {\n")
+        XCTAssertNotNil(teardownRange, "PiPCallController.tearDown() implementation must be present")
+        guard let teardownStart = teardownRange?.lowerBound,
+              let bodyEnd = Self.source.range(of: "\n    }", range: teardownStart..<Self.source.endIndex) else {
+            return XCTFail("Could not locate tearDown() body")
+        }
+        let body = Self.source[teardownStart..<bodyEnd.lowerBound]
+        XCTAssertTrue(
+            body.contains("desiredFrameRate = QualityThresholds.pipFrameRateDefault"),
+            "tearDown() must reset desiredFrameRate to the default so the next call's PiP doesn't inherit a throttled fps from a previous call"
+        )
+    }
 }
