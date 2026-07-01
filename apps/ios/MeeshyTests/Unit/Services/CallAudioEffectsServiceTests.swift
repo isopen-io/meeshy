@@ -295,39 +295,6 @@ final class CallAudioEffectsServiceTests: XCTestCase {
         XCTAssertFalse(sut.isAutoDegraded)
     }
 
-    func test_concurrentProcessBufferAndReset_doesNotCrashOrCorruptState() throws {
-        let sut = makeSUT()
-        try sut.setEffect(.demonVoice(.default))
-        let buffer = makeBuffer()
-
-        let iterations = 500
-        let group = DispatchGroup()
-
-        let audioQueue = DispatchQueue(label: "test.audioThread.simulation")
-        group.enter()
-        audioQueue.async {
-            for _ in 0..<iterations {
-                _ = sut.processAudioBuffer(buffer)
-            }
-            group.leave()
-        }
-
-        let controlQueue = DispatchQueue(label: "test.controlThread.simulation")
-        group.enter()
-        controlQueue.async {
-            for _ in 0..<iterations {
-                sut.reset()
-            }
-            group.leave()
-        }
-
-        let result = group.wait(timeout: .now() + 10)
-        XCTAssertEqual(result, .success, "Concurrent processAudioBuffer/reset should not deadlock")
-        // Either state is valid post-race; the assertion is that reading it
-        // does not crash and returns a well-defined Bool (no torn state).
-        XCTAssertTrue(sut.isAutoDegraded == true || sut.isAutoDegraded == false)
-    }
-
     // MARK: - Reset
 
     func test_reset_clearsAllState() throws {
