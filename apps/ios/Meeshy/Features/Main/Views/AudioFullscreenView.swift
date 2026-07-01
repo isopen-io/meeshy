@@ -300,12 +300,14 @@ private struct AudioFullscreenPage: View {
                 onDismiss()
                 HapticFeedback.light()
             } label: {
+                // Glyphe chrome dans un cadre de tap fixe 36×36 : figé (doctrine 82i) ; le libellé porte le sens
                 Image(systemName: "xmark")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 36, height: 36)
                     .background(Circle().fill(Color.white.opacity(0.2)))
             }
+            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
 
             Spacer()
 
@@ -405,12 +407,23 @@ private struct AudioFullscreenPage: View {
                     Image(systemName: "xmark")
                 }
             }
+            // Glyphe chrome dans un cadre de tap fixe 36×36 : figé (doctrine 82i) ; le libellé porte le sens
             .font(.system(size: 16, weight: .semibold))
             .foregroundColor(.white.opacity(0.9))
             .frame(width: 36, height: 36)
             .background(Circle().fill(Color.white.opacity(0.2)))
         }
         .disabled(saveState == .saving || saveState == .saved)
+        .accessibilityLabel(downloadAccessibilityLabel)
+    }
+
+    private var downloadAccessibilityLabel: String {
+        switch saveState {
+        case .saving: return String(localized: "audio.fullscreen.save.saving", defaultValue: "Enregistrement en cours", bundle: .main)
+        case .saved: return String(localized: "audio.fullscreen.save.saved", defaultValue: "Enregistré", bundle: .main)
+        case .failed: return String(localized: "audio.fullscreen.save.failed", defaultValue: "Échec de l'enregistrement", bundle: .main)
+        case .idle: return String(localized: "media.download", defaultValue: "Télécharger", bundle: .main)
+        }
     }
 
     // MARK: - Waveform Section
@@ -482,6 +495,9 @@ private struct AudioFullscreenPage: View {
     // MARK: - Center Controls
 
     private var centerControls: some View {
+        // Contrôles de transport média : tailles de glyphes figées pour préserver
+        // la cohérence du rang (bouton lecture ancré dans un cercle fixe 64×64) —
+        // les libellés VoiceOver portent le sens des boutons icône-seule.
         HStack(spacing: 48) {
             Button {
                 player.skip(seconds: -10)
@@ -491,6 +507,7 @@ private struct AudioFullscreenPage: View {
                     .font(.system(size: 28, weight: .semibold))
                     .foregroundColor(.white)
             }
+            .accessibilityLabel(String(localized: "media.skipBack10s", defaultValue: "Reculer de 10 secondes", bundle: .main))
 
             Button {
                 if player.isPlaying || player.progress > 0 {
@@ -515,6 +532,9 @@ private struct AudioFullscreenPage: View {
                     }
                 }
             }
+            .accessibilityLabel(player.isPlaying
+                ? String(localized: "media.pauseAudio", defaultValue: "Mettre en pause", bundle: .main)
+                : String(localized: "media.playAudio", defaultValue: "Lire l'audio", bundle: .main))
 
             Button {
                 player.skip(seconds: 10)
@@ -524,6 +544,7 @@ private struct AudioFullscreenPage: View {
                     .font(.system(size: 28, weight: .semibold))
                     .foregroundColor(.white)
             }
+            .accessibilityLabel(String(localized: "media.skipForward10s", defaultValue: "Avancer de 10 secondes", bundle: .main))
         }
     }
 
@@ -632,8 +653,9 @@ private struct AudioFullscreenPage: View {
             Spacer(minLength: 0)
 
             Image(systemName: "text.word.spacing")
-                .font(.system(size: 28, weight: .light))
+                .font(MeeshyFont.relative(28, weight: .light))
                 .foregroundColor(.white.opacity(0.25))
+                .accessibilityHidden(true)
 
             Text(String(localized: "audio.fullscreen.transcription.empty", defaultValue: "Aucune transcription", bundle: .main))
                 .font(MeeshyFont.relative(14, weight: .medium))
@@ -718,12 +740,14 @@ private struct AudioFullscreenPage: View {
                 showLanguagePicker = true
                 HapticFeedback.light()
             } label: {
+                // Glyphe dans un cercle de dimension fixe 26×26 : figé (déborderait s'il scalait, doctrine 86i) ; le libellé porte le sens
                 Image(systemName: "translate")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.white.opacity(0.5))
                     .frame(width: 26, height: 26)
                     .background(Circle().fill(Color.white.opacity(0.08)))
             }
+            .accessibilityLabel(String(localized: "audio.fullscreen.language.choose", defaultValue: "Choisir une langue", bundle: .main))
         }
         .padding(.horizontal, 8)
     }

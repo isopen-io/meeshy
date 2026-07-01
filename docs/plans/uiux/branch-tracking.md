@@ -14,6 +14,28 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 104i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> - **104i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `ed04f121`)** :
+>   a11y VoiceOver de `AudioFullscreenView` (lecteur audio plein écran). Fichier déjà largement
+>   `MeeshyFont.relative` → vrai défaut = **boutons icône-seule sans `.accessibilityLabel`**.
+>   **6 `.accessibilityLabel`** ajoutés : fermer (`common.close`), download **state-aware**
+>   (`downloadAccessibilityLabel` idle/saving/saved/failed), −10s (`media.skipBack10s`),
+>   play/pause (`media.playAudio`/`pauseAudio` SSOT), +10s (`media.skipForward10s`), choisir
+>   langue (`audio.fullscreen.language.choose`). **1 migration Dynamic Type** : glyphe état vide
+>   `text.word.spacing` 28 → `relative(28, .light)` + `.accessibilityHidden`. **6 glyphes figés**
+>   commentés : chrome fermer/download (cadre 36×36, doctrine 82i), transport −10/play/+10
+>   (cohérence rang, lecture cercle 64×64), add-langue (cercle 26×26, doctrine 86i). 4 clés i18n
+>   inline `defaultValue`. 1 fichier, 0 logique, 0 test neuf. Gate = CI `iOS Tests`.
+> - **⚠️ Branche repurposée + renumérotée** : visait `CommunityLinkDetailView` (95i) mais un autre
+>   agent l'a mergé identiquement dans `main` via #1272 → PR #1274 fermée (superseded). Repurposée
+>   sur `AudioFullscreenView` (surface non réclamée). Numéro passé **103i → 104i** car un autre agent
+>   a mergé `ConversationMediaGalleryView` en **103i** entre-temps. PR = #1292.
+> - **⚠️ `AudioFullscreenView` a11y SOLDÉ** : ne plus reprendre les 6 glyphes de contrôle figés.
+>   Différé 105i+ : `seekBar` slider custom → VoiceOver-adjustable ; `authorInfoRow` combine.
+> - **Base de départ 105i : `main` HEAD** (toujours resync sur `main` ; supprimer la branche mergée).
+
+> **POINTEUR AUTORITAIRE iOS (mis à jour 103i, ConversationMediaGalleryView, mergé sur main)** — voir
+>   `docs/analyses/uiux/2026-07-01-iteration-103i.md` (surface distincte de la mienne).
 > **POINTEUR AUTORITAIRE iOS (mis à jour 101i)** — source fiable = § History (append-only).
 > - **Dernière itération iOS : `101i`** → branche `claude/upbeat-euler-l5yima` (Dynamic Type + VoiceOver `TrackingLinksView` — jumeau de `CommunityLinksView` 91i : 5/7 `.font(.system(size:))` → `MeeshyFont.relative` ; 2 figés `.accessibilityHidden` ; `.isHeader` ×2, `.combine` stat card + état vide). Base = `main` HEAD `bb1ca52e`. Gate = CI `iOS Tests`.
 > - **99i mergé** = `CommunityLinkDetailView` (#1272). ⚠️ `Build (bun)` peut être rouge sur les PR iOS (régression web `main` `copyToClipboard` dupliqué) mais **check NON-requis** — merge iOS prouvé possible (#1272 mergée). ⚠️ Essaim d'agents iOS extrême (labels 87i–100i saturés) → choisir haut (101i+) + surface FREE. Prochain candidat = `TrackingLinkDetailView`, `ShareLinksView` (7), `EditPostSheet` (9).
@@ -1014,3 +1036,23 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 > - **Base de départ 103i : `main` HEAD**. Cibles restantes (vérifier collision) : `OnboardingFlowView`/`OnboardingStepViews`, `EditPostSheet`, `ShareLinksView`, `StatusBubbleOverlay` ; meaty risquées : `StoryViewerView+Content` (31, i18n), `ConversationView+Composer` (22).
 
 | 102i | claude/upbeat-euler-pt8xxj (iOS LoginView finition Dynamic Type + a11y : 6/7 `.system(size:)` → `MeeshyFont.relative` (weight/`.monospaced`), 1 figé = chevron retour 36×36, 1 label VoiceOver `common.confirm` sur bouton checkmark host custom ; 1 fichier, 0 test neuf ; gate CI `ios-tests.yml`) | ⏳ | ⏳ |
+
+---
+
+> **POINTEUR iOS AUTORITAIRE (mis à jour 100i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> - **95i mergée** (`TwoFactorSetupView` a11y + sélection, #1248, main `6775ec47`). ⚠️ Le numéro « 95i » a aussi été utilisé par une session parallèle pour `SupportView` (contenu concaténé dans les docs 95i — doublon de numérotation, sans impact code).
+> - **Contention run 2026-07-01** : 32 PRs ouvertes, ~20 sweeps a11y iOS en vol (jusqu'à iter 99i `MessageOverlayMenu` #1275). Cibles réclamées : ForwardPickerSheet, LicensesView, UserStatsView, NotificationSettingsView, AddParticipantSheet, MemberManagementSection, CommunityLink*, ConversationMediaGalleryView, ConversationListView overlays, LoginView, TrackingLinksView, AboutView, EffectsPickerView, AffiliateView.
+> - **100i (terminée, branche `claude/upbeat-euler-vj3vu8`, base `main` HEAD `6775ec47`)** : a11y Dynamic Type + VoiceOver de **`EditPostSheet.swift`** (feuille d'édition de post). Cible **non réclamée** ; numéro 100i > 99i pour éviter collision. **7/9** `.font(.system(size:))` → `MeeshyFont.relative` (weight préservé : TextEditor 17, compteur 12, Publier 16, libellé/valeur/Auto langue 15, chevron 12). **2 glyphes figés commentés** (vignette média 64×64 rigide) : bouton retirer/restaurer 18 → **+ `.accessibilityLabel`** (lacune VoiceOver comblée) ; icône média placeholder 22 → **+ `.accessibilityHidden(true)`**. **2 labels** VoiceOver ajoutés (TextEditor « Contenu du post » + compteur « %d caractères restants »). Palette déjà tokenisée (0 swap) ; **4 clés i18n neuves** toutes suffixées `.a11y` (labels VoiceOver, pas d'UI visible). 1 fichier, 0 logique / 0 test neuf (parité 55i/74i/86i/90i/95i). Gate = CI `iOS Tests`.
+> - **Base de départ 101i : `main` HEAD** (toujours resync ; supprimer la branche mergée).
+> - **⚠️ NE PLUS re-flagger** `EditPostSheet` (Dynamic Type migré 100i ; 2 glyphes vignette figés + labellisés/hidden à dessein).
+> - **Différé prioritaire iOS 101i+** : `FeedView+Attachments` (14), `FeedPostCard+Media` (13), `BubbleStandardLayout+Media` (12), `StoryTrayView` (9), `FeedPostCard` (9, + sélection texte), `AudioEffectsPanel` (9), `OnboardingFlowView` (8), `CallView` (8) ; gros lots critiques en dernier `StoryViewerView+Content` (31, ⚠️ i18n #1174), `ConversationView+Composer` (22), `ConversationView+MessageRow` (16, prudence Zero-re-render), `OnboardingAnimations` (17, décoratif).
+
+| 100i | claude/upbeat-euler-vj3vu8 (iOS a11y `EditPostSheet` : 7/9 `.font(.system(size:))` → `MeeshyFont.relative` weight préservé ; 2 glyphes vignette 64×64 figés = bouton retirer 18 + `.accessibilityLabel` (lacune comblée) & icône média 22 + `.accessibilityHidden` ; 2 labels VoiceOver TextEditor+compteur ; palette tokenisée 0 swap ; 4 clés i18n neuves `.a11y` ; 1 fichier, 0 logique/0 test neuf ; gate = CI `iOS Tests`) | ⏳ | ⏳ |
+> **POINTEUR iOS AUTORITAIRE (mis à jour 104i, 2026-07-01)** — piste iOS (suffixe `i`).
+> - **Contexte** : essaim d'agents extrême (labels 87i→103i saturés). 94i (`MemberManagementSection`, PR #1277) **fermée sans merge — superseded** par l'implémentation supérieure `910e9e13` déjà sur `main` (14 modificateurs a11y). Non repris.
+> - **104i (terminée, branche `claude/upbeat-euler-6r2un5`, base `main` HEAD `5a47053b`)** : Dynamic Type + VoiceOver de `ShareLinksView` (écran « Liens de partage » : header, cartes de stats, liste de liens avec copie + navigation détail, état vide). **5/7** `.font(.system(size:))` → `MeeshyFont.relative(size, weight:)` (chevron retour, bouton créer, glyphe carte de stat, bouton copie `doc.on.doc`, chevron disclosure). **2 figés commentés** : hero d'état vide `link.badge.plus` 40pt (doctrine 84i/86i) + icône de ligne 16pt dans cercle fixe 40×40 (doctrine 86i), tous deux `accessibilityHidden`. **VoiceOver** : **trou comblé** = label du bouton de copie de lien (`share.links.copy.a11y`, VoiceOver-only, 1 clé neuve suffixée `.a11y`) ; `.isHeader` sur « MES LIENS » ; `.combine` sur cartes de stat + état vide ; `.accessibilityHidden` sur 4 glyphes décoratifs. Palette déjà tokenisée (`MeeshyColors.shareAccent` + `theme.*`) → 0 swap. Le reste des polices était déjà sémantique (scalable). `import MeeshyUI` ajouté. 1 fichier, 0 logique / 0 test neuf (parité 55i/74i/86i/93i). Gate = CI `iOS Tests`.
+> - **101i (agent parallèle) = `TrackingLinksView`** (jumeau structurel, fichier distinct) — ne pas confondre.
+> - **NE PAS re-flagger** `ShareLinksView` (Dynamic Type + VoiceOver soldés 104i ; hero 40pt + icône cercle 40×40 figés à dessein ; bouton copie labellisé).
+> - **Base de départ 105i : `main` HEAD**. **Différé 105i+** : `StoryViewerView+Content` (31, ⚠️ i18n #1174), `ConversationView+Composer` (22, prudent), `OnboardingAnimations` (17), `ConversationView+MessageRow` (16), `StoryViewerView+Canvas` (13), `FeedPostCard+Media` (13).
+
+| 104i | claude/upbeat-euler-6r2un5 (iOS Dynamic Type + VoiceOver `ShareLinksView` : 5/7 `.font(.system(size:))` → `MeeshyFont.relative` ; 2 figés commentés = hero état vide 40pt doctrine 84i/86i + icône ligne 16pt cercle fixe 40×40 doctrine 86i, accessibilityHidden ; VoiceOver = label bouton copie comblé `share.links.copy.a11y` (1 clé neuve `.a11y`) + `.isHeader` « MES LIENS » + `.combine` stats/état-vide + `.accessibilityHidden` ×4 ; palette tokenisée 0 swap ; `import MeeshyUI` ajouté ; 1 fichier sweep pur, 0 logique/0 test neuf, parité 55i/74i/86i/93i ; gate = CI iOS Tests) | ⏳ | ⏳ |
