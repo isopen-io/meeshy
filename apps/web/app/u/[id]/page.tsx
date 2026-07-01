@@ -25,7 +25,6 @@ import { OnlineIndicator } from '@/components/ui/online-indicator';
 import { getUserStatus } from '@/lib/user-status';
 import { getUserInitials } from '@/lib/avatar-utils';
 import { getUserDisplayName as resolveDisplayName } from '@/utils/user-display-name';
-import { getUserInitials } from '@/lib/avatar-utils';
 import { formatPresenceLabel, presenceColorClass } from '@/utils/presence-format';
 import { buildApiUrl } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
