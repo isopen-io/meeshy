@@ -176,6 +176,26 @@ export class PresenceVisibilityService {
     return result;
   }
 
+  /**
+   * Prefs-only pour les listes où l'accès est déjà garanti par le contexte
+   * (co-participants d'une conversation, co-membres d'une communauté) : la
+   * présence est montrable, on applique seulement showOnlineStatus/showLastSeen.
+   */
+  async resolvePrefsOnly(userIds: string[]): Promise<Map<string, PresenceVisibility>> {
+    const result = new Map<string, PresenceVisibility>();
+    const uniqueIds = [...new Set(userIds)];
+    if (uniqueIds.length === 0) return result;
+    const prefsMap = await this.privacy.getPreferencesForUsers(
+      uniqueIds.map((id) => ({ id, isAnonymous: false })),
+    );
+    for (const id of uniqueIds) {
+      const p = prefsMap.get(id);
+      if (p && !p.showOnlineStatus) result.set(id, HIDDEN);
+      else result.set(id, { showOnline: true, showLastSeenTimestamp: p ? p.showLastSeen : true });
+    }
+    return result;
+  }
+
   private async isBlockedEitherWay(a: string, b: string): Promise<boolean> {
     const row = await this.prisma.user.findFirst({
       where: {

@@ -206,3 +206,22 @@ describe('PresenceVisibilityService.resolveForTargets (batch)', () => {
     expect(map.get('friend')).toEqual({ showOnline: false, showLastSeenTimestamp: false });
   });
 });
+
+describe('PresenceVisibilityService.resolvePrefsOnly', () => {
+  function svcWithPrefs(prefsById: Record<string, Partial<PrivacyPreferences>>) {
+    const privacy = {
+      getPreferencesForUsers: jest.fn<any>().mockImplementation((arr: Array<{ id: string }>) =>
+        Promise.resolve(new Map(arr.map(({ id }) => [id, makePrefs(prefsById[id] ?? {})]))),
+      ),
+    } as any;
+    return new PresenceVisibilityService({} as any, privacy);
+  }
+
+  it('shows presence but applies the preference cascade, without any relation lookup', async () => {
+    const svc = svcWithPrefs({ off: { showOnlineStatus: false }, noseen: { showLastSeen: false } });
+    const map = await svc.resolvePrefsOnly(['normal', 'off', 'noseen']);
+    expect(map.get('normal')).toEqual({ showOnline: true, showLastSeenTimestamp: true });
+    expect(map.get('off')).toEqual({ showOnline: false, showLastSeenTimestamp: false });
+    expect(map.get('noseen')).toEqual({ showOnline: true, showLastSeenTimestamp: false });
+  });
+});

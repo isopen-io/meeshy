@@ -1,33 +1,40 @@
-# Plan — Iteration 78i (2026-07-01) — iOS épuration palette sémantique lot 2
+# Plan — Iteration 78i (2026-07-01) — iOS épuration palette (rouges erreur/destructif → token)
 
 ## Objectif
-Consolider les couleurs sémantiques (erreur / disponible / rôle admin) codées en dur vers les
-tokens `MeeshyColors`, en prolongeant la piste palette 69i/70i.
+Consolider les rouges d'état négatif (erreur / expiration / suppression destructive) codés en
+dur en `Color(hex:)` vers le token sémantique unique `MeeshyColors.error`, sans changement de
+comportement ni de layout.
 
 ## Base de départ
-`main` HEAD `000d167` (post-#1162, resync avant démarrage ; branche `claude/upbeat-euler-j4z44f`).
+`main` HEAD `65c6007` (resync avant démarrage ; branche `claude/upbeat-euler-ceba09`).
+Dernière itération iOS mergée = **77i** (i18n `SharePickerView`, PR #1162).
 
 ## Étapes
-1. [x] Auditer les `Color(hex:)` sémantiques hors ladders catégoriels
-   (`FF6B6B`/`4ADE80`/`3B82F6`/`34B7F1`/`3B82F6`).
-2. [x] Vérifier imports `MeeshyUI` + existence des tokens `.error` (`F87171`), `.success`
-   (`34D399`), `.info` (`60A5FA`) dans `MeeshyColors.swift`.
-3. [x] Swaps littéral → token (`Color`) :
-   - `AddParticipantSheet.swift:167` `Color(hex: "FF6B6B")` → `MeeshyColors.error`
-   - `AboutView.swift:252` `Color(hex: "4ADE80")` → `MeeshyColors.success`
-   - `MemberManagementSection.swift:214` `Color(hex: "3B82F6")` → `MeeshyColors.info`
-     (complète le ladder dont `moderator` est déjà `.success`)
-4. [x] Laisser le badge creator gold `F8B500` (aucun token « owner gold ») + ladders catégoriels.
-5. [ ] Commit + push branche ; gate = CI `ios-tests.yml` (compile Xcode 26.1 + tests 18.2).
-6. [ ] Merge dans `main` après CI verte ; supprimer la branche ; mettre à jour branch-tracking.
+1. [x] Auditer les `Color(hex:)` littéraux ; identifier les rouges d'état négatif vs les
+   décoratifs/recording/ladders.
+2. [x] Restreindre au cluster non-ambigu : `#F87171` (= token exact) badges expiré ×2 ;
+   `#FF6B6B` (coral→error) message d'erreur ×1 + boutons de suppression d'attachment ×5.
+3. [x] Vérifier `MeeshyColors` en scope (app : `import MeeshyUI` ; MeeshyUI Media : même module).
+4. [x] Vérifier absence de snapshot baseline couvrant ces vues (infra limitée à Timeline).
+5. [x] Appliquer 8 swaps `Color(hex:"…")` → `MeeshyColors.error` sur 7 fichiers :
+   - app : `StoryViewerView+Content.swift`, `AddParticipantSheet.swift`
+   - MeeshyUI : `NotificationRowView.swift`, `AudioPlayerView.swift`, `CodeViewerView.swift`,
+     `DocumentViewerView.swift` (×2), `ImageViewerView.swift`
+6. [x] Grep de contrôle : plus aucun `Color(hex:"F87171")` hors la définition du token.
+7. [ ] Commit + push branche ; gate = CI `ios-tests.yml` (compile Xcode 26.1 + tests 18.2).
+8. [ ] Merge dans `main` après CI verte ; supprimer la branche ; mettre à jour branch-tracking.
 
 ## Risques / points d'attention
-- **Pur swap `Color` → `Color`** : aucune signature ni layout modifié, tokens déjà `public` et
-  de type `Color`. Les 3 fichiers importent déjà `MeeshyUI`.
-- **Aucune régression sémantique** : `error`/`success`/`info` correspondent exactement à l'intention
-  d'origine (erreur/disponible/admin). Rendu dark/light géré par les tokens centraux.
-- Pas de test neuf : swap mécanique, couverture = compile CI + smokes structurels existants.
+- **`#F87171` = valeur exacte du token** → pixels identiques, zéro risque snapshot/visuel.
+- **`#FF6B6B` (coral)** → léger décalage de teinte vers `#F87171`. Assumé et positif : parité
+  dark/light + SSOT. Aucun snapshot ne couvre ces vues (vérifié).
+- Pas de test neuf : swap mécanique littéral→token, couverture = compile CI.
+- Exclusions documentées (recording-red, live-location, ladders décoratifs, DynamicColorGenerator)
+  pour éviter toute sur-correction sémantiquement fausse.
 
 ## Vérification finale
-- [x] `grep` : plus de `Color(hex: "FF6B6B"|"4ADE80"|"3B82F6")` dans les 3 fichiers.
+- [x] `grep` : 0 `Color(hex:"F87171")` hors `MeeshyColors.swift` ; 8 lignes ciblées en
+  `MeeshyColors.error`.
+- [x] `MeeshyColors` accessible dans les 7 fichiers (refs préexistantes confirmées).
 - [ ] CI `ios-tests.yml` verte.
+- [ ] Merge `main` + suppression branche + tracking mis à jour.

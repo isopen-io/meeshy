@@ -11,6 +11,7 @@ import { StoryViewersSheet } from './StoryViewersSheet';
 import { useCommentsInfiniteQuery, useCommentsList } from '@/hooks/queries/use-comments-query';
 import { useCreateCommentMutation, useLikeCommentMutation, useUnlikeCommentMutation, useDeleteCommentMutation } from '@/hooks/queries/use-comment-mutations';
 import { useAuthStore } from '@/stores/auth-store';
+import { formatTimeRemaining } from '@/utils/time-remaining';
 
 // ============================================================================
 // Types
@@ -845,11 +846,8 @@ function StoryViewer({
                 </span>
               )}
               {story.expiresAt && (() => {
-                const diff = new Date(story.expiresAt).getTime() - Date.now();
-                if (diff <= 0) return null;
-                const mins = Math.floor(diff / 60000);
-                const hrs = Math.floor(mins / 60);
-                const remaining = hrs >= 1 ? `${hrs}h${mins % 60 > 0 ? `${mins % 60}m` : ''}` : `${mins}m`;
+                const remaining = formatTimeRemaining(story.expiresAt);
+                if (!remaining) return null;
                 return <span className="text-xs text-white/40">{remaining}</span>;
               })()}
             </div>

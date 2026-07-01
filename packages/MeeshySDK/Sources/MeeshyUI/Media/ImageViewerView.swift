@@ -111,7 +111,7 @@ public struct ImageViewerView: View {
                     Button { onDelete(); HapticFeedback.light() } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 18))
-                            .foregroundColor(Color(hex: "FF6B6B"))
+                            .foregroundColor(MeeshyColors.error)
                             .background(Circle().fill(.ultraThinMaterial).frame(width: 14, height: 14))
                     }
                     .padding(6)

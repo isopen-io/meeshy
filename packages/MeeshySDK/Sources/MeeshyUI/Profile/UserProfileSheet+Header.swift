@@ -135,9 +135,18 @@ extension UserProfileSheet {
                 .font(.system(.title3, design: .rounded).weight(.bold))
                 .foregroundColor(theme.textPrimary)
 
-            Text("@\(displayUser.username)")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(Color(hex: resolvedAccent))
+            HStack(spacing: 5) {
+                Text("@\(displayUser.username)")
+                    .foregroundColor(Color(hex: resolvedAccent))
+                // Présence datée après le pseudo — rendue seulement si le serveur
+                // l'a jugée montrable (lastActiveAt non nil pour cet observateur).
+                if let lastActive = displayUser.lastActiveAt {
+                    Text(verbatim: "·").foregroundColor(theme.textSecondary)
+                    Text(RelativeTimeFormatter.lastSeenString(for: lastActive))
+                        .foregroundColor(presenceColor(for: lastActive))
+                }
+            }
+            .font(.system(size: 14, weight: .medium))
         }
         .padding(.top, 4)
         // Gate the expanded identity from VoiceOver once the compact pinned bar
@@ -168,6 +177,15 @@ extension UserProfileSheet {
 
     var presenceFromUser: PresenceState {
         displayUser.isOnline == true ? .online : .offline
+    }
+
+    /// Couleur du libellé de présence selon l'ancienneté : vert < 5 min,
+    /// orange < 30 min, gris sinon. Miroir de `presenceColorClass` (web).
+    func presenceColor(for date: Date, now: Date = Date()) -> Color {
+        let minutes = now.timeIntervalSince(date) / 60
+        if minutes < 5 { return MeeshyColors.success }
+        if minutes < 30 { return MeeshyColors.warning }
+        return theme.textSecondary
     }
 
     // MARK: - Pinned tab bar (section header — pins on scroll)
