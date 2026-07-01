@@ -63,7 +63,7 @@ struct AffiliateView: View {
                     .font(MeeshyFont.relative(22))
                     .foregroundColor(Color(hex: accentColor))
             }
-            .accessibilityLabel(String(localized: "affiliate.create.title", defaultValue: "Créer un lien", bundle: .main))
+            .accessibilityLabel(String(localized: "affiliate.action.create", defaultValue: "Créer un lien de parrainage", bundle: .main))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -124,7 +124,9 @@ struct AffiliateView: View {
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
         .padding(.vertical, 14)
+        .accessibilityElement(children: .combine)
         .background(
             RoundedRectangle(cornerRadius: 14)
                 .fill(theme.surfaceGradient(tint: color))
@@ -152,6 +154,8 @@ struct AffiliateView: View {
                     .accessibilityAddTraits(.isHeader)
             }
             .padding(.leading, 4)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
 
             if viewModel.tokens.isEmpty {
                 emptyTokensState
@@ -178,7 +182,9 @@ struct AffiliateView: View {
 
     private var emptyTokensState: some View {
         VStack(spacing: 12) {
-            // Héros décoratif d'état vide ≥36pt : taille figée (doctrine 74i/86i), masqué à VoiceOver.
+            // Héros décoratif ≥36pt : gardé figé (doctrine 74i/86i/89i) ; le libellé adjacent
+            // porte le sens → laissé fixe et masqué de VoiceOver plutôt que de scaler et
+            // déséquilibrer l'état vide.
             Image(systemName: "link")
                 .font(.system(size: 36))
                 .foregroundColor(Color(hex: accentColor).opacity(0.4))
@@ -223,6 +229,7 @@ struct AffiliateView: View {
                         .foregroundColor(MeeshyColors.success)
                 }
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -236,7 +243,7 @@ struct AffiliateView: View {
                     .font(MeeshyFont.relative(14, weight: .medium))
                     .foregroundColor(Color(hex: accentColor))
             }
-            .accessibilityLabel(String(localized: "common.copy", defaultValue: "Copier", bundle: .main))
+            .accessibilityLabel(String(localized: "affiliate.action.copy", defaultValue: "Copier le lien de parrainage", bundle: .main))
 
             // Partager
             Button {
@@ -260,7 +267,7 @@ struct AffiliateView: View {
                     .font(MeeshyFont.relative(16))
                     .foregroundColor(MeeshyColors.success)
             }
-            .accessibilityLabel(String(localized: "common.share", defaultValue: "Partager", bundle: .main))
+            .accessibilityLabel(String(localized: "affiliate.action.share", defaultValue: "Partager le lien de parrainage", bundle: .main))
 
             Button {
                 Task { await viewModel.deleteToken(token) }
@@ -269,7 +276,7 @@ struct AffiliateView: View {
                     .font(MeeshyFont.relative(14, weight: .medium))
                     .foregroundColor(MeeshyColors.error)
             }
-            .accessibilityLabel(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main))
+            .accessibilityLabel(String(localized: "affiliate.action.delete", defaultValue: "Supprimer le lien de parrainage", bundle: .main))
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)

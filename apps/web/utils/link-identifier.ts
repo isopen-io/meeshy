@@ -2,6 +2,8 @@
  * Utilitaires pour la gestion des identifiants de liens de partage
  */
 
+import { isValidObjectId } from './object-id';
+
 export interface LinkIdentifierInfo {
   type: 'linkId' | 'conversationShareLinkId' | 'unknown';
   value: string;
@@ -21,7 +23,7 @@ export function analyzeLinkIdentifier(identifier: string): LinkIdentifierInfo {
   }
 
   // Vérifier si c'est un ObjectId MongoDB (24 caractères hexadécimaux)
-  if (/^[0-9a-fA-F]{24}$/.test(identifier)) {
+  if (isValidObjectId(identifier)) {
     return {
       type: 'conversationShareLinkId',
       value: identifier,
@@ -65,7 +67,7 @@ export function generateFallbackIdentifiers(identifier: string): string[] {
   if (info.type === 'linkId') {
     // Si c'est un linkId (format: id.timestamp_random), essayer juste l'ID
     const parts = identifier.split('.');
-    if (parts.length > 1 && /^[0-9a-fA-F]{24}$/.test(parts[0])) {
+    if (parts.length > 1 && isValidObjectId(parts[0])) {
       fallbacks.push(parts[0]); // Essayer avec juste le conversationShareLinkId
     }
   } else if (info.type === 'conversationShareLinkId') {
@@ -124,7 +126,7 @@ export function extractConversationShareLinkId(identifier: string): string | nul
   if (info.type === 'linkId') {
     // Pour les linkIds (format: id.timestamp_random), extraire la première partie
     const parts = identifier.split('.');
-    if (parts.length > 1 && /^[0-9a-fA-F]{24}$/.test(parts[0])) {
+    if (parts.length > 1 && isValidObjectId(parts[0])) {
       return parts[0];
     }
   }
