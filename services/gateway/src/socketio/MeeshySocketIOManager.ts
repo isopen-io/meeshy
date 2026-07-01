@@ -1820,7 +1820,7 @@ export class MeeshySocketIOManager {
           // Calculer le unreadCount pour tous les participants en batch (1 query au lieu de N)
           const readStatusService = this.readStatusService;
 
-          const unreadCountMap = await readStatusService.getUnreadCountsForParticipants(participants, normalizedId, senderId);
+          const unreadCountMap = await readStatusService.getUnreadCountsForParticipants(participants, normalizedId);
 
           const connectedUserIds = new Set(this.getConnectedUsers());
 
