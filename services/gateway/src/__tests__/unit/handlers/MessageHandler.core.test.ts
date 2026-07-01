@@ -97,6 +97,7 @@ jest.mock('../../../services/messaging/postReplySnapshot', () => ({
 
 jest.mock('../../../services/attachments/attachmentIncludes', () => ({
   attachmentForwardPreviewSelect: { id: true, mimeType: true },
+  attachmentMediaSelect: { id: true, mimeType: true, url: true },
 }));
 
 jest.mock('../../../services/MessagingService', () => ({ MessagingService: jest.fn() }));
@@ -3426,6 +3427,32 @@ describe('MessageHandler.handleMessageEdit', () => {
     }));
     expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     expect(retranslationAsync).toHaveBeenCalledWith(existingMessage.id, expect.objectContaining({ content: 'updated content' }));
+  });
+
+  it('preserves attachments in the MESSAGE_EDITED broadcast so editing a caption does not drop the photo/video/audio client-side', async () => {
+    mockValidateSocketEvent.mockReturnValue({ success: true, data: makeEditData() });
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const socket = makeSocket();
+    const callback = jest.fn();
+    const existingAttachment = { id: 'att-1', mimeType: 'image/jpeg', url: 'https://cdn/att-1.jpg' };
+    const existingMessage = makeExistingMessage({ attachments: [existingAttachment] });
+    const updatedMessage = makeUpdatedMessage();
+    const prisma = makeMockPrisma({
+      message: {
+        findFirst: jest.fn(async () => existingMessage),
+        update: jest.fn(async () => updatedMessage),
+      },
+    });
+    const io = makeMockIo();
+    const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma, io });
+    (handler as any).translationService = { retranslateMessageAsync: jest.fn(async () => undefined) };
+    mockSerializeAttachment.mockImplementation((att: any) => att);
+
+    await handler.handleMessageEdit(socket, makeEditData(), callback);
+
+    expect(io._emit).toHaveBeenCalledWith('message:edited', expect.objectContaining({
+      attachments: [existingAttachment],
+    }));
   });
 
   it('trims whitespace from content before saving', async () => {
