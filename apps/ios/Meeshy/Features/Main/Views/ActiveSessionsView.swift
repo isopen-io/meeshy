@@ -40,9 +40,9 @@ struct ActiveSessionsView: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
                     Text(String(localized: "sessions_back", defaultValue: "Retour"))
-                        .font(.system(size: 15, weight: .medium))
+                        .font(MeeshyFont.relative(15, weight: .medium))
                 }
                 .foregroundColor(MeeshyColors.indigo500)
             }
@@ -50,7 +50,7 @@ struct ActiveSessionsView: View {
             Spacer()
 
             Text(String(localized: "sessions_title", defaultValue: "Sessions actives"))
-                .font(.system(size: 17, weight: .bold))
+                .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
@@ -73,7 +73,7 @@ struct ActiveSessionsView: View {
         } else if viewModel.sessions.isEmpty {
             Spacer()
             Text(String(localized: "sessions_empty", defaultValue: "Aucune session active"))
-                .font(.system(size: 15, weight: .medium))
+                .font(MeeshyFont.relative(15, weight: .medium))
                 .foregroundColor(theme.textMuted)
             Spacer()
         } else {
@@ -117,12 +117,12 @@ struct ActiveSessionsView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(session.deviceName ?? String(localized: "sessions_unknown_device", defaultValue: "Appareil inconnu"))
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
 
                     if session.isCurrent {
                         Text(String(localized: "sessions_current_badge", defaultValue: "Actuelle"))
-                            .font(.system(size: 10, weight: .bold))
+                            .font(MeeshyFont.relative(10, weight: .bold))
                             .foregroundColor(.white)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -132,14 +132,14 @@ struct ActiveSessionsView: View {
 
                 if let ip = session.ipAddress {
                     Text(ip)
-                        .font(.system(size: 12, weight: .regular))
+                        .font(MeeshyFont.relative(12, weight: .regular))
                         .foregroundColor(theme.textMuted)
                 }
 
                 if let lastActive = session.lastActive {
                     let formatted = lastActive.formatted(.relative(presentation: .named))
                     Text(String(localized: "sessions_last_active", defaultValue: "Actif") + " " + formatted)
-                        .font(.system(size: 11, weight: .regular))
+                        .font(MeeshyFont.relative(11, weight: .regular))
                         .foregroundColor(theme.textSecondary)
                 }
             }
@@ -152,7 +152,7 @@ struct ActiveSessionsView: View {
                     Task { await viewModel.revokeSession(sessionId: session.id) }
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 20))
+                        .font(MeeshyFont.relative(20))
                         .foregroundColor(MeeshyColors.error.opacity(0.7))
                 }
                 .accessibilityLabel(String(localized: "sessions_revoke", defaultValue: "Revoquer cette session"))
@@ -179,9 +179,9 @@ struct ActiveSessionsView: View {
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "trash")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(MeeshyFont.relative(13, weight: .semibold))
                 Text(String(localized: "sessions_revoke_all", defaultValue: "Revoquer toutes les autres sessions"))
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(MeeshyFont.relative(14, weight: .semibold))
             }
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
