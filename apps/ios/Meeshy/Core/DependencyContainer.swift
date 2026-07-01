@@ -6,7 +6,7 @@ import GRDB
 import MeeshySDK
 import os
 
-private let containerLogger = Logger(subsystem: "me.meeshy.app", category: "dependency-container")
+private nonisolated let containerLogger = Logger(subsystem: "me.meeshy.app", category: "dependency-container")
 
 /// Diagnostic record produced by ``DependencyContainer`` boot.
 ///

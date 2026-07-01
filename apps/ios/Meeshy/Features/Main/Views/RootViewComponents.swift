@@ -67,8 +67,8 @@ struct ThemedActionButton: View {
             }
             .scaleEffect(isPressed ? 0.82 : 1)
         }
-        .accessibilityLabel(label ?? "")
-        .accessibilityHint(hint ?? "")
+        .accessibilityLabel(label)
+        .accessibilityHint(hint)
         .onAppear {
             // Reduce Motion: keep the static base shadow, no breathing glow.
             guard !reduceMotion else { return }
