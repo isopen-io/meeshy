@@ -1687,7 +1687,14 @@ final class CallManager: ObservableObject {
                 fromUsername: pending.fromUsername,
                 isVideo: pending.isVideo
             )
-            self.pendingIncomingCall = nil
+            // A third call can arrive during the 0.5s settle delay and overwrite
+            // pendingIncomingCall with its own record. Only clear it here if it
+            // still refers to the call we just routed — otherwise this would
+            // clobber the newer call's pending state and silently drop its
+            // call-waiting banner.
+            if self.pendingIncomingCall?.callId == pending.callId {
+                self.pendingIncomingCall = nil
+            }
         }
     }
 
