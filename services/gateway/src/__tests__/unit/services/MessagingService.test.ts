@@ -90,6 +90,7 @@ jest.mock('../../../utils/logger', () => ({
 // Import after mocks are set up
 import { MessagingService } from '../../../services/MessagingService';
 import type { PrismaClient, Message } from '@meeshy/shared/prisma/client';
+import { resetParticipantLookupCache } from '../../../utils/participant-lookup-cache';
 
 describe('MessagingService', () => {
   let service: MessagingService;
@@ -122,6 +123,7 @@ describe('MessagingService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    resetParticipantLookupCache();
 
     // Mock global fetch for language detection (MessageValidator.detectLanguage)
     global.fetch = jest.fn().mockResolvedValue({
@@ -1324,6 +1326,7 @@ describe('MessagingService - Tracking Links Processing', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    resetParticipantLookupCache();
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ language: 'en' })
@@ -1547,6 +1550,7 @@ describe('MessagingService - Mention Processing', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    resetParticipantLookupCache();
     mockHandleNewMessage.mockResolvedValue(undefined);
     mockExtractMentions.mockReturnValue([]);
     mockResolveUsernames.mockResolvedValue(new Map());
@@ -1702,6 +1706,7 @@ describe('MessagingService - Edge Cases', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    resetParticipantLookupCache();
 
     // Mock global fetch for language detection (MessageValidator.detectLanguage)
     global.fetch = jest.fn().mockResolvedValue({

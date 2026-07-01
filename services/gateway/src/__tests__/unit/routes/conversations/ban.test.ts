@@ -12,9 +12,14 @@ import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
 const mockResolveConversationId = jest.fn<any>().mockResolvedValue('conv-resolved-id');
+const mockInvalidateParticipantLookup = jest.fn();
 
 jest.mock('../../../../utils/conversation-id-cache', () => ({
   resolveConversationId: (...args: any[]) => mockResolveConversationId(...args),
+}));
+
+jest.mock('../../../../utils/participant-lookup-cache', () => ({
+  invalidateParticipantLookup: (...args: any[]) => mockInvalidateParticipantLookup(...args),
 }));
 
 jest.mock('@meeshy/shared/types/socketio-events', () => ({
@@ -172,6 +177,16 @@ describe('PATCH ban — success with socket events', () => {
     const app = await buildApp({ prisma: makePrisma(), withSocket: true });
     const res = await app.inject({ method: 'PATCH', url: `/conversations/${CONV_ID}/participants/${TARGET_ID}/ban`, payload: {} });
     expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+describe('PATCH ban — participant lookup cache invalidation', () => {
+  it('invalidates the cached participant lookup for the banned target', async () => {
+    mockInvalidateParticipantLookup.mockClear();
+    const app = await buildApp({ prisma: makePrisma() });
+    await app.inject({ method: 'PATCH', url: `/conversations/${CONV_ID}/participants/${TARGET_ID}/ban`, payload: {} });
+    expect(mockInvalidateParticipantLookup).toHaveBeenCalledWith('part-tgt', 'conv-resolved-id');
     await app.close();
   });
 });

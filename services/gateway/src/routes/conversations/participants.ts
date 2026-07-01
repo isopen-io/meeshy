@@ -9,6 +9,7 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
+import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
@@ -505,7 +506,7 @@ export function registerParticipantsRoutes(
       // write and the emit so they agree.
       const removedParticipant = await prisma.participant.findFirst({
         where: { conversationId, userId, isActive: true },
-        select: { displayName: true }
+        select: { id: true, displayName: true }
       });
       const leftAt = new Date();
 
@@ -520,6 +521,9 @@ export function registerParticipantsRoutes(
           leftAt
         }
       });
+      if (removedParticipant) {
+        invalidateParticipantLookup(removedParticipant.id, conversationId);
+      }
 
       // R6-2 — broadcast so other members' devices drop the removed user from
       // the list + decrement the member count in real time (the DELETE
