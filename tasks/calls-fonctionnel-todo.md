@@ -17,10 +17,10 @@
 
 ## Causes racines candidates (du diagnostic)
 - [x] **RC-1 serveur**: TURN config — VÉRIFIÉ SAIN (`turn.meeshy.me:3478`, coturn healthy). Bug **client web** (TURN tardif non appliqué au PC déjà créé) CORRIGÉ 2026-07-01 : `WebRTCService.setIceServers()` (`services/webrtc-service.ts`) n'écrivait que `this.serverIceServers`, jamais appliqué à un `RTCPeerConnection` déjà construit (`use-webrtc-p2p.ts` cache un service par participant, `setIceServers` seulement au moment de la construction). Fix : `setIceServers()` appelle `peerConnection.setConfiguration({ iceServers })` immédiatement si la connexion existe déjà. Tests : `webrtc-service.coverage.test.ts`.
-- [ ] **RC-2**: désync session audio iOS (`didActivate` vs `[AUDIO_FALLBACK]` dans `CallManager.transitionToConnected`) → connecté mais muet.
-- [ ] **RC-3**: asymétrie munging SDP iOS↔web (web force RED PT63 / iOS désactive RED) — invisible serveur (pas de log SDP).
-- [ ] **RC-4**: 2× `new CallService` (`MeeshySocketIOManager.ts:153` + `CallEventsHandler.ts:80`) + `CallCleanupService` sans callService (`server.ts:373`) + double cleanup disconnect (`AuthHandler.ts:298` + `CallEventsHandler.ts:1585`).
-- [ ] **RC-5**: fenêtre zombie pré-ACK iOS (`endCall` n'émet `call:end` que si `currentCallId != nil`).
+- [~] **RC-2**: désync session audio iOS (`didActivate` vs `[AUDIO_FALLBACK]` dans `CallManager.transitionToConnected`) → connecté mais muet. Mitigé (guard d'idempotence + self-activate volontairement JAMAIS sur iPhone/iPad, cf. audit 2026-07-01) mais fenêtre de timing résiduelle si `didActivate` est retardé — pas de fix sûr sans test device réel.
+- [~] **RC-3**: asymétrie munging SDP iOS↔web (web force RED PT63 / iOS désactive RED) — invisible serveur (pas de log SDP). Confirmé réel mais bas impact (RED est un raffinement fmtp optionnel) ; non prioritaire, cf. audit 2026-07-01.
+- [x] **RC-4**: 2× `new CallService` (`MeeshySocketIOManager.ts:153` + `CallEventsHandler.ts:80`) + `CallCleanupService` sans callService (`server.ts:373`) + double cleanup disconnect (`AuthHandler.ts:298` + `CallEventsHandler.ts:1585`). CORRIGÉ commit `7728df04`.
+- [x] **RC-5**: fenêtre zombie pré-ACK iOS (`endCall` n'émet `call:end` que si `currentCallId != nil`). CORRIGÉ — `callId` capturé avant l'ACK, `call:end` émis (ack + fallback), gateway `call:force-leave` robuste.
 
 ## Phase 0 — Instrumentation (les logs)
 Gateway (déployé prod commit b541ba270, image :latest, gateway healthy):
@@ -90,6 +90,36 @@ Capture live 10:41-42 : call:initiate→livraison→answer→SDP(Opus PT111+RED+
 - Config socket gateway : pingTimeout 10s / pingInterval 25s (donc churn 5s ≠ ping timeout).
 - iOS `.forcePolling(true)` (long-polling only, pas de WebSocket) — fragile sous charge WebRTC.
 
+## Audit 2026-07-01 — relecture complète du backlog + passage gateway/web
+Point d'entrée : routine de suivi continu de la feature d'appel. RC-1/RC-4/RC-5/Fix#2/Fix#3/Fix#4
+étaient déjà corrigés sur `main` (vérifié par lecture du code réel, pas seulement des docs).
+RC-2 et RC-3 restent partiellement ouverts mais sont des risques bas/résiduels (détail ci-dessus) —
+RC-2 ne peut pas être corrigé de façon sûre sans test CallKit sur device réel (indisponible dans cet
+environnement Linux sans Xcode) ; RC-3 est un raffinement fmtp bas-impact dont le fix risquerait de
+rouvrir un bug libwebrtc déjà réglé (commit `9e663039`).
+
+Nouveau bug trouvé et corrigé côté gateway (TDD, `services/gateway/src/services/CallService.ts`) :
+`leaveCall()` ne nettoyait pas l'entrée heartbeat en mémoire du participant lors d'un départ mid-call
+(groupe, pas le dernier participant) — seul `clearParticipantBackgrounded` était appelé. L'entrée
+restait dans `this.heartbeats` jusqu'à la fin de l'appel (footprint mémoire négligeable et borné, mais
+incohérence réelle avec le pattern "chaque state se nettoie à la sortie" déjà utilisé pour
+`backgroundedParticipants`). Fix : `this.heartbeats.get(callId)?.delete(participantId)` ajouté dans la
+branche mid-call-leave, + test TDD couvrant le cas groupe. Suite complète gateway : 486/486 suites,
+13361/13362 tests verts, tsc --noEmit propre.
+
+Un audit gateway/web plus large (event listeners ZMQ, race conditions sur Maps in-memory, validation
+SDP renegotiation web) a soulevé 4 autres pistes qui, après lecture du code réel, se sont avérées être
+des faux positifs : le listener `translateAndEmitSegment` a un design correct (chaque Promise a son
+propre listener filtré par taskId, nettoyé au timeout) ; `bufferedOffers` n'a pas de race (Node.js
+single-threaded, pas d'`await` dans la boucle de sweep) ; le handler `call:transcription-segment` a déjà
+un try/catch englobant tout le corps ; la validation SDP avant `setRemoteDescription` côté web n'est pas
+nécessaire (le navigateur valide déjà, le pattern perfect-negotiation polite/impolite est déjà implémenté).
+
+Dead code identifié (SOTA plan §Étape 7, jamais fait) mais **non touché dans cette session** : cluster
+`CallEventQueue`/`MediaPipelineHook`/`CallMediaConfig` (Features/Main/Services/WebRTC) + `MeeshyAudioProcessingModule`,
+référencés uniquement par leurs propres tests unitaires, aucun call site en prod. Reporté : cet
+environnement (conteneur Linux sans Xcode/xcodegen) ne peut ni builder ni faire tourner XCTest, donc
+supprimer ces fichiers ne serait pas vérifiable ici — à faire dans une session avec accès macOS/Xcode.
 ## Review (2026-07-01 — session audit calling feature)
 Audit complet du pipeline appels (iOS CallManager/P2PWebRTCClient, gateway CallEventsHandler/CallService,
 web webrtc-service). Un agent d'exploration dédié a proposé 5 pistes de bugs (leak NotificationCenter,
