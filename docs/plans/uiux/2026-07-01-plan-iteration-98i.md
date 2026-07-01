@@ -1,35 +1,20 @@
-# Plan — Iteration 98i (2026-07-01) — AboutView : affordance de copie / diagnostic
+# Plan — Itération 98i (iOS)
 
-## Objectif
-Rendre copiables les **données de diagnostic** de `AboutView` (Version/build, Plateforme,
-Bundle ID, SDK Version) via la convention iOS native (long-press → menu « Copier »), avec
-parité VoiceOver, **sans aucun ajout visuel** (doctrine d'épuration). Thème *copie/sélection*
-disjoint du sweep Dynamic Type mené par l'essaim d'agents parallèles.
-
-## Base de départ
-- Branche : `claude/upbeat-euler-pgmqop` resynchronisée sur `main` HEAD `381d9c5f`.
-- Fichier unique : `apps/ios/Meeshy/Features/Main/Views/AboutView.swift`.
+**Surface** : `apps/ios/Meeshy/Features/Main/Views/UserStatsView.swift`
+**Branche** : `claude/upbeat-euler-rj79la` (base `main` HEAD `8aea0e4e`)
+**Type** : sweep Dynamic Type + traits VoiceOver (0 logique, 0 clé i18n, 0 test neuf)
 
 ## Étapes
-1. [x] Resync branche sur `origin/main`, config git identity.
-2. [x] Recensement anti-répétition (`list_pull_requests` + `branch-tracking.md`) → `AboutView`
-   + thème copie = disjoints. Numéro 98i (> 97i en vol).
-3. [x] Ajouter 3 helpers privés : `versionString` (source unique affichage+copie), `copyLabel`
-   (clé `common.copy` existante), `copyValue(_:)` (`UIPasteboard` + `HapticFeedback.success()`).
-4. [x] En-tête Version : `.contextMenu { Button "Copier" }` + `.accessibilityAction(named:)`.
-5. [x] `infoRow(...)` : idem greffé dans le helper → Plateforme + Bundle ID + SDK Version
-   copiables d'un seul point de code.
-6. [x] Vérifs : `UIPasteboard` dispo via `import SwiftUI` (parité ShareLinkDetailView) ; 0 clé
-   i18n neuve ; équilibrage des accolades relu.
-7. [x] Rédiger analyse `2026-07-01-iteration-98i.md` + ce plan.
-8. [ ] Commit + push `-u origin claude/upbeat-euler-pgmqop`.
-9. [ ] Ouvrir PR (base `main`), attendre CI `ios-tests.yml` verte.
-10. [ ] Merge dans `main` après CI verte ; mettre à jour `branch-tracking.md` (pointeur 99i).
+1. [x] Choisir surface non prise (contention ~15 PRs iOS) → `UserStatsView` (98i).
+2. [x] Header : `chevron.left`/titre → `MeeshyFont.relative` ; titre `.isHeader` ; spacer `.accessibilityHidden`.
+3. [x] `statCard` : valeur `.rounded`/label → `relative` ; icône 20pt en puce 36×36 **gardée figée** + commentaire + `.accessibilityHidden` ; carte `.accessibilityElement(children: .combine)`.
+4. [x] Section « ACTIVITE » : icône/titre → `relative` ; icône hidden ; `.combine` + `.isHeader`.
+5. [x] Section « BADGES » : icône/titre → `relative` ; icône hidden ; `.combine` + `.isHeader`.
+6. [x] Vérif : 8 `relative`, 1 `.system` figé documenté.
+7. [ ] Commit + push + attendre CI `iOS Tests` verte.
+8. [ ] Merge dans `main`, supprimer la branche, mettre à jour le pointeur.
 
-## Hors-scope (ne pas faire)
-- Dynamic Type (déjà en place sur `AboutView`).
-- Copie des liens promo / description / copyright (contenu non-diagnostic → épuration).
-- Refactor du bloc en « Copier tout le diagnostic » (bouton visible = surcharge, rejeté).
-
-## Gate
-CI `ios-tests.yml` (compile Xcode 26.1.x + tests simulateur 18.2). Aucun test neuf.
+## Différé prioritaire iOS 99i+
+- Dynamic Type grandes surfaces restantes une par itération : `StoryViewerView+Content` (31, ⚠️ collision i18n historique #1174), `ConversationView+Composer` (22, lot critique prudent), `ConversationView+MessageRow` (16), `ConversationListView+Overlays` (15), `LicensesView` (10, candidat propre non pris), `StoryViewerView+Sidebar` (10).
+- Glass adoption reste : `MessageOverlayMenu` (21, via `AdaptiveGlassContainer`, lot dédié).
+- **NE PAS re-flagger** `UserStatsView` (soldé 98i : 9 sites dont icône 20pt figée + palette catégorielle documentés hors-scope).
