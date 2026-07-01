@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { SmartSearch } from '../smart-search';
 import { useI18n } from '@/hooks/useI18n';
 import type { User } from '@/types';
+import { getUserDisplayName as resolveDisplayName } from '@/utils/user-display-name';
 
 interface MemberSelectionStepProps {
   searchQuery: string;
@@ -22,7 +23,10 @@ interface MemberSelectionStepProps {
 }
 
 function getUserDisplayName(user: User): string {
-  return user.displayName || user.username || user.firstName || user.lastName || 'Unknown User';
+  // Délègue à la source unique `utils/user-display-name` (displayName >
+  // firstName+lastName > username, trim) — corrige l'ordre username-first qui
+  // masquait le vrai nom ; pas de réimplémentation locale.
+  return resolveDisplayName(user, 'Unknown User');
 }
 
 function getUserAccentColor(userId: string): string {
