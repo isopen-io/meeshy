@@ -4,7 +4,6 @@
 
 import {
   getUserDisplayName,
-  getUserInitials,
   getUserFirstName,
   getThreadMemberFirstName,
   formatUserForConversation,
@@ -89,41 +88,6 @@ describe('user', () => {
         displayName: 'Johnny D',
       });
       expect(getUserDisplayName(user)).toBe('John Doe');
-    });
-  });
-
-  describe('getUserInitials', () => {
-    it('should return ?? for null user', () => {
-      expect(getUserInitials(null)).toBe('??');
-    });
-
-    it('should return ?? for undefined user', () => {
-      expect(getUserInitials(undefined)).toBe('??');
-    });
-
-    it('should return initials from firstName/lastName', () => {
-      const user = createMockUser({ firstName: 'John', lastName: 'Doe' });
-      expect(getUserInitials(user)).toBe('JD');
-    });
-
-    it('should return initials from displayName with space', () => {
-      const user = createMockUser({ displayName: 'John Doe Smith' });
-      expect(getUserInitials(user)).toBe('JS'); // First and last word
-    });
-
-    it('should return first 2 chars from displayName without space', () => {
-      const user = createMockUser({ displayName: 'Johnny' });
-      expect(getUserInitials(user)).toBe('JO');
-    });
-
-    it('should return first 2 chars from username', () => {
-      const user = createMockUser({ username: 'johndoe' });
-      expect(getUserInitials(user)).toBe('JO');
-    });
-
-    it('should uppercase initials', () => {
-      const user = createMockUser({ firstName: 'john', lastName: 'doe' });
-      expect(getUserInitials(user)).toBe('JD');
     });
   });
 
