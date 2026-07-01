@@ -1,4 +1,5 @@
 import type { Post } from '@meeshy/shared/types/post';
+import { formatTimeRemaining } from '@meeshy/shared/utils/time-remaining';
 import type { StoryItem } from '@/components/v2/StoryTray';
 import type { StoryData, StoryTextObjectData, StoryMediaObjectData, StoryAudioObjectData } from '@/components/v2/StoryViewer';
 
@@ -361,12 +362,5 @@ export function groupStoriesByAuthor(posts: Post[]): Map<string, Post[]> {
 // ============================================================================
 
 export function timeRemaining(expiresAt: string): string | null {
-  const diff = new Date(expiresAt).getTime() - Date.now();
-  if (diff <= 0) return null;
-
-  const minutes = Math.floor(diff / 60000);
-  const hours = Math.floor(minutes / 60);
-
-  if (hours >= 1) return `${hours}h${minutes % 60 > 0 ? `${minutes % 60}m` : ''}`;
-  return `${minutes}m`;
+  return formatTimeRemaining(new Date(expiresAt).getTime(), Date.now());
 }
