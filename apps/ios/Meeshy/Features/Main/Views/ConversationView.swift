@@ -570,6 +570,7 @@ struct ConversationView: View {
             .sheet(item: $composerState.forwardMessage) { msgToForward in
                 ForwardPickerSheet(message: msgToForward, sourceConversationId: conversation?.id ?? "", accentColor: accentColor) { composerState.forwardMessage = nil }
                     .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
             }
             .overlay { overlayMenuContent }
             .onPreferenceChange(MessageFramePreferenceKey.self) { frames in

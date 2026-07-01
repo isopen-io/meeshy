@@ -210,7 +210,11 @@ public struct StoryComposerView: View {
     @State private var isLoadingMedia = false
     @State private var mediaLoadProgress: Double = 0
     @State private var mediaLoadLabel: String = ""
-    @State private var visibility: String = "PUBLIC"
+    // Défaut « Contacts » (PostVisibility.friends) : une story est d'abord
+    // partagée avec ses contacts, pas publiquement. L'audience publique reste
+    // un choix explicite via le sélecteur globe. Aligné sur le défaut du VM app
+    // (`StoryViewModel.publishStory(visibility: "FRIENDS")`).
+    @State private var visibility: String = "FRIENDS"
     @State private var visibilityUserIds: [String] = []
     @State private var audiencePickerMode: PostVisibility?
     @State private var lostMediaCount: Int = 0  // > 0 triggers an alert after restoreDraft
@@ -834,13 +838,9 @@ public struct StoryComposerView: View {
 
     private var overflowMenu: some View {
         Menu {
-            // Slide tools
-            Button { showFilterSheet = true } label: {
-                Label(
-                    String(localized: "story.composer.filter", defaultValue: "Filtre", bundle: .module),
-                    systemImage: selectedFilter != nil ? "camera.filters" : "camera.filters"
-                )
-            }
+            // Slide tools — le filtre GLOBAL a été retiré : les filtres
+            // s'appliquent désormais par média via l'éditeur unitaire (crayon
+            // sur chaque image/vidéo), chacun avec son propre aperçu live.
             Button { showTransitionSheet = true } label: {
                 Label(
                     String(localized: "story.composer.transitions", defaultValue: "Transitions", bundle: .module),
@@ -1117,13 +1117,13 @@ public struct StoryComposerView: View {
                                          bundle: .module)
                     )
                 largeToolTile(
-                    .filters,
-                    icon: "camera.filters",
-                    title: String(localized: "story.composer.empty.tile.filters",
-                                  defaultValue: "Effets",
+                    .texture,
+                    icon: "paintpalette.fill",
+                    title: String(localized: "story.tool.texture",
+                                  defaultValue: "Fond",
                                   bundle: .module),
-                    subtitle: String(localized: "story.composer.empty.tile.filters.sub",
-                                     defaultValue: "Filtres visuels",
+                    subtitle: String(localized: "story.background.swatch",
+                                     defaultValue: "Couleur de fond",
                                      bundle: .module)
                 )
                 largeToolTile(

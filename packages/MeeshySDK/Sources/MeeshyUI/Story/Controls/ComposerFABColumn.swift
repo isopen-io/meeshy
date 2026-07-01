@@ -12,7 +12,7 @@ struct ComposerFABColumn: View, Equatable {
     let sonBadge: Int
     let textBadge: Int
     let drawingBadge: Int
-    let filtersBadge: Int
+    let textureBadge: Int
     let timelineBadge: Int
     let activeCategory: BandCategory?
 
@@ -25,7 +25,7 @@ struct ComposerFABColumn: View, Equatable {
     var body: some View {
         VStack(spacing: 12) {
             fab(category: .timeline, icon: "clock", badge: timelineBadge)
-            fab(category: .filters, icon: "camera.filters", badge: filtersBadge)
+            fab(category: .texture, icon: "paintpalette.fill", badge: textureBadge)
             fab(category: .drawing, icon: "pencil.tip", badge: drawingBadge)
             fab(category: .text, icon: "textformat", badge: textBadge)
             fab(category: .son, icon: "music.note", badge: sonBadge)
@@ -48,6 +48,7 @@ struct ComposerFABColumn: View, Equatable {
             case .son: return MeeshyColors.indigo400
             case .text: return MeeshyColors.indigo400
             case .drawing: return MeeshyColors.success
+            case .texture: return MeeshyColors.warning
             case .filters: return MeeshyColors.info
             case .timeline: return MeeshyColors.indigo300
             }
@@ -98,7 +99,7 @@ struct ComposerFABColumn: View, Equatable {
             && lhs.sonBadge == rhs.sonBadge
             && lhs.textBadge == rhs.textBadge
             && lhs.drawingBadge == rhs.drawingBadge
-            && lhs.filtersBadge == rhs.filtersBadge
+            && lhs.textureBadge == rhs.textureBadge
             && lhs.timelineBadge == rhs.timelineBadge
             && lhs.activeCategory == rhs.activeCategory
     }

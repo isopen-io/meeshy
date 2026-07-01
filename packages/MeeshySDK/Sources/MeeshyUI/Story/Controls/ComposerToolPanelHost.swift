@@ -136,11 +136,11 @@ struct ComposerToolPanelHost: View {
         ))
     }
 
-    /// Tous les éditeurs SAUF celui couramment ouvert. Ordre stable depuis
-    /// `StoryToolMode.allCases` (media, drawing, text, texture, filters,
-    /// timeline) — i.e. l'ordre des FABs du composer.
+    /// Tous les éditeurs sélectionnables SAUF celui couramment ouvert. Ordre
+    /// stable depuis `StoryToolMode.selectableCases` — le filtre global `.filters`
+    /// en est exclu (filtrage désormais par média via l'éditeur unitaire).
     private var otherTools: [StoryToolMode] {
-        StoryToolMode.allCases.filter { $0 != tool }
+        StoryToolMode.selectableCases.filter { $0 != tool }
     }
 
     private static func icon(for tool: StoryToolMode) -> String {

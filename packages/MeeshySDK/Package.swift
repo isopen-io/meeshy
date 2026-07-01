@@ -56,7 +56,6 @@ let package = Package(
             dependencies: ["MeeshySDK"],
             resources: [
                 .process("Resources"),
-                .process("Story/Canvas/Metal"),
             ],
             swiftSettings: uiSwiftSettings
         ),

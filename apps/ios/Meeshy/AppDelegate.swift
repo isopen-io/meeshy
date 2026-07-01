@@ -33,20 +33,16 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // recorded during *previous* sessions here.
         //
         // P3 wire-up (Sprint 4):
-        // - `StoryFilteredLayer.preheatAllPipelines()` compiles every Metal
-        //   compute pipeline state process-wide so the composer / reader
-        //   never pay the compile cost on the first user-visible frame.
         // - `MeeshyMetricsSubscriber.shared.register()` attaches to
         //   `MXMetricManager` so the `MXSignpostMetric` entries produced by
         //   `TimelineSignposter` are aggregated into the rolling 24h window.
         //   Without this call the docstring promise of "automatic
         //   aggregation" is vacuous: the signposts appear in Instruments
-        //   but no payload ever lands. Both calls are `@MainActor`-isolated
-        //   and idempotent — safe to invoke alongside the crash observer
-        //   install in the same MainActor hop.
+        //   but no payload ever lands. It is `@MainActor`-isolated and
+        //   idempotent — safe to invoke alongside the crash observer install
+        //   in the same MainActor hop.
         Task { @MainActor in
             CrashDiagnosticsManager.shared.install(crashReporter: crashReporter)
-            StoryFilteredLayer.preheatAllPipelines()
             MeeshyMetricsSubscriber.shared.register()
             AnalyticsManager.shared.syncCollectionState()
             // P1.5 — surface DependencyContainer boot diagnostics now that

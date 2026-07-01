@@ -82,11 +82,12 @@ struct ConversationLockSheet: View {
                 .padding(.top, 24)
 
             Text(titleText)
-                .font(.system(size: 18, weight: .bold))
+                .font(.headline)
                 .foregroundColor(theme.textPrimary)
+                .multilineTextAlignment(.center)
 
             Text(subtitleText)
-                .font(.system(size: 13, weight: .medium))
+                .font(.footnote.weight(.medium))
                 .foregroundColor(theme.textMuted)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
@@ -142,6 +143,8 @@ struct ConversationLockSheet: View {
                 }
                 .opacity(currentPin.isEmpty ? 0.3 : 1.0)
                 .animation(.easeInOut(duration: 0.15), value: currentPin.isEmpty)
+                .accessibilityLabel(String(localized: "conversation.lock.a11y.delete", defaultValue: "Supprimer le dernier chiffre", bundle: .main))
+                .disabled(currentPin.isEmpty)
             }
         }
     }
@@ -189,48 +192,67 @@ struct ConversationLockSheet: View {
     private var titleText: String {
         switch mode {
         case .setupMasterPin:
-            return step == 0 ? "Créer le master PIN" : "Confirmer le master PIN"
+            return step == 0
+                ? String(localized: "conversation.lock.title.createMasterPin", defaultValue: "Créer le master PIN", bundle: .main)
+                : String(localized: "conversation.lock.title.confirmMasterPin", defaultValue: "Confirmer le master PIN", bundle: .main)
         case .changeMasterPin:
-            if step == 0 { return "Vérifier le master PIN" }
-            if step == 1 { return "Nouveau master PIN" }
-            return "Confirmer le nouveau PIN"
+            if step == 0 { return String(localized: "conversation.lock.title.verifyMasterPin", defaultValue: "Vérifier le master PIN", bundle: .main) }
+            if step == 1 { return String(localized: "conversation.lock.title.newMasterPin", defaultValue: "Nouveau master PIN", bundle: .main) }
+            return String(localized: "conversation.lock.title.confirmNewPin", defaultValue: "Confirmer le nouveau PIN", bundle: .main)
         case .removeMasterPin:
-            return "Supprimer le master PIN"
+            return String(localized: "conversation.lock.title.removeMasterPin", defaultValue: "Supprimer le master PIN", bundle: .main)
         case .lockConversation:
-            if step == 0 { return "Vérifier le master PIN" }
-            if step == 1 { return "Code de la conversation" }
-            return "Confirmer le code"
+            if step == 0 { return String(localized: "conversation.lock.title.verifyMasterPin", defaultValue: "Vérifier le master PIN", bundle: .main) }
+            if step == 1 { return String(localized: "conversation.lock.title.conversationCode", defaultValue: "Code de la conversation", bundle: .main) }
+            return String(localized: "conversation.lock.title.confirmCode", defaultValue: "Confirmer le code", bundle: .main)
         case .unlockConversation:
-            return "Déverrouiller"
+            return String(localized: "conversation.lock.title.unlock", defaultValue: "Déverrouiller", bundle: .main)
         case .openConversation:
-            return "Conversation verrouillée"
+            return String(localized: "conversation.lock.title.locked", defaultValue: "Conversation verrouillée", bundle: .main)
         case .unlockAll:
-            return "Déverrouiller tout"
+            return String(localized: "conversation.lock.title.unlockAll", defaultValue: "Déverrouiller tout", bundle: .main)
         }
     }
 
     private var subtitleText: String {
         switch mode {
         case .setupMasterPin:
-            if step == 0 { return "Choisissez un master PIN à 6 chiffres pour sécuriser vos verrous" }
-            return "Saisissez à nouveau votre master PIN pour confirmer"
+            if step == 0 { return String(localized: "conversation.lock.subtitle.chooseMasterPin", defaultValue: "Choisissez un master PIN à 6 chiffres pour sécuriser vos verrous", bundle: .main) }
+            return String(localized: "conversation.lock.subtitle.reenterMasterPin", defaultValue: "Saisissez à nouveau votre master PIN pour confirmer", bundle: .main)
         case .changeMasterPin:
-            if step == 0 { return "Saisissez votre master PIN actuel" }
-            if step == 1 { return "Choisissez un nouveau master PIN à 6 chiffres" }
-            return "Confirmez votre nouveau master PIN"
+            if step == 0 { return String(localized: "conversation.lock.subtitle.enterCurrentMasterPin", defaultValue: "Saisissez votre master PIN actuel", bundle: .main) }
+            if step == 1 { return String(localized: "conversation.lock.subtitle.chooseNewMasterPin", defaultValue: "Choisissez un nouveau master PIN à 6 chiffres", bundle: .main) }
+            return String(localized: "conversation.lock.subtitle.confirmNewMasterPin", defaultValue: "Confirmez votre nouveau master PIN", bundle: .main)
         case .removeMasterPin:
-            return "Saisissez votre master PIN pour confirmer la suppression"
+            return String(localized: "conversation.lock.subtitle.confirmRemoval", defaultValue: "Saisissez votre master PIN pour confirmer la suppression", bundle: .main)
         case .lockConversation:
-            if step == 0 { return "Saisissez votre master PIN pour autoriser le verrouillage" }
-            if step == 1 { return "Choisissez un code à 4 chiffres pour \(conversationName)" }
-            return "Confirmez le code pour \(conversationName)"
+            if step == 0 { return String(localized: "conversation.lock.subtitle.authorizeLock", defaultValue: "Saisissez votre master PIN pour autoriser le verrouillage", bundle: .main) }
+            if step == 1 {
+                return String(format: String(localized: "conversation.lock.subtitle.chooseCode", defaultValue: "Choisissez un code à 4 chiffres pour %@", bundle: .main), conversationName)
+            }
+            return String(format: String(localized: "conversation.lock.subtitle.confirmCodeFor", defaultValue: "Confirmez le code pour %@", bundle: .main), conversationName)
         case .unlockConversation:
-            return "Saisissez le code de \(conversationName) pour le déverrouiller"
+            return String(format: String(localized: "conversation.lock.subtitle.enterCodeToUnlock", defaultValue: "Saisissez le code de %@ pour le déverrouiller", bundle: .main), conversationName)
         case .openConversation:
-            return "Saisissez le code pour accéder à \(conversationName)"
+            return String(format: String(localized: "conversation.lock.subtitle.enterCodeToOpen", defaultValue: "Saisissez le code pour accéder à %@", bundle: .main), conversationName)
         case .unlockAll:
-            return "Saisissez votre master PIN pour déverrouiller toutes les conversations"
+            return String(localized: "conversation.lock.subtitle.unlockAll", defaultValue: "Saisissez votre master PIN pour déverrouiller toutes les conversations", bundle: .main)
         }
+    }
+
+    // MARK: - Localized error strings
+
+    private var errPinMismatch: String {
+        String(localized: "conversation.lock.error.pinMismatch", defaultValue: "Les PIN ne correspondent pas", bundle: .main)
+    }
+    private var errMasterPinIncorrect: String {
+        String(localized: "conversation.lock.error.masterPinIncorrect", defaultValue: "Master PIN incorrect", bundle: .main)
+    }
+    private var errCodeMismatch: String {
+        String(localized: "conversation.lock.error.codeMismatch", defaultValue: "Les codes ne correspondent pas", bundle: .main)
+    }
+    private var errCodeIncorrect: String {
+        String(localized: "conversation.lock.error.codeIncorrect", defaultValue: "Code incorrect", bundle: .main)
     }
 
     // MARK: - Input logic
@@ -262,7 +284,7 @@ struct ConversationLockSheet: View {
             if step == 0 {
                 withAnimation { step = 2 }
             } else {
-                guard pin == confirmPin else { return shakeAndReset("Les PIN ne correspondent pas") }
+                guard pin == confirmPin else { return shakeAndReset(errPinMismatch) }
                 lockManager.setMasterPin(pin)
                 HapticFeedback.success()
                 onSuccess()
@@ -271,12 +293,12 @@ struct ConversationLockSheet: View {
 
         case .changeMasterPin:
             if step == 0 {
-                guard lockManager.verifyMasterPin(pin) else { return shakeAndReset("Master PIN incorrect") }
+                guard lockManager.verifyMasterPin(pin) else { return shakeAndReset(errMasterPinIncorrect) }
                 withAnimation { step = 1; pin = "" }
             } else if step == 1 {
                 withAnimation { step = 2 }
             } else {
-                guard pin == confirmPin else { return shakeAndReset("Les PIN ne correspondent pas") }
+                guard pin == confirmPin else { return shakeAndReset(errPinMismatch) }
                 lockManager.setMasterPin(pin)
                 HapticFeedback.success()
                 onSuccess()
@@ -284,7 +306,7 @@ struct ConversationLockSheet: View {
             }
 
         case .removeMasterPin:
-            guard lockManager.verifyMasterPin(pin) else { return shakeAndReset("Master PIN incorrect") }
+            guard lockManager.verifyMasterPin(pin) else { return shakeAndReset(errMasterPinIncorrect) }
             lockManager.forceRemoveMasterPin()
             HapticFeedback.success()
             onSuccess()
@@ -292,12 +314,12 @@ struct ConversationLockSheet: View {
 
         case .lockConversation:
             if step == 0 {
-                guard lockManager.verifyMasterPin(pin) else { return shakeAndReset("Master PIN incorrect") }
+                guard lockManager.verifyMasterPin(pin) else { return shakeAndReset(errMasterPinIncorrect) }
                 withAnimation { step = 1; pin = "" }
             } else if step == 1 {
                 withAnimation { step = 2 }
             } else {
-                guard pin == confirmPin else { return shakeAndReset("Les codes ne correspondent pas") }
+                guard pin == confirmPin else { return shakeAndReset(errCodeMismatch) }
                 guard let id = conversationId else { return }
                 lockManager.setLock(conversationId: id, pin: pin)
                 HapticFeedback.success()
@@ -308,7 +330,7 @@ struct ConversationLockSheet: View {
         case .unlockConversation:
             guard let id = conversationId else { return }
             guard lockManager.verifyLock(conversationId: id, pin: pin) else {
-                return shakeAndReset("Code incorrect")
+                return shakeAndReset(errCodeIncorrect)
             }
             lockManager.removeLock(conversationId: id)
             HapticFeedback.success()
@@ -318,14 +340,14 @@ struct ConversationLockSheet: View {
         case .openConversation:
             guard let id = conversationId else { return }
             guard lockManager.verifyLock(conversationId: id, pin: pin) else {
-                return shakeAndReset("Code incorrect")
+                return shakeAndReset(errCodeIncorrect)
             }
             HapticFeedback.success()
             onSuccess()
             dismiss()
 
         case .unlockAll:
-            guard lockManager.verifyMasterPin(pin) else { return shakeAndReset("Master PIN incorrect") }
+            guard lockManager.verifyMasterPin(pin) else { return shakeAndReset(errMasterPinIncorrect) }
             lockManager.removeAllLocks()
             HapticFeedback.success()
             onSuccess()

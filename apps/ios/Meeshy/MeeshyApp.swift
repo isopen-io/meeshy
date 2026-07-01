@@ -692,17 +692,17 @@ struct MeeshyApp: App {
 
         crashReportsToShow = reports
 
-        let kindLabel: String
-        switch mostRecent.kind {
-        case .nsException: kindLabel = "Exception"
-        case .crash: kindLabel = "Crash"
-        case .hang: kindLabel = "Blocage"
-        case .cpuException: kindLabel = "Pic CPU"
-        case .diskWriteException: kindLabel = "Ecriture disque"
-        }
+        let kindLabel = mostRecent.kind.localizedLabel
         let extra = reports.count > 1 ? " (+\(reports.count - 1))" : ""
         toastManager.show(
-            "\(kindLabel) precedent\(extra) : \(mostRecent.summary)",
+            String(
+                format: String(
+                    localized: "crash.toast.previous",
+                    defaultValue: "%1$@ précédent%2$@ : %3$@",
+                    bundle: .main
+                ),
+                kindLabel, extra, mostRecent.summary
+            ),
             type: .info
         ) { [self] in
             showCrashSheet = true

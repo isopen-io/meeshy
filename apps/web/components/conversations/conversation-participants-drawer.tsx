@@ -244,8 +244,7 @@ export function ConversationParticipantsDrawer({
           user.username?.toLowerCase().includes(searchTerm) ||
           user.displayName?.toLowerCase().includes(searchTerm) ||
           user.firstName?.toLowerCase().includes(searchTerm) ||
-          user.lastName?.toLowerCase().includes(searchTerm) ||
-          user.email?.toLowerCase().includes(searchTerm)
+          user.lastName?.toLowerCase().includes(searchTerm)
         );
       });
 

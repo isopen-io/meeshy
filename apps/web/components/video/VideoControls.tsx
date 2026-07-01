@@ -4,6 +4,7 @@ import React, { memo } from 'react';
 import { Play, Pause, AlertTriangle, Download, Maximize, Minimize } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { VolumeControl } from './VolumeControl';
+import { formatDuration } from '@/utils/audio-formatters';
 import { useI18n } from '@/hooks/useI18n';
 
 interface VideoControlsProps {
@@ -43,13 +44,6 @@ export const VideoControls = memo<VideoControlsProps>(function VideoControls({
 }) {
   const { t } = useI18n('viewers');
 
-  const formatTime = (seconds: number): string => {
-    if (!isFinite(seconds) || isNaN(seconds) || seconds < 0) return '0:00';
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
   const progress = duration > 0 && isFinite(currentTime) && isFinite(duration)
     ? Math.min(Math.max((currentTime / duration) * 100, 0), 100)
     : 0;
@@ -82,7 +76,7 @@ export const VideoControls = memo<VideoControlsProps>(function VideoControls({
       </Button>
 
       <span className="text-xs font-mono tabular-nums text-gray-600 dark:text-gray-300 flex-shrink-0">
-        {formatTime(currentTime)}
+        {formatDuration(currentTime)}
       </span>
 
       <div className="flex-1 relative h-[15px] bg-gray-200 dark:bg-gray-700 rounded-full overflow-visible group cursor-pointer">
@@ -125,7 +119,7 @@ export const VideoControls = memo<VideoControlsProps>(function VideoControls({
       </div>
 
       <span className="text-xs font-mono tabular-nums text-gray-600 dark:text-gray-300 flex-shrink-0">
-        {formatTime(duration)}
+        {formatDuration(duration)}
       </span>
 
       <VolumeControl

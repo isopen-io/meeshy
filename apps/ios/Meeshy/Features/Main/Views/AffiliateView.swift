@@ -27,6 +27,7 @@ struct AffiliateView: View {
                 viewModel.tokens.insert(token, at: 0)
             }
             .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
         }
         .task { await viewModel.load() }
     }
