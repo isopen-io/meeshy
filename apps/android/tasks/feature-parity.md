@@ -827,10 +827,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `Timeout`. +26 behavioural tests (21 parser: success incl. minimal/unknown-keys, single vs array
       urls, TURN creds, every ServerError fallback incl. non-string error, Malformed bad-JSON/bad-shape,
       robust urls dropping; 5 manager: payload keys, video/audio, ServerError, no-ACK Timeout,
-      non-JSONObject Timeout). **Pending:** fold `events` into `CallViewModel` in `viewModelScope` +
-      route accept/decline/hang-up/mute/camera to the outbound emits (now the `callId` lifecycle exists);
-      WebRTC-plumbing emits (`request-ice-servers`/`heartbeat`/`quality-report`/`reconnecting`/
-      `reconnected`); and the app-level `attach()` lifecycle caller.
+      non-JSONObject Timeout). **VM-fold landed** (slice `call-viewmodel-signal-fold`): the
+      `:feature:calls` `CallViewModel` now folds `CallSignalManager.events` in `viewModelScope` (each
+      mapped `CallEvent` reduced through the FSM, so a peer answer / remote hang-up / stall drives the
+      screen with no manual wiring); an **outgoing** `start` mints the real `callId` via `emitInitiate`
+      (optimistic ring first, then `Ended(Failed)` on a rejected/timed-out/malformed ACK — the gateway
+      message surfaced on `ServerError`); and accept/decline/hang-up/mute/camera fan out to
+      `emitJoin`/`emitEnd`/`emitToggleAudio`/`emitToggleVideo`, each **keyed by the known `callId`** and
+      inert until one is known (outgoing minted, incoming from `CallConfig.callId`). +14 behavioural tests.
+      **Pending:** WebRTC-plumbing emits (`request-ice-servers`/`heartbeat`/`quality-report`/
+      `reconnecting`/`reconnected`); the app-level `CallSignalManager.attach()` lifecycle caller; and a
+      Calls-tab nav entry threading the real `conversationId` into the outgoing `CallConfig` (`:app`).
 - [x] Call history / journal (recent + missed calls list, direction, duration, data usage) —
       **pure call-journal model landed** (slice `call-history-model`): `core:model`
       `me.meeshy.sdk.model.call` gains `CallDirection` (incoming/outgoing/missed, `fromRaw` degrades
