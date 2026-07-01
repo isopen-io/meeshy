@@ -44,10 +44,11 @@ struct AudioEffectsPanel: View {
     private var header: some View {
         HStack(spacing: 8) {
             Image(systemName: "waveform.path.ecg")
-                .font(.system(size: 14, weight: .semibold))
+                .font(MeeshyFont.relative(14, weight: .semibold))
                 .foregroundColor(MeeshyColors.indigo400)
+                .accessibilityHidden(true)
             Text(String(localized: "audio.effects.title", defaultValue: "Effets audio", bundle: .main))
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
                 .foregroundColor(.primary)
             Spacer()
             if callManager.activeAudioEffect != nil {
@@ -56,7 +57,7 @@ struct AudioEffectsPanel: View {
                     callManager.clearAudioEffect()
                 } label: {
                     Text(String(localized: "audio.effects.disable", defaultValue: "Desactiver", bundle: .main))
-                        .font(.system(size: 12, weight: .medium))
+                        .font(MeeshyFont.relative(12, weight: .medium))
                         .foregroundColor(MeeshyColors.error)
                 }
             }
@@ -85,9 +86,10 @@ struct AudioEffectsPanel: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
+                    .accessibilityHidden(true)
                 Text(label)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(MeeshyFont.relative(12, weight: .medium))
             }
             .foregroundColor(isActive ? MeeshyColors.indigo500 : .secondary)
             .padding(.horizontal, 14)
@@ -163,7 +165,7 @@ struct AudioEffectsPanel: View {
                     backSoundParams.soundFile = sound
                 } label: {
                     Text(soundLabel(sound))
-                        .font(.system(size: 11, weight: .medium))
+                        .font(MeeshyFont.relative(11, weight: .medium))
                         .foregroundColor(isActive ? MeeshyColors.indigo500 : .secondary)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
@@ -188,11 +190,18 @@ struct AudioEffectsPanel: View {
     // MARK: - Slider Helper
 
     private func effectSlider(icon: String, label: String, value: Binding<Float>, range: ClosedRange<Float>, format: String) -> some View {
+        // Rangée de mixer compacte à largeurs figées (icône 18 / libellé 55 /
+        // valeur 42) : les polices restent FIXES à dessein — les scaler dans ces
+        // cadres rigides tronquerait le libellé/la valeur à grande taille Dynamic
+        // Type. L'accessibilité est déjà servie par le `Slider` lui-même
+        // (`accessibilityLabel(label)` + `accessibilityValue`), donc le libellé/
+        // la valeur visibles sont purement visuels et l'icône est décorative.
         HStack(spacing: 10) {
             Image(systemName: icon)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(MeeshyColors.indigo400)
                 .frame(width: 18)
+                .accessibilityHidden(true)
             Text(label)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(.secondary)
