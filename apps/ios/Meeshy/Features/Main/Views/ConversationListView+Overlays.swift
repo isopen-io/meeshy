@@ -265,9 +265,10 @@ struct ConversationListHeaderOverlay: View {
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "square.stack.fill")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(MeeshyFont.relative(13, weight: .semibold))
+                                .accessibilityHidden(true)
                             Text(String(localized: "conversation.list.feed", defaultValue: "Feed", bundle: .main))
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(MeeshyFont.relative(13, weight: .semibold))
                         }
                         .foregroundStyle(
                             LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700], startPoint: .leading, endPoint: .trailing)
@@ -283,12 +284,16 @@ struct ConversationListHeaderOverlay: View {
             },
             titleView: {
                 Text("Meeshy Chats")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(28, weight: .bold, design: .rounded))
                     .foregroundStyle(
                         LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700], startPoint: .leading, endPoint: .trailing)
                     )
+                    .accessibilityAddTraits(.isHeader)
             },
             trailing: {
+                // Header action glyphs (link/plus/bell/gear + notification badge) keep
+                // fixed point sizes: two sit inside 40x40 glass circles and the row reads
+                // as chrome — scaling them with Dynamic Type would break the toolbar grid.
                 HStack(spacing: 12) {
                     // iOS 26 Liquid Glass for the two primary actions (share link +
                     // new conversation), grouped so the glass circles blend. Gating/
@@ -420,7 +425,7 @@ struct ConversationListBottomBar: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(String(localized: "communities.title", defaultValue: "Communaut\u{00e9}s"))
-                    .font(.system(size: 16, weight: .bold))
+                    .font(MeeshyFont.relative(16, weight: .bold))
                     .foregroundStyle(
                         LinearGradient(
                             colors: [MeeshyColors.error, MeeshyColors.indigo300],
@@ -428,6 +433,7 @@ struct ConversationListBottomBar: View {
                             endPoint: .trailing
                         )
                     )
+                    .accessibilityAddTraits(.isHeader)
                 Spacer()
 
                 HStack(spacing: 12) {
@@ -435,7 +441,7 @@ struct ConversationListBottomBar: View {
                         router.push(.communityList)
                     } label: {
                         Text(String(localized: "action.see_all", defaultValue: "Voir tout"))
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(MeeshyFont.relative(12, weight: .semibold))
                             .foregroundColor(MeeshyColors.indigo300)
                     }
                     .accessibilityLabel(String(localized: "accessibility.see_all_communities", defaultValue: "Voir toutes les communautes"))
@@ -447,7 +453,7 @@ struct ConversationListBottomBar: View {
                         HapticFeedback.light()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 18))
+                            .font(MeeshyFont.relative(18))
                             .foregroundStyle(
                                 LinearGradient(
                                     colors: [MeeshyColors.error, MeeshyColors.error.opacity(0.7)],
@@ -511,7 +517,7 @@ struct ConversationListBottomBar: View {
                 }
             } label: {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 16, weight: .medium))
+                    .font(MeeshyFont.relative(16, weight: .medium))
                     .foregroundStyle(
                         isActive ?
                         AnyShapeStyle(LinearGradient(colors: [MeeshyColors.error, MeeshyColors.indigo300], startPoint: .leading, endPoint: .trailing)) :
@@ -526,7 +532,7 @@ struct ConversationListBottomBar: View {
             TextField(String(localized: "search.placeholder", defaultValue: "Rechercher..."), text: $conversationViewModel.searchText)
                 .focused(isSearching)
                 .foregroundColor(theme.textPrimary)
-                .font(.system(size: 15))
+                .font(MeeshyFont.relative(15))
                 .accessibilityLabel(String(localized: "conversation.list.search_conversations", defaultValue: "Rechercher des conversations", bundle: .main))
 
             if !conversationViewModel.searchText.isEmpty {
@@ -547,7 +553,7 @@ struct ConversationListBottomBar: View {
                 showWidgetPreview = true
             } label: {
                 Image(systemName: "square.grid.2x2")
-                    .font(.system(size: 16, weight: .medium))
+                    .font(MeeshyFont.relative(16, weight: .medium))
                     .foregroundStyle(
                         LinearGradient(
                             colors: [MeeshyColors.warning, MeeshyColors.indigo500],
@@ -565,7 +571,7 @@ struct ConversationListBottomBar: View {
                 showGlobalSearch = true
             } label: {
                 Image(systemName: "text.magnifyingglass")
-                    .font(.system(size: 16, weight: .medium))
+                    .font(MeeshyFont.relative(16, weight: .medium))
                     .foregroundStyle(
                         LinearGradient(
                             colors: [MeeshyColors.indigo600, MeeshyColors.indigo300],

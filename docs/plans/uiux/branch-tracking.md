@@ -18,7 +18,29 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 > - **Dernière itération iOS : `91i`** → branche `claude/upbeat-euler-l5yima` (Dynamic Type + VoiceOver `CommunityLinksView.swift` : 13/15 `.font(.system(size:))` → `MeeshyFont.relative` ; 2 figés commentés = héros état-vide 40pt + glyphe 14pt dans cercle fixe 40×40, tous deux `.accessibilityHidden` ; `.isHeader` ×2 titre+section, `.combine` carte stat + état vide, `.accessibilityHidden` glyphes décoratifs ; 0 logique/0 i18n/0 test neuf). Base = `main` HEAD `af1fe619`. Gate = CI `iOS Tests`.
 > - **90i réel mergé** = `MagicLinkView` (#1221). **4 PR « 90i » parallèles en vol au démarrage 91i** : `DataExportView` (#1226), `FeedCommentsSheet` (#1228), `MagicLinkView` doublon (#1225), `NewConversationView` (#1224). 91i orthogonal = `CommunityLinksView` (surface neuve, 0 collision).
 > - **Base de départ itération iOS suivante : `main` HEAD** (toujours resync sur `main` ; supprimer la branche mergée). Prochain candidat = `CommunityLinkDetailView` (10 sites), `MemberManagementSection` (17), `AffiliateView` (17 Dynamic Type), `AddParticipantSheet` (14), `SharePickerView` (14).
-> **POINTEUR iOS AUTORITAIRE (mis à jour 93i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> **POINTEUR iOS AUTORITAIRE (mis à jour 94i-conversation-list, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> - **94i-conversation-list (terminée, branche `claude/upbeat-euler-vyrhaw`, base `main` HEAD `1df16a6d`)** :
+>   Dynamic Type + VoiceOver de la **surface d'accueil** `ConversationListView+Overlays.swift`
+>   (en-tête repliable `ConversationListHeaderOverlay` + barre inférieure `ConversationListBottomBar` :
+>   recherche + carrousel communautés + filtres). **10/15** `.font(.system(size:))` → `MeeshyFont.relative(...)`
+>   (weight/design `.rounded` préservés : icône+texte bouton Feed, titre héros « Meeshy Chats » 28pt,
+>   titre section « Communautés », « Voir tout », X fermeture, loupe + champ de recherche + dashboard +
+>   recherche globale). **5/15 figés à dessein** (commentaire ligne 293) = rangée chrome header :
+>   `link.badge.plus`/`plus` (cercles Glass fixes 40×40), `bell.fill`, `gearshape.fill`, compteur
+>   notif 9pt (badge fixe 16×16) — scaler casserait la grille toolbar (doctrine 82i/86i). **2 traits
+>   `.isHeader`** (titre + « Communautés ») + **1 masquage VoiceOver** décoratif (icône Feed). Liquid
+>   Glass (`AdaptiveGlassContainer` + `.adaptiveGlass`) + tokens `MeeshyColors` déjà conformes → intacts.
+>   1 fichier, 0 logique / 0 couleur / 0 clé i18n / 0 test neuf (parité 55i/74i/82i/86i/93i). Gate = CI `ios-tests.yml`.
+> - **⚠️ NE PLUS re-flagger** `ConversationListView+Overlays` (Dynamic Type/VoiceOver soldé 94i ; chrome header figé à dessein).
+> - **Base de départ 95i : `main` HEAD** (toujours resync sur `main` ; supprimer la branche mergée).
+> - **Différé prioritaire iOS 95i+** : `StoryViewerView+Content` (31, coord. i18n), `ConversationView+Composer` (22),
+>   `MessageOverlayMenu` (21 + Glass), `Onboarding*` (flux non touché), `ConversationView+MessageRow` (16),
+>   `FeedView+Attachments` (14), `FeedPostCard+Media` (13).
+> - **⚠️ CONTENTION 94i (essaim ~10 agents iOS, 2026-07-01)** : surfaces PRISES (PRs ouvertes) = SharePickerView
+>   (#1243/#1246), AffiliateView (#1245/#1267), MemberManagementSection (#1244), AddParticipantSheet (#1256),
+>   NotificationSettingsView (#1252), CommunityLinkDetailView (#1272/#1273), ConversationMediaGalleryView (#1271),
+>   LicensesView (#1270), UserStatsView (#1269), AboutView (#1268), SupportView (#1262), TwoFactorSetupView (#1248),
+>   EffectsPicker (#1261), LocationPickerView (#1242). Mon 94i-conversation-list = surface disjointe (0 collision).
 > - **93i (terminée, branche `claude/upbeat-euler-512kep`, base `main` HEAD `33f89430`)** :
 >   Dynamic Type de `LocationPickerView` (sélecteur de lieu MapKit). **15/17** `.font(.system(size:))`
 >   → `MeeshyFont.relative(...)` (weight + `.monospaced` des coordonnées préservés ; titre toolbar,
