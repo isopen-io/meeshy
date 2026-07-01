@@ -5,10 +5,13 @@
 `Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → **Calls (started)** → rest`
 
 > Calls kicked off 2026-06-30 with the pure call-lifecycle FSM (`core:model`
-> `me.meeshy.sdk.model.call` — `CallState`/`CallEndReason`/`CallEvent`/`CallStateMachine`). Next:
-> a `:feature:calls` `CallViewModel` (UDF `StateFlow<CallUiState>` driving the FSM via intents) +
-> a minimal call screen (ringing/connecting/connected/ended) so the FSM has a real consumer, then
-> the WebRTC/signalling plumbing. See the Calls plan in the run log + `feature-parity.md §H`.
+> `me.meeshy.sdk.model.call` — `CallState`/`CallEndReason`/`CallEvent`/`CallStateMachine`). On
+> 2026-07-01 the `:feature:calls` module landed its real consumer (slice `calls-viewmodel-screen`):
+> a UDF `CallViewModel` (`StateFlow<CallUiState>`) driving the FSM via accept/decline/hang-up/mute/
+> camera intents + signalling events, a pure `CallPresenter` projecting the UI state, and a minimal
+> accent-coherent call screen reachable from audio/video buttons in the chat header. **Next:** the
+> call **signalling event models + socket mapping** (`call:offer`/`:answer`/`:ice-candidate`/…),
+> then the WebRTC/Telecom/FCM plumbing. See the run log + `feature-parity.md §H`.
 
 Stories so far: tray (ring carousel) + cross-group viewer playback engine +
 quick-reaction strip + swipe gestures + realtime reaction socket deltas +
@@ -134,13 +137,14 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 ## Next slice (pick one for the next run)
 
 **Now in the Calls area** (`feature-parity.md §H`). The pure FSM (`core:model`
-`me.meeshy.sdk.model.call`) landed 2026-06-30. Ordered by value:
-1. **`:feature:calls` `CallViewModel` + minimal call screen** — a new Gradle module
-   (`include(":feature:calls")`) with a UDF `CallViewModel` exposing `StateFlow<CallUiState>` derived
-   from `CallState`, driving `CallStateMachine.reduce` from intents (accept/decline/hang-up) and
-   socket/remote events, plus a thin Compose screen rendering ringing/connecting/connected/ended
-   (accent-coherent, natural dismiss). Gives the FSM a real consumer (no dead end). Keep all
-   decisions in the VM/FSM; the screen stays glue.
+`me.meeshy.sdk.model.call`) landed 2026-06-30; the `:feature:calls` consumer landed 2026-07-01
+(slice `calls-viewmodel-screen`). Ordered by value:
+1. ~~**`:feature:calls` `CallViewModel` + minimal call screen**~~ ✅ shipped as `calls-viewmodel-screen`
+   (2026-07-01) — new `:feature:calls` module with a UDF `CallViewModel` (`StateFlow<CallUiState>`)
+   folding accept/decline/hang-up/mute/camera intents + signalling events through `CallStateMachine.reduce`,
+   a pure `CallPresenter` (`CallState × CallConfig × CallMedia → CallUiState`) owning every affordance
+   decision, and a minimal accent-coherent Compose screen (ringing/connecting/connected/ended) reachable
+   from audio/video call buttons in the chat header; dismissal returns to chat. +34 tests. See run log.
 2. **Call signalling event models + socket mapping** — Kotlin payload types for `call:initiate`/
    `:offer`/`:answer`/`:ice-candidate`/`:ended`/`:missed`/`:media-toggled` (parity with iOS
    `CallManager` emit/listen tables) + a pure mapper from socket frames → `CallEvent`.
@@ -337,6 +341,46 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-01 — slice `calls-viewmodel-screen` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration; `origin/main` HEAD `1827303`
+  (iter 53, web). Branched `claude/apps/android/calls-viewmodel-screen` off latest `main`.
+- **What:** gave the pure call FSM (`core:model` `me.meeshy.sdk.model.call`) its **first real consumer** —
+  a new `:feature:calls` Gradle module (`include(":feature:calls")`, wired into `:app`).
+  - **`CallPresenter`** (pure): projects `CallState × CallConfig × CallMedia → CallUiState`. Owns every
+    UI decision — `CallStatus` (IDLE/INCOMING/OUTGOING_RINGING/CONNECTING/CONNECTED/RECONNECTING/ENDED,
+    with `Offering` collapsing to CONNECTING), the `showAnswerControls`/`showHangUp`/`canToggleMedia`/
+    `isActive`/`isEnded` affordances, the terminal `endReason`, the reconnect attempt, and the
+    camera-only-if-video rule. Media intent (mute/camera) rides alongside the phase, never inside the FSM
+    (iOS `CallManager` parity).
+  - **`CallViewModel`** (UDF, `@HiltViewModel`): holds `CallState` + `CallMedia`, folds
+    `start`/`accept`/`decline`/`hangUp`/`onSignal`/`toggleMute`/`toggleCamera`/`dismiss` through
+    `CallStateMachine.reduce`, republishes an immutable `StateFlow<CallUiState>` via `CallPresenter`.
+    `start` is **inert unless idle** (re-entrant launch effect never resets a live call); `dismiss`
+    settles a terminal call back to idle. No `viewModelScope` needed — every transition is synchronous
+    and deterministic (the async WebRTC/signalling plumbing is the next slice).
+  - **`CallScreen`** (glue): accent-coherent (`DynamicColorGenerator.colorForName`) full-screen call UI
+    rendering the phase + peer + status label, with accept/decline/hang-up/mute/camera/close controls the
+    state exposes. Reachable from **audio & video call buttons added to the chat header** (iOS parity);
+    `onClose` returns to chat (coherent dismissal). +2 strings × 4 locales in `:feature:chat`, 18 strings
+    × 4 locales in `:feature:calls`.
+- **Tests (+34, red → green):** `CallPresenterTest` (20) sweeps every `statusOf` arm + every derived
+  affordance's true/false branches + the camera video/audio matrix + end-reason/reconnect exposure;
+  `CallViewModelTest` (14) drives the intents through the public `state` API (outgoing negotiate→connected,
+  incoming accept→connecting, decline→Rejected, hang-up→Local, remote hang-up→Remote, mute/camera toggles,
+  audio call never reports camera on, `start` inert mid-call, dismiss→idle, restart after settle). **RED
+  caught a real bug:** an assertion assumed `Offering` blocks media toggle, but `Offering` presents as
+  CONNECTING (which allows it) — the test expectation was corrected to match the intended collapse, not
+  the code weakened.
+- **Verification:** `:feature:calls:testDebugUnitTest` → 34/34 green; `:app:assembleDebug` → **BUILD
+  SUCCESSFUL** (the chat-header + nav wiring compiles). Diff is `apps/android` only (`git status` clean of
+  any web/ios/gateway/shared path).
+- **Reviewer gate:** PASS — SDK purity respected (pure `CallPresenter` + FSM in `core:model`; product
+  orchestration in `:feature:calls`/`:app`); UDF with immutable `StateFlow<CallUiState>` + pure
+  transitions; single source of truth for colour (`DynamicColorGenerator`) and call transitions
+  (`CallStateMachine`); behaviour-tested through the public API (no tautologies, no reflection); near-total
+  branch coverage on the pure logic incl. inert/boundary arms; no coverage floor touched; natural chat-header
+  entry with coherent dismissal (no dead end).
 
 ### 2026-06-30 — slice `call-state-machine` ✅ shipped (PR pending → squash-merge) + unblocked & merged `story-sticker-picker-search` (PR #1135)
 - **Step 0 (housekeeping):** the prior run's PR #1135 (`story-sticker-picker-search`) was open and

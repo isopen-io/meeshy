@@ -780,6 +780,13 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       mirroring iOS `CallManager`/`WebRTCTypes` transitions (incl. the 3-attempt reconnect budget →
       `ConnectionLost`). SSOT the `:feature:calls` wiring will drive — surpasses iOS, where the FSM
       validator is only a P1 todo. 31 behavioural tests. PiP/call-pill UI + the WebRTC plumbing pending.
+      **`:feature:calls` now consumes the FSM** (slice `calls-viewmodel-screen`): a UDF `CallViewModel`
+      (`StateFlow<CallUiState>`) folds accept/decline/hang-up/mute/camera intents + signalling events
+      through `CallStateMachine.reduce`, with a pure `CallPresenter` projecting `CallState × CallConfig ×
+      CallMedia → CallUiState` (status/answer/hang-up/media-toggle affordances, end-reason label,
+      reconnect attempt). A minimal accent-coherent Compose call screen renders ringing/connecting/
+      connected/ended and is reachable from **audio/video call buttons in the chat header** (iOS parity);
+      dismissal returns to chat. +34 behavioural tests. WebRTC/signalling plumbing still pending.
 - [ ] Live in-call transcription overlay (on-device speech-to-text, leader/follower)
 - [ ] In-call translation data channel (dual-stream clean audio)
 - [ ] In-call video filters (colour presets, low-light boost, background blur, skin smoothing)
