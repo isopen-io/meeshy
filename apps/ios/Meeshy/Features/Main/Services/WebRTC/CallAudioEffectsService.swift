@@ -202,17 +202,27 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
     }
 
     private func updatePerformanceCounters(ms: Double) {
+        // Read the (MainActor-isolated-by-default) constants into local
+        // Sendable values *before* entering the lock: stateLock.withLock's
+        // closure is @Sendable and cannot reference main-actor-isolated
+        // static properties directly, even though this function itself
+        // runs on the same actor as AudioEffectsConstants.
+        let maxProcessingTimeMs = AudioEffectsConstants.maxProcessingTimeMs
+        let overBudgetThreshold = AudioEffectsConstants.overBudgetThreshold
+        let restoreBudgetMs = AudioEffectsConstants.restoreBudgetMs
+        let underBudgetThreshold = AudioEffectsConstants.underBudgetThreshold
+
         let transition = stateLock.withLock { state -> PerformanceTransition in
-            if ms > AudioEffectsConstants.maxProcessingTimeMs {
+            if ms > maxProcessingTimeMs {
                 state.consecutiveOverBudgetFrames += 1
                 state.consecutiveUnderBudgetFrames = 0
-                guard state.consecutiveOverBudgetFrames >= AudioEffectsConstants.overBudgetThreshold,
+                guard state.consecutiveOverBudgetFrames >= overBudgetThreshold,
                       !state.isAutoDegraded else { return .none }
                 state.isAutoDegraded = true
                 return .degraded
-            } else if ms < AudioEffectsConstants.restoreBudgetMs {
+            } else if ms < restoreBudgetMs {
                 state.consecutiveUnderBudgetFrames += 1
-                guard state.consecutiveUnderBudgetFrames >= AudioEffectsConstants.underBudgetThreshold,
+                guard state.consecutiveUnderBudgetFrames >= underBudgetThreshold,
                       state.isAutoDegraded else { return .none }
                 state.isAutoDegraded = false
                 state.consecutiveOverBudgetFrames = 0
