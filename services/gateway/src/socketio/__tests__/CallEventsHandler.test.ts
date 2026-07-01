@@ -1253,8 +1253,12 @@ describe('CallEventsHandler', () => {
       );
     });
 
-    it('does NOT emit quality alert when participant cannot be resolved', async () => {
-      // callSession.findUnique returns null → resolveParticipantIdFromCall returns null
+    it('does NOT persist stats or emit a quality alert when participant cannot be resolved', async () => {
+      // callSession.findUnique returns null → resolveParticipantIdFromCall returns null.
+      // Security fix: persistCallStats must be gated on the SAME participant
+      // resolution as the alert broadcast — otherwise any authenticated user
+      // could flood-write bytesSent/bytesReceived/level onto a callId that
+      // doesn't even resolve to a real call/participant of theirs.
       mockCallServicePersistCallStats.mockResolvedValue(undefined);
       const { socket, io } = setupWithSocket({
         callSession: {
@@ -1269,8 +1273,7 @@ describe('CallEventsHandler', () => {
         stats: { rtt: 500, packetLoss: 1, bytesSent: 100, bytesReceived: 100, level: 'poor' },
       });
 
-      // Stats persisted but no room emit for quality-alert
-      expect(mockCallServicePersistCallStats).toHaveBeenCalled();
+      expect(mockCallServicePersistCallStats).not.toHaveBeenCalled();
       const ioCalls = (io.to as jest.Mock<any>).mock.calls;
       expect(ioCalls.length).toBe(0);
     });
