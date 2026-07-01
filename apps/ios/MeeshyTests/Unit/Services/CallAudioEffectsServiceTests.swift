@@ -273,6 +273,28 @@ final class CallAudioEffectsServiceTests: XCTestCase {
         XCTAssertFalse(sut.isAutoDegraded)
     }
 
+    // MARK: - Performance Counters Thread Safety
+
+    func test_reset_afterDegradation_requiresFullThresholdToDegradeAgain() throws {
+        let sut = makeSUT()
+        try sut.setEffect(.demonVoice(.default))
+
+        for _ in 0..<AudioEffectsConstants.overBudgetThreshold {
+            sut.reportProcessingTime(ms: AudioEffectsConstants.maxProcessingTimeMs + 1)
+        }
+        XCTAssertTrue(sut.isAutoDegraded)
+
+        sut.reset()
+        try sut.setEffect(.demonVoice(.default))
+        XCTAssertFalse(sut.isAutoDegraded)
+
+        // Regression guard: reset() must fully zero the over-budget counter
+        // (not just the isAutoDegraded flag). If the counter carried over,
+        // a single over-budget frame here would immediately re-degrade.
+        sut.reportProcessingTime(ms: AudioEffectsConstants.maxProcessingTimeMs + 1)
+        XCTAssertFalse(sut.isAutoDegraded)
+    }
+
     // MARK: - Reset
 
     func test_reset_clearsAllState() throws {

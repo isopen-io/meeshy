@@ -652,7 +652,6 @@ nonisolated enum QualityThresholds {
     /// declaring "connected". Beyond 10s with no RTP → ended(.failed).
     /// Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §2.3
     static let rtpGatePollIntervalSeconds: TimeInterval = 2.0
-    static let rtpGateMaxAttempts: Int = 5
     static let rtpGateRequiredPackets: Int = 5
 
     /// §5.8 — grace window after reaching `.connected` before a stalled inbound
