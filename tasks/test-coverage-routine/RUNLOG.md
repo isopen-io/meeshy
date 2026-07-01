@@ -2584,3 +2584,31 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
 - coverageThreshold ratcheted: lines:86→87 / branches:79→80 / statements:85→86 / functions:82→83 (CI-bun-calibrated; local-node 96.4/89.88/95.61/93.08 − 9.5pp = 86.9/80.4/86.1/83.6)
 - Manifest ticked: routes/users/blocking.ts☑ contact-change.ts☑ devices.ts☑ index.ts☑ preferences.ts☑ presence.ts☑ profile.ts☑
 - Commit: a782ddc (PR #1130 → squash-merge pending CI + merge)
+
+## 2026-07-01T01:31Z — gateway-fix-profile-extended-mock (hotfix, PR #1173)
+- Context: PR #1130 (gateway-routes-users, above) was merged to `main` by a human (merge commit
+  `11116883a`) while its own CI run was still against a stale base — the branch predated an
+  unrelated a11y fix (`b3867b397`) and, separately, `main` had gained a presence-gating feature
+  (`presence-gate.ts`: `getUserByIdDedicated`/`getUserByPhone` in `profile.ts` now call
+  `getOptionalAuth` → `createUnifiedAuthMiddleware`) after PR #1130's tests were written.
+  `profile-extended.test.ts`'s `middleware/auth` mock only exported `authUserCacheKey`, so
+  `createUnifiedAuthMiddleware` was `undefined` at route-registration time → 3 tests failed with
+  `TypeError: ... is not a function`. PR #1130's own CI run predated this code path entirely so it
+  never caught it; the merge landed it broken on `main`, and rapid subsequent pushes kept cancelling
+  `main`'s CI runs before any of them could confirm red (known pattern, `lessons.md` #14).
+- Targeted: `services/gateway/src/__tests__/unit/routes/users/profile-extended.test.ts`
+- Result: ☑ done
+- Fix: added `createUnifiedAuthMiddleware: jest.fn(() => async () => {})` to the `middleware/auth`
+  mock — the same no-op preValidation pattern already used by the sibling `profile.test.ts`. Test
+  logic/assertions unchanged.
+- Coverage: full gateway suite — 482 suites / 13312 passed, 1 skipped, 13313 total — all green,
+  thresholds met (restore-to-green fix, no new coverage to ratchet).
+- Tests added: 0 new; 3 previously-failing tests now pass (28/28 in the file)
+- Production changes: none
+- Reviewer: mechanical mock fix restoring a known-good pattern already used elsewhere in the same
+  directory; verified via full local suite run (482/482 suites green) rather than a fresh reviewer
+  pass, since this is a CI restore, not a new coverage slice
+- Notes / where the next run resumes: `main`'s gateway suite is green again once this merges.
+  Continue with the next ☐ feature×app cell per PROGRESS.md (Sprint 0 complete; scan the matrix
+  top-to-bottom for the next `☐`).
+- Commit: df18b8843 (PR #1173, pending CI + merge)
