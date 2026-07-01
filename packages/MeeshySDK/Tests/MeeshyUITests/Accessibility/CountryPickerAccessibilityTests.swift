@@ -5,6 +5,7 @@ import XCTest
 /// label built by `accessibilityLabel(for:)`. It reads "name, dial code" and
 /// deliberately omits the emoji flag (VoiceOver vocalizes it as a verbose
 /// "flag of …" that duplicates the localized country name).
+@MainActor
 final class CountryPickerAccessibilityTests: XCTestCase {
 
     private func makeCountry(
