@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Play, Pause } from 'lucide-react';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
+import { formatClock } from '@meeshy/shared/utils/duration-format';
 import MediaManager from '@/utils/media-manager';
 
 interface CompactVideoPlayerProps {
@@ -109,17 +110,7 @@ export const CompactVideoPlayer: React.FC<CompactVideoPlayerProps> = ({
     };
   }, []);
 
-  const formatDuration = (seconds: number): string => {
-    if (!seconds || !isFinite(seconds)) return '0:00';
-    const hours = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
-
-    if (hours > 0) {
-      return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    }
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
+  const formatDuration = (seconds: number): string => formatClock(seconds);
 
   return (
     <div className={`inline-flex items-center gap-2 rounded-lg overflow-hidden bg-purple-100 dark:bg-purple-900/30 ${className}`}>

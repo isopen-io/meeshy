@@ -263,7 +263,7 @@ struct StoryRingCell: View {
 
             if showsUsername {
                 Text(group.username)
-                    .font(.system(size: isCompact ? 9 : 10, weight: group.hasUnviewed ? .semibold : .medium))
+                    .font(MeeshyFont.relative(isCompact ? 9 : 10, weight: group.hasUnviewed ? .semibold : .medium))
                     .foregroundColor(group.hasUnviewed ? theme.textPrimary : theme.textMuted)
                     .lineLimit(1)
                     .frame(width: isCompact ? 56 : 96)
@@ -290,10 +290,11 @@ fileprivate func storyCountDots(count: Int, unviewed: Bool) -> some View {
         }
         if count > 5 {
             Text("+")
-                .font(.system(size: 8, weight: .bold))
+                .font(MeeshyFont.relative(8, weight: .bold))
                 .foregroundColor(.white.opacity(0.5))
         }
     }
+    .accessibilityHidden(true)
 }
 
 // MARK: - Thumbnail Helper
@@ -399,12 +400,14 @@ private struct MyStoryButton: View {
                             // bouton (+) (40pt) → 32pt frame, glyph à 0.65×
                             // pour garder la parité avec l'emoji mood animé
                             // (cf. MeeshyAvatar.badgeSize .storyTray).
+                            // Emoji dans un cercle de dimension fixe 32×32 : figé (déborderait s'il scalait, doctrine 86i)
                             Text("\u{1F4AD}")
                                 .font(.system(size: 20))
                                 .frame(width: 32, height: 32)
                                 .background(Circle().fill(theme.backgroundPrimary))
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(String(localized: "story.tray.a11y.changeMood", defaultValue: "Changer mon mood", bundle: .main))
                     }
                 }
                 .overlay(alignment: .topLeading) {
@@ -424,6 +427,7 @@ private struct MyStoryButton: View {
                             // 20×20 / offset (-2,-2). Maintenant doublé pour
                             // matcher la taille trail (avatars passés à 88pt
                             // en ab691abaf).
+                            // Glyphe dans un cercle de dimension fixe 40×40 : figé (déborderait s'il scalait, doctrine 86i) ; le bouton porte le libellé
                             Image(systemName: "plus")
                                 .font(.system(size: 22, weight: .bold))
                                 .foregroundStyle(Color.white)
@@ -460,16 +464,17 @@ private struct MyStoryButton: View {
                         }
                         if group.stories.count > 5 {
                             Text("+")
-                                .font(.system(size: 8, weight: .bold))
+                                .font(MeeshyFont.relative(8, weight: .bold))
                                 .foregroundColor(.white.opacity(0.5))
                         }
                     }
                     .offset(y: 28)
+                    .accessibilityHidden(true)
                 }
             }
 
             Text(String(localized: "story.tray.me", defaultValue: "Moi", bundle: .main))
-                .font(.system(size: 10, weight: .semibold))
+                .font(MeeshyFont.relative(10, weight: .semibold))
                 .foregroundColor(theme.textSecondary)
         }
         .accessibilityLabel(hasMyStory ? String(localized: "story.tray.a11y.myStory", defaultValue: "Ma story", bundle: .main) : String(localized: "story.tray.a11y.changeMood", defaultValue: "Changer mon mood", bundle: .main))
@@ -506,6 +511,7 @@ private struct StoryUploadOverlay: View {
                     .stroke(MeeshyColors.error, lineWidth: 3)
                     .frame(width: 50, height: 50)
 
+                // Glyphe dans un cercle d'upload de dimension fixe 50×50 : figé (déborderait s'il scalait, doctrine 86i)
                 Image(systemName: "exclamationmark.triangle")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(.white)
@@ -520,6 +526,7 @@ private struct StoryUploadOverlay: View {
                     .rotationEffect(.degrees(-90))
                     .animation(.linear(duration: 0.3), value: upload.progress)
 
+                // Texte dans un cercle d'upload de dimension fixe 50×50 : figé (déborderait s'il scalait, doctrine 86i)
                 Text("\(Int(upload.progress * 100))%")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(.white)
@@ -651,6 +658,7 @@ struct PinnedStoryTrailBand: View {
             viewModel.showStoryComposer = true
             HapticFeedback.medium()
         } label: {
+            // Glyphe dans un cercle de dimension fixe 44×44 : figé (déborderait s'il scalait, doctrine 86i) ; le bouton porte le libellé
             Image(systemName: "plus")
                 .font(.system(size: 20, weight: .bold))
                 .foregroundStyle(Color.white)

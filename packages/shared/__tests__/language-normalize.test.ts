@@ -61,11 +61,34 @@ describe('normalizeLanguageCode', () => {
     expect(normalizeLanguageCode('z')).toBeUndefined();
   });
 
-  it('caps length at 2 chars (NLLB-200 mapping uses ISO 639-1)', () => {
-    // ISO 639-3 codes ("eng", "fra") get truncated to their 2-letter equivalent
-    // because the translator pipeline maps 2-letter codes only ("en" → "eng_Latn").
+  it('reduces ISO 639-3 to its supported 2-letter equivalent when unambiguous', () => {
+    // "eng"/"fra" have no Meeshy entry but their 2-letter prefix IS supported,
+    // and the translator pipeline maps 2-letter codes ("en" → "eng_Latn").
     expect(normalizeLanguageCode('eng')).toBe('en');
     expect(normalizeLanguageCode('fra')).toBe('fr');
+  });
+
+  it('preserves supported ISO 639-3 codes verbatim (never truncates)', () => {
+    // Cameroonian languages have no ISO 639-1 code and are stored/keyed by their
+    // 3-letter code everywhere (translations, NLLB, MessageTranslation). Truncating
+    // 'bas' → 'ba' would resolve to Bashkir and break the Prisme Linguistique.
+    expect(normalizeLanguageCode('bas')).toBe('bas');
+    expect(normalizeLanguageCode('ewo')).toBe('ewo');
+    expect(normalizeLanguageCode('dua')).toBe('dua');
+    expect(normalizeLanguageCode('nnh')).toBe('nnh');
+    expect(normalizeLanguageCode('ksf')).toBe('ksf');
+  });
+
+  it('strips region tag from a supported 3-letter code', () => {
+    // iOS Locale.current for a Basaa device reports "bas_CM".
+    expect(normalizeLanguageCode('bas-CM')).toBe('bas');
+    expect(normalizeLanguageCode('BAS_CM')).toBe('bas');
+  });
+
+  it('rejects unknown ISO 639-3 whose 2-letter prefix is unsupported', () => {
+    // 'spa' → 'sp' would be wrong (Spanish is 'es'); refuse rather than corrupt.
+    expect(normalizeLanguageCode('spa')).toBeUndefined();
+    expect(normalizeLanguageCode('xyz')).toBeUndefined();
   });
 
   it('rejects primary subtag containing digits or punctuation', () => {

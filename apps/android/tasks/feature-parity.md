@@ -814,10 +814,30 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       the `CallViewModel` will fold; a non-JSONObject arg / malformed / inert frame emits nothing.
       Outbound fire-and-forget emit table at iOS-exact payload keys: `emitJoin`/`emitLeave`/`emitEnd`
       (`{callId}`), `emitToggleAudio`/`emitToggleVideo` (`{callId, enabled}`), `emitSignal`
-      (`{callId, signal}`). +18 behavioural tests. **Pending:** fold `events` into `CallViewModel` in
-      `viewModelScope` (needs the call-id lifecycle from an `initiate`-ACK slice), the ACK-based
-      `call:initiate` + WebRTC-plumbing emits (`request-ice-servers`/`heartbeat`/`quality-report`/
-      `reconnecting`/`reconnected`), and the app-level `attach()` lifecycle caller.
+      (`{callId, signal}`). +18 behavioural tests. **ACK-based `call:initiate` landed** (slice
+      `call-initiate-ack`): `core:model` gains the pure `SocketIceServer` (with
+      `IceServerUrlsSerializer` normalising the gateway's single-string-or-array `urls` to a `List`),
+      `CallInitiateAck` (`callId`/`mode`/`iceServers`/`ttlSeconds`), the sealed `CallInitiateResult`
+      (`Success`/`ServerError`/`Malformed`/`Timeout`), and the total `CallInitiateAckParser.parse(rawJson)`
+      — parity with the iOS `emitCallInitiate` guard (`success:true` + non-blank `data.callId` → `Success`;
+      else the gateway error from `error.message` → bare-string `error` → `"unknown error"`; undecodable
+      body → `Malformed`). `:sdk-core` `CallSignalManager.emitInitiate(conversationId, isVideo)` is the
+      suspend transport: emits `call:initiate` with `{conversationId, type}`, awaits the ACK within a 10s
+      budget (iOS parity), delegates the body to the parser, and maps a missing/non-object ACK to
+      `Timeout`. +26 behavioural tests (21 parser: success incl. minimal/unknown-keys, single vs array
+      urls, TURN creds, every ServerError fallback incl. non-string error, Malformed bad-JSON/bad-shape,
+      robust urls dropping; 5 manager: payload keys, video/audio, ServerError, no-ACK Timeout,
+      non-JSONObject Timeout). **VM-fold landed** (slice `call-viewmodel-signal-fold`): the
+      `:feature:calls` `CallViewModel` now folds `CallSignalManager.events` in `viewModelScope` (each
+      mapped `CallEvent` reduced through the FSM, so a peer answer / remote hang-up / stall drives the
+      screen with no manual wiring); an **outgoing** `start` mints the real `callId` via `emitInitiate`
+      (optimistic ring first, then `Ended(Failed)` on a rejected/timed-out/malformed ACK — the gateway
+      message surfaced on `ServerError`); and accept/decline/hang-up/mute/camera fan out to
+      `emitJoin`/`emitEnd`/`emitToggleAudio`/`emitToggleVideo`, each **keyed by the known `callId`** and
+      inert until one is known (outgoing minted, incoming from `CallConfig.callId`). +14 behavioural tests.
+      **Pending:** WebRTC-plumbing emits (`request-ice-servers`/`heartbeat`/`quality-report`/
+      `reconnecting`/`reconnected`); the app-level `CallSignalManager.attach()` lifecycle caller; and a
+      Calls-tab nav entry threading the real `conversationId` into the outgoing `CallConfig` (`:app`).
 - [x] Call history / journal (recent + missed calls list, direction, duration, data usage) —
       **pure call-journal model landed** (slice `call-history-model`): `core:model`
       `me.meeshy.sdk.model.call` gains `CallDirection` (incoming/outgoing/missed, `fromRaw` degrades

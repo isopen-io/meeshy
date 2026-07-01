@@ -180,6 +180,16 @@ public enum LanguageData {
         return common + rest
     }()
 
+    // MARK: - Supported-Code Set
+
+    /// Lowercased set of every supported language code, including ISO 639-3 codes
+    /// without an ISO 639-1 equivalent (`"bas"`, `"dua"`, `"ewo"`). Used by
+    /// `MeeshyUser.normalizeLanguageCode` to preserve 3-letter codes verbatim
+    /// instead of truncating them into unrelated languages (`"bas"` → `"ba"`).
+    /// Built once; membership checks are O(1).
+    public static let supportedCodeSet: Set<String> =
+        Set(allLanguages.map { $0.code.lowercased() })
+
     // MARK: - Lookup
 
     /// Canonical-code aliases so legacy/BCP-47 spellings resolve to the entry

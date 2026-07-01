@@ -25,6 +25,9 @@ import type {
   ConversationJoinedListener,
   ConversationNewListener,
   FriendRequestCancelledListener,
+  FriendRequestNewListener,
+  FriendRequestAcceptedListener,
+  FriendRequestRejectedListener,
   ConversationDeletedListener,
   ConversationUpdatedListener,
   UnsubscribeFn
@@ -48,6 +51,9 @@ export class PresenceService {
   private participantRoleUpdatedListeners: Set<(data: { conversationId: string; userId: string; newRole: string }) => void> = new Set();
   private conversationNewListeners: Set<ConversationNewListener> = new Set();
   private friendRequestCancelledListeners: Set<FriendRequestCancelledListener> = new Set();
+  private friendRequestNewListeners: Set<FriendRequestNewListener> = new Set();
+  private friendRequestAcceptedListeners: Set<FriendRequestAcceptedListener> = new Set();
+  private friendRequestRejectedListeners: Set<FriendRequestRejectedListener> = new Set();
   private conversationDeletedListeners: Set<ConversationDeletedListener> = new Set();
   private conversationUpdatedListeners: Set<ConversationUpdatedListener> = new Set();
   private conversationParticipantLeftListeners: Set<(data: { conversationId: string; userId: string; displayName: string; leftAt: string }) => void> = new Set();
@@ -136,6 +142,18 @@ export class PresenceService {
 
     socket.on(SERVER_EVENTS.FRIEND_REQUEST_CANCELLED as any, (data: any) => {
       this.friendRequestCancelledListeners.forEach(listener => listener(data));
+    });
+
+    socket.on(SERVER_EVENTS.FRIEND_REQUEST_NEW as any, (data: any) => {
+      this.friendRequestNewListeners.forEach(listener => listener(data));
+    });
+
+    socket.on(SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED as any, (data: any) => {
+      this.friendRequestAcceptedListeners.forEach(listener => listener(data));
+    });
+
+    socket.on(SERVER_EVENTS.FRIEND_REQUEST_REJECTED as any, (data: any) => {
+      this.friendRequestRejectedListeners.forEach(listener => listener(data));
     });
 
     socket.on(SERVER_EVENTS.CONVERSATION_DELETED as any, (data: any) => {
@@ -262,6 +280,21 @@ export class PresenceService {
     return () => this.friendRequestCancelledListeners.delete(listener);
   }
 
+  onFriendRequestNew(listener: FriendRequestNewListener): UnsubscribeFn {
+    this.friendRequestNewListeners.add(listener);
+    return () => this.friendRequestNewListeners.delete(listener);
+  }
+
+  onFriendRequestAccepted(listener: FriendRequestAcceptedListener): UnsubscribeFn {
+    this.friendRequestAcceptedListeners.add(listener);
+    return () => this.friendRequestAcceptedListeners.delete(listener);
+  }
+
+  onFriendRequestRejected(listener: FriendRequestRejectedListener): UnsubscribeFn {
+    this.friendRequestRejectedListeners.add(listener);
+    return () => this.friendRequestRejectedListeners.delete(listener);
+  }
+
   onConversationDeleted(listener: ConversationDeletedListener): UnsubscribeFn {
     this.conversationDeletedListeners.add(listener);
     return () => this.conversationDeletedListeners.delete(listener);
@@ -314,6 +347,9 @@ export class PresenceService {
     this.participantRoleUpdatedListeners.clear();
     this.conversationNewListeners.clear();
     this.friendRequestCancelledListeners.clear();
+    this.friendRequestNewListeners.clear();
+    this.friendRequestAcceptedListeners.clear();
+    this.friendRequestRejectedListeners.clear();
     this.conversationDeletedListeners.clear();
     this.conversationUpdatedListeners.clear();
     this.conversationParticipantLeftListeners.clear();

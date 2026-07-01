@@ -4,26 +4,37 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Calls) — slice `call-history-list` ✅
-The recent/missed-calls **list UI** (`:feature:calls`) over the cache-first journal.
-- Pure `CallHistoryList` (`combine` de-dups stream+paged by `callId`, stream order first;
-  `filter` narrows to missed). Pure `CallTimeLabel` (ISO → relative label: same-day time /
-  yesterday / weekday / date-with-optional-year, empty on unparsable).
-- UDF `CallHistoryViewModel` over `CallHistoryRepository.historyStream()` — SWR flags
-  (skeleton only on cold empty), client-side missed-only filter, cursor-paged infinite scroll
-  via `fetchPage` (de-dup, cursor advance, `hasMore`/re-entrancy/failure gating), pull-to-refresh
-  that resets paging. Immutable `CallHistoryUiState` with `isFilteredEmpty`.
-- Accent-coherent `CallHistoryScreen` glue: `MeeshyAvatar` rows, direction icon (missed = error
-  colour), relative time, All/Missed `FilterChip`s, cold skeleton, empty states, pull-to-refresh.
-- +30 tests (`CallHistoryListTest` 7, `CallTimeLabelTest` 7, `CallHistoryViewModelTest` 16).
-  +10 strings × 4 locales. `meeshy.sh check` green, diff = `apps/android` only.
+## This loop (Phase: Calls) — slice `call-viewmodel-signal-fold` ✅
+The VM-fold — turns the call screen into a live two-way socket endpoint by folding
+`CallSignalManager.events` into `CallViewModel`, placing outgoing calls via the ACK, and keying every
+outbound emit by the real `callId`.
+- `CallConfig` gains `conversationId` (outgoing `emitInitiate` target) + `callId` (id an incoming call
+  already carries); both default `""` so `:app`'s placeholder compiles unchanged.
+- `CallViewModel` `@Inject`s `CallSignalManager`: `init` collects `events` in `viewModelScope` and
+  reduces each mapped `CallEvent` through the unchanged FSM; outgoing `start` rings optimistically then
+  `emitInitiate` mints `callId` (`Success`) or settles `Ended(Failed)` (`ServerError`/`Timeout`/
+  `Malformed`, gateway message surfaced); accept→`emitJoin`, decline/hangUp→`emitEnd`, mute→
+  `emitToggleAudio`, camera→`emitToggleVideo`, all `emitIfIdentified`-guarded (inert while `callId` blank).
+- +14 tests (28 total in `CallViewModelTest`; all 14 prior preserved). Whole-project `assembleDebug` +
+  `testDebugUnitTest` green (system Gradle `/opt/gradle`, wrapper 403s through proxy — see NOTES).
+  Diff = `apps/android` only (3 code files).
 
 ### Next
-1. Fold `CallSignalManager.events` into `CallViewModel` once the `initiate`-ACK call-id lifecycle
-   lands (an `initiate`-ACK slice giving the outgoing call its server call-id).
-2. Wire `CallHistoryScreen` into a Calls tab / navigation entry once the app shell exposes one
-   (currently reachable as a standalone screen; nav host wiring touches `:app`).
+1. **App-level `CallSignalManager.attach()` lifecycle caller** — an app-startup hook so inbound `events`
+   begin flowing (currently nothing calls `attach()`).
+2. A Calls-tab nav entry threading the real `conversationId` into the outgoing `CallConfig` + wiring
+   `CallHistoryScreen` (`:app`, own explicit run since it touches nav).
 3. Then the WebRTC / Telecom / FCM full-screen-intent plumbing.
+
+## Prior loop (Phase: Calls) — slice `call-initiate-ack` ✅
+The ACK-based `call:initiate` — mints the real server `callId` (+ mode / ICE servers / ttl). `core:model`
+`SocketIceServer`/`CallInitiateAck`/`CallInitiateResult`/`CallInitiateAckParser`; `:sdk-core`
+`CallSignalManager.emitInitiate(conversationId, isVideo)`. +26 tests. Diff = `apps/android` only.
+
+## Prior loop (Phase: Calls) — slice `call-history-list` ✅
+The recent/missed-calls **list UI** (`:feature:calls`) over the cache-first journal — pure
+`CallHistoryList` + `CallTimeLabel`, UDF `CallHistoryViewModel` (SWR, missed filter, cursor paging,
+pull-to-refresh), accent-coherent `CallHistoryScreen`. +30 tests. Diff = `apps/android` only.
 
 ## Prior loop (Phase: Calls) — slice `call-history-repository` ✅
 The REST + Room cache-first layer under the call journal. `:core:network` `CallHistoryApi`

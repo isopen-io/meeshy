@@ -292,9 +292,11 @@ struct ReelsPlayerView: View {
     private var emptyState: some View {
         if viewModel.hasLoadedOnce {
             VStack(spacing: 14) {
+                // Glyphe héros décoratif ≥40pt : figé (doctrine 74i/86i) + masqué VoiceOver (le texte porte le sens)
                 Image(systemName: "play.rectangle.on.rectangle")
                     .font(.system(size: 44))
                     .foregroundColor(.white.opacity(0.7))
+                    .accessibilityHidden(true)
                 Text(String(localized: "reels.empty", defaultValue: "Aucun réel pour le moment", bundle: .main))
                     .font(.headline)
                     .foregroundColor(.white)
@@ -331,6 +333,7 @@ struct ReelsPlayerView: View {
                 )
 
             Button(action: onClose) {
+                // Glyphe chrome dans un cadre de tap fixe 40×40 : figé (doctrine 82i) ; le bouton porte le libellé
                 Image(systemName: "chevron.backward")
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(.white)
@@ -711,7 +714,7 @@ struct ReelPageView: View {
 
     private func statInline(icon: String, count: Int, a11yLabel: String) -> some View {
         HStack(spacing: 3) {
-            Image(systemName: icon).font(.system(size: 10, weight: .semibold))
+            Image(systemName: icon).font(MeeshyFont.relative(10, weight: .semibold))
             Text(ReelActionButton.compact(count)).font(.caption2.weight(.medium))
         }
         .foregroundColor(.white.opacity(0.85))
@@ -889,6 +892,8 @@ private struct ReelActionButton: View {
         Button(action: action) {
             VStack(spacing: 5) {
                 ZStack {
+                    // Glyphes du rail d'actions (like/comment/bookmark/share) : taille figée pour
+                    // la cohérence de la colonne fixe width:48 (doctrine 86i) ; le bouton porte le libellé
                     Image(systemName: systemName)
                         .font(.system(size: 26, weight: .semibold))
                         .foregroundColor(tint)
@@ -1521,10 +1526,12 @@ private struct ReelAudioView: View {
             .ignoresSafeArea()
 
             // Subtle large waveform watermark behind the transcript.
+            // Glyphe décoratif ≥40pt : figé (doctrine 74i/86i) + masqué VoiceOver
             Image(systemName: "waveform")
                 .font(.system(size: 220, weight: .semibold))
                 .foregroundColor(.white.opacity(0.05))
                 .allowsHitTesting(false)
+                .accessibilityHidden(true)
 
             heroLayer
         }
@@ -1535,10 +1542,12 @@ private struct ReelAudioView: View {
         if displaySegments.isEmpty {
             // No transcript yet — keep a prominent waveform glyph as the hero so
             // the screen never reads as empty.
+            // Glyphe héros décoratif ≥40pt : figé (doctrine 74i/86i) + masqué VoiceOver
             Image(systemName: "waveform")
                 .font(.system(size: 84, weight: .semibold))
                 .foregroundColor(.white.opacity(0.92))
                 .shadow(color: .black.opacity(0.35), radius: 10)
+                .accessibilityHidden(true)
         } else {
             // Karaoke transcript: the active segment ([startTime, endTime) of the
             // live `player.currentTime`) is highlighted + auto-scrolled to centre.

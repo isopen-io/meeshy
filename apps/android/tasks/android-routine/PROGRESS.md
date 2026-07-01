@@ -31,9 +31,23 @@
 > cursor-paged infinite scroll via `fetchPage` (de-dup, cursor advance, `hasMore`/re-entrancy/failure
 > gating), and pull-to-refresh that resets paging — backed by the pure `CallHistoryList` (combine+filter)
 > and `CallTimeLabel` (ISO → relative label), rendered by an accent-coherent `CallHistoryScreen`.
-> **Next:** fold `CallSignalManager.events` into `CallViewModel` (`viewModelScope`) once the call-id
-> lifecycle exists (an `initiate`-ACK slice); wire `CallHistoryScreen` into a Calls tab (`:app`); then
-> the WebRTC/Telecom/FCM plumbing. See the run log + `feature-parity.md §H`.
+> On 2026-07-01 the **ACK-based `call:initiate`** landed (slice `call-initiate-ack`): `core:model` gains
+> `SocketIceServer` (+ `IceServerUrlsSerializer` normalising single-string-or-array `urls`),
+> `CallInitiateAck`, the sealed `CallInitiateResult` (`Success`/`ServerError`/`Malformed`/`Timeout`) and
+> the total pure `CallInitiateAckParser.parse`, plus `:sdk-core` `CallSignalManager.emitInitiate(
+> conversationId, isVideo)` — the suspend emit that mints the real `callId` (+ mode / ICE servers / ttl)
+> every outbound emit is keyed by, at parity with the iOS `emitCallInitiate` (10s ACK budget). The
+> `callId` lifecycle now exists.
+> On 2026-07-01 the **VM-fold** landed (slice `call-viewmodel-signal-fold`): `CallViewModel` now folds
+> `CallSignalManager.events` in `viewModelScope` (each mapped `CallEvent` reduced through the FSM), an
+> outgoing `start` mints the real `callId` via `emitInitiate` (optimistic ring, then `Ended(Failed)` on
+> ACK failure), and accept/decline/hang-up/mute/camera fan out to `emitJoin`/`emitEnd`/`emitToggleAudio`/
+> `emitToggleVideo` keyed by the known `callId` (inert until one exists). The call screen is now a real
+> two-way endpoint over the socket.
+> **Next:** the app-level `CallSignalManager.attach()` lifecycle caller (an app-startup hook so `events`
+> begin flowing); a Calls-tab nav entry threading the real `conversationId` into the outgoing `CallConfig`
+> (`:app`) + wiring `CallHistoryScreen` there; then the WebRTC/Telecom/FCM plumbing. See the run log +
+> `feature-parity.md §H`.
 
 Stories so far: tray (ring carousel) + cross-group viewer playback engine +
 quick-reaction strip + swipe gestures + realtime reaction socket deltas +
@@ -196,13 +210,26 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
    listens to all 8 inbound `call:*` frames, routes each through `CallSignalMapper`, and republishes the
    mapped `CallEvent` on `SharedFlow<CallEvent> events`; outbound fire-and-forget emit table
    (`join`/`leave`/`end`/`toggle-audio`/`toggle-video`/`signal`) at iOS-exact payload keys. +18 tests.
-   See run log. **Still pending:** the **VM-fold half** — `CallViewModel` collecting `events` in
-   `viewModelScope` and its intents driving the outbound emits. That needs the **call-id lifecycle**
-   which `CallConfig` doesn't yet carry, so it depends on:
-5. **`call:initiate` ACK slice**: an `emitInitiate(conversationId, isVideo)` returning the gateway's real
-   `callId` (+ mode / ICE servers / ttl) — the ACK-based emit iOS uses to mint the id. This gives the VM
-   the `callId` every outbound emit is keyed by; once it lands, fold `events` into the VM and route
-   accept/decline/hang-up/mute/camera to `CallSignalManager` emits.
+   See run log. **VM-fold half now shipped** (see #6).
+5. ~~**`call:initiate` ACK slice**~~ ✅ shipped as `call-initiate-ack` (2026-07-01) — `core:model`
+   `SocketIceServer` (+ `IceServerUrlsSerializer` normalising single-string-or-array `urls`),
+   `CallInitiateAck` (`callId`/`mode`/`iceServers`/`ttlSeconds`), the sealed `CallInitiateResult`
+   (`Success`/`ServerError`/`Malformed`/`Timeout`) and the total pure `CallInitiateAckParser.parse`,
+   plus `:sdk-core` `CallSignalManager.emitInitiate(conversationId, isVideo)` — the suspend transport
+   that emits `call:initiate`, awaits the ACK (10s, iOS parity), delegates the body to the parser, and
+   maps a missing/non-object ACK to `Timeout`. +26 tests. See run log.
+6. ~~**VM-fold slice**~~ ✅ shipped as `call-viewmodel-signal-fold` (2026-07-01) — `CallViewModel` folds
+   `CallSignalManager.events` in `viewModelScope` (each mapped `CallEvent` reduced through the FSM); an
+   outgoing `start` mints the real `callId` via `emitInitiate` (optimistic ring, then `Ended(Failed)` on
+   `ServerError`/`Timeout`/`Malformed`, the gateway message surfaced); accept/decline/hang-up/mute/camera
+   fan out to `emitJoin`/`emitEnd`/`emitToggleAudio`/`emitToggleVideo` keyed by the known `callId`
+   (outgoing minted, incoming from `CallConfig.callId`, inert until one exists). +14 tests. See run log.
+
+**Next (highest value now the call screen is a live endpoint):** the app-level
+`CallSignalManager.attach()` lifecycle caller (an app-startup hook so inbound `events` begin flowing);
+then a Calls-tab nav entry threading the real `conversationId` into the outgoing `CallConfig` and wiring
+`CallHistoryScreen` (`:app`, own explicit run since it touches nav). Then the heavier WebRTC/Telecom/FCM
+plumbing.
 
 Then the heavier WebRTC/Telecom/FCM-full-screen-intent plumbing (glue-heavy; push every testable
 decision into pure helpers/the VM).
@@ -393,6 +420,78 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-01 — slice `call-viewmodel-signal-fold` ✅ shipped
+- **Step 0 (housekeeping):** the prior Android PR **#1311** (`call-initiate-ack`) was still open —
+  squash-merged it to `main` first (mergeable=clean, diff `apps/android` only, monorepo CI has no
+  required checks for an android-only diff), then branched off freshly-fetched `origin/main`
+  (`03c122fe`) as `claude/apps/android/call-viewmodel-signal-fold`. The other 7 open PRs are
+  web/iOS/gateway/shared branches — left untouched.
+- **Slice:** the VM-fold — turn the call screen from a self-contained FSM demo into a live two-way
+  socket endpoint. Folds `CallSignalManager.events` into the VM, places outgoing calls via the ACK, and
+  keys every outbound emit by the real `callId`.
+- **Design (thin orchestration over the existing pure building blocks):**
+  - `CallConfig` gains `conversationId` (the room an outgoing `emitInitiate` targets) and `callId` (the
+    id an incoming call already carries); both default `""`, so `:app`'s existing `CallConfig(...)`
+    placeholder compiles unchanged.
+  - `CallViewModel` now `@Inject`s `CallSignalManager`. `init { viewModelScope.launch { events.collect
+    (::dispatch) } }` folds each mapped `CallEvent` through the unchanged `CallStateMachine`. Outgoing
+    `start` rings optimistically (`dispatch(StartOutgoing)`) then `launch`es `emitInitiate` → `Success`
+    stores the minted `callId`; `ServerError`/`Timeout`/`Malformed` → `dispatch(ConnectionFailed(msg))`
+    which the FSM's terminal path settles to `Ended(Failed)`. accept→`emitJoin`, decline/hangUp→
+    `emitEnd`, mute→`emitToggleAudio(enabled=!muted)`, camera→`emitToggleVideo(enabled=cameraOn)`, all
+    guarded by `emitIfIdentified` (inert while `callId` is blank). No FSM/presenter change.
+- **Tests (TDD red→green, +14; 28 total in `CallViewModelTest`):** initiate emits conversationId+video
+  type; optimistic ring before ACK; `ServerError`→`Ended(Failed("Room full"))`; `Timeout`/`Malformed`→
+  `Ended(Failed)`; incoming never emits initiate; hang-up/accept/decline/mute/camera each verified
+  keyed by the minted/incoming id; blank-id guard emits nothing; `RemoteHangUp` and the
+  join→answer→connected chain folded through `events` drive the state. All 14 prior tests preserved
+  verbatim (only the `vm()` factory + configs gained the injected mock and the new id fields).
+- **Verification:** whole-project `assembleDebug testDebugUnitTest` **BUILD SUCCESSFUL** (886 tasks) via
+  system Gradle 8.14.3 `--no-daemon` (wrapper still 403s through the proxy — NOTES). `:feature:calls`
+  suite 28/28 green; `:app` compiles against the widened `CallConfig`.
+- **Reviewer gate:** PASS — diff `apps/android` only (3 code files, +290 −31), VM orchestration lives in
+  `:feature:calls` (building blocks untouched in `:sdk-core`/`core:model`), behaviour tested through the
+  public API, no tautologies, no floor lowered, `viewModelScope` collect cancellation-safe (no swallowed
+  `CancellationException`).
+
+### 2026-07-01 — slice `call-initiate-ack` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration (the 4 open PRs on `main` are
+  web/iOS branches — #1307–#1310, none `claude/apps/android/*`). Branched off freshly-fetched
+  `origin/main` (`dc9a1a11`) as `claude/apps/android/call-initiate-ack`.
+- **Slice:** the ACK-based `call:initiate` — the "Next slice" #5 that unblocks the VM-fold. It gives the
+  future `CallViewModel` the real MongoDB `callId` every outbound emit is keyed by, plus the per-user ICE
+  servers WebRTC must be configured with before any SDP offer.
+- **Design (SDK-pure-first):**
+  - `core:model/.../call/CallInitiateAck.kt` — `SocketIceServer` (`urls`/`username`/`credential`) with a
+    custom `IceServerUrlsSerializer` that normalises the gateway's single-string-**or**-array `urls` to a
+    `List<String>` (parity with iOS `SocketIceServer.IceServerURLs`); `CallInitiateAck`
+    (`callId`/`mode`/`iceServers`/`ttlSeconds`); the sealed `CallInitiateResult`
+    (`Success`/`ServerError`/`Malformed`/`Timeout`); and the total, side-effect-free
+    `CallInitiateAckParser.parse(rawJson)` — the single tested SSOT for the ACK wire contract, faithful to
+    the iOS `emitCallInitiate` guard (`success:true` + non-blank `data.callId` → `Success`; else the
+    gateway error from `error.message` → bare-string `error` → `"unknown error"`; undecodable body →
+    `Malformed`). `Timeout` is transport-level (never produced by the parser).
+  - `:sdk-core/.../socket/CallSignalManager.kt` — `suspend emitInitiate(conversationId, isVideo)`: emits
+    `call:initiate` with `{conversationId, type:"video"|"audio"}` via the existing ACK-emit overload,
+    awaits the ACK inside `withTimeoutOrNull(10_000)` (iOS's 10s budget) wrapping a
+    `suspendCancellableCoroutine`, delegates the body to `CallInitiateAckParser`, and maps a
+    missing/non-JSONObject ACK to `CallInitiateResult.Timeout`. Owns only the transport; the wire decision
+    lives once in the pure parser.
+- **Tests (TDD red→green, +26):** 21 `CallInitiateAckParserTest` (full ACK incl. minimal/unknown-keys,
+  single-string vs array `urls`, TURN creds, every `ServerError` fallback incl. non-string error, both
+  `Malformed` arms — bad JSON + wrong `iceServers` shape, robust `urls` dropping non-strings/objects);
+  5 `CallSignalManagerTest` additions (payload keys + video type, audio type, `ServerError` on rejection,
+  `Timeout` on no-ACK, `Timeout` on non-JSONObject ACK — the last two exercise `withTimeoutOrNull` under
+  the `runTest` virtual clock). Every parser branch and `messageOf` arm enumerated and hit.
+- **Verification:** `assembleDebug testDebugUnitTest` **BUILD SUCCESSFUL** (whole project; 886 tasks) via
+  system Gradle 8.14.3 (`--no-daemon`). The wrapper's pinned 8.11.1 distribution 403s through the egress
+  proxy (redirects to a blocked github.com release asset) — used the preinstalled `/opt/gradle` instead;
+  the committed wrapper is untouched. Lesson recorded in NOTES.md.
+- **Reviewer gate:** PASS — diff is `apps/android` only (4 files, +404 −0), pure building blocks in
+  `core:model`/`:sdk-core` (no product orchestration; the VM-fold is the next slice, so `emitInitiate`
+  joins the already-established outbound emit table awaiting that fold — not an orphan), behaviour tested
+  through the public API, no tautologies, no floor lowered.
 
 ### 2026-07-01 — slice `call-history-list` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration (open PRs on `main` are iOS-a11y

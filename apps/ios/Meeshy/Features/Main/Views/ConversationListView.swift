@@ -320,7 +320,7 @@ struct ConversationListView: View {
             },
             onLongPress: {
                 Task { await conversationViewModel.loadPreviewMessages(for: conversation.id) }
-                withAnimation(.easeOut(duration: 0.2)) { contextMenuConversation = conversation }
+                withAnimation(.spring(response: 0.34, dampingFraction: 0.72)) { contextMenuConversation = conversation }
             }
         )
         .equatable()
