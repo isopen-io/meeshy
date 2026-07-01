@@ -387,6 +387,36 @@ describe('PresenceService', () => {
       socket._trigger('friend-request:cancelled', {});
       expect(listener).not.toHaveBeenCalled();
     });
+
+    it('onFriendRequestNew unsubscribe works', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      const unsub = service.onFriendRequestNew(listener);
+      unsub();
+      socket._trigger('friend-request:new', {});
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it('onFriendRequestAccepted unsubscribe works', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      const unsub = service.onFriendRequestAccepted(listener);
+      unsub();
+      socket._trigger('friend-request:accepted', {});
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it('onFriendRequestRejected unsubscribe works', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      const unsub = service.onFriendRequestRejected(listener);
+      unsub();
+      socket._trigger('friend-request:rejected', {});
+      expect(listener).not.toHaveBeenCalled();
+    });
   });
 
   // ─── CONVERSATION_NEW ────────────────────────────────────────────────────────
@@ -433,6 +463,44 @@ describe('PresenceService', () => {
       service.onFriendRequestCancelled(listener);
       const event = { friendRequestId: 'fr-1', cancelledBy: 'user-2' };
       socket._trigger('friend-request:cancelled', event);
+      expect(listener).toHaveBeenCalledWith(event);
+    });
+  });
+
+  // ─── FRIEND_REQUEST_NEW / ACCEPTED / REJECTED ───────────────────────────────
+
+  describe('friend-request:new', () => {
+    it('forwards friend-request:new events to registered listeners', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      service.onFriendRequestNew(listener);
+      const event = { friendRequestId: 'fr-1', senderId: 'user-1', receiverId: 'user-2' };
+      socket._trigger('friend-request:new', event);
+      expect(listener).toHaveBeenCalledWith(event);
+    });
+  });
+
+  describe('friend-request:accepted', () => {
+    it('forwards friend-request:accepted events to registered listeners', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      service.onFriendRequestAccepted(listener);
+      const event = { friendRequestId: 'fr-1', accepterId: 'user-2', conversationId: 'conv-1' };
+      socket._trigger('friend-request:accepted', event);
+      expect(listener).toHaveBeenCalledWith(event);
+    });
+  });
+
+  describe('friend-request:rejected', () => {
+    it('forwards friend-request:rejected events to registered listeners', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      service.onFriendRequestRejected(listener);
+      const event = { friendRequestId: 'fr-1', rejecterId: 'user-2' };
+      socket._trigger('friend-request:rejected', event);
       expect(listener).toHaveBeenCalledWith(event);
     });
   });

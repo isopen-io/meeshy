@@ -686,6 +686,18 @@ export class SocketIOOrchestrator {
     return this.presenceService.onFriendRequestCancelled(listener);
   }
 
+  onFriendRequestNew(listener: import('./types').FriendRequestNewListener): UnsubscribeFn {
+    return this.presenceService.onFriendRequestNew(listener);
+  }
+
+  onFriendRequestAccepted(listener: import('./types').FriendRequestAcceptedListener): UnsubscribeFn {
+    return this.presenceService.onFriendRequestAccepted(listener);
+  }
+
+  onFriendRequestRejected(listener: import('./types').FriendRequestRejectedListener): UnsubscribeFn {
+    return this.presenceService.onFriendRequestRejected(listener);
+  }
+
   onConversationDeleted(listener: import('./types').ConversationDeletedListener): UnsubscribeFn {
     return this.presenceService.onConversationDeleted(listener);
   }
