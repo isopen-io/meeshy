@@ -8,6 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { List, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { agentAdminService, type ScanLogSummary, type ScanLogsFilters } from '@/services/agent-admin.service';
 import { useI18n } from '@/hooks/useI18n';
+import { formatAgentTimeAgoShort } from '@/utils/agent-time-format';
 import dynamic from 'next/dynamic';
 
 const ScanLogDetail = dynamic(() => import('./ScanLogDetail'), {
@@ -34,15 +35,10 @@ export default memo(function ScanLogTable({ conversationId }: ScanLogTableProps)
   const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
   const [filters, setFilters] = useState<ScanLogsFilters>({ limit: 15, conversationId });
 
-  const formatTimeAgo = useCallback((dateStr: string): string => {
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return t('timeAgo.now');
-    if (mins < 60) return `${mins}${t('timeAgo.minutes')}`;
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}${t('timeAgo.hours')}`;
-    return `${Math.floor(hours / 24)}${t('timeAgo.days')}`;
-  }, [t]);
+  const formatTimeAgo = useCallback(
+    (dateStr: string): string => formatAgentTimeAgoShort(dateStr, t),
+    [t]
+  );
 
   const getTriggerLabel = useCallback((trigger: string): string => {
     const labels: Record<string, string> = {

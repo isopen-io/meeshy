@@ -12,6 +12,7 @@ import { agentAdminService, type AgentMessageEntry } from '@/services/agent-admi
 import { UserDisplay } from './UserDisplay';
 import { useCurrentInterfaceLanguage } from '@/stores/language-store';
 import { useI18n } from '@/hooks/useI18n';
+import { formatAgentTimeAgo } from '@/utils/agent-time-format';
 
 type AgentMessagesModalProps = {
   conversationId: string;
@@ -25,16 +26,6 @@ function formatDateTime(dateStr: string, locale: string): string {
   return d.toLocaleDateString(locale, {
     day: '2-digit', month: '2-digit', year: 'numeric',
   }) + ' ' + d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-}
-
-function formatTimeAgo(dateStr: string, t: (key: string) => string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return t('agent.overview.timeAgo.justNow');
-  if (mins < 60) return t('agent.overview.timeAgo.minutes').replace('{{count}}', String(mins));
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return t('agent.overview.timeAgo.hours').replace('{{count}}', String(hours));
-  return t('agent.overview.timeAgo.days').replace('{{count}}', String(Math.floor(hours / 24)));
 }
 
 export default memo(function AgentMessagesModal({
@@ -152,7 +143,7 @@ export default memo(function AgentMessagesModal({
                       <div className="flex items-center gap-2 text-[10px] text-gray-400 tabular-nums">
                         <span>{formatDateTime(msg.createdAt, locale)}</span>
                         <span className="text-gray-300 dark:text-gray-600">·</span>
-                        <span>{formatTimeAgo(msg.createdAt, t)}</span>
+                        <span>{formatAgentTimeAgo(msg.createdAt, t)}</span>
                         <span className="text-gray-300 dark:text-gray-600">·</span>
                         <span className="font-mono">{msg.id.slice(0, 12)}</span>
                       </div>

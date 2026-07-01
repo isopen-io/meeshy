@@ -27,24 +27,7 @@ import { UserDisplay } from './UserDisplay';
 import { useDebounce } from 'use-debounce';
 import { useI18n } from '@/hooks/useI18n';
 import { useAgentAdminEvents } from '@/hooks/admin/use-agent-admin-events';
-import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
-
-function formatTimeAgo(dateStr: string | null | undefined, t: (key: string) => string): string {
-  if (!dateStr) return t('agent.overview.timeAgo.never');
-  const bucket = classifyRelativeTime(new Date(dateStr).getTime(), Date.now(), { beyondDays: Infinity });
-  switch (bucket.unit) {
-    case 'now':
-      return t('timeAgo.now');
-    case 'minutes':
-      return `${bucket.value}${t('timeAgo.minutes')}`;
-    case 'hours':
-      return `${bucket.value}${t('timeAgo.hours')}`;
-    case 'days':
-      return `${bucket.value}${t('timeAgo.days')}`;
-    default:
-      return t('timeAgo.now');
-  }
-}
+import { formatAgentTimeAgoShort } from '@/utils/agent-time-format';
 
 function confidenceColor(value: number) {
   if (value > 0.8) return 'text-green-600 dark:text-green-400';
@@ -165,7 +148,7 @@ function RecentConversationsList({
                   <div className="flex items-center gap-3 text-[10px] text-gray-400">
                     <span className="tabular-nums">{item.messagesSent} msgs</span>
                     <span className="tabular-nums">{item.controlledUsersCount} users</span>
-                    <span className="tabular-nums ml-auto">{formatTimeAgo(item.lastResponseAt, t)}</span>
+                    <span className="tabular-nums ml-auto">{formatAgentTimeAgoShort(item.lastResponseAt, t)}</span>
                   </div>
                 </button>
               );

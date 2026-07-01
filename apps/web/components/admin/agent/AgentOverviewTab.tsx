@@ -26,18 +26,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, L
 import { toast } from 'sonner';
 import { useResolvedTheme } from '@/hooks/use-resolved-theme';
 import { useI18n } from '@/hooks/useI18n';
-
-function formatTimeAgo(dateStr: string | null, t: (key: string) => string): string {
-  if (!dateStr) return t('agent.overview.timeAgo.never');
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return t('agent.overview.timeAgo.justNow');
-  if (minutes < 60) return t('agent.overview.timeAgo.minutes').replace('{{count}}', String(minutes));
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return t('agent.overview.timeAgo.hours').replace('{{count}}', String(hours));
-  const days = Math.floor(hours / 24);
-  return t('agent.overview.timeAgo.days').replace('{{count}}', String(days));
-}
+import { formatAgentTimeAgo } from '@/utils/agent-time-format';
 
 function getTypeLabel(type: string, t: (key: string) => string): string {
   const mapped: Record<string, string> = {
@@ -353,7 +342,7 @@ export function AgentOverviewTab() {
                         </span>
                       </div>
                       <span className="text-[10px] text-gray-400 w-16 text-right tabular-nums">
-                        {formatTimeAgo(entry.lastResponseAt, t)}
+                        {formatAgentTimeAgo(entry.lastResponseAt, t)}
                       </span>
                     </div>
                   </div>
