@@ -228,6 +228,112 @@ extension ConversationListView {
             Label(String(localized: "context.delete", defaultValue: "Supprimer"), systemImage: "trash.fill")
         }
     }
+
+    // MARK: - Custom Context Menu Overlay (icônes garanties iOS 26)
+
+    func dismissContextMenu() {
+        withAnimation(.easeOut(duration: 0.2)) { contextMenuConversation = nil }
+    }
+
+    @ViewBuilder
+    var conversationContextMenuOverlay: some View {
+        if let conversation = contextMenuConversation {
+            ZStack {
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                    .ignoresSafeArea()
+                    .overlay(Color.black.opacity(0.12).ignoresSafeArea())
+                    .contentShape(Rectangle())
+                    .onTapGesture { dismissContextMenu() }
+
+                VStack(spacing: 16) {
+                    ConversationPreviewView(
+                        conversation: conversation,
+                        cachedMessages: conversationViewModel.previewMessages[conversation.id] ?? []
+                    )
+                    .frame(maxWidth: 340)
+                    .allowsHitTesting(false)
+
+                    ConversationContextMenuView(
+                        accentHex: conversation.accentColor,
+                        isPinned: conversation.userState.isPinned,
+                        isMuted: conversation.userState.isMuted,
+                        hasUnread: conversation.userState.unreadCount > 0,
+                        currentReaction: conversation.userState.reaction,
+                        categories: conversationViewModel.userCategories.map {
+                            ConversationMenuCategory(id: $0.id, name: $0.name, icon: $0.icon)
+                        },
+                        currentSectionId: conversation.userState.sectionId,
+                        canInvite: canCreateShareLink(for: conversation),
+                        isLocked: ConversationLockManager.shared.isLocked(conversation.id),
+                        isArchived: conversation.userState.isArchived,
+                        isBlockableDM: conversation.type == .direct && conversation.participantUserId != nil,
+                        isBlocked: conversation.participantUserId.map { BlockService.shared.isBlocked(userId: $0) } ?? false,
+                        onPin: { Task { await conversationViewModel.togglePin(for: conversation.id) } },
+                        onMute: { Task { await conversationViewModel.toggleMute(for: conversation.id) } },
+                        onMarkReadToggle: {
+                            Task {
+                                if conversation.userState.unreadCount > 0 {
+                                    await conversationViewModel.markAsRead(conversationId: conversation.id)
+                                } else {
+                                    await conversationViewModel.markAsUnread(conversationId: conversation.id)
+                                }
+                            }
+                        },
+                        onDetails: { conversationInfoConversation = conversation },
+                        onSetFavorite: { emoji in
+                            Task { await conversationViewModel.setFavoriteReaction(conversationId: conversation.id, emoji: emoji) }
+                        },
+                        onRemoveFavorite: {
+                            Task { await conversationViewModel.setFavoriteReaction(conversationId: conversation.id, emoji: nil) }
+                        },
+                        onMove: { sectionId in
+                            conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: sectionId)
+                        },
+                        onInvite: { inviteSheetConversation = conversation },
+                        onLock: {
+                            if ConversationLockManager.shared.isLocked(conversation.id) {
+                                lockSheetMode = .unlockConversation
+                                lockSheetConversation = conversation
+                            } else if ConversationLockManager.shared.masterPinConfigured {
+                                lockSheetMode = .lockConversation
+                                lockSheetConversation = conversation
+                            } else {
+                                showNoMasterPinAlert = true
+                            }
+                        },
+                        onArchive: {
+                            Task {
+                                if conversation.userState.isArchived {
+                                    await conversationViewModel.unarchiveConversation(conversationId: conversation.id)
+                                } else {
+                                    await conversationViewModel.archiveConversation(conversationId: conversation.id)
+                                }
+                            }
+                        },
+                        onBlock: {
+                            if let uid = conversation.participantUserId, BlockService.shared.isBlocked(userId: uid) {
+                                Task {
+                                    try? await BlockService.shared.unblockUser(userId: uid)
+                                    await MainActor.run { HapticFeedback.success() }
+                                }
+                            } else {
+                                blockTargetConversation = conversation
+                                showBlockConfirmation = true
+                            }
+                        },
+                        onDelete: {
+                            Task { await conversationViewModel.deleteConversation(conversationId: conversation.id) }
+                        },
+                        onDismiss: { dismissContextMenu() }
+                    )
+                }
+                .padding(.horizontal, 20)
+            }
+            .zIndex(300)
+            .transition(.opacity)
+        }
+    }
 }
 
 // MARK: - Header Overlay

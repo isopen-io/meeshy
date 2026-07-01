@@ -19,7 +19,7 @@ import MeeshyUI
 /// + hard-press preview. Extracted from `ConversationListView.conversationRow`.
 /// All inputs are plain values / closures so the row re-evaluates only when
 /// its own inputs change, not on every ConversationListView body pass.
-struct ConversationRowItem<Menu: View>: View {
+struct ConversationRowItem: View {
     let conversation: Conversation
     let community: MeeshyCommunity?
     let rowWidth: CGFloat
@@ -47,7 +47,9 @@ struct ConversationRowItem<Menu: View>: View {
     let onTap: () -> Void
     let onDragStart: () -> Void
     let onLoadPreview: () async -> Void
-    @ViewBuilder let contextMenu: () -> Menu
+    /// Appui long → overlay de menu custom (dessine ses icônes ; le
+    /// `.contextMenu` natif ne les affiche pas sur iOS 26).
+    let onLongPress: () -> Void
 
     var body: some View {
         SwipeableRow(
@@ -86,14 +88,17 @@ struct ConversationRowItem<Menu: View>: View {
                 onDragStart()
                 return NSItemProvider(object: conversation.id as NSString)
             }
-            .contextMenu {
-                contextMenu()
-            } preview: {
-                ConversationPreviewView(
-                    conversation: conversation,
-                    cachedMessages: cachedPreviewMessages
-                )
-            }
+            // Appui long → overlay custom (icônes garanties iOS 26). Coexiste
+            // avec le tap (rapide) et le drag-to-reorder : LongPressGesture
+            // annule si le doigt bouge (> maximumDistance par défaut), donc un
+            // drag ne déclenche pas le menu.
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: 0.45)
+                    .onEnded { _ in
+                        HapticFeedback.medium()
+                        onLongPress()
+                    }
+            )
             .task {
                 await onLoadPreview()
             }

@@ -140,6 +140,11 @@ struct ConversationListView: View {
     // Preview state for hard press
     @State private var previewConversation: Conversation? = nil
 
+    /// Conversation dont l'overlay de menu contextuel custom est présenté
+    /// (appui long). Menu custom qui dessine ses icônes — le `.contextMenu`
+    /// natif ne les affiche pas sur iOS 26.
+    @State var contextMenuConversation: Conversation? = nil
+
     // Drag & Drop state
     @State private var draggingConversation: Conversation? = nil
     @State private var dropTargetSection: String? = nil
@@ -312,10 +317,12 @@ struct ConversationListView: View {
             },
             onLoadPreview: {
                 await conversationViewModel.loadPreviewMessages(for: conversation.id)
+            },
+            onLongPress: {
+                Task { await conversationViewModel.loadPreviewMessages(for: conversation.id) }
+                withAnimation(.easeOut(duration: 0.2)) { contextMenuConversation = conversation }
             }
-        ) {
-            conversationContextMenu(for: conversation)
-        }
+        )
         .equatable()
     }
 
@@ -595,6 +602,7 @@ struct ConversationListView: View {
                         .zIndex(200)
                 }
             }
+            .overlay { conversationContextMenuOverlay }
             .sheet(item: $lockSheetConversation) { conversation in
                 ConversationLockSheet(
                     mode: lockSheetMode,
