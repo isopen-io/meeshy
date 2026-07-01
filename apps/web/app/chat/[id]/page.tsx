@@ -3,6 +3,7 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { LinkConversationService, type LinkConversationData } from '@/services/link-conversation.service';
+import { isExpired } from '@/utils/time-remaining';
 import { BubbleStreamPage } from '@/components/common/bubble-stream-page';
 import { JoinError } from '@/components/join';
 import { Header } from '@/components/layout/Header';
@@ -89,7 +90,7 @@ export default function ChatLinkPage() {
           return;
         }
 
-        if (data.link.expiresAt && new Date(data.link.expiresAt) < new Date()) {
+        if (isExpired(data.link.expiresAt)) {
           setError(t('errors.linkExpired'));
           return;
         }
