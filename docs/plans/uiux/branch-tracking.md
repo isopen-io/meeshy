@@ -14,6 +14,18 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 111i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> - **111i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `57408634`)** :
+>   Dynamic Type de `StatusBubbleOverlay` (bulle d'humeur flottante Liquid Glass). Bouton audio déjà
+>   étiqueté ; **6/7** `.font(.system(size:))` → `MeeshyFont.relative` (contenu 13, timeAgo ×2 à 10,
+>   « via » 11, glyphe repost 11, libellé Republier 12). **1 glyphe figé** : play/stop 8 dans cercle
+>   fixe 18×18 (doctrine 86i, bouton déjà étiqueté). 1 fichier, 0 logique, 0 test/clé i18n neuve.
+>   0 contention. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `StatusBubbleOverlay` Dynamic Type SOLDÉ** : ne plus reprendre le glyphe play/stop figé.
+> - **Base de départ 112i : `main` HEAD**. Candidats : `OnboardingStepViews` (7) ; différé 108i
+>   (`.accessibilityValue` timeAgo/expiry header stories). Gros lots : `StoryViewerView+Content` (⚠️ i18n),
+>   `ConversationView+Composer`.
+
 > **POINTEUR AUTORITAIRE iOS (mis à jour 110i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
 > - **110i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `6519f8ed`)** :
 >   Dynamic Type + a11y de `ReelsPlayerView` (lecteur de réels plein écran). Rail/scrub/back/meta

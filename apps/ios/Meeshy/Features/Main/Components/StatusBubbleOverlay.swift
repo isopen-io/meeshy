@@ -107,21 +107,21 @@ struct StatusBubbleOverlay: View {
                 VStack(alignment: .leading, spacing: 6) {
                     audioPlayerRow(urlString: audioUrl)
                     Text(status.timeAgo)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(MeeshyFont.relative(10, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
             } else {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     if let content = status.content, !content.isEmpty {
                         Text(content)
-                            .font(.system(size: 13))
+                            .font(MeeshyFont.relative(13))
                             .foregroundColor(theme.textPrimary)
                             .lineLimit(3)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer(minLength: 4)
                     Text(status.timeAgo)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(MeeshyFont.relative(10, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -129,7 +129,7 @@ struct StatusBubbleOverlay: View {
             // "via @username" for republished statuses
             if let via = status.viaUsername {
                 Text(String(localized: "status.bubble.via", defaultValue: "via @\(via)", bundle: .main))
-                    .font(.system(size: 11))
+                    .font(MeeshyFont.relative(11))
                     .foregroundColor(theme.textMuted)
             }
 
@@ -142,9 +142,9 @@ struct StatusBubbleOverlay: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.2.squarepath")
-                            .font(.system(size: 11))
+                            .font(MeeshyFont.relative(11))
                         Text(String(localized: "status.bubble.republish", defaultValue: "Republier", bundle: .main))
-                            .font(.system(size: 12, weight: .medium))
+                            .font(MeeshyFont.relative(12, weight: .medium))
                     }
                     .foregroundColor(MeeshyColors.indigo400)
                 }
@@ -179,6 +179,7 @@ struct StatusBubbleOverlay: View {
             Button {
                 audioPlayer.togglePlayPause()
             } label: {
+                // Glyphe dans un cercle de dimension fixe 18×18 : figé (déborderait s'il scalait, doctrine 86i) ; le bouton porte le libellé
                 Image(systemName: audioPlayer.isPlaying ? "stop.fill" : "play.fill")
                     .font(.system(size: 8, weight: .bold))
                     .foregroundColor(.white)
