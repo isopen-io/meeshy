@@ -124,6 +124,7 @@ struct AffiliateView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 14)
+        .accessibilityElement(children: .combine)
         .background(
             RoundedRectangle(cornerRadius: 14)
                 .fill(theme.surfaceGradient(tint: color))
