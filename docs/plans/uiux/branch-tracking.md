@@ -14,6 +14,34 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 107i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> - **107i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `1e12f2d7`)** :
+>   Dynamic Type + VoiceOver de `FeedPostCard+Media` (rendu média des posts feed). **10/13**
+>   `.font(.system(size:))` → `MeeshyFont.relative` (durées vidéo/audio `.monospaced`, nom fichier/
+>   taille/pages doc, nom lieu/coordonnées, badge `+N`, glyphe `arrow.up.right`). **3 glyphes figés**
+>   (cadres fixes, doctrine 86i) : `play.fill` 12 (cercle 30/36), `doc.fill` 24 (48×56),
+>   `mappin.circle.fill` 28 (64×64). **6 `.accessibilityHidden`** (overlays galerie vidéo/audio,
+>   badge `+N`, glyphes doc/mappin/arrow décoratifs). 1 fichier, 0 logique, 0 test/clé i18n neuve ;
+>   cellule de liste → 0 `@ObservedObject` ajouté. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ 106i pris par un autre agent** (PR #1301 `AudioEffectsPanel`) → cette itération = **107i**.
+> - **⚠️ `FeedPostCard+Media` a11y/DynamicType SOLDÉ** : ne plus reprendre les 3 glyphes figés.
+> - **Base de départ 108i : `main` HEAD** (toujours resync ; supprimer la branche mergée).
+>   Candidats 108i+ : `StoryTrayView` (9), `StoryViewerView+Sidebar` (10), `ReelsPlayerView` (7).
+
+> **POINTEUR AUTORITAIRE iOS (mis à jour 105i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> - **105i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `61257034`)** :
+>   a11y VoiceOver de `FeedView+Attachments` (tuiles de pièces jointes du composer feed). Typo déjà
+>   conforme ; 14 `.system(size:)` = glyphes en cadres fixes (croix / miniatures / toolbar) figés.
+>   Vrai défaut = **boutons « retirer » (croix) sans label** + glyphes décoratifs non masqués.
+>   **2 `.accessibilityLabel`** (`feed.attachment.remove`) sur les croix des 2 tuiles
+>   (`feedAttachmentTile` + `sheetAttachmentTile`) ; **6 `.accessibilityHidden`** sur glyphes
+>   décoratifs (play.circle vidéo / mappin lieu / icône type, ×2 tuiles) ; 2 commentaires doctrine 82i.
+>   1 fichier, 0 logique, 0 test neuf, 1 clé i18n inline. **0 contention** (0 PR ouverte au démarrage).
+>   Gate = CI `ios-tests` (`Build (bun)` non-requis). PR à venir.
+> - **⚠️ `FeedView+Attachments` a11y SOLDÉ** : ne plus reprendre les 14 glyphes figés (cadres fixes).
+>   Différé 106i+ : normaliser les clés a11y littérales FR de la toolbar `FeedComposerSheet`.
+> - **Base de départ 106i : `main` HEAD** (toujours resync sur `main` ; supprimer la branche mergée).
+
 > **POINTEUR AUTORITAIRE iOS (mis à jour 104i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
 > - **104i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `ed04f121`)** :
 >   a11y VoiceOver de `AudioFullscreenView` (lecteur audio plein écran). Fichier déjà largement
@@ -1056,3 +1084,30 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 > - **Base de départ 105i : `main` HEAD**. **Différé 105i+** : `StoryViewerView+Content` (31, ⚠️ i18n #1174), `ConversationView+Composer` (22, prudent), `OnboardingAnimations` (17), `ConversationView+MessageRow` (16), `StoryViewerView+Canvas` (13), `FeedPostCard+Media` (13).
 
 | 104i | claude/upbeat-euler-6r2un5 (iOS Dynamic Type + VoiceOver `ShareLinksView` : 5/7 `.font(.system(size:))` → `MeeshyFont.relative` ; 2 figés commentés = hero état vide 40pt doctrine 84i/86i + icône ligne 16pt cercle fixe 40×40 doctrine 86i, accessibilityHidden ; VoiceOver = label bouton copie comblé `share.links.copy.a11y` (1 clé neuve `.a11y`) + `.isHeader` « MES LIENS » + `.combine` stats/état-vide + `.accessibilityHidden` ×4 ; palette tokenisée 0 swap ; `import MeeshyUI` ajouté ; 1 fichier sweep pur, 0 logique/0 test neuf, parité 55i/74i/86i/93i ; gate = CI iOS Tests) | ⏳ | ⏳ |
+
+---
+
+> **POINTEUR iOS AUTORITAIRE (mis à jour 105i, 2026-07-01)** — piste iOS (suffixe `i`).
+> - **100i mergée** (`EditPostSheet` a11y, #1289). Piste parallèle déjà à 104i (`ShareLinksView`) / 103i (`AudioFullscreenView`) sur `main` ; **0 PR ouverte** au run 105i.
+> - **105i (terminée, branche `claude/upbeat-euler-vj3vu8`, base `main` HEAD post-104i)** : Dynamic Type + VoiceOver de **`AudioEffectsPanel.swift`** (panneau d'effets audio in-call). Cible **génuinement non-migrée** (0 `MeeshyFont.relative` avant). Deux cibles **déjà mûres écartées** (impact minimal) : `CallView` (audité P0/P1/P2, glyphes verre fixes justifiés) et `FeedPostCard` (barre d'action déjà labellisée). **6/9** `.font(.system(size:))` (chrome flexible : header icône+titre, bouton désactiver, chips icône+label, label son) → `MeeshyFont.relative` (weight + `.rounded` préservés). **3 gardés FIXES & commentés** = rangée de mixer `effectSlider` (largeurs rigides 18/55/42 → scaler tronquerait ; a11y **déjà servie par le `Slider`** via `accessibilityLabel`+`accessibilityValue`). **3 `.accessibilityHidden(true)`** sur glyphes décoratifs (header/chip/slider). Palette déjà tokenisée (0 swap), Glass iOS 26 déjà en place (`adaptiveGlass`). 1 fichier, 0 logique / 0 clé i18n / 0 test neuf (parité 55i/74i/86i/90i/95i/100i). Gate = CI `iOS Tests`.
+> - **Base de départ 106i : `main` HEAD** (resync ; supprimer branche mergée).
+> - **⚠️ NE PLUS re-flagger** `AudioEffectsPanel` (migré 105i ; 3 fonts mixer figées à dessein). **Écarter** `CallView` / `FeedPostCard` (déjà mûrs).
+> - **Différé prioritaire iOS 106i+** : `FeedView+Attachments` (14), `FeedPostCard+Media` (13), `BubbleStandardLayout+Media` (12), `StoryTrayView` (9), `OnboardingFlowView` (8), `StatusBubbleOverlay` (7), `VideoFilterControlView` (7) ; gros lots critiques en dernier `StoryViewerView+Content` (31, ⚠️ i18n #1174), `ConversationView+Composer` (22), `ConversationView+MessageRow` (16, prudence Zero-re-render), `OnboardingAnimations` (17, décoratif).
+
+| 105i | claude/upbeat-euler-vj3vu8 (iOS Dynamic Type + VoiceOver `AudioEffectsPanel` : 6/9 `.font(.system(size:))` → `MeeshyFont.relative` (header/chips/label son, weight+`.rounded` préservés) ; 3 fonts mixer `effectSlider` figées commentées (largeurs 18/55/42, a11y servie par Slider) ; 3 `.accessibilityHidden` glyphes déco ; cibles mûres CallView/FeedPostCard écartées ; palette tokenisée 0 swap, Glass iOS 26 déjà présent ; 1 fichier, 0 logique/0 test neuf ; gate = CI `iOS Tests`) | ⏳ | ⏳ |
+> - **Dernière itération iOS mergée : `104i`** (#1294, main — Dynamic Type + VoiceOver `ShareLinksView`). Essaim vidé (0 PR ouverte au run 105i).
+> - **105i (terminée, branche `claude/upbeat-euler-6r2un5`, base `main` HEAD `61257034`)** : Dynamic Type + VoiceOver de `VideoFilterControlView` (panneau de filtres vidéo : header/toggle, 5 sliders temperature/luminosité/contraste/saturation/exposition, bouton reset). **7/7** `.font(.system(size:))` → `MeeshyFont.relative(size, weight:, design:)` (weight + `.rounded`/`.monospaced` préservés) — **aucun figé** (pas de badge de dimension fixe). **VoiceOver — 2 lacunes réelles comblées** : le `Toggle` (`labelsHidden`) et les 5 `Slider` n'avaient aucun label → `.accessibilityLabel(video.filter.title)` sur le Toggle + `.accessibilityLabel(label)` sur chaque Slider (VoiceOver annonce « Température, 50% »). + `.isHeader` sur le titre + `.accessibilityHidden` sur 3 glyphes décoratifs. Palette déjà tokenisée → 0 swap ; i18n couvert → 0 clé neuve. 1 fichier, 0 logique / 0 test neuf (parité 55i/74i/86i/93i/104i). Gate = CI `iOS Tests`.
+> - **NE PAS re-flagger** `VideoFilterControlView` (Dynamic Type + VoiceOver soldés 105i).
+> - **Base de départ 106i : `main` HEAD**. **Différé 106i+** : `OnboardingAnimations` (17), `ConversationView+MessageRow` (16), `StoryViewerView+Canvas` (13), `FeedPostCard+Media` (13), `AudioEffectsPanel` (9), `ReelsPlayerView` (7) ; `ConversationView+Composer` (22, prudent), `StoryViewerView+Content` (31, ⚠️ i18n #1174).
+
+| 105i | claude/upbeat-euler-6r2un5 (iOS Dynamic Type + VoiceOver `VideoFilterControlView` : 7/7 `.font(.system(size:))` → `MeeshyFont.relative` (weight + `.rounded`/`.monospaced` préservés, aucun figé) ; VoiceOver = 2 lacunes comblées (Toggle `labelsHidden` + 5 Sliders sans label → `.accessibilityLabel`) + `.isHeader` titre + `.accessibilityHidden` ×3 glyphes ; palette tokenisée 0 swap, i18n 0 clé neuve ; 1 fichier sweep pur, 0 logique/0 test neuf, parité 55i/74i/86i/93i/104i ; gate = CI iOS Tests) | ⏳ | ⏳ |
+
+---
+
+> **POINTEUR iOS AUTORITAIRE (mis à jour 106i, 2026-07-01)** — piste iOS (suffixe `i`).
+> - **Dernière itération iOS mergée : `105i`** (#1297, main `7529e54f` — Dynamic Type + VoiceOver `VideoFilterControlView`).
+> - **106i (terminée, branche `claude/upbeat-euler-6r2un5`, base `main` HEAD `7529e54f`)** : Dynamic Type + VoiceOver de `AudioEffectsPanel` (panneau d'effets vocaux en appel : header/désactiver, sélecteur d'effets Off/Auto-tune/Baby/Demon/Ambiance, sliders de paramètres, sélecteur de son). **9/9** `.font(.system(size:))` → `MeeshyFont.relative(size, weight:, design:)` (weight + `.rounded`/`.monospacedDigit()` préservés, aucun figé). **VoiceOver** : `.isHeader` sur le titre + `.accessibilityHidden` sur 3 glyphes décoratifs + `.accessibilityAddTraits(.isSelected)` conditionnel sur le chip d'effet actif ET le bouton de son actif (état auparavant signalé par la seule couleur, invisible VoiceOver). Sliders **déjà** `.accessibilityLabel`/`.accessibilityValue` (inchangés). Palette tokenisée + Glass déjà adopté → 0 swap ; i18n couvert → 0 clé neuve. 1 fichier, 0 logique / 0 test neuf (parité 55i/74i/86i/93i/104i/105i). Gate = CI `iOS Tests`.
+> - **NE PAS re-flagger** `AudioEffectsPanel` (Dynamic Type + VoiceOver soldés 106i).
+> - **Base de départ 107i : `main` HEAD**. **Différé 107i+** : `ReelsPlayerView` (7), `StoryTrayView` (9), `FeedPostCard+Media` (13), `StoryViewerView+Canvas` (13), `ConversationAnimatedBackground` (12), `OnboardingAnimations` (17), `ConversationView+MessageRow` (16) ; `ConversationView+Composer` (22, prudent), `StoryViewerView+Content` (31, ⚠️ i18n #1174).
+
+| 106i | claude/upbeat-euler-6r2un5 (iOS Dynamic Type + VoiceOver `AudioEffectsPanel` : 9/9 `.font(.system(size:))` → `MeeshyFont.relative` (weight + `.rounded`/`.monospacedDigit()` préservés, aucun figé) ; VoiceOver = `.isHeader` titre + `.accessibilityHidden` ×3 glyphes + `.isSelected` conditionnel chip d'effet actif & bouton son actif ; sliders déjà labellisés ; palette tokenisée + Glass adopté 0 swap, i18n 0 clé neuve ; 1 fichier sweep pur, 0 logique/0 test neuf, parité 55i/74i/86i/93i/104i/105i ; gate = CI iOS Tests) | ⏳ | ⏳ |

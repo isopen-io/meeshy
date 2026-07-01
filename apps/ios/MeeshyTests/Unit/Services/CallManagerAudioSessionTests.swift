@@ -28,6 +28,32 @@ final class CallManagerAudioSessionTests: XCTestCase {
         )
     }
 
+    /// `providerDidReset` fires when CallKit resets ALL calls (crash recovery,
+    /// force-quit during a call) — per Apple's guidance the app must behave as
+    /// if no calls had ever occurred. `endCall()` alone is insufficient: it
+    /// no-ops when `callState` isn't active, which would skip
+    /// `deactivateAudioSession()` and leave `RTCAudioSession` stale with no
+    /// matching `didDeactivate` callback. The reset handler must disable the
+    /// audio session directly, independent of local call state.
+    func test_providerDidReset_disablesRTCAudioSession_independentOfCallState() throws {
+        let source = try callManagerSource()
+        guard let range = source.range(of: "func providerDidReset(_ provider: CXProvider) {") else {
+            XCTFail("providerDidReset not found"); return
+        }
+        let end = source.range(of: "\n    }", range: range.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
+        let body = String(source[range.lowerBound..<end])
+
+        XCTAssertTrue(
+            body.contains("RTCAudioSession.sharedInstance()"),
+            "providerDidReset must reach into RTCAudioSession directly rather than relying solely on endCall()"
+        )
+        XCTAssertTrue(
+            body.contains("rtc.isAudioEnabled = false"),
+            "providerDidReset must unconditionally disable RTCAudioSession, matching Apple's " +
+            "\"treat as if no calls had ever occurred\" guidance for a full provider reset"
+        )
+    }
+
     func test_callManager_toggleTranscription_doesNotHardcodeLanguage() throws {
         // Regression guard: toggleTranscription() must not hardcode language strings.
         // Language resolution is delegated to CallManager.preferredCallLanguage(for:)

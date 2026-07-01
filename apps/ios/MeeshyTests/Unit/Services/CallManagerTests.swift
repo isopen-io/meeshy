@@ -587,6 +587,30 @@ final class CallManagerEarlyJoinTests: XCTestCase {
         XCTAssertTrue(voipBody.contains("localMediaTask = Task"), "reportIncomingVoIPCall must store the local media Task in localMediaTask.")
     }
 
+    /// The dedup ring in `VoIPPushManager` already recorded this callId as
+    /// "seen" when the push arrived (before CallKit had a chance to report
+    /// or refuse it). If `reportNewIncomingCall` genuinely fails, the call is
+    /// torn down locally — without evicting the callId, a legitimate APNs
+    /// retry within the dedup TTL would be silently phantom-acked as a
+    /// duplicate instead of re-ringing the callee.
+    func test_reportIncomingVoIPCall_evictsDedupRingEntry_onCallKitReportFailure() throws {
+        let source = try sourceText()
+        guard let body = body(of: "func reportIncomingVoIPCall", in: source) else {
+            XCTFail("reportIncomingVoIPCall not found")
+            return
+        }
+        guard let reportRange = body.range(of: "reportNewIncomingCall(with: uuid, update: update) { [weak self] error in") else {
+            XCTFail("Expected the non-busy reportNewIncomingCall failure closure in reportIncomingVoIPCall")
+            return
+        }
+        let closureBody = String(body[reportRange.upperBound...])
+        XCTAssertTrue(
+            closureBody.contains("VoIPPushManager.shared.clearDedup(callId: callId)"),
+            "reportIncomingVoIPCall's CallKit-report-failure closure must evict the callId from the " +
+            "dedup ring so a genuine APNs retry is not dropped as a duplicate."
+        )
+    }
+
     func test_answerCall_awaitsLocalMediaBeforeCreateAnswer() throws {
         let source = try sourceText()
         guard let body = body(of: "func answerCall()", in: source) else {

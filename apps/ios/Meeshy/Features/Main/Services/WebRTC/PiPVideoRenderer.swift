@@ -68,17 +68,6 @@ nonisolated final class PiPVideoRenderer: NSObject, RTCVideoRenderer, @unchecked
         notifyRotationIfChanged(Int(frame.rotation.rawValue))
     }
 
-    /// Vide la file + réinitialise le converter (à l'arrêt du PiP).
-    func reset() {
-        queue.async { [weak self] in
-            guard let self else { return }
-            self.flush()
-            self.converter.reset()
-            self.lastEnqueueNs = 0
-            self.lastRotation = -1
-        }
-    }
-
     /// Ajuste le framerate cible (thermal-aware). Muté sur la serial queue.
     func setMaxFrameRate(_ fps: Int) {
         let interval = UInt64(1_000_000_000 / max(1, fps))
