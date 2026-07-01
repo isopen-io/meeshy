@@ -2211,14 +2211,7 @@ final class CallManager: ObservableObject {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, let callId = self.currentCallId else { return }
-                // Audit — a call that rang in via the in-app UI while the app
-                // was FOREGROUND never got a CXProvider registration (see
-                // `handleIncomingCallNotification`'s `callUsesCallKit` gate).
-                // If the user backgrounds/locks before answering, iOS can
-                // suspend the app mid-ring with no lock-screen call card at
-                // all — the inbound call silently vanishes. Promote it to a
-                // real CallKit call now, before backgrounding takes effect.
-                self.promoteRingingCallToCallKitIfNeeded()
+                self.promoteRingingCallToCallKitIfNeeded() // see doc above — no-op unless still ringing
                 let userId = AuthManager.shared.currentUser?.id ?? ""
                 MessageSocketManager.shared.emitCallBackgrounded(callId: callId, participantId: userId)
                 Logger.calls.info("Call backgrounded")
