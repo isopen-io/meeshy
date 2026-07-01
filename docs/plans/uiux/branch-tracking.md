@@ -14,6 +14,25 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 103i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> - **103i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `ed04f121`)** :
+>   a11y VoiceOver de `AudioFullscreenView` (lecteur audio plein écran). Fichier déjà largement
+>   `MeeshyFont.relative` → vrai défaut = **boutons icône-seule sans `.accessibilityLabel`**.
+>   **6 `.accessibilityLabel`** ajoutés : fermer (`common.close`), download **state-aware**
+>   (`downloadAccessibilityLabel` idle/saving/saved/failed), −10s (`media.skipBack10s`),
+>   play/pause (`media.playAudio`/`pauseAudio` SSOT), +10s (`media.skipForward10s`), choisir
+>   langue (`audio.fullscreen.language.choose`). **1 migration Dynamic Type** : glyphe état vide
+>   `text.word.spacing` 28 → `relative(28, .light)` + `.accessibilityHidden`. **6 glyphes figés**
+>   commentés : chrome fermer/download (cadre 36×36, doctrine 82i), transport −10/play/+10
+>   (cohérence rang, lecture cercle 64×64), add-langue (cercle 26×26, doctrine 86i). 4 clés i18n
+>   inline `defaultValue`. 1 fichier, 0 logique, 0 test neuf. Gate = CI `iOS Tests`.
+> - **⚠️ Branche repurposée** : visait `CommunityLinkDetailView` (95i) mais un autre agent l'a
+>   mergé identiquement dans `main` via #1272 → PR #1274 fermée (superseded). Repurposée sur
+>   `AudioFullscreenView` (surface non réclamée). Numéro **103i** > tous les numéros essaim (≤102i).
+> - **⚠️ `AudioFullscreenView` a11y SOLDÉ** : ne plus reprendre les 6 glyphes de contrôle figés.
+>   Différé 104i+ : `seekBar` slider custom → VoiceOver-adjustable ; `authorInfoRow` combine.
+> - **Base de départ 104i : `main` HEAD** (toujours resync sur `main` ; supprimer la branche mergée).
+
 > **POINTEUR AUTORITAIRE iOS (mis à jour 99i)** — source fiable = § History (append-only).
 > - **Dernière itération iOS : `99i`** → branche `claude/upbeat-euler-l5yima` (Dynamic Type + VoiceOver `CommunityLinkDetailView.swift` : 8/10 `.font(.system(size:))` → `MeeshyFont.relative` ; 2 figés (héros 26pt cercle 60×60 + icône bouton 22pt tuile 52×52) `.accessibilityHidden` ; `.combine` en-tête/stats/lignes info, `.isHeader` « INFORMATIONS », `.accessibilityLabel` boutons action). Sibling de 91i → cluster « Liens communauté » iOS intégralement Dynamic-Type/VoiceOver-conforme. Base = `main` HEAD `5deacf76`. Gate = CI `iOS Tests`.
 > - **91i mergé** = `CommunityLinksView` (#1236). ⚠️ Forte activité multi-agents 87i–98i en vol → labels saturés, choisir haut (99i+) pour éviter collision. Prochain candidat = `StoryViewerView+Content` (31, coordonner i18n), `ConversationView+Composer` (22, prudent), Glass `MessageOverlayMenu` (21).
