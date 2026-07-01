@@ -18,6 +18,18 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
   },
 }));
 
+const mockResolvePrefsOnly = jest.fn<any>();
+
+jest.mock('../../../../services/PresenceVisibilityService', () => ({
+  getPresenceVisibilityService: () => ({
+    resolvePrefsOnly: (...args: any[]) => mockResolvePrefsOnly(...args),
+  }),
+}));
+
+beforeEach(() => {
+  mockResolvePrefsOnly.mockReset().mockResolvedValue(new Map());
+});
+
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { communityRoutes } from '../../../../routes/communities/index';
@@ -152,6 +164,70 @@ describe('GET /communities/:id/members — success', () => {
     const { app } = await buildApp({ prisma });
     const res = await app.inject({ method: 'GET', url: `/communities/${COMMUNITY_ID}/members` });
     expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+// ─── GET /communities/:id/members — presence visibility gating ───────────────
+
+describe('GET /communities/:id/members — presence visibility gating', () => {
+  it('returns a member unchanged when it has no user object', async () => {
+    const prisma = makePrisma();
+    prisma.community.findFirst = jest.fn<any>().mockResolvedValue(publicCommunityWithUserAsMember());
+    prisma.communityMember.findMany = jest.fn<any>().mockResolvedValue([
+      { id: 'mem-nouser', userId: 'ghost-user', role: 'member' }
+    ]);
+    prisma.communityMember.count = jest.fn<any>().mockResolvedValue(1);
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: `/communities/${COMMUNITY_ID}/members` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data[0].id).toBe('mem-nouser');
+    expect(res.json().data[0].user).toBeUndefined();
+    await app.close();
+  });
+
+  it('returns a member unchanged when no presence entry exists for its user', async () => {
+    const prisma = makePrisma();
+    prisma.community.findFirst = jest.fn<any>().mockResolvedValue(publicCommunityWithUserAsMember());
+    prisma.communityMember.findMany = jest.fn<any>().mockResolvedValue([
+      { id: 'mem-novis', userId: 'user-novis', role: 'member', user: { id: 'user-novis', username: 'novis', isOnline: true } }
+    ]);
+    prisma.communityMember.count = jest.fn<any>().mockResolvedValue(1);
+    // Default beforeEach already resolves an empty Map (no entry for 'user-novis').
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: `/communities/${COMMUNITY_ID}/members` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data[0].user.isOnline).toBe(true);
+    await app.close();
+  });
+
+  it('hides isOnline when the member has disabled showOnlineStatus', async () => {
+    const prisma = makePrisma();
+    prisma.community.findFirst = jest.fn<any>().mockResolvedValue(publicCommunityWithUserAsMember());
+    prisma.communityMember.findMany = jest.fn<any>().mockResolvedValue([
+      { id: 'mem-hidden', userId: 'user-hidden', role: 'member', user: { id: 'user-hidden', username: 'hidden', isOnline: true } }
+    ]);
+    prisma.communityMember.count = jest.fn<any>().mockResolvedValue(1);
+    mockResolvePrefsOnly.mockResolvedValue(new Map([['user-hidden', { showOnline: false, showLastSeenTimestamp: true }]]));
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: `/communities/${COMMUNITY_ID}/members` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data[0].user.isOnline).toBe(false);
+    await app.close();
+  });
+
+  it('keeps isOnline visible when the member allows showOnlineStatus', async () => {
+    const prisma = makePrisma();
+    prisma.community.findFirst = jest.fn<any>().mockResolvedValue(publicCommunityWithUserAsMember());
+    prisma.communityMember.findMany = jest.fn<any>().mockResolvedValue([
+      { id: 'mem-visible', userId: 'user-visible', role: 'member', user: { id: 'user-visible', username: 'visible', isOnline: true } }
+    ]);
+    prisma.communityMember.count = jest.fn<any>().mockResolvedValue(1);
+    mockResolvePrefsOnly.mockResolvedValue(new Map([['user-visible', { showOnline: true, showLastSeenTimestamp: true }]]));
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: `/communities/${COMMUNITY_ID}/members` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data[0].user.isOnline).toBe(true);
     await app.close();
   });
 });

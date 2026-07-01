@@ -20,6 +20,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useI18n } from '@/hooks/useI18n';
 import { Users } from 'lucide-react';
 import { toast } from 'sonner';
+import { copyToClipboard } from '@/lib/clipboard';
 import type { Group } from '@meeshy/shared/types';
 import { cn } from '@/lib/utils';
 
@@ -168,17 +169,16 @@ export function GroupsLayout({ selectedGroupIdentifier }: GroupsLayoutProps) {
   const copyIdentifier = useCallback(
     async (identifier: string, e?: React.MouseEvent | React.KeyboardEvent) => {
       e?.stopPropagation();
-      try {
-        const displayIdentifier = identifier.replace(/^mshy_/, '');
-        await navigator.clipboard.writeText(displayIdentifier);
+      const displayIdentifier = identifier.replace(/^mshy_/, '');
+      const { success } = await copyToClipboard(displayIdentifier);
+      if (success) {
         setCopiedIdentifier(identifier);
         toast.success(tGroups('success.identifierCopied'));
 
         setTimeout(() => {
           setCopiedIdentifier(null);
         }, 2000);
-      } catch (error) {
-        console.error('[Groups] Error copying identifier:', error);
+      } else {
         toast.error(tGroups('errors.copyError'));
       }
     },
