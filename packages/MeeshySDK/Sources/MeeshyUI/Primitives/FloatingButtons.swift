@@ -674,6 +674,11 @@ public struct NotificationBadge: View {
                 Text("\(min(count, 99))")
                     .font(MeeshyFont.relative(10, weight: .bold))
                     .foregroundColor(.white)
+                    // Dynamic Type exception : le compteur vit dans une pastille
+                    // fixe 18×18. Sans shrink-to-fit, une police relative agrandie
+                    // tronque « 51 » en « .. » — on force une ligne qui rétrécit.
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
                     .frame(width: 18, height: 18)
                     .background(
                         Circle()
