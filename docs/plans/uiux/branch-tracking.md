@@ -14,6 +14,28 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR iOS AUTORITAIRE (mis à jour 98i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> - **98i (terminée, branche `claude/upbeat-euler-rj79la`, base `main` HEAD `8aea0e4e`)** :
+>   Dynamic Type + VoiceOver de `UserStatsView` (écran « Statistiques » — cartes, graphe activité 30 j, badges).
+>   **8/9** `.font(.system(size:))` → `MeeshyFont.relative(...)` (weight + design `.rounded` préservés) :
+>   header (chevron/titre), valeur+label des 6 cartes de stat, icônes+titres des sections ACTIVITE/BADGES.
+>   **1/9 gardé figé & commenté** : icône stat 20pt dans puce 36×36 à géométrie verrouillée (doctrine 74i/83i),
+>   `.accessibilityHidden`. **5 traits VoiceOver** : `.accessibilityElement(children: .combine)` sur les cartes
+>   (fin du double-élément « 42 » + « Messages ») + icônes décoratives masquées ; `.isHeader` sur le titre
+>   d'écran + les 2 sections (rotor) ; spacer fantôme header masqué. Palette catégorielle par métrique
+>   (`3498DB`/`F8B500`/`E91E63` + tokens indigo) **préservée** (ladder différé, doctrine 83i). 1 fichier, sweep
+>   présentation + traits déclaratifs, 0 logique / 0 clé i18n / 0 test neuf (parité 55i/71i/74i/83i/86i/88i).
+>   Gate = CI `iOS Tests`. Contention : ~15 PRs iOS ouvertes (91i→97i), `UserStatsView` non prise → n° 98i (> 97i).
+> - **Base de départ 99i : `main` HEAD** (toujours resync sur `main` avant de commencer ; supprimer la branche mergée).
+> - **Différé prioritaire iOS 99i+** : `StoryViewerView+Content` (31, ⚠️ collision i18n #1174), `ConversationView+Composer`
+>   (22, lot critique prudent), `ConversationView+MessageRow` (16), `ConversationListView+Overlays` (15),
+>   `LicensesView` (10, propre non pris), `StoryViewerView+Sidebar` (10) ; Glass `MessageOverlayMenu` (21, lot dédié).
+>   **NE PAS re-flagger** `UserStatsView` (soldé 98i : 9 sites dont icône 20pt figée + palette catégorielle documentés).
+
+| 98i | claude/upbeat-euler-rj79la (iOS Dynamic Type + VoiceOver `UserStatsView` : 8/9 `.font(.system(size:))` → `MeeshyFont.relative` (weight/design `.rounded` préservés) ; 1 icône stat 20pt en puce 36×36 gardée figée + `.accessibilityHidden` (doctrine 74i/83i) ; 5 a11y = `.accessibilityElement(children:.combine)` sur cartes + icônes masquées, `.isHeader` titre + 2 sections, spacer masqué ; palette catégorielle préservée ; 1 fichier, 0 logique/0 clé/0 test neuf) | ⏳ | ⏳ |
+
+---
+
 > **POINTEUR iOS AUTORITAIRE (mis à jour 93i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
 > - **93i (terminée, branche `claude/upbeat-euler-512kep`, base `main` HEAD `33f89430`)** :
 >   Dynamic Type de `LocationPickerView` (sélecteur de lieu MapKit). **15/17** `.font(.system(size:))`
