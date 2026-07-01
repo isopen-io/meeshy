@@ -127,6 +127,7 @@ struct ConversationDashboardView: View {
                 } else if !summary.text.isEmpty {
                     HStack(alignment: .top, spacing: 4) {
                         Text("\u{201C}")
+                            // Dynamic Type exception: decorative opening-quote glyph, absolute offset(y:) tuned to its point size
                             .font(.system(size: 48, weight: .bold, design: .serif))
                             .foregroundColor(accent.opacity(0.3))
                             .offset(y: -12)
@@ -354,6 +355,7 @@ struct ConversationDashboardView: View {
                 .chartXAxis {
                     AxisMarks(values: .automatic(desiredCount: 5)) { _ in
                         AxisValueLabel()
+                            // Dynamic Type exception: Swift Charts axis label kept compact inside the fixed-height chart
                             .font(.system(size: 9, weight: .medium))
                             .foregroundStyle(theme.textMuted)
                     }
@@ -361,6 +363,7 @@ struct ConversationDashboardView: View {
                 .chartYAxis {
                     AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { _ in
                         AxisValueLabel()
+                            // Dynamic Type exception: Swift Charts axis label kept compact inside the fixed-height chart
                             .font(.system(size: 9, weight: .medium))
                             .foregroundStyle(theme.textMuted)
                         AxisGridLine()
@@ -403,7 +406,7 @@ struct ConversationDashboardView: View {
     private var emptyChartPlaceholder: some View {
         VStack(spacing: 8) {
             Image(systemName: "chart.line.uptrend.xyaxis")
-                .font(.system(size: 24, weight: .light))
+                .font(MeeshyFont.relative(24, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.3))
             Text(String(localized: "dashboard.activity.empty", defaultValue: "Pas assez de donnees", bundle: .main))
                 .font(MeeshyFont.relative(12, weight: .medium))
@@ -714,7 +717,7 @@ struct ConversationDashboardView: View {
         let pct = total > 0 ? Int(Double(count) / Double(total) * 100) : 0
         return VStack(spacing: 4) {
             Text(emoji)
-                .font(.system(size: 22))
+                .font(MeeshyFont.relative(22))
             Text("\(pct)%")
                 .font(MeeshyFont.relative(15, weight: .bold, design: .rounded))
                 .foregroundColor(color)
@@ -1160,6 +1163,7 @@ private struct StatRing: View {
                     .animation(.spring(response: 0.8, dampingFraction: 0.7), value: animated)
 
                 Text(displayValue)
+                    // Dynamic Type exception: value centered in a fixed 60pt ring (minimumScaleFactor shrinks-to-fit)
                     .font(.system(size: 14, weight: .bold, design: .rounded))
                     .foregroundColor(textColor)
                     .minimumScaleFactor(0.6)
@@ -1168,6 +1172,7 @@ private struct StatRing: View {
             .frame(width: 60, height: 60)
 
             Text(label.uppercased())
+                // Dynamic Type exception: compact ring caption under the fixed-geometry ring
                 .font(.system(size: 9, weight: .bold, design: .rounded))
                 .foregroundColor(mutedColor)
                 .tracking(0.5)
@@ -1211,6 +1216,7 @@ private struct ArcGauge: View {
 
                 VStack(spacing: 0) {
                     Text("\(score)")
+                        // Dynamic Type exception: score centered in the fixed-geometry arc gauge (position is radius-relative)
                         .font(.system(size: 34, weight: .bold, design: .rounded))
                         .foregroundColor(scoreColor)
                 }
