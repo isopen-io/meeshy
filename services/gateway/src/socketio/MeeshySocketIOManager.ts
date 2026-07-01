@@ -2093,9 +2093,22 @@ export class MeeshySocketIOManager {
         metadata: { source: 'api' as const },
       };
 
+      // Résout le Participant.id du sender AVANT d'appeler handleMessage — mirroring
+      // handleAgentReaction just below. MessagingService attend un Participant.id ;
+      // lui passer asUserId (un User.id) ne fonctionnait que via son fallback
+      // DEPRECATED (query supplémentaire + log d'erreur à chaque réponse d'agent).
+      const senderParticipant = await this.prisma.participant.findFirst({
+        where: { userId: response.asUserId, conversationId: response.conversationId, isActive: true },
+        select: { id: true },
+      });
+      if (!senderParticipant) {
+        logger.warn(`[Agent] No active participant for userId=${response.asUserId} in conv=${response.conversationId}`);
+        return;
+      }
+
       const result = await this.messagingService.handleMessage(
         messageRequest,
-        response.asUserId
+        senderParticipant.id
       );
 
       if (!result.success || !result.data) {
