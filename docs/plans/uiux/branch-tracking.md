@@ -925,3 +925,36 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 > - **Différé prioritaire iOS 99i+** : Dynamic Type grandes surfaces restantes une par itération — `CommunityLinkDetailView` (10), `UserStatsView` (9), `StoryTrayView` (9) ; lots critiques prudents en dernier — `StoryViewerView+Content` (31, ⚠️ collision i18n historique #1174), `ConversationView+Composer` (22) ; Glass adoption `MessageOverlayMenu` (21, via `AdaptiveGlassContainer`). **Vérifier `list_pull_requests` avant de choisir** (forte contention multi-agents iOS : 91i→97i en vol).
 
 | 98i | claude/upbeat-euler-8z0srs (iOS Dynamic Type + VoiceOver + sélection `LicensesView` : 10/10 `.font(.system(size:))` → `MeeshyFont.relative` (weight/`.rounded` préservés) ; 0 site figé ; a11y = `.combine`+`.accessibilityLabel`+`.isHeader` sur sectionHeader (parité AboutView) ; `.textSelection(.enabled)` intro légale ; palette `accentColor=6366F1` + `badgeColor` catégorie préservés ; 1 fichier, 0 clé/0 logique/0 test neuf ; gate = CI `iOS Tests`) | ⏳ | ⏳ |
+
+---
+
+> **POINTEUR iOS AUTORITAIRE (mis à jour 103i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> - **103i (terminée, branche `claude/upbeat-euler-hhsxw6`, base `main` HEAD `2d91d96d`)** :
+>   Dynamic Type + VoiceOver de `ConversationMediaGalleryView` (galerie plein écran médias, swipe
+>   entre tous les visuels d'une conversation). **Surface fraîche** : 0 mention historique d'analyse,
+>   0 PR ouverte. **7/13** `.font(.system(size:))` → `MeeshyFont.relative(size, weight:, design:)`
+>   (weight + monospaced préservés) : légende média, compteur `1/N`, nom auteur, date, glyphe type
+>   média apparié, dimensions `w×h`, taille fichier. **6/13 figés** + commentaires : état-vide `photo`
+>   48 (décoratif ≥40, doctrine 74i/86i) + chrome `xmark` 28 & save 18 (cadres tap fixes, doctrine
+>   82i) + contrôles `play.fill` 22 / `arrow.down.to.line` 20 / label taille 10 (cercle de contrôle
+>   fixe 56/64pt). **8 traits VoiceOver** : `.accessibilityLabel(common.close)` (SSOT) sur fermeture ;
+>   `.accessibilityLabel(media.saveToPhotos)` + `.accessibilityValue` d'état sur save ;
+>   `.accessibilityLabel` dynamique (`media.playVideo` SSOT / `media.downloadVideo` / `common.downloading`)
+>   sur le bouton central vidéo ; `.accessibilityElement(children:.combine)` sur rangée auteur ;
+>   `.accessibilityHidden(true)` ×2 glyphes décoratifs. 1 fichier, 0 logique / 0 édition xcstrings
+>   (clés neuves référencées code-only via `defaultValue`) / 0 test neuf. Gate = CI `iOS Tests`.
+> - **⚠️ COLLISION DE NUMÉROS (essaim ~32 PR)** : « 95i » revendiqué par ≥3 agents (TwoFactorSetupView
+>   mergé #1248, SupportView #1262, ma cible initiale). Les PR ouvertes vont jusqu'à **102i**, main
+>   jusqu'à 99i → renumérotée **103i** (> 102) pour éviter toute collision de fichiers docs.
+> - **⚠️ `ConversationMediaGalleryView` SOLDÉ (ne plus reprendre)** : Dynamic Type + VoiceOver soldés
+>   103i ; 6 `.system(size:)` figés à dessein (voir liste ci-dessus).
+> - **Note CI** : `Build (bun)` est ROUGE sur main (doublon d'import `copyToClipboard` web,
+>   `ConversationItem.tsx`/`use-header-actions.ts`, issu du merge #1232) — **hors périmètre iOS**,
+>   non bloquant (PR iOS #1248/#1249 ont mergé à travers). Gate iOS = `ios-tests` uniquement.
+> - **Base de départ 104i : `main` HEAD** (toujours resync sur `main` ; supprimer la branche mergée).
+> - **Différé prioritaire iOS 104i+** : (a) Dynamic Type grandes surfaces — `StoryViewerView+Content`
+>   (31, ⚠️ collision i18n #1174), `ConversationView+Composer` (22, lot prudent) ; vérifier
+>   `list_pull_requests` (essaim dense, numéros ≥103). (b) Palette : checkmark `#4ADE80` → `success`.
+>   (c) Glass adoption `MessageOverlayMenu` = lot DÉDIÉ prudent (recette bespoke, risque régression).
+
+| 103i | claude/upbeat-euler-hhsxw6 (iOS Dynamic Type + VoiceOver `ConversationMediaGalleryView` : 7/13 `.font(.system(size:))` → `MeeshyFont.relative` ; 6 figés commentés = état-vide photo 48 + chrome xmark 28/save 18 + contrôles play 22/download 20/label 10 cercle fixe ; 8 a11y = labels close(SSOT)/save+value/play-download dynamique + combine rangée auteur + hidden ×2 décoratifs ; renuméroté depuis 95i pour collision essaim ; 1 fichier, 0 logique/0 xcstrings/0 test neuf ; gate = CI `iOS Tests`) | ⏳ | ⏳ |
