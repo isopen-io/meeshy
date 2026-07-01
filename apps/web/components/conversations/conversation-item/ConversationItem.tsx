@@ -23,6 +23,7 @@ import {
   getConversationCreatedDate
 } from './conversation-utils';
 import { formatLastMessage } from './message-formatting';
+import { copyToClipboard } from '@/lib/clipboard';
 
 interface ConversationItemProps {
   conversation: Conversation;
@@ -128,11 +129,11 @@ export const ConversationItem = memo(function ConversationItem({
         });
       } else {
         const { success } = await copyToClipboard(fullMessage);
-        toast[success ? 'success' : 'error'](
-          success
-            ? t('conversationHeader.linkCopied')
-            : t('conversationHeader.linkCopyError'),
-        );
+        if (success) {
+          toast.success(t('conversationHeader.linkCopied'));
+        } else {
+          toast.error(t('conversationHeader.linkCopyError'));
+        }
       }
     } catch (error: unknown) {
       if (error.name === 'AbortError') {

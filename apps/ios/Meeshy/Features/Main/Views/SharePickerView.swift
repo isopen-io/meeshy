@@ -96,15 +96,16 @@ struct SharePickerView: View {
                 .frame(width: 3, height: 32)
 
             contentIcon
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(contentLabel)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(MeeshyFont.relative(11, weight: .semibold))
                     .foregroundColor(MeeshyColors.indigo400)
                     .lineLimit(1)
 
                 Text(contentPreview)
-                    .font(.system(size: 12))
+                    .font(MeeshyFont.relative(12))
                     .foregroundColor(theme.textMuted)
                     .lineLimit(2)
             }
@@ -114,6 +115,7 @@ struct SharePickerView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.02))
+        .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder
@@ -121,11 +123,11 @@ struct SharePickerView: View {
         switch sharedContent {
         case .text:
             Image(systemName: "text.bubble.fill")
-                .font(.system(size: 16))
+                .font(MeeshyFont.relative(16))
                 .foregroundColor(MeeshyColors.indigo400)
         case .url:
             Image(systemName: "link.circle.fill")
-                .font(.system(size: 16))
+                .font(MeeshyFont.relative(16))
                 .foregroundColor(MeeshyColors.indigo600)
         case .image(let image):
             Image(uiImage: image)
@@ -135,11 +137,11 @@ struct SharePickerView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6))
         case .message:
             Image(systemName: "arrowshape.turn.up.forward.fill")
-                .font(.system(size: 16))
+                .font(MeeshyFont.relative(16))
                 .foregroundColor(MeeshyColors.warning)
         case .story:
             Image(systemName: "play.rectangle.fill")
-                .font(.system(size: 16))
+                .font(MeeshyFont.relative(16))
                 .foregroundColor(MeeshyColors.indigo500)
         }
     }
@@ -177,11 +179,12 @@ struct SharePickerView: View {
     private var searchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(theme.textMuted)
+                .accessibilityHidden(true)
 
             TextField(String(localized: "share.search.placeholder", defaultValue: "Rechercher une conversation...", bundle: .main), text: $searchText)
-                .font(.system(size: 15))
+                .font(MeeshyFont.relative(15))
                 .foregroundColor(theme.textPrimary)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
@@ -191,7 +194,7 @@ struct SharePickerView: View {
                     searchText = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16))
+                        .font(MeeshyFont.relative(16))
                         .foregroundColor(theme.textMuted)
                 }
                 .accessibilityLabel(String(localized: "common.clearSearch", defaultValue: "Clear search", bundle: .main))
@@ -253,26 +256,28 @@ struct SharePickerView: View {
                 ConversationTitleLabel(
                     name: conv.displayName,
                     favoriteEmoji: conv.userState.reaction,
-                    font: .system(size: 15, weight: .medium),
+                    font: MeeshyFont.relative(15, weight: .medium),
                     color: theme.textPrimary
                 )
 
                 HStack(spacing: 4) {
                     Text(conversationTypeLabel(conv.type))
-                        .font(.system(size: 12))
+                        .font(MeeshyFont.relative(12))
                         .foregroundColor(theme.textMuted)
 
                     if let preview = conv.lastMessagePreview, !preview.isEmpty {
                         Text("\u{2022}")
-                            .font(.system(size: 10))
+                            .font(MeeshyFont.relative(10))
                             .foregroundColor(theme.textMuted)
+                            .accessibilityHidden(true)
                         Text(preview)
-                            .font(.system(size: 12))
+                            .font(MeeshyFont.relative(12))
                             .foregroundColor(theme.textMuted)
                             .lineLimit(1)
                     }
                 }
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -285,11 +290,19 @@ struct SharePickerView: View {
 
     @ViewBuilder
     private func shareButton(for conv: Conversation) -> some View {
+        // Colonne de contrôle en fin de ligne : les 3 états (envoyer / en cours /
+        // envoyé) restent à 26pt fixe pour rester alignés avec le ProgressView
+        // contraint à 26×26 — un glyphe scalable ferait sauter la largeur de la
+        // colonne d'action au fil du réglage Dynamic Type (doctrine 86i, contrôle
+        // à taille fixe). Tap target ≥44pt garanti par le padding de ligne.
         if sentToIds.contains(conv.id) {
+            // Fixed control-sized status glyph (26pt): fills the row's trailing action
+            // slot at a deliberate control size, not reading text (74i/86i doctrine).
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 26))
                 .foregroundColor(MeeshyColors.success)
                 .transition(.scale.combined(with: .opacity))
+                .accessibilityLabel(String(localized: "share.sent", defaultValue: "Envoy\u{00e9}", bundle: .main))
         } else if sendingToId == conv.id {
             ProgressView()
                 .scaleEffect(0.8)
@@ -298,6 +311,7 @@ struct SharePickerView: View {
             Button {
                 shareToConversation(conv)
             } label: {
+                // Fixed control-sized action glyph (26pt): control size, not reading text.
                 Image(systemName: "paperplane.circle.fill")
                     .font(.system(size: 26))
                     .foregroundColor(MeeshyColors.indigo400)

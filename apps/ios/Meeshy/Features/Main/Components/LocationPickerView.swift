@@ -37,6 +37,7 @@ struct LocationPickerView: View {
                 ToolbarItem(placement: .principal) {
                     Text(String(localized: "location.title", defaultValue: "Choisir un lieu", bundle: .main))
                         .font(MeeshyFont.relative(16, weight: .bold))
+                        .accessibilityAddTraits(.isHeader)
                 }
             }
             .onAppear { viewModel.requestPermission() }
@@ -61,9 +62,14 @@ struct LocationPickerView: View {
                 viewModel.updateSelectedLocation(center)
             }
         ) {
-            // Marqueur d'annotation carte : taille fixe (overlay MapKit, hors flux Dynamic Type
-            // — un pin qui grandit avec le réglage texte casserait l'alignement sur la carte).
+            // Map annotation marker anchored to a coordinate: system-pin chrome
+            // rendered at a fixed screen size, not reading text — scaling it with
+            // Dynamic Type would detach it from the point it marks. Kept fixed
+            // (doctrine 74i/86i).
             Image(systemName: "mappin.circle.fill")
+                // Fixed: this is the MapKit annotation marker pinned to the map —
+                // its geometry is anchored to a coordinate, not reading text, so it
+                // must stay a fixed point size (doctrine 74i/86i).
                 .font(.system(size: 36))
                 .foregroundStyle(Color(hex: accentColor), Color(hex: accentColor).opacity(0.3))
                 .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 6, y: 3)
@@ -134,9 +140,13 @@ struct LocationPickerView: View {
                     viewModel.searchResults.removeAll()
                 } label: {
                     HStack(spacing: 10) {
-                        // Glyphe contraint dans un badge 28×28 fixe : gardé figé (doctrine 86i —
-                        // un glyphe scalable déborderait le cadre). Décoratif → masqué VoiceOver.
+                        // Glyph constrained in a fixed 28×28 badge — a scalable
+                        // font would overflow the frame. Kept fixed + hidden from
+                        // VoiceOver (the result name carries the meaning; doctrine 86i).
                         Image(systemName: "mappin")
+                            // Fixed: glyph centered in a fixed 28×28 circle badge;
+                            // a scalable font would overflow the frame (doctrine 86i).
+                            // Decorative — the place name carries the meaning.
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(Color(hex: accentColor))
                             .frame(width: 28, height: 28)
@@ -213,6 +223,9 @@ struct LocationPickerView: View {
 
                 Spacer()
             }
+            // VoiceOver reads the selected-location summary (address + coordinates)
+            // as a single element instead of three disjoint fragments.
+            .accessibilityElement(children: .combine)
 
             HStack(spacing: 12) {
                 Button {
