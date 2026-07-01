@@ -2,7 +2,16 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → **Stories (in progress)** → Calls → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → **Calls (started)** → rest`
+
+> Calls kicked off 2026-06-30 with the pure call-lifecycle FSM (`core:model`
+> `me.meeshy.sdk.model.call` — `CallState`/`CallEndReason`/`CallEvent`/`CallStateMachine`). On
+> 2026-07-01 the `:feature:calls` module landed its real consumer (slice `calls-viewmodel-screen`):
+> a UDF `CallViewModel` (`StateFlow<CallUiState>`) driving the FSM via accept/decline/hang-up/mute/
+> camera intents + signalling events, a pure `CallPresenter` projecting the UI state, and a minimal
+> accent-coherent call screen reachable from audio/video buttons in the chat header. **Next:** the
+> call **signalling event models + socket mapping** (`call:offer`/`:answer`/`:ice-candidate`/…),
+> then the WebRTC/Telecom/FCM plumbing. See the run log + `feature-parity.md §H`.
 
 Stories so far: tray (ring carousel) + cross-group viewer playback engine +
 quick-reaction strip + swipe gestures + realtime reaction socket deltas +
@@ -127,6 +136,26 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
+**Now in the Calls area** (`feature-parity.md §H`). The pure FSM (`core:model`
+`me.meeshy.sdk.model.call`) landed 2026-06-30; the `:feature:calls` consumer landed 2026-07-01
+(slice `calls-viewmodel-screen`). Ordered by value:
+1. ~~**`:feature:calls` `CallViewModel` + minimal call screen**~~ ✅ shipped as `calls-viewmodel-screen`
+   (2026-07-01) — new `:feature:calls` module with a UDF `CallViewModel` (`StateFlow<CallUiState>`)
+   folding accept/decline/hang-up/mute/camera intents + signalling events through `CallStateMachine.reduce`,
+   a pure `CallPresenter` (`CallState × CallConfig × CallMedia → CallUiState`) owning every affordance
+   decision, and a minimal accent-coherent Compose screen (ringing/connecting/connected/ended) reachable
+   from audio/video call buttons in the chat header; dismissal returns to chat. +34 tests. See run log.
+2. **Call signalling event models + socket mapping** — Kotlin payload types for `call:initiate`/
+   `:offer`/`:answer`/`:ice-candidate`/`:ended`/`:missed`/`:media-toggled` (parity with iOS
+   `CallManager` emit/listen tables) + a pure mapper from socket frames → `CallEvent`.
+3. **`CallDirection` (incoming/outgoing/missed, raw-degrades to incoming) + `CallMediaType`
+   (audioOnly/audioVideo)** + call-history row model — the remaining pure call enums from iOS
+   `CallModels.swift`/`WebRTCTypes.swift`, feeding a missed/recent-calls list.
+
+Then the heavier WebRTC/Telecom/FCM-full-screen-intent plumbing (glue-heavy; push every testable
+decision into pure helpers/the VM).
+
+--- Stories backlog (area is rich; revisit only if Calls stalls) ---
 Ordered by value:
 0aa. ~~**8 photo filters with intensity**~~ ✅ shipped as `story-photo-filters` (this run) — pure
    `StoryFilterMatrix` (Compose-agnostic `StoryColorMatrix` + per-preset `baseMatrix` + intensity-blended
@@ -135,8 +164,12 @@ Ordered by value:
    publish on `storyEffects.filter`. See run log. **Emoji stickers** ✅ shipped as `story-sticker-elements`
    (this run) — on-canvas `StoryStickerElement` (drag/pinch/rotate/remove) + Contenu "Sticker" tile +
    emoji-grid picker, serialised to `storyEffects.stickerObjects`. **Next real Effets tiles:** on-canvas
-   **freehand drawing**, then **backgrounds** (pastel / gradient / image), then the timeline; and a
-   **categorised + searchable** sticker picker to replace the flat built-in palette.
+   **freehand drawing**, then **backgrounds** (pastel / gradient / image), then the timeline. The
+   **categorised + searchable** sticker picker ✅ shipped as `story-sticker-picker-search` (this run) —
+   pure `StickerCatalog` (8 categories, keyworded search, `search(query, category?)`) + pure
+   `StickerPickerState` reducer (a non-blank query searches across **all** categories, iOS parity);
+   the dialog is now a search field + `FilterChip` tabs + filtered grid + empty-state. Replaces the
+   flat `STORY_STICKER_EMOJIS`. +22 tests. See run log.
 0. ~~**Z-order management (front/back, forward/backward)**~~ ✅ shipped as `story-text-element-zorder`
    (this run) — pure `StorySlideDeck.reorderTextElement(id, StoryZOrder)` restacks an element within its
    slide's paint order (list order = z-order), inert at the extremes / unknown id / single element;
@@ -308,6 +341,139 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-01 — slice `calls-viewmodel-screen` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration; `origin/main` HEAD `1827303`
+  (iter 53, web). Branched `claude/apps/android/calls-viewmodel-screen` off latest `main`.
+- **What:** gave the pure call FSM (`core:model` `me.meeshy.sdk.model.call`) its **first real consumer** —
+  a new `:feature:calls` Gradle module (`include(":feature:calls")`, wired into `:app`).
+  - **`CallPresenter`** (pure): projects `CallState × CallConfig × CallMedia → CallUiState`. Owns every
+    UI decision — `CallStatus` (IDLE/INCOMING/OUTGOING_RINGING/CONNECTING/CONNECTED/RECONNECTING/ENDED,
+    with `Offering` collapsing to CONNECTING), the `showAnswerControls`/`showHangUp`/`canToggleMedia`/
+    `isActive`/`isEnded` affordances, the terminal `endReason`, the reconnect attempt, and the
+    camera-only-if-video rule. Media intent (mute/camera) rides alongside the phase, never inside the FSM
+    (iOS `CallManager` parity).
+  - **`CallViewModel`** (UDF, `@HiltViewModel`): holds `CallState` + `CallMedia`, folds
+    `start`/`accept`/`decline`/`hangUp`/`onSignal`/`toggleMute`/`toggleCamera`/`dismiss` through
+    `CallStateMachine.reduce`, republishes an immutable `StateFlow<CallUiState>` via `CallPresenter`.
+    `start` is **inert unless idle** (re-entrant launch effect never resets a live call); `dismiss`
+    settles a terminal call back to idle. No `viewModelScope` needed — every transition is synchronous
+    and deterministic (the async WebRTC/signalling plumbing is the next slice).
+  - **`CallScreen`** (glue): accent-coherent (`DynamicColorGenerator.colorForName`) full-screen call UI
+    rendering the phase + peer + status label, with accept/decline/hang-up/mute/camera/close controls the
+    state exposes. Reachable from **audio & video call buttons added to the chat header** (iOS parity);
+    `onClose` returns to chat (coherent dismissal). +2 strings × 4 locales in `:feature:chat`, 18 strings
+    × 4 locales in `:feature:calls`.
+- **Tests (+34, red → green):** `CallPresenterTest` (20) sweeps every `statusOf` arm + every derived
+  affordance's true/false branches + the camera video/audio matrix + end-reason/reconnect exposure;
+  `CallViewModelTest` (14) drives the intents through the public `state` API (outgoing negotiate→connected,
+  incoming accept→connecting, decline→Rejected, hang-up→Local, remote hang-up→Remote, mute/camera toggles,
+  audio call never reports camera on, `start` inert mid-call, dismiss→idle, restart after settle). **RED
+  caught a real bug:** an assertion assumed `Offering` blocks media toggle, but `Offering` presents as
+  CONNECTING (which allows it) — the test expectation was corrected to match the intended collapse, not
+  the code weakened.
+- **Verification:** `:feature:calls:testDebugUnitTest` → 34/34 green; `:app:assembleDebug` → **BUILD
+  SUCCESSFUL** (the chat-header + nav wiring compiles). Diff is `apps/android` only (`git status` clean of
+  any web/ios/gateway/shared path).
+- **Reviewer gate:** PASS — SDK purity respected (pure `CallPresenter` + FSM in `core:model`; product
+  orchestration in `:feature:calls`/`:app`); UDF with immutable `StateFlow<CallUiState>` + pure
+  transitions; single source of truth for colour (`DynamicColorGenerator`) and call transitions
+  (`CallStateMachine`); behaviour-tested through the public API (no tautologies, no reflection); near-total
+  branch coverage on the pure logic incl. inert/boundary arms; no coverage floor touched; natural chat-header
+  entry with coherent dismissal (no dead end).
+
+### 2026-06-30 — slice `call-state-machine` ✅ shipped (PR pending → squash-merge) + unblocked & merged `story-sticker-picker-search` (PR #1135)
+- **Step 0 (housekeeping):** the prior run's PR #1135 (`story-sticker-picker-search`) was open and
+  ⚠ blocked on a **pre-existing red `main`** (the `Test web` a11y failure in `invite-user-modal.test.tsx`).
+  `main` has since gone **green** (the fix merged; HEAD `c261f0bd` CI = success). Rebased #1135 onto current
+  `main` (clean, apps/android-only), re-ran CI → **all green** (the once-red `Test web` now passes),
+  local `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL**, then **squash-merged** to `main`
+  (`876f9087`). Hard-rule honoured: never merged past the red CI; merged only once `main` was green.
+- **Then advanced one phase** into the **Calls** area (Stories richness is now sufficient — composer
+  has slides/deck/per-slide media/text-elements/stickers/filters/z-order/snap/canvas-transform/toolbar,
+  all non-UI files tested).
+- **What:** the first Calls brick — a **pure call-lifecycle FSM** in `core:model`
+  (`me.meeshy.sdk.model.call`), the single source of truth the future `:feature:calls` wiring drives.
+  - `CallState` (Idle / Ringing(isOutgoing) / Offering / Connecting / Connected / Reconnecting(attempt) /
+    Ended(reason)) with derived flags `isActive`/`isRinging`/`isEnded`/`canStart`.
+  - `CallEndReason` (Local / Remote / Rejected / Missed / ConnectionLost / Failed(message)) — faithful
+    port of iOS `WebRTCTypes.CallEndReason` incl. the message-carrying `Failed`.
+  - `CallEvent` — the 15 lifecycle triggers (StartOutgoing/ReceiveIncoming/ParticipantJoined/
+    LocalAnswer/RemoteAnswer/MediaConnected/ConnectionStalled/ReconnectFailed/Reject/LocalHangUp/
+    RemoteHangUp/RingTimeout/ConnectionFailed(msg)/Settle).
+  - `CallStateMachine.reduce(state, event, maxReconnectAttempts = 3)` — total, side-effect-free,
+    faithfully mirroring the iOS `CallManager` transition table (outgoing: ringing→offering→connecting→
+    connected; incoming: ringing→connecting→connected; connected→reconnecting on stall; reconnect budget
+    of 3 → `Ended(ConnectionLost)`; ringing timeout → `Missed`; incoming decline → `Rejected`). Every
+    inapplicable event is **inert** (same state); terminal `Ended` only leaves via `Settle` → `Idle`, so
+    the machine always settles and never loops. **Surpasses iOS**, where a real FSM validator is only a
+    P1 "todo" in its calls SOTA plan.
+- **Why `core:model` (not a new `:feature:calls` module):** the FSM is a stateless pure building block
+  (SDK-purity grain test → agnostic, parameter-driven, no product orchestration), and `core:model`
+  already hosts the codebase's pure domain logic (`EmojiUsageRanker`, `ConversationFilter`,
+  `LanguageResolver`). Keeps the slice tight (no Gradle-module wiring) and the FSM reusable by both the
+  app and the SDK. The `:feature:calls` ViewModel + minimal screen that *consume* it are the next slice.
+- **Tests (+31, red → green):** `CallStateMachineTest` (`core:model`). RED captured first (types
+  unresolved). Branch sweep — every `when` arm exercised, including: idle ignores mid-call events;
+  outgoing ringing ignores local-answer & reject; incoming ringing ignores participant-join; offering
+  ignores the (cancelled) ring timeout; connecting ignores a pre-media stall; connected ignores a
+  redundant media-connected; the reconnect-budget boundary (`attempt >= max` → `ConnectionLost`, both
+  default max=3 and max=1); ended is inert and keeps its original reason; plus three end-to-end folds
+  (outgoing happy path, incoming happy path, stall→reconnect→recover).
+- **Verification:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL** (debug APK assembles, all
+  modules' JVM unit tests green; `CallStateMachineTest` 31/31). Diff is `apps/android` only.
+- **Reviewer gate:** PASS — pure stateless building block (SDK-purity respected), behaviour tested
+  through the public `reduce` API (no tautologies, no reflection), near-total branch coverage incl. the
+  inert/no-op and boundary arms, no coverage floor touched.
+
+### 2026-06-30 — slice `story-sticker-picker-search` ⚠ blocked (PR #1135, merge-blocked on red `main`)
+- **Status:** implementation + tests + reviewer gate all **DONE/PASS**; merge **blocked** by a
+  **pre-existing, unrelated** failure on `main`. The monorepo CI's `Test web` job fails on a single
+  web a11y test — `__tests__/components/conversations/invite-user-modal.test.tsx:493`
+  (`getByRole('button', { name: 'John Doe déjà sélectionné' })` → `toBeDisabled`); **1 failed /
+  10 769 passed**, all in that one web file. My diff is `apps/android` only and touches **zero** web
+  code, so it cannot have caused this — it is the same broken-`main` regression open PR #1131 documents
+  and carries the fix for. I can't fix it here (editing `invite-user-modal.tsx` is web production logic,
+  which breaks the "diff is apps/android only" hard gate). **Unblock:** once `main` goes green (a fix
+  like #1131 merges), rebase this branch onto it (`update_pull_request_branch`) → CI re-runs green →
+  squash-merge. The `*/8 min` self-check cron (`b4133933`) re-checks and will rebase + merge when `main`
+  is green. **Do NOT merge past this red CI** (hard rule).
+- **Branch:** `claude/apps/android/story-sticker-picker-search` (off `origin/main` @ `a751730f`).
+- **Housekeeping (step 0):** no open `claude/apps/android/*` PR (`list_pull_requests state=open` → only
+  dependabot + non-android `claude/*` branches: #1133 ios-calls, #1132 translator, #1131 gateway, #1130
+  gateway-coverage). Branched clean off the freshened `origin/main`.
+- **What:** the **categorised + searchable** emoji sticker picker (feature-parity §Stories + audit
+  part-21 `StickerPickerView`), replacing the old flat `STORY_STICKER_EMOJIS` palette. iOS parity: 8
+  category tabs (smileys/animals/food/activities/travel/objects/symbols/flags) + a search field; a
+  non-blank query searches across **all** categories.
+- **Design (single source of truth, SDK purity):** two pure types in `:feature:stories` (composer
+  product logic, mirroring where `StoryStickerElement` lives). `StickerCatalog` — `enum StickerCategory`
+  (8, tab order), `data class StickerEntry(emoji, category, keywords)`, the curated catalogue (~16
+  keyworded emojis/category, every glyph in exactly one category so `all` is duplicate-free),
+  `inCategory(cat)`, `all`, and `search(query, category?)`: trim+lowercase substring over keywords **or**
+  the glyph itself, blank query ⇒ whole scope unfiltered, result preserves catalogue order + `distinct`.
+  `StickerPickerState(category, query)` — the product reducer: `isSearching` (non-blank), `visibleEmojis`
+  (global `search` while searching so the tab is intentionally ignored, else the tab's emojis),
+  `withCategory`/`withQuery` (inert/same-instance on no-op). The decision lives in one unit-tested place;
+  the dialog stays glue.
+- **Changed (production — all `:feature:stories`, `apps/android` only):** `StickerCatalog.kt` (new),
+  `StoryComposerScreen.kt` (`StickerPickerDialog` → search field + `FilterChip` tab row + filtered grid +
+  empty-state; removed `STORY_STICKER_EMOJIS`), `values{,-fr,-es,-pt}/strings.xml` (10 strings × 4 locales:
+  search hint, no-results, 8 category labels).
+- **Tests (+22, red→green):** `StickerCatalogTest` — catalogue shape (every category non-empty,
+  `inCategory` order, `all` = concat + duplicate-free + tab order), search (blank ⇒ scope, category-scoped
+  blank, keyword match, case-insensitive + trim, substring, spans-all-categories, category-scoped excludes
+  others, glyph match, no-match ⇒ empty, order-preserving + distinct), reducer (default smileys/not-
+  searching, tab select, whitespace not searching, query searches-all-ignoring-tab, clear ⇒ tab,
+  `withCategory`/`withQuery` inert, select-tab-while-searching keeps global result). First RED caught a
+  real duplicate (`⭐` in OBJECTS+SYMBOLS) → fixed to `☮️`. No floor lowered, no test weakened.
+- **Edge cases:** empty/blank/whitespace query, no-match (empty grid → empty-state), single-category
+  scope, glyph-as-query, duplicate-free, idempotent reducer transitions (same instance).
+- **Verify:** `./gradlew assembleDebug testDebugUnitTest` → **BUILD SUCCESSFUL** (debug APK assembles; all
+  modules' unit tests green; `StickerCatalogTest` 22/22). Diff = `apps/android` only.
+- **Reviewer gate:** PASS — pure behaviour through the public API, no tautologies, SDK purity respected
+  (pure catalogue/reducer in `:feature:stories`, dialog is glue), single source of truth (catalogue
+  replaces the flat palette), UX coherence (natural tabs + live search, no dead-end — empty-state).
 
 ### 2026-06-30 — slice `story-sticker-elements` ✅
 - **Branch:** `claude/apps/android/story-sticker-elements` (off `origin/main` @ `d06d5ec`).

@@ -132,7 +132,7 @@ struct TwoFactorSetupView: View {
                         }
                     } label: {
                         Image(systemName: copiedKey ? "checkmark" : "doc.on.doc")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(MeeshyFont.relative(12, weight: .semibold))
                             .foregroundColor(copiedKey ? MeeshyColors.success : tfaColor)
                     }
                     .accessibilityLabel(copiedKey ? String(localized: "a11y_copied", defaultValue: "Copié") : String(localized: "a11y_copy_key", defaultValue: "Copier la clé secrète"))
@@ -154,7 +154,7 @@ struct TwoFactorSetupView: View {
                 withAnimation { step = .enterCode(setup) }
             } label: {
                 Text(String(localized: "2fa_next_button", defaultValue: "Suivant"))
-                    .font(.system(size: 15, weight: .bold))
+                    .font(MeeshyFont.relative(15, weight: .bold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
@@ -174,13 +174,13 @@ struct TwoFactorSetupView: View {
                 .padding(.top, 20)
 
             Text(String(localized: "2fa_enter_code_instruction", defaultValue: "Entrez le code a 6 chiffres affiche dans votre application"))
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 20)
 
             TextField(String(localized: "2fa_code_placeholder", defaultValue: "000000"), text: $verificationCode)
-                .font(.system(size: 28, weight: .bold, design: .monospaced))
+                .font(MeeshyFont.relative(28, weight: .bold, design: .monospaced))
                 .multilineTextAlignment(.center)
                 .keyboardType(.numberPad)
                 .foregroundColor(theme.textPrimary)
@@ -199,7 +199,7 @@ struct TwoFactorSetupView: View {
 
             if let codeError {
                 Text(codeError)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(MeeshyFont.relative(12, weight: .medium))
                     .foregroundColor(MeeshyColors.error)
             }
 
@@ -212,7 +212,7 @@ struct TwoFactorSetupView: View {
                         ProgressView().scaleEffect(0.7).tint(.white)
                     }
                     Text(String(localized: "2fa_verify_button", defaultValue: "Verifier et activer"))
-                        .font(.system(size: 15, weight: .bold))
+                        .font(MeeshyFont.relative(15, weight: .bold))
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
@@ -232,7 +232,7 @@ struct TwoFactorSetupView: View {
                 withAnimation { step = .showSecret(setup) }
             } label: {
                 Text(String(localized: "2fa_back_to_qr", defaultValue: "Retour au QR code"))
-                    .font(.system(size: 13, weight: .medium))
+                    .font(MeeshyFont.relative(13, weight: .medium))
                     .foregroundColor(tfaColor)
             }
         }
@@ -248,11 +248,11 @@ struct TwoFactorSetupView: View {
                 .padding(.top, 20)
 
             Text(String(localized: "2fa_activated_title", defaultValue: "2FA active avec succes !"))
-                .font(.system(size: 18, weight: .bold))
+                .font(MeeshyFont.relative(18, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 
             Text(String(localized: "2fa_backup_codes_instruction", defaultValue: "Conservez ces codes de secours dans un endroit sur. Chaque code ne peut etre utilise qu'une seule fois."))
-                .font(.system(size: 13, weight: .medium))
+                .font(MeeshyFont.relative(13, weight: .medium))
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 16)
@@ -274,11 +274,11 @@ struct TwoFactorSetupView: View {
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: copiedCodes ? "checkmark" : "doc.on.doc.fill")
-                        .font(.system(size: 13))
+                        .font(MeeshyFont.relative(13))
                     Text(copiedCodes
                         ? String(localized: "a11y_copied", defaultValue: "Copié")
                         : String(localized: "2fa_copy_all_codes", defaultValue: "Copier tous les codes"))
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
                 }
                 .foregroundColor(copiedCodes ? MeeshyColors.success : tfaColor)
                 .padding(.horizontal, 20)
@@ -294,7 +294,7 @@ struct TwoFactorSetupView: View {
                 onComplete()
             } label: {
                 Text(String(localized: "2fa_done_button", defaultValue: "Terminer"))
-                    .font(.system(size: 15, weight: .bold))
+                    .font(MeeshyFont.relative(15, weight: .bold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
@@ -308,7 +308,7 @@ struct TwoFactorSetupView: View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
             ForEach(codes, id: \.self) { code in
                 Text(code)
-                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                    .font(MeeshyFont.relative(14, weight: .semibold, design: .monospaced))
                     .foregroundColor(theme.textPrimary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
@@ -335,7 +335,7 @@ struct TwoFactorSetupView: View {
                 .padding(.top, 40)
 
             Text(message)
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
 
@@ -344,7 +344,7 @@ struct TwoFactorSetupView: View {
                 initiateSetup()
             } label: {
                 Text(String(localized: "2fa_retry", defaultValue: "Reessayer"))
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(MeeshyFont.relative(14, weight: .semibold))
                     .foregroundColor(tfaColor)
             }
         }
@@ -412,18 +412,18 @@ struct TwoFactorDisableView: View {
                         .padding(.top, 40)
 
                     Text(String(localized: "2fa_disable_title", defaultValue: "Desactiver l'authentification a deux facteurs"))
-                        .font(.system(size: 16, weight: .bold))
+                        .font(MeeshyFont.relative(16, weight: .bold))
                         .foregroundColor(theme.textPrimary)
                         .multilineTextAlignment(.center)
 
                     Text(String(localized: "2fa_disable_warning", defaultValue: "Votre compte sera moins securise sans 2FA. Entrez votre mot de passe et votre code pour confirmer."))
-                        .font(.system(size: 13, weight: .medium))
+                        .font(MeeshyFont.relative(13, weight: .medium))
                         .foregroundColor(theme.textSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 20)
 
                     SecureField(String(localized: "2fa_password_placeholder", defaultValue: "Mot de passe"), text: $disablePassword)
-                        .font(.system(size: 16, weight: .medium))
+                        .font(MeeshyFont.relative(16, weight: .medium))
                         .foregroundColor(theme.textPrimary)
                         .padding(.vertical, 14)
                         .padding(.horizontal, 16)
@@ -438,7 +438,7 @@ struct TwoFactorDisableView: View {
                         .padding(.horizontal, 16)
 
                     TextField(String(localized: "2fa_code_placeholder", defaultValue: "000000"), text: $disableCode)
-                        .font(.system(size: 28, weight: .bold, design: .monospaced))
+                        .font(MeeshyFont.relative(28, weight: .bold, design: .monospaced))
                         .multilineTextAlignment(.center)
                         .keyboardType(.numberPad)
                         .foregroundColor(theme.textPrimary)
@@ -458,7 +458,7 @@ struct TwoFactorDisableView: View {
 
                     if let disableError {
                         Text(disableError)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(MeeshyFont.relative(12, weight: .medium))
                             .foregroundColor(MeeshyColors.error)
                     }
 
@@ -471,7 +471,7 @@ struct TwoFactorDisableView: View {
                                 ProgressView().scaleEffect(0.7).tint(.white)
                             }
                             Text(String(localized: "2fa_confirm_disable", defaultValue: "Confirmer la desactivation"))
-                                .font(.system(size: 15, weight: .bold))
+                                .font(MeeshyFont.relative(15, weight: .bold))
                         }
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
@@ -558,7 +558,7 @@ struct TwoFactorBackupCodesView: View {
                                     .padding(.top, 40)
 
                                 Text(error)
-                                    .font(.system(size: 14, weight: .medium))
+                                    .font(MeeshyFont.relative(14, weight: .medium))
                                     .foregroundColor(theme.textSecondary)
 
                                 Button {
@@ -568,7 +568,7 @@ struct TwoFactorBackupCodesView: View {
                                     viewModel.clearError()
                                 } label: {
                                     Text(String(localized: "2fa_retry", defaultValue: "Reessayer"))
-                                        .font(.system(size: 14, weight: .semibold))
+                                        .font(MeeshyFont.relative(14, weight: .semibold))
                                         .foregroundColor(tfaColor)
                                 }
                             }
@@ -579,7 +579,7 @@ struct TwoFactorBackupCodesView: View {
                                 .padding(.top, 20)
 
                             Text(String(localized: "2fa_backup_codes_warning", defaultValue: "Ces codes remplacent les precedents. Conservez-les en lieu sur."))
-                                .font(.system(size: 13, weight: .medium))
+                                .font(MeeshyFont.relative(13, weight: .medium))
                                 .foregroundColor(theme.textSecondary)
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal, 16)
@@ -587,7 +587,7 @@ struct TwoFactorBackupCodesView: View {
                             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                                 ForEach(viewModel.recoveryCodes, id: \.self) { code in
                                     Text(code)
-                                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                                        .font(MeeshyFont.relative(14, weight: .semibold, design: .monospaced))
                                         .foregroundColor(theme.textPrimary)
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 8)
@@ -617,11 +617,11 @@ struct TwoFactorBackupCodesView: View {
                             } label: {
                                 HStack(spacing: 8) {
                                     Image(systemName: copiedCodes ? "checkmark" : "doc.on.doc.fill")
-                                        .font(.system(size: 13))
+                                        .font(MeeshyFont.relative(13))
                                     Text(copiedCodes
                                         ? String(localized: "a11y_copied", defaultValue: "Copié")
                                         : String(localized: "2fa_copy_all_codes", defaultValue: "Copier tous les codes"))
-                                        .font(.system(size: 14, weight: .semibold))
+                                        .font(MeeshyFont.relative(14, weight: .semibold))
                                 }
                                 .foregroundColor(copiedCodes ? MeeshyColors.success : tfaColor)
                                 .padding(.horizontal, 20)
@@ -658,13 +658,13 @@ struct TwoFactorBackupCodesView: View {
                 .padding(.top, 40)
 
             Text(String(localized: "2fa_backup_code_verify", defaultValue: "Entrez votre code 2FA pour generer de nouveaux codes de secours"))
-                .font(.system(size: 14, weight: .medium))
+                .font(MeeshyFont.relative(14, weight: .medium))
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 20)
 
             TextField(String(localized: "2fa_code_placeholder", defaultValue: "000000"), text: $verificationCode)
-                .font(.system(size: 28, weight: .bold, design: .monospaced))
+                .font(MeeshyFont.relative(28, weight: .bold, design: .monospaced))
                 .multilineTextAlignment(.center)
                 .keyboardType(.numberPad)
                 .foregroundColor(theme.textPrimary)
@@ -686,7 +686,7 @@ struct TwoFactorBackupCodesView: View {
                 loadCodes()
             } label: {
                 Text(String(localized: "2fa_generate_codes", defaultValue: "Generer les codes"))
-                    .font(.system(size: 15, weight: .bold))
+                    .font(MeeshyFont.relative(15, weight: .bold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)

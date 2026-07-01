@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   resolvePresenceVisibility,
+  applyPresenceVisibility,
   type PresenceVisibilityInput,
 } from '../../utils/presence-visibility.js';
 
@@ -92,5 +93,35 @@ describe('resolvePresenceVisibility', () => {
     expect(
       resolvePresenceVisibility(baseInput({ areConnected: true, targetIsDeactivated: true })),
     ).toEqual({ showOnline: false, showLastSeenTimestamp: false });
+  });
+});
+
+describe('applyPresenceVisibility', () => {
+  const profile = { id: 'u1', isOnline: true as boolean | null, lastActiveAt: new Date(1000) as Date | null };
+
+  it('keeps both fields when both flags are on', () => {
+    const out = applyPresenceVisibility(profile, { showOnline: true, showLastSeenTimestamp: true });
+    expect(out.isOnline).toBe(true);
+    expect(out.lastActiveAt).toEqual(new Date(1000));
+  });
+
+  it('nulls isOnline when showOnline is off, keeping the rest of the object', () => {
+    const out = applyPresenceVisibility(profile, { showOnline: false, showLastSeenTimestamp: false });
+    expect(out.isOnline).toBeNull();
+    expect(out.lastActiveAt).toBeNull();
+    expect(out.id).toBe('u1');
+  });
+
+  it('keeps isOnline but nulls the timestamp when only showLastSeenTimestamp is off', () => {
+    const out = applyPresenceVisibility(profile, { showOnline: true, showLastSeenTimestamp: false });
+    expect(out.isOnline).toBe(true);
+    expect(out.lastActiveAt).toBeNull();
+  });
+
+  it('does not mutate the input object', () => {
+    const input = { id: 'u2', isOnline: true as boolean | null, lastActiveAt: new Date(2000) as Date | null };
+    applyPresenceVisibility(input, { showOnline: false, showLastSeenTimestamp: false });
+    expect(input.isOnline).toBe(true);
+    expect(input.lastActiveAt).toEqual(new Date(2000));
   });
 });

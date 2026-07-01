@@ -6,7 +6,6 @@
 import imageCompression from 'browser-image-compression';
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile, toBlobURL } from '@ffmpeg/util';
-import { formatFileSize } from '@meeshy/shared/types/attachment';
 
 const COMPRESSION_THRESHOLD = 100 * 1024 * 1024; // 100MB
 const TARGET_SIZE = 50 * 1024 * 1024; // Cible: 50MB après compression
@@ -312,4 +311,15 @@ export async function compressMultipleFiles(
   }
 
   return compressedFiles;
+}
+
+/**
+ * Formate une taille de fichier pour l'affichage
+ */
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
 }

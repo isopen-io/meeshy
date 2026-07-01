@@ -872,16 +872,18 @@ private fun StickerLayer(
 }
 
 /**
- * The emoji sticker picker — a simple grid of the built-in [STORY_STICKER_EMOJIS].
- * Tapping an emoji forwards it to [onPick] (which adds it to the canvas and closes the
- * dialog). The categorised + searchable picker is a tracked follow-up; this gives the
- * sticker feature a real entry point. Pure glue.
+ * The emoji sticker picker — category tabs ([StickerCategory]) plus a live search field,
+ * both driven by the pure [StickerPickerState] so the "what is visible" decision is
+ * unit-tested in one place (a non-blank query searches across every category and the tab
+ * row is hidden). Tapping an emoji forwards it to [onPick] (which adds it to the canvas
+ * and closes the dialog). Pure glue.
  */
 @Composable
 private fun StickerPickerDialog(
     onPick: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    var picker by remember { mutableStateOf(StickerPickerState()) }
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {},
@@ -892,26 +894,69 @@ private fun StickerPickerDialog(
         },
         title = { Text(stringResource(R.string.stories_composer_add_sticker)) },
         text = {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(STICKER_PICKER_COLUMNS),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                gridItems(STORY_STICKER_EMOJIS) { emoji ->
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = picker.query,
+                    onValueChange = { picker = picker.withQuery(it) },
+                    singleLine = true,
+                    placeholder = { Text(stringResource(R.string.stories_composer_sticker_search)) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (!picker.isSearching) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(StickerCategory.values().toList()) { category ->
+                            FilterChip(
+                                selected = picker.category == category,
+                                onClick = { picker = picker.withCategory(category) },
+                                label = { Text(category.label()) },
+                            )
+                        }
+                    }
+                }
+                val visible = picker.visibleEmojis
+                if (visible.isEmpty()) {
                     Text(
-                        text = emoji,
-                        fontSize = STICKER_PICKER_FONT_SIZE,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { onPick(emoji) }
-                            .padding(8.dp),
+                        text = stringResource(R.string.stories_composer_sticker_no_results),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(vertical = 16.dp),
                     )
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(STICKER_PICKER_COLUMNS),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        gridItems(visible) { emoji ->
+                            Text(
+                                text = emoji,
+                                fontSize = STICKER_PICKER_FONT_SIZE,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { onPick(emoji) }
+                                    .padding(8.dp),
+                            )
+                        }
+                    }
                 }
             }
         },
     )
 }
+
+@Composable
+private fun StickerCategory.label(): String = stringResource(
+    when (this) {
+        StickerCategory.SMILEYS -> R.string.stories_composer_sticker_cat_smileys
+        StickerCategory.ANIMALS -> R.string.stories_composer_sticker_cat_animals
+        StickerCategory.FOOD -> R.string.stories_composer_sticker_cat_food
+        StickerCategory.ACTIVITIES -> R.string.stories_composer_sticker_cat_activities
+        StickerCategory.TRAVEL -> R.string.stories_composer_sticker_cat_travel
+        StickerCategory.OBJECTS -> R.string.stories_composer_sticker_cat_objects
+        StickerCategory.SYMBOLS -> R.string.stories_composer_sticker_cat_symbols
+        StickerCategory.FLAGS -> R.string.stories_composer_sticker_cat_flags
+    },
+)
 
 private const val STICKER_PICKER_COLUMNS = 6
 private val STICKER_PICKER_FONT_SIZE = 28.sp
@@ -931,18 +976,6 @@ private fun StoryTextFontFamily.toFontFamily(): FontFamily = when (this) {
 
 /** The intrinsic on-canvas emoji size before per-sticker [StoryStickerElement.scale]. */
 private val STICKER_BASE_FONT_SIZE = 48.sp
-
-/**
- * The built-in emoji palette offered by the sticker picker. A curated common set —
- * the categorised + searchable picker is a tracked follow-up; this gives the feature
- * a real, non-dead-end entry point today.
- */
-private val STORY_STICKER_EMOJIS = listOf(
-    "😀", "😂", "😍", "😎", "🥳", "😭", "😡", "🤔",
-    "👍", "👏", "🙏", "💪", "🔥", "✨", "⭐", "💯",
-    "❤️", "💔", "💖", "🎉", "🎂", "🎁", "🌈", "☀️",
-    "🌙", "⚡", "🍕", "🍔", "☕", "🍺", "⚽", "🏆",
-)
 
 /** The on-canvas text colour palette — hex (no `#`), [StoryTextElement.DEFAULT_COLOR] first. */
 private val STORY_TEXT_COLORS = listOf(

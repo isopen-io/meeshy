@@ -29,6 +29,10 @@ jest.mock('../../../../utils/logger-enhanced.js', () => ({
 
 jest.mock('../../../../middleware/auth', () => ({
   authUserCacheKey: jest.fn((id: string) => `auth:user:${id}`),
+  // getOptionalAuth (presence-gate.ts) calls this at route-registration time
+  // for the dedicated email/id/phone lookups — a no-op preValidation hook is
+  // enough since these tests don't exercise presence-gating itself.
+  createUnifiedAuthMiddleware: jest.fn(() => async () => {}),
 }));
 
 jest.mock('../../../../services/CacheStore', () => ({

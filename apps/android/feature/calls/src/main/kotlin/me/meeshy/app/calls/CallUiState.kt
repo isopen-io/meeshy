@@ -1,0 +1,136 @@
+package me.meeshy.app.calls
+
+import me.meeshy.sdk.model.call.CallEndReason
+import me.meeshy.sdk.model.call.CallState
+
+/**
+ * The coarse phase the call screen renders, derived from the pure
+ * [CallState] FSM. Where the FSM distinguishes SDP/ICE substates
+ * ([CallState.Offering] vs [CallState.Connecting]) the UI collapses them to a
+ * single "connecting" affordance — the caller only cares that media is not yet
+ * flowing.
+ */
+enum class CallStatus {
+    /** No call in progress. */
+    IDLE,
+
+    /** An incoming call is alerting; the local user may accept or decline. */
+    INCOMING,
+
+    /** An outgoing call is placed and waiting for the peer to answer. */
+    OUTGOING_RINGING,
+
+    /** Negotiating (offer sent / ICE handshaking); media not yet flowing. */
+    CONNECTING,
+
+    /** Connected — media is flowing. */
+    CONNECTED,
+
+    /** The media path dropped and an ICE restart is under way. */
+    RECONNECTING,
+
+    /** The call has terminated. */
+    ENDED,
+}
+
+/**
+ * Local media intent that rides *alongside* the call phase, never inside the
+ * FSM (parity with iOS `CallManager`, where mute/camera are independent of
+ * `CallState`). [isCameraOn] is only meaningful for a video call.
+ */
+data class CallMedia(
+    val isMuted: Boolean = false,
+    val isCameraOn: Boolean = true,
+)
+
+/**
+ * The immutable inputs describing *who* and *what kind* of call this is. Fed in
+ * from navigation (an outgoing call from chat) or an incoming-call signal.
+ */
+data class CallConfig(
+    val peerId: String,
+    val peerName: String,
+    val isVideo: Boolean,
+    val isOutgoing: Boolean,
+) {
+    companion object {
+        val EMPTY: CallConfig = CallConfig(peerId = "", peerName = "", isVideo = false, isOutgoing = false)
+    }
+}
+
+/**
+ * The single immutable snapshot the call screen renders. Every field is derived
+ * — the screen stays pure glue and makes no decisions of its own.
+ */
+data class CallUiState(
+    val status: CallStatus,
+    val peerName: String,
+    val isVideoCall: Boolean,
+    val isMuted: Boolean,
+    val isCameraOn: Boolean,
+    val endReason: CallEndReason?,
+    val reconnectAttempt: Int,
+) {
+    /** Accept / decline are only offered for an incoming, still-ringing call. */
+    val showAnswerControls: Boolean
+        get() = status == CallStatus.INCOMING
+
+    /** Hang-up is offered for any live, non-incoming-ringing phase. */
+    val showHangUp: Boolean
+        get() = when (status) {
+            CallStatus.OUTGOING_RINGING,
+            CallStatus.CONNECTING,
+            CallStatus.CONNECTED,
+            CallStatus.RECONNECTING,
+            -> true
+            else -> false
+        }
+
+    /** Mute / camera toggles only make sense once media is being negotiated. */
+    val canToggleMedia: Boolean
+        get() = when (status) {
+            CallStatus.CONNECTING,
+            CallStatus.CONNECTED,
+            CallStatus.RECONNECTING,
+            -> true
+            else -> false
+        }
+
+    /** True while a call is live (anything but idle or ended). */
+    val isActive: Boolean
+        get() = status != CallStatus.IDLE && status != CallStatus.ENDED
+
+    val isEnded: Boolean
+        get() = status == CallStatus.ENDED
+}
+
+/**
+ * Pure projection `CallState × CallConfig × CallMedia → CallUiState`. Isolated
+ * from the ViewModel and the Composable so every derivation branch is unit
+ * tested (TDD-COVERAGE §"UiState derivation").
+ */
+object CallPresenter {
+
+    fun present(state: CallState, config: CallConfig, media: CallMedia): CallUiState {
+        val status = statusOf(state)
+        return CallUiState(
+            status = status,
+            peerName = config.peerName,
+            isVideoCall = config.isVideo,
+            isMuted = media.isMuted,
+            isCameraOn = config.isVideo && media.isCameraOn,
+            endReason = (state as? CallState.Ended)?.reason,
+            reconnectAttempt = (state as? CallState.Reconnecting)?.attempt ?: 0,
+        )
+    }
+
+    fun statusOf(state: CallState): CallStatus = when (state) {
+        is CallState.Idle -> CallStatus.IDLE
+        is CallState.Ringing -> if (state.isOutgoing) CallStatus.OUTGOING_RINGING else CallStatus.INCOMING
+        is CallState.Offering -> CallStatus.CONNECTING
+        is CallState.Connecting -> CallStatus.CONNECTING
+        is CallState.Connected -> CallStatus.CONNECTED
+        is CallState.Reconnecting -> CallStatus.RECONNECTING
+        is CallState.Ended -> CallStatus.ENDED
+    }
+}

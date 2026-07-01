@@ -109,7 +109,7 @@ public struct NotificationRowView: View {
                     }
                 }
                 .font(MeeshyFont.relative(11))
-                .foregroundColor(notification.isLinkedContentExpired ? Color(hex: "F87171") : theme.textMuted)
+                .foregroundColor(notification.isLinkedContentExpired ? MeeshyColors.error : theme.textMuted)
                 .padding(.top, 1)
             }
 

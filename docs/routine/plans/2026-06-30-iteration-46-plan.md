@@ -1,71 +1,71 @@
 # Iteration 46 — Plan d'implémentation (2026-06-30)
 
-> **Renumérotation** : lot d'abord produit comme « 45 », rencommé en **46** suite à la collision
-> de noms de fichiers docs avec l'itération 45 parallèle (F23, comptes de non-lus) mergée dans
-> `main` le même jour. Lots disjoints — aucune collision de code. Voir l'analyse.
-
 ## Objectif
-Lot « Source unique du formatage de taille de fichier (F24) » : éliminer les 3 réimplémentations
-locales web de `formatFileSize` en les faisant déléguer à la fonction canonique déjà testée
-(`packages/shared/types/attachment.ts`). Sorties byte-identiques pour B/C ; **unification
-d'affichage délibérée** pour D (composer). Gateway FR conservée (F24b).
+Lot « Unification de la sémantique du comptage non-lus (F23b) ». Aligner
+`getUnreadCountsForParticipants` sur les deux autres sources (`getUnreadCount`,
+`getUnreadCountsForUser`) : exclure **les messages de chaque participant lui-même**
+(`senderId ≠ p.id`) au lieu de l'expéditeur du message. Préserver l'optimisation iter 45
+(1 requête). Supprimer le paramètre `senderId` devenu mort + mettre à jour les 2 appelants.
 
-## Pré-requis runner (parité CI)
-- [x] `packages/shared && bun run build` (tsc) → `dist/` présent (sinon web jest ne résout pas
-      `@meeshy/shared`).
-- [x] Baselines vertes : shared vitest **1208/1208** ; web jest `attachmentService`+`tusUploadService`
-      **110/110**, `AttachmentDetails`+`media-compression` **62/62**.
+Fichiers : `services/gateway/src/services/MessageReadStatusService.ts`,
+`services/gateway/src/socketio/handlers/MessageHandler.ts`,
+`services/gateway/src/socketio/MeeshySocketIOManager.ts`
+Tests : `services/gateway/src/__tests__/unit/services/MessageReadStatusService.test.ts`
 
-## Étapes (délégation à une SSOT déjà testée — pas de nouveau RED shared requis)
+## Étapes (TDD : RED → GREEN)
 
-### Phase A — Ancre SSOT (vérif, aucune modif)
-- [ ] Confirmer `formatFileSize` exporté de `packages/shared/types/attachment.ts` et couvert par
-      `__tests__/types/attachment.test.ts` (0 B → TB). Aucune modification shared.
+### Phase A — Gateway : réécriture de la suite de tests (RED)
+- [ ] Suite `getUnreadCountsForParticipants` (signature à 2 args) :
+      - mock `message.findMany` renvoyant `{ createdAt, senderId }` ;
+      - cas « exclut les messages du participant lui-même » : p1 a envoyé un message au-dessus
+        de son plancher → non compté pour p1, mais compté pour p2 ;
+      - cas « inclut les messages des autres (dont l'ex-`senderId`) » ;
+      - cas « planchers distincts depuis 1 fetch », « plancher null illimité »,
+        « borne `gt` stricte », « tableau vide », « DB throw → Map(p→0) » ;
+      - vérifier que le `where` du `findMany` n'a **pas** de filtre `senderId`.
 
-### Phase B — `apps/web/utils/media-compression.ts`
-- [ ] Supprimer le `function formatFileSize` local (l.316-325) + son commentaire.
-- [ ] Ajouter `import { formatFileSize } from '@meeshy/shared/types/attachment';` en tête.
-- [ ] `node_modules/.bin/jest __tests__/utils/media-compression.test.ts` → vert.
+### Phase B — Gateway : implémentation (GREEN)
+- [ ] `getUnreadCountsForParticipants(participants, conversationId)` (drop `senderId`) :
+      1. `cursor.findMany` (inchangé) → `cursorMap`.
+      2. Planchers `floorMs` par participant (inchangé).
+      3. `minFloorMs` (inchangé).
+      4. `message.findMany({ where: { conversationId, deletedAt: null,
+         ...(minFloorMs!==null ? {createdAt:{gt:new Date(minFloorMs)}} : {}) },
+         select: { createdAt: true, senderId: true }, orderBy: { createdAt: 'asc' } })`.
+      5. `allTs = rows.map(r => r.createdAt.getTime()).sort` ;
+         `bySender: Map<string, number[]>` (push par `senderId`, ordre createdAt asc préservé).
+      6. `countAbove(ts[], F)` : upper-bound dichotomique (`null` → length).
+      7. `unread(p) = countAbove(allTs, F) − countAbove(bySender.get(p.id) ?? [], F)`.
+      8. `catch` inchangé → `Map(p → 0)`.
 
-### Phase C — `apps/web/components/attachments/AttachmentDetails.tsx`
-- [ ] Supprimer le `const formatFileSize` local (l.59-66) + son commentaire.
-- [ ] Importer `formatFileSize` depuis `@meeshy/shared/types/attachment` (regrouper avec un import
-      existant si présent).
-- [ ] `node_modules/.bin/jest __tests__/components/attachments/AttachmentDetails.test.tsx` → vert
-      (assertions `2 MB`/`500 KB`/`5 GB`/`0 B` inchangées).
+### Phase C — Appelants
+- [ ] `MessageHandler.ts:1322` : retirer le 3ᵉ arg `senderId`.
+- [ ] `MeeshySocketIOManager.ts:1802` : retirer le 3ᵉ arg `senderId`.
+      (Les deux conservent le `.filter(p => p.id !== senderId)` — l'expéditeur ne reçoit pas
+      d'auto-update ; inchangé.)
 
-### Phase D — `apps/web/components/v2/MessageComposer.tsx`
-- [ ] Supprimer le `function formatFileSize` local divergent (l.135-139).
-- [ ] Ajouter `import { formatFileSize } from '@meeshy/shared/types/attachment';`.
-- [ ] `node_modules/.bin/jest __tests__/components/common/message-composer.test.tsx __tests__/components/message-composer/integration.test.tsx`
-      → vert (aucune assertion de taille ; unification d'affichage assumée).
-
-### Phase E — Vérification & livraison
-- [ ] `tsc --noEmit` web : aucun nouveau type error sur les 3 fichiers touchés.
-- [ ] Suite web jest ciblée (B+C+D) verte ; shared vitest **1208/1208** inchangé.
-- [ ] Commit + push `claude/sharp-wozniak-dx26dd` ; PR vers `main` ; CI verte ; **merge dans main**.
+### Phase D — Vérification & livraison
+- [ ] `node_modules/.bin/jest MessageReadStatusService` → suite verte.
+- [ ] `jest MessageHandler` → appelants verts (méthode mockée).
+- [ ] Commit + push `claude/sharp-wozniak-svekrj` ; PR vers `main` ; CI verte ; merge.
 
 ## Hors périmètre (consigné dans l'analyse)
-F2 (staging), F10 (dual-write/backfill), F21 (sémantique), F23b (audit `senderId`/`participant.id`),
-F24b (formatFileSize locale-aware gateway FR), F18d (queue de présentation date).
-**F23 est FAIT** (itération 45 parallèle mergée dans `main`) — retiré du backlog.
+F2 (staging), F10 (backfill), F18d (queue présentation), F21 (sémantique), F23c (champ
+dénormalisé `cursor.unreadCount` mort en lecture).
 
 ## Continuité
-Iter 47+ : **F24b** (formatFileSize locale-aware côté gateway/i18n) si une fenêtre i18n s'ouvre ;
-sinon scout d'une nouvelle duplication pure (validators regex, array utils). **F23b** (audit
-sémantique `senderId` vs `participant.id` dans le compte batché d'iter 45) si confirmé visible ;
-F2/F10/F21 dès qu'une fenêtre staging/backfill existe.
+Iter 47+ : **F23c** (suppression du champ `unreadCount` dénormalisé si confirmé mort) ;
+F18d ; F2/F10 dès qu'une fenêtre staging existe.
 
 ## Statut (mis à jour en fin d'itération)
-- [x] Phase A — ancre SSOT confirmée : `formatFileSize` (shared) reste l'unique canonique,
-      couvert par `attachment.test.ts` (vitest **150/150**, suite shared **1208/1208**).
-- [x] Phase B — `media-compression.ts` : local supprimé, import depuis le canonique.
-      web jest `media-compression` vert.
-- [x] Phase C — `AttachmentDetails.tsx` : local supprimé, `formatFileSize` regroupé avec
-      `getAttachmentType`. `AttachmentDetails.test.tsx` vert (assertions de taille inchangées).
-- [x] Phase D — `MessageComposer.tsx` : local divergent supprimé, import canonique
-      (affichage unifié app-wide). `message-composer` + `integration` verts.
-- [x] Phase E — 6 suites web affectées **218/218** vertes ; `tsc --noEmit` web : **aucun
-      nouveau** type error sur les 3 fichiers touchés (les 2 erreurs visibles —
-      `AttachmentDetails` `(attachment as unknown).metadata`, `StreamComposer` `ref`— pré-existent
-      à HEAD). Reste : push + PR + CI verte + merge dans main.
+- [x] Phase A — suite `getUnreadCountsForParticipants` réécrite (signature 2 args, rows
+      `{createdAt, senderId}`) : nouveau cas « exclut les messages de p, compte les autres »,
+      « pas de filtre `senderId` dans le `where` », + planchers distincts/null/borne stricte/
+      vide/throw. Gateway jest `MessageReadStatusService` **140/140**.
+- [x] Phase B — `getUnreadCountsForParticipants(participants, conversationId)` : 1 `cursor.findMany`
+      + 1 `message.findMany` (sans filtre expéditeur, `select {createdAt, senderId}`) ; buckets
+      par expéditeur ; `unread(p) = countAbove(tous,F) − countAbove(messages_de_p,F)`.
+- [x] Phase C — `MessageHandler.ts` + `MeeshySocketIOManager.ts` : 3ᵉ arg `senderId` retiré.
+      Suites appelantes **695/695** (9 suites), aucune régression.
+- [ ] Phase D — CI verte, mergé dans main
+</content>

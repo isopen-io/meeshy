@@ -25,6 +25,7 @@ import { useUserSelection, useUserSearch } from '@/hooks/use-user-search';
 import { useCommunitiesQuery } from '@/hooks/queries';
 import { useIdentifierValidation } from '@/hooks/use-identifier-validation';
 import { useConversationCreation } from '@/hooks/use-conversation-creation';
+import { getUserDisplayName as resolveDisplayName } from '@/utils/user-display-name';
 
 // Steps components (lazy loaded)
 import {
@@ -93,9 +94,10 @@ export function CreateConversationModal({
   // Auto-génération du titre basé sur les utilisateurs sélectionnés
   useEffect(() => {
     if (selectedUsers.length > 0 && !title) {
-      const getUserDisplayName = (user: User): string => {
-        return user.displayName || user.username || user.firstName || user.lastName || 'Unknown User';
-      };
+      const getUserDisplayName = (user: User): string =>
+        // Délègue à la source unique `utils/user-display-name` (displayName >
+        // firstName+lastName > username) — corrige l'ordre username-first.
+        resolveDisplayName(user, 'Unknown User');
 
       let autoTitle = '';
       if (selectedUsers.length === 1) {
