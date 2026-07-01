@@ -41,9 +41,9 @@ struct LicensesView: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
                     Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-                        .font(.system(size: 15, weight: .medium))
+                        .font(MeeshyFont.relative(15, weight: .medium))
                 }
                 .foregroundColor(Color(hex: accentColor))
             }
@@ -52,7 +52,7 @@ struct LicensesView: View {
             Spacer()
 
             Text(String(localized: "about.licenses.title", defaultValue: "Licences", bundle: .main))
-                .font(.system(size: 17, weight: .bold))
+                .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
@@ -73,10 +73,11 @@ struct LicensesView: View {
                 sectionHeader(title: String(localized: "about.licenses.section.open_source", defaultValue: "Open Source", bundle: .main), icon: "checkmark.seal.fill", color: accentColor)
 
                 Text(String(localized: "about.licenses.intro", defaultValue: "Meeshy utilise les bibliotheques open source suivantes.", bundle: .main))
-                    .font(.system(size: 13, weight: .medium))
+                    .font(MeeshyFont.relative(13, weight: .medium))
                     .foregroundColor(theme.textMuted)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.leading, 4)
+                    .textSelection(.enabled)
 
                 ForEach(licenses) { license in
                     licenseCard(license)
@@ -98,18 +99,18 @@ struct LicensesView: View {
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(license.name)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(MeeshyFont.relative(15, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
 
                     Text(license.author)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(MeeshyFont.relative(12, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
 
                 Spacer()
 
                 Text(license.licenseType)
-                    .font(.system(size: 10, weight: .bold))
+                    .font(MeeshyFont.relative(10, weight: .bold))
                     .foregroundColor(.white)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
@@ -118,7 +119,7 @@ struct LicensesView: View {
                     )
 
                 Image(systemName: "arrow.up.right")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
             }
             .padding(.horizontal, 14)
@@ -142,15 +143,18 @@ struct LicensesView: View {
     private func sectionHeader(title: String, icon: String, color: String) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
+                .font(MeeshyFont.relative(12, weight: .semibold))
                 .foregroundColor(Color(hex: color))
             Text(title.uppercased())
-                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: color))
                 .tracking(1.2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.leading, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(.isHeader)
     }
 
     private func badgeColor(for licenseType: String) -> String {
