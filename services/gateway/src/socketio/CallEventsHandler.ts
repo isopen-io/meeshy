@@ -95,6 +95,27 @@ export class CallEventsHandler {
   private bufferedOffers = new Map<string, { signal: CallSignalEvent; bufferedAt: number }>();
   private static readonly OFFER_BUFFER_TTL_MS = 150_000;
 
+  /**
+   * P0-7 — grace period before a TRANSIENT socket drop (Wi-Fi↔LTE handoff,
+   * brief radio dropout, ping timeout) is treated as the participant leaving
+   * the call. Without this, a disconnect that self-heals in 1-3s still
+   * immediately marked `leftAt` and could end a direct call, even though the
+   * WebRTC media path (separate from this Socket.IO connection) often
+   * survives the blip untouched. Keyed by `${callId}:${participantId}`.
+   * Cancelled by call:join / call:heartbeat / explicit leave from the same
+   * participant within the window; otherwise the deferred leave runs
+   * exactly like the pre-existing immediate path. An explicit ("client
+   * namespace disconnect" / "server namespace disconnect") disconnect is
+   * NEVER deferred — only reasons that are ambiguous at the transport level.
+   */
+  private pendingDisconnectLeaves = new Map<string, ReturnType<typeof setTimeout>>();
+  private static readonly DISCONNECT_GRACE_MS = 10_000;
+  private static readonly TRANSIENT_DISCONNECT_REASONS = new Set([
+    'transport close',
+    'transport error',
+    'ping timeout',
+  ]);
+
   constructor(private prisma: PrismaClient) {
     this.callService = new CallService(prisma);
     // Defensive TTL sweep: runs every 60s to evict stale offer entries whose
@@ -116,6 +137,41 @@ export class CallEventsHandler {
     if (this.bufferCleanupInterval !== null) {
       clearInterval(this.bufferCleanupInterval);
       this.bufferCleanupInterval = null;
+    }
+    for (const timer of this.pendingDisconnectLeaves.values()) {
+      clearTimeout(timer);
+    }
+    this.pendingDisconnectLeaves.clear();
+  }
+
+  private pendingLeaveKey(callId: string, participantId: string): string {
+    return `${callId}:${participantId}`;
+  }
+
+  /**
+   * P0-7 — cancel a pending grace-period leave because the participant
+   * reconnected (call:join / call:heartbeat) or explicitly left in the
+   * meantime. No-op if no timer is pending for this participant.
+   */
+  private cancelPendingDisconnectLeave(callId: string, participantId: string | null | undefined): void {
+    if (!participantId) return;
+    const key = this.pendingLeaveKey(callId, participantId);
+    const timer = this.pendingDisconnectLeaves.get(key);
+    if (timer) {
+      clearTimeout(timer);
+      this.pendingDisconnectLeaves.delete(key);
+      logger.info('📞 Reconnected within grace window — cancelled pending disconnect-leave', { callId, participantId });
+    }
+  }
+
+  /** P0-7 — drop every pending grace-period timer for a call that has fully ended. */
+  private clearPendingDisconnectLeavesForCall(callId: string): void {
+    const prefix = `${callId}:`;
+    for (const [key, timer] of this.pendingDisconnectLeaves) {
+      if (key.startsWith(prefix)) {
+        clearTimeout(timer);
+        this.pendingDisconnectLeaves.delete(key);
+      }
     }
   }
 
@@ -918,6 +974,11 @@ export class CallEventsHandler {
           return;
         }
 
+        // P0-7 — this socket reconnected and is rejoining the call within
+        // the grace window: cancel any pending deferred disconnect-leave for
+        // this participant before it has a chance to fire.
+        this.cancelPendingDisconnectLeave(data.callId, joinParticipantId);
+
         // CVE-005: Join call via service (returns dynamic ICE servers).
         //
         // Audit 2026-05-11 — race fix: joinCall transitions DB status to
@@ -1137,6 +1198,10 @@ export class CallEventsHandler {
         // Resolve participantId from userId + callId
         const leaveParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
 
+        // P0-7 — an explicit leave always wins over a pending grace-period
+        // timer from an earlier transient drop for this same participant.
+        this.cancelPendingDisconnectLeave(data.callId, leaveParticipantId);
+
         // Leave call via service
         const callSession = await this.callService.leaveCall({
           callId: data.callId,
@@ -1187,6 +1252,10 @@ export class CallEventsHandler {
         // connected".
         const finalStatus = callSession.status as string;
         if (finalStatus === 'ended' || finalStatus === 'missed') {
+          // P0-7 — the call is fully terminal: drop any stragglers' pending
+          // grace timers so they don't fire a redundant leave/broadcast later.
+          this.clearPendingDisconnectLeavesForCall(data.callId);
+
           const endedEvent: CallEndedEvent = {
             callId: callSession.id,
             duration: callSession.duration || 0,
@@ -1348,6 +1417,9 @@ export class CallEventsHandler {
               // Resolve participantId for cleanup
               const cleanupParticipantId = await this.resolveParticipantIdFromCall(userId, call.id);
 
+              // P0-7 — force-leave always wins over a pending grace-period timer.
+              this.cancelPendingDisconnectLeave(call.id, cleanupParticipantId);
+
               // Leave the call
               const callSession = await this.callService.leaveCall({
                 callId: call.id,
@@ -1372,6 +1444,9 @@ export class CallEventsHandler {
               await socket.leave(ROOMS.call(call.id));
 
               if (callSession.status === 'ended') {
+                // P0-7 — call is over; drop any stragglers' pending grace timers.
+                this.clearPendingDisconnectLeavesForCall(call.id);
+
                 const endedEvent: CallEndedEvent = {
                   callId: callSession.id,
                   duration: callSession.duration || 0,
@@ -1537,7 +1612,7 @@ export class CallEventsHandler {
           // applied). The caller still gets success:false so its at-least-once
           // retry can also fire; the buffer is the backstop.
           if (data.signal.type === 'offer' || data.signal.type === 'ice-restart') {
-            this.bufferOffer(data.callId, data);
+            this.bufferOffer(data.callId, validation.data as CallSignalEvent);
             logger.info('📦 [CALL] Buffered offer for late (re)join', {
               callId: data.callId,
               to: data.signal.to,
@@ -1556,15 +1631,20 @@ export class CallEventsHandler {
           return;
         }
 
+        // Relay the Zod-validated payload (validation.data), not the raw
+        // client object — socketSignalSchema is a plain z.object() so
+        // schema.parse() strips any field not declared in it. Forwarding
+        // the unvalidated `data` would let a client smuggle arbitrary extra
+        // fields into the peer's signaling payload.
         for (const targetSocketId of targetSocketIds) {
-          io.to(targetSocketId).emit(CALL_EVENTS.SIGNAL, data);
+          io.to(targetSocketId).emit(CALL_EVENTS.SIGNAL, validation.data);
         }
 
         // §4.6 — also buffer successfully-relayed offers. The target may have
         // received it but then churn its socket before answering; the buffer
         // lets it recover on rejoin (epoch-guarded, last-write-wins).
         if (data.signal.type === 'offer' || data.signal.type === 'ice-restart') {
-          this.bufferOffer(data.callId, data);
+          this.bufferOffer(data.callId, validation.data as CallSignalEvent);
         }
 
         // Transition to active on first successful signal exchange
@@ -1841,6 +1921,9 @@ export class CallEventsHandler {
         this.callService.clearRingingTimeout(data.callId);
         // §4.6 — drop any buffered offer for this terminated call.
         this.clearBufferedOffer(data.callId);
+        // P0-7 — drop any pending grace-period disconnect-leave timers; the
+        // call is over, a deferred leave for it would be a no-op duplicate.
+        this.clearPendingDisconnectLeavesForCall(data.callId);
 
         const endReason = (callSession.endReason || 'completed') as CallEndReason;
 
@@ -1897,6 +1980,9 @@ export class CallEventsHandler {
         const participantId = await this.resolveParticipantIdFromCall(userId, data.callId);
         if (participantId) {
           this.callService.recordHeartbeat(data.callId, participantId);
+          // P0-7 — a heartbeat proves the socket is back; cancel any pending
+          // deferred disconnect-leave from an earlier transient drop.
+          this.cancelPendingDisconnectLeave(data.callId, participantId);
         }
       } catch (error) {
         logger.error('Error recording heartbeat', { error });
@@ -2086,6 +2172,19 @@ export class CallEventsHandler {
           return;
         }
 
+        // Defense-in-depth: confirm the caller is still an active participant
+        // of this call (not just that their socket is in the room — room
+        // membership and participant state could diverge if cleanup ever
+        // races) before minting fresh TURN credentials for them.
+        const iceParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        if (!iceParticipantId) {
+          socket.emit(CALL_EVENTS.ERROR, {
+            code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
+            message: 'Not a participant in this call'
+          } as CallError);
+          return;
+        }
+
         const iceServers = this.callService.generateIceServers(userId);
         const ttl = this.callService.getIceServerTtl();
         const refreshedEvent: CallIceServersRefreshedEvent = {
@@ -2119,12 +2218,19 @@ export class CallEventsHandler {
         const validation = validateSocketEvent(socketCallBackgroundedSchema, data);
         if (!validation.success) return;
 
+        // Resolve the caller's own participantId rather than trusting the
+        // client-supplied one — otherwise a participant could flag a peer's
+        // participantId as backgrounded and skew that peer's heartbeat
+        // tolerance / ringing delivery (socket vs VoIP push).
+        const backgroundedParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        if (!backgroundedParticipantId) return;
+
         socket.data.appForeground = false;
-        this.callService.recordParticipantBackgrounded(data.callId, data.participantId);
+        this.callService.recordParticipantBackgrounded(data.callId, backgroundedParticipantId);
 
         logger.debug('📞 Socket: call:backgrounded', {
           callId: data.callId,
-          participantId: data.participantId,
+          participantId: backgroundedParticipantId,
           userId,
         });
       } catch (error) {
@@ -2144,12 +2250,17 @@ export class CallEventsHandler {
         const validation = validateSocketEvent(socketCallForegroundedSchema, data);
         if (!validation.success) return;
 
+        // Same rationale as call:backgrounded — resolve the caller's own
+        // participantId instead of trusting the client-supplied one.
+        const foregroundedParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        if (!foregroundedParticipantId) return;
+
         socket.data.appForeground = true;
-        this.callService.clearParticipantBackgrounded(data.callId, data.participantId);
+        this.callService.clearParticipantBackgrounded(data.callId, foregroundedParticipantId);
 
         logger.debug('📞 Socket: call:foregrounded', {
           callId: data.callId,
-          participantId: data.participantId,
+          participantId: foregroundedParticipantId,
           userId,
         });
       } catch (error) {
@@ -2249,15 +2360,24 @@ export class CallEventsHandler {
      * if MeeshySocketIOManager's own disconnect listener ran first and purged
      * its socketToUser map. Fall back to the cached userId we captured during
      * the last authenticated event handled by this socket.
+     *
+     * P0-7 — a TRANSIENT disconnect reason (transport close/error, ping
+     * timeout — i.e. anything that isn't an explicit namespace disconnect)
+     * defers the actual leave by DISCONNECT_GRACE_MS instead of running it
+     * inline, so a brief Wi-Fi↔LTE handoff doesn't end a direct call or drop
+     * a participant the instant the socket blips. See
+     * cancelPendingDisconnectLeave (call:join / call:heartbeat / explicit
+     * leave) for how the timer gets cancelled on a real reconnect.
      */
-    socket.on('disconnect', async () => {
+    socket.on('disconnect', async (reason?: string) => {
       try {
         const userId = recoverUserId();
         if (!userId) return;
 
         logger.info('📞 Socket: disconnect - checking for active calls', {
           socketId: socket.id,
-          userId
+          userId,
+          reason
         });
 
         // Find any active calls the user is in
@@ -2280,146 +2400,195 @@ export class CallEventsHandler {
           });
         }
 
+        const isTransientDisconnect = typeof reason === 'string'
+          && CallEventsHandler.TRANSIENT_DISCONNECT_REASONS.has(reason);
+
         // Leave all active calls (IMPORTANT FIX: force cleanup even on errors)
         for (const participation of activeParticipations) {
-          if (participation.callSession.status !== 'ended') {
-            try {
-              // Try normal leave flow first
-              const leftSession = await this.callService.leaveCall({
-                callId: participation.callSessionId,
-                userId,
-                participantId: participation.participantId
-              });
+          if (participation.callSession.status === 'ended') continue;
 
-              // Broadcast to call participants
-              io.to(ROOMS.call(participation.callSessionId)).emit(
-                CALL_EVENTS.PARTICIPANT_LEFT,
-                {
-                  callId: participation.callSessionId,
-                  participantId: participation.id,
-                  mode: participation.callSession.mode
-                } as CallParticipantLeftEvent
-              );
+          if (isTransientDisconnect) {
+            const key = this.pendingLeaveKey(participation.callSessionId, participation.participantId);
+            const existingTimer = this.pendingDisconnectLeaves.get(key);
+            if (existingTimer) clearTimeout(existingTimer);
 
-              // CALL-FIX 2026-06-06 — if leaving ENDED the call (direct call, or
-              // last participant), broadcast call:ended too. Without this, a peer
-              // whose socket simply DROPS mid-call left the OTHER party stuck "in
-              // call" (only participant-left was sent) until CallCleanupService GC.
-              const dcStatus = leftSession.status as string;
-              if (dcStatus === 'ended' || dcStatus === 'missed') {
-                const dcEndedEvent: CallEndedEvent = {
-                  callId: leftSession.id,
-                  duration: leftSession.duration || 0,
-                  endedBy: userId,
-                  reason: (leftSession.endReason || 'completed') as CallEndReason
-                };
-                io.to(ROOMS.call(participation.callSessionId)).emit(CALL_EVENTS.ENDED, dcEndedEvent);
-                io.to(ROOMS.conversation(leftSession.conversationId)).emit(CALL_EVENTS.ENDED, dcEndedEvent);
-              }
-
-              logger.info('✅ Socket: Auto-left call on disconnect', {
-                callId: participation.callSessionId,
-                userId
-              });
-            } catch (leaveError) {
-              // IMPORTANT FIX: Force cleanup even if leaveCall fails
-              // This prevents zombie calls when DB errors or validation fails
-              logger.error('❌ Socket: Error in leaveCall, forcing direct cleanup', {
-                callId: participation.callSessionId,
-                userId,
-                error: leaveError
-              });
-
-              try {
-                const now = new Date();
-                let dcForceEndedDuration: number | null = null;
-
-                // Force update participant and potentially end call
-                await this.prisma.$transaction(async (tx) => {
-                  // Mark participant as left
-                  await tx.callParticipant.update({
-                    where: { id: participation.id },
-                    data: { leftAt: now }
-                  });
-
-                  // Check if this was the last participant
-                  const remainingParticipants = await tx.callParticipant.count({
-                    where: {
-                      callSessionId: participation.callSessionId,
-                      leftAt: null
-                    }
-                  });
-
-                  // If last participant, force end the call
-                  if (remainingParticipants === 0) {
-                    const call = await tx.callSession.findUnique({
-                      where: { id: participation.callSessionId }
-                    });
-
-                    if (call) {
-                      const duration = Math.floor((now.getTime() - call.startedAt.getTime()) / 1000);
-
-                      await tx.callSession.update({
-                        where: { id: participation.callSessionId },
-                        data: {
-                          status: 'ended',
-                          endedAt: now,
-                          duration
-                        }
-                      });
-                      dcForceEndedDuration = duration;
-
-                      logger.info('✅ Socket: Force-ended call after disconnect error', {
-                        callId: participation.callSessionId,
-                        duration
-                      });
-                    }
-                  }
-                });
-
-                // Still broadcast events even after force cleanup
-                io.to(ROOMS.call(participation.callSessionId)).emit(
-                  CALL_EVENTS.PARTICIPANT_LEFT,
-                  {
-                    callId: participation.callSessionId,
-                    participantId: participation.id,
-                    mode: participation.callSession.mode
-                  } as CallParticipantLeftEvent
-                );
-
-                // CALL-FIX 2026-06-06 — broadcast call:ended too when force cleanup
-                // ended the call, so the other party tears down instead of staying
-                // stuck until CallCleanupService GC.
-                if (dcForceEndedDuration !== null) {
-                  const dcForceEndedEvent: CallEndedEvent = {
-                    callId: participation.callSessionId,
-                    duration: dcForceEndedDuration,
-                    endedBy: userId,
-                    reason: 'completed' as CallEndReason
-                  };
-                  io.to(ROOMS.call(participation.callSessionId)).emit(CALL_EVENTS.ENDED, dcForceEndedEvent);
-                  io.to(ROOMS.conversation(participation.callSession.conversationId)).emit(CALL_EVENTS.ENDED, dcForceEndedEvent);
-                }
-
-                logger.info('✅ Socket: Force cleanup successful on disconnect', {
-                  callId: participation.callSessionId,
-                  userId
-                });
-              } catch (forceError) {
-                // Even force cleanup failed - log but don't crash
-                logger.error('❌ Socket: Force cleanup also failed', {
+            const timer = setTimeout(() => {
+              this.pendingDisconnectLeaves.delete(key);
+              this.leaveCallOnDisconnect(participation, userId, io).catch((error) => {
+                logger.error('❌ Socket: deferred disconnect-leave failed', {
                   callId: participation.callSessionId,
                   userId,
-                  error: forceError
+                  error
                 });
-              }
-            }
+              });
+            }, CallEventsHandler.DISCONNECT_GRACE_MS);
+            timer.unref?.();
+            this.pendingDisconnectLeaves.set(key, timer);
+
+            logger.info('📞 Socket: transient disconnect — deferring call-leave for grace window', {
+              callId: participation.callSessionId,
+              userId,
+              reason,
+              graceMs: CallEventsHandler.DISCONNECT_GRACE_MS
+            });
+            continue;
           }
+
+          await this.leaveCallOnDisconnect(participation, userId, io);
         }
       } catch (error) {
         logger.error('❌ Socket: Error handling disconnect for calls', error);
       }
     });
+  }
+
+  /**
+   * P0-7 — the disconnect-triggered call-leave + broadcast logic. Runs
+   * either immediately (explicit disconnect) or after the grace-period
+   * timer fires with no reconnect (transient disconnect). Behavior is
+   * unchanged from the original inline implementation it was extracted from.
+   */
+  private async leaveCallOnDisconnect(
+    participation: {
+      id: string;
+      callSessionId: string;
+      participantId: string;
+      callSession: { status: string; mode: string; conversationId: string };
+    },
+    userId: string,
+    io: any
+  ): Promise<void> {
+    try {
+      // Try normal leave flow first
+      const leftSession = await this.callService.leaveCall({
+        callId: participation.callSessionId,
+        userId,
+        participantId: participation.participantId
+      });
+
+      // Broadcast to call participants
+      io.to(ROOMS.call(participation.callSessionId)).emit(
+        CALL_EVENTS.PARTICIPANT_LEFT,
+        {
+          callId: participation.callSessionId,
+          participantId: participation.id,
+          mode: participation.callSession.mode
+        } as CallParticipantLeftEvent
+      );
+
+      // CALL-FIX 2026-06-06 — if leaving ENDED the call (direct call, or
+      // last participant), broadcast call:ended too. Without this, a peer
+      // whose socket simply DROPS mid-call left the OTHER party stuck "in
+      // call" (only participant-left was sent) until CallCleanupService GC.
+      const dcStatus = leftSession.status as string;
+      if (dcStatus === 'ended' || dcStatus === 'missed') {
+        const dcEndedEvent: CallEndedEvent = {
+          callId: leftSession.id,
+          duration: leftSession.duration || 0,
+          endedBy: userId,
+          reason: (leftSession.endReason || 'completed') as CallEndReason
+        };
+        io.to(ROOMS.call(participation.callSessionId)).emit(CALL_EVENTS.ENDED, dcEndedEvent);
+        io.to(ROOMS.conversation(leftSession.conversationId)).emit(CALL_EVENTS.ENDED, dcEndedEvent);
+      }
+
+      logger.info('✅ Socket: Auto-left call on disconnect', {
+        callId: participation.callSessionId,
+        userId
+      });
+    } catch (leaveError) {
+      // IMPORTANT FIX: Force cleanup even if leaveCall fails
+      // This prevents zombie calls when DB errors or validation fails
+      logger.error('❌ Socket: Error in leaveCall, forcing direct cleanup', {
+        callId: participation.callSessionId,
+        userId,
+        error: leaveError
+      });
+
+      try {
+        const now = new Date();
+        let dcForceEndedDuration: number | null = null;
+
+        // Force update participant and potentially end call
+        await this.prisma.$transaction(async (tx) => {
+          // Mark participant as left
+          await tx.callParticipant.update({
+            where: { id: participation.id },
+            data: { leftAt: now }
+          });
+
+          // Check if this was the last participant
+          const remainingParticipants = await tx.callParticipant.count({
+            where: {
+              callSessionId: participation.callSessionId,
+              leftAt: null
+            }
+          });
+
+          // If last participant, force end the call
+          if (remainingParticipants === 0) {
+            const call = await tx.callSession.findUnique({
+              where: { id: participation.callSessionId }
+            });
+
+            if (call) {
+              const duration = Math.floor((now.getTime() - call.startedAt.getTime()) / 1000);
+
+              await tx.callSession.update({
+                where: { id: participation.callSessionId },
+                data: {
+                  status: 'ended',
+                  endedAt: now,
+                  duration
+                }
+              });
+              dcForceEndedDuration = duration;
+
+              logger.info('✅ Socket: Force-ended call after disconnect error', {
+                callId: participation.callSessionId,
+                duration
+              });
+            }
+          }
+        });
+
+        // Still broadcast events even after force cleanup
+        io.to(ROOMS.call(participation.callSessionId)).emit(
+          CALL_EVENTS.PARTICIPANT_LEFT,
+          {
+            callId: participation.callSessionId,
+            participantId: participation.id,
+            mode: participation.callSession.mode
+          } as CallParticipantLeftEvent
+        );
+
+        // CALL-FIX 2026-06-06 — broadcast call:ended too when force cleanup
+        // ended the call, so the other party tears down instead of staying
+        // stuck until CallCleanupService GC.
+        if (dcForceEndedDuration !== null) {
+          const dcForceEndedEvent: CallEndedEvent = {
+            callId: participation.callSessionId,
+            duration: dcForceEndedDuration,
+            endedBy: userId,
+            reason: 'completed' as CallEndReason
+          };
+          io.to(ROOMS.call(participation.callSessionId)).emit(CALL_EVENTS.ENDED, dcForceEndedEvent);
+          io.to(ROOMS.conversation(participation.callSession.conversationId)).emit(CALL_EVENTS.ENDED, dcForceEndedEvent);
+        }
+
+        logger.info('✅ Socket: Force cleanup successful on disconnect', {
+          callId: participation.callSessionId,
+          userId
+        });
+      } catch (forceError) {
+        // Even force cleanup failed - log but don't crash
+        logger.error('❌ Socket: Force cleanup also failed', {
+          callId: participation.callSessionId,
+          userId,
+          error: forceError
+        });
+      }
+    }
   }
 
   /**

@@ -1228,7 +1228,7 @@ struct StoryCommentsOverlayView: View {
         .foregroundColor(.white.opacity(0.85))
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
-        .background(Capsule().fill(Color(hex: "F87171").opacity(0.32)))
+        .background(Capsule().fill(MeeshyColors.error.opacity(0.32)))
         .padding(.bottom, 6)
         .transition(.opacity)
     }

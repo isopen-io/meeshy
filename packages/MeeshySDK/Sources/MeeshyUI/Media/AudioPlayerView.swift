@@ -1568,7 +1568,7 @@ public struct AudioPlayerView: View {
                     Button { onDelete() } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 15))
-                            .foregroundColor(Color(hex: "FF6B6B"))
+                            .foregroundColor(MeeshyColors.error)
                     }
                 }
             }

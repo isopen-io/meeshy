@@ -88,7 +88,7 @@ struct StoryGestureOverlayView: View {
             .contentShape(Rectangle())
             .accessibilityElement()
             .accessibilityLabel(String(localized: "story.viewer.label", defaultValue: "Stories viewer", bundle: .main))
-            .accessibilityHint("Toucher à gauche pour la story précédente, à droite pour la suivante, maintenir pour mettre en pause")
+            .accessibilityHint(String(localized: "story.viewer.navigation.hint", defaultValue: "Tap left for the previous story, right for the next, hold to pause", bundle: .main))
             // `DragGesture(minimumDistance: 0)` capture LE PREMIER touch-down
             // ainsi que le release. C'est le seul moyen fiable en SwiftUI de
             // distinguer un tap court d'un hold long sur la même hit-area —

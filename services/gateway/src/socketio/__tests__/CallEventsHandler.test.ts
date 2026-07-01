@@ -319,7 +319,10 @@ describe('CallEventsHandler', () => {
     jest.clearAllMocks();
     mockGetSocketRateLimiter.mockReturnValue({});
     mockCheckSocketRateLimit.mockResolvedValue(true);
-    mockValidateSocketEvent.mockReturnValue({ success: true });
+    // Echo the input back as `data`, mirroring the real validateSocketEvent
+    // (Zod's schema.parse() on success) — handlers that forward the
+    // validated payload (e.g. call:signal relay) depend on this shape.
+    mockValidateSocketEvent.mockImplementation((_schema: unknown, data: unknown) => ({ success: true, data }));
     mockCallServiceGenerateIceServers.mockReturnValue([{ urls: 'stun:stun.l.google.com:19302' }]);
     mockCallServiceUpdateCallStatus.mockResolvedValue({});
     mockCallServiceMarkCallAsMissed.mockResolvedValue({});
@@ -968,6 +971,35 @@ describe('CallEventsHandler', () => {
       expect(ack).toHaveBeenCalledWith({ success: true });
       expect(mockCallServiceClearRingingTimeout).toHaveBeenCalledWith(CALL_ID);
     });
+
+    it('relays only the schema-validated payload, stripping unknown client-supplied fields', async () => {
+      const senderPart = makeParticipant({ participant: { userId: USER_ID, user: {} } });
+      const targetPart = makeParticipant({ id: 'target-part', participantId: 'target-user-id', participant: { userId: 'target-user-id', user: {} } });
+      mockCallServiceGetCallSession.mockResolvedValue(makeCallSession({ participants: [senderPart, targetPart] }));
+
+      // The real validateSocketEvent (Zod schema.parse()) strips fields not
+      // declared on socketSignalSchema. Simulate that here, since the global
+      // mock otherwise just echoes the raw input back.
+      const sanitizedSignal = { callId: CALL_ID, signal: { type: 'answer', from: USER_ID, to: 'target-user-id' } };
+      mockValidateSocketEvent.mockReturnValue({ success: true, data: sanitizedSignal });
+
+      const targetSocket = { id: 'target-socket', emit: jest.fn() };
+      const { socket, io, getUserId } = setupWithSocket();
+      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([targetSocket]) });
+      getUserId.mockImplementation((socketId: string) =>
+        socketId === 'target-socket' ? 'target-user-id' : USER_ID
+      );
+
+      const rawSignalWithExtraField = {
+        callId: CALL_ID,
+        signal: { type: 'answer', from: USER_ID, to: 'target-user-id', maliciousField: { injected: true } },
+      };
+      await socket._trigger('call:signal', rawSignalWithExtraField);
+
+      // The relayed payload is the sanitized one, never the raw client object.
+      expect(io._roomEmit).toHaveBeenCalledWith('call:signal', sanitizedSignal);
+      expect(io._roomEmit).not.toHaveBeenCalledWith('call:signal', rawSignalWithExtraField);
+    });
   });
 
   // ── call:toggle-audio ────────────────────────────────────────────────────
@@ -1453,6 +1485,129 @@ describe('CallEventsHandler', () => {
 
       await socket._trigger('disconnect');
       expect(mockCallServiceLeaveCall).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── disconnect: P0-7 grace period for transient drops ───────────────────
+
+  describe('disconnect grace period (P0-7)', () => {
+    const activeParticipation = {
+      id: PARTICIPANT_ID,
+      callSessionId: CALL_ID,
+      participantId: PARTICIPANT_ID,
+      callSession: { status: 'active', mode: 'p2p', conversationId: CONV_ID },
+    };
+    const GRACE_MS = 10_000;
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it.each(['transport close', 'transport error', 'ping timeout'])(
+      'defers the leave on a transient disconnect (%s) instead of running it immediately',
+      async (reason) => {
+        const leftSession = makeCallSession({ status: 'active' });
+        mockCallServiceLeaveCall.mockResolvedValue(leftSession);
+
+        const { socket, io } = setupWithSocket({
+          callParticipant: { findMany: jest.fn<any>().mockResolvedValue([activeParticipation]) },
+        });
+        io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
+
+        await socket._trigger('disconnect', reason);
+        expect(mockCallServiceLeaveCall).not.toHaveBeenCalled();
+
+        await jest.advanceTimersByTimeAsync(GRACE_MS);
+        expect(mockCallServiceLeaveCall).toHaveBeenCalledWith(expect.objectContaining({ callId: CALL_ID }));
+      }
+    );
+
+    it('runs the leave immediately for an explicit disconnect reason (no grace period)', async () => {
+      const leftSession = makeCallSession({ status: 'active' });
+      mockCallServiceLeaveCall.mockResolvedValue(leftSession);
+
+      const { socket, io } = setupWithSocket({
+        callParticipant: { findMany: jest.fn<any>().mockResolvedValue([activeParticipation]) },
+      });
+      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
+
+      await socket._trigger('disconnect', 'client namespace disconnect');
+      expect(mockCallServiceLeaveCall).toHaveBeenCalledWith(expect.objectContaining({ callId: CALL_ID }));
+    });
+
+    it('cancels the deferred leave when the participant rejoins (call:join) within the grace window', async () => {
+      const { socket, io } = setupWithSocket({
+        callParticipant: { findMany: jest.fn<any>().mockResolvedValue([activeParticipation]) },
+      });
+      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
+
+      await socket._trigger('disconnect', 'transport close');
+      expect(mockCallServiceLeaveCall).not.toHaveBeenCalled();
+
+      const participant = makeParticipant();
+      const callSession = makeCallSession({ participants: [participant] });
+      mockCallServiceJoinCall.mockResolvedValue({ callSession, iceServers: [] });
+      await socket._trigger('call:join', { callId: CALL_ID, settings: {} });
+
+      await jest.advanceTimersByTimeAsync(GRACE_MS);
+      expect(mockCallServiceLeaveCall).not.toHaveBeenCalled();
+    });
+
+    it('cancels the deferred leave when a heartbeat arrives within the grace window', async () => {
+      const { socket, io } = setupWithSocket({
+        callParticipant: { findMany: jest.fn<any>().mockResolvedValue([activeParticipation]) },
+      });
+      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
+
+      await socket._trigger('disconnect', 'transport close');
+      expect(mockCallServiceLeaveCall).not.toHaveBeenCalled();
+
+      await socket._trigger('call:heartbeat', { callId: CALL_ID });
+
+      await jest.advanceTimersByTimeAsync(GRACE_MS);
+      expect(mockCallServiceLeaveCall).not.toHaveBeenCalled();
+    });
+
+    it('cancels the deferred leave when the participant explicitly leaves (call:leave) within the grace window', async () => {
+      const { socket, io } = setupWithSocket({
+        callParticipant: { findMany: jest.fn<any>().mockResolvedValue([activeParticipation]) },
+      });
+      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
+
+      await socket._trigger('disconnect', 'transport close');
+      expect(mockCallServiceLeaveCall).not.toHaveBeenCalled();
+
+      const explicitLeaveSession = makeCallSession({ status: 'active' });
+      mockCallServiceGetCallSession.mockResolvedValue(makeCallSession({ participants: [makeParticipant()] }));
+      mockCallServiceLeaveCall.mockResolvedValue(explicitLeaveSession);
+      await socket._trigger('call:leave', { callId: CALL_ID });
+
+      expect(mockCallServiceLeaveCall).toHaveBeenCalledTimes(1);
+
+      // The grace timer must not fire a second, redundant leave.
+      await jest.advanceTimersByTimeAsync(GRACE_MS);
+      expect(mockCallServiceLeaveCall).toHaveBeenCalledTimes(1);
+    });
+
+    it('a second transient disconnect for the same participant supersedes the earlier timer (no double-fire)', async () => {
+      const leftSession = makeCallSession({ status: 'active' });
+      mockCallServiceLeaveCall.mockResolvedValue(leftSession);
+
+      const { socket, io } = setupWithSocket({
+        callParticipant: { findMany: jest.fn<any>().mockResolvedValue([activeParticipation]) },
+      });
+      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
+
+      await socket._trigger('disconnect', 'transport close');
+      await jest.advanceTimersByTimeAsync(GRACE_MS / 2);
+      await socket._trigger('disconnect', 'transport close');
+
+      await jest.advanceTimersByTimeAsync(GRACE_MS);
+      expect(mockCallServiceLeaveCall).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -3117,6 +3272,26 @@ describe('CallEventsHandler', () => {
         PARTICIPANT_ID
       );
     });
+
+    it('ignores a client-supplied participantId and uses the resolved one instead', async () => {
+      const { socket } = setupWithSocket();
+      await socket._trigger('call:backgrounded', {
+        callId: CALL_ID,
+        participantId: 'someone-elses-participant-id',
+      });
+      expect(mockCallServiceRecordParticipantBackgrounded).toHaveBeenCalledWith(
+        CALL_ID,
+        PARTICIPANT_ID
+      );
+    });
+
+    it('returns early when the caller cannot be resolved to an active participant', async () => {
+      const { socket } = setupWithSocket({
+        callSession: { findUnique: jest.fn<any>().mockResolvedValue(null) },
+      });
+      await socket._trigger('call:backgrounded', validData);
+      expect(mockCallServiceRecordParticipantBackgrounded).not.toHaveBeenCalled();
+    });
   });
 
   // ── call:foregrounded ────────────────────────────────────────────────────
@@ -3155,6 +3330,18 @@ describe('CallEventsHandler', () => {
       expect(socket.data.appForeground).toBe(false);
       await socket._trigger('call:foregrounded', validData);
       expect(socket.data.appForeground).toBe(true);
+    });
+
+    it('ignores a client-supplied participantId and uses the resolved one instead', async () => {
+      const { socket } = setupWithSocket();
+      await socket._trigger('call:foregrounded', {
+        callId: CALL_ID,
+        participantId: 'someone-elses-participant-id',
+      });
+      expect(mockCallServiceClearParticipantBackgrounded).toHaveBeenCalledWith(
+        CALL_ID,
+        PARTICIPANT_ID
+      );
     });
   });
 

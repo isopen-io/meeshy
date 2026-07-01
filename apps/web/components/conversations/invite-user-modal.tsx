@@ -17,7 +17,7 @@ import {
 import { User } from '@/types';
 import { toast } from 'sonner';
 import { apiService } from '@/services/api.service';
-import { getUserInitials } from '@/utils/user';
+import { getUserInitials } from '@/lib/avatar-utils';
 import { useI18n } from '@/hooks/useI18n';
 
 interface InviteUserModalProps {

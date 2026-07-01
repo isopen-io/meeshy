@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useI18n } from '@/hooks/useI18n';
 import type { CallInitiatedEvent } from '@meeshy/shared/types/video-call';
+import { getInitials } from '@/utils/initials';
 
 interface CallNotificationProps {
   call: CallInitiatedEvent;
@@ -40,15 +41,6 @@ export function CallNotification({ call, onAccept, onReject }: CallNotificationP
       }
     };
   }, []);
-
-  // Get caller initials for avatar fallback
-  const getInitials = (name: string) => {
-    const parts = name.split(' ');
-    if (parts.length >= 2) {
-      return (parts[0][0] + parts[1][0]).toUpperCase();
-    }
-    return name.substring(0, 2).toUpperCase();
-  };
 
   return (
     <div

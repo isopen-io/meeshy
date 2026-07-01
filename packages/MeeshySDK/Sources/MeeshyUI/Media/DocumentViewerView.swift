@@ -66,7 +66,7 @@ public struct DocumentViewerView: View {
                     Button { onDelete(); HapticFeedback.light() } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 15))
-                            .foregroundColor(Color(hex: "FF6B6B"))
+                            .foregroundColor(MeeshyColors.error)
                             .background(Circle().fill(isDark ? Color.black : Color.white).frame(width: 12, height: 12))
                     }
                     .offset(x: 6, y: -6)
@@ -141,7 +141,7 @@ public struct DocumentViewerView: View {
                 Button { onDelete(); HapticFeedback.light() } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 15))
-                        .foregroundColor(Color(hex: "FF6B6B"))
+                        .foregroundColor(MeeshyColors.error)
                 }
             }
         }

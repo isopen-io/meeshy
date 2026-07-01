@@ -1085,8 +1085,10 @@ private struct PreviewAudioPlayer: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(player.isPlaying ? "Mettre en pause" : "Lire l'audio")
-                .accessibilityHint("Audio de \(player.timeLabel(totalDuration: attachment.duration))")
+                .accessibilityLabel(player.isPlaying
+                    ? String(localized: "audio.pause", defaultValue: "Pause", bundle: .main)
+                    : String(localized: "audio.play", defaultValue: "Play audio", bundle: .main))
+                .accessibilityHint(String(format: String(localized: "audio.duration.hint", defaultValue: "Audio, %@", bundle: .main), player.timeLabel(totalDuration: attachment.duration)))
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(attachment.originalName.isEmpty ? "Audio" : attachment.originalName)
