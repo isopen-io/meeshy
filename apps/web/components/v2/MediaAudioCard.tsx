@@ -9,6 +9,7 @@ import {
   useMemo,
 } from 'react';
 import { cn } from '@/lib/utils';
+import { truncateText } from '@/utils/truncate';
 import { getLanguageColor } from './theme';
 
 // ============================================================================
@@ -113,12 +114,6 @@ function generateWaveform(src: string, barCount: number): number[] {
   return bars;
 }
 
-function truncateText(text: string, maxLength: number): { truncated: string; isTruncated: boolean } {
-  if (text.length <= maxLength) {
-    return { truncated: text, isTruncated: false };
-  }
-  return { truncated: text.slice(0, maxLength).trim() + '...', isTruncated: true };
-}
 
 // ============================================================================
 // Icon Components
