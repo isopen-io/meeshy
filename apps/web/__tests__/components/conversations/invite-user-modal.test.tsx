@@ -487,6 +487,7 @@ describe('InviteUserModal', () => {
       // aria-disabled — toBeDisabled() only honors the `disabled` attribute on form
       // elements and does not apply to this ARIA widget pattern.
       expect(selectedButton).toHaveAttribute('aria-disabled', 'true');
+      expect(selectedButton).toHaveAttribute('tabindex', '-1');
     });
 
     it('gives the selection remove button an accessible name identifying the user', async () => {
