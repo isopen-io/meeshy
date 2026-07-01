@@ -62,14 +62,10 @@ struct LocationPickerView: View {
                 viewModel.updateSelectedLocation(center)
             }
         ) {
-            // Map annotation marker anchored to a coordinate: system-pin chrome
-            // rendered at a fixed screen size, not reading text — scaling it with
-            // Dynamic Type would detach it from the point it marks. Kept fixed
-            // (doctrine 74i/86i).
+            // Fixed: MapKit annotation marker anchored to a coordinate — system-pin
+            // chrome rendered at a fixed screen size, not reading text. Scaling it
+            // with Dynamic Type would detach it from the point it marks (74i/86i).
             Image(systemName: "mappin.circle.fill")
-                // Fixed: this is the MapKit annotation marker pinned to the map —
-                // its geometry is anchored to a coordinate, not reading text, so it
-                // must stay a fixed point size (doctrine 74i/86i).
                 .font(.system(size: 36))
                 .foregroundStyle(Color(hex: accentColor), Color(hex: accentColor).opacity(0.3))
                 .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 6, y: 3)
