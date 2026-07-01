@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect, memo, CSSProperties } from 'react';
 import { cn } from '@/lib/utils';
+import { truncateText } from '@/utils/truncate';
 import { getLanguageColor } from './theme';
 
 // ============================================================================
@@ -89,12 +90,6 @@ function formatDuration(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-function truncateText(text: string, maxLength: number): { truncated: string; isTruncated: boolean } {
-  if (text.length <= maxLength) {
-    return { truncated: text, isTruncated: false };
-  }
-  return { truncated: text.slice(0, maxLength).trim() + '...', isTruncated: true };
-}
 
 // ============================================================================
 // Icon Props Type
