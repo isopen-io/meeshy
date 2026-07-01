@@ -25,6 +25,15 @@ final class VoIPPushManager: NSObject, ObservableObject {
     /// evicts genuine entries and resurfaces phantom cards.
     fileprivate var dedupRing = VoIPDedupRing()
 
+    /// Evicts `callId` from the dedup ring. Called by `CallManager` when a
+    /// reported incoming call is torn down because CallKit genuinely refused
+    /// the `reportNewIncomingCall` transaction — without this, a legitimate
+    /// APNs retry for the same call within the dedup TTL would be silently
+    /// phantom-acked instead of re-ringing the callee.
+    func clearDedup(callId: String) {
+        dedupRing.remove(callId)
+    }
+
     /// Audit P2-CC-1 — pending token to register once the user is logged in.
     /// Without this, a VoIP token delivered before login completes was
     /// silently dropped (`authToken == nil` short-circuit in

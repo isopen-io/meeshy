@@ -39,6 +39,21 @@ final class VoIPPushManagerTests: XCTestCase {
         sut.forceReregister()
     }
 
+    // MARK: - Dedup ring eviction (CallManager calls this when CallKit refuses
+    // reportNewIncomingCall, so a genuine APNs retry for the same callId isn't
+    // silently phantom-acked as a duplicate).
+
+    func test_clearDedup_unknownCallId_doesNotCrash() {
+        let sut = VoIPPushManager.shared
+        sut.clearDedup(callId: "not-previously-reported")
+    }
+
+    func test_clearDedup_isIdempotent() {
+        let sut = VoIPPushManager.shared
+        sut.clearDedup(callId: "some-call-id")
+        sut.clearDedup(callId: "some-call-id")
+    }
+
     // MARK: - parseIceServers (P2-CC-4 surface)
 
     func test_parseIceServers_nilInput_returnsNil() {

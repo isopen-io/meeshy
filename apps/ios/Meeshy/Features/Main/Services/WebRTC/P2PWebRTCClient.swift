@@ -114,6 +114,14 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     // MARK: - Configuration
 
     func configure(iceServers: [IceServer]) throws {
+        // Defensive: callers are expected to `disconnect()` before
+        // re-configuring (CallManager's FSM enforces `.idle` first), but if
+        // that invariant is ever violated, closing any stale peer connection
+        // here prevents it from leaking silently with its native threads/sockets.
+        if let stalePeerConnection = peerConnection {
+            Logger.webrtc.warning("configure() called with a live peerConnection — closing it before creating a new one")
+            stalePeerConnection.close()
+        }
         let config = RTCConfiguration()
         config.iceServers = iceServers.map { server in
             RTCIceServer(

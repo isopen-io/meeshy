@@ -837,6 +837,10 @@ final class CallManager: ObservableObject {
             Logger.calls.error("CallKit VoIP report failed: \(error.localizedDescription)")
             Task { @MainActor [weak self] in
                 self?.endCallInternal(reason: .failed("CallKit error"))
+                // The dedup ring already recorded this callId when the push
+                // arrived; since CallKit refused to report it, evict it so a
+                // legitimate APNs retry isn't dropped as a duplicate.
+                VoIPPushManager.shared.clearDedup(callId: callId)
             }
         }
 
@@ -1259,9 +1263,13 @@ final class CallManager: ObservableObject {
         HapticFeedback.success()
     }
 
-    /// Async wrapper used by CXAnswerCallAction so `action.fulfill()` is only
-    /// called once the SDP+media setup task has been queued. This prevents
-    /// CallKit from racing the WebRTC setup pipeline.
+    /// Async SDP+media setup kicked off by `CXAnswerCallAction` AFTER
+    /// `action.fulfill()` has already been called synchronously (CallKit's
+    /// contract requires fulfill()/fail() before the delegate method
+    /// returns — see `provider(_:perform: CXAnswerCallAction)`). This is
+    /// fire-and-forget from CallKit's perspective: a `createAnswer` failure
+    /// here cannot un-fulfill the action, so it must tear the call down via
+    /// `endCallInternal` instead of failing it back to CallKit.
     func answerCallReady() async {
         guard case .ringing(isOutgoing: false) = callState else { return }
         guard let callId = currentCallId, let userId = remoteUserId else { return }
@@ -3705,6 +3713,16 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
 
     func providerDidReset(_ provider: CXProvider) {
         Logger.calls.info("CallKit provider did reset")
+        // Apple's CallKit guidance: treat this as if no calls had ever
+        // occurred. `endCall()` no-ops when `callState` isn't active, which
+        // would otherwise skip `deactivateAudioSession()` and leave
+        // `RTCAudioSession` stale if this fires without a matching
+        // `didDeactivate` (e.g. after a system-level call reset). Disabling
+        // it here is idempotent and independent of local call state.
+        let rtc = RTCAudioSession.sharedInstance()
+        rtc.lockForConfiguration()
+        rtc.isAudioEnabled = false
+        rtc.unlockForConfiguration()
         Task { @MainActor [weak self] in
             self?.manager?.endCall()
         }

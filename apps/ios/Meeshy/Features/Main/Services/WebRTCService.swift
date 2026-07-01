@@ -58,6 +58,13 @@ final class WebRTCService {
     // already set). Cancelled in close() so it cannot outlive teardown and
     // attempt addIceCandidate on a disposed peer connection.
     private var pendingCandidateTask: Task<Void, Never>?
+    // Chains onto the previous camera-switch task instead of firing an
+    // untracked `Task` per call: a rapid double-tap on flip-camera otherwise
+    // overlaps two `stopCapture()`/`startCapture()` sequences on the same
+    // `RTCCameraVideoCapturer`, which can leave the capturer in an
+    // indeterminate state or desync `isUsingFrontCamera` from the actually
+    // active camera. Mirrors `CallManager.holdVideoTask`'s chaining pattern.
+    private var switchCameraTask: Task<Void, Never>?
 
     private(set) var currentBitrate: Int = QualityThresholds.defaultBitrate
     private(set) var currentQualityLevel: VideoQualityLevel = .excellent
@@ -234,9 +241,11 @@ final class WebRTCService {
     }
 
     func switchCamera() {
-        Task {
+        let previousTask = switchCameraTask
+        switchCameraTask = Task { [weak self] in
+            await previousTask?.value
             do {
-                try await client.switchCamera()
+                try await self?.client.switchCamera()
             } catch {
                 Logger.webrtc.error("Failed to switch camera: \(error.localizedDescription)")
             }
@@ -249,9 +258,11 @@ final class WebRTCService {
     }
 
     func switchToCamera(uniqueID: String) {
-        Task {
+        let previousTask = switchCameraTask
+        switchCameraTask = Task { [weak self] in
+            await previousTask?.value
             do {
-                try await client.switchToCamera(uniqueID: uniqueID)
+                try await self?.client.switchToCamera(uniqueID: uniqueID)
             } catch {
                 Logger.webrtc.error("Failed to switch to camera \(uniqueID): \(error.localizedDescription)")
             }
@@ -473,6 +484,8 @@ final class WebRTCService {
         flushCandidatesTask = nil
         pendingCandidateTask?.cancel()
         pendingCandidateTask = nil
+        switchCameraTask?.cancel()
+        switchCameraTask = nil
         client.disconnect()
         iceCandidateBuffer.removeAll()
         hasRemoteDescription = false
