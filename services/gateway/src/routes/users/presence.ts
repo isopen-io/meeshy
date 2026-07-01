@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { sendSuccess, sendBadRequest } from '../../utils/response';
+import { sendSuccess, sendBadRequest, sendInternalError } from '../../utils/response';
 import { viewerFromAuthContext } from './presence-gate';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 
@@ -129,10 +129,7 @@ export async function getUsersPresence(fastify: FastifyInstance) {
       return sendSuccess(reply, { users: responseUsers });
     } catch (error) {
       fastify.log.error({ error }, '[users/presence] Failed to resolve presence');
-      reply.code(500).send({
-        success: false,
-        error: { code: 'INTERNAL_ERROR', message: 'Failed to resolve presence' }
-      });
+      return sendInternalError(reply, 'Failed to resolve presence');
     }
   });
 }

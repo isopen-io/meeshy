@@ -19,6 +19,7 @@ import { usersService, conversationsService, type UserStats } from '@/services';
 import { type User } from '@/types';
 import { useI18n } from '@/hooks/useI18n';
 import { useUser } from '@/stores';
+import { useUserStatusTick } from '@/stores/user-store';
 import { useSocketIOMessaging } from '@/hooks/use-socketio-messaging';
 import { OnlineIndicator } from '@/components/ui/online-indicator';
 import { getUserStatus } from '@/lib/user-status';
@@ -49,6 +50,9 @@ export default function ProfilePage({ params }: ProfilePageProps) {
   const { t } = useI18n('profile');
   const { t: tCommon } = useI18n('common');
   const { t: tContacts, locale } = useI18n('contacts');
+  // Re-render sur tick de présence : fait vieillir le libellé relatif
+  // (« Vu il y a 5 min » → « 6 min ») et sa couleur sans recharger la page.
+  useUserStatusTick();
 
   const [user, setUser] = useState<User | null>(null);
   const [stats, setStats] = useState<UserStats | null>(null);

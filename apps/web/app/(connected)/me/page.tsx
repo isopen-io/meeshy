@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { formatCompactNumber } from '@/utils/format-number';
 import { Footer } from '@/components/layout/Footer';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -39,7 +38,9 @@ import {
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
-const formatNumber = formatCompactNumber;
+function formatNumber(num: number): string {
+  return num >= 1000 ? (num / 1000).toFixed(1) + 'k' : num.toString();
+}
 
 // ─── Modals ────────────────────────────────────────────────────────────────
 
