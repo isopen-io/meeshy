@@ -442,8 +442,6 @@ export class MessageReadStatusService {
         field: "deliveredAt",
       });
 
-      await this.updateUnreadCount(participantId, conversationId);
-
       logger.info(
         `[MessageReadStatus] Participant ${participantId} received update in conversation ${conversationId}`
       );
@@ -1570,49 +1568,6 @@ export class MessageReadStatusService {
     } catch (error) {
       logger.error('[MessageReadStatus] Error computing summary:', error);
       return { totalMembers: 0, deliveredCount: 0, readCount: 0 };
-    }
-  }
-
-  private async updateUnreadCount(
-    participantId: string,
-    conversationId: string
-  ): Promise<void> {
-    try {
-      const cursor = await this.prisma.conversationReadCursor.findUnique({
-        where: {
-          conversation_participant_cursor: { participantId, conversationId },
-        },
-      });
-
-      let unreadCount = 0;
-
-      if (!cursor || !cursor.lastReadAt) {
-        unreadCount = await this.prisma.message.count({
-          where: {
-            conversationId,
-            deletedAt: null,
-            senderId: { not: participantId },
-          },
-        });
-      } else {
-        unreadCount = await this.prisma.message.count({
-          where: {
-            conversationId,
-            deletedAt: null,
-            senderId: { not: participantId },
-            createdAt: { gt: cursor.lastReadAt },
-          },
-        });
-      }
-
-      if (cursor) {
-        await this.prisma.conversationReadCursor.update({
-          where: { id: cursor.id },
-          data: { unreadCount },
-        });
-      }
-    } catch (error) {
-      logger.error("[MessageReadStatus] Error updating unread count", error);
     }
   }
 
