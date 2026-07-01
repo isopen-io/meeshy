@@ -14,6 +14,12 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR iOS AUTORITAIRE (suffixe `i`) — mis à jour 76i** — piste indépendante des itérations web. Source fiable = § History (append-only).
+> - **Dernière itération iOS : `76i`** (a11y Dynamic Type `InviteFriendsSheet` : 33 `.font(.system(size:))` figés → 29 `MeeshyFont.relative(...)` scalables + 4 icônes en conteneur fixe [toolbar close, avatar 44 pt, tuiles 32 pt ×2] gardées figées avec commentaire d'exception ; 0 changement layout/couleur/copie ; 0 test couplé). Branche `claude/upbeat-euler-37k8i5`, base = `main` HEAD `7d960fb`.
+> - **Base de départ 77i : `main` HEAD** (toujours resync sur `main` avant de commencer ; supprimer la branche mergée).
+> - **⚠️ Forte contention iOS (run 2026-07-01)** : ~10 agents parallèles en vol (PR #1137→#1157, iter 71i→75i). **Vérifier `list_pull_requests` ouvertes AVANT de choisir une surface.** Surfaces prises/en vol au moment de 76i : 2FA Dynamic Type (#1137/#1155), feed comments sheet (#1139), conversation dashboard (#1145), voice profile mgmt (#1150), emoji-picker VoiceOver (#1154), quick-action menu i18n (#1157), Support/Report tints (#1149), VoiceOver labels FR (#1142/#1148).
+> - **Différé prioritaire iOS 77i+ : Dynamic Type grandes surfaces restantes** — `StoryViewerView+Content` (38), `FeedView+Attachments` (30), `NewConversationView`, `SettingsView`, `DataExportView`, `DataStorageView` (un écran/itération), hors surfaces prises. **NE PAS re-flagger** les 4 icônes figées de `InviteFriendsSheet` (108/131/492/526 — glyphes en frame fixe, décision HIG anti-clipping). Puis Glass adoption (reste) + ladder catégoriel arc-en-ciel.
+>
 > **POINTEUR AUTORITAIRE WEB (mis à jour 70wb)** — source fiable = § History (append-only) ; le tableau Current State a divergé (lignes dupliquées par agents parallèles).
 > - **Dernière itération web mergée : `70w` → PR #1088** (i18n `PhoneResetFlow.tsx` — 56 `t()||'FR'` → `t(k,'EN')` + clé EN manquante `phoneReset.identityHint`). Antérieures : 69w #1084 (a11y create-link modal), 68w #1082, 67w #1078.
 > - **⚠️ Collision de numéro `70w`** : deux itérations web parallèles ont pris `70w`. `claude/practical-fermat-w9pjo3` (PhoneResetFlow, mergée #1088) garde `70w` ; la présente (invite-user-modal a11y, branche `claude/practical-fermat-mql80f`) est renommée **`70wb`** (convention `wb`). Surfaces disjointes (auth/ vs conversations/) — aucun conflit de code.
@@ -342,6 +348,7 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 
 | Iteration | Branch | PR | Merged |
 |-----------|--------|----|--------|
+| 76i | claude/upbeat-euler-37k8i5 (iOS a11y Dynamic Type `InviteFriendsSheet` : 33 `.font(.system(size:))` figés → 29 `MeeshyFont.relative(...)` scalables [texte + icônes SF Symbol inline] + 4 icônes en conteneur de taille fixe gardées figées avec commentaire d'exception [toolbar close L108, avatar 44 pt L131, tuiles 32 pt `optionToggle`/`optionRow` L492/L526 — anti-clipping HIG] ; `MeeshyUI` déjà importé ; 0 changement layout/couleur/logique/copie ; 0 test couplé ; gate = CI `ios-tests.yml`) | ⏳ | ⏳ |
 | 1 | feat/uiux-iter1 | (early) | ✅ |
 | 2–12 | feat/uiux-iter{N} | various | ✅ |
 | 13 | feat/uiux-iter13 | #407 | ✅ |
