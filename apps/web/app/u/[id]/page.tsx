@@ -23,6 +23,7 @@ import { useSocketIOMessaging } from '@/hooks/use-socketio-messaging';
 import { OnlineIndicator } from '@/components/ui/online-indicator';
 import { getUserStatus } from '@/lib/user-status';
 import { getUserDisplayName as resolveDisplayName } from '@/utils/user-display-name';
+import { getUserInitials } from '@/lib/avatar-utils';
 import { formatPresenceLabel, presenceColorClass } from '@/utils/presence-format';
 import { buildApiUrl } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
@@ -343,7 +344,7 @@ export default function ProfilePage({ params }: ProfilePageProps) {
                     <Avatar className="h-24 w-24">
                       <AvatarImage src={user.avatar} />
                       <AvatarFallback className="text-2xl bg-gradient-to-br from-blue-500 to-purple-600 text-white">
-                        {getUserDisplayName(user).slice(0, 2).toUpperCase()}
+                        {getUserInitials(user)}
                       </AvatarFallback>
                     </Avatar>
                     {/* Pastille de présence — masquée si la présence n'est pas montrable (isOnline null) */}
