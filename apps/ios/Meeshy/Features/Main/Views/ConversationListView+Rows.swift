@@ -84,21 +84,16 @@ struct ConversationRowItem: View {
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(String(localized: "conversation.row.hint", bundle: .main))
-            .onDrag {
-                onDragStart()
-                return NSItemProvider(object: conversation.id as NSString)
+            // Appui long → overlay custom (icônes garanties iOS 26). Le
+            // drag-to-reorder natif (`.onDrag`) a été retiré : il installe une
+            // UIDragInteraction UIKit qui capte le long-press système et
+            // empêchait la gesture SwiftUI d'ouvrir le menu (le `.contextMenu`
+            // natif, lui, se coordonnait avec `.onDrag`). Le déplacement reste
+            // accessible via « Déplacer vers » dans le menu.
+            .onLongPressGesture(minimumDuration: 0.4) {
+                HapticFeedback.medium()
+                onLongPress()
             }
-            // Appui long → overlay custom (icônes garanties iOS 26). Coexiste
-            // avec le tap (rapide) et le drag-to-reorder : LongPressGesture
-            // annule si le doigt bouge (> maximumDistance par défaut), donc un
-            // drag ne déclenche pas le menu.
-            .simultaneousGesture(
-                LongPressGesture(minimumDuration: 0.45)
-                    .onEnded { _ in
-                        HapticFeedback.medium()
-                        onLongPress()
-                    }
-            )
             .task {
                 await onLoadPreview()
             }
