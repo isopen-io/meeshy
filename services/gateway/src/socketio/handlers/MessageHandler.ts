@@ -21,7 +21,7 @@ import {
 import { StatusService } from '../../services/StatusService';
 import { NotificationService } from '../../services/notifications/NotificationService';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
-import { attachmentForwardPreviewSelect } from '../../services/attachments/attachmentIncludes';
+import { attachmentForwardPreviewSelect, attachmentMediaSelect } from '../../services/attachments/attachmentIncludes';
 import { serializeAttachmentForSocket } from '../serializeAttachmentForSocket';
 import { validateMessageLength } from '../../config/message-limits';
 import {
@@ -569,7 +569,7 @@ export class MessageHandler {
           content: true,
           originalLanguage: true,
           sender: { select: { id: true, userId: true, displayName: true, avatar: true } },
-          attachments: { select: { id: true } },
+          attachments: { select: attachmentMediaSelect },
         },
       });
 
@@ -614,10 +614,15 @@ export class MessageHandler {
       this.translationService.retranslateMessageAsync(validated.messageId, retranslationPayload)
         .catch((err: unknown) => handlerLogger.warn('retranslation failed after socket edit', { messageId: validated.messageId, error: err }));
 
+      // Attachments are unaffected by a content edit — carry over the ones
+      // fetched pre-edit so clients that overwrite their cached message with
+      // this payload (`{ ...cached, ...editedPayload }`) do not lose the
+      // photo/video/audio that was attached to the message being edited.
       const editedPayload = {
         ...updatedMessage,
         conversationId: message.conversationId,
         translations: [],
+        attachments: this._serializeAttachmentsField(message as unknown as Message),
       };
 
       const room = ROOMS.conversation(message.conversationId);
