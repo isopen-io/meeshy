@@ -87,6 +87,7 @@ export async function registerSearchRoutes(fastify: FastifyInstance) {
     }
   }, async (request, reply) => {
     try {
+      /* istanbul ignore next -- AJV `default: '0'`/`default: '20'` on the querystring schema always fill these before the handler runs */
       const { q, offset = '0', limit = '20' } = request.query as { q?: string; offset?: string; limit?: string };
 
       if (!q || q.trim().length === 0) {

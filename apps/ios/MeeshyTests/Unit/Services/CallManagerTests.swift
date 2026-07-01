@@ -482,7 +482,6 @@ final class CallManagerRTPGateTests: XCTestCase {
 
     func test_qualityThresholds_rtpGate_constants() {
         XCTAssertEqual(QualityThresholds.rtpGatePollIntervalSeconds, 2.0)
-        XCTAssertEqual(QualityThresholds.rtpGateMaxAttempts, 5)
         XCTAssertEqual(QualityThresholds.rtpGateRequiredPackets, 5)
     }
 

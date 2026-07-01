@@ -1326,6 +1326,7 @@ struct CallView: View {
         }
         .pressable()
         .accessibilityLabel(String(localized: "call.filters.a11y", defaultValue: "Filtres video", bundle: .main))
+        .accessibilityHint(String(localized: "call.filters.hint", defaultValue: "Ouvre ou ferme la barre de filtres video", bundle: .main))
     }
 
     private var endCallButton: some View {

@@ -16,6 +16,15 @@ Append-only log of gotchas and decisions that save time next run.
 - `./apps/android/meeshy.sh check` = `assembleDebug` + `testDebugUnitTest`.
   Full clean check ≈ 2.5 min once dependencies are cached.
 
+## Serialization gotchas
+- ⚠ **Never put a `private companion object` on a `@Serializable` class.** The plugin generates the
+  public `serializer()` *onto the class's companion*; if you declare your own `private companion object`
+  (e.g. to hold `const`/helper functions), the generated `serializer()` inherits that `private`
+  visibility and `MyType.serializer()` becomes inaccessible from other files (compile error:
+  "Cannot access 'companion object Companion': it is private"). Fix: keep helpers/constants as
+  **file-private top-level** declarations (no companion), or make the companion non-private. Hit on
+  `call-history-model` (`CallRecord`).
+
 ## Test patterns (established in repo)
 - ViewModel tests: `UnconfinedTestDispatcher` + `Dispatchers.setMain/resetMain`
   in `@Before/@After`; Truth `assertThat`; MockK (`relaxed = true`); Turbine
