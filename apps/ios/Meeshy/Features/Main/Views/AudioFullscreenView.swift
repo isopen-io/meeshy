@@ -378,7 +378,7 @@ private struct AudioFullscreenPage: View {
 
             HStack(spacing: 6) {
                 Image(systemName: "waveform")
-                    .font(.system(size: 10))
+                    .font(MeeshyFont.relative(10))
                     .foregroundColor(.white.opacity(0.4))
                 if attachment.fileSize > 0 {
                     Text(attachment.fileSizeFormatted)
@@ -649,7 +649,7 @@ private struct AudioFullscreenPage: View {
                             .scaleEffect(0.7)
                     } else {
                         Image(systemName: "waveform.and.mic")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(MeeshyFont.relative(13, weight: .semibold))
                     }
                     Text(String(localized: "audio.fullscreen.transcription.action", defaultValue: "Transcrire", bundle: .main))
                         .font(MeeshyFont.relative(13, weight: .bold))
@@ -746,7 +746,7 @@ private struct AudioFullscreenPage: View {
             HapticFeedback.light()
         } label: {
             HStack(spacing: 3) {
-                Text(flag).font(.system(size: 12))
+                Text(flag).font(MeeshyFont.relative(12))
                 Text(label)
                     .font(MeeshyFont.relative(10, weight: isSelected ? .bold : .medium))
                     .lineLimit(1)
@@ -780,7 +780,7 @@ private struct AudioFullscreenPage: View {
                         HapticFeedback.light()
                     } label: {
                         HStack(spacing: 10) {
-                            Text(lang.flag).font(.system(size: 20))
+                            Text(lang.flag).font(MeeshyFont.relative(20))
 
                             Text(lang.name)
                                 .font(MeeshyFont.relative(15, weight: isSelected ? .bold : .regular))
@@ -790,13 +790,13 @@ private struct AudioFullscreenPage: View {
 
                             if hasAudio {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 16))
+                                    .font(MeeshyFont.relative(16))
                                     .foregroundColor(MeeshyColors.success)
                             }
 
                             if isSelected {
                                 Image(systemName: "speaker.wave.2.fill")
-                                    .font(.system(size: 14))
+                                    .font(MeeshyFont.relative(14))
                                     .foregroundColor(accent)
                             }
                         }
