@@ -14,6 +14,28 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 104i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> - **104i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `ed04f121`)** :
+>   a11y VoiceOver de `AudioFullscreenView` (lecteur audio plein écran). Fichier déjà largement
+>   `MeeshyFont.relative` → vrai défaut = **boutons icône-seule sans `.accessibilityLabel`**.
+>   **6 `.accessibilityLabel`** ajoutés : fermer (`common.close`), download **state-aware**
+>   (`downloadAccessibilityLabel` idle/saving/saved/failed), −10s (`media.skipBack10s`),
+>   play/pause (`media.playAudio`/`pauseAudio` SSOT), +10s (`media.skipForward10s`), choisir
+>   langue (`audio.fullscreen.language.choose`). **1 migration Dynamic Type** : glyphe état vide
+>   `text.word.spacing` 28 → `relative(28, .light)` + `.accessibilityHidden`. **6 glyphes figés**
+>   commentés : chrome fermer/download (cadre 36×36, doctrine 82i), transport −10/play/+10
+>   (cohérence rang, lecture cercle 64×64), add-langue (cercle 26×26, doctrine 86i). 4 clés i18n
+>   inline `defaultValue`. 1 fichier, 0 logique, 0 test neuf. Gate = CI `iOS Tests`.
+> - **⚠️ Branche repurposée + renumérotée** : visait `CommunityLinkDetailView` (95i) mais un autre
+>   agent l'a mergé identiquement dans `main` via #1272 → PR #1274 fermée (superseded). Repurposée
+>   sur `AudioFullscreenView` (surface non réclamée). Numéro passé **103i → 104i** car un autre agent
+>   a mergé `ConversationMediaGalleryView` en **103i** entre-temps. PR = #1292.
+> - **⚠️ `AudioFullscreenView` a11y SOLDÉ** : ne plus reprendre les 6 glyphes de contrôle figés.
+>   Différé 105i+ : `seekBar` slider custom → VoiceOver-adjustable ; `authorInfoRow` combine.
+> - **Base de départ 105i : `main` HEAD** (toujours resync sur `main` ; supprimer la branche mergée).
+
+> **POINTEUR AUTORITAIRE iOS (mis à jour 103i, ConversationMediaGalleryView, mergé sur main)** — voir
+>   `docs/analyses/uiux/2026-07-01-iteration-103i.md` (surface distincte de la mienne).
 > **POINTEUR AUTORITAIRE iOS (mis à jour 101i)** — source fiable = § History (append-only).
 > - **Dernière itération iOS : `101i`** → branche `claude/upbeat-euler-l5yima` (Dynamic Type + VoiceOver `TrackingLinksView` — jumeau de `CommunityLinksView` 91i : 5/7 `.font(.system(size:))` → `MeeshyFont.relative` ; 2 figés `.accessibilityHidden` ; `.isHeader` ×2, `.combine` stat card + état vide). Base = `main` HEAD `bb1ca52e`. Gate = CI `iOS Tests`.
 > - **99i mergé** = `CommunityLinkDetailView` (#1272). ⚠️ `Build (bun)` peut être rouge sur les PR iOS (régression web `main` `copyToClipboard` dupliqué) mais **check NON-requis** — merge iOS prouvé possible (#1272 mergée). ⚠️ Essaim d'agents iOS extrême (labels 87i–100i saturés) → choisir haut (101i+) + surface FREE. Prochain candidat = `TrackingLinkDetailView`, `ShareLinksView` (7), `EditPostSheet` (9).
