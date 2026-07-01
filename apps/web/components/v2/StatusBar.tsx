@@ -6,6 +6,7 @@ import { useI18n } from '@/hooks/use-i18n';
 import { Skeleton } from './Skeleton';
 import { TranslationToggle } from './TranslationToggle';
 import { getLanguageName } from './flags';
+import { formatTimeRemaining } from '@/utils/time-remaining';
 
 // ============================================================================
 // Types
@@ -29,28 +30,6 @@ export interface StatusBarProps {
   userLanguage?: string;
   isLoading?: boolean;
   className?: string;
-}
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-function getTimeRemaining(expiresAt: string): string {
-  const now = Date.now();
-  const expiry = new Date(expiresAt).getTime();
-  const diff = expiry - now;
-
-  if (diff <= 0) return 'Expire';
-
-  const minutes = Math.floor(diff / 60000);
-  const hours = Math.floor(minutes / 60);
-
-  if (hours >= 1) {
-    const remainingMinutes = minutes % 60;
-    return remainingMinutes > 0 ? `${hours}h${remainingMinutes}m` : `${hours}h`;
-  }
-
-  return `${minutes}m`;
 }
 
 // ============================================================================
@@ -128,7 +107,7 @@ function StatusPopover({ status, userLanguage, onClose }: StatusPopoverProps) {
     };
   }, [onClose]);
 
-  const timeRemaining = getTimeRemaining(status.expiresAt);
+  const timeRemaining = formatTimeRemaining(status.expiresAt) ?? 'Expire';
 
   return (
     <div
