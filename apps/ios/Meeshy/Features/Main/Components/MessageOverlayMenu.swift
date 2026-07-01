@@ -180,7 +180,7 @@ struct MessageOverlayMenu: View {
             onShowTranslate?()
         case .delete:
             onDelete?()
-        case .reply, .forward, .react, .pin, .info:
+        case .reply, .forward, .react, .pin, .star, .thread, .info:
             break
         }
         dismiss()

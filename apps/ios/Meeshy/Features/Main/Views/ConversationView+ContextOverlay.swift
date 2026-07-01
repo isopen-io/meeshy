@@ -184,7 +184,7 @@ extension ConversationView {
         case .delete:
             overlayState.deleteConfirmMessageId = message.id
             dismissContextOverlay()
-        case .edit, .pin, .info:
+        case .edit, .pin, .star, .thread, .info:
             dismissContextOverlay()
         }
     }
