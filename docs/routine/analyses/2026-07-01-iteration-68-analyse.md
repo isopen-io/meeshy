@@ -1,6 +1,5 @@
 # Iteration 68 — Analyse d'optimisation (2026-07-01)
 
-<<<<<<< claude/sharp-wozniak-vz661u
 ## Protocole renforcé v2 — vérification de continuité sur `main`
 `main` (HEAD `99aefe6e`, PR #1231) intègre les itérations parallèles récentes. Vérification des
 acquis F30 avant d'attaquer le lot suivant :
@@ -82,7 +81,6 @@ strictement identique sur le happy path ; **plus robuste** sur iOS/WebView non s
 2 sites de partage de conversation (quasi-doublons desktop/liste) convergent vers la source unique →
 robustesse iOS/WebView du fallback presse-papiers, comportement unifié. Surface `navigator.clipboard`
 brute : 10 → 8 sites. 0 régression tsc (baseline `main` = 1198 erreurs pré-existantes en fichiers de test).
-=======
 > Note de consolidation (iter 69) : ce document avait été **concaténé par un merge parallèle** — deux
 > agents ont livré F30-d simultanément et leurs deux versions du doc `iteration-68` ont fusionné. Version
 > ci-dessous nettoyée et fusionnée en un seul récit cohérent.
@@ -118,4 +116,3 @@ le merge automatique a combiné les deux ajouts d'`import { copyToClipboard }` s
 applicative : 10 → 8 sites. Leçon PROC renforcée : sur un domaine à fort parallélisme (F30), le merge
 Git peut **cumuler** deux ajouts identiques sans conflit textuel → vérifier les doublons d'import au
 démarrage de l'itération suivante (intégré au protocole v2, cf. iter 69).
->>>>>>> main
