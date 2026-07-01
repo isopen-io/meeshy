@@ -46,7 +46,7 @@ const createMockPrisma = () => ({
   callSession: {
     findMany: jest.fn() as MockFn,
     findUnique: jest.fn() as MockFn,
-    update: jest.fn() as MockFn
+    updateMany: jest.fn() as MockFn
   },
   callParticipant: {
     updateMany: jest.fn() as MockFn
@@ -81,12 +81,20 @@ const makeStaleCall = (
   conversationId: 'conv-1'
 });
 
-/** Sets up the $transaction mock to execute its callback. */
-const setupTransactionPassthrough = (prisma: ReturnType<typeof createMockPrisma>) => {
+/**
+ * Sets up the $transaction mock to execute its callback. `updateManyCount`
+ * controls how many rows `tx.callSession.updateMany` reports as matched —
+ * 0 simulates the call having already transitioned away from the expected
+ * `fromStatuses` (the race guard), matching the real conditional update.
+ */
+const setupTransactionPassthrough = (
+  prisma: ReturnType<typeof createMockPrisma>,
+  updateManyCount = 1
+) => {
   prisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
     const tx = {
       callParticipant: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-      callSession: { update: jest.fn().mockResolvedValue({}) }
+      callSession: { updateMany: jest.fn().mockResolvedValue({ count: updateManyCount }) }
     };
     return cb(tx);
   });
@@ -593,14 +601,19 @@ describe('CallCleanupService', () => {
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
-    it('DB fallback: force-ends when no in-memory data and participant lastHeartbeatAt is null (never recorded)', async () => {
+    it('DB fallback: force-ends when no in-memory data, lastHeartbeatAt is null, and the participant joined long ago (genuine zombie)', async () => {
       const noMemoryCallService = createMockCallService(false);
       const service = new CallCleanupService(prisma as any, noMemoryCallService as any);
 
-      const participant = { id: 'p-1', participantId: 'part-1', leftAt: null, lastHeartbeatAt: null };
+      // Joined 130s ago (older than the 120s timeout) and never got a heartbeat
+      // persisted — a real zombie, not a just-restarted-gateway false positive.
+      const participant = {
+        id: 'p-1', participantId: 'part-1', leftAt: null,
+        lastHeartbeatAt: null, joinedAt: new Date(Date.now() - 130_000)
+      };
       const activeCall = {
         id: 'call-db-null',
-        startedAt: new Date(Date.now() - 70_000), // started 70s ago, no heartbeat
+        startedAt: new Date(Date.now() - 130_000),
         conversationId: 'conv-db-null',
         participants: [participant]
       };
@@ -617,6 +630,87 @@ describe('CallCleanupService', () => {
       const result = await service.runCleanup();
 
       expect(result.cleaned).toBe(1);
+    });
+
+    it('DB fallback: does NOT force-end when lastHeartbeatAt is null but the participant joined recently (gateway-restart false-positive guard)', async () => {
+      const noMemoryCallService = createMockCallService(false);
+      const service = new CallCleanupService(prisma as any, noMemoryCallService as any);
+
+      // Call started 10s ago — well within the 120s timeout — and the gateway
+      // just restarted so no in-memory heartbeat exists yet and the 30s debounce
+      // hasn't flushed lastHeartbeatAt to the DB. This must NOT be GC'd.
+      const participant = {
+        id: 'p-1', participantId: 'part-1', leftAt: null,
+        lastHeartbeatAt: null, joinedAt: new Date(Date.now() - 10_000)
+      };
+      const activeCall = {
+        id: 'call-db-fresh-join',
+        startedAt: new Date(Date.now() - 10_000),
+        conversationId: 'conv-db-fresh-join',
+        participants: [participant]
+      };
+
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([activeCall]);
+
+      const result = await service.runCleanup();
+
+      expect(result.cleaned).toBe(0);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // forceEndCall — race guard (call already transitioned before the write)
+  // -------------------------------------------------------------------------
+  describe('forceEndCall — race guard', () => {
+    it('does not count a call as cleaned when it already left the expected fromStatuses before the write', async () => {
+      const service = new CallCleanupService(prisma as any);
+      // Snapshot found it stale/initiated, but by write time a client-driven
+      // `call:end` already moved it to `ended` — updateMany matches 0 rows.
+      const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-race');
+
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([staleCall])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-race' });
+      setupTransactionPassthrough(prisma, 0); // 0 rows matched — already transitioned
+
+      const result = await service.runCleanup();
+
+      expect(result.cleaned).toBe(0);
+      expect(result.errors).toBe(0);
+    });
+
+    it('does not touch callParticipant or broadcast call:ended when the race guard skips the write', async () => {
+      const io = createMockIo();
+      const service = new CallCleanupService(prisma as any);
+      service.attachSocketServer(io);
+      const staleCall = makeStaleCall(CallStatus.connecting, 100_000, 'call-race-2');
+
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([staleCall])
+        .mockResolvedValueOnce([]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-race-2' });
+
+      let capturedTx: any;
+      prisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
+        capturedTx = {
+          callParticipant: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+          callSession: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) }
+        };
+        return cb(capturedTx);
+      });
+
+      await service.runCleanup();
+
+      expect(capturedTx.callParticipant.updateMany).not.toHaveBeenCalled();
+      expect(io.emit).not.toHaveBeenCalled();
     });
   });
 

@@ -114,9 +114,14 @@ export class CallCleanupService {
 
     for (const call of staleInitiated) {
       try {
-        await this.forceEndCall(call.id, now, call.startedAt, CallStatus.missed, CallEndReason.missed);
-        logger.warn('[CallCleanupService] Force MISSED', { callId: call.id, status: call.status });
-        cleaned++;
+        const ended = await this.forceEndCall(
+          call.id, now, call.startedAt,
+          [CallStatus.initiated, CallStatus.ringing], CallStatus.missed, CallEndReason.missed
+        );
+        if (ended) {
+          logger.warn('[CallCleanupService] Force MISSED', { callId: call.id, status: call.status });
+          cleaned++;
+        }
       } catch (error) {
         logger.error('[CallCleanupService] Failed to force MISSED', { callId: call.id, error });
         errors++;
@@ -139,9 +144,14 @@ export class CallCleanupService {
 
     for (const call of staleConnecting) {
       try {
-        await this.forceEndCall(call.id, now, call.startedAt, CallStatus.failed, CallEndReason.failed);
-        logger.warn('[CallCleanupService] Force FAILED', { callId: call.id });
-        cleaned++;
+        const ended = await this.forceEndCall(
+          call.id, now, call.startedAt,
+          [CallStatus.connecting], CallStatus.failed, CallEndReason.failed
+        );
+        if (ended) {
+          logger.warn('[CallCleanupService] Force FAILED', { callId: call.id });
+          cleaned++;
+        }
       } catch (error) {
         logger.error('[CallCleanupService] Failed to force FAILED', { callId: call.id, error });
         errors++;
@@ -159,9 +169,14 @@ export class CallCleanupService {
 
     for (const call of staleActive) {
       try {
-        await this.forceEndCall(call.id, now, call.startedAt, CallStatus.ended, CallEndReason.garbageCollected);
-        logger.warn('[CallCleanupService] Force GC ENDED', { callId: call.id, status: call.status });
-        cleaned++;
+        const ended = await this.forceEndCall(
+          call.id, now, call.startedAt,
+          [CallStatus.active, CallStatus.reconnecting], CallStatus.ended, CallEndReason.garbageCollected
+        );
+        if (ended) {
+          logger.warn('[CallCleanupService] Force GC ENDED', { callId: call.id, status: call.status });
+          cleaned++;
+        }
       } catch (error) {
         logger.error('[CallCleanupService] Failed to force GC', { callId: call.id, error });
         errors++;
@@ -185,28 +200,46 @@ export class CallCleanupService {
           const staleParticipants = this.callService.getStaleHeartbeats(call.id, this.HEARTBEAT_TIMEOUT_MS);
           if (staleParticipants.length > 0 && staleParticipants.length >= call.participants.length) {
             try {
-              await this.forceEndCall(call.id, now, call.startedAt, CallStatus.ended, CallEndReason.heartbeatTimeout);
-              logger.warn('[CallCleanupService] Heartbeat timeout', { callId: call.id, staleParticipants });
-              cleaned++;
+              const ended = await this.forceEndCall(
+                call.id, now, call.startedAt,
+                [CallStatus.active, CallStatus.reconnecting], CallStatus.ended, CallEndReason.heartbeatTimeout
+              );
+              if (ended) {
+                logger.warn('[CallCleanupService] Heartbeat timeout', { callId: call.id, staleParticipants });
+                cleaned++;
+              }
             } catch (error) {
               logger.error('[CallCleanupService] Heartbeat cleanup failed', { callId: call.id, error });
               errors++;
             }
           }
         } else {
-          // Post-restart fallback: in-memory map is empty; check DB lastHeartbeatAt timestamps
+          // Post-restart fallback: in-memory map is empty; check DB lastHeartbeatAt
+          // timestamps. A participant with no `lastHeartbeatAt` yet is NOT
+          // automatically stale — `lastHeartbeatAt` is only flushed 30s after the
+          // first heartbeat (HEARTBEAT_DB_DEBOUNCE_MS in CallService), so a call
+          // that is younger than the heartbeat timeout when the gateway restarts
+          // would otherwise have every participant read back as "stale" (null
+          // lastHeartbeatAt) and get force-ended seconds after a routine deploy.
+          // Fall back to `joinedAt` as the last-known-liveness signal instead.
           const staleThreshold = new Date(now.getTime() - this.HEARTBEAT_TIMEOUT_MS);
           const dbStaleParticipants = call.participants.filter(
-            (p: { lastHeartbeatAt: Date | null }) => !p.lastHeartbeatAt || p.lastHeartbeatAt < staleThreshold
+            (p: { lastHeartbeatAt: Date | null; joinedAt: Date }) =>
+              (p.lastHeartbeatAt ?? p.joinedAt) < staleThreshold
           );
           if (dbStaleParticipants.length > 0 && dbStaleParticipants.length >= call.participants.length) {
             try {
-              await this.forceEndCall(call.id, now, call.startedAt, CallStatus.ended, CallEndReason.heartbeatTimeout);
-              logger.warn('[CallCleanupService] Heartbeat timeout (DB fallback, post-restart)', {
-                callId: call.id,
-                staleCount: dbStaleParticipants.length
-              });
-              cleaned++;
+              const ended = await this.forceEndCall(
+                call.id, now, call.startedAt,
+                [CallStatus.active, CallStatus.reconnecting], CallStatus.ended, CallEndReason.heartbeatTimeout
+              );
+              if (ended) {
+                logger.warn('[CallCleanupService] Heartbeat timeout (DB fallback, post-restart)', {
+                  callId: call.id,
+                  staleCount: dbStaleParticipants.length
+                });
+                cleaned++;
+              }
             } catch (error) {
               logger.error('[CallCleanupService] Heartbeat cleanup failed (DB fallback)', { callId: call.id, error });
               errors++;
@@ -223,13 +256,27 @@ export class CallCleanupService {
     return { cleaned, errors };
   }
 
+  /**
+   * Force-ends a call, but ONLY if it is still in one of `fromStatuses` at
+   * write time. `runCleanup`'s tiers snapshot stale calls via `findMany` up to
+   * a full 60s cleanup tick earlier; without this guard, a call that a client
+   * legitimately ended (`call:end`/`call:leave`) in that window would have its
+   * already-correct terminal `status`/`endReason`/`duration` clobbered by the
+   * GC reason, and clients would receive a second, contradictory `call:ended`
+   * broadcast. Mirrors the conditional `updateMany` pattern already used by
+   * the ringing-timeout callback in `CallEventsHandler.ts`.
+   *
+   * Returns `false` (and does nothing further) when the call had already
+   * moved to a different status — the caller must not count this as cleaned.
+   */
   private async forceEndCall(
     callId: string,
     now: Date,
     startedAt: Date,
+    fromStatuses: CallStatus[],
     status: CallStatus,
     endReason: CallEndReason
-  ): Promise<void> {
+  ): Promise<boolean> {
     const duration = Math.floor((now.getTime() - startedAt.getTime()) / 1000);
 
     // Read conversationId BEFORE the transaction so we can broadcast to the
@@ -240,17 +287,28 @@ export class CallCleanupService {
       select: { conversationId: true }
     });
 
-    await this.prisma.$transaction(async (tx) => {
+    const ended = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.callSession.updateMany({
+        where: { id: callId, status: { in: fromStatuses } },
+        data: { status, endedAt: now, duration, endReason }
+      });
+      if (updated.count === 0) {
+        return false;
+      }
+
       await tx.callParticipant.updateMany({
         where: { callSessionId: callId, leftAt: null },
         data: { leftAt: now }
       });
-
-      await tx.callSession.update({
-        where: { id: callId },
-        data: { status, endedAt: now, duration, endReason }
-      });
+      return true;
     });
+
+    if (!ended) {
+      logger.info('[CallCleanupService] Skipped force-end — call already transitioned', {
+        callId, fromStatuses, attemptedStatus: status
+      });
+      return false;
+    }
 
     this.callService?.clearHeartbeats(callId);
 
@@ -275,6 +333,7 @@ export class CallCleanupService {
     } else {
       logger.warn('[CallCleanupService] No Socket.IO server attached — clients will not receive call:ended', { callId });
     }
+    return true;
   }
 
   async manualCleanup(): Promise<{ cleaned: number; errors: number }> {

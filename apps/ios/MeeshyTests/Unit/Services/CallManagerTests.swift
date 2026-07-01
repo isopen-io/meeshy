@@ -1763,7 +1763,15 @@ final class HandleHoldTaskTrackingTests: XCTestCase {
         )
     }
 
-    func test_handleHold_cancelsPreviousTask_beforeCreatingNew() throws {
+    func test_handleHold_chainsOntoPreviousTask_insteadOfRelyingOnCancel() throws {
+        // `Task.cancel()` is cooperative and `disableLocalVideo`/`enableLocalVideo`
+        // never check `Task.isCancelled` mid-flight (they simply await
+        // `stopCapture`/`startCapture`) — cancelling the previous holdVideoTask and
+        // immediately firing a new one does NOT stop the in-flight camera/
+        // transceiver mutation, so a rapid hold→unhold could run a cancelled
+        // downgrade concurrently with a fresh upgrade. handleHold must instead
+        // await the previous task's `.value` before starting its own, serializing
+        // every hold transition.
         let source = try callManagerSource()
         guard let funcRange = source.range(of: "func handleHold") else {
             XCTFail("handleHold not found"); return
@@ -1775,14 +1783,26 @@ final class HandleHoldTaskTrackingTests: XCTestCase {
         ].compactMap { $0 }.min() ?? source.endIndex
         let body = String(source[funcRange.lowerBound..<nextFunc])
 
-        guard let cancelRange = body.range(of: "holdVideoTask?.cancel()"),
-              let assignRange = body.range(of: "holdVideoTask = Task") else {
-            XCTFail("handleHold must cancel then assign holdVideoTask"); return
+        let previousTaskCaptures = body.components(separatedBy: "let previousTask = holdVideoTask").count - 1
+        XCTAssertEqual(
+            previousTaskCaptures, 2,
+            "Both the hold and unhold branches must capture the in-flight holdVideoTask before replacing it"
+        )
+
+        let awaitedCompletions = body.components(separatedBy: "await previousTask?.value").count - 1
+        XCTAssertEqual(
+            awaitedCompletions, 2,
+            "Both branches must await the previous task's completion before mutating the camera/transceiver"
+        )
+
+        guard let assignRange = body.range(of: "holdVideoTask = Task"),
+              let awaitRange = body.range(of: "await previousTask?.value", range: assignRange.upperBound..<body.endIndex),
+              let downgradeRange = body.range(of: "webRTCService.downgradeFromVideo()", range: assignRange.upperBound..<body.endIndex) else {
+            XCTFail("Expected holdVideoTask = Task, await previousTask?.value, then downgradeFromVideo() in that order"); return
         }
         XCTAssertLessThan(
-            cancelRange.lowerBound,
-            assignRange.lowerBound,
-            "holdVideoTask?.cancel() must appear before holdVideoTask = Task to prevent concurrent hold/unhold video operations"
+            awaitRange.lowerBound, downgradeRange.lowerBound,
+            "The hold branch must await the previous task's completion BEFORE calling downgradeFromVideo()"
         )
     }
 

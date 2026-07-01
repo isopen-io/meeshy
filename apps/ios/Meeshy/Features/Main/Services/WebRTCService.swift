@@ -130,12 +130,18 @@ final class WebRTCService {
 
     func createAnswer(from offer: SessionDescription) async -> SessionDescription? {
         do {
-            hasRemoteDescription = true
             let answer = try await client.createAnswer(for: offer)
+            hasRemoteDescription = true
             flushBufferedCandidates()
             Logger.webrtc.info("Created SDP answer")
             return answer
         } catch {
+            // Do NOT set `hasRemoteDescription` before this can throw (e.g. the
+            // perfect-negotiation glare guard raising `.offerIgnored` for a
+            // collided offer): leaving it `true` on a failed answer would make
+            // `addICECandidate` forward candidates straight to the ICE agent
+            // for a remote description that was never actually applied,
+            // instead of buffering them for the retried negotiation.
             Logger.webrtc.error("Failed to create answer: \(error.localizedDescription)")
             return nil
         }

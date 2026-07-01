@@ -115,6 +115,27 @@ final class WebRTCServiceTests: XCTestCase {
         XCTAssertNil(result)
     }
 
+    func test_createAnswer_failure_doesNotMarkRemoteDescriptionAsSet() async {
+        // Regression guard: a failed createAnswer (e.g. the perfect-negotiation
+        // glare guard raising `.offerIgnored` for a collided offer) must NOT flip
+        // `hasRemoteDescription`, otherwise a subsequent ICE candidate is forwarded
+        // straight to the ICE agent instead of buffered — for a remote description
+        // that was never actually applied to the peer connection.
+        let (sut, client) = makeSUT()
+        client.createAnswerResult = .failure(WebRTCError.offerIgnored)
+
+        let offer = SessionDescription(type: .offer, sdp: "offer-sdp")
+        _ = await sut.createAnswer(from: offer)
+
+        let candidate = IceCandidate(sdpMid: "0", sdpMLineIndex: 0, candidate: "candidate:test")
+        sut.addICECandidate(candidate)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(client.addIceCandidateCallCount, 0,
+            "ICE candidates must still be buffered after a failed createAnswer — " +
+            "the remote description was never successfully applied.")
+    }
+
     // MARK: - Media Controls
 
     func test_muteAudio_true_callsToggleAudioWithFalse() {
