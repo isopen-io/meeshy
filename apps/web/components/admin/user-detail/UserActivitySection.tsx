@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { isExpired } from '@/utils/time-remaining';
 import { Badge } from '@/components/ui/badge';
 import {
   Activity,
@@ -108,9 +109,6 @@ function StatusBadge({ active, expired }: { active: boolean; expired: boolean })
   return <Badge variant="secondary" className="text-xs">{t('usersDetail.inactiveBadge')}</Badge>;
 }
 
-function isExpired(expiresAt: string | null): boolean {
-  return !!expiresAt && new Date(expiresAt) < new Date();
-}
 
 function CollapsibleSection({
   title,

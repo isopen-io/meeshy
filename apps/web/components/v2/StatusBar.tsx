@@ -2,11 +2,11 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { cn } from '@/lib/utils';
+import { formatTimeRemaining } from '@meeshy/shared/utils/time-remaining';
 import { useI18n } from '@/hooks/use-i18n';
 import { Skeleton } from './Skeleton';
 import { TranslationToggle } from './TranslationToggle';
 import { getLanguageName } from './flags';
-import { formatTimeRemaining } from '@/utils/time-remaining';
 
 // ============================================================================
 // Types
@@ -30,6 +30,14 @@ export interface StatusBarProps {
   userLanguage?: string;
   isLoading?: boolean;
   className?: string;
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+function getTimeRemaining(expiresAt: string): string {
+  return formatTimeRemaining(new Date(expiresAt).getTime(), Date.now()) ?? 'Expire';
 }
 
 // ============================================================================
@@ -107,7 +115,7 @@ function StatusPopover({ status, userLanguage, onClose }: StatusPopoverProps) {
     };
   }, [onClose]);
 
-  const timeRemaining = formatTimeRemaining(status.expiresAt) ?? 'Expire';
+  const timeRemaining = getTimeRemaining(status.expiresAt);
 
   return (
     <div

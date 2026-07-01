@@ -171,4 +171,45 @@ final class StoryRenderer_RenderTests: XCTestCase {
         XCTAssertEqual(drawingLayer?.contentsScale, 1.0,
                        "Drawing overlay must carry the caller-supplied contentsScale")
     }
+
+    // MARK: - renderBackground legacy routing (WS5.4 fix a)
+
+    /// A legacy slide carries its background only through `StorySlide.mediaURL`
+    /// (no `mediaObjects`). `renderBackground` MUST route that URL through the
+    /// `postMediaId` field so `StoryBackgroundLayer.configure` resolves it
+    /// directly via `directURLIfAny` (file:// / http(s)://) — the same path the
+    /// isBackground image branch uses for composer file URLs.
+    ///
+    /// Regression this locks: the branch historically passed `slide.id`, a
+    /// non-media key the resolver (keyed by `FeedMedia.id`) never matched, so
+    /// the legacy background rendered blank/black.
+    func test_renderBackground_legacyMediaURL_routesDirectURLNotSlideID() {
+        let url = "https://cdn.meeshy.me/story/legacy-bg.jpg"
+        let slide = StorySlide(id: "slide-1", mediaURL: url, effects: StoryEffects())
+
+        let kind = StoryRenderer.renderBackground(slide: slide, languages: [])
+
+        guard case let .image(postMediaId, _) = kind else {
+            return XCTFail("Legacy mediaURL background must resolve to .image, got \(kind)")
+        }
+        XCTAssertEqual(postMediaId, url,
+                       "Legacy background must route the direct URL so directURLIfAny can resolve it")
+        XCTAssertNotEqual(postMediaId, slide.id,
+                          "Regression guard: slide.id is a non-media key the resolver never matches")
+    }
+
+    /// Guard the fallback ordering: with neither `mediaObjects`, `mediaURL`, nor
+    /// an `effects.background` hex, the background is the opaque black solid — the
+    /// legacy-URL fix must not shadow this terminal case.
+    func test_renderBackground_noMediaNoHex_fallsBackToSolidBlack() {
+        let slide = StorySlide(id: "slide-empty", effects: StoryEffects())
+
+        let kind = StoryRenderer.renderBackground(slide: slide, languages: [])
+
+        guard case let .solidColor(color) = kind else {
+            return XCTFail("Empty background must resolve to .solidColor, got \(kind)")
+        }
+        XCTAssertEqual(color, .black,
+                       "Empty background terminal fallback must stay opaque black")
+    }
 }

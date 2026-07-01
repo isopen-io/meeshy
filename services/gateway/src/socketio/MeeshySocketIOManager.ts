@@ -104,6 +104,14 @@ export class MeeshySocketIOManager {
     return this.io;
   }
 
+  /// RC-4 — exposes the shared CallService instance so CallCleanupService's
+  /// heartbeat GC tier observes the same in-memory heartbeat/ringing-timeout
+  /// state that CallEventsHandler and AuthHandler write to, instead of an
+  /// unwired second instance that always looks empty.
+  getCallService(): CallService {
+    return this.callService;
+  }
+
   private prisma: PrismaClient;
   private translationService: MessageTranslationService;
   private maintenanceService: MaintenanceService;
@@ -179,13 +187,18 @@ export class MeeshySocketIOManager {
     this.notificationService = new NotificationService(prisma);
     this.mentionService = new MentionService(prisma);
     this.messagingService = new MessagingService(prisma, this.translationService, this.notificationService);
-    this.callEventsHandler = new CallEventsHandler(prisma);
+    // RC-4 — construct the shared CallService BEFORE CallEventsHandler so both
+    // it and AuthHandler observe the same in-memory ringingTimeouts/heartbeats/
+    // backgroundedParticipants maps (previously two independent instances,
+    // silently desyncing disconnect-cleanup from the ringing-timeout/heartbeat
+    // state actually being written by the socket handlers).
+    this.callService = new CallService(prisma);
+    this.callEventsHandler = new CallEventsHandler(prisma, this.callService);
     // P3 — let the call handler post the call-summary system message through
     // the canonical message broadcast path when a call ends.
     this.callEventsHandler.setMessageBroadcaster(
       (message, conversationId) => this.broadcastMessage(message as Message, conversationId)
     );
-    this.callService = new CallService(prisma);
 
     // CORRECTION: Configurer le callback de broadcast pour le MaintenanceService
     this.maintenanceService.setStatusBroadcastCallback(

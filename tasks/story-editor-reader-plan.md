@@ -45,7 +45,9 @@ WS1 (proportions) → WS5 (structure/Prisme) → WS3 (autoplay, +WS3.7) → WS4 
 - [x] WS5.1 Persister `originalLanguage` dans publish offline/queue (champ optionnel + threading + migrator + bootstrap)
 - [x] WS5.2 Payload Timeline publish = `[StorySlide]` (pas `TimelineProject`) → match unique décodeur
 - [x] WS5.3 Préserver type vidéo dans converters offline (sniff extension)
-- [ ] WS5.4 `toRenderableSlide` : garder bg statique quand `effects.resolvedBackgroundMedia == nil` — ⚠️ TENTÉ PUIS REVERTÉ (`b39a4c15f`, cassait le rendu) ; à reprendre proprement
+- [~] WS5.4 fond legacy — SPLIT en 2 :
+  - [x] **(a) SAFE** `StoryRenderer.renderBackground` : le fond legacy `slide.mediaURL` routait `slide.id` (clé non-média que le resolver `mediaList.first{ $0.id==postId }` ne matche jamais) → fond blanc/noir. Fix : router l'URL directe via `postMediaId` (résolue par `directURLIfAny` file://+http(s)://), miroir de la branche image `isBackground`. +2 tests SDK (`test_renderBackground_legacyMediaURL_routesDirectURLNotSlideID`, `_noMediaNoHex_fallsBackToSolidBlack`).
+  - [ ] **(b) DEFERRED** `toRenderableSlide` : promouvoir `media[0]` non-flaggé en bg statique quand `resolvedBackgroundMedia == nil` — ⚠️ cas produit-ambigu, cassait en NOIR (revert `b39a4c15f`) ; nécessite une règle produit pour ne pas masquer le fallback couleur unie.
 
 ## WS6 — Refactor < 1000 LOC (req 5) [MEDIUM, SDK, mécanique behavior-preserving]
 Cible : Canvas 3771→~700 · ComposerView 2566→~700 · ComposerVM 1788→~620. 26 fichiers (extensions même-type).

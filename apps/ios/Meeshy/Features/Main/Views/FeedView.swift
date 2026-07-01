@@ -1412,6 +1412,7 @@ struct FeedView: View {
                 showEmojiPicker = false
             }
             .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
         .sheet(item: $shareableLink) { link in
             // System share sheet — paste/AirDrop/Messages/etc. all receive the

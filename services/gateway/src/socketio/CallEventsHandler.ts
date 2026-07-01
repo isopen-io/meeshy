@@ -95,8 +95,13 @@ export class CallEventsHandler {
   private bufferedOffers = new Map<string, { signal: CallSignalEvent; bufferedAt: number }>();
   private static readonly OFFER_BUFFER_TTL_MS = 150_000;
 
-  constructor(private prisma: PrismaClient) {
-    this.callService = new CallService(prisma);
+  // RC-4 — accepts an externally-owned CallService so the socket manager,
+  // AuthHandler disconnect cleanup, and CallCleanupService's heartbeat GC
+  // all observe the same in-memory ringingTimeouts/heartbeats/
+  // backgroundedParticipants maps. Falls back to a private instance when
+  // omitted (unit tests construct this handler standalone).
+  constructor(private prisma: PrismaClient, callService?: CallService) {
+    this.callService = callService ?? new CallService(prisma);
     // Defensive TTL sweep: runs every 60s to evict stale offer entries whose
     // call ended via a path that skipped clearBufferedOffer (error branches,
     // GC teardown). Complements the inline sweep in bufferOffer which only
@@ -1685,10 +1690,13 @@ export class CallEventsHandler {
       } catch (error: any) {
         logger.error('❌ Socket: Error toggling audio', error);
 
-        socket.emit(CALL_EVENTS.ERROR, {
-          code: 'MEDIA_TOGGLE_FAILED',
-          message: 'Failed to toggle audio'
-        } as CallError);
+        const errorMessage = error.message || 'Failed to toggle audio';
+        const errorCode = errorMessage.split(':')[0];
+        const message = errorMessage.includes(':')
+          ? errorMessage.split(':').slice(1).join(':').trim()
+          : errorMessage;
+
+        socket.emit(CALL_EVENTS.ERROR, { code: errorCode, message } as CallError);
       }
     });
 
@@ -1778,10 +1786,13 @@ export class CallEventsHandler {
       } catch (error: any) {
         logger.error('❌ Socket: Error toggling video', error);
 
-        socket.emit(CALL_EVENTS.ERROR, {
-          code: 'MEDIA_TOGGLE_FAILED',
-          message: 'Failed to toggle video'
-        } as CallError);
+        const errorMessage = error.message || 'Failed to toggle video';
+        const errorCode = errorMessage.split(':')[0];
+        const message = errorMessage.includes(':')
+          ? errorMessage.split(':').slice(1).join(':').trim()
+          : errorMessage;
+
+        socket.emit(CALL_EVENTS.ERROR, { code: errorCode, message } as CallError);
       }
     });
 

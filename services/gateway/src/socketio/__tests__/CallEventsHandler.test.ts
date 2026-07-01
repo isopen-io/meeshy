@@ -1032,11 +1032,24 @@ describe('CallEventsHandler', () => {
       expect(io.to).toHaveBeenCalledWith(`call:${CALL_ID}`);
     });
 
-    it('emits error when updateParticipantMedia throws', async () => {
+    it('relays the real error code/message when updateParticipantMedia throws a coded error', async () => {
+      mockCallServiceUpdateParticipantMedia.mockRejectedValue(new Error('CALL_NOT_FOUND: Call session not found'));
+      const { socket } = setupWithSocket();
+      await socket._trigger('call:toggle-audio', validData);
+      expect(socket.emit).toHaveBeenCalledWith('call:error', {
+        code: 'CALL_NOT_FOUND',
+        message: 'Call session not found'
+      });
+    });
+
+    it('falls back to the raw message as both code and message for uncoded errors', async () => {
       mockCallServiceUpdateParticipantMedia.mockRejectedValue(new Error('update failed'));
       const { socket } = setupWithSocket();
       await socket._trigger('call:toggle-audio', validData);
-      expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({ code: 'MEDIA_TOGGLE_FAILED' }));
+      expect(socket.emit).toHaveBeenCalledWith('call:error', {
+        code: 'update failed',
+        message: 'update failed'
+      });
     });
   });
 
@@ -1062,11 +1075,24 @@ describe('CallEventsHandler', () => {
       expect(socket.to).toHaveBeenCalledWith(`call:${CALL_ID}`);
     });
 
-    it('emits error when updateParticipantMedia throws', async () => {
+    it('relays the real error code/message when updateParticipantMedia throws a coded error', async () => {
+      mockCallServiceUpdateParticipantMedia.mockRejectedValue(new Error('NOT_A_PARTICIPANT: You are not a participant in this conversation'));
+      const { socket } = setupWithSocket();
+      await socket._trigger('call:toggle-video', validData);
+      expect(socket.emit).toHaveBeenCalledWith('call:error', {
+        code: 'NOT_A_PARTICIPANT',
+        message: 'You are not a participant in this conversation'
+      });
+    });
+
+    it('falls back to the raw message as both code and message for uncoded errors', async () => {
       mockCallServiceUpdateParticipantMedia.mockRejectedValue(new Error('video fail'));
       const { socket } = setupWithSocket();
       await socket._trigger('call:toggle-video', validData);
-      expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({ code: 'MEDIA_TOGGLE_FAILED' }));
+      expect(socket.emit).toHaveBeenCalledWith('call:error', {
+        code: 'video fail',
+        message: 'video fail'
+      });
     });
   });
 

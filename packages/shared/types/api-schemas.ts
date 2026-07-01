@@ -877,7 +877,6 @@ export const conversationParticipantSchema = {
     lastName: { type: 'string', nullable: true, description: 'Last name' },
     displayName: { type: 'string', nullable: true, description: 'Display name' },
     avatar: { type: 'string', nullable: true, description: 'Avatar URL' },
-    email: { type: 'string', nullable: true, description: 'Email address' },
     role: {
       type: 'string',
       enum: ['USER', 'ADMIN', 'MODERATOR', 'BIGBOSS', 'AUDIT', 'ANALYST'],

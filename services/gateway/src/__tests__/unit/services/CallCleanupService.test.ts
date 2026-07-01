@@ -468,6 +468,36 @@ describe('CallCleanupService', () => {
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
+    it('heartbeat timeout: setCallService() after construction activates the tier (RC-4 wiring)', async () => {
+      // Mirrors production: server.ts constructs CallCleanupService before
+      // MeeshySocketIOManager exists, then wires the shared CallService in
+      // once the socket layer is up via setCallService().
+      const service = new CallCleanupService(prisma as any);
+      service.setCallService(callService as any);
+      const participant = { id: 'p-1', leftAt: null };
+      const activeCall = {
+        id: 'call-hb-late',
+        startedAt: new Date(Date.now() - 10_000),
+        conversationId: 'conv-hb-late',
+        participants: [participant]
+      };
+
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([]) // tier 1
+        .mockResolvedValueOnce([]) // tier 2
+        .mockResolvedValueOnce([]) // tier 3
+        .mockResolvedValueOnce([activeCall]); // heartbeat tier
+
+      callService.getStaleHeartbeats.mockReturnValue(['p-1']); // 1 stale >= 1 total
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-hb-late' });
+      setupTransactionPassthrough(prisma);
+
+      const result = await service.runCleanup();
+
+      expect(result.cleaned).toBe(1);
+      expect(callService.clearHeartbeats).toHaveBeenCalledWith('call-hb-late');
+    });
+
     it('skips heartbeat tier entirely when callService is not provided', async () => {
       // No callService — heartbeat check should be skipped
       const service = new CallCleanupService(prisma as any);
