@@ -194,6 +194,26 @@ export const SERVER_EVENTS = {
    * creation). Realtime-only signal — no persisted `Notification` row.
    */
   FRIEND_REQUEST_CANCELLED: 'friend-request:cancelled',
+  /**
+   * Emitted to the RECEIVER's user-room when `POST /friend-requests`
+   * creates a new pending request. Same rationale as `CONVERSATION_NEW`:
+   * replaces string-discrimination on `NOTIFICATION_NEW(type=friend_request)`
+   * with a typed, domain-specific event. The legacy `notification:new` is
+   * kept emitted in parallel for ~3 months so older clients keep working.
+   */
+  FRIEND_REQUEST_NEW: 'friend-request:new',
+  /**
+   * Emitted to the ORIGINAL SENDER's user-room when the receiver accepts
+   * via `PATCH /friend-requests/:id`. Typed counterpart of
+   * `NOTIFICATION_NEW(type=friend_accepted)`, emitted in parallel.
+   */
+  FRIEND_REQUEST_ACCEPTED: 'friend-request:accepted',
+  /**
+   * Emitted to the ORIGINAL SENDER's user-room when the receiver rejects
+   * via `PATCH /friend-requests/:id`. Typed counterpart of the legacy
+   * system notification, emitted in parallel.
+   */
+  FRIEND_REQUEST_REJECTED: 'friend-request:rejected',
   CONVERSATION_PARTICIPANT_LEFT: 'conversation:participant-left',
   CONVERSATION_PARTICIPANT_BANNED: 'conversation:participant-banned',
   /**
@@ -583,6 +603,35 @@ export interface ConversationNewEventData {
 export interface FriendRequestCancelledEventData {
   readonly friendRequestId: string;
   readonly cancelledBy: string; // userId de qui a déclenché la suppression
+}
+
+/**
+ * Payload de `FRIEND_REQUEST_NEW` — émis à l'user-room du DESTINATAIRE
+ * lors d'un `POST /friend-requests`.
+ */
+export interface FriendRequestNewEventData {
+  readonly friendRequestId: string;
+  readonly senderId: string;
+  readonly receiverId: string;
+}
+
+/**
+ * Payload de `FRIEND_REQUEST_ACCEPTED` — émis à l'user-room de l'EXPÉDITEUR
+ * original lors d'un `PATCH /friend-requests/:id` avec `status=accepted`.
+ */
+export interface FriendRequestAcceptedEventData {
+  readonly friendRequestId: string;
+  readonly accepterId: string;
+  readonly conversationId?: string;
+}
+
+/**
+ * Payload de `FRIEND_REQUEST_REJECTED` — émis à l'user-room de l'EXPÉDITEUR
+ * original lors d'un `PATCH /friend-requests/:id` avec `status=rejected`.
+ */
+export interface FriendRequestRejectedEventData {
+  readonly friendRequestId: string;
+  readonly rejecterId: string;
 }
 
 /**
@@ -1232,6 +1281,9 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CALL_ICE_SERVERS_REFRESHED]: (data: CallIceServersRefreshedEvent) => void;
   [SERVER_EVENTS.CONVERSATION_NEW]: (data: ConversationNewEventData) => void;
   [SERVER_EVENTS.FRIEND_REQUEST_CANCELLED]: (data: FriendRequestCancelledEventData) => void;
+  [SERVER_EVENTS.FRIEND_REQUEST_NEW]: (data: FriendRequestNewEventData) => void;
+  [SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED]: (data: FriendRequestAcceptedEventData) => void;
+  [SERVER_EVENTS.FRIEND_REQUEST_REJECTED]: (data: FriendRequestRejectedEventData) => void;
   [SERVER_EVENTS.READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
   [SERVER_EVENTS.MESSAGE_CONSUMED]: (data: MessageConsumedEventData) => void;
   [SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED]: (data: ParticipantRoleUpdatedEventData) => void;
