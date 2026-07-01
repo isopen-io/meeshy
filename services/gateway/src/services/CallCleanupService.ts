@@ -54,6 +54,16 @@ export class CallCleanupService {
     logger.info('[CallCleanupService] Socket.IO server attached — force-end events will be broadcast');
   }
 
+  // RC-4 — the socket layer's CallService (and the ringingTimeouts/heartbeats
+  // it owns) only exists once MeeshySocketIOManager is constructed, which
+  // happens after this service. Without this, `this.callService` stayed
+  // undefined for the process lifetime and tier 4 (stale-heartbeat GC,
+  // documented above) never ran at all.
+  setCallService(callService: CallService): void {
+    this.callService = callService;
+    logger.info('[CallCleanupService] CallService attached — heartbeat-timeout GC tier active');
+  }
+
   start(): void {
     if (this.cleanupInterval) {
       logger.warn('[CallCleanupService] Cleanup job already running');
