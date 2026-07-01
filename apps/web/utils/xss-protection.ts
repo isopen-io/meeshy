@@ -14,6 +14,8 @@
  * @version 1.0.0
  */
 
+import { isValidEmail as canonicalIsValidEmail } from '@meeshy/shared/utils/email-validator';
+
 // Server-side fallback: DOMPurify requires a window object
 // On the server, we'll use a simple regex-based sanitization
 const isBrowser = typeof window !== 'undefined';
@@ -281,14 +283,16 @@ export function truncateText(
 /**
  * Validate email address
  *
+ * Délègue à la source unique RFC 5322 `@meeshy/shared/utils/email-validator`
+ * (la même utilisée par les schémas Zod et les flux d'inscription) — pas de
+ * réimplémentation locale de la validation d'email.
+ *
  * @param email - Email string
  * @returns true if valid email format
  */
 export function isValidEmail(email: string | null | undefined): boolean {
   if (!email) return false;
-
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email) && email.length <= 254;
+  return canonicalIsValidEmail(email);
 }
 
 /**

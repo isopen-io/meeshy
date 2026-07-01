@@ -1537,7 +1537,7 @@ export class CallEventsHandler {
           // applied). The caller still gets success:false so its at-least-once
           // retry can also fire; the buffer is the backstop.
           if (data.signal.type === 'offer' || data.signal.type === 'ice-restart') {
-            this.bufferOffer(data.callId, data);
+            this.bufferOffer(data.callId, validation.data as CallSignalEvent);
             logger.info('📦 [CALL] Buffered offer for late (re)join', {
               callId: data.callId,
               to: data.signal.to,
@@ -1556,15 +1556,20 @@ export class CallEventsHandler {
           return;
         }
 
+        // Relay the Zod-validated payload (validation.data), not the raw
+        // client object — socketSignalSchema is a plain z.object() so
+        // schema.parse() strips any field not declared in it. Forwarding
+        // the unvalidated `data` would let a client smuggle arbitrary extra
+        // fields into the peer's signaling payload.
         for (const targetSocketId of targetSocketIds) {
-          io.to(targetSocketId).emit(CALL_EVENTS.SIGNAL, data);
+          io.to(targetSocketId).emit(CALL_EVENTS.SIGNAL, validation.data);
         }
 
         // §4.6 — also buffer successfully-relayed offers. The target may have
         // received it but then churn its socket before answering; the buffer
         // lets it recover on rejoin (epoch-guarded, last-write-wins).
         if (data.signal.type === 'offer' || data.signal.type === 'ice-restart') {
-          this.bufferOffer(data.callId, data);
+          this.bufferOffer(data.callId, validation.data as CallSignalEvent);
         }
 
         // Transition to active on first successful signal exchange
@@ -2086,6 +2091,19 @@ export class CallEventsHandler {
           return;
         }
 
+        // Defense-in-depth: confirm the caller is still an active participant
+        // of this call (not just that their socket is in the room — room
+        // membership and participant state could diverge if cleanup ever
+        // races) before minting fresh TURN credentials for them.
+        const iceParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        if (!iceParticipantId) {
+          socket.emit(CALL_EVENTS.ERROR, {
+            code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
+            message: 'Not a participant in this call'
+          } as CallError);
+          return;
+        }
+
         const iceServers = this.callService.generateIceServers(userId);
         const ttl = this.callService.getIceServerTtl();
         const refreshedEvent: CallIceServersRefreshedEvent = {
@@ -2119,12 +2137,19 @@ export class CallEventsHandler {
         const validation = validateSocketEvent(socketCallBackgroundedSchema, data);
         if (!validation.success) return;
 
+        // Resolve the caller's own participantId rather than trusting the
+        // client-supplied one — otherwise a participant could flag a peer's
+        // participantId as backgrounded and skew that peer's heartbeat
+        // tolerance / ringing delivery (socket vs VoIP push).
+        const backgroundedParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        if (!backgroundedParticipantId) return;
+
         socket.data.appForeground = false;
-        this.callService.recordParticipantBackgrounded(data.callId, data.participantId);
+        this.callService.recordParticipantBackgrounded(data.callId, backgroundedParticipantId);
 
         logger.debug('📞 Socket: call:backgrounded', {
           callId: data.callId,
-          participantId: data.participantId,
+          participantId: backgroundedParticipantId,
           userId,
         });
       } catch (error) {
@@ -2144,12 +2169,17 @@ export class CallEventsHandler {
         const validation = validateSocketEvent(socketCallForegroundedSchema, data);
         if (!validation.success) return;
 
+        // Same rationale as call:backgrounded — resolve the caller's own
+        // participantId instead of trusting the client-supplied one.
+        const foregroundedParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        if (!foregroundedParticipantId) return;
+
         socket.data.appForeground = true;
-        this.callService.clearParticipantBackgrounded(data.callId, data.participantId);
+        this.callService.clearParticipantBackgrounded(data.callId, foregroundedParticipantId);
 
         logger.debug('📞 Socket: call:foregrounded', {
           callId: data.callId,
-          participantId: data.participantId,
+          participantId: foregroundedParticipantId,
           userId,
         });
       } catch (error) {

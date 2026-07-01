@@ -569,7 +569,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       upload-then-publish outbox chain (SOTA follow-up).
 - [ ] Audio elements (≤5/slide): voice recording (60s), audio file import, on-canvas player widget
 - [ ] Freehand drawing layer (pen/marker/eraser, colour, width, undo/redo/clear)
-- [~] Emoji sticker picker — **on-canvas sticker elements done** (`story-sticker-elements`): a pure
+- [x] Emoji sticker picker — **categorised + searchable** (`story-sticker-picker-search`): a pure
+      `StickerCatalog` (8 iOS-parity categories — smileys/animals/food/activities/travel/objects/
+      symbols/flags, ~16 keyworded emojis each, every glyph in exactly one category) owns the emoji
+      data + a pure `search(query, category?)` (trim+lowercase substring over keywords or the glyph
+      itself; blank query ⇒ whole scope; result preserves catalogue order, duplicate-free). A pure
+      `StickerPickerState(category, query)` reducer encodes the product rule — a non-blank query
+      searches **across every category** (iOS parity) and hides the tab row, otherwise the active tab
+      shows; `withCategory`/`withQuery` are inert on no-op. The picker dialog becomes glue: a search
+      field + `FilterChip` tab row + filtered grid + empty-state. +22 tests. Replaces the old flat
+      `STORY_STICKER_EMOJIS` palette.
+- [x] Emoji sticker picker — **on-canvas sticker elements done** (`story-sticker-elements`): a pure
       `StoryStickerElement` (id/emoji/normalised x,y/scale/rotation) reusing [StoryTextElement]'s
       canvas-geometry clamps (the single source of truth) + a `toSticker()` gateway-wire mapper
       (`StoryEffects.stickerObjects`). The deck mirrors the text-element reducer per-slide
@@ -580,8 +590,8 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       add/select/deselect/move/transform/remove intents with selection mutually exclusive vs the
       text-element edit; a "Sticker" tile in the Contenu drawer opens an emoji-grid picker, and each
       on-canvas sticker is draggable / pinch-rotatable / removable (glue mirroring `TextElementLayer`).
-      +50 tests (15 model, 21 deck, 5 draft, ~12 VM). Pending: **categorised + searchable** picker (the
-      built-in palette is a flat curated set today).
+      +50 tests (15 model, 21 deck, 5 draft, ~12 VM). Categorised + searchable picker shipped above
+      (`story-sticker-picker-search`).
 - [ ] Backgrounds: random pastel, colour/gradient palette, image, looping/non-looping video
 - [x] 8 photo filters (vintage/bw/warm/cool/dramatic/vivid/fade/chrome) with intensity
       (`story-photo-filters`): the look of each preset lives in **one** pure, Compose-agnostic place —
@@ -762,7 +772,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] System call UI (Telecom/ConnectionService) + ringback tone
 - [ ] Incoming-call delivery via FCM data push when backgrounded/killed (full-screen intent)
 - [ ] Call reconnection on network change (ICE restart)
-- [ ] Call states: ringing/connecting/connected/ended; PiP / floating call pill
+- [~] Call states: ringing/connecting/connected/ended; PiP / floating call pill —
+      **pure call-lifecycle FSM landed** (`core:model` `me.meeshy.sdk.model.call`):
+      `CallState` (Idle/Ringing(isOutgoing)/Offering/Connecting/Connected/Reconnecting(attempt)/
+      Ended(reason)) + `CallEndReason` (Local/Remote/Rejected/Missed/ConnectionLost/Failed(msg)) +
+      `CallEvent` + total side-effect-free `CallStateMachine.reduce(state, event)` faithfully
+      mirroring iOS `CallManager`/`WebRTCTypes` transitions (incl. the 3-attempt reconnect budget →
+      `ConnectionLost`). SSOT the `:feature:calls` wiring will drive — surpasses iOS, where the FSM
+      validator is only a P1 todo. 31 behavioural tests. PiP/call-pill UI + the WebRTC plumbing pending.
+      **`:feature:calls` now consumes the FSM** (slice `calls-viewmodel-screen`): a UDF `CallViewModel`
+      (`StateFlow<CallUiState>`) folds accept/decline/hang-up/mute/camera intents + signalling events
+      through `CallStateMachine.reduce`, with a pure `CallPresenter` projecting `CallState × CallConfig ×
+      CallMedia → CallUiState` (status/answer/hang-up/media-toggle affordances, end-reason label,
+      reconnect attempt). A minimal accent-coherent Compose call screen renders ringing/connecting/
+      connected/ended and is reachable from **audio/video call buttons in the chat header** (iOS parity);
+      dismissal returns to chat. +34 behavioural tests. WebRTC/signalling plumbing still pending.
 - [ ] Live in-call transcription overlay (on-device speech-to-text, leader/follower)
 - [ ] In-call translation data channel (dual-stream clean audio)
 - [ ] In-call video filters (colour presets, low-light boost, background blur, skin smoothing)
