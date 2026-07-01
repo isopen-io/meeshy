@@ -115,20 +115,29 @@ single-threaded, pas d'`await` dans la boucle de sweep) ; le handler `call:trans
 un try/catch englobant tout le corps ; la validation SDP avant `setRemoteDescription` côté web n'est pas
 nécessaire (le navigateur valide déjà, le pattern perfect-negotiation polite/impolite est déjà implémenté).
 
-Dead code identifié (SOTA plan §Étape 7, jamais fait) — **supprimé 2026-07-01 (2e session du jour)** :
-cluster `CallEventQueue`/`MediaPipelineHook`/`CallMediaConfig` (Features/Main/Services/WebRTC) +
-`MeeshyAudioProcessingModule`, référencés uniquement par leurs propres tests unitaires, aucun call
-site en prod (`MeeshyAudioProcessingModule.audioProcessingProcess` — le seul point d'accroche possible
-sur le vrai flux audio WebRTC via `RTCAudioCustomProcessingDelegate` — est sous `#if false`, donc
-inatteignable même en théorie sans un build WebRTC custom). Vérifié par grep exhaustif des 4 noms de
-symboles (types/protocole/actor) sur tout `apps/ios` + `packages/` avant suppression : zéro référence
-hors du cluster et de ses propres tests. `project.yml` (XcodeGen) utilise un glob récursif sans liste de
-fichiers explicite → suppression sans risque de cassure de projet ; `project.pbxproj` reste
-volontairement non touché (artefact régénéré par CI via `xcodegen generate`, cf. `apps/ios/CLAUDE.md`).
+Dead code identifié (SOTA plan §Étape 7, jamais fait) — **supprimé 2026-07-01 (2e session du jour)**,
+puis **CORRIGÉ après échec CI** (`ios-tests` a échoué sur PR #1320 : `cannot find 'VideoConfig' in scope`
+dans `P2PWebRTCClient.swift:1261-1263`, `selectFormat(for:)`). Cause : `CallMediaConfig.swift` déclare
+`VideoConfig`/`AudioConfig`/`DataChannelConfig`/`CodecPreferences`, et **`VideoConfig.hd720p30` est
+réellement utilisé en prod** (ceiling résolution/framerate caméra) — ce fichier N'ÉTAIT PAS mort,
+contrairement à `CallEventQueue`/`MediaPipelineHook`/`MeeshyAudioProcessingModule` qui le sont réellement
+(vérifié à nouveau, zéro référence prod). Le grep initial de vérification pré-suppression a raté cet
+usage : la commande Bash `grep -n "..." P2PWebRTCClient.swift | head -30` a tronqué le résultat via son
+propre `| head -30` avant d'atteindre la ligne 1261 (~30 correspondances antérieures sur
+`setCodecPreferences`/`applyAudioCodecPreferences`, homonymes non liés, avant la vraie occurrence de
+`VideoConfig`) — outil `Grep` dédié (head_limit par défaut 250, pas de troncature silencieuse) aurait
+évité l'erreur. **Leçon** : ne jamais grep en Bash brut + `| head -N` pour une vérification "zéro
+référence" avant suppression ; toujours `Grep` (files_with_matches d'abord, puis content avec
+`head_limit: 0`) sur l'intégralité de l'arbre. Fix : `CallMediaConfig.swift` +
+`CallMediaConfigTests.swift` restaurés à l'identique (diff vide vs avant suppression) ; `CallEventQueue`/
+`MediaPipelineHook`/`MeeshyAudioProcessingModule` + leurs tests restent supprimés (confirmés morts par
+cette même re-vérification exhaustive). `project.yml` (XcodeGen) utilise un glob récursif sans liste de
+fichiers explicite → l'ajout comme la suppression sont sans risque de cassure de projet ; `project.pbxproj`
+reste volontairement non touché (artefact régénéré par CI via `xcodegen generate`, cf. `apps/ios/CLAUDE.md`).
 Cet environnement (conteneur Linux, toujours pas de Swift/Xcode/xcodegen) ne peut toujours pas compiler
-ni faire tourner XCTest — la suppression de fichiers non référencés est sûre sans compilateur (pas de
-forward-declaration en Swift), mais **`./apps/ios/meeshy.sh test` reste à faire par un humain/CI avec
-accès macOS avant de considérer ce point définitivement clos.**
+localement — c'est précisément pourquoi le garde-fou CI (`ios-tests`) existe et a été laissé faire son
+travail : **`./apps/ios/meeshy.sh test` / CI verte reste la seule preuve définitive**, obtenue ici via la
+CI GitHub Actions elle-même (macOS runner) plutôt qu'en local.
 ## Review (2026-07-01 — session audit calling feature)
 Audit complet du pipeline appels (iOS CallManager/P2PWebRTCClient, gateway CallEventsHandler/CallService,
 web webrtc-service). Un agent d'exploration dédié a proposé 5 pistes de bugs (leak NotificationCenter,
