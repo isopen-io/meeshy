@@ -58,6 +58,124 @@ export class PresenceVisibilityService {
     });
   }
 
+  /**
+   * Version batchée pour les listes (/users/presence, search). ~6 requêtes
+   * groupées pour N cibles au lieu de N×4.
+   */
+  async resolveForTargets(
+    viewer: PresenceViewer,
+    ids: string[],
+    opts?: ResolvePresenceOptions,
+  ): Promise<Map<string, PresenceVisibility>> {
+    const result = new Map<string, PresenceVisibility>();
+    const uniqueIds = [...new Set(ids)];
+    if (uniqueIds.length === 0) return result;
+
+    if (viewer && isGlobalModerator(viewer.role)) {
+      for (const id of uniqueIds) result.set(id, FULL);
+      return result;
+    }
+
+    const targetRows = await this.prisma.user.findMany({
+      where: { id: { in: uniqueIds } },
+      select: { id: true, deactivatedAt: true },
+    });
+    const deactivated = new Set(
+      targetRows.filter((r: { deactivatedAt: Date | null }) => r.deactivatedAt != null).map((r: { id: string }) => r.id),
+    );
+
+    if (!viewer) {
+      for (const id of uniqueIds) result.set(id, HIDDEN);
+      return result;
+    }
+    const viewerId = viewer.userId;
+
+    const [blockedByTargets, viewerRow] = await Promise.all([
+      this.prisma.user.findMany({
+        where: { id: { in: uniqueIds }, blockedUserIds: { has: viewerId } },
+        select: { id: true },
+      }),
+      this.prisma.user.findUnique({ where: { id: viewerId }, select: { blockedUserIds: true } }),
+    ]);
+    const blocked = new Set(blockedByTargets.map((r: { id: string }) => r.id));
+    for (const bid of (viewerRow?.blockedUserIds ?? []) as string[]) {
+      if (uniqueIds.includes(bid)) blocked.add(bid);
+    }
+
+    const [friends, affiliates] = await Promise.all([
+      this.prisma.friendRequest.findMany({
+        where: {
+          status: 'accepted',
+          OR: [
+            { senderId: viewerId, receiverId: { in: uniqueIds } },
+            { senderId: { in: uniqueIds }, receiverId: viewerId },
+          ],
+        },
+        select: { senderId: true, receiverId: true },
+      }),
+      this.prisma.affiliateRelation.findMany({
+        where: {
+          status: 'completed',
+          OR: [
+            { affiliateUserId: viewerId, referredUserId: { in: uniqueIds } },
+            { affiliateUserId: { in: uniqueIds }, referredUserId: viewerId },
+          ],
+        },
+        select: { affiliateUserId: true, referredUserId: true },
+      }),
+    ]);
+    const connected = new Set<string>();
+    for (const f of friends as Array<{ senderId: string; receiverId: string }>) {
+      connected.add(f.senderId === viewerId ? f.receiverId : f.senderId);
+    }
+    for (const a of affiliates as Array<{ affiliateUserId: string; referredUserId: string }>) {
+      connected.add(a.affiliateUserId === viewerId ? a.referredUserId : a.affiliateUserId);
+    }
+
+    let sharesConvo = new Set<string>();
+    if (opts?.allowConversationContext) {
+      const viewerConversations = await this.prisma.participant.findMany({
+        where: { userId: viewerId, isActive: true },
+        select: { conversationId: true },
+      });
+      if (viewerConversations.length > 0) {
+        const coParticipants = await this.prisma.participant.findMany({
+          where: {
+            userId: { in: uniqueIds },
+            isActive: true,
+            conversationId: { in: viewerConversations.map((c: { conversationId: string }) => c.conversationId) },
+          },
+          select: { userId: true },
+        });
+        sharesConvo = new Set(
+          coParticipants.map((p: { userId: string | null }) => p.userId).filter((u: string | null): u is string => !!u),
+        );
+      }
+    }
+
+    const prefsMap = await this.privacy.getPreferencesForUsers(
+      uniqueIds.map((id) => ({ id, isAnonymous: false })),
+    );
+
+    for (const id of uniqueIds) {
+      const prefs = prefsMap.get(id);
+      result.set(
+        id,
+        resolvePresenceVisibility({
+          isSelf: id === viewerId,
+          viewerRole: viewer.role,
+          areConnected: connected.has(id),
+          sharesConversation: sharesConvo.has(id),
+          targetShowOnlineStatus: prefs?.showOnlineStatus ?? true,
+          targetShowLastSeen: prefs?.showLastSeen ?? true,
+          targetIsDeactivated: deactivated.has(id),
+          isBlockedEitherWay: blocked.has(id),
+        }),
+      );
+    }
+    return result;
+  }
+
   private async isBlockedEitherWay(a: string, b: string): Promise<boolean> {
     const row = await this.prisma.user.findFirst({
       where: {

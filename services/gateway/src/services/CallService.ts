@@ -1245,46 +1245,6 @@ export class CallService {
   }
 
   /**
-   * Marquer un appel comme rejeté
-   * À appeler quand un participant rejette l'appel
-   */
-  async markCallAsRejected(callId: string): Promise<CallSessionWithParticipants> {
-    logger.info('📞 Marking call as rejected', { callId });
-
-    const callSession = await this.prisma.callSession.findUnique({
-      where: { id: callId },
-      include: {
-        participants: true
-      }
-    });
-
-    if (!callSession) {
-      logger.error('❌ Call session not found', { callId });
-      throw new Error(`${CALL_ERROR_CODES.CALL_NOT_FOUND}: Call session not found`);
-    }
-
-    // Mettre à jour le statut de l'appel
-    const now = new Date();
-    const duration = Math.floor((now.getTime() - callSession.startedAt.getTime()) / 1000);
-
-    await this.prisma.callSession.update({
-      where: { id: callId },
-      data: {
-        status: CallStatus.rejected,
-        endedAt: now,
-        duration,
-        endReason: CallEndReason.rejected
-      }
-    });
-
-    this.clearHeartbeats(callId);
-
-    logger.info('Call marked as rejected', { callId, duration });
-
-    return this.getCallSession(callId);
-  }
-
-  /**
    * Récupérer les participants d'un appel qui n'ont pas rejoint
    */
   async getUnrespondedParticipants(callId: string): Promise<string[]> {

@@ -774,6 +774,34 @@ describe('MessageReadStatusService', () => {
       expect(result.notSeenCount).toBe(0);
     });
 
+    // Regression: the `notSeenBy` list must resolve avatars with the SAME rule as
+    // `receivedBy`/`readBy` — participant-local avatar first, then the linked user
+    // avatar. A participant with only a local avatar (no `user.avatar`) was showing
+    // `null` in `notSeenBy` while showing its photo in the other lists for the SAME
+    // message. Source of truth: resolveParticipantAvatar (@meeshy/shared).
+    it('should resolve the participant-local avatar in notSeenBy, consistent with the other lists', async () => {
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: testMessageId,
+        createdAt: new Date('2025-01-01T10:00:00Z'),
+        senderId: testParticipantId,
+        anonymousSenderId: null,
+        conversationId: testConversationId,
+      });
+      // User2 has a local participant avatar but no linked user avatar, and has not
+      // seen the message (no cursor, not the sender) → lands in notSeenBy.
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: testParticipantId, displayName: 'User1', avatar: null, user: null },
+        { id: testParticipantId2, displayName: 'User2', avatar: 'local.jpg', user: null },
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+
+      expect(result.notSeenBy).toHaveLength(1);
+      expect(result.notSeenBy[0].participantId).toBe(testParticipantId2);
+      expect(result.notSeenBy[0].avatarURL).toBe('local.jpg');
+    });
+
     it('should expose per-participant media consumption positions for the message attachments', async () => {
       const messageCreatedAt = new Date('2025-01-01T10:00:00Z');
       mockPrisma.message.findUnique.mockResolvedValue({
@@ -2391,28 +2419,28 @@ describe('MessageReadStatusService', () => {
   });
 
   describe('getUnreadCountsForParticipants', () => {
-    // Candidate messages (createdAt) from the single `message.findMany`. Helper keeps the
-    // tests focused on the per-participant bucketing rather than Prisma plumbing.
-    const mockCandidates = (isoDates: string[]) =>
+    // Candidate messages from the single `message.findMany`. Each row carries createdAt +
+    // senderId so the service can exclude each participant's OWN messages (senderId ≠ p.id).
+    const mockCandidates = (rows: ReadonlyArray<{ at: string; from: string }>) =>
       mockPrisma.message.findMany.mockResolvedValue(
-        isoDates.map((iso) => ({ createdAt: new Date(iso) }))
+        rows.map((r) => ({ createdAt: new Date(r.at), senderId: r.from }))
       );
 
     it('returns empty map for empty participants array', async () => {
-      const result = await service.getUnreadCountsForParticipants([], testConversationId, 'sender-1');
+      const result = await service.getUnreadCountsForParticipants([], testConversationId);
       expect(result).toEqual(new Map());
       expect(mockPrisma.conversationReadCursor.findMany).not.toHaveBeenCalled();
     });
 
     it('collapses N counts into ONE message.findMany and buckets per participant', async () => {
-      // p1 floor = 10:00 (cursor) → 2 candidates strictly after (11:00, 12:00)
-      // p2 floor = 11:30 (joinedAt, no cursor) → 1 candidate strictly after (12:00)
+      // p1 floor = 10:00 (cursor) → 2 candidates strictly after (11:00, 12:00) from others
+      // p2 floor = 11:30 (joinedAt, no cursor) → 1 candidate strictly after (12:00) from others
       mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
         { participantId: 'p1', lastReadAt: new Date('2024-01-01T10:00:00Z') },
       ]);
       mockCandidates([
-        '2024-01-01T11:00:00Z',
-        '2024-01-01T12:00:00Z',
+        { at: '2024-01-01T11:00:00Z', from: 'other' },
+        { at: '2024-01-01T12:00:00Z', from: 'other' },
       ]);
 
       const participants = [
@@ -2421,7 +2449,7 @@ describe('MessageReadStatusService', () => {
       ];
 
       const result = await service.getUnreadCountsForParticipants(
-        participants, testConversationId, 'sender-x'
+        participants, testConversationId
       );
 
       // Distinct floors → distinct counts, from a SINGLE candidate fetch
@@ -2431,7 +2459,28 @@ describe('MessageReadStatusService', () => {
       expect(mockPrisma.message.count).not.toHaveBeenCalled();
     });
 
-    it('uses the oldest floor as the findMany lower bound', async () => {
+    it("excludes each participant's OWN messages, counting everyone else's (incl. the message sender)", async () => {
+      // Two messages above floor: one Alice sent, one p1 sent themselves.
+      // For p1: only Alice's counts (own message excluded). For p2: both count.
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+      mockCandidates([
+        { at: '2024-01-01T11:00:00Z', from: 'alice' },
+        { at: '2024-01-01T12:00:00Z', from: 'p1' },
+      ]);
+
+      const result = await service.getUnreadCountsForParticipants(
+        [
+          { id: 'p1', joinedAt: new Date('2024-01-01T10:00:00Z') },
+          { id: 'p2', joinedAt: new Date('2024-01-01T10:00:00Z') },
+        ],
+        testConversationId
+      );
+
+      expect(result.get('p1')).toBe(1); // alice's only — p1's own message excluded
+      expect(result.get('p2')).toBe(2); // both — neither was sent by p2
+    });
+
+    it('does NOT filter by senderId in the query (own-message cut is in memory)', async () => {
       mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
         { participantId: 'p1', lastReadAt: new Date('2024-01-01T10:00:00Z') },
         { participantId: 'p2', lastReadAt: new Date('2024-01-01T08:00:00Z') },
@@ -2443,14 +2492,13 @@ describe('MessageReadStatusService', () => {
           { id: 'p1', joinedAt: null },
           { id: 'p2', joinedAt: null },
         ],
-        testConversationId,
-        'sender-x'
+        testConversationId
       );
 
       const where = mockPrisma.message.findMany.mock.calls[0][0].where;
       expect(where.conversationId).toBe(testConversationId);
       expect(where.deletedAt).toBeNull();
-      expect(where.senderId).toEqual({ not: 'sender-x' });
+      expect(where.senderId).toBeUndefined();
       // Oldest floor (08:00) bounds the fetch — everything any participant could count
       expect(where.createdAt).toEqual({ gt: new Date('2024-01-01T08:00:00Z') });
     });
@@ -2460,9 +2508,9 @@ describe('MessageReadStatusService', () => {
         { participantId: 'p1', lastReadAt: new Date('2024-01-01T10:00:00Z') },
       ]);
       mockCandidates([
-        '2024-01-01T09:00:00Z',
-        '2024-01-01T11:00:00Z',
-        '2024-01-01T12:00:00Z',
+        { at: '2024-01-01T09:00:00Z', from: 'other' },
+        { at: '2024-01-01T11:00:00Z', from: 'other' },
+        { at: '2024-01-01T12:00:00Z', from: 'other' },
       ]);
 
       const result = await service.getUnreadCountsForParticipants(
@@ -2470,8 +2518,7 @@ describe('MessageReadStatusService', () => {
           { id: 'p1', joinedAt: new Date('2024-01-01T10:00:00Z') },
           { id: 'p2', joinedAt: null }, // no cursor, no joinedAt → unbounded
         ],
-        testConversationId,
-        'sender-x'
+        testConversationId
       );
 
       // Unbounded participant: full fetch, no createdAt bound on the query
@@ -2486,14 +2533,13 @@ describe('MessageReadStatusService', () => {
         { participantId: 'p1', lastReadAt: new Date('2024-01-01T10:00:00Z') },
       ]);
       mockCandidates([
-        '2024-01-01T10:00:00Z', // exactly at floor → excluded
-        '2024-01-01T10:00:01Z', // after floor → counted
+        { at: '2024-01-01T10:00:00Z', from: 'other' }, // exactly at floor → excluded
+        { at: '2024-01-01T10:00:01Z', from: 'other' }, // after floor → counted
       ]);
 
       const result = await service.getUnreadCountsForParticipants(
         [{ id: 'p1', joinedAt: null }],
-        testConversationId,
-        'sender-x'
+        testConversationId
       );
 
       expect(result.get('p1')).toBe(1);
@@ -2504,14 +2550,13 @@ describe('MessageReadStatusService', () => {
         { participantId: 'p1', lastReadAt: new Date('2024-01-01T23:00:00Z') },
       ]);
       mockCandidates([
-        '2024-01-01T11:00:00Z',
-        '2024-01-01T12:00:00Z',
+        { at: '2024-01-01T11:00:00Z', from: 'other' },
+        { at: '2024-01-01T12:00:00Z', from: 'other' },
       ]);
 
       const result = await service.getUnreadCountsForParticipants(
         [{ id: 'p1', joinedAt: null }],
-        testConversationId,
-        'sender-x'
+        testConversationId
       );
 
       expect(result.get('p1')).toBe(0);
@@ -2522,7 +2567,7 @@ describe('MessageReadStatusService', () => {
       const participants = [{ id: 'p1', joinedAt: null }];
 
       const result = await service.getUnreadCountsForParticipants(
-        participants, testConversationId, 'sender-x'
+        participants, testConversationId
       );
 
       expect(result.get('p1')).toBe(0);

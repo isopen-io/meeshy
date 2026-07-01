@@ -29,11 +29,10 @@ jest.mock('../../../../utils/logger-enhanced.js', () => ({
 
 jest.mock('../../../../middleware/auth', () => ({
   authUserCacheKey: jest.fn((id: string) => `auth:user:${id}`),
-  // presence-gate.ts's getOptionalAuth() calls this at route-registration
-  // time; GET /u/:username and GET /users/:id wire its result in as
-  // preValidation. A no-op hook is enough — these tests don't assert on
-  // presence-gated fields (isOnline/lastActiveAt), only on profile shape.
-  createUnifiedAuthMiddleware: jest.fn(() => jest.fn(async () => {})),
+  // getOptionalAuth (presence-gate.ts) calls this at route-registration time
+  // for the dedicated email/id/phone lookups — a no-op preValidation hook is
+  // enough since these tests don't exercise presence-gating itself.
+  createUnifiedAuthMiddleware: jest.fn(() => async () => {}),
 }));
 
 jest.mock('../../../../services/CacheStore', () => ({

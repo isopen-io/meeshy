@@ -519,11 +519,32 @@ export class MeeshySocketIOManager {
    * Permet au client de seed son store sans attendre qu'un changement d'état arrive
    * (closes la faille "ne se met jamais à jour" sur les contacts déjà connectés).
    */
+  /**
+   * Masque la présence des contacts selon leurs préférences privacy (cascade
+   * showOnlineStatus maître + showLastSeen). Anonymes → défaut (montrés).
+   * Appliqué à l'émission (pas au cache) pour couvrir aussi le cache-hit.
+   */
+  private async _applyPresencePrefs(
+    users: { userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }[],
+  ): Promise<{ userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }[]> {
+    if (users.length === 0) return users;
+    const prefsMap = await this.privacyPreferencesService.getPreferencesForUsers(
+      users.map(u => ({ id: u.userId, isAnonymous: false })),
+    );
+    return users.map(u => {
+      const p = prefsMap.get(u.userId);
+      if (p && !p.showOnlineStatus) return { ...u, isOnline: false, lastActiveAt: null };
+      return { ...u, lastActiveAt: p && !p.showLastSeen ? null : u.lastActiveAt };
+    });
+  }
+
   private async _emitPresenceSnapshot(socket: Socket, userId: string, isAnonymous: boolean): Promise<void> {
     try {
       const cached = this.presenceSnapshotCache.get(userId);
       if (cached && Date.now() - cached.cachedAt < this.PRESENCE_SNAPSHOT_CACHE_TTL_MS) {
-        const users = cached.users.map(u => ({ ...u, isOnline: this.connectedUsers.has(u.userId) }));
+        const users = await this._applyPresencePrefs(
+          cached.users.map(u => ({ ...u, isOnline: this.connectedUsers.has(u.userId) })),
+        );
         socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users });
         logger.info(`📸 [PRESENCE_SNAPSHOT] ${users.length} contacts (cache) sent to ${userId}`);
       } else {
@@ -577,7 +598,7 @@ export class MeeshySocketIOManager {
           }
 
           this.presenceSnapshotCache.set(userId, { users, cachedAt: Date.now() });
-          socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users });
+          socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users: await this._applyPresencePrefs(users) });
           logger.info(`📸 [PRESENCE_SNAPSHOT] ${users.length} contacts sent to ${userId} (${users.filter(u => u.isOnline).length} online)`);
         }
       }
@@ -1799,7 +1820,7 @@ export class MeeshySocketIOManager {
           // Calculer le unreadCount pour tous les participants en batch (1 query au lieu de N)
           const readStatusService = this.readStatusService;
 
-          const unreadCountMap = await readStatusService.getUnreadCountsForParticipants(participants, normalizedId, senderId);
+          const unreadCountMap = await readStatusService.getUnreadCountsForParticipants(participants, normalizedId);
 
           const connectedUserIds = new Set(this.getConnectedUsers());
 

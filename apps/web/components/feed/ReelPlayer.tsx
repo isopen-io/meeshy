@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Post } from '@meeshy/shared/types/post';
 import { useI18n } from '@/hooks/use-i18n';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { getInitials } from '@/utils/initials';
 import {
   X,
   Heart,
@@ -21,12 +22,6 @@ import {
 
 function authorName(post: Post): string {
   return post.author?.displayName ?? post.author?.username ?? 'Meeshy';
-}
-
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (!parts.length) return '?';
-  return (parts[0][0] + (parts[1]?.[0] ?? '')).toUpperCase();
 }
 
 /**
@@ -326,7 +321,7 @@ export function ReelPlayer({
           <div className="flex items-center gap-3">
             <Avatar className="h-10 w-10 ring-2 ring-white/50">
               {reel.author?.avatar ? <AvatarImage src={reel.author.avatar} alt="" /> : null}
-              <AvatarFallback className="bg-indigo-600">{initials(name)}</AvatarFallback>
+              <AvatarFallback className="bg-indigo-600">{getInitials(name)}</AvatarFallback>
             </Avatar>
             <span className="font-semibold text-lg drop-shadow-sm">{name}</span>
           </div>

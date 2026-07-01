@@ -186,7 +186,21 @@ export const SERVER_EVENTS = {
   CONVERSATION_NEW: 'conversation:new',
   CONVERSATION_PARTICIPANT_LEFT: 'conversation:participant-left',
   CONVERSATION_PARTICIPANT_BANNED: 'conversation:participant-banned',
+  /**
+   * GLOBAL soft-delete by the creator/an admin (`DELETE /conversations/:id`):
+   * `Conversation.isActive` is set to `false` (with `closedAt`/`closedBy`)
+   * and the conversation disappears from every member's list. Broadcast to
+   * the **conversation room** (`ROOMS.conversation`) so all members react —
+   * contrast with `CONVERSATION_DELETED` below.
+   */
   CONVERSATION_CLOSED: 'conversation:closed',
+  /**
+   * PER-USER "delete for me" (`DELETE /conversations/:id/delete-for-me`):
+   * removes the conversation from the caller's own device list only — the
+   * conversation stays active for every other participant. Broadcast to the
+   * caller's **user room** (`ROOMS.user`) only, so their other devices stay
+   * in sync — contrast with `CONVERSATION_CLOSED` above.
+   */
   CONVERSATION_DELETED: 'conversation:deleted',
   CONVERSATION_PARTICIPANT_UNBANNED: 'conversation:participant-unbanned',
   ATTACHMENT_STATUS_UPDATED: 'attachment-status:updated',

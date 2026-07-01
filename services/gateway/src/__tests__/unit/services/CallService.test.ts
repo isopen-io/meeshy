@@ -1099,46 +1099,6 @@ describe('CallService', () => {
     });
   });
 
-  describe('markCallAsRejected', () => {
-    it('should mark call as rejected', async () => {
-      const callSession = createMockCallSession({
-        status: CallStatus.initiated,
-        participants: [createMockParticipant()]
-      });
-      const rejectedCall = {
-        ...callSession,
-        status: CallStatus.rejected,
-        endedAt: new Date(),
-        participants: [createMockParticipant({ user: createMockUser() })],
-        initiator: createMockUser(),
-        conversation: createMockConversation()
-      };
-
-      mockPrisma.callSession.findUnique.mockResolvedValueOnce(callSession);
-      mockPrisma.callSession.update.mockResolvedValue(rejectedCall);
-      mockPrisma.callSession.findUnique.mockResolvedValueOnce(rejectedCall);
-
-      const result = await callService.markCallAsRejected('call-123');
-
-      expect(result.status).toBe(CallStatus.rejected);
-      expect(mockPrisma.callSession.update).toHaveBeenCalledWith({
-        where: { id: 'call-123' },
-        data: expect.objectContaining({
-          status: CallStatus.rejected,
-          endReason: 'rejected'
-        })
-      });
-    });
-
-    it('should throw error when call not found', async () => {
-      mockPrisma.callSession.findUnique.mockResolvedValue(null);
-
-      await expect(callService.markCallAsRejected('invalid-call')).rejects.toThrow(
-        'CALL_NOT_FOUND: Call session not found'
-      );
-    });
-  });
-
   describe('getUnrespondedParticipants', () => {
     it('should return users who have not joined the call', async () => {
       const callSession = createMockCallSession({

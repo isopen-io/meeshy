@@ -95,10 +95,18 @@ const REQUEST_DATA = { callId: CALL_ID };
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makePrisma() {
+function makePrisma({ isActiveParticipant = false }: { isActiveParticipant?: boolean } = {}) {
   return {
-    callSession: { findUnique: jest.fn<any>().mockResolvedValue(null) },
-    participant: { findFirst: jest.fn<any>().mockResolvedValue(null) },
+    callSession: {
+      findUnique: jest.fn<any>().mockResolvedValue(
+        isActiveParticipant ? { conversationId: 'conversation-id-1' } : null
+      ),
+    },
+    participant: {
+      findFirst: jest.fn<any>().mockResolvedValue(
+        isActiveParticipant ? { id: 'participant-id-1' } : null
+      ),
+    },
   } as unknown as PrismaClient;
 }
 
@@ -154,7 +162,7 @@ describe('CallEventsHandler — call:request-ice-servers handler', () => {
     let directEmit: jest.MockedFunction<any>;
 
     beforeEach(async () => {
-      const prisma = makePrisma();
+      const prisma = makePrisma({ isActiveParticipant: true });
       const { socket, handlers, directEmit: emit } = makeSocket({ inCallRoom: true });
       directEmit = emit;
       const { io } = makeIo();
@@ -196,6 +204,36 @@ describe('CallEventsHandler — call:request-ice-servers handler', () => {
         ([event]) => event === CALL_EVENTS.ERROR
       );
       expect(errorEmits).toHaveLength(0);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Defense-in-depth: in room but not an active participant
+  // -------------------------------------------------------------------------
+
+  describe('stale-room guard: socket is in the call room but DB has no active participant', () => {
+    let directEmit: jest.MockedFunction<any>;
+
+    beforeEach(async () => {
+      const prisma = makePrisma({ isActiveParticipant: false });
+      const { socket, handlers, directEmit: emit } = makeSocket({ inCallRoom: true });
+      directEmit = emit;
+      const { io } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io as any, () => USER_ID);
+      await handlers[CALL_EVENTS.REQUEST_ICE_SERVERS](REQUEST_DATA);
+    });
+
+    it('emits NOT_A_PARTICIPANT error even though the socket is in the room', () => {
+      expect(directEmit).toHaveBeenCalledWith(
+        CALL_EVENTS.ERROR,
+        expect.objectContaining({ code: CALL_ERROR_CODES.NOT_A_PARTICIPANT })
+      );
+    });
+
+    it('does not call generateIceServers when the caller is not an active participant', () => {
+      expect(mockGenerateIceServers).not.toHaveBeenCalled();
     });
   });
 

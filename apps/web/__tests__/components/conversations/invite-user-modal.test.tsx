@@ -54,15 +54,6 @@ jest.mock('sonner', () => ({
   },
 }));
 
-// Mock utils
-jest.mock('@/utils/user', () => ({
-  getUserInitials: (user: any) => {
-    if (user.displayName) return user.displayName.charAt(0);
-    if (user.firstName) return user.firstName.charAt(0);
-    return user.username?.charAt(0) || '?';
-  },
-}));
-
 // Mock UI components
 jest.mock('@/components/ui/dialog', () => ({
   Dialog: ({ children, open }: { children: React.ReactNode; open: boolean }) => (
@@ -496,6 +487,7 @@ describe('InviteUserModal', () => {
       // aria-disabled — toBeDisabled() only honors the `disabled` attribute on form
       // elements and does not apply to this ARIA widget pattern.
       expect(selectedButton).toHaveAttribute('aria-disabled', 'true');
+      expect(selectedButton).toHaveAttribute('tabindex', '-1');
     });
 
     it('gives the selection remove button an accessible name identifying the user', async () => {

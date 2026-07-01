@@ -319,7 +319,10 @@ describe('CallEventsHandler', () => {
     jest.clearAllMocks();
     mockGetSocketRateLimiter.mockReturnValue({});
     mockCheckSocketRateLimit.mockResolvedValue(true);
-    mockValidateSocketEvent.mockReturnValue({ success: true });
+    // Echo the input back as `data`, mirroring the real validateSocketEvent
+    // (Zod's schema.parse() on success) — handlers that forward the
+    // validated payload (e.g. call:signal relay) depend on this shape.
+    mockValidateSocketEvent.mockImplementation((_schema: unknown, data: unknown) => ({ success: true, data }));
     mockCallServiceGenerateIceServers.mockReturnValue([{ urls: 'stun:stun.l.google.com:19302' }]);
     mockCallServiceUpdateCallStatus.mockResolvedValue({});
     mockCallServiceMarkCallAsMissed.mockResolvedValue({});
@@ -967,6 +970,35 @@ describe('CallEventsHandler', () => {
       expect(io._roomEmit).toHaveBeenCalledWith('call:signal', answerSignal);
       expect(ack).toHaveBeenCalledWith({ success: true });
       expect(mockCallServiceClearRingingTimeout).toHaveBeenCalledWith(CALL_ID);
+    });
+
+    it('relays only the schema-validated payload, stripping unknown client-supplied fields', async () => {
+      const senderPart = makeParticipant({ participant: { userId: USER_ID, user: {} } });
+      const targetPart = makeParticipant({ id: 'target-part', participantId: 'target-user-id', participant: { userId: 'target-user-id', user: {} } });
+      mockCallServiceGetCallSession.mockResolvedValue(makeCallSession({ participants: [senderPart, targetPart] }));
+
+      // The real validateSocketEvent (Zod schema.parse()) strips fields not
+      // declared on socketSignalSchema. Simulate that here, since the global
+      // mock otherwise just echoes the raw input back.
+      const sanitizedSignal = { callId: CALL_ID, signal: { type: 'answer', from: USER_ID, to: 'target-user-id' } };
+      mockValidateSocketEvent.mockReturnValue({ success: true, data: sanitizedSignal });
+
+      const targetSocket = { id: 'target-socket', emit: jest.fn() };
+      const { socket, io, getUserId } = setupWithSocket();
+      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([targetSocket]) });
+      getUserId.mockImplementation((socketId: string) =>
+        socketId === 'target-socket' ? 'target-user-id' : USER_ID
+      );
+
+      const rawSignalWithExtraField = {
+        callId: CALL_ID,
+        signal: { type: 'answer', from: USER_ID, to: 'target-user-id', maliciousField: { injected: true } },
+      };
+      await socket._trigger('call:signal', rawSignalWithExtraField);
+
+      // The relayed payload is the sanitized one, never the raw client object.
+      expect(io._roomEmit).toHaveBeenCalledWith('call:signal', sanitizedSignal);
+      expect(io._roomEmit).not.toHaveBeenCalledWith('call:signal', rawSignalWithExtraField);
     });
   });
 
@@ -3240,6 +3272,26 @@ describe('CallEventsHandler', () => {
         PARTICIPANT_ID
       );
     });
+
+    it('ignores a client-supplied participantId and uses the resolved one instead', async () => {
+      const { socket } = setupWithSocket();
+      await socket._trigger('call:backgrounded', {
+        callId: CALL_ID,
+        participantId: 'someone-elses-participant-id',
+      });
+      expect(mockCallServiceRecordParticipantBackgrounded).toHaveBeenCalledWith(
+        CALL_ID,
+        PARTICIPANT_ID
+      );
+    });
+
+    it('returns early when the caller cannot be resolved to an active participant', async () => {
+      const { socket } = setupWithSocket({
+        callSession: { findUnique: jest.fn<any>().mockResolvedValue(null) },
+      });
+      await socket._trigger('call:backgrounded', validData);
+      expect(mockCallServiceRecordParticipantBackgrounded).not.toHaveBeenCalled();
+    });
   });
 
   // ── call:foregrounded ────────────────────────────────────────────────────
@@ -3278,6 +3330,18 @@ describe('CallEventsHandler', () => {
       expect(socket.data.appForeground).toBe(false);
       await socket._trigger('call:foregrounded', validData);
       expect(socket.data.appForeground).toBe(true);
+    });
+
+    it('ignores a client-supplied participantId and uses the resolved one instead', async () => {
+      const { socket } = setupWithSocket();
+      await socket._trigger('call:foregrounded', {
+        callId: CALL_ID,
+        participantId: 'someone-elses-participant-id',
+      });
+      expect(mockCallServiceClearParticipantBackgrounded).toHaveBeenCalledWith(
+        CALL_ID,
+        PARTICIPANT_ID
+      );
     });
   });
 
