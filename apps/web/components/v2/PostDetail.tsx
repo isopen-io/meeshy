@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
+import { formatCompactNumber } from '@/utils/format-number';
 import { buildAttachmentUrl } from '@/utils/attachment-url';
 import { Repeat2 } from 'lucide-react';
 import { Avatar } from './Avatar';
@@ -34,11 +35,7 @@ function postTranslationsToItems(translations: unknown): TranslationItem[] {
     }));
 }
 
-function formatCount(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
+const formatCount = formatCompactNumber;
 
 // ---------------------------------------------------------------------------
 // Types
