@@ -354,9 +354,8 @@ describe('MessageReadStatusService', () => {
 
       mockPrisma.message.findFirst.mockResolvedValue(mockMessage);
       mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
-      // Mock for updateUnreadCount
+      // Best-effort prev-cursor read (prevDeliveredAt window) inside markMessagesAsReceived
       mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
-      mockPrisma.message.count.mockResolvedValue(0);
 
       await service.markMessagesAsReceived(testParticipantId, testConversationId, testMessageId);
 
@@ -386,9 +385,8 @@ describe('MessageReadStatusService', () => {
     it('should fetch latest message when messageId not provided', async () => {
       mockPrisma.message.findFirst.mockResolvedValue({ id: testMessageId });
       mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
-      // Mock for updateUnreadCount
+      // Best-effort prev-cursor read (prevDeliveredAt window) inside markMessagesAsReceived
       mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
-      mockPrisma.message.count.mockResolvedValue(0);
 
       await service.markMessagesAsReceived(testParticipantId, testConversationId);
 
@@ -412,9 +410,8 @@ describe('MessageReadStatusService', () => {
       // the service proceeds directly without fetching the latest message.
       // The messageId is trusted as provided by the caller.
       mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
-      // Mock for updateUnreadCount
+      // Best-effort prev-cursor read (prevDeliveredAt window) inside markMessagesAsReceived
       mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
-      mockPrisma.message.count.mockResolvedValue(0);
 
       await service.markMessagesAsReceived(testParticipantId, testConversationId, 'provided-message-id');
 
@@ -3023,59 +3020,6 @@ describe('MessageReadStatusService', () => {
     });
   });
 
-  describe('updateUnreadCount (via markMessagesAsReceived)', () => {
-    it('counts all messages when cursor has no lastReadAt', async () => {
-      mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
-      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({
-        id: 'cursor-1', lastReadAt: null,
-      });
-      mockPrisma.message.count.mockResolvedValue(5);
-      mockPrisma.conversationReadCursor.update.mockResolvedValue({});
-
-      await service.markMessagesAsReceived('p-new', testConversationId, testMessageId);
-
-      expect(mockPrisma.message.count).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({ senderId: { not: 'p-new' } }),
-        })
-      );
-      expect(mockPrisma.conversationReadCursor.update).toHaveBeenCalledWith(
-        expect.objectContaining({ data: { unreadCount: 5 } })
-      );
-    });
-
-    it('counts messages after lastReadAt when cursor has lastReadAt', async () => {
-      const lastReadAt = new Date('2024-06-01T09:00:00Z');
-      mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
-      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({
-        id: 'cursor-2', lastReadAt,
-      });
-      mockPrisma.message.count.mockResolvedValue(2);
-      mockPrisma.conversationReadCursor.update.mockResolvedValue({});
-
-      await service.markMessagesAsReceived('p-with-cursor', testConversationId, testMessageId);
-
-      expect(mockPrisma.message.count).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({ createdAt: { gt: lastReadAt } }),
-        })
-      );
-      expect(mockPrisma.conversationReadCursor.update).toHaveBeenCalledWith(
-        expect.objectContaining({ data: { unreadCount: 2 } })
-      );
-    });
-
-    it('does not call update when cursor is null', async () => {
-      mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
-      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
-      mockPrisma.message.count.mockResolvedValue(0);
-
-      await service.markMessagesAsReceived('p-no-cursor', testConversationId, testMessageId);
-
-      expect(mockPrisma.conversationReadCursor.update).not.toHaveBeenCalled();
-    });
-  });
-
   describe('updateAttachmentComputedStatus — video all-watched path', () => {
     beforeEach(() => {
       // Reset these mocks fully to clear any queued Once handlers from prior tests
@@ -3132,10 +3076,10 @@ describe('MessageReadStatusService', () => {
   // BRANCH GAP-FILL: uncovered catch blocks + no-op method
   // ===========================================================
 
-  describe('updateUnreadCount — error swallowed silently', () => {
-    it('completes markMessagesAsReceived even when updateUnreadCount DB call fails', async () => {
+  describe('markMessagesAsReceived — cursor read error swallowed', () => {
+    it('completes even when the best-effort prev-cursor lookup fails', async () => {
       mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
-      // findUnique inside updateUnreadCount throws — error must be swallowed
+      // The best-effort findUnique (prevDeliveredAt window) throws — must be swallowed.
       mockPrisma.conversationReadCursor.findUnique.mockRejectedValue(new Error('cursor lookup fail'));
 
       await expect(
