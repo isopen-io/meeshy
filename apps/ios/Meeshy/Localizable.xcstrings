@@ -12949,6 +12949,41 @@
         }
       }
     },
+    "call.filters.hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Öffnet oder schließt die Video-Filterleiste"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens or closes the video filters toolbar"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre o cierra la barra de filtros de video"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvre ou ferme la barre de filtres vidéo"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abre ou fecha a barra de filtros de vídeo"
+          }
+        }
+      }
+    },
     "call.incoming.unknown_caller" : {
       "extractionState" : "manual",
       "localizations" : {
