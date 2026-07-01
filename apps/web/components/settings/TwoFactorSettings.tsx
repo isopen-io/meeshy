@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { copyToClipboard as copyTextToClipboard } from '@/lib/clipboard';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -126,10 +127,11 @@ export function TwoFactorSettings() {
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text).then(() => {
+  const copyToClipboard = async (text: string) => {
+    const { success } = await copyTextToClipboard(text);
+    if (success) {
       toast.success(t('twoFactor.copied', 'Copied to clipboard'));
-    });
+    }
   };
 
   const cancelFlow = () => {
