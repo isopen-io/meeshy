@@ -155,7 +155,7 @@ Measured 2026-06-14. Commands run after `pnpm install` + `cd packages/shared && 
 | Suite | Command | Line % | Branch % | Recorded |
 |-------|---------|:------:|:--------:|:--------:|
 | web | `pnpm --filter web test:coverage` | 42.97 | 35.17 | 2026-06-22 (post P2 Theme/accent color × web; +1 test for use-resolved-theme dark→light transition; date-format+tag-colors already at 100%; stmts:42.21/branch:35.17/funcs:39.16/lines:42.97; threshold floor unchanged lines:42/branches:34/statements:41/functions:38 — new measurements already above floor) |
-| gateway | `pnpm --filter gateway test:coverage` | 95.54 (local node) | 88.85 (local node) | 2026-06-30 (post gateway-upload-coverage: upload.ts 56.7%→100% lines+branches; 469 suites / 13092 tests / 1 skipped; threshold floor ratcheted lines:82→86/branches:75→79/statements:81→85/functions:78→82 — CI-bun-calibrated ~9pp gap) |
+| gateway | `pnpm --filter gateway test:coverage` | 96.4 (local node) | 89.88 (local node) | 2026-06-30 (post gateway-routes-users: all 7 routes/users modules to ≥92% line+branch; 478 suites / 13268 tests / 1 skipped; threshold floor ratcheted lines:86→87/branches:79→80/statements:85→86/functions:82→83 — CI-bun-calibrated ~9.5pp gap from local-node 96.4/89.88/95.61/93.08) |
 | translator | `.venv/bin/python -m pytest tests/ -m "not slow and not gpu" --cov=src` | ~39 | n/a | 2026-06-19 (post P1 Voice/audio × translator; +127 tests covering 6 modules; fail_under ratcheted 37→39; diarization GPU methods pragma'd) |
 | iOS | `./apps/ios/meeshy.sh test` | n/a | n/a | not measurable (no macOS/Xcode in CI env) |
 | android | `apps/android/meeshy.sh test` | n/a | n/a | not measurable (no Android SDK in CI env) |

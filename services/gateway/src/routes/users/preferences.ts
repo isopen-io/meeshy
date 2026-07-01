@@ -454,6 +454,7 @@ export async function getUserStats(fastify: FastifyInstance) {
       };
 
       const achievements = Object.entries(ACHIEVEMENT_THRESHOLDS).map(([key, config]) => {
+        /* istanbul ignore next — all ACHIEVEMENT_THRESHOLDS fields are keys of numericStats */
         const current = numericStats[config.field] ?? 0;
         const progress = Math.min(current / config.threshold, 1);
         return {
@@ -539,6 +540,7 @@ export async function searchUsers(fastify: FastifyInstance) {
         return sendUnauthorized(reply, 'Authentication required');
       }
 
+      /* istanbul ignore next — Fastify AJV schema default: fills offset/limit before handler; JS destructuring defaults unreachable */
       const { q, offset = '0', limit = '20' } = request.query as SearchQuery;
 
       const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
