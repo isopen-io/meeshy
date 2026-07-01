@@ -1218,7 +1218,7 @@ struct StoryCommentsOverlayView: View {
     /// consultables, mais on signale que la story n'est plus accessible.
     private var expiredStoryBanner: some View {
         Label {
-            Text("Story expirée — les commentaires restent visibles")
+            Text(String(localized: "story.viewer.expiredBanner", defaultValue: "Story expirée — les commentaires restent visibles", bundle: .main))
                 .font(.system(size: 11, weight: .semibold))
                 .lineLimit(1)
         } icon: {

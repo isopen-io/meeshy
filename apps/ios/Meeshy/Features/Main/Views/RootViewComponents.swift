@@ -743,6 +743,7 @@ struct ThemedFeedOverlay: View {
         .sheet(isPresented: $showStatusComposer) {
             StatusComposerView(viewModel: statusViewModel)
                 .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
         }
         .fullScreenCover(isPresented: $showFullComposer) {
             FeedComposerSheet(

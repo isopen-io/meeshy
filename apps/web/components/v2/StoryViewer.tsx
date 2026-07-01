@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { formatTimeRemaining } from '@meeshy/shared/utils/time-remaining';
 import { useI18n } from '@/hooks/use-i18n';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
@@ -11,7 +12,6 @@ import { StoryViewersSheet } from './StoryViewersSheet';
 import { useCommentsInfiniteQuery, useCommentsList } from '@/hooks/queries/use-comments-query';
 import { useCreateCommentMutation, useLikeCommentMutation, useUnlikeCommentMutation, useDeleteCommentMutation } from '@/hooks/queries/use-comment-mutations';
 import { useAuthStore } from '@/stores/auth-store';
-import { formatTimeRemaining } from '@/utils/time-remaining';
 
 // ============================================================================
 // Types
@@ -846,8 +846,8 @@ function StoryViewer({
                 </span>
               )}
               {story.expiresAt && (() => {
-                const remaining = formatTimeRemaining(story.expiresAt);
-                if (!remaining) return null;
+                const remaining = formatTimeRemaining(new Date(story.expiresAt).getTime(), Date.now());
+                if (remaining === null) return null;
                 return <span className="text-xs text-white/40">{remaining}</span>;
               })()}
             </div>

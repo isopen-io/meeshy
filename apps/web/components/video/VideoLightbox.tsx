@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Attachment, formatFileSize } from '@meeshy/shared/types/attachment';
+import { formatDuration } from '@/utils/audio-formatters';
 import { Button } from '../ui/button';
 
 interface VideoLightboxProps {
@@ -341,14 +342,6 @@ export function VideoLightbox({
     document.body.removeChild(link);
   }, [currentVideo]);
 
-  const formatTime = (seconds: number): string => {
-    /* istanbul ignore if -- defensive guard; video duration/currentTime from HTMLVideoElement is always finite */
-    if (!isFinite(seconds) || isNaN(seconds) || seconds < 0) return '0:00';
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
   // Gestion du swipe
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
@@ -459,7 +452,7 @@ export function VideoLightbox({
               {currentVideo.width &&
                 currentVideo.height &&
                 ` • ${currentVideo.width}x${currentVideo.height}`}
-              {currentVideo.duration && ` • ${formatTime(currentVideo.duration)}`}
+              {currentVideo.duration && ` • ${formatDuration(currentVideo.duration)}`}
               {videos.length > 1 && ` • ${currentIndex + 1} / ${videos.length}`}
             </span>
           </div>
@@ -639,7 +632,7 @@ export function VideoLightbox({
 
               {/* Temps */}
               <span className="text-sm font-mono tabular-nums flex-shrink-0">
-                {formatTime(currentTime)} / {formatTime(duration)}
+                {formatDuration(currentTime)} / {formatDuration(duration)}
               </span>
 
               {/* Spacer */}
