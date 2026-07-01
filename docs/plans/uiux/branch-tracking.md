@@ -14,6 +14,19 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 109i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> - **109i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `fb5cc0e1`)** :
+>   Dynamic Type + a11y de `StoryTrayView` (tray de stories en tête de feed). Anneaux/boutons déjà
+>   étiquetés ; **4/9** `.font(.system(size:))` → `MeeshyFont.relative` (nom d'utilisateur, « Moi »,
+>   « + » des 2 clusters de pastilles). **5 glyphes figés** (cercles fixes, doctrine 86i) : 💭 mood
+>   (32×32), plus composer (40×40), exclamation + % upload (50×50), plus band épinglée (44×44).
+>   **1 `.accessibilityLabel`** sur le bouton mood 💭 (clé SSOT `story.tray.a11y.changeMood`), **2
+>   `.accessibilityHidden`** sur pastilles décoratives. 1 fichier, 0 logique, 0 test/clé i18n neuve ;
+>   cellule de liste → 0 `@ObservedObject` ajouté. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `StoryTrayView` Dynamic Type + a11y SOLDÉ** : ne plus reprendre les 5 glyphes figés.
+> - **Base de départ 110i : `main` HEAD**. Candidats : `ReelsPlayerView` (7), `OnboardingStepViews`
+>   (7), `StatusBubbleOverlay` (7) ; différé 108i (`.accessibilityValue` timeAgo/expiry header stories).
+
 > **POINTEUR AUTORITAIRE iOS (mis à jour 108i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
 > - **108i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `100e4725`)** :
 >   Dynamic Type de `StoryViewerView+Sidebar` (sidebar + header du visualiseur de stories).
