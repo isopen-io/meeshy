@@ -14,6 +14,18 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 110i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> - **110i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `6519f8ed`)** :
+>   Dynamic Type + a11y de `ReelsPlayerView` (lecteur de réels plein écran). Rail/scrub/back/meta
+>   déjà bien étiquetés ; **1/7** `.font(.system(size:))` → `MeeshyFont.relative` (glyphe inline stat
+>   auteur). **6 glyphes figés** (commentés) : chrome back (cadre 40×40, doctrine 82i), rail
+>   d'actions ×2 (colonne fixe width:48, 86i), héros décoratifs `play.rectangle` 44 + `waveform`
+>   220/84 (≥40pt, 74i/86i). **3 `.accessibilityHidden`** sur les héros décoratifs. 1 fichier,
+>   0 logique, 0 test/clé i18n neuve. 0 contention (PR ouvertes = web/calls). Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `ReelsPlayerView` Dynamic Type + a11y SOLDÉ** : ne plus reprendre les 6 glyphes figés.
+> - **Base de départ 111i : `main` HEAD**. Candidats : `StatusBubbleOverlay` (7), `OnboardingStepViews`
+>   (7) ; différé 108i (`.accessibilityValue` timeAgo/expiry header stories).
+
 > **POINTEUR AUTORITAIRE iOS (mis à jour 109i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
 > - **109i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `fb5cc0e1`)** :
 >   Dynamic Type + a11y de `StoryTrayView` (tray de stories en tête de feed). Anneaux/boutons déjà
