@@ -14,6 +14,20 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 105i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> - **105i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `61257034`)** :
+>   a11y VoiceOver de `FeedView+Attachments` (tuiles de pièces jointes du composer feed). Typo déjà
+>   conforme ; 14 `.system(size:)` = glyphes en cadres fixes (croix / miniatures / toolbar) figés.
+>   Vrai défaut = **boutons « retirer » (croix) sans label** + glyphes décoratifs non masqués.
+>   **2 `.accessibilityLabel`** (`feed.attachment.remove`) sur les croix des 2 tuiles
+>   (`feedAttachmentTile` + `sheetAttachmentTile`) ; **6 `.accessibilityHidden`** sur glyphes
+>   décoratifs (play.circle vidéo / mappin lieu / icône type, ×2 tuiles) ; 2 commentaires doctrine 82i.
+>   1 fichier, 0 logique, 0 test neuf, 1 clé i18n inline. **0 contention** (0 PR ouverte au démarrage).
+>   Gate = CI `ios-tests` (`Build (bun)` non-requis). PR à venir.
+> - **⚠️ `FeedView+Attachments` a11y SOLDÉ** : ne plus reprendre les 14 glyphes figés (cadres fixes).
+>   Différé 106i+ : normaliser les clés a11y littérales FR de la toolbar `FeedComposerSheet`.
+> - **Base de départ 106i : `main` HEAD** (toujours resync sur `main` ; supprimer la branche mergée).
+
 > **POINTEUR AUTORITAIRE iOS (mis à jour 104i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
 > - **104i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `ed04f121`)** :
 >   a11y VoiceOver de `AudioFullscreenView` (lecteur audio plein écran). Fichier déjà largement
