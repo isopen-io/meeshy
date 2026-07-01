@@ -2146,6 +2146,53 @@ export class NotificationService {
   }
 
   // ==============================================
+  // FRIEND_REQUEST_NEW / ACCEPTED / REJECTED (typed, dual-emitted
+  // alongside the legacy NOTIFICATION_NEW string-discriminated payload —
+  // see socketio-events-cleanup.md #7. Same pattern as CONVERSATION_NEW /
+  // FRIEND_REQUEST_CANCELLED: realtime-only signal, no separate
+  // `Notification` row of their own.)
+  // ==============================================
+
+  emitFriendRequestNew(params: {
+    receiverId: string;
+    friendRequestId: string;
+    senderId: string;
+  }): void {
+    if (!this.io) return;
+    this.io.to(ROOMS.user(params.receiverId)).emit(SERVER_EVENTS.FRIEND_REQUEST_NEW, {
+      friendRequestId: params.friendRequestId,
+      senderId: params.senderId,
+      receiverId: params.receiverId,
+    });
+  }
+
+  emitFriendRequestAccepted(params: {
+    senderId: string;
+    friendRequestId: string;
+    accepterId: string;
+    conversationId?: string;
+  }): void {
+    if (!this.io) return;
+    this.io.to(ROOMS.user(params.senderId)).emit(SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED, {
+      friendRequestId: params.friendRequestId,
+      accepterId: params.accepterId,
+      conversationId: params.conversationId,
+    });
+  }
+
+  emitFriendRequestRejected(params: {
+    senderId: string;
+    friendRequestId: string;
+    rejecterId: string;
+  }): void {
+    if (!this.io) return;
+    this.io.to(ROOMS.user(params.senderId)).emit(SERVER_EVENTS.FRIEND_REQUEST_REJECTED, {
+      friendRequestId: params.friendRequestId,
+      rejecterId: params.rejecterId,
+    });
+  }
+
+  // ==============================================
   // MEMBER_JOINED
   // ==============================================
 

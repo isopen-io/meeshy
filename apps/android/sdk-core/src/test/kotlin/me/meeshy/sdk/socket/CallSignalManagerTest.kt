@@ -8,6 +8,7 @@ import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.call.CallEvent
+import me.meeshy.sdk.model.call.CallInitiateResult
 import org.json.JSONObject
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -201,6 +202,79 @@ class CallSignalManagerTest {
         verify { socket.emit("call:toggle-video", capture(payload)) }
         assertThat(payload.captured.getString("callId")).isEqualTo("call-9")
         assertThat(payload.captured.getBoolean("enabled")).isTrue()
+    }
+
+    // --- Outbound: the ACK-based call:initiate ---
+
+    @Test
+    fun `emitInitiate emits conversationId and video type and returns the minted call on a valid ACK`() = runTest {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, socket) = managerAndSocket
+        val payload = slot<JSONObject>()
+        every { socket.emit("call:initiate", capture(payload), any()) } answers {
+            thirdArg<(Array<Any>) -> Unit>().invoke(
+                arrayOf(
+                    JSONObject(
+                        """{"success":true,"data":{"callId":"call-77","mode":"p2p","ttl":600,"iceServers":[{"urls":"stun:s:1"}]}}""",
+                    ),
+                ),
+            )
+        }
+        val result = manager.emitInitiate("conv-1", isVideo = true)
+        assertThat(payload.captured.getString("conversationId")).isEqualTo("conv-1")
+        assertThat(payload.captured.getString("type")).isEqualTo("video")
+        val ack = (result as CallInitiateResult.Success).ack
+        assertThat(ack.callId).isEqualTo("call-77")
+        assertThat(ack.mode).isEqualTo("p2p")
+        assertThat(ack.ttlSeconds).isEqualTo(600)
+        assertThat(ack.iceServers.single().urls).containsExactly("stun:s:1")
+    }
+
+    @Test
+    fun `emitInitiate emits audio type when not video`() = runTest {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, socket) = managerAndSocket
+        val payload = slot<JSONObject>()
+        every { socket.emit("call:initiate", capture(payload), any()) } answers {
+            thirdArg<(Array<Any>) -> Unit>().invoke(
+                arrayOf(JSONObject("""{"success":true,"data":{"callId":"c1"}}""")),
+            )
+        }
+        manager.emitInitiate("conv-1", isVideo = false)
+        assertThat(payload.captured.getString("type")).isEqualTo("audio")
+    }
+
+    @Test
+    fun `emitInitiate surfaces the gateway rejection as ServerError`() = runTest {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, socket) = managerAndSocket
+        every { socket.emit("call:initiate", any(), any()) } answers {
+            thirdArg<(Array<Any>) -> Unit>().invoke(
+                arrayOf(JSONObject("""{"success":false,"error":{"message":"Room full"}}""")),
+            )
+        }
+        val result = manager.emitInitiate("conv-1", isVideo = true)
+        assertThat(result).isEqualTo(CallInitiateResult.ServerError("Room full"))
+    }
+
+    @Test
+    fun `emitInitiate returns Timeout when no ACK ever arrives`() = runTest {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, _) = managerAndSocket
+        // The relaxed mock's 3-arg emit never invokes the ack callback.
+        val result = manager.emitInitiate("conv-1", isVideo = true)
+        assertThat(result).isEqualTo(CallInitiateResult.Timeout)
+    }
+
+    @Test
+    fun `emitInitiate treats a non-JSONObject ACK argument as a Timeout`() = runTest {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, socket) = managerAndSocket
+        every { socket.emit("call:initiate", any(), any()) } answers {
+            thirdArg<(Array<Any>) -> Unit>().invoke(arrayOf("not-an-object"))
+        }
+        val result = manager.emitInitiate("conv-1", isVideo = true)
+        assertThat(result).isEqualTo(CallInitiateResult.Timeout)
     }
 
     @Test

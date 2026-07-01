@@ -27,6 +27,14 @@ interface TypingUser {
   displayName: string;
 }
 
+// Filet de sécurité : un `typing:stop` distant peut se perdre (coupure
+// réseau brève sans déconnexion socket, onglet expéditeur tué avant que son
+// propre timeout d'arrêt ne s'exécute...). Sans ce filet, l'indicateur "X est
+// en train d'écrire" resterait affiché jusqu'au ping-timeout du socket
+// (~45-60s). 8s laisse une marge confortable au-dessus du cycle normal
+// start→stop tout en bornant le pire cas perçu par l'utilisateur.
+const REMOTE_TYPING_SAFETY_TIMEOUT = 8000;
+
 interface UseStreamSocketOptions {
   conversationId: string;
   user: User;
@@ -100,11 +108,21 @@ export function useStreamSocket({
   // Refs pour éviter les re-créations
   const normalizedConversationIdRef = useRef<string | null>(null);
   const activeUsersRef = useRef(activeUsers);
+  // Un timeout de sécurité par utilisateur distant en train de taper
+  const remoteTypingTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   // Mettre à jour la ref activeUsers
   useEffect(() => {
     activeUsersRef.current = activeUsers;
   }, [activeUsers]);
+
+  // Nettoyage des timeouts de sécurité au démontage
+  useEffect(() => {
+    return () => {
+      remoteTypingTimeoutsRef.current.forEach(timeout => clearTimeout(timeout));
+      remoteTypingTimeoutsRef.current.clear();
+    };
+  }, []);
 
   // Handler pour les utilisateurs en train de taper
   const handleUserTyping = useCallback((userId: string, username: string, isTyping: boolean, typingConversationId: string) => {
@@ -113,6 +131,22 @@ export function useStreamSocket({
     const currentNormalizedId = normalizedConversationIdRef.current;
     if (!currentNormalizedId || typingConversationId !== currentNormalizedId) {
       return;
+    }
+
+    const existingTimeout = remoteTypingTimeoutsRef.current.get(userId);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+      remoteTypingTimeoutsRef.current.delete(userId);
+    }
+
+    if (isTyping) {
+      remoteTypingTimeoutsRef.current.set(
+        userId,
+        setTimeout(() => {
+          remoteTypingTimeoutsRef.current.delete(userId);
+          setTypingUsers(prev => prev.filter(u => u.id !== userId));
+        }, REMOTE_TYPING_SAFETY_TIMEOUT)
+      );
     }
 
     setTypingUsers(prev => {

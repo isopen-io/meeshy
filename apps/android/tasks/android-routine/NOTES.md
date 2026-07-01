@@ -9,6 +9,14 @@ Append-only log of gotchas and decisions that save time next run.
   the stale tree. A branch cut from it **loses the previous merged slice** (e.g. `story-canvas-snap-guides`
   was first cut without PR #1045's `scale`/`rotation` fields). Recipe: `git fetch origin main && git
   checkout -B claude/apps/android/<slice> origin/main`. Verify a known recent symbol is present before coding.
+- ⚠ **Gradle wrapper distribution 403s through the egress proxy.** `./gradlew` downloads the pinned
+  `gradle-8.11.1-bin.zip` from `services.gradle.org`, which **302-redirects to a `github.com` release
+  asset** the org egress policy blocks (`403`). The wrapper then dies with
+  `Server returned HTTP response code: 403`. Fix: a full Gradle is preinstalled at **`/opt/gradle`**
+  (8.14.3) — run the build with `/opt/gradle/bin/gradle <tasks> --no-daemon` (the daemon had a startup
+  hiccup once; `--no-daemon` is reliable). 8.14.3 builds this AGP project fine. **Do NOT edit the
+  committed `gradle-wrapper.properties`** to work around this — that's a repo change unrelated to the
+  slice; keep the wrapper pinned and use the system gradle locally.
 - Fresh container has **no Android SDK**. Install per `ROUTINE.md` recipe (~2 min).
 - JDK 21 preinstalled; modules target JVM 17 — fine.
 - First Gradle run downloads the whole toolchain (slow); run it in the

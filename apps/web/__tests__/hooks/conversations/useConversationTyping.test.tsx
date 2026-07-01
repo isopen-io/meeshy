@@ -616,6 +616,138 @@ describe('useConversationTyping', () => {
     });
   });
 
+  describe('Remote Typing Safety Timeout', () => {
+    it('should auto-remove a remote typing user if no stop event arrives', () => {
+      const { result } = renderTypingHook();
+
+      act(() => {
+        result.current.handleUserTyping('user-456', 'otheruser', true, mockConversationId);
+      });
+
+      expect(result.current.typingUsers).toHaveLength(1);
+
+      // A dropped typing:stop event should not leave the indicator stuck
+      // forever — a safety timeout clears it well before the socket's own
+      // ping-timeout disconnect would.
+      act(() => {
+        jest.advanceTimersByTime(8000);
+      });
+
+      expect(result.current.typingUsers).toHaveLength(0);
+    });
+
+    it('should refresh the safety timeout on repeated typing:true for the same user', () => {
+      const { result } = renderTypingHook();
+
+      act(() => {
+        result.current.handleUserTyping('user-456', 'otheruser', true, mockConversationId);
+      });
+
+      act(() => {
+        jest.advanceTimersByTime(6000);
+      });
+
+      // A fresh typing:true keepalive should reset the safety window.
+      act(() => {
+        result.current.handleUserTyping('user-456', 'otheruser', true, mockConversationId);
+      });
+
+      act(() => {
+        jest.advanceTimersByTime(6000);
+      });
+
+      expect(result.current.typingUsers).toHaveLength(1);
+
+      act(() => {
+        jest.advanceTimersByTime(2000);
+      });
+
+      expect(result.current.typingUsers).toHaveLength(0);
+    });
+
+    it('should clear the safety timeout when an explicit stop event arrives', () => {
+      const { result } = renderTypingHook();
+
+      act(() => {
+        result.current.handleUserTyping('user-456', 'otheruser', true, mockConversationId);
+        result.current.handleUserTyping('user-456', 'otheruser', false, mockConversationId);
+      });
+
+      expect(result.current.typingUsers).toHaveLength(0);
+
+      // Should not throw or resurrect the user once the safety timer would
+      // have fired.
+      act(() => {
+        jest.advanceTimersByTime(8000);
+      });
+
+      expect(result.current.typingUsers).toHaveLength(0);
+    });
+
+    it('should not leak timers across independent typing users', () => {
+      const { result } = renderTypingHook();
+
+      act(() => {
+        result.current.handleUserTyping('user-456', 'otheruser', true, mockConversationId);
+      });
+
+      act(() => {
+        jest.advanceTimersByTime(4000);
+      });
+
+      act(() => {
+        result.current.handleUserTyping('user-789', 'anotheruser', true, mockConversationId);
+      });
+
+      act(() => {
+        jest.advanceTimersByTime(4000);
+      });
+
+      // user-456's 8s window has elapsed; user-789's has not.
+      expect(result.current.typingUsers.map(u => u.id)).toEqual(['user-789']);
+    });
+
+    it('should clear pending safety timeouts on unmount', () => {
+      const { result, unmount } = renderTypingHook();
+
+      act(() => {
+        result.current.handleUserTyping('user-456', 'otheruser', true, mockConversationId);
+      });
+
+      unmount();
+
+      act(() => {
+        jest.advanceTimersByTime(8000);
+      });
+    });
+
+    it('should clear pending safety timeouts on conversation change', () => {
+      const { result, rerender } = renderHook(
+        ({ conversationId }) =>
+          useConversationTyping({
+            conversationId,
+            currentUserId: mockCurrentUserId,
+            participants: mockParticipants,
+            startTyping: mockStartTyping,
+            stopTyping: mockStopTyping,
+          }),
+        { initialProps: { conversationId: 'conv-1' } }
+      );
+
+      act(() => {
+        result.current.handleUserTyping('user-456', 'otheruser', true, 'conv-1');
+      });
+
+      rerender({ conversationId: 'conv-2' });
+
+      act(() => {
+        jest.advanceTimersByTime(8000);
+      });
+
+      expect(result.current.typingUsers).toHaveLength(0);
+    });
+  });
+
   describe('Handler Stability', () => {
     it('should return stable handleUserTyping reference', () => {
       const { result, rerender } = renderTypingHook();
