@@ -582,15 +582,15 @@ struct MessageOverlayMenu: View {
             }
 
             Text(name)
-                .font(.system(size: 13, weight: .semibold))
+                .font(MeeshyFont.relative(13, weight: .semibold))
                 .foregroundColor(Color(hex: color))
 
             Text("·")
-                .font(.system(size: 13))
+                .font(MeeshyFont.relative(13))
                 .foregroundColor(theme.textMuted)
 
             Text(formatExactDate(message.createdAt))
-                .font(.system(size: 12))
+                .font(MeeshyFont.relative(12))
                 .foregroundColor(theme.textMuted)
         }
     }
@@ -695,7 +695,7 @@ struct MessageOverlayMenu: View {
 
         return VStack(alignment: message.isMe ? .trailing : .leading, spacing: 4) {
             Text(truncated)
-                .font(.system(size: 15))
+                .font(MeeshyFont.relative(15))
                 .foregroundColor(message.isMe ? .white : theme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 14)
@@ -797,18 +797,21 @@ struct MessageOverlayMenu: View {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(accent.opacity(0.15))
                     .frame(width: 36, height: 36)
+                // Decorative glyph inside a fixed 36×36 badge — kept fixed so
+                // it never overflows the badge; filename text carries the label.
                 Image(systemName: "doc.fill")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(accent)
+                    .accessibilityHidden(true)
             }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(attachment.originalName.isEmpty ? attachment.fileName : attachment.originalName)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(MeeshyFont.relative(13, weight: .medium))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
                 Text(formatFileSize(attachment.fileSize))
-                    .font(.system(size: 11))
+                    .font(MeeshyFont.relative(11))
                     .foregroundColor(theme.textMuted)
             }
 
@@ -1087,6 +1090,8 @@ private struct PreviewAudioPlayer: View {
                                 .tint(accent)
                                 .scaleEffect(0.6)
                         } else {
+                            // Glyph inside a fixed 40×40 circle — kept fixed to
+                            // stay centred; the Button carries the a11y label.
                             Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(accent)
@@ -1101,12 +1106,12 @@ private struct PreviewAudioPlayer: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(attachment.originalName.isEmpty ? "Audio" : attachment.originalName)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(MeeshyFont.relative(13, weight: .medium))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
 
                     Text(player.timeLabel(totalDuration: attachment.duration))
-                        .font(.system(size: 11, weight: .medium))
+                        .font(MeeshyFont.relative(11, weight: .medium))
                         .foregroundColor(theme.textMuted)
                         .monospacedDigit()
                 }
@@ -1128,7 +1133,7 @@ private struct PreviewAudioPlayer: View {
                     }
                 } label: {
                     Text("\(String(format: "%.2g", player.playbackRate))x")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(MeeshyFont.relative(11, weight: .semibold))
                         .foregroundColor(accent)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
@@ -1139,7 +1144,7 @@ private struct PreviewAudioPlayer: View {
             HStack(spacing: 8) {
                 Button { player.skip(seconds: -5) } label: {
                     Image(systemName: "gobackward.5")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(MeeshyFont.relative(14, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
@@ -1158,7 +1163,7 @@ private struct PreviewAudioPlayer: View {
 
                 // Pourcentage d'avancement
                 Text("\(player.percentInt)%")
-                    .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                    .font(MeeshyFont.relative(11, weight: .heavy, design: .monospaced))
                     .foregroundColor(player.percentInt == 0 ? theme.textMuted : accent)
                     .frame(minWidth: 36)
                     .contentTransition(.numericText())
@@ -1167,7 +1172,7 @@ private struct PreviewAudioPlayer: View {
 
                 Button { player.skip(seconds: 5) } label: {
                     Image(systemName: "goforward.5")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(MeeshyFont.relative(14, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
@@ -1223,6 +1228,8 @@ private struct PreviewVideoPlayer: View {
                             .fill(.black.opacity(0.5))
                             .frame(width: 52, height: 52)
                             .overlay(
+                                // Glyph inside a fixed 52×52 play circle — kept
+                                // fixed; the Button carries the a11y label.
                                 Image(systemName: "play.fill")
                                     .font(.system(size: 20))
                                     .foregroundColor(.white)
@@ -1263,7 +1270,7 @@ private struct PreviewVideoPlayer: View {
                             .frame(width: 14, height: 14)
                     } else {
                         Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(MeeshyFont.relative(14, weight: .semibold))
                             .foregroundColor(accent)
                     }
                 }
@@ -1274,14 +1281,14 @@ private struct PreviewVideoPlayer: View {
 
                 Button { player.skip(seconds: -5) } label: {
                     Image(systemName: "gobackward.5")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(MeeshyFont.relative(12, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "media.skipBack5s", defaultValue: "Skip back 5 seconds", bundle: .main))
 
                 Text("\(player.percentInt)%")
-                    .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                    .font(MeeshyFont.relative(10, weight: .heavy, design: .monospaced))
                     .foregroundColor(player.percentInt == 0 ? theme.textMuted : accent)
                     .frame(minWidth: 32)
                     .contentTransition(.numericText())
@@ -1290,7 +1297,7 @@ private struct PreviewVideoPlayer: View {
 
                 Button { player.skip(seconds: 5) } label: {
                     Image(systemName: "goforward.5")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(MeeshyFont.relative(12, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
@@ -1299,7 +1306,7 @@ private struct PreviewVideoPlayer: View {
                 Spacer()
 
                 Text(player.timeLabel(totalDuration: attachment.duration))
-                    .font(.system(size: 10, weight: .medium))
+                    .font(MeeshyFont.relative(10, weight: .medium))
                     .foregroundColor(theme.textMuted)
                     .monospacedDigit()
 
@@ -1330,7 +1337,7 @@ private struct PreviewVideoPlayer: View {
             }
         } label: {
             Text("\(String(format: "%.2g", player.playbackRate))x")
-                .font(.system(size: 10, weight: .semibold))
+                .font(MeeshyFont.relative(10, weight: .semibold))
                 .foregroundColor(accent)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)

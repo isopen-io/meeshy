@@ -1251,6 +1251,55 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
             "foreground handler can distinguish a background-caused suspension from a user toggle")
     }
 
+    func test_backgroundObserver_promotesStillRingingCallToCallKit() throws {
+        let source = try callManagerSource()
+        guard let bgRange = source.range(of: "didEnterBackgroundNotification") else {
+            XCTFail("didEnterBackgroundNotification observer not found in CallManager.swift"); return
+        }
+        let afterBg = String(source[bgRange.upperBound...])
+        guard let blockEnd = afterBg.range(of: "foregroundObserver = NotificationCenter")?.lowerBound else {
+            XCTFail("Could not find foregroundObserver boundary"); return
+        }
+        let bgBlock = String(afterBg[..<blockEnd])
+        XCTAssertTrue(
+            bgBlock.contains("promoteRingingCallToCallKitIfNeeded"),
+            "didEnterBackground handler must call promoteRingingCallToCallKitIfNeeded() — a call " +
+            "that rang in while the app was foreground (CallKit skipped) has NO system-level " +
+            "backing; backgrounding before answering must promote it or iOS can suspend the app " +
+            "mid-ring with no lock-screen call card, silently dropping the inbound call")
+    }
+
+    func test_promoteRingingCallToCallKitIfNeeded_guardsOnRingingIncomingNotYetOnCallKit() throws {
+        let source = try callManagerSource()
+        guard let fnRange = source.range(of: "private func promoteRingingCallToCallKitIfNeeded()") else {
+            XCTFail("promoteRingingCallToCallKitIfNeeded not found in CallManager.swift"); return
+        }
+        let afterFn = String(source[fnRange.upperBound...])
+        guard let fnEnd = afterFn.range(of: "private func startBackgroundMonitoring")?.lowerBound else {
+            XCTFail("Could not find promoteRingingCallToCallKitIfNeeded boundary"); return
+        }
+        let fnBody = String(afterFn[..<fnEnd])
+        XCTAssertTrue(
+            fnBody.contains("case .ringing(isOutgoing: false) = callState"),
+            "must only promote a still-ringing INCOMING call — an outgoing call or an already " +
+            "answered/connected call must never be re-reported to CallKit")
+        XCTAssertTrue(
+            fnBody.contains("!callUsesCallKit"),
+            "must skip promotion when the call already has a CallKit registration — re-reporting " +
+            "an already-registered call would be a duplicate CXProvider call")
+        XCTAssertTrue(
+            fnBody.contains("isiOSAppOnMac"),
+            "must never attempt CallKit on iOS-app-on-Mac — reportNewIncomingCall fails there " +
+            "(CXErrorCodeIncomingCallError 3, cf. CALL-FIX 2026-06-06)")
+        XCTAssertTrue(
+            fnBody.contains("callProvider.reportNewIncomingCall"),
+            "must actually register the call with CXProvider, not just flip local flags")
+        XCTAssertTrue(
+            fnBody.contains("callUsesCallKit = false") && fnBody.contains("error"),
+            "on reportNewIncomingCall failure, must roll back callUsesCallKit so the app doesn't " +
+            "believe it has system backing it never actually got")
+    }
+
     func test_foregroundObserver_emitsToggleVideoTrue_whenVideoStillEnabled() throws {
         let source = try callManagerSource()
         guard let fgRange = source.range(of: "willEnterForegroundNotification") else {

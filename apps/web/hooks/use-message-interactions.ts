@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import type { Message } from '@meeshy/shared/types/conversation';
 import type { ConversationType } from '@meeshy/shared/types';
 import { formatFullDate } from '@/utils/date-format';
+import { copyToClipboard } from '@/lib/clipboard';
 import { useCurrentInterfaceLanguage } from '@/stores/language-store';
 import { getUserDisplayName } from '@/utils/user-display-name';
 import { hasModeratorPrivileges } from '@meeshy/shared/types/role-types';
@@ -126,8 +127,12 @@ export function useMessageInteractions({
       const fullDate = formatFullDate(message.createdAt, locale);
       const contentToCopy = `${fullDate} ${t('messageCopyBy')} ${senderName} :\n${displayContent}\n\n${messageUrl}`;
 
-      await navigator.clipboard.writeText(contentToCopy);
-      toast.success(t('messageCopied'));
+      const { success } = await copyToClipboard(contentToCopy);
+      if (success) {
+        toast.success(t('messageCopied'));
+      } else {
+        toast.error(t('copyFailed'));
+      }
     } catch (error) {
       console.error('Failed to copy message:', error);
       toast.error(t('copyFailed'));
@@ -152,8 +157,12 @@ export function useMessageInteractions({
         messageUrl = `${baseUrl}/message/${message.id}`;
       }
 
-      await navigator.clipboard.writeText(messageUrl);
-      toast.success(t('linkCopied') || 'Lien copié !');
+      const { success } = await copyToClipboard(messageUrl);
+      if (success) {
+        toast.success(t('linkCopied') || 'Lien copié !');
+      } else {
+        toast.error(t('copyFailed'));
+      }
     } catch (error) {
       console.error('Failed to copy message link:', error);
       toast.error(t('copyFailed'));

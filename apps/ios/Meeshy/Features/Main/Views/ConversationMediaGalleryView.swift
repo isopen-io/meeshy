@@ -27,6 +27,22 @@ struct ConversationMediaGalleryView: View {
 
     private enum SaveState { case idle, saving, saved, failed }
 
+    /// Annonce VoiceOver de l'état du bouton d'enregistrement (le glyphe qui
+    /// change — spinner / checkmark / xmark — est décoratif, l'état est porté
+    /// par cette `accessibilityValue`). Vide au repos.
+    private var saveStateAccessibilityValue: String {
+        switch saveState {
+        case .idle:
+            return ""
+        case .saving:
+            return String(localized: "common.saving", defaultValue: "Enregistrement…", bundle: .main)
+        case .saved:
+            return String(localized: "common.saved", defaultValue: "Enregistré", bundle: .main)
+        case .failed:
+            return String(localized: "common.failed", defaultValue: "Échec", bundle: .main)
+        }
+    }
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
@@ -126,7 +142,7 @@ struct ConversationMediaGalleryView: View {
 
     private func captionOverlay(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 14, weight: .medium))
+            .font(MeeshyFont.relative(14, weight: .medium))
             .foregroundColor(.white.opacity(0.85))
             .multilineTextAlignment(.leading)
             .lineLimit(4)
@@ -243,9 +259,11 @@ struct ConversationMediaGalleryView: View {
                 }
             }
         } else {
+            // Glyphe d'état-vide décoratif ≥40pt figé (doctrine 74i/86i).
             Image(systemName: "photo")
                 .font(.system(size: 48))
                 .foregroundColor(.white.opacity(0.3))
+                .accessibilityHidden(true)
         }
     }
 
@@ -271,17 +289,20 @@ struct ConversationMediaGalleryView: View {
                     stopActiveVideoAudio()
                     dismiss()
                 } label: {
+                    // Chrome : glyphe `xmark` figé (cadre tap = icône + padding
+                    // par défaut ≈ 60pt, doctrine 82i) — ne pas scaler.
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 28))
                         .foregroundColor(.white.opacity(0.8))
                         .padding()
                 }
+                .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
 
                 Spacer()
 
                 if allAttachments.count > 1 {
                     Text("\(currentIndex + 1) / \(allAttachments.count)")
-                        .font(.system(size: 13, weight: .bold, design: .monospaced))
+                        .font(MeeshyFont.relative(13, weight: .bold, design: .monospaced))
                         .foregroundColor(.white)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
@@ -306,6 +327,8 @@ struct ConversationMediaGalleryView: View {
                                 Image(systemName: "xmark")
                             }
                         }
+                        // Chrome : glyphe d'état figé dans un cadre tap fixe
+                        // 40×40 (doctrine 82i) — ne pas scaler.
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(.white.opacity(0.9))
                         .frame(width: 40, height: 40)
@@ -314,6 +337,8 @@ struct ConversationMediaGalleryView: View {
                         .padding(.top, 8)
                     }
                     .disabled(saveState == .saving || saveState == .saved)
+                    .accessibilityLabel(String(localized: "media.saveToPhotos", defaultValue: "Enregistrer dans Photos", bundle: .main))
+                    .accessibilityValue(saveStateAccessibilityValue)
                 } else {
                     Color.clear.frame(width: 52, height: 40).padding(.trailing, 12)
                 }
@@ -370,27 +395,31 @@ struct ConversationMediaGalleryView: View {
                     )
                     VStack(alignment: .leading, spacing: 2) {
                         Text(info.senderName)
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(MeeshyFont.relative(14, weight: .semibold))
                             .foregroundColor(.white)
                         Text(info.sentAt, format: .dateTime.day().month(.abbreviated).hour().minute())
-                            .font(.system(size: 12, weight: .medium))
+                            .font(MeeshyFont.relative(12, weight: .medium))
                             .foregroundColor(.white.opacity(0.6))
                     }
                     Spacer()
                 }
+                .accessibilityElement(children: .combine)
             }
             HStack(spacing: 8) {
+                // Glyphe de type média décoratif (apparié aux dimensions) —
+                // scale avec le texte mais masqué de VoiceOver.
                 Image(systemName: att.type == .video ? "video.fill" : "photo")
-                    .font(.system(size: 11))
+                    .font(MeeshyFont.relative(11))
                     .foregroundColor(.white.opacity(0.6))
+                    .accessibilityHidden(true)
                 if let w = att.width, let h = att.height, w > 0, h > 0 {
                     Text("\(w) \u{00D7} \(h)")
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .font(MeeshyFont.relative(11, weight: .medium, design: .monospaced))
                         .foregroundColor(.white.opacity(0.6))
                 }
                 if att.fileSize > 0 {
                     Text(att.fileSizeFormatted)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(MeeshyFont.relative(11, weight: .medium))
                         .foregroundColor(.white.opacity(0.5))
                 }
                 Spacer()
@@ -623,10 +652,27 @@ private struct GalleryVideoPage: View {
             if case .downloading = availability { return true }
             return false
         }())
+        .accessibilityLabel(playOrDownloadAccessibilityLabel)
+    }
+
+    /// Label VoiceOver du bouton central selon l'état (lecture / téléchargement
+    /// / progression). Les glyphes internes sont décoratifs.
+    private var playOrDownloadAccessibilityLabel: String {
+        switch availability {
+        case .ready:
+            return String(localized: "media.playVideo", defaultValue: "Lire la vidéo", bundle: .main)
+        case .needsDownload:
+            return String(localized: "media.downloadVideo", defaultValue: "Télécharger la vidéo", bundle: .main)
+        case .downloading:
+            return String(localized: "common.downloading", defaultValue: "Téléchargement…", bundle: .main)
+        }
     }
 
     @ViewBuilder
     private var buttonContent: some View {
+        // Glyphes/label figés : contenus d'un contrôle circulaire de taille
+        // fixe (56/64pt) — les scaler déborderait le cercle. État porté par
+        // `playOrDownloadAccessibilityLabel` sur le bouton parent.
         switch availability {
         case .ready:
             Image(systemName: "play.fill")

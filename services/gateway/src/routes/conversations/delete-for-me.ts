@@ -4,6 +4,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth'
 import { sendSuccess, sendNotFound } from '../../utils/response'
 import { SERVER_EVENTS, ROOMS, type ConversationDeletedEventData } from '@meeshy/shared/types/socketio-events'
 import { resolveConversationId } from '../../utils/conversation-id-cache'
+import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache'
 
 export function registerDeleteForMeRoutes(
   fastify: FastifyInstance,
@@ -100,6 +101,7 @@ export function registerDeleteForMeRoutes(
         where: { id: participant.id },
         data: { deletedForMe: now, isActive: false },
       })
+      invalidateParticipantLookup(participant.id, conversationId)
 
       // Remove user from socket room silently
       const manager = socketIOHandler?.getManager()

@@ -22,12 +22,14 @@ final class NSEPendingMessageConsumer {
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let dateStr = try container.decode(String.self)
-            let fmtFrac = ISO8601DateFormatter()
-            fmtFrac.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            if let date = fmtFrac.date(from: dateStr) { return date }
-            let fmtBasic = ISO8601DateFormatter()
-            fmtBasic.formatOptions = [.withInternetDateTime]
-            if let date = fmtBasic.date(from: dateStr) { return date }
+            // Modern Date.ISO8601FormatStyle supports fractional seconds and
+            // is more efficient than legacy ISO8601DateFormatter.
+            if let date = try? Date(dateStr, strategy: Date.ISO8601FormatStyle(includingFractionalSeconds: true)) {
+                return date
+            }
+            if let date = try? Date(dateStr, strategy: .iso8601) {
+                return date
+            }
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
         }
 

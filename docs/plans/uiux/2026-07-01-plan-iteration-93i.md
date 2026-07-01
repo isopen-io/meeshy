@@ -1,4 +1,3 @@
-<<<<<<< claude/upbeat-euler-ieycux
 # Plan itération 93i — iOS `LocationPickerView` (Dynamic Type + VoiceOver)
 
 **Base** : `main` HEAD `53068393` · **Branche** : `claude/upbeat-euler-ieycux` · **Gate** : CI `iOS Tests`
@@ -27,7 +26,6 @@ layout par défaut, logique, palette, Glass (déjà adopté) ni chaînes i18n.
 - Glass adoption reste (`MessageOverlayMenu` via `AdaptiveGlassContainer`, lot dédié).
 - Palette : hexes proches-mais-non-exacts (checkmark `#4ADE80` → `success`, vérif visuelle).
 - **NE PAS re-flagger** `LocationPickerView` (soldé 93i : Dynamic Type + VoiceOver + Glass).
-=======
 # Plan — Iteration 93i (2026-07-01)
 
 ## Objectif
@@ -115,4 +113,3 @@ palette ni les chaînes i18n.
 `MemberManagementSection` (17), `MessageOverlayMenu` (21, + Glass), `StoryViewerView+Content`
 (coordonner i18n), `ConversationView+Composer` (22, prudent).
 </content>
->>>>>>> main

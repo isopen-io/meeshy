@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { isExpired } from '@/utils/time-remaining';
+import { copyToClipboard as copyTextToClipboard } from '@/lib/clipboard';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -148,11 +149,10 @@ export function ShareAffiliateModal({ isOpen, onClose, userLanguage }: ShareAffi
   };
 
   const copyToClipboard = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
+    const { success } = await copyTextToClipboard(text);
+    if (success) {
       toast.success(t('linkCopied'));
-    } catch (error) {
-      console.error('Erreur copie:', error);
+    } else {
       toast.error(t('errorCopying'));
     }
   };

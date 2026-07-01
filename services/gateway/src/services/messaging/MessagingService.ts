@@ -16,6 +16,7 @@ import { NotificationService } from '../notifications/NotificationService';
 import { MessageValidator } from './MessageValidator';
 import { MessageProcessor } from './MessageProcessor';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
+import { getCachedParticipant, cacheParticipant } from '../../utils/participant-lookup-cache';
 
 const logger = enhancedLogger.child({ module: 'MessagingService' });
 
@@ -96,6 +97,9 @@ export class MessagingService {
       let participant = await performanceLogger.withTiming(
         'messaging.participantLookup',
         async () => {
+          const cached = getCachedParticipant(participantId, conversationId);
+          if (cached) return cached;
+
           let p = await this.prisma.participant.findUnique({
             where: { id: participantId },
             select: { id: true, conversationId: true, isActive: true }
@@ -109,6 +113,9 @@ export class MessagingService {
           }
           if (!p) {
             p = await this.ensureParticipantFromMember(participantId, conversationId);
+          }
+          if (p) {
+            cacheParticipant(participantId, conversationId, p);
           }
           return p;
         },

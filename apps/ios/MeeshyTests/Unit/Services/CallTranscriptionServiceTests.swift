@@ -283,6 +283,33 @@ final class CallTranscriptionServiceTests: XCTestCase {
         XCTAssertTrue(sut.segments.isEmpty)
         XCTAssertNil(sut.lastError)
     }
+
+    // MARK: - Stale Recognizer Callback After Teardown
+
+    func test_applyRecognitionResult_whenNotTranscribing_doesNotRepopulateSegments() {
+        // Regression guard: the on-device recognizer callback runs off-MainActor
+        // and hops back via Task.detached, so a result can still be in flight
+        // when stopTranscribing()/resetForCallEnd() has already cleared state for
+        // a call that just ended. `isTranscribing` defaults to false (as it does
+        // here, and as it remains in every test in this file since none drive a
+        // real SFSpeechRecognizer session), so this exercises exactly that stale-
+        // callback path.
+        let sut = makeSUT()
+        XCTAssertFalse(sut.isTranscribing)
+
+        sut.applyRecognitionResult(
+            segments: [makeSegment(text: "stale from previous call")],
+            speakerId: "user1",
+            isFinal: true,
+            boundaryText: "stale from previous call"
+        )
+
+        XCTAssertTrue(
+            sut.segments.isEmpty,
+            "A recognizer callback that resolves after teardown (isTranscribing == false) " +
+            "must not repopulate the transcript with data from an ended call."
+        )
+    }
 }
 
 // MARK: - TranscriptionSegment Data Model Tests

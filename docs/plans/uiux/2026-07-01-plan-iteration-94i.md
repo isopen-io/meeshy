@@ -1,4 +1,3 @@
-<<<<<<< claude/upbeat-euler-8v1yh3
 # Plan — Itération 94i (iOS)
 
 **Cible** : `apps/ios/Meeshy/Features/Main/Views/SharePickerView.swift` (« Partager avec... »).
@@ -24,7 +23,6 @@
 ## Suite (95i+)
 `MemberManagementSection` (17) · `AddParticipantSheet` (14) · `ForwardPickerSheet` (9) ·
 `ConversationView+Composer` (22, prudent) · Glass `MessageOverlayMenu` (21).
-=======
 # Plan itération 94i — `AffiliateView` Dynamic Type/VoiceOver + nettoyage merge `DataExportView`
 
 **Base de départ** : `main` HEAD `99aefe6e` (post-91i/93i, forte contention parallèle).
@@ -85,4 +83,3 @@ Surface du différé prioritaire 91i+ ; non prise par les PR iOS en vol (91i→9
 ## Suite (95i+)
 `ConversationView+Composer` (22, prudent), `StoryViewerView+Content` (31, i18n #1174),
 `AboutView` (16), `CommunityLinkDetailView` (10) ; Glass `MessageOverlayMenu` (21).
->>>>>>> main

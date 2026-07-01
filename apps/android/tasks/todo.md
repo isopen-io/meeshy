@@ -4,18 +4,20 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Calls) — slice `call-history-model` ✅
-Ports the iOS call journal into `:core:model` `me.meeshy.sdk.model.call`: `CallDirection`
-(incoming/outgoing/missed, `fromRaw` degrades unknown → incoming), `CallMediaType`
-(audioOnly/audioVideo), `@Serializable` `CallHistoryPeer` + `CallRecord` mirroring the gateway
-`CallHistoryItem` REST contract field-for-field (ISO-8601 timestamps as strings → date-dependency-free),
-with pure display accessors (`directionKind`/`isMissed`, `mediaType`, four-tier `displayName`,
-`avatarUrl`, `durationLabel`, `dataLabel`) as the SSOT a missed/recent-calls list renders. +22 tests,
+## This loop (Phase: Calls) — slice `call-history-repository` ✅
+The REST + Room cache-first layer under the call journal. `:core:network` `CallHistoryApi`
+(`GET calls/history?cursor&limit&filter` → `ApiResponse<List<CallRecord>>`, wired into `MeeshyApi` +
+`NetworkModule`); `:core:database` `CallHistoryEntity`/`CallHistoryDao` (DB **v6→v7**, destructive
+fallback) + `DatabaseModule` provider; `:sdk-core` `CallHistoryCacheSource` (Room-backed
+`SwrCacheSource`, port of `StoryCacheSource`) + `CallHistoryRepository` — cache-first `historyStream()`
+(`CachePolicy.CallHistory` fresh 60s / keep 90d), `refresh()`, and cursor-paginated
+`fetchPage(cursor, limit, missedOnly) → CallHistoryPage(records, nextCursor, hasMore)`. +17 tests,
 `meeshy.sh check` green, diff = `apps/android` only.
 
 ### Next
-1. Call-history **repository** (REST `/calls/history` fetch + Room cache, cache-first SWR), then the
-   missed/recent-calls **list UI**.
+1. Recent/missed-calls **list UI** (`:feature:calls`): `CallHistoryViewModel` over `historyStream()`
+   (fresh/stale/empty + pull-to-refresh + paging via `fetchPage`) + accent-coherent list rendering each
+   `CallRecord` via its pure display accessors.
 2. Fold `CallSignalManager.events` into `CallViewModel` once the `initiate`-ACK call-id lifecycle lands.
 3. Then the WebRTC / Telecom / FCM full-screen-intent plumbing.
 

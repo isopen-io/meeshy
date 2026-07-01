@@ -224,7 +224,7 @@ final class CallManager: ObservableObject {
     /// referencing CallManager or hopping to the MainActor. Used to suppress
     /// `forceReconnect()` mid-call (token rotation / re-auth) so the WebRTC
     /// signaling socket is never torn down during a call.
-    private nonisolated(unsafe) static let _isCallActiveLock = OSAllocatedUnfairLock(initialState: false)
+    private nonisolated static let _isCallActiveLock = OSAllocatedUnfairLock(initialState: false)
     /// Thread-safe read/write. Written only from @MainActor (callState.didSet);
     /// read from non-isolated socket-manager closures — guarded by an unfair lock
     /// so concurrent reads never observe a torn write.
@@ -915,7 +915,7 @@ final class CallManager: ObservableObject {
 
             if httpResponse.statusCode == 404 {
                 Logger.calls.warning("[VOIP_FRESHNESS] callId \(callId) introuvable (404) — push stale, ending phantom call")
-                if activeCallUUID == uuid {
+                if activeCallUUID == uuid, case .ringing = callState {
                     callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
                     endCallInternal(reason: .missed)
                 }
@@ -933,7 +933,13 @@ final class CallManager: ObservableObject {
             let terminalStatuses: Set<String> = ["ended", "missed", "rejected", "failed"]
             if terminalStatuses.contains(status.lowercased()) {
                 Logger.calls.warning("[VOIP_FRESHNESS] callId \(callId) status=\(status) (terminal) — push stale, ending phantom call")
-                if activeCallUUID == uuid {
+                // Guard on `callState` too, not just `activeCallUUID` — this REST check
+                // can take up to `voipFreshnessTimeoutSeconds` to resolve. If the user
+                // answers while it's in flight, the call has already moved past
+                // `.ringing` (connecting/connected) by the time this returns, and a
+                // stale/racy terminal response must never tear down a call the user
+                // is actively on.
+                if activeCallUUID == uuid, case .ringing = callState {
                     callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
                     endCallInternal(reason: .missed)
                 }
@@ -2161,6 +2167,40 @@ final class CallManager: ObservableObject {
 
     // MARK: - Background/Foreground Monitoring (H1)
 
+    /// Registers a still-ringing, in-app-only incoming call with CallKit.
+    /// No-op unless we're genuinely in that gap: ringing, incoming, and
+    /// `callUsesCallKit` is false because `handleIncomingCallNotification`
+    /// skipped CallKit for being foreground/macOS at arrival time. macOS
+    /// never gets a system call UI (`reportNewIncomingCall` fails there),
+    /// so it's excluded here too.
+    @MainActor
+    private func promoteRingingCallToCallKitIfNeeded() {
+        guard case .ringing(isOutgoing: false) = callState else { return }
+        guard !callUsesCallKit, !ProcessInfo.processInfo.isiOSAppOnMac else { return }
+        guard let uuid = activeCallUUID else { return }
+
+        let handleValue = (remoteUserId?.isEmpty == false) ? remoteUserId! : (remoteUsername ?? "")
+        let update = CXCallUpdate()
+        update.remoteHandle = CXHandle(type: .generic, value: handleValue)
+        update.localizedCallerName = remoteUsername
+        update.hasVideo = isVideoEnabled
+        update.supportsGrouping = false
+        update.supportsHolding = false
+
+        callUsesCallKit = true
+        ringbackPlayer.shouldSelfActivateSession = false
+        callProvider.reportNewIncomingCall(with: uuid, update: update) { [weak self] error in
+            guard let self else { return }
+            if let error {
+                Logger.calls.error("CallKit late-promote on background failed: \(error.localizedDescription)")
+                self.callUsesCallKit = false
+                self.ringbackPlayer.shouldSelfActivateSession = true
+            } else {
+                Logger.calls.info("Promoted ringing call to CallKit on background entry")
+            }
+        }
+    }
+
     private func startBackgroundMonitoring() {
         // Garantir un seul observateur actif par type — évite les doublons sur reconnexion
         stopBackgroundMonitoring()
@@ -2171,6 +2211,7 @@ final class CallManager: ObservableObject {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, let callId = self.currentCallId else { return }
+                self.promoteRingingCallToCallKitIfNeeded() // see doc above — no-op unless still ringing
                 let userId = AuthManager.shared.currentUser?.id ?? ""
                 MessageSocketManager.shared.emitCallBackgrounded(callId: callId, participantId: userId)
                 Logger.calls.info("Call backgrounded")
@@ -2234,8 +2275,19 @@ final class CallManager: ObservableObject {
         if isOnHold {
             if isVideoEnabled {
                 isVideoSuspendedByHold = true
-                holdVideoTask?.cancel()
-                holdVideoTask = Task { [weak self] in _ = await self?.webRTCService.downgradeFromVideo() }
+                // Chain onto the previous hold-video task instead of cancelling it:
+                // `Task.cancel()` is cooperative and `disableLocalVideo`/`enableLocalVideo`
+                // never check `Task.isCancelled` mid-flight (they await `stopCapture`/
+                // `startCapture`), so a rapid hold→unhold→hold could otherwise let a
+                // cancelled downgrade and a fresh upgrade mutate the same camera
+                // capturer/transceiver concurrently, leaving video stuck broken.
+                // Awaiting the prior task's `.value` first serializes every hold
+                // transition without relying on cancellation to stop in-flight work.
+                let previousTask = holdVideoTask
+                holdVideoTask = Task { [weak self] in
+                    await previousTask?.value
+                    _ = await self?.webRTCService.downgradeFromVideo()
+                }
                 MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: false)
                 Logger.calls.info("CallKit hold — video suspended, peer notified (callId=\(callId))")
             }
@@ -2243,8 +2295,11 @@ final class CallManager: ObservableObject {
             if isVideoSuspendedByHold {
                 isVideoSuspendedByHold = false
                 if isVideoEnabled && !isVideoSuspended && !isVideoSuspendedByBackground {
-                    holdVideoTask?.cancel()
-                    holdVideoTask = Task { [weak self] in _ = try? await self?.webRTCService.upgradeToVideo() }
+                    let previousTask = holdVideoTask
+                    holdVideoTask = Task { [weak self] in
+                        await previousTask?.value
+                        _ = try? await self?.webRTCService.upgradeToVideo()
+                    }
                     MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: true)
                     Logger.calls.info("CallKit unhold — video restored, peer notified (callId=\(callId))")
                 }

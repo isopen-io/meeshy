@@ -391,4 +391,19 @@ describe('formatFileSize', () => {
     // 1 PB = 1024 TB; Math.min(i, 4) caps at TB
     expect(formatFileSize(1024 ** 5)).toBe('1024 TB');
   });
+
+  it('defaults to 2 significant decimals (trailing zeros stripped)', () => {
+    // 1587 / 1024 = 1.5498...; toFixed(2) → "1.55"
+    expect(formatFileSize(1587)).toBe('1.55 KB');
+  });
+
+  it('honours the decimals option', () => {
+    expect(formatFileSize(1587, { decimals: 1 })).toBe('1.5 KB');
+    expect(formatFileSize(1587, { decimals: 0 })).toBe('2 KB');
+  });
+
+  it('ignores decimals for exact and zero values', () => {
+    expect(formatFileSize(0, { decimals: 1 })).toBe('0 B');
+    expect(formatFileSize(1024, { decimals: 1 })).toBe('1 KB');
+  });
 });

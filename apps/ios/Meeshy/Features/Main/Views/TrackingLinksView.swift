@@ -52,7 +52,7 @@ struct TrackingLinksView: View {
                 dismiss()
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundColor(accent)
             }
             .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
@@ -62,6 +62,7 @@ struct TrackingLinksView: View {
             Text(String(localized: "tracking.links.title", defaultValue: "Liens de tracking", bundle: .main))
                 .font(.headline.weight(.bold))
                 .foregroundColor(theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
@@ -70,7 +71,7 @@ struct TrackingLinksView: View {
                 showCreate = true
             } label: {
                 Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 22))
+                    .font(MeeshyFont.relative(22))
                     .foregroundColor(accent)
             }
             .accessibilityLabel(String(localized: "tracking.links.create.a11y", defaultValue: "Créer un lien de tracking", bundle: .main))
@@ -91,8 +92,9 @@ struct TrackingLinksView: View {
     private func trackingStatCard(_ value: String, label: String, icon: String) -> some View {
         VStack(spacing: 4) {
             Image(systemName: icon)
-                .font(.system(size: 16))
+                .font(MeeshyFont.relative(16))
                 .foregroundColor(accent)
+                .accessibilityHidden(true)
             Text(value)
                 .font(.title3.weight(.bold))
                 .foregroundColor(theme.textPrimary)
@@ -108,12 +110,14 @@ struct TrackingLinksView: View {
                 .overlay(RoundedRectangle(cornerRadius: 14)
                     .stroke(accent.opacity(0.2), lineWidth: 1))
         )
+        .accessibilityElement(children: .combine)
     }
 
     private var linksSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(String(localized: "tracking.links.section.myLinks", defaultValue: "MES LIENS", bundle: .main)).font(.caption.weight(.semibold))
                 .foregroundColor(theme.textSecondary).kerning(0.8)
+                .accessibilityAddTraits(.isHeader)
 
             if viewModel.isLoading {
                 ProgressView().frame(maxWidth: .infinity).padding(40)
@@ -133,8 +137,10 @@ struct TrackingLinksView: View {
 
     private var trackingEmptyState: some View {
         VStack(spacing: 12) {
+            // Hero glyph ≥40pt: décoratif, le libellé adjacent porte le sens — figé + masqué VoiceOver (doctrine 74i/86i)
             Image(systemName: "chart.bar.fill")
                 .font(.system(size: 40)).foregroundColor(accent.opacity(0.6))
+                .accessibilityHidden(true)
             Text(String(localized: "tracking.links.empty.title", defaultValue: "Aucun lien de tracking", bundle: .main)).font(.subheadline.weight(.semibold))
                 .foregroundColor(theme.textPrimary)
             Text(String(localized: "tracking.links.empty.subtitle", defaultValue: "Créez un lien pour suivre vos clics et campagnes", bundle: .main))
@@ -142,6 +148,7 @@ struct TrackingLinksView: View {
                 .multilineTextAlignment(.center)
         }
         .padding(40).frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
     }
 
     private func trackingLinkRow(_ link: TrackingLink) -> some View {
@@ -149,9 +156,11 @@ struct TrackingLinksView: View {
             ZStack {
                 Circle().fill((link.isActive ? accent : MeeshyColors.neutral500).opacity(0.15))
                     .frame(width: 40, height: 40)
+                // Glyphe dans un cercle de dimension fixe 40×40 : figé (déborderait s'il scalait) + masqué VoiceOver (doctrine 86i)
                 Image(systemName: "chart.bar.fill")
                     .font(.system(size: 16))
                     .foregroundColor(link.isActive ? accent : MeeshyColors.neutral500)
+                    .accessibilityHidden(true)
             }
 
             VStack(alignment: .leading, spacing: 3) {
@@ -174,12 +183,13 @@ struct TrackingLinksView: View {
                 UIPasteboard.general.string = link.shortUrl
                 HapticFeedback.success()
             } label: {
-                Image(systemName: "doc.on.doc").font(.system(size: 16))
+                Image(systemName: "doc.on.doc").font(MeeshyFont.relative(16))
                     .foregroundColor(accent)
             }.padding(.horizontal, 4)
             .accessibilityLabel(String(localized: "common.copyLink", defaultValue: "Copier le lien", bundle: .main))
 
-            Image(systemName: "chevron.right").font(.system(size: 12)).foregroundColor(theme.textMuted)
+            Image(systemName: "chevron.right").font(MeeshyFont.relative(12)).foregroundColor(theme.textMuted)
+                .accessibilityHidden(true)
         }
         .padding(14)
         .background(
