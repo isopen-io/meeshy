@@ -84,7 +84,7 @@ final class PiPCallController: NSObject, PiPCallProviding {
     private var onStart: (@MainActor () -> Void)?
     private var onRestoreUI: (@MainActor () -> Void)?
     private var onStop: (@MainActor () -> Void)?
-    private var desiredFrameRate = 15
+    private var desiredFrameRate = QualityThresholds.pipFrameRateDefault
 
     override init() {
         isPiPSupported = AVPictureInPictureController.isPictureInPictureSupported()
@@ -168,6 +168,9 @@ final class PiPCallController: NSObject, PiPCallProviding {
         onStart = nil
         onRestoreUI = nil
         onStop = nil
+        // `PiPCallController` is a singleton, so a thermally-throttled fps from
+        // the previous call must not silently carry over into the next one.
+        desiredFrameRate = QualityThresholds.pipFrameRateDefault
     }
 }
 
