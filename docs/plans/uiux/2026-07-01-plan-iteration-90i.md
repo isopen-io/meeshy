@@ -1,3 +1,100 @@
+# Plan — Iteration 90i (2026-07-01)
+
+## Objectif
+Accessibilité `NewConversationView` (écran « Nouvelle conversation ») : **Dynamic Type**. iOS
+exclusivement (suffixe `i`). Branche = `claude/upbeat-euler-bx683k`, base = `main` HEAD `591d03e9`.
+
+## Diagnostic
+- `NewConversationView.swift` : 17 sites `.font(.system(size:))` → l'écran ignore Dynamic Type
+  (rupture règle a11y CLAUDE.md « never fixed font sizes for body text »).
+- Couleurs **déjà** toutes tokenisées (`MeeshyColors`, `theme.*`, accent déterministe) → aucune
+  dette palette.
+- Glyphe décoratif d'état vide `person.slash` (36pt) non masqué de VoiceOver.
+
+## Étapes
+1. [x] Vérifier surfaces iOS non prises (`list_pull_requests` → 0 PR ouverte) ; `NewConversationView`
+   listé « différé prioritaire » 84i/89i, retenu.
+2. [x] Lire le fichier, classer chaque site (texte-de-lecture / glyphe inline vs décoratif fixe).
+3. [x] Migrer 16/17 sites `.system(size:)` → `MeeshyFont.relative(size, weight:)` (weight préservé).
+4. [x] Garder figé le glyphe `person.slash` (36pt état vide décoratif) + `.accessibilityHidden(true)`
+   (précédent 74i/86i).
+5. [x] Rédiger analyse `2026-07-01-iteration-90i.md` + ce plan.
+6. [ ] Commit + push branche + PR.
+7. [ ] Attendre CI `iOS Tests` verte.
+8. [ ] Merger dans `main` ; supprimer la branche mergée.
+9. [ ] Mettre à jour `branch-tracking.md` (pointeur autoritaire iOS → 90i + ligne History) + marquer 89i ✅.
+
+## Risques / mitigations
+- **Pas de compile locale** (SwiftUI/Linux) → gate = CI `ios-tests.yml`. Swap purement
+  mécanique, `MeeshyFont` déjà consommé par de multiples vues → risque compile ~nul.
+- **Débordement glyphe** → seul l'état vide 36pt reste figé ; les glyphes inline migrés scalent en
+  tandem avec leur texte adjacent (pas de conteneur à dimension fixe dans cette vue).
+- **Aucune dette palette / i18n touchée** → périmètre étroit, régression visuelle nulle au cadre
+  Dynamic Type par défaut.
+
+## Hors-scope (différé, documenté dans l'analyse)
+- Normalisation des clés i18n français→dot (refactor i18n distinct, risque catalogue).
+- Autres grandes surfaces Dynamic Type (`MagicLinkView`, `DataExportView`, `AffiliateView`,
+  `LocationPickerView`) → 91i+.
+# Plan — Itération 90i (2026-07-01)
+
+## Objectif
+Dynamic Type `FeedCommentsSheet.swift` (feuille de commentaires du feed). iOS exclusivement
+(suffixe `i`). Branche = `claude/upbeat-euler-ghu3bp`, base = `main` HEAD `c8063196`.
+
+## Motivation
+Surface flaggée « à re-vérifier » depuis 84i (historique 72i/`429ad8b7` prétendait la migration,
+mais le fichier restait **28 fixed / 0 relative**). Re-vérification confirmée avant travail :
+la migration n'avait jamais eu lieu. 90i comble ce trou réel.
+
+## Étapes
+1. [x] Resync branche désignée sur `main` HEAD (`c8063196`).
+2. [x] Re-vérifier `FeedCommentsSheet.swift` : 28 `.font(.system(size:))` / 0 `MeeshyFont.relative`.
+3. [x] Migrer 23 sites texte-de-lecture + glyphes inline appariés → `MeeshyFont.relative(size, weight:)`.
+4. [x] Garder 5 sites figés (2 chrome `xmark` cadre fixe, 2 drapeaux d'état, 1 icône décorative) + commenter.
+5. [x] Vérifier compte (23 relative + 5 fixed = 28) et bonne formation des appels.
+6. [x] Rédiger analyse + plan 90i.
+7. [ ] Commit + push branche `claude/upbeat-euler-ghu3bp`.
+8. [ ] Ouvrir PR, attendre CI `iOS Tests` verte, merger dans `main`.
+9. [ ] Mettre à jour `branch-tracking.md` (pointeur 91i = `main` HEAD).
+
+## Portée
+- 1 fichier, sweep typographique pur. 0 logique, 0 clé i18n, 0 test neuf.
+- Gate unique = CI `iOS Tests` (pas de toolchain Xcode en local Linux).
+
+## Différé prioritaire iOS 91i+
+- Dynamic Type grandes surfaces restantes : `StoryViewerView+Content` (31, coordonner i18n),
+  `ConversationView+Composer` (22, lot prudent), `MagicLinkView` (17), `DataExportView` (17),
+  `AffiliateView` (17).
+- Glass adoption reste (`MessageOverlayMenu` — lot dédié `AdaptiveGlassContainer`).
+- **NE PLUS re-flagger** `FeedCommentsSheet` (soldé 90i ; 5 `.system(size:)` figés à dessein).
+# Plan — Itération 90i (2026-07-01) — iOS Dynamic Type + a11y `DataExportView`
+
+## Objectif
+Rendre l'écran d'export de données RGPD (`DataExportView.swift`) conforme Dynamic Type et
+VoiceOver, sans changer le layout par défaut, la logique ni la palette.
+
+## Base
+- Branche : `claude/upbeat-euler-ojxbs8` resync sur `main` HEAD (`c8063196`).
+- Numéro : `90i` (88i/89i déjà mergés par agents parallèles → prochain libre).
+
+## Étapes
+1. [x] Resync branche sur `origin/main`, vérifier 0 PR ouverte (aucune contention).
+2. [x] Migrer 16/17 `.font(.system(size:))` → `MeeshyFont.relative(...)` (weight/design préservés).
+3. [x] Garder 1 glyphe figé (badge fixe 28×28 `toggleRow`) + commentaire doctrine 86i.
+4. [x] VoiceOver : masquer 4 glyphes décoratifs, combiner carte/bannière/en-tête, `.isHeader`
+       sur `sectionHeader`, état `.isSelected` + label sur boutons format JSON/CSV.
+5. [x] Vérifier `grep` : 1 figé restant, 16 `MeeshyFont.relative`.
+6. [ ] Commit + push sur la branche.
+7. [ ] Ouvrir PR, attendre CI `ios-tests.yml` verte.
+8. [ ] Merger dans `main`, supprimer la branche, mettre à jour `branch-tracking.md`.
+
+## Invariants
+- 1 fichier touché, 0 clé i18n neuve, 0 test neuf, 0 changement de logique.
+- SDK non touché (`MeeshyFont.relative` déjà en scope via `import MeeshyUI`).
+
+## Gate
+CI `ios-tests.yml` (compile Xcode 26.1 + tests simu 18.2) — SwiftUI ne compile pas sous Linux.
 # Plan itération 90i — Dynamic Type + VoiceOver `MagicLinkView`
 
 **Base de départ** : `main` HEAD `ede22fe4` (post-88i mergé #1215).

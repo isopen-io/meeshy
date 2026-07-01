@@ -112,6 +112,7 @@ struct AffiliateView: View {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(18, weight: .semibold))
                 .foregroundColor(Color(hex: color))
+                .accessibilityHidden(true)
 
             Text(value)
                 .font(MeeshyFont.relative(20, weight: .bold, design: .rounded))
@@ -132,6 +133,7 @@ struct AffiliateView: View {
                         .stroke(theme.border(tint: color), lineWidth: 1)
                 )
         )
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Tokens Section
@@ -142,12 +144,14 @@ struct AffiliateView: View {
                 Image(systemName: "link.badge.plus")
                     .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
+                    .accessibilityHidden(true)
                 Text(String(localized: "affiliate.section.myLinks", defaultValue: "MES LIENS", bundle: .main))
                     .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: accentColor))
                     .tracking(1.2)
             }
             .padding(.leading, 4)
+            .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isHeader)
 
             if viewModel.tokens.isEmpty {
@@ -175,8 +179,9 @@ struct AffiliateView: View {
 
     private var emptyTokensState: some View {
         VStack(spacing: 12) {
-            // Hero décoratif ≥36pt gardé figé (doctrine 74i/86i) : le libellé adjacent porte
-            // le sens ; scaler l'icône déséquilibrerait l'état vide. Masqué de VoiceOver.
+            // Héros décoratif ≥36pt : gardé figé (doctrine 74i/86i/89i) ; le libellé adjacent
+            // porte le sens → laissé fixe et masqué de VoiceOver plutôt que de scaler et
+            // déséquilibrer l'état vide.
             Image(systemName: "link")
                 .font(.system(size: 36))
                 .foregroundColor(Color(hex: accentColor).opacity(0.4))

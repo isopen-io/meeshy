@@ -12,8 +12,18 @@
 > accent-coherent call screen reachable from audio/video buttons in the chat header. On 2026-07-01 the
 > **signalling event models + socket mapping** landed (slice `call-signalling-events`): `@Serializable`
 > inbound `call:*` payload types + a total pure `CallSignalMapper.map(eventName, rawJson) → CallEvent?`
-> at parity with the iOS `MessageSocketManager` listen table. **Next:** wire the mapper into a socket
-> subscription that folds mapped events into `CallViewModel`, mirror the outbound emit table, then the
+> at parity with the iOS `MessageSocketManager` listen table. On 2026-07-01 the **socket subscription +
+> outbound emit table** landed (slice `call-signal-manager`): `:sdk-core` `CallSignalManager` listens to
+> all 8 inbound `call:*` frames → `CallSignalMapper` → `SharedFlow<CallEvent> events`, and exposes the
+> fire-and-forget outbound emits (`join`/`leave`/`end`/`toggle-audio`/`toggle-video`/`signal`) at
+> iOS-exact payload keys. On 2026-07-01 the **call-journal model** landed (slice `call-history-model`):
+> `core:model` gains `CallDirection` (raw-degrades to incoming), `CallMediaType` (audioOnly/audioVideo),
+> `@Serializable` `CallHistoryPeer` + `CallRecord` mirroring the gateway `CallHistoryItem` REST contract
+> field-for-field (ISO-8601 timestamps as strings, keeping the module date-dependency-free), with pure
+> display accessors (`directionKind`/`isMissed`, `mediaType`, four-tier `displayName`, `avatarUrl`,
+> `durationLabel`, `dataLabel`) as the single tested SSOT a future missed/recent-calls list renders.
+> **Next:** fold `events` into `CallViewModel` (`viewModelScope`) once the call-id lifecycle exists (an
+> `initiate`-ACK slice); the call-history repository (REST + Room cache) + list UI; then the
 > WebRTC/Telecom/FCM plumbing. See the run log + `feature-parity.md §H`.
 
 Stories so far: tray (ring carousel) + cross-group viewer playback engine +
@@ -156,12 +166,26 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
    inert → `null`). +22 tests. See run log. **Next:** wire the mapper into a socket subscription that
    folds mapped events into `CallViewModel`, and mirror the **outbound** emit table
    (`call:initiate`/`:join`/`:signal`/`:toggle-audio`/`:toggle-video`/`:end`).
-3. **`CallDirection` (incoming/outgoing/missed, raw-degrades to incoming) + `CallMediaType`
-   (audioOnly/audioVideo)** + call-history row model — the remaining pure call enums from iOS
-   `CallModels.swift`/`WebRTCTypes.swift`, feeding a missed/recent-calls list.
-4. **Socket subscription → VM wiring**: a `CallSignalManager` (`:sdk-core`) subscribing to the `call:*`
-   events, decoding via the new payload types + `CallSignalMapper`, exposing a `SharedFlow<CallEvent>` the
-   `CallViewModel` folds (parity with the message/social socket managers).
+3. ~~**`CallDirection` (incoming/outgoing/missed, raw-degrades to incoming) + `CallMediaType`
+   (audioOnly/audioVideo) + call-history row model**~~ ✅ shipped as `call-history-model` (2026-07-01) —
+   the pure call enums from iOS `CallModels.swift`/`WebRTCTypes.swift` + `@Serializable` `CallHistoryPeer`
+   and `CallRecord` mirroring the gateway `CallHistoryItem` REST contract (`GET /api/v1/calls/history`)
+   field-for-field, with pure display accessors (`directionKind`/`isMissed`, `mediaType`, four-tier
+   `displayName`, `avatarUrl`, `durationLabel`, `dataLabel`) as the SSOT a missed/recent-calls list
+   renders. +22 tests. See run log. **Next:** the call-history **repository** (REST fetch + Room cache,
+   cache-first) then the list **UI**.
+4. ~~**Socket subscription → VM wiring**~~ ✅ the **subscription half** shipped as `call-signal-manager`
+   (2026-07-01) — `:sdk-core` `CallSignalManager` (parity with `MessageSocketManager`/`SocialSocketManager`)
+   listens to all 8 inbound `call:*` frames, routes each through `CallSignalMapper`, and republishes the
+   mapped `CallEvent` on `SharedFlow<CallEvent> events`; outbound fire-and-forget emit table
+   (`join`/`leave`/`end`/`toggle-audio`/`toggle-video`/`signal`) at iOS-exact payload keys. +18 tests.
+   See run log. **Still pending:** the **VM-fold half** — `CallViewModel` collecting `events` in
+   `viewModelScope` and its intents driving the outbound emits. That needs the **call-id lifecycle**
+   which `CallConfig` doesn't yet carry, so it depends on:
+5. **`call:initiate` ACK slice**: an `emitInitiate(conversationId, isVideo)` returning the gateway's real
+   `callId` (+ mode / ICE servers / ttl) — the ACK-based emit iOS uses to mint the id. This gives the VM
+   the `callId` every outbound emit is keyed by; once it lands, fold `events` into the VM and route
+   accept/decline/hang-up/mute/camera to `CallSignalManager` emits.
 
 Then the heavier WebRTC/Telecom/FCM-full-screen-intent plumbing (glue-heavy; push every testable
 decision into pure helpers/the VM).
@@ -352,6 +376,85 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-01 — slice `call-history-model` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration (the open PRs on `main` are all
+  iOS-a11y / web / gateway work, none `claude/apps/android/*`). Branched `call-history-model` off the
+  freshly-fetched `origin/main`.
+- **Slice:** the pure **call journal** model in `:core:model` `me.meeshy.sdk.model.call` — a
+  dependency-free port of iOS `CallModels.swift` (`CallDirection`, `CallHistoryPeer`, `APICallRecord`)
+  plus `CallMediaType` from `WebRTCTypes.swift`, mirroring the gateway `CallHistoryItem` REST contract
+  (`services/gateway/src/services/callHistory.ts`, `GET /api/v1/calls/history`) field-for-field.
+  - `CallDirection(wire)` enum + `fromRaw(raw)` degrading an unknown value → `INCOMING` (parity with
+    iOS `CallDirection(raw:)`, so one bad field never fails the whole record).
+  - `CallMediaType` (`AUDIO_ONLY`/`AUDIO_VIDEO`) + `forVideo(isVideo)` — the single mapping from the
+    record's persisted `isVideo` flag to the enum.
+  - `@Serializable CallHistoryPeer` (userId/username/displayName?/avatar?/phoneNumber?/isOnline) and
+    `@Serializable CallRecord` (all gateway fields; only the non-null ones required so a malformed frame
+    fails to decode rather than half-populating). Timestamps stay ISO-8601 **strings** — faithful to the
+    wire and keeping `:core:model` free of any `java.time` dependency (a repository parses where needed).
+  - Pure display accessors as the single tested SSOT: `directionKind`/`isMissed`, `mediaType`, four-tier
+    `displayName` (peer display → peer username → conversation title → "Inconnu", **blank-skipping** —
+    surpasses iOS which only skips empty strings and would surface a whitespace-only name), `avatarUrl`
+    (peer → conversation fallback), `durationLabel` (`M:SS`/`H:MM:SS`, empty at ≤0, locale-free padding),
+    `dataLabel` (deterministic locale-independent byte ladder B→KB→MB→GB→TB, one decimal, `null` when no
+    counters recorded or the total is zero).
+- **TDD red → green:** wrote `CallRecordTest` (+22) first; first compile failed **red** on a real defect —
+  a `private companion object` holding the helpers shadowed the `@Serializable`-generated public
+  `serializer()`, so `CallRecord.serializer()` was inaccessible. Fixed by moving the pure helpers to
+  file-private top-level functions (no companion), letting serialization generate its own public one.
+  Tests then green. Coverage of new logic: every `CallDirection` arm incl. the unknown-degrades arm; both
+  `forVideo` arms; all four `displayName` tiers incl. blank/empty skips and the fallback; all `avatarUrl`
+  fallbacks; `durationLabel` zero/negative/sub-minute/minute/hour-boundary; `dataLabel` both-null / zero /
+  single-counter / KB-MB-GB ladder; and a real gateway-shaped JSON decode with and without a `peer`
+  (unknown extra key tolerated). No `@Composable`/glue in the slice — 100% of it is the covered target.
+- **Verification:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL** (debug APK assembles + all JVM
+  unit tests green). `:core:model:testDebugUnitTest` = `CallRecordTest` 22/22, skipped 0, failures 0.
+- **Reviewer gate:** PASS. Scope = `apps/android/core/model` only (2 new files), no secrets, no production
+  logic touched. Behavioural tests through the public API, no tautologies, no floor lowered. SDK purity
+  respected (stateless model in `:core:model`); single source of truth (this IS the SSOT for call-journal
+  display); immutable data, early returns. Edge cases covered per §3.
+- **Next:** the call-history **repository** (REST `/calls/history` fetch + Room cache, cache-first SWR),
+  then the missed/recent-calls **list UI**; independently, fold `CallSignalManager.events` into
+  `CallViewModel` once the `initiate`-ACK call-id lifecycle lands.
+
+### 2026-07-01 — slice `call-signal-manager` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration (the open PRs — #1221-1229 —
+  are all ios/web/gateway). `origin/main` HEAD `c8063196` (PR #1220). Branched
+  `claude/apps/android/call-signal-manager` off latest `main`.
+- **What:** the **socket subscription + outbound emit table** half of the Calls signalling wiring —
+  a new `:sdk-core` `CallSignalManager`, a transport building block mirroring `MessageSocketManager`/
+  `SocialSocketManager`.
+  - **Inbound.** `attach()` registers a `SocketManager.on(...)` listener for all 8 inbound `call:*`
+    frames (`initiated`/`signal`/`participant-joined`/`ended`/`missed`/`media-toggled`/`error`/
+    `already-answered`), converts each first-arg `JSONObject` to its string form, routes it through the
+    pure `CallSignalMapper.map(event, raw)` (the single tested source of "which frame is which event"),
+    and `tryEmit`s any non-null `CallEvent` on the hot `SharedFlow<CallEvent> events` (replay 0, buffer
+    64 — parity with the other managers). A non-`JSONObject` first arg, a malformed frame, or a
+    mapper-inert frame (ICE candidate / renegotiation offer / media-toggle) emits nothing.
+  - **Outbound.** Fire-and-forget lifecycle emits at **iOS-exact** payload keys (pinned so a rename
+    can't silently break the gateway handler): `emitJoin`/`emitLeave`/`emitEnd` → `{callId}`,
+    `emitToggleAudio`/`emitToggleVideo` → `{callId, enabled}`, `emitSignal` → `{callId, signal}`
+    (nested SDP/ICE object). Derived from the iOS `CallEmitSourceGuardTests` emit table.
+  - **Deliberately deferred** (documented, not orphaned): the ACK-based `call:initiate` (mints the
+    callId; returns ICE servers — belongs with WebRTC) and `request-ice-servers`/`heartbeat`/
+    `quality-report`/`reconnecting`/`reconnected`. The VM-fold + app-level `attach()` caller wait on
+    the call-id lifecycle (an `initiate`-ACK slice) — same building-block-awaiting-wiring status as
+    `SocialSocketManager`/`MessageSocketManager` today.
+- **Tests (+18, `CallSignalManagerTest`, Robolectric):** mockk `SocketManager` capturing `on(...)`
+  handlers (SocialSocketManagerTest pattern) + `emit(...)` payload slots.
+  - Inbound (12): each of the 10 mapped outcomes (initiated→ReceiveIncoming, participant-joined→
+    ParticipantJoined, signal answer→RemoteAnswer, ended missed→RingTimeout, ended rejected→
+    RemoteHangUp, missed→RingTimeout, error→ConnectionFailed(msg), already-answered→RemoteHangUp) +
+    2 inert (signal ice-candidate, media-toggled) `expectNoEvents` + malformed-missing-callId +
+    non-JSONObject-arg both `expectNoEvents`.
+  - Outbound (6): each emit verified for event name + payload keys/values via `slot<JSONObject>`.
+- **Verify:** `./apps/android/meeshy.sh check` — `assembleDebug` + full `testDebugUnitTest` **BUILD
+  SUCCESSFUL** (CallSignalManagerTest 18/18; no regressions).
+- **Reviewer gate: PASS** — apps/android-only diff (1 prod file + 1 test + docs); behavioural tests,
+  no tautologies; SDK-pure building block reusing the `CallSignalMapper` SSOT; edge cases (malformed /
+  non-object / inert frames) covered; no coverage floor touched.
+- **Next:** the `initiate`-ACK slice (call-id lifecycle) → then fold `events` into `CallViewModel`.
 
 ### 2026-07-01 — slice `call-signalling-events` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration (the 30 open PRs are all
