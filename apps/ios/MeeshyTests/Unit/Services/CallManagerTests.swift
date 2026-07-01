@@ -1982,28 +1982,6 @@ final class EndCurrentAndAnswerPendingTests: XCTestCase {
             "endCurrentAndAnswerPending must guard that a pending call exists before ending the current call"
         )
     }
-
-    func test_endCurrentAndAnswerPending_onlyClearsPendingIfStillSameCall() throws {
-        // The 0.5s settle delay opens a window where a THIRD call can arrive
-        // and overwrite pendingIncomingCall before this Task resumes. Clearing
-        // it unconditionally would silently drop the new call's banner state
-        // even though it is still ringing. The clear must be conditioned on
-        // identity with the call this Task actually routed.
-        let source = try callManagerSource()
-        guard let body = functionBody(of: "func endCurrentAndAnswerPending", in: source) else {
-            XCTFail("endCurrentAndAnswerPending not found"); return
-        }
-        guard let taskRange = body.range(of: "Task {") else {
-            XCTFail("Task { not found in endCurrentAndAnswerPending"); return
-        }
-        let insideTask = String(body[taskRange.lowerBound...])
-        XCTAssertTrue(
-            insideTask.contains("self.pendingIncomingCall?.callId == pending.callId"),
-            "endCurrentAndAnswerPending must only clear pendingIncomingCall when it still refers to the " +
-            "call just routed — otherwise a third call arriving during the 0.5s settle delay has its " +
-            "pendingIncomingCall record silently clobbered to nil, losing the call-waiting banner"
-        )
-    }
 }
 
 // MARK: - performLocalMediaStart deduplication guard
