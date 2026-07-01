@@ -112,6 +112,7 @@ struct AffiliateView: View {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(18, weight: .semibold))
                 .foregroundColor(Color(hex: color))
+                .accessibilityHidden(true)
 
             Text(value)
                 .font(MeeshyFont.relative(20, weight: .bold, design: .rounded))
@@ -124,6 +125,7 @@ struct AffiliateView: View {
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
         .padding(.vertical, 14)
+        .accessibilityElement(children: .combine)
         .background(
             RoundedRectangle(cornerRadius: 14)
                 .fill(theme.surfaceGradient(tint: color))
@@ -132,6 +134,7 @@ struct AffiliateView: View {
                         .stroke(theme.border(tint: color), lineWidth: 1)
                 )
         )
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Tokens Section
@@ -177,8 +180,9 @@ struct AffiliateView: View {
 
     private var emptyTokensState: some View {
         VStack(spacing: 12) {
-            // Décoratif : glyphe hero d'état vide — le libellé adjacent porte le sens.
-            // Gardé fixe (le sens est dans le texte scalable) + masqué à VoiceOver (doctrine 74i/86i).
+            // Héros décoratif ≥36pt : gardé figé (doctrine 74i/86i/89i) ; le libellé adjacent
+            // porte le sens → laissé fixe et masqué de VoiceOver plutôt que de scaler et
+            // déséquilibrer l'état vide.
             Image(systemName: "link")
                 .font(.system(size: 36))
                 .foregroundColor(Color(hex: accentColor).opacity(0.4))
