@@ -70,7 +70,7 @@ struct BubbleFooterActions {
     /// l'onglet "Vues" pour consulter le statut de reception/lecture detail.
     /// Wirage UIKit-bridged : `MessageListViewController` -> `MessageListView`
     /// -> `ConversationView` (onShowReadStatus) -> `overlayState.detailSheetMessage`
-    /// + `.detailSheetInitialTab = .views`.
+    /// + `.moreSheetInitialItem = .views` (feuille native MessageMoreSheet).
     var onShowReadStatus: (() -> Void)?
 
     init(

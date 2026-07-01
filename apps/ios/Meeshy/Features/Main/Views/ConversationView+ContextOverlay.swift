@@ -171,8 +171,8 @@ extension ConversationView {
                 }
             )
         case .translate:
+            overlayState.moreSheetInitialItem = .language
             overlayState.detailSheetMessage = message
-            overlayState.detailSheetInitialTab = .language
             dismissContextOverlay()
         case .copy:
             UIPasteboard.general.string = message.content

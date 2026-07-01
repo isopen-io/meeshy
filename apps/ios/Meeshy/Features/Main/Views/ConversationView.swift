@@ -38,7 +38,9 @@ struct ConversationOverlayState {
     var showOverlayMenu = false
     var longPressEnabled = false
     var detailSheetMessage: Message? = nil
-    var detailSheetInitialTab: DetailTab? = nil
+    var moreSheetInitialItem: MoreItem? = nil
+    /// Message dont le picker d'emoji complet (réaction) est présenté.
+    var fullReactionPickerMessage: Message? = nil
     var quickReactionMessageId: String? = nil
 
     // MARK: - Context overlay (iMessage-style long-press)
@@ -608,26 +610,44 @@ struct ConversationView: View {
                 }
             }
             .sheet(item: $overlayState.detailSheetMessage) { msg in
-                MessageDetailSheet(
+                let ctx = MessageMenuContext(
+                    isMine: msg.isMe,
+                    canEdit: msg.isMe || isCurrentUserAdminOrMod,
+                    canDelete: msg.isMe || isCurrentUserAdminOrMod,
+                    hasText: !msg.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                    hasMedia: !msg.attachments.isEmpty,
+                    hasTimebasedMedia: msg.attachments.contains { AttachmentKind(mimeType: $0.mimeType).hasTimebasedTrack },
+                    isPinned: msg.pinnedAt != nil,
+                    isStarred: viewModel.isStarred(messageId: msg.id),
+                    isEdited: msg.isEdited,
+                    hasEditRevisions: !viewModel.editRevisions(for: msg.id).isEmpty
+                )
+                MessageMoreSheet(
                     message: msg,
                     contactColor: conversation?.accentColor ?? MeeshyColors.brandPrimaryHex,
                     conversationId: viewModel.conversationId,
-                    initialTab: overlayState.detailSheetInitialTab,
-                    canDelete: msg.isMe || isCurrentUserAdminOrMod,
+                    sections: MessageActionResolver.moreSections(ctx),
+                    initialItem: overlayState.moreSheetInitialItem,
                     textTranslations: viewModel.messageTranslations[msg.id] ?? [],
                     transcription: viewModel.messageTranscriptions[msg.id],
                     translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
+                    editRevisions: viewModel.editRevisions(for: msg.id),
+                    onReply: { triggerReply(for: msg) },
+                    onForward: { composerState.forwardMessage = msg },
+                    onThread: {
+                        overlayState.replyThreadParentId = msg.id
+                        overlayState.showReplyThread = true
+                    },
+                    onDeleteMedia: {
+                        if let attId = msg.attachments.first?.id {
+                            Task { await viewModel.deleteAttachment(messageId: msg.id, attachmentId: attId) }
+                        }
+                    },
                     onSelectTranslation: { translation in
                         viewModel.setActiveTranslation(for: msg.id, translation: translation)
                     },
                     onSelectAudioLanguage: { langCode in
                         viewModel.setActiveAudioLanguage(for: msg.id, language: langCode)
-                    },
-                    onRequestTranslation: { messageId, lang in
-                        MessageSocketManager.shared.requestTranslation(messageId: messageId, targetLanguage: lang)
-                    },
-                    onReact: { emoji in
-                        viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
                     },
                     onReport: { type, reason in
                         Task {
@@ -635,15 +655,19 @@ struct ConversationView: View {
                             if success { HapticFeedback.success() }
                             else { HapticFeedback.error() }
                         }
-                    },
-                    onDelete: {
-                        // Route through the confirmation dialog so the user
-                        // picks between "Delete for me" and "Delete for
-                        // everyone" instead of silently losing the message.
-                        overlayState.deleteConfirmMessageId = msg.id
-                    },
-                    editRevisions: viewModel.editRevisions(for: msg.id)
+                    }
                 )
+            }
+            .sheet(item: $overlayState.fullReactionPickerMessage) { msg in
+                EmojiPickerSheet(
+                    quickReactions: ["❤️", "😂", "👍", "🔥", "😍", "😮", "😢", "👏", "🎉"],
+                    onSelect: { emoji in
+                        viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
+                        overlayState.fullReactionPickerMessage = nil
+                    }
+                )
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
             }
     }
 
@@ -994,21 +1018,20 @@ struct ConversationView: View {
                 },
                 onOpenReactPicker: { messageId in
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
-                    overlayState.detailSheetMessage = msg
-                    overlayState.detailSheetInitialTab = .react
+                    overlayState.fullReactionPickerMessage = msg
                 },
                 onShowMessageInfo: { messageId in
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
+                    overlayState.moreSheetInitialItem = .views
                     overlayState.detailSheetMessage = msg
-                    overlayState.detailSheetInitialTab = .views
                 },
                 onShowReadStatus: { messageId in
                     // Tap sur les coches (✓ / ✓✓ / ✓✓ bleu) d'un message envoyé.
                     // Ouvre la sheet detail sur l'onglet "Vues" pour consulter
                     // qui a reçu / qui a lu — sans passer par le long-press.
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
+                    overlayState.moreSheetInitialItem = .views
                     overlayState.detailSheetMessage = msg
-                    overlayState.detailSheetInitialTab = .views
                 },
                 onRetry: { messageId in
                     // Tap on the orange retry band of a FAILED outgoing message.
@@ -1020,13 +1043,13 @@ struct ConversationView: View {
                 },
                 onShowReactions: { messageId in
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
+                    overlayState.moreSheetInitialItem = .reactions
                     overlayState.detailSheetMessage = msg
-                    overlayState.detailSheetInitialTab = .reactions
                 },
                 onShowTranslationDetail: { messageId in
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
+                    overlayState.moreSheetInitialItem = .language
                     overlayState.detailSheetMessage = msg
-                    overlayState.detailSheetInitialTab = .language
                 },
                 onMediaTap: { attachment in
                     // User tapped a media — opportunistically warm the cache,
@@ -1510,8 +1533,8 @@ struct ConversationView: View {
                 userRegionalLanguage: AuthManager.shared.currentUser?.regionalLanguage,
                 userCustomDestinationLanguage: AuthManager.shared.currentUser?.customDestinationLanguage,
                 onShowTranslate: {
+                    overlayState.moreSheetInitialItem = .language
                     overlayState.detailSheetMessage = msg
-                    overlayState.detailSheetInitialTab = .language
                 }
             )
             .transition(.opacity).zIndex(999)
