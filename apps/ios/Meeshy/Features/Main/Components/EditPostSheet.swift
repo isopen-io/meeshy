@@ -117,7 +117,7 @@ struct EditPostSheet: View {
                 VStack(alignment: .leading, spacing: 12) {
                     TextEditor(text: $draftContent)
                         .focused($isFocused)
-                        .font(.system(size: 17))
+                        .font(MeeshyFont.relative(17))
                         .foregroundColor(theme.textPrimary)
                         .scrollContentBackground(.hidden)
                         .padding(12)
@@ -139,7 +139,7 @@ struct EditPostSheet: View {
                     HStack {
                         Spacer()
                         Text("\(remainingChars)")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(MeeshyFont.relative(12, weight: .medium))
                             .foregroundColor(remainingChars < 100 ? MeeshyColors.warning : theme.textMuted)
                     }
                     .padding(.horizontal, 20)
@@ -165,7 +165,7 @@ struct EditPostSheet: View {
                                 .scaleEffect(0.85)
                         } else {
                             Text(String(localized: "feed.post.edit.publish", defaultValue: "Publier", bundle: .main))
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(MeeshyFont.relative(16, weight: .semibold))
                         }
                     }
                     .disabled(!isValid || !hasChanges || isSaving)
@@ -210,20 +210,20 @@ struct EditPostSheet: View {
                     Image(systemName: "globe")
                         .foregroundColor(theme.textSecondary)
                     Text(String(localized: "feed.post.edit.language", defaultValue: "Langue du contenu", bundle: .main))
-                        .font(.system(size: 15))
+                        .font(MeeshyFont.relative(15))
                         .foregroundColor(theme.textPrimary)
                     Spacer()
                     if let info = selectedLanguageInfo {
                         Text("\(info.flag) \(info.name)")
-                            .font(.system(size: 15, weight: .medium))
+                            .font(MeeshyFont.relative(15, weight: .medium))
                             .foregroundColor(theme.textSecondary)
                     } else {
                         Text(String(localized: "feed.post.edit.language.auto", defaultValue: "Auto", bundle: .main))
-                            .font(.system(size: 15))
+                            .font(MeeshyFont.relative(15))
                             .foregroundColor(theme.textMuted)
                     }
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(MeeshyFont.relative(12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
                 .padding(.vertical, 10)
@@ -289,13 +289,16 @@ struct EditPostSheet: View {
                 toggleRemove(item.id)
             } label: {
                 Image(systemName: removed ? "arrow.uturn.backward.circle.fill" : "xmark.circle.fill")
-                    .font(.system(size: 18))
+                    .font(MeeshyFont.relative(18))
                     .foregroundColor(removed ? MeeshyColors.indigo300 : .white)
                     .shadow(radius: 1)
             }
             .buttonStyle(.plain)
             .offset(x: 6, y: -6)
             .disabled(blockRemoval || isSaving)
+            .accessibilityLabel(removed
+                ? String(localized: "feed.post.edit.media.restore", defaultValue: "Restaurer le média", bundle: .main)
+                : String(localized: "feed.post.edit.media.remove", defaultValue: "Retirer le média", bundle: .main))
         }
     }
 
@@ -303,9 +306,12 @@ struct EditPostSheet: View {
     private func mediaIcon(_ kind: EditablePostMedia.Kind) -> some View {
         ZStack {
             theme.inputBackground
+            // Decorative media-type placeholder centered in a fixed 64×64 tile —
+            // kept fixed per doctrine 86i (a scalable glyph would overflow the tile).
             Image(systemName: mediaSymbol(kind))
                 .font(.system(size: 22))
                 .foregroundColor(theme.textMuted)
+                .accessibilityHidden(true)
         }
     }
 
