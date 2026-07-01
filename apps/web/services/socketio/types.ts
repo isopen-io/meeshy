@@ -23,6 +23,7 @@ import type {
   TranslationFailedEventData,
   AudioTranslationFailedEventData,
   TranscriptionFailedEventData,
+  FriendRequestCancelledEventData,
 } from '@meeshy/shared/types/socketio-events';
 import type { EncryptedPayload, EncryptionMode } from '@meeshy/shared/types/encryption';
 
@@ -54,6 +55,7 @@ export type TranslationFailedListener = (data: TranslationFailedEventData) => vo
 export type AudioTranslationFailedListener = (data: AudioTranslationFailedEventData) => void;
 export type TranscriptionFailedListener = (data: TranscriptionFailedEventData) => void;
 export type ConversationNewListener = (data: { conversationId: string; conversationType: string; title: string | null; creatorId: string; participantIds: readonly string[]; createdAt: string }) => void;
+export type FriendRequestCancelledListener = (data: FriendRequestCancelledEventData) => void;
 export type ConversationDeletedListener = (data: { userId: string; conversationId: string }) => void;
 export type ConversationUpdatedListener = (data: { conversationId: string; updatedBy: { id: string }; updatedAt: string; [key: string]: unknown }) => void;
 

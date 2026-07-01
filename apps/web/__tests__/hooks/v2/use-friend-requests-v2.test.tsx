@@ -22,6 +22,18 @@ jest.mock('@/hooks/use-websocket', () => ({
   useWebSocket: () => ({ isConnected: true }),
 }));
 
+let friendRequestCancelledHandler: ((data: { friendRequestId: string; cancelledBy: string }) => void) | null = null;
+const mockOnFriendRequestCancelled = jest.fn((listener: (data: { friendRequestId: string; cancelledBy: string }) => void) => {
+  friendRequestCancelledHandler = listener;
+  return () => { friendRequestCancelledHandler = null; };
+});
+
+jest.mock('@/services/meeshy-socketio.service', () => ({
+  meeshySocketIOService: {
+    onFriendRequestCancelled: (...args: unknown[]) => mockOnFriendRequestCancelled(...(args as [(data: { friendRequestId: string; cancelledBy: string }) => void])),
+  },
+}));
+
 const createWrapper = () => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
@@ -44,6 +56,7 @@ const makeFriendRequest = (overrides: Partial<FriendRequest> = {}): FriendReques
 describe('useFriendRequestsV2', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    friendRequestCancelledHandler = null;
     mockGet.mockResolvedValue({ data: { success: true, data: [], pagination: { total: 0 } } });
   });
 
@@ -167,6 +180,25 @@ describe('useFriendRequestsV2', () => {
     });
 
     expect(mockDelete).toHaveBeenCalledWith('/friend-requests/req1');
+  });
+
+  it('invalidates and refetches when the OTHER party cancels/removes a request', async () => {
+    mockGet.mockResolvedValue({ data: { success: true, data: [], pagination: { total: 0 } } });
+
+    const { result } = renderHook(() => useFriendRequestsV2(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(mockOnFriendRequestCancelled).toHaveBeenCalled();
+
+    const callsBefore = mockGet.mock.calls.length;
+
+    await act(async () => {
+      friendRequestCancelledHandler?.({ friendRequestId: 'req1', cancelledBy: 'other-user' });
+    });
+
+    await waitFor(() => {
+      expect(mockGet.mock.calls.length).toBeGreaterThan(callsBefore);
+    });
   });
 
   it('provides getPendingRequestWithUser helper', async () => {

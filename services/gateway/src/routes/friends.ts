@@ -664,6 +664,21 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
         where: { id }
       });
 
+      // Realtime signal a l'AUTRE partie (celle qui n'a pas appele ce endpoint)
+      // pour qu'elle invalide sa liste de demandes en attente immediatement,
+      // au lieu de rester perimee jusqu'a son prochain refetch complet.
+      const notificationService = fastify.notificationService;
+      if (notificationService) {
+        const otherUserId = friendRequest.senderId === userId
+          ? friendRequest.receiverId
+          : friendRequest.senderId;
+        notificationService.emitFriendRequestCancelled({
+          recipientUserId: otherUserId,
+          friendRequestId: id,
+          cancelledBy: userId,
+        });
+      }
+
       return sendSuccess(reply, { message: 'Demande d\'ami supprimee' });
 
     } catch (error) {
