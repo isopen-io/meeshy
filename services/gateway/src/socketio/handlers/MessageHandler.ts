@@ -1318,11 +1318,11 @@ export class MessageHandler {
       // Filter out the sender — unread counts are for recipients only
       const participants = allParticipants.filter((p) => p.id !== senderId);
 
-      // Batch: 1 cursor query + N parallel counts instead of 3N sequential queries
+      // Batch: 1 cursor query + 1 message fetch instead of 3N sequential queries.
+      // Each recipient's count excludes their OWN messages (handled inside the service).
       const unreadCounts = await this.readStatusService.getUnreadCountsForParticipants(
         participants,
-        conversationId,
-        senderId
+        conversationId
       );
 
       await Promise.all(participants.map(async (participant) => {
