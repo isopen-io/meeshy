@@ -133,6 +133,7 @@ struct DataExportView: View {
                     .foregroundColor(theme.textMuted)
             }
         }
+        .accessibilityElement(children: .combine)
         .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 14)
@@ -162,6 +163,7 @@ struct DataExportView: View {
                         VStack(spacing: 6) {
                             Image(systemName: format.icon)
                                 .font(MeeshyFont.relative(22, weight: .semibold))
+                                .accessibilityHidden(true)
                             Text(format.rawValue)
                                 .font(MeeshyFont.relative(12, weight: .semibold))
                         }
@@ -177,6 +179,8 @@ struct DataExportView: View {
                                 )
                         )
                     }
+                    .accessibilityLabel(format.rawValue)
+                    .accessibilityAddTraits(selectedFormats.contains(format) ? .isSelected : [])
                 }
             }
         }
@@ -207,6 +211,8 @@ struct DataExportView: View {
             // Glyphe contraint dans un badge 28×28 fixe : taille figée (doctrine 74i/86i),
             // déjà masqué à VoiceOver.
             Image(systemName: icon)
+                // Glyphe figé : badge de dimension fixe 28×28 (doctrine 86i — le scaling
+                // Dynamic Type déborderait/tronquerait le glyphe hors du cadre fixe).
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(color)
                 .frame(width: 28, height: 28)
@@ -241,6 +247,7 @@ struct DataExportView: View {
                 .font(MeeshyFont.relative(13))
                 .foregroundColor(MeeshyColors.error)
         }
+        .accessibilityElement(children: .combine)
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
@@ -299,6 +306,8 @@ struct DataExportView: View {
                 .tracking(1.2)
                 .accessibilityAddTraits(.isHeader)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
         .padding(.leading, 4)
     }
 

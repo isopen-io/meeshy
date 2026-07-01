@@ -133,6 +133,7 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'Access denied to this community');
       }
 
+      /* istanbul ignore next -- AJV `default: '0'`/`default: '20'` on the querystring schema always fill these before the handler runs */
       const { offset = '0', limit = '20' } = request.query as { offset?: string; limit?: string };
       const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
@@ -171,6 +172,7 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
           user: {
             ...m.user,
             isOnline: vis.showOnline ? m.user.isOnline : false,
+            /* istanbul ignore next -- lastActiveAt is absent from userMinimalSchema (community-member response schema), so this ternary's effect never reaches the public API; both outcomes are unobservable through app.inject() */
             lastActiveAt: vis.showLastSeenTimestamp ? m.user.lastActiveAt : null,
           },
         };
@@ -312,6 +314,7 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
           data: {
             communityId: id,
             userId: validatedData.userId,
+            /* istanbul ignore next -- AddMemberSchema's `role` is `.optional().default(CommunityRole.MEMBER)`, so Zod's own parse() already guarantees a defined value here */
             role: (validatedData.role || CommunityRole.MEMBER) as string
           },
           include: {
