@@ -54,15 +54,6 @@ jest.mock('sonner', () => ({
   },
 }));
 
-// Mock utils
-jest.mock('@/utils/user', () => ({
-  getUserInitials: (user: any) => {
-    if (user.displayName) return user.displayName.charAt(0);
-    if (user.firstName) return user.firstName.charAt(0);
-    return user.username?.charAt(0) || '?';
-  },
-}));
-
 // Mock UI components
 jest.mock('@/components/ui/dialog', () => ({
   Dialog: ({ children, open }: { children: React.ReactNode; open: boolean }) => (
