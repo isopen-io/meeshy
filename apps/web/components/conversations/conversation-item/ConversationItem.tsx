@@ -5,6 +5,7 @@ import { Pin } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { copyToClipboard } from '@/lib/clipboard';
 import type { Conversation, SocketIOUser as User } from '@meeshy/shared/types';
 import { useConversationPreference, useConversationPreferencesActions } from '@/stores/conversation-preferences-store';
 import { getTagColor } from '@/utils/tag-colors';
@@ -126,8 +127,12 @@ export const ConversationItem = memo(function ConversationItem({
           text: fullMessage,
         });
       } else {
-        await navigator.clipboard.writeText(fullMessage);
-        toast.success(t('conversationHeader.linkCopied'));
+        const { success } = await copyToClipboard(fullMessage);
+        if (success) {
+          toast.success(t('conversationHeader.linkCopied'));
+        } else {
+          toast.error(t('conversationHeader.linkCopyError'));
+        }
       }
     } catch (error: unknown) {
       if (error.name === 'AbortError') {

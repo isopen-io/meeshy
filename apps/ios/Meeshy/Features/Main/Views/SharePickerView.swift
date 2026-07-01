@@ -290,6 +290,11 @@ struct SharePickerView: View {
 
     @ViewBuilder
     private func shareButton(for conv: Conversation) -> some View {
+        // Colonne de contrôle en fin de ligne : les 3 états (envoyer / en cours /
+        // envoyé) restent à 26pt fixe pour rester alignés avec le ProgressView
+        // contraint à 26×26 — un glyphe scalable ferait sauter la largeur de la
+        // colonne d'action au fil du réglage Dynamic Type (doctrine 86i, contrôle
+        // à taille fixe). Tap target ≥44pt garanti par le padding de ligne.
         if sentToIds.contains(conv.id) {
             // Fixed control-sized status glyph (26pt): fills the row's trailing action
             // slot at a deliberate control size, not reading text (74i/86i doctrine).

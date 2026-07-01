@@ -818,6 +818,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `viewModelScope` (needs the call-id lifecycle from an `initiate`-ACK slice), the ACK-based
       `call:initiate` + WebRTC-plumbing emits (`request-ice-servers`/`heartbeat`/`quality-report`/
       `reconnecting`/`reconnected`), and the app-level `attach()` lifecycle caller.
+- [~] Call history / journal (recent + missed calls list, direction, duration, data usage) —
+      **pure call-journal model landed** (slice `call-history-model`): `core:model`
+      `me.meeshy.sdk.model.call` gains `CallDirection` (incoming/outgoing/missed, `fromRaw` degrades
+      unknown → incoming, parity with iOS `CallDirection(raw:)`), `CallMediaType` (audioOnly/audioVideo,
+      port of `WebRTCTypes.swift`), the `@Serializable` `CallHistoryPeer`, and `@Serializable` `CallRecord`
+      mirroring the gateway `CallHistoryItem` REST contract (`GET /api/v1/calls/history`) field-for-field
+      (timestamps kept as ISO-8601 strings → `:core:model` stays date-dependency-free). Pure display
+      accessors are the single tested SSOT a future list renders: `directionKind`/`isMissed`, `mediaType`,
+      four-tier `displayName` (peer display → peer username → conversation title → "Inconnu", blank-skipping,
+      surpasses iOS's empty-only skip), `avatarUrl` (peer → conversation fallback), `durationLabel`
+      (`M:SS`/`H:MM:SS`, empty at zero), `dataLabel` (deterministic locale-independent byte ladder, null
+      when no counters / zero total). +22 behavioural tests (every direction arm incl. unknown, name/avatar
+      fallbacks, hour boundary, byte-ladder + guards, gateway-shaped JSON decode with/without peer). The
+      call-history repository (REST fetch + Room cache) + list UI are the pending follow-ups.
 
 ## I. Communities
 - [ ] Community creation (name, `mshy_` identifier, description, emoji, privacy, initial members)

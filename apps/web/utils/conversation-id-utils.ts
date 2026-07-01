@@ -3,13 +3,9 @@
  * Clarification : utiliser `id` (ObjectId) pour les API/WebSocket, `identifier` pour l'affichage/URLs
  */
 
-/**
- * Vérifie si une chaîne est un ObjectId MongoDB valide
- */
-export function isValidObjectId(id: string): boolean {
-  if (!id || typeof id !== 'string') return false;
-  return /^[0-9a-fA-F]{24}$/.test(id);
-}
+import { isValidObjectId } from './object-id';
+
+export { isValidObjectId };
 
 /**
  * Vérifie si une chaîne est un identifiant de conversation lisible (pour URLs)
