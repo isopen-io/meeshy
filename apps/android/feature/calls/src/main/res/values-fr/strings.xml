@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_status_incoming">Appel entrant…</string>
+    <string name="call_status_ringing">Sonnerie…</string>
+    <string name="call_status_connecting">Connexion…</string>
+    <string name="call_status_connected">Connecté</string>
+    <string name="call_status_reconnecting">Reconnexion (%1$d)…</string>
+    <string name="call_ended">Appel terminé</string>
+    <string name="call_ended_missed">Appel manqué</string>
+    <string name="call_ended_declined">Appel refusé</string>
+    <string name="call_ended_connection_lost">Connexion perdue</string>
+    <string name="call_ended_failed">Échec de l\'appel</string>
+    <string name="call_action_accept">Accepter</string>
+    <string name="call_action_decline">Refuser</string>
+    <string name="call_action_hang_up">Raccrocher</string>
+    <string name="call_action_mute">Muet</string>
+    <string name="call_action_camera">Caméra</string>
+    <string name="call_action_close">Fermer</string>
+    <string name="call_start_audio">Appel audio</string>
+    <string name="call_start_video">Appel vidéo</string>
+</resources>

@@ -32,8 +32,11 @@ import androidx.navigation.navArgument
 import androidx.navigation.navDeepLink
 import androidx.compose.ui.res.stringResource
 import me.meeshy.app.R
+import android.net.Uri
 import me.meeshy.app.auth.AuthViewModel
 import me.meeshy.app.auth.LoginScreen
+import me.meeshy.app.calls.CallConfig
+import me.meeshy.app.calls.CallScreen
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.app.chat.ChatScreen
 import me.meeshy.app.chat.ChatViewModel
@@ -68,10 +71,14 @@ object Routes {
     const val STORY_VIEWER = "story/{${StoryViewerViewModel.USER_ID_ARG}}"
     const val STORY_DEEP_LINK = "meeshy://$STORY_VIEWER"
     const val STORY_COMPOSER = "story_composer"
+    const val CALL_PEER_ARG = "peerName"
+    const val CALL_VIDEO_ARG = "video"
+    const val CALL = "call/{$CALL_PEER_ARG}/{$CALL_VIDEO_ARG}"
 
     fun chat(conversationId: String): String = "chat/$conversationId"
     fun profile(userId: String): String = "profile/$userId"
     fun story(userId: String): String = "story/$userId"
+    fun call(peerName: String, isVideo: Boolean): String = "call/${Uri.encode(peerName)}/$isVideo"
 }
 
 private data class TabItem(
@@ -221,7 +228,12 @@ fun MeeshyApp() {
                     navDeepLink { uriPattern = Routes.CONVERSATION_SHORT_DEEP_LINK },
                 ),
             ) {
-                ChatScreen(onBack = { navController.popBackStack() })
+                ChatScreen(
+                    onBack = { navController.popBackStack() },
+                    onStartCall = { peerName, isVideo ->
+                        navController.navigate(Routes.call(peerName, isVideo))
+                    },
+                )
             }
             composable(Routes.FEED) {
                 FeedScreen(
@@ -266,6 +278,25 @@ fun MeeshyApp() {
             }
             composable(Routes.STORY_COMPOSER) {
                 StoryComposerScreen(onClose = { navController.popBackStack() })
+            }
+            composable(
+                route = Routes.CALL,
+                arguments = listOf(
+                    navArgument(Routes.CALL_PEER_ARG) { type = NavType.StringType },
+                    navArgument(Routes.CALL_VIDEO_ARG) { type = NavType.BoolType },
+                ),
+            ) { entry ->
+                val peerName = entry.arguments?.getString(Routes.CALL_PEER_ARG).orEmpty()
+                val isVideo = entry.arguments?.getBoolean(Routes.CALL_VIDEO_ARG) ?: false
+                CallScreen(
+                    config = CallConfig(
+                        peerId = "",
+                        peerName = Uri.decode(peerName),
+                        isVideo = isVideo,
+                        isOutgoing = true,
+                    ),
+                    onClose = { navController.popBackStack() },
+                )
             }
         }
     }
