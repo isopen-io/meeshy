@@ -31,6 +31,7 @@ jest.mock('@meeshy/shared/types', () => ({
 
 import { canAccessConversation } from '../../../routes/conversations/utils/access-control';
 import { registerParticipantsRoutes } from '../../../routes/conversations/participants';
+import { cacheParticipant, getCachedParticipant } from '../../../utils/participant-lookup-cache';
 
 const VALID_CONV_ID = '507f1f77bcf86cd799439011';
 const VALID_USER_ID = '507f1f77bcf86cd799439022';
@@ -1245,6 +1246,23 @@ describe('registerParticipantsRoutes', () => {
       expect(io._leave).toHaveBeenCalledWith(`conversation:${VALID_CONV_ID}`);
       expect(mockFastify._invalidateParticipantCache).toHaveBeenCalledWith(TARGET_USER_ID, VALID_CONV_ID);
       expect(reply.send).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    });
+
+    it('should evict the removed participant from the message-send lookup cache', async () => {
+      const route = getRoute(mockFastify, 'DELETE', '/participants');
+      mockPrisma.participant.findFirst.mockResolvedValue(createCreatorParticipant());
+      mockPrisma.participant.updateMany.mockResolvedValue({ count: 1 });
+      mockPrisma.participant.findMany.mockResolvedValue([]);
+      const reply = createMockReply();
+      cacheParticipant(PARTICIPANT_ID, VALID_CONV_ID, {
+        id: PARTICIPANT_ID,
+        conversationId: VALID_CONV_ID,
+        isActive: true,
+      });
+
+      await route.handler(createDeleteRequest(), reply);
+
+      expect(getCachedParticipant(PARTICIPANT_ID, VALID_CONV_ID)).toBeUndefined();
     });
 
     it('should soft delete the participant when authorized as ADMIN user role', async () => {
