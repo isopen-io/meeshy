@@ -14,6 +14,12 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR iOS AUTORITAIRE (mis à jour 77i, 2026-07-01)** — piste iOS indépendante des itérations web (suffixe `i`).
+> - **Itération en cours : `77i` → branche `claude/upbeat-euler-79v8sr`** (i18n complète `SharePickerView` : ~13 littéraux français visibles → clés catalogue ; réutilise le SSOT `conversation.type.*` de `GlobalSearchView` + `common.close` ; ajoute `conversation.type.broadcast` (manquante → corrige aussi `GlobalSearchView` EN/ES/DE/pt-BR) + 13 clés `share.*` ×5 langues ; interpolation `String(format:)` pour story). Base = `main` HEAD `5f95e77`. Gate = CI `ios-tests.yml`.
+> - **Base de départ 78i : `main` HEAD** (toujours resync sur `main` avant de commencer ; supprimer la branche mergée).
+> - **⚠️ Forte contention iOS (run 2026-06-30/07-01)** : ~10 agents parallèles. Surfaces DÉJÀ PRISES (PRs ouvertes) au moment de 77i : InviteFriendsSheet #1160, 2FA #1155/#1137, emoji-picker labels #1154, VoiceProfileManageView #1150, SupportView hex #1149, ConversationDashboardView #1145, FeedCommentsSheet #1139, quick-action menu #1157, VoiceOver FR #1148/#1142. **Vérifier `list_pull_requests` AVANT de choisir une surface.**
+> - **Différé prioritaire iOS 78i+** : (a) autres littéraux FR visibles figés (`Text`/`Button`/`navigationTitle`) hors surfaces prises ; (b) Dynamic Type grandes surfaces (`CallView`, `StoryViewerView+Content`, `FeedView+Attachments`) ; (c) Glass adoption reste (`MessageOverlayMenu` lot dédié `AdaptiveGlassContainer`). **NE PAS re-flagger** `ContactCardView` (palette/a11y soldés 70i), ni les surfaces de contenu à verre-derrière-scroll (`EmojiFullPickerSheet`/`EmojiKeyboardPanel`).
+
 > **POINTEUR AUTORITAIRE WEB (mis à jour 70wb)** — source fiable = § History (append-only) ; le tableau Current State a divergé (lignes dupliquées par agents parallèles).
 > - **Dernière itération web mergée : `70w` → PR #1088** (i18n `PhoneResetFlow.tsx` — 56 `t()||'FR'` → `t(k,'EN')` + clé EN manquante `phoneReset.identityHint`). Antérieures : 69w #1084 (a11y create-link modal), 68w #1082, 67w #1078.
 > - **⚠️ Collision de numéro `70w`** : deux itérations web parallèles ont pris `70w`. `claude/practical-fermat-w9pjo3` (PhoneResetFlow, mergée #1088) garde `70w` ; la présente (invite-user-modal a11y, branche `claude/practical-fermat-mql80f`) est renommée **`70wb`** (convention `wb`). Surfaces disjointes (auth/ vs conversations/) — aucun conflit de code.
