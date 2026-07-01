@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import AdminLayout from '@/components/admin/AdminLayout';
+import { copyToClipboard as copyTextToClipboard } from '@/lib/clipboard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -244,9 +245,11 @@ export default function AdminTrackingLinksPage() {
     });
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success(t('trackingLinks.copySuccess'));
+  const copyToClipboard = async (text: string) => {
+    const { success } = await copyTextToClipboard(text);
+    if (success) {
+      toast.success(t('trackingLinks.copySuccess'));
+    }
   };
 
   const getDeviceIcon = (device?: string) => {
