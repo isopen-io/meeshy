@@ -2,6 +2,7 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { getUserInitials } from '@/lib/avatar-utils';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -88,7 +89,7 @@ const ContactsList = React.memo<ContactsListProps>(({
                   <Avatar className="h-12 w-12 sm:h-16 sm:w-16 border-2 border-white dark:border-gray-700 shadow-lg">
                     <AvatarImage src={contact.avatar} alt={getUserDisplayName(contact)} />
                     <AvatarFallback className="text-sm sm:text-lg font-bold">
-                      {getUserDisplayName(contact).slice(0, 2).toUpperCase()}
+                      {getUserInitials(contact)}
                     </AvatarFallback>
                   </Avatar>
                   <ParticipantPresenceIndicator
