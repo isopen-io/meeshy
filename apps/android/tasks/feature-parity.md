@@ -796,7 +796,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Adaptive call quality (bitrate ladder, auto video-disable on critical link)
 - [ ] Connection-quality indicator; call-waiting banner (second incoming call)
 - [ ] Front-camera mirroring; extensible call media pipeline hook bus
-- [ ] Voice/video call signaling events (initiate, answer, ICE, end, missed, media toggle)
+- [~] Voice/video call signaling events (initiate, answer, ICE, end, missed, media toggle) —
+      **inbound event models + pure frame→`CallEvent` mapper landed** (slice `call-signalling-events`):
+      `core:model` `me.meeshy.sdk.model.call` gains `@Serializable` payload types at parity with the iOS
+      `MessageSocketManager` listen table (`CallInitiatedPayload`/`CallSignalEnvelope`+`CallSignalPayload`/
+      `CallParticipantPayload`/`CallEndedPayload`/`CallMissedPayload`/`CallMediaTogglePayload`/
+      `CallErrorPayload`/`CallAlreadyAnsweredPayload`) plus a total, side-effect-free `CallSignalMapper.map(
+      eventName, rawJson)` routing each `call:*` frame into the FSM vocabulary: `call:initiated`→
+      `ReceiveIncoming`, `call:participant-joined`→`ParticipantJoined`, `call:signal` type=`answer`→
+      `RemoteAnswer` (offer/ice-candidate inert), `call:ended` reason=`missed`→`RingTimeout` else
+      `RemoteHangUp`, `call:missed`→`RingTimeout`, `call:error`→`ConnectionFailed(msg)`,
+      `call:already-answered`→`RemoteHangUp`; `call:media-toggled` + malformed/unknown frames → `null`
+      (inert, never crashes). +22 behavioural tests. VM/socket subscription wiring + outbound emit table
+      still pending.
 
 ## I. Communities
 - [ ] Community creation (name, `mshy_` identifier, description, emoji, privacy, initial members)

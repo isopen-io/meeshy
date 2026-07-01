@@ -9,9 +9,12 @@
 > 2026-07-01 the `:feature:calls` module landed its real consumer (slice `calls-viewmodel-screen`):
 > a UDF `CallViewModel` (`StateFlow<CallUiState>`) driving the FSM via accept/decline/hang-up/mute/
 > camera intents + signalling events, a pure `CallPresenter` projecting the UI state, and a minimal
-> accent-coherent call screen reachable from audio/video buttons in the chat header. **Next:** the
-> call **signalling event models + socket mapping** (`call:offer`/`:answer`/`:ice-candidate`/…),
-> then the WebRTC/Telecom/FCM plumbing. See the run log + `feature-parity.md §H`.
+> accent-coherent call screen reachable from audio/video buttons in the chat header. On 2026-07-01 the
+> **signalling event models + socket mapping** landed (slice `call-signalling-events`): `@Serializable`
+> inbound `call:*` payload types + a total pure `CallSignalMapper.map(eventName, rawJson) → CallEvent?`
+> at parity with the iOS `MessageSocketManager` listen table. **Next:** wire the mapper into a socket
+> subscription that folds mapped events into `CallViewModel`, mirror the outbound emit table, then the
+> WebRTC/Telecom/FCM plumbing. See the run log + `feature-parity.md §H`.
 
 Stories so far: tray (ring carousel) + cross-group viewer playback engine +
 quick-reaction strip + swipe gestures + realtime reaction socket deltas +
@@ -145,12 +148,20 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
    a pure `CallPresenter` (`CallState × CallConfig × CallMedia → CallUiState`) owning every affordance
    decision, and a minimal accent-coherent Compose screen (ringing/connecting/connected/ended) reachable
    from audio/video call buttons in the chat header; dismissal returns to chat. +34 tests. See run log.
-2. **Call signalling event models + socket mapping** — Kotlin payload types for `call:initiate`/
-   `:offer`/`:answer`/`:ice-candidate`/`:ended`/`:missed`/`:media-toggled` (parity with iOS
-   `CallManager` emit/listen tables) + a pure mapper from socket frames → `CallEvent`.
+2. ~~**Call signalling event models + socket mapping**~~ ✅ shipped as `call-signalling-events`
+   (2026-07-01) — `@Serializable` inbound payload types (`CallInitiatedPayload`/`CallSignalEnvelope`/
+   `CallParticipantPayload`/`CallEndedPayload`/`CallMissedPayload`/`CallMediaTogglePayload`/
+   `CallErrorPayload`/`CallAlreadyAnsweredPayload`) + a total pure `CallSignalMapper.map(eventName, rawJson)`
+   → `CallEvent?` routing every `call:*` frame into the FSM vocabulary (offer/ice/media-toggle/malformed
+   inert → `null`). +22 tests. See run log. **Next:** wire the mapper into a socket subscription that
+   folds mapped events into `CallViewModel`, and mirror the **outbound** emit table
+   (`call:initiate`/`:join`/`:signal`/`:toggle-audio`/`:toggle-video`/`:end`).
 3. **`CallDirection` (incoming/outgoing/missed, raw-degrades to incoming) + `CallMediaType`
    (audioOnly/audioVideo)** + call-history row model — the remaining pure call enums from iOS
    `CallModels.swift`/`WebRTCTypes.swift`, feeding a missed/recent-calls list.
+4. **Socket subscription → VM wiring**: a `CallSignalManager` (`:sdk-core`) subscribing to the `call:*`
+   events, decoding via the new payload types + `CallSignalMapper`, exposing a `SharedFlow<CallEvent>` the
+   `CallViewModel` folds (parity with the message/social socket managers).
 
 Then the heavier WebRTC/Telecom/FCM-full-screen-intent plumbing (glue-heavy; push every testable
 decision into pure helpers/the VM).
@@ -341,6 +352,43 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-01 — slice `call-signalling-events` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration (the 30 open PRs are all
+  ios/web/gateway/shared); `origin/main` HEAD `deb81adf` (iter 61, web). Branched
+  `claude/apps/android/call-signalling-events` off latest `main`.
+- **What:** gave the pure call FSM its **inbound wire vocabulary** — `core:model`
+  `me.meeshy.sdk.model.call` now models every inbound `call:*` frame and maps it to a `CallEvent`.
+  - **`CallSocketEvents.kt`** (payload models): `@Serializable` data classes at parity with the iOS
+    `MessageSocketManager` listen table — `CallSignalPayload` (SDP/ICE: type/sdp/candidate/sdpMLineIndex/
+    sdpMid/from/to/negotiationId), `CallInitiatedPayload` (+`CallInitiatorInfo`), `CallSignalEnvelope`,
+    `CallParticipantPayload`, `CallEndedPayload` (reason), `CallMissedPayload`, `CallMediaTogglePayload`,
+    `CallErrorPayload`, `CallAlreadyAnsweredPayload`. Required identifiers are non-null so a frame missing
+    them fails to decode and is treated as inert (iOS `guard let` parity).
+  - **`CallSignalMapper.kt`** (pure `object`): `map(eventName, rawJson): CallEvent?` — total &
+    side-effect-free, lenient `Json { ignoreUnknownKeys; isLenient }`, wrapped in `runCatching` so a
+    malformed/unknown frame yields `null` (never crashes, never an illegal transition). Routing:
+    `call:initiated`→`ReceiveIncoming`; `call:participant-joined`→`ParticipantJoined`; `call:signal`
+    type=`answer`→`RemoteAnswer` (renegotiation `offer` / `ice-candidate` / unknown / no-signal → `null`,
+    inert plumbing); `call:ended` reason=`missed`→`RingTimeout` else `RemoteHangUp`; `call:missed`→
+    `RingTimeout`; `call:media-toggled`→`null` (media state, not a phase); `call:error`→
+    `ConnectionFailed(message ?? code ?? "Call error")`; `call:already-answered`→`RemoteHangUp`; unknown
+    event name → `null`.
+- **Tests (+22, red → green):** `CallSignalMapperTest` drives the public `map(eventName, rawJson)` with
+  realistic gateway JSON strings and asserts the mapped `CallEvent`/`null` — every branch: each event name,
+  the `signal.type` switch (answer/offer/ice/unknown/no-signal/extra-unknown-fields), the `reason` switch
+  (missed/completed/rejected/absent), the inert plumbing events, the message/code/generic error fallback
+  chain, missing required ids (initiated/media-toggled), unknown event name, and malformed/empty JSON
+  (graceful, no crash). RED was real: the tests fail to compile without the mapper + models.
+- **Verification:** `:core:model:testDebugUnitTest` → `CallSignalMapperTest` 22/22 green; full
+  `assembleDebug testDebugUnitTest` → **BUILD SUCCESSFUL** (no regression across all modules). Diff is
+  `apps/android` only (2 prod files + 1 test + docs; `git status` clean of any web/ios/gateway/shared path).
+- **Reviewer gate:** PASS — SDK purity respected (stateless pure mapper + data models in `core:model`,
+  no product orchestration/singletons/Compose); single source of truth (the mapper feeds the SSOT
+  `CallStateMachine`, no re-implementation of transition logic); behaviour-tested through the public API
+  (no tautologies, no reflection, asserts the mapper's transformation not a canned return); near-total
+  branch coverage incl. the inert/malformed/boundary arms; immutable data, early returns, no coverage floor
+  touched; graceful failure paths (malformed frame → inert, never a crash).
 
 ### 2026-07-01 — slice `calls-viewmodel-screen` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration; `origin/main` HEAD `1827303`
