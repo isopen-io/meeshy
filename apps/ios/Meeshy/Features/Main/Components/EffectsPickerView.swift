@@ -20,9 +20,9 @@ struct EffectChip: View {
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 13))
+                    .font(MeeshyFont.relative(13))
                 Text(label)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(MeeshyFont.relative(12, weight: .medium))
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
@@ -51,10 +51,10 @@ struct EffectsPickerView: View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text(String(localized: "effects.title", defaultValue: "Effets du message", bundle: .main))
-                    .font(.system(size: 17, weight: .bold))
+                    .font(MeeshyFont.relative(17, weight: .bold))
                 Spacer()
                 Button(String(localized: "common.ok", defaultValue: "OK", bundle: .main)) { dismiss() }
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(MeeshyFont.relative(15, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
             }
             .padding(.horizontal)
@@ -105,7 +105,7 @@ struct EffectsPickerView: View {
     private func effectSection(title: String, items: [(MessageEffectFlags, String, String)]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.system(size: 13, weight: .semibold))
+                .font(MeeshyFont.relative(13, weight: .semibold))
                 .foregroundColor(.secondary)
                 .padding(.horizontal)
 
@@ -123,7 +123,7 @@ struct EffectsPickerView: View {
     private var ephemeralDurationPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(String(localized: "effects.ephemeral-duration", defaultValue: "Dur\u{00E9}e \u{00E9}ph\u{00E9}m\u{00E8}re", bundle: .main))
-                .font(.system(size: 13, weight: .semibold))
+                .font(MeeshyFont.relative(13, weight: .semibold))
                 .foregroundColor(.secondary)
             HStack(spacing: 8) {
                 ForEach(EphemeralDuration.allCases) { duration in
@@ -132,7 +132,7 @@ struct EffectsPickerView: View {
                         effects.ephemeralDuration = duration.rawValue
                     } label: {
                         Text(duration.label)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(MeeshyFont.relative(12, weight: .medium))
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
                             .background(effects.ephemeralDuration == duration.rawValue
@@ -158,15 +158,15 @@ struct EffectsPickerView: View {
     private var activeEffectsSummary: some View {
         HStack {
             Text(String(format: String(localized: "effects.active-count", defaultValue: "%d effet(s) actif(s)", bundle: .main), effects.flags.rawValue.nonzeroBitCount))
-                .font(.system(size: 12))
+                .font(MeeshyFont.relative(12))
                 .foregroundColor(.secondary)
             Spacer()
             Button(String(localized: "effects.clear-all", defaultValue: "Tout effacer", bundle: .main)) {
                 HapticFeedback.light()
                 effects = .none
             }
-            .font(.system(size: 12, weight: .medium))
-            .foregroundColor(.red.opacity(0.8))
+            .font(MeeshyFont.relative(12, weight: .medium))
+            .foregroundColor(MeeshyColors.error.opacity(0.8))
         }
         .padding(.horizontal)
         .transition(.opacity)
