@@ -74,69 +74,69 @@ public struct StoryComposerView: View {
 
     // MARK: - Single source of truth
 
-    @StateObject private var viewModel = StoryComposerViewModel()
+    @StateObject var viewModel = StoryComposerViewModel()
 
     // MARK: - System environment
 
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorScheme) var colorScheme
 
     // MARK: - Canvas-local state
 
-    @State private var selectedFilter: StoryFilter?
-    @State private var selectedImage: UIImage?
-    @State private var stickerObjects: [StorySticker] = []
+    @State var selectedFilter: StoryFilter?
+    @State var selectedImage: UIImage?
+    @State var stickerObjects: [StorySticker] = []
 
     // MARK: - Background audio (legacy panel state)
 
-    @State private var selectedAudioId: String?
-    @State private var selectedAudioTitle: String?
-    @State private var audioVolume: Float = 0.7
-    @State private var audioTrimStart: TimeInterval = 0
-    @State private var audioTrimEnd: TimeInterval = 0
+    @State var selectedAudioId: String?
+    @State var selectedAudioTitle: String?
+    @State var audioVolume: Float = 0.7
+    @State var audioTrimStart: TimeInterval = 0
+    @State var audioTrimEnd: TimeInterval = 0
 
     // MARK: - Photo / media pickers
 
-    @State private var fgMediaItem: PhotosPickerItem?
+    @State var fgMediaItem: PhotosPickerItem?
 
     // MARK: - Empty-state picker selection animation
     //
     // Briefly latched when the user taps a tile in `emptyStateLargePicker`,
     // before the selection propagates to `viewModel.selectTool(_:)`. Drives
     // the highlight + fade-others animation in `largeToolTile`.
-    @State private var pickerSelectedTool: StoryToolMode?
+    @State var pickerSelectedTool: StoryToolMode?
 
     // MARK: - Media editor (triggered by edit button on canvas elements)
 
-    @State private var editingBgImage: UIImage?
-    @State private var editingElementImage: EditingMediaImage?
-    @State private var editingElementVideo: EditingMediaVideo?
+    @State var editingBgImage: UIImage?
+    @State var editingElementImage: EditingMediaImage?
+    @State var editingElementVideo: EditingMediaVideo?
 
     // MARK: - Audio pickers
 
-    @State private var showAudioDocumentPicker = false
-    @State private var showVoiceRecorderSheet = false
+    @State var showAudioDocumentPicker = false
+    @State var showVoiceRecorderSheet = false
     // Prisme Linguistique: the story's source language comes from the user's
     // in-app content preferences (systemLanguage → regionalLanguage → "fr"),
     // NEVER from the keyboard locale. See `StoryComposerViewModel
     // .resolveComposerSourceLanguage(user:)` for the canonical resolver.
-    @State private var storyLanguage: String = StoryComposerViewModel
+    @State var storyLanguage: String = StoryComposerViewModel
         .resolveComposerSourceLanguage(user: AuthManager.shared.currentUser)
-    @State private var showFilterSheet = false
-    @State private var showTransitionSheet = false
-    @State private var audioEditorItem: AudioEditorItemWrapper?
-    @State private var mediaAudioEditorItem: AudioEditorItemWrapper?
-    @State private var confirmedMediaAudioURL: URL?
+    @State var showFilterSheet = false
+    @State var showTransitionSheet = false
+    @State var audioEditorItem: AudioEditorItemWrapper?
+    @State var mediaAudioEditorItem: AudioEditorItemWrapper?
+    @State var confirmedMediaAudioURL: URL?
 
     // MARK: - Manipulation layer (verrouillage en cascade)
 
     /// Couche active courante du canvas, miroir SwiftUI de
     /// `StoryCanvasUIView.currentManipulationLayer`. Mise à jour via le
     /// callback `onManipulationLayerChanged` du `StoryComposerCanvasView`.
-    @State private var manipulationLayer: CanvasManipulationLayer = .canvas
+    @State var manipulationLayer: CanvasManipulationLayer = .canvas
 
     // MARK: - Publication
 
-    @State private var publishTask: Task<Void, Never>?
+    @State var publishTask: Task<Void, Never>?
 
     // MARK: - Canvas viewport (pinch-to-zoom + drag-to-pan when zoomed)
 
@@ -145,22 +145,22 @@ public struct StoryComposerView: View {
     /// 1.0 à `.ended`/`.cancelled`. Anciennement `@GestureState` lié au
     /// `MagnificationGesture` SwiftUI 2-doigts qui entrait en conflit avec
     /// le pinch d'élément.
-    @State private var viewportPinchDelta: CGFloat = 1.0
-    @GestureState private var viewportDragDelta: CGSize = .zero
+    @State var viewportPinchDelta: CGFloat = 1.0
+    @GestureState var viewportDragDelta: CGSize = .zero
 
     /// Canvas gestures disabled only during drawing (PKCanvasView needs exclusive touch control).
     /// For all other modes, child element gestures naturally take priority via SwiftUI's
     /// gesture hierarchy (.gesture on child beats .gesture on parent).
-    private var isCanvasGestureEnabled: Bool {
+    var isCanvasGestureEnabled: Bool {
         !viewModel.isDrawingActive
     }
 
     /// Pan always available when zoomed — uses high minimumDistance to avoid accidental triggers
-    private var isPanEnabled: Bool {
+    var isPanEnabled: Bool {
         viewModel.isCanvasZoomed
     }
 
-    private var viewportDragGesture: some Gesture {
+    var viewportDragGesture: some Gesture {
         DragGesture(minimumDistance: 20)
             .updating($viewportDragDelta) { value, state, _ in
                 state = value.translation
@@ -175,63 +175,63 @@ public struct StoryComposerView: View {
 
     /// Top bar hides during free canvas manipulation (zoomed, no tool/selection)
     /// to reveal canvas controls underneath. Reappears when activating a tool or selecting media.
-    private var showTopBar: Bool {
+    var showTopBar: Bool {
         (!viewModel.isCanvasZoomed && areFabsVisible) || viewModel.activeTool != nil || viewModel.selectedElementId != nil
     }
 
     // MARK: - Pickers
-    private var transitionPicker: some View {
+    var transitionPicker: some View {
         Text(String(localized: "story.composer.transitions", defaultValue: "Transitions", bundle: .module))
             .foregroundColor(.white)
     }
 
     // MARK: - UI state
 
-    @State private var areFabsVisible: Bool = true
-    @State private var bandStateMachine: BandStateMachine = BandStateMachine()
+    @State var areFabsVisible: Bool = true
+    @State var bandStateMachine: BandStateMachine = BandStateMachine()
 
     /// Hauteur (redimensionnable) du panneau DESSIN du band partagé, pilotée par le
     /// drag du grabber (`ComposerBottomBand`). Tirer vers le haut agrandit le panneau
     /// (liste des traits) ; vers le bas le réduit. En mode dessin (Option A) le canvas
     /// reste PLEIN — ce drawer flotte par-dessus, il ne rétrécit plus le canvas.
-    @State private var composerBandHeight: CGFloat = 280
+    @State var composerBandHeight: CGFloat = 280
 
     /// Drawer d'outil replié « totalement » : seul le grabber reste visible et le
     /// canvas est 100 % visible. Vaut pour TOUS les outils (2026-06-02) — replier ne
     /// quitte pas l'outil actif (en dessin, le contrôleur flottant `StoryDrawingToolbar`
     /// persiste en plus). Re-déplier via le grabber.
-    @State private var bandDrawerCollapsed = false
+    @State var bandDrawerCollapsed = false
 
     /// Hauteur du drawer dessin une fois replié (poignée seule).
     static let drawingDrawerGrabberHeight: CGFloat = 38
 
-    @State private var showDiscardAlert = false
-    @State private var showRestoreDraftAlert = false
-    @State private var isLoadingMedia = false
-    @State private var mediaLoadProgress: Double = 0
-    @State private var mediaLoadLabel: String = ""
+    @State var showDiscardAlert = false
+    @State var showRestoreDraftAlert = false
+    @State var isLoadingMedia = false
+    @State var mediaLoadProgress: Double = 0
+    @State var mediaLoadLabel: String = ""
     // Défaut « Contacts » (PostVisibility.friends) : une story est d'abord
     // partagée avec ses contacts, pas publiquement. L'audience publique reste
     // un choix explicite via le sélecteur globe. Aligné sur le défaut du VM app
     // (`StoryViewModel.publishStory(visibility: "FRIENDS")`).
-    @State private var visibility: String = "FRIENDS"
-    @State private var visibilityUserIds: [String] = []
-    @State private var audiencePickerMode: PostVisibility?
-    @State private var lostMediaCount: Int = 0  // > 0 triggers an alert after restoreDraft
+    @State var visibility: String = "FRIENDS"
+    @State var visibilityUserIds: [String] = []
+    @State var audiencePickerMode: PostVisibility?
+    @State var lostMediaCount: Int = 0  // > 0 triggers an alert after restoreDraft
 
     // MARK: - Transition effects (local until synced to effects)
 
-    @State private var openingEffect: StoryTransitionEffect?
-    @State private var closingEffect: StoryTransitionEffect?
+    @State var openingEffect: StoryTransitionEffect?
+    @State var closingEffect: StoryTransitionEffect?
 
     // MARK: - Keyboard observation + canvas shift
 
-    @State private var keyboardHeight: CGFloat = 0
-    @State private var canvasEditShift: CGFloat = 0
+    @State var keyboardHeight: CGFloat = 0
+    @State var canvasEditShift: CGFloat = 0
     /// Frame naturelle (non décalée) du canvas, mesurée hors `.offset`.
-    @State private var canvasNaturalFrame: CGRect = .zero
+    @State var canvasNaturalFrame: CGRect = .zero
 
-    @Environment(\.theme) private var theme
+    @Environment(\.theme) var theme
 
     // MARK: - Callbacks (public API preserved)
 
@@ -284,7 +284,7 @@ public struct StoryComposerView: View {
 
     // MARK: - Body
 
-    private var mainContent: some View {
+    var mainContent: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
@@ -436,7 +436,7 @@ public struct StoryComposerView: View {
 
     // Sheets and full-screen covers are extracted here to keep `body` small
     // enough for the SwiftUI type-checker to handle within its time budget.
-    private var sheetModifiers: some View {
+    var sheetModifiers: some View {
         mainContent
         .fileImporter(isPresented: $showAudioDocumentPicker, allowedContentTypes: [.audio], allowsMultipleSelection: false) { result in
             if case .success(let urls) = result, let url = urls.first {
@@ -693,7 +693,7 @@ public struct StoryComposerView: View {
         .onAppear { checkForDraft() }
     }
 
-    private var bottomRegion: some View {
+    var bottomRegion: some View {
         VStack(spacing: 0) {
             Spacer()
             if shouldShowEmptyStateLargePicker {
@@ -722,7 +722,7 @@ public struct StoryComposerView: View {
 
     // MARK: - Top Bar
 
-    private var topBar: some View {
+    var topBar: some View {
         HStack(spacing: 0) {
             dismissButton
                 .padding(.leading, 16)
@@ -752,7 +752,7 @@ public struct StoryComposerView: View {
         )
     }
 
-    private var dismissButton: some View {
+    var dismissButton: some View {
         Button { handleDismiss() } label: {
             Image(systemName: "xmark")
                 .font(.system(size: 15, weight: .bold))
@@ -763,7 +763,7 @@ public struct StoryComposerView: View {
         }
     }
 
-    private var previewButton: some View {
+    var previewButton: some View {
         Button {
             NotificationCenter.default.post(name: .storyComposerMuteCanvas, object: nil)
             Task { @MainActor in
@@ -781,7 +781,7 @@ public struct StoryComposerView: View {
     }
 
 
-    private var publishButton: some View {
+    var publishButton: some View {
         let isPublishing = publishTask != nil
         return Button { publishAllSlides() } label: {
             HStack(spacing: 4) {
@@ -804,7 +804,7 @@ public struct StoryComposerView: View {
         .disabled(isPublishing)
     }
 
-    private var visibilityMenu: some View {
+    var visibilityMenu: some View {
         Menu {
             ForEach(PostVisibility.composerSelectableCases) { mode in
                 Button {
@@ -836,7 +836,7 @@ public struct StoryComposerView: View {
         }
     }
 
-    private var overflowMenu: some View {
+    var overflowMenu: some View {
         Menu {
             // Slide tools — le filtre GLOBAL a été retiré : les filtres
             // s'appliquent désormais par média via l'éditeur unitaire (crayon
@@ -886,7 +886,7 @@ public struct StoryComposerView: View {
 
     // MARK: - Slide Strip
 
-    private var slideStrip: some View {
+    var slideStrip: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
                 ForEach(Array(viewModel.slides.enumerated()), id: \.element.id) { index, slide in
@@ -897,7 +897,7 @@ public struct StoryComposerView: View {
         }
     }
 
-    private func slideThumb(slide: StorySlide, index: Int) -> some View {
+    func slideThumb(slide: StorySlide, index: Int) -> some View {
         let isSelected = viewModel.currentSlideIndex == index
         let thumbH: CGFloat = 42
         let thumbW: CGFloat = thumbH * 9 / 16
@@ -994,12 +994,12 @@ public struct StoryComposerView: View {
     /// les autres outils + des bulles flottantes au-dessus : on NE masque donc PAS
     /// le band pendant le dessin (correctif user 2026-06-01 « dessin devrait afficher
     /// le ComposerBottomBand aussi » ; plus de bande dédiée `DrawingBand`).
-    private var isFloatingEditorActive: Bool {
+    var isFloatingEditorActive: Bool {
         viewModel.textEditingMode != .inactive
     }
 
 
-    private var isComposerEmpty: Bool {
+    var isComposerEmpty: Bool {
         let slidesEmpty = viewModel.slides.allSatisfy { slide in
             slide.content == nil
                 && viewModel.slideImages[slide.id] == nil
@@ -1015,7 +1015,7 @@ public struct StoryComposerView: View {
             && viewModel.drawingStrokes.isEmpty
     }
 
-    private var shouldShowEmptyStateLargePicker: Bool {
+    var shouldShowEmptyStateLargePicker: Bool {
         // Le picker grand format n'est montré QUE quand :
         //  - aucun outil n'est sélectionné côté viewModel,
         //  - le bandeau d'outils est complètement masqué (.hidden — le
@@ -1033,7 +1033,7 @@ public struct StoryComposerView: View {
     /// Pastel accent color per tile. Picks a distinct hue so the carousel
     /// feels lively without breaking from the brand palette. Each accent is
     /// applied at low opacity behind the icon glyph (soft tinted card).
-    private func tileAccent(for tool: StoryToolMode) -> Color {
+    func tileAccent(for tool: StoryToolMode) -> Color {
         switch tool {
         case .media:    return MeeshyColors.error          // peachy red
         case .audio:    return MeeshyColors.indigo400      // soft lavender
@@ -1046,7 +1046,7 @@ public struct StoryComposerView: View {
     }
 
     @ViewBuilder
-    private var emptyStateLargePicker: some View {
+    var emptyStateLargePicker: some View {
         VStack(spacing: 8) {
             VStack(spacing: 2) {
                 Text(String(localized: "story.composer.empty.title",
@@ -1177,7 +1177,7 @@ public struct StoryComposerView: View {
     }
 
     @ViewBuilder
-    private func largeToolTile(
+    func largeToolTile(
         _ tool: StoryToolMode,
         icon: String,
         title: String,
@@ -1289,7 +1289,7 @@ public struct StoryComposerView: View {
     /// + loading + zoom-reset overlays. Extracted so the SwiftUI type-checker
     /// doesn't time out on the parent body.
     @ViewBuilder
-    private var canvasComposerLayer: some View {
+    var canvasComposerLayer: some View {
         // **Parité 9:16 composer ↔ reader / preview / export (2026-06-01).**
         // Le canvas d'édition était auparavant plein écran (`.ignoresSafeArea()`
         // sans contrainte de ratio), donc plus haut que 9:16 sur la plupart des
@@ -1386,7 +1386,7 @@ public struct StoryComposerView: View {
     /// top reserve + l'arrondi s'appliquent (le drawer flotte par-dessus le bas du
     /// canvas — il ne le rétrécit plus). C'est ce qui rend le dessin WYSIWYG avec la
     /// preview/le reader (le drawing remplit tout le viewport).
-    private var canvasIsInset: Bool {
+    var canvasIsInset: Bool {
         viewModel.drawingEditingMode.isActive
             || bandStateMachine.state.activeCategory == .drawing
     }
@@ -1395,7 +1395,7 @@ public struct StoryComposerView: View {
     /// contrôleurs flottants (`StoryDrawingToolbar`) juste au-dessus du drawer. Replié
     /// « totalement » = poignée seule ; déplié = panneau (liste des traits) + chrome.
     /// Ne rétrécit PLUS le canvas (Option A).
-    private var drawingDrawerHeight: CGFloat {
+    var drawingDrawerHeight: CGFloat {
         guard canvasIsInset else { return 0 }
         return bandDrawerCollapsed ? Self.drawingDrawerGrabberHeight : composerBandHeight + 40
     }
@@ -1406,7 +1406,7 @@ public struct StoryComposerView: View {
     /// Vrai dès qu'un panneau (band partagé, mode dessin, ou éditeur texte) est
     /// présenté : le canvas se carde alors en rectangle arrondi AU-DESSUS de la
     /// sheet (plus de chevauchement Option A). Truth-table dans `StoryCanvasFraming`.
-    private var canvasIsCarded: Bool {
+    var canvasIsCarded: Bool {
         let bandPresent = bandStateMachine.state != .hidden
         let drawingActive = viewModel.drawingEditingMode.isActive
         let textActive = viewModel.textEditingMode != .inactive
@@ -1422,7 +1422,7 @@ public struct StoryComposerView: View {
     /// (lot B4 remplacera la source par un modèle par-outil) : band/dessin →
     /// `composerBandHeight` cappé ; éditeur texte → `keyboardHeight + 132` (barre
     /// bulles). Hors carding → `0` (canvas plein écran).
-    private var presentedSheetHeight: CGFloat {
+    var presentedSheetHeight: CGFloat {
         guard canvasIsCarded else { return 0 }
         let cap = cappedSheetMaxHeight(screenHeight: composerScreenHeight)
         if viewModel.textEditingMode != .inactive {
@@ -1440,13 +1440,13 @@ public struct StoryComposerView: View {
 
     /// Plafond de hauteur de sheet : ~42 % de l'écran, borné à 540 pt — garde le
     /// canvas cardé toujours visible (jamais écrasé sous la sheet).
-    private func cappedSheetMaxHeight(screenHeight: CGFloat) -> CGFloat {
+    func cappedSheetMaxHeight(screenHeight: CGFloat) -> CGFloat {
         min(540, screenHeight * 0.42)
     }
 
     /// Hauteur de la fenêtre active (et non `UIScreen.main.bounds`) — identique au
     /// calcul de `recomputeCanvasShift`, pour respecter split-screen / Stage Manager.
-    private var composerScreenHeight: CGFloat {
+    var composerScreenHeight: CGFloat {
         UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .first?.windows.first(where: { $0.isKeyWindow })?.bounds.height
@@ -1454,7 +1454,7 @@ public struct StoryComposerView: View {
     }
 
     @ViewBuilder
-    private func canvasCore(cornerRadius: CGFloat) -> some View {
+    func canvasCore(cornerRadius: CGFloat) -> some View {
         StoryComposerCanvasView(
             slide: $viewModel.currentSlide,
             onItemTapped: { id, kind in
@@ -1628,7 +1628,7 @@ public struct StoryComposerView: View {
     /// venait du fait que `StoryAudioPlayerView` n'était wired nulle part —
     /// ce chip est plus léger et dédié à la composition.
     @ViewBuilder
-    private var audioForegroundOverlay: some View {
+    var audioForegroundOverlay: some View {
         if !viewModel.isDrawingActive {
             GeometryReader { geo in
                 ForEach(foregroundAudioBindings, id: \.wrappedValue.id) { binding in
@@ -1661,7 +1661,7 @@ public struct StoryComposerView: View {
     /// respectent tous ce `volume`. Posé dans le MÊME espace de coordonnées que
     /// les chips audio (overlay sur le canvas) pour un placement cohérent.
     @ViewBuilder
-    private var videoMuteOverlay: some View {
+    var videoMuteOverlay: some View {
         if !viewModel.isDrawingActive {
             GeometryReader { geo in
                 ForEach(foregroundVideoBindings, id: \.wrappedValue.id) { binding in
@@ -1671,7 +1671,7 @@ public struct StoryComposerView: View {
         }
     }
 
-    private func videoMuteButton(for binding: Binding<StoryMediaObject>,
+    func videoMuteButton(for binding: Binding<StoryMediaObject>,
                                  canvasSize: CGSize) -> some View {
         let media = binding.wrappedValue
         let muted = media.volume <= 0
@@ -1709,7 +1709,7 @@ public struct StoryComposerView: View {
     /// Bindings vers chaque vidéo foreground (`isBackground == false`, kind
     /// `.video`) de la slide courante — pour le bouton mute. Écrit en retour
     /// dans `viewModel.currentEffects`, ce qui resync la slide et l'aperçu.
-    private var foregroundVideoBindings: [Binding<StoryMediaObject>] {
+    var foregroundVideoBindings: [Binding<StoryMediaObject>] {
         let medias = viewModel.currentEffects.mediaObjects ?? []
         return medias.enumerated().compactMap { idx, obj -> Binding<StoryMediaObject>? in
             guard obj.isBackground == false, obj.kind == .video else { return nil }
@@ -1733,7 +1733,7 @@ public struct StoryComposerView: View {
     /// Bindings vers chaque `StoryAudioPlayerObject` foreground de la slide
     /// courante. Le binding écrit en retour dans `viewModel.currentEffects`
     /// — ce qui resync la slide via `currentSlide.didSet` et propage au canvas.
-    private var foregroundAudioBindings: [Binding<StoryAudioPlayerObject>] {
+    var foregroundAudioBindings: [Binding<StoryAudioPlayerObject>] {
         let audios = viewModel.currentEffects.audioPlayerObjects ?? []
         return audios.enumerated().compactMap { idx, obj -> Binding<StoryAudioPlayerObject>? in
             guard obj.isBackground != true else { return nil }
@@ -1755,7 +1755,7 @@ public struct StoryComposerView: View {
     }
 
     @ViewBuilder
-    private var mediaLoadingOverlay: some View {
+    var mediaLoadingOverlay: some View {
         if isLoadingMedia {
             Color.black.opacity(0.4)
                 .overlay {
@@ -1789,7 +1789,7 @@ public struct StoryComposerView: View {
 
 
     @ViewBuilder
-    private var canvasZoomResetButton: some View {
+    var canvasZoomResetButton: some View {
         if viewModel.isCanvasZoomed {
             Button {
                 withAnimation(.spring(response: 0.3)) {
@@ -1812,7 +1812,7 @@ public struct StoryComposerView: View {
     // MARK: - Timeline Section
 
     @ViewBuilder
-    private var timelineSection: some View {
+    var timelineSection: some View {
         // V2 timeline editor is the product — no feature-flag gating since the
         // app has not yet shipped to a userbase that requires backwards-compat.
         TimelineContainerSwitcher(viewModel: viewModel.timelineViewModel)
@@ -1825,7 +1825,7 @@ public struct StoryComposerView: View {
     /// Décale le canvas vers le haut juste assez pour que le texte édité reste
     /// au-dessus de (clavier + barre d'outils). Basé sur la position normalisée
     /// `y` du modèle — pas de pont de coordonnées UIKit↔SwiftUI.
-    private func recomputeCanvasShift() {
+    func recomputeCanvasShift() {
         guard keyboardHeight > 0,
               let id = viewModel.textEditingMode.activeTextId,
               let textObj = viewModel.currentEffects.textObjects.first(where: { $0.id == id }),
@@ -1848,13 +1848,13 @@ public struct StoryComposerView: View {
         canvasEditShift = max(0, textCenterY - visibleBottom)
     }
 
-    private var safeAreaBottomInset: CGFloat {
+    var safeAreaBottomInset: CGFloat {
         UIApplication.shared.connectedScenes
             .compactMap { $0 as? UIWindowScene }
             .first?.windows.first?.safeAreaInsets.bottom ?? 0
     }
 
-    private func textObjectBinding(for id: String) -> Binding<StoryTextObject>? {
+    func textObjectBinding(for id: String) -> Binding<StoryTextObject>? {
         guard viewModel.currentEffects.textObjects.contains(where: { $0.id == id }) else { return nil }
         return Binding(
             get: {
@@ -1873,7 +1873,7 @@ public struct StoryComposerView: View {
 
     // MARK: - Sync / Restore
 
-    private func syncCurrentSlideEffects() {
+    func syncCurrentSlideEffects() {
         viewModel.currentEffects = buildEffects()
     }
 
@@ -1887,7 +1887,7 @@ public struct StoryComposerView: View {
     /// transient picker / editor scratch state. Intentionally does NOT
     /// touch user preferences (`storyLanguage`, `visibility`), the
     /// in-flight loading indicators, or sheet-presentation booleans.
-    private func resetLocalState() {
+    func resetLocalState() {
         // Canvas-local state (read by buildEffects via canvasSyncFingerprint)
         selectedFilter = nil
         selectedImage = nil
@@ -1914,7 +1914,7 @@ public struct StoryComposerView: View {
         lostMediaCount = 0
     }
 
-    private func restoreCanvas(from slide: StorySlide) {
+    func restoreCanvas(from slide: StorySlide) {
         let e = slide.effects
         if let bgHex = e.background { viewModel.backgroundColor = "#\(bgHex)" }
         else { viewModel.backgroundColor = "#\(StoryBackgroundPalette.randomBackgroundColor())" }
@@ -1949,7 +1949,7 @@ public struct StoryComposerView: View {
     /// design) tombe dans le rayon du geste de gomme. Pas d'effacement pixel-par-pixel
     /// (le modèle est vectoriel) — on supprime le trait entier croisé, UX acceptable
     /// (cf. Risque #2 du plan).
-    private func eraseStrokes(near erasePoints: [CGPoint]) {
+    func eraseStrokes(near erasePoints: [CGPoint]) {
         guard !erasePoints.isEmpty else { return }
         let eraseRadius: CGFloat = 28  // design px
         let survivors = viewModel.drawingStrokes.filter { stroke in
@@ -1968,7 +1968,7 @@ public struct StoryComposerView: View {
         }
     }
 
-    private func buildEffects() -> StoryEffects {
+    func buildEffects() -> StoryEffects {
         let bgHex = selectedImage != nil ? nil : viewModel.backgroundColor.replacingOccurrences(of: "#", with: "")
         let bt = viewModel.backgroundTransform
         let bgTransform = StoryBackgroundTransform(
@@ -2027,13 +2027,13 @@ public struct StoryComposerView: View {
 
     // MARK: - Media Loading
 
-    private func handleForegroundMediaSelection(from item: PhotosPickerItem?) {
+    func handleForegroundMediaSelection(from item: PhotosPickerItem?) {
         guard let item else { return }
         let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) || $0.conforms(to: .video) }
         addForegroundMedia(from: item, kind: isVideo ? .video : .image)
     }
 
-    private func addForegroundMedia(from item: PhotosPickerItem?, kind: StoryMediaKind) {
+    func addForegroundMedia(from item: PhotosPickerItem?, kind: StoryMediaKind) {
         guard let item else { return }
         // Capture the slide ID at the START of the picker flow. PhotosPicker's
         // `loadTransferable` is async (1-3s for a video) and the user can switch
@@ -2159,7 +2159,7 @@ public struct StoryComposerView: View {
         }
     }
 
-    private func addVocalToForeground() {
+    func addVocalToForeground() {
         guard let url = confirmedMediaAudioURL else { return }
         Task {
             let samples: [Float]
@@ -2192,7 +2192,7 @@ public struct StoryComposerView: View {
         }
     }
 
-    private func openMediaEditor(elementId: String) {
+    func openMediaEditor(elementId: String) {
         let mediaObj = viewModel.currentEffects.mediaObjects?.first(where: { $0.id == elementId })
         guard let mediaObj else { return }
 
@@ -2203,7 +2203,7 @@ public struct StoryComposerView: View {
         }
     }
 
-    private func addRecordingToBackground(url: URL) {
+    func addRecordingToBackground(url: URL) {
         Task {
             let samples: [Float]
             do {
@@ -2226,7 +2226,7 @@ public struct StoryComposerView: View {
 
     // MARK: - Publication
 
-    private func publishAllSlides() {
+    func publishAllSlides() {
         // Pré-calcul des thumbHashes (image + vidéo) avant le hand-off vers
         // l'uploader background. La génération vidéo est async via
         // `AVAssetImageGenerator.image(at:)` (iOS 16+) ; on cap chaque média
@@ -2249,7 +2249,7 @@ public struct StoryComposerView: View {
         }
     }
 
-    private func snapshotAllSlides() async -> (slides: [StorySlide], bgImages: [String: UIImage]) {
+    func snapshotAllSlides() async -> (slides: [StorySlide], bgImages: [String: UIImage]) {
         var slides = viewModel.slides
         let idx = viewModel.currentSlideIndex
         if idx < slides.count {
@@ -2318,7 +2318,7 @@ public struct StoryComposerView: View {
     /// implicite (l'extraction d'une frame à t=0.1s d'une vidéo locale
     /// prend typiquement < 200 ms). Retourne `nil` si l'extraction échoue —
     /// le placeholder du reader tombera alors sur le fond noir / le bg slide.
-    nonisolated private static func computeVideoThumbHash(url: URL) async -> String? {
+    nonisolated static func computeVideoThumbHash(url: URL) async -> String? {
         let asset = AVURLAsset(url: url)
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
@@ -2334,7 +2334,7 @@ public struct StoryComposerView: View {
 
     // MARK: - Dismiss
 
-    private func handleDismiss() {
+    func handleDismiss() {
         let hasContent = viewModel.slides.contains { slide in
             slide.content != nil
                 || viewModel.slideImages[slide.id] != nil
@@ -2348,12 +2348,12 @@ public struct StoryComposerView: View {
         else { publishTask?.cancel(); publishTask = nil; clearAllDrafts(); onDismiss() }
     }
 
-    private func saveDraftAndDismiss() {
+    func saveDraftAndDismiss() {
         saveDraft()
         onDismiss()
     }
 
-    private func cancelAndDismiss() {
+    func cancelAndDismiss() {
         publishTask?.cancel()
         publishTask = nil
         clearAllDrafts()
@@ -2362,7 +2362,7 @@ public struct StoryComposerView: View {
 
     // MARK: - Draft Persistence
 
-    private func saveDraft() {
+    func saveDraft() {
         syncCurrentSlideEffects()
         StoryDraftStore.shared.save(slides: viewModel.slides, visibility: visibility)
         StoryDraftStore.shared.saveMedia(
@@ -2373,7 +2373,7 @@ public struct StoryComposerView: View {
         HapticFeedback.light()
     }
 
-    private func checkForDraft() {
+    func checkForDraft() {
         if StoryDraftStore.shared.load() != nil {
             showRestoreDraftAlert = true
         } else if UserDefaults.standard.data(forKey: StoryComposerDraft.userDefaultsKey) != nil {
@@ -2381,7 +2381,7 @@ public struct StoryComposerView: View {
         }
     }
 
-    private func restoreDraft() {
+    func restoreDraft() {
         if let stored = StoryDraftStore.shared.load() {
             viewModel.slides = stored.slides.isEmpty ? [StorySlide()] : stored.slides
             viewModel.currentSlideIndex = 0
@@ -2409,7 +2409,7 @@ public struct StoryComposerView: View {
         }
     }
 
-    private func clearAllDrafts() {
+    func clearAllDrafts() {
         StoryDraftStore.shared.clear()
         UserDefaults.standard.removeObject(forKey: StoryComposerDraft.userDefaultsKey)
     }
@@ -2429,7 +2429,7 @@ public struct StoryComposerView: View {
 
 // MARK: - Audio Editor Item Wrapper
 
-private struct AudioEditorItemWrapper: Identifiable {
+struct AudioEditorItemWrapper: Identifiable {
     let id = UUID()
     let url: URL
     /// Language tagged at record time (recorder strip); seeds the editor's
@@ -2439,7 +2439,7 @@ private struct AudioEditorItemWrapper: Identifiable {
 
 // MARK: - Media Editor Wrappers
 
-private struct PendingImageWrapper: Identifiable {
+struct PendingImageWrapper: Identifiable {
     let id = UUID()
     let image: UIImage
 }
@@ -2460,10 +2460,10 @@ struct EditingMediaVideo: Identifiable {
 
 struct StoryLanguagePickerView: View {
     @Binding var selectedLanguage: String
-    @Environment(\.dismiss) private var dismiss
-    @State private var searchText = ""
+    @Environment(\.dismiss) var dismiss
+    @State var searchText = ""
 
-    private var languages: [(code: String, name: String)] {
+    var languages: [(code: String, name: String)] {
         Locale.availableIdentifiers
             .compactMap { id -> (String, String)? in
                 let locale = Locale(identifier: id)
@@ -2478,7 +2478,7 @@ struct StoryLanguagePickerView: View {
             .sorted { $0.1 < $1.1 }
     }
 
-    private var filteredLanguages: [(code: String, name: String)] {
+    var filteredLanguages: [(code: String, name: String)] {
         guard !searchText.isEmpty else { return languages }
         let query = searchText.lowercased()
         return languages.filter { $0.name.lowercased().contains(query) || $0.code.lowercased().contains(query) }
@@ -2532,7 +2532,7 @@ struct MediaPillLabel: View {
     let text: String
     var destructive: Bool = false
 
-    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         // Le bandeau composer a un fond opaque adaptatif (blanc en light,

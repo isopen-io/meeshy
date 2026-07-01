@@ -116,8 +116,8 @@ public final class StoryCanvasUIView: UIView {
             }
         }
     }
-    public private(set) var mode: RenderMode
-    public private(set) var currentTime: CMTime = .zero
+    public internal(set) var mode: RenderMode
+    public internal(set) var currentTime: CMTime = .zero
 
     /// Corner radius (in this view's own coordinate space) applied to the
     /// backing layer so the rounded « card » clips the actual CALayer story
@@ -150,8 +150,8 @@ public final class StoryCanvasUIView: UIView {
 
     // MARK: - Reader context (Task 5)
 
-    private var readerContext: StoryReaderContext = .empty
-    private var completionFired: Bool = false
+    var readerContext: StoryReaderContext = .empty
+    var completionFired: Bool = false
 
     /// Called whenever a gesture mutates the slide (Tasks 2.7+).
     public var onItemModified: ((StorySlide) -> Void)?
@@ -228,9 +228,9 @@ public final class StoryCanvasUIView: UIView {
 
     // MARK: - Internal layers
 
-    private let rootLayer = CALayer()
+    let rootLayer = CALayer()
     let itemsContainer = CALayer()
-    private let editOverlayLayer = CALayer()
+    let editOverlayLayer = CALayer()
 
     /// Background layer (color/gradient/image/video). Inserted at z=0 beneath itemsContainer.
     /// `internal` (not private) so test seams can introspect transform during live drag tests.
@@ -249,7 +249,7 @@ public final class StoryCanvasUIView: UIView {
     /// `contentVersion` so the background re-stamps an edited bitmap under the
     /// same media id. The story filter is BAKED into the background bitmap by
     /// `StoryBackgroundLayer` (no overlay) since the 2026-06-03 pivot.
-    private var composerImageRevision: UInt64 = 0
+    var composerImageRevision: UInt64 = 0
 
     /// Two-pass backdrop snapshot helper. Drives the MPS path on
     /// `StoryGlassBackdropLayer` by capturing the canvas-minus-glass tree
@@ -257,26 +257,26 @@ public final class StoryCanvasUIView: UIView {
     /// glass-text item via the `BackdropProvider` closure. When no glass
     /// items exist on the slide the capture is a no-op (single boolean scan).
     /// See `docs/superpowers/specs/2026-05-12-story-glass-backdrop-snapshot-design.md`.
-    private let backdropCapture = StoryBackdropCapture()
+    let backdropCapture = StoryBackdropCapture()
 
     /// Cache CALayer partagé entre tous les ticks de `rebuildLayers()` (.play
     /// 60 Hz + .edit). Évite de recréer un `AVPlayer` 60 fois par seconde
     /// pendant la lecture (cf. spec § 2.2 A.1). L'extension content fingerprint
     /// de `ItemSignature` détecte les mutations de modèle à id constant pour
     /// invalider correctement le cache d'une frame à l'autre.
-    private let rendererCache = StoryRendererCache()
+    let rendererCache = StoryRendererCache()
 
     // MARK: - Content readiness tracking
 
     /// `true` after `onContentReady` has fired for the current background
     /// state. Reset on every slide change (via `slide.didSet` → `rebuildLayers`)
     /// and on every `setReaderContext` so re-keying replays the wait.
-    private(set) public var contentReadyFired: Bool = false
+    internal(set) public var contentReadyFired: Bool = false
 
     /// `true` once the slide background (color / gradient / image / video) is
     /// visually settled. The combined `onContentReady` signal additionally
     /// waits on foreground video readiness (T6).
-    private var backgroundContentReady: Bool = false
+    var backgroundContentReady: Bool = false
 
     /// `true` quand l'activation du background playback (vidéo bg + audio bg)
     /// a été demandée en `.play` mais que `contentReadyFired` était encore
@@ -288,7 +288,7 @@ public final class StoryCanvasUIView: UIView {
     /// loadée (file:// dead, resolver nil, 404 réseau) — le user voit un
     /// loader à 0% mais entend la TTS / musique de fond, et/ou la vidéo bg
     /// joue sans son image fixed → désynchro UX inacceptable.
-    private var pendingBackgroundActivation: Bool = false
+    var pendingBackgroundActivation: Bool = false
 
     /// Intention de lecture des vidéos FOREGROUND — source de vérité unique,
     /// tenue EN PHASE avec `backgroundLayer.isPlaybackActive` et le mixer audio
@@ -297,7 +297,7 @@ public final class StoryCanvasUIView: UIView {
     /// Sticky : `rebuildLayers()` le propage aux layers fraîchement attachées,
     /// et `StoryMediaLayer.attachPlayer` le consulte pour qu'une vidéo dont les
     /// octets arrivent APRÈS le « GO » (content-ready) démarre immédiatement.
-    private var foregroundVideosPlaybackActive: Bool = false {
+    var foregroundVideosPlaybackActive: Bool = false {
         didSet {
             guard oldValue != foregroundVideosPlaybackActive else { return }
             forEachMediaLayer { $0.isPlaybackActive = foregroundVideosPlaybackActive }
@@ -308,19 +308,19 @@ public final class StoryCanvasUIView: UIView {
     /// image background is loading. Held until the real bytes land or the
     /// background is replaced. `NSKeyValueObservation` invalidates on deinit
     /// so there is no manual `invalidate()` requirement on dealloc.
-    private var imageContentsObserver: NSKeyValueObservation?
+    var imageContentsObserver: NSKeyValueObservation?
 
     /// KVO token watching `avPlayer.currentItem.status` while a video
     /// background is preparing. Released when the player reaches
     /// `.readyToPlay` or the background is replaced.
-    private var videoStatusObserver: NSKeyValueObservation?
+    var videoStatusObserver: NSKeyValueObservation?
 
     /// KVO token watching the background `AVPlayerLayer.isReadyForDisplay`
     /// (première frame réellement décodée ET composée à l'écran). C'est CE
     /// signal — pas la simple présence disque du fichier — qui gate la progress
     /// bar, pour qu'elle n'avance jamais sur le flou ThumbHash pendant le
     /// spinup du decoder. Libéré dans `teardownReadinessObservers`.
-    private var videoFirstFrameObserver: NSKeyValueObservation?
+    var videoFirstFrameObserver: NSKeyValueObservation?
 
     /// Tâche de sondage utilisée pour la branche cache-miss de
     /// `scheduleContentReadyEvaluation(.video)` : quand `backgroundLayer
@@ -328,35 +328,35 @@ public final class StoryCanvasUIView: UIView {
     /// `avPlayer` n'existe pas encore au moment de l'évaluation et il faut
     /// attendre son apparition pour brancher l'observer status. Annulée à
     /// chaque changement de slide et dans `teardownReadinessObservers`.
-    private var pendingVideoReadinessTask: Task<Void, Never>?
+    var pendingVideoReadinessTask: Task<Void, Never>?
 
     /// `CGImage` captured the moment the ThumbHash placeholder was assigned
     /// to `backgroundLayer.contentLayer.contents`. Used to distinguish
     /// "still showing the placeholder" from "real bitmap landed" — the
     /// `imageContentsObserver` only fires `onContentReady` once `contents`
     /// transitions to a `CGImage` that is not this reference.
-    private weak var thumbHashPlaceholderRef: AnyObject?
+    weak var thumbHashPlaceholderRef: AnyObject?
 
     // MARK: - Gestures
 
-    private var panRecognizer: UIPanGestureRecognizer!
-    private var pinchRecognizer: UIPinchGestureRecognizer!
-    private var rotationRecognizer: UIRotationGestureRecognizer!
-    private var singleTapRecognizer: UITapGestureRecognizer!
-    private var doubleTapRecognizer: UITapGestureRecognizer!
+    var panRecognizer: UIPanGestureRecognizer!
+    var pinchRecognizer: UIPinchGestureRecognizer!
+    var rotationRecognizer: UIRotationGestureRecognizer!
+    var singleTapRecognizer: UITapGestureRecognizer!
+    var doubleTapRecognizer: UITapGestureRecognizer!
     /// Pinch à 3 doigts dédié au zoom du viewport (canvas entier). Séparé du
     /// `pinchRecognizer` 2-doigts qui agit sur un élément/fond : sans cette
     /// séparation, un pinch sur un élément faisait aussi scaler le conteneur
     /// SwiftUI (`.scaleEffect(canvasScale)`) parce que les deux gestures
     /// firent en parallèle.
-    private var canvasZoomPinchRecognizer: ThreeFingerPinchGestureRecognizer!
+    var canvasZoomPinchRecognizer: ThreeFingerPinchGestureRecognizer!
 
     // MARK: - Drawing mode (Phase 3 Task 3.4)
 
     /// PencilKit drawing surface. Non-nil iff `isDrawingMode == true`.
-    private var drawingCanvas: PKCanvasView?
+    var drawingCanvas: PKCanvasView?
 
-    public private(set) var isDrawingMode: Bool = false
+    public internal(set) var isDrawingMode: Bool = false
 
     /// Latest drawing data captured from `drawingCanvas`. The composer VC reads
     /// this on toggle-off and persists it into `slide.effects.drawingData`.
@@ -365,11 +365,11 @@ public final class StoryCanvasUIView: UIView {
     }
 
     /// Item currently being dragged/scaled/rotated. Reset on .ended/.cancelled.
-    private var manipulatedItemId: String?
-    private var dragStartSlideX: Double = 0
-    private var dragStartSlideY: Double = 0
-    private var baseScale: Double = 1.0
-    private var baseRotation: Double = 0.0
+    var manipulatedItemId: String?
+    var dragStartSlideX: Double = 0
+    var dragStartSlideY: Double = 0
+    var baseScale: Double = 1.0
+    var baseRotation: Double = 0.0
 
     /// Cache the id of the background media (resolved in `slide.didSet`).
     /// Used by handlers to skip foreground-only behaviors (snap guides,
@@ -382,7 +382,7 @@ public final class StoryCanvasUIView: UIView {
     /// (`updateScale`/`updatePosition`/`updateRotation` mutent
     /// `mediaObjects[bg]`). La seule différence est le routing de l'apply
     /// CALayer live qui passe par `backgroundLayer.applyContentTransform`.
-    private var backgroundMediaObjectId: String?
+    var backgroundMediaObjectId: String?
 
     /// Fires when the background transform is committed (currently only by
     /// the double-tap fit mode cycle, which is bg-specific). Parent composer
@@ -415,7 +415,7 @@ public final class StoryCanvasUIView: UIView {
     /// Couche active courante. Recalculée à chaque `slide.didSet` via
     /// `updateManipulationLayer()`. Le routage des gestes pan/pinch/rotate
     /// se fait à partir de cette valeur. Voir `CanvasManipulationLayer`.
-    public private(set) var currentManipulationLayer: CanvasManipulationLayer = .canvas
+    public internal(set) var currentManipulationLayer: CanvasManipulationLayer = .canvas
 
     /// Notifié lorsque la couche active change (transition `.canvas` ↔
     /// `.background` ↔ `.foreground`). Le composer peut s'abonner pour
@@ -434,23 +434,23 @@ public final class StoryCanvasUIView: UIView {
     // MARK: - Audio
 
     /// Sample-accurate foreground+background audio engine for mode `.play`.
-    private let audioMixer = ReaderAudioMixer()
+    let audioMixer = ReaderAudioMixer()
     /// Reflects the current mute state driven by `setReaderContext` or
     /// `.storyComposerMuteCanvas` / `.storyComposerUnmuteCanvas` notifications.
-    public private(set) var isAudioMuted: Bool = false
+    public internal(set) var isAudioMuted: Bool = false
     /// `slideContentRevision` the `audioMixer` was last configured against.
     /// Lets `reconfigureAudioForPlayback()` skip the (expensive) AVAudioFile
     /// reload when the slide content hasn't changed — `rebuildLayers()` runs
     /// every display-link tick in `.play` mode, but the audio model only
     /// changes when `slide` itself is reassigned.
-    private var lastAudioConfigRevision: UInt64?
+    var lastAudioConfigRevision: UInt64?
 
     /// `true` while this view holds a balanced `.playback` claim on the shared
     /// `MediaSessionCoordinator` (RC4.3). Keeps request/release symmetric.
     /// `nonisolated(unsafe)` so the `nonisolated deinit` can read it to decide
     /// whether to release the session — all mutations happen in MainActor
     /// playback methods, so single-context mutation is preserved.
-    private nonisolated(unsafe) var didRequestPlaybackSession: Bool = false
+    nonisolated(unsafe) var didRequestPlaybackSession: Bool = false
 
     /// Subscription to `MediaSessionCoordinator.events` — pauses the mixer on
     /// interruptions / headset unplug and resumes it on an explicit
@@ -458,18 +458,18 @@ public final class StoryCanvasUIView: UIView {
     /// `nonisolated(unsafe)` so the `nonisolated deinit` can cancel it without
     /// a MainActor hop — `AnyCancellable.cancel()` is idempotent and the
     /// property is only assigned once, from a MainActor init path.
-    private nonisolated(unsafe) var audioSessionEventsCancellable: AnyCancellable?
+    nonisolated(unsafe) var audioSessionEventsCancellable: AnyCancellable?
 
     /// Souscription au `$muted` du `StoryReaderAudioMuteRegistry` partagé. Le
     /// chip foreground du reader pousse sur la registry ; on diff l'ensemble
     /// publié contre `lastAppliedMutedSet` pour n'appeler `setMute(_:for:)`
     /// que pour les pistes qui ont effectivement changé d'état.
-    private nonisolated(unsafe) var muteRegistryCancellable: AnyCancellable?
-    private var lastAppliedMutedSet: Set<String> = []
+    nonisolated(unsafe) var muteRegistryCancellable: AnyCancellable?
+    var lastAppliedMutedSet: Set<String> = []
 
     /// KVO tokens watching foreground video readiness so `onContentReady`
     /// does not fire while a foreground clip is still a black rectangle (T6).
-    private var foregroundVideoStatusObservers: [NSKeyValueObservation] = []
+    var foregroundVideoStatusObservers: [NSKeyValueObservation] = []
 
     /// Failsafe timeout for the foreground-video readiness gate. The background
     /// already owns a 2 s failsafe (`pendingVideoReadinessTask`) so a stuck
@@ -481,14 +481,14 @@ public final class StoryCanvasUIView: UIView {
     /// ("le fond vidéo ne démarre jamais / se fige quand il y a une vidéo
     /// foreground", user 2026-06-23). Armed once by `observePendingForegroundVideos`,
     /// cancelled in `teardownReadinessObservers`.
-    private var foregroundVideoReadinessFailsafe: Task<Void, Never>?
+    var foregroundVideoReadinessFailsafe: Task<Void, Never>?
 
     /// Set by `foregroundVideoReadinessFailsafe` when the foreground gate has
     /// waited past its window. Lets `fireContentReadyIfNeeded()` proceed even
     /// though a foreground clip is still `.unknown` — the clip remains a
     /// timeline component that appears once its bytes land. Reset on every
     /// `scheduleContentReadyEvaluation` (new slide / rebuild).
-    private var foregroundReadinessTimedOut: Bool = false
+    var foregroundReadinessTimedOut: Bool = false
 
     // MARK: - Display link
 
@@ -497,13 +497,13 @@ public final class StoryCanvasUIView: UIView {
     // pour un canvas qui reçoit `setMode` mais n'entre jamais en window —
     // willMove/didMove ne couvrent pas ce chemin). Le link cible un
     // `WeakDisplayLinkTarget`, donc le deinit est atteignable.
-    private nonisolated(unsafe) var displayLink: CADisplayLink?
+    nonisolated(unsafe) var displayLink: CADisplayLink?
 
     /// Always-on while in `.edit` and the view is in a window — preferred 120 Hz on
     /// ProMotion devices for buttery gesture transforms (active rendering happens
     /// inside the gesture handlers; this link's tick is a no-op for now and exists
     /// so the display server keeps the high-rate clock running while editing).
-    private nonisolated(unsafe) var editDisplayLink: CADisplayLink?
+    nonisolated(unsafe) var editDisplayLink: CADisplayLink?
 
     // MARK: - Inline text editing
 
@@ -538,7 +538,7 @@ public final class StoryCanvasUIView: UIView {
     /// NSHashTable.weakObjects() s'auto-nettoie quand les canvases sont
     /// désalloués — aucune cleanup explicite requise au `deinit` (sauf le
     /// removeAll que ferait NSHashTable spontanément).
-    @MainActor private static let activePlayingCanvases = NSHashTable<StoryCanvasUIView>.weakObjects()
+    @MainActor static let activePlayingCanvases = NSHashTable<StoryCanvasUIView>.weakObjects()
 
     /// Pause tout le média actif sur ce canvas — bg AVPlayer + FG AVPlayer +
     /// audio mixer — sans changer le `mode`. Utilisé par la préemption
@@ -548,7 +548,7 @@ public final class StoryCanvasUIView: UIView {
     /// Note : on ne touche pas au displayLink ni à `isPlaybackPaused` —
     /// l'instance est en fin de vie côté SwiftUI, son cleanup viendra. On
     /// coupe juste les sources sonores et visuelles immédiatement.
-    fileprivate func preemptMediaPlayback() {
+    func preemptMediaPlayback() {
         backgroundLayer.isPlaybackActive = false
         foregroundVideosPlaybackActive = false
         audioMixer.stop()
@@ -557,7 +557,7 @@ public final class StoryCanvasUIView: UIView {
     /// Enregistre `self` comme canvas actif et préempte tous les autres
     /// canvases en `.play` (sauf self). Appelé à chaque entrée en mode `.play`
     /// (init avec mode `.play`, ou `setMode(.play)`).
-    @MainActor private func registerAsActiveAndPreemptOthers() {
+    @MainActor func registerAsActiveAndPreemptOthers() {
         let others = Self.activePlayingCanvases.allObjects.filter { $0 !== self }
         for other in others {
             other.preemptMediaPlayback()
@@ -570,7 +570,7 @@ public final class StoryCanvasUIView: UIView {
     /// `setMode(.edit)`, `willMove(toWindow: nil)`, et lors du deinit (via
     /// la `weakObjects` table — auto-cleanup en théorie, mais on le fait
     /// explicitement quand on sait que le canvas quitte la window).
-    @MainActor private func unregisterFromActive() {
+    @MainActor func unregisterFromActive() {
         Self.activePlayingCanvases.remove(self)
     }
 
@@ -713,7 +713,7 @@ public final class StoryCanvasUIView: UIView {
         set {}
     }
 
-    private func synthesizedAccessibilityElements() -> [Any]? {
+    func synthesizedAccessibilityElements() -> [Any]? {
         switch mode {
         case .edit:
             return editAccessibilityElements()
@@ -722,7 +722,7 @@ public final class StoryCanvasUIView: UIView {
         }
     }
 
-    private func editAccessibilityElements() -> [UIAccessibilityElement] {
+    func editAccessibilityElements() -> [UIAccessibilityElement] {
         var elements: [UIAccessibilityElement] = []
         for txt in slide.effects.textObjects {
             elements.append(makeAccessibilityElement(
@@ -760,7 +760,7 @@ public final class StoryCanvasUIView: UIView {
     /// because it covers the full canvas and would otherwise be invisible
     /// to VoiceOver. Custom destructive actions (delete/duplicate/back) are
     /// suppressed in `.play` — they only make sense while composing.
-    private func playAccessibilityElements() -> [UIAccessibilityElement] {
+    func playAccessibilityElements() -> [UIAccessibilityElement] {
         let languages = readerContext.preferredLanguages
         var elements: [UIAccessibilityElement] = []
         for media in slide.effects.mediaObjects ?? [] where media.isBackground {
@@ -799,7 +799,7 @@ public final class StoryCanvasUIView: UIView {
         return elements
     }
 
-    private func makeAccessibilityElement(label: String,
+    func makeAccessibilityElement(label: String,
                                           traits: UIAccessibilityTraits,
                                           id: String,
                                           allowCustomActions: Bool) -> UIAccessibilityElement {
@@ -824,7 +824,7 @@ public final class StoryCanvasUIView: UIView {
     ///    through `CanvasGeometry.render(_:)` when no layer is present yet
     ///    (e.g. when VoiceOver queries before the first layout pass).
     /// 3. Default to `.zero` when the item id is unknown.
-    private func accessibilityFrame(forId id: String) -> CGRect {
+    func accessibilityFrame(forId id: String) -> CGRect {
         if let layerFrame = itemsContainer.sublayers?.first(where: { $0.name == id })?.frame,
            layerFrame != .zero {
             return layerFrame
@@ -836,7 +836,7 @@ public final class StoryCanvasUIView: UIView {
     /// (0–1) position via `CanvasGeometry.render(_:)`. Used as a fallback when
     /// the CALayer hasn't been built yet so VoiceOver focus is still located
     /// roughly where the item will appear.
-    private func projectedDesignFrame(forId id: String) -> CGRect? {
+    func projectedDesignFrame(forId id: String) -> CGRect? {
         let g = geometry
         guard g.renderSize.width > 0 else { return nil }
         if let t = slide.effects.textObjects.first(where: { $0.id == id }) {
@@ -871,7 +871,7 @@ public final class StoryCanvasUIView: UIView {
         return nil
     }
 
-    private func centeredFrame(normalizedX nx: CGFloat,
+    func centeredFrame(normalizedX nx: CGFloat,
                                normalizedY ny: CGFloat,
                                designSize: CGSize,
                                geometry g: CanvasGeometry) -> CGRect {
@@ -889,7 +889,7 @@ public final class StoryCanvasUIView: UIView {
     /// custom-image stickers, an asset identifier. We use the Unicode
     /// "Name" property to provide a localized name when present (e.g. "🔥"
     /// → "Fire"); otherwise we fall back to "Sticker".
-    private func stickerAccessibilityLabel(for sticker: StorySticker) -> String {
+    func stickerAccessibilityLabel(for sticker: StorySticker) -> String {
         let emoji = sticker.emoji
         if !emoji.isEmpty,
            let scalar = emoji.unicodeScalars.first,
@@ -900,7 +900,7 @@ public final class StoryCanvasUIView: UIView {
         return "Sticker"
     }
 
-    private func makeCustomActions(forId id: String) -> [UIAccessibilityCustomAction] {
+    func makeCustomActions(forId id: String) -> [UIAccessibilityCustomAction] {
         [
             UIAccessibilityCustomAction(name: "Supprimer") { [weak self] _ in
                 self?.deleteItem(id: id)
@@ -1081,7 +1081,7 @@ public final class StoryCanvasUIView: UIView {
     /// Drives `ReaderAudioMixer`'s idempotence guard: a re-render replays with
     /// the same key (no echo) while a genuine content change re-schedules
     /// against a fresh key (RC4.6).
-    private var currentSlideKey: String {
+    var currentSlideKey: String {
         let langs = readerContext.preferredLanguages.joined(separator: ",")
         return "\(slide.id)#\(slideContentRevision)#\(langs)"
     }
@@ -1089,7 +1089,7 @@ public final class StoryCanvasUIView: UIView {
     /// Materialises the slide's `t = 0` as a host-time. When the playhead is
     /// already advanced (`currentTime > 0`, composer preview scrub) the origin
     /// is back-dated so audio and the canvas playhead share one zero (RC4.4).
-    private func captureSlideTimelineOrigin() -> UInt64 {
+    func captureSlideTimelineOrigin() -> UInt64 {
         let now = mach_absolute_time()
         let elapsed = currentTime.seconds
         guard elapsed > 0, elapsed.isFinite else { return now }
@@ -1101,7 +1101,7 @@ public final class StoryCanvasUIView: UIView {
     /// `setReaderContext`, `setMode(.play)`). Captures the timeline origin,
     /// activates the audio session, enforces single-owner exclusion and applies
     /// the default fade envelope — consistently every time.
-    private func startAudioPlayback() {
+    func startAudioPlayback() {
         guard mode == .play else { return }
         // Call-safety gate (WS3.2) : ouvrir un reader pendant un appel ne doit
         // PAS faire tourner l'AVAudioEngine du reader sur la session détenue par
@@ -1154,14 +1154,14 @@ public final class StoryCanvasUIView: UIView {
     /// Activates the shared `.playback` `AVAudioSession` through the existing
     /// `MediaSessionCoordinator` (RC4.3). Refcounted; the boolean keeps this
     /// view's request/release at exactly one claim.
-    private func requestPlaybackSessionIfNeeded() {
+    func requestPlaybackSessionIfNeeded() {
         guard !didRequestPlaybackSession else { return }
         didRequestPlaybackSession = true
         Task { try? await MediaSessionCoordinator.shared.request(role: .playback) }
     }
 
     /// Balances `requestPlaybackSessionIfNeeded()`.
-    private func releasePlaybackSessionIfNeeded() {
+    func releasePlaybackSessionIfNeeded() {
         guard didRequestPlaybackSession else { return }
         didRequestPlaybackSession = false
         Task { await MediaSessionCoordinator.shared.release() }
@@ -1171,7 +1171,7 @@ public final class StoryCanvasUIView: UIView {
     /// events and applies Apple's playback policy to the reader engine: pause
     /// on interruption-began and on headset unplug, resume only on an explicit
     /// `shouldResume` while still foreground (RC4.3 / T7).
-    private func observeAudioSessionEvents() {
+    func observeAudioSessionEvents() {
         audioSessionEventsCancellable = MediaSessionCoordinator.shared.events
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
@@ -1213,7 +1213,7 @@ public final class StoryCanvasUIView: UIView {
     /// object's `id`, but `StoryReaderContext.postMediaURLResolver` maps a
     /// `postMediaId` → `URL`. We bridge the two here, dropping any clip whose
     /// `postMediaId` does not resolve.
-    private func reconfigureAudioForPlayback() {
+    func reconfigureAudioForPlayback() {
         guard mode == .play else { return }
         guard lastAudioConfigRevision != slideContentRevision else { return }
         lastAudioConfigRevision = slideContentRevision
@@ -1323,7 +1323,7 @@ public final class StoryCanvasUIView: UIView {
     /// Returns a `file://` URL for `remote`, downloading and caching the bytes
     /// when the disk cache misses. Returns `nil` if every path fails — the
     /// caller logs the failure context.
-    private nonisolated static func cachedAudioFileURL(remote: URL) async -> URL? {
+    nonisolated static func cachedAudioFileURL(remote: URL) async -> URL? {
         if remote.isFileURL { return remote }
         if let cached = CacheCoordinator.audioLocalFileURL(for: remote.absoluteString) {
             return cached
@@ -1334,7 +1334,7 @@ public final class StoryCanvasUIView: UIView {
 
     // MARK: - Rendering
 
-    private func rebuildLayers() {
+    func rebuildLayers() {
         guard bounds.size != .zero else { return }
         // CATransaction with disableActions avoids implicit fade animations on
         // every rebuild — important for a smooth ~60 Hz playback loop.
@@ -1512,7 +1512,7 @@ public final class StoryCanvasUIView: UIView {
     /// chaque sublayer (le `name` du layer == element id) plutôt qu'un overlay
     /// CAShapeLayer séparé. Ça suit les transformations / drag / pinch sans
     /// avoir besoin de re-synchroniser un layer supplémentaire à chaque tick.
-    private func applyForegroundFrames() {
+    func applyForegroundFrames() {
         // Les textes ne reçoivent PAS de cadre permanent : le contour
         // rectangulaire entoure inutilement la chaîne de caractères et alourdit
         // le rendu (le glyph dessine déjà sa propre forme). Seuls les médias
@@ -1562,7 +1562,7 @@ public final class StoryCanvasUIView: UIView {
     ///
     /// The observers are torn down on every entry so they cannot stack across
     /// slides (slide swipe in the reader rebuilds layers on every keyframe).
-    private func scheduleContentReadyEvaluation(for kind: StoryBackgroundLayer.Kind) {
+    func scheduleContentReadyEvaluation(for kind: StoryBackgroundLayer.Kind) {
         contentReadyFired = false
         backgroundContentReady = false
         foregroundReadinessTimedOut = false
@@ -1682,7 +1682,7 @@ public final class StoryCanvasUIView: UIView {
     /// (`onPlayerAttached`) — volontairement NON destructif : ne touche ni
     /// `contentReadyFired` ni `backgroundContentReady`, donc inoffensif si
     /// la readiness a déjà fire.
-    private func armBackgroundVideoReadinessObservation(item: AVPlayerItem?) {
+    func armBackgroundVideoReadinessObservation(item: AVPlayerItem?) {
         storyMediaLog.debug("arm video readiness layerReady=\(self.backgroundLayer.avPlayerLayer?.isReadyForDisplay ?? false, privacy: .public) itemStatus=\(item?.status.rawValue ?? -1, privacy: .public)")
         // La progress bar ne doit démarrer que sur la PREMIÈRE FRAME
         // réellement à l'écran. `AVPlayerLayer.isReadyForDisplay`
@@ -1723,7 +1723,7 @@ public final class StoryCanvasUIView: UIView {
     /// caller retombe alors sur un observer `AVPlayerItem.status`. Le token KVO
     /// est libéré par `teardownReadinessObservers()`.
     @discardableResult
-    private func waitBackgroundVideoFirstFrame() -> Bool {
+    func waitBackgroundVideoFirstFrame() -> Bool {
         guard let playerLayer = backgroundLayer.avPlayerLayer else { return false }
         if playerLayer.isReadyForDisplay {
             DispatchQueue.main.async { [weak self] in
@@ -1747,13 +1747,13 @@ public final class StoryCanvasUIView: UIView {
     /// Marks the slide background as visually settled. The combined readiness
     /// signal (`onContentReady`) still waits on foreground video — see
     /// `fireContentReadyIfNeeded()`.
-    private func backgroundDidBecomeReady() {
+    func backgroundDidBecomeReady() {
         backgroundContentReady = true
         recomputeContentProgress()
         fireContentReadyIfNeeded()
     }
 
-    private func fireContentReadyIfNeeded() {
+    func fireContentReadyIfNeeded() {
         guard !contentReadyFired else { return }
         // The background must be settled first — a foreground video KVO ping
         // can otherwise call in before the background image bytes land.
@@ -1837,7 +1837,7 @@ public final class StoryCanvasUIView: UIView {
     /// notifie via `onContentProgress`. Aggregé sur :
     /// - 1 point : background ready
     /// - N points : chaque foreground media (image=contents non nil, vidéo=AVPlayerItem.status != .unknown)
-    private func recomputeContentProgress() {
+    func recomputeContentProgress() {
         guard onContentProgress != nil else { return }
         let bg: Double = backgroundContentReady ? 1.0 : 0.0
         var fgReady: Double = 0
@@ -1868,7 +1868,7 @@ public final class StoryCanvasUIView: UIView {
     /// `AVPlayerItem`s of every foreground video layer currently on the canvas.
     /// A foreground video whose URL never resolved has no `AVPlayer` and so
     /// never blocks the readiness signal.
-    private func foregroundVideoItems() -> [AVPlayerItem] {
+    func foregroundVideoItems() -> [AVPlayerItem] {
         var items: [AVPlayerItem] = []
         for sub in itemsContainer.sublayers ?? [] {
             if let media = sub as? StoryMediaLayer,
@@ -1883,13 +1883,13 @@ public final class StoryCanvasUIView: UIView {
     /// *resolved* — `.readyToPlay` OR `.failed`. A broken / stuck clip
     /// (status `.failed`) must not freeze the slide timer forever, so it
     /// counts as resolved rather than blocking indefinitely.
-    private func foregroundVideosReady() -> Bool {
+    func foregroundVideosReady() -> Bool {
         let items = foregroundVideoItems()
         guard !items.isEmpty else { return true }
         return items.allSatisfy { $0.status != .unknown }
     }
 
-    private func observePendingForegroundVideos() {
+    func observePendingForegroundVideos() {
         foregroundVideoStatusObservers.forEach { $0.invalidate() }
         foregroundVideoStatusObservers = []
         for item in foregroundVideoItems() where item.status == .unknown {
@@ -1917,7 +1917,7 @@ public final class StoryCanvasUIView: UIView {
         }
     }
 
-    private func teardownReadinessObservers() {
+    func teardownReadinessObservers() {
         imageContentsObserver?.invalidate()
         imageContentsObserver = nil
         videoStatusObserver?.invalidate()
@@ -2005,7 +2005,7 @@ public final class StoryCanvasUIView: UIView {
 
     // MARK: - App lifecycle (UIScene-aware)
 
-    private func observeAppLifecycle() {
+    func observeAppLifecycle() {
         let nc = NotificationCenter.default
         nc.addObserver(self,
                        selector: #selector(handleWillResignActive),
@@ -2017,7 +2017,7 @@ public final class StoryCanvasUIView: UIView {
                        object: nil)
     }
 
-    private func observeMuteNotifications() {
+    func observeMuteNotifications() {
         let nc = NotificationCenter.default
         nc.addObserver(self,
                        selector: #selector(handleComposerMute),
@@ -2038,7 +2038,7 @@ public final class StoryCanvasUIView: UIView {
     /// invoque `setMute(_:for:)` uniquement pour les ids qui ont basculé.
     /// Gating sur `.play` : en `.edit` la registry n'a pas de sens (le
     /// composer mute via son propre slider de volume).
-    private func applyPerTrackMute(_ next: Set<String>) {
+    func applyPerTrackMute(_ next: Set<String>) {
         guard mode == .play else { return }
         let toMute = next.subtracting(lastAppliedMutedSet)
         let toUnmute = lastAppliedMutedSet.subtracting(next)
@@ -2053,7 +2053,7 @@ public final class StoryCanvasUIView: UIView {
     /// this canvas form a single playback unit: pausing the timer pauses
     /// every media here (bg video, foreground videos, audio mixer, effect
     /// display-link), exactly like pausing a video player.
-    private func observeStoryPlayerNotifications() {
+    func observeStoryPlayerNotifications() {
         let nc = NotificationCenter.default
         nc.addObserver(self,
                        selector: #selector(handleStoryPlayerPause),
@@ -2070,13 +2070,13 @@ public final class StoryCanvasUIView: UIView {
     /// `isPlaybackPaused` freezes every clock-driven surface so the story
     /// stops as a unit (the « long-press = stop comme une vidéo »
     /// requirement).
-    private var isPlaybackPaused: Bool = false
+    var isPlaybackPaused: Bool = false
 
-    @objc private func handleStoryPlayerPause() {
+    @objc func handleStoryPlayerPause() {
         setStoryPlaybackPaused(true)
     }
 
-    @objc private func handleStoryPlayerResume() {
+    @objc func handleStoryPlayerResume() {
         setStoryPlaybackPaused(false)
     }
 
@@ -2107,7 +2107,7 @@ public final class StoryCanvasUIView: UIView {
         setStoryPlaybackPaused(paused)
     }
 
-    private func setStoryPlaybackPaused(_ paused: Bool) {
+    func setStoryPlaybackPaused(_ paused: Bool) {
         guard mode == .play else { return }
         guard isPlaybackPaused != paused else { return }
         isPlaybackPaused = paused
@@ -2136,21 +2136,21 @@ public final class StoryCanvasUIView: UIView {
         }
     }
 
-    @objc private func handleComposerMute() {
+    @objc func handleComposerMute() {
         isAudioMuted = true
         audioMixer.setMute(true)
         forEachMediaLayer { $0.isMuted = true }
         backgroundLayer.isMuted = true
     }
 
-    @objc private func handleComposerUnmute() {
+    @objc func handleComposerUnmute() {
         isAudioMuted = false
         audioMixer.setMute(false)
         forEachMediaLayer { $0.isMuted = false }
         backgroundLayer.isMuted = false
     }
 
-    @objc private func handleWillResignActive() {
+    @objc func handleWillResignActive() {
         // Pause transitoire SANS effacer l'intention `isPlaybackActive` —
         // symétrique au `backgroundLayer.handleAppLifecycle`. Le retour
         // foreground ne relancera que les vidéos que le canvas autorisait.
@@ -2163,7 +2163,7 @@ public final class StoryCanvasUIView: UIView {
         releasePlaybackSessionIfNeeded()
     }
 
-    @objc private func handleDidBecomeActive() {
+    @objc func handleDidBecomeActive() {
         // `window != nil` est OBLIGATOIRE pour TOUTES les reprises, pas
         // seulement l'audio mixer : un canvas `.play` retenu hors écran
         // (viewer fermé mais instance vivante, canvas sortant de cross-fade)
@@ -2206,7 +2206,7 @@ public final class StoryCanvasUIView: UIView {
         releasePlaybackSessionIfNeeded()
     }
 
-    private func forEachAVPlayer(_ block: (AVPlayer) -> Void) {
+    func forEachAVPlayer(_ block: (AVPlayer) -> Void) {
         for sub in itemsContainer.sublayers ?? [] {
             if let media = sub as? StoryMediaLayer, let player = media.avPlayer {
                 block(player)
@@ -2220,7 +2220,7 @@ public final class StoryCanvasUIView: UIView {
     /// layer, qui le stampera sur le player dès `attachPlayer()` — ferme la
     /// fenêtre de course où un player fraîchement créé jouait audible le
     /// temps d'un cycle de display-link.
-    private func forEachMediaLayer(_ block: (StoryMediaLayer) -> Void) {
+    func forEachMediaLayer(_ block: (StoryMediaLayer) -> Void) {
         for sub in itemsContainer.sublayers ?? [] {
             if let media = sub as? StoryMediaLayer {
                 block(media)
@@ -2232,7 +2232,7 @@ public final class StoryCanvasUIView: UIView {
     /// toutes les `StoryMediaLayer`, afin que `alignToTimelineThenPlay()` cale le
     /// player sur la bonne position au prochain démarrage. Appelé aux transitions
     /// de lecture (GO, resume) où aucun rebuild ne vient rafraîchir la valeur.
-    private func pushSlidePlayheadToLayers() {
+    func pushSlidePlayheadToLayers() {
         let playheadSeconds = currentTime.seconds
         backgroundLayer.slidePlayheadSeconds = playheadSeconds
         forEachMediaLayer { $0.slidePlayheadSeconds = playheadSeconds }
@@ -2244,7 +2244,7 @@ public final class StoryCanvasUIView: UIView {
     /// (prefetcher hors-écran → reste silencieux). Idempotent : appelé à chaque
     /// `rebuildLayers()` (les layers `.edit` sont reconstruits à neuf à chaque
     /// mutation) et au flip du drapeau.
-    private func applyEditPlayback() {
+    func applyEditPlayback() {
         guard mode == .edit, playsVideoInEditMode else { return }
         // Éditeur sonore (choix produit) : pose la session `.playback` pour que
         // l'audio des vidéos qui bouclent soit audible même silent-switch ON.
@@ -2267,7 +2267,7 @@ public final class StoryCanvasUIView: UIView {
 
     // MARK: - Playback (CADisplayLink)
 
-    private func startPlayback() {
+    func startPlayback() {
         stopPlayback()
         // Nouvelle session de lecture → on repart « progressant » (non gaté).
         // Couvre init(.play), setMode(.play) au slide-change, et le re-arm
@@ -2303,7 +2303,7 @@ public final class StoryCanvasUIView: UIView {
         }
     }
 
-    private func stopPlayback() {
+    func stopPlayback() {
         displayLink?.invalidate()
         displayLink = nil
         // Pause symétrique des players vidéo (fond + foreground). Une slide qui
@@ -2313,7 +2313,7 @@ public final class StoryCanvasUIView: UIView {
         foregroundVideosPlaybackActive = false
     }
 
-    @objc private func displayLinkTick(_ link: CADisplayLink) {
+    @objc func displayLinkTick(_ link: CADisplayLink) {
         guard mode == .play else { return }
         // Timeline unifiée : sonder la santé de lecture du média PRIMAIRE AVANT
         // d'avancer le playhead, afin de geler EN PHASE avec un buffer stall
@@ -2342,7 +2342,7 @@ public final class StoryCanvasUIView: UIView {
     /// `rebuildLayers()` inconditionnel ici causait un scintillement (60
     /// rebuilds/s avant content ready). Bug user-reporté 2026-05-27 « la story
     /// scintille seulement ».
-    private func advancePlayheadIfActive(by dt: Double) {
+    func advancePlayheadIfActive(by dt: Double) {
         guard mode == .play, contentReadyFired, !isPlaybackPaused, !isPlaybackStalled else {
             return
         }
@@ -2384,20 +2384,20 @@ public final class StoryCanvasUIView: UIView {
     /// `true` quand le média primaire de la slide bufferise / est en pause
     /// inattendue. Gèle l'avance du playhead canvas (`advancePlayheadIfActive`)
     /// pour rester EN PHASE avec la progress bar du viewer.
-    private(set) public var isPlaybackStalled: Bool = false
+    internal(set) public var isPlaybackStalled: Bool = false
 
     /// Dernière valeur émise via `onPlaybackProgressing` — emit-on-change only.
     /// Démarre à `true` : une slide commence « progressante » (non gatée).
-    private var lastProgressingEmitted: Bool = true
+    var lastProgressingEmitted: Bool = true
 
     /// Timestamp `CADisplayLink` du début du dernier épisode CONTINU de
     /// non-lecture. `nil` tant que la lecture est saine. Alimente le watchdog.
-    private var playbackStallSince: CFTimeInterval?
+    var playbackStallSince: CFTimeInterval?
 
     /// Le player média « primaire » de la slide qui pilote la timeline : vidéo
     /// de fond en priorité, sinon première vidéo foreground. `nil` pour une
     /// slide sans vidéo (image / couleur / audio-only) → jamais gatée.
-    private func primaryMediaPlayer() -> AVPlayer? {
+    func primaryMediaPlayer() -> AVPlayer? {
         if case .video = backgroundLayer.kind, let player = backgroundLayer.avPlayer {
             return player
         }
@@ -2415,7 +2415,7 @@ public final class StoryCanvasUIView: UIView {
     /// Production feed : sonde le player primaire à chaque tick (uniquement une
     /// fois le contenu prêt — avant ça la timeline est déjà gatée par
     /// content-ready et la vidéo bg n'a pas démarré).
-    private func refreshPlaybackHealth(now: CFTimeInterval) {
+    func refreshPlaybackHealth(now: CFTimeInterval) {
         guard contentReadyFired else { return }
         let player = primaryMediaPlayer()
         applyPlaybackHealth(status: player?.timeControlStatus,
@@ -2426,7 +2426,7 @@ public final class StoryCanvasUIView: UIView {
     /// Cœur testable : timing du watchdog + mapping pur (`StoryPlaybackHealth`)
     /// + emit-on-change. Alimenté en prod par `refreshPlaybackHealth`, en test
     /// par `_refreshPlaybackHealthForTesting` (statut injecté).
-    private func applyPlaybackHealth(status: AVPlayer.TimeControlStatus?,
+    func applyPlaybackHealth(status: AVPlayer.TimeControlStatus?,
                                      failed: Bool,
                                      now: CFTimeInterval) {
         // Le watchdog n'accumule QUE pendant une non-lecture réelle d'un média
@@ -2454,7 +2454,7 @@ public final class StoryCanvasUIView: UIView {
     /// Remet l'état de santé à « progressant » au démarrage d'une session de
     /// lecture (nouveau slide / re-attach). N'ÉMET PAS — `setCurrentSlide`/`reset`
     /// du timer côté viewer réinitialisent symétriquement leur propre `isPlaybackStalled`.
-    private func resetPlaybackHealthState() {
+    func resetPlaybackHealthState() {
         isPlaybackStalled = false
         lastProgressingEmitted = true
         playbackStallSince = nil
@@ -2497,7 +2497,7 @@ public final class StoryCanvasUIView: UIView {
 
     // MARK: - ProMotion edit-mode link
 
-    private func startEditDisplayLinkIfNeeded() {
+    func startEditDisplayLinkIfNeeded() {
         guard mode == .edit, editDisplayLink == nil else { return }
         let link = WeakDisplayLinkTarget.makeLink { [weak self] link in
             guard let self else {
@@ -2511,14 +2511,14 @@ public final class StoryCanvasUIView: UIView {
         editDisplayLink = link
     }
 
-    private func stopEditDisplayLink() {
+    func stopEditDisplayLink() {
         editDisplayLink?.invalidate()
         editDisplayLink = nil
     }
 
-    private var lastEditBackdropTimestamp: CFTimeInterval = 0
+    var lastEditBackdropTimestamp: CFTimeInterval = 0
 
-    @objc private func editTick(_ link: CADisplayLink) {
+    @objc func editTick(_ link: CADisplayLink) {
         // Gesture handlers drive their own rebuilds; the tick keeps the 120 Hz
         // clock alive on ProMotion while editing AND (WS2.1) re-feeds the glass
         // text backdrop so it tracks a playing video background between rebuilds.
@@ -2535,7 +2535,7 @@ public final class StoryCanvasUIView: UIView {
     /// ~18 fps via `StoryEditBackdropThrottle` since the link runs up to 120 Hz.
     /// Reuses the exact capture path of `rebuildLayers` (same `geometry`,
     /// `currentTime`, languages) so the crop geometry can't drift.
-    private func refreshEditGlassBackdropIfNeeded(now: CFTimeInterval) {
+    func refreshEditGlassBackdropIfNeeded(now: CFTimeInterval) {
         guard mode == .edit, case .video = backgroundLayer.kind else { return }
         guard StoryEditBackdropThrottle.shouldEmit(now: now, last: lastEditBackdropTimestamp) else { return }
         lastEditBackdropTimestamp = now
@@ -2557,7 +2557,7 @@ public final class StoryCanvasUIView: UIView {
 
     // MARK: - Gesture wiring
 
-    private func setupGesturesAll() {
+    func setupGesturesAll() {
         panRecognizer = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
         pinchRecognizer = UIPinchGestureRecognizer(target: self, action: #selector(handlePinch(_:)))
         rotationRecognizer = UIRotationGestureRecognizer(target: self, action: #selector(handleRotation(_:)))
@@ -2581,7 +2581,7 @@ public final class StoryCanvasUIView: UIView {
         addInteraction(UIContextMenuInteraction(delegate: self))
     }
 
-    @objc private func handleSingleTap(_ recognizer: UITapGestureRecognizer) {
+    @objc func handleSingleTap(_ recognizer: UITapGestureRecognizer) {
         guard mode == .edit, recognizer.state == .ended else { return }
         let location = recognizer.location(in: self)
         guard let id = hitTestItem(at: location), let kind = itemKind(forId: id) else {
@@ -2605,7 +2605,7 @@ public final class StoryCanvasUIView: UIView {
         onItemTapped?(id, kind)
     }
 
-    @objc private func handleDoubleTap(_ recognizer: UITapGestureRecognizer) {
+    @objc func handleDoubleTap(_ recognizer: UITapGestureRecognizer) {
         guard mode == .edit, recognizer.state == .ended else { return }
         let location = recognizer.location(in: self)
 
@@ -2639,14 +2639,14 @@ public final class StoryCanvasUIView: UIView {
         onItemDoubleTapped?(id, kind)
     }
 
-    private func itemKind(forId id: String) -> CanvasItemKind? {
+    func itemKind(forId id: String) -> CanvasItemKind? {
         if slide.effects.textObjects.contains(where: { $0.id == id }) { return .text }
         if (slide.effects.mediaObjects ?? []).contains(where: { $0.id == id }) { return .media }
         if (slide.effects.stickerObjects ?? []).contains(where: { $0.id == id }) { return .sticker }
         return nil
     }
 
-    @objc private func handlePinch(_ recognizer: UIPinchGestureRecognizer) {
+    @objc func handlePinch(_ recognizer: UIPinchGestureRecognizer) {
         guard mode == .edit else { return }
         // Garde-fou : ce recognizer est dédié au pinch 2 doigts (élément ou
         // fond). Si trois doigts sont posés, c'est le `canvasZoomPinch` qui
@@ -2695,12 +2695,12 @@ public final class StoryCanvasUIView: UIView {
 
     /// Pinch à 3 doigts → relaie l'échelle au composer pour piloter le zoom
     /// du viewport. Ne mute pas la slide (le viewport est un état SwiftUI).
-    @objc private func handleCanvasZoomPinch(_ recognizer: ThreeFingerPinchGestureRecognizer) {
+    @objc func handleCanvasZoomPinch(_ recognizer: ThreeFingerPinchGestureRecognizer) {
         guard mode == .edit else { return }
         onCanvasZoomScaleChanged?(recognizer.scale, recognizer.state)
     }
 
-    @objc private func handleRotation(_ recognizer: UIRotationGestureRecognizer) {
+    @objc func handleRotation(_ recognizer: UIRotationGestureRecognizer) {
         guard mode == .edit else { return }
         switch recognizer.state {
         case .began:
@@ -2739,7 +2739,7 @@ public final class StoryCanvasUIView: UIView {
         }
     }
 
-    @objc private func handlePan(_ recognizer: UIPanGestureRecognizer) {
+    @objc func handlePan(_ recognizer: UIPanGestureRecognizer) {
         guard mode == .edit else { return }
         let location = recognizer.location(in: self)
         switch recognizer.state {
@@ -2812,19 +2812,19 @@ public final class StoryCanvasUIView: UIView {
 
     // MARK: - Snap guides
 
-    private nonisolated static let snapTargets: [Double] = [0.18, 0.25, 0.5, 0.75, 0.82]
-    private nonisolated static let snapTolerance: Double = 0.02
+    nonisolated static let snapTargets: [Double] = [0.18, 0.25, 0.5, 0.75, 0.82]
+    nonisolated static let snapTolerance: Double = 0.02
 
-    private var snapGuideLayers: [CAShapeLayer] = []
+    var snapGuideLayers: [CAShapeLayer] = []
 
-    private nonisolated func snap(_ value: Double) -> (snapped: Double, didSnap: Bool) {
+    nonisolated func snap(_ value: Double) -> (snapped: Double, didSnap: Bool) {
         for target in Self.snapTargets where abs(value - target) < Self.snapTolerance {
             return (target, true)
         }
         return (value, false)
     }
 
-    private func updateSnapGuides(x: Double?, y: Double?) {
+    func updateSnapGuides(x: Double?, y: Double?) {
         // Désactive les actions implicites de CoreAnimation (fade in / out de
         // contents) pour éviter tout scintillement quand on recrée les guides
         // à chaque tick de drag. Voir spec § 2.5 A.4.a.
@@ -2849,7 +2849,7 @@ public final class StoryCanvasUIView: UIView {
         }
     }
 
-    private func hideSnapGuides() {
+    func hideSnapGuides() {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         snapGuideLayers.forEach { $0.removeFromSuperlayer() }
@@ -2857,7 +2857,7 @@ public final class StoryCanvasUIView: UIView {
         CATransaction.commit()
     }
 
-    private func makeGuideLine(verticalAt offset: CGFloat,
+    func makeGuideLine(verticalAt offset: CGFloat,
                                length: CGFloat,
                                vertical: Bool) -> CAShapeLayer {
         let path = UIBezierPath()
@@ -2882,7 +2882,7 @@ public final class StoryCanvasUIView: UIView {
     /// During an active gesture (pan/pinch/rotate), update only the manipulated
     /// item's CALayer transform instead of rebuilding all layers. This keeps
     /// drag/resize fluid even with many layers on canvas.
-    private func updateManipulatedItemLayer() {
+    func updateManipulatedItemLayer() {
         guard let id = manipulatedItemId else { return }
         let bounds = self.bounds
         guard bounds.size != .zero else { return }
@@ -2985,7 +2985,7 @@ public final class StoryCanvasUIView: UIView {
 
     // MARK: - Hit testing
 
-    private func hitTestItem(at point: CGPoint) -> String? {
+    func hitTestItem(at point: CGPoint) -> String? {
         guard let hit = itemsContainer.hitTest(point) else { return nil }
         var current: CALayer? = hit
         while let c = current {
@@ -3002,7 +3002,7 @@ public final class StoryCanvasUIView: UIView {
     /// Hit-test qui exclut explicitement les médias `isBackground == true`.
     /// Utilisé en mode `.foreground` pour empêcher la manipulation du fond
     /// quand au moins un foreground est posé sur la slide.
-    private func hitTestForegroundItem(at point: CGPoint) -> String? {
+    func hitTestForegroundItem(at point: CGPoint) -> String? {
         guard let id = hitTestItem(at: point) else { return nil }
         if let media = slide.effects.mediaObjects?.first(where: { $0.id == id }),
            media.isBackground == true {
@@ -3019,7 +3019,7 @@ public final class StoryCanvasUIView: UIView {
     /// du bg). N'émet via `onManipulationLayerChanged` que si la valeur a
     /// effectivement changé — pour les re-emissions « défensives »
     /// (bootstrap, resync SwiftUI), utiliser `emitCurrentManipulationLayer()`.
-    private func updateManipulationLayer() {
+    func updateManipulationLayer() {
         let new = Self.resolveManipulationLayer(for: slide.effects)
         guard new != currentManipulationLayer else { return }
         currentManipulationLayer = new
@@ -3078,7 +3078,7 @@ public final class StoryCanvasUIView: UIView {
 
     /// Résolution unique du bg media : préfère le flag explicite
     /// `isBackground == true`, retombe sur `resolvedBackgroundMedia`.
-    private func resolveBackgroundMediaId() -> String? {
+    func resolveBackgroundMediaId() -> String? {
         if let bg = slide.effects.mediaObjects?.first(where: { $0.isBackground == true }) {
             return bg.id
         }
@@ -3087,7 +3087,7 @@ public final class StoryCanvasUIView: UIView {
 
     // MARK: - Slide mutation helpers
 
-    private func currentItemNormalizedPosition(forId id: String) -> (Double, Double)? {
+    func currentItemNormalizedPosition(forId id: String) -> (Double, Double)? {
         if let t = slide.effects.textObjects.first(where: { $0.id == id }) {
             return (t.x, t.y)
         }
@@ -3100,42 +3100,42 @@ public final class StoryCanvasUIView: UIView {
         return nil
     }
 
-    private func currentScale(forId id: String) -> Double? {
+    func currentScale(forId id: String) -> Double? {
         if let t = slide.effects.textObjects.first(where: { $0.id == id }) { return t.scale }
         if let m = slide.effects.mediaObjects?.first(where: { $0.id == id }) { return m.scale }
         if let s = slide.effects.stickerObjects?.first(where: { $0.id == id }) { return s.scale }
         return nil
     }
 
-    private func currentRotation(forId id: String) -> Double? {
+    func currentRotation(forId id: String) -> Double? {
         if let t = slide.effects.textObjects.first(where: { $0.id == id }) { return t.rotation }
         if let m = slide.effects.mediaObjects?.first(where: { $0.id == id }) { return m.rotation }
         if let s = slide.effects.stickerObjects?.first(where: { $0.id == id }) { return s.rotation }
         return nil
     }
 
-    private func updatePosition(slideId: String, x: Double, y: Double) -> StorySlide {
+    func updatePosition(slideId: String, x: Double, y: Double) -> StorySlide {
         mutateItem(slideId: slideId,
                    text:    { $0.x = x; $0.y = y },
                    media:   { $0.x = x; $0.y = y },
                    sticker: { $0.x = x; $0.y = y })
     }
 
-    private func updateScale(slideId: String, scale: Double) -> StorySlide {
+    func updateScale(slideId: String, scale: Double) -> StorySlide {
         mutateItem(slideId: slideId,
                    text:    { $0.scale = scale },
                    media:   { $0.scale = scale },
                    sticker: { $0.scale = scale })
     }
 
-    private func updateRotation(slideId: String, rotation: Double) -> StorySlide {
+    func updateRotation(slideId: String, rotation: Double) -> StorySlide {
         mutateItem(slideId: slideId,
                    text:    { $0.rotation = rotation },
                    media:   { $0.rotation = rotation },
                    sticker: { $0.rotation = rotation })
     }
 
-    private func mutateItem(slideId: String,
+    func mutateItem(slideId: String,
                             text:    (inout StoryTextObject)  -> Void,
                             media:   (inout StoryMediaObject) -> Void,
                             sticker: (inout StorySticker)     -> Void) -> StorySlide {
@@ -3161,7 +3161,7 @@ public final class StoryCanvasUIView: UIView {
         return newSlide
     }
 
-    private nonisolated func clamp(_ value: Double) -> Double {
+    nonisolated func clamp(_ value: Double) -> Double {
         max(0, min(1, value))
     }
 
@@ -3287,14 +3287,14 @@ public final class StoryCanvasUIView: UIView {
         onItemModified?(slide)
     }
 
-    private func nextTopZ() -> Int {
+    func nextTopZ() -> Int {
         let allZ = slide.effects.textObjects.map(\.zIndex)
             + (slide.effects.mediaObjects?.map(\.zIndex) ?? [])
             + (slide.effects.stickerObjects?.map(\.zIndex) ?? [])
         return (allZ.max() ?? 0) + 1
     }
 
-    private func nextBottomZ() -> Int {
+    func nextBottomZ() -> Int {
         let allZ = slide.effects.textObjects.map(\.zIndex)
             + (slide.effects.mediaObjects?.map(\.zIndex) ?? [])
             + (slide.effects.stickerObjects?.map(\.zIndex) ?? [])
@@ -3362,7 +3362,7 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
         return targetedPreview(for: configuration)
     }
 
-    private func targetedPreview(for configuration: UIContextMenuConfiguration) -> UITargetedPreview? {
+    func targetedPreview(for configuration: UIContextMenuConfiguration) -> UITargetedPreview? {
         guard let id = configuration.identifier as? String,
               let layer = itemsContainer.sublayers?.first(where: { $0.name == id }) else { return nil }
 
@@ -3465,7 +3465,7 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
         }
     }
 
-    private func contextDuplicate(id: String) {
+    func contextDuplicate(id: String) {
         var duplicatedNewId: String?
         var duplicatedKind: CanvasItemKind?
         // Branche media : `guard var` au lieu de `mediaObjects![idx]` — même si
@@ -3516,7 +3516,7 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
         }
     }
 
-    private func contextBringForward(id: String) {
+    func contextBringForward(id: String) {
         if var medias = slide.effects.mediaObjects,
            let idx = medias.firstIndex(where: { $0.id == id }),
            idx < medias.count - 1 {
@@ -3526,7 +3526,7 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
         }
     }
 
-    private func contextSendBackward(id: String) {
+    func contextSendBackward(id: String) {
         if var medias = slide.effects.mediaObjects,
            let idx = medias.firstIndex(where: { $0.id == id }),
            idx > 0 {
@@ -3536,7 +3536,7 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
         }
     }
 
-    private func contextDelete(id: String) {
+    func contextDelete(id: String) {
         slide.effects.mediaObjects?.removeAll { $0.id == id }
         slide.effects.textObjects.removeAll { $0.id == id }
         slide.effects.stickerObjects?.removeAll { $0.id == id }
@@ -3629,10 +3629,10 @@ extension StoryCanvasUIView: UIGestureRecognizerDelegate {
 /// - `.cancelled` → touchesCancelled (interruption système)
 final class ThreeFingerPinchGestureRecognizer: UIGestureRecognizer {
     /// Échelle cumulée depuis `.began`. Reset à 1.0 dans `reset()`.
-    private(set) var scale: CGFloat = 1.0
-    private var initialAverageDistance: CGFloat = 0
+    internal(set) var scale: CGFloat = 1.0
+    var initialAverageDistance: CGFloat = 0
 
-    private static let requiredTouches: Int = 3
+    static let requiredTouches: Int = 3
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
         super.touchesBegan(touches, with: event)
@@ -3688,7 +3688,7 @@ final class ThreeFingerPinchGestureRecognizer: UIGestureRecognizer {
     /// Pure helper — extrait `static` pour permettre les tests sans monter
     /// un environnement UITouch (testé via `Self.averageDistance(...)`).
     /// Retourne 0 si moins d'une touche ou pas de view attachée.
-    private static func averageDistanceFromCentroid(of recognizer: UIGestureRecognizer) -> CGFloat {
+    static func averageDistanceFromCentroid(of recognizer: UIGestureRecognizer) -> CGFloat {
         guard let view = recognizer.view, recognizer.numberOfTouches > 0 else { return 0 }
         let count = recognizer.numberOfTouches
         let points = (0..<count).map { recognizer.location(ofTouch: $0, in: view) }

@@ -289,7 +289,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         return "fr"
     }
 
-    private var detectedKeyboardLanguage: String {
+    var detectedKeyboardLanguage: String {
         Self.resolveComposerSourceLanguage(user: AuthManager.shared.currentUser)
     }
 
@@ -307,7 +307,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     // Cancellable preload Task started by `init(reposting:authorHandle:)`.
     // Marked `nonisolated(unsafe)` so the `nonisolated deinit` below can cancel it
     // without requiring a MainActor hop (cancellation is Sendable / thread-safe).
-    nonisolated(unsafe) private var preloadTask: Task<Void, Never>?
+    nonisolated(unsafe) var preloadTask: Task<Void, Never>?
 
     var currentSlide: StorySlide {
         get {
@@ -429,7 +429,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// slide 1's content to position 0 but `restoreBackgroundTransform()` would still
     /// load the old slide 0's transform (now stranded at key `0`). Using the stable
     /// slide ID survives any reorder/insert/remove operation.
-    private var backgroundTransformCache: [String: BackgroundTransform] = [:]
+    var backgroundTransformCache: [String: BackgroundTransform] = [:]
 
     func saveBackgroundTransform() {
         guard let id = slides[safe: currentSlideIndex]?.id else { return }
@@ -540,7 +540,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
 
     // MARK: - Timeline V2 wiring
 
-    private var _timelineViewModel: TimelineViewModel?
+    var _timelineViewModel: TimelineViewModel?
 
     public var timelineViewModel: TimelineViewModel {
         if let existing = _timelineViewModel { return existing }
@@ -682,7 +682,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     ///
     /// Elements whose URL cannot be resolved are omitted — the engine handles missing
     /// URLs gracefully (logs "skipping … no URL") without crashing.
-    private func collectMediaURLs(for slide: StorySlide) -> [String: URL] {
+    func collectMediaURLs(for slide: StorySlide) -> [String: URL] {
         var result: [String: URL] = [:]
 
         for media in slide.effects.mediaObjects ?? [] {
@@ -699,9 +699,9 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         return result
     }
 
-    private enum MediaKind { case video, audio }
+    enum MediaKind { case video, audio }
 
-    private func resolveMediaURL(elementId: String, postMediaId: String, kind: MediaKind) -> URL? {
+    func resolveMediaURL(elementId: String, postMediaId: String, kind: MediaKind) -> URL? {
         // Composer-session in-memory cache (highest priority).
         switch kind {
         case .video:
@@ -719,7 +719,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         }
     }
 
-    private func projectContains(clipId: String, in project: TimelineProject) -> Bool {
+    func projectContains(clipId: String, in project: TimelineProject) -> Bool {
         project.mediaObjects.contains(where: { $0.id == clipId })
         || project.audioPlayerObjects.contains(where: { $0.id == clipId })
         || project.textObjects.contains(where: { $0.id == clipId })
@@ -994,7 +994,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// hydrating from the model means an element promoted on slide 0 retains its
     /// front-position when the user comes back from slide 1. `nextZIndex` advances
     /// past the highest persisted value so newly-promoted elements still rise above.
-    private func rehydrateZIndexMapFromSlide() {
+    func rehydrateZIndexMapFromSlide() {
         var map: [String: Int] = [:]
         var maxZ = 0
         let effects = currentEffects
@@ -1035,7 +1035,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         }
     }
 
-    private func reorderSlides() {
+    func reorderSlides() {
         for i in slides.indices {
             slides[i].order = i
         }
@@ -1398,8 +1398,8 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
 
     // MARK: - Z-Order
 
-    private var zIndexMap: [String: Int] = [:]
-    private var nextZIndex: Int = 1
+    var zIndexMap: [String: Int] = [:]
+    var nextZIndex: Int = 1
 
     func zIndex(for id: String) -> Int {
         if let mapped = zIndexMap[id] { return mapped }
@@ -1505,7 +1505,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         return elements.sorted { $0.zIndex < $1.zIndex }
     }
 
-    private func persistZIndex(_ z: Int, for id: String) {
+    func persistZIndex(_ z: Int, for id: String) {
         var effects = currentEffects
         if let i = effects.textObjects.firstIndex(where: { $0.id == id }) {
             effects.textObjects[i].zIndex = z
@@ -1558,7 +1558,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
 
     // MARK: - Memory Pressure & Cleanup
 
-    private var memoryObserver: Any?
+    var memoryObserver: Any?
 
     func startMemoryObserver() {
         // Idempotent : un `onAppear` répété écrasait sinon le token précédent
@@ -1788,7 +1788,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
 
 // MARK: - Safe Array Access
 
-private extension Array {
+extension Array {
     subscript(safe index: Int) -> Element? {
         indices.contains(index) ? self[index] : nil
     }
