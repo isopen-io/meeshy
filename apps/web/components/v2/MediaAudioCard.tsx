@@ -9,6 +9,7 @@ import {
   useMemo,
 } from 'react';
 import { cn } from '@/lib/utils';
+import { formatDuration } from '@/utils/audio-formatters';
 import { getLanguageColor } from './theme';
 
 // ============================================================================
@@ -87,13 +88,6 @@ const FLAG_MAP: Record<string, string> = {
 function getFlag(code: string): string {
   const normalized = code.toLowerCase().slice(0, 2);
   return FLAG_MAP[normalized] || '\u{1F310}';
-}
-
-function formatTime(seconds: number): string {
-  if (!isFinite(seconds) || seconds < 0) return '0:00';
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
 function generateWaveform(src: string, barCount: number): number[] {
@@ -608,11 +602,11 @@ export function MediaAudioCard({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-xs font-medium">
                   <span className="text-[var(--gp-text-secondary)] transition-colors duration-300">
-                    {formatTime(currentTime)}
+                    {formatDuration(currentTime)}
                   </span>
                   <span className="text-[var(--gp-text-muted)] transition-colors duration-300">/</span>
                   <span className="text-[var(--gp-text-muted)] transition-colors duration-300">
-                    {formatTime(duration)}
+                    {formatDuration(duration)}
                   </span>
                 </div>
 
