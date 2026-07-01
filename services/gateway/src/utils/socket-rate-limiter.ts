@@ -73,6 +73,16 @@ export const SOCKET_RATE_LIMITS = {
     windowMs: 10000, // 10 seconds (real-time transcription bursts)
     keyPrefix: 'socket:call:transcription'
   },
+  CALL_HEARTBEAT: {
+    maxRequests: 12,
+    windowMs: 60000, // 1 minute — client heartbeats every ~10s, generous buffer for jitter
+    keyPrefix: 'socket:call:heartbeat'
+  },
+  CALL_QUALITY_REPORT: {
+    maxRequests: 30,
+    windowMs: 60000, // 1 minute — client reports stats every few seconds
+    keyPrefix: 'socket:call:quality'
+  },
   REACTION_ADD: {
     maxRequests: 30,
     windowMs: 60000, // 1 minute — prevents emoji spam floods

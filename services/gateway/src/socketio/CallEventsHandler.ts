@@ -1912,6 +1912,15 @@ export class CallEventsHandler {
         const userId = getUserId(socket.id);
         if (!userId) return;
 
+        const rateLimitPassed = await checkSocketRateLimit(
+          socket,
+          userId,
+          SOCKET_RATE_LIMITS.CALL_HEARTBEAT,
+          this.rateLimiter,
+          CALL_EVENTS.ERROR
+        );
+        if (!rateLimitPassed) return;
+
         const validation = validateSocketEvent(socketHeartbeatSchema, data);
         if (!validation.success) return;
 
@@ -1932,8 +1941,26 @@ export class CallEventsHandler {
         const userId = getUserId(socket.id);
         if (!userId) return;
 
+        const rateLimitPassed = await checkSocketRateLimit(
+          socket,
+          userId,
+          SOCKET_RATE_LIMITS.CALL_QUALITY_REPORT,
+          this.rateLimiter,
+          CALL_EVENTS.ERROR
+        );
+        if (!rateLimitPassed) return;
+
         const validation = validateSocketEvent(socketQualityReportSchema, data);
         if (!validation.success) return;
+
+        // Authorization — only an active participant of this call may write
+        // stats/quality data against it. Without this, any authenticated
+        // user could flood-write bogus bytesSent/bytesReceived/level onto a
+        // callId they merely guessed, since `persistCallStats` below took no
+        // membership check (only the quality-alert broadcast further down
+        // resolved the participant, and only conditionally).
+        const participantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        if (!participantId) return;
 
         // Check quality thresholds and emit alerts if needed
         const { stats } = data;
@@ -1947,20 +1974,17 @@ export class CallEventsHandler {
         });
 
         if (stats.rtt > 300 || stats.packetLoss > 5) {
-          const participantId = await this.resolveParticipantIdFromCall(userId, data.callId);
-          if (participantId) {
-            const metric = stats.rtt > 300 ? 'rtt' : 'packetLoss';
-            const value = metric === 'rtt' ? stats.rtt : stats.packetLoss;
-            const threshold = metric === 'rtt' ? 300 : 5;
+          const metric = stats.rtt > 300 ? 'rtt' : 'packetLoss';
+          const value = metric === 'rtt' ? stats.rtt : stats.packetLoss;
+          const threshold = metric === 'rtt' ? 300 : 5;
 
-            io.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.QUALITY_ALERT, {
-              callId: data.callId,
-              participantId,
-              metric,
-              value,
-              threshold
-            });
-          }
+          io.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.QUALITY_ALERT, {
+            callId: data.callId,
+            participantId,
+            metric,
+            value,
+            threshold
+          });
         }
       } catch (error) {
         logger.error('Error processing quality report', { error });
