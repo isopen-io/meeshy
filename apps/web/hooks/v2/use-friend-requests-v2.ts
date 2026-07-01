@@ -146,6 +146,33 @@ export function useFriendRequestsV2(
     });
   }, [enabled, invalidateAll]);
 
+  // Typed counterparts of NOTIFICATION_NEW(type=friend_request/friend_accepted)
+  // and the reject system notification. The `onNotification` listener above
+  // only re-invalidates on `friend_request`/`contact_request` — the sender's
+  // `sent` list previously had NO live signal when the receiver accepted or
+  // rejected, staying stale until the next full reload. These typed events
+  // close that gap (dual-emitted alongside the legacy notifications).
+  useEffect(() => {
+    if (!enabled) return;
+    return meeshySocketIOService.onFriendRequestNew(() => {
+      invalidateAll();
+    });
+  }, [enabled, invalidateAll]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    return meeshySocketIOService.onFriendRequestAccepted(() => {
+      invalidateAll();
+    });
+  }, [enabled, invalidateAll]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    return meeshySocketIOService.onFriendRequestRejected(() => {
+      invalidateAll();
+    });
+  }, [enabled, invalidateAll]);
+
   const sendMutation = useMutation({
     mutationFn: async ({ receiverId, message }: { receiverId: string; message?: string }) => {
       await apiService.post('/friend-requests', { receiverId, ...(message && { message }) });

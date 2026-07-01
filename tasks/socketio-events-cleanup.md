@@ -125,6 +125,35 @@ d'exécution) — à faire en suivi, même pattern que `CONVERSATION_NEW`.
 `NEW`/`ACCEPTED`/`REJECTED` restent P2/P3 (cosmétique — pattern à corriger mais pas
 de gap de délivrance fonctionnel aujourd'hui).
 
+**`FRIEND_REQUEST_NEW` / `FRIEND_REQUEST_ACCEPTED` / `FRIEND_REQUEST_REJECTED` — ✅ Résolu (2026-07-01)**
+
+Ajoutés en dual-émission (mêmes points d'appel que `createFriendRequestNotification` /
+`createFriendAcceptedNotification` / la notification système de rejet, legacy
+`NOTIFICATION_NEW` conservé ~3 mois). Un gap de délivrance réel a été trouvé au passage :
+côté **web**, `use-friend-requests-v2.ts` n'invalidait la liste `sent` sur aucun signal
+socket pour `friend_accepted`/rejet (`onNotification` ne filtrait que
+`friend_request`/`contact_request`) — l'expéditeur ne voyait pas en temps réel que sa
+demande avait été acceptée/refusée, seulement au prochain refetch complet.
+
+- `packages/shared/types/socketio-events.ts` : `FRIEND_REQUEST_NEW: 'friend-request:new'`
+  (`{ friendRequestId, senderId, receiverId }`), `FRIEND_REQUEST_ACCEPTED:
+  'friend-request:accepted'` (`{ friendRequestId, accepterId, conversationId? }`),
+  `FRIEND_REQUEST_REJECTED: 'friend-request:rejected'` (`{ friendRequestId, rejecterId }`).
+- `NotificationService.emitFriendRequestNew/Accepted/Rejected()` (realtime-only, même
+  pattern que `emitFriendRequestCancelled`) appelées depuis
+  `services/gateway/src/routes/friends.ts` : `POST /friend-requests` (NEW → user-room du
+  receiver), `PATCH /friend-requests/:id` accepted (ACCEPTED → user-room du sender,
+  `conversationId` résolu après création/lookup de la conversation directe) et rejected
+  (REJECTED → user-room du sender).
+- Web câblé de bout en bout (`presence.service.ts` → `orchestrator.service.ts` →
+  `meeshy-socketio.service.ts` → `use-friend-requests-v2.ts`, invalide `invalidateAll()`
+  sur les 3 events — ferme le gap ci-dessus).
+- iOS non câblé dans ce passage (pas de toolchain Swift dans l'environnement d'exécution)
+  — à faire en suivi, même pattern que `CONVERSATION_NEW`/`FRIEND_REQUEST_CANCELLED`.
+- Tests : gateway (`friends-routes.test.ts`, 6 nouveaux cas), shared
+  (`socketio-events.test.ts`), web (`presence.service.test.ts` ×6,
+  `use-friend-requests-v2.test.tsx` ×3).
+
 ---
 
 ## Priorisation suggérée

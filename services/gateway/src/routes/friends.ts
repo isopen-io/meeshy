@@ -149,6 +149,12 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
           requesterId: userId,
           friendRequestId: friendRequest.id,
         });
+
+        notificationService.emitFriendRequestNew({
+          receiverId: body.receiverId,
+          friendRequestId: friendRequest.id,
+          senderId: userId,
+        });
       }
 
       return sendSuccess(reply, friendRequest, { statusCode: 201 });
@@ -523,6 +529,11 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
             priority: 'low',
             systemType: 'announcement',
           });
+          notificationService.emitFriendRequestRejected({
+            senderId: updatedRequest.senderId,
+            friendRequestId: id,
+            rejecterId: userId,
+          });
         }
       }
 
@@ -551,6 +562,8 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
           }
         });
 
+        let acceptedConversationId = existingConversation?.id;
+
         if (!existingConversation) {
           // Generer un identifier unique pour la conversation directe
           const identifier = `direct_${friendRequest.senderId}_${friendRequest.receiverId}_${Date.now()}`;
@@ -578,6 +591,16 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
 
           // Ajouter la conversation a la reponse
           (updatedRequest as any).conversation = conversation;
+          acceptedConversationId = conversation.id;
+        }
+
+        if (notificationService) {
+          notificationService.emitFriendRequestAccepted({
+            senderId: updatedRequest.senderId,
+            friendRequestId: id,
+            accepterId: userId,
+            conversationId: acceptedConversationId,
+          });
         }
       }
 
