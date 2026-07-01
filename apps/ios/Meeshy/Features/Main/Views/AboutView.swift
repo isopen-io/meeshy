@@ -19,6 +19,19 @@ struct AboutView: View {
         Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
     }
 
+    private var versionString: String {
+        String(localized: "about.version", defaultValue: "Version \(appVersion) (\(buildNumber))", bundle: .main)
+    }
+
+    private var copyLabel: String {
+        String(localized: "common.copy", defaultValue: "Copy", bundle: .main)
+    }
+
+    private func copyValue(_ value: String) {
+        UIPasteboard.general.string = value
+        HapticFeedback.success()
+    }
+
     var body: some View {
         ZStack {
             theme.backgroundGradient.ignoresSafeArea()
@@ -98,9 +111,17 @@ struct AboutView: View {
                 .font(MeeshyFont.relative(28, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
-            Text(String(localized: "about.version", defaultValue: "Version \(appVersion) (\(buildNumber))", bundle: .main))
+            Text(versionString)
                 .font(MeeshyFont.relative(13, weight: .medium))
                 .foregroundColor(theme.textMuted)
+                .contextMenu {
+                    Button {
+                        copyValue(versionString)
+                    } label: {
+                        Label(copyLabel, systemImage: "doc.on.doc")
+                    }
+                }
+                .accessibilityAction(named: Text(copyLabel)) { copyValue(versionString) }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
@@ -238,6 +259,14 @@ struct AboutView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .accessibilityElement(children: .combine)
+        .contextMenu {
+            Button {
+                copyValue(value)
+            } label: {
+                Label(copyLabel, systemImage: "doc.on.doc")
+            }
+        }
+        .accessibilityAction(named: Text(copyLabel)) { copyValue(value) }
     }
 
     private func featureRow(title: String, icon: String) -> some View {
