@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - ShareLinksView
 
@@ -59,7 +60,7 @@ struct ShareLinksView: View {
                 dismiss()
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
             }
             .accessibilityLabel(String(localized: "a11y.back", bundle: .main))
@@ -77,7 +78,7 @@ struct ShareLinksView: View {
                 showCreate = true
             } label: {
                 Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 22))
+                    .font(MeeshyFont.relative(22))
                     .foregroundColor(Color(hex: accentColor))
             }
             .accessibilityLabel(String(localized: "share.links.create.a11y", defaultValue: "Créer un lien de partage", bundle: .main))
@@ -99,8 +100,9 @@ struct ShareLinksView: View {
     private func shareLinkStatCard(_ value: String, label: String, icon: String) -> some View {
         VStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 20))
+                .font(MeeshyFont.relative(20))
                 .foregroundColor(MeeshyColors.shareAccent)
+                .accessibilityHidden(true)
             Text(value)
                 .font(.title2.weight(.bold))
                 .foregroundColor(theme.textPrimary)
@@ -116,6 +118,7 @@ struct ShareLinksView: View {
                 .overlay(RoundedRectangle(cornerRadius: 16)
                     .stroke(MeeshyColors.shareAccent.opacity(0.2), lineWidth: 1))
         )
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Links list
@@ -126,6 +129,7 @@ struct ShareLinksView: View {
                 .font(.caption.weight(.semibold))
                 .foregroundColor(theme.textSecondary)
                 .kerning(0.8)
+                .accessibilityAddTraits(.isHeader)
 
             if viewModel.isLoading {
                 ProgressView()
@@ -148,9 +152,12 @@ struct ShareLinksView: View {
 
     private var emptyState: some View {
         VStack(spacing: 12) {
+            // Decorative empty-state hero glyph (≥40pt) — its meaning is carried
+            // by the title below; kept fixed + hidden from VoiceOver (doctrine 84i/86i).
             Image(systemName: "link.badge.plus")
                 .font(.system(size: 40))
                 .foregroundColor(MeeshyColors.shareAccent.opacity(0.6))
+                .accessibilityHidden(true)
             Text(String(localized: "share.links.empty.title", defaultValue: "Aucun lien de partage", bundle: .main))
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(theme.textPrimary)
@@ -161,6 +168,7 @@ struct ShareLinksView: View {
         }
         .padding(40)
         .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
     }
 
     private func shareLinkRow(_ link: MyShareLink) -> some View {
@@ -169,9 +177,13 @@ struct ShareLinksView: View {
                 Circle()
                     .fill((link.isActive ? MeeshyColors.shareAccent : MeeshyColors.neutral500).opacity(0.15))
                     .frame(width: 40, height: 40)
+                // Glyph centered in a fixed 40×40 circle badge — a scalable font
+                // would overflow the frame. Kept fixed + hidden (the link name
+                // carries the meaning; doctrine 86i).
                 Image(systemName: link.isActive ? "link" : "link.badge.minus")
                     .font(.system(size: 16))
                     .foregroundColor(link.isActive ? MeeshyColors.shareAccent : MeeshyColors.neutral500)
+                    .accessibilityHidden(true)
             }
 
             VStack(alignment: .leading, spacing: 3) {
@@ -199,14 +211,16 @@ struct ShareLinksView: View {
                 HapticFeedback.success()
             } label: {
                 Image(systemName: "doc.on.doc")
-                    .font(.system(size: 16))
+                    .font(MeeshyFont.relative(16))
                     .foregroundColor(MeeshyColors.shareAccent)
             }
             .padding(.horizontal, 4)
+            .accessibilityLabel(String(localized: "share.links.copy.a11y", defaultValue: "Copier le lien", bundle: .main))
 
             Image(systemName: "chevron.right")
-                .font(.system(size: 12))
+                .font(MeeshyFont.relative(12))
                 .foregroundColor(theme.textMuted)
+                .accessibilityHidden(true)
         }
         .padding(14)
         .background(
