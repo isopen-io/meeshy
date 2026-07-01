@@ -382,12 +382,23 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     /// PERF-005: MainActor-isolated apply step. Skips partial work while the
     /// overlay is hidden so the cost of partial recognition becomes nearly
     /// zero when the user has dismissed the transcription panel.
-    private func applyRecognitionResult(
+    /// Internal (not `private`) so `CallTranscriptionServiceTests` can drive the
+    /// stale-callback-after-teardown guard directly.
+    func applyRecognitionResult(
         segments newSegments: [TranscriptionSegment],
         speakerId: String,
         isFinal: Bool,
         boundaryText: String?
     ) {
+        // Guards against the same hazard `resetForCallEnd` documents: the
+        // recognizer callback runs on its own queue and hops to MainActor via
+        // `Task.detached`, so a result can still be in flight when
+        // `stopTranscribing()`/`resetForCallEnd()` clears `allSegments`/`segments`
+        // for a call that just ended. Without this check, a stale callback would
+        // repopulate the transcript with the *previous* call's data right after
+        // the reset — the error-handling branch above already guards on
+        // `isTranscribing` for this exact reason.
+        guard isTranscribing else { return }
         guard isFinal || isShowingOverlay else { return }
         replaceSegments(for: speakerId, with: newSegments, isFinal: isFinal)
         if isFinal, let boundaryText {

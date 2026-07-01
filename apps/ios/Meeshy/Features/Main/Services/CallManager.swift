@@ -2275,8 +2275,19 @@ final class CallManager: ObservableObject {
         if isOnHold {
             if isVideoEnabled {
                 isVideoSuspendedByHold = true
-                holdVideoTask?.cancel()
-                holdVideoTask = Task { [weak self] in _ = await self?.webRTCService.downgradeFromVideo() }
+                // Chain onto the previous hold-video task instead of cancelling it:
+                // `Task.cancel()` is cooperative and `disableLocalVideo`/`enableLocalVideo`
+                // never check `Task.isCancelled` mid-flight (they await `stopCapture`/
+                // `startCapture`), so a rapid hold→unhold→hold could otherwise let a
+                // cancelled downgrade and a fresh upgrade mutate the same camera
+                // capturer/transceiver concurrently, leaving video stuck broken.
+                // Awaiting the prior task's `.value` first serializes every hold
+                // transition without relying on cancellation to stop in-flight work.
+                let previousTask = holdVideoTask
+                holdVideoTask = Task { [weak self] in
+                    await previousTask?.value
+                    _ = await self?.webRTCService.downgradeFromVideo()
+                }
                 MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: false)
                 Logger.calls.info("CallKit hold — video suspended, peer notified (callId=\(callId))")
             }
@@ -2284,8 +2295,11 @@ final class CallManager: ObservableObject {
             if isVideoSuspendedByHold {
                 isVideoSuspendedByHold = false
                 if isVideoEnabled && !isVideoSuspended && !isVideoSuspendedByBackground {
-                    holdVideoTask?.cancel()
-                    holdVideoTask = Task { [weak self] in _ = try? await self?.webRTCService.upgradeToVideo() }
+                    let previousTask = holdVideoTask
+                    holdVideoTask = Task { [weak self] in
+                        await previousTask?.value
+                        _ = try? await self?.webRTCService.upgradeToVideo()
+                    }
                     MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: true)
                     Logger.calls.info("CallKit unhold — video restored, peer notified (callId=\(callId))")
                 }
