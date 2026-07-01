@@ -14,6 +14,24 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR iOS AUTORITAIRE (suffixe `i`) — mis à jour 71i** — piste indépendante des itérations web.
+> - **Dernière itération iOS en cours : `71i`** (Dynamic Type / a11y du flux de sécurité 2FA
+>   `TwoFactorSetupView.swift` — 3 écrans setup/disable/backup-codes : **30** `.font(.system(size:))`
+>   figés → `MeeshyFont.relative(...)` (texte + petites icônes inline 12–13 pt, weight/design préservés
+>   dont `.monospaced`) ; **9 icônes héros décoratives 40/50/80 pt gardées figées** pour préserver la
+>   hiérarchie visuelle). Branche `claude/upbeat-euler-8btkin`, base = `main` HEAD `b3867b39`.
+> - **70i (mergé)** = `ContactCardView` palette (hex `#2ECC71`/`#3498DB` → `MeeshyColors.success`/`.info`)
+>   + a11y VoiceOver (annonce téléphones/e-mails) — déjà dans `main`. **69i** = `ContactCardView` palette/Dynamic Type.
+>   **68i** = Liquid Glass champ recherche + `MentionSuggestionPanel`. **55i** = `ConversationInfoSheet`
+>   Dynamic Type (51 conversions, sweep pur sans test — modèle suivi par 71i).
+> - **Base de départ 72i : `main` HEAD** (toujours resync sur `main` avant de commencer ; supprimer la branche mergée).
+> - **Différé prioritaire iOS 72i+ : Dynamic Type grandes surfaces restantes** — `StoryViewerView+Content` (38),
+>   `VoiceProfileManageView` (31), `FeedView+Attachments` (30), `FeedCommentsSheet` (28), `AudioFullscreenView` (26),
+>   `ConversationDashboardView` (43) — un écran/lot, même doctrine (texte + glyphes inline ; héros décoratifs ≥ 40 pt figés).
+>   Puis **Glass adoption (reste)** : `MessageOverlayMenu` (gros fichier, glow réglé — lot dédié `AdaptiveGlassContainer`).
+>   **NE PAS re-flagger** : `ReplyThreadOverlay` (déjà `.adaptiveGlass`, scrim de fond OK), `EmojiFullPickerSheet`/
+>   `EmojiKeyboardPanel` (verre derrière scroll = anti-lisibilité HIG). Voir analyse 71i § Différés.
+>
 > **POINTEUR iOS AUTORITAIRE (mis à jour 77i, 2026-07-01)** — piste iOS indépendante des itérations web (suffixe `i`).
 > - **Itération en cours : `77i` → branche `claude/upbeat-euler-79v8sr`** (i18n complète `SharePickerView` : ~13 littéraux français visibles → clés catalogue ; réutilise le SSOT `conversation.type.*` de `GlobalSearchView` + `common.close` ; ajoute `conversation.type.broadcast` (manquante → corrige aussi `GlobalSearchView` EN/ES/DE/pt-BR) + 13 clés `share.*` ×5 langues ; interpolation `String(format:)` pour story). Base = `main` HEAD `5f95e77`. Gate = CI `ios-tests.yml`.
 > - **Base de départ 78i : `main` HEAD** (toujours resync sur `main` avant de commencer ; supprimer la branche mergée).
