@@ -75,7 +75,9 @@ ENV PYTORCH_INDEX_CPU="https://download.pytorch.org/whl/cpu" \
 # Install dependencies with selected backend
 # Note: Installation en 3 étapes pour résoudre conflit numpy:
 # 1. PyTorch depuis index spécifique (CPU ou GPU)
-# 2. Toutes les dépendances (numpy 2.0+ pour ESPnet)
+# 2. Toutes les dépendances (numpy<1.24 pour ESPnet 202412 — requirements.txt épingle
+#    en exact toutes les libs ML à bornes flottantes qui dérivent sinon vers un torch/numpy
+#    plus récent, cf. commentaire en tête de requirements.txt)
 # 3. chatterbox-tts avec --no-deps (évite conflit numpy<1.26)
 RUN --mount=type=cache,target=/root/.cache/uv \
     echo "Installing with TORCH_BACKEND=${TORCH_BACKEND}" && \
