@@ -41,14 +41,17 @@ struct MemberManagementSection: View {
     private var sectionHeader: some View {
         HStack(spacing: 6) {
             Image(systemName: "person.3.fill")
-                .font(.system(size: 11, weight: .semibold))
+                .font(MeeshyFont.relative(11, weight: .semibold))
                 .foregroundColor(sectionColor)
+                .accessibilityHidden(true)
 
             Text(headerTitle)
-                .font(.system(size: 11, weight: .bold))
+                .font(MeeshyFont.relative(11, weight: .bold))
                 .foregroundColor(theme.textMuted)
                 .tracking(1.2)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
     }
 
     private var headerTitle: String {
@@ -90,11 +93,12 @@ struct MemberManagementSection: View {
     private var searchBar: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 13, weight: .medium))
+                .font(MeeshyFont.relative(13, weight: .medium))
                 .foregroundColor(theme.textMuted)
+                .accessibilityHidden(true)
 
             TextField(String(localized: "member-management.search", defaultValue: "Rechercher un membre...", bundle: .main), text: $viewModel.memberSearchText)
-                .font(.system(size: 14, design: .rounded))
+                .font(MeeshyFont.relative(14, design: .rounded))
                 .foregroundColor(theme.textPrimary)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
@@ -104,9 +108,10 @@ struct MemberManagementSection: View {
                     viewModel.memberSearchText = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14))
+                        .font(MeeshyFont.relative(14))
                         .foregroundColor(theme.textMuted)
                 }
+                .accessibilityLabel(String(localized: "accessibility.clear_search", defaultValue: "Effacer la recherche", bundle: .main))
             }
         }
         .padding(.horizontal, 14)
@@ -156,7 +161,7 @@ struct MemberManagementSection: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(displayName)
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .font(MeeshyFont.relative(14, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
@@ -176,6 +181,9 @@ struct MemberManagementSection: View {
                         }
                     }
                 } label: {
+                    // Fixed 13pt: chrome glyph centered in a fixed 32×32 tap frame — a
+                    // scalable font would overflow the frame (doctrine 82i). The Menu
+                    // carries an .accessibilityLabel, so VoiceOver reads the member's name.
                     Image(systemName: "ellipsis")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(theme.textMuted)
@@ -198,27 +206,30 @@ struct MemberManagementSection: View {
             case .creator:
                 HStack(spacing: 3) {
                     Image(systemName: "crown.fill")
-                        .font(.system(size: 9))
+                        .font(MeeshyFont.relative(9))
+                        .accessibilityHidden(true)
                     Text(String(localized: "member-management.role.creator", defaultValue: "Creator", bundle: .main))
-                        .font(.system(size: 11, weight: .medium))
+                        .font(MeeshyFont.relative(11, weight: .medium))
                 }
                 .foregroundColor(Color(hex: "F8B500"))
 
             case .admin:
                 HStack(spacing: 3) {
                     Image(systemName: "shield.fill")
-                        .font(.system(size: 9))
+                        .font(MeeshyFont.relative(9))
+                        .accessibilityHidden(true)
                     Text(String(localized: "member-management.role.admin", defaultValue: "Admin", bundle: .main))
-                        .font(.system(size: 11, weight: .medium))
+                        .font(MeeshyFont.relative(11, weight: .medium))
                 }
                 .foregroundColor(MeeshyColors.info)
 
             case .moderator:
                 HStack(spacing: 3) {
                     Image(systemName: "checkmark.shield.fill")
-                        .font(.system(size: 9))
+                        .font(MeeshyFont.relative(9))
+                        .accessibilityHidden(true)
                     Text(String(localized: "member-management.role.moderator", defaultValue: "Modérateur", bundle: .main))
-                        .font(.system(size: 11, weight: .medium))
+                        .font(MeeshyFont.relative(11, weight: .medium))
                 }
                 .foregroundColor(MeeshyColors.success)
 
@@ -237,10 +248,11 @@ struct MemberManagementSection: View {
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "person.badge.plus")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(MeeshyFont.relative(13, weight: .semibold))
+                    .accessibilityHidden(true)
 
                 Text(String(localized: "participants.add.title", defaultValue: "Ajouter un membre", bundle: .main))
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .font(MeeshyFont.relative(14, weight: .semibold, design: .rounded))
             }
             .foregroundColor(sectionColor)
             .frame(maxWidth: .infinity)
@@ -293,16 +305,20 @@ struct MemberManagementSection: View {
 
     private var emptyState: some View {
         VStack(spacing: 8) {
+            // Fixed 28pt: decorative empty-state hero glyph — the adjacent label carries
+            // the meaning, so it stays fixed and is hidden from VoiceOver (precedent 90i).
             Image(systemName: "person.slash")
                 .font(.system(size: 28, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
+                .accessibilityHidden(true)
 
             Text(String(localized: "member-management.empty", defaultValue: "Aucun membre trouvé", bundle: .main))
-                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .font(MeeshyFont.relative(13, weight: .medium, design: .rounded))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 24)
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Filtered Participants
