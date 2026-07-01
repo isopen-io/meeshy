@@ -12,9 +12,13 @@
 > accent-coherent call screen reachable from audio/video buttons in the chat header. On 2026-07-01 the
 > **signalling event models + socket mapping** landed (slice `call-signalling-events`): `@Serializable`
 > inbound `call:*` payload types + a total pure `CallSignalMapper.map(eventName, rawJson) → CallEvent?`
-> at parity with the iOS `MessageSocketManager` listen table. **Next:** wire the mapper into a socket
-> subscription that folds mapped events into `CallViewModel`, mirror the outbound emit table, then the
-> WebRTC/Telecom/FCM plumbing. See the run log + `feature-parity.md §H`.
+> at parity with the iOS `MessageSocketManager` listen table. On 2026-07-01 the **socket subscription +
+> outbound emit table** landed (slice `call-signal-manager`): `:sdk-core` `CallSignalManager` listens to
+> all 8 inbound `call:*` frames → `CallSignalMapper` → `SharedFlow<CallEvent> events`, and exposes the
+> fire-and-forget outbound emits (`join`/`leave`/`end`/`toggle-audio`/`toggle-video`/`signal`) at
+> iOS-exact payload keys. **Next:** fold `events` into `CallViewModel` (`viewModelScope`) once the
+> call-id lifecycle exists (an `initiate`-ACK slice), then the WebRTC/Telecom/FCM plumbing. See the run
+> log + `feature-parity.md §H`.
 
 Stories so far: tray (ring carousel) + cross-group viewer playback engine +
 quick-reaction strip + swipe gestures + realtime reaction socket deltas +
@@ -159,9 +163,18 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 3. **`CallDirection` (incoming/outgoing/missed, raw-degrades to incoming) + `CallMediaType`
    (audioOnly/audioVideo)** + call-history row model — the remaining pure call enums from iOS
    `CallModels.swift`/`WebRTCTypes.swift`, feeding a missed/recent-calls list.
-4. **Socket subscription → VM wiring**: a `CallSignalManager` (`:sdk-core`) subscribing to the `call:*`
-   events, decoding via the new payload types + `CallSignalMapper`, exposing a `SharedFlow<CallEvent>` the
-   `CallViewModel` folds (parity with the message/social socket managers).
+4. ~~**Socket subscription → VM wiring**~~ ✅ the **subscription half** shipped as `call-signal-manager`
+   (2026-07-01) — `:sdk-core` `CallSignalManager` (parity with `MessageSocketManager`/`SocialSocketManager`)
+   listens to all 8 inbound `call:*` frames, routes each through `CallSignalMapper`, and republishes the
+   mapped `CallEvent` on `SharedFlow<CallEvent> events`; outbound fire-and-forget emit table
+   (`join`/`leave`/`end`/`toggle-audio`/`toggle-video`/`signal`) at iOS-exact payload keys. +18 tests.
+   See run log. **Still pending:** the **VM-fold half** — `CallViewModel` collecting `events` in
+   `viewModelScope` and its intents driving the outbound emits. That needs the **call-id lifecycle**
+   which `CallConfig` doesn't yet carry, so it depends on:
+5. **`call:initiate` ACK slice**: an `emitInitiate(conversationId, isVideo)` returning the gateway's real
+   `callId` (+ mode / ICE servers / ttl) — the ACK-based emit iOS uses to mint the id. This gives the VM
+   the `callId` every outbound emit is keyed by; once it lands, fold `events` into the VM and route
+   accept/decline/hang-up/mute/camera to `CallSignalManager` emits.
 
 Then the heavier WebRTC/Telecom/FCM-full-screen-intent plumbing (glue-heavy; push every testable
 decision into pure helpers/the VM).
@@ -352,6 +365,44 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-01 — slice `call-signal-manager` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration (the open PRs — #1221-1229 —
+  are all ios/web/gateway). `origin/main` HEAD `c8063196` (PR #1220). Branched
+  `claude/apps/android/call-signal-manager` off latest `main`.
+- **What:** the **socket subscription + outbound emit table** half of the Calls signalling wiring —
+  a new `:sdk-core` `CallSignalManager`, a transport building block mirroring `MessageSocketManager`/
+  `SocialSocketManager`.
+  - **Inbound.** `attach()` registers a `SocketManager.on(...)` listener for all 8 inbound `call:*`
+    frames (`initiated`/`signal`/`participant-joined`/`ended`/`missed`/`media-toggled`/`error`/
+    `already-answered`), converts each first-arg `JSONObject` to its string form, routes it through the
+    pure `CallSignalMapper.map(event, raw)` (the single tested source of "which frame is which event"),
+    and `tryEmit`s any non-null `CallEvent` on the hot `SharedFlow<CallEvent> events` (replay 0, buffer
+    64 — parity with the other managers). A non-`JSONObject` first arg, a malformed frame, or a
+    mapper-inert frame (ICE candidate / renegotiation offer / media-toggle) emits nothing.
+  - **Outbound.** Fire-and-forget lifecycle emits at **iOS-exact** payload keys (pinned so a rename
+    can't silently break the gateway handler): `emitJoin`/`emitLeave`/`emitEnd` → `{callId}`,
+    `emitToggleAudio`/`emitToggleVideo` → `{callId, enabled}`, `emitSignal` → `{callId, signal}`
+    (nested SDP/ICE object). Derived from the iOS `CallEmitSourceGuardTests` emit table.
+  - **Deliberately deferred** (documented, not orphaned): the ACK-based `call:initiate` (mints the
+    callId; returns ICE servers — belongs with WebRTC) and `request-ice-servers`/`heartbeat`/
+    `quality-report`/`reconnecting`/`reconnected`. The VM-fold + app-level `attach()` caller wait on
+    the call-id lifecycle (an `initiate`-ACK slice) — same building-block-awaiting-wiring status as
+    `SocialSocketManager`/`MessageSocketManager` today.
+- **Tests (+18, `CallSignalManagerTest`, Robolectric):** mockk `SocketManager` capturing `on(...)`
+  handlers (SocialSocketManagerTest pattern) + `emit(...)` payload slots.
+  - Inbound (12): each of the 10 mapped outcomes (initiated→ReceiveIncoming, participant-joined→
+    ParticipantJoined, signal answer→RemoteAnswer, ended missed→RingTimeout, ended rejected→
+    RemoteHangUp, missed→RingTimeout, error→ConnectionFailed(msg), already-answered→RemoteHangUp) +
+    2 inert (signal ice-candidate, media-toggled) `expectNoEvents` + malformed-missing-callId +
+    non-JSONObject-arg both `expectNoEvents`.
+  - Outbound (6): each emit verified for event name + payload keys/values via `slot<JSONObject>`.
+- **Verify:** `./apps/android/meeshy.sh check` — `assembleDebug` + full `testDebugUnitTest` **BUILD
+  SUCCESSFUL** (CallSignalManagerTest 18/18; no regressions).
+- **Reviewer gate: PASS** — apps/android-only diff (1 prod file + 1 test + docs); behavioural tests,
+  no tautologies; SDK-pure building block reusing the `CallSignalMapper` SSOT; edge cases (malformed /
+  non-object / inert frames) covered; no coverage floor touched.
+- **Next:** the `initiate`-ACK slice (call-id lifecycle) → then fold `events` into `CallViewModel`.
 
 ### 2026-07-01 — slice `call-signalling-events` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration (the 30 open PRs are all
