@@ -22,6 +22,7 @@ import {
   LanguageOrb,
 } from '@/components/v2';
 import { getInitials } from '@/utils/initials';
+import { formatCompactNumber } from '@/utils/format-number';
 import { useProfileV2 } from '@/hooks/v2';
 import { useAuth } from '@/hooks/use-auth';
 import { useI18n } from '@/hooks/use-i18n';
@@ -38,9 +39,7 @@ import {
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
-function formatNumber(num: number): string {
-  return num >= 1000 ? (num / 1000).toFixed(1) + 'k' : num.toString();
-}
+const formatNumber = formatCompactNumber;
 
 // ─── Modals ────────────────────────────────────────────────────────────────
 
