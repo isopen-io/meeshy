@@ -62,6 +62,10 @@ struct LocationPickerView: View {
                 viewModel.updateSelectedLocation(center)
             }
         ) {
+            // Map annotation marker anchored to a coordinate: system-pin chrome
+            // rendered at a fixed screen size, not reading text — scaling it with
+            // Dynamic Type would detach it from the point it marks. Kept fixed
+            // (doctrine 74i/86i).
             Image(systemName: "mappin.circle.fill")
                 // Fixed: this is the MapKit annotation marker pinned to the map —
                 // its geometry is anchored to a coordinate, not reading text, so it
@@ -136,6 +140,9 @@ struct LocationPickerView: View {
                     viewModel.searchResults.removeAll()
                 } label: {
                     HStack(spacing: 10) {
+                        // Glyph constrained in a fixed 28×28 badge — a scalable
+                        // font would overflow the frame. Kept fixed + hidden from
+                        // VoiceOver (the result name carries the meaning; doctrine 86i).
                         Image(systemName: "mappin")
                             // Fixed: glyph centered in a fixed 28×28 circle badge;
                             // a scalable font would overflow the frame (doctrine 86i).
