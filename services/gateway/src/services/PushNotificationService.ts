@@ -53,6 +53,13 @@ export interface PushResult {
   success: boolean;
   tokenId: string;
   error?: string;
+  /**
+   * True when `error` represents a transient provider-side failure (APNs
+   * InternalServerError/ServiceUnavailable, FCM messaging/internal-error, etc.)
+   * rather than a permanently invalid token. `handleFailedToken` uses this to
+   * avoid deactivating healthy tokens during an Apple/Google outage.
+   */
+  transient?: boolean;
 }
 
 export interface SendPushOptions {
@@ -89,6 +96,37 @@ const config = {
     environment: (process.env.APNS_ENVIRONMENT || 'development') as 'development' | 'production',
   },
 };
+
+// ============================================
+// TRANSIENT ERROR CLASSIFICATION
+// ============================================
+
+// Apple-reported reasons that indicate a provider-side hiccup, not a bad
+// device token. Worth a short retry before counting as a delivery failure.
+const APNS_TRANSIENT_REASONS = new Set(['InternalServerError', 'ServiceUnavailable', 'TooManyRequests', 'Shutdown']);
+
+// FCM error codes for the same class of provider-side issue (as opposed to
+// `messaging/registration-token-not-registered` / `invalid-registration-token`,
+// which mean the token itself is dead).
+const FCM_TRANSIENT_ERROR_CODES = new Set([
+  'messaging/internal-error',
+  'messaging/server-unavailable',
+  'messaging/unavailable',
+  'messaging/quota-exceeded',
+]);
+
+function isTransientApnsReason(reason: string | undefined): boolean {
+  return !!reason && APNS_TRANSIENT_REASONS.has(reason);
+}
+
+function isTransientFcmErrorCode(code: string | undefined): boolean {
+  return !!code && FCM_TRANSIENT_ERROR_CODES.has(code);
+}
+
+// Up to 2 retries (3 attempts total) with exponential backoff before a
+// transient failure is surfaced as a real delivery failure.
+const PUSH_RETRY_MAX_ATTEMPTS = 2;
+const PUSH_RETRY_BASE_DELAY_MS = 200;
 
 // ============================================
 // SERVICE CLASS
@@ -133,6 +171,13 @@ export class PushNotificationService {
 
   constructor(prisma: PrismaClient) {
     this.prisma = prisma;
+  }
+
+  /**
+   * Sleep helper, broken out so tests can stub it to skip real backoff delays.
+   */
+  private async wait(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   /**
@@ -322,7 +367,7 @@ export class PushNotificationService {
 
         // Handle failed tokens
         if (!result.success) {
-          await this.handleFailedToken(tokenRecord.id, result.error || 'Unknown error');
+          await this.handleFailedToken(tokenRecord.id, result.error || 'Unknown error', result.transient);
         } else {
           // Update last used timestamp
           await this.prisma.pushToken.update({
@@ -488,7 +533,7 @@ export class PushNotificationService {
       await this.fcmCircuitBreaker.execute(() =>
         performanceLogger.withTiming(
           'push.sendViaFCM',
-          () => this.firebaseAdmin!.messaging().send(message),
+          () => this.sendFcmWithRetry(message, fcmCorr),
           fcmCorr
         )
       );
@@ -512,7 +557,33 @@ export class PushNotificationService {
         return { success: false, tokenId: tokenRecord.id, error: 'TOKEN_INVALID' };
       }
 
-      return { success: false, tokenId: tokenRecord.id, error: error.message || 'FCM error' };
+      return {
+        success: false,
+        tokenId: tokenRecord.id,
+        error: error.message || 'FCM error',
+        transient: isTransientFcmErrorCode(errorCode),
+      };
+    }
+  }
+
+  /**
+   * Sends via FCM, retrying transient provider errors (`messaging/internal-error`,
+   * etc.) with exponential backoff. Permanent errors (bad/unregistered token)
+   * throw immediately on the first attempt — retrying them would just waste
+   * round-trips and delay the TOKEN_INVALID classification.
+   */
+  private async sendFcmWithRetry(message: unknown, corr: Record<string, unknown>): Promise<unknown> {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await this.firebaseAdmin!.messaging().send(message);
+      } catch (error: any) {
+        const code = error?.code || error?.errorInfo?.code;
+        if (!isTransientFcmErrorCode(code) || attempt >= PUSH_RETRY_MAX_ATTEMPTS) {
+          throw error;
+        }
+        pushLogger.warn('push.sendViaFCM.retry', { ...corr, attempt: attempt + 1, code });
+        await this.wait(PUSH_RETRY_BASE_DELAY_MS * 2 ** attempt);
+      }
     }
   }
 
@@ -613,7 +684,7 @@ export class PushNotificationService {
       const result = await this.apnsCircuitBreaker.execute(() =>
         performanceLogger.withTiming(
           'push.sendViaAPNS',
-          () => client.send(notification, tokenRecord.token) as Promise<{ failed: Array<{ response?: { reason?: string }; status?: number | string }>; sent: unknown[] }>,
+          () => this.sendApnsWithRetry(client, notification, tokenRecord.token, apnsCorr),
           apnsCorr
         )
       );
@@ -630,6 +701,7 @@ export class PushNotificationService {
           success: false,
           tokenId: tokenRecord.id,
           error: reason,
+          transient: isTransientApnsReason(reason),
         };
       }
 
@@ -647,13 +719,48 @@ export class PushNotificationService {
   }
 
   /**
+   * Sends via APNs, retrying transient provider reasons (`InternalServerError`,
+   * `ServiceUnavailable`, `TooManyRequests`, `Shutdown`) with exponential
+   * backoff. Permanent reasons (`BadDeviceToken`, `Unregistered`, ...) are
+   * returned on the first attempt — retrying a dead token wastes round-trips.
+   */
+  private async sendApnsWithRetry(
+    client: { send: (notification: unknown, token: string) => Promise<unknown> },
+    notification: unknown,
+    token: string,
+    corr: Record<string, unknown>
+  ): Promise<{ failed: Array<{ response?: { reason?: string }; status?: number | string }>; sent: unknown[] }> {
+    for (let attempt = 0; ; attempt++) {
+      const result = (await client.send(notification, token)) as {
+        failed: Array<{ response?: { reason?: string }; status?: number | string }>;
+        sent: unknown[];
+      };
+      const reason = result.failed[0]?.response?.reason;
+      if (result.failed.length === 0 || !isTransientApnsReason(reason) || attempt >= PUSH_RETRY_MAX_ATTEMPTS) {
+        return result;
+      }
+      pushLogger.warn('push.sendViaAPNS.retry', { ...corr, attempt: attempt + 1, reason });
+      await this.wait(PUSH_RETRY_BASE_DELAY_MS * 2 ** attempt);
+    }
+  }
+
+  /**
    * Handle failed token delivery.
    * Uses an in-flight guard to prevent duplicate DB writes when the same
    * token fails multiple concurrent sends in a burst scenario.
+   *
+   * `transient` failures (Apple/Google provider-side outages, already retried
+   * by `sendApnsWithRetry`/`sendFcmWithRetry`) are logged but never count
+   * toward the 3-strike deactivation threshold — the token itself is fine,
+   * only the provider had a hiccup.
    */
-  private async handleFailedToken(tokenId: string, error: string): Promise<void> {
+  private async handleFailedToken(tokenId: string, error: string, transient = false): Promise<void> {
     if (this.deactivatingTokenIds.has(tokenId)) {
       pushLogger.debug('handleFailedToken skipped (already in-flight)', { tokenId });
+      return;
+    }
+    if (transient) {
+      pushLogger.warn('Push delivery failed transiently, token left active', { tokenId, error });
       return;
     }
     this.deactivatingTokenIds.add(tokenId);
