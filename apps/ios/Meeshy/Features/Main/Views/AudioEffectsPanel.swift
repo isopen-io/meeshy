@@ -50,6 +50,7 @@ struct AudioEffectsPanel: View {
             Text(String(localized: "audio.effects.title", defaultValue: "Effets audio", bundle: .main))
                 .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
                 .foregroundColor(.primary)
+                .accessibilityAddTraits(.isHeader)
             Spacer()
             if callManager.activeAudioEffect != nil {
                 Button {
@@ -104,6 +105,7 @@ struct AudioEffectsPanel: View {
             )
         }
         .pressable()
+        .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 
     // MARK: - Parameter Sliders
@@ -174,6 +176,7 @@ struct AudioEffectsPanel: View {
                                 .fill(isActive ? MeeshyColors.indigo500.opacity(0.12) : Color.primary.opacity(0.05))
                         )
                 }
+                .accessibilityAddTraits(isActive ? .isSelected : [])
             }
         }
     }
@@ -198,12 +201,12 @@ struct AudioEffectsPanel: View {
         // la valeur visibles sont purement visuels et l'icône est décorative.
         HStack(spacing: 10) {
             Image(systemName: icon)
-                .font(.system(size: 11, weight: .medium))
+                .font(MeeshyFont.relative(11, weight: .medium))
                 .foregroundColor(MeeshyColors.indigo400)
                 .frame(width: 18)
                 .accessibilityHidden(true)
             Text(label)
-                .font(.system(size: 12, weight: .medium))
+                .font(MeeshyFont.relative(12, weight: .medium))
                 .foregroundColor(.secondary)
                 .frame(width: 55, alignment: .leading)
             Slider(value: value, in: range)
@@ -211,7 +214,7 @@ struct AudioEffectsPanel: View {
                 .accessibilityLabel(label)
                 .accessibilityValue(String(format: format, value.wrappedValue))
             Text(String(format: format, value.wrappedValue))
-                .font(.system(size: 11, weight: .medium).monospacedDigit())
+                .font(MeeshyFont.relative(11, weight: .medium).monospacedDigit())
                 .foregroundColor(.secondary)
                 .frame(width: 42, alignment: .trailing)
         }

@@ -131,8 +131,9 @@ extension FeedPostCard {
                         if count > 5 {
                             Color.black.opacity(0.6)
                             Text("+\(count - 5)")
-                                .font(.system(size: 22, weight: .bold))
+                                .font(MeeshyFont.relative(22, weight: .bold))
                                 .foregroundColor(.white)
+                                .accessibilityHidden(true)
                         }
                     }
                     .contentShape(Rectangle())
@@ -201,7 +202,7 @@ extension FeedPostCard {
                 )
             }
 
-            // Video overlay
+            // Video overlay (décoratif : la cellule galerie parente porte le libellé VoiceOver)
             if media.type == .video {
                 VStack(spacing: 6) {
                     ZStack {
@@ -211,6 +212,7 @@ extension FeedPostCard {
                         Circle()
                             .fill(Color.white.opacity(0.85))
                             .frame(width: 30, height: 30)
+                        // Glyphe dans un cercle de dimension fixe 30/36 : figé (déborderait s'il scalait, doctrine 86i)
                         Image(systemName: "play.fill")
                             .font(.system(size: 12, weight: .bold))
                             .foregroundColor(.black.opacity(0.7))
@@ -218,27 +220,29 @@ extension FeedPostCard {
                     }
                     if let duration = media.durationFormatted {
                         Text(duration)
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .font(MeeshyFont.relative(10, weight: .semibold, design: .monospaced))
                             .foregroundColor(.white)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(Capsule().fill(Color.black.opacity(0.6)))
                     }
                 }
+                .accessibilityHidden(true)
             } else if media.type == .audio {
                 VStack(spacing: 4) {
                     Image(systemName: "waveform")
-                        .font(.system(size: 20))
+                        .font(MeeshyFont.relative(20))
                         .foregroundColor(.white)
                     if let duration = media.durationFormatted {
                         Text(duration)
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .font(MeeshyFont.relative(10, weight: .semibold, design: .monospaced))
                             .foregroundColor(.white)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(Capsule().fill(Color.black.opacity(0.6)))
                     }
                 }
+                .accessibilityHidden(true)
             }
         }
         .clipped()
@@ -326,22 +330,24 @@ extension FeedPostCard {
                     .fill(Color(hex: media.thumbnailColor).opacity(0.2))
                     .frame(width: 48, height: 56)
 
+                // Glyphe dans un cadre de dimension fixe 48×56 : figé (déborderait s'il scalait, doctrine 86i) ; le nom de fichier porte le sens
                 Image(systemName: "doc.fill")
                     .font(.system(size: 24))
                     .foregroundColor(Color(hex: media.thumbnailColor))
+                    .accessibilityHidden(true)
             }
 
             // Document info
             VStack(alignment: .leading, spacing: 4) {
                 Text(media.fileName ?? "Document")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(MeeshyFont.relative(14, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
                 HStack(spacing: 8) {
                     if let size = media.fileSize {
                         Text(size)
-                            .font(.system(size: 12))
+                            .font(MeeshyFont.relative(12))
                             .foregroundColor(theme.textMuted)
                     }
 
@@ -349,7 +355,7 @@ extension FeedPostCard {
                         Text("\u{2022}")
                             .foregroundColor(theme.textMuted)
                         Text("\(pages) pages")
-                            .font(.system(size: 12))
+                            .font(MeeshyFont.relative(12))
                             .foregroundColor(theme.textMuted)
                     }
                 }
@@ -383,31 +389,34 @@ extension FeedPostCard {
                     )
                     .frame(width: 64, height: 64)
 
+                // Glyphe dans un cadre de dimension fixe 64×64 : figé (déborderait s'il scalait, doctrine 86i) ; le nom du lieu porte le sens
                 Image(systemName: "mappin.circle.fill")
                     .font(.system(size: 28))
                     .foregroundColor(Color(hex: media.thumbnailColor))
+                    .accessibilityHidden(true)
             }
 
             // Location info
             VStack(alignment: .leading, spacing: 4) {
                 Text(media.locationName ?? "Location")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(MeeshyFont.relative(14, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(2)
 
                 if let lat = media.latitude, let lon = media.longitude {
                     Text(String(format: "%.4f, %.4f", lat, lon))
-                        .font(.system(size: 11))
+                        .font(MeeshyFont.relative(11))
                         .foregroundColor(theme.textMuted)
                 }
             }
 
             Spacer()
 
-            // Open in maps
+            // Open in maps (glyphe d'affordance décoratif)
             Image(systemName: "arrow.up.right.circle.fill")
-                .font(.system(size: 28))
+                .font(MeeshyFont.relative(28))
                 .foregroundColor(Color(hex: media.thumbnailColor))
+                .accessibilityHidden(true)
         }
         .padding(14)
         .background(
