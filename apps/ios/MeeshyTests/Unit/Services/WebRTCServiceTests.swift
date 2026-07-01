@@ -895,3 +895,76 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
     func setAudioEffect(_ effect: AudioEffectConfig?) throws {}
     func updateAudioEffectParams(_ config: AudioEffectConfig) throws {}
 }
+
+// MARK: - Camera switch serialization source guard
+
+/// A rapid double-tap on flip-camera used to fire two untracked `Task`s, each
+/// running `stopCapture()`/`startCapture()` on the same `RTCCameraVideoCapturer`
+/// concurrently — can leave the capturer in an indeterminate state or desync
+/// `isUsingFrontCamera` from the actually active camera. `switchCamera()` and
+/// `switchToCamera(uniqueID:)` must chain onto the previous in-flight task
+/// (mirroring `CallManager.holdVideoTask`'s pattern) instead of firing a bare
+/// `Task { }` per call.
+@MainActor
+final class SwitchCameraSourceGuardTests: XCTestCase {
+
+    private func webRTCServiceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func body(of funcSignature: String, in source: String) -> String? {
+        guard let range = source.range(of: funcSignature) else { return nil }
+        let end = source.range(of: "\n    }", range: range.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
+        return String(source[range.lowerBound..<end])
+    }
+
+    func test_switchCamera_chainsOntoPreviousTask() throws {
+        let src = try webRTCServiceSource()
+        guard let body = body(of: "func switchCamera()", in: src) else {
+            XCTFail("switchCamera() not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("switchCameraTask"),
+            "switchCamera() must track its Task in switchCameraTask so a rapid double-tap serializes " +
+            "instead of racing two concurrent capturer restarts"
+        )
+        XCTAssertTrue(
+            body.contains("await previousTask?.value"),
+            "switchCamera() must await the previous in-flight switch before starting a new one"
+        )
+    }
+
+    func test_switchToCamera_chainsOntoPreviousTask() throws {
+        let src = try webRTCServiceSource()
+        guard let body = body(of: "func switchToCamera(uniqueID: String)", in: src) else {
+            XCTFail("switchToCamera(uniqueID:) not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("switchCameraTask"),
+            "switchToCamera(uniqueID:) must track its Task in switchCameraTask so it serializes " +
+            "against a concurrent switchCamera()/switchToCamera(uniqueID:) call"
+        )
+        XCTAssertTrue(
+            body.contains("await previousTask?.value"),
+            "switchToCamera(uniqueID:) must await the previous in-flight switch before starting a new one"
+        )
+    }
+
+    func test_close_cancelsSwitchCameraTask() throws {
+        let src = try webRTCServiceSource()
+        guard let body = body(of: "func close()", in: src) else {
+            XCTFail("close() not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("switchCameraTask?.cancel()"),
+            "close() must cancel switchCameraTask like its other tracked tasks so a pending camera " +
+            "switch cannot outlive teardown"
+        )
+    }
+}

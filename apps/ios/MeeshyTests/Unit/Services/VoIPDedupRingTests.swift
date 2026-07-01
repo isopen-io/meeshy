@@ -130,4 +130,39 @@ final class VoIPDedupRingTests: XCTestCase {
         XCTAssertEqual(ring.count, 1, "Expired entries must be purged by insert(), leaving only c3")
         XCTAssertTrue(ring.contains("c3", now: t0.addingTimeInterval(60)))
     }
+
+    // MARK: - Eviction on CallKit report failure
+
+    func test_remove_evictsCallId_soASubsequentPushIsNotDeduped() {
+        var ring = VoIPDedupRing(capacity: 10, ttl: 30)
+        let t0 = Date(timeIntervalSince1970: 1_000_000)
+        ring.insert("c1", now: t0)
+        XCTAssertTrue(ring.contains("c1", now: t0.addingTimeInterval(1)))
+
+        ring.remove("c1")
+
+        XCTAssertFalse(
+            ring.contains("c1", now: t0.addingTimeInterval(2)),
+            "After CallKit refuses reportNewIncomingCall, evicting the callId must let a genuine APNs retry re-ring instead of being phantom-acked as a duplicate"
+        )
+    }
+
+    func test_remove_unknownCallId_isNoOp() {
+        var ring = VoIPDedupRing(capacity: 10, ttl: 30)
+        let t0 = Date(timeIntervalSince1970: 1_000_000)
+        ring.insert("c1", now: t0)
+        ring.remove("does-not-exist")
+        XCTAssertTrue(ring.contains("c1", now: t0.addingTimeInterval(1)))
+        XCTAssertEqual(ring.count, 1)
+    }
+
+    func test_remove_onlyRemovesMatchingCallId_leavesOthersIntact() {
+        var ring = VoIPDedupRing(capacity: 10, ttl: 30)
+        let t0 = Date(timeIntervalSince1970: 1_000_000)
+        ring.insert("c1", now: t0)
+        ring.insert("c2", now: t0.addingTimeInterval(1))
+        ring.remove("c1")
+        XCTAssertFalse(ring.contains("c1", now: t0.addingTimeInterval(2)))
+        XCTAssertTrue(ring.contains("c2", now: t0.addingTimeInterval(2)))
+    }
 }

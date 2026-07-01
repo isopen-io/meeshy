@@ -348,4 +348,27 @@ final class CodecPreferencesTests: XCTestCase {
             "Reference §3.8 + ADR-4."
         )
     }
+
+    func test_configure_closesAnyPreExistingPeerConnection() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+
+        guard let range = source.range(of: "func configure(iceServers: [IceServer]) throws {") else {
+            XCTFail("configure(iceServers:) not found"); return
+        }
+        let end = source.range(of: "\n    }", range: range.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
+        let body = String(source[range.lowerBound..<end])
+
+        XCTAssertTrue(
+            body.contains("stalePeerConnection.close()"),
+            "configure() must close any pre-existing peerConnection before overwriting the reference — " +
+            "otherwise a caller that violates the .idle-before-configure FSM invariant silently leaks " +
+            "a native RTCPeerConnection (threads/sockets)."
+        )
+    }
 }
