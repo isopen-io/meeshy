@@ -1535,6 +1535,13 @@ struct ConversationView: View {
                 onShowTranslate: {
                     overlayState.moreSheetInitialItem = .language
                     overlayState.detailSheetMessage = msg
+                },
+                onShowMore: {
+                    overlayState.moreSheetInitialItem = nil
+                    overlayState.detailSheetMessage = msg
+                },
+                onExpandFullPicker: {
+                    overlayState.fullReactionPickerMessage = msg
                 }
             )
             .transition(.opacity).zIndex(999)

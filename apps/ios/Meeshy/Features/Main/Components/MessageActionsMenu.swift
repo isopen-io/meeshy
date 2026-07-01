@@ -63,6 +63,16 @@ struct MessageActionsMenu: View {
         .accessibilityAddTraits(.isButton)
     }
 
+    static let rowHeight: CGFloat = 44
+    static let menuWidth: CGFloat = 240
+
+    /// Taille déterministe pour un nombre d'actions donné — utilisée par le
+    /// conteneur de l'overlay pour positionner le menu sans PreferenceKey.
+    static func estimatedSize(actionCount: Int) -> CGSize {
+        let count = max(1, actionCount)
+        return CGSize(width: menuWidth, height: CGFloat(count) * rowHeight + 16)
+    }
+
     private func symbol(_ a: PrimaryAction) -> String {
         switch a {
         case .edit: return "pencil"

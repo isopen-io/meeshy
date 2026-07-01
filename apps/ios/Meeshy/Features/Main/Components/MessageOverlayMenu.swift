@@ -46,6 +46,11 @@ struct MessageOverlayMenu: View {
     /// action bar — ouvre l'écran de détail sur l'onglet Langue côté
     /// ConversationView.
     var onShowTranslate: (() -> Void)? = nil
+    /// Ouvre la feuille « Plus… » native (MessageMoreSheet) — action `.more`
+    /// de la liste verticale.
+    var onShowMore: (() -> Void)? = nil
+    /// Ouvre le picker d'emoji complet (bouton `+` de la barre de réactions).
+    var onExpandFullPicker: (() -> Void)? = nil
 
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
@@ -186,6 +191,52 @@ struct MessageOverlayMenu: View {
         dismiss()
     }
 
+    // MARK: - Primary Actions (liste verticale native-lean)
+
+    private var menuContext: MessageMenuContext {
+        let hasText = !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let hasMedia = !message.attachments.isEmpty
+        let hasTimebased = message.attachments.contains {
+            AttachmentKind(mimeType: $0.mimeType).hasTimebasedTrack
+        }
+        return MessageMenuContext(
+            isMine: message.isMe,
+            canEdit: canEdit,
+            canDelete: canDelete,
+            hasText: hasText,
+            hasMedia: hasMedia,
+            hasTimebasedMedia: hasTimebased,
+            isPinned: message.pinnedAt != nil,
+            isStarred: isStarred,
+            isEdited: message.isEdited,
+            hasEditRevisions: true
+        )
+    }
+
+    private var primaryActions: [PrimaryAction] {
+        MessageActionResolver.primaryActions(menuContext)
+    }
+
+    private func handlePrimaryAction(_ action: PrimaryAction) {
+        switch action {
+        case .edit:
+            onEdit?()
+        case .translate:
+            onShowTranslate?()
+        case .copy:
+            onCopy?()
+        case .pin, .unpin:
+            onPin?()
+        case .star, .unstar:
+            onToggleStar?()
+        case .more:
+            onShowMore?()
+        case .delete:
+            onDelete?()
+        }
+        dismiss()
+    }
+
 
     var body: some View {
         GeometryReader { geometry in
@@ -311,6 +362,35 @@ struct MessageOverlayMenu: View {
             let clusterFadeOpacity: CGFloat = max(0, 1 - abs(clampedDrag) / clusterFadeThreshold)
             let clusterIsInteractive = clusterFadeOpacity > 0.5
 
+            // ── Géométrie native-lean : barre réactions (haut) + bulle + liste verticale (bas) ──
+            let nlEmojiBarHeight: CGFloat = 52
+            let nlGap: CGFloat = 12
+            let nlSidePadding: CGFloat = 16
+            let nlMenuWidth: CGFloat = MessageActionsMenu.menuWidth
+            let nlMenuHeight: CGFloat = MessageActionsMenu.estimatedSize(actionCount: primaryActions.count).height
+            let nlEmojiWidth: CGFloat = 300
+            let nlAvailTop = safeTop + 12
+            let nlAvailBottom = screenH - safeBottom - 12
+            let nlAvailable = max(160, nlAvailBottom - nlAvailTop)
+            let nlChrome = nlEmojiBarHeight + nlGap * 2 + nlMenuHeight
+            let nlFitScale: CGFloat = (scaledBubbleHeight + nlChrome > nlAvailable)
+                ? max(0.4, min(bubblePreviewScale, max(60, nlAvailable - nlChrome) / max(1, bubbleRect.height)))
+                : bubblePreviewScale
+            let nlBubbleW = bubbleRect.width * nlFitScale
+            let nlBubbleH = bubbleRect.height * nlFitScale
+            let nlClusterH = nlEmojiBarHeight + nlGap + nlBubbleH + nlGap + nlMenuHeight
+            let nlAnchorX: CGFloat = message.isMe
+                ? bubbleRect.maxX - nlBubbleW / 2
+                : bubbleRect.minX + nlBubbleW / 2
+            let nlDesiredTop = bubbleRect.minY - nlEmojiBarHeight - nlGap
+            let nlClusterTop = max(nlAvailTop, min(nlDesiredTop, nlAvailBottom - nlClusterH))
+            let nlEmojiY = nlClusterTop + nlEmojiBarHeight / 2
+            let nlBubbleTop = nlClusterTop + nlEmojiBarHeight + nlGap
+            let nlBubbleMidY = nlBubbleTop + nlBubbleH / 2
+            let nlMenuY = nlBubbleTop + nlBubbleH + nlGap + nlMenuHeight / 2
+            let nlMenuX = max(nlSidePadding + nlMenuWidth / 2, min(geometry.size.width - nlSidePadding - nlMenuWidth / 2, nlAnchorX))
+            let nlEmojiX = max(nlSidePadding + nlEmojiWidth / 2, min(geometry.size.width - nlSidePadding - nlEmojiWidth / 2, nlAnchorX))
+
             ZStack {
                 dismissBackground
 
@@ -362,39 +442,25 @@ struct MessageOverlayMenu: View {
                         .offset(y: isVisible ? 0 : 18)
                     }
 
-                    // Le panneau de détail reste ANCRÉ au bas — le drag
-                    // handle laisse l'utilisateur l'agrandir ou le réduire à
-                    // volonté. Pas de lift artificiel : le panel s'ouvre à
-                    // la hauteur permise (`panelBaseHeight`) et le drag fait
-                    // varier `panelHeight` autour de cette base.
-                    detailPanel(safeBottom: safeBottom)
-                        .frame(height: panelHeight)
-                        .offset(y: isVisible ? 0 : panelBaseHeight + 40)
+                    // Panneau grille retiré (native-lean) — les détails
+                    // passent désormais par la feuille « Plus… » (MessageMoreSheet).
                 }
 
                 if useSourceFrame {
-                    // Quick action bar au-dessus de la bulle (iMessage-style)
-                    // — actions rapides Copier/Éditer/Traduire/Supprimer
-                    // filtrées selon le contexte. Tap fire le callback +
-                    // dismiss l'overlay. Visible uniquement si au moins une
-                    // action passe le filtre.
-                    if !quickActions.isEmpty {
-                        ContextActionMenu(
-                            actions: quickActions,
-                            palette: quickActionPalette,
-                            onAction: { kind in handleQuickAction(kind) }
-                        )
-                        .position(
-                            x: quickActionMenuCenterX,
-                            y: isVisible ? quickActionMenuCenterY : (bubbleRect.minY - 4)
-                        )
-                        .opacity(isVisible ? clusterFadeOpacity : 0)
-                        .scaleEffect(
-                            isVisible ? 1.0 : 0.85,
-                            anchor: message.isMe ? .bottomTrailing : .bottomLeading
-                        )
-                        .allowsHitTesting(clusterIsInteractive)
-                    }
+                    // Liste d'actions verticale EN-DESSOUS de la bulle
+                    // (native-lean). Icônes monochromes accent, destructif
+                    // rouge isolé. Remplace la capsule horizontale + la grille.
+                    MessageActionsMenu(
+                        actions: primaryActions,
+                        accentHex: contactColor,
+                        onSelect: { handlePrimaryAction($0) }
+                    )
+                    .position(
+                        x: nlMenuX,
+                        y: isVisible ? nlMenuY : (bubbleRect.maxY + 8)
+                    )
+                    .opacity(isVisible ? 1 : 0)
+                    .scaleEffect(isVisible ? 1.0 : 0.85, anchor: .top)
 
                     // FIDÉLITÉ — vrai `ThemedMessageBubble` avec les mêmes
                     // paramètres que la cellule live de la liste : rendu
@@ -432,30 +498,24 @@ struct MessageOverlayMenu: View {
                         )
                     )
                     .frame(width: bubbleRect.width, height: bubbleRect.height, alignment: .leading)
-                    .scaleEffect(bubblePreviewScale, anchor: .center)
-                    .frame(width: scaledBubbleWidth, height: scaledBubbleHeight)
+                    .scaleEffect(nlFitScale, anchor: .center)
+                    .frame(width: nlBubbleW, height: nlBubbleH)
                     .position(
-                        x: bubbleAnchorX,
-                        y: isVisible ? bubbleFinalMidY : bubbleRect.midY
+                        x: nlAnchorX,
+                        y: isVisible ? nlBubbleMidY : bubbleRect.midY
                     )
-                    .opacity(isVisible ? clusterFadeOpacity : 0)
+                    .opacity(isVisible ? 1 : 0)
                     .allowsHitTesting(false)
 
-                    // Barre d'emojis rapides — positionnée DIRECTEMENT sous
-                    // la bulle (gap ~10pt) ET ALIGNÉE au même côté que la
-                    // bulle pour rester "à portée de pouce" et créer une
-                    // continuité visuelle bubble ↔ emoji bar ↔ action bar.
+                    // Barre de réactions AU-DESSUS de la bulle (native-lean).
                     emojiQuickBar
                         .position(
-                            x: emojiBarCenterX,
-                            y: isVisible ? emojiBarCenterY : (bubbleRect.maxY + emojiBarHeight / 2)
+                            x: nlEmojiX,
+                            y: isVisible ? nlEmojiY : bubbleRect.minY
                         )
-                        .opacity(isVisible ? clusterFadeOpacity : 0)
-                        .scaleEffect(
-                            isVisible ? 1.0 : 0.7,
-                            anchor: message.isMe ? .topTrailing : .topLeading
-                        )
-                        .allowsHitTesting(clusterIsInteractive)
+                        .opacity(isVisible ? 1 : 0)
+                        .scaleEffect(isVisible ? 1.0 : 0.7, anchor: .center)
+                        .allowsHitTesting(true)
                 }
             }
         }
@@ -494,8 +554,8 @@ struct MessageOverlayMenu: View {
             },
             onExpandFullPicker: {
                 HapticFeedback.light()
-                isEmojiPickerOpen.toggle()
-                forceTab = isEmojiPickerOpen ? .react : .language
+                onExpandFullPicker?()
+                dismiss()
             }
         )
         .frame(maxWidth: 280)
