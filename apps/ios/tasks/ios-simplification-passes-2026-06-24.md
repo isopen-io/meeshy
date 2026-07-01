@@ -158,7 +158,10 @@ helpers + retry backoff), (5) monitoring (network/thermal/screen-capture/backgro
 - **B3** — `toggleTranscription` (`CallManager:1394`) : langues hardcodées `"fr"` →
   résoudre via `resolveUserLanguage()`/`preferredContentLanguages` (Prisme).
 - **Code mort** — `emitCallEnd(callId:toUserId:)` (`CallManager:2541-2543`, 0 appelant)
-  + le commentaire `_ = userId` (l.1167). À supprimer.
+  + le commentaire `_ = userId` (l.1167). **Supprimé** (audit calling-stack 2026-07-01) —
+  au passage, `endCall()` ne gate plus l'émission de `call:end` sur `remoteUserId`
+  non-nil (le guard `if let callId, let userId` ne servait qu'à justifier la
+  référence morte à l'API legacy).
 - **Transcription unidirectionnelle** — `WebRTCService.createTranscriptionChannel()`
   n'est jamais appelé côté offerer (seul le receiver câble via `didOpen`). Soit
   l'appeler au setup offerer, soit supprimer le code si la transcription temps-réel

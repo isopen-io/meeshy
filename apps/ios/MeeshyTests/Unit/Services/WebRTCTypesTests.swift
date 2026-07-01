@@ -674,6 +674,15 @@ final class QualityThresholdsSignalingTests: XCTestCase {
             "Ping interval must be ≤ quality-reset window so recovery is confirmed before the badge clears"
         )
     }
+
+    func test_maxPendingIceCandidates_exceedsDocumentedGatheringRoundSize() {
+        // The cap's own doc comment says a single gathering round can produce
+        // "50+" candidates. A cap sitting exactly at 50 would drop legitimate
+        // candidates from a busy round while the socket is down — the cap must
+        // leave headroom above that documented figure.
+        XCTAssertGreaterThan(QualityThresholds.maxPendingIceCandidates, 50,
+                              "Cap must exceed the documented 50+ candidates a single gathering round can produce")
+    }
 }
 
 // MARK: - PiP Thermal Frame-Rate Ladder

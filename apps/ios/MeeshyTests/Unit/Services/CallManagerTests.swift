@@ -3780,3 +3780,81 @@ final class CallManagerAudioSessionOpusAlignmentTests: XCTestCase {
         )
     }
 }
+
+// MARK: - Local SDP Failure Notifies Peer (audit fix)
+
+/// A local SDP generation failure (createOffer/createAnswer returning nil, or the
+/// remote offer never arriving before the timeout) is invisible to the peer unless
+/// we explicitly emit `call:end`. Without it, the peer sits in .ringing/.connecting
+/// until the gateway's CallCleanupService cron reaps the zombie call (~60s later).
+/// These tests guard against regressing that notification on each local-failure path.
+final class LocalSDPFailureNotifiesPeerTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(of signature: String, in source: String) -> String? {
+        guard let range = source.range(of: signature) else { return nil }
+        let nextFunc = [
+            source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<nextFunc])
+    }
+
+    func test_handleSignalOffer_createAnswerFailure_emitsCallEnd() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func handleSignalOffer(callId: String, sdp: SessionDescription, generation: Int = 0) {", in: source) else {
+            XCTFail("handleSignalOffer(callId:sdp:generation:) not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("MessageSocketManager.shared.emitCallEnd(callId: callId)"),
+            "handleSignalOffer's late-offer createAnswer failure must emit call:end — " +
+            "otherwise the caller is left waiting for an answer that will never arrive."
+        )
+    }
+
+    func test_answerCall_createAnswerFailure_emitsCallEnd() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func answerCall() {", in: source) else {
+            XCTFail("answerCall() not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("MessageSocketManager.shared.emitCallEnd(callId: callId)"),
+            "answerCall()'s createAnswer failure and SDP-offer-timeout paths must emit " +
+            "call:end — otherwise the caller is left ringing/connecting indefinitely."
+        )
+    }
+
+    func test_answerCallReady_createAnswerFailure_emitsCallEnd() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func answerCallReady() async {", in: source) else {
+            XCTFail("answerCallReady() not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("MessageSocketManager.shared.emitCallEnd(callId: callId)"),
+            "answerCallReady()'s createAnswer failure and SDP-offer-timeout paths must " +
+            "emit call:end — otherwise the caller is left ringing/connecting indefinitely."
+        )
+    }
+
+    func test_listenForParticipantJoined_createOfferFailure_emitsCallEnd() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "private func listenForParticipantJoined(callId: String, toUserId: String, isVideo: Bool) {", in: source) else {
+            XCTFail("listenForParticipantJoined(callId:toUserId:isVideo:) not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("MessageSocketManager.shared.emitCallEnd(callId: callId)"),
+            "listenForParticipantJoined()'s createOffer failure must emit call:end — " +
+            "the callee already joined the room and is waiting for an offer that will never arrive."
+        )
+    }
+}
