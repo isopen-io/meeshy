@@ -967,7 +967,8 @@
     "clickColReferrer": "Referrer",
     "clickColSource": "Source",
     "clickColStatus": "Status",
-    "fieldNamePlaceholder": "Summer promo"
+    "fieldNamePlaceholder": "Summer promo",
+    "copyError": "Failed to copy link"
   },
   "users": {
     "newUser": {
@@ -1968,7 +1969,8 @@
     "next": "Next",
     "deleteTitle": "Delete share link",
     "deleteDescription": "This action is irreversible. The share link and all its accesses will be permanently deleted.",
-    "deleteConfirm": "Delete"
+    "deleteConfirm": "Delete",
+    "copyError": "Failed to copy link"
   },
   "translationsPage": {
     "loadError": "Error loading translations",

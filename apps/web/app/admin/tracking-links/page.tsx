@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import AdminLayout from '@/components/admin/AdminLayout';
-import { copyToClipboard as copyTextToClipboard } from '@/lib/clipboard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -30,6 +29,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { apiService } from '@/services/api.service';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
+import { copyToClipboard as copyTextToClipboard } from '@/lib/clipboard';
 
 interface TrackingLinkAdmin {
   id: string;
@@ -249,6 +249,8 @@ export default function AdminTrackingLinksPage() {
     const { success } = await copyTextToClipboard(text);
     if (success) {
       toast.success(t('trackingLinks.copySuccess'));
+    } else {
+      toast.error(t('trackingLinks.copyError'));
     }
   };
 

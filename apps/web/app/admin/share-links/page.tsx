@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { isExpired } from '@/utils/time-remaining';
-import { copyToClipboard as copyTextToClipboard } from '@/lib/clipboard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -37,6 +36,7 @@ import { adminService } from '@/services/admin.service';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
 import { ConfirmDialog } from '@/components/admin/ConfirmDialog';
+import { copyToClipboard as copyTextToClipboard } from '@/lib/clipboard';
 
 interface ShareLink {
   id: string;
@@ -149,6 +149,8 @@ export default function AdminShareLinksPage() {
     const { success } = await copyTextToClipboard(text);
     if (success) {
       toast.success(t('shareLinks.copiedToClipboard'));
+    } else {
+      toast.error(t('shareLinks.copyError'));
     }
   };
 
