@@ -71,7 +71,7 @@ struct LinkPreviewCard: View {
             VStack(alignment: .leading, spacing: 4) {
                 if let siteName = meta.siteName?.nilIfBlank ?? meta.host {
                     Text(siteName)
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(MeeshyFont.relative(10, weight: .semibold))
                         .foregroundStyle(accent)
                         .textCase(.uppercase)
                         .tracking(0.3)
@@ -79,13 +79,13 @@ struct LinkPreviewCard: View {
                 }
                 if let title = meta.title?.nilIfBlank {
                     Text(title)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                         .lineLimit(2)
                 }
                 if let description = meta.description?.nilIfBlank {
                     Text(description)
-                        .font(.system(size: 11))
+                        .font(MeeshyFont.relative(11))
                         .foregroundStyle(isDark ? MeeshyColors.indigo400 : MeeshyColors.indigo700.opacity(0.7))
                         .lineLimit(2)
                 }
@@ -113,11 +113,11 @@ struct LinkPreviewCard: View {
                 .frame(width: 3)
             VStack(alignment: .leading, spacing: 6) {
                 Text(fallbackHost)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(MeeshyFont.relative(10, weight: .semibold))
                     .foregroundStyle(accent)
                     .lineLimit(1)
                 Text(urlString)
-                    .font(.system(size: 11))
+                    .font(MeeshyFont.relative(11))
                     .foregroundStyle(isDark ? MeeshyColors.indigo400 : MeeshyColors.indigo700.opacity(0.6))
                     .lineLimit(1)
             }
@@ -145,18 +145,18 @@ struct LinkPreviewCard: View {
                 .frame(width: 3)
             VStack(alignment: .leading, spacing: 6) {
                 Text(fallbackHost)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(MeeshyFont.relative(10, weight: .semibold))
                     .foregroundStyle(accent)
                     .lineLimit(1)
                 Text(urlString)
-                    .font(.system(size: 11))
+                    .font(MeeshyFont.relative(11))
                     .foregroundStyle(isDark ? MeeshyColors.indigo400 : MeeshyColors.indigo700.opacity(0.6))
                     .lineLimit(1)
             }
             .padding(.vertical, 8)
             Spacer(minLength: 0)
             Image(systemName: "link")
-                .font(.system(size: 14, weight: .semibold))
+                .font(MeeshyFont.relative(14, weight: .semibold))
                 .foregroundStyle(accent.opacity(0.6))
                 .padding(.trailing, 12)
         }
@@ -181,7 +181,7 @@ struct LinkPreviewCard: View {
                 .fill(accent.opacity(0.1))
                 .overlay(
                     Image(systemName: "link")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(MeeshyFont.relative(14, weight: .semibold))
                         .foregroundStyle(accent.opacity(0.6))
                 )
         }
