@@ -14,6 +14,27 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR iOS AUTORITAIRE (mis à jour 94i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> - **94i (terminée, branche `claude/upbeat-euler-512kep`, base `main` HEAD `6b8abcbb`)** :
+>   Dynamic Type de `SharePickerView` (feuille « Partager avec… » — bannière d'aperçu + recherche +
+>   liste de conversations). **14/16** `.font(.system(size:))` → `MeeshyFont.relative(...)` (weight
+>   préservé ; libellé+aperçu de la bannière, 4 icônes de type de contenu, loupe+champ+croix de
+>   recherche, `ConversationTitleLabel(font:)`, type de conv + puce + aperçu du dernier message).
+>   **2/16 glyphes de la colonne d'envoi (26pt) gardés figés** + commentaire : `paperplane`/`checkmark`
+>   alignés avec le `ProgressView` 26×26 (doctrine 86i — un glyphe scalable ferait sauter la largeur
+>   de la colonne d'action). 1 masquage VoiceOver (loupe décorative). Palette déjà tokenisée → intacte.
+>   1 fichier, 0 logique / 0 clé i18n / 0 test neuf (parité 55i/74i/86i/90i/93i). Gate = CI `ios-tests.yml`.
+> - **⚠️ Essaim d'agents iOS très dense** : jusqu'à 3-4 PR par surface (LocationPickerView 93i ×3,
+>   AffiliateView 91i/92i ×4). 93i (LocationPickerView #1225) mergée. Cibles chaudes + liste « next »
+>   saturées → 94i choisit une surface **hors-radar** (`SharePickerView`, 0 PR, 0 mention). Numéro 94i.
+> - **⚠️ `SharePickerView` SOLDÉ (ne plus reprendre Dynamic Type)** : 14 sites → `relative`, 2 glyphes
+>   de contrôle 26pt figés à dessein.
+> - **Base de départ 95i : `main` HEAD** (toujours resync sur `main` ; supprimer la branche mergée).
+> - **Différé prioritaire iOS 95i+** : surfaces **hors-radar** (collision faible) `AddParticipantSheet` (14),
+>   `ForwardPickerSheet` (8), `NotificationSettingsView` (10), `SupportView` (10), `CommunityLinkDetailView` (10) ;
+>   grandes surfaces chaudes à coordonner (MemberManagementSection, StoryViewerView+Content) ;
+>   palette hexes proches ; Glass `MessageOverlayMenu`.
+
 > **POINTEUR iOS AUTORITAIRE (mis à jour 93i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
 > - **93i (terminée, branche `claude/upbeat-euler-512kep`, base `main` HEAD `33f89430`)** :
 >   Dynamic Type de `LocationPickerView` (sélecteur de lieu MapKit). **15/17** `.font(.system(size:))`
