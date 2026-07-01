@@ -19,6 +19,7 @@ import { usePreferredLanguage } from '@/hooks/use-post-translation';
 import { useImpressionTracking } from '@/hooks/use-impression-tracking';
 import { useI18n } from '@/hooks/useI18n';
 import type { Post } from '@meeshy/shared/types/post';
+import { copyToClipboard } from '@/lib/clipboard';
 
 const LIKE_EMOJI = '❤️';
 
@@ -120,11 +121,11 @@ export default function ReelPage() {
 
   const onShare = useCallback(async () => {
     if (!current) return;
-    try {
-      await navigator.clipboard.writeText(`${window.location.origin}/reel/${current.id}`);
+    const { success } = await copyToClipboard(`${window.location.origin}/reel/${current.id}`);
+    if (success) {
       shareMutation.mutate({ postId: current.id });
       toastCtx.addToast(t('linkCopied', 'Link copied!'), 'success');
-    } catch {
+    } else {
       toastCtx.addToast(t('linkCopyError', "Couldn't copy the link"), 'error');
     }
   }, [current, shareMutation, toastCtx, t]);
