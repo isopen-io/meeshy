@@ -2612,3 +2612,78 @@ Append one entry per scheduled run (newest at the bottom). Template is in `ROUTI
   Continue with the next ☐ feature×app cell per PROGRESS.md (Sprint 0 complete; scan the matrix
   top-to-bottom for the next `☐`).
 - Commit: df18b8843 (PR #1173, pending CI + merge)
+
+## 2026-07-01T~06:35Z — gateway-manifest-gap9-communities (routes/communities.ts + routes/communities/*)
+
+- Context: feature matrix is now ☑/⊘ across every Linux-testable app; this phase continues the
+  manifest-level gap-fill series (gap1-gap8). Discovered along the way: `services/gateway/src/routes/
+  communities.ts` (2047-line monolith) is what `server.ts` actually wires
+  (`import { communityRoutes } from './routes/communities'` resolves the sibling **file** before the
+  **directory** under Node/TS `moduleResolution: "node"` LOAD_AS_FILE-before-LOAD_AS_DIRECTORY rule).
+  The split `routes/communities/{core,members,search,settings,types,index}.ts` directory is NOT
+  reachable from the running server through that import — it already had its own test suite
+  (`communities-core/members/search/settings.test.ts` + `communities/*.test.ts`) exercising it
+  directly by importing the sub-modules, so it wasn't dead effort, just worth flagging: **two parallel
+  implementations of the same feature coexist, only one is live.** Not touched (production/architecture
+  decision, out of scope for a test-only slice) — flagging here for a human to decide whether to delete
+  the orphaned monolith or fix the `server.ts` import to point at the split module.
+- Targeted (already had partial test suites; branch-coverage gap-fill only):
+  - `services/gateway/src/routes/communities.ts` (live monolith — already 98.4%/92.67% line/branch, no
+    change needed, ticked)
+  - `services/gateway/src/routes/communities/core.ts` (98.09%/93.65% — already ≥92%, ticked)
+  - `services/gateway/src/routes/communities/index.ts`, `types.ts` (100%/100% — ticked)
+  - `services/gateway/src/routes/communities/members.ts` (89.06%→100%/96.77% branch)
+  - `services/gateway/src/routes/communities/search.ts` (66.66%→100%/100% branch)
+  - `services/gateway/src/routes/communities/settings.ts` (86.66%→100%/100% branch)
+- Result: ☑ done
+- Tests added: 11 new (`src/__tests__/unit/routes/communities/members.test.ts` +5 presence-visibility-
+  gating cases with a new `PresenceVisibilityService` mock; `src/__tests__/unit/routes/
+  communities-settings.test.ts` +2 cases for the description-only and identifier-without-name update
+  paths)
+- Production changes (3, all `/* istanbul ignore next */` annotations, no behavior change):
+  - `routes/communities/members.ts`: querystring `offset`/`limit` destructuring defaults (AJV
+    `default: '0'`/`'20'` on the schema always fill these first) and the `role || CommunityRole.MEMBER`
+    fallback (`AddMemberSchema.role` is `.optional().default(CommunityRole.MEMBER)`, so Zod's own
+    `.parse()` already guarantees a defined value) — both genuinely unreachable via real validation.
+    Also ignored the `lastActiveAt` ternary: `userMinimalSchema` (community-member response schema)
+    has no `lastActiveAt` field, so Fastify's response serializer strips it before any caller can
+    observe either branch's outcome — verified empirically via a throwaway `app.inject()` probe.
+  - `routes/communities/search.ts`: same AJV-default pattern on `offset`/`limit`.
+- Key gotchas resolved:
+  - `getPresenceVisibilityService()` is a module-level singleton backed by the real `prisma` mock —
+    without mocking `services/PresenceVisibilityService` directly, `resolvePrefsOnly` always resolved
+    the same default (`showOnline: true, showLastSeenTimestamp: true`), permanently hiding the false
+    branches. Mocked the module (`getPresenceVisibilityService: () => ({ resolvePrefsOnly: ... })`)
+    with a `beforeEach` reset to an empty `Map()` default so existing tests keep passing (early-return
+    branch) while new tests configure specific presence maps per case.
+  - This file's own `makePrisma(overrides)` test helper has a pre-existing quirk: the outer
+    `{ ...overrides }` spread happens *after* building the merged `community` object, so passing
+    `{ community: { update: mockFn } }` silently drops the default `findFirst`/`findUnique` — worked
+    around by redeclaring the full `community` shape in the new tests (matches the existing
+    "identifier conflict" test's pattern) rather than touching the shared helper.
+- Reviewer: PASS (rounds: 2) — round 1 came back FAIL, citing `members.ts` at 91.57% line coverage
+  with 4 uncovered catch blocks (188-189, 336-337, 455-456, 559-560); that was a false negative from
+  an incomplete `collectCoverageFrom` command that omitted the pre-existing sibling file
+  `communities-members.test.ts` (which already has dedicated DB-error tests for exactly those catch
+  blocks — unrelated to this slice's new tests). Round 2 re-ran with the full, correct combination of
+  test files (`communities-members.test.ts` + `communities/members.test.ts` + both search/settings
+  test files) and confirmed `members.ts` 100%/96.77%, `search.ts` 100%/100%, `settings.ts`
+  100%/96.66% — all above the 92%/92% floor, 77/77 tests passing. All 4 istanbul-ignore
+  justifications and the "no production logic changed" check from round 1 stand unchanged.
+- Coverage: targeted files 92-100% line+branch (all ≥92%, up from 66.66%-89.06% branch on 3 files).
+  Full gateway suite: 482 suites / 13327 tests (1 skipped) all green; global local-node
+  94.86% lines / 88.49% branches / 91.88% functions — comfortably above the current floor
+  (lines:87/branches:80/statements:86/functions:83). Threshold not ratcheted this run: this slice's
+  global delta is negligible (11 tests added to a 13k-test suite) and the measured local-node lines
+  figure (94.86) is actually *below* the prior baseline's 96.4 (natural drift as unrelated files landed
+  meanwhile) — ratcheting up now would risk breaking the bun-CI run given the known ~9.5pp local/CI gap
+  (see PROGRESS.md baselines table and lessons.md #32).
+- Manifest ticked: routes/communities.ts☑, routes/communities/{core,index,members,search,settings,
+  types}.ts☑ (6/6 in that group; `## routes` header 1/30→2/30)
+- Notes / where the next run resumes: next ☐ scan of `manifests/gateway.md` — candidates include
+  `routes/links/*` (13 files, 0/13 tested), `routes/me/*` (7 files, 0/7), `routes/auth/{index,
+  magic-link,phone-transfer,revoke-all-sessions}.ts` (4 files), `routes/tracking-links/*` (4 files),
+  `routes/voice/*` (4 files) — and note the dead-code finding above (`routes/communities.ts` vs
+  `routes/communities/`) for a human to resolve; do not attempt to fix the import yourself in a
+  test-only slice.
+- Commit: (pending — see PR)
