@@ -956,20 +956,23 @@ struct MessageOverlayMenu: View {
 
         actions.append(MessageAction(
             id: "reply", icon: "arrowshape.turn.up.left.fill",
-            label: "Repondre", color: MeeshyColors.indigo400,
+            label: String(localized: "action.reply", defaultValue: "Répondre", bundle: .main),
+            color: MeeshyColors.indigo400,
             handler: { dismissThen { onReply?() } }
         ))
 
         actions.append(MessageAction(
             id: "thread", icon: "bubble.left.and.bubble.right.fill",
-            label: "Discussion", color: MeeshyColors.warning,
+            label: String(localized: "action.thread", defaultValue: "Discussion", bundle: .main),
+            color: MeeshyColors.warning,
             handler: { dismissThen { onShowThread?() } }
         ))
 
         if hasText {
             actions.append(MessageAction(
                 id: "copy", icon: "doc.on.doc.fill",
-                label: "Copier", color: MeeshyColors.indigo500,
+                label: String(localized: "action.copy", defaultValue: "Copier", bundle: .main),
+                color: MeeshyColors.indigo500,
                 handler: { dismissThen { onCopy?() } }
             ))
         }
@@ -977,7 +980,9 @@ struct MessageOverlayMenu: View {
         actions.append(MessageAction(
             id: "pin",
             icon: message.pinnedAt != nil ? "pin.slash.fill" : "pin.fill",
-            label: message.pinnedAt != nil ? "Desepingler" : "Epingler",
+            label: message.pinnedAt != nil
+                ? String(localized: "action.unpin", defaultValue: "Désépingler", bundle: .main)
+                : String(localized: "action.pin", defaultValue: "Épingler", bundle: .main),
             color: MeeshyColors.info,
             handler: { dismissThen { onPin?() } }
         ))
@@ -986,7 +991,9 @@ struct MessageOverlayMenu: View {
         actions.append(MessageAction(
             id: "star",
             icon: isStarred ? "star.slash.fill" : "star.fill",
-            label: isStarred ? "Retirer des favoris" : "Ajouter aux favoris",
+            label: isStarred
+                ? String(localized: "action.unstar", defaultValue: "Retirer des favoris", bundle: .main)
+                : String(localized: "action.star", defaultValue: "Ajouter aux favoris", bundle: .main),
             color: MeeshyColors.warning,
             handler: { dismissThen { onToggleStar?() } }
         ))
@@ -994,7 +1001,8 @@ struct MessageOverlayMenu: View {
         if canEdit && hasText {
             actions.append(MessageAction(
                 id: "edit", icon: "pencil",
-                label: "Modifier", color: MeeshyColors.warning,
+                label: String(localized: "action.edit", defaultValue: "Modifier", bundle: .main),
+                color: MeeshyColors.warning,
                 handler: { dismissThen { onEdit?() } }
             ))
         }
@@ -1004,7 +1012,8 @@ struct MessageOverlayMenu: View {
                 let attId = message.attachments[0].id
                 actions.append(MessageAction(
                     id: "deleteAttachment", icon: "paperclip.badge.ellipsis",
-                    label: "Supprimer le media", color: MeeshyColors.error,
+                    label: String(localized: "action.delete_media", defaultValue: "Supprimer le média", bundle: .main),
+                    color: MeeshyColors.error,
                     handler: { dismissThen { onDeleteAttachment(attId) } }
                 ))
             }
@@ -1086,9 +1095,9 @@ private struct PreviewAudioPlayer: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(player.isPlaying
-                    ? String(localized: "audio.pause", defaultValue: "Pause", bundle: .main)
-                    : String(localized: "audio.play", defaultValue: "Play audio", bundle: .main))
-                .accessibilityHint(String(format: String(localized: "audio.duration.hint", defaultValue: "Audio, %@", bundle: .main), player.timeLabel(totalDuration: attachment.duration)))
+                    ? String(localized: "media.pauseAudio", defaultValue: "Mettre en pause", bundle: .main)
+                    : String(localized: "media.playAudio", defaultValue: "Lire l'audio", bundle: .main))
+                .accessibilityHint(String(format: String(localized: "media.audioHint", defaultValue: "Audio de %@", bundle: .main), player.timeLabel(totalDuration: attachment.duration)))
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(attachment.originalName.isEmpty ? "Audio" : attachment.originalName)
@@ -1259,7 +1268,9 @@ private struct PreviewVideoPlayer: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(player.isPlaying ? "Mettre la vidéo en pause" : "Lire la vidéo")
+                .accessibilityLabel(player.isPlaying
+                    ? String(localized: "media.pauseVideo", defaultValue: "Mettre la vidéo en pause", bundle: .main)
+                    : String(localized: "media.playVideo", defaultValue: "Lire la vidéo", bundle: .main))
 
                 Button { player.skip(seconds: -5) } label: {
                     Image(systemName: "gobackward.5")

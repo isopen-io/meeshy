@@ -249,7 +249,7 @@ struct AboutView: View {
 
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 16))
-                .foregroundColor(Color(hex: "4ADE80"))
+                .foregroundColor(MeeshyColors.success)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
