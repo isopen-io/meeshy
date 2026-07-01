@@ -10,6 +10,7 @@ import type { Conversation, SocketIOUser as User } from '@meeshy/shared/types';
 import { useConversationPreference, useConversationPreferencesActions } from '@/stores/conversation-preferences-store';
 import { getTagColor } from '@/utils/tag-colors';
 import { toast } from 'sonner';
+import { copyToClipboard } from '@/lib/clipboard';
 import { formatConversationDate } from '@/utils/date-format';
 import { ParticipantPresenceIndicator } from './ParticipantPresenceIndicator';
 import { ConversationItemActions } from './ConversationItemActions';
@@ -128,11 +129,11 @@ export const ConversationItem = memo(function ConversationItem({
         });
       } else {
         const { success } = await copyToClipboard(fullMessage);
-        toast[success ? 'success' : 'error'](
-          success
-            ? t('conversationHeader.linkCopied')
-            : t('conversationHeader.linkCopyError'),
-        );
+        if (success) {
+          toast.success(t('conversationHeader.linkCopied'));
+        } else {
+          toast.error(t('conversationHeader.linkCopyError'));
+        }
       }
     } catch (error: unknown) {
       if (error.name === 'AbortError') {
