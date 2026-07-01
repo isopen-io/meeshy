@@ -25,10 +25,15 @@
 > On 2026-07-01 the **call-history repository** landed (slice `call-history-repository`): `:core:network`
 > `CallHistoryApi`, `:core:database` `CallHistoryEntity`/`CallHistoryDao` (DB v6→v7), and `:sdk-core`
 > `CallHistoryRepository` — a cache-first SWR `historyStream()` (via `CallHistoryCacheSource`, port of
-> `StoryCacheSource`) plus a cursor-paginated `fetchPage → CallHistoryPage`.
-> **Next:** the recent/missed-calls **list UI** (`:feature:calls`) over `historyStream()`; fold `events`
-> into `CallViewModel` (`viewModelScope`) once the call-id lifecycle exists (an `initiate`-ACK slice);
-> then the WebRTC/Telecom/FCM plumbing. See the run log + `feature-parity.md §H`.
+> `StoryCacheSource`) plus a cursor-paginated `fetchPage → CallHistoryPage`. On 2026-07-01 the
+> **recent/missed-calls list UI** landed (slice `call-history-list`): a UDF `CallHistoryViewModel`
+> over `historyStream()` — SWR flags (skeleton only on cold empty), a client-side missed-only filter,
+> cursor-paged infinite scroll via `fetchPage` (de-dup, cursor advance, `hasMore`/re-entrancy/failure
+> gating), and pull-to-refresh that resets paging — backed by the pure `CallHistoryList` (combine+filter)
+> and `CallTimeLabel` (ISO → relative label), rendered by an accent-coherent `CallHistoryScreen`.
+> **Next:** fold `CallSignalManager.events` into `CallViewModel` (`viewModelScope`) once the call-id
+> lifecycle exists (an `initiate`-ACK slice); wire `CallHistoryScreen` into a Calls tab (`:app`); then
+> the WebRTC/Telecom/FCM plumbing. See the run log + `feature-parity.md §H`.
 
 Stories so far: tray (ring carousel) + cross-group viewer playback engine +
 quick-reaction strip + swipe gestures + realtime reaction socket deltas +
@@ -180,8 +185,12 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
    (2026-07-01) — `:core:network` `CallHistoryApi`, `:core:database` `CallHistoryEntity`/`CallHistoryDao`
    (DB v6→v7), and `:sdk-core` `CallHistoryRepository` (cache-first SWR `historyStream()` via
    `CallHistoryCacheSource` + cursor-paginated `fetchPage → CallHistoryPage`). +17 tests. See run log.
-   **Next:** the recent/missed-calls **list UI** (`:feature:calls`) reading `historyStream()` and
-   rendering each `CallRecord` through its pure display accessors.
+   The **list UI** ✅ shipped as `call-history-list` (2026-07-01) — a UDF `CallHistoryViewModel` over
+   `historyStream()` (SWR flags, client-side missed-only filter, cursor-paged infinite scroll via
+   `fetchPage`, pull-to-refresh) backed by pure `CallHistoryList` (combine+filter) and `CallTimeLabel`,
+   rendered by an accent-coherent `CallHistoryScreen`. +30 tests. See run log.
+   **Next:** fold `CallSignalManager.events` into `CallViewModel` once the `initiate`-ACK call-id
+   lifecycle lands; wire `CallHistoryScreen` into a Calls tab (`:app`).
 4. ~~**Socket subscription → VM wiring**~~ ✅ the **subscription half** shipped as `call-signal-manager`
    (2026-07-01) — `:sdk-core` `CallSignalManager` (parity with `MessageSocketManager`/`SocialSocketManager`)
    listens to all 8 inbound `call:*` frames, routes each through `CallSignalMapper`, and republishes the
@@ -384,6 +393,46 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-01 — slice `call-history-list` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration (open PRs on `main` are iOS-a11y
+  branches, none `claude/apps/android/*`). **Gotcha caught:** the container's local `main` was stale and
+  divergent (un-squashed Stories commits); a naive `git checkout main` would have branched off the wrong
+  base. Recovered with `git checkout -B claude/apps/android/call-history-list origin/main` — the freshly
+  fetched `origin/main` (`728c999e`) already carries all prior Calls work (`call-history-repository` etc.).
+  Lesson recorded in NOTES.md. Always branch off `origin/main`, never local `main`.
+- **Slice:** the recent/missed-calls **list UI** (`:feature:calls`) — the real consumer of
+  `CallHistoryRepository.historyStream()`. Vertical slice, all in `:feature:calls`:
+  - Pure `CallHistoryList` — `combine(stream, paged)` de-dups by `callId` (stream order first, so a
+    `fetchPage(cursor=null)` re-fetch of the head never duplicates); `filter(records, missedOnly)`.
+  - Pure `CallTimeLabel.label(iso, now, zone, locale, yesterday)` — ISO-8601 → relative label
+    (same-day 24h time / yesterday / weekday within the week / date with year only when it differs),
+    degrading an absent/unparsable value to `""`. Parses via the SDK's single `isoToEpochMillis` SSOT.
+  - UDF `CallHistoryViewModel` (`StateFlow<CallHistoryUiState>`) — cache-first SWR flags (skeleton only
+    on cold empty, `isSyncing` on stale/syncing, error surfaced + skeleton dropped), a **client-side**
+    missed-only filter (instant, no network), cursor-paged infinite scroll via `fetchPage` (append +
+    de-dup, cursor advance, `hasMore`/`isLoadingMore` re-entrancy gating, failure surfaced), and
+    pull-to-refresh that resets paging and tracks `isUserRefreshing` distinct from silent SWR.
+    `CancellationException` rethrown in every `viewModelScope` catch.
+  - Accent-coherent `CallHistoryScreen` glue — `MeeshyAvatar` rows, direction icon (missed = error
+    colour), relative time, All/Missed `FilterChip`s, cold skeleton, filtered/cold empty states,
+    `PullToRefreshBox`, `loadMoreIfNeeded` on row render.
+- **TDD red → green:** tests first. **30** new behavioural tests through the public API:
+  `CallHistoryListTest` (+7 — combine order/dedup/empty/stream-wins, filter all/missed/none),
+  `CallTimeLabelTest` (+7 — null/garbage → empty, same-day time, later-same-day, yesterday, weekday,
+  date without/with year), `CallHistoryViewModelTest` (+16 — cold skeleton, fresh/stale/syncing paint,
+  sync error, missed filter narrow+restore, `isFilteredEmpty`, loadMore append+dedup / far-from-tail
+  no-op / `hasMore` exhausted / cursor advance / failure / re-entrancy guard, refresh reset + failure).
+- **Verification:** `./apps/android/meeshy.sh check` → **BUILD SUCCESSFUL** (debug APK assembles + all
+  JVM unit tests green). Zero warnings after switching to `Icons.AutoMirrored.Filled.CallMissed`.
+- **Reviewer gate:** PASS. Scope = `apps/android` only (5 new Kotlin + 3 new tests + 4 strings edits),
+  no secrets, no `local.properties`. Behavioural tests, no tautologies, no floor lowered. SDK purity:
+  pure list/time algebra + a `:feature` ViewModel (product orchestration); no re-implementation of
+  language/colour SSOTs. Cache-first (instant-app): skeleton only on cold empty, cached rows paint
+  immediately. Edge cases: empty/single/boundary lists, unknown callId, first/last paging positions,
+  no-op filter toggle, failure paths, cancellation-safe scope work.
+- **Next:** fold `CallSignalManager.events` into `CallViewModel` once the `initiate`-ACK call-id
+  lifecycle lands; wire `CallHistoryScreen` into a Calls tab (`:app`); then WebRTC/Telecom/FCM.
 
 ### 2026-07-01 — slice `call-history-repository` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration (the 27 open PRs on `main` are all
