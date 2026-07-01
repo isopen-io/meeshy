@@ -750,6 +750,46 @@ describe('CallService', () => {
 
       expect(result.status).toBe(CallStatus.active);
     });
+
+    it('should clear the leaving participant heartbeat from in-memory tracking when others remain', async () => {
+      const participant = createMockParticipant();
+      const otherParticipant = createMockParticipant({
+        id: 'participant-456',
+        userId: 'user-456'
+      });
+      const callWithTwoParticipants = createMockCallSession({
+        status: CallStatus.active,
+        participants: [participant, otherParticipant]
+      });
+      const callAfterLeave = {
+        ...callWithTwoParticipants,
+        participants: [
+          { ...participant, leftAt: new Date(), user: createMockUser() },
+          { ...otherParticipant, user: createMockUser({ id: 'user-456' }) }
+        ],
+        initiator: createMockUser(),
+        conversation: createMockConversation()
+      };
+
+      callService.recordHeartbeat(validLeaveData.callId, validLeaveData.participantId);
+      callService.recordHeartbeat(validLeaveData.callId, otherParticipant.id);
+
+      mockPrisma.callParticipant.findFirst.mockResolvedValue(participant);
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(callWithTwoParticipants);
+      mockPrisma.$transaction.mockImplementation(async (callback: (tx: any) => Promise<void>) => {
+        const mockTx = {
+          callParticipant: { update: jest.fn() },
+          callSession: { update: jest.fn() }
+        };
+        await callback(mockTx);
+      });
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(callAfterLeave);
+
+      await callService.leaveCall(validLeaveData);
+
+      expect(callService.getLastHeartbeat(validLeaveData.callId, validLeaveData.participantId)).toBeUndefined();
+      expect(callService.getLastHeartbeat(validLeaveData.callId, otherParticipant.id)).toBeDefined();
+    });
   });
 
   describe('getCallSession', () => {
