@@ -12,6 +12,7 @@ import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 const logger = enhancedLogger.child({ module: 'ConversationParticipantsRoutes' });
 
 /**
@@ -163,6 +164,13 @@ export function registerParticipantsRoutes(
         }
       });
 
+      // Présence des co-participants : montrable (co-participation = contexte
+      // d'accès déjà garanti), mais soumise aux préférences showOnlineStatus/
+      // showLastSeen de chacun. Anonymes inchangés.
+      const presenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+        paginatedParticipants.map(p => p.userId).filter((uid): uid is string => !!uid),
+      );
+
       const formattedParticipants = paginatedParticipants.map(participant => ({
         id: participant.id,
         participantId: participant.id,
@@ -177,8 +185,8 @@ export function registerParticipantsRoutes(
         role: participant.user?.role ?? 'USER',
         conversationRole: participant.role,
         joinedAt: participant.joinedAt,
-        isOnline: participant.isOnline,
-        lastActiveAt: participant.lastActiveAt,
+        isOnline: presenceVis.get(participant.userId ?? '')?.showOnline === false ? false : participant.isOnline,
+        lastActiveAt: presenceVis.get(participant.userId ?? '')?.showLastSeenTimestamp === false ? null : participant.lastActiveAt,
         systemLanguage: participant.user?.systemLanguage ?? participant.language,
         regionalLanguage: participant.user?.regionalLanguage ?? participant.language,
         customDestinationLanguage: participant.user?.customDestinationLanguage ?? participant.language,

@@ -11,6 +11,7 @@ import {
   sendInternalError,
   sendPaginatedSuccess
 } from '../../utils/response.js';
+import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 
 const logger = enhancedLogger.child({ module: 'CommunityMembersRoutes' });
 import {
@@ -157,7 +158,25 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
         fastify.prisma.communityMember.count({ where: { communityId: id } })
       ]);
 
-      return sendPaginatedSuccess(reply, members, {
+      // Présence des co-membres : montrable (appartenance commune = accès déjà
+      // garanti), soumise aux préférences showOnlineStatus/showLastSeen.
+      const memberPresence = await getPresenceVisibilityService(fastify.prisma).resolvePrefsOnly(
+        members.map(m => m.user?.id).filter((uid): uid is string => !!uid),
+      );
+      const gatedMembers = members.map(m => {
+        const vis = m.user?.id ? memberPresence.get(m.user.id) : undefined;
+        if (!m.user || !vis) return m;
+        return {
+          ...m,
+          user: {
+            ...m.user,
+            isOnline: vis.showOnline ? m.user.isOnline : false,
+            lastActiveAt: vis.showLastSeenTimestamp ? m.user.lastActiveAt : null,
+          },
+        };
+      });
+
+      return sendPaginatedSuccess(reply, gatedMembers, {
         total: totalCount,
         limit: limitNum,
         offset: offsetNum,
