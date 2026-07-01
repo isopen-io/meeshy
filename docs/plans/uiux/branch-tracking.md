@@ -14,7 +14,24 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
-<<<<<<< claude/upbeat-euler-512kep
+> **POINTEUR iOS AUTORITAIRE (mis à jour 95i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> - **95i (terminée, branche `claude/upbeat-euler-512kep`, base `main` HEAD `6b8abcbb`)** :
+>   Dynamic Type de `ForwardPickerSheet` (feuille « Forward » — bannière d'aperçu + liste de conv).
+>   **7/8** `.font(.system(size:))` → `MeeshyFont.relative(...)` (état vide, bannière expéditeur/
+>   contenu/croix, `ConversationTitleLabel(font:)`, type + compteur membres, bouton d'envoi
+>   `paperplane`). **1/8 héros décoratif 40pt figé** (`bubble.left.and.bubble.right`) + commentaire +
+>   `.accessibilityHidden(true)`. Cohérence colonne d'envoi : `paperplane` → `relative(24)` (≈ `.title2`)
+>   s'aligne sur le `checkmark` déjà en `.font(.title2)`. 0 import ajouté (transitivité `MeeshyFont`/
+>   `MeeshyColors`). 1 fichier, 0 logique / 0 clé i18n / 0 test neuf. Gate = CI `ios-tests.yml`.
+> - **⚠️ Essaim iOS dense** : 94i (SharePickerView #1243) & 93i (LocationPickerView #1225) mergées.
+>   Stratégie **hors-radar** (surfaces 0-PR) maintenue. **NB** : merges parallèles de l'essaim ont laissé
+>   des marqueurs de conflit committés dans ce fichier — résolus dans ce commit (95i).
+> - **⚠️ `ForwardPickerSheet` SOLDÉ (ne plus reprendre Dynamic Type)** : 7 sites → `relative`, héros 40pt figé.
+> - **Base de départ 96i : `main` HEAD** (toujours resync sur `main` ; supprimer la branche mergée).
+> - **Différé prioritaire iOS 96i+** : surfaces hors-radar `AddParticipantSheet` (14),
+>   `NotificationSettingsView` (10), `SupportView` (10), `CommunityLinkDetailView` (10),
+>   `UserStatsView` (9), `EditPostSheet` (9) ; grandes surfaces chaudes à coordonner ; Glass `MessageOverlayMenu`.
+
 > **POINTEUR iOS AUTORITAIRE (mis à jour 94i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
 > - **94i (terminée, branche `claude/upbeat-euler-512kep`, base `main` HEAD `6b8abcbb`)** :
 >   Dynamic Type de `SharePickerView` (feuille « Partager avec… » — bannière d'aperçu + recherche +
@@ -36,12 +53,10 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 >   grandes surfaces chaudes à coordonner (MemberManagementSection, StoryViewerView+Content) ;
 >   palette hexes proches ; Glass `MessageOverlayMenu`.
 
-=======
 > **POINTEUR AUTORITAIRE iOS (mis à jour 91i)** — source fiable = § History (append-only).
 > - **Dernière itération iOS : `91i`** → branche `claude/upbeat-euler-l5yima` (Dynamic Type + VoiceOver `CommunityLinksView.swift` : 13/15 `.font(.system(size:))` → `MeeshyFont.relative` ; 2 figés commentés = héros état-vide 40pt + glyphe 14pt dans cercle fixe 40×40, tous deux `.accessibilityHidden` ; `.isHeader` ×2 titre+section, `.combine` carte stat + état vide, `.accessibilityHidden` glyphes décoratifs ; 0 logique/0 i18n/0 test neuf). Base = `main` HEAD `af1fe619`. Gate = CI `iOS Tests`.
 > - **90i réel mergé** = `MagicLinkView` (#1221). **4 PR « 90i » parallèles en vol au démarrage 91i** : `DataExportView` (#1226), `FeedCommentsSheet` (#1228), `MagicLinkView` doublon (#1225), `NewConversationView` (#1224). 91i orthogonal = `CommunityLinksView` (surface neuve, 0 collision).
 > - **Base de départ itération iOS suivante : `main` HEAD** (toujours resync sur `main` ; supprimer la branche mergée). Prochain candidat = `CommunityLinkDetailView` (10 sites), `MemberManagementSection` (17), `AffiliateView` (17 Dynamic Type), `AddParticipantSheet` (14), `SharePickerView` (14).
->>>>>>> main
 > **POINTEUR iOS AUTORITAIRE (mis à jour 93i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
 > - **93i (terminée, branche `claude/upbeat-euler-512kep`, base `main` HEAD `33f89430`)** :
 >   Dynamic Type de `LocationPickerView` (sélecteur de lieu MapKit). **15/17** `.font(.system(size:))`
@@ -734,7 +749,6 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 ---
 
 > **POINTEUR iOS AUTORITAIRE (mis à jour 93i, 2026-07-01)** — piste iOS indépendante des itérations web (suffixe `i`).
-<<<<<<< claude/upbeat-euler-ieycux
 > - **93i (terminée, branche `claude/upbeat-euler-ieycux`, base `main` HEAD `53068393`)** : Dynamic Type + VoiceOver de la feuille de sélection de lieu `LocationPickerView` (partage de position). **15/17** `.font(.system(size:))` → `MeeshyFont.relative(size, weight:, design:)` (weight/design préservés dont `.monospaced` des coordonnées). **2 gardés FIXES commentés** = marqueur d'annotation MapKit `mappin.circle.fill` 36pt (géométrie ancrée à une coordonnée, pas du texte) + épingle `mappin` 12pt centrée dans un cercle fixe 28×28 (doctrine 86i, `.accessibilityHidden`). **VoiceOver** : `.accessibilityAddTraits(.isHeader)` sur le titre, `.accessibilityHidden(true)` sur 3 glyphes décoratifs (loupe/épingle résultat/`location.fill` carte), `.accessibilityElement(children: .combine)` sur le bloc info (adresse + coordonnées lues en un élément). **Glass déjà adopté avant 93i** (`.adaptiveGlass` sur les 3 surfaces flottantes) → hors-scope. Palette déjà tokenisée (accent déterministe + `theme.*`) → intacte. 1 fichier, 0 logique / 0 clé i18n neuve / 0 test neuf (parité 55i/71i/74i/83i/86i/88i/89i). Gate = CI `iOS Tests`.
 > - **Contention forte (run 2026-07-01)** : ~8 PRs iOS ouvertes (90i→92i) sur surfaces disjointes (`AffiliateView`/`NewConversationView`/`CommunityLinksView`/`DataExportView`/`MagicLinkView`). `LocationPickerView` non prise. Numéro **93i** = > 92i (plus haut label en vol).
 > - **⚠️ NE PLUS re-flagger** `LocationPickerView` (Dynamic Type + VoiceOver + Glass soldés 93i ; 2 `.system(size:)` figés à dessein documentés).
@@ -742,7 +756,6 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 > - **Différé prioritaire iOS 94i+** : Dynamic Type grandes surfaces restantes — `MemberManagementSection` (17), `ConversationView+Composer` (22, lot prudent = composer critique), `StoryViewerView+Content` (coordonner i18n), `AboutView` (16). Puis Glass adoption reste (`MessageOverlayMenu` via `AdaptiveGlassContainer`, lot dédié) ; palette hexes proches-mais-non-exacts (`#4ADE80` → `success`, vérif visuelle).
 
 | 93i | claude/upbeat-euler-ieycux (iOS Dynamic Type + VoiceOver `LocationPickerView` : 15/17 `.font(.system(size:))` → `MeeshyFont.relative` (weight/design préservés dont `.monospaced`) ; 2 figés commentés = marqueur annotation MapKit 36pt + épingle 12pt cercle fixe 28×28 ; VoiceOver `.isHeader` titre + `.accessibilityHidden` 3 glyphes décoratifs + `.accessibilityElement(children:.combine)` bloc info adresse/coordonnées ; Glass déjà adopté + palette tokenisée hors-scope ; 1 fichier, 0 test neuf sweep pur ; gate = CI `iOS Tests`) | ⏳ | ⏳ |
-=======
 > - **Itérations iOS mergées cette session (branche `claude/upbeat-euler-bx683k`)** : `89i` (#1218 EffectsPickerView), `90i` (#1224 NewConversationView). ⚠️ **Forte contention** : ~7 PRs iOS parallèles ce run ont réutilisé les labels 90i/91i/92i sur d'autres surfaces (MagicLinkView/DataExportView/FeedCommentsSheet/AffiliateView/CommunityLinksView) — **toujours `list_pull_requests` AVANT de choisir surface + numéro**.
 > - **93i (terminée, branche `claude/upbeat-euler-bx683k`, base `main` HEAD `33f89430`)** : Dynamic Type + VoiceOver `ConversationPreferencesTab` (onglet Préférences de `ConversationInfoSheet` : nom perso, réaction, catégorie, tags, notifs, actions). **12/16** sites `.font(.system(size:))` → `MeeshyFont.relative(size, weight:, design:)` (weight + `.rounded` préservés). **4** glyphes en badge de dimension fixe 28×28 (pencil/grid/tag/settingsRow) gardés figés + `.accessibilityHidden(true)` (86i doctrine). **VoiceOver** : `settingsSection` → `.accessibilityLabel(title)` non-uppercased + `.accessibilityAddTraits(.isHeader)` (rotor). Ladder catégoriel de teintes par-section laissé intact (charte unique différée). 1 fichier, 0 logique / 0 test neuf (parité 55i/74i/86i/90i). Gate = CI `iOS Tests`.
 > - **Base de départ 94i : `main` HEAD** (toujours resync sur `main` ; supprimer la branche mergée).
@@ -807,4 +820,3 @@ parité stories (UI absente, large) OU réactions par pièce jointe (avec web) ;
 > - **Différé prioritaire iOS 92i+** : `NewConversationView` (17), `AffiliateView` (17), `LocationPickerView` (17), `MemberManagementSection` (17) ; puis `StoryViewerView+Content` (31, ⚠️ collision i18n historique #1174) et `ConversationView+Composer` (22, lot critique prudent) en dernier ; Glass adoption `MessageOverlayMenu` (21, via `AdaptiveGlassContainer`).
 
 | 91i | claude/upbeat-euler-pt8xxj (iOS Dynamic Type + VoiceOver écran RGPD `DataExportView` : 16/17 `.font(.system(size:))` → `MeeshyFont.relative` (weight/`.rounded` préservés) ; 1 figé commenté = glyphe badge toggle 28×28 ; 4 a11y `.accessibilityElement(children:.combine)` ×2 (carte info + erreur) + `.isHeader` sectionHeader + `.accessibilityHidden` glyphes décoratifs ; 1 fichier, 0 test neuf sweep pur ; gate = CI `ios-tests.yml`) | ⏳ | ⏳ |
->>>>>>> main
