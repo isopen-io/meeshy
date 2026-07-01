@@ -682,6 +682,10 @@ export class SocketIOOrchestrator {
     return this.presenceService.onConversationNew(listener);
   }
 
+  onFriendRequestCancelled(listener: import('./types').FriendRequestCancelledListener): UnsubscribeFn {
+    return this.presenceService.onFriendRequestCancelled(listener);
+  }
+
   onConversationDeleted(listener: import('./types').ConversationDeletedListener): UnsubscribeFn {
     return this.presenceService.onConversationDeleted(listener);
   }

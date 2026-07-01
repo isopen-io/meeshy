@@ -184,6 +184,16 @@ export const SERVER_EVENTS = {
    * so older clients keep working during rollout.
    */
   CONVERSATION_NEW: 'conversation:new',
+  /**
+   * Emitted to the OTHER party's user-room when a pending friend request is
+   * removed via `DELETE /friend-requests/:id` — either the sender cancelling
+   * their own outgoing request, or the receiver declining/removing it without
+   * an explicit accept/reject. Previously this path emitted NOTHING, leaving
+   * the counterpart's pending-request list stale until their next full
+   * refetch (same class of gap `CONVERSATION_NEW` fixed for conversation
+   * creation). Realtime-only signal — no persisted `Notification` row.
+   */
+  FRIEND_REQUEST_CANCELLED: 'friend-request:cancelled',
   CONVERSATION_PARTICIPANT_LEFT: 'conversation:participant-left',
   CONVERSATION_PARTICIPANT_BANNED: 'conversation:participant-banned',
   /**
@@ -564,6 +574,15 @@ export interface ConversationNewEventData {
   readonly creatorId: string;
   readonly participantIds: readonly string[]; // tous les participants y compris le créateur
   readonly createdAt: string;                 // ISO8601
+}
+
+/**
+ * Payload de `FRIEND_REQUEST_CANCELLED` — émis à l'user-room de l'AUTRE
+ * partie (pas l'auteur de l'action) lors d'un `DELETE /friend-requests/:id`.
+ */
+export interface FriendRequestCancelledEventData {
+  readonly friendRequestId: string;
+  readonly cancelledBy: string; // userId de qui a déclenché la suppression
 }
 
 /**
@@ -1212,6 +1231,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CALL_FORCE_LEAVE]: (data: CallForceLeaveServerEvent) => void;
   [SERVER_EVENTS.CALL_ICE_SERVERS_REFRESHED]: (data: CallIceServersRefreshedEvent) => void;
   [SERVER_EVENTS.CONVERSATION_NEW]: (data: ConversationNewEventData) => void;
+  [SERVER_EVENTS.FRIEND_REQUEST_CANCELLED]: (data: FriendRequestCancelledEventData) => void;
   [SERVER_EVENTS.READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
   [SERVER_EVENTS.MESSAGE_CONSUMED]: (data: MessageConsumedEventData) => void;
   [SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED]: (data: ParticipantRoleUpdatedEventData) => void;

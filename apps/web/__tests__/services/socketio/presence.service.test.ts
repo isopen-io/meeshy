@@ -377,6 +377,16 @@ describe('PresenceService', () => {
       socket._trigger('conversation:new', {});
       expect(listener).not.toHaveBeenCalled();
     });
+
+    it('onFriendRequestCancelled unsubscribe works', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      const unsub = service.onFriendRequestCancelled(listener);
+      unsub();
+      socket._trigger('friend-request:cancelled', {});
+      expect(listener).not.toHaveBeenCalled();
+    });
   });
 
   // ─── CONVERSATION_NEW ────────────────────────────────────────────────────────
@@ -410,6 +420,20 @@ describe('PresenceService', () => {
       socket._trigger('conversation:new', event);
       expect(listenerA).toHaveBeenCalledWith(event);
       expect(listenerB).toHaveBeenCalledWith(event);
+    });
+  });
+
+  // ─── FRIEND_REQUEST_CANCELLED ────────────────────────────────────────────────
+
+  describe('friend-request:cancelled', () => {
+    it('forwards friend-request:cancelled events to registered listeners', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      service.onFriendRequestCancelled(listener);
+      const event = { friendRequestId: 'fr-1', cancelledBy: 'user-2' };
+      socket._trigger('friend-request:cancelled', event);
+      expect(listener).toHaveBeenCalledWith(event);
     });
   });
 

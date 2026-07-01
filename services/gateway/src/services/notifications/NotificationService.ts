@@ -2122,6 +2122,30 @@ export class NotificationService {
   }
 
   // ==============================================
+  // FRIEND_REQUEST_CANCELLED (realtime-only, no persisted Notification)
+  // ==============================================
+
+  /**
+   * Fired when a pending friend request is removed via
+   * `DELETE /friend-requests/:id` — sender cancelling, or receiver
+   * declining/removing without an explicit accept/reject. Unlike the other
+   * `create*FriendRequest*` methods this does NOT persist a `Notification`
+   * row (ephemeral realtime signal only) so the counterpart's pending list
+   * can invalidate immediately without polluting their notification feed.
+   */
+  emitFriendRequestCancelled(params: {
+    recipientUserId: string;
+    friendRequestId: string;
+    cancelledBy: string;
+  }): void {
+    if (!this.io) return;
+    this.io.to(ROOMS.user(params.recipientUserId)).emit(SERVER_EVENTS.FRIEND_REQUEST_CANCELLED, {
+      friendRequestId: params.friendRequestId,
+      cancelledBy: params.cancelledBy,
+    });
+  }
+
+  // ==============================================
   // MEMBER_JOINED
   // ==============================================
 

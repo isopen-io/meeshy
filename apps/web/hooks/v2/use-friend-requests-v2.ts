@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '@/services/api.service';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { notificationSocketIO } from '@/services/notification-socketio.singleton';
+import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import type { FriendRequest, FriendRequestsData } from '@/types/contacts';
 
 export interface UseFriendRequestsV2Options {
@@ -132,6 +133,16 @@ export function useFriendRequestsV2(
       if (notification.type === 'friend_request' || notification.type === 'contact_request') {
         invalidateAll();
       }
+    });
+  }, [enabled, invalidateAll]);
+
+  // Invalidate when the OTHER party cancels/removes a pending request — this
+  // path never creates a persisted notification, so it needs its own signal
+  // (otherwise the counterpart's list stays stale until their next full reload).
+  useEffect(() => {
+    if (!enabled) return;
+    return meeshySocketIOService.onFriendRequestCancelled(() => {
+      invalidateAll();
     });
   }, [enabled, invalidateAll]);
 

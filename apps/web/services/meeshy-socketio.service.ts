@@ -362,6 +362,10 @@ class MeeshySocketIOService {
     return this.orchestrator.onConversationNew(listener);
   }
 
+  public onFriendRequestCancelled(listener: (data: { friendRequestId: string; cancelledBy: string }) => void): () => void {
+    return this.orchestrator.onFriendRequestCancelled(listener);
+  }
+
   public onConversationDeleted(listener: (data: { userId: string; conversationId: string }) => void): () => void {
     return this.orchestrator.onConversationDeleted(listener);
   }
