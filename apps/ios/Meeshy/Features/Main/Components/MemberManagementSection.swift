@@ -211,7 +211,7 @@ struct MemberManagementSection: View {
                     Text(String(localized: "member-management.role.admin", defaultValue: "Admin", bundle: .main))
                         .font(.system(size: 11, weight: .medium))
                 }
-                .foregroundColor(Color(hex: "3B82F6"))
+                .foregroundColor(MeeshyColors.info)
 
             case .moderator:
                 HStack(spacing: 3) {
