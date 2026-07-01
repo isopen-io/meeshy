@@ -62,7 +62,7 @@ struct AffiliateView: View {
                     .font(MeeshyFont.relative(22))
                     .foregroundColor(Color(hex: accentColor))
             }
-            .accessibilityLabel(String(localized: "affiliate.create.title", defaultValue: "Nouveau lien", bundle: .main))
+            .accessibilityLabel(String(localized: "affiliate.action.create", defaultValue: "Créer un lien de parrainage", bundle: .main))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -123,6 +123,7 @@ struct AffiliateView: View {
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
         .padding(.vertical, 14)
         .accessibilityElement(children: .combine)
         .background(
@@ -240,7 +241,7 @@ struct AffiliateView: View {
                     .font(MeeshyFont.relative(14, weight: .medium))
                     .foregroundColor(Color(hex: accentColor))
             }
-            .accessibilityLabel(String(localized: "common.copyLink", defaultValue: "Copier le lien", bundle: .main))
+            .accessibilityLabel(String(localized: "affiliate.action.copy", defaultValue: "Copier le lien de parrainage", bundle: .main))
 
             // Partager
             Button {
@@ -264,7 +265,7 @@ struct AffiliateView: View {
                     .font(MeeshyFont.relative(16))
                     .foregroundColor(MeeshyColors.success)
             }
-            .accessibilityLabel(String(localized: "common.share", defaultValue: "Partager", bundle: .main))
+            .accessibilityLabel(String(localized: "affiliate.action.share", defaultValue: "Partager le lien de parrainage", bundle: .main))
 
             Button {
                 Task { await viewModel.deleteToken(token) }
@@ -273,7 +274,7 @@ struct AffiliateView: View {
                     .font(MeeshyFont.relative(14, weight: .medium))
                     .foregroundColor(MeeshyColors.error)
             }
-            .accessibilityLabel(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main))
+            .accessibilityLabel(String(localized: "affiliate.action.delete", defaultValue: "Supprimer le lien de parrainage", bundle: .main))
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
