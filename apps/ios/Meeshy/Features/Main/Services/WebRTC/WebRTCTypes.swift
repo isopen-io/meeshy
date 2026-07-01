@@ -600,7 +600,10 @@ nonisolated enum QualityThresholds {
     /// STUN server-reflexive + TURN relayed × UDP/TCP); beyond this cap
     /// candidates are dropped since they belong to a stale ICE generation
     /// that the remote won't honour after reconnect anyway.
-    static let maxPendingIceCandidates: Int = 50
+    /// 100 (was 50) — the prior cap sat exactly at the documented "50+"
+    /// figure, so a single busy gathering round during a socket outage
+    /// could hit the cap and drop legitimate, still-relevant candidates.
+    static let maxPendingIceCandidates: Int = 100
     /// Cap on the `WebRTCService.iceCandidateBuffer` maintained while the remote
     /// description has not yet been set. Beyond this count ICE candidates are
     /// FIFO-evicted (oldest first) — the ICE agent selects a pair well before

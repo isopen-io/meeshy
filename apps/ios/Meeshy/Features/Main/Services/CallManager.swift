@@ -1141,6 +1141,10 @@ final class CallManager: ObservableObject {
                 await self.localMediaTask?.value
                 guard let answer = await self.webRTCService.createAnswer(from: sdp) else {
                     guard self.currentCallId == callId else { return }
+                    // Local SDP generation failure is invisible to the peer — without
+                    // this signal the caller sits in .connecting/.ringing until the
+                    // gateway's CallCleanupService cron reaps the zombie (~60s).
+                    MessageSocketManager.shared.emitCallEnd(callId: callId)
                     self.endCallInternal(reason: .failed("Failed to create SDP answer"))
                     return
                 }
@@ -1215,6 +1219,10 @@ final class CallManager: ObservableObject {
                 await self.localMediaTask?.value
                 guard let answer = await self.webRTCService.createAnswer(from: remoteOffer) else {
                     guard self.currentCallId == callId else { return }
+                    // Local SDP generation failure is invisible to the peer — without
+                    // this signal the caller sits in .connecting/.ringing until the
+                    // gateway's CallCleanupService cron reaps the zombie (~60s).
+                    MessageSocketManager.shared.emitCallEnd(callId: callId)
                     self.endCallInternal(reason: .failed("Failed to create SDP answer"))
                     return
                 }
@@ -1235,6 +1243,9 @@ final class CallManager: ObservableObject {
                 guard let self, !Task.isCancelled else { return }
                 guard case .connecting = self.callState, self.currentCallId == callId else { return }
                 Logger.calls.error("SDP offer timeout for call: \(callId)")
+                // The peer is still waiting on an answer that will never come —
+                // tell the gateway now instead of leaving it to the cron reaper.
+                MessageSocketManager.shared.emitCallEnd(callId: callId)
                 self.endCallInternal(reason: .failed(String(localized: "call.error.timeout")))
             }
         }
@@ -1259,6 +1270,10 @@ final class CallManager: ObservableObject {
             await self.localMediaTask?.value
             guard let answer = await self.webRTCService.createAnswer(from: remoteOffer) else {
                 guard self.currentCallId == callId else { return }
+                // Local SDP generation failure is invisible to the peer — without
+                // this signal the caller sits in .connecting/.ringing until the
+                // gateway's CallCleanupService cron reaps the zombie (~60s).
+                MessageSocketManager.shared.emitCallEnd(callId: callId)
                 self.endCallInternal(reason: .failed("Failed to create SDP answer"))
                 return
             }
@@ -1279,6 +1294,9 @@ final class CallManager: ObservableObject {
                 guard let self, !Task.isCancelled else { return }
                 guard case .connecting = self.callState, self.currentCallId == callId else { return }
                 Logger.calls.error("SDP offer timeout for call: \(callId)")
+                // The peer is still waiting on an answer that will never come —
+                // tell the gateway now instead of leaving it to the cron reaper.
+                MessageSocketManager.shared.emitCallEnd(callId: callId)
                 self.endCallInternal(reason: .failed(String(localized: "call.error.timeout")))
             }
         }
@@ -1325,7 +1343,6 @@ final class CallManager: ObservableObject {
         // identifiants OPTIONNELS et on garantit `endCallInternal` dans
         // tous les cas pour nettoyer l'état local + cancel les Tasks.
         let callId = currentCallId
-        let userId = remoteUserId
 
         // Phase finale — émettre `call:end` avec ACK garanti pour que le
         // gateway broadcast `call:ended` au peer. Avant : emit fire-and-forget
@@ -1335,7 +1352,7 @@ final class CallManager: ObservableObject {
         // `emitCallEndWithAck` (3s timeout, retry interne au gateway) en
         // Task détaché : ne bloque pas le cleanup local mais garantit que
         // le gateway sait que l'appel est fini.
-        if let callId, let userId {
+        if let callId {
             Task {
                 let acked = await MessageSocketManager.shared.emitCallEndWithAck(callId: callId)
                 if !acked {
@@ -1347,7 +1364,6 @@ final class CallManager: ObservableObject {
                     Logger.calls.warning("call:end ACK failed pour \(callId) — fallback fire-and-forget émis, gateway cron cleanup dans 60s")
                 }
             }
-            _ = userId  // Référencé pour cohérence avec l'API legacy emitCallEnd(callId:toUserId:)
         }
 
         // H1 — rendre le teardown local atomique vis-à-vis de CallKit. On capture
@@ -3010,6 +3026,10 @@ final class CallManager: ObservableObject {
                     // building the SDP, peerConnection is nil → nil return.
                     // Don't clobber a clean end with .failed.
                     guard self.currentCallId == callId else { return }
+                    // The callee already joined and is waiting for our offer —
+                    // tell the gateway now instead of leaving them hanging until
+                    // the cron reaper.
+                    MessageSocketManager.shared.emitCallEnd(callId: callId)
                     self.endCallInternal(reason: .failed("Failed to create offer"))
                     return
                 }
@@ -3232,10 +3252,6 @@ final class CallManager: ObservableObject {
     // the call room, no recipient field needed.
     private func emitCallReject(callId: String) {
         MessageSocketManager.shared.emitCallLeave(callId: callId)
-    }
-
-    private func emitCallEnd(callId: String, toUserId: String) {
-        MessageSocketManager.shared.emitCallEnd(callId: callId)
     }
 
     // MARK: - Duration Formatting
