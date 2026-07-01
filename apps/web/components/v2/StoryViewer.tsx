@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { formatTimeRemaining } from '@meeshy/shared/utils/time-remaining';
 import { useI18n } from '@/hooks/use-i18n';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
@@ -845,11 +846,8 @@ function StoryViewer({
                 </span>
               )}
               {story.expiresAt && (() => {
-                const diff = new Date(story.expiresAt).getTime() - Date.now();
-                if (diff <= 0) return null;
-                const mins = Math.floor(diff / 60000);
-                const hrs = Math.floor(mins / 60);
-                const remaining = hrs >= 1 ? `${hrs}h${mins % 60 > 0 ? `${mins % 60}m` : ''}` : `${mins}m`;
+                const remaining = formatTimeRemaining(new Date(story.expiresAt).getTime(), Date.now());
+                if (remaining === null) return null;
                 return <span className="text-xs text-white/40">{remaining}</span>;
               })()}
             </div>
