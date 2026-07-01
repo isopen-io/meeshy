@@ -20,6 +20,7 @@ export function useFieldValidation({ value, disabled, t, type }: UseFieldValidat
   const [status, setStatus] = useState<ValidationStatus>('idle');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const checkTimeout = useRef<NodeJS.Timeout | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const validateFormat = useCallback(async (val: string) => {
     if (!val.trim()) {
@@ -61,14 +62,26 @@ export function useFieldValidation({ value, disabled, t, type }: UseFieldValidat
   }, [type, t]);
 
   const checkAvailability = useCallback(async (val: string) => {
+    // Annule toute vérification encore en vol : sans ça, une réponse lente
+    // pour une valeur ancienne peut arriver après (et écraser) la validation
+    // de la valeur courante (last-write-wins), et le fetch continue après
+    // démontage. AbortController = API native, zéro dépendance.
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
       const param = type === 'username' ? 'username' : type === 'email' ? 'email' : 'phoneNumber';
       const response = await fetch(
-        buildApiUrl(`/auth/check-availability?${param}=${encodeURIComponent(val.trim())}`)
+        buildApiUrl(`/auth/check-availability?${param}=${encodeURIComponent(val.trim())}`),
+        { signal: controller.signal }
       );
+
+      if (controller.signal.aborted) return;
 
       if (response.ok) {
         const result = await response.json();
+        if (controller.signal.aborted) return;
         if (result.success) {
           const availableKey = type === 'username' ? 'usernameAvailable' :
                                type === 'email' ? 'emailAvailable' : 'phoneNumberAvailable';
@@ -93,6 +106,9 @@ export function useFieldValidation({ value, disabled, t, type }: UseFieldValidat
         }
       }
     } catch (error) {
+      // Requête annulée (valeur obsolète / démontage) : ne pas dégrader
+      // l'état de validation — une vérification plus récente prend le relais.
+      if ((error as Error)?.name === 'AbortError') return;
       console.error(`Erreur vérification ${type}:`, error);
       // Erreur réseau (pas de réponse) - définir comme invalide
       setStatus('invalid');
@@ -128,6 +144,9 @@ export function useFieldValidation({ value, disabled, t, type }: UseFieldValidat
       if (checkTimeout.current) {
         clearTimeout(checkTimeout.current);
       }
+      // Annule la requête de disponibilité en vol quand la valeur change
+      // ou que le composant se démonte (évite un setState post-démontage).
+      abortRef.current?.abort();
     };
   }, [value, disabled, validateFormat, checkAvailability]);
 
