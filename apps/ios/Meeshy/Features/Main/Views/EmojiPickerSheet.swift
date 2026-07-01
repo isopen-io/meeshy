@@ -39,6 +39,28 @@ enum EmojiGridCategory: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Localized, human-facing name for the category.
+    ///
+    /// The tab is an **icon-only** button, so its `accessibilityLabel` is the
+    /// only thing VoiceOver can announce. `rawValue` is the storage/identity
+    /// key (`id`) and must stay stable, so the display layer lives here —
+    /// keeping the Prisme Linguistique promise that the user hears the category
+    /// in their own language rather than a hardcoded French string.
+    var localizedName: String {
+        switch self {
+        case .recent: return String(localized: "emoji.category.recent", defaultValue: "Récents", bundle: .main)
+        case .smileys: return String(localized: "emoji.category.smileys", defaultValue: "Smileys", bundle: .main)
+        case .people: return String(localized: "emoji.category.people", defaultValue: "Personnes", bundle: .main)
+        case .animals: return String(localized: "emoji.category.animals", defaultValue: "Animaux", bundle: .main)
+        case .food: return String(localized: "emoji.category.food", defaultValue: "Nourriture", bundle: .main)
+        case .activities: return String(localized: "emoji.category.activities", defaultValue: "Activités", bundle: .main)
+        case .travel: return String(localized: "emoji.category.travel", defaultValue: "Voyages", bundle: .main)
+        case .objects: return String(localized: "emoji.category.objects", defaultValue: "Objets", bundle: .main)
+        case .symbols: return String(localized: "emoji.category.symbols", defaultValue: "Symboles", bundle: .main)
+        case .flags: return String(localized: "emoji.category.flags", defaultValue: "Drapeaux", bundle: .main)
+        }
+    }
+
     var emojis: [String] {
         switch self {
         case .recent:
@@ -220,7 +242,7 @@ struct EmojiPickerView: View {
                                     )
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel(category.rawValue)
+                            .accessibilityLabel(category.localizedName)
                             .accessibilityAddTraits(selectedCategory == category ? [.isSelected] : [])
                         }
                     }
