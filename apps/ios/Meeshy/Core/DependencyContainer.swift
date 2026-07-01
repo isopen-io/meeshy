@@ -6,7 +6,7 @@ import GRDB
 import MeeshySDK
 import os
 
-private let containerLogger = Logger(subsystem: "me.meeshy.app", category: "dependency-container")
+private nonisolated let containerLogger = Logger(subsystem: "me.meeshy.app", category: "dependency-container")
 
 /// Diagnostic record produced by ``DependencyContainer`` boot.
 ///
@@ -106,7 +106,11 @@ final class DependencyContainer {
            !UserDefaults.standard.bool(forKey: autoVacuumKey) {
             let pool = self.dbPool
             Task.detached(priority: .background) {
-                try? DatabaseMaintenance.enableIncrementalAutoVacuumOneShot(on: pool)
+                do {
+                    try DatabaseMaintenance.enableIncrementalAutoVacuumOneShot(on: pool)
+                } catch {
+                    containerLogger.error("Failed to enable incremental auto-vacuum: \(error.localizedDescription, privacy: .public)")
+                }
                 await MainActor.run {
                     UserDefaults.standard.set(true, forKey: autoVacuumKey)
                 }
@@ -245,8 +249,12 @@ final class DependencyContainer {
         // The WAL and SHM siblings reference a now-missing main file and
         // would prevent GRDB from creating a fresh database. They never
         // carry data we can recover separately, so they're safe to remove.
-        try? fileManager.removeItem(atPath: path + "-wal")
-        try? fileManager.removeItem(atPath: path + "-shm")
+        do { try fileManager.removeItem(atPath: path + "-wal") } catch {
+            containerLogger.debug("No WAL file to remove at \(path, privacy: .public)-wal: \(error.localizedDescription, privacy: .public)")
+        }
+        do { try fileManager.removeItem(atPath: path + "-shm") } catch {
+            containerLogger.debug("No SHM file to remove at \(path, privacy: .public)-shm: \(error.localizedDescription, privacy: .public)")
+        }
 
         return (mainExists && fileManager.fileExists(atPath: quarantined)) ? quarantined : nil
     }
@@ -273,7 +281,11 @@ final class DependencyContainer {
         }
         let base = groupContainer ?? URL.applicationSupportDirectory
         let dbDir = base.appendingPathComponent("Database")
-        try? FileManager.default.createDirectory(at: dbDir, withIntermediateDirectories: true)
+        do {
+            try FileManager.default.createDirectory(at: dbDir, withIntermediateDirectories: true)
+        } catch {
+            containerLogger.error("Failed to create database directory at \(dbDir.path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
         return dbDir.appendingPathComponent("meeshy_messages.sqlite").path
     }
 

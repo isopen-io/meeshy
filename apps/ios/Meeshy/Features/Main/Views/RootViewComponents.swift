@@ -50,14 +50,14 @@ struct ThemedActionButton: View {
                     )
 
                 Image(systemName: icon)
-                    .font(.system(size: iconSize, weight: .semibold))
+                    .font(MeeshyFont.relative(iconSize, weight: .semibold))
                     .foregroundColor(.white)
                     .scaleEffect(isPressed ? 1.2 : 1.0)
                     .rotationEffect(.degrees(isPressed ? -8 : 0))
 
                 if badge > 0 {
                     Text("\(min(badge, 99))")
-                        .font(.system(size: 9, weight: .bold))
+                        .font(MeeshyFont.relative(9, weight: .bold))
                         .foregroundColor(Color(hex: color))
                         .frame(width: 16, height: 16)
                         .background(Circle().fill(Color.white))
@@ -67,8 +67,8 @@ struct ThemedActionButton: View {
             }
             .scaleEffect(isPressed ? 0.82 : 1)
         }
-        .accessibilityLabel(label ?? "")
-        .accessibilityHint(hint ?? "")
+        .accessibilityLabel(label)
+        .accessibilityHint(hint)
         .onAppear {
             // Reduce Motion: keep the static base shadow, no breathing glow.
             guard !reduceMotion else { return }
@@ -361,7 +361,7 @@ struct ThemedFeedOverlay: View {
             backgroundColor: theme.backgroundPrimary,
             titleView: {
                 Text("Meeshy Feed")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(28, weight: .bold, design: .rounded))
                     .foregroundStyle(
                         LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700], startPoint: .leading, endPoint: .trailing)
                     )
@@ -372,7 +372,7 @@ struct ThemedFeedOverlay: View {
                     ReelsPresenter.shared.presentFresh()
                 } label: {
                     Image(systemName: "play.rectangle.on.rectangle.fill")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(MeeshyFont.relative(18, weight: .semibold))
                         .foregroundColor(MeeshyColors.indigo500)
                         .frame(width: 40, height: 40)
                         .adaptiveGlass(in: Circle(), interactive: true)
@@ -456,7 +456,7 @@ struct ThemedFeedOverlay: View {
         // Marge latérale plus serrée que les posts standards (`FeedPostCard` = 16)
         // → la carte Réel est un peu plus large sur iPhone, tout en gardant une
         // séparation nette des bords.
-        .padding(.horizontal, 12)
+        .padding(.horizontal, MeeshySpacing.md)
     }
 
     // MARK: - Standard post card
@@ -587,21 +587,21 @@ struct ThemedFeedOverlay: View {
                             )
 
                             Text(String(localized: "composer.placeholder.share", defaultValue: "Share something…", bundle: .main))
-                                .font(.footnote)
+                                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                                 .foregroundColor(theme.textMuted)
 
                             Spacer()
 
                             Image(systemName: "photo.on.rectangle.angled")
-                                .font(.system(size: 16))
+                                .font(MeeshyFont.relative(16))
                                 .foregroundColor(MeeshyColors.indigo400)
                         }
                         .padding(12)
                         .background(
-                            RoundedRectangle(cornerRadius: 16)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                                 .fill(theme.inputBackground)
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 16)
+                                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                                         .stroke(theme.inputBorder, lineWidth: 1)
                                 )
                         )
@@ -636,7 +636,7 @@ struct ThemedFeedOverlay: View {
                             .padding()
                     }
                 }
-                .padding(.bottom, 100)
+                .padding(.bottom, 100) // Clear floating button / tab bar area
                 }
                 .onPreferenceChange(ReelVisibilityPreferenceKey.self) { frames in
                     reelAutoplay.update(

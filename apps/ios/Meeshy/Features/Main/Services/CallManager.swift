@@ -224,7 +224,7 @@ final class CallManager: ObservableObject {
     /// referencing CallManager or hopping to the MainActor. Used to suppress
     /// `forceReconnect()` mid-call (token rotation / re-auth) so the WebRTC
     /// signaling socket is never torn down during a call.
-    private nonisolated(unsafe) static let _isCallActiveLock = OSAllocatedUnfairLock(initialState: false)
+    private nonisolated static let _isCallActiveLock = OSAllocatedUnfairLock(initialState: false)
     /// Thread-safe read/write. Written only from @MainActor (callState.didSet);
     /// read from non-isolated socket-manager closures — guarded by an unfair lock
     /// so concurrent reads never observe a torn write.

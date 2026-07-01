@@ -556,7 +556,7 @@ struct RootView: View {
         }
         .overlay(alignment: .top) {
             FloatingCallPillView()
-                .padding(.top, 8)
+                .padding(.top, MeeshySpacing.sm)
         }
         // §7.6 — call-waiting: a 2nd incoming call while one is active. Was dead
         // code (CallManager API + CallWaitingBannerView existed but were never
@@ -571,7 +571,7 @@ struct RootView: View {
                     onReject: { callManager.rejectPendingCall() },
                     onEndAndAnswer: { callManager.endCurrentAndAnswerPending() }
                 )
-                .padding(.top, 8)
+                .padding(.top, MeeshySpacing.sm)
             }
         }
         // SyncPill is mounted INSIDE ConnectionBanner (replacing the legacy
@@ -1524,7 +1524,7 @@ struct RootView: View {
                             .frame(width: 26, height: 26)
                     } else {
                         Image(systemName: "square.stack.fill")
-                            .font(.system(size: 20, weight: .semibold))
+                            .font(MeeshyFont.relative(20, weight: .semibold))
                             .foregroundColor(.white)
                     }
                 }
@@ -1827,17 +1827,17 @@ private struct PendingSettingsBannerInline: View {
             if pendingCount > 0 {
                 HStack(spacing: 8) {
                     Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundColor(.white)
 
                     Text("\(String(localized: "root.pending_changes", defaultValue: "Modifications en attente", bundle: .main)) (\(pendingCount))")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundColor(.white)
 
                     Spacer()
 
                     Text(String(localized: "root.sync_on_reconnect", defaultValue: "Synchronisation au retour en ligne", bundle: .main))
-                        .font(.system(size: 10, weight: .regular))
+                        .font(MeeshyFont.relative(10, weight: .regular))
                         .foregroundColor(.white.opacity(0.85))
                         .lineLimit(1)
                 }
@@ -1888,17 +1888,17 @@ private struct PendingStoryBannerInline: View {
             if publishService.pendingCount > 0 {
                 HStack(spacing: 8) {
                     Image(systemName: "photo.stack")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundColor(.white)
 
                     Text("\(String(localized: "root.pending_stories", defaultValue: "Stories en attente", bundle: .main)) (\(publishService.pendingCount))")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundColor(.white)
 
                     Spacer()
 
                     Text(String(localized: "root.publish_on_reconnect", defaultValue: "Publication au retour en ligne", bundle: .main))
-                        .font(.system(size: 10, weight: .regular))
+                        .font(MeeshyFont.relative(10, weight: .regular))
                         .foregroundColor(.white.opacity(0.85))
                         .lineLimit(1)
                 }

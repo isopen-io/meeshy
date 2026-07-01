@@ -497,8 +497,13 @@ struct MeeshyApp: App {
                         // Capture dbPool before crossing the actor boundary.
                         let pool = dependencies.dbPool
                         Task.detached(priority: .background) {
-                            try? DatabaseMaintenance.runIncrementalVacuum(on: pool)
-                            try? DatabaseMaintenance.runOptimize(on: pool)
+                            do {
+                                try DatabaseMaintenance.runIncrementalVacuum(on: pool)
+                                try DatabaseMaintenance.runOptimize(on: pool)
+                            } catch {
+                                Logger(subsystem: "me.meeshy.app", category: "maintenance")
+                                    .error("Background DB maintenance failed: \(error.localizedDescription, privacy: .public)")
+                            }
                         }
                     case .inactive:
                         break
@@ -679,9 +684,8 @@ struct MeeshyApp: App {
         let reports = CrashDiagnosticsManager.shared.consumePending()
         guard let mostRecent = reports.first else { return }
 
-        let isoFormatter = ISO8601DateFormatter()
         for report in reports {
-            let when = isoFormatter.string(from: report.timestamp)
+            let when = report.timestamp.formatted(.iso8601)
             Logger.crash.error("""
                 [\(report.kind.rawValue, privacy: .public)] \
                 \(when, privacy: .public) — \
