@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 
+@MainActor
 final class MessageActionResolverTests: XCTestCase {
     private func ctx(
         isMine: Bool = false, canEdit: Bool = false, canDelete: Bool = false,

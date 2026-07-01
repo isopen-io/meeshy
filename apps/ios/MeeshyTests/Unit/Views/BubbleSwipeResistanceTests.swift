@@ -2,6 +2,7 @@ import XCTest
 import CoreGraphics
 @testable import Meeshy
 
+@MainActor
 final class BubbleSwipeResistanceTests: XCTestCase {
     func test_minimumDistance_normalIs22_resistantIs48() {
         XCTAssertEqual(BubbleSwipeResistance.minimumDistance(.normal), 22)
