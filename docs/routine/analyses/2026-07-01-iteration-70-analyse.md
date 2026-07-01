@@ -62,7 +62,22 @@ Les call sites sont tous des `onClick={() => copyToClipboard(x)}` fire-and-forge
 | F31 | `truncateText` collision de sémantiques — **NE PAS** fusionner. | — |
 | F25b | Deux validateurs téléphone (APIs divergentes). | MOYEN |
 
+## Incident CI — `main` était rouge (détecté en cours d'itération)
+Le premier run CI (`Build (bun)`) a échoué **hors de mes fichiers** : `main` (avancé de `df4e2e57` à
+`1df16a6d` pendant l'itération, via merges parallèles) portait un **`import { copyToClipboard }` dupliqué**
+dans `components/conversations/conversation-item/ConversationItem.tsx` (lignes 8+13) et
+`components/conversations/header/use-header-actions.ts` (lignes 3+6) → `next build` :
+`Identifier 'copyToClipboard' has already been declared`. Cause : deux agents F30 parallèles ayant ajouté le
+même import sur des lignes non-conflictuelles → git a conservé les deux copies au merge.
+
+**Action** : rebase de la branche sur `1df16a6d` + suppression des imports dupliqués (2 lignes). Scan de tout
+`apps/web` (script Python, comptage des lignes `import ... from` par fichier) → **0 autre import dupliqué**.
+Leçon consignée : le merge parallèle de dédup d'imports peut produire des doublons silencieux non-conflictuels ;
+vérifier `next build` (pas seulement tsc) sur la cible.
+
 ## Gain
+- **Correctif build** : `main` repassé au vert (import dupliqué supprimé, cause d'un `next build` cassé pour
+  toute l'équipe).
 - **Correctif UX réel** : plus de faux « Copié » quand la copie échoue (toast d'erreur explicite).
 - **Robustesse iOS/WebView** : les 2 pages admin héritent du fallback textarea de la source unique.
 - **Dédup** : littéral `navigator.clipboard.writeText` nu applicatif : 2 sites admin → 0.
