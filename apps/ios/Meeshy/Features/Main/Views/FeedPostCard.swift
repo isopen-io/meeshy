@@ -1067,11 +1067,30 @@ struct FeedPostCard: View {
                         }
                     }
 
-                    // Content (Prisme Linguistique)
-                    Text(comment.displayContent)
-                        .font(.footnote)
-                        .foregroundColor(theme.textPrimary)
-                        .lineLimit(2)
+                    // Content (Prisme Linguistique) — masqué pour un commentaire
+                    // média-seul (displayContent vide) : évite une ligne fantôme.
+                    if !comment.displayContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text(comment.displayContent)
+                            .font(.footnote)
+                            .foregroundColor(theme.textPrimary)
+                            .lineLimit(2)
+                    }
+
+                    // Média unique (image/vidéo/audio) — rendu inline dans l'aperçu
+                    // du feed avec les MÊMES building blocks que la sheet. L'audio est
+                    // ainsi lisible/arrêtable directement (le player porte son propre
+                    // bouton, qui capte le tap sans ouvrir la sheet).
+                    if let media = comment.media.first {
+                        CommentMediaView(
+                            media: media,
+                            accentColor: accentColor,
+                            authorName: comment.author,
+                            authorAvatarURL: comment.authorAvatarURL,
+                            authorColor: comment.authorColor,
+                            sentAt: comment.timestamp
+                        )
+                        .padding(.top, 2)
+                    }
 
                     // Stats row: likes and replies
                     HStack(spacing: 16) {
