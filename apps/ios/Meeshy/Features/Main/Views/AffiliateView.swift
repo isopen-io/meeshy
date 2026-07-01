@@ -51,6 +51,7 @@ struct AffiliateView: View {
             Text(String(localized: "affiliate.title", defaultValue: "Parrainage", bundle: .main))
                 .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
@@ -150,6 +151,7 @@ struct AffiliateView: View {
                     .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: accentColor))
                     .tracking(1.2)
+                    .accessibilityAddTraits(.isHeader)
             }
             .padding(.leading, 4)
             .accessibilityElement(children: .combine)
