@@ -143,7 +143,7 @@ public enum StorySlideRenderer {
 
         // 7. Filter — applied over the WHOLE composite, mirroring the canvas which
         //    runs its kernel on the captured (background + items) texture. Gated on
-        //    the SAME `StoryFilteredLayer.Kind(storyFilter:)` bridge the canvas uses,
+        //    the SAME `StoryFilterKind(storyFilter:)` bridge the canvas uses,
         //    so the thumbHash reflects exactly what the viewer renders: vintage/bw
         //    (the only kernels that exist) are applied; kernel-less filters
         //    (warm/cool/…) leave the composite untouched, just as the viewer leaves
@@ -155,11 +155,11 @@ public enum StorySlideRenderer {
     }
 
     /// Applies the active story filter to the rendered composite, gated on the same
-    /// `StoryFilteredLayer.Kind` bridge the canvas/viewer use so coverage stays in
+    /// `StoryFilterKind` bridge the canvas/viewer use so coverage stays in
     /// lock-step (today: vintage + bw; the six kernel-less filters return the image
     /// unchanged). Returns the input untouched on any CoreImage failure.
     static func applyActiveFilter(to image: UIImage, effects: StoryEffects) -> UIImage {
-        guard let kind = StoryFilteredLayer.Kind(storyFilter: effects.filter),
+        guard let kind = StoryFilterKind(storyFilter: effects.filter),
               let input = CIImage(image: image) else { return image }
         let intensity = Float(max(0.0, min(1.0, effects.filterIntensity ?? 1.0)))
 
