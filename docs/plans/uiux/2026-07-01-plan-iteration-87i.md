@@ -1,35 +1,32 @@
-# Plan — Iteration 87i (2026-07-01) — iOS Dynamic Type + a11y `VoiceProfileWizardView`
+# Plan — Iteration 87i (2026-07-01)
 
 ## Objectif
-Rendre le wizard de profil vocal (`VoiceProfileWizardView`, clonage vocal — feature cœur)
-conforme Dynamic Type et combler les trous VoiceOver, sans changer le layout ni la logique.
+Accessibilité `EffectsPickerView` (sheet « Effets du message ») : **Dynamic Type** (9 polices
+figées) + **1 swap palette** (`.red` destructif → `MeeshyColors.error`). iOS exclusivement
+(suffixe `i`). Branche = `claude/upbeat-euler-riv8e5`, base = `main` HEAD `0b9ade13`.
 
-## Base de départ
-`main` HEAD `7b486857` (resync avant démarrage ; branche `claude/upbeat-euler-f34cru`).
-Dernière itération iOS mergée = **83i** (PR #1211, `DataStorageView`/`MediaDownloadSettingsView`).
-84i/85i/86i (EditProfile/StarredMessages/AboutView) déjà sur `main`. Numéro **87i** choisi
-(> 86i, plus haute analyse iOS existante) pour éviter la collision d'agents parallèles.
-
-## Contention
-Vérifié `list_pull_requests` : 1 seule PR ouverte (#1213, appels WebRTC — pas UI/UX).
-`VoiceProfileWizardView` **libre** (aucune PR, différé prioritaire explicite du pointeur 85i).
+## Diagnostic
+- 9 sites `.font(.system(size:))` figés → ignore Dynamic Type (rupture règle a11y CLAUDE.md).
+- Bouton « Tout effacer » : `.red.opacity(0.8)` = rouge système hors-charte → token destructif `MeeshyColors.error` (SSOT 78i).
+- i18n + traits VoiceOver `.isSelected` déjà complets ; tous les conteneurs sont flexibles (aucun glyphe à figer).
 
 ## Étapes
-1. [x] Explorer les surfaces iOS non prises → `VoiceProfileWizardView` (24 fixed-fonts, propre).
-2. [x] Confirmer `MeeshyFont.relative` en scope (`import MeeshyUI` présent) + `common.close` en catalogue.
-3. [x] Migrer 20/24 `.font(.system(size:))` → `MeeshyFont.relative(...)` (weight/design préservés
-   dont `.rounded`/`.monospaced`).
-4. [x] Garder figés 4 sites commentés : chrome `xmark.circle.fill` 28 + 3 héros décoratifs 64/64/72.
-5. [x] a11y : `.accessibilityLabel(common.close)` sur fermeture ; `.accessibilityHidden(true)` sur
-   3 héros + indicateur d'étapes + glyphe consentInfoRow ; `.accessibilityElement(.combine)` sur profileInfoRow.
-6. [x] Grep de contrôle : 4 `.system(size:)` restants (tous commentés), 20 `relative`.
-7. [x] Rédiger analyse `2026-07-01-iteration-87i.md` + ce plan.
-8. [ ] Commit + push branche ; gate = CI `ios-tests.yml` (compile Xcode 26.1 + tests simu 18.2).
-9. [ ] Ouvrir PR ; merge dans `main` après CI verte ; supprimer la branche ; MàJ branch-tracking.
+1. [x] 86i (AboutView) mergé dans `main` via PR #1209 (consolidation #1212) → resync branche sur `main` HEAD.
+2. [x] Lire `EffectsPickerView.swift`, confirmer 9 sites police + 1 `.red`, absence de PR concurrente.
+3. [x] Migrer 9/9 `.system(size:)` → `MeeshyFont.relative(size, weight:)` (weight préservé).
+4. [x] Swap `.red.opacity(0.8)` → `MeeshyColors.error.opacity(0.8)`.
+5. [x] Rédiger analyse `2026-07-01-iteration-87i.md` + ce plan.
+6. [x] Mettre à jour `branch-tracking.md` (86i mergé + pointeur 87i + ligne History).
+7. [ ] Commit + push branche + PR.
+8. [ ] Attendre CI `iOS Tests` verte → merger dans `main` (squash) ; supprimer la branche.
+9. [ ] Démarrer 88i.
 
-## Différé prioritaire iOS 88i+
-Dynamic Type grandes surfaces restantes : `StoryViewerView+Content` (31, coordonner i18n),
-`FeedCommentsSheet` (28 — ⚠️ historique confus : commit `429ad8b7` prétend l'avoir fait mais le
-fichier a 28 fixed-fonts / 0 relative, à re-vérifier), `ConversationView+Composer` (22, lot prudent),
-`DeleteAccountView` (20), `NewConversationView`/`MagicLinkView`/`DataExportView`/`AffiliateView` (17).
-Puis Glass adoption reste (`MessageOverlayMenu`). **NE PAS re-flagger** `VoiceProfileWizardView` (soldé 87i).
+## Risques / mitigations
+- **Pas de compile locale** (SwiftUI/Linux) → gate = CI `ios-tests.yml`. Swap mécanique,
+  `MeeshyFont`/`MeeshyColors` déjà consommés partout → risque compile ~nul.
+- **Aucun frame fixe** → pas de risque de débordement glyphe ; tout scale proprement.
+- **Pas de snapshot** sur cette sheet → aucune baseline cassée.
+
+## Hors-scope (différé, documenté dans l'analyse)
+- Accent de sélection paramétré (`Color(hex: accentColor)`), neutres `.gray`/`.secondary`.
+- Checkmark `#4ADE80` (AboutView) → success avec vérif visuelle (88i+).
