@@ -2,8 +2,10 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// Feuille « Plus… » native — NavigationStack + List à sections.
-/// Réutilise les vues MessageDetail comme destinations. 100 % design système.
+/// Feuille « Plus… » — grille de pastilles colorées sur surface Liquid Glass,
+/// avec contenu d'exploration inline sous la grille. Reprend l'esthétique de
+/// l'ancien menu détaillé (`MessageDetailSheet.unifiedGrid`), verre iOS 26.
+/// Réutilise les vues MessageDetail comme contenu inline. 100 % design système.
 struct MessageMoreSheet: View {
     let message: Message
     let contactColor: String
@@ -24,64 +26,217 @@ struct MessageMoreSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
-    @State private var path: [MoreItem] = []
+    @State private var selectedItem: MoreItem?
+    @State private var gridAppeared = false
+
+    private var theme: ThemeManager { ThemeManager.shared }
+    private var isDark: Bool { colorScheme == .dark }
+    private var accent: Color { Color(hex: contactColor) }
 
     var body: some View {
-        NavigationStack(path: $path) {
-            List {
-                ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
-                    sectionView(for: section)
+        VStack(spacing: 0) {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 16) {
+                    glassGridCard
+                        .padding(.horizontal, 14)
+                        .padding(.top, 8)
+
+                    if let selectedItem, isExploration(selectedItem) {
+                        inlineContent(for: selectedItem)
+                            .id(selectedItem)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
                 }
+                .padding(.bottom, 24)
             }
-            .navigationTitle(String(localized: "message-more.title", defaultValue: "Options", bundle: .main))
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(for: MoreItem.self) { destination(for: $0) }
+            .animation(.easeInOut(duration: 0.2), value: selectedItem)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(theme.backgroundPrimary)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-        .onAppear { if let initialItem { path = [initialItem] } }
+        .onAppear {
+            if let initialItem, isExploration(initialItem) { selectedItem = initialItem }
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.1)) {
+                gridAppeared = true
+            }
+        }
+    }
+
+    // MARK: - Glass Grid Card
+
+    private var glassGridCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
+                sectionGrid(for: section)
+            }
+        }
+        .padding(.vertical, 16)
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity)
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous), tint: accent.opacity(0.14))
+        .shadow(color: accent.opacity(0.12), radius: 12, x: 0, y: 4)
+        .shadow(color: .black.opacity(0.14), radius: 18, x: 0, y: 8)
     }
 
     @ViewBuilder
-    private func sectionView(for section: MoreSection) -> some View {
+    private func sectionGrid(for section: MoreSection) -> some View {
         switch section {
         case .actions(let items):
-            Section(String(localized: "message-more.section.actions", defaultValue: "Actions", bundle: .main)) {
-                ForEach(items, id: \.self) { actionRow($0) }
-            }
+            pelletSubGrid(title: String(localized: "message-more.section.actions", defaultValue: "Actions", bundle: .main), items: items)
         case .info(let items):
-            Section(String(localized: "message-more.section.info", defaultValue: "Infos & Prisme", bundle: .main)) {
-                ForEach(items, id: \.self) { navRow($0) }
-            }
+            pelletSubGrid(title: String(localized: "message-more.section.info", defaultValue: "Infos & Prisme", bundle: .main), items: items)
         case .moderation(let items):
-            Section(String(localized: "message-more.section.moderation", defaultValue: "Modération", bundle: .main)) {
-                ForEach(items, id: \.self) { navRow($0) }
+            pelletSubGrid(title: String(localized: "message-more.section.moderation", defaultValue: "Modération", bundle: .main), items: items)
+        }
+    }
+
+    @ViewBuilder
+    private func pelletSubGrid(title: String, items: [MoreItem]) -> some View {
+        if !items.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title)
+                    .font(.caption2.weight(.semibold))
+                    .textCase(.uppercase)
+                    .foregroundColor(theme.textMuted)
+                    .padding(.horizontal, 4)
+
+                let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 5)
+                LazyVGrid(columns: columns, spacing: 8) {
+                    ForEach(Array(items.enumerated()), id: \.element) { index, item in
+                        pellet(item, index: index)
+                    }
+                }
             }
         }
     }
 
-    /// Actions immédiates (fire-and-forget) — ferment le sheet.
-    private func actionRow(_ item: MoreItem) -> some View {
-        Button {
-            HapticFeedback.medium()
-            switch item {
-            case .reply: onReply?()
-            case .forward: onForward?()
-            case .thread: onThread?()
-            case .deleteMedia: onDeleteMedia?()
-            default: break
+    // MARK: - Pellet Button
+
+    private func pellet(_ item: MoreItem, index: Int) -> some View {
+        let color = colorFor(item)
+        let isActive = selectedItem == item && isExploration(item)
+        let fillOpacity = isActive
+            ? (isDark ? 0.40 : 0.35)
+            : (isDark ? 0.25 : 0.15)
+        let trailOpacity = isActive
+            ? (isDark ? 0.25 : 0.18)
+            : (isDark ? 0.12 : 0.06)
+
+        return Button {
+            if isExploration(item) {
+                HapticFeedback.light()
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedItem = (selectedItem == item) ? nil : item
+                }
+            } else {
+                HapticFeedback.medium()
+                switch item {
+                case .reply: onReply?()
+                case .forward: onForward?()
+                case .thread: onThread?()
+                case .deleteMedia: onDeleteMedia?()
+                default: break
+                }
+                dismiss()
             }
-            dismiss()
         } label: {
-            Label(labelText(item), systemImage: symbol(item))
+            VStack(spacing: 5) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [color.opacity(fillOpacity), color.opacity(trailOpacity)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .overlay(
+                            Circle()
+                                .stroke(
+                                    isActive ? color.opacity(0.5) : color.opacity(0.2),
+                                    lineWidth: isActive ? 1.5 : 0.5
+                                )
+                        )
+                        .frame(width: 42, height: 42)
+
+                    Image(systemName: symbol(item))
+                        .font(.callout.weight(.semibold))
+                        .foregroundColor(color)
+                }
+
+                Text(labelText(item))
+                    .font(.caption2.weight(.medium))
+                    .foregroundColor(isActive ? color : theme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+            }
+            .frame(maxWidth: .infinity, minHeight: 68)
+            .opacity(gridAppeared ? 1 : 0)
+            .offset(y: gridAppeared ? 0 : 12)
+            .animation(
+                .spring(response: 0.4, dampingFraction: 0.7).delay(Double(index) * 0.04),
+                value: gridAppeared
+            )
+        }
+        .buttonStyle(MorePelletButtonStyle())
+    }
+
+    // MARK: - Item Classification & Color
+
+    private func isExploration(_ item: MoreItem) -> Bool {
+        switch item {
+        case .reply, .forward, .thread, .deleteMedia: return false
+        case .views, .reactions, .language, .transcription, .sentiment, .history, .report: return true
         }
     }
 
-    /// Explorations — poussent une destination via NavigationLink de valeur.
-    private func navRow(_ item: MoreItem) -> some View {
-        NavigationLink(value: item) {
-            Label(labelText(item), systemImage: symbol(item))
+    private func colorFor(_ item: MoreItem) -> Color {
+        switch item {
+        case .reply: return MeeshyColors.indigo400
+        case .forward: return MeeshyColors.indigo500
+        case .thread: return MeeshyColors.warning
+        case .deleteMedia: return MeeshyColors.error
+        case .language: return MeeshyColors.info
+        case .views: return MeeshyColors.success
+        case .reactions: return MeeshyColors.warning
+        case .sentiment: return MeeshyColors.info
+        case .transcription: return MeeshyColors.indigo600
+        case .history: return MeeshyColors.warning
+        case .report: return MeeshyColors.error
         }
+    }
+
+    // MARK: - Inline Content
+
+    /// En-tête discret + contenu réutilisé de `destination(for:)`, posé inline
+    /// sous la grille. Le header remplace la barre de navigation absente.
+    private func inlineContent(for item: MoreItem) -> some View {
+        let color = colorFor(item)
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: symbol(item))
+                    .font(.footnote.weight(.semibold))
+                    .foregroundColor(color)
+                Text(labelText(item))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(theme.textPrimary)
+                Spacer()
+                Button {
+                    HapticFeedback.light()
+                    withAnimation(.easeInOut(duration: 0.2)) { selectedItem = nil }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.subheadline)
+                        .foregroundColor(theme.textMuted)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 4)
+
+            destination(for: item)
+        }
+        .padding(.horizontal, 18)
     }
 
     @ViewBuilder
@@ -153,5 +308,18 @@ struct MessageMoreSheet: View {
         case .history: return String(localized: "message-detail.tab.history", defaultValue: "Historique", bundle: .main)
         case .report: return String(localized: "message-detail.tab.report", defaultValue: "Signaler", bundle: .main)
         }
+    }
+}
+
+// MARK: - Pellet Button Style
+
+/// Press feedback pour les pastilles de la grille — miroir de
+/// `DetailActionButtonStyle` de `MessageDetailSheet`.
+private struct MorePelletButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.88 : 1.0)
+            .opacity(configuration.isPressed ? 0.7 : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.65), value: configuration.isPressed)
     }
 }
