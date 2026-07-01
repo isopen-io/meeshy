@@ -24,6 +24,10 @@ jest.mock('sonner', () => ({
   toast: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
 
+jest.mock('@/lib/clipboard', () => ({
+  copyToClipboard: jest.fn().mockResolvedValue({ success: true, message: 'ok' }),
+}));
+
 jest.mock('next/dynamic', () => (loader: any, opts?: any) => {
   loader().catch(() => {});
   return () => null;
@@ -1144,8 +1148,8 @@ describe('AgentConfigDialog — edit mode with convMeta', () => {
   });
 
   it('copies conversation id to clipboard when ID button is clicked', async () => {
-    const mockWriteText = jest.fn().mockResolvedValue(undefined);
-    Object.assign(navigator, { clipboard: { writeText: mockWriteText } });
+    const { copyToClipboard: mockCopyToClipboard } = jest.requireMock('@/lib/clipboard');
+    mockCopyToClipboard.mockResolvedValue({ success: true, message: 'ok' });
     mockGetConversation.mockResolvedValue({
       id: '507f1f77bcf86cd799439011',
       type: 'group',
@@ -1168,8 +1172,8 @@ describe('AgentConfigDialog — edit mode with convMeta', () => {
     await waitFor(() => expect(screen.getByText('agentConfig.conversationSection')).toBeInTheDocument());
     const idButton = screen.getByText('507f1f77bcf86cd799439011');
     fireEvent.click(idButton);
-    await waitFor(() => expect(mockWriteText).toHaveBeenCalledWith('507f1f77bcf86cd799439011'));
-    expect(mockToastSuccess).toHaveBeenCalledWith('copied');
+    await waitFor(() => expect(mockCopyToClipboard).toHaveBeenCalledWith('507f1f77bcf86cd799439011'));
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalledWith('copied'));
   });
 });
 

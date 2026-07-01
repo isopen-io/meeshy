@@ -282,6 +282,7 @@ struct DeleteAccountView: View {
                     .multilineTextAlignment(.center)
                     .lineSpacing(2)
             }
+            .accessibilityElement(children: .combine)
             .padding(24)
             .background(
                 RoundedRectangle(cornerRadius: 20)
@@ -344,6 +345,8 @@ struct DeleteAccountView: View {
                 .tracking(1.2)
         }
         .padding(.leading, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
     }
 
     private func sectionBackground(tint: String) -> some View {
