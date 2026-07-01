@@ -470,10 +470,9 @@ extension FeedView {
                 .frame(width: 56, height: 56)
 
                 Text(feedLabelForAttachment(attachment))
-                    .font(.caption2.weight(.medium))
+                    .font(MeeshyFont.relative(10, weight: .medium))
                     .foregroundColor(ThemeManager.shared.textSecondary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
                     .frame(width: 60)
             }
         }
@@ -590,11 +589,11 @@ struct FeedComposerSheet: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: forcePlainPost ? "doc.text" : "play.rectangle.on.rectangle.fill")
-                    .font(.caption)
+                    .font(MeeshyFont.relative(10))
                 Text(forcePlainPost
                     ? String(localized: "feed.composer.type.post", defaultValue: "Post", bundle: .main)
                     : String(localized: "feed.composer.type.reel", defaultValue: "Réel", bundle: .main))
-                    .font(.caption)
+                    .font(MeeshyFont.relative(12))
             }
             .foregroundColor(forcePlainPost ? theme.textMuted : MeeshyColors.indigo300)
         }
@@ -613,14 +612,14 @@ struct FeedComposerSheet: View {
                         cleanupAndDismiss()
                     } label: {
                         Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
-                            .font(.subheadline.weight(.medium))
+                            .font(MeeshyFont.relative(15, weight: .medium))
                             .foregroundColor(theme.textSecondary)
                     }
 
                     Spacer()
 
                     Text(String(localized: "feed.post.composer.title", defaultValue: "Nouveau post", bundle: .main))
-                        .font(.headline)
+                        .font(MeeshyFont.relative(16, weight: .bold))
                         .foregroundColor(theme.textPrimary)
 
                     Spacer()
@@ -634,7 +633,7 @@ struct FeedComposerSheet: View {
                                 .scaleEffect(0.8)
                         } else {
                             Text(String(localized: "feed.post.composer.publish", defaultValue: "Publier", bundle: .main))
-                                .font(.subheadline.weight(.bold))
+                                .font(MeeshyFont.relative(15, weight: .bold))
                                 .foregroundColor(hasContent ? MeeshyColors.indigo300 : theme.textMuted)
                         }
                     }
@@ -670,13 +669,13 @@ struct FeedComposerSheet: View {
                         } label: {
                             HStack(spacing: 4) {
                                 Image(systemName: postVisibility == "PUBLIC" ? "globe" : postVisibility == "FRIENDS" ? "person.2" : "lock")
-                                    .font(.caption)
+                                    .font(MeeshyFont.relative(10))
                                 Text(postVisibility == "PUBLIC"
                                     ? String(localized: "feed.post.visibility.public", defaultValue: "Public", bundle: .main)
                                     : postVisibility == "FRIENDS"
                                         ? String(localized: "feed.post.visibility.friends", defaultValue: "Amis", bundle: .main)
                                         : String(localized: "feed.post.visibility.private", defaultValue: "Privé", bundle: .main))
-                                    .font(.caption)
+                                    .font(MeeshyFont.relative(12))
                             }
                             .foregroundColor(theme.textMuted)
                         }
@@ -693,7 +692,7 @@ struct FeedComposerSheet: View {
                 ZStack(alignment: .topLeading) {
                     if composerText.isEmpty {
                         Text(String(localized: "feed.post.composer.placeholder", defaultValue: "Qu'avez-vous en tête ?", bundle: .main))
-                            .font(.body)
+                            .font(MeeshyFont.relative(17))
                             .foregroundColor(theme.textMuted)
                             .padding(.horizontal, 16)
                             .padding(.top, 12)
@@ -702,7 +701,7 @@ struct FeedComposerSheet: View {
                         .focused($isFocused)
                         .scrollContentBackground(.hidden)
                         .foregroundColor(theme.textPrimary)
-                        .font(.body)
+                        .font(MeeshyFont.relative(17))
                         .frame(minHeight: 120)
                         .padding(.horizontal, 12)
                         .padding(.top, 4)
@@ -719,15 +718,15 @@ struct FeedComposerSheet: View {
                                 avatarURL: quoted.authorAvatarURL
                             )
                             Text(quoted.author)
-                                .font(.footnote.weight(.semibold))
+                                .font(MeeshyFont.relative(13, weight: .semibold))
                                 .foregroundColor(theme.accentText(quoted.authorColor))
                             Text("·").foregroundColor(theme.textMuted)
                             Text(quoted.timestamp, style: .relative)
-                                .font(.caption2)
+                                .font(MeeshyFont.relative(11))
                                 .foregroundColor(theme.textMuted)
                         }
                         Text(quoted.displayContent)
-                            .font(.subheadline)
+                            .font(MeeshyFont.relative(14))
                             .foregroundColor(theme.textSecondary)
                             .lineLimit(4)
                     }
@@ -805,9 +804,9 @@ struct FeedComposerSheet: View {
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "globe")
-                                .font(.footnote)
+                                .font(MeeshyFont.relative(14))
                             Text(composerLanguageDisplayName)
-                                .font(.footnote.weight(.semibold))
+                                .font(MeeshyFont.relative(13, weight: .semibold))
                         }
                         .foregroundColor(MeeshyColors.indigo500)
                         .padding(.horizontal, 10)
@@ -1054,10 +1053,9 @@ struct FeedComposerSheet: View {
             }
 
             Text(sheetLabelForAttachment(attachment))
-                .font(.caption2.weight(.medium))
+                .font(MeeshyFont.relative(10, weight: .medium))
                 .foregroundColor(theme.textSecondary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
                 .frame(width: 72)
         }
     }
