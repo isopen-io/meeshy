@@ -157,12 +157,11 @@ struct DeleteAccountView: View {
             sectionHeader(title: String(localized: "account.delete.section.confirmation", defaultValue: "Confirmation", bundle: .main), icon: "checkmark.shield.fill", color: "F59E0B")
 
             VStack(alignment: .leading, spacing: 10) {
-                Text(String(localized: "account.delete.confirmation.prompt", defaultValue: "Tapez **SUPPRIMER MON COMPTE** pour confirmer", bundle: .main))
-                    .font(MeeshyFont.relative(14, weight: .medium))
+                confirmationPrompt
                     .foregroundColor(theme.textPrimary)
 
                 HStack(spacing: 10) {
-                    TextField(String(localized: "account.delete.confirmation.placeholder", defaultValue: "SUPPRIMER MON COMPTE", bundle: .main), text: $confirmationText)
+                    TextField(requiredPhrase, text: $confirmationText)
                         .font(MeeshyFont.relative(14, weight: .semibold, design: .monospaced))
                         .foregroundColor(theme.textPrimary)
                         .autocapitalization(.allCharacters)
@@ -264,8 +263,7 @@ struct DeleteAccountView: View {
             Spacer()
 
             VStack(spacing: 16) {
-                // Glyphe décoratif héros — taille fixe volontaire (parité 84i/74i) :
-                // scaler à ~120pt en Dynamic Type XXL déséquilibrerait l'écran de fin.
+                // Héros décoratif ≥40pt : diamètre fixe, exclu du Dynamic Type (doctrine 84i/87i).
                 Image(systemName: "envelope.circle.fill")
                     .font(.system(size: 64))
                     .foregroundStyle(
@@ -319,6 +317,22 @@ struct DeleteAccountView: View {
     }
 
     // MARK: - Helpers
+
+    // The confirmation phrase is a server-side literal contract
+    // (`z.literal('SUPPRIMER MON COMPTE')`, delete-account-schemas.ts): it must be
+    // typed verbatim in every locale. So `requiredPhrase` is injected literally into a
+    // word-order-safe `%@` format string and emphasized deterministically — never
+    // embedded as translatable text (which could drift from the server literal) nor as
+    // raw markdown (which `Text(String)` renders with visible asterisks).
+    private var confirmationPrompt: Text {
+        let format = String(localized: "account.delete.confirmation.prompt", defaultValue: "Tapez %@ pour confirmer", bundle: .main)
+        var attributed = AttributedString(String(format: format, requiredPhrase))
+        attributed.font = MeeshyFont.relative(14, weight: .medium)
+        if let range = attributed.range(of: requiredPhrase) {
+            attributed[range].font = MeeshyFont.relative(14, weight: .bold, design: .monospaced)
+        }
+        return Text(attributed)
+    }
 
     private func sectionHeader(title: String, icon: String, color: String) -> some View {
         HStack(spacing: 6) {

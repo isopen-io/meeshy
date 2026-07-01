@@ -1,38 +1,34 @@
-# Plan — Iteration 88i (2026-07-01)
+# Plan itération 88i — `DeleteAccountView` (iOS)
 
-## Objectif
-Accessibilité du flux destructif `DeleteAccountView` (iOS) : Dynamic Type + VoiceOver.
+**Branche** : `claude/upbeat-euler-bhrdy6` (resync sur `main` HEAD `e89c7c1a`)
+**Suffixe `i`** = piste iOS (parallèle web/android).
+**Surface** : `apps/ios/Meeshy/Features/Main/Views/DeleteAccountView.swift` (écran suppression de compte — à enjeu élevé, destructif).
+**Contention** : 0 PR iOS ouverte au moment du run (`list_pull_requests` = []). Numéro `88i` = > 87i (plus haute analyse iOS mergée).
 
-## Base de départ
-`main` HEAD (post-87i, commit `94537e44`). Branche : `claude/upbeat-euler-x74cy3`.
+## Diagnostic (au-delà du sweep répétitif)
 
-## Périmètre (1 fichier)
-`apps/ios/Meeshy/Features/Main/Views/DeleteAccountView.swift`
+1. **Dynamic Type** : 20 `.font(.system(size:))` figés → Dynamic Type absent.
+2. **Bug VISUEL ACTIF** (ligne 160) : `Text(String(localized:..., defaultValue: "Tapez **SUPPRIMER MON COMPTE** pour confirmer"))`.
+   `String(localized:)` renvoie une `String` → `Text(String)` **ne parse PAS le markdown** → l'utilisateur voit les astérisques littérales `**SUPPRIMER MON COMPTE**`.
+3. **Bug i18n LATENT (sévère)** : la phrase de confirmation est couplée à la traduction.
+   - Serveur = `z.literal('SUPPRIMER MON COMPTE')` (`services/gateway/src/validation/delete-account-schemas.ts`) → la phrase tapée DOIT être exactement cette chaîne FR dans **toutes** les locales.
+   - Les clés `account.delete.confirmation.{prompt,placeholder}` ne sont dans aucun catalogue (`defaultValue` seul) → aujourd'hui l'app affiche le FR partout (OK par accident). Mais dès qu'un traducteur ajoute + traduit ces clés (workflow i18n normal), un utilisateur EN/ES/DE/PT verrait « Type **DELETE MY ACCOUNT** » et **ne pourrait JAMAIS** supprimer son compte (bouton bloqué à vie).
 
-### Étapes
-1. **Dynamic Type (19/20 sites)** — swap mécanique `.font(.system(size:))` →
-   `.font(MeeshyFont.relative(size, weight:, design:))`, préservant `weight` et
-   `design` (`.monospaced` du TextField de confirmation, `.rounded` du section header).
-   Sites : header (chevron 14 + « Retour » 15 + titre 17), message d'erreur 13, carte
-   d'avertissement (icône 24 + titre 17 + intro 14 + puce 14 + texte puce 13),
-   confirmation (prompt 14 + TextField 14 mono + checkmark 20), bouton destructif
-   (trash 14 + texte 15), vue e-mail (titre 20 + corps 15 + bouton 16), helper
-   `sectionHeader` (icône 12 + libellé 11 rounded).
-2. **Site gardé FIXE** — icône héros `envelope.circle.fill` 64pt (l.268) : commentaire
-   d'exception (glyphe décoratif héros, parité 84i/74i).
-3. **VoiceOver** —
-   - `sectionHeader` helper : `.accessibilityAddTraits(.isHeader)`.
-   - Bloc héros e-mail : `.accessibilityElement(children: .combine)`.
+## Corrections
 
-### Contraintes
-- 0 logique métier modifiée, 0 test neuf (swap présentation + traits déclaratifs).
-- `requiredPhrase` FR hardcodée : **NON touchée** (différé i18n/backend, cf. analyse).
+1. **Dynamic Type** : 19 sites `.font(.system(size:))` → `MeeshyFont.relative(size, weight:, design:)` (weight/design préservés, dont `.monospaced`/`.rounded`).
+   - **1 figé justifié & commenté** : héros `envelope.circle.fill` 64pt (décoratif ≥40pt, doctrine 84i/87i) + `.accessibilityHidden(true)`.
+2. **Prompt de confirmation** (fix bugs 2 & 3, source unique) :
+   - `defaultValue` `"Tapez **SUPPRIMER MON COMPTE** pour confirmer"` → `"Tapez %@ pour confirmer"` (format word-order-safe).
+   - `requiredPhrase` (source unique = littéral serveur) injecté via `String(format:)`, puis mis en gras monospacé déterministe via `AttributedString.range(of:)` (mime le champ de saisie monospacé → signale « tapez exactement ceci »). Plus d'astérisques, plus de dérive i18n possible.
+3. **Placeholder découplé** : `TextField(String(localized:"...placeholder"), …)` → `TextField(requiredPhrase, …)` (littéral non-traduisible = contrat serveur, supprime le risque de dérive).
+4. **a11y** : `.accessibilityHidden(true)` sur héros décoratif envelope.
 
-## Vérification
-Gate = CI `ios-tests.yml` (compile Xcode 26.1.x + simu 18.2). Pas de build Linux.
+## Contraintes
+- 1 fichier, 0 logique métier changée (le contrat `requiredPhrase == "SUPPRIMER MON COMPTE"` est préservé et renforcé comme source unique).
+- 0 clé i18n neuve (réutilise `account.delete.confirmation.prompt` avec un `defaultValue` corrigé ; retire l'usage de `...placeholder` qui n'était pas au catalogue).
+- 0 test neuf (swap présentation + fix rendu ; couverture structurelle CI).
+- Gate = CI `iOS Tests` (`ios-tests.yml`).
 
-## Merge
-Push branche → PR → CI verte → merge dans `main` → supprimer branche → MAJ pointeur
-`branch-tracking.md`.
-
-## Statut : ✅ appliqué
+## Après merge
+- Supprimer la branche mergée, resync `main`, mettre à jour `branch-tracking.md` (pointeur iOS 89i).
