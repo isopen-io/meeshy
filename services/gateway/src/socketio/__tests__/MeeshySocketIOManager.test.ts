@@ -1866,6 +1866,7 @@ describe('MeeshySocketIOManager', () => {
       });
       prisma.conversation.findUnique.mockResolvedValue(null);
       prisma.participant.findMany.mockResolvedValue([]);
+      prisma.participant.findFirst.mockResolvedValue({ id: 'agent-participant-1' });
 
       await manager.handleAgentResponse(baseAgentResponse);
 
@@ -1894,8 +1895,18 @@ describe('MeeshySocketIOManager', () => {
     });
 
     it('does not throw on unexpected error', async () => {
+      prisma.participant.findFirst.mockResolvedValue({ id: 'agent-participant-err' });
       mockMessagingServiceInstance.handleMessage.mockRejectedValue(new Error('unexpected'));
       await expect(manager.handleAgentResponse(baseAgentResponse)).resolves.not.toThrow();
+    });
+
+    it('returns early without calling handleMessage when the agent has no active participant', async () => {
+      prisma.participant.findFirst.mockResolvedValue(null);
+
+      await manager.handleAgentResponse(baseAgentResponse);
+
+      expect(mockMessagingServiceInstance.handleMessage).not.toHaveBeenCalled();
+      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.anything());
     });
   });
 
@@ -2319,6 +2330,7 @@ describe('MeeshySocketIOManager', () => {
       prisma.user.findMany.mockResolvedValue([]);
       prisma.conversation.findUnique.mockResolvedValue(null);
       prisma.participant.findMany.mockResolvedValue([]);
+      prisma.participant.findFirst.mockResolvedValue({ id: 'agent-1-participant' });
       await manager.handleAgentResponse({
         type: 'agent:response',
         conversationId: 'conv-123456789012',
@@ -2329,9 +2341,11 @@ describe('MeeshySocketIOManager', () => {
         messageSource: 'agent',
         metadata: { agentType: 'animator', roleConfidence: 0.9 },
       });
+      // Second arg is the resolved Participant.id, NOT the raw asUserId — see
+      // the DEPRECATED fallback note in MessagingService.handleMessage.
       expect(mockMessagingServiceInstance.handleMessage).toHaveBeenCalledWith(
         expect.objectContaining({ mentionedUserIds: undefined }),
-        'agent-1'
+        'agent-1-participant'
       );
     });
   });

@@ -359,13 +359,25 @@ export async function translationRoutes(fastify: FastifyInstance, _options: Reco
           anonymousDisplayName: authContext.isAnonymous ? authContext.displayName : undefined
         };
 
-        const senderId = authContext.userId;
+        // Résout le Participant.id du sender AVANT d'appeler handleMessage.
+        // MessagingService attend un Participant.id ; lui passer le userId brut
+        // ne fonctionnait que via son fallback DEPRECATED (query supplémentaire
+        // + log d'erreur à chaque requête de traduction non-bloquante).
+        (async () => {
+          const senderParticipantId = authContext.isAnonymous
+            ? authContext.participantId
+            : (await fastify.prisma.participant.findFirst({
+                where: { userId: authContext.userId, conversationId: resolvedConversationId, isActive: true },
+                select: { id: true }
+              }))?.id;
 
-        // DECLENCHEMENT NON-BLOQUANT - pas d'await !
-        messagingService.handleMessage(
-          messageRequest,
-          senderId
-        ).catch((error: any) => {
+          if (!senderParticipantId) {
+            logger.warn(`[Translation] No active participant for user in conversation ${resolvedConversationId}`);
+            return;
+          }
+
+          return messagingService.handleMessage(messageRequest, senderParticipantId);
+        })().catch((error: any) => {
           logger.error(`[Translation] Async message processing error: ${error.message}`);
         });
 

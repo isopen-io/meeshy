@@ -58,18 +58,17 @@ Total estimé pour un envoi texte simple (réseau MongoDB local) :
 
 **Risque** : aucun fonctionnel — le client REST/Socket attend déjà l'objet enrichi seulement pour l'affichage optimiste, qu'il a déjà construit lui-même côté iOS (`MessageRecord.insertOptimistic`).
 
-### Hotspot #2 — `messaging.participantLookup` 🔴
+### Hotspot #2 — `messaging.participantLookup` 🟢 RÉSOLU (2026-07-01)
 
-**Pourquoi** : 2-3 queries Prisma séquentielles (`findUnique` → `findFirst` fallback → `ensureParticipantFromMember`). Le legacy `userId-as-participantId` fallback fait un `console.error` deprecated mais reste en place pour compat.
+**Pourquoi (historique)** : 2-3 queries Prisma séquentielles (`findUnique` → `findFirst` fallback → `ensureParticipantFromMember`). Le legacy `userId-as-participantId` fallback fait un `console.error` deprecated mais restait en place pour compat.
 
-**Mesure attendue** : 20-60 ms typique. Peut grimper si auto-création.
+**Audit (2026-07-01)** : le fallback DEPRECATED n'était pas du poids mort — il était déclenché sur CHAQUE requête par deux callers internes qui passaient un `User.id` là où `MessagingService.handleMessage` attend un `Participant.id` :
+- `routes/translation-non-blocking.ts` (CAS 2 — nouveau message via `POST /translate`)
+- `socketio/MeeshySocketIOManager.ts#handleAgentResponse` (réponses des agents ZMQ impersonator/animator/orchestrator)
 
-**Origine** : code de migration ConversationMember → Participant qui se déclenche encore en production pour les conversations anciennes.
+**Fix appliqué** : les deux callers résolvent maintenant leur `Participant.id` via un `participant.findFirst({ userId, conversationId, isActive: true })` (même pattern que `POST /conversations/:id/messages` et que `handleAgentReaction`, déjà correct) AVANT d'appeler `handleMessage`. Le fallback DEPRECATED dans `MessagingService` reste en place pour compat mais n'est plus jamais exercé sur ces deux chemins — donc plus de query supplémentaire, plus de log d'erreur en boucle. Root-cause fix, pas de cache/TTL introduit (évite tout risque de staleness sur `isActive`).
 
-**Pistes de fix** :
-1. **Memoization in-memory** : un cache `Map<(participantId, conversationId), isActive>` avec TTL court (30s). Invalidé sur `participant:left`.
-2. **Suppression du legacy fallback** : forcer le caller à passer le bon `Participant.id` partout. Le `console.error('DEPRECATED')` peut être promu en erreur après audit des callsites.
-3. **Single combined query** : remplacer findUnique + findFirst par un seul `findFirst` qui couvre les deux cas.
+Tests : `translation-non-blocking-participant.test.ts` (3 cas) + `MeeshySocketIOManager.test.ts` (mis à jour + 1 cas ajouté). Suite gateway complète : 317/317 suites vertes.
 
 ### Hotspot #3 — `messaging.mentionsAndNotifications` 🔴
 
