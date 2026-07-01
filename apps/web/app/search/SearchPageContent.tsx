@@ -39,6 +39,7 @@ import { authManager } from '@/services/auth-manager.service';
 import { OnlineIndicator } from '@/components/ui/online-indicator';
 import { getUserStatus } from '@/lib/user-status';
 import { getUserInitials } from '@/lib/avatar-utils';
+import { getUserDisplayName as resolveDisplayName } from '@/utils/user-display-name';
 import { ConversationDropdown } from '@/components/contacts/ConversationDropdown';
 import { useUser } from '@/stores';
 import type { ConversationType, Community as BaseCommunity } from '@meeshy/shared/types';
@@ -220,8 +221,9 @@ export function SearchPageContent() {
   };
 
   const getUserDisplayName = (user: User): string => {
-    if (user.displayName) return user.displayName;
-    return `${user.firstName} ${user.lastName}`.trim() || user.username;
+    // Délègue à la source unique `utils/user-display-name` (displayName >
+    // firstName+lastName > username, trim) — pas de réimplémentation locale.
+    return resolveDisplayName(user, user.username);
   };
 
   // Envoyer une demande d'ami
