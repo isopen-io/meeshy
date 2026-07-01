@@ -10,7 +10,6 @@ import type { Conversation, SocketIOUser as User } from '@meeshy/shared/types';
 import { useConversationPreference, useConversationPreferencesActions } from '@/stores/conversation-preferences-store';
 import { getTagColor } from '@/utils/tag-colors';
 import { toast } from 'sonner';
-import { copyToClipboard } from '@/lib/clipboard';
 import { formatConversationDate } from '@/utils/date-format';
 import { ParticipantPresenceIndicator } from './ParticipantPresenceIndicator';
 import { ConversationItemActions } from './ConversationItemActions';
