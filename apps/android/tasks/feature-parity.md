@@ -807,8 +807,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `RemoteAnswer` (offer/ice-candidate inert), `call:ended` reason=`missed`→`RingTimeout` else
       `RemoteHangUp`, `call:missed`→`RingTimeout`, `call:error`→`ConnectionFailed(msg)`,
       `call:already-answered`→`RemoteHangUp`; `call:media-toggled` + malformed/unknown frames → `null`
-      (inert, never crashes). +22 behavioural tests. VM/socket subscription wiring + outbound emit table
-      still pending.
+      (inert, never crashes). +22 behavioural tests. **Socket subscription + outbound emit table landed**
+      (slice `call-signal-manager`): `:sdk-core` `CallSignalManager` (mirrors `SocialSocketManager`/
+      `MessageSocketManager`) — `attach()` listens to all 8 inbound `call:*` frames, routes each through
+      `CallSignalMapper`, and republishes the mapped `CallEvent` on a hot `SharedFlow<CallEvent> events`
+      the `CallViewModel` will fold; a non-JSONObject arg / malformed / inert frame emits nothing.
+      Outbound fire-and-forget emit table at iOS-exact payload keys: `emitJoin`/`emitLeave`/`emitEnd`
+      (`{callId}`), `emitToggleAudio`/`emitToggleVideo` (`{callId, enabled}`), `emitSignal`
+      (`{callId, signal}`). +18 behavioural tests. **Pending:** fold `events` into `CallViewModel` in
+      `viewModelScope` (needs the call-id lifecycle from an `initiate`-ACK slice), the ACK-based
+      `call:initiate` + WebRTC-plumbing emits (`request-ice-servers`/`heartbeat`/`quality-report`/
+      `reconnecting`/`reconnected`), and the app-level `attach()` lifecycle caller.
 
 ## I. Communities
 - [ ] Community creation (name, `mshy_` identifier, description, emoji, privacy, initial members)
