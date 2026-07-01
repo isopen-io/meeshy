@@ -62,7 +62,7 @@ struct AffiliateView: View {
                     .font(MeeshyFont.relative(22))
                     .foregroundColor(Color(hex: accentColor))
             }
-            .accessibilityLabel(String(localized: "affiliate.create.button", defaultValue: "Creer le lien", bundle: .main))
+            .accessibilityLabel(String(localized: "affiliate.create.title", defaultValue: "Nouveau lien", bundle: .main))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -124,6 +124,7 @@ struct AffiliateView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 14)
+        .accessibilityElement(children: .combine)
         .background(
             RoundedRectangle(cornerRadius: 14)
                 .fill(theme.surfaceGradient(tint: color))
@@ -178,7 +179,9 @@ struct AffiliateView: View {
 
     private var emptyTokensState: some View {
         VStack(spacing: 12) {
-            // Héros décoratif 36pt : le libellé adjacent porte le sens → gardé figé + masqué de VoiceOver (doctrine 74i/86i).
+            // Héros décoratif ≥36pt : gardé figé (doctrine 74i/86i/89i) ; le libellé adjacent
+            // porte le sens → laissé fixe et masqué de VoiceOver plutôt que de scaler et
+            // déséquilibrer l'état vide.
             Image(systemName: "link")
                 .font(.system(size: 36))
                 .foregroundColor(Color(hex: accentColor).opacity(0.4))
@@ -223,6 +226,7 @@ struct AffiliateView: View {
                         .foregroundColor(MeeshyColors.success)
                 }
             }
+            .accessibilityElement(children: .combine)
 
             Spacer()
 
@@ -236,7 +240,7 @@ struct AffiliateView: View {
                     .font(MeeshyFont.relative(14, weight: .medium))
                     .foregroundColor(Color(hex: accentColor))
             }
-            .accessibilityLabel(String(localized: "common.copy", defaultValue: "Copy", bundle: .main))
+            .accessibilityLabel(String(localized: "common.copyLink", defaultValue: "Copier le lien", bundle: .main))
 
             // Partager
             Button {
@@ -260,7 +264,7 @@ struct AffiliateView: View {
                     .font(MeeshyFont.relative(16))
                     .foregroundColor(MeeshyColors.success)
             }
-            .accessibilityLabel(String(localized: "common.share", defaultValue: "Share", bundle: .main))
+            .accessibilityLabel(String(localized: "common.share", defaultValue: "Partager", bundle: .main))
 
             Button {
                 Task { await viewModel.deleteToken(token) }

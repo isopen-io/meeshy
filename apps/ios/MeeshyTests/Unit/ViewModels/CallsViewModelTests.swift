@@ -100,7 +100,11 @@ final class CallsViewModelTests: XCTestCase {
 
     // MARK: - setFilter
 
-    func test_setFilter_updatesFilterAndClearsCurrentList() async {
+    func test_setFilter_updatesFilterWithoutFlashingListEmpty() async {
+        // Cache-first contract (CLAUDE.md "No spinner when cache has data"):
+        // switching filters must not blank the list before the new filter's
+        // cache/network result is applied. Regression test for the bug where
+        // `setFilter` synchronously set `calls = []` ahead of the async reload.
         let (sut, service) = makeSUT()
         service.historyResult = .success(Self.page([Self.makeRecord(id: "c1")]))
         await sut.loadCalls()
@@ -109,7 +113,7 @@ final class CallsViewModelTests: XCTestCase {
         sut.setFilter(.missed)
 
         XCTAssertEqual(sut.filter, .missed)
-        XCTAssertTrue(sut.calls.isEmpty)
+        XCTAssertFalse(sut.calls.isEmpty)
     }
 
     func test_setFilter_sameValue_isNoOp() async {
