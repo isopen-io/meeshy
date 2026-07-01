@@ -715,10 +715,12 @@ export default async function callRoutes(fastify: FastifyInstance) {
 
       logger.info('📞 REST: Leaving call', { callId, participantId, userId });
 
+      let call: Awaited<ReturnType<typeof callService.getCallSession>> | undefined;
+
       // Verify user is leaving their own participation or has moderator rights
       if (participantId !== userId) {
         // Check if user is moderator
-        const call = await callService.getCallSession(callId);
+        call = await callService.getCallSession(callId);
         const membership = await prisma.participant.findFirst({
           where: {
             conversationId: call.conversationId,
@@ -735,7 +737,27 @@ export default async function callRoutes(fastify: FastifyInstance) {
         }
       }
 
-      const leaveParticipantId = authRequest.authContext.participantId || participantId;
+      // `authContext.participantId` is populated only for anonymous sessions
+      // (see middleware/auth.ts) and is trustworthy ONLY when leaving one's
+      // OWN slot — it is the CALLER's conversation Participant.id. Registered
+      // users never populate it, and a moderator removing someone else must
+      // NEVER fall back to it here: `CallParticipant.participantId` must be
+      // the TARGET's Participant.id, or the moderator's own participation
+      // gets marked as "left" instead of the target's (kick silently no-ops
+      // or ends the wrong side of the call). Resolve the target's real
+      // Participant.id from their userId whenever we can't trust the shortcut.
+      let leaveParticipantId: string;
+      if (participantId === userId && authRequest.authContext.participantId) {
+        leaveParticipantId = authRequest.authContext.participantId;
+      } else {
+        call = call ?? await callService.getCallSession(callId);
+        const targetParticipant = await prisma.participant.findFirst({
+          where: { conversationId: call.conversationId, userId: participantId, isActive: true },
+          select: { id: true }
+        });
+        leaveParticipantId = targetParticipant?.id ?? participantId;
+      }
+
       const callSession = await callService.leaveCall({
         callId,
         userId: participantId,

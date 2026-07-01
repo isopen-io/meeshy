@@ -1890,6 +1890,25 @@ final class VoIPFreshnessSourceGuardTests: XCTestCase {
         )
     }
 
+    func test_freshness_guardsOnRingingState_beforeEndingCall() throws {
+        let source = try callManagerSource()
+        guard let body = freshnessBody(in: source) else {
+            XCTFail("checkVoIPCallFreshness not found"); return
+        }
+        // Regression: activeCallUUID alone is unchanged across ringing→connecting→
+        // connected (only cleared in endCallInternal), so it cannot distinguish "user
+        // hasn't answered yet" from "user just answered while this REST check — up to
+        // voipFreshnessTimeoutSeconds — was still in flight". A stale/racy terminal
+        // response must never tear down a call the user is actively connecting/on.
+        let occurrences = body.components(separatedBy: "activeCallUUID == uuid, case .ringing = callState").count - 1
+        XCTAssertEqual(
+            occurrences, 2,
+            "Bug D follow-up: BOTH the 404 branch and the terminal-status branch must guard " +
+            "on `case .ringing = callState` in addition to activeCallUUID, or an answered call " +
+            "racing a slow freshness check gets killed out from under the user"
+        )
+    }
+
     func test_freshness_uses_configuredTimeout() throws {
         let source = try callManagerSource()
         guard let body = freshnessBody(in: source) else {
