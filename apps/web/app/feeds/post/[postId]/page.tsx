@@ -33,6 +33,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useAuthStore } from '@/stores/auth-store';
 import { postsService, recordAnonymousView } from '@/services/posts.service';
 import { getOrCreateWebSessionKey } from '@/lib/anonymous-session';
+import { copyToClipboard } from '@/lib/clipboard';
 
 /**
  * Post detail page (v1 canonical path).
@@ -140,13 +141,12 @@ export default function PostDetailPage() {
   const isAuthor = post.authorId === currentUser?.id;
 
   const handleShare = async () => {
-    try {
-      await navigator.clipboard.writeText(`${window.location.origin}/feeds/post/${post.id}`);
+    const { success } = await copyToClipboard(`${window.location.origin}/feeds/post/${post.id}`);
+    if (success) {
       shareMutation.mutate({ postId: post.id });
       showToast('Link copied!', 'success');
-    } catch {
-      /* clipboard denied / unavailable — silent */
     }
+    /* else: clipboard denied / unavailable — silent */
   };
 
   const handleDeletePost = () => {

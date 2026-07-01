@@ -36,6 +36,7 @@ import { TusUploadService } from '@/services/tusUploadService';
 import type { MobileTranscription } from '@/services/posts.service';
 import type { Post } from '@meeshy/shared/types/post';
 import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
+import { copyToClipboard } from '@/lib/clipboard';
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
@@ -370,17 +371,17 @@ export function PostsFeedScreen() {
 
   const handleShare = useCallback(
     async (postId: string) => {
-      try {
-        const post = posts.find((p) => p.id === postId);
-        const url =
-          post?.type === 'REEL'
-            ? `${window.location.origin}/reel/${postId}`
-            : `${window.location.origin}/feeds/post/${postId}`;
+      const post = posts.find((p) => p.id === postId);
+      const url =
+        post?.type === 'REEL'
+          ? `${window.location.origin}/reel/${postId}`
+          : `${window.location.origin}/feeds/post/${postId}`;
 
-        await navigator.clipboard.writeText(url);
+      const { success } = await copyToClipboard(url);
+      if (success) {
         shareMutation.mutate({ postId });
         showToast(t('toast.linkCopied', 'Link copied!'), 'success');
-      } catch {
+      } else {
         showToast(t('toast.error', 'Error'), 'error', t('toast.linkCopyError', "Couldn't copy the link."));
       }
     },
