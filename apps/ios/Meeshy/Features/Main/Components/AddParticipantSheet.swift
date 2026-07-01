@@ -164,7 +164,7 @@ struct AddParticipantSheet: View {
             if let error = errorMessage {
                 Text(error)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(Color(hex: "FF6B6B"))
+                    .foregroundColor(MeeshyColors.error)
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
             }
