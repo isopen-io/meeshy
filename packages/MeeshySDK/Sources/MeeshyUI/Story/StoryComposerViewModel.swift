@@ -9,8 +9,6 @@ import PencilKit
 @MainActor
 public final class StoryComposerViewModel: StoryComposerProviding, ObservableObject {
 
-    // MARK: - Source Language Resolution (Prisme Linguistique)
-
     // MARK: - Slides
 
     @Published var slides: [StorySlide] = [StorySlide()]
@@ -180,8 +178,6 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     @Published var selectedFilter: String?
     @Published var filterIntensity: Double = 1.0
 
-    // MARK: - Slide Duration
-
     // MARK: - Canvas Viewport
 
     @Published var canvasScale: CGFloat = 1.0
@@ -197,33 +193,14 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     @Published var errorMessage: String?
     @Published var showDraftAlert: Bool = false
 
-    // MARK: - Limits
-
-    // MARK: - Slide Management
-
-    // MARK: - Element Management
-
-    // MARK: - Background toggle
-
-    // MARK: - Media Reorder
-
     // MARK: - Z-Order
 
     var zIndexMap: [String: Int] = [:]
     var nextZIndex: Int = 1
 
-    // MARK: - Phase 3 real implementation
-
-    // MARK: - Tool Actions
-
     // MARK: - Memory Pressure & Cleanup
 
     var memoryObserver: Any?
-
-    // MARK: - Slide Image Management
-
-    // MARK: - Reset
-    // Note: Draft persistence is handled by StoryComposerView via StoryDraftStore — not by the ViewModel.
 
     // MARK: - Repost Initializer (Patch B.6)
 

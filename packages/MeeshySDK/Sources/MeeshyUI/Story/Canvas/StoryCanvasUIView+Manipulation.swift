@@ -11,6 +11,12 @@ import MeeshySDK
 // MARK: - StoryCanvasUIView + Manipulation
 
 extension StoryCanvasUIView {
+    /// Recalcule `currentManipulationLayer` à partir du contenu de la slide.
+    /// Textes et stickers comptent comme foreground (cohérent avec le modèle
+    /// de couches : tout ce qui n'est pas un bg media bloque la manipulation
+    /// du bg). N'émet via `onManipulationLayerChanged` que si la valeur a
+    /// effectivement changé — pour les re-emissions « défensives »
+    /// (bootstrap, resync SwiftUI), utiliser `emitCurrentManipulationLayer()`.
     func updateManipulationLayer() {
         let new = Self.resolveManipulationLayer(for: slide.effects)
         guard new != currentManipulationLayer else { return }

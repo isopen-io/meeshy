@@ -612,12 +612,6 @@ public final class StoryCanvasUIView: UIView {
         fatalError("StoryCanvasUIView does not support NSCoder")
     }
 
-    // MARK: - Layout
-
-    // MARK: - Mode switching
-
-    // MARK: - Reader audio transport (Sprint 4)
-
     // MARK: - Rendering
 
     /// `true` while the story is paused via the viewer-level long-press
@@ -626,8 +620,6 @@ public final class StoryCanvasUIView: UIView {
     /// stops as a unit (the « long-press = stop comme une vidéo »
     /// requirement).
     var isPlaybackPaused: Bool = false
-
-    // MARK: - Playback (CADisplayLink)
 
     // MARK: - Playback health (unified timeline)
 
@@ -655,34 +647,11 @@ public final class StoryCanvasUIView: UIView {
 
     var lastEditBackdropTimestamp: CFTimeInterval = 0
 
-    // MARK: - Gesture wiring
-
     // MARK: - Snap guides
 
     nonisolated static let snapTargets: [Double] = [0.18, 0.25, 0.5, 0.75, 0.82]
     nonisolated static let snapTolerance: Double = 0.02
 
     var snapGuideLayers: [CAShapeLayer] = []
-
-    // MARK: - Lightweight gesture update
-
-    /// During an active gesture (pan/pinch/rotate), update only the manipulated
-    /// item's CALayer transform instead of rebuilding all layers. This keeps
-    /// drag/resize fluid even with many layers on canvas.
-
-    // MARK: - Hit testing
-
-    // MARK: - Manipulation layer
-
-    /// Recalcule `currentManipulationLayer` à partir du contenu de la slide.
-    /// Textes et stickers comptent comme foreground (cohérent avec le modèle
-    /// de couches : tout ce qui n'est pas un bg media bloque la manipulation
-    /// du bg). N'émet via `onManipulationLayerChanged` que si la valeur a
-    /// effectivement changé — pour les re-emissions « défensives »
-    /// (bootstrap, resync SwiftUI), utiliser `emitCurrentManipulationLayer()`.
-
-    // MARK: - Slide mutation helpers
-
-    // MARK: - Item commands (used by context menu + accessibility)
 
 }

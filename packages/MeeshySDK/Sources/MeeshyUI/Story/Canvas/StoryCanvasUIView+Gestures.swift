@@ -331,6 +331,9 @@ extension StoryCanvasUIView {
         return line
     }
 
+    /// During an active gesture (pan/pinch/rotate), update only the manipulated
+    /// item's CALayer transform instead of rebuilding all layers. This keeps
+    /// drag/resize fluid even with many layers on canvas.
     func updateManipulatedItemLayer() {
         guard let id = manipulatedItemId else { return }
         let bounds = self.bounds

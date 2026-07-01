@@ -147,6 +147,8 @@ extension StoryComposerView {
         onDismiss()
     }
 
+    // DEPRECATED: Replaced by StoryMediaLoader.shared.videoThumbnail(url:) — async, cached, off main thread.
+    // Kept for backward compatibility with external callers.
     static func generateVideoThumbnail(url: URL) -> UIImage? {
         let asset = AVURLAsset(url: url)
         let generator = AVAssetImageGenerator(asset: asset)

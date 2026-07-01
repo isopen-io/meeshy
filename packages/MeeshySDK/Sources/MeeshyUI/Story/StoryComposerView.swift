@@ -230,22 +230,4 @@ public struct StoryComposerView: View {
     static let composerBandMinHeight: CGFloat = 160
     static let composerBandMaxHeight: CGFloat = 540
 
-    // MARK: - Timeline Section
-
-    // MARK: - Helpers
-
-    // MARK: - Sync / Restore
-
-    // MARK: - Media Loading
-
-    // MARK: - Publication
-
-    // MARK: - Dismiss
-
-    // MARK: - Draft Persistence
-
-    // MARK: - Video Thumbnail
-    // DEPRECATED: Replaced by StoryMediaLoader.shared.videoThumbnail(url:) — async, cached, off main thread.
-    // Kept for backward compatibility with external callers.
-
 }
