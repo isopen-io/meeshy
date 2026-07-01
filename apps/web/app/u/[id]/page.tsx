@@ -22,6 +22,7 @@ import { useUser } from '@/stores';
 import { useSocketIOMessaging } from '@/hooks/use-socketio-messaging';
 import { OnlineIndicator } from '@/components/ui/online-indicator';
 import { getUserStatus } from '@/lib/user-status';
+import { getUserDisplayName as resolveDisplayName } from '@/utils/user-display-name';
 import { formatPresenceLabel, presenceColorClass } from '@/utils/presence-format';
 import { buildApiUrl } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
@@ -248,13 +249,9 @@ export default function ProfilePage({ params }: ProfilePageProps) {
   };
 
   const getUserDisplayName = (userData: User): string => {
-    if (userData.displayName) return userData.displayName;
-    
-    const firstName = userData.firstName || '';
-    const lastName = userData.lastName || '';
-    const fullName = `${firstName} ${lastName}`.trim();
-    
-    return fullName || userData.username || 'User';
+    // Délègue à la source unique `utils/user-display-name` (displayName >
+    // firstName+lastName > username, trim) — pas de réimplémentation locale.
+    return resolveDisplayName(userData, userData.username || 'User');
   };
 
   const getUserUsername = (userData: User): string => {

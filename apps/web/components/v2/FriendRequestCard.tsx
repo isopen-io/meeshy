@@ -8,6 +8,7 @@ import { Button } from './Button';
 import { Check, X, Clock, RotateCcw } from 'lucide-react';
 import type { FriendRequest } from '@/types/contacts';
 import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
+import { getUserDisplayName as resolveDisplayName } from '@/utils/user-display-name';
 
 export type FriendRequestAction = 'accept' | 'reject' | 'cancel' | 'resend';
 
@@ -26,10 +27,9 @@ function getOtherUser(request: FriendRequest, currentUserId?: string) {
 }
 
 function getUserDisplayName(user?: { displayName?: string; firstName?: string; lastName?: string; username?: string }) {
-  if (!user) return '?';
-  if (user.displayName) return user.displayName;
-  const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
-  return fullName || user.username || '?';
+  // Délègue à la source unique `utils/user-display-name` (displayName >
+  // firstName+lastName > username, trim, null-safe) — pas de réimplémentation locale.
+  return resolveDisplayName(user, '?');
 }
 
 function formatRelativeDate(
