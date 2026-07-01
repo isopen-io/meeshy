@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { UserRoleEnum } from '@meeshy/shared/types';
+import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import {
   conversationParticipantSchema,
@@ -171,7 +172,7 @@ export function registerParticipantsRoutes(
         firstName: participant.user?.firstName ?? participant.displayName,
         lastName: participant.user?.lastName ?? '',
         displayName: participant.displayName,
-        avatar: participant.avatar ?? participant.user?.avatar ?? null,
+        avatar: resolveParticipantAvatar(participant),
         email: participant.user?.email ?? '',
         role: participant.user?.role ?? 'USER',
         conversationRole: participant.role,

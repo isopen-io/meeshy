@@ -1,5 +1,6 @@
 import XCTest
 import GRDB
+import Combine
 @testable import MeeshySDK
 
 final class OfflineQueueTests: XCTestCase {

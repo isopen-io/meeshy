@@ -2,7 +2,6 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { getUserInitials } from '@/lib/avatar-utils';
 import { ParticipantPresenceIndicator } from '@/components/conversations/conversation-item/ParticipantPresenceIndicator';
 import { UserPresenceLabel } from '@/components/presence/UserPresenceLabel';
 import { User } from '@/types';
@@ -66,7 +65,7 @@ const AffiliatesTab = React.memo<AffiliatesTabProps>(({
                   <Avatar className="h-12 w-12 sm:h-16 sm:w-16 border-2 border-white shadow-lg">
                     <AvatarImage src={relation.referredUser.avatar} alt={getUserDisplayName(relation.referredUser)} />
                     <AvatarFallback className="text-sm sm:text-lg font-bold">
-                      {getUserInitials(relation.referredUser)}
+                      {getUserDisplayName(relation.referredUser).slice(0, 2).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                   <ParticipantPresenceIndicator
