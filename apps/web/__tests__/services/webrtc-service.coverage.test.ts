@@ -94,6 +94,9 @@ class FakeRTCPeerConnection {
     forEach: jest.fn(),
   }));
   close = jest.fn();
+  setConfiguration = jest.fn((config: unknown) => {
+    this.config = config;
+  });
   constructor(config: unknown) {
     this.config = config;
   }
@@ -214,6 +217,27 @@ describe('setIceServers', () => {
     // createPeerConnection should use the stored servers
     const pc = service.createPeerConnection('p') as unknown as FakeRTCPeerConnection;
     expect(pc.config).toEqual({ iceServers: servers });
+  });
+
+  it('applies immediately via setConfiguration when TURN credentials arrive after the peer connection already exists', () => {
+    // Reproduces RC-1 (tasks/calls-fonctionnel-todo.md): a peer connection
+    // created before server TURN credentials resolve must not be stuck on
+    // STUN-only defaults for the rest of the call — a late/refreshed
+    // setIceServers() has to reach the live RTCPeerConnection.
+    const service = new WebRTCService();
+    const pc = service.createPeerConnection('p') as unknown as FakeRTCPeerConnection;
+    const servers: RTCIceServer[] = [
+      { urls: 'turn:example.com', username: 'u', credential: 'c' },
+    ];
+
+    service.setIceServers(servers);
+
+    expect(pc.setConfiguration).toHaveBeenCalledWith({ iceServers: servers });
+  });
+
+  it('does not throw when no peer connection has been created yet', () => {
+    const service = new WebRTCService();
+    expect(() => service.setIceServers([{ urls: 'stun:example.com' }])).not.toThrow();
   });
 });
 

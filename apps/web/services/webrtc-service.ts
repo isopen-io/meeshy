@@ -110,6 +110,14 @@ export class WebRTCService {
 
   setIceServers(iceServers: RTCIceServer[]): void {
     this.serverIceServers = iceServers;
+    // RC-1: TURN credentials can resolve/refresh AFTER createPeerConnection()
+    // already ran (e.g. socket ack racing local-stream setup). Without this,
+    // the live RTCPeerConnection keeps the STUN-only/stale servers it was
+    // constructed with for the rest of the call, and a symmetric-NAT peer can
+    // never gather a TURN relay candidate.
+    if (this.peerConnection) {
+      this.peerConnection.setConfiguration({ iceServers });
+    }
   }
 
   /**
