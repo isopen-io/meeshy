@@ -252,8 +252,10 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
               lastName: member.user.lastName,
               displayName: member.user.displayName,
               avatar: member.user.avatar,
-              isOnline: member.user.isOnline ?? false,
-              lastActiveAt: member.user.lastActiveAt ?? member.joinedAt
+              // Lien de partage consultable sans authentification : ne jamais
+              // divulguer la présence réelle des membres (joinedAt non sensible).
+              isOnline: false,
+              lastActiveAt: member.joinedAt
             }
           })),
           anonymousParticipants: shareLink.conversation.participants.filter(p => p.type === "anonymous").map(participant => ({

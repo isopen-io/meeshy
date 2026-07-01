@@ -18,6 +18,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 
+import { getInitials } from '@/utils/initials';
 import { useContactsV2, useFriendRequestsV2, useBlockedUsersV2 } from '@/hooks/v2';
 import type { ContactV2 } from '@/hooks/v2/use-contacts-v2';
 import { useUser } from '@/stores';
@@ -47,14 +48,6 @@ import {
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
 type TFn = (key: string, params?: Record<string, unknown>) => string;
-
-function getInitials(name: string): string {
-  const cleaned = name.replace(/^@/, '').trim();
-  const parts = cleaned.split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '?';
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
 
 function userDisplayName(u?: User | null): string {
   if (!u) return '';

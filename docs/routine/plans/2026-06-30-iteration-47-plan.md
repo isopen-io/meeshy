@@ -1,71 +1,61 @@
 # Iteration 47 — Plan d'implémentation (2026-06-30)
 
 ## Objectif
-Lot « Source unique de la résolution d'avatar participant (F24) ». Centraliser la règle
-*avatar local → avatar user → null* dans un helper pur partagé, remplacer les **10 sites
-canoniques** gateway iso-comportement, et **corriger le bug de cohérence `notSeenBy`**
-(`MessageReadStatusService.ts:868`, fallback `participant.avatar` manquant).
+Lot « Source unique du formatage de durée horloge (F25c) » : faire déléguer les 2 dernières
+réimplémentations inline web de `formatDuration` (`MessageComposer.tsx`, `VideoPlayer.tsx`) au
+canonique `formatClock` (via le wrapper `apps/web/utils/audio-formatters.ts` qui l'expose déjà
+sous le nom `formatDuration`). VideoPlayer byte-identique sur toute la plage ; MessageComposer
+byte-identique en usage réel, strictement plus correct aux bords.
 
-Fichiers cibles :
-- `packages/shared/utils/participant-helpers.ts` (nouveau) + `packages/shared/utils/index.ts`
-- `packages/shared/__tests__/utils/participant-helpers.test.ts` (nouveau, vitest)
-- `services/gateway/src/services/MessageReadStatusService.ts` (3 sites, dont fix 868)
-- `services/gateway/src/routes/conversations/{core,search,messages,participants}.ts` (7 sites)
-- `services/gateway/src/__tests__/unit/services/MessageReadStatusService.test.ts` (test RED 868)
+## Pré-requis runner (parité CI)
+- [x] `packages/shared && bun run build` (tsc) → `dist/` présent.
+- [x] Baselines vertes : shared vitest **1208/1208** ; web jest `VideoPlayer` **58/58**,
+      `audio-formatters` vert.
 
-## Étapes (TDD : RED → GREEN)
+## Étapes (délégation à une SSOT déjà testée — pas de nouveau RED shared)
 
-### Phase A — shared : helper pur + tests (RED→GREEN)
-- [ ] Écrire `participant-helpers.test.ts` (vitest) :
-      - `avatar` local présent → renvoie l'avatar local (même si `user.avatar` présent) ;
-      - `avatar` local absent (`null`/`undefined`), `user.avatar` présent → renvoie `user.avatar` ;
-      - les deux absents → `null` ; entrée `null`/`undefined` → `null` ;
-      - `user` à `null` → ne casse pas.
-- [ ] Implémenter `resolveParticipantAvatar` :
-      `(p?: { avatar?: string|null; user?: { avatar?: string|null }|null } | null) => p?.avatar ?? p?.user?.avatar ?? null`.
-- [ ] Exporter depuis `utils/index.ts` (`export * from './participant-helpers.js'`).
-- [ ] `bunx vitest run __tests__/utils/participant-helpers.test.ts` → vert.
+### Phase A — `apps/web/components/v2/MessageComposer.tsx`
+- [ ] Supprimer le `function formatDuration` inline (l.130-134) + commentaire éventuel.
+- [ ] Ajouter `import { formatDuration } from '@/utils/audio-formatters';` (call-sites l.274/545
+      inchangés).
+- [ ] `node_modules/.bin/jest __tests__/components/common/message-composer.test.tsx __tests__/components/message-composer/integration.test.tsx` → vert.
 
-### Phase B — gateway : test RED du bug notSeenBy
-- [ ] Ajouter dans `getMessageReadStatus` un cas : participant actif, sans curseur, ≠ sender,
-      `avatar:'local.jpg'`, `user:null` → `result.notSeenBy[0].avatarURL === 'local.jpg'`.
-      Doit ÉCHOUER sur le code actuel (renvoie `null`).
+### Phase B — `apps/web/components/v2/VideoPlayer.tsx`
+- [ ] Supprimer le `function formatDuration` inline (l.27-36) + commentaire.
+- [ ] Ajouter `import { formatDuration } from '@/utils/audio-formatters';` (call-sites l.253/314/366
+      inchangés).
+- [ ] `node_modules/.bin/jest __tests__/components/video/VideoPlayer.test.tsx` → **58/58** vert
+      (assertions `0:00`/`2:05`/`1:30`/`1:01:05` inchangées).
 
-### Phase C — gateway : implémentation (GREEN)
-- [ ] `import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';`
-      dans les 5 fichiers cibles.
-- [ ] Remplacer les 10 expressions canoniques `X.avatar ?? X.user?.avatar ?? null` par
-      `resolveParticipantAvatar(X)`. Inclut `notSeenBy:868` (le fallback local réapparaît).
-- [ ] `bun run test -- MessageReadStatusService` → 140/140 (139 existants + 1 nouveau) vert.
-
-### Phase D — Vérification & livraison
-- [ ] `cd packages/shared && bun run build` (dist à jour pour le build prod gateway).
-- [ ] Sanity gateway jest sur les suites routes touchées si elles existent.
-- [ ] Commit + push `claude/sharp-wozniak-4p9870` ; PR vers `main` ; CI verte ; merge.
+### Phase C — Vérification & livraison
+- [ ] `tsc --noEmit` web : aucun nouveau type error sur les 2 fichiers touchés.
+- [ ] Suite web jest ciblée (A+B) verte ; shared vitest **1208/1208** inchangé.
+- [ ] Commit + push `claude/sharp-wozniak-dx26dd` ; PR vers `main` ; CI verte (checks
+      code-relevant) ; **merge dans main** (squash).
 
 ## Hors périmètre (consigné dans l'analyse)
-F24b (CallEventsHandler/MeeshySocketIOManager — ordre/`||` divergents), F24c (web
-UserConversationsSection), F2 (staging), F10 (backfill), F23b (audit sémantique).
+F25a (email plus strict — changement de comportement), F25b (téléphone — façade), F24b (FR
+file-size), F2/F10/F21 (staging/backfill), gateway `formatDuration` abrégé FR (contrat distinct).
 
 ## Continuité
-Iter 48+ : **F24b** (migration des sites à sémantique divergente après décision produit sur
-l'ordre local/user et le traitement de `""`) ; puis F24c (web) ; F2/F10 dès fenêtre staging.
+Iter 48+ : **F25a** (email RFC 5322) après validation que la stricte ne casse aucun flux
+d'inscription/contact ; sinon **F25b** (façade téléphone) ou nouveau scout (avatar-color/initials,
+slug/url, groupBy/chunk). F2/F10/F21 dès qu'une fenêtre staging/backfill existe.
+
+## Incidents de merge (parallélisme multi-agents)
+- **Clobber iter-46** : un commit parallèle (`0f7e3312`, présence Lot 3/6) avait réintroduit le
+  `formatFileSize` local divergent dans `MessageComposer.tsx` (annulant iter-46). Conflit résolu
+  en **restaurant les deux délégations** (`formatFileSize`→shared, `formatDuration`→wrapper).
+- **Régression gateway pré-existante sur `main`** : la même Lot 3/6 a ajouté `presence-gate.ts`
+  (`getOptionalAuth` → `createUnifiedAuthMiddleware`) et l'a câblée dans `getUserById`, sans mettre
+  à jour le mock `auth` de `profile.test.ts` → **7 tests `Test gateway` en échec sur `main`**.
+  Fix drive-by **test-only** : ajout de `createUnifiedAuthMiddleware: jest.fn(() => async () => {})`
+  au mock. `profile.test.ts` **46/46** vert localement. Débloque la CI gateway de toute la routine.
 
 ## Statut (mis à jour en fin d'itération)
-- [x] Phase A — `resolveParticipantAvatar` (`participant?.avatar ?? participant?.user?.avatar ?? null`),
-      exporté via `utils/index.ts` → `@meeshy/shared`. vitest **6/6** (local d'abord, fallback user,
-      null final, null-safe entrée `null`/`undefined`, `user:null`).
-- [x] Phase B — test RED gateway : participant non-vu `avatar:'local.jpg'`/`user:null` →
-      `notSeenBy[0].avatarURL` attendu `'local.jpg'`. Échoue sur le code actuel (`null`).
-- [x] Phase C — 10 substitutions iso-comportement (`MessageReadStatusService` ×3 dont fix 868 ;
-      `core.ts`, `search.ts`, `participants.ts`, `messages.ts` ×5) par `resolveParticipantAvatar`.
-      gateway jest : `MessageReadStatusService` **140/140** (139 + 1 nouveau), `messages-routes`
-      **169/169**, `conversation-core` + `conversations-search-routes` + `participants` +
-      `message-sender-user-select` **192/192**. Aucune régression.
-- [x] Phase D — `packages/shared` dist rebuild (`dist/utils/participant-helpers.js`). Reste :
-      push `claude/sharp-wozniak-4p9870` + CI verte + merge `main`.
-
-## Résultat
-Bug de cohérence d'avatar `notSeenBy` corrigé (prouvé par test RED→GREEN) et 10 réécritures
-manuelles de la règle d'avatar unifiées sur une source pure unique. Sites à sémantique divergente
-(`||`, ordre inversé) consignés F24b/F24c pour audit produit dédié.
+- [x] Phase A — `MessageComposer.tsx` : `formatDuration` inline supprimé, import de
+      `@/utils/audio-formatters`. message-composer + integration verts.
+- [x] Phase B — `VideoPlayer.tsx` : `formatDuration` inline supprimé, import du wrapper.
+      `VideoPlayer.test.tsx` **58/58** (assertions `0:00`/`2:05`/`1:30`/`1:01:05` inchangées).
+- [x] Phase C — 4 suites web affectées **133/133** vertes ; `tsc --noEmit` web : **aucun**
+      type error sur les 2 fichiers touchés. Reste : push + PR + CI verte + merge dans main.

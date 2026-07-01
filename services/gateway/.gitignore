@@ -35,7 +35,7 @@ dev.db
 
 # Testing
 coverage/
-coverage-tmp/
+coverage-*/
 .coverage*/
 .nyc_output/
 

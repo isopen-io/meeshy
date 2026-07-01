@@ -1,8 +1,11 @@
 import { User } from '@/types';
+import { getUserDisplayName as resolveDisplayName } from '@/utils/user-display-name';
 
 export function getUserDisplayName(user: User | { firstName: string; lastName: string; username: string; displayName?: string }): string {
-  if ('displayName' in user && user.displayName) return user.displayName;
-  return `${user.firstName} ${user.lastName}`.trim() || user.username;
+  // Délègue à la source unique `utils/user-display-name` (même priorité
+  // displayName > firstName+lastName > username, avec trim) — pas de
+  // réimplémentation locale.
+  return resolveDisplayName(user, user.username);
 }
 
 export function formatLastSeen(user: User, t: (key: string, params?: unknown) => string): string {

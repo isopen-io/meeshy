@@ -213,15 +213,15 @@ Heuristic note: a `[~]` only means a similarly-named test file exists — it doe
 
 - [ ] `services/gateway/src/routes/uploads/tus-handler.ts`
 
-## routes/users  (1/8 have a test)
+## routes/users  (7/8 have a test)
 
-- [~] `services/gateway/src/routes/users/blocking.ts`
-- [ ] `services/gateway/src/routes/users/contact-change.ts`
-- [ ] `services/gateway/src/routes/users/devices.ts`
-- [ ] `services/gateway/src/routes/users/index.ts`
-- [ ] `services/gateway/src/routes/users/preferences.ts`
-- [ ] `services/gateway/src/routes/users/presence.ts`
-- [ ] `services/gateway/src/routes/users/profile.ts`
+- [x] `services/gateway/src/routes/users/blocking.ts`
+- [x] `services/gateway/src/routes/users/contact-change.ts`
+- [x] `services/gateway/src/routes/users/devices.ts`
+- [x] `services/gateway/src/routes/users/index.ts`
+- [x] `services/gateway/src/routes/users/preferences.ts`
+- [x] `services/gateway/src/routes/users/presence.ts`
+- [x] `services/gateway/src/routes/users/profile.ts`
 - [ ] `services/gateway/src/routes/users/types.ts`
 
 ## routes/voice  (0/4 have a test)

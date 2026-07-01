@@ -73,17 +73,11 @@ Le générique `NOTIFICATION` (sans `:action`) est inhabituel — quel sens vs `
 
 ---
 
-## 5. `CONVERSATION_CLOSED` vs `CONVERSATION_DELETED`
+## 5. `CONVERSATION_CLOSED` vs `CONVERSATION_DELETED` — ✅ Résolu (2026-06-30)
 
-**Problème** : `CONVERSATION_CLOSED` existe (`'conversation:closed'`), pas `CONVERSATION_DELETED`. La sémantique n'est pas documentée :
-- closed = read-only, history préservée ?
-- deleted = supprimée pour tous ?
-- Comment le client distingue archive perso vs delete global ?
-
-**Action proposée** :
-- Documenter la sémantique exacte de `CONVERSATION_CLOSED` dans le code
-- Si "delete" est un cas distinct → ajouter `CONVERSATION_DELETED`
-- Sinon → docstring sur le const pour clarifier
+Docstrings ajoutées sur les deux constantes dans `socketio-events.ts`, vérifiées contre le code (`routes/conversations/core.ts` / `delete-for-me.ts`) :
+- `CONVERSATION_CLOSED` : suppression **globale** par le créateur/un admin (`DELETE /conversations/:id`), `Conversation.isActive=false`, broadcast à `ROOMS.conversation` (tous les membres).
+- `CONVERSATION_DELETED` : "delete for me" **par utilisateur** (`DELETE /conversations/:id/delete-for-me`), broadcast uniquement à `ROOMS.user` du caller (ses autres devices), la conversation reste active pour les autres participants.
 
 ---
 

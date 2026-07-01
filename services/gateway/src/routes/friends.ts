@@ -102,9 +102,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
             firstName: true,
             lastName: true,
             displayName: true,
-            avatar: true,
-            isOnline: true,
-            lastActiveAt: true
+            avatar: true
           }
         },
         receiver: {
@@ -114,9 +112,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
             firstName: true,
             lastName: true,
             displayName: true,
-            avatar: true,
-            isOnline: true,
-            lastActiveAt: true
+            avatar: true
           }
         }
       } as const;
@@ -241,9 +237,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
                 firstName: true,
                 lastName: true,
                 displayName: true,
-                avatar: true,
-                isOnline: true,
-                lastActiveAt: true
+                avatar: true
               }
             }
           },
@@ -341,9 +335,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
                 firstName: true,
                 lastName: true,
                 displayName: true,
-                avatar: true,
-                isOnline: true,
-                lastActiveAt: true
+                avatar: true
               }
             }
           },
@@ -450,9 +442,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
             firstName: true,
             lastName: true,
             displayName: true,
-            avatar: true,
-            isOnline: true,
-            lastActiveAt: true
+            avatar: true
           }
         },
         receiver: {
@@ -462,9 +452,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
             firstName: true,
             lastName: true,
             displayName: true,
-            avatar: true,
-            isOnline: true,
-            lastActiveAt: true
+            avatar: true
           }
         }
       } as const;

@@ -177,28 +177,30 @@ export class MessageReadStatusService {
   /**
    * Batched variant for multiple participants in the same conversation.
    *
-   * Fires on the hottest path — `MessageHandler._updateUnreadCounts` calls this on
-   * EVERY `message:new` for every participant. All participants share an IDENTICAL
-   * count predicate (`conversationId`, `deletedAt: null`, `senderId ≠ <sender>`);
-   * the ONLY per-participant variance is the lower `createdAt` floor. N counts over
-   * the same ordered set is therefore N searches in one array — collapsed here into
+   * Fires on the hottest path — `_updateUnreadCounts` calls this on EVERY `message:new`
+   * for every recipient. Each participant's unread count shares the SAME shape — messages
+   * after their read floor that they did NOT send themselves — so the only per-participant
+   * variance is the `createdAt` floor and the "exclude my own messages" cut. Collapsed into
    * **1 cursor batch + 1 `message.findMany`** (index-backed by
-   * `[conversationId, deletedAt, createdAt]`) + N in-memory upper-bound binary
-   * searches. Output is byte-identical to the previous N parallel `message.count`.
+   * `[conversationId, deletedAt, createdAt]`) + in-memory upper-bound binary searches.
+   *
+   * Semantics match the canonical single-participant `getUnreadCount` and
+   * `getUnreadCountsForUser`: exclude **the participant's own** messages (`senderId ≠ p.id`),
+   * NOT the new message's sender. (The previous `senderId ≠ <message sender>` predicate
+   * under-reported — in a 1:1 it pushed 0 unread on every incoming message — and diverged
+   * from the authoritative `getUnreadCountsForUser`. See iter 46 / F23b.)
    *
    * Counting floor per participant: `cursor.lastReadAt → joinedAt → null` (no floor).
    * The `findMany` lower bound is the OLDEST floor across participants, so only the
    * messages any participant could count are fetched once; a `null` floor (never read,
-   * no `joinedAt`) drops the bound entirely — the same full set the old unbounded
-   * `count` scanned, but in a single round-trip instead of N.
+   * no `joinedAt`) drops the bound entirely.
    *
    * Returns a Map<participantId, unreadCount>. Accepts pre-resolved participant rows
    * (id + joinedAt) to avoid redundant participant lookups.
    */
   async getUnreadCountsForParticipants(
     participants: ReadonlyArray<{ id: string; joinedAt: Date | null }>,
-    conversationId: string,
-    senderId: string
+    conversationId: string
   ): Promise<Map<string, number>> {
     if (participants.length === 0) return new Map();
 
@@ -213,7 +215,7 @@ export class MessageReadStatusService {
       const cursorMap = new Map(cursors.map((c) => [c.participantId, c.lastReadAt]));
 
       // Per-participant counting floor (ms). `lastReadAt → joinedAt → null` — identical
-      // reduction to the previous `lastReadAt ?? p.joinedAt ?? null`.
+      // reduction to the single-participant `lastReadAt ?? p.joinedAt ?? null`.
       const floors = participants.map((p) => ({
         id: p.id,
         floorMs: ((cursorMap.get(p.id) ?? p.joinedAt)?.getTime() ?? null) as number | null,
@@ -226,38 +228,54 @@ export class MessageReadStatusService {
         ? null
         : Math.min(...floors.map((f) => f.floorMs as number));
 
-      // ONE query replaces N parallel counts. Same predicate as the old per-participant
-      // count (`senderId ≠ <sender>`); `orderBy createdAt asc` walks the index in order.
+      // ONE query for all participants. No `senderId` filter here — the "exclude my own
+      // messages" cut is per-participant, applied in memory below. `orderBy createdAt asc`
+      // walks the index in order, so per-sender buckets stay ascending.
       const rows = await this.prisma.message.findMany({
         where: {
           conversationId,
           deletedAt: null,
-          senderId: { not: senderId },
           ...(minFloorMs !== null ? { createdAt: { gt: new Date(minFloorMs) } } : {}),
         },
-        select: { createdAt: true },
+        select: { createdAt: true, senderId: true },
         orderBy: { createdAt: "asc" },
       });
-      // Ascending timestamps. JS sort is a defensive net (the DB already returns index
-      // order) so the binary search holds regardless of the source ordering.
-      const timestamps = rows.map((r) => r.createdAt.getTime()).sort((a, b) => a - b);
 
-      // unread(F) = count of timestamps strictly > F. Upper-bound binary search on the
-      // ascending array: first index where ts > F → `length - lo`. Strict `>` mirrors the
-      // old `createdAt: { gt: floor }` (a message at exactly the floor is not counted).
-      const countAbove = (floorMs: number | null): number => {
-        if (floorMs === null) return timestamps.length;
+      // All candidate timestamps (ascending) + per-sender buckets, so each participant's
+      // own messages can be subtracted. JS sort is a defensive net (the DB already returns
+      // index order) so the binary search holds regardless of source ordering.
+      const allTimestamps = rows.map((r) => r.createdAt.getTime()).sort((a, b) => a - b);
+      const bySender = new Map<string, number[]>();
+      for (const r of rows) {
+        const bucket = bySender.get(r.senderId);
+        if (bucket) bucket.push(r.createdAt.getTime());
+        else bySender.set(r.senderId, [r.createdAt.getTime()]);
+      }
+
+      // countAbove(ts, F) = number of timestamps strictly > F. Upper-bound binary search on
+      // an ascending array: first index where ts > F → `length - lo`. Strict `>` mirrors
+      // `createdAt: { gt: floor }` (a message at exactly the floor is not counted). `null`
+      // floor counts the whole array.
+      const countAbove = (sorted: number[], floorMs: number | null): number => {
+        if (floorMs === null) return sorted.length;
         let lo = 0;
-        let hi = timestamps.length;
+        let hi = sorted.length;
         while (lo < hi) {
           const mid = (lo + hi) >>> 1;
-          if (timestamps[mid] > floorMs) hi = mid;
+          if (sorted[mid] > floorMs) hi = mid;
           else lo = mid + 1;
         }
-        return timestamps.length - lo;
+        return sorted.length - lo;
       };
 
-      return new Map(floors.map((f) => [f.id, countAbove(f.floorMs)]));
+      // unread(p) = (all messages after p's floor) − (p's OWN messages after p's floor).
+      // Buckets share the ascending order of `rows`, so they're valid for the same search.
+      return new Map(
+        floors.map((f) => {
+          const own = bySender.get(f.id) ?? [];
+          return [f.id, countAbove(allTimestamps, f.floorMs) - countAbove(own, f.floorMs)];
+        })
+      );
     } catch (error) {
       logger.error("[MessageReadStatus] Error batch-computing unread counts", error);
       return new Map(participants.map((p) => [p.id, 0]));
