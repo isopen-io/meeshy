@@ -23,7 +23,6 @@ import {
   getConversationCreatedDate
 } from './conversation-utils';
 import { formatLastMessage } from './message-formatting';
-import { copyToClipboard } from '@/lib/clipboard';
 
 interface ConversationItemProps {
   conversation: Conversation;
