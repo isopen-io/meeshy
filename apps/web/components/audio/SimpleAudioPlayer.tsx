@@ -5,6 +5,7 @@ import { useI18n } from '@/hooks/use-i18n';
 
 import { Play, Pause, AlertTriangle, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { formatDuration } from '@/utils/audio-formatters';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
 
 // Hooks personnalisés
@@ -346,18 +347,6 @@ export const CompactAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
     mimeType: attachment.mimeType,
     isOwnMessage,
   });
-
-  const formatDuration = (seconds: number): string => {
-    if (!seconds || !isFinite(seconds)) return '0:00';
-    const hours = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
-
-    if (hours > 0) {
-      return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    }
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
 
   return (
     <div
