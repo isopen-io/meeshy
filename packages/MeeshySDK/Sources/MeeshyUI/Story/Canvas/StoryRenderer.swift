@@ -412,7 +412,17 @@ extension StoryRenderer {
                           thumbHash: slide.effects.thumbHash)
         }
         if let urlString = slide.mediaURL, !urlString.isEmpty {
-            return .image(postMediaId: slide.id, thumbHash: slide.effects.thumbHash)
+            // Legacy background (StorySlide.mediaURL, set only for pre-mediaObjects
+            // stories). Route the direct URL through the postMediaId field so
+            // `StoryBackgroundLayer.configure` resolves it via `directURLIfAny`
+            // (file:// / http(s)://) — the same path the isBackground image branch
+            // uses for composer file URLs. Passing `slide.id` fed a NON-media key
+            // to the resolver (`mediaList.first { $0.id == postId }`, keyed by
+            // FeedMedia.id), which never matched → legacy background rendered
+            // blank/black (WS5.4 fix a). The modern "unflagged media[0] as static
+            // background" case stays a documented deferred limitation (needs a
+            // product rule to avoid shadowing the solid-colour fallback).
+            return .image(postMediaId: urlString, thumbHash: slide.effects.thumbHash)
         }
         // Hex color from effects.background
         if let hex = slide.effects.background, let color = uiColor(fromHex: hex) {
