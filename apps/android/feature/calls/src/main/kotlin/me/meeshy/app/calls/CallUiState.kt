@@ -46,12 +46,20 @@ data class CallMedia(
 /**
  * The immutable inputs describing *who* and *what kind* of call this is. Fed in
  * from navigation (an outgoing call from chat) or an incoming-call signal.
+ *
+ * [conversationId] is the room an **outgoing** call is placed into — the payload
+ * of the ACK-based `call:initiate` that mints the real server id. [callId] is the
+ * id an **incoming** call already carries (from the offer/push that triggered
+ * navigation); an outgoing call leaves it blank and receives the minted id from
+ * the initiate ACK. Every outbound emit is keyed by whichever id is known.
  */
 data class CallConfig(
     val peerId: String,
     val peerName: String,
     val isVideo: Boolean,
     val isOutgoing: Boolean,
+    val conversationId: String = "",
+    val callId: String = "",
 ) {
     companion object {
         val EMPTY: CallConfig = CallConfig(peerId = "", peerName = "", isVideo = false, isOutgoing = false)

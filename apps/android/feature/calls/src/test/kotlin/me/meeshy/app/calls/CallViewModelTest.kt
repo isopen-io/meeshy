@@ -1,16 +1,53 @@
 package me.meeshy.app.calls
 
 import com.google.common.truth.Truth.assertThat
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.model.call.CallEndReason
 import me.meeshy.sdk.model.call.CallEvent
+import me.meeshy.sdk.model.call.CallInitiateAck
+import me.meeshy.sdk.model.call.CallInitiateResult
+import me.meeshy.sdk.socket.CallSignalManager
+import org.junit.After
+import org.junit.Before
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class CallViewModelTest {
 
-    private val outgoingVideo = CallConfig(peerId = "u1", peerName = "Alice", isVideo = true, isOutgoing = true)
-    private val incomingAudio = CallConfig(peerId = "u2", peerName = "Bob", isVideo = false, isOutgoing = false)
+    private val dispatcher = UnconfinedTestDispatcher()
+    private val events = MutableSharedFlow<CallEvent>(extraBufferCapacity = 64)
+    private val signalManager: CallSignalManager = mockk(relaxed = true)
 
-    private fun vm() = CallViewModel()
+    private val outgoingVideo =
+        CallConfig(peerId = "u1", peerName = "Alice", isVideo = true, isOutgoing = true, conversationId = "conv-1")
+    private val incomingAudio =
+        CallConfig(peerId = "u2", peerName = "Bob", isVideo = false, isOutgoing = false, callId = "call-9")
+
+    @Before
+    fun setUp() {
+        Dispatchers.setMain(dispatcher)
+        every { signalManager.events } returns events
+        coEvery { signalManager.emitInitiate(any(), any()) } returns
+            CallInitiateResult.Success(CallInitiateAck(callId = "call-1"))
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
+
+    private fun vm() = CallViewModel(signalManager)
 
     @Test
     fun `starts idle`() {
@@ -18,7 +55,7 @@ class CallViewModelTest {
     }
 
     @Test
-    fun `starting an outgoing call rings and carries the peer`() {
+    fun `starting an outgoing call rings and carries the peer`() = runTest {
         val vm = vm()
         vm.start(outgoingVideo)
 
@@ -38,7 +75,7 @@ class CallViewModelTest {
     }
 
     @Test
-    fun `start is inert once a call is in flight`() {
+    fun `start is inert once a call is in flight`() = runTest {
         val vm = vm()
         vm.start(outgoingVideo)
         vm.start(incomingAudio)
@@ -68,7 +105,7 @@ class CallViewModelTest {
     }
 
     @Test
-    fun `hanging up ends the call locally`() {
+    fun `hanging up ends the call locally`() = runTest {
         val vm = vm()
         vm.start(outgoingVideo)
         vm.hangUp()
@@ -79,7 +116,7 @@ class CallViewModelTest {
     }
 
     @Test
-    fun `outgoing call negotiates through to connected via signals`() {
+    fun `outgoing call negotiates through to connected via signals`() = runTest {
         val vm = vm()
         vm.start(outgoingVideo)
 
@@ -94,7 +131,7 @@ class CallViewModelTest {
     }
 
     @Test
-    fun `a remote hang-up ends the call`() {
+    fun `a remote hang-up ends the call`() = runTest {
         val vm = vm()
         vm.start(outgoingVideo)
         vm.onSignal(CallEvent.ParticipantJoined)
@@ -108,7 +145,7 @@ class CallViewModelTest {
     }
 
     @Test
-    fun `toggling mute flips the media intent`() {
+    fun `toggling mute flips the media intent`() = runTest {
         val vm = vm()
         vm.start(outgoingVideo)
         assertThat(vm.state.value.isMuted).isFalse()
@@ -121,7 +158,7 @@ class CallViewModelTest {
     }
 
     @Test
-    fun `a video call starts with the camera on and can be toggled off`() {
+    fun `a video call starts with the camera on and can be toggled off`() = runTest {
         val vm = vm()
         vm.start(outgoingVideo)
         assertThat(vm.state.value.isCameraOn).isTrue()
@@ -140,7 +177,7 @@ class CallViewModelTest {
     }
 
     @Test
-    fun `dismissing a terminated call settles back to idle`() {
+    fun `dismissing a terminated call settles back to idle`() = runTest {
         val vm = vm()
         vm.start(outgoingVideo)
         vm.hangUp()
@@ -151,7 +188,7 @@ class CallViewModelTest {
     }
 
     @Test
-    fun `starting again after a settled call is allowed`() {
+    fun `starting again after a settled call is allowed`() = runTest {
         val vm = vm()
         vm.start(outgoingVideo)
         vm.hangUp()
@@ -160,5 +197,154 @@ class CallViewModelTest {
         vm.start(incomingAudio)
         assertThat(vm.state.value.status).isEqualTo(CallStatus.INCOMING)
         assertThat(vm.state.value.peerName).isEqualTo("Bob")
+    }
+
+    // --- The VM-fold: outgoing initiate ------------------------------------
+
+    @Test
+    fun `starting an outgoing call emits initiate with the conversation and video type`() = runTest {
+        val vm = vm()
+        vm.start(outgoingVideo)
+
+        coVerify(exactly = 1) { signalManager.emitInitiate("conv-1", true) }
+    }
+
+    @Test
+    fun `an outgoing call rings immediately even before the ACK decides the id`() = runTest {
+        coEvery { signalManager.emitInitiate(any(), any()) } returns
+            CallInitiateResult.Success(CallInitiateAck(callId = "call-77"))
+
+        val vm = vm()
+        vm.start(outgoingVideo)
+
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.OUTGOING_RINGING)
+    }
+
+    @Test
+    fun `a server-rejected initiate ends the call as failed with the gateway message`() = runTest {
+        coEvery { signalManager.emitInitiate(any(), any()) } returns
+            CallInitiateResult.ServerError("Room full")
+
+        val vm = vm()
+        vm.start(outgoingVideo)
+
+        val s = vm.state.value
+        assertThat(s.status).isEqualTo(CallStatus.ENDED)
+        assertThat(s.endReason).isEqualTo(CallEndReason.Failed("Room full"))
+    }
+
+    @Test
+    fun `a timed-out initiate ends the call as failed`() = runTest {
+        coEvery { signalManager.emitInitiate(any(), any()) } returns CallInitiateResult.Timeout
+
+        val vm = vm()
+        vm.start(outgoingVideo)
+
+        val s = vm.state.value
+        assertThat(s.status).isEqualTo(CallStatus.ENDED)
+        assertThat(s.endReason).isInstanceOf(CallEndReason.Failed::class.java)
+    }
+
+    @Test
+    fun `a malformed initiate ACK ends the call as failed`() = runTest {
+        coEvery { signalManager.emitInitiate(any(), any()) } returns CallInitiateResult.Malformed
+
+        val vm = vm()
+        vm.start(outgoingVideo)
+
+        val s = vm.state.value
+        assertThat(s.status).isEqualTo(CallStatus.ENDED)
+        assertThat(s.endReason).isInstanceOf(CallEndReason.Failed::class.java)
+    }
+
+    @Test
+    fun `an incoming call does not emit initiate`() = runTest {
+        val vm = vm()
+        vm.start(incomingAudio)
+
+        coVerify(exactly = 0) { signalManager.emitInitiate(any(), any()) }
+    }
+
+    // --- The VM-fold: outbound emits keyed by the minted callId ------------
+
+    @Test
+    fun `hanging up an outgoing call ends it on the wire keyed by the minted id`() = runTest {
+        val vm = vm()
+        vm.start(outgoingVideo) // emitInitiate stubbed → mints "call-1"
+        vm.hangUp()
+
+        verify(exactly = 1) { signalManager.emitEnd("call-1") }
+    }
+
+    @Test
+    fun `accepting an incoming call joins the room keyed by the incoming id`() {
+        val vm = vm()
+        vm.start(incomingAudio) // callId comes from the incoming config
+        vm.accept()
+
+        verify(exactly = 1) { signalManager.emitJoin("call-9") }
+    }
+
+    @Test
+    fun `declining an incoming call ends it on the wire`() {
+        val vm = vm()
+        vm.start(incomingAudio)
+        vm.decline()
+
+        verify(exactly = 1) { signalManager.emitEnd("call-9") }
+    }
+
+    @Test
+    fun `muting signals the peer that audio is disabled keyed by the id`() {
+        val vm = vm()
+        vm.start(incomingAudio)
+        vm.toggleMute()
+
+        verify(exactly = 1) { signalManager.emitToggleAudio("call-9", enabled = false) }
+    }
+
+    @Test
+    fun `toggling the camera off signals the peer that video is disabled`() = runTest {
+        val vm = vm()
+        vm.start(outgoingVideo) // mints "call-1"
+        vm.toggleCamera()
+
+        verify(exactly = 1) { signalManager.emitToggleVideo("call-1", enabled = false) }
+    }
+
+    @Test
+    fun `no outbound emit fires while the call has no id yet`() {
+        val vm = vm()
+        // An incoming call whose id is not yet known (blank) must not emit.
+        vm.start(incomingAudio.copy(callId = ""))
+        vm.hangUp()
+
+        verify(exactly = 0) { signalManager.emitEnd(any()) }
+    }
+
+    // --- The VM-fold: signalling events folded from the manager ------------
+
+    @Test
+    fun `a remote hang-up folded from the signal manager ends the call`() = runTest {
+        val vm = vm()
+        vm.start(outgoingVideo)
+
+        events.emit(CallEvent.RemoteHangUp)
+
+        val s = vm.state.value
+        assertThat(s.status).isEqualTo(CallStatus.ENDED)
+        assertThat(s.endReason).isEqualTo(CallEndReason.Remote)
+    }
+
+    @Test
+    fun `a participant-joined event folded from the manager advances an outgoing call`() = runTest {
+        val vm = vm()
+        vm.start(outgoingVideo)
+
+        events.emit(CallEvent.ParticipantJoined)
+        events.emit(CallEvent.RemoteAnswer)
+        events.emit(CallEvent.MediaConnected)
+
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.CONNECTED)
     }
 }

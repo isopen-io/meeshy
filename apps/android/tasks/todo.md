@@ -4,30 +4,32 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Calls) — slice `call-initiate-ack` ✅
-The ACK-based `call:initiate` — mints the real server `callId` (+ mode / ICE servers / ttl) the
-outgoing-call VM will key every emit by. Parity with iOS `emitCallInitiate` (10s ACK budget).
-- `core:model`: pure `SocketIceServer` (+ `IceServerUrlsSerializer` normalising the gateway's
-  single-string-**or**-array `urls` → `List`), `CallInitiateAck`
-  (`callId`/`mode`/`iceServers`/`ttlSeconds`), sealed `CallInitiateResult`
-  (`Success`/`ServerError`/`Malformed`/`Timeout`), and the total `CallInitiateAckParser.parse(rawJson)`
-  — the single tested SSOT for the ACK wire contract (`success:true` + non-blank `callId` → `Success`;
-  else gateway error `error.message` → bare-string `error` → `"unknown error"`; undecodable → `Malformed`).
-- `:sdk-core`: `CallSignalManager.emitInitiate(conversationId, isVideo)` — suspend transport emitting
-  `{conversationId, type}`, awaiting the ACK in `withTimeoutOrNull(10_000)`, delegating the body to the
-  parser, mapping a missing/non-object ACK to `Timeout`.
-- +26 tests (`CallInitiateAckParserTest` 21, `CallSignalManagerTest` +5). Full `assembleDebug` +
+## This loop (Phase: Calls) — slice `call-viewmodel-signal-fold` ✅
+The VM-fold — turns the call screen into a live two-way socket endpoint by folding
+`CallSignalManager.events` into `CallViewModel`, placing outgoing calls via the ACK, and keying every
+outbound emit by the real `callId`.
+- `CallConfig` gains `conversationId` (outgoing `emitInitiate` target) + `callId` (id an incoming call
+  already carries); both default `""` so `:app`'s placeholder compiles unchanged.
+- `CallViewModel` `@Inject`s `CallSignalManager`: `init` collects `events` in `viewModelScope` and
+  reduces each mapped `CallEvent` through the unchanged FSM; outgoing `start` rings optimistically then
+  `emitInitiate` mints `callId` (`Success`) or settles `Ended(Failed)` (`ServerError`/`Timeout`/
+  `Malformed`, gateway message surfaced); accept→`emitJoin`, decline/hangUp→`emitEnd`, mute→
+  `emitToggleAudio`, camera→`emitToggleVideo`, all `emitIfIdentified`-guarded (inert while `callId` blank).
+- +14 tests (28 total in `CallViewModelTest`; all 14 prior preserved). Whole-project `assembleDebug` +
   `testDebugUnitTest` green (system Gradle `/opt/gradle`, wrapper 403s through proxy — see NOTES).
-  Diff = `apps/android` only.
+  Diff = `apps/android` only (3 code files).
 
 ### Next
-1. **VM-fold (highest value now):** fold `CallSignalManager.events` into `CallViewModel`
-   (`viewModelScope`), add a `startOutgoing` intent calling `emitInitiate` → store the minted `callId`
-   in `CallUiState` (Ringing on `Success`, error surface on `ServerError`/`Timeout`/`Malformed`), and
-   route accept/decline/hang-up/mute/camera intents to the outbound emits keyed by that `callId`.
-2. App-level `CallSignalManager.attach()` lifecycle caller; wire `CallHistoryScreen` into a Calls tab
-   (`:app`) once the app shell exposes one.
+1. **App-level `CallSignalManager.attach()` lifecycle caller** — an app-startup hook so inbound `events`
+   begin flowing (currently nothing calls `attach()`).
+2. A Calls-tab nav entry threading the real `conversationId` into the outgoing `CallConfig` + wiring
+   `CallHistoryScreen` (`:app`, own explicit run since it touches nav).
 3. Then the WebRTC / Telecom / FCM full-screen-intent plumbing.
+
+## Prior loop (Phase: Calls) — slice `call-initiate-ack` ✅
+The ACK-based `call:initiate` — mints the real server `callId` (+ mode / ICE servers / ttl). `core:model`
+`SocketIceServer`/`CallInitiateAck`/`CallInitiateResult`/`CallInitiateAckParser`; `:sdk-core`
+`CallSignalManager.emitInitiate(conversationId, isVideo)`. +26 tests. Diff = `apps/android` only.
 
 ## Prior loop (Phase: Calls) — slice `call-history-list` ✅
 The recent/missed-calls **list UI** (`:feature:calls`) over the cache-first journal — pure
