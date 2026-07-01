@@ -143,6 +143,7 @@ struct DataExportView: View {
                         .stroke(theme.border(tint: accentColor), lineWidth: 1)
                 )
         )
+        .accessibilityElement(children: .combine)
     }
 
     private var formatSection: some View {
@@ -207,6 +208,8 @@ struct DataExportView: View {
 
     private func toggleRow(title: String, icon: String, color: Color, isOn: Binding<Bool>) -> some View {
         HStack(spacing: 12) {
+            // Glyphe contraint dans un badge 28×28 fixe : taille figée (doctrine 74i/86i),
+            // déjà masqué à VoiceOver.
             Image(systemName: icon)
                 // Glyphe figé : badge de dimension fixe 28×28 (doctrine 86i — le scaling
                 // Dynamic Type déborderait/tronquerait le glyphe hors du cadre fixe).
@@ -251,6 +254,7 @@ struct DataExportView: View {
             RoundedRectangle(cornerRadius: 12)
                 .fill(MeeshyColors.error.opacity(0.1))
         )
+        .accessibilityElement(children: .combine)
     }
 
     private var exportButton: some View {
@@ -300,6 +304,7 @@ struct DataExportView: View {
                 .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
                 .foregroundColor(color)
                 .tracking(1.2)
+                .accessibilityAddTraits(.isHeader)
         }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
