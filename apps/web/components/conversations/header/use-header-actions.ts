@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { AttachmentService } from '@/services/attachmentService';
 import { conversationsService } from '@/services/conversations.service';
+import { copyToClipboard } from '@/lib/clipboard';
 
 export function useHeaderActions(conversationId: string, t: (key: string, fallback?: string) => string) {
   const [isImageUploadDialogOpen, setIsImageUploadDialogOpen] = useState(false);
@@ -47,8 +48,12 @@ export function useHeaderActions(conversationId: string, t: (key: string, fallba
           text: fullMessage,
         });
       } else {
-        await navigator.clipboard.writeText(fullMessage);
-        toast.success(t('conversationHeader.linkCopied', 'Link copied!'));
+        const { success } = await copyToClipboard(fullMessage);
+        toast[success ? 'success' : 'error'](
+          success
+            ? t('conversationHeader.linkCopied', 'Link copied!')
+            : t('conversationHeader.linkCopyError', 'Error copying link'),
+        );
       }
     } catch (error: unknown) {
       if (error.name === 'AbortError') {
