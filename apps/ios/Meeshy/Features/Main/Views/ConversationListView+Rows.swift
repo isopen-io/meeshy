@@ -86,12 +86,13 @@ struct ConversationRowItem<Menu: View>: View {
                 onDragStart()
                 return NSItemProvider(object: conversation.id as NSString)
             }
-            // Pas de `preview:` custom : la variante `.contextMenu(menuItems:preview:)`
-            // supprime les icônes SF des `Label` du menu (comportement SwiftUI
-            // persistant sur iOS 26). On garde la variante sans preview pour que
-            // les icônes s'affichent (fonctionnellement prioritaires sur l'aperçu).
             .contextMenu {
                 contextMenu()
+            } preview: {
+                ConversationPreviewView(
+                    conversation: conversation,
+                    cachedMessages: cachedPreviewMessages
+                )
             }
             .task {
                 await onLoadPreview()
