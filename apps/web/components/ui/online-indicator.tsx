@@ -1,6 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
+import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
 
 interface OnlineIndicatorProps {
   isOnline: boolean;
@@ -50,22 +51,20 @@ export function OnlineIndicator({
 
   // Ajouter l'info de dernière activité si disponible
   if (lastActiveAt && effectiveStatus !== 'online') {
-    const now = new Date();
-    const diffMs = now.getTime() - new Date(lastActiveAt).getTime();
-    const diffMinutes = Math.floor(diffMs / (1000 * 60));
-
-    if (diffMinutes < 1) {
-      finalTooltip += ' - À l\'instant';
-    } else if (diffMinutes < 60) {
-      finalTooltip += ` - Il y a ${diffMinutes} min`;
-    } else {
-      const diffHours = Math.floor(diffMinutes / 60);
-      if (diffHours < 24) {
-        finalTooltip += ` - Il y a ${diffHours}h`;
-      } else {
-        const diffDays = Math.floor(diffHours / 24);
-        finalTooltip += ` - Il y a ${diffDays} jour${diffDays > 1 ? 's' : ''}`;
-      }
+    const bucket = classifyRelativeTime(new Date(lastActiveAt).getTime(), Date.now(), { beyondDays: Infinity });
+    switch (bucket.unit) {
+      case 'now':
+        finalTooltip += ' - À l\'instant';
+        break;
+      case 'minutes':
+        finalTooltip += ` - Il y a ${bucket.value} min`;
+        break;
+      case 'hours':
+        finalTooltip += ` - Il y a ${bucket.value}h`;
+        break;
+      case 'days':
+        finalTooltip += ` - Il y a ${bucket.value} jour${bucket.value > 1 ? 's' : ''}`;
+        break;
     }
   }
 
