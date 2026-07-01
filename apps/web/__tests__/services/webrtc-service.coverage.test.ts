@@ -1950,7 +1950,7 @@ describe('SDP munging — mungeOpusSdp', () => {
 
     pc.createOffer = jest.fn(async () => ({
       type: 'offer' as RTCSdpType,
-      sdp: 'v=0\r\na=fmtp:111 minptime=10;usedtx=1\r\n',
+      sdp: 'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=fmtp:111 minptime=10;usedtx=1\r\n',
     }));
     pc.setLocalDescription = jest.fn(async (desc: { sdp?: string }) => {
       pc.localDescription = { type: 'offer', sdp: desc.sdp };
@@ -1970,7 +1970,7 @@ describe('SDP munging — mungeOpusSdp', () => {
     // A param without '=' (just a key, no value) should be skipped by the if (key && value) branch
     pc.createOffer = jest.fn(async () => ({
       type: 'offer' as RTCSdpType,
-      sdp: 'v=0\r\na=fmtp:111 minptime=10;keyonly\r\n',
+      sdp: 'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=fmtp:111 minptime=10;keyonly\r\n',
     }));
     pc.setLocalDescription = jest.fn(async (desc: { sdp?: string }) => {
       pc.localDescription = { type: 'offer', sdp: desc.sdp };
@@ -1979,6 +1979,35 @@ describe('SDP munging — mungeOpusSdp', () => {
     const offer = await service.createOffer();
     // Should still have the opus params (key-only param is simply skipped)
     expect(offer.sdp).toContain('maxaveragebitrate=128000');
+  });
+
+  it('does NOT pollute video fmtp lines with Opus-only params', async () => {
+    const { service, pc } = setup();
+    service.addLocalMedia(makeStream({ audio: true, video: true }), { sendVideo: true });
+
+    pc.createOffer = jest.fn(async () => ({
+      type: 'offer' as RTCSdpType,
+      sdp:
+        'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=fmtp:111 minptime=10;useinbandfec=1\r\n' +
+        'm=video 9 UDP/TLS/RTP/SAVPF 96\r\na=fmtp:96 profile-level-id=42e01f;level-asymmetry-allowed=1\r\n',
+    }));
+    pc.setLocalDescription = jest.fn(async (desc: { sdp?: string }) => {
+      pc.localDescription = { type: 'offer', sdp: desc.sdp };
+    });
+
+    const offer = await service.createOffer();
+    const videoFmtpLine = offer.sdp!
+      .split('\r\n')
+      .find((line) => line.startsWith('a=fmtp:96'));
+
+    // addVideoBitrateHints legitimately appends x-google-{max,min}-bitrate to
+    // video fmtp lines — only the Opus-only params must stay off this line.
+    expect(videoFmtpLine).toContain('profile-level-id=42e01f;level-asymmetry-allowed=1');
+    expect(videoFmtpLine).not.toContain('maxaveragebitrate');
+    expect(videoFmtpLine).not.toContain('stereo=');
+    expect(videoFmtpLine).not.toContain('useinbandfec');
+    expect(videoFmtpLine).not.toContain('usedtx');
+    expect(videoFmtpLine).not.toContain('maxplaybackrate');
   });
 });
 

@@ -115,11 +115,20 @@ single-threaded, pas d'`await` dans la boucle de sweep) ; le handler `call:trans
 un try/catch englobant tout le corps ; la validation SDP avant `setRemoteDescription` côté web n'est pas
 nécessaire (le navigateur valide déjà, le pattern perfect-negotiation polite/impolite est déjà implémenté).
 
-Dead code identifié (SOTA plan §Étape 7, jamais fait) mais **non touché dans cette session** : cluster
-`CallEventQueue`/`MediaPipelineHook`/`CallMediaConfig` (Features/Main/Services/WebRTC) + `MeeshyAudioProcessingModule`,
-référencés uniquement par leurs propres tests unitaires, aucun call site en prod. Reporté : cet
-environnement (conteneur Linux sans Xcode/xcodegen) ne peut ni builder ni faire tourner XCTest, donc
-supprimer ces fichiers ne serait pas vérifiable ici — à faire dans une session avec accès macOS/Xcode.
+Dead code identifié (SOTA plan §Étape 7, jamais fait) — **supprimé 2026-07-01 (2e session du jour)** :
+cluster `CallEventQueue`/`MediaPipelineHook`/`CallMediaConfig` (Features/Main/Services/WebRTC) +
+`MeeshyAudioProcessingModule`, référencés uniquement par leurs propres tests unitaires, aucun call
+site en prod (`MeeshyAudioProcessingModule.audioProcessingProcess` — le seul point d'accroche possible
+sur le vrai flux audio WebRTC via `RTCAudioCustomProcessingDelegate` — est sous `#if false`, donc
+inatteignable même en théorie sans un build WebRTC custom). Vérifié par grep exhaustif des 4 noms de
+symboles (types/protocole/actor) sur tout `apps/ios` + `packages/` avant suppression : zéro référence
+hors du cluster et de ses propres tests. `project.yml` (XcodeGen) utilise un glob récursif sans liste de
+fichiers explicite → suppression sans risque de cassure de projet ; `project.pbxproj` reste
+volontairement non touché (artefact régénéré par CI via `xcodegen generate`, cf. `apps/ios/CLAUDE.md`).
+Cet environnement (conteneur Linux, toujours pas de Swift/Xcode/xcodegen) ne peut toujours pas compiler
+ni faire tourner XCTest — la suppression de fichiers non référencés est sûre sans compilateur (pas de
+forward-declaration en Swift), mais **`./apps/ios/meeshy.sh test` reste à faire par un humain/CI avec
+accès macOS avant de considérer ce point définitivement clos.**
 ## Review (2026-07-01 — session audit calling feature)
 Audit complet du pipeline appels (iOS CallManager/P2PWebRTCClient, gateway CallEventsHandler/CallService,
 web webrtc-service). Un agent d'exploration dédié a proposé 5 pistes de bugs (leak NotificationCenter,
@@ -131,3 +140,41 @@ annoncé séparément ; "race" en fait sérialisée par le `DispatchQueue.main` 
 fichier étaient déjà résolus par une session antérieure mais jamais cochés ici — source de confusion pour
 les prochaines sessions, corrigé. Seul finding réel de la session : RC-3 (asymétrie SDP RED web/iOS),
 corrigé ci-dessus, avec tests unitaires mais sans validation d'appel réel device.
+
+## Review (2026-07-01 — 2e session du jour) — dead code iOS + 2 bugs gateway/web
+Point d'entrée : suite de la routine de suivi continu. Cette session a pu tester réellement gateway/web
+(bun/node disponibles) mais toujours pas Swift/Xcode (conteneur Linux) — portée limitée à ce qui est
+vérifiable ici.
+
+- **Dead code iOS supprimé** : cluster `CallEventQueue`/`MediaPipelineHook`/`CallMediaConfig`/
+  `MeeshyAudioProcessingModule`, déjà identifié et reporté deux fois (SOTA plan + audit du matin même) —
+  détail ci-dessus.
+- **Bug réel #1 (web, corrigé, TDD)** — `WebRTCService.mungeOpusSdp()` (`apps/web/services/webrtc-service.ts`)
+  n'avait aucun filtre de section SDP : la regex `a=fmtp:(\d+) (.+)` matchait TOUTE ligne fmtp, y compris
+  celles de la section vidéo (H264/VP8/VP9/AV1 `profile-level-id`, etc.), sur lesquelles elle appliquait
+  quand même `maxaveragebitrate`/`stereo`/`useinbandfec`/`usedtx`/`maxplaybackrate` (des clés Opus-only, non
+  pertinentes pour un codec vidéo). Ce test manquant existait depuis l'introduction de RC-3 le matin même —
+  `webrtc-service.coverage.test.ts` testait la pollution du bitrate vidéo et les params Opus séparément,
+  jamais leur interaction sur un SDP audio+vidéo combiné. Trouvé par un agent d'exploration dédié
+  gateway/web, confirmé par lecture du code + test RED, corrigé : `mungeOpusSdp` collecte d'abord les
+  payload types déclarés par les lignes `m=audio` puis ne munge que les `a=fmtp` dont le PT est dans cet
+  ensemble (robuste à l'ordre des lignes dans le SDP). 158/158 tests verts, couverture fichier 99.14%
+  (inchangée).
+- **Bug réel #2 (gateway, corrigé, TDD)** — `CallEventsHandler.ts` : `call:quality-report` (et 6 handlers
+  frères : `call:toggle-audio`/`call:toggle-video`/`call:backgrounded`/`call:foregrounded`/
+  `call:reconnecting`/`call:reconnected`) autorisaient via `resolveParticipantIdFromCall`, qui vérifie
+  seulement l'appartenance à la **conversation**, pas la participation active à **CET appel précis**. Les
+  appels sont plafonnés à 2 participants (`CallService.joinCall`) même dans une conversation de groupe —
+  un membre du groupe qui n'a jamais rejoint l'appel pouvait donc écrire des stats
+  (`bytesSent`/`bytesReceived`/`networkQuality`) sur l'appel actif de quelqu'un d'autre, alors que le
+  commentaire du code prétendait explicitement le contraire ("only an active participant of this call may
+  write stats"). Fix : nouvelle méthode `resolveActiveCallParticipantId` (mirroir du pattern CVE-001 déjà
+  utilisé par `call:signal` — `callService.getCallSession(callId)` + recherche d'un participant actif
+  `!leftAt` matchant l'userId), substituée dans les 7 handlers concernés (`call:join`/`call:leave`/
+  `call:end`/cleanup/`call:transcription-segment`/`call:request-ice-servers` restent volontairement sur
+  l'ancienne méthode — `call:join` en particulier a lieu AVANT la création du `CallParticipant`, donc le
+  check strict y serait circulaire). 677/677 tests gateway socketio verts (dont 6 nouveaux cas de
+  régression ciblés). `tsc --noEmit` non vérifiable dans cet environnement (client Prisma non généré —
+  échec réseau `ECONNRESET` sur le téléchargement du binaire moteur, indépendant de ce changement).
+- Non étendu à `call:transcription-segment`/`call:request-ice-servers` (même faille théorique, non
+  vérifiée en détail cette session) — piste pour une prochaine passe.
