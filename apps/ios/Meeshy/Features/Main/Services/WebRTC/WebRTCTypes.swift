@@ -281,6 +281,16 @@ extension CallStats {
 /// side effects (ICE restart, end-call); this type owns only the *decision*.
 nonisolated enum CallReliabilityPolicy {
 
+    /// EXIGENCE №1 — degraded-signaling indicator. The media path (P2P
+    /// DTLS-SRTP) is decoupled from the signaling socket: a socket drop during
+    /// an established call never tears it down (no listener has that power —
+    /// re-join/resync happens on `didReconnect`). This policy only drives the
+    /// discreet in-call hint that signaling operations (media toggles, hangup
+    /// relay, ICE relay) are deferred until the socket returns.
+    static func signalingDegraded(callEstablished: Bool, socketConnected: Bool) -> Bool {
+        callEstablished && !socketConnected
+    }
+
     /// §5.8 — half-open media detection. We keep `.connected` immediately on
     /// `RTCPeerConnectionState.connected` for snappy UX, but a real half-open
     /// path (we send RTP, the peer's RTP never arrives) is silent audio. After a
@@ -523,12 +533,6 @@ protocol WebRTCClientProviding: AnyObject {
     /// with video for the available budget. Min bitrate is always preserved
     /// at the value set by `applyAudioCodecPreferences` (16 kbps floor).
     func applyAudioEncoding(maxBitrateBps: Int)
-    /// Dynamically tightens the Opus encoder ceiling. Called from
-    /// `WebRTCService.adjustBitrate` when the RTT/loss heuristic drops
-    /// below the `goodRTT`/`goodPacketLoss` thresholds, reducing the
-    /// ceiling from 64 kbps to 24 kbps so GCC has less headroom to fill
-    /// and audio competes less aggressively with loss recovery traffic.
-    func setMaxAudioBitrate(_ bitrate: Int)
     /// Whether a local camera track currently exists (audio-only calls have
     /// none until upgraded). Drives the self-preview / camera-toggle UI.
     var hasLocalVideoTrack: Bool { get }

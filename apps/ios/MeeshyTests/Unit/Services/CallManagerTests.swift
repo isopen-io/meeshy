@@ -332,7 +332,6 @@ nonisolated final class MockWebRTCClient: WebRTCClientProviding {
     private(set) var restartIceCallCount = 0
     func restartIce() { restartIceCallCount += 1 }
     func applyAudioEncoding(maxBitrateBps: Int) {}
-    func setMaxAudioBitrate(_ bitrate: Int) {}
     func sendDTMF(digits: String) {}
     func setAudioEffect(_ effect: AudioEffectConfig?) throws {}
     func updateAudioEffectParams(_ config: AudioEffectConfig) throws {}
@@ -3991,6 +3990,192 @@ final class LocalSDPFailureNotifiesPeerTests: XCTestCase {
             body.contains("MessageSocketManager.shared.emitCallEnd(callId: callId)"),
             "listenForParticipantJoined()'s createOffer failure must emit call:end — " +
             "the callee already joined the room and is waiting for an offer that will never arrive."
+        )
+    }
+}
+
+// MARK: - Call-waiting hygiene + CallKit failure teardown (audit 2026-07-02, bugs 1-3)
+
+@MainActor
+final class CallWaitingAndFailureTeardownTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(of signature: String, in source: String) -> String? {
+        guard let range = source.range(of: signature) else { return nil }
+        let nextFunc = [
+            source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<nextFunc])
+    }
+
+    // MARK: Bug 3 — remote hangup of the WAITING call must dismiss the banner
+
+    func test_clearPendingIncomingCall_helperExists_andClearsBothFields() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "private func clearPendingIncomingCall(ifMatching", in: source) else {
+            XCTFail(
+                "clearPendingIncomingCall(ifMatching:) missing — when the caller of the WAITING " +
+                "call hangs up (call:ended/missed/force-leave for pendingIncomingCall.callId), the " +
+                "banner must be dismissed instead of lingering 15s and offering End & Answer on a dead call"
+            )
+            return
+        }
+        XCTAssertTrue(body.contains("pendingIncomingCall = nil"), "helper must clear pendingIncomingCall")
+        XCTAssertTrue(body.contains("showCallWaitingBanner = false"), "helper must hide the banner")
+    }
+
+    func test_terminalSocketListeners_routeEventsThroughPendingCallCheck() throws {
+        let source = try callManagerSource()
+        // Definition + at least callEnded, callMissed, callForcedLeave and
+        // callAlreadyAnswered call sites. Each of those listeners guards on
+        // currentCallId (the ACTIVE call) and early-returns for the waiting
+        // call's callId — the pending-call check must run before/independently
+        // of that guard.
+        let occurrences = source.components(separatedBy: "clearPendingIncomingCall(ifMatching").count - 1
+        XCTAssertGreaterThanOrEqual(
+            occurrences, 5,
+            "expected the 4 terminal socket listeners (callEnded, callMissed, callForcedLeave, " +
+            "callAlreadyAnswered) to route their event through clearPendingIncomingCall(ifMatching:) " +
+            "— found \(occurrences - 1 >= 0 ? occurrences : 0) occurrence(s) total (incl. definition)"
+        )
+    }
+
+    // MARK: Bug 2 — TURN credentials must survive the call-waiting hand-off
+
+    func test_pendingIncomingCall_carriesIceServers() throws {
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("iceServers: [IceServer]?)?"),
+            "pendingIncomingCall must store the iceServers that arrived with the waiting call — " +
+            "otherwise End & Answer configures the PeerConnection STUN-only and CGNAT/symmetric-NAT " +
+            "callers get no media after the hand-off"
+        )
+    }
+
+    func test_busyPaths_storeIceServersInPendingCall() throws {
+        let source = try callManagerSource()
+        let occurrences = source.components(separatedBy: "iceServers: iceServers)").count - 1
+        XCTAssertGreaterThanOrEqual(
+            occurrences, 2,
+            "both busy paths (reportIncomingVoIPCall + handleIncomingCallNotification) must persist " +
+            "the received iceServers into pendingIncomingCall"
+        )
+    }
+
+    func test_endCurrentAndAnswerPending_forwardsIceServers() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCurrentAndAnswerPending", in: source) else {
+            XCTFail("endCurrentAndAnswerPending not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("iceServers: pending.iceServers"),
+            "endCurrentAndAnswerPending must forward the stored iceServers to " +
+            "handleIncomingCallNotification — the 2nd call's TURN credentials are otherwise lost"
+        )
+    }
+
+    // MARK: Bug 1 — failure teardowns must inform CallKit
+
+    func test_failCall_reportsFailureToCallKitBeforeTeardown() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "private func failCall(", in: source) else {
+            XCTFail(
+                "failCall(_:) missing — failure teardowns (initiate-ACK failure, local-media failure, " +
+                "setRemoteDescription failure, connecting watchdog, call:error, createOffer failure) " +
+                "must report the end to CallKit or the system call UI stays stranded"
+            )
+            return
+        }
+        guard let reportRange = body.range(of: "reportCall(with:"),
+              let teardownRange = body.range(of: "endCallInternal(reason: .failed(") else {
+            XCTFail("failCall must reportCall(ended) to CallKit then run endCallInternal(.failed)"); return
+        }
+        XCTAssertLessThan(
+            reportRange.lowerBound, teardownRange.lowerBound,
+            "failCall must report to CallKit BEFORE endCallInternal nils activeCallUUID"
+        )
+    }
+
+    func test_noDirectFailedTeardown_outsideFailCallAndCallKitErrorCallbacks() throws {
+        let source = try callManagerSource()
+        let offenders = source
+            .components(separatedBy: "\n")
+            .filter { $0.contains("endCallInternal(reason: .failed") }
+            .filter { !$0.contains("CallKit error") && !$0.contains(".failed(reasonMessage)") }
+        XCTAssertTrue(
+            offenders.isEmpty,
+            "every failure teardown must go through failCall(_:) so CallKit is informed. " +
+            "Direct endCallInternal(.failed) is only allowed inside failCall itself and in the " +
+            "reportNewIncomingCall/CXStartCallAction error callbacks (\"CallKit error\" — CallKit " +
+            "never accepted the call). Offending lines: \(offenders)"
+        )
+    }
+}
+
+// MARK: - Degraded-signaling indicator wiring (EXIGENCE №1)
+
+@MainActor
+final class SignalingDegradedIndicatorTests: XCTestCase {
+
+    private func sourceFile(_ relativePath: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent(relativePath)
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_callManager_declaresIsSignalingDegraded() throws {
+        let source = try sourceFile("Meeshy/Features/Main/Services/CallManager.swift")
+        XCTAssertTrue(
+            source.contains("@Published private(set) var isSignalingDegraded"),
+            "CallManager must expose the degraded-signaling flag for CallView — a socket drop " +
+            "during an established call is invisible otherwise (media is P2P and keeps flowing)"
+        )
+    }
+
+    func test_callManager_observesConnectionState_readOnly() throws {
+        let source = try sourceFile("Meeshy/Features/Main/Services/CallManager.swift")
+        XCTAssertTrue(
+            source.contains("socket.$connectionState"),
+            "setupSocketListeners must observe the socket connectionState publisher to drive the indicator"
+        )
+        XCTAssertTrue(
+            source.contains("CallReliabilityPolicy.signalingDegraded("),
+            "the indicator must be computed by the pure policy (testable, no lifecycle side effects)"
+        )
+    }
+
+    func test_endCallInternal_resetsIsSignalingDegraded() throws {
+        let source = try sourceFile("Meeshy/Features/Main/Services/CallManager.swift")
+        XCTAssertTrue(
+            source.contains("isSignalingDegraded = false"),
+            "endCallInternal must reset the indicator so it never leaks into the next call"
+        )
+    }
+
+    func test_callView_rendersSignalingDegradedBanner() throws {
+        let source = try sourceFile("Meeshy/Features/Main/Views/CallView.swift")
+        XCTAssertTrue(
+            source.contains("callManager.isSignalingDegraded"),
+            "CallView must render a discreet banner while signaling is degraded"
+        )
+        XCTAssertTrue(
+            source.contains("signalingDegradedBanner"),
+            "the banner must follow the reconnecting/quality banner pattern (stacked capsules)"
         )
     }
 }

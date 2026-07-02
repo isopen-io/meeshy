@@ -132,6 +132,22 @@ struct CallView: View {
                     .transition(.opacity)
             }
 
+            // EXIGENCE №1 — signaling dégradé : le socket est tombé pendant un
+            // appel établi. Le média P2P continue ; indicateur discret, empilé
+            // sous les bannières reconnexion/qualité éventuelles.
+            if callManager.isSignalingDegraded {
+                let stackedOffset: CGFloat = {
+                    var offset: CGFloat = 0
+                    if case .reconnecting = callManager.callState { offset += 52 }
+                    if callManager.isRemoteQualityDegraded { offset += 44 }
+                    return offset
+                }()
+                signalingDegradedBanner
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .padding(.top, stackedOffset)
+                    .transition(.opacity)
+            }
+
             // Effects overlay — accessible dans tous les etats actifs (pas seulement
             // connected). Video-only depuis 2026-07-02 : le panneau d'effets vocaux
             // est retiré (pipeline de capture audio inexistant — voir
@@ -232,6 +248,14 @@ struct CallView: View {
                 notification: .announcement,
                 argument: String(localized: "call.a11y.remote.quality.poor",
                                 defaultValue: "Réseau faible chez votre contact",
+                                bundle: .main))
+        }
+        .adaptiveOnChange(of: callManager.isSignalingDegraded) { _, isDegraded in
+            guard isDegraded else { return }
+            UIAccessibility.post(
+                notification: .announcement,
+                argument: String(localized: "call.a11y.signaling.degraded",
+                                defaultValue: "Connexion au serveur perdue, l'appel continue",
                                 bundle: .main))
         }
     }
@@ -623,6 +647,31 @@ struct CallView: View {
                                    bundle: .main))
     }
 
+    /// EXIGENCE №1 — the signaling socket dropped while the call is connected.
+    /// The P2P media keeps flowing; this discreet hint mirrors the
+    /// quality-degraded capsule and never implies the call is at risk.
+    private var signalingDegradedBanner: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "antenna.radiowaves.left.and.right.slash")
+                .font(MeeshyFont.relative(12, weight: .semibold))
+                .accessibilityHidden(true)
+            Text(String(localized: "call.signaling.degraded",
+                        defaultValue: "Connexion au serveur perdue — l'appel continue",
+                        bundle: .main))
+                .font(.footnote.weight(.semibold))
+                .foregroundColor(.white)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(Capsule().fill(MeeshyColors.warning.opacity(0.85)))
+        .shadow(color: Color.black.opacity(0.15), radius: 6, y: 2)
+        .padding(.top, 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(String(localized: "call.signaling.degraded",
+                                   defaultValue: "Connexion au serveur perdue — l'appel continue",
+                                   bundle: .main))
+    }
+
     private var connectionQualityColor: Color {
         // Prefer the RTT+packet-loss stats level (updated every statsIntervalSeconds)
         // over the binary ICE state for a more accurate real-time quality indicator.
@@ -865,6 +914,7 @@ struct CallView: View {
                                     showEffectsToolbar.toggle()
                                 }
                             }
+                            .accessibilityHint(String(localized: "call.filters.hint", defaultValue: "Ouvre ou ferme la barre de filtres video", bundle: .main))
                         }
                         .padding(.bottom, 6)
                     }

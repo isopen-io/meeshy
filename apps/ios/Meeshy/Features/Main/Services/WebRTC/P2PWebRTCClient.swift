@@ -471,17 +471,6 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         }
     }
 
-    func setMaxAudioBitrate(_ bitrate: Int) {
-        guard let at = audioTransceiver else { return }
-        let params = at.sender.parameters
-        guard !params.encodings.isEmpty else { return }
-        for encoding in params.encodings {
-            encoding.maxBitrateBps = NSNumber(value: bitrate)
-        }
-        at.sender.parameters = params
-        Logger.webrtc.info("[WEBRTC] audio max bitrate updated to \(bitrate / 1000, privacy: .public)kbps")
-    }
-
     /// Adjusts the audio sender's max bitrate at runtime. Called by the
     /// quality-adaptation loop when the network tier changes (e.g. poor link
     /// drops from 64 kbps to 24 kbps so audio competes less with video).
@@ -1625,7 +1614,6 @@ final class P2PWebRTCClient: WebRTCClientProviding {
     func toggleAudio(_ enabled: Bool) {}
     func toggleVideo(_ enabled: Bool) {}
     func applyVideoEncoding(maxBitrateBps: Int, maxFramerate: Int, scaleResolutionDownBy: Double) {}
-    func setMaxAudioBitrate(_ bitrate: Int) {}
     var hasLocalVideoTrack: Bool { false }
     func enableLocalVideo() async throws -> Bool { throw WebRTCError.notSupported }
     func disableLocalVideo() async -> Bool { false }

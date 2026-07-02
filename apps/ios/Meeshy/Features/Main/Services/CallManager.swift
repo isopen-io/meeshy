@@ -140,6 +140,10 @@ final class CallManager: ObservableObject {
     /// conditions keep resetting the timer, so the indicator stays up as long as
     /// alerts keep arriving.
     @Published private(set) var isRemoteQualityDegraded: Bool = false
+    /// EXIGENCE №1 — true while the signaling socket is down during an
+    /// established call. The P2P media keeps flowing; CallView shows a
+    /// discreet banner and signaling ops resync on the socket reconnect.
+    @Published private(set) var isSignalingDegraded: Bool = false
     @Published var isMuted: Bool = false
 
     /// CALL-FIX 2026-06-06 — whether THIS call drives CallKit. CallKit is only
@@ -195,7 +199,7 @@ final class CallManager: ObservableObject {
     @Published private(set) var availableCameras: [CameraDeviceOption] = []
     /// §7.1 — uniqueID of the active capture camera (drives the picker's check).
     @Published private(set) var selectedCameraId: String?
-    @Published var pendingIncomingCall: (callId: String, fromUserId: String, fromUsername: String, isVideo: Bool)?
+    @Published var pendingIncomingCall: (callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, iceServers: [IceServer]?)?
 
     // MARK: - Audio Guard (DEBUG override for tests)
 
@@ -855,7 +859,7 @@ final class CallManager: ObservableObject {
             } catch {
                 Logger.calls.error("call:initiate ACK failed: \(error.localizedDescription)")
                 if self.activeCallUUID == uuid {
-                    self.endCallInternal(reason: .failed("Failed to initiate call"))
+                    self.failCall("Failed to initiate call")
                 }
             }
         }
@@ -901,7 +905,7 @@ final class CallManager: ObservableObject {
                 }
             }
             callProvider.reportCall(with: uuid, endedAt: nil, reason: .unanswered)
-            pendingIncomingCall = (callId: callId, fromUserId: callerUserId, fromUsername: callerName, isVideo: isVideo)
+            pendingIncomingCall = (callId: callId, fromUserId: callerUserId, fromUsername: callerName, isVideo: isVideo, iceServers: iceServers)
             showCallWaitingBanner = true
             Logger.calls.info("VoIP push while busy — ended secondary call, showing banner")
             HapticFeedback.medium()
@@ -1093,7 +1097,7 @@ final class CallManager: ObservableObject {
         resetEndedStateForNewCall()
         guard callState == .idle else {
             Logger.calls.info("Incoming call while busy — showing call waiting banner")
-            pendingIncomingCall = (callId: callId, fromUserId: fromUserId, fromUsername: fromUsername, isVideo: isVideo)
+            pendingIncomingCall = (callId: callId, fromUserId: fromUserId, fromUsername: fromUsername, isVideo: isVideo, iceServers: iceServers)
             showCallWaitingBanner = true
             HapticFeedback.medium()
             return
@@ -1211,7 +1215,7 @@ final class CallManager: ObservableObject {
         } catch {
             Logger.calls.error("startLocalMedia failed: \(error.localizedDescription)")
             if currentCallId == callId {
-                endCallInternal(reason: .failed(String(localized: "call.error.media")))
+                failCall(String(localized: "call.error.media"))
             }
         }
     }
@@ -1247,7 +1251,7 @@ final class CallManager: ObservableObject {
                     // this signal the caller sits in .connecting/.ringing until the
                     // gateway's CallCleanupService cron reaps the zombie (~60s).
                     MessageSocketManager.shared.emitCallEnd(callId: callId)
-                    self.endCallInternal(reason: .failed("Failed to create SDP answer"))
+                    self.failCall("Failed to create SDP answer")
                     return
                 }
                 guard self.currentCallId == callId else {
@@ -1372,7 +1376,7 @@ final class CallManager: ObservableObject {
                     // this signal the caller sits in .connecting/.ringing until the
                     // gateway's CallCleanupService cron reaps the zombie (~60s).
                     MessageSocketManager.shared.emitCallEnd(callId: callId)
-                    self.endCallInternal(reason: .failed("Failed to create SDP answer"))
+                    self.failCall("Failed to create SDP answer")
                     return
                 }
                 guard self.currentCallId == callId else {
@@ -1395,7 +1399,7 @@ final class CallManager: ObservableObject {
                 // The peer is still waiting on an answer that will never come —
                 // tell the gateway now instead of leaving it to the cron reaper.
                 MessageSocketManager.shared.emitCallEnd(callId: callId)
-                self.endCallInternal(reason: .failed(String(localized: "call.error.timeout")))
+                self.failCall(String(localized: "call.error.timeout"))
             }
         }
 
@@ -1427,7 +1431,7 @@ final class CallManager: ObservableObject {
                 // this signal the caller sits in .connecting/.ringing until the
                 // gateway's CallCleanupService cron reaps the zombie (~60s).
                 MessageSocketManager.shared.emitCallEnd(callId: callId)
-                self.endCallInternal(reason: .failed("Failed to create SDP answer"))
+                self.failCall("Failed to create SDP answer")
                 return
             }
             guard self.currentCallId == callId else {
@@ -1450,7 +1454,7 @@ final class CallManager: ObservableObject {
                 // The peer is still waiting on an answer that will never come —
                 // tell the gateway now instead of leaving it to the cron reaper.
                 MessageSocketManager.shared.emitCallEnd(callId: callId)
-                self.endCallInternal(reason: .failed(String(localized: "call.error.timeout")))
+                self.failCall(String(localized: "call.error.timeout"))
             }
         }
 
@@ -1855,6 +1859,19 @@ final class CallManager: ObservableObject {
         Logger.calls.info("Rejected pending call: \(pending.callId)")
     }
 
+    /// Audit 2026-07-02 (bug 3) — the caller of the WAITING call hung up (or it
+    /// was answered/force-ended elsewhere) before the user acted on the banner.
+    /// Every terminal socket listener guards on `currentCallId` (the ACTIVE
+    /// call) and early-returns for the waiting call's id — without this check
+    /// the banner lingers until its 15s auto-dismiss and "End & Answer" would
+    /// end the healthy active call to join one already torn down server-side.
+    private func clearPendingIncomingCall(ifMatching callId: String) {
+        guard pendingIncomingCall?.callId == callId else { return }
+        pendingIncomingCall = nil
+        showCallWaitingBanner = false
+        Logger.calls.info("Waiting call ended remotely — call-waiting banner dismissed (callId=\(callId))")
+    }
+
     func endCurrentAndAnswerPending() {
         guard let pending = pendingIncomingCall else { return }
         showCallWaitingBanner = false
@@ -1868,7 +1885,8 @@ final class CallManager: ObservableObject {
                 callId: pending.callId,
                 fromUserId: pending.fromUserId,
                 fromUsername: pending.fromUsername,
-                isVideo: pending.isVideo
+                isVideo: pending.isVideo,
+                iceServers: pending.iceServers
             )
             self.pendingIncomingCall = nil
         }
@@ -1889,7 +1907,7 @@ final class CallManager: ObservableObject {
             // hang silently in `.offering` / `.connecting`.
             guard success else {
                 Logger.calls.error("Failed to apply remote answer for call \(callId) — ending call")
-                self.endCallInternal(reason: .failed(String(localized: "call.error.sdp")))
+                self.failCall(String(localized: "call.error.sdp"))
                 return
             }
             // Phase 1 fix E5: now that remote answer is applied, ICE
@@ -2069,7 +2087,7 @@ final class CallManager: ObservableObject {
                         self.attemptReconnection()
                     case .fail:
                         Logger.calls.error(".connecting watchdog (\(Int(elapsed))s) — failing call")
-                        self.endCallInternal(reason: .failed(String(localized: "call.error.timeout")))
+                        self.failCall(String(localized: "call.error.timeout"))
                         return
                     }
                 case .connected:
@@ -2194,6 +2212,14 @@ final class CallManager: ObservableObject {
         // New connection period: re-arms the reliability monitor's half-open
         // detection with a fresh RTP baseline (see HalfOpenMonitorState).
         connectionEpoch += 1
+
+        // EXIGENCE №1 — the connectionState sink only fires on socket-state
+        // CHANGES; evaluate once here in case the call establishes while the
+        // socket is already down (e.g. media connected during a gateway blip).
+        isSignalingDegraded = CallReliabilityPolicy.signalingDegraded(
+            callEstablished: true,
+            socketConnected: MessageSocketManager.shared.isConnected
+        )
         // Audio session was configured ONCE at peer-connection setup; CallKit
         // drives activation via provider:didActivate:, which is the single
         // place that flips RTCAudioSession.isAudioEnabled.
@@ -2646,6 +2672,22 @@ final class CallManager: ObservableObject {
         analyticsVideoFiltersUsed = false
     }
 
+    /// Audit 2026-07-02 (bug 1) — shared failure teardown. `endCallInternal`
+    /// never reports to CallKit on its own (its only CallKit side effect is
+    /// failing a still-pending CXAnswerCallAction), so every failure path that
+    /// reached it directly left the system call UI stranded on a call the app
+    /// had already abandoned (caller-side ACK/SDP/media failures, connecting
+    /// watchdog, server call:error). Report the failure first, while
+    /// `activeCallUUID` is still set — the wrapper sites for local/remote ends
+    /// (endCall, handleRemoteEnd, …) keep doing their own CallKit teardown with
+    /// end-specific reasons.
+    private func failCall(_ reasonMessage: String) {
+        if callUsesCallKit, let uuid = activeCallUUID {
+            callProvider.reportCall(with: uuid, endedAt: Date(), reason: .failed)
+        }
+        endCallInternal(reason: .failed(reasonMessage))
+    }
+
     private func endCallInternal(reason: CallEndReason) {
         // CALL-FIX 2026-06-06 — stop any ringing loop + play the "ended" cue, but
         // ONLY if the call was actually active (ringing/connecting/connected). The
@@ -2703,6 +2745,7 @@ final class CallManager: ObservableObject {
         voipFreshnessTask?.cancel()
         voipFreshnessTask = nil
         isRemoteQualityDegraded = false
+        isSignalingDegraded = false
         pendingRemoteOffer = nil
         pendingIceCandidates = []
         thermalMonitor.stopMonitoring()
@@ -2978,6 +3021,20 @@ final class CallManager: ObservableObject {
     private func setupSocketListeners() {
         let socket = MessageSocketManager.shared
 
+        // EXIGENCE №1 — degraded-signaling indicator. This subscription has NO
+        // power over the call lifecycle (media is P2P; `didReconnect` re-joins
+        // and resyncs); it only drives the discreet CallView banner.
+        socket.$connectionState
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] state in
+                guard let self else { return }
+                self.isSignalingDegraded = CallReliabilityPolicy.signalingDegraded(
+                    callEstablished: self.callState == .connected,
+                    socketConnected: state == .connected
+                )
+            }
+            .store(in: &cancellables)
+
         socket.callOfferReceived
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
@@ -3054,7 +3111,9 @@ final class CallManager: ObservableObject {
         socket.callEnded
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                self?.handleRemoteEnd(callId: event.callId, rawReason: event.reason)
+                guard let self else { return }
+                self.clearPendingIncomingCall(ifMatching: event.callId)
+                self.handleRemoteEnd(callId: event.callId, rawReason: event.reason)
             }
             .store(in: &cancellables)
 
@@ -3067,6 +3126,7 @@ final class CallManager: ObservableObject {
             .sink { [weak self] event in
                 guard let self else { return }
                 Logger.calls.info("call:missed received: callId=\(event.callId), caller=\(event.callerName ?? "?")")
+                self.clearPendingIncomingCall(ifMatching: event.callId)
                 if self.currentCallId == event.callId {
                     self.handleRemoteEnd(callId: event.callId, rawReason: "missed")
                 }
@@ -3107,7 +3167,7 @@ final class CallManager: ObservableObject {
                 // Ne teardown que si un appel est réellement en vol (ringing →
                 // reconnecting). Une erreur hors-appel ne fait qu'afficher le toast.
                 if self.callState.isActive {
-                    self.endCallInternal(reason: .failed(message))
+                    self.failCall(message)
                 }
             }
             .store(in: &cancellables)
@@ -3177,6 +3237,7 @@ final class CallManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self else { return }
+                self.clearPendingIncomingCall(ifMatching: event.callId)
                 guard self.currentCallId == event.callId,
                       case .ringing = self.callState else { return }
                 Logger.calls.info("call:already-answered received — dismissing local ring (callId=\(event.callId))")
@@ -3222,7 +3283,9 @@ final class CallManager: ObservableObject {
         socket.callForcedLeave
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let self, self.currentCallId == event.callId else { return }
+                guard let self else { return }
+                self.clearPendingIncomingCall(ifMatching: event.callId)
+                guard self.currentCallId == event.callId else { return }
                 Logger.calls.warning("call:force-leave received — ending call (callId=\(event.callId) reason=\(event.reason ?? "unspecified"))")
                 if let uuid = self.activeCallUUID {
                     self.callProvider.reportCall(with: uuid, endedAt: Date(), reason: .failed)
@@ -3309,7 +3372,7 @@ final class CallManager: ObservableObject {
                     // tell the gateway now instead of leaving them hanging until
                     // the cron reaper.
                     MessageSocketManager.shared.emitCallEnd(callId: callId)
-                    self.endCallInternal(reason: .failed("Failed to create offer"))
+                    self.failCall("Failed to create offer")
                     return
                 }
                 guard self.currentCallId == callId else {

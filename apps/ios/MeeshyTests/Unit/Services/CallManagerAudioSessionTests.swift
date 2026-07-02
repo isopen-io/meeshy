@@ -3482,7 +3482,7 @@ final class CallViewAutoHideControlsSourceGuardTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    func test_shouldAutoHideControls_gatesOnIsVideoEnabled() throws {
+    func test_shouldAutoHideControls_gatesOnVideoLayoutActive() throws {
         let source = try callViewSource()
         guard let fnRange = source.range(of: "private var shouldAutoHideControls: Bool") else {
             XCTFail("shouldAutoHideControls not found in CallView.swift")
@@ -3491,9 +3491,11 @@ final class CallViewAutoHideControlsSourceGuardTests: XCTestCase {
         let end = source.index(fnRange.lowerBound, offsetBy: 300, limitedBy: source.endIndex) ?? source.endIndex
         let body = String(source[fnRange.lowerBound ..< end])
         XCTAssertTrue(
-            body.contains("isVideoEnabled"),
-            "shouldAutoHideControls must gate on isVideoEnabled — controls must never " +
-            "auto-hide on an audio-only call (there's no video surface to tap for recall)."
+            body.contains("isVideoUIActive"),
+            "shouldAutoHideControls must gate on isVideoUIActive (local OR remote video, Fix 7) — " +
+            "controls must never auto-hide on a voice-only layout (no video surface to tap for " +
+            "recall), but must auto-hide once the video layout is active even when only the " +
+            "REMOTE camera is on."
         )
     }
 
