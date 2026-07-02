@@ -1495,21 +1495,14 @@ export class CallEventsHandler {
           message
         } as CallError);
       }
-      // Audit 2026-07-02 (item F follow-up) — deliberately NOT clearing the
-      // ringing timeout here. `joinCall` now transitions initiated/ringing
-      // calls to `ringing`, not `active`: the callee's client early-joins
-      // the call room as soon as it starts ringing (it must, to receive the
-      // SDP offer), well before the human taps "answer". Clearing the timer
-      // on every join — including this early one, and a rehydrated timer
-      // after a mid-ring gateway restart — silently disabled the 60s
-      // no-answer protection (a call would then ring server-side forever,
-      // or until the much coarser 120s heartbeat GC tier reaped it). The
-      // real answer is `call:signal` with `signal.type === 'answer'`, which
-      // already clears the timer there. Every terminal transition
-      // (endCall/leaveCall/markCallAsMissed/forceEndCall) clears it too. The
-      // timeout callback itself is status-guarded (atomic `updateMany`
-      // scoped to initiated/ringing), so leaving it armed across a join is
-      // safe even in the ordinary case where the call is answered normally.
+      // Item F follow-up (chaos-2 re-test) — the join deliberately does NOT
+      // clear the ringing timer anymore: the callee EARLY-joins while still
+      // ringing (the offer must flow during the ring), and clearing here left
+      // no server-side bound on the ring after any join — and wiped the timer
+      // the boot rehydration had just re-armed after a mid-ring restart (the
+      // call then decayed via the GC tier at ~150s instead of resolving
+      // missed at its nominal remaining budget). The SDP answer path and the
+      // terminal paths (leave/end/GC, item I) own the clear.
     });
 
     /**

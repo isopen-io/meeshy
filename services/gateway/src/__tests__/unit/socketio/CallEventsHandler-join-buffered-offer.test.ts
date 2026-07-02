@@ -299,3 +299,34 @@ describe('CallEventsHandler — buffered offer sender validation (C2)', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Ringing timer ownership (item F follow-up — chaos-2 re-test)
+// ---------------------------------------------------------------------------
+
+describe('CallEventsHandler — call:join leaves the ringing timer alone', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (validateSocketEvent as jest.MockedFunction<any>).mockReturnValue({ success: true });
+  });
+
+  it('does NOT clear the ringing timer on join — only the SDP answer settles the ring', async () => {
+    // The callee EARLY-joins while still ringing (the offer must flow during
+    // the ring). Clearing the timer in the join handler's finally left NO
+    // server-side bound on the ring after any join, and wiped the timer the
+    // boot rehydration had just re-armed after a mid-ring restart — the call
+    // then decayed via the GC tier (~150s) instead of resolving missed at its
+    // nominal remaining budget. The answer path (call:signal answer) and the
+    // terminal paths (leave/end/service-level, item I) already own the clear.
+    mockJoinCall.mockResolvedValue({ callSession: makeCallSession(null, null), iceServers: [] });
+    const prisma = makePrisma();
+    const { socket, handlers } = makeSocket();
+    const { io } = makeIo();
+
+    const handler = new CallEventsHandler(prisma);
+    handler.setupCallEvents(socket as any, io, () => CALLEE_ID);
+    await handlers[CALL_EVENTS.JOIN](JOIN_DATA, jest.fn());
+
+    expect(mockClearRingingTimeout).not.toHaveBeenCalled();
+  });
+});

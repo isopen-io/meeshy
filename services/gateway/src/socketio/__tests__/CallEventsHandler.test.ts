@@ -1715,15 +1715,16 @@ describe('CallEventsHandler', () => {
       expect(socket.emit).toHaveBeenCalledWith('call:error', expect.any(Object));
     });
 
-    it('emits error on joinCall failure without touching the ringing timer', async () => {
+    it('emits error WITHOUT clearing the ringing timer on joinCall failure (item F follow-up)', async () => {
+      // A failed join must not disarm the ring: the call is still ringing for
+      // everyone else and the timer must resolve missed at its nominal budget.
+      // (The old finally-clear also wiped the timer the boot rehydration had
+      // just re-armed after a mid-ring restart.) The SDP answer and the
+      // terminal paths own the clear.
       mockCallServiceJoinCall.mockRejectedValue(new Error('JOIN_FAIL: server error'));
       const { socket } = setupWithSocket();
       await socket._trigger('call:join', validData);
       expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({ code: 'JOIN_FAIL' }));
-      // A failed join (e.g. a third party racing a full P2P call) must not
-      // clear a ringing timer that legitimately belongs to the real
-      // participants — see the item-F regression test below for the
-      // success-path case this guards against.
       expect(mockCallServiceClearRingingTimeout).not.toHaveBeenCalled();
     });
 
