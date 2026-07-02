@@ -258,12 +258,12 @@ struct ConversationListView: View {
         }
     }
 
-    private func storyRingState(for conversation: Conversation) -> StoryRingState {
+    func storyRingState(for conversation: Conversation) -> StoryRingState {
         guard conversation.type == .direct, let userId = conversation.participantUserId else { return .none }
         return storyViewModel.storyRingState(forUserId: userId)
     }
 
-    private func conversationMoodStatus(for conversation: Conversation) -> StatusEntry? {
+    func conversationMoodStatus(for conversation: Conversation) -> StatusEntry? {
         guard conversation.type == .direct, let userId = conversation.participantUserId else { return nil }
         return statusViewModel.statusForUser(userId: userId)
     }
@@ -325,7 +325,9 @@ struct ConversationListView: View {
             },
             onLongPress: {
                 Task { await conversationViewModel.loadPreviewMessages(for: conversation.id) }
-                withAnimation(.spring(response: 0.34, dampingFraction: 0.72)) { contextMenuConversation = conversation }
+                // Zoom + rebond : damping bas (0.58) => léger dépassement avant
+                // stabilisation de l'aperçu et du menu.
+                withAnimation(.spring(response: 0.42, dampingFraction: 0.58)) { contextMenuConversation = conversation }
             }
         )
         .equatable()
@@ -858,7 +860,7 @@ struct ConversationListView: View {
     }
 
     // MARK: - Handle Profile View
-    private func handleProfileView(_ conversation: Conversation) {
+    func handleProfileView(_ conversation: Conversation) {
         // Open user profile sheet (works for DM, uses participant data)
         selectedProfileUser = .from(conversation: conversation)
     }

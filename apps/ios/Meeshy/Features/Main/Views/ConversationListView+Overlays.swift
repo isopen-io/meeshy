@@ -250,10 +250,31 @@ extension ConversationListView {
                 VStack(spacing: 16) {
                     ConversationPreviewView(
                         conversation: conversation,
-                        cachedMessages: conversationViewModel.previewMessages[conversation.id] ?? []
+                        cachedMessages: conversationViewModel.previewMessages[conversation.id] ?? [],
+                        bannerURL: conversation.banner.flatMap { MeeshyConfig.resolveMediaURL($0) },
+                        avatarURL: conversation.type == .direct ? conversation.participantAvatarURL : conversation.avatar,
+                        storyState: storyRingState(for: conversation),
+                        moodEmoji: conversationMoodStatus(for: conversation)?.moodEmoji,
+                        presenceState: conversation.type == .direct
+                            ? PresenceManager.shared.presenceState(for: conversation.participantUserId ?? "")
+                            : .offline,
+                        isDirect: conversation.type == .direct,
+                        onCall: (conversation.type == .direct && conversation.participantUserId != nil) ? {
+                            dismissContextMenu()
+                            if let uid = conversation.participantUserId {
+                                CallManager.shared.startCall(
+                                    conversationId: conversation.id,
+                                    userId: uid,
+                                    displayName: conversation.name ?? "",
+                                    isVideo: false
+                                )
+                            }
+                        } : nil,
+                        onSearch: { dismissContextMenu(); onSelect(conversation) },
+                        onInfo: { dismissContextMenu(); conversationInfoConversation = conversation },
+                        onProfileInfo: { dismissContextMenu(); handleProfileView(conversation) }
                     )
                     .frame(maxWidth: 340)
-                    .allowsHitTesting(false)
 
                     ConversationContextMenuView(
                         accentHex: conversation.accentColor,
