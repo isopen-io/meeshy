@@ -659,6 +659,65 @@ final class ConversationSyncEngineTests: XCTestCase {
         XCTAssertNil(row?.lastMessageId)
     }
 
+    /// An own-echo REST send racing the socket broadcast (or any other
+    /// out-of-order `message:new`) must not regress the list row to older
+    /// content once a newer message has already been applied — mirrors the
+    /// monotone guard in `ConversationStore.applyConversationUpdated`.
+    func test_messageNew_staleMessage_doesNotRegressListRow() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        let newer = Date(timeIntervalSince1970: 1_700_000_000)
+        let older = Date(timeIntervalSince1970: 1_699_000_000)
+        let conv = MeeshyConversation(
+            id: "c-order", identifier: "test-c-order", type: .direct,
+            lastMessageAt: newer,
+            lastMessagePreview: "current preview", lastMessageId: "m-current")
+        try? await CacheCoordinator.shared.conversations.save([conv], for: "list")
+        await engine.startSocketRelay()
+
+        let exp = expectation(description: "conversationsDidChange after stale message:new")
+        engine.conversationsDidChange.first().sink { exp.fulfill() }.store(in: &cancellables)
+
+        mockMessageSocket.messageReceived.send(
+            TestFactories.makeAPIMessage(id: "m-stale", conversationId: "c-order",
+                                          content: "stale content", createdAt: older))
+        await fulfillment(of: [exp], timeout: 2.0)
+
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        let row = cached.first(where: { $0.id == "c-order" })
+        XCTAssertEqual(row?.lastMessagePreview, "current preview",
+                       "a stale message:new must not overwrite the newer preview")
+        XCTAssertEqual(row?.lastMessageId, "m-current")
+        XCTAssertEqual(row?.lastMessageAt, newer)
+    }
+
+    /// The normal, in-order case: a genuinely newer message still updates
+    /// the row and bumps it to the top.
+    func test_messageNew_newerMessage_updatesListRow() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        let older = Date(timeIntervalSince1970: 1_699_000_000)
+        let newer = Date(timeIntervalSince1970: 1_700_000_000)
+        let conv = MeeshyConversation(
+            id: "c-order2", identifier: "test-c-order2", type: .direct,
+            lastMessageAt: older,
+            lastMessagePreview: "old preview", lastMessageId: "m-old")
+        try? await CacheCoordinator.shared.conversations.save([conv], for: "list")
+        await engine.startSocketRelay()
+
+        let exp = expectation(description: "conversationsDidChange after newer message:new")
+        engine.conversationsDidChange.first().sink { exp.fulfill() }.store(in: &cancellables)
+
+        mockMessageSocket.messageReceived.send(
+            TestFactories.makeAPIMessage(id: "m-new", conversationId: "c-order2",
+                                          content: "fresh content", createdAt: newer))
+        await fulfillment(of: [exp], timeout: 2.0)
+
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        let row = cached.first(where: { $0.id == "c-order2" })
+        XCTAssertEqual(row?.lastMessagePreview, "fresh content")
+        XCTAssertEqual(row?.lastMessageId, "m-new")
+        XCTAssertEqual(row?.lastMessageAt, newer)
+    }
+
     // Helper: seed the conversations cache with [id, unreadCount] tuples.
     // Uses `save()` (not `update()`): `update()` early-returns when the key
     // is absent from L1, which is exactly the state right after `invalidate`.
