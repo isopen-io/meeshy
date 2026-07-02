@@ -468,7 +468,7 @@ struct ConversationView: View {
             Button {
                 HapticFeedback.medium()
                 Task {
-                    try? await blockService.unblockUser(userId: userId)
+                    await BlockActionCoordinator.shared.unblock(userId: userId)
                     await MainActor.run { HapticFeedback.success() }
                 }
             } label: {
