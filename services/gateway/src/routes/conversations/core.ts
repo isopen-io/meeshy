@@ -503,16 +503,19 @@ export function registerCoreRoutes(
 
         // Merge presence override. firstName/lastName now come directly from m.user
         // (participant select was extended in iter-8 — no separate memberUsers query needed).
+        const isDirect = conversation.type === 'direct';
         const membersWithUser = conversation.participants
           .slice(0, 5)
           .map((m: any) => {
             const liveOnline = presenceChecker?.isOnline(m.userId ?? m.id);
             return {
               ...m,
-              // Bannière de profil top-level : le schéma participant est plat
-              // (strippe `user`), donc on expose la bannière du destinataire
-              // au niveau participant pour la remontée en DM.
-              banner: m.user?.banner ?? m.banner ?? null,
+              // Bannière de profil top-level : le schéma participant (minimal) est
+              // plat et strippe `user`, donc on lève la bannière au niveau
+              // participant pour la remontée en DM. Réservé aux DM — en groupe le
+              // client ignore `participantBanner` (évite le sur-transfert).
+              // Note : `Participant` n'a pas de colonne `banner`, seule `User` en a.
+              banner: isDirect ? (m.user?.banner ?? null) : null,
               isOnline: liveOnline === undefined ? m.isOnline : liveOnline,
               user: m.userId
                 ? { ...m.user, isOnline: liveOnline === undefined ? m.user?.isOnline : liveOnline }
