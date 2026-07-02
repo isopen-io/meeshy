@@ -51,6 +51,11 @@ const createMockPrisma = () => ({
   callParticipant: {
     updateMany: jest.fn() as MockFn
   },
+  // Active-call claim release (see CallService.releaseActiveCallClaim); GC's
+  // forceEndCall clears it directly since it isn't a CallService method.
+  conversation: {
+    updateMany: jest.fn().mockResolvedValue({ count: 1 }) as MockFn
+  },
   $transaction: jest.fn() as MockFn
 });
 

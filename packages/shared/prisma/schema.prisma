@@ -358,6 +358,16 @@ model Conversation {
   /// Auto-translation (disabled for E2EE mode)
   autoTranslateEnabled Boolean @default(true)
 
+  /// Atomic claim on the CallSession currently "owning" this conversation's
+  /// call slot. Set only via a conditional `updateMany({ activeCallId: null })`
+  /// in CallService.initiateCall — MongoDB's single-document atomicity makes
+  /// that claim race-free without a multi-document transaction. Cleared back
+  /// to null by every call-termination path (see `releaseActiveCallClaim`).
+  /// Closes a TOCTOU window where two near-simultaneous `initiateCall` calls
+  /// for the same conversation could each pass the "no active call" read
+  /// check before either had committed its `CallSession`.
+  activeCallId String? @db.ObjectId
+
   preferences           ConversationPreference[]
   shareLinks            ConversationShareLink[]
   community             Community?               @relation(fields: [communityId], references: [id])
