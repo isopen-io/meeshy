@@ -86,6 +86,21 @@ Faible — 1 nouveau fichier + 1 test (7 cas), 3 sites convertis, +1 type local.
       `@meeshy/shared/prisma/client` non résolu — pré-existant/environnemental, client Prisma
       non généré sous ce sandbox, présent sur `main`).
 
+## Correctif CI annexe (main rouge pré-existant)
+La CI `Test gateway` de la PR était rouge à cause d'un échec **pré-existant sur `main`** (branche
+non concernée : fichiers `CallEventsHandler` intouchés). Le fix sécurité `close membership-check
+bypass` (commit `0a9b4d14`) a basculé l'autorisation de `call:transcription-segment` de
+`resolveParticipantIdFromCall` (prisma) vers `resolveActiveCallParticipantId` →
+`callService.getCallSession`, mais `CallEventsHandler-transcription.test.ts` mockait encore
+**l'ancien** chemin prisma. `getCallSession` étant `undefined`, l'appel jetait → traité comme
+`NOT_A_PARTICIPANT` → **9 assertions** en échec (relais + silent-drop).
+
+Correctif **test-only** (comportement prod inchangé) : injection d'un mock `CallService`
+(`getCallSession` renvoyant l'appartenance active) via le 2e argument du constructeur, et
+simplification du mock `prisma.callSession.findUnique` désormais appelé **une seule fois**
+(status/metadata). Résultat : **15/15** dans la suite, **381/381** sur toutes les suites
+`CallEventsHandler`. Commit séparé (`test(gateway): update transcription relay test…`).
+
 ## Consignés pour itérations futures
 
 | # | Constat | Impact |
