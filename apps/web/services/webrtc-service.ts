@@ -138,9 +138,23 @@ export class WebRTCService {
    * (maxaveragebitrate=128000, stereo=1, useinbandfec=1, usedtx=1, maxplaybackrate=48000)
    */
   private mungeOpusSdp(sdp: string): string {
+    // Collect payload types declared by `m=audio` lines first (rather than
+    // tracking section boundaries top-to-bottom) so this stays correct
+    // regardless of whether `a=fmtp` lines appear before or after their
+    // owning `m=` line. Without this, the params below (Opus-only) would
+    // leak onto video fmtp lines (e.g. H264 `profile-level-id`) sharing the
+    // same SDP.
+    const audioPayloadTypes = new Set<string>();
+    sdp.split('\r\n').forEach((line) => {
+      if (!line.startsWith('m=audio ')) return;
+      line.trim().split(' ').slice(3).forEach((pt) => audioPayloadTypes.add(pt));
+    });
+
     return sdp.replace(
       /a=fmtp:(\d+) (.+)/g,
-      (_match, payloadType, existingParams) => {
+      (match, payloadType, existingParams) => {
+        if (!audioPayloadTypes.has(payloadType)) return match;
+
         const opusParams = new Map<string, string>();
         existingParams.split(';').forEach((param: string) => {
           const [key, value] = param.trim().split('=');

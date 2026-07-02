@@ -103,17 +103,28 @@ export class ReactionService {
       return this.mapReactionToData(existingReaction);
     }
 
-    const reaction = await this.prisma.reaction.create({
-      data: {
-        messageId,
-        participantId,
-        emoji: sanitized
+    try {
+      const reaction = await this.prisma.reaction.create({
+        data: {
+          messageId,
+          participantId,
+          emoji: sanitized
+        }
+      });
+
+      await this.updateMessageReactionSummary(messageId, sanitized, 'add');
+
+      return this.mapReactionToData(reaction);
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'code' in err && err.code === 'P2002') {
+        // Concurrent insert race: treat as idempotent success, summary already correct.
+        const existing = await this.prisma.reaction.findFirst({
+          where: { messageId, participantId, emoji: sanitized }
+        });
+        if (existing) return this.mapReactionToData(existing);
       }
-    });
-
-    await this.updateMessageReactionSummary(messageId, sanitized, 'add');
-
-    return this.mapReactionToData(reaction);
+      throw err;
+    }
   }
 
   async removeReaction(options: RemoveReactionOptions): Promise<boolean> {

@@ -178,6 +178,28 @@ export class CallEventsHandler {
   }
 
   /**
+   * Resolve the caller's own CallParticipant.participantId, verifying they
+   * are an ACTIVE participant of THIS specific call — unlike
+   * `resolveParticipantIdFromCall`, which only checks conversation
+   * membership. Calls are capped at 2 participants (`CallService.joinCall`)
+   * even inside group conversations, so a conversation member who never
+   * joined (or already left) this call must not pass authorization checks
+   * gating writes against call state/stats (quality reports, media toggles,
+   * background/foreground, reconnect status).
+   */
+  private async resolveActiveCallParticipantId(userId: string, callId: string): Promise<string | null> {
+    try {
+      const callSession = await this.callService.getCallSession(callId);
+      const activeParticipant = callSession.participants.find(
+        (p) => ((p.participant?.userId ?? p.participantId) === userId) && !p.leftAt
+      );
+      return activeParticipant?.participantId ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Resolve target userId to their socket IDs within a call room
    */
   private async resolveTargetSockets(
@@ -221,6 +243,18 @@ export class CallEventsHandler {
    */
   setMessageBroadcaster(broadcaster: (message: unknown, conversationId: string) => Promise<void>): void {
     this.messageBroadcaster = broadcaster;
+  }
+
+  /**
+   * Public entry point for external terminal paths (currently
+   * `CallCleanupService`'s GC tiers) that end a call without going through
+   * this handler's own socket events, but still need the "Appel … · MM:SS" /
+   * "manqué" system message posted. Thin wrapper around the private
+   * `postCallSummary` so callers outside this class don't need to know about
+   * its retry bookkeeping.
+   */
+  async postCallSummaryForTerminatedCall(callId: string): Promise<void> {
+    return this.postCallSummary(callId);
   }
 
   /**
@@ -1654,7 +1688,7 @@ export class CallEventsHandler {
         // `participantId` (Participant.id ObjectId), NOT userId. Passing
         // userId here matched nothing and the toggle silently failed.
         // Resolve to the real participantId before calling the service.
-        const audioParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        const audioParticipantId = await this.resolveActiveCallParticipantId(userId, data.callId);
         if (!audioParticipantId) {
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
@@ -1751,7 +1785,7 @@ export class CallEventsHandler {
         });
 
         // Audit P2-GW-5 — see audio toggle handler for rationale.
-        const videoParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        const videoParticipantId = await this.resolveActiveCallParticipantId(userId, data.callId);
         if (!videoParticipantId) {
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
@@ -1953,13 +1987,12 @@ export class CallEventsHandler {
         const validation = validateSocketEvent(socketQualityReportSchema, data);
         if (!validation.success) return;
 
-        // Authorization — only an active participant of this call may write
-        // stats/quality data against it. Without this, any authenticated
-        // user could flood-write bogus bytesSent/bytesReceived/level onto a
-        // callId they merely guessed, since `persistCallStats` below took no
-        // membership check (only the quality-alert broadcast further down
-        // resolved the participant, and only conditionally).
-        const participantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        // Authorization — only an ACTIVE PARTICIPANT OF THIS CALL may write
+        // stats/quality data against it (not merely a member of its
+        // conversation — `resolveParticipantIdFromCall` only checked that,
+        // letting any other conversation member flood-write bogus
+        // bytesSent/bytesReceived/level onto someone else's active call).
+        const participantId = await this.resolveActiveCallParticipantId(userId, data.callId);
         if (!participantId) return;
 
         // Check quality thresholds and emit alerts if needed
@@ -2003,10 +2036,11 @@ export class CallEventsHandler {
         const validation = validateSocketEvent(socketReconnectingSchema, data);
         if (!validation.success) return;
 
-        // Audit P1-21 — Authorization: only an active participant in this
-        // call can flip its status. Otherwise any authenticated user could
-        // toggle reconnecting/active on arbitrary callIds.
-        const membership = await this.resolveParticipantIdFromCall(userId, data.callId);
+        // Audit P1-21 — Authorization: only an active participant of THIS
+        // call can flip its status (not merely a member of its conversation).
+        // Otherwise any authenticated user could toggle reconnecting/active
+        // on arbitrary callIds.
+        const membership = await this.resolveActiveCallParticipantId(userId, data.callId);
         if (!membership) return;
 
         await this.callService.updateCallStatus(data.callId, CallStatus.reconnecting).catch((err) => logger.warn('call:status update failed (reconnecting)', { callId: data.callId, err }));
@@ -2034,7 +2068,7 @@ export class CallEventsHandler {
         if (!validation.success) return;
 
         // Audit P1-21 — Authorization: see RECONNECTING handler above.
-        const membership = await this.resolveParticipantIdFromCall(userId, data.callId);
+        const membership = await this.resolveActiveCallParticipantId(userId, data.callId);
         if (!membership) return;
 
         await this.callService.updateCallStatus(data.callId, CallStatus.active).catch((err) => logger.warn('call:status update failed (active on reconnect)', { callId: data.callId, err }));
@@ -2190,8 +2224,9 @@ export class CallEventsHandler {
         // Resolve the caller's own participantId rather than trusting the
         // client-supplied one — otherwise a participant could flag a peer's
         // participantId as backgrounded and skew that peer's heartbeat
-        // tolerance / ringing delivery (socket vs VoIP push).
-        const backgroundedParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        // tolerance / ringing delivery (socket vs VoIP push). Must be an
+        // active participant of THIS call, not merely its conversation.
+        const backgroundedParticipantId = await this.resolveActiveCallParticipantId(userId, data.callId);
         if (!backgroundedParticipantId) return;
 
         socket.data.appForeground = false;
@@ -2221,7 +2256,7 @@ export class CallEventsHandler {
 
         // Same rationale as call:backgrounded — resolve the caller's own
         // participantId instead of trusting the client-supplied one.
-        const foregroundedParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        const foregroundedParticipantId = await this.resolveActiveCallParticipantId(userId, data.callId);
         if (!foregroundedParticipantId) return;
 
         socket.data.appForeground = true;
@@ -2395,6 +2430,13 @@ export class CallEventsHandler {
                 };
                 io.to(ROOMS.call(participation.callSessionId)).emit(CALL_EVENTS.ENDED, dcEndedEvent);
                 io.to(ROOMS.conversation(leftSession.conversationId)).emit(CALL_EVENTS.ENDED, dcEndedEvent);
+
+                // P3 — post the call-summary system message. A disconnect
+                // (app killed, crash, network drop, background eviction) is a
+                // terminal path just like an explicit call:leave/call:end and
+                // must not silently skip the "Appel … · MM:SS" / "manqué"
+                // message. Idempotent across terminal paths.
+                await this.postCallSummary(leftSession.id);
               }
 
               logger.info('✅ Socket: Auto-left call on disconnect', {
@@ -2479,6 +2521,10 @@ export class CallEventsHandler {
                   };
                   io.to(ROOMS.call(participation.callSessionId)).emit(CALL_EVENTS.ENDED, dcForceEndedEvent);
                   io.to(ROOMS.conversation(participation.callSession.conversationId)).emit(CALL_EVENTS.ENDED, dcForceEndedEvent);
+
+                  // P3 — same call-summary posting as the normal leave path
+                  // above; the force-cleanup branch is a terminal path too.
+                  await this.postCallSummary(participation.callSessionId);
                 }
 
                 logger.info('✅ Socket: Force cleanup successful on disconnect', {

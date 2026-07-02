@@ -97,6 +97,9 @@ function makeSocket() {
 function makeCallService() {
   return {
     updateParticipantMedia: jest.fn<any>().mockResolvedValue(undefined),
+    getCallSession: jest.fn<any>().mockResolvedValue({
+      participants: [{ participantId: 'participant-1', leftAt: null, participant: { userId: USER_ID } }],
+    }),
   } as any;
 }
 

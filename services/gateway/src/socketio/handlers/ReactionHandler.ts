@@ -138,7 +138,7 @@ export class ReactionHandler {
           .catch(err => logger.error('reaction:add broadcast failed', { error: err, conversationId: message.conversationId }));
       }
       // _createReactionNotification handles errors internally; void to be explicit.
-      void this._createReactionNotification(validated.messageId, validated.emoji, userId, isAnonymous, reaction.id);
+      void this._createReactionNotification(validated.messageId, validated.emoji, participantId, isAnonymous, reaction.id);
     } catch (error: unknown) {
       logger.error('reaction:add failed', { error });
       const errorResponse: SocketIOResponse<unknown> = {

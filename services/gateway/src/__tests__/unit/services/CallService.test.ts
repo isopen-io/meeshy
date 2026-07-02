@@ -362,6 +362,19 @@ describe('CallService', () => {
       );
     });
 
+    it('should reject when participantId is undefined without querying Prisma (security regression guard)', async () => {
+      mockPrisma.conversation.findUnique.mockResolvedValue(createMockConversation());
+
+      await expect(
+        callService.initiateCall({ ...validInitiateData, participantId: undefined })
+      ).rejects.toThrow('NOT_A_PARTICIPANT: You are not a participant in this conversation');
+
+      // `id: undefined` in a Prisma `where` clause is treated as an omitted
+      // field (matches ANY participant), not "match nothing" — the guard
+      // MUST short-circuit before the query is ever issued.
+      expect(mockPrisma.participant.findFirst).not.toHaveBeenCalled();
+    });
+
     it('should throw error when call already active', async () => {
       const activeCall = createMockCallSession({
         status: CallStatus.active,
@@ -497,6 +510,18 @@ describe('CallService', () => {
       await expect(callService.joinCall(validJoinData)).rejects.toThrow(
         'NOT_A_PARTICIPANT: You are not a participant in this conversation'
       );
+    });
+
+    it('should reject when participantId is undefined without querying Prisma (security regression guard)', async () => {
+      mockPrisma.callSession.findUnique.mockResolvedValue(
+        createMockCallSession({ conversation: createMockConversation() })
+      );
+
+      await expect(
+        callService.joinCall({ ...validJoinData, participantId: undefined })
+      ).rejects.toThrow('NOT_A_PARTICIPANT: You are not a participant in this conversation');
+
+      expect(mockPrisma.participant.findFirst).not.toHaveBeenCalled();
     });
 
     it('should return current state when user already in call', async () => {

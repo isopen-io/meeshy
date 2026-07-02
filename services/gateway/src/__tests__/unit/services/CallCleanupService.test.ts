@@ -715,6 +715,83 @@ describe('CallCleanupService', () => {
   });
 
   // -------------------------------------------------------------------------
+  // setPostSummaryCallback — P3: GC-ended calls must post the same
+  // call-summary system message as every other terminal path.
+  // -------------------------------------------------------------------------
+  describe('setPostSummaryCallback', () => {
+    it('invokes the callback with the callId when a call is force-ended', async () => {
+      const service = new CallCleanupService(prisma as any);
+      const postSummary = jest.fn().mockResolvedValue(undefined) as MockFn;
+      service.setPostSummaryCallback(postSummary);
+
+      const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-summary-1');
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([staleCall])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-summary-1' });
+      setupTransactionPassthrough(prisma);
+
+      await service.runCleanup();
+
+      expect(postSummary).toHaveBeenCalledWith('call-summary-1');
+    });
+
+    it('does not invoke the callback when the race guard skips the write (call already transitioned)', async () => {
+      const service = new CallCleanupService(prisma as any);
+      const postSummary = jest.fn().mockResolvedValue(undefined) as MockFn;
+      service.setPostSummaryCallback(postSummary);
+
+      const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-summary-race');
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([staleCall])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-summary-race' });
+      setupTransactionPassthrough(prisma, 0); // already transitioned — no write
+
+      await service.runCleanup();
+
+      expect(postSummary).not.toHaveBeenCalled();
+    });
+
+    it('does not throw when the callback rejects — GC must not break on a summary-posting failure', async () => {
+      const service = new CallCleanupService(prisma as any);
+      const postSummary = jest.fn().mockRejectedValue(new Error('broadcast down')) as MockFn;
+      service.setPostSummaryCallback(postSummary);
+
+      const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-summary-fail');
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([staleCall])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-summary-fail' });
+      setupTransactionPassthrough(prisma);
+
+      const result = await service.runCleanup();
+
+      expect(result.cleaned).toBe(1);
+      expect(result.errors).toBe(0);
+    });
+
+    it('is a no-op (no crash) when no callback was registered', async () => {
+      const service = new CallCleanupService(prisma as any);
+
+      const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-summary-none');
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([staleCall])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-summary-none' });
+      setupTransactionPassthrough(prisma);
+
+      const result = await service.runCleanup();
+
+      expect(result.cleaned).toBe(1);
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // forceEndCall (tested indirectly via runCleanup)
   // -------------------------------------------------------------------------
   describe('forceEndCall — broadcast variants', () => {

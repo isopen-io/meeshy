@@ -235,6 +235,23 @@ describe('CallEventsHandler — disconnect handler force-cleanup', () => {
       );
     });
 
+    it('posts the call-summary message when force-cleanup ends the call', async () => {
+      // A crash / app-kill / network drop is a terminal path just like an
+      // explicit call:leave or call:end — the "Appel … · MM:SS" system
+      // message must not be silently skipped here.
+      mockLeaveCallDc.mockRejectedValue(new Error('DB error'));
+
+      const prisma = makePrisma();
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers['disconnect']();
+
+      expect(mockCreateCallSummaryMessageDc).toHaveBeenCalledWith(CALL_ID);
+    });
+
     it('does NOT force-end the call when participants remain (remainingParticipants > 0)', async () => {
       // $transaction returns count=1 → line 1932 is false → no call:ended broadcast
       mockLeaveCallDc.mockRejectedValue(new Error('DB error'));
@@ -342,6 +359,28 @@ describe('CallEventsHandler — disconnect handler force-cleanup', () => {
       );
       // Force cleanup NOT triggered
       expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('posts the call-summary message when leaveCall itself ends the call', async () => {
+      const leftSession = {
+        id: CALL_ID,
+        conversationId: CONV_ID,
+        status: 'ended',
+        duration: 42,
+        endReason: 'completed',
+        mode: 'p2p',
+      };
+      mockLeaveCallDc.mockResolvedValue(leftSession);
+
+      const prisma = makePrisma();
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers['disconnect']();
+
+      expect(mockCreateCallSummaryMessageDc).toHaveBeenCalledWith(CALL_ID);
     });
   });
 });

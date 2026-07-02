@@ -408,7 +408,22 @@ export class CallService {
       );
     }
 
-    // Check if user is participant of conversation
+    // Check if user is participant of conversation. `participantId` MUST be
+    // checked explicitly before hitting Prisma: passing `id: undefined` in a
+    // `where` clause makes Prisma treat the field as omitted rather than
+    // "match nothing", so the query silently degrades to "does this
+    // conversation have ANY active participant" — true for virtually every
+    // real conversation. Without this guard a caller whose participantId
+    // failed to resolve (e.g. genuinely not a member) would sail through the
+    // membership check for a conversation they have no access to.
+    if (!participantId) {
+      logger.error('❌ Missing participantId — cannot verify conversation membership', {
+        conversationId,
+        initiatorId
+      });
+      throw new Error(`${CALL_ERROR_CODES.NOT_A_PARTICIPANT}: You are not a participant in this conversation`);
+    }
+
     const membership = await this.prisma.participant.findFirst({
       where: {
         conversationId,
@@ -602,7 +617,19 @@ export class CallService {
       throw new Error(`${CALL_ERROR_CODES.CALL_ENDED}: This call has already ended`);
     }
 
-    // Check if user is participant of conversation
+    // Check if user is participant of conversation. See the matching guard in
+    // `initiateCall` for why `participantId` must be checked before the
+    // Prisma query: `id: undefined` is treated as an omitted field, not
+    // "match nothing", which would otherwise let a non-member's join sail
+    // through as long as the conversation has any active participant.
+    if (!participantId) {
+      logger.error('❌ Missing participantId — cannot verify conversation membership', {
+        conversationId: call.conversationId,
+        userId
+      });
+      throw new Error(`${CALL_ERROR_CODES.NOT_A_PARTICIPANT}: You are not a participant in this conversation`);
+    }
+
     const membership = await this.prisma.participant.findFirst({
       where: {
         conversationId: call.conversationId,

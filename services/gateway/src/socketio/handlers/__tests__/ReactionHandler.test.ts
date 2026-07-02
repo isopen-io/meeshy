@@ -398,6 +398,26 @@ describe('ReactionHandler', () => {
       // Callback still reported success — notification failure is fire-and-forget
       expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
+
+    it('notifies with the resolved Participant.id, not the User.id', async () => {
+      // reactorParticipantId must be a Participant.id — notifyReactionAdded looks
+      // it up via `prisma.participant.findUnique({ where: { id: reactorParticipantId } })`.
+      // Passing the User.id here means that lookup always misses and the message
+      // author never receives a reaction notification over the socket path.
+      const { notifyReactionAdded } = require('../../../services/notifications/reactionNotify');
+      const { handler } = buildHandler();
+
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, jest.fn());
+
+      expect(notifyReactionAdded).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ reactorParticipantId: PARTICIPANT_ID })
+      );
+      expect(notifyReactionAdded).not.toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ reactorParticipantId: USER_ID })
+      );
+    });
   });
 
   // ── Rate limiting ────────────────────────────────────────────────────────
