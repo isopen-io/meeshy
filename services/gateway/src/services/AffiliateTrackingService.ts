@@ -125,11 +125,13 @@ export class AffiliateTrackingService {
         }
       });
 
-      // Mettre à jour le compteur d'utilisation
+      // Mettre à jour le compteur d'utilisation — increment atomique côté DB
+      // (jamais `currentUses + 1` calculé en JS : deux conversions concurrentes
+      // liraient la même valeur et l'une des incrémentations serait perdue).
       await prisma.affiliateToken.update({
         where: { id: affiliateToken.id },
         data: {
-          currentUses: affiliateToken.currentUses + 1
+          currentUses: { increment: 1 }
         }
       });
 

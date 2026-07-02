@@ -141,6 +141,7 @@ function makePrisma(overrides: Record<string, unknown> = {}): jest.Mocked<Prisma
     conversation: {
       findUnique: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
     },
     participant: {
       findMany: jest.fn(),
@@ -224,6 +225,7 @@ function makeMessageRecord(overrides: Record<string, unknown> = {}) {
     attachments: [],
     conversation: {
       createdAt: new Date('2024-01-01'),
+      lastMessageAt: new Date('2024-05-01'),
       participants: [],
     },
     ...overrides,
@@ -456,6 +458,7 @@ describe('MessageHandler — handleMessageDelete', () => {
       sender: { id: PARTICIPANT_ID, userId: senderUserId },
       conversation: {
         createdAt: new Date('2024-01-01'),
+        lastMessageAt: new Date('2024-05-01'),
         participants: memberRole ? [{ role: memberRole }] : [],
       },
       attachments,
@@ -465,7 +468,7 @@ describe('MessageHandler — handleMessageDelete', () => {
     }
     (deps.prisma.message.update as jest.Mock<any>).mockResolvedValue({ id: VALID_MSG_ID });
     (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValueOnce({ createdAt: new Date('2024-06-01') });
-    (deps.prisma.conversation.update as jest.Mock<any>).mockResolvedValue({});
+    (deps.prisma.conversation.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
   }
 
   beforeEach(() => {
@@ -623,43 +626,48 @@ describe('MessageHandler — handleMessageDelete', () => {
     }));
   });
 
-  it('updates conversation lastMessageAt to latest non-deleted message', async () => {
+  it('recomputes conversation lastMessageAt, guarded against cursor regression', async () => {
     const lastMsgDate = new Date('2024-06-15');
+    const convLastMessageAt = new Date('2024-05-01');
     (deps.prisma.message.findFirst as jest.Mock<any>)
       .mockResolvedValueOnce({
         id: VALID_MSG_ID, conversationId: VALID_CONV_ID, senderId: PARTICIPANT_ID,
         sender: { id: PARTICIPANT_ID, userId: USER_ID },
-        conversation: { createdAt: new Date('2024-01-01'), participants: [] },
+        conversation: { createdAt: new Date('2024-01-01'), lastMessageAt: convLastMessageAt, participants: [] },
         attachments: [],
       })
       .mockResolvedValueOnce({ createdAt: lastMsgDate });
     (deps.prisma.message.update as jest.Mock<any>).mockResolvedValue({ id: VALID_MSG_ID });
-    (deps.prisma.conversation.update as jest.Mock<any>).mockResolvedValue({});
+    (deps.prisma.conversation.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
 
     await handler.handleMessageDelete(socket, { messageId: VALID_MSG_ID }, callback);
 
-    expect(deps.prisma.conversation.update).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: VALID_CONV_ID },
+    // Optimistic-concurrency guard: the write only lands while lastMessageAt is
+    // still the value read at handler start — a racing message:new advances it,
+    // the guard mismatches, and the cursor never regresses onto the deleted message.
+    expect(deps.prisma.conversation.updateMany).toHaveBeenCalledWith({
+      where: { id: VALID_CONV_ID, lastMessageAt: convLastMessageAt },
       data: { lastMessageAt: lastMsgDate },
-    }));
+    });
   });
 
   it('falls back to conversation.createdAt when all messages are deleted', async () => {
     const convCreatedAt = new Date('2024-01-01');
+    const convLastMessageAt = new Date('2024-05-01');
     (deps.prisma.message.findFirst as jest.Mock<any>)
       .mockResolvedValueOnce({
         id: VALID_MSG_ID, conversationId: VALID_CONV_ID, senderId: PARTICIPANT_ID,
         sender: { id: PARTICIPANT_ID, userId: USER_ID },
-        conversation: { createdAt: convCreatedAt, participants: [] },
+        conversation: { createdAt: convCreatedAt, lastMessageAt: convLastMessageAt, participants: [] },
         attachments: [],
       })
       .mockResolvedValueOnce(null);
     (deps.prisma.message.update as jest.Mock<any>).mockResolvedValue({ id: VALID_MSG_ID });
-    (deps.prisma.conversation.update as jest.Mock<any>).mockResolvedValue({});
+    (deps.prisma.conversation.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
 
     await handler.handleMessageDelete(socket, { messageId: VALID_MSG_ID }, callback);
 
-    expect(deps.prisma.conversation.update).toHaveBeenCalledWith(expect.objectContaining({
+    expect(deps.prisma.conversation.updateMany).toHaveBeenCalledWith(expect.objectContaining({
       data: { lastMessageAt: convCreatedAt },
     }));
   });
@@ -691,13 +699,13 @@ describe('MessageHandler — handleMessageDelete', () => {
     (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValueOnce({
       id: VALID_MSG_ID, conversationId: VALID_CONV_ID, senderId: PARTICIPANT_ID,
       sender: { id: PARTICIPANT_ID, userId: USER_ID },
-      conversation: { createdAt: new Date('2024-01-01'), participants: [] },
+      conversation: { createdAt: new Date('2024-01-01'), lastMessageAt: new Date('2024-05-01'), participants: [] },
       attachments: [{ id: 'att-bad' }],
     });
     (deps.attachmentService as any).deleteAttachment.mockRejectedValue(new Error('S3 error'));
     (deps.prisma.message.update as jest.Mock<any>).mockResolvedValue({ id: VALID_MSG_ID });
     (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValueOnce({ createdAt: new Date() });
-    (deps.prisma.conversation.update as jest.Mock<any>).mockResolvedValue({});
+    (deps.prisma.conversation.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
 
     await handler.handleMessageDelete(socket, { messageId: VALID_MSG_ID }, callback);
 
