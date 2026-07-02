@@ -322,6 +322,69 @@ describe('ReactionService', () => {
   });
 
   // ==============================================
+  // ADD REACTION — P2002 CONCURRENT INSERT
+  // ==============================================
+
+  describe('addReaction — P2002 concurrent insert', () => {
+    beforeEach(() => {
+      mockPrisma.message.findUnique.mockResolvedValue(createMockMessage());
+      mockPrisma.reaction.findMany.mockResolvedValue([]);
+    });
+
+    it('should return the winning row instead of throwing when a concurrent insert wins the unique constraint race', async () => {
+      const existingReaction = createMockReaction();
+      const p2002Error = Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
+
+      // Pre-check finds nothing (TOCTOU window), then a concurrent request wins the insert.
+      mockPrisma.reaction.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(existingReaction);
+      mockPrisma.reaction.create.mockRejectedValue(p2002Error);
+
+      const result = await service.addReaction({
+        messageId: testMessageId,
+        participantId: testParticipantId,
+        emoji: '👍'
+      });
+
+      expect(result).toBeDefined();
+      expect(result?.id).toBe(existingReaction.id);
+      // The race winner already updated the summary — the loser must not double-count it.
+      expect(mockPrisma.message.update).not.toHaveBeenCalled();
+    });
+
+    it('should rethrow non-P2002 database errors from the create call', async () => {
+      const dbError = Object.assign(new Error('Connection timeout'), { code: 'P1001' });
+      mockPrisma.reaction.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.reaction.create.mockRejectedValue(dbError);
+
+      await expect(
+        service.addReaction({
+          messageId: testMessageId,
+          participantId: testParticipantId,
+          emoji: '👍'
+        })
+      ).rejects.toThrow('Connection timeout');
+    });
+
+    it('should rethrow P2002 when no existing row is found on recovery lookup', async () => {
+      const p2002Error = Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
+      mockPrisma.reaction.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null);
+      mockPrisma.reaction.create.mockRejectedValue(p2002Error);
+
+      await expect(
+        service.addReaction({
+          messageId: testMessageId,
+          participantId: testParticipantId,
+          emoji: '👍'
+        })
+      ).rejects.toThrow('Unique constraint failed');
+    });
+  });
+
+  // ==============================================
   // REMOVE REACTION TESTS
   // ==============================================
 
