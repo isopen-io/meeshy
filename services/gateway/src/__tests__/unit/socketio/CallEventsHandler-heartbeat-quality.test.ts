@@ -90,10 +90,20 @@ function makeSocket() {
   return { socket, io, handlers };
 }
 
-function makeCallService() {
+function makeCallService(overrides: { participants?: Array<{ participantId: string; userId?: string; leftAt?: Date | null }> } = {}) {
+  const participants = overrides.participants ?? [
+    { participantId: 'participant-1', userId: USER_ID, leftAt: null },
+  ];
   return {
     recordHeartbeat: jest.fn<any>(),
     persistCallStats: jest.fn<any>().mockResolvedValue(undefined),
+    getCallSession: jest.fn<any>().mockResolvedValue({
+      participants: participants.map((p) => ({
+        participantId: p.participantId,
+        leftAt: p.leftAt ?? null,
+        participant: p.userId ? { userId: p.userId } : undefined,
+      })),
+    }),
   } as any;
 }
 
@@ -187,8 +197,48 @@ describe('CallEventsHandler — call:heartbeat / call:quality-report hardening',
 
     it('never persists stats for a callId the caller is not a participant of', async () => {
       const prisma = makePrisma();
-      (prisma.participant.findFirst as jest.MockedFunction<any>).mockResolvedValueOnce(null);
-      const callService = makeCallService();
+      const callService = makeCallService({ participants: [] });
+      const { socket, io, handlers } = makeSocket();
+
+      const handler = new CallEventsHandler(prisma, callService);
+      handler.setupCallEvents(socket as any, io as any, () => USER_ID);
+
+      await handlers[CALL_EVENTS.QUALITY_REPORT]({
+        callId: VALID_CALL_ID,
+        stats: { bytesSent: 100, bytesReceived: 200, level: 'good', rtt: 50, packetLoss: 0 },
+      });
+
+      expect(callService.persistCallStats).not.toHaveBeenCalled();
+    });
+
+    it('never persists stats when the caller is a member of the conversation but not an active participant of THIS call', async () => {
+      // Regression: `resolveActiveCallParticipantId` must check the caller is
+      // an active CallParticipant of the specific callId, not merely a member
+      // of the underlying conversation (calls are capped at 2 participants
+      // even inside group conversations — other conversation members must
+      // not be able to write stats onto someone else's active call).
+      const prisma = makePrisma();
+      const callService = makeCallService({
+        participants: [{ participantId: 'someone-elses-participant-id', userId: 'other-user', leftAt: null }],
+      });
+      const { socket, io, handlers } = makeSocket();
+
+      const handler = new CallEventsHandler(prisma, callService);
+      handler.setupCallEvents(socket as any, io as any, () => USER_ID);
+
+      await handlers[CALL_EVENTS.QUALITY_REPORT]({
+        callId: VALID_CALL_ID,
+        stats: { bytesSent: 100, bytesReceived: 200, level: 'good', rtt: 50, packetLoss: 0 },
+      });
+
+      expect(callService.persistCallStats).not.toHaveBeenCalled();
+    });
+
+    it('never persists stats when the caller already left THIS call (leftAt set)', async () => {
+      const prisma = makePrisma();
+      const callService = makeCallService({
+        participants: [{ participantId: 'participant-1', userId: USER_ID, leftAt: new Date() }],
+      });
       const { socket, io, handlers } = makeSocket();
 
       const handler = new CallEventsHandler(prisma, callService);
