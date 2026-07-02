@@ -881,8 +881,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       paging — backed by pure `CallHistoryList` (combine+filter) and `CallTimeLabel` (ISO → relative
       label), rendered by an accent-coherent `CallHistoryScreen` (avatar rows, direction icon with
       missed=error colour, relative time, All/Missed filter chips, skeleton/empty states). +30
-      behavioural tests. **Pending follow-up:** a dedicated Calls **tab** in the bottom nav wiring
-      `CallHistoryScreen` (`:app`). (The outgoing-call `conversationId` threading + folding
+      behavioural tests. The dedicated Calls **tab landed** (slice `calls-tab-nav`): `Routes.CALLS`
+      (`Call` icon, order Messages · Feed · **Calls** · Activity · Profile) mounts `CallHistoryScreen`
+      in the `NavHost`; tapping a journal row re-dials via the pure `CallRoute.redial(record)` (threads
+      the record's conversation, resolved `displayName` and media into the outgoing-call route, identical
+      to a chat-header call). +4 behavioural tests. (The outgoing-call `conversationId` threading + folding
       `CallSignalManager.events` into `CallViewModel` both landed — see the signalling row above.)
 
 ## I. Communities

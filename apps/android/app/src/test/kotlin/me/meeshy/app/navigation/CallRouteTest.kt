@@ -2,6 +2,8 @@ package me.meeshy.app.navigation
 
 import android.net.Uri
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.call.CallHistoryPeer
+import me.meeshy.sdk.model.call.CallRecord
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -89,4 +91,72 @@ class CallRouteTest {
         assertThat(CallRoute.PATTERN).contains("{${CallRoute.PEER_NAME_ARG}}")
         assertThat(CallRoute.PATTERN).contains("{${CallRoute.VIDEO_ARG}}")
     }
+
+    @Test
+    fun `redial threads a history record's conversation, resolved name and media into the route`() {
+        val path = CallRoute.redial(callRecord(conversationId = "conv-99", isVideo = true))
+
+        val config = CallRoute.config(
+            conversationId = Uri.decode(path.split("/")[1]),
+            peerName = Uri.decode(path.split("/")[2]),
+            isVideo = path.split("/")[3].toBoolean(),
+        )
+        assertThat(config.conversationId).isEqualTo("conv-99")
+        assertThat(config.peerName).isEqualTo("Alice Martin")
+        assertThat(config.isVideo).isTrue()
+        assertThat(config.isOutgoing).isTrue()
+    }
+
+    @Test
+    fun `redial resolves the display name over the raw username, then encodes it safely`() {
+        val record = callRecord(
+            peer = CallHistoryPeer(userId = "u1", username = "amartin", displayName = "Ann / Bob & Co"),
+        )
+
+        val path = CallRoute.redial(record)
+
+        val segments = path.split("/")
+        // The encoded, reserved-char display name must not spawn extra path segments.
+        assertThat(segments).hasSize(4)
+        assertThat(Uri.decode(segments[2])).isEqualTo("Ann / Bob & Co")
+    }
+
+    @Test
+    fun `redial carries an audio-only record as an audio call`() {
+        val path = CallRoute.redial(callRecord(isVideo = false))
+
+        assertThat(path.split("/")[3]).isEqualTo("false")
+    }
+
+    @Test
+    fun `redial falls back to the record's display name when the peer is absent`() {
+        val record = callRecord(peer = null, conversationTitle = "Design Team")
+
+        val path = CallRoute.redial(record)
+
+        assertThat(Uri.decode(path.split("/")[2])).isEqualTo("Design Team")
+    }
+
+    private fun callRecord(
+        conversationId: String = "conv-1",
+        isVideo: Boolean = false,
+        conversationTitle: String? = null,
+        peer: CallHistoryPeer? = CallHistoryPeer(
+            userId = "u1",
+            username = "amartin",
+            displayName = "Alice Martin",
+        ),
+    ): CallRecord = CallRecord(
+        callId = "call-1",
+        conversationId = conversationId,
+        conversationType = "direct",
+        conversationTitle = conversationTitle,
+        mode = "p2p",
+        status = "ended",
+        direction = "outgoing",
+        isVideo = isVideo,
+        startedAt = "2026-07-02T10:00:00Z",
+        durationSec = 42,
+        peer = peer,
+    )
 }
