@@ -14,6 +14,21 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 116i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> - **116i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `512798e1`)** :
+>   Dynamic Type + a11y de `OnboardingAnimations` (décor animé du wizard + CTA). Le décor animé
+>   `AnimatedStepBackground` (15 glyphes SF Symbols + emojis drapeaux décoratifs) est **masqué du
+>   rotor VoiceOver** via un seul `.accessibilityHidden(true)` racine (plus de lecture des drapeaux
+>   ambiants) + commentaire doctrine : les 15 tailles `.system(size:)` restent **figées volontairement**
+>   (décor en couches, scaler déformerait le positionnement). **2/17 migrés** : le CTA `GlowingButton`
+>   (titre 16 semibold + icône 15 semibold) → `relative`. 1 fichier, 0 logique, 0 test/clé i18n neuve.
+>   0 contention iOS. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `OnboardingAnimations` Dynamic Type + a11y SOLDÉ** : décor animé masqué + 15 glyphes figés
+>   documentés → ne plus les re-flagger.
+> - **Base de départ 117i : `main` HEAD**. Gros lots restants : `StoryViewerView+Content` (⚠️ i18n +
+>   piège `@State private` cross-file), `ConversationView+Composer` (lot critique prudent),
+>   `StoryViewerView+Canvas` (petits labels + hero 100pt). `FeedPostCard` (9) = chrome d'action-bar → gel documenté.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 115i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
 > - **115i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `49d933d8`)** :
 >   Dynamic Type + a11y de `CallView` (écran d'appel WebRTC). **7/8** `.font(.system(size:))` **figés**
