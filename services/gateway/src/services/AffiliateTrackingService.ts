@@ -105,8 +105,8 @@ export class AffiliateTrackingService {
       });
 
       if (existingRelation) {
-        return { 
-          success: true, 
+        return {
+          success: true,
           data: {
             id: existingRelation.id,
             status: existingRelation.status
@@ -114,7 +114,30 @@ export class AffiliateTrackingService {
         };
       }
 
-      // Créer la relation d'affiliation
+      // Réserver un slot d'utilisation de manière ATOMIQUE avant de créer la relation.
+      // Le cap `maxUses` est appliqué dans le filtre `where` (`currentUses < maxUses`) —
+      // le garde `>= maxUses` en amont n'est qu'un fast-path : entre sa lecture et
+      // l'incrément, N conversions concurrentes pouvaient toutes le franchir puis toutes
+      // incrémenter, dépassant le cap (TOCTOU). Ici MongoDB sérialise les updateMany sur
+      // le même document : seuls `maxUses - currentUses` matchent, les suivants renvoient
+      // `count === 0`. L'incrément reste atomique côté DB (jamais `currentUses + 1` en JS).
+      const reservation = await prisma.affiliateToken.updateMany({
+        where: {
+          id: affiliateToken.id,
+          ...(affiliateToken.maxUses
+            ? { currentUses: { lt: affiliateToken.maxUses } }
+            : {})
+        },
+        data: {
+          currentUses: { increment: 1 }
+        }
+      });
+
+      if (reservation.count === 0) {
+        return { success: false, error: 'Limite d\'utilisation atteinte' };
+      }
+
+      // Créer la relation d'affiliation (le slot est déjà réservé)
       const affiliateRelation = await prisma.affiliateRelation.create({
         data: {
           affiliateTokenId: affiliateToken.id,
@@ -122,16 +145,6 @@ export class AffiliateTrackingService {
           referredUserId: userId,
           status: 'completed',
           completedAt: new Date()
-        }
-      });
-
-      // Mettre à jour le compteur d'utilisation — increment atomique côté DB
-      // (jamais `currentUses + 1` calculé en JS : deux conversions concurrentes
-      // liraient la même valeur et l'une des incrémentations serait perdue).
-      await prisma.affiliateToken.update({
-        where: { id: affiliateToken.id },
-        data: {
-          currentUses: { increment: 1 }
         }
       });
 

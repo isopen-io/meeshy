@@ -46,6 +46,7 @@ function makePrisma(overrides?: {
     affiliateToken: {
       findUnique: jest.fn(),
       update: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       findMany: jest.fn().mockResolvedValue([]),
       ...overrides?.affiliateToken,
     },
@@ -233,7 +234,7 @@ describe('AffiliateTrackingService.convertAffiliateVisit', () => {
       }),
     });
 
-    expect(prisma.affiliateToken.update).toHaveBeenCalledWith({
+    expect(prisma.affiliateToken.updateMany).toHaveBeenCalledWith({
       where: { id: 'tok_001' },
       data: { currentUses: { increment: 1 } },
     });
@@ -257,10 +258,46 @@ describe('AffiliateTrackingService.convertAffiliateVisit', () => {
     });
     await AffiliateTrackingService.convertAffiliateVisit(prisma, token, userId);
 
-    const updateCall = prisma.affiliateToken.update.mock.calls[0][0];
+    const updateCall = prisma.affiliateToken.updateMany.mock.calls[0][0];
     expect(updateCall.data.currentUses).toEqual({ increment: 1 });
     // Must NOT pass a pre-computed number (which is what loses updates).
     expect(typeof updateCall.data.currentUses).not.toBe('number');
+  });
+
+  it('reserves a slot with a cap-guarded conditional update when maxUses is set', async () => {
+    // The reservation must include the cap in its `where` so MongoDB enforces
+    // `currentUses < maxUses` atomically (not just an unconditional increment).
+    const prisma = makePrisma({
+      affiliateToken: {
+        findUnique: jest.fn().mockResolvedValue(makeToken({ maxUses: 10, currentUses: 3 })),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+    });
+    const result = await AffiliateTrackingService.convertAffiliateVisit(prisma, token, userId);
+
+    expect(result.success).toBe(true);
+    expect(prisma.affiliateToken.updateMany).toHaveBeenCalledWith({
+      where: { id: 'tok_001', currentUses: { lt: 10 } },
+      data: { currentUses: { increment: 1 } },
+    });
+    expect(prisma.affiliateRelation.create).toHaveBeenCalled();
+  });
+
+  it('enforces maxUses atomically: no relation when the reservation loses the cap race', async () => {
+    // Two concurrent conversions both pass the read-time pre-check (currentUses < maxUses),
+    // but only `maxUses - currentUses` conditional updateMany can match. The loser gets
+    // count === 0 and must NOT create a relation — otherwise the cap is exceeded (TOCTOU).
+    const prisma = makePrisma({
+      affiliateToken: {
+        findUnique: jest.fn().mockResolvedValue(makeToken({ maxUses: 10, currentUses: 9 })),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+    });
+    const result = await AffiliateTrackingService.convertAffiliateVisit(prisma, token, userId);
+
+    expect(result).toEqual({ success: false, error: "Limite d'utilisation atteinte" });
+    expect(prisma.affiliateRelation.create).not.toHaveBeenCalled();
+    expect(prisma.friendRequest.create).not.toHaveBeenCalled();
   });
 
   it('ignores friendRequest creation errors (already exists)', async () => {
