@@ -1371,6 +1371,30 @@ export class CallEventsHandler {
         // Join call room
         await socket.join(ROOMS.call(data.callId));
 
+        // C8 (prod audit, callIds 6a4607a9…/6a4607bb…) — a user re-joining
+        // from a NEW socket (churn, second tab, post-restart reconnect)
+        // leaves stale sockets of the SAME user in the room: every targeted
+        // signal then fans out to N sockets (targetSockets:2 observed —
+        // glare risk, double offer handling, double analytics). A P2P call
+        // has exactly one signaling endpoint per user: last join wins, our
+        // own older sockets are evicted from the room. Best-effort — an
+        // eviction failure must never fail the join.
+        try {
+          const roomSockets = await io.in(ROOMS.call(data.callId)).fetchSockets();
+          for (const s of roomSockets) {
+            if (s.id !== socket.id && getUserId(s.id) === userId) {
+              s.leave(ROOMS.call(data.callId));
+              logger.info('📞 C8 — evicted stale same-user socket from call room', {
+                callId: data.callId, userId, staleSocketId: s.id, newSocketId: socket.id
+              });
+            }
+          }
+        } catch (evictError) {
+          logger.warn('📞 C8 — same-user socket eviction failed (join unaffected)', {
+            callId: data.callId, evictError
+          });
+        }
+
         // Get the participant that just joined
         const participant = callSession.participants.find(
           p => ((p.participant?.userId || p.participantId) === userId) && !p.leftAt
