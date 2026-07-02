@@ -14,6 +14,20 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 117i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> - **117i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `9077eea6`)** :
+>   Dynamic Type + a11y de `StoryViewerView+Canvas` (canvas du viewer de stories). **10/13**
+>   `.font(.system(size:))` → `MeeshyFont.relative` (libellé + aperçu de réponse, transcription
+>   vocale, badge audio `music.note`/titre/uploader, badge traduction `translate`/code langue, pseudo
+>   de cover). **3 glyphes figés** : croix annuler-réponse (cadre fixe 22×22, 82i), croix fermeture
+>   preview (cadre fixe 36×36, 82i), emoji réaction hero (100pt burst animé, 84i, déjà hidden).
+>   `accessibilityLabel(story.viewer.reply.cancel)` sur la croix d'annulation. 1 fichier, 0 logique,
+>   0 test neuf, 1 clé i18n inline. 0 contention iOS. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `StoryViewerView+Canvas` Dynamic Type + a11y SOLDÉ** : ne plus reprendre les 3 glyphes figés.
+> - **Base de départ 118i : `main` HEAD**. Gros lots restants : `StoryViewerView+Content` (⚠️ i18n +
+>   piège `@State private` cross-file), `ConversationView+Composer` (lot critique prudent),
+>   `ConversationView+MessageRow`, `BubbleStandardLayout+Media`. `FeedPostCard` (9) = chrome d'action-bar → gel documenté.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 116i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
 > - **116i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `512798e1`)** :
 >   Dynamic Type + a11y de `OnboardingAnimations` (décor animé du wizard + CTA). Le décor animé
