@@ -14,6 +14,22 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 115i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> - **115i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `49d933d8`)** :
+>   Dynamic Type + a11y de `CallView` (écran d'appel WebRTC). **7/8** `.font(.system(size:))` **figés**
+>   avec commentaires doctrine — glyphes de contrôle dans des cercles glass de diamètre fixe
+>   (`callControlGlass`/`endCallGlass` ⌀40/56/64, doctrine 82i/86i) + initiales d'avatar dans cercles
+>   fixes (56×56, `size*0.4`) ; les captions `.caption2` sous chaque bouton portent déjà le Dynamic
+>   Type. **1/8 migré** : `video.slash.fill` de l'overlay « vidéo en pause » (18 semibold) →
+>   `relative` + `accessibilityHidden` (libellés adjacents portent le sens). 1 fichier, 0 logique,
+>   0 test/clé i18n neuve. 0 contention iOS. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `CallView` Dynamic Type + a11y SOLDÉ** : les 7 glyphes de contrôle en cercles glass fixes
+>   sont désormais commentés in-situ (doctrine 82i/86i) → ne plus les re-flagger.
+> - **Base de départ 116i : `main` HEAD**. Gros lots restants : `StoryViewerView+Content` (⚠️ i18n +
+>   piège `@State private` cross-file), `ConversationView+Composer` (lot critique prudent),
+>   `OnboardingAnimations` (glyphes d'animation ≥40pt → gel + masquage), `StoryViewerView+Canvas`
+>   (petits labels migrables + hero 100pt). `FeedPostCard` (9) = chrome d'action-bar → gel documenté.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 114i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
 > - **114i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `529ccb81`)** :
 >   Dynamic Type + a11y de `StoryExportShareSheet` (sheet d'export MP4 auteur-only). **5/6**
