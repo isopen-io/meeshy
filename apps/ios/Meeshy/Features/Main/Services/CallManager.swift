@@ -195,7 +195,11 @@ final class CallManager: ObservableObject {
     @Published private(set) var availableCameras: [CameraDeviceOption] = []
     /// §7.1 — uniqueID of the active capture camera (drives the picker's check).
     @Published private(set) var selectedCameraId: String?
-    @Published var pendingIncomingCall: (callId: String, fromUserId: String, fromUsername: String, isVideo: Bool)?
+    /// `iceServers` must be threaded through from whichever incoming-call path
+    /// populates this (VoIP push busy path, foreground busy path) so
+    /// `endCurrentAndAnswerPending()` can answer with fresh TURN credentials
+    /// instead of silently proceeding without any (`configure(iceServers: nil)`).
+    @Published var pendingIncomingCall: (callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, iceServers: [IceServer]?)?
 
     // MARK: - Audio Guard (DEBUG override for tests)
 
@@ -901,7 +905,7 @@ final class CallManager: ObservableObject {
                 }
             }
             callProvider.reportCall(with: uuid, endedAt: nil, reason: .unanswered)
-            pendingIncomingCall = (callId: callId, fromUserId: callerUserId, fromUsername: callerName, isVideo: isVideo)
+            pendingIncomingCall = (callId: callId, fromUserId: callerUserId, fromUsername: callerName, isVideo: isVideo, iceServers: iceServers)
             showCallWaitingBanner = true
             Logger.calls.info("VoIP push while busy — ended secondary call, showing banner")
             HapticFeedback.medium()
@@ -1093,7 +1097,7 @@ final class CallManager: ObservableObject {
         resetEndedStateForNewCall()
         guard callState == .idle else {
             Logger.calls.info("Incoming call while busy — showing call waiting banner")
-            pendingIncomingCall = (callId: callId, fromUserId: fromUserId, fromUsername: fromUsername, isVideo: isVideo)
+            pendingIncomingCall = (callId: callId, fromUserId: fromUserId, fromUsername: fromUsername, isVideo: isVideo, iceServers: iceServers)
             showCallWaitingBanner = true
             HapticFeedback.medium()
             return
@@ -1868,7 +1872,8 @@ final class CallManager: ObservableObject {
                 callId: pending.callId,
                 fromUserId: pending.fromUserId,
                 fromUsername: pending.fromUsername,
-                isVideo: pending.isVideo
+                isVideo: pending.isVideo,
+                iceServers: pending.iceServers
             )
             self.pendingIncomingCall = nil
         }
@@ -2733,6 +2738,19 @@ final class CallManager: ObservableObject {
         lastKnownStats = nil
         webRTCService.close()
         deactivateAudioSession()
+        // Audit — teardown call sites that pass `.failed(...)` (setup/negotiation
+        // errors before a more specific remote/local reason is known: ACK
+        // failure, SDP timeout, ICE failure, ...) never told CallKit the call
+        // ended, unlike every other reason (`.rejected`/`.remote`/`.missed`/
+        // `.connectionLost`), each already reported at its own call site
+        // above `endCallInternal`. Left uncorrected CallKit shows a stuck
+        // ringing card / a stale Recents entry. Centralized here (rather than
+        // patched at each of the ~10 `.failed(...)` call sites) because no
+        // other reason reaches this point already reported — safe single
+        // choke point.
+        if case .failed = reason, let uuid = activeCallUUID {
+            callProvider.reportCall(with: uuid, endedAt: Date(), reason: .failed)
+        }
         callState = .ended(reason: reason)
         connectionQuality = .new
         liveVideoQualityLevel = nil
@@ -3054,7 +3072,19 @@ final class CallManager: ObservableObject {
         socket.callEnded
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                self?.handleRemoteEnd(callId: event.callId, rawReason: event.reason)
+                guard let self else { return }
+                // The 2nd caller (the one call-waited behind `currentCallId`)
+                // hung up/was cancelled before the user answered/rejected it.
+                // `handleRemoteEnd` below only acts when `currentCallId ==
+                // event.callId`, which is never true for a still-pending
+                // call — without this branch the banner stayed stuck
+                // pointing at a callId the gateway already tore down.
+                if self.pendingIncomingCall?.callId == event.callId {
+                    Logger.calls.info("call:ended for pending call-waiting callId \(event.callId) — clearing banner")
+                    self.pendingIncomingCall = nil
+                    self.showCallWaitingBanner = false
+                }
+                self.handleRemoteEnd(callId: event.callId, rawReason: event.reason)
             }
             .store(in: &cancellables)
 
@@ -3067,6 +3097,10 @@ final class CallManager: ObservableObject {
             .sink { [weak self] event in
                 guard let self else { return }
                 Logger.calls.info("call:missed received: callId=\(event.callId), caller=\(event.callerName ?? "?")")
+                if self.pendingIncomingCall?.callId == event.callId {
+                    self.pendingIncomingCall = nil
+                    self.showCallWaitingBanner = false
+                }
                 if self.currentCallId == event.callId {
                     self.handleRemoteEnd(callId: event.callId, rawReason: "missed")
                 }

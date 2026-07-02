@@ -523,12 +523,6 @@ protocol WebRTCClientProviding: AnyObject {
     /// with video for the available budget. Min bitrate is always preserved
     /// at the value set by `applyAudioCodecPreferences` (16 kbps floor).
     func applyAudioEncoding(maxBitrateBps: Int)
-    /// Dynamically tightens the Opus encoder ceiling. Called from
-    /// `WebRTCService.adjustBitrate` when the RTT/loss heuristic drops
-    /// below the `goodRTT`/`goodPacketLoss` thresholds, reducing the
-    /// ceiling from 64 kbps to 24 kbps so GCC has less headroom to fill
-    /// and audio competes less aggressively with loss recovery traffic.
-    func setMaxAudioBitrate(_ bitrate: Int)
     /// Whether a local camera track currently exists (audio-only calls have
     /// none until upgraded). Drives the self-preview / camera-toggle UI.
     var hasLocalVideoTrack: Bool { get }

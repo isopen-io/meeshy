@@ -1111,8 +1111,16 @@ export class CallService {
       throw new Error(`${CALL_ERROR_CODES.CALL_NOT_FOUND}: Call session not found`);
     }
 
-    if (call.status === CallStatus.ended) {
-      logger.warn('⚠️ Call already ended', { callId });
+    // Idempotency: `updateCallStatus`/`leaveCall` already short-circuit on
+    // ANY terminal status, not just `ended` — this guard only checked
+    // `ended`, so a call already resolved to `missed`/`rejected`/`failed`
+    // by another path (e.g. the ringing-timeout's `markCallAsMissed`, which
+    // never touches participant rows) could still be re-processed by a
+    // delayed/retried `call:end` and get silently overwritten back to
+    // `ended`/`completed` — reopening the exact "phantom completed call"
+    // bug the C3/C4 pre-answer fix above was meant to close.
+    if (TERMINAL_STATUSES.includes(call.status)) {
+      logger.warn('⚠️ Call already in terminal state', { callId, currentStatus: call.status });
       return this.getCallSession(callId);
     }
 

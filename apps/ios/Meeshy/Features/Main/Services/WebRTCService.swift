@@ -74,7 +74,6 @@ final class WebRTCService {
     // no structured cancellation hand-off.
     private var qualityMonitorTask: Task<Void, Never>?
     private var lastStats: CallStats?
-    private var comfortNoiseEnabled = true
     private var qualityLevelDebounceDate: Date?
     // §5.6 — last device thermal state applied to the encoder. A change here
     // re-applies the video encoding ceiling even when the network quality
@@ -267,13 +266,6 @@ final class WebRTCService {
                 Logger.webrtc.error("Failed to switch to camera \(uniqueID): \(error.localizedDescription)")
             }
         }
-    }
-
-    // MARK: - Comfort Noise
-
-    func handleRemoteAudioMuted(_ muted: Bool) {
-        guard comfortNoiseEnabled else { return }
-        Logger.webrtc.info("Remote audio \(muted ? "muted" : "unmuted") — CNG active via Opus")
     }
 
     // MARK: - Quality Monitoring

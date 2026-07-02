@@ -396,15 +396,14 @@ propre) :
       quand même) n'est pas fait — changerait la signature de `CallService.endCall()` (routes/calls.ts +
       CallEventsHandler.ts + ~8 tests), jugé hors scope pour cette session vu que l'index corrige déjà le
       symptôme observable (double persistance en DB)
-- [ ] iOS (déféré, pas de toolchain Swift dans cet environnement — voir session ci-dessous pour le détail) :
-      CallKit jamais informé (`reportCall`/`CXEndCallAction`) sur les téardowns `.failed(...)` après
-      engagement CallKit (`CallManager.swift` ~L855, motif répété ~L1250/1375/1430/1892/3312) ; TURN perdu
-      sur le flow « End & Answer waiting call » (`pendingIncomingCall` ne porte pas `iceServers`,
-      `CallManager.swift` ~L198/1096/1858) ; banner call-waiting jamais nettoyé si l'appelant raccroche
-      avant que l'utilisateur réponde (aucun listener socket ne vérifie `pendingIncomingCall?.callId`) ;
-      pipeline effets vocaux mort mais toujours instancié par appel (`CallAudioEffectsService`,
-      AVAudioEngine construit inutilement) ; `WebRTCService.handleRemoteAudioMuted`/`setMaxAudioBitrate`
-      dead code (aucun appelant prod, superseded par `applyAudioEncoding`)
+- [x] iOS CallKit/TURN/banner triad — **CORRIGÉ 2026-07-02 (session ci-dessous)**, voir détail. Pipeline
+      effets vocaux mort mais toujours instancié par appel (`CallAudioEffectsService`, AVAudioEngine
+      construit inutilement) reste ouvert — recâblage nécessite un hook de capture WebRTC dédié, hors
+      scope d'un cycle d'audit.
+- [ ] C6 court-circuit `endCall()` (routes/calls.ts + CallEventsHandler.ts + ~9 tests) toujours différé —
+      voir note "Reste ouvert (C6 court-circuit)" ci-dessus. Une variante voisine (endCall() rappelé sur
+      un call DÉJÀ missed/rejected/failed, pas seulement ended) a été trouvée et corrigée cette session
+      (voir ci-dessous) ; le court-circuit "no-op rebroadcast" original reste, lui, non traité.
 
 ### Session 2026-07-02 (routine calling-feature, gateway-only — toujours pas de toolchain Swift ici)
 
@@ -426,3 +425,58 @@ propre) :
 - **Reste ouvert (C6 court-circuit)** : toujours non fait, mêmes raisons (changerait la signature
   `endCall()` sur 2 call sites + ~9 tests pour un gain cosmétique — la dédup DB réelle est déjà couverte
   par le catch P2002 sur l'index unique partiel corrigé la session précédente).
+
+### Session 2026-07-02 (routine calling-feature) — iOS triad iOS-only backlog traité + bug gateway `endCall` idempotence
+
+Point d'entrée : reprise du backlog "Reste à faire" iOS déféré aux sessions précédentes (toujours pas de
+toolchain Swift/Xcode dans cet environnement — Linux — donc portée limitée à des fixes vérifiés par
+lecture attentive + tests source-guard, CI `ios-tests` macOS reste le juge final). Un agent d'exploration
+dédié a re-vérifié les 3 pistes iOS + les 2 claims de dead code sur le code RÉEL (pas les numéros de ligne
+périmés du backlog) avant tout fix.
+
+- **[FIX iOS, HIGH] CallKit jamais informé sur téardown `.failed(...)`** — confirmé plus large que prévu :
+  ~11 call sites passent `endCallInternal(reason: .failed(...))` sans jamais appeler
+  `callProvider.reportCall`, contre 6 sites qui le font correctement pour les autres raisons
+  (`.rejected`/`.remote`/`.missed`/`.connectionLost`). Fix centralisé (plutôt que patché à chaque site) :
+  `endCallInternal` reporte lui-même `.failed` à CallKit juste avant `activeCallUUID = nil`, gated sur
+  `case .failed = reason` — sûr car aucun site qui reporte déjà avant d'appeler `endCallInternal` n'utilise
+  la raison `.failed`. Sans ce fix : carte d'appel CallKit bloquée en "ringing"/entrée Recents fantôme.
+- **[FIX iOS, HIGH] TURN perdu sur « End & Answer waiting call »** — `pendingIncomingCall` ne portait pas
+  `iceServers` malgré que les deux sites qui le peuplent (`reportIncomingVoIPCall` VoIP-push busy path,
+  `handleIncomingCallNotification` foreground busy path) reçoivent déjà ce paramètre. Fix : champ
+  `iceServers: [IceServer]?` ajouté au tuple, capturé aux 2 sites d'écriture, transmis par
+  `endCurrentAndAnswerPending()` au lieu de laisser `handleIncomingCallNotification` défaulter à `nil`
+  (`webRTCService.configure(iceServers: nil)`, appel sans TURN).
+- **[FIX iOS, MED] Banner call-waiting jamais nettoyé si l'appelant du 2nd appel raccroche avant réponse**
+  — ni `socket.callEnded` ni `socket.callMissed` ne vérifiaient `pendingIncomingCall?.callId` (seul
+  `currentCallId` était comparé, jamais vrai pour un appel encore pending) — banner fantôme pointant vers
+  un `callId` déjà clos côté gateway. Fix : les deux sinks clearent `pendingIncomingCall`/
+  `showCallWaitingBanner` quand `event.callId` matche le pending, en plus de leur logique existante.
+- **[CLEANUP iOS] Dead code confirmé et supprimé** — `WebRTCService.handleRemoteAudioMuted` (0 appelant
+  prod, `comfortNoiseEnabled` devenu mort avec lui) et `setMaxAudioBitrate` (protocole
+  `WebRTCClientProviding` + impl réelle `P2PWebRTCClient` + stub `#else`, 0 appelant prod, superseded par
+  `applyAudioEncoding` — confirmé par grep exhaustif, pas de `| head` tronqué cf. leçon #39).
+- **[BUG TROUVÉ EN PASSANT, iOS] Stub `#else` (WebRTC non résolu) ne compilait déjà plus** — en retirant
+  `setMaxAudioBitrate` du stub `#else` de `P2PWebRTCClient`, découverte que ce même stub n'implémentait ni
+  `applyAudioEncoding` (requirement du protocole) ni `videoFilterPipeline` (requirement `{ get }`) — un
+  gap de conformité protocole pré-existant, invisible ici car ce chemin ne compile QUE quand le package
+  SPM WebRTC n'est pas résolu (CI sans WebRTC, cf. leçon iOS 2026-06-01 sur `WebRTCStubs.swift`). Corrigé
+  dans la même passe (2 lignes, miroir exact des no-op déjà présents pour `applyVideoEncoding`).
+  Tests : 6 nouveaux tests source-guard `CallManagerTests.swift` (CallKit report + TURN threading + banner
+  cleanup ×2), 3 nouveaux tests source-guard `WebRTCServiceTests.swift` (conformité stub `#else`). Non
+  recompilé localement (pas de toolchain Swift ici) — CI `ios-tests` reste le garde-fou, comme toutes les
+  sessions iOS précédentes de ce backlog.
+
+- **[BUG TROUVÉ + CORRIGÉ, gateway, TDD] `CallService.endCall()` : idempotence incomplète (missed/rejected
+  → écrasé en `ended`)** — trouvé en auditant le voisinage du fix C3/C4 (guard `updateCallStatus`/
+  `leaveCall` déjà sur `TERMINAL_STATUSES.includes(...)`, mais `endCall()` ne guardait que
+  `status === CallStatus.ended`). Race réelle : le ringing-timeout (`markCallAsMissed`) résout la
+  `CallSession` en `missed` SANS toucher les lignes `CallParticipant` (`leftAt` reste `null`) — un
+  `call:end` retardé/rejoué de l'initiateur (retry socket, event dupliqué) repasse alors tous les checks
+  (participant encore actif) et écrase silencieusement `status=missed`→`ended`, `endReason`→`completed` :
+  exactement le bug "appel fantôme completed" que le fix C3/C4 visait à fermer, réouvert par un chemin
+  différent (double-invocation au lieu d'un ordering pré-answer). Fix : `TERMINAL_STATUSES.includes(call.status)`
+  au lieu de `call.status === CallStatus.ended`, alignant `endCall()` sur le pattern déjà utilisé par
+  `updateCallStatus`/`leaveCall`/`joinCall` (leçon #42/#45 : drift de patterns siblings). 2 tests TDD
+  ajoutés (missed→pas réécrit, rejected→pas réécrit, assertion `$transaction` jamais appelé). Suite
+  complète : 23/23 suites call (709/709 tests), `CallService.test.ts` 150/150.
