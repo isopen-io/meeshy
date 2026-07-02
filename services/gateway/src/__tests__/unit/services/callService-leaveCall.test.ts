@@ -69,6 +69,7 @@ const setupTransactionPassthrough = (prisma: ReturnType<typeof buildMockPrisma>)
       },
       callSession: {
         update: jest.fn().mockResolvedValue({ id: 'call-1', status: CallStatus.ended }),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         findUnique: jest.fn().mockResolvedValue(null),
       },
     };

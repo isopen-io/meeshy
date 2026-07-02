@@ -174,7 +174,7 @@ struct ConversationContextMenuView: View {
                         onDismiss()
                     } label: {
                         Text(emoji)
-                            .font(.system(size: 22))
+                            .font(MeeshyFont.relative(22))
                             .frame(maxWidth: .infinity, minHeight: 44)
                             .contentShape(Rectangle())
                     }
@@ -292,20 +292,20 @@ struct ConversationContextMenuView: View {
         } label: {
             HStack(spacing: 14) {
                 Image(systemName: icon)
-                    .font(.system(size: 17, weight: .medium))
+                    .font(MeeshyFont.relative(17, weight: .medium))
                     .symbolRenderingMode(.hierarchical)
                     .frame(width: 24)
                 Text(label)
-                    .font(.system(size: 16, weight: .regular))
+                    .font(MeeshyFont.relative(16))
                     .multilineTextAlignment(.leading)
                 Spacer(minLength: 0)
                 if showsCheckmark {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                 }
                 if showsChevron {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .opacity(0.4)
                 }
             }
@@ -325,11 +325,11 @@ struct ConversationContextMenuView: View {
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(MeeshyFont.relative(15, weight: .semibold))
                     .symbolRenderingMode(.hierarchical)
                     .frame(width: 24)
                 Text(title)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(MeeshyFont.relative(16, weight: .semibold))
                 Spacer(minLength: 0)
             }
             .foregroundStyle(accent)

@@ -406,10 +406,23 @@ export class CallService {
       updateData.answeredAt = new Date();
     }
 
-    await this.prisma.callSession.update({
-      where: { id: callId },
-      data: updateData
+    // Version-guarded write: the plain `update` this replaced could blind-write
+    // over a concurrent terminal transition (e.g. endCall()/leaveCall() resolving
+    // the call to `missed`/`ended` between our `findUnique` above and this write),
+    // resurrecting an already-ended call back to a non-terminal status. Scoping
+    // to the version we read makes a losing writer's update a no-op instead —
+    // same optimistic-lock pattern as joinCallAttempt().
+    const lock = await this.prisma.callSession.updateMany({
+      where: { id: callId, version: call.version },
+      data: { ...updateData, version: { increment: 1 } }
     });
+
+    if (lock.count === 0) {
+      logger.warn('⚠️ Call status update lost race to a concurrent write — no-op', {
+        callId, requestedStatus: newStatus
+      });
+      return this.getCallSession(callId);
+    }
 
     if (TERMINAL_STATUSES.includes(newStatus)) {
       await this.releaseActiveCallClaim(call.conversationId, callId);
@@ -572,8 +585,13 @@ export class CallService {
         const now = new Date();
         const duration = Math.floor((now.getTime() - activeCall.startedAt.getTime()) / 1000);
 
-        await this.prisma.callSession.update({
-          where: { id: activeCall.id },
+        // Scoped to status still in ACTIVE_STATUSES (mirrors the
+        // initiatorStaleParticipations cleanup above): if the last
+        // participant reconnected/rejoined between the `activeParticipants`
+        // read above and this write, this becomes a no-op instead of
+        // force-ending a call that just resumed.
+        await this.prisma.callSession.updateMany({
+          where: { id: activeCall.id, status: { in: ACTIVE_STATUSES } },
           data: {
             status: CallStatus.ended,
             endedAt: now,
@@ -940,21 +958,47 @@ export class CallService {
         existing.status === CallStatus.initiated ||
         existing.status === CallStatus.ringing ||
         existing.status === CallStatus.connecting;
-      await this.prisma.$transaction(async (tx) => {
+      // Version-guarded (see endCall()'s doc comment): a racing terminal
+      // writer (call:end, force-end) could resolve this same call between
+      // the `existing` read above and this write; scope to `existing.version`
+      // so the losing writer no-ops instead of clobbering the winner's
+      // duration/endReason.
+      const idemVersionConflict = Symbol('idemVersionConflict');
+      const idemOutcome = await this.prisma.$transaction(async (tx) => {
         await tx.callParticipant.updateMany({
           where: { callSessionId: callId, OR: [{ leftAt: null }, { leftAt: { isSet: false } }] },
           data: { leftAt: idemNow }
         });
-        await tx.callSession.update({
-          where: { id: callId },
+        const lock = await tx.callSession.updateMany({
+          where: { id: callId, version: existing.version },
           data: {
             status: idemPreAnswered ? CallStatus.missed : CallStatus.ended,
             endReason: idemPreAnswered ? CallEndReason.missed : CallEndReason.completed,
             endedAt: idemNow,
-            duration: Math.max(0, Math.floor((idemNow.getTime() - existing.startedAt.getTime()) / 1000))
+            duration: Math.max(0, Math.floor((idemNow.getTime() - existing.startedAt.getTime()) / 1000)),
+            version: { increment: 1 }
           }
         });
-      });
+        if (lock.count === 0) {
+          throw idemVersionConflict;
+        }
+      }).then(
+        () => 'ended' as const,
+        (error) => {
+          if (error === idemVersionConflict) {
+            return 'conflict' as const;
+          }
+          throw error;
+        }
+      );
+
+      if (idemOutcome === 'conflict') {
+        logger.warn('⚠️ Idempotent leave lost race to a concurrent terminal write — returning current session', {
+          callId, userId
+        });
+        return this.getCallSession(callId);
+      }
+
       this.clearHeartbeats(callId);
       this.clearRingingTimeout(callId);
       await this.releaseActiveCallClaim(existing.conversationId, callId);
@@ -1010,8 +1054,14 @@ export class CallService {
     const targetEndedStatus = wasPreAnswered ? CallStatus.missed : CallStatus.ended;
     const targetEndReason = wasPreAnswered ? CallEndReason.missed : CallEndReason.completed;
 
-    // Update in transaction
-    await this.prisma.$transaction(async (tx) => {
+    // Update in transaction. Version-guarded on the terminal write (see
+    // endCall()'s doc comment): a racing terminal writer for this same call
+    // (e.g. a retried call:end, or the OTHER participant's own leave landing
+    // concurrently) could resolve it between the `call` read above and this
+    // write; scoping to `call.version` makes the losing writer's terminal
+    // write a no-op instead of clobbering the winner's duration/endReason.
+    const leaveVersionConflict = Symbol('leaveVersionConflict');
+    const leaveOutcome = await this.prisma.$transaction(async (tx) => {
       // Update participant left time
       await tx.callParticipant.update({
         where: { id: callParticipant.id },
@@ -1024,15 +1074,20 @@ export class CallService {
           (leftAt.getTime() - call.startedAt.getTime()) / 1000
         );
 
-        await tx.callSession.update({
-          where: { id: callId },
+        const lock = await tx.callSession.updateMany({
+          where: { id: callId, version: call.version },
           data: {
             status: targetEndedStatus,
             endReason: targetEndReason,
             endedAt: leftAt,
-            duration
+            duration,
+            version: { increment: 1 }
           }
         });
+
+        if (lock.count === 0) {
+          throw leaveVersionConflict;
+        }
 
         logger.info('✅ Call closed - last participant left', {
           callId,
@@ -1042,7 +1097,22 @@ export class CallService {
           wasPreAnswered
         });
       }
-    });
+    }).then(
+      () => 'left' as const,
+      (error) => {
+        if (error === leaveVersionConflict) {
+          return 'conflict' as const;
+        }
+        throw error;
+      }
+    );
+
+    if (leaveOutcome === 'conflict') {
+      logger.warn('⚠️ Leave-triggered call end lost race to a concurrent terminal write — returning current session', {
+        callId, userId
+      });
+      return this.getCallSession(callId);
+    }
 
     if (isLastParticipant) {
       this.clearHeartbeats(callId);
@@ -1196,7 +1266,17 @@ export class CallService {
       : resolvedReason;
     const targetStatus = wasPreAnswered ? CallStatus.missed : CallStatus.ended;
 
-    await this.prisma.$transaction(async (tx) => {
+    // Version-guarded: a plain read-modify-write here raced with any other
+    // terminal writer touching this same call (a retried `call:end`, a
+    // concurrent `leaveCall`/force-end from CallCleanupService/disconnect
+    // handling) — both read the same pre-terminal snapshot, both pass the
+    // `TERMINAL_STATUSES` guard above, and whichever writes last silently
+    // clobbers the other's `duration`/`endReason`. Scoping the final write to
+    // `version: call.version` (same optimistic-lock field `joinCallAttempt`
+    // uses) makes the losing writer's update a no-op and roll back its
+    // participant `leftAt` stamps too, instead of corrupting the record.
+    const versionConflict = Symbol('versionConflict');
+    const outcome = await this.prisma.$transaction(async (tx) => {
       await tx.callParticipant.updateMany({
         where: {
           callSessionId: callId,
@@ -1205,8 +1285,8 @@ export class CallService {
         data: { leftAt: endedAt }
       });
 
-      await tx.callSession.update({
-        where: { id: callId },
+      const lock = await tx.callSession.updateMany({
+        where: { id: callId, version: call.version },
         data: {
           status: targetStatus,
           endedAt,
@@ -1215,10 +1295,30 @@ export class CallService {
           metadata: {
             ...(call.metadata as Record<string, unknown>),
             endedBy
-          }
+          },
+          version: { increment: 1 }
         }
       });
-    });
+
+      if (lock.count === 0) {
+        throw versionConflict;
+      }
+    }).then(
+      () => 'ended' as const,
+      (error) => {
+        if (error === versionConflict) {
+          return 'conflict' as const;
+        }
+        throw error;
+      }
+    );
+
+    if (outcome === 'conflict') {
+      logger.warn('⚠️ Call end lost race to a concurrent terminal write — returning current session', {
+        callId, endedBy
+      });
+      return this.getCallSession(callId);
+    }
 
     this.clearHeartbeats(callId);
     this.clearRingingTimeout(callId);

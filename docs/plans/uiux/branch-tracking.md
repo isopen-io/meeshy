@@ -14,6 +14,35 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 121i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> - **121i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `ead4451c`)** :
+>   Dynamic Type de `ConversationContextMenuView` (menu contextuel long-press de message). **7/7**
+>   `.font(.system(size:))` → `MeeshyFont.relative` (emoji favori, icône+libellé de rangée d'action,
+>   checkmark/chevron d'état, chevron+titre de l'en-tête de retour) → **0 `.system(size:)` restant,
+>   surface 100 % conforme**. 0 gel (aucun cadre fixe : les `frame(width:24)` sont des colonnes
+>   d'alignement en rangées `minHeight:44`). a11y déjà exhaustive (labels de bouton + `.isButton`).
+>   1 fichier, 0 logique, 0 test/clé i18n neuve. 0 contention iOS. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `ConversationContextMenuView` Dynamic Type SOLDÉ** (0 `.system(size:)`). **`TwoFactorSetupView`
+>   déjà conforme** (texte `relative`/sémantique, 9 héros ≥40pt déjà `accessibilityHidden`) → ne pas reprendre.
+> - **Base de départ 122i : `main` HEAD**. Gros lots restants : `StoryViewerView+Content` (⚠️ i18n +
+>   piège `@State private` cross-file), `ConversationView+Composer` (lot critique prudent). Fresh à
+>   texte réel : `FeedCommentsSheet` (5), `EmojiPickerSheet` (5), `FeedView` (7). `FeedPostCard` (9)
+>   = chrome d'action-bar → gel documenté. Ensuite : passe de revue state-of-the-art (palette/dark-light/gestes).
+>
+> **POINTEUR AUTORITAIRE iOS (mis à jour 120i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> - **120i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `385df871`)** :
+>   a11y de `ConversationAnimatedBackground` (décor animé de l'écran de conversation, contrepartie de
+>   `OnboardingAnimations`). Les **12** `.font(.system(size:))` sont **toutes** du décor animé (cœurs,
+>   person, globe, cadenas/boucliers/enveloppes, drapeaux) → **masquées du rotor VoiceOver** via un
+>   seul `.accessibilityHidden(true)` racine + commentaire doctrine (tailles figées volontairement,
+>   décor en couches). **0 migration** justifiée (100 % décoratif → gel + masquage, comme 116i).
+>   1 fichier, 0 logique, 0 test/clé i18n neuve. 0 contention iOS. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `ConversationAnimatedBackground` a11y SOLDÉ** : décor masqué + 12 glyphes figés documentés → ne plus re-flagger.
+> - **Base de départ 121i : `main` HEAD**. Gros lots restants : `StoryViewerView+Content` (⚠️ i18n +
+>   piège `@State private` cross-file), `ConversationView+Composer` (lot critique prudent).
+>   `FeedPostCard` (9) = chrome d'action-bar → gel documenté. Ensuite : passe de revue state-of-the-art
+>   (audit palette hexes proches, cohérence .system/.dark/.light, gestes standards) sur les surfaces soldées.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 119i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
 > - **119i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `ed63724f`)** :
 >   Dynamic Type + a11y de `BubbleStandardLayout+Media` (grille média de la bulle, leaf view).

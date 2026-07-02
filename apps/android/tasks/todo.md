@@ -4,26 +4,24 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Calls) — slice `fcm-call-push-route` ✅
-The **FCM call-push routing** — wires the pure decision bricks into the live FCM service so a
-backgrounded/killed device actually rings on an incoming-call data push.
-- `core:model` pure `IncomingCallPushRouter.route(data, context) → IncomingCallPushRoute`
-  (`NotACallPush` | `Ring(push, updatedSeen)` | `Suppress(reason)`): folds parser → decider → ring-insert;
-  the dedup ring advances **only** on a `Ring`, so a retry is deduped and a suppressed push never poisons it.
-- `:app` `@Singleton IncomingCallRingStore`: the sole owner of the live `SeenCallRing`; synchronized
-  `route`/`forget`, self-user id threaded from `SessionRepository`.
-- `:app` `MeeshyFcmService.onMessageReceived`: routes by kind — `Ring` → full-screen CATEGORY_CALL /
-  `PRIORITY_MAX` notification on the new `meeshy_calls` channel (`setFullScreenIntent` → `MainActivity` +
-  `callId`/`conversationId`/`callerName`/`isVideo` extras); `Suppress` → silent drop; `NotACallPush` →
-  the existing message path.
-- +19 behavioural tests (11 router, 8 store). `assembleDebug` + all `testDebugUnitTest` green.
-  Diff = `apps/android` only (5 files, glue outside is exempt platform code).
+## This loop (Phase: Calls) — slice `incoming-call-deeplink` ✅
+The **incoming-call deep-link** — consumes the `MainActivity` launch/full-screen intent extras and routes
+them into the NavHost, so a ring tap actually opens the incoming-call screen.
+- `:app` pure `LaunchRouter.route(LaunchExtras) → String?` (SSOT): non-blank `callId` → `CallRoute.incoming`
+  (call push wins; `isOutgoing=false` + server id ⇒ answerable ring); else non-blank `conversationId` →
+  `Routes.chat` (shared message-tap path); else `null`.
+- `CallRoute` refactored to a **static `call` path + all-optional query args** (a blank room / peer name
+  can never collapse a required path segment → no `navigate()` crash). Added `incoming(...)` +
+  `config(callId, incoming)`; outgoing/`redial` behaviour preserved.
+- `:app` glue: `MeeshyApp(launchRoute, onLaunchRouteConsumed)` navigates via a `LaunchedEffect` once the
+  graph is live + authenticated, then marks consumed; `MainActivity` extracts extras in `onCreate` +
+  `onNewIntent`.
+- +14 behavioural tests (8 router, 6 route). `assembleDebug` + all `testDebugUnitTest` green.
+  Diff = `apps/android` only (6 files; MeeshyApp/MainActivity glue is exempt platform code).
 
 ### Next
-1. Consume the `MainActivity` call extras → NavHost deep-link into the incoming-call screen (shared
-   plumbing with the still-unwired message-notification `conversationId` deep-link).
-2. `ConnectionService`/Telecom integration + ringtone; then WebRTC media transport.
-3. Follow-up: `SocketManager.reconnectWithToken()` still has no caller (token-refresh re-attach slice).
+1. `ConnectionService`/Telecom integration + ringback tone (system call UI); then WebRTC media transport.
+2. Follow-up: `SocketManager.reconnectWithToken()` still has no caller (token-refresh re-attach slice).
 
 ## Prior loop (Phase: Calls) — slice `incoming-call-push-decision` ✅
 The **pure incoming-call push decision core** — the brick before the Android Telecom/`ConnectionService`
