@@ -423,7 +423,16 @@ export default async function callRoutes(fastify: FastifyInstance) {
       // Get call to verify permissions
       const call = await callService.getCallSession(callId);
 
-      // Verify user is initiator or admin/moderator of conversation
+      // Resolve conversation membership (needed for endParticipantId below).
+      // Authorization on WHO may end the call is enforced by
+      // callService.endCall() itself — P2P: any active participant may end
+      // for everyone; SFU (Phase 2): initiator/moderator only. This route
+      // must mirror that single policy rather than re-implement a stricter
+      // initiator/admin/moderator-only gate here: the socket `call:end` path
+      // has no such extra gate, so a plain P2P callee ending their own call
+      // via REST previously got PERMISSION_DENIED while the identical action
+      // via the socket succeeded — an authorization inconsistency between
+      // the two transports for the exact same operation.
       const membership = await prisma.participant.findFirst({
         where: {
           conversationId: call.conversationId,
@@ -434,16 +443,6 @@ export default async function callRoutes(fastify: FastifyInstance) {
 
       if (!membership) {
         return sendForbidden(reply, 'NOT_A_PARTICIPANT');
-      }
-
-      // Only initiator or admin/moderator can end call
-      const canEndCall =
-        call.initiatorId === userId ||
-        membership.role === 'admin' ||
-        membership.role === 'moderator';
-
-      if (!canEndCall) {
-        return sendForbidden(reply, 'PERMISSION_DENIED');
       }
 
       const endParticipantId = authRequest.authContext.participantId || membership?.id;
