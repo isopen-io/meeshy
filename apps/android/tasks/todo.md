@@ -4,19 +4,29 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Calls) — slice `calls-tab-nav` ✅
-The Calls **bottom-nav tab** — `CallHistoryScreen` was reachable-by-nobody dead UI (no route pointed at it).
-- `Routes.CALLS` tab (`Call` icon, order Messages · Feed · **Calls** · Activity · Profile) mounts
-  `CallHistoryScreen` in the `NavHost`; added to `tabRoutes` + `rememberTabs` + new `tab_calls` string.
-- New pure `CallRoute.redial(record: CallRecord)` — the natural "tap a past call to call back" gesture:
-  threads the journal row's conversation + resolved `displayName` + media straight into the outgoing-call
-  `path(...)`, identical to a chat-header call. `onOpenCall` navigates via it.
-- +4 `CallRouteTest` cases (conversation/name/media round trip, displayName-over-username + reserved-char
-  encoding, audio-only, peer-absent group fallback). `assembleDebug` + `:app:testDebugUnitTest` green.
-  Diff = `apps/android` only (4 files).
+## This loop (Phase: Calls) — slice `incoming-call-push-decision` ✅
+The **pure incoming-call push decision core** — the brick before the Android Telecom/`ConnectionService`
+full-screen-intent plumbing. When the app is backgrounded/killed the socket is down, so the gateway
+delivers the ring as a data-only FCM push; this slice is the typed shape + gating that wiring consumes.
+- `core:model` `me.meeshy.sdk.model.call.IncomingCallPush` — typed FCM `data`-map / VoIP payload at
+  parity with the gateway `CallEventsHandler` (`type:"call"`) + `PushNotificationService` (`type:"voip_call"`):
+  `callId`/`conversationId`/`callerUserId`/`callerName`/`isVideo`(string flag)/`iceServers`(JSON) + a
+  blank-skipping `displayName`.
+- `IncomingCallPushParser.parse(Map<String,String>) → IncomingCallPush?` — total, side-effect-free: a call
+  iff `type ∈ {call,voip_call}` AND non-blank `callId`; leniently decodes `iceServers` (missing/malformed
+  → `[]`, never drops the push); blank optionals → null.
+- `SeenCallRing` — immutable pure port of the iOS `VoIPDedupRing` (capacity 24 / ttl 30s):
+  `contains`/`insert`/`remove`, expiry-pruning + capacity-trimming, every mutation returns a new ring.
+- `IncomingCallDecider.decide(push, context) → IncomingCallDecision` (`Ring` | `Ignore(reason:
+  DUPLICATE/BUSY/SELF_INITIATED)`) — faithful to the iOS `VoIPPushManager`/`reportIncomingVoIPCall`
+  ordering: self-fanout → duplicate (active-or-seen) → busy → ring.
+- +39 behavioural tests (18 parser, 11 ring, 10 decider). `assembleDebug` + all `testDebugUnitTest` green.
+  Diff = `apps/android` only (4 files, 0 production logic outside android).
 
 ### Next
-1. The WebRTC / Telecom / FCM full-screen-intent plumbing (incoming-call notification + ConnectionService).
+1. `MeeshyFcmService` call-push routing: route a `type ∈ {call,voip_call}` data push through the parser +
+   decider, hold the live `SeenCallRing`, and on `Ring` fire a full-screen `ConnectionService` /
+   CATEGORY_CALL notification → the call screen (Android-platform glue).
 2. Then the actual WebRTC media transport (peer connection, ICE, SDP over `CallSignalManager`).
 3. Follow-up: `SocketManager.reconnectWithToken()` has no caller yet — a token-refresh slice must
    re-attach after it (same attach-per-connect rule).
