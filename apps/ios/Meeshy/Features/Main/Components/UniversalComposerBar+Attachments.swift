@@ -118,7 +118,8 @@ extension UniversalComposerBar {
                 RecentMediaStrip(
                     accentColor: accentColor,
                     onOpenLibrary: { fire { onPhotoLibrary?() } },
-                    onSelect: onRecentMediaSelected
+                    onSelect: onRecentMediaSelected,
+                    onEdit: onRecentMediaEdit
                 )
             } else {
                 Spacer(minLength: 0)

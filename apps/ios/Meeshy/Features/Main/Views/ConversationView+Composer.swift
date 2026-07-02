@@ -175,6 +175,7 @@ extension ConversationView {
                 }
             },
             onRecentMediaSelected: { pick in ingestRecentMediaPick(pick) },
+            onRecentMediaEdit: { pick in editRecentMediaPick(pick) },
             injectedEmoji: $composerState.emojiToInject,
             ephemeralDuration: $viewModel.ephemeralDuration,
             hideEphemeral: composerState.editingMessageId != nil,
@@ -280,6 +281,39 @@ extension ConversationView {
                 )
             }
         }
+        // D2. "Éditer" from the recent-media strip → the editor opens BEFORE
+        // staging; the edited output goes through the same preparation pipeline
+        // as a camera capture (the pre-edit original is never staged).
+        .fullScreenCover(isPresented: Binding(
+            get: { scrollState.recentImageToEdit != nil },
+            set: { if !$0 { scrollState.recentImageToEdit = nil } }
+        )) {
+            if let image = scrollState.recentImageToEdit {
+                MeeshyImageEditorView(image: image, context: .message, accentColor: accentColor, onAccept: { edited in
+                    scrollState.recentImageToEdit = nil
+                    handleCameraCapture(edited)
+                }, onCancel: {
+                    scrollState.recentImageToEdit = nil
+                })
+            }
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { scrollState.recentVideoToEdit != nil },
+            set: { if !$0 { scrollState.recentVideoToEdit = nil } }
+        )) {
+            if let url = scrollState.recentVideoToEdit {
+                MeeshyVideoEditorView(
+                    url: url,
+                    context: .message,
+                    accentColor: accentColor,
+                    onComplete: { result in
+                        scrollState.recentVideoToEdit = nil
+                        handleCameraVideo(result.url)
+                    },
+                    onCancel: { scrollState.recentVideoToEdit = nil }
+                )
+            }
+        }
         // E. Audio → MeeshyAudioEditorView
         .fullScreenCover(item: Binding(
             get: { scrollState.audioToEdit },
@@ -310,6 +344,15 @@ extension ConversationView {
         switch pick {
         case .image(let image): handleCameraCapture(image)
         case .video(let url): handleCameraVideo(url)
+        }
+    }
+
+    /// "Éditer" from the strip's long-press menu: opens the media editor on the
+    /// resolved pick; the edited result is staged like a camera capture.
+    func editRecentMediaPick(_ pick: RecentMediaPick) {
+        switch pick {
+        case .image(let image): scrollState.recentImageToEdit = image
+        case .video(let url): scrollState.recentVideoToEdit = url
         }
     }
 

@@ -202,6 +202,10 @@ struct CommentsSheetView: View {
     @State private var commentPhotoItems: [PhotosPickerItem] = []
     @State private var showCommentFilePicker: Bool = false
     @State private var showCommentLocationPicker: Bool = false
+    /// "Éditer" from the recent-media strip — the editor opens before staging;
+    /// the edited output is ingested, never the original.
+    @State private var commentRecentImageToEdit: UIImage? = nil
+    @State private var commentRecentVideoToEdit: URL? = nil
 
     /// Enregistreur vocal parent-managed — MÊME composant que les conversations
     /// (`ConversationView`). Produit un vrai fichier audio (pas un timer) déposé
@@ -822,6 +826,7 @@ struct CommentsSheetView: View {
             onPhotoLibrary: { showCommentPhotoPicker = true },
             onFilePicker: { showCommentFilePicker = true },
             onRecentMediaSelected: { pick in ingestCommentRecentMedia(pick) },
+            onRecentMediaEdit: { pick in editCommentRecentMedia(pick) },
             isBlurEnabled: $commentBlurEnabled,
             pendingEffects: $commentEffects,
             externalAttachments: commentAttachments,
@@ -850,6 +855,38 @@ struct CommentsSheetView: View {
         }
         .adaptiveOnChange(of: commentPhotoItems) { _, items in
             handleCommentPhotoSelection(items)
+        }
+        // "Éditer" from the recent-media strip → edit BEFORE staging: only the
+        // edited output lands in the comment attachments.
+        .fullScreenCover(isPresented: Binding(
+            get: { commentRecentImageToEdit != nil },
+            set: { if !$0 { commentRecentImageToEdit = nil } }
+        )) {
+            if let image = commentRecentImageToEdit {
+                MeeshyImageEditorView(image: image, context: .post, accentColor: accentColor, onAccept: { edited in
+                    commentRecentImageToEdit = nil
+                    ingestCommentRecentMedia(.image(edited))
+                }, onCancel: {
+                    commentRecentImageToEdit = nil
+                })
+            }
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { commentRecentVideoToEdit != nil },
+            set: { if !$0 { commentRecentVideoToEdit = nil } }
+        )) {
+            if let url = commentRecentVideoToEdit {
+                MeeshyVideoEditorView(
+                    url: url,
+                    context: .post,
+                    accentColor: accentColor,
+                    onComplete: { result in
+                        commentRecentVideoToEdit = nil
+                        ingestCommentRecentMedia(.video(result.url))
+                    },
+                    onCancel: { commentRecentVideoToEdit = nil }
+                )
+            }
         }
     }
 
@@ -928,6 +965,15 @@ struct CommentsSheetView: View {
                 await MainActor.run { commentAttachments.append(attachment) }
             }
             await MainActor.run { commentPhotoItems = [] }
+        }
+    }
+
+    /// "Éditer" from the strip's long-press menu: opens the media editor on the
+    /// resolved pick; the edited result is ingested like a strip tap.
+    private func editCommentRecentMedia(_ pick: RecentMediaPick) {
+        switch pick {
+        case .image(let image): commentRecentImageToEdit = image
+        case .video(let url): commentRecentVideoToEdit = url
         }
     }
 

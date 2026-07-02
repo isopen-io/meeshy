@@ -100,6 +100,10 @@ struct ConversationScrollState {
     var editingPendingAttachmentId: String? = nil
     var videoToEdit: URL? = nil
     var audioToEdit: PendingAudioEdit? = nil
+    // "Éditer" from the recent-media strip — edited BEFORE staging (the edited
+    // output goes through the camera-capture pipeline, never the original).
+    var recentImageToEdit: UIImage? = nil
+    var recentVideoToEdit: URL? = nil
 }
 
 struct PreviewMedia: Identifiable {
