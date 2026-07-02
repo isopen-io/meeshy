@@ -1008,6 +1008,10 @@ struct ConversationView: View {
                     // du menu existant (sans remplacer le menu lui-même).
                     guard overlayState.longPressEnabled else { return }
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
+                    // Bulles système (journal d'appel, notices) : réactions,
+                    // édition, traduction, épinglage… n'ont aucun sens dessus.
+                    // Le call-notice garde son propre long-press (sheet détails).
+                    guard msg.messageSource != .system else { return }
                     overlayState.overlayMessage = msg
                     overlayState.showOverlayMenu = true
                 },

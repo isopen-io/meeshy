@@ -53,6 +53,7 @@ import type {
   CallQualityReportEvent,
   CallReconnectingEvent,
   CallReconnectedEvent,
+  CallMissedEvent,
   CallInitiateAck,
   CallJoinAck,
   ConnectionQuality,
@@ -789,10 +790,15 @@ export class CallEventsHandler {
             if (result.count === 0) {
               return; // already transitioned
             }
-            const conversationId = (await this.prisma.callSession.findUnique({
+            const missedContext = await this.prisma.callSession.findUnique({
               where: { id: callSession.id },
-              select: { conversationId: true }
-            }))?.conversationId;
+              select: {
+                conversationId: true,
+                initiatorId: true,
+                initiator: { select: { displayName: true, username: true } }
+              }
+            });
+            const conversationId = missedContext?.conversationId;
             const endedEvent = {
               callId: callSession.id,
               duration: 0,
@@ -803,9 +809,17 @@ export class CallEventsHandler {
             if (conversationId) {
               io.to(ROOMS.conversation(conversationId)).emit(CALL_EVENTS.ENDED, endedEvent);
             }
-            io.to(ROOMS.call(callSession.id)).emit(CALL_EVENTS.MISSED, {
-              callId: callSession.id
-            });
+            // Contract: CallMissedEvent requires all 4 fields — a `{ callId }`
+            // only payload made the iOS decoder fail (keyNotFound conversationId).
+            const missedEvent: CallMissedEvent = {
+              callId: callSession.id,
+              conversationId: conversationId ?? '',
+              callerId: missedContext?.initiatorId ?? '',
+              callerName: missedContext?.initiator?.displayName
+                || missedContext?.initiator?.username
+                || ''
+            };
+            io.to(ROOMS.call(callSession.id)).emit(CALL_EVENTS.MISSED, missedEvent);
 
             // P3 — post the "Appel … manqué" system message into the conversation.
             await this.postCallSummary(callSession.id);

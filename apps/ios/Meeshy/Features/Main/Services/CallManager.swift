@@ -288,6 +288,45 @@ final class CallManager: ObservableObject {
     ///      can `await` this task before invoking `createAnswer` — guaranteeing
     ///      the audio/video transceivers exist before SDP answer negotiation.
     private var localMediaTask: Task<Void, Never>?
+
+    /// [CALL_JOIN] Reliable `call:join` emission for incoming calls — see
+    /// `joinCallRoomReliably(callId:)`. Cancelled on teardown and superseded
+    /// by any newer incoming call.
+    private var callJoinTask: Task<Void, Never>?
+
+    /// [Fix 2026-07-02] CallKit answer action held until the call actually
+    /// connects. CallKit starts the callee's elapsed timer the moment the
+    /// answer action is fulfilled — fulfilling at tap time made the counter
+    /// run while WebRTC was still connecting (user-reported "0:00 before the
+    /// connection exists"). Held here, fulfilled in `transitionToConnected`,
+    /// failed on pre-connection teardown, force-fulfilled by a 10 s safety
+    /// net so CallKit can never time the action out.
+    private var pendingAnswerAction: CXAnswerCallAction?
+    private var pendingAnswerSafetyTask: Task<Void, Never>?
+
+    /// Called synchronously (main queue) from the CXProvider delegate.
+    func holdPendingAnswerAction(_ action: CXAnswerCallAction) {
+        pendingAnswerAction = action
+        pendingAnswerSafetyTask?.cancel()
+        pendingAnswerSafetyTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 10_000_000_000)
+            guard !Task.isCancelled else { return }
+            self?.settlePendingAnswerAction(fulfilled: true, reason: "safety-net 10s — still not connected")
+        }
+    }
+
+    private func settlePendingAnswerAction(fulfilled: Bool, reason: String) {
+        pendingAnswerSafetyTask?.cancel()
+        pendingAnswerSafetyTask = nil
+        guard let action = pendingAnswerAction else { return }
+        pendingAnswerAction = nil
+        if fulfilled {
+            action.fulfill()
+        } else {
+            action.fail()
+        }
+        Logger.calls.info("[CALLKIT] answer action \(fulfilled ? "fulfilled" : "failed") (\(reason))")
+    }
     /// Caller-side ringing timeout — ends the call as `.missed` if the recipient
     /// hasn't joined within `outgoingRingTimeoutSeconds`. Cancelled when the
     /// state leaves `.ringing(isOutgoing: true)` (offering / connecting / ended).
@@ -927,8 +966,10 @@ final class CallManager: ObservableObject {
         // waiting for our camera/mic warmup. Media init runs in parallel; the
         // answer creation paths (answerCall*, handleSignalOffer .connecting)
         // await `localMediaTask` before invoking createAnswer.
-        MessageSocketManager.shared.emitCallJoin(callId: callId)
-        Logger.calls.info("VoIP push — emitted call:join early; starting media in parallel: \(callId) (\(iceServers?.count ?? 0) ICE servers)")
+        // [Fix 2026-07-02] via joinCallRoomReliably: on a VoIP cold start the
+        // socket has never connected — a bare emit vanishes (prod-observed).
+        joinCallRoomReliably(callId: callId)
+        Logger.calls.info("VoIP push — reliable call:join dispatched; starting media in parallel: \(callId) (\(iceServers?.count ?? 0) ICE servers)")
 
         localMediaTask?.cancel()
         localMediaTask = Task { [weak self] in
@@ -1121,8 +1162,10 @@ final class CallManager: ObservableObject {
         // Phase 2 fix — Bug 2: emit call:join IMMEDIATELY so the caller receives
         // PARTICIPANT_JOINED while we initialize media in parallel. See
         // `localMediaTask` property doc for rationale and downstream contract.
-        MessageSocketManager.shared.emitCallJoin(callId: callId)
-        Logger.calls.info("Incoming call — emitted call:join early; starting media in parallel: \(callId)")
+        // [Fix 2026-07-02] via joinCallRoomReliably — ACK-aware, survives a
+        // not-yet-connected socket (notification received during app launch).
+        joinCallRoomReliably(callId: callId)
+        Logger.calls.info("Incoming call — reliable call:join dispatched; starting media in parallel: \(callId)")
 
         localMediaTask?.cancel()
         localMediaTask = Task { [weak self] in
@@ -1243,6 +1286,53 @@ final class CallManager: ObservableObject {
 
     func handleIncomingOffer(callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, sdp: SessionDescription) {
         handleIncomingCallNotification(callId: callId, fromUserId: fromUserId, fromUsername: fromUsername, isVideo: isVideo)
+    }
+
+    // MARK: - Reliable call:join (incoming paths)
+
+    /// [Fix 2026-07-02] Reliable `call:join` — replaces the fire-and-forget
+    /// `emitCallJoin` on BOTH incoming-call paths.
+    ///
+    /// On a VoIP-push cold start (locked phone, answer from the CallKit lock
+    /// screen) no view is mounted, so `connect()` — only triggered by
+    /// RootView/ConversationView appearing in the foreground — has never run:
+    /// the socket is nil and `socket?.emit("call:join")` vanishes. The gateway
+    /// never creates our CallParticipant, then rejects every `call:signal` we
+    /// send ("Sender not a participant") and the caller times out to `missed`
+    /// even though the user answered (observed in prod, callIds
+    /// 6a461091/6a46110c, 2026-07-02). The P1-30 rejoin net doesn't cover this:
+    /// the FIRST connection never fires `didReconnect` (`hadPreviousConnection`).
+    ///
+    /// Strategy: force `connect()` when needed, wait for `isConnected`
+    /// (200 ms poll, 30 s budget — under the 45 s ring), then ACK-aware
+    /// `call:join` with one retry. Gateway-side joinCall is idempotent, so a
+    /// duplicate join from the foreground path is harmless.
+    private func joinCallRoomReliably(callId: String) {
+        callJoinTask?.cancel()
+        callJoinTask = Task { @MainActor [weak self] in
+            let socket = MessageSocketManager.shared
+            if !socket.isConnected {
+                Logger.calls.warning("[CALL_JOIN] socket not connected — forcing connect() (callId=\(callId))")
+                socket.connect()
+            }
+            var waitedNs: UInt64 = 0
+            while !socket.isConnected && waitedNs < 30_000_000_000 && !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 200_000_000)
+                waitedNs += 200_000_000
+            }
+            guard let self, !Task.isCancelled else { return }
+            guard self.currentCallId == callId, self.callState.isActive else { return }
+            guard socket.isConnected else {
+                Logger.calls.error("[CALL_JOIN] socket still not connected after 30s — join impossible (callId=\(callId))")
+                return
+            }
+            var joined = await socket.emitCallJoinWithAck(callId: callId)
+            if !joined, !Task.isCancelled, self.currentCallId == callId, self.callState.isActive {
+                Logger.calls.warning("[CALL_JOIN] call:join ACK failed — retrying once (callId=\(callId))")
+                joined = await socket.emitCallJoinWithAck(callId: callId)
+            }
+            Logger.calls.info("[CALL_JOIN] call:join \(joined ? "ACKed" : "NOT ACKed") (callId=\(callId))")
+        }
     }
 
     // MARK: - Answer Call
@@ -1460,10 +1550,24 @@ final class CallManager: ObservableObject {
     private weak var pipConfiguredTrack: AnyObject?
     private weak var pipConfiguredSource: UIView?
 
-    /// Le PiP vidéo système peut s'activer : appel vidéo, track distant présent,
-    /// caméra distante allumée, sur un appareil compatible (≠ iOS-app-on-Mac).
+    /// L'UI d'appel doit rendre le layout vidéo dès qu'un flux est visible :
+    /// caméra locale active OU vidéo distante reçue (escalade unilatérale du
+    /// correspondant pendant un appel audio). Voir
+    /// `CallReliabilityPolicy.videoLayoutActive`.
+    var isVideoUIActive: Bool {
+        CallReliabilityPolicy.videoLayoutActive(
+            localVideoEnabled: isVideoEnabled,
+            hasRemoteVideoTrack: hasRemoteVideoTrack,
+            remoteVideoEnabled: isRemoteVideoEnabled
+        )
+    }
+
+    /// Le PiP vidéo système rend le flux DISTANT : il peut s'activer dès que le
+    /// track distant est présent et la caméra distante allumée, sur un appareil
+    /// compatible (≠ iOS-app-on-Mac) — même si la caméra locale est coupée
+    /// (escalade vidéo unilatérale d'un appel audio).
     var canActivateSystemPiP: Bool {
-        isVideoEnabled && hasRemoteVideoTrack && isRemoteVideoEnabled && pip.isPiPSupported
+        hasRemoteVideoTrack && isRemoteVideoEnabled && pip.isPiPSupported
     }
 
     /// Configure le PiP système pour cet appel (appelé par la vue avec la
@@ -2031,6 +2135,10 @@ final class CallManager: ObservableObject {
         // (immédiat sur RTCPeerConnectionState.connected, §3.2). Le guard évite de
         // relancer durationTask / heartbeat / haptics si re-déclenchée.
         if case .connected = callState { return }
+
+        // [Fix 2026-07-02] Le chrono CallKit du callee démarre au fulfill de
+        // l'answer action : la settle ICI (connexion réelle), pas au tap.
+        settlePendingAnswerAction(fulfilled: true, reason: "connected")
         let wasReconnecting: Bool
         if case .reconnecting = callState { wasReconnecting = true } else { wasReconnecting = false }
 
@@ -2553,6 +2661,11 @@ final class CallManager: ObservableObject {
         reliabilityMonitorTask = nil
         localMediaTask?.cancel()
         localMediaTask = nil
+        callJoinTask?.cancel()
+        callJoinTask = nil
+        // L'appel se termine avant la connexion : échouer l'answer action encore
+        // pendante pour que CallKit démonte proprement (no-op si déjà settled).
+        settlePendingAnswerAction(fulfilled: false, reason: "teardown before connect")
         outgoingRingTimeoutTask?.cancel()
         outgoingRingTimeoutTask = nil
         // Cancel le Task de setup outgoing (force-leave + ACK + media +
@@ -3858,13 +3971,29 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
     }
 
     func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
-        // CallKit requires fulfill()/fail() to be called synchronously before
-        // the delegate method returns. Calling fulfill() from inside a Task
-        // violates this contract — if the manager is nil or the task is
-        // cancelled, the action is never settled and CallKit times out the call.
-        action.fulfill()
-        Task { @MainActor [weak self] in
-            await self?.manager?.answerCallReady()
+        // [Fix 2026-07-02] CallKit starts the callee's elapsed timer at
+        // fulfill() — fulfilling here (at tap) made the counter run before the
+        // WebRTC connection existed. The manager HOLDS the action and settles
+        // it in `transitionToConnected` (fulfill), on pre-connect teardown
+        // (fail), or via a 10 s safety net (fulfill) so CallKit can never time
+        // it out. The delegate queue is `nil` = main, so the hand-off to the
+        // @MainActor manager is synchronous (no Sendable capture of the
+        // non-Sendable CXAction in a Task); the off-main branch is a defensive
+        // fallback that preserves the old immediate-fulfill behaviour.
+        if Thread.isMainThread {
+            MainActor.assumeIsolated {
+                guard let manager else {
+                    action.fulfill()
+                    return
+                }
+                manager.holdPendingAnswerAction(action)
+                Task { @MainActor in await manager.answerCallReady() }
+            }
+        } else {
+            action.fulfill()
+            Task { @MainActor [weak self] in
+                await self?.manager?.answerCallReady()
+            }
         }
     }
 

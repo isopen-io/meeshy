@@ -49,6 +49,12 @@ struct CallEffectsOverlay: View {
                     }
                     .padding(.bottom, 130)
                 }
+                // Filtres = seul panneau depuis le retrait des effets vocaux :
+                // l'ouvrir directement à chaque présentation, au lieu d'exiger
+                // un second tap sur la toolbar intermédiaire (retour user
+                // 2026-07-02). `onAppear` refire à chaque `isExpanded` true
+                // (la vue n'existe pas sinon) ; `dismiss()` remet `nil`.
+                .onAppear { activePanel = .videoFilters }
                 .transition(.opacity)
                 .zIndex(10)
             }

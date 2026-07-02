@@ -108,15 +108,17 @@ struct FloatingCallPillView: View {
 
     // MARK: - Leading Visual (remote video thumbnail or avatar)
 
-    /// §7.6 — for a minimized VIDEO call, show the live remote feed as a small
-    /// thumbnail so the user still sees their interlocutor (a return-to-call pill
-    /// that drops the video is a major gap). Falls back to the avatar for audio
-    /// calls, or when the peer's camera is off / no track yet. Only one renderer
-    /// is live at a time: CallView is dismounted while in `.pip`, so this does
-    /// not double-render the remote track.
+    /// §7.6 — whenever the peer's video is flowing, show the live remote feed
+    /// as a small thumbnail so the user still sees their interlocutor (a
+    /// return-to-call pill that drops the video is a major gap). Keyed on the
+    /// REMOTE stream only — the peer may have escalated an audio call to video
+    /// while the local camera stays off. Falls back to the avatar when the
+    /// peer's camera is off / no track yet. Only one renderer is live at a
+    /// time: CallView is dismounted while in `.pip`, so this does not
+    /// double-render the remote track.
     @ViewBuilder
     private var pillLeadingVisual: some View {
-        if callManager.isVideoEnabled && callManager.hasRemoteVideoTrack && callManager.isRemoteVideoEnabled {
+        if callManager.hasRemoteVideoTrack && callManager.isRemoteVideoEnabled {
             CallVideoView(track: callManager.remoteVideoTrack, contentMode: .scaleAspectFill)
                 .frame(width: 44, height: 44)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
