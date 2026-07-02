@@ -44,6 +44,13 @@ export class CallCleanupService {
   // stay in `.ringing(true)` until their own client-side timeout fires.
   private io: SocketIOServer | null = null;
 
+  // P3 — set via `setPostSummaryCallback()` once the socket layer's
+  // CallEventsHandler is ready. Without it, calls force-ended by GC (a
+  // stuck ringing/connecting call, or a truly abandoned active call nobody
+  // explicitly hung up) never get the "Appel … · MM:SS" / "manqué" system
+  // message that every other terminal path posts.
+  private postSummary: ((callId: string) => Promise<void>) | null = null;
+
   constructor(
     private prisma: PrismaClient,
     private callService?: CallService
@@ -62,6 +69,14 @@ export class CallCleanupService {
   setCallService(callService: CallService): void {
     this.callService = callService;
     logger.info('[CallCleanupService] CallService attached — heartbeat-timeout GC tier active');
+  }
+
+  // P3 — mirrors `attachSocketServer`/`setCallService`: injected from server
+  // startup once CallEventsHandler exists, so force-ended calls get their
+  // call-summary system message posted too.
+  setPostSummaryCallback(postSummary: (callId: string) => Promise<void>): void {
+    this.postSummary = postSummary;
+    logger.info('[CallCleanupService] Post-summary callback attached — GC-ended calls will get a summary message');
   }
 
   start(): void {
@@ -311,6 +326,15 @@ export class CallCleanupService {
     }
 
     this.callService?.clearHeartbeats(callId);
+
+    // P3 — post the call-summary system message. Failures are logged and
+    // swallowed inside `postCallSummary` itself, never thrown, so a summary
+    // posting issue can never break GC or leave the transaction half-done.
+    if (this.postSummary) {
+      this.postSummary(callId).catch((error) => {
+        logger.error('[CallCleanupService] Failed to post call summary for GC-ended call', { callId, error });
+      });
+    }
 
     // Broadcast `call:ended` so clients (caller stuck in `.ringing`,
     // callee stuck in `.connecting`) leave their hung state instead of

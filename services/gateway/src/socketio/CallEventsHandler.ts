@@ -224,6 +224,18 @@ export class CallEventsHandler {
   }
 
   /**
+   * Public entry point for external terminal paths (currently
+   * `CallCleanupService`'s GC tiers) that end a call without going through
+   * this handler's own socket events, but still need the "Appel … · MM:SS" /
+   * "manqué" system message posted. Thin wrapper around the private
+   * `postCallSummary` so callers outside this class don't need to know about
+   * its retry bookkeeping.
+   */
+  async postCallSummaryForTerminatedCall(callId: string): Promise<void> {
+    return this.postCallSummary(callId);
+  }
+
+  /**
    * Translates a final transcription segment to each active participant's
    * preferred language and emits a `TRANSLATED_SEGMENT` event per language.
    * Only fires for final segments (isFinal=true) to avoid flooding ZMQ.
@@ -2395,6 +2407,13 @@ export class CallEventsHandler {
                 };
                 io.to(ROOMS.call(participation.callSessionId)).emit(CALL_EVENTS.ENDED, dcEndedEvent);
                 io.to(ROOMS.conversation(leftSession.conversationId)).emit(CALL_EVENTS.ENDED, dcEndedEvent);
+
+                // P3 — post the call-summary system message. A disconnect
+                // (app killed, crash, network drop, background eviction) is a
+                // terminal path just like an explicit call:leave/call:end and
+                // must not silently skip the "Appel … · MM:SS" / "manqué"
+                // message. Idempotent across terminal paths.
+                await this.postCallSummary(leftSession.id);
               }
 
               logger.info('✅ Socket: Auto-left call on disconnect', {
@@ -2479,6 +2498,10 @@ export class CallEventsHandler {
                   };
                   io.to(ROOMS.call(participation.callSessionId)).emit(CALL_EVENTS.ENDED, dcForceEndedEvent);
                   io.to(ROOMS.conversation(participation.callSession.conversationId)).emit(CALL_EVENTS.ENDED, dcForceEndedEvent);
+
+                  // P3 — same call-summary posting as the normal leave path
+                  // above; the force-cleanup branch is a terminal path too.
+                  await this.postCallSummary(participation.callSessionId);
                 }
 
                 logger.info('✅ Socket: Force cleanup successful on disconnect', {

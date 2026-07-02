@@ -112,6 +112,13 @@ export class MeeshySocketIOManager {
     return this.callService;
   }
 
+  /// Exposes the shared CallEventsHandler so CallCleanupService's GC tiers
+  /// can post the call-summary system message on calls they force-end —
+  /// mirrors `getCallService()` above.
+  getCallEventsHandler(): CallEventsHandler {
+    return this.callEventsHandler;
+  }
+
   private prisma: PrismaClient;
   private translationService: MessageTranslationService;
   private maintenanceService: MaintenanceService;
