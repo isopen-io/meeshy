@@ -137,6 +137,15 @@ struct ConversationPreviewView: View {
     private var accentColor: String { conversation.accentColor }
     private var secondaryColor: String { conversation.colorPalette.secondary }
 
+    /// Couleur du texte de l'en-tête du preview. Avec bannière, le voile sombre
+    /// du `headerBackground` garantit la lisibilité du blanc. Sans bannière, le
+    /// fond est pâle → texte sombre en Light (le blanc y serait illisible),
+    /// blanc en Dark.
+    private var headerContentColor: Color {
+        if bannerURL != nil { return .white }
+        return isDark ? .white : .black
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Header — banner background + dark overlay for legibility
@@ -158,7 +167,7 @@ struct ConversationPreviewView: View {
                     HStack(alignment: .top, spacing: 6) {
                         Text(conversation.name)
                             .font(.callout.weight(.bold))
-                            .foregroundColor(.white)
+                            .foregroundColor(headerContentColor)
                             .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
                             .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
@@ -173,7 +182,7 @@ struct ConversationPreviewView: View {
                         if conversation.userState.isMuted {
                             Image(systemName: "bell.slash.fill")
                                 .font(.caption2)
-                                .foregroundColor(.white.opacity(0.7))
+                                .foregroundColor(headerContentColor.opacity(0.7))
                                 .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
                         }
 
@@ -187,7 +196,7 @@ struct ConversationPreviewView: View {
                             Text("\(conversation.memberCount) " + String(localized: "unit.members", defaultValue: "membres"))
                                 .font(.caption2.weight(.medium))
                         }
-                        .foregroundColor(.white.opacity(0.9))
+                        .foregroundColor(headerContentColor.opacity(0.9))
                         .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
                     }
 

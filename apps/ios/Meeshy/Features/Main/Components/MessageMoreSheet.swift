@@ -180,6 +180,9 @@ struct MessageMoreSheet: View {
             )
         }
         .buttonStyle(MorePelletButtonStyle())
+        // VoiceOver : annonce le seul libellé (évite la double-lecture
+        // « glyphe + texte », ex. « globe, Langue »). Le Button conserve son trait.
+        .accessibilityLabel(labelText(item))
     }
 
     // MARK: - Item Classification & Color

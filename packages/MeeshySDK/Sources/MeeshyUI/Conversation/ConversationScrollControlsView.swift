@@ -104,6 +104,15 @@ public struct ConversationScrollControlsView: View {
     @State private var typingDotPhase: Int = 0
     private let typingDotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
+    /// Couleur de contenu lisible sur la teinte glass. L'accent est déterministe
+    /// par conversation et peut tomber sur une couleur claire (jaune/cyan/vert) —
+    /// un contenu blanc y serait illisible (WCAG < 3:1). On choisit blanc ou sombre
+    /// selon la luminance WCAG de l'accent (seuil 0.6, convention repo). Offline :
+    /// la teinte neutral500 est sombre, le blanc reste lisible.
+    private var contentColor: Color {
+        isOffline ? .white : (Color(hex: accentColor).luminance > 0.6 ? .black : .white)
+    }
+
     public var body: some View {
         Button {
             onScrollToBottom()
@@ -123,14 +132,14 @@ public struct ConversationScrollControlsView: View {
                         Text("Hors ligne")
                             .font(.system(size: 13, weight: .semibold))
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(contentColor)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
                 } else {
                     // Simple chevron-only pill
                     Image(systemName: "chevron.down")
                         .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(contentColor)
                         .padding(12)
                 }
             }
@@ -180,7 +189,7 @@ public struct ConversationScrollControlsView: View {
                 }
             }
         }
-        .foregroundColor(.white)
+        .foregroundColor(contentColor)
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .frame(maxWidth: 180)
@@ -260,7 +269,7 @@ public struct ConversationScrollControlsView: View {
                     .font(.system(size: 11, weight: .bold))
             }
         }
-        .foregroundColor(.white)
+        .foregroundColor(contentColor)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .frame(maxWidth: 260)
