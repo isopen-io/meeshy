@@ -69,8 +69,17 @@
 > route (identical to a call from the chat header). +4 `CallRouteTest` cases (conversation/name/media round
 > trip, displayName-over-username resolution + reserved-char encoding, audio-only, peer-absent group
 > fallback). `assembleDebug` + `:app:testDebugUnitTest` green.
-> **Next:** the WebRTC / Telecom / FCM full-screen-intent plumbing (incoming-call notification + connection
-> service); then the actual media transport. See the run log + `feature-parity.md §H`.
+> On 2026-07-02 the **incoming-call push decision core** landed (slice `incoming-call-push-decision`): the
+> pure `core:model` brick before the Android Telecom/`ConnectionService` full-screen-intent plumbing.
+> `IncomingCallPush` (typed FCM `data`-map / VoIP payload at gateway parity) + total
+> `IncomingCallPushParser.parse` (call iff `type ∈ {call,voip_call}` + non-blank `callId`; lenient
+> `iceServers`) + immutable `SeenCallRing` (pure port of iOS `VoIPDedupRing`, cap 24 / ttl 30s) + pure
+> `IncomingCallDecider.decide` (`Ring` | `Ignore(DUPLICATE/BUSY/SELF_INITIATED)`, ordering faithful to
+> `VoIPPushManager`/`reportIncomingVoIPCall`). +39 behavioural tests. The SSOT the FCM-service routing +
+> full-screen notification will consume.
+> **Next:** wire `MeeshyFcmService` to route a call-type data push through the parser+decider and fire a
+> full-screen `ConnectionService` / CATEGORY_CALL notification → the call screen (Android-platform glue);
+> then the actual WebRTC media transport. See the run log + `feature-parity.md §H`.
 
 Stories so far: tray (ring carousel) + cross-group viewer playback engine +
 quick-reaction strip + swipe gestures + realtime reaction socket deltas +
@@ -451,6 +460,48 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-02 — slice `incoming-call-push-decision` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration. The open PRs (#1344 gateway
+  call-resilience, #1346 iOS a11y) are `jcnm` branches from other sessions, disjoint from `apps/android`;
+  left untouched. Branched off freshly-fetched `origin/main` (`0f6dc241`) as
+  `claude/apps/android/incoming-call-push-decision`. Confirmed HEAD's `apps/android` is byte-identical to
+  `origin/main` (all prior Android work merged).
+- **Gap found while scoping:** `MeeshyFcmService.onMessageReceived` only handled a `message.notification`
+  display push (reading solely `data["conversationId"]`); a **data-only incoming-call push is silently
+  dropped** — no `type`/`callId` parse, no dedup, no ring. That's the first missing brick of parity
+  item §H "Incoming-call delivery via FCM data push when backgrounded/killed (full-screen intent)". The
+  iOS SSOT is `VoIPPushManager` (parse+phantom-guard) + `VoIPDedupRing` + `CallManager.reportIncomingVoIPCall`
+  (busy gate).
+- **Design (pure-decision-first, `core:model`):**
+  - `IncomingCallPush` — typed FCM `data`-map / VoIP payload at parity with the gateway
+    `CallEventsHandler` push (`type:"call"`) + `PushNotificationService.sendVoIPPush` (`type:"voip_call"`):
+    `callId`/`conversationId`/`callerUserId`/`callerName`/`isVideo`(sent as string `"true"`/`"false"`)/
+    `iceServers`(JSON string) + a blank-skipping `displayName` (`callerName` else the shared "Inconnu").
+  - `IncomingCallPushParser.parse(Map<String,String>) → IncomingCallPush?` — total, side-effect-free;
+    a call iff `type ∈ {call,voip_call}` AND non-blank `callId` (mirrors the iOS phantom-guard); leniently
+    decodes `iceServers` via the existing `SocketIceServer` serializer, degrading a missing/blank/malformed
+    value to `[]` rather than dropping the whole push; blank optionals → null; `isVideo` case-insensitive.
+  - `SeenCallRing` — immutable pure port of `VoIPDedupRing` (default capacity 24 / ttl 30_000ms):
+    `contains(id, now)` (freshness-bounded), `insert(id, now)` (prunes expired, refreshes a same-id window,
+    trims oldest past capacity — every mutation returns a new ring), `remove(id)`.
+  - `IncomingCallDecision` (`Ring(push)` | `Ignore(reason: DUPLICATE/BUSY/SELF_INITIATED)`) +
+    `IncomingCallContext(nowMillis, activeCallId?, seen, selfUserId?)` + pure
+    `IncomingCallDecider.decide` — ordering faithful to iOS: **self-fanout → duplicate (active-or-seen) →
+    busy (different call active) → ring**. Recording on `Ring` is the caller's job (kept a total fn).
+- **Tests:** +39 behavioural (18 `IncomingCallPushParserTest`, 11 `SeenCallRingTest`, 10
+  `IncomingCallDeciderTest`) through the public API only — every `when`/`if` arm swept: both call types +
+  non-call + no-type; callId absent/blank/valid; isVideo true/false/UPPER/missing/garbage; optionals
+  blank/absent/present; iceServers valid/absent/blank/malformed; ring contains-fresh/expired/capacity-evict/
+  prune-on-insert/refresh/remove-present-absent/immutability; decider ring/self/blank-self/other-caller/
+  active-dup/seen-dup/expired-not-dup/busy/dup-vs-busy precedence. No tautologies, no floor lowered.
+- **Verification:** `assembleDebug` + all `testDebugUnitTest` **BUILD SUCCESSFUL** via system Gradle 8.14.3
+  (wrapper still 403s — see NOTES); `:core:model` new classes 39/39 green; no suite regressed.
+- **Reviewer gate:** PASS — diff `apps/android` only (4 files, 1 prod + 3 test, all in `core:model`), pure
+  building blocks correctly in `:core:model` (matches `CallSignalMapper`/`CallStateMachine`/`CallInitiateAckParser`),
+  behaviour through public API, no unguarded async (all pure). **Next:** wire `MeeshyFcmService` to route a
+  call-type data push through parser+decider and fire a full-screen `ConnectionService`/CATEGORY_CALL
+  notification (Android-platform glue).
 
 ### 2026-07-02 — slice `calls-tab-nav` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration — the 4 open PRs (#1335, #1337–#1339)

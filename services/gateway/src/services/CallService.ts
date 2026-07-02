@@ -587,11 +587,19 @@ export class CallService {
       });
 
       // Create participant for initiator
+      // Audit C5 (2026-07-02): `leftAt` must be written explicitly as `null`
+      // — MongoDB has no NULL-vs-missing-field distinction at the storage
+      // layer, but Prisma's query engine treats them differently: a field
+      // omitted from `data` at create time is never written to the document,
+      // so a later `findFirst({ where: { leftAt: null } })` (used throughout
+      // this service, e.g. updateParticipantMedia) never matches it. That
+      // caused 100% of media-toggle DB writes to silently no-op in prod.
       await tx.callParticipant.create({
         data: {
           callSessionId: session.id,
           participantId,
           role: ParticipantRole.initiator,
+          leftAt: null,
           isAudioEnabled: settings?.audioEnabled ?? true,
           isVideoEnabled: type === 'video' ? (settings?.videoEnabled ?? true) : false
         }
@@ -610,8 +618,19 @@ export class CallService {
     // deterministically lets exactly one of two concurrent callers win the
     // claim; the loser observes `count === 0` and unwinds its own orphaned
     // session instead of leaving two live sessions for one conversation.
+    // Prisma-on-MongoDB null semantics: `activeCallId: null` matches ONLY
+    // documents where the field is explicitly null — NOT documents missing
+    // the field entirely (every conversation created before this claim was
+    // introduced, plus any new conversation Prisma creates while omitting
+    // unset optionals). Without the `isSet: false` arm the claim can NEVER
+    // succeed on those documents and every initiateCall fails
+    // CALL_ALREADY_ACTIVE (prod incident 2026-07-02: 211/211 conversations
+    // lacked the field; hot-fixed by backfilling `activeCallId: null`).
     const claim = await this.prisma.conversation.updateMany({
-      where: { id: conversationId, activeCallId: null },
+      where: {
+        id: conversationId,
+        OR: [{ activeCallId: null }, { activeCallId: { isSet: false } }]
+      },
       data: { activeCallId: callSession.id }
     });
 
@@ -754,12 +773,15 @@ export class CallService {
     // the cap check above (see joinCallAttempt's doc comment).
     const versionConflict = Symbol('versionConflict');
     const outcome = await this.prisma.$transaction(async (tx) => {
-      // Create participant
+      // Create participant. See the C5 note on the initiator's `create` above
+      // — `leftAt: null` must be explicit or later `findFirst({ leftAt: null })`
+      // lookups (e.g. updateParticipantMedia) never match this row.
       await tx.callParticipant.create({
         data: {
           callSessionId: callId,
           participantId,
           role: ParticipantRole.participant,
+          leftAt: null,
           isAudioEnabled: settings?.audioEnabled ?? true,
           isVideoEnabled: settings?.videoEnabled ?? true
         }
@@ -1110,7 +1132,25 @@ export class CallService {
       ? Math.floor((endedAt.getTime() - call.answeredAt.getTime()) / 1000)
       : 0;
 
-    const endReason = this.resolveEndReason(reason);
+    // Audit C3/C4 (2026-07-02 prod audit) — mirror leaveCall()'s pre-answer
+    // handling: a call ended before it was ever answered (still initiated/
+    // ringing/connecting) must resolve to `missed`, never `completed`.
+    // Without this, `call:end` fired before the callee's `call:join` (a race
+    // observed in prod) persisted status='ended'/duration=0/reason='completed'
+    // — a phantom "completed" call in history that never triggered a
+    // missed-call notification for the other party. An explicit non-default
+    // reason (rejected/failed/...) is preserved as endReason; only the status
+    // is normalized to `missed` so history/Recents filters stay consistent
+    // with leaveCall().
+    const wasPreAnswered =
+      call.status === CallStatus.initiated ||
+      call.status === CallStatus.ringing ||
+      call.status === CallStatus.connecting;
+    const resolvedReason = this.resolveEndReason(reason);
+    const endReason = wasPreAnswered && resolvedReason === CallEndReason.completed
+      ? CallEndReason.missed
+      : resolvedReason;
+    const targetStatus = wasPreAnswered ? CallStatus.missed : CallStatus.ended;
 
     await this.prisma.$transaction(async (tx) => {
       await tx.callParticipant.updateMany({
@@ -1124,7 +1164,7 @@ export class CallService {
       await tx.callSession.update({
         where: { id: callId },
         data: {
-          status: CallStatus.ended,
+          status: targetStatus,
           endedAt,
           duration,
           endReason,
@@ -1139,7 +1179,7 @@ export class CallService {
     this.clearHeartbeats(callId);
     await this.releaseActiveCallClaim(call.conversationId, callId);
 
-    logger.info('Call ended successfully', { callId, duration, endedBy, endReason });
+    logger.info('Call ended successfully', { callId, duration, endedBy, endReason, wasPreAnswered });
 
     return this.getCallSession(callId);
   }

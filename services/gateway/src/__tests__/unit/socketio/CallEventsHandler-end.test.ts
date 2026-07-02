@@ -450,6 +450,48 @@ describe('CallEventsHandler — call:end handler', () => {
   });
 
   // -------------------------------------------------------------------------
+  // Audit C3/C4: endCall() resolving pre-answer calls to `missed` must trigger
+  // the same missed-call notification path as call:leave.
+  // -------------------------------------------------------------------------
+
+  describe('C3/C4: pre-answer end resolving to missed status', () => {
+    it('broadcasts call:ended with reason=missed and posts a summary', async () => {
+      mockEndCall.mockResolvedValue(makeCallSession({ status: 'missed', endReason: 'missed', duration: 0 }));
+
+      const prisma = makePrisma();
+      const { socket, handlers } = makeSocket();
+      const { io, roomEmit } = makeIo();
+      const ack = jest.fn<any>();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+      await handlers[CALL_EVENTS.END](END_DATA, ack);
+
+      const endedPayload = roomEmit.mock.calls[0][1];
+      expect(endedPayload.reason).toBe('missed');
+      expect(endedPayload.duration).toBe(0);
+      expect(mockCreateCallSummaryMessage).toHaveBeenCalledWith(CALL_ID);
+      expect(ack).toHaveBeenCalledWith({ success: true });
+    });
+
+    it('does not attempt missed-call handling for a normally completed call', async () => {
+      mockEndCall.mockResolvedValue(makeCallSession({ status: 'ended', endReason: 'completed' }));
+
+      const prisma = makePrisma();
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+      const ack = jest.fn<any>();
+
+      const handler = new CallEventsHandler(prisma);
+      const handleMissedCallSpy = jest.spyOn(handler, 'handleMissedCall');
+      handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+      await handlers[CALL_EVENTS.END](END_DATA, ack);
+
+      expect(handleMissedCallSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // postCallSummary: non-Error throw covers line 206 (String(error) branch)
   // -------------------------------------------------------------------------
 

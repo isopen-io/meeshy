@@ -46,6 +46,7 @@ export class StatusHandler {
   private static readonly TYPING_THROTTLE_MS = 2_000;
   private static readonly TYPING_THROTTLE_TTL_MS = 30_000;
   private static readonly TYPING_THROTTLE_CLEANUP_SIZE = 1_000;
+  private static readonly IDENTITY_CACHE_MAX_SIZE = 5_000;
   private typingThrottleCleanupTimer: ReturnType<typeof setInterval> | null = null;
   private rateLimiter = getSocketRateLimiter();
 
@@ -55,7 +56,7 @@ export class StatusHandler {
     this.privacyPreferencesService = deps.privacyPreferencesService;
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
-    this.typingThrottleCleanupTimer = setInterval(() => this._evictStaleThrottleEntries(), 30_000);
+    this.typingThrottleCleanupTimer = setInterval(() => this._evictStale(), 30_000);
     if (this.typingThrottleCleanupTimer.unref) this.typingThrottleCleanupTimer.unref();
   }
 
@@ -66,11 +67,35 @@ export class StatusHandler {
     }
   }
 
+  private _evictStale(): void {
+    this._evictStaleThrottleEntries();
+    this._evictExpiredIdentities();
+  }
+
   private _evictStaleThrottleEntries(): void {
     const stale = Date.now() - StatusHandler.TYPING_THROTTLE_TTL_MS;
     for (const [k, ts] of this.typingThrottleMap) {
       if (ts < stale) this.typingThrottleMap.delete(k);
     }
+  }
+
+  private _evictExpiredIdentities(): void {
+    const now = Date.now();
+    for (const [k, entry] of this.identityCache) {
+      if (entry.expiresAt <= now) this.identityCache.delete(k);
+    }
+  }
+
+  private _cacheIdentity(cacheKey: string, identity: { username: string; displayName: string }): void {
+    if (this.identityCache.size >= StatusHandler.IDENTITY_CACHE_MAX_SIZE) {
+      this._evictExpiredIdentities();
+      // Still at cap after removing expired entries → evict oldest (FIFO bound).
+      if (this.identityCache.size >= StatusHandler.IDENTITY_CACHE_MAX_SIZE) {
+        const firstKey = this.identityCache.keys().next().value;
+        if (firstKey !== undefined) this.identityCache.delete(firstKey);
+      }
+    }
+    this.identityCache.set(cacheKey, { ...identity, expiresAt: Date.now() + IDENTITY_CACHE_TTL_MS });
   }
 
   invalidateIdentityCache(userId: string): void {
@@ -329,7 +354,7 @@ export class StatusHandler {
 
       const displayName = participant.nickname || participant.displayName;
       const identity = { username: displayName, displayName };
-      this.identityCache.set(cacheKey, { ...identity, expiresAt: Date.now() + IDENTITY_CACHE_TTL_MS });
+      this._cacheIdentity(cacheKey, identity);
       return identity;
     } else {
       const dbUser = await this.prisma.user.findUnique({
@@ -353,7 +378,7 @@ export class StatusHandler {
         `${dbUser.firstName || ''} ${dbUser.lastName || ''}`.trim() ||
         dbUser.username;
       const identity = { username: dbUser.username, displayName };
-      this.identityCache.set(cacheKey, { ...identity, expiresAt: Date.now() + IDENTITY_CACHE_TTL_MS });
+      this._cacheIdentity(cacheKey, identity);
       return identity;
     }
   }
