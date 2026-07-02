@@ -13,7 +13,6 @@ import {
   containsXss,
   sanitizeNotification,
   escapeAttribute,
-  truncateText,
   isValidEmail,
   sanitizeFileName
 } from '../xss-protection';
@@ -378,31 +377,6 @@ describe('escapeAttribute', () => {
     expect(result).toContain('&#x27;'); // ' -> &#x27;
     // Original unescaped characters should not appear standalone
     expect(result).not.toBe(input);
-  });
-});
-
-describe('truncateText', () => {
-  it('should truncate long text', () => {
-    const text = 'This is a very long text that needs to be truncated';
-    const result = truncateText(text, 20);
-
-    expect(result.length).toBeLessThanOrEqual(23); // 20 + '...'
-    expect(result).toContain('...');
-  });
-
-  it('should not truncate short text', () => {
-    const text = 'Short';
-    const result = truncateText(text, 20);
-
-    expect(result).toBe(text);
-    expect(result).not.toContain('...');
-  });
-
-  it('should truncate at last space', () => {
-    const text = 'Hello World Testing';
-    const result = truncateText(text, 12);
-
-    expect(result).toBe('Hello World...');
   });
 });
 

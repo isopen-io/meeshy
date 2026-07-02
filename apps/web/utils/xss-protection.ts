@@ -253,34 +253,6 @@ export function sanitizeJson(input: any): any {
 }
 
 /**
- * Truncate text safely (without breaking words)
- *
- * @param input - Text to truncate
- * @param maxLength - Maximum length
- * @param suffix - Suffix to add (default: '...')
- * @returns Truncated text
- */
-export function truncateText(
-  input: string,
-  maxLength: number,
-  suffix: string = '...'
-): string {
-  if (!input || input.length <= maxLength) {
-    return input;
-  }
-
-  // Find last space before max length
-  const truncated = input.substring(0, maxLength);
-  const lastSpace = truncated.lastIndexOf(' ');
-
-  if (lastSpace > 0) {
-    return truncated.substring(0, lastSpace) + suffix;
-  }
-
-  return truncated + suffix;
-}
-
-/**
  * Validate email address
  *
  * Délègue à la source unique RFC 5322 `@meeshy/shared/utils/email-validator`
