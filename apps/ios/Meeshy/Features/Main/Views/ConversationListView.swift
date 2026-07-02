@@ -147,6 +147,10 @@ struct ConversationListView: View {
     /// Pilote l'animation zoom + rebond de l'overlay (false au montage → true
     /// via `.onAppear` ; false à la fermeture). Voir `conversationContextMenuOverlay`.
     @State var contextMenuAppeared = false
+    /// Purge différée annulable de l'overlay (voir `dismissContextMenu`). Conservée
+    /// pour l'annuler si une nouvelle ouverture survient avant la fin du zoom-out,
+    /// sinon la purge en vol effacerait le menu qui vient de se rouvrir.
+    @State var contextMenuDismissWork: DispatchWorkItem? = nil
 
     /// Renommage : conversation cible + texte en cours d'édition (action
     /// « Renommer » du menu contextuel, groupes/communautés uniquement).
@@ -331,6 +335,10 @@ struct ConversationListView: View {
                 // Montage instantané à l'état "replié" ; l'overlay anime
                 // ensuite via `.onAppear` (zoom + rebond). Reset explicite au
                 // cas où l'état resterait à true d'une ouverture précédente.
+                // Annule une purge de fermeture encore en vol, sinon elle
+                // effacerait ce menu fraîchement ouvert (~0.26 s plus tard).
+                contextMenuDismissWork?.cancel()
+                contextMenuDismissWork = nil
                 contextMenuAppeared = false
                 contextMenuConversation = conversation
             }

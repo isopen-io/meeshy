@@ -233,11 +233,14 @@ extension ConversationListView {
 
     func dismissContextMenu() {
         // Zoom-out : anime la sortie (aperçu rétrécit, menu redescend) puis
-        // retire réellement l'overlay après la durée du spring.
+        // retire réellement l'overlay après la durée du spring. Purge annulable :
+        // si l'utilisateur rouvre un menu avant la fin du zoom-out, `onLongPress`
+        // annule ce work item, sinon il effacerait le menu fraîchement rouvert.
+        contextMenuDismissWork?.cancel()
         withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) { contextMenuAppeared = false }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.26) {
-            contextMenuConversation = nil
-        }
+        let work = DispatchWorkItem { contextMenuConversation = nil }
+        contextMenuDismissWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.26, execute: work)
     }
 
     @ViewBuilder
