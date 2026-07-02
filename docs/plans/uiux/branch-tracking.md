@@ -14,6 +14,20 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 112i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> - **112i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `9408c957`)** :
+>   Dynamic Type + a11y de `OnboardingStepViews` (wizard d'inscription 8 étapes). Texte déjà
+>   majoritairement sémantique ; **4/7** `.font(.system(size:))` → `MeeshyFont.relative` (drapeau
+>   pays 24, indicateur match mdp 20, drapeau langue 26, checkmark sélection langue 20). **3 glyphes
+>   figés** : `StepIllustration` hero (44, cercle fixe 100×100, déjà hidden), `person.fill` profil
+>   (32, cercle fixe 80×80), `exclamationmark.triangle.fill` erreur récap (50). **2 `.accessibilityHidden`**
+>   sur person.fill + héros erreur. 1 fichier, 0 logique, 0 test/clé i18n neuve. 0 contention iOS.
+>   Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `OnboardingStepViews` Dynamic Type + a11y SOLDÉ** : ne plus reprendre les 3 glyphes figés.
+> - **Base de départ 113i : `main` HEAD**. Différé 108i (`.accessibilityValue` timeAgo/expiry header
+>   stories). Gros lots restants : `StoryViewerView+Content` (⚠️ i18n), `ConversationView+Composer`
+>   (lot critique prudent), `OnboardingAnimations` ; audit palette hexes proches.
+
 > **POINTEUR AUTORITAIRE iOS (mis à jour 111i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
 > - **111i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `57408634`)** :
 >   Dynamic Type de `StatusBubbleOverlay` (bulle d'humeur flottante Liquid Glass). Bouton audio déjà

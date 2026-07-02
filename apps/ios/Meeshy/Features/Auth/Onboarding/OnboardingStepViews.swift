@@ -102,6 +102,7 @@ struct StepIllustration: View {
             Circle()
                 .fill(accentColor.opacity(0.12))
                 .frame(width: 100, height: 100)
+            // Glyphe héros décoratif ≥40pt dans un cercle fixe 100×100 : figé (doctrine 74i/86i) ; le ZStack est masqué VoiceOver
             Image(systemName: iconName)
                 .font(.system(size: 44, weight: .light))
                 .foregroundStyle(
@@ -384,7 +385,7 @@ struct StepPhoneView: View {
                     showCountryPicker = false
                 }) {
                     HStack {
-                        Text(country.flag).font(.system(size: 24))
+                        Text(country.flag).font(MeeshyFont.relative(24))
                         Text(country.name).font(.subheadline)
                         Spacer()
                         Text(country.dialCode).font(.subheadline).foregroundColor(.secondary)
@@ -591,7 +592,7 @@ struct StepPasswordView: View {
                         if !viewModel.confirmPassword.isEmpty {
                             HStack(spacing: 10) {
                                 Image(systemName: passwordsMatch ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                    .font(.system(size: 20))
+                                    .font(MeeshyFont.relative(20))
                                     .foregroundColor(passwordsMatch ? MeeshyColors.success : MeeshyColors.error)
                                 Text(passwordsMatch ? String(localized: "onboarding.step.password.match", defaultValue: "Les mots de passe correspondent!", bundle: .main) : String(localized: "onboarding.step.password.mismatch", defaultValue: "Les mots de passe ne correspondent pas", bundle: .main))
                                     .font(.subheadline.weight(.medium))
@@ -877,14 +878,14 @@ struct StepLanguageView: View {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         }) {
             HStack(spacing: 10) {
-                Text(lang.flag).font(.system(size: 26))
+                Text(lang.flag).font(MeeshyFont.relative(26))
                 VStack(alignment: .leading, spacing: 2) {
                     Text(lang.name).font(.footnote.weight(.semibold)).foregroundColor(.primary)
                     Text(lang.id.uppercased()).font(.caption2.weight(.medium)).foregroundColor(.secondary)
                 }
                 Spacer()
                 if isSelected {
-                    Image(systemName: "checkmark.circle.fill").font(.system(size: 20)).foregroundColor(color)
+                    Image(systemName: "checkmark.circle.fill").font(MeeshyFont.relative(20)).foregroundColor(color)
                 }
             }
             .padding(12)
@@ -1070,9 +1071,11 @@ struct StepProfileView: View {
                             .fill(viewModel.currentStep.accentColor.opacity(0.2))
                             .frame(width: 80, height: 80)
                             .overlay(
+                                // Glyphe placeholder dans un cercle fixe 80×80 : figé (déborderait s'il scalait, doctrine 86i) + masqué VoiceOver (le nom sous l'aperçu porte le sens)
                                 Image(systemName: "person.fill")
                                     .font(.system(size: 32))
                                     .foregroundColor(viewModel.currentStep.accentColor.opacity(0.5))
+                                    .accessibilityHidden(true)
                             )
                             .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 4))
                     }
@@ -1165,9 +1168,11 @@ struct StepRecapView: View {
 
     private var errorView: some View {
         VStack(spacing: 16) {
+            // Glyphe héros décoratif ≥40pt : figé (doctrine 74i/86i) + masqué VoiceOver (le message d'erreur adjacent porte le sens)
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 50))
                 .foregroundColor(MeeshyColors.error)
+                .accessibilityHidden(true)
             Text(viewModel.errorMessage ?? String(localized: "common.error.unknown", defaultValue: "Erreur inconnue", bundle: .main))
                 .font(.subheadline)
                 .foregroundColor(MeeshyColors.error)
