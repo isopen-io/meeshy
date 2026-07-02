@@ -269,6 +269,15 @@ export class CallEventsHandler {
           }
         });
         const conversationId = missedContext?.conversationId;
+        // Release the conversation's active-call claim HERE, as close to the
+        // won transition as possible — before any emit/summary/notification
+        // step can throw. Delegating the release to handleMissedCall →
+        // markCallAsMissed leaks the claim: its non-ringing guard sees the
+        // row we just wrote as `missed` and returns early (prod incident
+        // 2026-07-02 — conversation rejected CALL_ALREADY_ACTIVE ~5 min).
+        if (conversationId) {
+          await this.callService.releaseActiveCallClaim(conversationId, callId);
+        }
         const endedEvent = {
           callId,
           duration: 0,

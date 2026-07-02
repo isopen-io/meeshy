@@ -362,8 +362,12 @@ export class CallService {
    * failure here is logged, not thrown, since the call's own status write is
    * always the source of truth and the claim self-heals the next time a call
    * is attempted for this conversation and finds this one already terminal.
+   * Public: the ringing-timeout handler (CallEventsHandler) owns the atomic
+   * missed-transition and must release the claim itself — delegating to
+   * markCallAsMissed hit the non-ringing guard and leaked the claim (prod
+   * incident 2026-07-02, conversation blocked CALL_ALREADY_ACTIVE ~5 min).
    */
-  private async releaseActiveCallClaim(conversationId: string, callId: string): Promise<void> {
+  async releaseActiveCallClaim(conversationId: string, callId: string): Promise<void> {
     try {
       await this.prisma.conversation.updateMany({
         where: { id: conversationId, activeCallId: callId },
@@ -372,6 +376,57 @@ export class CallService {
     } catch (error) {
       logger.error('Failed to release active-call claim', { conversationId, callId, error });
     }
+  }
+
+  /**
+   * Self-heal a leaked active-call claim. A claim can outlive its call when
+   * a terminal write raced the release (prod incident 2026-07-02: ringing
+   * timeout won the missed-transition, the delegated release was skipped by
+   * markCallAsMissed's non-ringing guard, and the conversation rejected
+   * every initiateCall for minutes). When the current holder is terminal —
+   * or the claim vanished between our failed claim and this read — take the
+   * claim for `newCallId` with a single compare-and-swap, so a concurrent
+   * healthy claim can never be clobbered. Returns true when the claim is won.
+   */
+  private async reclaimFromTerminalHolder(conversationId: string, newCallId: string): Promise<boolean> {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { activeCallId: true }
+    });
+    const holderId = conversation?.activeCallId;
+
+    if (!holderId) {
+      const retry = await this.prisma.conversation.updateMany({
+        where: {
+          id: conversationId,
+          OR: [{ activeCallId: null }, { activeCallId: { isSet: false } }]
+        },
+        data: { activeCallId: newCallId }
+      });
+      return retry.count > 0;
+    }
+
+    const holder = await this.prisma.callSession.findUnique({
+      where: { id: holderId },
+      select: { status: true }
+    });
+    if (holder && ACTIVE_STATUSES.includes(holder.status)) {
+      return false;
+    }
+
+    const swap = await this.prisma.conversation.updateMany({
+      where: { id: conversationId, activeCallId: holderId },
+      data: { activeCallId: newCallId }
+    });
+    if (swap.count > 0) {
+      logger.warn('⚠️ Active-call claim self-healed from terminal holder', {
+        conversationId,
+        staleHolderCallId: holderId,
+        newCallId
+      });
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -676,15 +731,18 @@ export class CallService {
     });
 
     if (claim.count === 0) {
-      logger.error('❌ Call already active (lost race to claim conversation)', {
-        conversationId,
-        orphanedCallId: callSession.id
-      });
-      await this.prisma.$transaction(async (tx) => {
-        await tx.callParticipant.deleteMany({ where: { callSessionId: callSession.id } });
-        await tx.callSession.delete({ where: { id: callSession.id } });
-      });
-      throw new Error(`${CALL_ERROR_CODES.CALL_ALREADY_ACTIVE}: A call is already active in this conversation`);
+      const healed = await this.reclaimFromTerminalHolder(conversationId, callSession.id);
+      if (!healed) {
+        logger.error('❌ Call already active (lost race to claim conversation)', {
+          conversationId,
+          orphanedCallId: callSession.id
+        });
+        await this.prisma.$transaction(async (tx) => {
+          await tx.callParticipant.deleteMany({ where: { callSessionId: callSession.id } });
+          await tx.callSession.delete({ where: { id: callSession.id } });
+        });
+        throw new Error(`${CALL_ERROR_CODES.CALL_ALREADY_ACTIVE}: A call is already active in this conversation`);
+      }
     }
 
     logger.info('✅ Call initiated successfully', {
@@ -1538,6 +1596,11 @@ export class CallService {
     // already `missed`. Unconditionally re-writing it drifts `endedAt`
     // (+a few ms) and `duration` (+a few seconds) on every retry.
     if (callSession.status !== CallStatus.initiated && callSession.status !== CallStatus.ringing) {
+      if (TERMINAL_STATUSES.includes(callSession.status)) {
+        this.clearHeartbeats(callId);
+        this.clearRingingTimeout(callId);
+        await this.releaseActiveCallClaim(callSession.conversationId, callId);
+      }
       logger.info('Call already in non-ringing state — skipping markCallAsMissed write', {
         callId,
         currentStatus: callSession.status
