@@ -145,6 +145,7 @@ jest.mock('@meeshy/shared/types/video-call', () => ({
     SIGNAL_SENDER_MISMATCH: 'SIGNAL_SENDER_MISMATCH',
     TARGET_NOT_FOUND: 'TARGET_NOT_FOUND',
   },
+  CALL_TERMINAL_STATUSES: ['ended', 'missed', 'rejected', 'failed'],
 }));
 
 jest.mock('@meeshy/shared/prisma/client', () => ({

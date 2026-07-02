@@ -349,6 +349,43 @@ describe('CallEventsHandler — restart / disconnect resilience', () => {
       expect(mockLeaveCall).not.toHaveBeenCalled();
     });
 
+    // Probe prod 2026-07-02 22:41Z: a call resolved `missed` by the ringing
+    // timeout was rewritten ended/completed because both terminal guards
+    // only checked 'ended'. Every terminal status must behave like 'ended'.
+    it.each(['missed', 'failed', 'rejected'])(
+      'does NOT end the call if it resolved %s during the grace window',
+      async (terminalStatus) => {
+        const prisma = makePrisma({
+          activeParticipations: [makeParticipation('active')],
+          freshParticipant: { leftAt: null, callSession: { status: terminalStatus } },
+        });
+        const { handlers } = setup({ prisma });
+
+        await handlers['disconnect']();
+        await jest.advanceTimersByTimeAsync(GRACE_MS + 100);
+
+        expect(mockLeaveCall).not.toHaveBeenCalled();
+      }
+    );
+
+    it.each(['missed', 'failed', 'rejected', 'ended'])(
+      'does not even arm a grace when the participation call is already %s at disconnect',
+      async (terminalStatus) => {
+        const prisma = makePrisma({
+          activeParticipations: [makeParticipation(terminalStatus)],
+        });
+        const { handlers } = setup({ prisma });
+
+        await handlers['disconnect']();
+        // No timer should have been armed at all — the expiry re-check
+        // (callParticipant.findUnique) must never run.
+        await jest.advanceTimersByTimeAsync(GRACE_MS + 10 * 15_000 + 1000);
+
+        expect(mockLeaveCall).not.toHaveBeenCalled();
+        expect((prisma.callParticipant.findUnique as jest.Mock)).not.toHaveBeenCalled();
+      }
+    );
+
     it('does NOT end the call if the participant already left by expiry', async () => {
       const prisma = makePrisma({
         activeParticipations: [makeParticipation('active')],

@@ -16,7 +16,7 @@ import { CallService } from '../services/CallService';
 import { NotificationService } from '../services/notifications/NotificationService';
 import { PushNotificationService } from '../services/PushNotificationService';
 import { logger } from '../utils/logger';
-import { CALL_EVENTS, CALL_ERROR_CODES } from '@meeshy/shared/types/video-call';
+import { CALL_EVENTS, CALL_ERROR_CODES, CALL_TERMINAL_STATUSES } from '@meeshy/shared/types/video-call';
 import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import { validateSocketEvent, isValidationFailure } from '../middleware/validation';
 import {
@@ -246,6 +246,10 @@ export class CallEventsHandler {
         // Atomic conditional transition — count > 0 means we won the
         // race; count === 0 means another path (call:join, call:end,
         // call:leave) already moved the status off ringing/initiated.
+        // Terminal write protocol: every terminal writer MUST bump `version`
+        // so version-guarded writers (leaveCall, endCall, idempotent-leave)
+        // that read the row BEFORE this transition no-op instead of rewriting
+        // missed → ended/completed (probe prod 2026-07-02 22:41Z).
         const result = await this.prisma.callSession.updateMany({
           where: {
             id: callId,
@@ -254,7 +258,8 @@ export class CallEventsHandler {
           data: {
             status: CallStatus.missed,
             endReason: CallEndReason.missed,
-            endedAt: new Date()
+            endedAt: new Date(),
+            version: { increment: 1 }
           }
         });
         if (result.count === 0) {
@@ -389,7 +394,12 @@ export class CallEventsHandler {
         include: { callSession: { select: { status: true } } }
       });
       if (!fresh || fresh.leftAt) return;
-      if ((fresh.callSession?.status as string | undefined) === 'ended') return;
+      // ANY terminal status — not just 'ended'. A call resolved `missed` by
+      // the ringing timeout during the grace window must not be re-ended:
+      // leaveCall would rewrite the terminal row ended/completed and post a
+      // second summary (probe prod 2026-07-02 22:41Z).
+      const freshStatus = fresh.callSession?.status;
+      if (freshStatus && (CALL_TERMINAL_STATUSES as readonly string[]).includes(freshStatus)) return;
 
       const socketsInRoom = await io.in(ROOMS.call(callId)).fetchSockets();
       const userBack = socketsInRoom.some(
@@ -2890,7 +2900,11 @@ export class CallEventsHandler {
         }
 
         for (const participation of activeParticipations) {
-          if (participation.callSession.status === 'ended') continue;
+          // Skip ANY terminal status — a leftAt:null participant row on a
+          // missed/failed/rejected call is bookkeeping residue, not a live
+          // call; arming a grace for it ends with leaveCall rewriting the
+          // terminal row (probe prod 2026-07-02 22:41Z).
+          if ((CALL_TERMINAL_STATUSES as readonly string[]).includes(participation.callSession.status)) continue;
 
           // CALL-RESILIENCE — an ANSWERED call (active/reconnecting) rides on a
           // direct P2P media connection that a transient socket drop does NOT

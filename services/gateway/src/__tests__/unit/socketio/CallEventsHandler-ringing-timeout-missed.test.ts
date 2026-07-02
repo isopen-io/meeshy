@@ -310,6 +310,27 @@ describe('CallEventsHandler — ringing timeout call:missed contract', () => {
     });
   });
 
+  describe('terminal write carries a version increment', () => {
+    // Probe prod 2026-07-02 22:41Z: the timeout's terminal updateMany did NOT
+    // bump `version`, so every later version-guarded terminal writer
+    // (leaveCall, endCall, idempotent-leave) still matched the pre-missed
+    // version and could rewrite missed → ended/completed.
+    it('increments the call version when winning the missed transition', async () => {
+      const prisma = makePrisma();
+
+      await fireRingingTimeout(prisma);
+
+      expect((prisma.callSession.updateMany as jest.Mock)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: 'missed',
+            version: { increment: 1 }
+          })
+        })
+      );
+    });
+  });
+
   describe('active-call claim release on won transition', () => {
     // Prod incident 2026-07-02 21:30Z: the handler won the atomic
     // missed-transition but the claim release was delegated to

@@ -29,6 +29,8 @@ const CALL_HISTORY_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
 const clampNonNegativeInt = (value?: number | null): number | null =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : null;
 
+// Mirror of `CALL_TERMINAL_STATUSES` (@meeshy/shared/types/video-call),
+// typed on the Prisma enum — keep both lists in sync.
 const TERMINAL_STATUSES: CallStatus[] = [
   CallStatus.ended,
   CallStatus.missed,
@@ -1075,6 +1077,26 @@ export class CallService {
     if (!call) {
       logger.error('❌ Call not found', { callId });
       throw new Error(`${CALL_ERROR_CODES.CALL_NOT_FOUND}: Call session not found`);
+    }
+
+    // Terminal guard (probe prod 2026-07-02 22:41Z): a leave landing on a call
+    // that another path already resolved (ringing timeout → missed, force-end,
+    // concurrent hangup) must only stamp the leaver's leftAt. Recomputing the
+    // outcome from a terminal status corrupts history — `missed` is not a
+    // pre-answer status, so the old path rewrote it ended/completed with a
+    // duration measured to the leave, and the handler posted a second summary.
+    if (TERMINAL_STATUSES.includes(call.status) || call.endedAt) {
+      await this.prisma.callParticipant.update({
+        where: { id: callParticipant.id },
+        data: { leftAt: new Date() }
+      });
+      this.clearParticipantBackgrounded(callId, participantId);
+      this.heartbeats.get(callId)?.delete(participantId);
+      await this.releaseActiveCallClaim(call.conversationId, callId);
+      logger.info('ℹ️ Leave on already-terminal call — participant marked left, terminal status preserved', {
+        callId, userId, status: call.status
+      });
+      return this.getCallSession(callId);
     }
 
     const leftAt = new Date();

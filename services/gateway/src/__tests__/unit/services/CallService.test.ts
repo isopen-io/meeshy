@@ -807,6 +807,44 @@ describe('CallService', () => {
       );
     });
 
+    it('preserves a terminal status: leave on an already-missed call marks the participant left without rewriting it', async () => {
+      // Probe prod 2026-07-02 22:41Z: the ringing timeout resolved the call
+      // `missed`; 19s later the caller's socket dropped and the expired grace
+      // called leaveCall, which read the missed row, computed
+      // wasPreAnswered=false (missed ∉ pre-answer statuses) and rewrote the
+      // terminal row ended/completed/duration=89 + posted a second summary.
+      // A leave that lands on a terminal call must only stamp the leaver's
+      // leftAt — never touch status/endReason/duration.
+      const participant = createMockParticipant();
+      const endedAt = new Date();
+      const missedCall = createMockCallSession({
+        status: CallStatus.missed,
+        endedAt,
+        duration: 0,
+        participants: [participant],
+        initiator: createMockUser(),
+        conversation: createMockConversation()
+      });
+
+      mockPrisma.callParticipant.findFirst.mockResolvedValue(participant);
+      mockPrisma.callSession.findUnique
+        .mockResolvedValueOnce(missedCall)   // leaveCall read
+        .mockResolvedValueOnce(missedCall);  // getCallSession
+      mockPrisma.callParticipant.update.mockResolvedValue({ ...participant, leftAt: new Date() });
+
+      const result = await callService.leaveCall(validLeaveData);
+
+      expect(result.status).toBe(CallStatus.missed);
+      expect(mockPrisma.callParticipant.update).toHaveBeenCalledWith({
+        where: { id: participant.id },
+        data: { leftAt: expect.any(Date) }
+      });
+      // The terminal write path (transaction + callSession.updateMany) must
+      // never run for a call that is already terminal.
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+      expect(mockPrisma.callSession.updateMany).not.toHaveBeenCalled();
+    });
+
     it('should throw error when call not found', async () => {
       mockPrisma.callParticipant.findFirst.mockResolvedValue(createMockParticipant());
       mockPrisma.callSession.findUnique.mockResolvedValue(null);
