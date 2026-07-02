@@ -20,6 +20,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -136,7 +137,10 @@ private fun rememberTabs(): List<TabItem> {
 private val tabRoutes = setOf(Routes.CONVERSATIONS, Routes.FEED, Routes.CALLS, Routes.NOTIFICATIONS, Routes.SETTINGS)
 
 @Composable
-fun MeeshyApp() {
+fun MeeshyApp(
+    launchRoute: String? = null,
+    onLaunchRouteConsumed: () -> Unit = {},
+) {
     val navController = rememberNavController()
     val authViewModel: AuthViewModel = hiltViewModel()
     val authState by authViewModel.state.collectAsStateWithLifecycle()
@@ -147,6 +151,17 @@ fun MeeshyApp() {
 
     val startDestination = remember(authState.isAuthenticated) { if (authState.isAuthenticated) Routes.CONVERSATIONS else Routes.LOGIN }
     val tabs = rememberTabs()
+
+    // Deep-link from a notification tap / full-screen call intent: navigate once
+    // the graph is live and the user is authenticated, then mark it consumed so a
+    // recomposition never re-navigates. An unauthenticated launch defers until
+    // sign-in resolves (the route survives in Activity state across the login gate).
+    LaunchedEffect(launchRoute, authState.isAuthenticated) {
+        if (launchRoute != null && authState.isAuthenticated) {
+            navController.navigate(launchRoute)
+            onLaunchRouteConsumed()
+        }
+    }
 
     Scaffold(
         containerColor = MeeshyTheme.tokens.backgroundPrimary,
@@ -301,9 +316,11 @@ fun MeeshyApp() {
             composable(
                 route = Routes.CALL,
                 arguments = listOf(
-                    navArgument(CallRoute.CONVERSATION_ID_ARG) { type = NavType.StringType },
-                    navArgument(CallRoute.PEER_NAME_ARG) { type = NavType.StringType },
-                    navArgument(CallRoute.VIDEO_ARG) { type = NavType.BoolType },
+                    navArgument(CallRoute.CONVERSATION_ID_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
+                    navArgument(CallRoute.PEER_NAME_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
+                    navArgument(CallRoute.VIDEO_ARG) { type = NavType.BoolType; defaultValue = false },
+                    navArgument(CallRoute.CALL_ID_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
+                    navArgument(CallRoute.INCOMING_ARG) { type = NavType.BoolType; defaultValue = false },
                 ),
             ) { entry ->
                 val args = entry.arguments
@@ -312,6 +329,8 @@ fun MeeshyApp() {
                         conversationId = args?.getString(CallRoute.CONVERSATION_ID_ARG)?.let(Uri::decode),
                         peerName = args?.getString(CallRoute.PEER_NAME_ARG)?.let(Uri::decode),
                         isVideo = args?.getBoolean(CallRoute.VIDEO_ARG),
+                        callId = args?.getString(CallRoute.CALL_ID_ARG)?.let(Uri::decode),
+                        incoming = args?.getBoolean(CallRoute.INCOMING_ARG) ?: false,
                     ),
                     onClose = { navController.popBackStack() },
                 )
