@@ -1728,6 +1728,24 @@ describe('CallEventsHandler', () => {
       expect(mockCallServiceClearRingingTimeout).not.toHaveBeenCalled();
     });
 
+    it('item F regression: does NOT clear the ringing timeout on a successful early-join while the call is still ringing', async () => {
+      // The callee's client early-joins as soon as the incoming call starts
+      // ringing (it must, to receive the SDP offer) — well before the human
+      // taps "answer". Clearing the ringing timeout here would silently
+      // disable the 60s no-answer protection, including for a timer
+      // re-armed by boot rehydration after a mid-ring gateway restart.
+      const participant = makeParticipant();
+      const ringingSession = makeCallSession({ participants: [participant], status: 'ringing' });
+      mockCallServiceJoinCall.mockResolvedValue({ callSession: ringingSession, iceServers: [] });
+
+      const { socket, io } = setupWithSocket();
+      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
+
+      await socket._trigger('call:join', validData);
+
+      expect(mockCallServiceClearRingingTimeout).not.toHaveBeenCalled();
+    });
+
     it('skips the participant-joined ICE push when getUserId returns undefined (never emits a TURN-less STUN-only config)', async () => {
       const participant = makeParticipant();
       const callSession = makeCallSession({ participants: [participant] });
