@@ -39,7 +39,7 @@ final class ConversationServiceTests: XCTestCase {
             leftAt: nil, bannedAt: nil, nickname: nil, lastActiveAt: nil,
             user: APIConversationUser(
                 id: userId, userId: nil, username: "testuser", displayName: "Test User",
-                firstName: nil, lastName: nil, avatar: nil,
+                firstName: nil, lastName: nil, avatar: nil, banner: nil,
                 isOnline: true, lastActiveAt: nil, type: nil, user: nil
             )
         )
