@@ -523,6 +523,15 @@ GREEN du chantier parallèle) et CHAOS-TEST 1 DÉMONTRÉ (callId 6a4680ef67ae80d
   réhydraté — le filet tier-1 GC résout missed quand même (~150s au lieu de ~60s) ; avec la FSM
   ringing, le join ne devrait plus clear ce timer (l'answer SDP le fait déjà) — micro-fix candidat.
 
+**8e vague — micro-fix propriété du ringing timer + VALIDATION CHRONOMÉTRIQUE (commit dc8f37a44) :**
+call:join ne désarme plus le ringing timer (l'answer SDP + chemins terminaux le possèdent) — le join
+early/re-join effaçait le timer réhydraté et laissait la sonnerie sans borne serveur. Re-test chaos-2
+live (callId 6a46b5e9…) : initiate 19:03:05.212Z → restart mid-ring → « re-armed count:1 » 19:03:25 →
+« Ringing timeout fired — marked as missed » 19:04:05.285Z = endedAt-startedAt **60,001s**, le budget
+NOMINAL exact malgré le restart. La réhydratation reprend le décompte là où le crash l'a laissé.
+CI note : « Test Python (translator) » flake sur ce push (aucun lien, translator intouché, vert au
+run précédent) → re-run déclenché.
+
 ### Session 2026-07-02 (routine calling-feature, gateway-only — toujours pas de toolchain Swift ici)
 
 - **[FIX C3/C4]** `CallService.endCall()` alignée sur `leaveCall()` (audit P1-29/P1 rec. #6-7) : un
