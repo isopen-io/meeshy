@@ -50,6 +50,24 @@ async function withRetry<T>(
   throw lastError;
 }
 
+// MongoDB ObjectId hex strings are chronologically sortable (leading 4 bytes
+// = creation timestamp), so lexicographic comparison approximates message
+// recency without an extra query. Only applied when both ids look like real
+// ObjectIds — non-conforming ids (tests, legacy data) always compare as
+// "not stale" so behavior is unchanged for callers that don't use ObjectIds.
+const OBJECT_ID_RE = /^[0-9a-f]{24}$/i;
+
+function isStaleCursorMessageId(
+  candidateMessageId: string,
+  currentCursorMessageId: string | null | undefined
+): boolean {
+  if (!currentCursorMessageId) return false;
+  if (!OBJECT_ID_RE.test(candidateMessageId) || !OBJECT_ID_RE.test(currentCursorMessageId)) {
+    return false;
+  }
+  return candidateMessageId.toLowerCase() < currentCursorMessageId.toLowerCase();
+}
+
 export class MessageReadStatusService {
   /**
    * Cache statique pour éviter les appels multiples à markMessagesAsReceived/Read
@@ -408,9 +426,19 @@ export class MessageReadStatusService {
           where: {
             conversation_participant_cursor: { participantId, conversationId },
           },
-          select: { lastDeliveredAt: true },
+          select: { lastDeliveredAt: true, lastDeliveredMessageId: true },
         });
         prevDeliveredAt = prevCursor?.lastDeliveredAt ?? null;
+
+        // Out-of-order delivery receipt (e.g. two devices/retries racing):
+        // never roll the cursor back to an older message than what's already
+        // recorded — that would resurrect messages as "undelivered".
+        if (isStaleCursorMessageId(messageId, prevCursor?.lastDeliveredMessageId)) {
+          logger.info(
+            `[MessageReadStatus] Ignoring stale received receipt for participant ${participantId} in conversation ${conversationId}`
+          );
+          return;
+        }
       } catch {
         prevDeliveredAt = null;
       }
@@ -503,9 +531,20 @@ export class MessageReadStatusService {
           where: {
             conversation_participant_cursor: { participantId, conversationId },
           },
-          select: { lastReadAt: true },
+          select: { lastReadAt: true, lastReadMessageId: true },
         });
         prevReadAt = prevCursor?.lastReadAt ?? null;
+
+        // Out-of-order read receipt (e.g. a second, staler device catching up
+        // after a fresher one already advanced the cursor): never roll the
+        // read cursor back to an older message — that would resurrect
+        // already-read messages as unread.
+        if (isStaleCursorMessageId(messageId, prevCursor?.lastReadMessageId)) {
+          logger.info(
+            `[MessageReadStatus] Ignoring stale read receipt for participant ${participantId} in conversation ${conversationId}`
+          );
+          return;
+        }
       } catch {
         prevReadAt = null;
       }
