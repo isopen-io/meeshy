@@ -795,9 +795,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `PRIORITY_MAX` notification on the new `meeshy_calls` channel (`setFullScreenIntent` → `MainActivity`
       with `callId`/`conversationId`/`callerName`/`isVideo` extras), suppresses duplicates silently, and
       hands every non-call push to the existing message path. +19 behavioural tests (11 router, 8 store).
-      **Pending:** MainActivity extra → NavHost deep-link into the incoming-call screen (shared with the
-      still-unwired message-notification `conversationId` deep-link), a full `ConnectionService`/Telecom
-      integration + ringtone, then the WebRTC media transport.
+      **Deep-link wired** (slice `incoming-call-deeplink`): the pure `me.meeshy.app.navigation.LaunchRouter`
+      decodes the launch/full-screen intent extras (`LaunchExtras`) into a nav route — a non-blank
+      `callId` → `CallRoute.incoming(...)` (call push wins, deep-links into the incoming-call screen with
+      `isOutgoing=false` carrying the server id so the ring is answerable), else a non-blank
+      `conversationId` → `Routes.chat(...)` (the shared message-notification tap path), else `null`.
+      `CallRoute` was refactored to a **static `call` path + all-optional query args** so a blank room /
+      peer name can never collapse the route or crash `navigate()`. `MainActivity` extracts the extras +
+      hands them to `LaunchRouter` (in `onCreate` and `onNewIntent`); `MeeshyApp` navigates once the graph
+      is live and the user is authenticated, then marks the route consumed. +14 behavioural tests (8
+      router, 6 route). **Pending:** a full `ConnectionService`/Telecom integration + ringtone, then the
+      WebRTC media transport.
 - [ ] Call reconnection on network change (ICE restart)
 - [~] Call states: ringing/connecting/connected/ended; PiP / floating call pill —
       **pure call-lifecycle FSM landed** (`core:model` `me.meeshy.sdk.model.call`):

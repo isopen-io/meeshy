@@ -2,6 +2,7 @@ package me.meeshy.app.navigation
 
 import android.net.Uri
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.app.calls.CallConfig
 import me.meeshy.sdk.model.call.CallHistoryPeer
 import me.meeshy.sdk.model.call.CallRecord
 import org.junit.Test
@@ -9,12 +10,26 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
 /**
- * Behavioural coverage for the outgoing-call route SSOT. The critical behaviour
- * is that a real [conversationId] survives the round trip into the [CallConfig]
- * the call screen drives — without it `emitInitiate` fires into an empty room.
+ * Behavioural coverage for the call route SSOT. The critical behaviours: a real
+ * [conversationId] survives the round trip into the [CallConfig] the screen drives
+ * (without it `emitInitiate` fires into an empty room), and an **incoming** deep
+ * link carries the server [callId] and non-outgoing direction (without which the
+ * ring cannot be answered). Every route is decoded back through [CallRoute.config]
+ * so the assertions are on real config, not string literals.
  */
 @RunWith(RobolectricTestRunner::class)
 class CallRouteTest {
+
+    private fun configOf(route: String): CallConfig {
+        val uri = Uri.parse(route)
+        return CallRoute.config(
+            conversationId = uri.getQueryParameter(CallRoute.CONVERSATION_ID_ARG),
+            peerName = uri.getQueryParameter(CallRoute.PEER_NAME_ARG),
+            isVideo = uri.getQueryParameter(CallRoute.VIDEO_ARG)?.toBoolean(),
+            callId = uri.getQueryParameter(CallRoute.CALL_ID_ARG),
+            incoming = uri.getQueryParameter(CallRoute.INCOMING_ARG)?.toBoolean() ?: false,
+        )
+    }
 
     @Test
     fun `config threads the conversationId for an outgoing call`() {
@@ -68,39 +83,122 @@ class CallRouteTest {
     }
 
     @Test
-    fun `path embeds the conversationId and round-trips a peerName with reserved characters`() {
-        val path = CallRoute.path(
-            conversationId = "6650f0aa11bb22cc33dd44ee",
-            peerName = "Ann / Bob & Co",
-            isVideo = true,
+    fun `config adopts an explicit incoming callId and flips direction`() {
+        val config = CallRoute.config(
+            conversationId = "c1",
+            peerName = "Bob",
+            isVideo = false,
+            callId = "call-9",
+            incoming = true,
         )
 
-        val segments = path.split("/")
-        // call / {conversationId} / {peerName} / {video} — the encoded peerName must not
-        // introduce extra path separators, so exactly four segments survive.
-        assertThat(segments).hasSize(4)
-        assertThat(segments[0]).isEqualTo("call")
-        assertThat(Uri.decode(segments[1])).isEqualTo("6650f0aa11bb22cc33dd44ee")
-        assertThat(Uri.decode(segments[2])).isEqualTo("Ann / Bob & Co")
-        assertThat(segments[3]).isEqualTo("true")
+        assertThat(config.callId).isEqualTo("call-9")
+        assertThat(config.isOutgoing).isFalse()
     }
 
     @Test
-    fun `pattern exposes all three named arguments`() {
+    fun `config degrades a null incoming callId to blank`() {
+        val config = CallRoute.config(
+            conversationId = "c1",
+            peerName = "Bob",
+            isVideo = true,
+            callId = null,
+            incoming = true,
+        )
+
+        assertThat(config.callId).isEmpty()
+        assertThat(config.isOutgoing).isFalse()
+    }
+
+    @Test
+    fun `path round-trips the conversationId and a peerName with reserved characters`() {
+        val config = configOf(
+            CallRoute.path(
+                conversationId = "6650f0aa11bb22cc33dd44ee",
+                peerName = "Ann / Bob & Co = X",
+                isVideo = true,
+            ),
+        )
+
+        assertThat(config.conversationId).isEqualTo("6650f0aa11bb22cc33dd44ee")
+        assertThat(config.peerName).isEqualTo("Ann / Bob & Co = X")
+        assertThat(config.isVideo).isTrue()
+        assertThat(config.isOutgoing).isTrue()
+    }
+
+    @Test
+    fun `path stays a single static segment so a blank conversationId never collapses it`() {
+        val route = CallRoute.path(conversationId = "", peerName = "", isVideo = false)
+
+        assertThat(Uri.parse(route).pathSegments).containsExactly("call")
+        val config = configOf(route)
+        assertThat(config.conversationId).isEmpty()
+        assertThat(config.isOutgoing).isTrue()
+    }
+
+    @Test
+    fun `pattern exposes all five named arguments`() {
         assertThat(CallRoute.PATTERN).contains("{${CallRoute.CONVERSATION_ID_ARG}}")
         assertThat(CallRoute.PATTERN).contains("{${CallRoute.PEER_NAME_ARG}}")
         assertThat(CallRoute.PATTERN).contains("{${CallRoute.VIDEO_ARG}}")
+        assertThat(CallRoute.PATTERN).contains("{${CallRoute.CALL_ID_ARG}}")
+        assertThat(CallRoute.PATTERN).contains("{${CallRoute.INCOMING_ARG}}")
+    }
+
+    @Test
+    fun `incoming threads the server id, room, name and media into a non-outgoing config`() {
+        val config = configOf(
+            CallRoute.incoming(
+                callId = "call-777",
+                conversationId = "conv-42",
+                callerName = "Alice",
+                isVideo = true,
+            ),
+        )
+
+        assertThat(config.callId).isEqualTo("call-777")
+        assertThat(config.conversationId).isEqualTo("conv-42")
+        assertThat(config.peerName).isEqualTo("Alice")
+        assertThat(config.isVideo).isTrue()
+        assertThat(config.isOutgoing).isFalse()
+    }
+
+    @Test
+    fun `incoming percent-encodes a reserved-char call id without breaking the query`() {
+        val config = configOf(
+            CallRoute.incoming(
+                callId = "call/7&7=z",
+                conversationId = "conv-1",
+                callerName = "Bob",
+                isVideo = false,
+            ),
+        )
+
+        assertThat(config.callId).isEqualTo("call/7&7=z")
+        assertThat(config.conversationId).isEqualTo("conv-1")
+        assertThat(config.isOutgoing).isFalse()
+    }
+
+    @Test
+    fun `incoming with a blank room still yields an answerable ring`() {
+        val config = configOf(
+            CallRoute.incoming(
+                callId = "call-1",
+                conversationId = "",
+                callerName = "Alice",
+                isVideo = false,
+            ),
+        )
+
+        assertThat(config.callId).isEqualTo("call-1")
+        assertThat(config.conversationId).isEmpty()
+        assertThat(config.isOutgoing).isFalse()
     }
 
     @Test
     fun `redial threads a history record's conversation, resolved name and media into the route`() {
-        val path = CallRoute.redial(callRecord(conversationId = "conv-99", isVideo = true))
+        val config = configOf(CallRoute.redial(callRecord(conversationId = "conv-99", isVideo = true)))
 
-        val config = CallRoute.config(
-            conversationId = Uri.decode(path.split("/")[1]),
-            peerName = Uri.decode(path.split("/")[2]),
-            isVideo = path.split("/")[3].toBoolean(),
-        )
         assertThat(config.conversationId).isEqualTo("conv-99")
         assertThat(config.peerName).isEqualTo("Alice Martin")
         assertThat(config.isVideo).isTrue()
@@ -113,28 +211,25 @@ class CallRouteTest {
             peer = CallHistoryPeer(userId = "u1", username = "amartin", displayName = "Ann / Bob & Co"),
         )
 
-        val path = CallRoute.redial(record)
+        val config = configOf(CallRoute.redial(record))
 
-        val segments = path.split("/")
-        // The encoded, reserved-char display name must not spawn extra path segments.
-        assertThat(segments).hasSize(4)
-        assertThat(Uri.decode(segments[2])).isEqualTo("Ann / Bob & Co")
+        assertThat(config.peerName).isEqualTo("Ann / Bob & Co")
     }
 
     @Test
     fun `redial carries an audio-only record as an audio call`() {
-        val path = CallRoute.redial(callRecord(isVideo = false))
+        val config = configOf(CallRoute.redial(callRecord(isVideo = false)))
 
-        assertThat(path.split("/")[3]).isEqualTo("false")
+        assertThat(config.isVideo).isFalse()
     }
 
     @Test
     fun `redial falls back to the record's display name when the peer is absent`() {
         val record = callRecord(peer = null, conversationTitle = "Design Team")
 
-        val path = CallRoute.redial(record)
+        val config = configOf(CallRoute.redial(record))
 
-        assertThat(Uri.decode(path.split("/")[2])).isEqualTo("Design Team")
+        assertThat(config.peerName).isEqualTo("Design Team")
     }
 
     private fun callRecord(

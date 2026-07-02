@@ -751,3 +751,27 @@ Append-only log of gotchas and decisions that save time next run.
   (`:feature:auth`, the app-level auth holder created above the NavHost in `MeeshyApp`, so effectively
   process-lifetime for the session). The coordinator + pure plan are stateless-ish SDK building blocks in
   `:sdk-core`. The `@Singleton` coordinator dedups on the edge, so a VM recreation can't double-connect.
+
+## Compose Navigation route shape for nullable values (slice `incoming-call-deeplink`, 2026-07-02)
+- **A required path arg must be non-empty, or `navigate()` throws.** Compose Navigation compiles a path
+  placeholder `{arg}` to the regex `[^/]+` (one-or-more non-slash). A route built with a blank value —
+  e.g. `call/${Uri.encode("")}/…` → `call//…` — has an empty segment that the regex won't match, so
+  `navController.navigate(route)` throws `IllegalArgumentException: destination … cannot be found`. And
+  `Uri.getPathSegments()` **silently drops** empty segments, so a test parsing `path.split("/")`/
+  `pathSegments` won't even see the collapse — it just shifts indices and passes for the wrong reason.
+- **Fix: for any route field that can be blank/nullable, use an OPTIONAL QUERY ARG, not a path arg.** A
+  static path + `?a={a}&b={b}…` with `navArgument { … ; defaultValue = … }` (and `nullable = true` for
+  strings) matches with the arg present-blank OR absent, binding the default — never a crash. We migrated
+  `CallRoute` from `call/{conversationId}/{peerName}/{video}` to a static `call?…` query route so an
+  incoming call with no room (gateway may omit `conversationId`) still deep-links safely. Prefer this shape
+  from the start for routes carrying free-text names or optional ids.
+- **Test the route by decoding it back through the SSOT, not by string-splitting.** `Uri.parse(route)
+  .getQueryParameter(ARG)` (auto-decoded) → `CallRoute.config(...)` → assert on the real `CallConfig`. That
+  survives an encoding change (path→query) without rewriting the behavioural intent, and it asserts the
+  actual value the screen drives rather than a positional segment literal.
+- **`MainActivity` intent → NavHost deep-link.** Keep the decision pure: `MainActivity` reads the intent
+  extras into a plain `LaunchExtras` (thin, untestable glue) and calls `LaunchRouter.route(...)`; hold the
+  result in `mutableStateOf`, recompute in both `onCreate` and `onNewIntent` (a running Activity gets
+  `onNewIntent`, not a fresh `onCreate`). `MeeshyApp` navigates from a `LaunchedEffect(route, isAuth)` — gate
+  on `isAuthenticated` so a not-yet-logged-in cold launch defers the route across the login gate — then a
+  `onLaunchRouteConsumed` callback nulls the state so a recomposition never re-navigates.
