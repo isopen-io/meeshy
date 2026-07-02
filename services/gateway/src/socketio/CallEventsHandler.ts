@@ -2105,7 +2105,12 @@ export class CallEventsHandler {
         const validation = validateSocketEvent(socketTranscriptionSegmentSchema, data);
         if (!validation.success) return;
 
-        const participantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        // Authorization — only an ACTIVE PARTICIPANT OF THIS CALL may inject
+        // transcription text into it (not merely a member of its conversation
+        // — `resolveParticipantIdFromCall` only checked that, letting any
+        // other conversation member broadcast arbitrary text into a call
+        // they never joined). Same fix as QUALITY_REPORT / RECONNECTING.
+        const participantId = await this.resolveActiveCallParticipantId(userId, data.callId);
         if (!participantId) {
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
