@@ -810,9 +810,19 @@ export class CallService {
         }
       });
 
+      // Item F (chaos-test 2, callId 6a4690a2…) — the callee EARLY-joins while
+      // still ringing (the SDP offer must flow during the ring), so this
+      // transition means "it is ringing on their device", NOT "they answered".
+      // Stamping connecting+answeredAt here made `ringing` invisible
+      // server-side, gave the boot rehydration (initiated/ringing) nothing to
+      // re-arm after a mid-ring restart (the call decayed to failed/91s via
+      // the connecting GC tier instead of resolving missed), and inflated
+      // `duration` with the ringing time. The real pick-up already stamps
+      // active+answeredAt via updateCallStatus on the SDP answer.
+      // Server FSM: initiated → ringing → active.
       const statusChange =
         call.status === CallStatus.initiated || call.status === CallStatus.ringing
-          ? { status: CallStatus.connecting, answeredAt: new Date() }
+          ? { status: CallStatus.ringing }
           : {};
 
       // Conditional update scoped to the version we read at the top of this

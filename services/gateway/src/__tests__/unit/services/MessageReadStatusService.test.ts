@@ -423,6 +423,29 @@ describe('MessageReadStatusService', () => {
         })
       );
     });
+
+    it('should ignore an out-of-order receipt older than the recorded delivered cursor', async () => {
+      // A second device/retry reports delivery up to testMessageId (older)
+      // AFTER the cursor already advanced to testMessageId2 (newer).
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({
+        lastDeliveredMessageId: testMessageId2
+      });
+
+      await service.markMessagesAsReceived(testParticipantId, testConversationId, testMessageId);
+
+      expect(mockPrisma.conversationReadCursor.upsert).not.toHaveBeenCalled();
+    });
+
+    it('should not treat non-ObjectId message ids as stale (safety net for non-Mongo ids)', async () => {
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({
+        lastDeliveredMessageId: 'not-an-object-id-newer'
+      });
+      mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
+
+      await service.markMessagesAsReceived(testParticipantId, testConversationId, 'not-an-object-id-older');
+
+      expect(mockPrisma.conversationReadCursor.upsert).toHaveBeenCalled();
+    });
   });
 
   // ==============================================
@@ -460,6 +483,48 @@ describe('MessageReadStatusService', () => {
       // No messages in the newly-crossed window (default mock) → freeze no-ops.
       expect(mockPrisma.messageStatusEntry.createMany).not.toHaveBeenCalled();
       expect(mockPrisma.message.update).not.toHaveBeenCalled();
+    });
+
+    it('should ignore an out-of-order read receipt older than the recorded read cursor', async () => {
+      // e.g. two devices marking read concurrently: a stale device reports
+      // testMessageId (older) after the cursor already advanced to
+      // testMessageId2 (newer) — must not roll the cursor backward.
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({
+        lastReadAt: new Date('2025-01-02'),
+        lastReadMessageId: testMessageId2
+      });
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId);
+
+      expect(mockPrisma.conversationReadCursor.upsert).not.toHaveBeenCalled();
+    });
+
+    it('should advance the cursor when the read receipt is genuinely newer', async () => {
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({
+        lastReadAt: new Date('2025-01-01'),
+        lastReadMessageId: testMessageId
+      });
+      mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId2);
+
+      expect(mockPrisma.conversationReadCursor.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          update: expect.objectContaining({ lastReadMessageId: testMessageId2 })
+        })
+      );
+    });
+
+    it('should not treat non-ObjectId message ids as stale (safety net for non-Mongo ids)', async () => {
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({
+        lastReadAt: new Date('2025-01-01'),
+        lastReadMessageId: 'not-an-object-id-newer'
+      });
+      mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId, 'not-an-object-id-older');
+
+      expect(mockPrisma.conversationReadCursor.upsert).toHaveBeenCalled();
     });
 
     it('should freeze a write-once readAt per message newly crossed', async () => {

@@ -3216,6 +3216,58 @@ describe('CallService - joinCall settings branches', () => {
     expect(capturedData).toHaveProperty('leftAt', null);
   });
 
+  it('item F: joining an initiated call transitions to RINGING without answeredAt (the real answer stamps both)', async () => {
+    // Chaos-test 2 (callId 6a4690a2...): the callee early-joins DURING the
+    // ring (Phase 2 — the offer must flow while ringing), and joinCall used
+    // to stamp connecting+answeredAt before any pick-up. Consequences:
+    // "ringing" was invisible server-side (item F), the boot rehydration
+    // (initiated/ringing) had nothing to re-arm after a mid-ring restart, the
+    // GC decayed the call to failed/91s instead of missed, and duration
+    // included the ringing time. The SDP answer already stamps
+    // active+answeredAt (updateCallStatus). FSM: initiated -> ringing -> active.
+    const existingCall = createMockCallSession({
+      status: CallStatus.initiated,
+      participants: [createMockParticipant()],
+      conversation: createMockConversation()
+    });
+    const updatedCall = {
+      ...existingCall,
+      status: CallStatus.ringing,
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    };
+
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(existingCall)
+      .mockResolvedValueOnce(updatedCall);
+    mockPrisma.participant.findFirst.mockResolvedValue({
+      id: 'member-456', conversationId: 'conv-123', userId: 'user-456', isActive: true
+    });
+
+    let capturedUpdate: Record<string, unknown> | undefined;
+    mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
+      const tx = {
+        callParticipant: { create: jest.fn().mockResolvedValue({}) },
+        callSession: {
+          updateMany: jest.fn().mockImplementation(({ data }: any) => {
+            capturedUpdate = data;
+            return { count: 1 };
+          })
+        }
+      };
+      return cb(tx);
+    });
+
+    await callService.joinCall({
+      callId: 'call-123',
+      userId: 'user-456',
+      participantId: 'participant-456'
+    });
+
+    expect(capturedUpdate).toMatchObject({ status: CallStatus.ringing });
+    expect(capturedUpdate).not.toHaveProperty('answeredAt');
+  });
+
   it('does not update callSession when joining connecting call (not initiated/ringing)', async () => {
     const connectingCall = createMockCallSession({
       status: CallStatus.connecting,

@@ -89,10 +89,25 @@
 > `MainActivity` with `callId`/`conversationId`/`callerName`/`isVideo` extras), a `Suppress` drops
 > silently, and a `NotACallPush` falls through to the existing message-notification + outbox-flush path.
 > +19 behavioural tests (11 router, 8 store). `:app:assembleDebug` + `testDebugUnitTest` green.
-> **Next:** consume the `MainActivity` call extras → NavHost deep-link into the incoming-call screen
-> (shared plumbing with the still-unwired message-notification `conversationId` deep-link), add a
-> `ConnectionService`/Telecom integration + ringtone, then the actual WebRTC media transport. See the run
-> log + `feature-parity.md §H`.
+> On 2026-07-02 the **incoming-call deep-link** landed (slice `incoming-call-deeplink`): the call
+> full-screen intent + message notification set extras on `MainActivity`, but `MainActivity` ignored them
+> — a ring tap opened the app on the conversation list, never the call. The new pure
+> `me.meeshy.app.navigation.LaunchRouter.route(LaunchExtras) → String?` is the SSOT: a non-blank `callId`
+> deep-links into the incoming-call screen via `CallRoute.incoming(...)` (a call push **wins** over a
+> message push — a ring is the urgent intent — and the route carries `isOutgoing=false` + the server
+> `callId` so the screen **answers** rather than re-initiates), else a non-blank `conversationId` opens
+> that chat (`Routes.chat`, the shared message-tap path), else `null` (start dest stands). `CallRoute` was
+> refactored from a path-arg route to a **static `call` path + all-optional query args** so a blank room
+> or peer name can never collapse a required path segment and crash `navigate()` (Compose Navigation
+> requires non-empty path segments) — strictly more robust, outgoing/redial behaviour preserved.
+> `MainActivity` extracts the extras (thin glue) and calls `LaunchRouter` in `onCreate` + `onNewIntent`;
+> `MeeshyApp` navigates via a `LaunchedEffect` once the graph is live **and** the user is authenticated
+> (an unauthenticated cold launch defers the route across the login gate), then marks it consumed so a
+> recomposition never re-navigates. +14 behavioural tests (8 `LaunchRouterTest`, 6 new `CallRouteTest`).
+> `assembleDebug` + all `testDebugUnitTest` green.
+> **Next:** a full `ConnectionService`/Telecom integration + ringback tone (system call UI), then the
+> actual WebRTC media transport (`stream-webrtc-android`). Follow-up: `SocketManager.reconnectWithToken()`
+> still has no caller (token-refresh re-attach slice). See the run log + `feature-parity.md §H`.
 
 Stories so far: tray (ring carousel) + cross-group viewer playback engine +
 quick-reaction strip + swipe gestures + realtime reaction socket deltas +
@@ -473,6 +488,54 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-02 — slice `incoming-call-deeplink` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration. The two open PRs (#1360 iOS a11y,
+  #1359 gateway cache refactor) are `jcnm` branches from other sessions, disjoint from `apps/android`;
+  left untouched. Branch was in sync with `origin/main` (0/0). Branched off freshly-fetched `origin/main`
+  (`7527881e`) as `claude/apps/android/incoming-call-deeplink`. Confirmed HEAD's `apps/android` matches
+  `origin/main` (all prior Android work merged; `MainActivity.kt`/`CallRoute.kt` verified before coding).
+- **Gap closed:** the prior slice fired a full-screen call notification whose `PendingIntent` set
+  `callId`/`conversationId`/`callerName`/`isVideo` extras on `MainActivity` — but `MainActivity.onCreate`
+  just called `MeeshyApp()` and dropped them. A ring tap (and the older message-notification tap, which
+  set a `conversationId` extra) opened the app on the start destination, never the call / chat. This slice
+  wires the extras through a pure decoder into a NavHost deep-link.
+- **Design:**
+  - `:app` `me.meeshy.app.navigation.LaunchRouter.route(LaunchExtras) → String?` — the pure SSOT: a
+    non-blank `callId` wins → `CallRoute.incoming(...)` (ring is the urgent intent); else a non-blank
+    `conversationId` → `Routes.chat(...)` (shared message-tap path); else `null`. `LaunchExtras` is the
+    plain data holder `MainActivity` fills from the intent (keys mirror `MeeshyFcmService`'s `EXTRA_*`).
+  - `CallRoute` **refactored** from `call/{conversationId}/{peerName}/{video}` (path args) to a static
+    `call` path + all-optional query args (`conversationId`/`peerName`/`video`/`callId`/`incoming`). A
+    path arg must be non-empty (Compose Navigation regex `[^/]+`), so a blank room / peer name would
+    collapse the segment and make `navigate()` throw. Query args default cleanly → blank is safe. Added
+    `incoming(callId, conversationId, callerName, isVideo)` (server `callId`, `incoming=true`) and extended
+    `config(...)` with `callId`/`incoming` → `isOutgoing = !incoming`, adopting the server id so the ring
+    is answerable. Outgoing `path`/`redial`/`config` behaviour preserved.
+  - `:app` glue (exempt): `MeeshyApp(launchRoute, onLaunchRouteConsumed)` navigates via a `LaunchedEffect`
+    keyed on `(launchRoute, isAuthenticated)` — only once the graph is live **and** authenticated (an
+    unauthenticated cold launch defers across the login gate), then calls `onLaunchRouteConsumed` so a
+    recomposition never re-navigates; the CALL composable's 5 query navArguments + decode. `MainActivity`
+    holds a `mutableStateOf` route, computes it via `LaunchRouter` in `onCreate` + `onNewIntent`, and a
+    private `Intent.launchExtras()` extension pulls the `MeeshyFcmService.EXTRA_*` extras.
+- **Tests:** +14 behavioural through the public API only. `LaunchRouterTest` (8): call push → incoming
+  config (server id + `isOutgoing=false`, video/room threaded); call wins over a conversation id;
+  reserved-char caller name round-trips; call push with no room still rings (blank room, id kept); bare
+  conversation id → `Routes.chat`; blank `callId` falls through to the chat; empty extras / both blank →
+  `null`. `CallRouteTest` (+6): `config` adopts an incoming `callId` + flips direction; null incoming
+  `callId` → blank; `path` round-trips reserved chars via query; `path` stays a single static `call`
+  segment on a blank room; `incoming` threads/encodes/blank-room variants. Reworked the pattern + redial
+  assertions to decode the query route (same behaviours, new encoding — not weakened). No tautologies.
+- **Verification:** `gradle assembleDebug testDebugUnitTest` (== `meeshy.sh check`) — **BUILD SUCCESSFUL**
+  via system Gradle 8.14.3 (wrapper 8.11.1 still 403s on the GitHub-hosted distribution — see NOTES).
+  Full suite green; navigation suite `me.meeshy.app.navigation.*` green in isolation too.
+- **Reviewer gate:** PASS — diff `apps/android` only (6 files: `LaunchRouter.kt` prod + `LaunchRouterTest`,
+  `CallRoute.kt`/`MeeshyApp.kt`/`MainActivity.kt` glue+route, `CallRouteTest` extended). SDK purity (pure
+  router + route SSOT in `:app` navigation, no `:sdk-*` change); single source of truth (one route object,
+  one launch decoder — no re-implementation); UX coherence (call push prioritised, accent-coherent screen
+  reused, dismissal returns via `popBackStack`); failure paths (blank room / malformed extras → inert, no
+  crash). Behaviour through public API; the only async is the guarded `LaunchedEffect` (idempotent via the
+  consumed flag). **Next:** `ConnectionService`/Telecom + ringback tone, then WebRTC media transport.
 
 ### 2026-07-02 — slice `fcm-call-push-route` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration. The open PRs (#1346 iOS a11y,

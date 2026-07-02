@@ -1512,7 +1512,14 @@ final class CallManager: ObservableObject {
             let acked = await MessageSocketManager.shared.emitCallEndWithAck(callId: callId)
             if !acked {
                 MessageSocketManager.shared.emitCallEnd(callId: callId)
-                Logger.calls.warning("call:end ACK failed pour \(callId) — fallback fire-and-forget émis, gateway cron cleanup dans 60s")
+                // [Chaos-test 2, callId 6a4690a2…] An unacked end during churn
+                // means the socket LOOKED up but the emit may never have
+                // materialised server-side (the CallSession decayed to
+                // failed/91s via GC instead of missed). Remember it and replay
+                // on the next connect — the gateway end handler is idempotent,
+                // a duplicate is a logged no-op.
+                pendingEndReconciliationCallId = callId
+                Logger.calls.warning("call:end ACK failed pour \(callId) — fallback émis + réconciliation armée pour le prochain connect")
             }
         }
     }
