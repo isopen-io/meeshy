@@ -1298,6 +1298,12 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
         // tier (spec section 2.6) observes real in-memory heartbeat state
         // instead of staying permanently unwired.
         this.callCleanupService.setCallService(cleanupManager.getCallService());
+        // P3 — GC-forced call ends (stale ringing/connecting/active) now post
+        // the same call-summary system message as every other terminal path.
+        const callEventsHandler = cleanupManager.getCallEventsHandler();
+        this.callCleanupService.setPostSummaryCallback(
+          (callId) => callEventsHandler.postCallSummaryForTerminatedCall(callId)
+        );
       } else {
         logger.warn('[GWY] CallCleanupService starting without Socket.IO server — clients will not receive force-end broadcasts');
       }
