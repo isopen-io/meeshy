@@ -835,9 +835,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       message surfaced on `ServerError`); and accept/decline/hang-up/mute/camera fan out to
       `emitJoin`/`emitEnd`/`emitToggleAudio`/`emitToggleVideo`, each **keyed by the known `callId`** and
       inert until one is known (outgoing minted, incoming from `CallConfig.callId`). +14 behavioural tests.
-      **Pending:** WebRTC-plumbing emits (`request-ice-servers`/`heartbeat`/`quality-report`/
-      `reconnecting`/`reconnected`); the app-level `CallSignalManager.attach()` lifecycle caller; and a
-      Calls-tab nav entry threading the real `conversationId` into the outgoing `CallConfig` (`:app`).
+      **App-level socket-lifecycle caller landed** (slice `realtime-session-coordinator`): the whole
+      realtime layer was dead — nothing called `SocketManager.connect()` and no `*.attach()` ran, so
+      `CallSignalManager.events` (and every `message:*`/social frame) never flowed. `:sdk-core`
+      `RealtimeSessionCoordinator.onAuthenticatedChanged(isAuthenticated)` is the auth→socket bridge:
+      sign-in `connect()`s **then** attaches message/social/call, sign-out `disconnect()`s, edge-only (no
+      double-connect). Ordering (connect-before-attach) + edge invariants live in the pure
+      `RealtimeLifecyclePlan`; **attach is paired with every connect** so a logout→login re-attaches on
+      the new socket. Driven by `AuthViewModel` at init (restored token) / login / logout. +16 behavioural
+      tests. **Pending:** WebRTC-plumbing emits (`request-ice-servers`/`heartbeat`/`quality-report`/
+      `reconnecting`/`reconnected`); and a Calls-tab nav entry threading the real `conversationId` into
+      the outgoing `CallConfig` (`:app`).
 - [x] Call history / journal (recent + missed calls list, direction, duration, data usage) —
       **pure call-journal model landed** (slice `call-history-model`): `core:model`
       `me.meeshy.sdk.model.call` gains `CallDirection` (incoming/outgoing/missed, `fromRaw` degrades

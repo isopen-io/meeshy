@@ -44,8 +44,17 @@
 > ACK failure), and accept/decline/hang-up/mute/camera fan out to `emitJoin`/`emitEnd`/`emitToggleAudio`/
 > `emitToggleVideo` keyed by the known `callId` (inert until one exists). The call screen is now a real
 > two-way endpoint over the socket.
-> **Next:** the app-level `CallSignalManager.attach()` lifecycle caller (an app-startup hook so `events`
-> begin flowing); a Calls-tab nav entry threading the real `conversationId` into the outgoing `CallConfig`
+> On 2026-07-02 the **realtime session binding** landed (slice `realtime-session-coordinator`): the whole
+> realtime layer was previously dead — nothing called `SocketManager.connect()` and no manager's `attach()`
+> ran, so `CallSignalManager.events` (and every `message:*`/social frame) never flowed. A new
+> `:sdk-core` `RealtimeSessionCoordinator.onAuthenticatedChanged(isAuthenticated)` is the one bridge from
+> the auth session to the socket: on sign-in it `connect()`s the socket **then** attaches all three feature
+> managers (message/social/call), on sign-out it `disconnect()`s, and it acts only on genuine auth edges
+> (no double-connect on a redundant signal). The ordering + edge invariants live in the pure
+> `RealtimeLifecyclePlan.commandsFor(was, is)`; **attach is paired with every connect** (not once ever) so a
+> logout→login cycle re-attaches on the new socket. `AuthViewModel` drives it at init (restored token),
+> login success, and logout. +11 tests (5 plan, 6 coordinator) + 5 AuthViewModel wiring tests.
+> **Next:** a Calls-tab nav entry threading the real `conversationId` into the outgoing `CallConfig`
 > (`:app`) + wiring `CallHistoryScreen` there; then the WebRTC/Telecom/FCM plumbing. See the run log +
 > `feature-parity.md §H`.
 
@@ -224,12 +233,17 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
    `ServerError`/`Timeout`/`Malformed`, the gateway message surfaced); accept/decline/hang-up/mute/camera
    fan out to `emitJoin`/`emitEnd`/`emitToggleAudio`/`emitToggleVideo` keyed by the known `callId`
    (outgoing minted, incoming from `CallConfig.callId`, inert until one exists). +14 tests. See run log.
+7. ~~**App-level socket-lifecycle caller**~~ ✅ shipped as `realtime-session-coordinator` (2026-07-02) —
+   the whole realtime layer was dead (nothing called `SocketManager.connect()` / any `*.attach()`), so
+   `CallSignalManager.events` never flowed. `:sdk-core` `RealtimeSessionCoordinator.onAuthenticatedChanged`
+   is the auth→socket bridge (connect **then** attach message/social/call on sign-in; disconnect on
+   sign-out; edge-only, no double-connect), ordering + edges owned by the pure `RealtimeLifecyclePlan`
+   (attach paired with **every** connect so logout→login re-attaches). Driven by `AuthViewModel` at
+   init/login/logout. +16 tests. See run log.
 
-**Next (highest value now the call screen is a live endpoint):** the app-level
-`CallSignalManager.attach()` lifecycle caller (an app-startup hook so inbound `events` begin flowing);
-then a Calls-tab nav entry threading the real `conversationId` into the outgoing `CallConfig` and wiring
-`CallHistoryScreen` (`:app`, own explicit run since it touches nav). Then the heavier WebRTC/Telecom/FCM
-plumbing.
+**Next (highest value now the socket is a live endpoint):** a Calls-tab nav entry threading the real
+`conversationId` into the outgoing `CallConfig` and wiring `CallHistoryScreen` (`:app`, own explicit run
+since it touches nav). Then the heavier WebRTC/Telecom/FCM plumbing.
 
 Then the heavier WebRTC/Telecom/FCM-full-screen-intent plumbing (glue-heavy; push every testable
 decision into pure helpers/the VM).
@@ -420,6 +434,49 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-02 — slice `realtime-session-coordinator` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR was open. The 4 open PRs (#1317–#1320) are iOS/web/gateway
+  branches from other sessions — left untouched. Branched off freshly-fetched `origin/main` (`57408634`)
+  as `claude/apps/android/realtime-session-coordinator`.
+- **Root-cause found while scoping:** the whole realtime layer was **dead code**. `SocketManager.connect()`
+  was never called anywhere in production, and no socket manager's `attach()` (message/social/**call**) ran
+  — `on()` no-ops while `_socket` is null and only `connectionState` was ever observed. So no `call:*`,
+  `message:*` or social frame could reach any ViewModel. This slice (the tracked "app-level
+  `CallSignalManager.attach()` lifecycle caller") fixes the root cause for all three managers at once.
+- **Design:**
+  - `:sdk-core` pure `RealtimeLifecyclePlan.commandsFor(wasAuthenticated, isAuthenticated) → List<RealtimeCommand>`
+    owns the two invariants: **ordering** (sign-in yields `Connect` *before* `Attach`, because listeners
+    can only register on an existing socket) and **edge-only** (act solely on a genuine auth ⇄ unauth
+    transition — never double-connect a live session, which would double-register every listener and
+    duplicate every inbound event). Because a fresh `connect()` mints a **new** socket, `Attach` is paired
+    with **every** `Connect` (not once ever), so logout→login re-attaches on the new socket.
+  - `:sdk-core` `@Singleton RealtimeSessionCoordinator.onAuthenticatedChanged(isAuthenticated)` holds the
+    last-seen edge (`@Synchronized`) and dispatches the plan's commands to the SDK singletons (connect /
+    attach-all-three / disconnect). Thin wiring; all the logic is in the pure plan.
+  - `AuthViewModel` (the app-level auth holder, created above the NavHost in `MeeshyApp`) drives it: at
+    `init` with `authRepository.isAuthenticated` (reconnects a restored-token session on app start / after
+    process death), on login success (`true`), and on logout (`false`). The coordinator is a `@Singleton`
+    so even a VM recreation dedups via the edge.
+- **Tests (TDD red→green, +16):**
+  - `RealtimeLifecyclePlanTest` (5): sign-in → `[Connect, Attach]` in order; sign-out → `[Disconnect]`;
+    stay-in / stay-out → `[]`; attach-never-precedes-connect.
+  - `RealtimeSessionCoordinatorTest` (6, mockk relaxed managers): connect-then-attach-all order;
+    redundant `true` doesn't reconnect/re-attach (exactly-1); sign-out disconnects; initial `false`
+    touches nothing; redundant `false` doesn't re-disconnect; logout→login **re-attaches on the new
+    socket** (connect×2, each attach×2, disconnect×1) — proves attach-per-connect, not attach-once.
+  - `AuthViewModelTest` (+5): init with restored token → `onAuthenticatedChanged(true)`; init without
+    token → `false`; login success → `true`; login failure → not `true`; logout → `false`.
+- **Branches covered:** plan's `when` all 3 arms (Connect+Attach / Disconnect / empty); coordinator's
+  `execute` all 3 command arms. ≥90% branch+instruction on the new pure logic.
+- **Verify:** `assembleDebug` + `testDebugUnitTest` green (system Gradle `/opt/gradle` `--no-daemon`;
+  wrapper 403s through proxy — see NOTES). Diff = `apps/android` only (2 modified: `AuthViewModel` +
+  its test; 4 new: plan + coordinator + 2 tests). No production logic outside `apps/android`.
+- **Reviewer verdict:** PASS — pure logic fully branch-covered, behaviour-tested through the public API
+  (no tautologies), SDK purity respected (pure plan + thin stateful coordinator in `:sdk-core`, the
+  when-to-connect edge driven from the `:feature:auth` VM), scope `apps/android`-only.
+- **Follow-ups noted:** `SocketManager.reconnectWithToken()` (disconnect+connect on token refresh) still
+  has no caller — a future token-refresh slice must re-attach after it (same attach-per-connect rule).
 
 ### 2026-07-01 — slice `call-viewmodel-signal-fold` ✅ shipped
 - **Step 0 (housekeeping):** the prior Android PR **#1311** (`call-initiate-ack`) was still open —
