@@ -117,7 +117,15 @@ extension UniversalComposerBar {
                 Divider().opacity(0.4).padding(.horizontal, 14)
                 RecentMediaStrip(
                     accentColor: accentColor,
-                    onOpenLibrary: { fire { onPhotoLibrary?() } },
+                    onOpenLibrary: { preselectedIds in
+                        fire {
+                            if let onPhotoLibraryPreselecting {
+                                onPhotoLibraryPreselecting(preselectedIds)
+                            } else {
+                                onPhotoLibrary?()
+                            }
+                        }
+                    },
                     onSelect: onRecentMediaSelected,
                     onEdit: onRecentMediaEdit
                 )

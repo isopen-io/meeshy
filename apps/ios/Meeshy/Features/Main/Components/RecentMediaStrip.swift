@@ -231,7 +231,11 @@ final class RecentMediaStripModel: ObservableObject {
 /// `onOpenLibrary`.
 struct RecentMediaStrip: View {
     let accentColor: String
-    let onOpenLibrary: () -> Void
+    /// Opens the full photo library. Receives the asset identifiers currently
+    /// multi-selected in the strip (empty outside selection mode) so the host
+    /// can preselect them in its PhotosPicker. The strip keeps its selection —
+    /// a cancelled picker must not lose the user's picks.
+    let onOpenLibrary: ([String]) -> Void
     let onSelect: (RecentMediaPick) -> Void
     /// When wired, the long-press menu offers "Éditer" — the resolved media is
     /// handed to the host, which opens its editor before staging the result.
@@ -472,7 +476,7 @@ struct RecentMediaStrip: View {
     private func openLibraryTile(_ size: CGFloat) -> some View {
         Button {
             HapticFeedback.light()
-            onOpenLibrary()
+            onOpenLibrary(selection.ids)
         } label: {
             ZStack {
                 RoundedRectangle(cornerRadius: 12)

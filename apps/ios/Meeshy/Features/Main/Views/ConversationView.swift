@@ -144,6 +144,11 @@ struct ConversationComposerState {
     var showCamera = false
     var showFilePicker = false
     var selectedPhotoItems: [PhotosPickerItem] = []
+    /// True while `selectedPhotoItems` is being primed with the recent-media
+    /// strip's multi-selection before presenting the PhotosPicker. Priming
+    /// fires the selection onChange once — this flag swallows that echo so
+    /// items are only ingested when the user actually confirms in the picker.
+    var photoPickerPriming = false
     
     // Location & Upload
     var isLoadingLocation = false

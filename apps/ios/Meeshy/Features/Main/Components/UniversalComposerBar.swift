@@ -161,6 +161,13 @@ struct UniversalComposerBar: View {
     /// and stages the edited result. When nil the action is hidden.
     var onRecentMediaEdit: ((RecentMediaPick) -> Void)? = nil
 
+    /// Called when the user opens the full photo library from the recent-media
+    /// strip, carrying the asset identifiers already multi-selected there so
+    /// the host can preselect them in its PhotosPicker (via
+    /// `PhotosPickerItem(itemIdentifier:)` + `photoLibrary: .shared()`).
+    /// Falls back to `onPhotoLibrary` when nil.
+    var onPhotoLibraryPreselecting: (([String]) -> Void)? = nil
+
     /// Bind this to inject an emoji into the text field from outside (e.g. from parent's emoji picker)
     var injectedEmoji: Binding<String> = .constant("")
 

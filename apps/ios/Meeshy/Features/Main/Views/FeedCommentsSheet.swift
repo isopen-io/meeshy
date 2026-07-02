@@ -200,6 +200,10 @@ struct CommentsSheetView: View {
     @State private var commentAttachments: [ComposerAttachment] = []
     @State private var showCommentPhotoPicker: Bool = false
     @State private var commentPhotoItems: [PhotosPickerItem] = []
+    /// True while `commentPhotoItems` is being primed with the recent-media
+    /// strip's multi-selection before presenting the PhotosPicker — swallows
+    /// the priming onChange echo so only a user confirmation ingests items.
+    @State private var commentPhotoPickerPriming: Bool = false
     @State private var showCommentFilePicker: Bool = false
     @State private var showCommentLocationPicker: Bool = false
     /// "Éditer" from the recent-media strip — the editor opens before staging;
@@ -827,16 +831,21 @@ struct CommentsSheetView: View {
             onFilePicker: { showCommentFilePicker = true },
             onRecentMediaSelected: { pick in ingestCommentRecentMedia(pick) },
             onRecentMediaEdit: { pick in editCommentRecentMedia(pick) },
+            onPhotoLibraryPreselecting: { ids in openCommentLibraryPreselecting(ids) },
             isBlurEnabled: $commentBlurEnabled,
             pendingEffects: $commentEffects,
             externalAttachments: commentAttachments,
             focusTrigger: $composerFocusTrigger
         )
+        // `photoLibrary: .shared()` est requis pour la présélection : les
+        // PhotosPickerItem(itemIdentifier:) injectés depuis le strip ne
+        // matchent les assets du picker que sur la photothèque partagée.
         .photosPicker(
             isPresented: $showCommentPhotoPicker,
             selection: $commentPhotoItems,
             maxSelectionCount: 10,
-            matching: .any(of: [.images, .videos])
+            matching: .any(of: [.images, .videos]),
+            photoLibrary: .shared()
         )
         .fileImporter(
             isPresented: $showCommentFilePicker,
@@ -946,8 +955,32 @@ struct CommentsSheetView: View {
 
     // MARK: - Comment Attachment Pickers
 
+    /// Opens the full photo library with the strip's multi-selection already
+    /// checked (identifier-based priming — see `commentPhotoPickerPriming`).
+    /// Capped at the picker's `maxSelectionCount` (10); with no strip
+    /// selection, stale primed items from a cancelled run are dropped.
+    private func openCommentLibraryPreselecting(_ assetIds: [String]) {
+        if !assetIds.isEmpty {
+            let primed = assetIds.prefix(10).map { PhotosPickerItem(itemIdentifier: $0) }
+            // Arm the echo-swallow ONLY when priming actually mutates the
+            // binding — an unchanged binding fires no onChange, and a stale
+            // armed flag would swallow the user's real confirmation instead.
+            commentPhotoPickerPriming = primed != commentPhotoItems
+            commentPhotoItems = primed
+        } else {
+            commentPhotoItems = []
+        }
+        showCommentPhotoPicker = true
+    }
+
     private func handleCommentPhotoSelection(_ items: [PhotosPickerItem]) {
         guard !items.isEmpty else { return }
+        // Priming echo (strip multi-selection injected before presenting the
+        // picker) — not a user confirmation, nothing to ingest yet.
+        if commentPhotoPickerPriming {
+            commentPhotoPickerPriming = false
+            return
+        }
         Task {
             for item in items {
                 let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
