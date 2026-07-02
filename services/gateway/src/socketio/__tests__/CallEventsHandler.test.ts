@@ -3152,6 +3152,12 @@ describe('CallEventsHandler', () => {
     it('emits call:ice-servers-refreshed with iceServers and ttl on happy path', async () => {
       const iceServers = [{ urls: 'turn:turn.example.com:3478' }];
       mockCallServiceGenerateIceServers.mockReturnValueOnce(iceServers);
+      // Authz upgrade (audit 2026-07-02) — the handler now resolves the caller
+      // via `resolveActiveCallParticipantId`, which reads `callService.getCallSession`
+      // instead of trusting room membership alone.
+      mockCallServiceGetCallSession.mockResolvedValue(
+        makeCallSession({ participants: [makeParticipant()] })
+      );
       const { handler, io } = buildHandler();
       const socket = makeSocket({ rooms: new Set([`call:${CALL_ID}`]) });
       const getUserId = jest.fn<any>().mockReturnValue(USER_ID);

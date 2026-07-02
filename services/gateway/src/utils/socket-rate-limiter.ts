@@ -53,8 +53,16 @@ export const SOCKET_RATE_LIMITS = {
     windowMs: 10000, // 10 seconds
     keyPrefix: 'socket:call:signal'
   },
+  // Audit gateway prod 2026-07-02 (C2) — 50/5s was tuned for a single steady
+  // trickle, but real clients flush a full ICE gathering pass (15-25
+  // candidates within milliseconds) AND re-gather on every renegotiation
+  // (camera toggle, ICE restart) — a healthy 262s call observed 7 such
+  // cycles. The old budget let one gathering flush exhaust the window and
+  // throttle a live call (prod: call killed 382ms after connecting).
+  // Candidates are redundant by design (loss-tolerant), so widening this is
+  // safe — it only prevents legitimate bursts from being mistaken for abuse.
   CALL_ICE_CANDIDATE: {
-    maxRequests: 50,
+    maxRequests: 150,
     windowMs: 5000,
     keyPrefix: 'socket:call:ice'
   },
