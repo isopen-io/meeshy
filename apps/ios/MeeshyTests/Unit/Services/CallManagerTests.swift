@@ -4179,3 +4179,129 @@ final class SignalingDegradedIndicatorTests: XCTestCase {
         )
     }
 }
+
+// MARK: - call:error non-fatal whitelist (chaos-test prod 2026-07-02)
+
+@MainActor
+final class CallErrorNonFatalWhitelistTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_targetNotFound_isNonFatal() throws {
+        // Chaos-test prod (callId 6a466e05a081f94fac47159e): after a gateway
+        // restart, the peer's socket churned and a relayed signal drew
+        // call:error TARGET_NOT_FOUND — the callee tore down a call whose P2P
+        // media was perfectly healthy, then the peer's ICE-restart offers hit
+        // "Signal offer for unknown call" and the caller died on its watchdog.
+        // A transient relay failure must NEVER end an established call.
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("event.code == \"TARGET_NOT_FOUND\""),
+            "call:error TARGET_NOT_FOUND (peer momentarily has no socket in the room — churn or " +
+            "reconnect in flight) must be whitelisted as non-fatal like INVALID_SIGNAL and " +
+            "RATE_LIMIT_EXCEEDED; ICE is redundant by design and the answer path retries"
+        )
+        guard let checkRange = source.range(of: "event.code == \"TARGET_NOT_FOUND\""),
+              let teardownRange = source.range(of: "self.failCall(message)") else {
+            XCTFail("expected the whitelist check and the call:error teardown to coexist"); return
+        }
+        XCTAssertLessThan(
+            checkRange.lowerBound, teardownRange.lowerBound,
+            "the TARGET_NOT_FOUND early-return must guard BEFORE the call:error teardown"
+        )
+    }
+}
+
+// MARK: - Local teardown must materialise server-side (chaos-test prod 2026-07-02)
+
+@MainActor
+final class LocalTeardownServerReconciliationTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(of signature: String, in source: String) -> String? {
+        guard let range = source.range(of: signature) else { return nil }
+        let nextFunc = [
+            source.range(of: "\n    func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    private func ", range: range.upperBound..<source.endIndex)?.lowerBound,
+            source.range(of: "\n    // MARK:", range: range.upperBound..<source.endIndex)?.lowerBound,
+        ].compactMap { $0 }.min() ?? source.endIndex
+        return String(source[range.lowerBound..<nextFunc])
+    }
+
+    // Proof from prod gateway logs (window 13:56-13:59Z): the callee tore down
+    // locally on an error and NO call:end/leave ever reached the gateway — the
+    // caller stayed in a zombie call for ~48s until its own watchdogs fired.
+
+    func test_emitCallEndReliably_defersWhenSocketDown_andReconcilesOnReconnect() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "private func emitCallEndReliably(", in: source) else {
+            XCTFail(
+                "emitCallEndReliably(callId:) missing — every local teardown must materialise " +
+                "server-side (ACK + fallback), and a hang-up during a signaling outage must be " +
+                "remembered and re-emitted on the next socket connect (mission: reconciliation)"
+            )
+            return
+        }
+        XCTAssertTrue(
+            body.contains("pendingEndReconciliationCallId = callId"),
+            "when the socket is down, the callId must be remembered for reconciliation"
+        )
+        XCTAssertTrue(
+            body.contains("emitCallEndWithAck"),
+            "when the socket is up, the ACK-first path must be used"
+        )
+        XCTAssertTrue(
+            source.contains("let pending = self.pendingEndReconciliationCallId"),
+            "the socket connectionState observer must replay the deferred call:end on reconnect"
+        )
+    }
+
+    func test_failCall_emitsCallEndToServer_beforeLocalTeardown() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "private func failCall(", in: source) else {
+            XCTFail("failCall not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("emitCallEndReliably("),
+            "failCall must inform the gateway — a silent local teardown leaves the peer in a " +
+            "zombie call the gateway keeps relaying re-joins for"
+        )
+        guard let emitRange = body.range(of: "emitCallEndReliably("),
+              let teardownRange = body.range(of: "endCallInternal(reason: .failed(") else {
+            XCTFail("expected both the server emit and the local teardown in failCall"); return
+        }
+        XCTAssertLessThan(
+            emitRange.lowerBound, teardownRange.lowerBound,
+            "the emit must capture currentCallId BEFORE endCallInternal nils it"
+        )
+    }
+
+    func test_endCall_usesSharedReliableEmit() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCall()", in: source) else {
+            XCTFail("endCall not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("emitCallEndReliably("),
+            "endCall must route through the shared reliable emit so a hang-up during a " +
+            "signaling outage is reconciled on reconnect instead of silently lost"
+        )
+    }
+}

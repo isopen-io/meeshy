@@ -354,6 +354,13 @@ final class CallManager: ObservableObject {
     /// and the Phone-app Recents entry shows no duration.
     private var lastCallWasOutgoing: Bool = false
     private var callStartDate: Date?
+    /// True dès que la PREMIÈRE connexion média de cet appel a eu lieu (chrono
+    /// démarré). CallView s'en sert pour ne rendre le layout connecté en
+    /// `.reconnecting` que si un média a réellement existé — un ICE restart
+    /// pré-établissement (depuis `.connecting`) garde l'UI "Connexion…".
+    /// Lu au re-render déclenché par le changement de `callState` (@Published) ;
+    /// pas besoin d'être publié lui-même.
+    var hasEstablishedMedia: Bool { callStartDate != nil }
     private var reconnectAttempt = 0
     /// Connection epoch — bumped on every `transitionToConnected`. The
     /// reliability monitor's `HalfOpenMonitorState` keys off it to re-arm
@@ -1487,6 +1494,31 @@ final class CallManager: ObservableObject {
 
     // MARK: - End Call
 
+    /// [Chaos-test prod 2026-07-02, EXIGENCE №1] A local hang-up that never
+    /// reaches the gateway leaves the PEER in a zombie call: the server keeps
+    /// the CallSession active, keeps accepting the peer's re-joins, and never
+    /// broadcasts participant-left — the peer only dies ~48s later on its own
+    /// watchdogs (proven from prod logs: zero call:end received in the window).
+    /// Deferred here + replayed by the connectionState observer when the
+    /// hang-up happens during a signaling outage; the gateway end handler is
+    /// idempotent and resolves pre-answer ends to `missed` (C3/C4).
+    private var pendingEndReconciliationCallId: String?
+
+    private func emitCallEndReliably(callId: String) {
+        guard MessageSocketManager.shared.isConnected else {
+            pendingEndReconciliationCallId = callId
+            Logger.calls.warning("call:end deferred — socket down, will reconcile on reconnect (callId=\(callId))")
+            return
+        }
+        Task {
+            let acked = await MessageSocketManager.shared.emitCallEndWithAck(callId: callId)
+            if !acked {
+                MessageSocketManager.shared.emitCallEnd(callId: callId)
+                Logger.calls.warning("call:end ACK failed pour \(callId) — fallback fire-and-forget émis, gateway cron cleanup dans 60s")
+            }
+        }
+    }
+
     func endCall() {
         guard callState.isActive else { return }
 
@@ -1510,17 +1542,7 @@ final class CallManager: ObservableObject {
         // Task détaché : ne bloque pas le cleanup local mais garantit que
         // le gateway sait que l'appel est fini.
         if let callId {
-            Task {
-                let acked = await MessageSocketManager.shared.emitCallEndWithAck(callId: callId)
-                if !acked {
-                    // Fallback : si le socket ack failed (timeout / déco),
-                    // re-emit fire-and-forget. Le gateway a ses propres
-                    // safeguards (CallCleanupService cron) qui finiront par
-                    // ramasser le zombie après 60s.
-                    MessageSocketManager.shared.emitCallEnd(callId: callId)
-                    Logger.calls.warning("call:end ACK failed pour \(callId) — fallback fire-and-forget émis, gateway cron cleanup dans 60s")
-                }
-            }
+            emitCallEndReliably(callId: callId)
         }
 
         // H1 — rendre le teardown local atomique vis-à-vis de CallKit. On capture
@@ -1910,6 +1932,9 @@ final class CallManager: ObservableObject {
                 self.failCall(String(localized: "call.error.sdp"))
                 return
             }
+            // L'answer SDP = l'appelé a décroché : désarmer le cutoff 45s
+            // "pas de réponse" (resté armé pendant .offering).
+            self.cancelOutgoingRingTimeout()
             // Phase 1 fix E5: now that remote answer is applied, ICE
             // checking starts. Transition .offering → .connecting.
             // The single source of truth for `.connected` remains
@@ -2006,7 +2031,13 @@ final class CallManager: ObservableObject {
             try? await Task.sleep(for: .seconds(timeout))
             guard let self else { return }
             guard !Task.isCancelled else { return }
-            guard case .ringing(isOutgoing: true) = self.callState else { return }
+            // `.offering` compte comme "sonne encore" : le join de l'appelé est
+            // automatique à la sonnerie, l'offer part avant tout décroché
+            // humain. Seule l'answer SDP (= accept) désarme ce cutoff.
+            switch self.callState {
+            case .ringing(isOutgoing: true), .offering: break
+            default: return
+            }
             Logger.calls.warning("Outgoing call ring timeout after \(timeout)s — no answer; ending call")
             if let uuid = self.activeCallUUID {
                 self.callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
@@ -2035,15 +2066,19 @@ final class CallManager: ObservableObject {
 
     /// §5.8 — unified reliability monitor. One periodic task that, each tick,
     /// branches on `callState`:
-    ///   - `.connecting`/`.offering`: applies the watchdog (`evaluateConnecting`)
-    ///     so a wedged ICE/DTLS handshake gets ONE ICE restart, then fails,
-    ///     instead of spinning "Connexion…" forever (bug h).
+    ///   - `.connecting` (answer reçue, ICE réel en cours) : applies the
+    ///     watchdog (`evaluateConnecting`) so a wedged ICE/DTLS handshake gets
+    ///     ONE ICE restart, then fails, instead of spinning "Connexion…"
+    ///     forever (bug h).
+    ///   - `.offering` : PAS de watchdog ICE — l'appelé sonne encore (join
+    ///     automatique à la sonnerie) ; l'horloge est le ring timeout 45s.
     ///   - `.connected`: applies the half-open self-heal (`evaluateHalfOpen`).
     ///     We stay `.connected` for snappy UX, but if after the grace window the
     ///     peer's RTP never arrives while ours flows, we trigger ONE ICE restart
     ///     (the heal is one-shot per call to honour "un ICE restart").
     /// Real disconnects/hangups remain handled by the PC-state delegate, remote
-    /// `call:ended`, the user, and `outgoingRingTimeoutSeconds` (in `.ringing`).
+    /// `call:ended`, the user, and `outgoingRingTimeoutSeconds` (armed through
+    /// `.ringing` AND `.offering`).
     @MainActor
     private func startReliabilityMonitor() {
         reliabilityMonitorTask?.cancel()
@@ -2069,7 +2104,19 @@ final class CallManager: ObservableObject {
                 guard !Task.isCancelled else { return }
 
                 switch self.callState {
-                case .connecting, .offering:
+                case .offering:
+                    // Offer envoyé, l'appelé SONNE encore (le join est
+                    // automatique à la sonnerie — un délai humain > 12s est
+                    // normal, pas une panne ICE : aucune remote description
+                    // n'existe, un ICE restart est impossible). L'horloge de
+                    // l'appel non répondu est le ring timeout 45s
+                    // (startOutgoingRingTimeout) + le reaper gateway 60s.
+                    // L'horloge ICE (.connecting) ne démarre qu'à l'answer.
+                    connectingSince = nil
+                    didAttemptConnectingRestart = false
+                    reconnectingSince = nil
+                    reconnectingWatchedAttempt = nil
+                case .connecting:
                     reconnectingSince = nil
                     reconnectingWatchedAttempt = nil
                     let since = connectingSince ?? Date()
@@ -2226,13 +2273,23 @@ final class CallManager: ObservableObject {
         // On reconnect use a lighter haptic — the user is mid-call, not initiating.
         playHaptic(wasReconnecting ? .light : .heavy)
         startScreenCaptureMonitoring()
-        // Preserve the call start time and running duration on reconnect so the
-        // timer does not reset to 0:00 mid-call after an ICE restart.
-        if !wasReconnecting {
+        // Preserve the call start time and running duration on a genuine
+        // mid-call reconnect (ICE restart) — but a nil callStartDate means this
+        // is the FIRST real connection even if the FSM transited through
+        // `.reconnecting` (pre-establishment ICE restart): without the reset,
+        // durationTask died on the nil date and the timer froze at 00:00.
+        if CallReliabilityPolicy.shouldResetCallClock(
+            wasReconnecting: wasReconnecting,
+            hasExistingStartDate: callStartDate != nil
+        ) {
             callStartDate = Date()
             analyticsConnectedDate = callStartDate
             callDuration = 0
         }
+        // Hygiène timer — l'appel est établi : le cutoff "pas de réponse" n'a
+        // plus d'objet (son fire-site ne couvre que .ringing/.offering, mais
+        // autant ne pas laisser une task morte armée).
+        cancelOutgoingRingTimeout()
         reconnectAttempt = 0
 
         // Notify gateway that the ICE restart succeeded so call DB status is
@@ -2246,7 +2303,11 @@ final class CallManager: ObservableObject {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 guard !Task.isCancelled else { return }
-                guard let self, let start = self.callStartDate else { return }
+                guard let self else { return }
+                // Défense en profondeur : un callStartDate momentanément nil ne
+                // doit PAS tuer la boucle (l'ancien `return` gelait le chrono à
+                // 00:00 pour tout le reste de l'appel) — on saute juste le tick.
+                guard let start = self.callStartDate else { continue }
                 self.callDuration = Date().timeIntervalSince(start)
             }
         }
@@ -2685,6 +2746,12 @@ final class CallManager: ObservableObject {
         if callUsesCallKit, let uuid = activeCallUUID {
             callProvider.reportCall(with: uuid, endedAt: Date(), reason: .failed)
         }
+        // Capture BEFORE endCallInternal nils it — the gateway must learn of
+        // this teardown or the peer stays in a zombie call (see
+        // emitCallEndReliably).
+        if let callId = currentCallId {
+            emitCallEndReliably(callId: callId)
+        }
         endCallInternal(reason: .failed(reasonMessage))
     }
 
@@ -3032,6 +3099,14 @@ final class CallManager: ObservableObject {
                     callEstablished: self.callState == .connected,
                     socketConnected: state == .connected
                 )
+                // Reconciliation — a hang-up that happened while the socket was
+                // down is replayed as soon as the transport returns, even if no
+                // call is active anymore (the gateway end handler is idempotent).
+                if state == .connected, let pending = self.pendingEndReconciliationCallId {
+                    self.pendingEndReconciliationCallId = nil
+                    Logger.calls.info("Reconciling deferred call:end after reconnect (callId=\(pending))")
+                    self.emitCallEndReliably(callId: pending)
+                }
             }
             .store(in: &cancellables)
 
@@ -3161,6 +3236,18 @@ final class CallManager: ObservableObject {
                 // 382 ms after connection (callId 6a461199…935c, prod).
                 if event.code == "RATE_LIMIT_EXCEEDED" {
                     Logger.calls.warning("call:error RATE_LIMIT_EXCEEDED — non-fatal, dropping throttled event")
+                    return
+                }
+                // [Chaos-test prod 2026-07-02, EXIGENCE №1] TARGET_NOT_FOUND is
+                // a TRANSIENT relay failure: the peer momentarily has no socket
+                // in the call room (socket churn, re-join in flight after a
+                // gateway restart). The P2P media is untouched — tearing down
+                // here killed a healthy call while the peer re-joined seconds
+                // later. ICE candidates are redundant by design and the answer
+                // path has its own bounded retry; dropping the failed relay is
+                // safe.
+                if event.code == "TARGET_NOT_FOUND" {
+                    Logger.calls.warning("call:error TARGET_NOT_FOUND — transient relay failure, keeping the call")
                     return
                 }
                 FeedbackToastManager.shared.showError(message)
@@ -3359,7 +3446,11 @@ final class CallManager: ObservableObject {
             // Phase 1 fix E5: distinct .offering state. We're no longer ringing
             // (peer joined) but not yet connecting (no answer received). This
             // makes the FSM observable and matches the SOTA spec §2.2.
-            self.cancelOutgoingRingTimeout()
+            // Le ring timeout 45s RESTE armé : le join est automatique à la
+            // sonnerie (avant tout décroché humain), donc `.offering` = l'appelé
+            // sonne encore. Il n'est annulé qu'à la réception de l'answer SDP
+            // (handleRemoteAnswer) — sinon un appel sans réponse pendait sans
+            // aucune horloge cliente une fois l'offer envoyé.
             self.callState = .offering
             Task { [weak self] in
                 guard let self else { return }
@@ -3911,6 +4002,15 @@ extension CallManager: WebRTCServiceDelegate {
     /// `.connectionLost`).
     @MainActor
     private func attemptReconnection(escalate: Bool = false) {
+        // FSM §3.2 — `.reconnecting` est réservé aux appels dont la négociation
+        // média a commencé. Avant l'answer (.ringing/.offering) aucun ICE
+        // restart n'est possible (pas de remote description) et la bascule
+        // d'état faisait rendre l'écran connecté (00:00 figé) pendant que
+        // l'appelé sonnait encore.
+        guard CallReliabilityPolicy.reconnectingAllowed(from: callState) else {
+            Logger.calls.warning("attemptReconnection ignoré en état \(String(describing: self.callState)) — réservé aux appels en négociation/établis (FSM §3.2)")
+            return
+        }
         let isAlreadyReconnecting: Bool
         if case .reconnecting = callState { isAlreadyReconnecting = true } else { isAlreadyReconnecting = false }
 

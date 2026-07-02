@@ -1617,14 +1617,23 @@ final class CallManagerDurationReconnectTests: XCTestCase {
         guard let assignRange = source[fnRange.upperBound...].range(of: "callStartDate = Date()") else {
             XCTFail("callStartDate = Date() not found after transitionToConnected()"); return
         }
-        // The assignment must be inside a !wasReconnecting guard
-        let contextStart = source.index(assignRange.lowerBound, offsetBy: -200, limitedBy: source.startIndex) ?? source.startIndex
+        // The assignment must be gated by the pure clock-reset policy: reset on
+        // a fresh connect AND on a first-ever connect that transited through
+        // `.reconnecting` (nil clock — else the timer froze at 00:00 forever),
+        // but NEVER on a genuine mid-call reconnect with a running clock (else
+        // the timer jumps back to 0:00 after a successful ICE restart). The
+        // decision semantics are unit-tested in CallClockPolicyTests.
+        let contextStart = source.index(assignRange.lowerBound, offsetBy: -300, limitedBy: source.startIndex) ?? source.startIndex
         let contextStr = String(source[contextStart ..< assignRange.upperBound])
         XCTAssertTrue(
-            contextStr.contains("!wasReconnecting") || contextStr.contains("wasReconnecting == false"),
-            "callStartDate must only be reset when !wasReconnecting — resetting it " +
-            "on every transitionToConnected call causes the timer to jump back to 0:00 " +
+            contextStr.contains("shouldResetCallClock"),
+            "callStartDate must only be reset when CallReliabilityPolicy.shouldResetCallClock " +
+            "allows it (fresh connect or nil clock) — resetting it on every " +
+            "transitionToConnected call causes the timer to jump back to 0:00 " +
             "after a successful ICE restart, which is a jarring mid-call UX regression")
+        XCTAssertTrue(
+            contextStr.contains("wasReconnecting: wasReconnecting"),
+            "the clock-reset decision must receive the real wasReconnecting flag")
     }
 
     func test_transitionToConnected_doesNotPlayConnectCueOnReconnect() throws {

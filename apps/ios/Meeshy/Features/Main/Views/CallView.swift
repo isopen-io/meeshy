@@ -43,6 +43,10 @@ struct CallView: View {
     // so the user knows the call is ringing, not stuck.
     @State private var sdpOfferSlow = false
     private let sdpOfferSlowSeconds: UInt64 = 6
+    // Profil du correspondant (avatar + bannière) — résolu cache-first dès que
+    // `remoteUserId` est connu, refresh API silencieux (Instant App). Sert
+    // l'avatar des cercles d'appel et le fond pleine page.
+    @State private var remoteProfile: MeeshyUser?
 
     var body: some View {
         ZStack {
@@ -101,20 +105,40 @@ struct CallView: View {
             case .reconnecting:
                 // §4.3 — keep the connected layout (peer's last frame / tiles)
                 // and overlay a "Reconnexion…" banner instead of blanking to
-                // the full-screen connecting view. `.reconnecting` is only
-                // entered from `.connected` (FSM §3.2), so the tracks already
-                // exist — the FaceTime/WhatsApp recovery behaviour.
-                connectedView
+                // the full-screen connecting view — the FaceTime/WhatsApp
+                // recovery behaviour. Gated on `hasEstablishedMedia` : un ICE
+                // restart PRÉ-établissement (watchdog `.connecting`) passe
+                // aussi par `.reconnecting` — sans média déjà négocié il n'y a
+                // pas de "dernier frame" à figer et le layout connecté
+                // afficherait un chrono 00:00 mensonger : rester "Connexion…".
+                if callManager.hasEstablishedMedia {
+                    connectedView
+                } else {
+                    connectingView
+                }
             case .idle:
                 EmptyView()
             }
 
-            // §4.3 — reconnecting banner over the frozen last frame while an ICE restart recovers.
-            if case .reconnecting = callManager.callState {
+            // Bandeau top — les bannières émergent de la Dynamic Island
+            // (IslandEmergingBanner) et se posent SOUS elle, dans la safe area.
+            // `.padding(.horizontal, 56)` garde la capsule à droite du chevron
+            // minimize (leading, 40 pt + marges) — le texte long wrappe sur 2
+            // lignes au lieu de passer dessous.
+            let showsReconnectingBanner: Bool = {
+                if case .reconnecting = callManager.callState { return callManager.hasEstablishedMedia }
+                return false
+            }()
+
+            // §4.3 — reconnecting banner over the frozen last frame while an ICE
+            // restart recovers. Même gate que le layout : pré-établissement,
+            // connectingView affiche déjà "Connexion…" — pas de bannière.
+            if showsReconnectingBanner {
                 reconnectingBanner
+                    .padding(.horizontal, 56)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    // P2-iOS-9 — slide from top when motion is allowed; fade only when reduceMotion is on.
-                    .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
+                    // P2-iOS-9 — l'émergence Island porte le mouvement ; fade à l'insertion/retrait.
+                    .transition(.opacity)
             }
 
             // §4.4 — remote peer quality alert. Gateway emits `call:quality-alert`
@@ -122,13 +146,10 @@ struct CallView: View {
             // `isRemoteQualityDegraded`. Stacked below the reconnecting banner
             // (extra top padding) so both can be visible simultaneously.
             if callManager.isRemoteQualityDegraded {
-                let hasReconnectingBanner: Bool = {
-                    if case .reconnecting = callManager.callState { return true }
-                    return false
-                }()
                 remoteQualityDegradedBanner
+                    .padding(.horizontal, 56)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .padding(.top, hasReconnectingBanner ? 52 : 0)
+                    .padding(.top, showsReconnectingBanner ? 52 : 0)
                     .transition(.opacity)
             }
 
@@ -136,13 +157,10 @@ struct CallView: View {
             // appel établi. Le média P2P continue ; indicateur discret, empilé
             // sous les bannières reconnexion/qualité éventuelles.
             if callManager.isSignalingDegraded {
-                let stackedOffset: CGFloat = {
-                    var offset: CGFloat = 0
-                    if case .reconnecting = callManager.callState { offset += 52 }
-                    if callManager.isRemoteQualityDegraded { offset += 44 }
-                    return offset
-                }()
+                let stackedOffset: CGFloat = (showsReconnectingBanner ? 52 : 0)
+                    + (callManager.isRemoteQualityDegraded ? 44 : 0)
                 signalingDegradedBanner
+                    .padding(.horizontal, 56)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .padding(.top, stackedOffset)
                     .transition(.opacity)
@@ -189,10 +207,17 @@ struct CallView: View {
                     Spacer()
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 50)
+                // Safe area top désormais respectée par le conteneur : 8 pt
+                // suffisent (l'ancien 50 compensait l'encoche à la main).
+                .padding(.top, 8)
             }
         }
-        .ignoresSafeArea()
+        // Safe area TOP respectée : les bannières/chrome top se posent SOUS la
+        // Dynamic Island (elles se rendaient derrière l'encoche, illisibles).
+        // Le fond, le self-preview et les flux vidéo restent full-bleed via
+        // leurs `.ignoresSafeArea()` internes ; seul le bottom est ignoré ici
+        // (barre de contrôles au ras du home indicator, comme avant).
+        .ignoresSafeArea(edges: .bottom)
         .statusBarHidden(true)
         // L'écran d'appel est blanc-sur-fond-sombre fixe (cf. callBackground).
         // On épingle aussi le colorScheme en .dark pour que le verre et les
@@ -205,6 +230,9 @@ struct CallView: View {
         }
         .onDisappear {
             stopPulseAnimation()
+        }
+        .task(id: callManager.remoteUserId) {
+            await resolveRemoteProfile(userId: callManager.remoteUserId)
         }
         .adaptiveOnChange(of: callManager.callState) { _, newState in
             // Audit P2-iOS-11 — announce key call-state transitions for VoiceOver.
@@ -278,6 +306,37 @@ struct CallView: View {
             )
             .ignoresSafeArea()
 
+            // Prisme visuel du correspondant : sa bannière de profil (fallback
+            // avatar) couvre toute la page en transparence tant qu'aucun flux
+            // vidéo distant n'est actif — l'appel audio « habite » chez le
+            // contact (façon FaceTime audio). Blur + voile sombre dégradé pour
+            // préserver la lisibilité du chrome blanc (écran épinglé .dark).
+            if !hasActiveRemoteVideo, let backdrop = remoteBackdropURL {
+                CachedAsyncImage(url: backdrop, thumbHash: remoteBackdropThumbHash) {
+                    Color.clear
+                }
+                .scaledToFill()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .scaleEffect(1.08)
+                .blur(radius: 24)
+                .clipped()
+                .opacity(0.45)
+                .overlay(
+                    LinearGradient(
+                        colors: [
+                            Color.black.opacity(0.55),
+                            Color.black.opacity(0.25),
+                            Color.black.opacity(0.60)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .ignoresSafeArea()
+                .transition(.opacity)
+                .accessibilityHidden(true)
+            }
+
             // Animated ambient orbs — decorative only
             Circle()
                 .fill(MeeshyColors.indigo500.opacity(0.15))
@@ -302,6 +361,53 @@ struct CallView: View {
                 .offset(x: 80, y: -100)
                 .floating(range: 15, duration: 4.5)
                 .accessibilityHidden(true)
+        }
+        // Fondu du backdrop profil quand le flux vidéo distant (dés)active.
+        .animation(.easeInOut(duration: 0.35), value: hasActiveRemoteVideo)
+    }
+
+    /// Flux vidéo distant réellement visible (track présent ET caméra active).
+    private var hasActiveRemoteVideo: Bool {
+        callManager.hasRemoteVideoTrack && callManager.isRemoteVideoEnabled
+    }
+
+    /// Image de fond « du concerné » : bannière de profil d'abord, avatar en
+    /// repli. `nil` tant que le profil n'est pas résolu (gradient seul).
+    private var remoteBackdropURL: String? {
+        if let banner = remoteProfile?.banner, !banner.isEmpty { return banner }
+        if let avatar = remoteProfile?.avatar, !avatar.isEmpty { return avatar }
+        return nil
+    }
+
+    private var remoteBackdropThumbHash: String? {
+        if let banner = remoteProfile?.banner, !banner.isEmpty { return remoteProfile?.bannerThumbHash }
+        return remoteProfile?.avatarThumbHash
+    }
+
+    /// Résolution cache-first du profil du correspondant (Instant App) : le
+    /// store `.profiles` sert `.fresh`/`.stale` immédiatement, l'API rafraîchit
+    /// en silence (et ré-alimente le cache) sauf si le cache était frais.
+    private func resolveRemoteProfile(userId: String?) async {
+        guard let userId, !userId.isEmpty else {
+            remoteProfile = nil
+            return
+        }
+        switch await CacheCoordinator.shared.profiles.load(for: userId) {
+        case .fresh(let users, _):
+            remoteProfile = users.first
+            return
+        case .stale(let users, _):
+            remoteProfile = users.first
+        case .expired, .empty:
+            break
+        }
+        do {
+            let user = try await UserService.shared.getProfileById(userId)
+            guard callManager.remoteUserId == userId else { return }
+            remoteProfile = user
+            try? await CacheCoordinator.shared.profiles.save([user], for: userId)
+        } catch {
+            Logger.calls.debug("CallView: profil distant non résolu (\(userId)): \(error.localizedDescription)")
         }
     }
 
@@ -543,8 +649,8 @@ struct CallView: View {
 
     private var audioCallLayout: some View {
         VStack(spacing: 16) {
-            // Avatar (no pulse)
-            avatarCircle(size: 120)
+            // Duo d'avatars (no pulse) — correspondant + pastille locale.
+            callAvatarPair(size: 120)
                 .padding(.bottom, 8)
 
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
@@ -604,20 +710,19 @@ struct CallView: View {
     /// ICE restart recovers a dropped connection (warning-tinted capsule with a
     /// spinner). The call is NOT torn down; the peer's last frame stays visible.
     private var reconnectingBanner: some View {
-        HStack(spacing: 8) {
-            ProgressView()
-                .progressViewStyle(.circular)
-                .tint(.white)
-                .scaleEffect(0.8)
-            Text(String(localized: "call.reconnecting", defaultValue: "Reconnexion…", bundle: .main))
-                .font(.footnote.weight(.semibold))
-                .foregroundColor(.white)
+        IslandEmergingBanner(tint: MeeshyColors.warning.opacity(0.92), reduceMotion: reduceMotion) {
+            HStack(spacing: 8) {
+                ProgressView()
+                    .progressViewStyle(.circular)
+                    .tint(.white)
+                    .scaleEffect(0.8)
+                Text(String(localized: "call.reconnecting", defaultValue: "Reconnexion…", bundle: .main))
+                    .font(.footnote.weight(.semibold))
+                    .foregroundColor(.white)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(Capsule().fill(MeeshyColors.warning.opacity(0.92)))
-        .shadow(color: Color.black.opacity(0.18), radius: 8, y: 2)
-        .padding(.top, 8)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(String(localized: "call.reconnecting", defaultValue: "Reconnexion…", bundle: .main))
     }
@@ -626,21 +731,22 @@ struct CallView: View {
     /// is set by the `call:quality-alert` socket event emitted by the gateway.
     /// Mirrors FaceTime's "Contact has a poor connection" indicator.
     private var remoteQualityDegradedBanner: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "wifi.exclamationmark")
-                .font(MeeshyFont.relative(12, weight: .semibold))
-                .accessibilityHidden(true)
-            Text(String(localized: "call.remote.quality.degraded",
-                        defaultValue: "Réseau faible chez votre contact",
-                        bundle: .main))
-                .font(.footnote.weight(.semibold))
-                .foregroundColor(.white)
+        IslandEmergingBanner(tint: MeeshyColors.warning.opacity(0.85), reduceMotion: reduceMotion) {
+            HStack(spacing: 6) {
+                Image(systemName: "wifi.exclamationmark")
+                    .font(MeeshyFont.relative(12, weight: .semibold))
+                    .accessibilityHidden(true)
+                Text(String(localized: "call.remote.quality.degraded",
+                            defaultValue: "Réseau faible chez votre contact",
+                            bundle: .main))
+                    .font(.footnote.weight(.semibold))
+                    .foregroundColor(.white)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(Capsule().fill(MeeshyColors.warning.opacity(0.85)))
-        .shadow(color: Color.black.opacity(0.15), radius: 6, y: 2)
-        .padding(.top, 8)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(String(localized: "call.remote.quality.degraded",
                                    defaultValue: "Réseau faible chez votre contact",
@@ -651,21 +757,22 @@ struct CallView: View {
     /// The P2P media keeps flowing; this discreet hint mirrors the
     /// quality-degraded capsule and never implies the call is at risk.
     private var signalingDegradedBanner: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "antenna.radiowaves.left.and.right.slash")
-                .font(MeeshyFont.relative(12, weight: .semibold))
-                .accessibilityHidden(true)
-            Text(String(localized: "call.signaling.degraded",
-                        defaultValue: "Connexion au serveur perdue — l'appel continue",
-                        bundle: .main))
-                .font(.footnote.weight(.semibold))
-                .foregroundColor(.white)
+        IslandEmergingBanner(tint: MeeshyColors.warning.opacity(0.85), reduceMotion: reduceMotion) {
+            HStack(spacing: 6) {
+                Image(systemName: "antenna.radiowaves.left.and.right.slash")
+                    .font(MeeshyFont.relative(12, weight: .semibold))
+                    .accessibilityHidden(true)
+                Text(String(localized: "call.signaling.degraded",
+                            defaultValue: "Connexion au serveur perdue — l'appel continue",
+                            bundle: .main))
+                    .font(.footnote.weight(.semibold))
+                    .foregroundColor(.white)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(Capsule().fill(MeeshyColors.warning.opacity(0.85)))
-        .shadow(color: Color.black.opacity(0.15), radius: 6, y: 2)
-        .padding(.top, 8)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(String(localized: "call.signaling.degraded",
                                    defaultValue: "Connexion au serveur perdue — l'appel continue",
@@ -1317,7 +1424,7 @@ struct CallView: View {
                     .accessibilityHidden(true)
             }
 
-            avatarCircle(size: 100)
+            callAvatarPair(size: 100)
         }
         // Decorative: the remote user's name is shown as a Text element directly
         // below this avatar in every layout that uses pulsingAvatar. VoiceOver
@@ -1345,8 +1452,73 @@ struct CallView: View {
                 // Doctrine 86i : initiale d'avatar proportionnelle au cercle fixe `size` → figée.
                 .font(.system(size: size * 0.4, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
+
+            // Vraie photo de profil par-dessus le fallback initiale (le
+            // dégradé + initiale restent visibles pendant le chargement).
+            if let avatar = remoteProfile?.avatar, !avatar.isEmpty {
+                CachedAsyncImage(
+                    url: avatar,
+                    targetSize: CGSize(width: size, height: size),
+                    thumbHash: remoteProfile?.avatarThumbHash
+                ) {
+                    Color.clear
+                }
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+            }
         }
         .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: 12, y: 4)
+    }
+
+    /// Duo d'avatars de l'appel : le correspondant en grand, l'utilisateur
+    /// local en pastille chevauchante bas-droite — appelant ET appelé sont
+    /// identifiables d'un coup d'œil, quel que soit le sens de l'appel.
+    private func callAvatarPair(size: CGFloat) -> some View {
+        let badgeSize = max(44, size * 0.4)
+        return avatarCircle(size: size)
+            .overlay(alignment: .bottomTrailing) {
+                localAvatarBadge(size: badgeSize)
+                    .offset(x: badgeSize * 0.22, y: badgeSize * 0.12)
+            }
+    }
+
+    private func localAvatarBadge(size: CGFloat) -> some View {
+        let user = AuthManager.shared.currentUser
+        let name = user?.displayName ?? user?.username ?? "?"
+        let initial = String(name.prefix(1)).uppercased()
+
+        return ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [MeeshyColors.indigo600, MeeshyColors.indigo800],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            Text(initial)
+                .font(.system(size: size * 0.4, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
+
+            if let avatar = user?.avatar, !avatar.isEmpty {
+                CachedAsyncImage(
+                    url: avatar,
+                    targetSize: CGSize(width: size, height: size),
+                    thumbHash: user?.avatarThumbHash
+                ) {
+                    Color.clear
+                }
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+            }
+        }
+        .frame(width: size, height: size)
+        // Liseré au ton du fond : détache la pastille du grand cercle.
+        .overlay(Circle().stroke(Color(hex: "0F0D19"), lineWidth: 3))
+        .accessibilityLabel(String(localized: "call.avatar.you", defaultValue: "Vous", bundle: .main))
     }
 
     private var callTypeBadge: some View {

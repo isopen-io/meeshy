@@ -382,6 +382,29 @@ nonisolated enum CallReliabilityPolicy {
         return isAlreadyReconnecting ? .coalesce : .startCycle
     }
 
+    /// FSM §3.2 invariant — `.reconnecting` is reserved for calls whose media
+    /// negotiation has begun (remote description applied): `.connected`,
+    /// `.reconnecting`, and `.connecting` (answer received, ICE in flight).
+    /// Before the answer (.ringing/.offering) an ICE restart is semantically
+    /// impossible — no remote description exists — and flipping the state made
+    /// CallView render the connected layout (frozen 00:00 timer) while the
+    /// callee was still ringing.
+    static func reconnectingAllowed(from state: CallState) -> Bool {
+        switch state {
+        case .connected, .reconnecting, .connecting: return true
+        case .idle, .ringing, .offering, .ended: return false
+        }
+    }
+
+    /// Duration-clock decision at the `.connected` transition. Reset on a fresh
+    /// connect AND on a first-ever connect that transited through
+    /// `.reconnecting` (pre-establishment ICE restart) — `durationTask` dies on
+    /// a nil `callStartDate`, so skipping the reset froze the timer at 00:00.
+    /// Preserve only on a genuine mid-call reconnect (running clock exists).
+    static func shouldResetCallClock(wasReconnecting: Bool, hasExistingStartDate: Bool) -> Bool {
+        !wasReconnecting || !hasExistingStartDate
+    }
+
     /// Delay before the periodic TURN credential refresh, at 80% of the TTL.
     /// A degenerate TTL (zero, negative, or shorter than the floor) clamps to
     /// `minimumDelay` instead of disarming the refresh — silently skipping it

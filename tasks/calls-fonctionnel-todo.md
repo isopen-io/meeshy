@@ -453,6 +453,37 @@ résilience restart (3e vague, PR #1344) avait un **contournement critique** jam
   TOUS les participants sont silencieux (backgroundés, zéro heartbeat) post-restart est reapé à
   boot+120 s au lieu de 5 min ; si UN participant beat, le chemin in-memory protège les autres.
 
+### Session 2026-07-02 (mission SOTA, 5e vague : CHAOS-TESTS E2E EN PROD — sim atabeth ↔ sim meeshy)
+
+Deux simulateurs (iPhone 16 Pro 18.2 = atabeth, Meeshy-iOS26 = meeshy) sur la PROD (directive user :
+aucun test local Docker, tout en production). Gateway prod redéployé avec la vague 4 avant les tests.
+Pilotage idb (taps en POINTS, pas pixels ; keychain simulateur survit à la désinstallation — reset via
+`simctl keychain <UDID> reset` sinon la session précédente se restaure et on appelle le mauvais compte).
+
+**CHAOS-TEST 1 (restart SIGTERM mid-call) — SUCCÈS PARTIEL puis fix :**
+- ✅ Au SIGTERM : « Socket disconnect during shutdown — preserving active calls » ×4 sockets
+  (prepareForShutdown), le média P2P continue, chrono jamais interrompu (01:32 pendant le down).
+- ✅ La bannière « Connexion au serveur perdue — l'appel continue » (isSignalingDegraded, vague 4)
+  s'affiche pendant le down et disparaît à la reconnexion — PREMIÈRE VALIDATION LIVE.
+- ✅ Re-join automatique des DEUX participants ~25s après le restart + resync toggle-audio + TURN
+  frais des deux côtés (didReconnect). La grâce 30s absorbe aussi le churn socket mid-call
+  (« Reconnect within grace window — active call preserved »).
+- ❌ PUIS mort de l'appel à ~60-90s post-restart, reproduit 2×. Chaîne causale (logs device via
+  `simctl spawn <UDID> log show --predicate 'subsystem == "me.meeshy.app" AND category == "calls"'` ;
+  les logarchives `log collect` spawnées sortent VIDES — toujours utiliser log show in-sim) :
+  le socket du caller churne (re-join toutes les 10-40s) → fenêtres sans socket dans la room →
+  un signal relayé du callee tire `call:error TARGET_NOT_FOUND` → **le callee teardown un appel au
+  média SAIN** (`ended(.failed("Target participant has no active connection"))`) → les offers
+  d'ICE-restart du caller frappent « Signal offer for unknown call » → watchdog ×3 → connectionLost.
+- **[FIX TDD] TARGET_NOT_FOUND whitelisté non-fatal** dans le handler call:error de CallManager
+  (comme INVALID_SIGNAL et RATE_LIMit_EXCEEDED) : erreur de relay TRANSITOIRE (pair sans socket
+  pendant churn/re-join), ICE redondant par design, answer avec retry borné — un appel établi ne
+  meurt jamais d'une erreur signaling transitoire (EXIGENCE №1). Test source-guard
+  `CallErrorNonFatalWhitelistTests` (check AVANT le teardown failCall).
+- Piste gateway complémentaire (backlog #8) : grâce courte pré-answer sur disconnect du CALLER —
+  le churn a aussi tué un appel EN SONNERIE (fin pré-answer immédiate alors qu'un vrai cancel passe
+  par call:end explicite) ; callId 6a466a604f950a0526227353.
+
 ### Session 2026-07-02 (routine calling-feature, gateway-only — toujours pas de toolchain Swift ici)
 
 - **[FIX C3/C4]** `CallService.endCall()` alignée sur `leaveCall()` (audit P1-29/P1 rec. #6-7) : un
