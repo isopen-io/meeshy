@@ -14,6 +14,19 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 122i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> - **122i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `75d87347`)** :
+>   Dynamic Type + a11y de `EmojiPickerSheet` (sheet de sélection d'emoji). Ajout `import MeeshyUI`.
+>   **4/5** `.font(.system(size:))` → `MeeshyFont.relative` (glyphe + champ de recherche, croix
+>   d'effacement, glyphe d'en-tête de section). **1 glyphe figé** : onglet de catégorie (cadre tap
+>   fixe 36×28, doctrine 82i, déjà labellisé + `.isSelected`). `accessibilityHidden` sur le glyphe
+>   décoratif d'en-tête. 1 fichier, 0 logique, 0 test/clé i18n neuve. 0 contention iOS. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `EmojiPickerSheet` Dynamic Type + a11y SOLDÉ** (ne plus reprendre l'onglet figé 36×28).
+>   **`FeedCommentsSheet` déjà soldé** (5 `.system(size:)` déjà figés + commentés) → ne pas reprendre.
+> - **Base de départ 123i : `main` HEAD**. Gros lots restants : `StoryViewerView+Content` (⚠️ i18n +
+>   piège `@State private` cross-file), `ConversationView+Composer` (lot critique prudent), `FeedView`
+>   (7). `FeedPostCard` (9) = chrome d'action-bar → gel documenté. Ensuite : passe de revue state-of-the-art.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 121i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
 > - **121i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `ead4451c`)** :
 >   Dynamic Type de `ConversationContextMenuView` (menu contextuel long-press de message). **7/7**

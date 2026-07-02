@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import MeeshyUI
 
 // MARK: - Emoji Grid Category
 
@@ -197,11 +198,11 @@ struct EmojiPickerView: View {
             // Search bar
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 14))
+                    .font(MeeshyFont.relative(14))
                     .foregroundColor(.secondary)
 
                 TextField(String(localized: "emoji.search", defaultValue: "Rechercher un emoji"), text: $searchText)
-                    .font(.system(size: 14))
+                    .font(MeeshyFont.relative(14))
                     .autocorrectionDisabled()
 
                 if !searchText.isEmpty {
@@ -209,7 +210,7 @@ struct EmojiPickerView: View {
                         searchText = ""
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 14))
+                            .font(MeeshyFont.relative(14))
                             .foregroundColor(.secondary)
                     }
                     .accessibilityLabel(String(localized: "common.clearSearch", defaultValue: "Clear search", bundle: .main))
@@ -233,6 +234,8 @@ struct EmojiPickerView: View {
                                 }
                             } label: {
                                 Image(systemName: category.icon)
+                                    // Doctrine 82i : glyphe d'onglet de catégorie dans un cadre tap fixe
+                                    // 36×28 → taille figée (l'icône ne doit pas déborder de l'onglet).
                                     .font(.system(size: 13, weight: .medium))
                                     .foregroundColor(selectedCategory == category ? .white : .primary)
                                     .frame(width: 36, height: 28)
@@ -302,7 +305,8 @@ struct EmojiPickerView: View {
         HStack(spacing: 6) {
             Image(systemName: icon)
                 .foregroundColor(.secondary)
-                .font(.system(size: 12))
+                .font(MeeshyFont.relative(12))
+                .accessibilityHidden(true)
             Text(title)
                 .font(.subheadline)
                 .fontWeight(.semibold)
