@@ -1304,6 +1304,11 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
         this.callCleanupService.setPostSummaryCallback(
           (callId) => callEventsHandler.postCallSummaryForTerminatedCall(callId)
         );
+        // CALL-RESILIENCE (item H) — re-arm the in-process ringing timers a
+        // crash/restart wiped, so pre-answer calls interrupted by the restart
+        // resolve to `missed` (with their push notification) on the nominal
+        // ringing budget instead of ringing until the GC tier.
+        void callEventsHandler.rehydrateActiveCalls(cleanupManager.getIO());
       } else {
         logger.warn('[GWY] CallCleanupService starting without Socket.IO server — clients will not receive force-end broadcasts');
       }

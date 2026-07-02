@@ -406,6 +406,54 @@ propre) :
       AVAudioEngine construit inutilement) ; `WebRTCService.handleRemoteAudioMuted`/`setMaxAudioBitrate`
       dead code (aucun appelant prod, superseded par `applyAudioEncoding`)
 
+### Session 2026-07-02 (mission SOTA appels — macOS + Xcode, 4e vague : EXIGENCE №1 gateway complète)
+
+Cartographie préalable par 3 agents (gateway / iOS / specs) croisée avec le code réel. Constat : la
+résilience restart (3e vague, PR #1344) avait un **contournement critique** jamais couvert par les tests.
+
+- **[FIX CRITIQUE, TDD] `AuthHandler.handleDisconnection` terminait les appels répondus** — au dernier
+  socket d'un user, boucle `leaveCall()` inconditionnelle sur CHAQUE participation `leftAt: null`, y
+  compris `active`/`reconnecting`, SANS garde `isShuttingDown` ni fenêtre de grâce (`AuthHandler.ts:341-376`,
+  appelé depuis `MeeshySocketIOManager.ts:1004`). Pour un appel direct, `leaveCall` = `status: ended` en DB
+  immédiat → la grâce 30 s du handler disconnect de `CallEventsHandler` (PR #1344) était NEUTRALISÉE pour
+  tout user mono-device (le cas nominal) : un blip socket de 2 s ou un restart SIGTERM tuait l'appel en DB,
+  le re-join client recevait CALL_ENDED. Fix : le cycle de vie des appels sur disconnect appartient à
+  `CallEventsHandler` seul (grâce appels répondus, fin immédiate pré-answer, garde shutdown, re-check room
+  à l'expiration qui couvre le multi-device) ; `AuthHandler` ne garde l'auto-leave immédiat que pour les
+  participants **anonymes** (introuvables par la requête `participant.userId` du handler A, et sans grâce
+  par ADR-6). Tests : `AuthHandler.test.ts` réécrit (registered → jamais de leaveCall, anonyme → préservé,
+  48/48), aucun test n'exerçait ce chemin auparavant.
+- **[Item H, TDD] Plancher de liveness au boot (`CallCleanupService`)** — après un downtime >
+  HEARTBEAT_TIMEOUT_MS (120 s), TOUS les `lastHeartbeatAt` DB lisaient stale au premier tick GC (immédiat
+  au `start()`) → appel sain force-ended alors que les clients re-joignaient. Fix : `bootedAt` injecté au
+  constructeur (défaut `new Date()`), le fallback DB du tier 4 évalue `max(lastHeartbeatAt ?? joinedAt,
+  bootedAt) < now - 120s` — un reap heartbeat ne peut survenir qu'après une fenêtre heartbeat COMPLÈTE
+  depuis le boot. Chaos-test 3 (coupure 90 s+) couvert côté serveur. Les tiers 1-3 restent sans grâce
+  (voulu : ils s'ancrent sur des timestamps DB persistés et le reap pré-answer au boot est le comportement
+  correct du chaos-test 2).
+- **[Item H, TDD] Réhydratation des ringing timers au boot** — `CallEventsHandler.rehydrateActiveCalls(io)`
+  (câblé `server.ts` après l'attache socket) : requête les appels `initiated`/`ringing` survivants et
+  ré-arme chacun via `CallService.rescheduleRingingTimeout(callId, startedAt, handler)` = budget RESTANT
+  (`startedAt + 60s - now`, plancher 5 s). Le handler missed est extrait en
+  `buildRingingTimeoutHandler(io, callId)` — chemin identique à l'initiate (updateMany status-guardé →
+  broadcasts ENDED+MISSED → summary → push manqué). Avant : un appel en sonnerie au moment du crash sonnait
+  côté serveur jusqu'au GC 120 s SANS push manqué. Tests : `CallEventsHandler-rehydrate.test.ts` (4),
+  `CallService-ringing-reschedule.test.ts` (5, unit — le fichier integration/ est HORS scope jest CI).
+- **[Item I, TDD] `clearRingingTimeout` appairé à `clearHeartbeats` sur les 5 chemins terminaux** —
+  `endCall` (le REST DELETE /calls/:id ne clearait jamais), `markCallAsMissed`, `leaveCall` (branche
+  idempotente + last-participant), `CallCleanupService.forceEndCall`. Timers orphelins = callback tardif
+  no-op (status-guardé) mais mémoire retenue. 3 tests comportementaux (timer armé → transition terminale →
+  avance 61 s → callback jamais tiré).
+- **[Items E/F/G vérifiés dans le code]** E : couvert par le fix AuthHandler + re-check room à l'expiration
+  de grâce (le double-join multi-socket C8 reste au backlog). F : `ringing` jamais écrit par le serveur —
+  ASSUMÉ : toutes les lectures utilisent `[initiated, ringing]`, FSM cohérente, l'écrire exigerait un
+  nouvel event client (`call:ringing-ack`) pour zéro gain de robustesse — non implémenté, documenté ici.
+  G : DÉJÀ FAIT (handlers `call:backgrounded`/`foregrounded` avec authz stricte, tolérance
+  `BACKGROUND_HEARTBEAT_TIMEOUT_MS` 5 min dans `getStaleHeartbeats` — la dette décrivait un état antérieur).
+  Limite connue : les `backgroundedParticipants` in-memory ne sont pas réhydratés au boot — un appel dont
+  TOUS les participants sont silencieux (backgroundés, zéro heartbeat) post-restart est reapé à
+  boot+120 s au lieu de 5 min ; si UN participant beat, le chemin in-memory protège les autres.
+
 ### Session 2026-07-02 (routine calling-feature, gateway-only — toujours pas de toolchain Swift ici)
 
 - **[FIX C3/C4]** `CallService.endCall()` alignée sur `leaveCall()` (audit P1-29/P1 rec. #6-7) : un
