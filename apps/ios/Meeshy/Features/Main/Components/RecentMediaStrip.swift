@@ -1,6 +1,6 @@
 import SwiftUI
 import Photos
-import AVKit
+import AVFoundation
 import UIKit
 import MeeshyUI
 
@@ -570,30 +570,18 @@ private struct RecentMediaCell: View {
         .accessibilityLabel(asset.mediaType == .video
             ? String(localized: "composer.a11y.recentVideo", defaultValue: "Vid\u{00E9}o r\u{00E9}cente", bundle: .main)
             : String(localized: "composer.a11y.recentPhoto", defaultValue: "Photo r\u{00E9}cente", bundle: .main))
+        .accessibilityValue(selectionIndex != nil
+            ? String(localized: "composer.a11y.selectedState", defaultValue: "S\u{00E9}lectionn\u{00E9}", bundle: .main)
+            : "")
         .contextMenu {
-            // A ControlGroup renders the three actions as a horizontal row in
-            // the context menu (falls back to stacked items on older iOS 16).
-            ControlGroup {
-                Button(action: onAdd) {
-                    Label(
-                        String(localized: "composer.recent.add", defaultValue: "Ajouter", bundle: .main),
-                        systemImage: "plus.circle"
-                    )
-                }
-                Button(action: onToggleSelect) {
-                    Label(
-                        String(localized: "composer.recent.select", defaultValue: "S\u{00E9}lectionner", bundle: .main),
-                        systemImage: selectionIndex != nil ? "checkmark.circle.fill" : "checkmark.circle"
-                    )
-                }
-                if canEdit {
-                    Button(action: onEditTap) {
-                        Label(
-                            String(localized: "composer.recent.edit", defaultValue: "\u{00C9}diter", bundle: .main),
-                            systemImage: "pencil"
-                        )
-                    }
-                }
+            // `.compactMenu` (iOS 16.4+) renders the three actions as the
+            // system horizontal medium-size row (the Messages/Photos pattern);
+            // 16.0–16.3 falls back to a plain ControlGroup (stacked items).
+            if #available(iOS 16.4, *) {
+                ControlGroup { contextActionButtons }
+                    .controlGroupStyle(.compactMenu)
+            } else {
+                ControlGroup { contextActionButtons }
             }
         } preview: {
             RecentMediaPreview(asset: asset, model: model)
@@ -601,6 +589,31 @@ private struct RecentMediaCell: View {
         .task(id: asset.localIdentifier) {
             let px = cell * displayScale
             thumbnail = await model.thumbnail(for: asset, size: CGSize(width: px, height: px))
+        }
+    }
+
+    /// The three context-menu actions: Ajouter / Sélectionner / Éditer.
+    /// Éditer only appears when the host wired an editor flow.
+    @ViewBuilder private var contextActionButtons: some View {
+        Button(action: onAdd) {
+            Label(
+                String(localized: "composer.recent.add", defaultValue: "Ajouter", bundle: .main),
+                systemImage: "plus.circle"
+            )
+        }
+        Button(action: onToggleSelect) {
+            Label(
+                String(localized: "composer.recent.select", defaultValue: "S\u{00E9}lectionner", bundle: .main),
+                systemImage: selectionIndex != nil ? "checkmark.circle.fill" : "checkmark.circle"
+            )
+        }
+        if canEdit {
+            Button(action: onEditTap) {
+                Label(
+                    String(localized: "composer.recent.edit", defaultValue: "\u{00C9}diter", bundle: .main),
+                    systemImage: "pencil"
+                )
+            }
         }
     }
 
@@ -669,7 +682,7 @@ private struct RecentMediaPreview: View {
                 ProgressView()
             }
             if let player {
-                VideoPlayer(player: player)
+                PreviewVideoSurface(player: player)
             }
         }
         .frame(width: previewSize.width, height: previewSize.height)
@@ -679,10 +692,48 @@ private struct RecentMediaPreview: View {
                   let item = await model.videoPlayerItem(for: asset) else { return }
             let queue = AVQueuePlayer()
             queue.isMuted = true
+            queue.allowsExternalPlayback = false
+            queue.preventsDisplaySleepDuringVideoPlayback = false
             looper = AVPlayerLooper(player: queue, templateItem: item)
             player = queue
             queue.play()
         }
-        .onDisappear { player?.pause() }
+        .onDisappear {
+            player?.pause()
+            player = nil
+            looper = nil
+        }
+    }
+}
+
+/// Chrome-less `AVPlayerLayer` host for the context-menu video preview.
+/// AVKit's `VideoPlayer` is the wrong tool here: it draws transport controls
+/// (unusable inside a context-menu preview) over a black backdrop that hides
+/// the poster frame while the stream buffers. A bare player layer stays
+/// transparent until the first frame renders, so the poster shows through.
+private struct PreviewVideoSurface: UIViewRepresentable {
+    let player: AVPlayer
+
+    func makeUIView(context: Context) -> PlayerLayerView {
+        let view = PlayerLayerView()
+        view.playerLayer.videoGravity = .resizeAspect
+        view.playerLayer.player = player
+        return view
+    }
+
+    func updateUIView(_ uiView: PlayerLayerView, context: Context) {
+        if uiView.playerLayer.player !== player {
+            uiView.playerLayer.player = player
+        }
+    }
+
+    final class PlayerLayerView: UIView {
+        override class var layerClass: AnyClass { AVPlayerLayer.self }
+        var playerLayer: AVPlayerLayer {
+            guard let layer = layer as? AVPlayerLayer else {
+                preconditionFailure("PlayerLayerView layer must be AVPlayerLayer")
+            }
+            return layer
+        }
     }
 }
