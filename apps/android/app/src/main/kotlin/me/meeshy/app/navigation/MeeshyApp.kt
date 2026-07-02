@@ -2,11 +2,13 @@ package me.meeshy.app.navigation
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.ChatBubble
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Notifications
@@ -35,6 +37,7 @@ import me.meeshy.app.R
 import android.net.Uri
 import me.meeshy.app.auth.AuthViewModel
 import me.meeshy.app.auth.LoginScreen
+import me.meeshy.app.calls.CallHistoryScreen
 import me.meeshy.app.calls.CallScreen
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.app.chat.ChatScreen
@@ -62,6 +65,7 @@ object Routes {
     const val CONVERSATION_SINGULAR_DEEP_LINK = "meeshy://conversation/{${ChatViewModel.CONVERSATION_ID_ARG}}"
     const val CONVERSATION_SHORT_DEEP_LINK = "meeshy://c/{${ChatViewModel.CONVERSATION_ID_ARG}}"
     const val FEED = "feed"
+    const val CALLS = "calls"
     const val CONTACTS = "contacts"
     const val NOTIFICATIONS = "notifications"
     const val SETTINGS = "settings"
@@ -90,9 +94,10 @@ private data class TabItem(
 private fun rememberTabs(): List<TabItem> {
     val messages = stringResource(R.string.tab_messages)
     val feed = stringResource(R.string.tab_feed)
+    val calls = stringResource(R.string.tab_calls)
     val activity = stringResource(R.string.tab_activity)
     val profile = stringResource(R.string.tab_profile)
-    return remember(messages, feed, activity, profile) {
+    return remember(messages, feed, calls, activity, profile) {
         listOf(
             TabItem(
                 route = Routes.CONVERSATIONS,
@@ -105,6 +110,12 @@ private fun rememberTabs(): List<TabItem> {
                 label = feed,
                 selectedIcon = { Icon(Icons.Filled.Home, contentDescription = feed) },
                 unselectedIcon = { Icon(Icons.Outlined.Home, contentDescription = feed) },
+            ),
+            TabItem(
+                route = Routes.CALLS,
+                label = calls,
+                selectedIcon = { Icon(Icons.Filled.Call, contentDescription = calls) },
+                unselectedIcon = { Icon(Icons.Outlined.Call, contentDescription = calls) },
             ),
             TabItem(
                 route = Routes.NOTIFICATIONS,
@@ -122,7 +133,7 @@ private fun rememberTabs(): List<TabItem> {
     }
 }
 
-private val tabRoutes = setOf(Routes.CONVERSATIONS, Routes.FEED, Routes.NOTIFICATIONS, Routes.SETTINGS)
+private val tabRoutes = setOf(Routes.CONVERSATIONS, Routes.FEED, Routes.CALLS, Routes.NOTIFICATIONS, Routes.SETTINGS)
 
 @Composable
 fun MeeshyApp() {
@@ -239,6 +250,13 @@ fun MeeshyApp() {
             composable(Routes.FEED) {
                 FeedScreen(
                     onPostClick = { },
+                )
+            }
+            composable(Routes.CALLS) {
+                CallHistoryScreen(
+                    onOpenCall = { record ->
+                        navController.navigate(CallRoute.redial(record))
+                    },
                 )
             }
             composable(Routes.CONTACTS) {
