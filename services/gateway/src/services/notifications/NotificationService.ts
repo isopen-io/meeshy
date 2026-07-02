@@ -10,6 +10,8 @@
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { SequenceService } from '../SequenceService';
+import { emitWithSeq } from '../../socketio/utils/emitWithSeq';
 import type {
   NotificationActor,
   NotificationContext,
@@ -405,11 +407,14 @@ export class NotificationService {
 
   private pushService?: PushNotificationService;
   private emailService?: EmailService;
+  private readonly sequenceService: SequenceService;
 
   constructor(
     private prisma: PrismaClient,
     private io?: SocketIOServer
   ) {
+    // A2 — allocation des `_seq` per-user pour les events user-scoped.
+    this.sequenceService = new SequenceService(prisma);
     // Nettoyer les entrées de rate limit périmées toutes les 2 minutes
     const mentionsCleanup = setInterval(() => this.cleanupOldMentions(), 120_000);
     mentionsCleanup.unref?.();
@@ -747,9 +752,11 @@ export class NotificationService {
         subtitle: pushSubtitle,
       };
 
-      // Émettre via Socket.IO
+      // Émettre via Socket.IO — A2 : event user-scoped enrichi de `_seq`
+      // (SyncEngine, détection de gap exacte). `emitWithSeq` est résilient :
+      // sur échec d'allocation de séquence, l'event part sans `_seq`.
       if (this.io) {
-        this.io.to(params.userId).emit(SERVER_EVENTS.NOTIFICATION_NEW, socketPayload);
+        await emitWithSeq(this.io, this.sequenceService, params.userId, SERVER_EVENTS.NOTIFICATION_NEW, socketPayload as unknown as Record<string, unknown>);
         notificationLogger.debug('notification:new emitted via socket', { userId: params.userId, type: params.type, conversationId: params.context.conversationId ?? 'none' });
         // Update badge counters on client (fire-and-forget, non-blocking)
         this.emitCountsUpdate(params.userId).catch(() => {});
