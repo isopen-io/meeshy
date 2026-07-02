@@ -286,7 +286,7 @@ extension ConversationListView {
                         onInfo: { dismissContextMenu(); conversationInfoConversation = conversation },
                         onProfileInfo: { dismissContextMenu(); handleProfileView(conversation) }
                     )
-                    .frame(maxWidth: 340)
+                    .frame(width: 340)
                     // Aperçu : zoom (grandit depuis 0.7) + fondu, piloté par
                     // `contextMenuAppeared` (spring à rebond, cf. .onAppear).
                     .scaleEffect(contextMenuAppeared ? 1 : 0.7, anchor: .center)

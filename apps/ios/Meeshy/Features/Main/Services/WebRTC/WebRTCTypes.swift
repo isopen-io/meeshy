@@ -415,6 +415,20 @@ nonisolated enum CallReliabilityPolicy {
     static func platformUsesCallKit(isiOSAppOnMac: Bool, isSimulator: Bool) -> Bool {
         !isiOSAppOnMac && !isSimulator
     }
+
+    /// Whether the call UI must render the video layout. True as soon as ANY
+    /// stream is visible: the local camera, or the peer's camera during a
+    /// unilateral escalation of an audio call (renegotiation delivers the
+    /// remote track while `localVideoEnabled` stays false). Gating the layout
+    /// on the local camera alone leaves the incoming H264 stream decoded but
+    /// never rendered.
+    static func videoLayoutActive(
+        localVideoEnabled: Bool,
+        hasRemoteVideoTrack: Bool,
+        remoteVideoEnabled: Bool
+    ) -> Bool {
+        localVideoEnabled || (hasRemoteVideoTrack && remoteVideoEnabled)
+    }
 }
 
 /// Half-open detection state across connection epochs.

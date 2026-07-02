@@ -541,17 +541,20 @@ final class CallManagerEarlyJoinTests: XCTestCase {
             XCTFail("handleIncomingCallNotification not found")
             return
         }
-        guard let emitJoinIdx = body.range(of: "emitCallJoin(callId: callId)")?.lowerBound,
+        // [Fix 2026-07-02] the join is now dispatched via joinCallRoomReliably
+        // (connect-if-needed + ACK + retry) — same ordering contract: it must
+        // be kicked off BEFORE the media warmup.
+        guard let emitJoinIdx = body.range(of: "joinCallRoomReliably(callId: callId)")?.lowerBound,
               let startMediaIdx = body.range(of: "performLocalMediaStart(isVideo:")?.lowerBound else {
-            XCTFail("Expected emitCallJoin and performLocalMediaStart call sites in handleIncomingCallNotification")
+            XCTFail("Expected joinCallRoomReliably and performLocalMediaStart call sites in handleIncomingCallNotification")
             return
         }
         XCTAssertLessThan(
             emitJoinIdx,
             startMediaIdx,
-            "Bug 2 guard: emitCallJoin MUST be called before kicking off performLocalMediaStart (which awaits " +
-            "startLocalMedia) in handleIncomingCallNotification, otherwise the caller stays in .ringing(true) " +
-            "until the callee's camera/mic warmup completes."
+            "Bug 2 guard: joinCallRoomReliably MUST be dispatched before kicking off performLocalMediaStart " +
+            "(which awaits startLocalMedia) in handleIncomingCallNotification, otherwise the caller stays in " +
+            ".ringing(true) until the callee's camera/mic warmup completes."
         )
     }
 
@@ -561,16 +564,17 @@ final class CallManagerEarlyJoinTests: XCTestCase {
             XCTFail("reportIncomingVoIPCall not found")
             return
         }
-        guard let emitJoinIdx = body.range(of: "emitCallJoin(callId: callId)")?.lowerBound,
+        guard let emitJoinIdx = body.range(of: "joinCallRoomReliably(callId: callId)")?.lowerBound,
               let startMediaIdx = body.range(of: "performLocalMediaStart(isVideo:")?.lowerBound else {
-            XCTFail("Expected emitCallJoin and performLocalMediaStart call sites in reportIncomingVoIPCall")
+            XCTFail("Expected joinCallRoomReliably and performLocalMediaStart call sites in reportIncomingVoIPCall")
             return
         }
         XCTAssertLessThan(
             emitJoinIdx,
             startMediaIdx,
-            "Bug 2 guard: emitCallJoin MUST be called before kicking off performLocalMediaStart (which awaits " +
-            "startLocalMedia) in reportIncomingVoIPCall."
+            "Bug 2 guard: joinCallRoomReliably MUST be dispatched before kicking off performLocalMediaStart " +
+            "(which awaits startLocalMedia) in reportIncomingVoIPCall — on a VoIP cold start it also forces " +
+            "the socket connection that a bare emitCallJoin silently lost."
         )
     }
 
@@ -1769,28 +1773,35 @@ final class CallKitActionFulfillmentSourceGuardTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    /// `CXAnswerCallAction.fulfill()` must appear BEFORE the `Task {` that calls
-    /// `answerCallReady()` — not inside it. The Task is for async media setup;
-    /// the action settlement tells CallKit the call is answered at the UI layer.
-    func test_cxAnswerCallAction_fulfilledBeforeTask() throws {
+    /// [Fix 2026-07-02] The answer action is HELD (`holdPendingAnswerAction`)
+    /// and settled at `.connected` so the CallKit elapsed timer reflects the
+    /// REAL connection, not the tap (user-reported "0:00 before the connection
+    /// exists"). The handler must still keep a defensive immediate
+    /// `action.fulfill()` on the non-main fallback path, and the settlement
+    /// sites must exist: fulfill at connect, fail on pre-connect teardown,
+    /// 10 s safety net inside holdPendingAnswerAction.
+    func test_cxAnswerCallAction_heldUntilConnected() throws {
         let src = try callManagerSource()
         guard let answerRange = src.range(of: "perform action: CXAnswerCallAction") else {
             XCTFail("CXAnswerCallAction handler not found"); return
         }
-        // Find the end of this function body (next top-level `}` after the function
-        // header). We look for the pattern after the function opening brace.
         let bodyStart = src[answerRange.upperBound...].firstIndex(of: "{") ?? src.endIndex
-        let bodyFragment = String(src[bodyStart...].prefix(400))
+        let bodyFragment = String(src[bodyStart...].prefix(1600))
 
-        let fulfillOffset = bodyFragment.range(of: "action.fulfill()")?.lowerBound
-        let taskOffset = bodyFragment.range(of: "Task {")?.lowerBound
-        XCTAssertNotNil(fulfillOffset, "action.fulfill() must exist in CXAnswerCallAction handler")
-        XCTAssertNotNil(taskOffset, "Task { must exist in CXAnswerCallAction handler for async setup")
-        if let f = fulfillOffset, let t = taskOffset {
-            XCTAssertTrue(f < t,
-                "CXAnswerCallAction: action.fulfill() must appear BEFORE Task { — " +
-                "settling inside the Task is async and may never fire if manager is nil or Task is cancelled.")
-        }
+        XCTAssertTrue(bodyFragment.contains("holdPendingAnswerAction(action)"),
+            "CXAnswerCallAction: the action must be handed to the manager (holdPendingAnswerAction) " +
+            "so the CallKit timer starts at the real connection, not at tap time.")
+        XCTAssertTrue(bodyFragment.contains("MainActor.assumeIsolated"),
+            "CXAnswerCallAction: the hand-off must be synchronous on the main queue " +
+            "(delegate queue is nil = main) — no Sendable capture of the CXAction in a Task.")
+        XCTAssertTrue(bodyFragment.contains("action.fulfill()"),
+            "CXAnswerCallAction: the defensive fallback (off-main / nil manager) must still " +
+            "fulfill immediately so the action can never be lost.")
+
+        XCTAssertTrue(src.contains("settlePendingAnswerAction(fulfilled: true, reason: \"connected\")"),
+            "transitionToConnected must fulfill the held answer action at the real connection.")
+        XCTAssertTrue(src.contains("settlePendingAnswerAction(fulfilled: false, reason: \"teardown before connect\")"),
+            "endCallInternal must fail the held answer action when the call dies before connecting.")
     }
 
     /// `CXEndCallAction.fulfill()` must appear BEFORE the `Task {` that calls

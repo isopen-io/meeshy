@@ -271,7 +271,10 @@ struct CallSummaryDetailSheet: View {
             }
             .padding(20)
         }
-        .background(theme.backgroundPrimary.ignoresSafeArea())
+        // Liquid Glass (iOS 26) : la conversation transparaît derrière la
+        // feuille au lieu d'un aplat opaque — même traitement que
+        // FeedCommentsSheet / MessageMoreSheet.
+        .adaptiveSheetGlassBackground()
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
     }
@@ -323,7 +326,7 @@ struct CallSummaryDetailSheet: View {
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
-            .background(Capsule().fill(MeeshyColors.indigo500))
+            .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.indigo500)
         }
         .accessibilityLabel(callBackTitle)
     }
@@ -369,8 +372,10 @@ struct CallSummaryDetailSheet: View {
             }
         }
         .padding(.vertical, 4)
-        .background(theme.backgroundSecondary)
-        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
+        .adaptiveGlass(
+            in: RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous),
+            tint: tint.opacity(0.14)
+        )
     }
 
     /// Network-quality row. A per-second quality histogram can render here later

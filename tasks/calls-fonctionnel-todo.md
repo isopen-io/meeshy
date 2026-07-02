@@ -232,3 +232,86 @@ chaque piste re-vérifiée dans le code réel avant fix. Fixes commités `6b5e23
   `deactivateAudioSession` uniquement au teardown.
 - 23 tests unitaires nouveaux (`CallReconnectPolicyTests.swift`) sur les 4 politiques pures.
   Build-for-testing Xcode 26.1.1 VERT. Suite MeeshyTests 18.2 + E2E simu↔web : voir suite session.
+
+## Session 2026-07-02 (suite) — E2E prod RÉUSSI + Fixes 6-10
+
+### JALON : appel audio simulateur → iPhone réel CONNECTÉ sur prod ✅
+Endpoint réel : simu iPhone 16 Pro (atabeth, UDID 30BFD3A6) → iPhone 16 Pro Max physique
+(jcharlesnm), backend prod. CallId `6a4606f677575265af8192ea` : setup 1/4→4/4, ACK gateway
+4 ICE servers, remote ANSWER `audio=sendrecv`, ICE connected en 3,5 s, `[AUDIO_FALLBACK]`
+self-activation (chemin simulateur du Fix 6), **78 s de conversation** (RTT 4-9 ms, 0 perte,
+mute/unmute + speaker testés en live), raccrochage distant propre (`rawReason=completed`),
+journal « Appel audio sortant · 01:20 », 7.6 MB, qualité Excellent. Le refresh TURN 80 % TTL
+(Fix 2) validé live : refresh programmé à 2880 s pour TTL=3600 s.
+
+- **[FIX 6] Gate CallKit plateforme** (commit `a45bc1785`) — sur simulateur,
+  `provider:didActivate:` ne fire jamais et callservicesd envoie un `CXEndCallAction` autonome
+  ~3 s après le start sortant → appel tué en `.ringing`. Même famille que iOS-app-on-Mac
+  (error 3). `CallReliabilityPolicy.platformUsesCallKit` (pure) +
+  `CallManager.platformSupportsCallKit` (gate statique unique des 3 sites `callUsesCallKit`) ;
+  VoIP push garde CallKit (exigence Apple). 3 tests policy + source-guard migré. 51/51 verts.
+- **[FIX 7] Vidéo distante invisible en appel audio** (découvert live : le user a activé sa
+  caméra pendant l'appel audio → renégociation entrante OK, answer `video=recvonly`, track
+  délivré, 7000+ pkts H264… et l'UI restait sur l'avatar). Cause : la bascule
+  audio/vidéo de `CallView.connectedView` était `isVideoEnabled` (caméra LOCALE).
+  Fix : `CallReliabilityPolicy.videoLayoutActive(local || remote)` (pure, 5 tests) +
+  `CallManager.isVideoUIActive` ; bascule layout + swipe-down + auto-hide contrôles dans
+  CallView ; miniature `FloatingCallPillView` et `canActivateSystemPiP` keyed sur le flux
+  DISTANT seul. L'envoi vidéo DEPUIS le simu reste impossible (guard FigCaptureSourceRemote)
+  — l'affichage du flux distant, lui, fonctionne partout.
+- **[FIX 8, retour user] Contrôles sur le cadre self-preview + isolation du drag** — boutons
+  flip caméra + filtres épinglés SUR le cadre PiP local (`pipFrameButton`, visibles quand le
+  PiP montre le flux local) ; le geste swipe-down-minimise déplacé du ZStack `connectedView`
+  vers `videoCallLayout` seul → déplacer le cadre PiP (sibling au-dessus) ne quitte plus le
+  plein écran.
+- **[FIX 9, retour user] Long-press désactivé sur les bulles système** — le handler
+  `onLongPress` de ConversationView ignore `messageSource == .system` : plus de réactions/
+  Edit/Traduire/Pin/Supprimer sur le journal d'appel ; la bulle call-notice garde son propre
+  long-press → sheet détails.
+- **[FIX 10, retour user] `CallSummaryDetailSheet` en Liquid Glass iOS 26** — nouveau shim
+  `adaptiveSheetGlassBackground()` (MeeshyUI/Compatibility/AdaptiveGlass.swift,
+  `presentationBackground(.ultraThinMaterial)` gated 16.4+) ; carte détails en
+  `adaptiveGlass(tint:)` ; CTA rappel en `adaptiveGlassProminent`.
+
+### 2e vague (même session, après retours user live + audit prod multi-agents)
+
+Diagnostic majeur (logs gateway prod) : **le chemin décrochage-via-VoIP-push est cassé à 100 %**
+(7/7 appels notifiedSockets=0 → push APNS OK → app réveillée (REST OK) → socket JAMAIS connecté
+pendant le ring (connect() n'est déclenché que par les vues au foreground) → `call:join` fire-and-forget
+perdu → gateway rejette les signaux (« Sender not a participant » ×26 sur …e6) → missed malgré le
+décrochage). L'appel réussi de 07:36 : app au premier plan → socket vivant → in-app ring → OK.
+
+- **[FIX 11] `joinCallRoomReliably`** — remplace les 2 émissions early fire-and-forget (chemins VoIP
+  et foreground) : force `connect()` si nécessaire, attend `isConnected` (poll 200 ms, budget 30 s),
+  `emitCallJoinWithAck` + 1 retry, annulé au teardown. Source-guards EarlyJoin migrés vers le nouveau seam.
+- **[FIX 12, retour user] Chrono CallKit au connect réel** — l'answer action CallKit est TENUE
+  (`holdPendingAnswerAction`, hand-off synchrone `MainActor.assumeIsolated`, delegate queue=main) et
+  settled à `transitionToConnected` (fulfill) / teardown pré-connexion (fail) / filet 10 s (fulfill).
+  Le compteur ne démarre plus à 0:00 avant l'établissement. Source-guard CXAnswer migré.
+- **[FIX 8b, retour user] Contrôles du cadre sans doublons** — bouton Effets (« + ») et flip iPhone
+  retirés de la barre du bas (le picker multi-caméras Mac/iPad reste) ; l'overlay filtres ouvre
+  directement le panneau `VideoFiltersPanel` (plus de toolbar intermédiaire à 1 bouton).
+- **[FIX C2 audit, HIGH] RATE_LIMIT_EXCEEDED non-fatal côté iOS** — le gateway limite
+  `socket:call:ice` à 50/5 s ; un flush de gathering légitime (15-25 candidats/ms) le dépasse et le
+  client tuait l'appel (prod : appel …935c tué 382 ms après connexion). Ajouté à la whitelist comme
+  INVALID_SIGNAL (drop silencieux, ICE est redondant par design).
+- **[FIX gateway, TDD] Payload `call:missed` conforme au contrat** — le ringing-timeout n'émettait
+  que `{callId}` (violation de CallMissedEvent, decode iOS KO). Enrichi conversationId/callerId/
+  callerName + 5 tests, 188/188 socketio, 683/683 suites call, tsc 0 erreur. Côté SDK iOS,
+  `CallMissedData` décode désormais défensivement (champs optionnels) pour les vieux gateways.
+- **Audit prod multi-agents archivé** : `docs/analyses/2026-07-02-audit-gateway-appels-prod.md`
+  (C1-C8 confirmés dont : appels « completed » duration 0 au lieu de missed ; updateParticipantMedia
+  100 % d'échec DB — sémantique Prisma/Mongo `leftAt: null` vs missing ; double summary + index unique
+  `(conversationId, clientMessageId)` JAMAIS créé en prod — `$ne:''` non supporté en
+  partialFilterExpression ; force-leave pré-answer sans summary ni notification).
+
+### Reste à faire
+- [ ] Re-test E2E vidéo après Fix 7 : appel audio → user active sa caméra → le simu AFFICHE le flux
+- [ ] Déployer gateway (fix call:missed) + TestFlight (fixes 11/12 côté callee iPhone)
+- [ ] Backlog audit prod : C3/C4 (endCall → missed pas completed), C5 (leftAt isSet), C6 (index unique
+      partiel + court-circuit double summary), C7 (force-leave missed → summary+notif), C8 (dédup
+      multi-socket), limite ICE gateway 150/5 s, bulle de statut orange illisible derrière la Dynamic
+      Island (retour user, StatusBubbleOverlay)
+- [ ] Appel vidéo complet + envoi vidéo : device réel uniquement (guard simulateur)
+- [ ] Validation device réel du fallback stuck-muted (Fix 4)
+- [ ] Gateway : authz `call:transcription-segment` / `call:request-ice-servers` (piste connue)

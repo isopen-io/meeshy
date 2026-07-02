@@ -305,3 +305,41 @@ final class PlatformCallKitPolicyTests: XCTestCase {
         ))
     }
 }
+
+// MARK: - Video layout activation
+
+/// The call UI must switch to the video layout whenever ANY video stream is
+/// visible — the local camera, or the peer's camera during a unilateral video
+/// escalation of an audio call. Gating the layout on the local camera alone
+/// left the remote H264 stream flowing but never rendered (E2E 2026-07-02).
+final class VideoLayoutPolicyTests: XCTestCase {
+    func test_videoLayoutActive_audioOnly_returnsFalse() {
+        XCTAssertFalse(CallReliabilityPolicy.videoLayoutActive(
+            localVideoEnabled: false, hasRemoteVideoTrack: false, remoteVideoEnabled: true
+        ))
+    }
+
+    func test_videoLayoutActive_localCameraOn_returnsTrue() {
+        XCTAssertTrue(CallReliabilityPolicy.videoLayoutActive(
+            localVideoEnabled: true, hasRemoteVideoTrack: false, remoteVideoEnabled: true
+        ))
+    }
+
+    func test_videoLayoutActive_remoteEscalationDuringAudioCall_returnsTrue() {
+        XCTAssertTrue(CallReliabilityPolicy.videoLayoutActive(
+            localVideoEnabled: false, hasRemoteVideoTrack: true, remoteVideoEnabled: true
+        ))
+    }
+
+    func test_videoLayoutActive_remoteTrackButCameraOff_returnsFalse() {
+        XCTAssertFalse(CallReliabilityPolicy.videoLayoutActive(
+            localVideoEnabled: false, hasRemoteVideoTrack: true, remoteVideoEnabled: false
+        ))
+    }
+
+    func test_videoLayoutActive_remoteEnabledWithoutTrack_returnsFalse() {
+        XCTAssertFalse(CallReliabilityPolicy.videoLayoutActive(
+            localVideoEnabled: false, hasRemoteVideoTrack: false, remoteVideoEnabled: true
+        ))
+    }
+}

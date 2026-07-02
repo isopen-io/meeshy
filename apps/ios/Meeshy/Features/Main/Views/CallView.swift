@@ -397,12 +397,30 @@ struct CallView: View {
             // centered avatar for audio calls) overlay on top. This replaces the
             // old centered card sandwiched in Spacers, which floated over the
             // self-preview background and read as a "double frame".
-            if callManager.isVideoEnabled {
+            // `isVideoUIActive` (not `isVideoEnabled`): the peer can escalate an
+            // audio call to video unilaterally — its stream must render even
+            // while the local camera stays off.
+            if callManager.isVideoUIActive {
                 // §7.3 — tap the primary video to toggle the controls
                 // (auto-hide UX). The PiP (on top) keeps its own swap tap.
                 videoCallLayout
                     .contentShape(Rectangle())
                     .onTapGesture { toggleControls() }
+                    // Swipe-down-to-minimize is attached HERE, not on the whole
+                    // connectedView ZStack: the draggable PiP is a sibling ABOVE
+                    // this layer, so moving the PiP no longer also dismisses the
+                    // full-screen call (user-reported 2026-07-02).
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 50)
+                            .onEnded { value in
+                                guard !showEffectsToolbar else { return }
+                                if value.translation.height > 100 {
+                                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                                        callManager.displayMode = .pip
+                                    }
+                                }
+                            }
+                    )
                     .accessibilityLabel(showControls
                         ? String(localized: "call.video.hideControls", defaultValue: "Masquer les contrôles", bundle: .main)
                         : String(localized: "call.video.showControls", defaultValue: "Afficher les contrôles", bundle: .main))
@@ -414,7 +432,7 @@ struct CallView: View {
             }
 
             VStack(spacing: 0) {
-                if !callManager.isVideoEnabled {
+                if !callManager.isVideoUIActive {
                     Spacer()
                     audioCallLayout
                 }
@@ -445,17 +463,6 @@ struct CallView: View {
                 localVideoSuspendedTile
             }
         }
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 50)
-                .onEnded { value in
-                    guard !showEffectsToolbar else { return }
-                    if value.translation.height > 100 && callManager.isVideoEnabled {
-                        withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                            callManager.displayMode = .pip
-                        }
-                    }
-                }
-        )
         // §7.3 — auto-hide after 4s of no interaction. Re-arms whenever
         // showControls flips to true (a reveal tap); no-op for audio / Mac /
         // effects-open via shouldAutoHideControls.
@@ -474,7 +481,7 @@ struct CallView: View {
     /// reveal), never while the effects tray is open, and never while VoiceOver
     /// is running (VoiceOver users can't tap the video to reveal hidden controls).
     private var shouldAutoHideControls: Bool {
-        callManager.isVideoEnabled
+        callManager.isVideoUIActive
             && !showEffectsToolbar
             && !ProcessInfo.processInfo.isiOSAppOnMac
             && !UIAccessibility.isVoiceOverRunning
@@ -837,6 +844,31 @@ struct CallView: View {
                         .stroke(Color.white.opacity(0.3), lineWidth: 1)
                 )
                 .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
+                // Flip + filters live ON the self-view frame, where the user is
+                // already looking at their own camera (user-requested
+                // 2026-07-02). Only when the PiP shows the LOCAL stream — these
+                // controls act on the local camera, not the peer's feed.
+                .overlay(alignment: .bottom) {
+                    if !swapStreams {
+                        HStack(spacing: 8) {
+                            pipFrameButton(
+                                icon: "arrow.triangle.2.circlepath.camera.fill",
+                                label: String(localized: "call.control.flipCamera", defaultValue: "Basculer la caméra avant/arrière", bundle: .main)
+                            ) {
+                                callManager.switchCamera()
+                            }
+                            pipFrameButton(
+                                icon: "camera.filters",
+                                label: String(localized: "call.filters.a11y", defaultValue: "Filtres video", bundle: .main)
+                            ) {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    showEffectsToolbar.toggle()
+                                }
+                            }
+                        }
+                        .padding(.bottom, 6)
+                    }
+                }
                 .position(x: base.x + pipDragOffset.width, y: base.y + pipDragOffset.height)
                 .gesture(
                     DragGesture()
@@ -853,7 +885,7 @@ struct CallView: View {
                         }
                 )
                 // §7.2 — tap PiP = swap which stream is full-screen (FaceTime).
-                // Camera flip lives in the control bar now (was here, undiscoverable).
+                // Camera flip also sits on the self-view frame itself.
                 .onTapGesture {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                         swapStreams.toggle()
@@ -863,6 +895,24 @@ struct CallView: View {
                 .accessibilityLabel(String(localized: "call.pip.swap", defaultValue: "Permuter les vidéos", bundle: .main))
                 .accessibilityHint(String(localized: "call.pip.swap.hint", defaultValue: "Touchez pour échanger la petite et la grande vidéo ; faites glisser pour déplacer", bundle: .main))
         }
+    }
+
+    /// Small circular control pinned to the local self-view frame (flip
+    /// camera, filters). Buttons win the hit-test over the frame's tap-to-swap
+    /// and drag gestures, so they stay usable on the 100×140 tile.
+    private func pipFrameButton(icon: String, label: String, action: @escaping () -> Void) -> some View {
+        Button {
+            action()
+            HapticFeedback.light()
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.white.opacity(0.95))
+                .frame(width: 28, height: 28)
+                .background(Color.black.opacity(0.45), in: Circle())
+                .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 0.5))
+        }
+        .accessibilityLabel(label)
     }
 
     /// True when the survival layer has auto-dropped our outbound video while the
@@ -1082,30 +1132,10 @@ struct CallView: View {
             }
 
             // Effects (Plus button) — label is state-aware so VoiceOver users
-            // hear the expected outcome (open vs. close) rather than a static noun.
-            // Video calls only: the overlay now offers video filters exclusively
-            // (voice-effects entry removed — dead pipeline, see CallEffectsOverlay),
-            // so exposing it in an audio call would open an empty panel.
-            if callManager.isVideoEnabled {
-                callControlButton(
-                    icon: showEffectsToolbar ? "xmark" : "plus",
-                    color: hasActiveEffects ? MeeshyColors.indigo500 : .white,
-                    bgColor: hasActiveEffects ? MeeshyColors.indigo500 : .white,
-                    isActive: showEffectsToolbar || hasActiveEffects,
-                    caption: String(localized: "call.control.effects", defaultValue: "Effets", bundle: .main),
-                    label: showEffectsToolbar
-                        ? String(localized: "call.control.effects.close", defaultValue: "Fermer les effets", bundle: .main)
-                        : String(localized: "call.control.effects.open", defaultValue: "Ouvrir les effets", bundle: .main),
-                    isToggle: true
-                ) {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showEffectsToolbar.toggle()
-                    }
-                }
-            }
-
-            // §7.1/§7.3 — camera control: front/back flip on iPhone, a named
-            // device picker (Continuity / USB) on Mac/iPad with multiple cameras.
+            // Effets/filtres et flip iPhone : déplacés SUR le cadre de la
+            // self-preview (pipFrameButton, retour user 2026-07-02) — plus de
+            // doublon dans la barre. Seul reste ici le picker multi-caméras
+            // Mac/iPad (Continuity/USB), sans équivalent sur le cadre.
             cameraControl
 
             // §5.4 — always visible so an AUDIO call can be upgraded to video
@@ -1165,22 +1195,14 @@ struct CallView: View {
     /// video is off, or on Mac with a single camera (flip would be a no-op).
     @ViewBuilder
     private var cameraControl: some View {
-        if callManager.isVideoEnabled {
-            if callManager.availableCameras.count > 1
-                && (isOnMac || callManager.availableCameras.contains(where: { $0.isExternal })) {
-                cameraPickerMenu
-            } else if !isOnMac {
-                callControlButton(
-                    icon: "camera.rotate.fill",
-                    color: .white,
-                    bgColor: .white,
-                    isActive: false,
-                    caption: String(localized: "call.control.flipCamera.caption", defaultValue: "Pivoter", bundle: .main),
-                    label: String(localized: "call.control.flipCamera", defaultValue: "Basculer la caméra avant/arrière", bundle: .main)
-                ) {
-                    callManager.switchCamera()
-                }
-            }
+        // Le flip avant/arrière iPhone vit désormais sur le cadre de la
+        // self-preview (pipFrameButton) ; la barre ne garde que le picker
+        // multi-caméras Mac/iPad (Continuity/USB), qui n'a pas d'équivalent
+        // sur le cadre.
+        if callManager.isVideoEnabled,
+           callManager.availableCameras.count > 1,
+           isOnMac || callManager.availableCameras.contains(where: { $0.isExternal }) {
+            cameraPickerMenu
         }
     }
 

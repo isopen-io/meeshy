@@ -209,6 +209,11 @@ struct MessageOverlayMenu: View {
             isPinned: message.pinnedAt != nil,
             isStarred: isStarred,
             isEdited: message.isEdited,
+            // Inerte ici : `menuContext` n'alimente que `primaryActions`, qui
+            // n'utilise PAS `hasEditRevisions`. Ce champ ne pilote que l'item
+            // `.history` de la feuille « Plus… », dont le contexte est construit
+            // séparément (ConversationView) avec la vraie valeur
+            // `!editRevisions(for:).isEmpty`.
             hasEditRevisions: true
         )
     }
