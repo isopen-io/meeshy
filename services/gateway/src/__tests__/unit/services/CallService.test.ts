@@ -109,7 +109,10 @@ const createMockPrisma = () => {
       findUnique: jest.fn() as MockFn,
       findFirst: jest.fn() as MockFn,
       update: jest.fn() as MockFn,
-      updateMany: jest.fn() as MockFn
+      // Version-guarded writes (updateCallStatus/initiateCall zombie cleanup)
+      // default to "lock won" so existing tests that don't exercise the race
+      // path are unaffected — mirrors conversation.updateMany's default above.
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }) as MockFn
     },
     callParticipant: {
       create: jest.fn() as MockFn,
@@ -494,15 +497,18 @@ describe('CallService', () => {
       });
       mockPrisma.callParticipant.findMany.mockResolvedValue([]); // No stale participations
       mockPrisma.callSession.findFirst.mockResolvedValue(zombieCall);
-      mockPrisma.callSession.update.mockResolvedValue({ ...zombieCall, status: CallStatus.ended });
+      mockPrisma.callSession.updateMany.mockResolvedValue({ count: 1 });
       mockPrisma.$transaction.mockResolvedValue(newCall);
       mockPrisma.callSession.findUnique.mockResolvedValue(newCall);
 
       const result = await callService.initiateCall(validInitiateData);
 
       expect(result.id).toBe('call-new');
-      expect(mockPrisma.callSession.update).toHaveBeenCalledWith({
-        where: { id: zombieCall.id },
+      // Status-guarded (see CallService.initiateCall's doc comment): scoped to
+      // status still in ACTIVE_STATUSES so a reconnecting last participant
+      // can't be force-ended out from under itself.
+      expect(mockPrisma.callSession.updateMany).toHaveBeenCalledWith({
+        where: { id: zombieCall.id, status: { in: expect.arrayContaining([CallStatus.active]) } },
         data: expect.objectContaining({
           status: CallStatus.ended,
           endReason: 'garbageCollected'
@@ -830,11 +836,11 @@ describe('CallService', () => {
       mockPrisma.$transaction.mockImplementation(async (callback: (tx: any) => Promise<void>) => {
         const mockTx = {
           callParticipant: { update: jest.fn() },
-          callSession: { update: jest.fn() }
+          callSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }
         };
         await callback(mockTx);
-        // Verify call session update was called with ended status
-        expect(mockTx.callSession.update).toHaveBeenCalledWith(
+        // Verify the version-guarded call session update was called with ended status
+        expect(mockTx.callSession.updateMany).toHaveBeenCalledWith(
           expect.objectContaining({
             data: expect.objectContaining({ status: CallStatus.ended })
           })
@@ -872,11 +878,11 @@ describe('CallService', () => {
       mockPrisma.$transaction.mockImplementation(async (callback: (tx: any) => Promise<void>) => {
         const mockTx = {
           callParticipant: { update: jest.fn() },
-          callSession: { update: jest.fn() }
+          callSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }
         };
         await callback(mockTx);
         // Verify call session update was NOT called (call should not end)
-        expect(mockTx.callSession.update).not.toHaveBeenCalled();
+        expect(mockTx.callSession.updateMany).not.toHaveBeenCalled();
       });
       mockPrisma.callSession.findUnique.mockResolvedValueOnce(callAfterLeave);
 
@@ -913,7 +919,7 @@ describe('CallService', () => {
       mockPrisma.$transaction.mockImplementation(async (callback: (tx: any) => Promise<void>) => {
         const mockTx = {
           callParticipant: { update: jest.fn() },
-          callSession: { update: jest.fn() }
+          callSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }
         };
         await callback(mockTx);
       });
@@ -1203,7 +1209,7 @@ describe('CallService', () => {
 
       await callService.endCall('call-123', 'user-123', 'participant-123');
 
-      const updateCall = mockPrisma.callSession.update.mock.calls[0];
+      const updateCall = mockPrisma.callSession.updateMany.mock.calls[0];
       expect(updateCall[0].data.status).toBe(CallStatus.missed);
       expect(updateCall[0].data.endReason).toBe(CallEndReason.missed);
       expect(updateCall[0].data.duration).toBe(0);
@@ -1235,7 +1241,7 @@ describe('CallService', () => {
 
       await callService.endCall('call-123', 'user-123', 'participant-123', false, 'rejected');
 
-      const updateCall = mockPrisma.callSession.update.mock.calls[0];
+      const updateCall = mockPrisma.callSession.updateMany.mock.calls[0];
       expect(updateCall[0].data.status).toBe(CallStatus.missed);
       expect(updateCall[0].data.endReason).toBe(CallEndReason.rejected);
     });
@@ -1266,7 +1272,7 @@ describe('CallService', () => {
 
       await callService.endCall('call-123', 'user-123', 'participant-123');
 
-      const updateCall = mockPrisma.callSession.update.mock.calls[0];
+      const updateCall = mockPrisma.callSession.updateMany.mock.calls[0];
       expect(updateCall[0].data.status).toBe(CallStatus.ended);
       expect(updateCall[0].data.endReason).toBe(CallEndReason.completed);
     });
@@ -1639,10 +1645,11 @@ describe('CallService - Edge Cases', () => {
       const mockTx = {
         callParticipant: { updateMany: jest.fn() },
         callSession: {
-          update: jest.fn().mockImplementation(({ data }) => {
+          updateMany: jest.fn().mockImplementation(({ data }) => {
             // Verify duration is approximately 60 seconds
             expect(data.duration).toBeGreaterThanOrEqual(59);
             expect(data.duration).toBeLessThanOrEqual(61);
+            return { count: 1 };
           })
         }
       };
@@ -2039,11 +2046,11 @@ describe('CallService - updateCallStatus', () => {
     mockPrisma.callSession.findUnique
       .mockResolvedValueOnce(activeCall)
       .mockResolvedValueOnce(endedCall);
-    mockPrisma.callSession.update.mockResolvedValue(endedCall);
+    mockPrisma.callSession.updateMany.mockResolvedValue({ count: 1 });
 
     await callService.updateCallStatus('call-123', CallStatus.ended, CallEndReason.completed);
 
-    expect(mockPrisma.callSession.update).toHaveBeenCalledWith(
+    expect(mockPrisma.callSession.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           status: CallStatus.ended,
@@ -2064,11 +2071,11 @@ describe('CallService - updateCallStatus', () => {
     mockPrisma.callSession.findUnique
       .mockResolvedValueOnce(activeCall)
       .mockResolvedValueOnce(endedCall);
-    mockPrisma.callSession.update.mockResolvedValue(endedCall);
+    mockPrisma.callSession.updateMany.mockResolvedValue({ count: 1 });
 
     await callService.updateCallStatus('call-123', CallStatus.ended);
 
-    const updateCall = mockPrisma.callSession.update.mock.calls[0] as any;
+    const updateCall = mockPrisma.callSession.updateMany.mock.calls[0] as any;
     // endReason should not be in data since none provided
     expect(updateCall[0].data).not.toHaveProperty('endReason');
   });
@@ -2085,11 +2092,11 @@ describe('CallService - updateCallStatus', () => {
     mockPrisma.callSession.findUnique
       .mockResolvedValueOnce(initiatedCall)
       .mockResolvedValueOnce(activeCall);
-    mockPrisma.callSession.update.mockResolvedValue(activeCall);
+    mockPrisma.callSession.updateMany.mockResolvedValue({ count: 1 });
 
     await callService.updateCallStatus('call-123', CallStatus.active);
 
-    expect(mockPrisma.callSession.update).toHaveBeenCalledWith(
+    expect(mockPrisma.callSession.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
           status: CallStatus.active,
@@ -2111,11 +2118,11 @@ describe('CallService - updateCallStatus', () => {
     mockPrisma.callSession.findUnique
       .mockResolvedValueOnce(alreadyAnswered)
       .mockResolvedValueOnce(activeCall);
-    mockPrisma.callSession.update.mockResolvedValue(activeCall);
+    mockPrisma.callSession.updateMany.mockResolvedValue({ count: 1 });
 
     await callService.updateCallStatus('call-123', CallStatus.active);
 
-    const updateCall = mockPrisma.callSession.update.mock.calls[0] as any;
+    const updateCall = mockPrisma.callSession.updateMany.mock.calls[0] as any;
     expect(updateCall[0].data).not.toHaveProperty('answeredAt');
   });
 });
@@ -2560,7 +2567,7 @@ describe('CallService - leaveCall idempotent paths', () => {
       txCalled = true;
       const tx = {
         callParticipant: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-        callSession: { update: jest.fn().mockResolvedValue({}) }
+        callSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }
       };
       return cb(tx);
     });
@@ -2602,7 +2609,7 @@ describe('CallService - leaveCall idempotent paths', () => {
       txCalled = true;
       const tx = {
         callParticipant: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
-        callSession: { update: jest.fn().mockResolvedValue({}) }
+        callSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }
       };
       return cb(tx);
     });
@@ -2642,9 +2649,9 @@ describe('CallService - leaveCall idempotent paths', () => {
       const tx = {
         callParticipant: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
         callSession: {
-          update: jest.fn().mockImplementation(({ data }: any) => {
+          updateMany: jest.fn().mockImplementation(({ data }: any) => {
             capturedData = data;
-            return {};
+            return { count: 1 };
           })
         }
       };
@@ -3052,10 +3059,10 @@ describe('CallService - leaveCall wasPreAnswered=false branch (active call)', ()
       const tx = {
         callParticipant: { update: jest.fn().mockResolvedValue({}) },
         callSession: {
-          update: jest.fn().mockImplementation(({ data }: any) => {
+          updateMany: jest.fn().mockImplementation(({ data }: any) => {
             capturedStatus = data.status;
             capturedReason = data.endReason;
-            return {};
+            return { count: 1 };
           })
         }
       };
@@ -3095,10 +3102,10 @@ describe('CallService - leaveCall wasPreAnswered=false branch (active call)', ()
       const tx = {
         callParticipant: { update: jest.fn().mockResolvedValue({}) },
         callSession: {
-          update: jest.fn().mockImplementation(({ data }: any) => {
+          updateMany: jest.fn().mockImplementation(({ data }: any) => {
             capturedStatus = data.status;
             capturedReason = data.endReason;
-            return {};
+            return { count: 1 };
           })
         }
       };
