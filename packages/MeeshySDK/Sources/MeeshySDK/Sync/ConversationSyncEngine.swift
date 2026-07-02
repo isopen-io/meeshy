@@ -172,13 +172,36 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         set { UserDefaults.standard.set(newValue, forKey: cleanupDateKey) }
     }
 
+    // P7-10 — checkpoint de la dernière réconciliation COMPLÈTE (fullSync).
+    // Le delta `?updatedSince=` est upsert-only : une conversation
+    // HARD-supprimée côté serveur n'y apparaît jamais (contrairement aux
+    // `isActive:false` que mergeDeltaConversations retire) → sans
+    // réconciliation périodique, un `conversation:deleted` raté (offline)
+    // laisse une ligne fantôme inouvrable à vie — le cache reste
+    // perpétuellement fresh/stale via les deltas, donc le fullSync de
+    // cold-start ne court jamais (observé E2E 2026-07-02 : « Test Conv »
+    // épinglée, absente du serveur, tuée uniquement par pull-to-refresh).
+    private let fullReconcileKey = "me.meeshy.lastFullReconcileAt"
+    private var lastFullReconcileAt: Date? {
+        get { UserDefaults.standard.object(forKey: fullReconcileKey) as? Date }
+        set { UserDefaults.standard.set(newValue, forKey: fullReconcileKey) }
+    }
+    /// Borne « données jamais rapatriées inutilement » : au plus UN full
+    /// refetch par fenêtre. 24 h par défaut ; injectable pour les tests.
+    private let fullReconcileInterval: TimeInterval
+
+    private var isFullReconcileDue: Bool {
+        Date().timeIntervalSince(lastFullReconcileAt ?? .distantPast) >= fullReconcileInterval
+    }
+
     init(
         cache: CacheCoordinator = .shared,
         conversationService: ConversationServiceProviding = ConversationService.shared,
         messageService: MessageServiceProviding = MessageService.shared,
         messageSocket: MessageSocketProviding = MessageSocketManager.shared,
         socialSocket: SocialSocketProviding = SocialSocketManager.shared,
-        api: APIClientProviding = APIClient.shared
+        api: APIClientProviding = APIClient.shared,
+        fullReconcileInterval: TimeInterval = 86_400
     ) {
         self.cache = cache
         self.conversationService = conversationService
@@ -186,6 +209,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         self.messageSocket = messageSocket
         self.socialSocket = socialSocket
         self.api = api
+        self.fullReconcileInterval = fullReconcileInterval
     }
 
     // MARK: - Full Sync (cold start)
@@ -281,6 +305,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         // pagination convention).
         if let total = totalCount, total <= firstPage.count {
             lastSyncTimestamp = Date()
+            lastFullReconcileAt = Date()
             return true
         }
         if totalCount == nil && firstPageReturnedCount < pageSize {
@@ -474,6 +499,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
         if succeeded {
             lastSyncTimestamp = Date()
+            lastFullReconcileAt = Date()
         }
         return succeeded
     }
@@ -482,6 +508,21 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
     @discardableResult
     public func syncSinceLastCheckpoint() async -> Bool {
+        let ok = await deltaSyncCore()
+        // P7-10 — réconciliation complète périodique, chaînée APRÈS le delta
+        // (hors du garde `isSyncing` que le corps tient) : fullSync remplace
+        // la liste par la vérité serveur → purge les fantômes hard-supprimés
+        // que le delta upsert-only ne peut pas voir. Bornée à 1× par
+        // `fullReconcileInterval` (24 h) — le delta reste le chemin nominal
+        // bon marché. Seulement sur delta RÉUSSI : offline/panne, on garde
+        // le cache intact (local-first) et on retentera au prochain delta.
+        if ok && isFullReconcileDue {
+            await fullSync()
+        }
+        return ok
+    }
+
+    private func deltaSyncCore() async -> Bool {
         guard !isSyncing else { return true }
         // Throttle bursts: when several signals (socket reconnect,
         // foreground return, cache-stale revalidate) fire within the
