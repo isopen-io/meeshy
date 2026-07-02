@@ -68,6 +68,11 @@ export function useCallSignaling(options: UseCallSignalingOptions) {
     onError,
   });
 
+  // CALL-RESILIENCE — tracks whether we've already observed the socket's first
+  // `connect`. Any subsequent `connect` is a RECONNECT (network blip or gateway
+  // restart), which must re-enter the call room — see the reconnect handler.
+  const hasConnectedRef = useRef(false);
+
   // Update handlers ref when they change
   useEffect(() => {
     handlersRef.current = {
@@ -172,6 +177,44 @@ export function useCallSignaling(options: UseCallSignalingOptions) {
           reject(err);
         }
       });
+    });
+  }, [callId]);
+
+  /**
+   * CALL-RESILIENCE — re-enter the call room after the signaling socket
+   * reconnects (network blip or gateway restart). The peer-to-peer MEDIA
+   * survives such a drop untouched, so this does NOT recreate the
+   * RTCPeerConnection: it only re-emits `call:join` so the gateway puts this
+   * socket back in the call room and relayed signaling (ICE, renegotiation,
+   * call:ended) reaches us again. `joinCall` is idempotent for an existing
+   * participant server-side (it returns current state without re-applying
+   * settings). If the call actually ended while we were disconnected, the join
+   * is rejected with CALL_ENDED and we tear the UI down. Mirrors iOS
+   * CallManager's `didReconnect` re-join.
+   */
+  const rejoinAfterReconnect = useCallback(() => {
+    const socket = meeshySocketIOService.getSocket();
+    if (!socket) return;
+
+    socket.emit(CLIENT_EVENTS.CALL_JOIN, {
+      callId,
+      settings: { audioEnabled: true, videoEnabled: true },
+    }, (ack: CallJoinAck) => {
+      if (ack.success) {
+        logger.info('[useCallSignaling]', 'Re-joined call room after reconnect', { callId });
+        return;
+      }
+      if (ack.error?.code === 'CALL_ENDED') {
+        logger.warn('[useCallSignaling]', 'Call ended while disconnected — tearing down', { callId });
+        handlersRef.current.onCallEnded?.({
+          callId,
+          duration: 0,
+          endedBy: '',
+          reason: 'completed',
+        } as CallEndedEvent);
+        return;
+      }
+      logger.warn('[useCallSignaling]', 'Re-join after reconnect failed', { callId, error: ack.error });
     });
   }, [callId]);
 
@@ -287,7 +330,22 @@ export function useCallSignaling(options: UseCallSignalingOptions) {
       handlersRef.current.onError?.(new Error(error.message || 'Call error'));
     };
 
+    // CALL-RESILIENCE — a `connect` event AFTER the first one is a reconnect
+    // (Socket.IO reuses the same Socket instance and re-fires `connect`). Mark
+    // the initial connect (already connected at mount, or the first connect we
+    // observe) and only re-join the call room on subsequent reconnects.
+    hasConnectedRef.current = socket.connected === true;
+    const handleConnect = () => {
+      if (!hasConnectedRef.current) {
+        hasConnectedRef.current = true;
+        return;
+      }
+      logger.info('[useCallSignaling]', 'Socket reconnected — re-joining call room', { callId });
+      rejoinAfterReconnect();
+    };
+
     // Register listeners
+    socket.on('connect', handleConnect);
     socket.on(SERVER_EVENTS.CALL_SIGNAL, handleSignal);
     socket.on(SERVER_EVENTS.CALL_INITIATED, handleCallInitiated);
     socket.on(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, handleParticipantJoined);
@@ -299,6 +357,7 @@ export function useCallSignaling(options: UseCallSignalingOptions) {
     logger.info('[useCallSignaling]', 'Socket listeners registered', { callId });
 
     return () => {
+      socket.off('connect', handleConnect);
       socket.off(SERVER_EVENTS.CALL_SIGNAL, handleSignal);
       socket.off(SERVER_EVENTS.CALL_INITIATED, handleCallInitiated);
       socket.off(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, handleParticipantJoined);
@@ -309,7 +368,7 @@ export function useCallSignaling(options: UseCallSignalingOptions) {
 
       logger.debug('[useCallSignaling]', 'Socket listeners cleaned up', { callId });
     };
-  }, [callId]);
+  }, [callId, rejoinAfterReconnect]);
 
   return {
     sendSignal,
