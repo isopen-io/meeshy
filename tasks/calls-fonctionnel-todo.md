@@ -482,38 +482,34 @@ lecture attentive + tests source-guard, CI `ios-tests` macOS reste le juge final
 dédié a re-vérifié les 3 pistes iOS + les 2 claims de dead code sur le code RÉEL (pas les numéros de ligne
 périmés du backlog) avant tout fix.
 
-- **[FIX iOS, HIGH] CallKit jamais informé sur téardown `.failed(...)`** — confirmé plus large que prévu :
-  ~11 call sites passent `endCallInternal(reason: .failed(...))` sans jamais appeler
-  `callProvider.reportCall`, contre 6 sites qui le font correctement pour les autres raisons
-  (`.rejected`/`.remote`/`.missed`/`.connectionLost`). Fix centralisé (plutôt que patché à chaque site) :
-  `endCallInternal` reporte lui-même `.failed` à CallKit juste avant `activeCallUUID = nil`, gated sur
-  `case .failed = reason` — sûr car aucun site qui reporte déjà avant d'appeler `endCallInternal` n'utilise
-  la raison `.failed`. Sans ce fix : carte d'appel CallKit bloquée en "ringing"/entrée Recents fantôme.
-- **[FIX iOS, HIGH] TURN perdu sur « End & Answer waiting call »** — `pendingIncomingCall` ne portait pas
-  `iceServers` malgré que les deux sites qui le peuplent (`reportIncomingVoIPCall` VoIP-push busy path,
-  `handleIncomingCallNotification` foreground busy path) reçoivent déjà ce paramètre. Fix : champ
-  `iceServers: [IceServer]?` ajouté au tuple, capturé aux 2 sites d'écriture, transmis par
-  `endCurrentAndAnswerPending()` au lieu de laisser `handleIncomingCallNotification` défaulter à `nil`
-  (`webRTCService.configure(iceServers: nil)`, appel sans TURN).
-- **[FIX iOS, MED] Banner call-waiting jamais nettoyé si l'appelant du 2nd appel raccroche avant réponse**
-  — ni `socket.callEnded` ni `socket.callMissed` ne vérifiaient `pendingIncomingCall?.callId` (seul
-  `currentCallId` était comparé, jamais vrai pour un appel encore pending) — banner fantôme pointant vers
-  un `callId` déjà clos côté gateway. Fix : les deux sinks clearent `pendingIncomingCall`/
-  `showCallWaitingBanner` quand `event.callId` matche le pending, en plus de leur logique existante.
-- **[CLEANUP iOS] Dead code confirmé et supprimé** — `WebRTCService.handleRemoteAudioMuted` (0 appelant
-  prod, `comfortNoiseEnabled` devenu mort avec lui) et `setMaxAudioBitrate` (protocole
-  `WebRTCClientProviding` + impl réelle `P2PWebRTCClient` + stub `#else`, 0 appelant prod, superseded par
-  `applyAudioEncoding` — confirmé par grep exhaustif, pas de `| head` tronqué cf. leçon #39).
-- **[BUG TROUVÉ EN PASSANT, iOS] Stub `#else` (WebRTC non résolu) ne compilait déjà plus** — en retirant
-  `setMaxAudioBitrate` du stub `#else` de `P2PWebRTCClient`, découverte que ce même stub n'implémentait ni
-  `applyAudioEncoding` (requirement du protocole) ni `videoFilterPipeline` (requirement `{ get }`) — un
-  gap de conformité protocole pré-existant, invisible ici car ce chemin ne compile QUE quand le package
-  SPM WebRTC n'est pas résolu (CI sans WebRTC, cf. leçon iOS 2026-06-01 sur `WebRTCStubs.swift`). Corrigé
-  dans la même passe (2 lignes, miroir exact des no-op déjà présents pour `applyVideoEncoding`).
-  Tests : 6 nouveaux tests source-guard `CallManagerTests.swift` (CallKit report + TURN threading + banner
-  cleanup ×2), 3 nouveaux tests source-guard `WebRTCServiceTests.swift` (conformité stub `#else`). Non
-  recompilé localement (pas de toolchain Swift ici) — CI `ios-tests` reste le garde-fou, comme toutes les
-  sessions iOS précédentes de ce backlog.
+- **[FIX iOS, HIGH×2 + MED, CONVERGENCE]** Cette session a indépendamment trouvé et corrigé les 3 mêmes
+  bugs iOS (CallKit jamais informé sur téardown `.failed(...)`, TURN perdu sur « End & Answer waiting
+  call », banner call-waiting jamais nettoyé sur raccroché précoce du 2e appelant) qu'une session parallèle
+  (commit `8141e2d`, environnement macOS+Xcode réel, `MeeshyTests` COMPLET vert) a mergée sur `main` en
+  premier — mêmes root causes, mêmes fichiers, diagnostics quasi identiques. `git merge origin/main` a
+  produit des conflits sur `CallManager.swift`/`P2PWebRTCClient.swift`/`WebRTCService.swift`/2 fichiers de
+  test ; résolus en prenant la version `main` (vérifiée compilée+testée sur device réel, plus complète —
+  inclut aussi un indicateur "signaling dégradé" et un fix `CallAudioEffectsService` hors scope de cette
+  session) plutôt qu'en tentant de réconcilier deux implémentations divergentes du même fix. Les tests
+  source-guard écrits ici pour ces 3 bugs (`CallWaitingPendingCallTests`,
+  `EndCallInternalFailedReasonReportsToCallKitTests`) ont été supprimés après vérification qu'ils
+  échoueraient contre l'implémentation réellement mergée (`failCall(_:)` + `clearPendingIncomingCall(ifMatching:)`,
+  une architecture différente de la mienne) — `main` porte déjà une couverture équivalente
+  (`CallWaitingAndFailureTeardownTests`).
+- **[CLEANUP iOS, CONVERGENCE]** Même chose pour le dead code `WebRTCService.handleRemoteAudioMuted`/
+  `comfortNoiseEnabled` et `setMaxAudioBitrate` (protocole + impl réelle) — déjà supprimés par `8141e2d`.
+- **[BUG RÉEL RESTANT, iOS] Stub `#else` (WebRTC non résolu) toujours cassé après le merge** —
+  `8141e2d` a bien retiré `setMaxAudioBitrate` du stub `#else` de `P2PWebRTCClient` mais n'a PAS ajouté les
+  2 requirements manquants découverts cette session (`applyAudioEncoding`, `videoFilterPipeline`) — un gap
+  de conformité protocole resté réel après le merge, toujours invisible en CI normale (ce chemin ne compile
+  QUE quand le package SPM WebRTC n'est pas résolu). Réappliqué après le merge (2 lignes, miroir exact des
+  no-op déjà présents pour `applyVideoEncoding`). Seule contribution iOS de code de cette session qui
+  survit au merge ; test source-guard dédié conservé (`P2PWebRTCClientFallbackConformanceSourceGuardTests`,
+  `WebRTCServiceTests.swift`, pas de duplicat côté `main`). Non recompilé localement (pas de toolchain
+  Swift ici) — CI `ios-tests` reste le garde-fou.
+- **Leçon pour la prochaine session** : plusieurs instances de cette routine tournent en parallèle sur le
+  même backlog calling-feature et convergent régulièrement vers les mêmes bugs — toujours `git fetch origin
+  main` et comparer AVANT de pousser une grosse session de fixes iOS, pas seulement à la fin.
 
 - **[BUG TROUVÉ + CORRIGÉ, gateway, TDD] `CallService.endCall()` : idempotence incomplète (missed/rejected
   → écrasé en `ended`)** — trouvé en auditant le voisinage du fix C3/C4 (guard `updateCallStatus`/

@@ -1614,6 +1614,7 @@ final class P2PWebRTCClient: WebRTCClientProviding {
     func toggleAudio(_ enabled: Bool) {}
     func toggleVideo(_ enabled: Bool) {}
     func applyVideoEncoding(maxBitrateBps: Int, maxFramerate: Int, scaleResolutionDownBy: Double) {}
+    func applyAudioEncoding(maxBitrateBps: Int) {}
     var hasLocalVideoTrack: Bool { false }
     func enableLocalVideo() async throws -> Bool { throw WebRTCError.notSupported }
     func disableLocalVideo() async -> Bool { false }
@@ -1627,6 +1628,7 @@ final class P2PWebRTCClient: WebRTCClientProviding {
     func disconnect() {}
 
     var audioEffectsService: CallAudioEffectsServiceProviding? { nil }
+    var videoFilterPipeline = VideoFilterPipeline()
     func setAudioEffect(_ effect: AudioEffectConfig?) throws { throw WebRTCError.notSupported }
     func updateAudioEffectParams(_ config: AudioEffectConfig) throws { throw WebRTCError.notSupported }
 }
