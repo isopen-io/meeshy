@@ -270,6 +270,22 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertTrue(fetched[0].isEdited)
     }
 
+    func test_markEdited_ignoresOutOfOrderStaleEdit() async throws {
+        let record = MessageRecordFactory.make(localId: "edit_stale", content: "Original")
+        try await actor.insertOptimistic(record)
+
+        let newer = Date()
+        let older = newer.addingTimeInterval(-60)
+
+        // Newer edit applies first, then a stale/delayed duplicate delivery
+        // of an older edit arrives — it must not clobber the newer content.
+        try await actor.markEdited(localId: "edit_stale", newContent: "Newer edit", editedAt: newer)
+        try await actor.markEdited(localId: "edit_stale", newContent: "Stale edit", editedAt: older)
+
+        let fetched = try actor.messages(for: "conv_default", limit: 10)
+        XCTAssertEqual(fetched[0].content, "Newer edit")
+    }
+
     func test_markDeleted_clearsContentAndSetsTimestamp() async throws {
         let record = MessageRecordFactory.make(localId: "del_1", content: "Delete me")
         try await actor.insertOptimistic(record)

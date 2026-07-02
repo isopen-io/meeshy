@@ -621,10 +621,20 @@ public actor MessagePersistenceActor {
 
     public func markEdited(localId: String, newContent: String, editedAt: Date) throws {
         var affectedConversationId: String?
+        var didApply = false
         try dbWriter.write { db in
-            affectedConversationId = try MessageRecord
+            guard let existing = try MessageRecord
                 .filter(Column("localId") == localId || Column("serverId") == localId)
-                .fetchOne(db)?.conversationId
+                .fetchOne(db)
+            else { return }
+            // Ordering guard: `message:edited` carries no monotonic sequence, so a
+            // delayed/duplicate socket delivery can arrive after a newer edit was
+            // already applied. Comparing against the stored `editedAt` stops a
+            // stale edit from permanently clobbering the current content.
+            if let currentEditedAt = existing.editedAt, editedAt < currentEditedAt {
+                return
+            }
+            affectedConversationId = existing.conversationId
             try db.execute(
                 sql: """
                     UPDATE messages SET content = ?, isEdited = 1, editedAt = ?,
@@ -633,8 +643,9 @@ public actor MessagePersistenceActor {
                     """,
                 arguments: [newContent, editedAt, Date(), localId, localId]
             )
+            didApply = true
         }
-        if let convId = affectedConversationId {
+        if didApply, let convId = affectedConversationId {
             postMessageStoreRefresh(conversationIds: [convId])
         }
     }

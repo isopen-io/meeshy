@@ -477,6 +477,46 @@ describe('useSocketCacheSync', () => {
       expect(updatedMessage?.content).toBe('Edited content');
       expect(updatedMessage?.isEdited).toBe(true);
     });
+
+    it('should ignore a stale out-of-order edit older than the currently cached edit', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+        pages: [{ messages: mockMessages, hasMore: false, total: 2 }],
+        pageParams: [1],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      const newerEdit = {
+        ...mockMessages[0],
+        content: 'Newer edit',
+        isEdited: true,
+        editedAt: new Date('2024-06-01T12:00:00Z'),
+      };
+      const staleEdit = {
+        ...mockMessages[0],
+        content: 'Stale edit',
+        isEdited: true,
+        editedAt: new Date('2024-06-01T11:00:00Z'),
+      };
+
+      act(() => {
+        messageEditedCallback?.(newerEdit);
+      });
+      act(() => {
+        // Simulates a reordered/delayed duplicate delivery of an older edit
+        // arriving after the newer one was already applied.
+        messageEditedCallback?.(staleEdit);
+      });
+
+      const cachedData = queryClient.getQueryData(['messages', 'list', 'conv-1', 'infinite']) as {
+        pages: { messages: Message[] }[];
+      };
+
+      const updatedMessage = cachedData.pages[0].messages.find((m) => m.id === 'msg-1');
+      expect(updatedMessage?.content).toBe('Newer edit');
+    });
   });
 
   describe('Message Deleted Handler', () => {
