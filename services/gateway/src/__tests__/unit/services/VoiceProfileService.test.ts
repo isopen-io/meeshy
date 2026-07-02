@@ -28,9 +28,11 @@ jest.mock('fs', () => ({
   }
 }));
 
-// Mock crypto module
+// Mock crypto module (mockRandomUUID resettable per-test so concurrent calls can
+// simulate distinct request IDs, as real crypto.randomUUID() would produce)
+const mockRandomUUID = jest.fn(() => 'test-uuid-1234');
 jest.mock('crypto', () => ({
-  randomUUID: () => 'test-uuid-1234'
+  randomUUID: () => mockRandomUUID()
 }));
 
 // Mock logger-enhanced to prevent fs.write errors in tests
@@ -790,8 +792,8 @@ describe('VoiceProfileService', () => {
       expect(mockPrisma.userVoiceModel.update).toHaveBeenCalledWith({
         where: { userId: 'user-123' },
         data: expect.objectContaining({
-          audioCount: 3,
-          totalDurationMs: 45000
+          audioCount: { increment: 1 },
+          totalDurationMs: { increment: 15000 }
         })
       });
     });
@@ -848,9 +850,55 @@ describe('VoiceProfileService', () => {
       expect(mockPrisma.userVoiceModel.update).toHaveBeenCalledWith({
         where: { userId: 'user-123' },
         data: expect.objectContaining({
-          version: 4
+          version: { increment: 1 }
         })
       });
+    });
+
+    it('should use atomic increments so two concurrent calibrations reading the same stale audioCount do not lose an update', async () => {
+      // Both calls read the SAME stale snapshot (audioCount: 1) because the second
+      // findUnique happens before the first call's slow ZMQ round-trip resolves.
+      const mockVoiceModel = createMockVoiceModel({ audioCount: 1, totalDurationMs: 15000, version: 1 });
+      mockPrisma.userVoiceModel.findUnique.mockResolvedValue(mockVoiceModel);
+      mockPrisma.userVoiceModel.update.mockResolvedValue(mockVoiceModel);
+
+      // Distinct request IDs per call, as real crypto.randomUUID() would produce.
+      mockRandomUUID.mockImplementationOnce(() => 'req-a').mockImplementationOnce(() => 'req-b');
+
+      let callCount = 0;
+      mockZmqClient.sendVoiceProfileRequest.mockImplementation(async (req: { request_id: string }) => {
+        callCount += 1;
+        const isFirstCall = callCount === 1;
+        setTimeout(() => {
+          mockZmqClient.emit('voiceProfileAnalyzeResult', createMockZmqAnalyzeResult({
+            request_id: req.request_id,
+            audio_duration_ms: isFirstCall ? 5000 : 8000
+          }));
+        }, isFirstCall ? 20 : 5);
+      });
+
+      await Promise.all([
+        service.calibrateProfile('user-123', {
+          audioData: 'base64-audio-a',
+          audioFormat: 'wav',
+          replaceExisting: false
+        }),
+        service.calibrateProfile('user-123', {
+          audioData: 'base64-audio-b',
+          audioFormat: 'wav',
+          replaceExisting: false
+        })
+      ]);
+
+      expect(mockPrisma.userVoiceModel.update).toHaveBeenCalledTimes(2);
+      for (const call of mockPrisma.userVoiceModel.update.mock.calls) {
+        const data = (call[0] as { data: Record<string, unknown> }).data;
+        // Must be Prisma atomic operators, never a JS-computed absolute value derived
+        // from the stale `voiceModel` snapshot read before the ZMQ await.
+        expect(data.audioCount).toEqual({ increment: 1 });
+        expect(data.version).toEqual({ increment: 1 });
+        expect(data.totalDurationMs).toEqual(expect.objectContaining({ increment: expect.any(Number) }));
+      }
     });
 
     it('should handle calibration failure from ZMQ', async () => {
