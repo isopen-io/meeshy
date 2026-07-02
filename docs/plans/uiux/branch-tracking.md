@@ -14,6 +14,20 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 118i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> - **118i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `f07928f1`)** :
+>   Dynamic Type + a11y de `ConversationView+MessageRow` (affordances de conversation). **14/16**
+>   `.font(.system(size:))` → `MeeshyFont.relative` (recherche glyphe/champ/croix/Fermer, bannière
+>   résultats, pilule « Messages récents », barre d'échec Échec/Réessayer/Supprimer, pilule de
+>   réponses). **2 glyphes figés** : icône + micro-label du `messageActionButton` dans un cadre tap
+>   fixe 60×44 (doctrine 82i ; bouton déjà `accessibilityLabel` → VoiceOver complet). 1 fichier,
+>   0 logique, 0 test/clé i18n neuve. 0 contention iOS. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `ConversationView+MessageRow` Dynamic Type + a11y SOLDÉ** : ne plus reprendre les 2 glyphes
+>   figés du bouton d'action (cadre fixe 60×44).
+> - **Base de départ 119i : `main` HEAD**. Gros lots restants : `StoryViewerView+Content` (⚠️ i18n +
+>   piège `@State private` cross-file), `ConversationView+Composer` (lot critique prudent),
+>   `BubbleStandardLayout+Media`, `ConversationAnimatedBackground`. `FeedPostCard` (9) = chrome d'action-bar → gel documenté.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 117i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
 > - **117i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `9077eea6`)** :
 >   Dynamic Type + a11y de `StoryViewerView+Canvas` (canvas du viewer de stories). **10/13**
