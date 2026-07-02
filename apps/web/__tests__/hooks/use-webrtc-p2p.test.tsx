@@ -147,6 +147,8 @@ describe('useWebRTCP2P', () => {
     mockCreatePeerConnection.mockReturnValue(mockPeerConnection);
     mockCreateOffer.mockResolvedValue({ type: 'offer', sdp: 'offer-sdp' });
     mockCreateAnswer.mockResolvedValue({ type: 'answer', sdp: 'answer-sdp' });
+    mockHandleRenegotiationOffer.mockResolvedValue(undefined);
+    mockSetRemoteAnswer.mockResolvedValue(undefined);
 
     // Suppress console warnings
     jest.spyOn(console, 'warn').mockImplementation(() => {});
@@ -470,6 +472,51 @@ describe('useWebRTCP2P', () => {
       expect(mockSetRemoteAnswer).toHaveBeenCalledWith(
         expect.objectContaining({ type: 'answer', sdp: 'reanswer-sdp' })
       );
+    });
+  });
+
+  describe('Duplicate initial offer (reconnect-replay race)', () => {
+    const getSignalHandler = () => {
+      const call = [...mockOn.mock.calls].reverse().find((c) => c[0] === SERVER_EVENTS.CALL_SIGNAL);
+      return call?.[1] as (event: any) => void;
+    };
+
+    it('drops a second initial offer from the same peer that arrives while the first is still awaiting local media', async () => {
+      // The gateway relays an offer live AND buffers it for replay on the
+      // sender's next call:join (socket-churn reconnect recovery) — the same
+      // tab can receive the same initial offer twice. Simulate that by
+      // holding getLocalStream pending so handleOffer hasn't yet reached
+      // createPeerConnection when the duplicate arrives.
+      let resolveStream: (stream: MediaStream) => void = () => {};
+      mockGetLocalStream.mockReturnValue(
+        new Promise<MediaStream>((resolve) => {
+          resolveStream = resolve;
+        })
+      );
+
+      renderHook(() => useWebRTCP2P({ callId: mockCallId, userId: mockUserId }));
+      const signalHandler = getSignalHandler();
+
+      act(() => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'offer', from: mockTargetUserId, to: mockUserId, sdp: 'offer-sdp' },
+        });
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'offer', from: mockTargetUserId, to: mockUserId, sdp: 'offer-sdp-dup' },
+        });
+      });
+
+      await act(async () => {
+        resolveStream(mockMediaStream);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      // Only one RTCPeerConnection must ever be created for this peer — a
+      // second call would silently orphan the first (never-closed) one.
+      expect(mockCreatePeerConnection).toHaveBeenCalledTimes(1);
     });
   });
 

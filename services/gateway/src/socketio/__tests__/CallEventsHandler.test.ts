@@ -1715,12 +1715,34 @@ describe('CallEventsHandler', () => {
       expect(socket.emit).toHaveBeenCalledWith('call:error', expect.any(Object));
     });
 
-    it('emits error and clears ringing on joinCall failure', async () => {
+    it('emits error on joinCall failure without touching the ringing timer', async () => {
       mockCallServiceJoinCall.mockRejectedValue(new Error('JOIN_FAIL: server error'));
       const { socket } = setupWithSocket();
       await socket._trigger('call:join', validData);
       expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({ code: 'JOIN_FAIL' }));
-      expect(mockCallServiceClearRingingTimeout).toHaveBeenCalledWith(CALL_ID);
+      // A failed join (e.g. a third party racing a full P2P call) must not
+      // clear a ringing timer that legitimately belongs to the real
+      // participants — see the item-F regression test below for the
+      // success-path case this guards against.
+      expect(mockCallServiceClearRingingTimeout).not.toHaveBeenCalled();
+    });
+
+    it('item F regression: does NOT clear the ringing timeout on a successful early-join while the call is still ringing', async () => {
+      // The callee's client early-joins as soon as the incoming call starts
+      // ringing (it must, to receive the SDP offer) — well before the human
+      // taps "answer". Clearing the ringing timeout here would silently
+      // disable the 60s no-answer protection, including for a timer
+      // re-armed by boot rehydration after a mid-ring gateway restart.
+      const participant = makeParticipant();
+      const ringingSession = makeCallSession({ participants: [participant], status: 'ringing' });
+      mockCallServiceJoinCall.mockResolvedValue({ callSession: ringingSession, iceServers: [] });
+
+      const { socket, io } = setupWithSocket();
+      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
+
+      await socket._trigger('call:join', validData);
+
+      expect(mockCallServiceClearRingingTimeout).not.toHaveBeenCalled();
     });
 
     it('skips the participant-joined ICE push when getUserId returns undefined (never emits a TURN-less STUN-only config)', async () => {

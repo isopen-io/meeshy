@@ -1494,15 +1494,22 @@ export class CallEventsHandler {
           code: errorCode,
           message
         } as CallError);
-      } finally {
-        // Audit 2026-05-11 — guarantee timer cleanup even if joinCall (or
-        // any of the post-transaction work above) throws. clearRingingTimeout
-        // is idempotent — safe to call when the timer was never scheduled
-        // (e.g. early auth/rate-limit/validation rejection above).
-        if (data?.callId) {
-          this.callService.clearRingingTimeout(data.callId);
-        }
       }
+      // Audit 2026-07-02 (item F follow-up) — deliberately NOT clearing the
+      // ringing timeout here. `joinCall` now transitions initiated/ringing
+      // calls to `ringing`, not `active`: the callee's client early-joins
+      // the call room as soon as it starts ringing (it must, to receive the
+      // SDP offer), well before the human taps "answer". Clearing the timer
+      // on every join — including this early one, and a rehydrated timer
+      // after a mid-ring gateway restart — silently disabled the 60s
+      // no-answer protection (a call would then ring server-side forever,
+      // or until the much coarser 120s heartbeat GC tier reaped it). The
+      // real answer is `call:signal` with `signal.type === 'answer'`, which
+      // already clears the timer there. Every terminal transition
+      // (endCall/leaveCall/markCallAsMissed/forceEndCall) clears it too. The
+      // timeout callback itself is status-guarded (atomic `updateMany`
+      // scoped to initiated/ringing), so leaving it armed across a join is
+      // safe even in the ordinary case where the call is answered normally.
     });
 
     /**
