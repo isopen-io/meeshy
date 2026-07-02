@@ -152,15 +152,16 @@ describe('CallEventsHandler — call:transcription-segment relay', () => {
     (validateSocketEvent as jest.MockedFunction<any>).mockReturnValue({ success: true });
     mockCheckSocketRateLimit.mockClear();
     mockCheckSocketRateLimit.mockResolvedValue(true);
-    // Default: no active call participant — each scenario opts in via
-    // activeCallSession(userId) when it needs authorization to succeed.
+    // Default: no active call participant — scenarios that construct
+    // CallEventsHandler without an explicit CallService fall through to this
+    // module-mocked getCallSession and opt in by overriding it; scenarios
+    // that pass makeCallService() explicitly bypass this mock entirely.
     mockGetCallSession.mockReset();
     mockGetCallSession.mockResolvedValue({ participants: [] });
   });
 
   describe('rate limiting', () => {
     it('checks the rate limit before relaying a segment', async () => {
-      mockGetCallSession.mockResolvedValue(activeCallSession(SPEAKER_ID));
       const prisma = makePrisma({
         callSessionFindUnique: jest.fn<any>().mockResolvedValue({ status: 'active', metadata: null }),
       });
