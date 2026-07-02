@@ -109,11 +109,15 @@ describe('ReactionService', () => {
         create: jest.fn(),
         findFirst: jest.fn(),
         findMany: jest.fn(),
-        deleteMany: jest.fn()
+        deleteMany: jest.fn(),
+        // Compteur autoritaire lu dans updateMessageReactionSummary.
+        count: jest.fn().mockResolvedValue(1)
       },
       participant: {
         findMany: jest.fn().mockResolvedValue([])
-      }
+      },
+      // $transaction executes the callback with a transaction client (same shape).
+      $transaction: jest.fn()
     };
 
     // Create service instance
@@ -145,6 +149,17 @@ describe('ReactionService', () => {
       mockPrisma.reaction.findMany.mockResolvedValue([]);
       mockPrisma.reaction.findFirst.mockResolvedValue(null);
       mockPrisma.reaction.create.mockResolvedValue(createMockReaction());
+      mockPrisma.message.update.mockResolvedValue(createMockMessage());
+      // Wire $transaction to execute callback with a tx that delegates to the same mocks
+      mockPrisma.$transaction.mockImplementation((fn: (tx: any) => Promise<unknown>) => {
+        return fn({
+          message: {
+            findUnique: mockPrisma.message.findUnique,
+            update: mockPrisma.message.update
+          },
+          reaction: { count: mockPrisma.reaction.count }
+        });
+      });
     });
 
     it('should add a reaction successfully for authenticated user', async () => {
@@ -350,7 +365,7 @@ describe('ReactionService', () => {
       expect(result).toBeDefined();
       expect(result?.id).toBe(existingReaction.id);
       // The race winner already updated the summary — the loser must not double-count it.
-      expect(mockPrisma.message.update).not.toHaveBeenCalled();
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
     });
 
     it('should rethrow non-P2002 database errors from the create call', async () => {
@@ -391,6 +406,17 @@ describe('ReactionService', () => {
   describe('removeReaction', () => {
     beforeEach(() => {
       mockPrisma.reaction.deleteMany.mockResolvedValue({ count: 1 });
+      mockPrisma.message.findUnique.mockResolvedValue(createMockMessage());
+      mockPrisma.message.update.mockResolvedValue(createMockMessage());
+      mockPrisma.$transaction.mockImplementation((fn: (tx: any) => Promise<unknown>) => {
+        return fn({
+          message: {
+            findUnique: mockPrisma.message.findUnique,
+            update: mockPrisma.message.update
+          },
+          reaction: { count: mockPrisma.reaction.count }
+        });
+      });
     });
 
     it('should remove a reaction successfully for authenticated user', async () => {
@@ -449,6 +475,90 @@ describe('ReactionService', () => {
       });
 
       expect(result).toBe(false);
+    });
+  });
+
+  // ==============================================
+  // UPDATE MESSAGE REACTION SUMMARY — TRANSACTION + AUTHORITATIVE COUNT
+  // ==============================================
+  // Regression coverage for the lost-update race: two concurrent reaction:add/remove
+  // events on the same message used to read-modify-write `reactionCount` in plain JS,
+  // so the second write clobbered the first. Fixed by mirroring
+  // PostReactionService/CommentReactionService: wrap in $transaction and recompute
+  // `reactionCount` from the `Reaction` table (authoritative, self-healing) instead of
+  // incrementing/decrementing a denormalized counter.
+
+  describe('updateMessageReactionSummary — uses $transaction', () => {
+    beforeEach(() => {
+      mockPrisma.message.findUnique.mockResolvedValue(createMockMessage());
+      mockPrisma.reaction.findMany.mockResolvedValue([]);
+      mockPrisma.reaction.findFirst.mockResolvedValue(null);
+      mockPrisma.reaction.create.mockResolvedValue(createMockReaction());
+      mockPrisma.message.update.mockResolvedValue(createMockMessage());
+      mockPrisma.$transaction.mockImplementation((fn: (tx: any) => Promise<unknown>) => {
+        return fn({
+          message: {
+            findUnique: mockPrisma.message.findUnique,
+            update: mockPrisma.message.update
+          },
+          reaction: { count: mockPrisma.reaction.count }
+        });
+      });
+    });
+
+    it('should wrap the summary update in a single $transaction on add', async () => {
+      await service.addReaction({
+        messageId: testMessageId,
+        participantId: testParticipantId,
+        emoji: '👍'
+      });
+
+      expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('should wrap the summary update in a single $transaction on remove', async () => {
+      mockPrisma.reaction.deleteMany.mockResolvedValue({ count: 1 });
+
+      await service.removeReaction({
+        messageId: testMessageId,
+        participantId: testParticipantId,
+        emoji: '👍'
+      });
+
+      expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not open a transaction on remove when no row was deleted', async () => {
+      mockPrisma.reaction.deleteMany.mockResolvedValue({ count: 0 });
+
+      await service.removeReaction({
+        messageId: testMessageId,
+        participantId: testParticipantId,
+        emoji: '👍'
+      });
+
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('should derive reactionCount from the authoritative Reaction table count, not from a JS increment', async () => {
+      // Simulate a message whose denormalized reactionCount already drifted (lost
+      // update from a prior race) — the fix must ignore it and trust the DB count.
+      mockPrisma.message.findUnique.mockResolvedValue(
+        createMockMessage({ reactionSummary: { '👍': 1 }, reactionCount: 1 })
+      );
+      mockPrisma.reaction.count.mockResolvedValue(3);
+
+      await service.addReaction({
+        messageId: testMessageId,
+        participantId: testParticipantId,
+        emoji: '👍'
+      });
+
+      expect(mockPrisma.reaction.count).toHaveBeenCalledWith({ where: { messageId: testMessageId } });
+      expect(mockPrisma.message.update).toHaveBeenCalledWith({
+        where: { id: testMessageId },
+        data: expect.objectContaining({ reactionCount: 3 })
+      });
     });
   });
 
