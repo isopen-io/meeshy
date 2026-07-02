@@ -1451,7 +1451,11 @@ describe('CallEventsHandler', () => {
       expect(mockCallServiceLeaveCall).not.toHaveBeenCalled();
     });
 
-    it('auto-leaves active calls on disconnect', async () => {
+    // CALL-RESILIENCE — an ANSWERED call is not ended the instant the socket
+    // drops (P2P media survives): a reconnect grace window is armed, and the
+    // leave/broadcast only runs if it expires without a re-join.
+    it('auto-leaves active calls after the reconnect grace window expires', async () => {
+      jest.useFakeTimers();
       const leftSession = makeCallSession({ status: 'active' });
       mockCallServiceLeaveCall.mockResolvedValue(leftSession);
 
@@ -1465,17 +1469,24 @@ describe('CallEventsHandler', () => {
       const { socket, io } = setupWithSocket({
         callParticipant: {
           findMany: jest.fn<any>().mockResolvedValue([activeParticipation]),
+          findUnique: jest.fn<any>().mockResolvedValue({ leftAt: null, callSession: { status: 'active' } }),
         },
       });
       io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
 
       await socket._trigger('disconnect');
+      // No immediate teardown — grace armed.
+      expect(mockCallServiceLeaveCall).not.toHaveBeenCalled();
+
+      await jest.advanceTimersByTimeAsync(31_000);
 
       expect(mockCallServiceLeaveCall).toHaveBeenCalledWith(expect.objectContaining({ callId: CALL_ID }));
       expect(io.to).toHaveBeenCalledWith(`call:${CALL_ID}`);
+      jest.useRealTimers();
     });
 
-    it('broadcasts call:ended on disconnect when status becomes ended', async () => {
+    it('broadcasts call:ended on grace expiry when status becomes ended', async () => {
+      jest.useFakeTimers();
       const leftSession = makeCallSession({ status: 'ended', duration: 45 });
       mockCallServiceLeaveCall.mockResolvedValue(leftSession);
 
@@ -1487,17 +1498,23 @@ describe('CallEventsHandler', () => {
       };
 
       const { socket, io } = setupWithSocket({
-        callParticipant: { findMany: jest.fn<any>().mockResolvedValue([activeParticipation]) },
+        callParticipant: {
+          findMany: jest.fn<any>().mockResolvedValue([activeParticipation]),
+          findUnique: jest.fn<any>().mockResolvedValue({ leftAt: null, callSession: { status: 'active' } }),
+        },
       });
       io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
 
       await socket._trigger('disconnect');
+      await jest.advanceTimersByTimeAsync(31_000);
 
       const toCalls = (io.to as jest.Mock<any>).mock.calls.map((c: any[]) => c[0]);
       expect(toCalls).toContain(`conversation:${CONV_ID}`);
+      jest.useRealTimers();
     });
 
-    it('force-cleans up when leaveCall throws', async () => {
+    it('force-cleans up when leaveCall throws (at grace expiry)', async () => {
+      jest.useFakeTimers();
       mockCallServiceLeaveCall.mockRejectedValue(new Error('DB error'));
 
       const now = new Date(Date.now() - 60_000);
@@ -1520,15 +1537,20 @@ describe('CallEventsHandler', () => {
       };
 
       const { socket, io } = setupWithSocket({
-        callParticipant: { findMany: jest.fn<any>().mockResolvedValue([activeParticipation]) },
+        callParticipant: {
+          findMany: jest.fn<any>().mockResolvedValue([activeParticipation]),
+          findUnique: jest.fn<any>().mockResolvedValue({ leftAt: null, callSession: { status: 'active' } }),
+        },
         $transaction: jest.fn<any>().mockImplementation(async (fn: Function) => fn(mockTx)),
       });
       io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
 
       await socket._trigger('disconnect');
+      await jest.advanceTimersByTimeAsync(31_000);
 
       expect(mockTx.callParticipant.update).toHaveBeenCalled();
       expect(io.to).toHaveBeenCalledWith(`call:${CALL_ID}`);
+      jest.useRealTimers();
     });
 
     it('skips ended calls during disconnect cleanup', async () => {
@@ -3055,16 +3077,26 @@ describe('CallEventsHandler', () => {
       ...overrides,
     });
 
+    // CALL-RESILIENCE — the terminal leave/broadcast outcomes below now run at
+    // reconnect-grace expiry (active-call disconnect no longer ends immediately).
+    beforeEach(() => { jest.useFakeTimers(); });
+    afterEach(() => { jest.useRealTimers(); });
+
+    const graceReCheck = () => ({
+      findUnique: jest.fn<any>().mockResolvedValue({ leftAt: null, callSession: { status: 'active' } }),
+    });
+
     it('broadcasts call:ended when leaveCall returns ended session', async () => {
       mockCallServiceLeaveCall.mockResolvedValue(
         makeCallSession({ status: 'ended', duration: null, endReason: null })
       );
 
       const { socket, io } = setupWithSocket({
-        callParticipant: { findMany: jest.fn<any>().mockResolvedValue([makeActiveParticipation()]) },
+        callParticipant: { findMany: jest.fn<any>().mockResolvedValue([makeActiveParticipation()]), ...graceReCheck() },
       });
 
       await socket._trigger('disconnect');
+      await jest.advanceTimersByTimeAsync(31_000);
       const roomEmitCalls = (io._roomEmit as jest.Mock<any>).mock.calls;
       expect(roomEmitCalls.some((c: any[]) => c[0] === 'call:ended')).toBe(true);
     });
@@ -3073,10 +3105,11 @@ describe('CallEventsHandler', () => {
       mockCallServiceLeaveCall.mockRejectedValue(new Error('DB error'));
 
       const { socket, io } = setupWithSocket({
-        callParticipant: { findMany: jest.fn<any>().mockResolvedValue([makeActiveParticipation()]) },
+        callParticipant: { findMany: jest.fn<any>().mockResolvedValue([makeActiveParticipation()]), ...graceReCheck() },
       });
 
       await socket._trigger('disconnect');
+      await jest.advanceTimersByTimeAsync(31_000);
       // participant-left still broadcast via force cleanup
       const roomEmitCalls = (io._roomEmit as jest.Mock<any>).mock.calls;
       expect(roomEmitCalls.some((c: any[]) => c[0] === 'call:participant-left')).toBe(true);
@@ -3087,7 +3120,7 @@ describe('CallEventsHandler', () => {
       const startedAt = new Date(Date.now() - 10000);
 
       const { socket, io } = setupWithSocket({
-        callParticipant: { findMany: jest.fn<any>().mockResolvedValue([makeActiveParticipation()]) },
+        callParticipant: { findMany: jest.fn<any>().mockResolvedValue([makeActiveParticipation()]), ...graceReCheck() },
         $transaction: jest.fn<any>().mockImplementation(async (fn: Function) => fn({
           callParticipant: {
             update: jest.fn<any>().mockResolvedValue({}),
@@ -3101,6 +3134,7 @@ describe('CallEventsHandler', () => {
       });
 
       await socket._trigger('disconnect');
+      await jest.advanceTimersByTimeAsync(31_000);
       const roomEmitCalls = (io._roomEmit as jest.Mock<any>).mock.calls;
       // both participant-left and call:ended should be emitted
       expect(roomEmitCalls.some((c: any[]) => c[0] === 'call:participant-left')).toBe(true);
