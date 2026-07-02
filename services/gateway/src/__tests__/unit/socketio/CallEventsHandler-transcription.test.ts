@@ -18,8 +18,11 @@ import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 // CallService / TURNCredentialService / SocketRateLimiter (setInterval hazard)
 // ---------------------------------------------------------------------------
 
+const mockGetCallSession = jest.fn<any>();
 jest.mock('../../../services/CallService', () => ({
-  CallService: jest.fn(),
+  CallService: jest.fn().mockImplementation(() => ({
+    getCallSession: mockGetCallSession,
+  })),
 }));
 
 jest.mock('../../../services/notifications/NotificationService', () => ({
@@ -107,6 +110,10 @@ function makePrisma(overrides: {
   } as unknown as PrismaClient;
 }
 
+function activeCallSession(userId: string, participantId = 'participant-1') {
+  return { participants: [{ participantId, leftAt: null, participant: { userId } }] };
+}
+
 function makeSocket() {
   const handlers: Record<string, (...args: any[]) => any> = {};
   const directEmit = jest.fn<any>();
@@ -134,14 +141,17 @@ describe('CallEventsHandler — call:transcription-segment relay', () => {
     (validateSocketEvent as jest.MockedFunction<any>).mockReturnValue({ success: true });
     mockCheckSocketRateLimit.mockClear();
     mockCheckSocketRateLimit.mockResolvedValue(true);
+    // Default: no active call participant — each scenario opts in via
+    // activeCallSession(userId) when it needs authorization to succeed.
+    mockGetCallSession.mockReset();
+    mockGetCallSession.mockResolvedValue({ participants: [] });
   });
 
   describe('rate limiting', () => {
     it('checks the rate limit before relaying a segment', async () => {
+      mockGetCallSession.mockResolvedValue(activeCallSession(SPEAKER_ID));
       const prisma = makePrisma({
-        callSessionFindUnique: jest.fn<any>()
-          .mockResolvedValueOnce({ conversationId: VALID_CONV_ID })
-          .mockResolvedValueOnce({ status: 'active', metadata: null }),
+        callSessionFindUnique: jest.fn<any>().mockResolvedValue({ status: 'active', metadata: null }),
         participantFindFirst: jest.fn<any>().mockResolvedValue({ id: 'participant-1' }),
       });
       const { socket, handlers, roomEmit } = makeSocket();
@@ -177,12 +187,10 @@ describe('CallEventsHandler — call:transcription-segment relay', () => {
     let directEmit: jest.MockedFunction<any>;
 
     beforeEach(async () => {
+      mockGetCallSession.mockResolvedValue(activeCallSession(SPEAKER_ID));
       const prisma = makePrisma({
-        callSessionFindUnique: jest.fn<any>()
-          // First call: resolveParticipantIdFromCall → conversationId
-          .mockResolvedValueOnce({ conversationId: VALID_CONV_ID })
-          // Second call: status + metadata check
-          .mockResolvedValueOnce({ status: 'active', metadata: null }),
+        // Status + metadata check (authorization no longer consults prisma)
+        callSessionFindUnique: jest.fn<any>().mockResolvedValue({ status: 'active', metadata: null }),
         participantFindFirst: jest.fn<any>().mockResolvedValue({ id: 'participant-1' }),
       });
       const { socket, handlers, roomEmit: r, directEmit: d } = makeSocket();
@@ -234,8 +242,9 @@ describe('CallEventsHandler — call:transcription-segment relay', () => {
     let directEmit: jest.MockedFunction<any>;
 
     beforeEach(async () => {
+      // mockGetCallSession defaults (see top-level beforeEach) to a session
+      // with no active participants → resolveActiveCallParticipantId returns null.
       const prisma = makePrisma({
-        // resolveParticipantIdFromCall returns null (call not found)
         callSessionFindUnique: jest.fn<any>().mockResolvedValue(null),
         participantFindFirst: jest.fn<any>().mockResolvedValue(null),
       });
@@ -266,12 +275,10 @@ describe('CallEventsHandler — call:transcription-segment relay', () => {
     let directEmit: jest.MockedFunction<any>;
 
     beforeEach(async () => {
+      mockGetCallSession.mockResolvedValue(activeCallSession(SPEAKER_ID));
       const prisma = makePrisma({
-        callSessionFindUnique: jest.fn<any>()
-          // resolveParticipantIdFromCall: call found with a conversationId
-          .mockResolvedValueOnce({ conversationId: VALID_CONV_ID })
-          // status check: call is ended
-          .mockResolvedValueOnce({ status: 'ended', metadata: null }),
+        // status check: call is ended
+        callSessionFindUnique: jest.fn<any>().mockResolvedValue({ status: 'ended', metadata: null }),
         participantFindFirst: jest.fn<any>().mockResolvedValue({ id: 'participant-1' }),
       });
       const { socket, handlers, roomEmit: r, directEmit: d } = makeSocket();
