@@ -810,8 +810,21 @@ final class CallManager: ObservableObject {
         update.supportsHolding = false
 
         guard callState == .idle else {
-            // Busy: report + immediately end the secondary call
-            callProvider.reportNewIncomingCall(with: uuid, update: update) { _ in }
+            // Busy: report + immediately end the secondary call. Mirror the
+            // idle-path failure handling below — if CallKit refuses this
+            // report (two call groups already used, restricted mode, a
+            // transient CallKit error), the dedup ring already recorded this
+            // callId when the push arrived, and it must be evicted or a
+            // legitimate APNs retry gets silently dropped as a duplicate,
+            // leaving the callee with zero call UI for a call CallKit never
+            // actually reported.
+            callProvider.reportNewIncomingCall(with: uuid, update: update) { error in
+                guard let error else { return }
+                Logger.calls.error("CallKit VoIP report failed (busy path): \(error.localizedDescription)")
+                Task { @MainActor in
+                    VoIPPushManager.shared.clearDedup(callId: callId)
+                }
+            }
             callProvider.reportCall(with: uuid, endedAt: nil, reason: .unanswered)
             pendingIncomingCall = (callId: callId, fromUserId: callerUserId, fromUsername: callerName, isVideo: isVideo)
             showCallWaitingBanner = true

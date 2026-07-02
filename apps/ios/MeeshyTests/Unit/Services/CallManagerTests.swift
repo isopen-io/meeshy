@@ -611,6 +611,48 @@ final class CallManagerEarlyJoinTests: XCTestCase {
         )
     }
 
+    /// Mirrors `test_reportIncomingVoIPCall_evictsDedupRingEntry_onCallKitReportFailure`
+    /// for the `guard callState == .idle else { ... }` busy branch a few lines
+    /// above: a second VoIP push arriving mid-call is reported-then-immediately-
+    /// ended, but the completion handler used to discard the error entirely
+    /// (`{ _ in }`). If CallKit refuses that report (two call groups already
+    /// used, restricted mode, a transient error), the dedup ring — already
+    /// populated for this callId before this method ran — was never evicted,
+    /// so a legitimate APNs retry within the TTL got silently phantom-acked
+    /// instead of re-ringing the callee.
+    func test_reportIncomingVoIPCall_evictsDedupRingEntry_onCallKitReportFailure_busyPath() throws {
+        let source = try sourceText()
+        guard let body = body(of: "func reportIncomingVoIPCall", in: source) else {
+            XCTFail("reportIncomingVoIPCall not found")
+            return
+        }
+        guard let busyGuardRange = body.range(of: "guard callState == .idle else {") else {
+            XCTFail("Expected the busy-path guard in reportIncomingVoIPCall")
+            return
+        }
+        guard let reportRange = body.range(
+            of: "reportNewIncomingCall(with: uuid, update: update) { error in",
+            range: busyGuardRange.upperBound..<body.endIndex
+        ) else {
+            XCTFail("Expected the busy-path reportNewIncomingCall closure in reportIncomingVoIPCall")
+            return
+        }
+        guard let endedAtRange = body.range(
+            of: "reportCall(with: uuid, endedAt: nil, reason: .unanswered)",
+            range: reportRange.upperBound..<body.endIndex
+        ) else {
+            XCTFail("Expected reportCall(...endedAt: nil...) after the busy-path report closure")
+            return
+        }
+        let closureBody = String(body[reportRange.upperBound..<endedAtRange.lowerBound])
+        XCTAssertTrue(
+            closureBody.contains("VoIPPushManager.shared.clearDedup(callId: callId)"),
+            "reportIncomingVoIPCall's BUSY-path CallKit-report-failure closure must also evict the callId " +
+            "from the dedup ring — otherwise a genuine APNs retry while the user is on another call is " +
+            "dropped as a duplicate, leaving the callee with zero call UI."
+        )
+    }
+
     func test_answerCall_awaitsLocalMediaBeforeCreateAnswer() throws {
         let source = try sourceText()
         guard let body = body(of: "func answerCall()", in: source) else {
