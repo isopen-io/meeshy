@@ -349,6 +349,113 @@ nonisolated enum CallReliabilityPolicy {
     ) -> ReconnectingOutcome {
         secondsInAttempt >= budgetSeconds ? .retry : .waiting
     }
+
+    /// Reconnection-trigger arbitration. Reconnection is requested from several
+    /// independent sources: NWPathMonitor edges (path lost / restored / interface
+    /// handoff), the PC-state delegate, the watchdogs, and the ICE-restart
+    /// failure path. Without arbitration a single network blip fires several of
+    /// them back-to-back and each advances `reconnectAttempt` — the
+    /// `maxReconnectAttempts` budget is spent on redundant trigger *edges*
+    /// instead of reconnection *cycles*, and a call that would survive a 1-2s
+    /// hiccup drops with `.connectionLost`.
+    enum ReconnectTriggerOutcome: Equatable {
+        case startCycle   // not reconnecting yet — begin a cycle (advance budget)
+        case coalesce     // cycle in flight — re-arm its ICE restart, do NOT advance
+        case escalate     // watchdog overrun / failed restart — advance budget
+    }
+
+    static func evaluateReconnectTrigger(
+        isAlreadyReconnecting: Bool,
+        isEscalation: Bool
+    ) -> ReconnectTriggerOutcome {
+        if isEscalation { return .escalate }
+        return isAlreadyReconnecting ? .coalesce : .startCycle
+    }
+
+    /// Delay before the periodic TURN credential refresh, at 80% of the TTL.
+    /// A degenerate TTL (zero, negative, or shorter than the floor) clamps to
+    /// `minimumDelay` instead of disarming the refresh — silently skipping it
+    /// would let mid-call TURN credentials expire and kill relayed calls at the
+    /// credential horizon (coturn rejects allocation refreshes past the expiry
+    /// embedded in the username).
+    static func turnRefreshDelay(
+        ttl: TimeInterval,
+        minimumDelay: TimeInterval = QualityThresholds.turnMinRefreshDelaySeconds
+    ) -> TimeInterval {
+        max(minimumDelay, ttl * 0.8)
+    }
+
+    /// Stuck-muted CallKit fallback gate. On iPhone/iPad,
+    /// `RTCAudioSession.isAudioEnabled` is flipped ONLY by `provider:didActivate:`.
+    /// If CallKit never delivers it, the call sits `.connected` with dead mic and
+    /// speaker and no safety net (the half-open detector keys off RTP counters,
+    /// which comfort-noise/DTX packets keep non-zero). Force activation only in
+    /// that exact stuck state — never when CallKit did its job, never on Mac
+    /// (which self-activates in `transitionToConnected`), never after the call
+    /// ended.
+    static func shouldForceAudioSessionActivation(
+        usesCallKit: Bool,
+        didActivateFired: Bool,
+        isAudioEnabled: Bool,
+        callIsActive: Bool
+    ) -> Bool {
+        usesCallKit && callIsActive && !didActivateFired && !isAudioEnabled
+    }
+}
+
+/// Half-open detection state across connection epochs.
+///
+/// Replaces the poll-loop-local `halfOpenSettled` bool, which had two defects:
+/// 1. It was only reset when the loop *observed* `.reconnecting`; a reconnection
+///    cycle completing between two poll ticks left it `true` for the rest of the
+///    call (self-heal frozen).
+/// 2. Re-arming compared *cumulative* RTP counters against the threshold, so a
+///    post-restart half-open was instantly declared `.healthy` on the strength
+///    of pre-restart traffic.
+///
+/// The owner bumps `connectionEpoch` on every `transitionToConnected`; this
+/// state re-arms itself whenever the epoch changes, snapshots the counters as
+/// the epoch baseline, and evaluates per-epoch *deltas*. Returns `nil` once the
+/// epoch has settled (healthy confirmed or the one allowed self-heal fired).
+nonisolated struct HalfOpenMonitorState {
+    private var observedEpoch = Int.min
+    private var settled = false
+    private var epochStart = Date.distantPast
+    private var baselineInbound = 0
+    private var baselineOutbound = 0
+
+    /// Cheap pre-check so the poll loop can skip the (relatively expensive)
+    /// WebRTC stats fetch once the current epoch has settled.
+    func needsEvaluation(epoch: Int) -> Bool {
+        epoch != observedEpoch || !settled
+    }
+
+    mutating func evaluate(
+        epoch: Int,
+        inboundPackets: Int,
+        outboundPackets: Int,
+        now: Date = Date(),
+        requiredInboundPackets: Int = QualityThresholds.rtpGateRequiredPackets,
+        graceSeconds: TimeInterval = QualityThresholds.halfOpenHealGraceSeconds
+    ) -> CallReliabilityPolicy.HalfOpenOutcome? {
+        if epoch != observedEpoch {
+            observedEpoch = epoch
+            settled = false
+            epochStart = now
+            baselineInbound = inboundPackets
+            baselineOutbound = outboundPackets
+        }
+        guard !settled else { return nil }
+        let outcome = CallReliabilityPolicy.evaluateHalfOpen(
+            inboundPackets: inboundPackets - baselineInbound,
+            outboundPackets: outboundPackets - baselineOutbound,
+            secondsInConnected: now.timeIntervalSince(epochStart),
+            requiredInboundPackets: requiredInboundPackets,
+            graceSeconds: graceSeconds
+        )
+        if outcome == .healthy || outcome == .healHalfOpen { settled = true }
+        return outcome
+    }
 }
 
 // MARK: - WebRTC Client Protocol
@@ -699,6 +806,12 @@ nonisolated enum QualityThresholds {
     /// the TTL reported by the gateway. Guards against a malformed TTL=0 response
     /// that would otherwise trigger an immediate refresh on every call tick.
     static let turnMinRefreshDelaySeconds: TimeInterval = 30
+
+    /// Delay after `.connected` before the stuck-muted CallKit fallback
+    /// re-checks whether `provider:didActivate:` ever fired. CallKit normally
+    /// delivers it within ~500 ms of the call connecting; 2 s is comfortably
+    /// past that without leaving the user in a silent call for long.
+    static let stuckMutedFallbackDelaySeconds: TimeInterval = 2.0
 
     /// How long to wait for an SDP offer after the callee answers before
     /// treating the call as timed-out and failing it. Covers worst-case

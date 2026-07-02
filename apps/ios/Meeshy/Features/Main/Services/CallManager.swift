@@ -233,6 +233,18 @@ final class CallManager: ObservableObject {
         set { _isCallActiveLock.withLock { $0 = newValue } }
     }
 
+    /// CallKit `provider:didActivate:` observation flag for the stuck-muted
+    /// fallback (see `scheduleStuckMutedFallback`). Written from the
+    /// CXProviderDelegate proxy (non-isolated CallKit queue), read from the
+    /// MainActor fallback task — guarded by an unfair lock, mirroring
+    /// `isCallActiveFlag`. Reset in `endCallInternal` so each call observes
+    /// its own activation.
+    private nonisolated static let _didActivateLock = OSAllocatedUnfairLock(initialState: false)
+    nonisolated static var callKitDidActivateFired: Bool {
+        get { _didActivateLock.withLock { $0 } }
+        set { _didActivateLock.withLock { $0 = newValue } }
+    }
+
     // MARK: - Internal
 
     private let webRTCService: WebRTCService
@@ -285,6 +297,11 @@ final class CallManager: ObservableObject {
     private var lastCallWasOutgoing: Bool = false
     private var callStartDate: Date?
     private var reconnectAttempt = 0
+    /// Connection epoch — bumped on every `transitionToConnected`. The
+    /// reliability monitor's `HalfOpenMonitorState` keys off it to re-arm
+    /// half-open detection with a fresh RTP baseline after each (re)connect,
+    /// even when a reconnection cycle completes between two poll ticks.
+    private var connectionEpoch = 0
 
     // MARK: - Analytics accumulators (reset in endCallInternal)
     private var analyticsCallInitiatedDate: Date?
@@ -328,6 +345,9 @@ final class CallManager: ObservableObject {
     /// attempt before starting the new one — prevents two concurrent restart
     /// offers from corrupting the perfect-negotiation state machine.
     private var iceRestartTask: Task<Void, Never>?
+    /// One-shot stuck-muted fallback (§RC-2): armed when `.connected` is
+    /// reached on iPhone/iPad before CallKit delivered `provider:didActivate:`.
+    private var audioActivationFallbackTask: Task<Void, Never>?
     private var voipFreshnessTask: Task<Void, Never>?
     private var pendingRemoteOffer: SessionDescription?
     // P0-3 — ICE candidates generated while the socket is down are buffered
@@ -1879,13 +1899,12 @@ final class CallManager: ObservableObject {
         reliabilityMonitorTask = Task { @MainActor [weak self] in
             guard let self else { return }
             var connectingSince: Date?
-            var connectedSince: Date?
             var didAttemptConnectingRestart = false
-            // Half-open is checked only until it settles (media confirmed healthy
-            // OR the one allowed self-heal fired). After that the connected branch
-            // idles — ongoing transport faults surface via the PC-state delegate,
-            // not by polling stats forever.
-            var halfOpenSettled = false
+            // Half-open detection state, keyed off `connectionEpoch` so it
+            // re-arms with a fresh RTP baseline after every (re)connect — even
+            // when a reconnection cycle completes entirely between two poll
+            // ticks (the old loop-local bool missed that and froze self-heal).
+            var halfOpenMonitor = HalfOpenMonitorState()
             // `.reconnecting` watchdog state. `reconnectingWatchedAttempt` pins the
             // attempt number whose budget clock `reconnectingSince` is timing; a
             // change in attempt (any reconnection trigger advanced the counter)
@@ -1900,7 +1919,6 @@ final class CallManager: ObservableObject {
 
                 switch self.callState {
                 case .connecting, .offering:
-                    connectedSince = nil
                     reconnectingSince = nil
                     reconnectingWatchedAttempt = nil
                     let since = connectingSince ?? Date()
@@ -1926,34 +1944,27 @@ final class CallManager: ObservableObject {
                     didAttemptConnectingRestart = false
                     reconnectingSince = nil
                     reconnectingWatchedAttempt = nil
-                    let since = connectedSince ?? Date()
-                    connectedSince = since
-                    guard !halfOpenSettled else { break }
-                    let elapsed = Date().timeIntervalSince(since)
+                    // Cheap pre-check: once this epoch settled (media confirmed
+                    // healthy OR the one allowed self-heal fired) skip the stats
+                    // fetch — ongoing transport faults surface via the PC-state
+                    // delegate, not by polling stats forever.
+                    guard halfOpenMonitor.needsEvaluation(epoch: self.connectionEpoch) else { break }
                     guard let stats = await self.webRTCService.getStats() else { continue }
-                    switch CallReliabilityPolicy.evaluateHalfOpen(
+                    switch halfOpenMonitor.evaluate(
+                        epoch: self.connectionEpoch,
                         inboundPackets: stats.inboundPacketsReceived,
-                        outboundPackets: stats.outboundPacketsSent,
-                        secondsInConnected: elapsed
+                        outboundPackets: stats.outboundPacketsSent
                     ) {
-                    case .healthy:
-                        halfOpenSettled = true
+                    case .healthy?:
                         Logger.calls.debug("media bidirectional (inAudio=\(stats.inboundAudioPackets) inVideo=\(stats.inboundVideoPackets) out=\(stats.outboundPacketsSent))")
-                    case .waiting:
+                    case .waiting?, nil:
                         break
-                    case .healHalfOpen:
-                        halfOpenSettled = true
-                        Logger.calls.warning("half-open detected (in=0 out=\(stats.outboundPacketsSent)) after \(Int(elapsed))s — auto ICE restart")
+                    case .healHalfOpen?:
+                        Logger.calls.warning("half-open detected (inbound delta stalled, epoch \(self.connectionEpoch)) — auto ICE restart")
                         self.attemptReconnection()
                     }
                 case .reconnecting(let attempt):
                     connectingSince = nil
-                    connectedSince = nil
-                    // Re-arm half-open detection for the new connection period.
-                    // Without this, an ICE restart that produces an asymmetric path
-                    // (outbound OK but inbound broken) would skip the health check
-                    // and silently stay `.connected` with no incoming audio/video.
-                    halfOpenSettled = false
                     didAttemptConnectingRestart = false
                     // Restart the budget clock whenever a new attempt begins (any
                     // reconnection trigger advanced the counter).
@@ -1975,11 +1986,10 @@ final class CallManager: ObservableObject {
                         Logger.calls.warning(".reconnecting watchdog (\(Int(elapsed))s, attempt \(attempt)) — ICE restart stalled, escalating")
                         reconnectingSince = nil
                         reconnectingWatchedAttempt = nil
-                        self.attemptReconnection()
+                        self.attemptReconnection(escalate: true)
                     }
                 default:
                     connectingSince = nil
-                    connectedSince = nil
                     reconnectingSince = nil
                     reconnectingWatchedAttempt = nil
                 }
@@ -2025,6 +2035,11 @@ final class CallManager: ObservableObject {
             }
         } else if !RTCAudioSession.sharedInstance().isAudioEnabled {
             Logger.calls.warning("[AUDIO] connected but RTCAudioSession not yet active — awaiting CallKit provider:didActivate (do NOT self-activate on iPhone/iPad)")
+            // §RC-2 — if `didActivate` never arrives, the call would stay
+            // connected-but-muted forever. Arm the one-shot fallback; it
+            // re-checks the full stuck condition after a short delay and
+            // no-ops when CallKit did its job in the meantime.
+            scheduleStuckMutedFallback()
         }
 
         // CALL-FIX 2026-06-06 — call established: stop ringback/ringtone + play the
@@ -2039,6 +2054,9 @@ final class CallManager: ObservableObject {
             ringbackPlayer.playConnected()
         }
         callState = .connected
+        // New connection period: re-arms the reliability monitor's half-open
+        // detection with a fresh RTP baseline (see HalfOpenMonitorState).
+        connectionEpoch += 1
         // Audio session was configured ONCE at peer-connection setup; CallKit
         // drives activation via provider:didActivate:, which is the single
         // place that flips RTCAudioSession.isAudioEnabled.
@@ -2537,6 +2555,9 @@ final class CallManager: ObservableObject {
         remoteQualityResetTask = nil
         iceRestartTask?.cancel()
         iceRestartTask = nil
+        audioActivationFallbackTask?.cancel()
+        audioActivationFallbackTask = nil
+        CallManager.callKitDidActivateFired = false
         voipFreshnessTask?.cancel()
         voipFreshnessTask = nil
         isRemoteQualityDegraded = false
@@ -2745,6 +2766,49 @@ final class CallManager: ObservableObject {
         // remote face). iOS handles dimming automatically once monitoring is on.
         let shouldMonitor = callState.isActive && !isVideoEnabled
         UIDevice.current.isProximityMonitoringEnabled = shouldMonitor
+    }
+
+    /// §RC-2 stuck-muted fallback. On iPhone/iPad the audio session is activated
+    /// exclusively by CallKit's `provider:didActivate:` — self-activating BEFORE
+    /// it fires breaks the audio device module ("no sound on 1st call"), so
+    /// `transitionToConnected` is log-only there. But if CallKit never delivers
+    /// `didActivate` (rare; observed after provider glitches), the call sits
+    /// connected with dead mic + speaker and NO safety net — the half-open
+    /// detector can't catch it (comfort-noise/DTX keeps RTP counters non-zero).
+    /// After a short delay we re-check; if — and only if — the session is still
+    /// stuck (didActivate never fired, audio disabled, call still active) we
+    /// bridge the session exactly like the interruption-end path does. At that
+    /// point audio is already broken, so the fallback can only improve things.
+    /// NOTE: exercised in simulator only so far — needs a real-device pass
+    /// (CallKit timing differs on hardware).
+    private func scheduleStuckMutedFallback() {
+        audioActivationFallbackTask?.cancel()
+        audioActivationFallbackTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(QualityThresholds.stuckMutedFallbackDelaySeconds))
+            guard !Task.isCancelled, let self else { return }
+            guard CallReliabilityPolicy.shouldForceAudioSessionActivation(
+                usesCallKit: self.callUsesCallKit,
+                didActivateFired: CallManager.callKitDidActivateFired,
+                isAudioEnabled: RTCAudioSession.sharedInstance().isAudioEnabled,
+                callIsActive: self.callState.isActive
+            ) else { return }
+            Logger.calls.fault("[AUDIO_FALLBACK] CallKit didActivate never fired \(Int(QualityThresholds.stuckMutedFallbackDelaySeconds))s after connect — forcing RTCAudioSession activation")
+            self.audioSessionQueue.async {
+                // Mirror of the interruption-end recovery: activate the system
+                // session first, then bridge it to libwebrtc.
+                do {
+                    try AVAudioSession.sharedInstance().setActive(true, options: [])
+                } catch {
+                    Logger.calls.error("[AUDIO_FALLBACK] AVAudioSession activation failed: \(error.localizedDescription)")
+                    return
+                }
+                let rtc = RTCAudioSession.sharedInstance()
+                rtc.lockForConfiguration()
+                rtc.audioSessionDidActivate(AVAudioSession.sharedInstance())
+                rtc.isAudioEnabled = true
+                rtc.unlockForConfiguration()
+            }
+        }
     }
 
     private func deactivateAudioSession() {
@@ -3496,9 +3560,11 @@ extension CallManager: WebRTCServiceDelegate {
                 // Transient ICE flap during renegotiation — in-flight Task owns the loop.
                 Logger.calls.info("WebRTC disconnected during ICE restart — ignoring transient flap")
             case .reconnecting:
-                // Fatal PeerConnection .failed/.closed during ICE restart.
+                // Fatal PeerConnection .failed/.closed during ICE restart: the
+                // in-flight attempt is dead — escalate (advance the budget)
+                // rather than coalesce into it.
                 Logger.calls.warning("WebRTC fatal disconnect during ICE restart — triggering next attempt")
-                self.attemptReconnection()
+                self.attemptReconnection(escalate: true)
             default:
                 Logger.calls.info("WebRTC disconnected in state: \(String(describing: self.callState))")
             }
@@ -3619,8 +3685,35 @@ extension CallManager: WebRTCServiceDelegate {
         }
     }
 
+    /// Requests a reconnection. External triggers (NWPathMonitor edges, the
+    /// PC-state delegate, the `.connecting` watchdog, the half-open self-heal)
+    /// use the default `escalate: false` — when a cycle is already in flight
+    /// they COALESCE into it (re-arming its ICE restart) instead of advancing
+    /// `reconnectAttempt`, so a single network blip whose lost/restored edges
+    /// both fire no longer burns the `maxReconnectAttempts` budget. Only the
+    /// `.reconnecting` watchdog and a failed restart offer pass
+    /// `escalate: true` to advance the budget (and eventually trip the cap →
+    /// `.connectionLost`).
     @MainActor
-    private func attemptReconnection() {
+    private func attemptReconnection(escalate: Bool = false) {
+        let isAlreadyReconnecting: Bool
+        if case .reconnecting = callState { isAlreadyReconnecting = true } else { isAlreadyReconnecting = false }
+
+        switch CallReliabilityPolicy.evaluateReconnectTrigger(
+            isAlreadyReconnecting: isAlreadyReconnecting,
+            isEscalation: escalate
+        ) {
+        case .coalesce:
+            // Redundant edge of the same outage (e.g. path-restored right after
+            // path-lost). Re-arm the in-flight attempt's restart immediately —
+            // a just-restored path is when a restart is most likely to succeed.
+            Logger.calls.info("reconnect trigger coalesced into attempt \(self.reconnectAttempt) — re-arming ICE restart")
+            scheduleICERestart(attempt: reconnectAttempt, backoffSeconds: 0)
+            return
+        case .startCycle, .escalate:
+            break
+        }
+
         reconnectAttempt += 1
         guard reconnectAttempt <= QualityThresholds.maxReconnectAttempts else {
             if let uuid = activeCallUUID {
@@ -3636,11 +3729,24 @@ extension CallManager: WebRTCServiceDelegate {
         if let callId = currentCallId {
             let userId = AuthManager.shared.currentUser?.id ?? ""
             MessageSocketManager.shared.emitCallReconnecting(callId: callId, participantId: userId, attempt: reconnectAttempt)
+            // Fresh TURN credentials for this attempt (fire-and-forget): the
+            // `call:ice-servers-refreshed` listener applies the response via
+            // `updateIceServers`, so this restart — or its watchdog escalation —
+            // re-gathers relay candidates with fresh credentials instead of
+            // reusing creds that may be near the TTL horizon (coturn rejects
+            // allocation refreshes past the expiry embedded in the username).
+            MessageSocketManager.shared.emitRequestIceServers(callId: callId)
         }
 
-        let attempt = reconnectAttempt
-        let backoffSeconds = attempt > 1 ? min(pow(2.0, Double(attempt - 1)), 4.0) : 0.0
+        let backoffSeconds = reconnectAttempt > 1 ? min(pow(2.0, Double(reconnectAttempt - 1)), 4.0) : 0.0
+        scheduleICERestart(attempt: reconnectAttempt, backoffSeconds: backoffSeconds)
+    }
 
+    /// (Re-)arms the ICE restart for `attempt`. Cancels any in-flight restart
+    /// task first — prevents two concurrent restart offers from corrupting the
+    /// perfect-negotiation state machine.
+    @MainActor
+    private func scheduleICERestart(attempt: Int, backoffSeconds: Double) {
         iceRestartTask?.cancel()
         iceRestartTask = Task { @MainActor [weak self] in
             guard let self, let callId = self.currentCallId, let userId = self.remoteUserId else { return }
@@ -3649,7 +3755,7 @@ extension CallManager: WebRTCServiceDelegate {
                 guard !Task.isCancelled, case .reconnecting(let current) = self.callState, current == attempt else { return }
             }
             guard let offer = await self.webRTCService.performICERestart() else {
-                self.attemptReconnection(); return
+                self.attemptReconnection(escalate: true); return
             }
             guard !Task.isCancelled, case .reconnecting(let current) = self.callState, current == attempt else { return }
             self.emitCallOffer(callId: callId, toUserId: userId, isVideo: self.isVideoEnabled, sdp: offer)
@@ -3661,17 +3767,11 @@ extension CallManager: WebRTCServiceDelegate {
     // which `setupSocketListeners` applies via `webRTCService.updateIceServers`.
     private func scheduleTURNCredentialRefresh(ttl: TimeInterval) {
         turnRefreshTask?.cancel()
-        // Guard against a malformed or zero TTL from the gateway — a 0-second
-        // delay would cause an immediate re-request, hammering the gateway in a
-        // tight loop. Minimum 60 s is a reasonable floor; the expected value is
-        // 480 s (8 min) or the TURN server's credential lifetime.
-        guard ttl >= 60 else {
-            Logger.calls.warning("TURN refresh TTL too short (\(Int(ttl))s) — skipping reschedule")
-            return
-        }
-        // Guard against zero/negative TTL (malformed gateway response): a delay of
-        // ≤0 would schedule an immediate refresh on every tick, hammering the gateway.
-        let refreshDelay = max(QualityThresholds.turnMinRefreshDelaySeconds, ttl * 0.8)
+        // Floor-clamped: a degenerate TTL (zero / negative / short) schedules at
+        // the minimum cadence instead of silently disarming the refresh — the
+        // old `guard ttl >= 60 else return` left mid-call credentials expiring
+        // with no refresh armed at all. See CallReliabilityPolicy.turnRefreshDelay.
+        let refreshDelay = CallReliabilityPolicy.turnRefreshDelay(ttl: ttl)
         Logger.calls.info("TURN credential refresh scheduled in \(Int(refreshDelay))s (TTL=\(Int(ttl))s)")
         turnRefreshTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(refreshDelay))
@@ -3813,6 +3913,9 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
     }
 
     func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
+        // Stuck-muted fallback observation — the fallback no-ops once this is
+        // set (see CallManager.scheduleStuckMutedFallback).
+        CallManager.callKitDidActivateFired = true
         // CallKit owns AVAudioSession lifecycle; we ONLY bridge it to libwebrtc.
         // DO NOT call audioSession.setActive(true) here — CallKit already did.
         // Forcing it again creates desync between AVAudioSession and RTCAudioSession,

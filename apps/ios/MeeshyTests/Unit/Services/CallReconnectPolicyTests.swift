@@ -1,0 +1,281 @@
+import XCTest
+@testable import Meeshy
+
+// MARK: - Reconnect trigger arbitration
+
+/// Reconnection is requested from several independent sources: NWPathMonitor
+/// edges (path lost / restored / interface handoff), the PC-state delegate,
+/// the watchdogs, and the ICE-restart failure path. Without arbitration, a
+/// single network blip fires several of them back-to-back and each advances
+/// `reconnectAttempt` — the 3-attempt budget is spent on redundant trigger
+/// *edges* instead of reconnection *cycles*, and a call that would survive a
+/// 1-2s hiccup drops with `.connectionLost`.
+@MainActor
+final class ReconnectTriggerPolicyTests: XCTestCase {
+
+    func test_evaluateReconnectTrigger_notReconnecting_startsCycle() {
+        let outcome = CallReliabilityPolicy.evaluateReconnectTrigger(
+            isAlreadyReconnecting: false,
+            isEscalation: false
+        )
+        XCTAssertEqual(outcome, .startCycle)
+    }
+
+    func test_evaluateReconnectTrigger_alreadyReconnecting_coalesces() {
+        // Redundant edge of the same outage (e.g. path-restored right after
+        // path-lost): must NOT burn budget.
+        let outcome = CallReliabilityPolicy.evaluateReconnectTrigger(
+            isAlreadyReconnecting: true,
+            isEscalation: false
+        )
+        XCTAssertEqual(outcome, .coalesce)
+    }
+
+    func test_evaluateReconnectTrigger_escalationWhileReconnecting_escalates() {
+        // The `.reconnecting` watchdog and a failed ICE-restart offer are the
+        // only callers allowed to advance the budget mid-cycle.
+        let outcome = CallReliabilityPolicy.evaluateReconnectTrigger(
+            isAlreadyReconnecting: true,
+            isEscalation: true
+        )
+        XCTAssertEqual(outcome, .escalate)
+    }
+
+    func test_evaluateReconnectTrigger_escalationOutsideReconnecting_escalates() {
+        let outcome = CallReliabilityPolicy.evaluateReconnectTrigger(
+            isAlreadyReconnecting: false,
+            isEscalation: true
+        )
+        XCTAssertEqual(outcome, .escalate)
+    }
+}
+
+// MARK: - TURN refresh delay
+
+/// A degenerate TTL from the gateway must clamp to the minimum refresh cadence,
+/// not silently disarm the periodic refresh (which would let mid-call TURN
+/// credentials expire and kill relayed calls at the credential horizon).
+@MainActor
+final class TurnRefreshDelayPolicyTests: XCTestCase {
+
+    func test_turnRefreshDelay_nominalTTL_is80Percent() {
+        XCTAssertEqual(
+            CallReliabilityPolicy.turnRefreshDelay(ttl: 480, minimumDelay: 30),
+            384
+        )
+    }
+
+    func test_turnRefreshDelay_zeroTTL_clampsToMinimum() {
+        XCTAssertEqual(
+            CallReliabilityPolicy.turnRefreshDelay(ttl: 0, minimumDelay: 30),
+            30
+        )
+    }
+
+    func test_turnRefreshDelay_negativeTTL_clampsToMinimum() {
+        XCTAssertEqual(
+            CallReliabilityPolicy.turnRefreshDelay(ttl: -10, minimumDelay: 30),
+            30
+        )
+    }
+
+    func test_turnRefreshDelay_shortTTL_clampsToMinimum() {
+        // 30s TTL → 24s at 80%, below the 30s floor.
+        XCTAssertEqual(
+            CallReliabilityPolicy.turnRefreshDelay(ttl: 30, minimumDelay: 30),
+            30
+        )
+    }
+
+    func test_turnRefreshDelay_defaultMinimum_matchesThreshold() {
+        XCTAssertEqual(
+            CallReliabilityPolicy.turnRefreshDelay(ttl: 0),
+            QualityThresholds.turnMinRefreshDelaySeconds
+        )
+    }
+}
+
+// MARK: - Half-open monitor across connection epochs
+
+/// Two defects in the old Task-local `halfOpenSettled` bool:
+/// 1. It was only reset when the poll loop *observed* `.reconnecting`; a cycle
+///    completing between two 2s ticks left it `true` for the rest of the call
+///    (self-heal frozen).
+/// 2. Re-arming compared *cumulative* RTP counters against the threshold, so a
+///    post-restart half-open was instantly declared `.healthy` from pre-restart
+///    traffic.
+/// `HalfOpenMonitorState` keys off an explicit connection epoch and evaluates
+/// per-epoch packet *deltas*.
+@MainActor
+final class HalfOpenMonitorStateTests: XCTestCase {
+
+    private let t0 = Date(timeIntervalSince1970: 1_000_000)
+
+    func test_evaluate_firstTick_capturesBaseline_returnsWaiting() {
+        var state = HalfOpenMonitorState()
+        let outcome = state.evaluate(
+            epoch: 1, inboundPackets: 5_000, outboundPackets: 8_000,
+            now: t0, requiredInboundPackets: 5, graceSeconds: 10
+        )
+        // Cumulative counters are high but the epoch just started: delta is 0,
+        // clock is 0 — must wait, not declare healthy.
+        XCTAssertEqual(outcome, .waiting)
+    }
+
+    func test_evaluate_inboundDeltaReachesThreshold_returnsHealthy_thenSettles() {
+        var state = HalfOpenMonitorState()
+        _ = state.evaluate(
+            epoch: 1, inboundPackets: 100, outboundPackets: 100,
+            now: t0, requiredInboundPackets: 5, graceSeconds: 10
+        )
+        let second = state.evaluate(
+            epoch: 1, inboundPackets: 105, outboundPackets: 120,
+            now: t0.addingTimeInterval(2), requiredInboundPackets: 5, graceSeconds: 10
+        )
+        XCTAssertEqual(second, .healthy)
+        let third = state.evaluate(
+            epoch: 1, inboundPackets: 0, outboundPackets: 0,
+            now: t0.addingTimeInterval(4), requiredInboundPackets: 5, graceSeconds: 10
+        )
+        XCTAssertNil(third, "settled epoch must not re-evaluate")
+    }
+
+    func test_evaluate_pastGrace_outboundOnly_returnsHealHalfOpen_thenSettles() {
+        var state = HalfOpenMonitorState()
+        _ = state.evaluate(
+            epoch: 1, inboundPackets: 100, outboundPackets: 100,
+            now: t0, requiredInboundPackets: 5, graceSeconds: 10
+        )
+        let outcome = state.evaluate(
+            epoch: 1, inboundPackets: 100, outboundPackets: 500,
+            now: t0.addingTimeInterval(12), requiredInboundPackets: 5, graceSeconds: 10
+        )
+        XCTAssertEqual(outcome, .healHalfOpen)
+        let after = state.evaluate(
+            epoch: 1, inboundPackets: 100, outboundPackets: 900,
+            now: t0.addingTimeInterval(14), requiredInboundPackets: 5, graceSeconds: 10
+        )
+        XCTAssertNil(after, "one self-heal per epoch — settled after healing")
+    }
+
+    func test_evaluate_epochChange_reArmsWithFreshBaselineAndClock() {
+        var state = HalfOpenMonitorState()
+        // Epoch 1 settles healthy with high cumulative counters.
+        _ = state.evaluate(
+            epoch: 1, inboundPackets: 0, outboundPackets: 0,
+            now: t0, requiredInboundPackets: 5, graceSeconds: 10
+        )
+        _ = state.evaluate(
+            epoch: 1, inboundPackets: 10_000, outboundPackets: 10_000,
+            now: t0.addingTimeInterval(2), requiredInboundPackets: 5, graceSeconds: 10
+        )
+        // Reconnection completed (epoch 2). Cumulative counters unchanged from
+        // pre-restart traffic — the old code would instantly report .healthy.
+        let firstTick = state.evaluate(
+            epoch: 2, inboundPackets: 10_000, outboundPackets: 10_000,
+            now: t0.addingTimeInterval(60), requiredInboundPackets: 5, graceSeconds: 10
+        )
+        XCTAssertEqual(firstTick, .waiting, "epoch change must reset baseline and clock")
+        // Past grace within epoch 2: outbound flowing, inbound stalled → heal.
+        let healOutcome = state.evaluate(
+            epoch: 2, inboundPackets: 10_000, outboundPackets: 10_400,
+            now: t0.addingTimeInterval(72), requiredInboundPackets: 5, graceSeconds: 10
+        )
+        XCTAssertEqual(healOutcome, .healHalfOpen,
+                       "post-restart half-open must be detected from per-epoch deltas")
+    }
+
+    func test_needsEvaluation_freshState_returnsTrue() {
+        let state = HalfOpenMonitorState()
+        XCTAssertTrue(state.needsEvaluation(epoch: 1))
+    }
+
+    func test_needsEvaluation_settledEpoch_returnsFalse_newEpoch_returnsTrue() {
+        var state = HalfOpenMonitorState()
+        _ = state.evaluate(
+            epoch: 1, inboundPackets: 0, outboundPackets: 0,
+            now: t0, requiredInboundPackets: 5, graceSeconds: 10
+        )
+        _ = state.evaluate(
+            epoch: 1, inboundPackets: 50, outboundPackets: 50,
+            now: t0.addingTimeInterval(2), requiredInboundPackets: 5, graceSeconds: 10
+        )
+        XCTAssertFalse(state.needsEvaluation(epoch: 1),
+                       "settled epoch must allow the poll loop to skip getStats")
+        XCTAssertTrue(state.needsEvaluation(epoch: 2))
+    }
+
+    func test_evaluate_settledEpoch_staysSettledUntilEpochChanges() {
+        var state = HalfOpenMonitorState()
+        _ = state.evaluate(
+            epoch: 1, inboundPackets: 0, outboundPackets: 0,
+            now: t0, requiredInboundPackets: 5, graceSeconds: 10
+        )
+        _ = state.evaluate(
+            epoch: 1, inboundPackets: 50, outboundPackets: 50,
+            now: t0.addingTimeInterval(2), requiredInboundPackets: 5, graceSeconds: 10
+        )
+        XCTAssertNil(state.evaluate(
+            epoch: 1, inboundPackets: 60, outboundPackets: 60,
+            now: t0.addingTimeInterval(30), requiredInboundPackets: 5, graceSeconds: 10
+        ))
+        XCTAssertNotNil(state.evaluate(
+            epoch: 3, inboundPackets: 60, outboundPackets: 60,
+            now: t0.addingTimeInterval(32), requiredInboundPackets: 5, graceSeconds: 10
+        ), "a new epoch re-arms monitoring")
+    }
+}
+
+// MARK: - Stuck-muted CallKit fallback
+
+/// On iPhone/iPad, `RTCAudioSession.isAudioEnabled` is flipped ONLY by
+/// `provider:didActivate:`. If CallKit never delivers it (rare, observed on
+/// some hardware/OS states), the call sits `.connected` with dead mic and
+/// speaker and no safety net. The fallback must fire only in that exact
+/// stuck state — never when CallKit did its job, never on Mac (which has its
+/// own `[AUDIO_FALLBACK]` path), never after the call ended.
+@MainActor
+final class StuckMutedFallbackPolicyTests: XCTestCase {
+
+    func test_shouldForceAudioSessionActivation_stuckState_returnsTrue() {
+        XCTAssertTrue(CallReliabilityPolicy.shouldForceAudioSessionActivation(
+            usesCallKit: true, didActivateFired: false,
+            isAudioEnabled: false, callIsActive: true
+        ))
+    }
+
+    func test_shouldForceAudioSessionActivation_didActivateFired_returnsFalse() {
+        XCTAssertFalse(CallReliabilityPolicy.shouldForceAudioSessionActivation(
+            usesCallKit: true, didActivateFired: true,
+            isAudioEnabled: false, callIsActive: true
+        ))
+    }
+
+    func test_shouldForceAudioSessionActivation_audioAlreadyEnabled_returnsFalse() {
+        XCTAssertFalse(CallReliabilityPolicy.shouldForceAudioSessionActivation(
+            usesCallKit: true, didActivateFired: false,
+            isAudioEnabled: true, callIsActive: true
+        ))
+    }
+
+    func test_shouldForceAudioSessionActivation_noCallKit_returnsFalse() {
+        // Mac path activates manually in transitionToConnected already.
+        XCTAssertFalse(CallReliabilityPolicy.shouldForceAudioSessionActivation(
+            usesCallKit: false, didActivateFired: false,
+            isAudioEnabled: false, callIsActive: true
+        ))
+    }
+
+    func test_shouldForceAudioSessionActivation_callEnded_returnsFalse() {
+        XCTAssertFalse(CallReliabilityPolicy.shouldForceAudioSessionActivation(
+            usesCallKit: true, didActivateFired: false,
+            isAudioEnabled: false, callIsActive: false
+        ))
+    }
+
+    func test_stuckMutedFallbackDelaySeconds_is2() {
+        // CallKit normally delivers didActivate within ~500ms of connect;
+        // 2s is comfortably past that without leaving the user muted for long.
+        XCTAssertEqual(QualityThresholds.stuckMutedFallbackDelaySeconds, 2.0)
+    }
+}
