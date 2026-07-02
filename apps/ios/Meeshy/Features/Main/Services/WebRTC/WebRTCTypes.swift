@@ -401,6 +401,20 @@ nonisolated enum CallReliabilityPolicy {
     ) -> Bool {
         usesCallKit && callIsActive && !didActivateFired && !isAudioEnabled
     }
+
+    /// Whether the platform's CallKit stack can actually drive a call.
+    /// Two environments must run calls entirely in-app instead:
+    /// - iOS-app-on-Mac: `reportNewIncomingCall` fails (error 3) and
+    ///   `provider:didActivate:` never fires — CallKit half-succeeds then
+    ///   leaves a stuck "call in progress".
+    /// - Simulator: `provider:didActivate:` never fires either, and
+    ///   callservicesd autonomously sends `CXEndCallAction` ~3s after an
+    ///   outgoing start, killing the call while still `.ringing`.
+    /// Both take the `[AUDIO_FALLBACK]` self-activation path in
+    /// `transitionToConnected`.
+    static func platformUsesCallKit(isiOSAppOnMac: Bool, isSimulator: Bool) -> Bool {
+        !isiOSAppOnMac && !isSimulator
+    }
 }
 
 /// Half-open detection state across connection epochs.

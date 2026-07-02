@@ -1314,9 +1314,11 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
             "must skip promotion when the call already has a CallKit registration — re-reporting " +
             "an already-registered call would be a duplicate CXProvider call")
         XCTAssertTrue(
-            fnBody.contains("isiOSAppOnMac"),
-            "must never attempt CallKit on iOS-app-on-Mac — reportNewIncomingCall fails there " +
-            "(CXErrorCodeIncomingCallError 3, cf. CALL-FIX 2026-06-06)")
+            fnBody.contains("platformSupportsCallKit"),
+            "must never attempt CallKit where the platform stack is broken — iOS-app-on-Mac " +
+            "(reportNewIncomingCall fails, CXErrorCodeIncomingCallError 3, cf. CALL-FIX 2026-06-06) " +
+            "and the simulator (callservicesd autonomous CXEndCallAction ~3s after start) — " +
+            "gate via CallManager.platformSupportsCallKit")
         XCTAssertTrue(
             fnBody.contains("callProvider.reportNewIncomingCall"),
             "must actually register the call with CXProvider, not just flip local flags")

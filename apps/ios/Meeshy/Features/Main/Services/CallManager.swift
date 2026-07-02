@@ -245,6 +245,21 @@ final class CallManager: ObservableObject {
         set { _didActivateLock.withLock { $0 = newValue } }
     }
 
+    /// Single platform gate for every `callUsesCallKit` assignment — see
+    /// `CallReliabilityPolicy.platformUsesCallKit` for why Mac and the
+    /// simulator must drive calls in-app.
+    nonisolated static let platformSupportsCallKit: Bool = {
+        #if targetEnvironment(simulator)
+        let isSimulator = true
+        #else
+        let isSimulator = false
+        #endif
+        return CallReliabilityPolicy.platformUsesCallKit(
+            isiOSAppOnMac: ProcessInfo.processInfo.isiOSAppOnMac,
+            isSimulator: isSimulator
+        )
+    }()
+
     // MARK: - Internal
 
     private let webRTCService: WebRTCService
@@ -687,9 +702,10 @@ final class CallManager: ObservableObject {
         startOutgoingRingTimeout()
 
         // Outgoing is always foreground (the user just tapped Call), so the only
-        // no-CallKit case here is iOS-app-on-Mac. (Suppressing CallKit for outgoing
-        // on iOS would drop the system call UI / Recents the user expects there.)
-        callUsesCallKit = !ProcessInfo.processInfo.isiOSAppOnMac
+        // no-CallKit cases here are the platform ones (Mac, simulator).
+        // (Suppressing CallKit for outgoing on a real iPhone would drop the
+        // system call UI / Recents the user expects there.)
+        callUsesCallKit = Self.platformSupportsCallKit
         ringbackPlayer.shouldSelfActivateSession = !callUsesCallKit
         let uuid = UUID()
         activeCallUUID = uuid
@@ -1078,7 +1094,7 @@ final class CallManager: ObservableObject {
         // call UI; reportNewIncomingCall fails error 3). NB: a device woken from
         // suspension by a VoIP push comes through `reportIncomingVoIPCall`, NOT here,
         // and that path always keeps CallKit (Apple requirement).
-        callUsesCallKit = !ProcessInfo.processInfo.isiOSAppOnMac
+        callUsesCallKit = Self.platformSupportsCallKit
             && UIApplication.shared.applicationState != .active
         ringbackPlayer.shouldSelfActivateSession = !callUsesCallKit
         if !callUsesCallKit {
@@ -2215,7 +2231,7 @@ final class CallManager: ObservableObject {
     @MainActor
     private func promoteRingingCallToCallKitIfNeeded() {
         guard case .ringing(isOutgoing: false) = callState else { return }
-        guard !callUsesCallKit, !ProcessInfo.processInfo.isiOSAppOnMac else { return }
+        guard !callUsesCallKit, Self.platformSupportsCallKit else { return }
         guard let uuid = activeCallUUID else { return }
 
         let handleValue = (remoteUserId?.isEmpty == false) ? remoteUserId! : (remoteUsername ?? "")

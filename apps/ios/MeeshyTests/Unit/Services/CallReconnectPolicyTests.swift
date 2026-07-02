@@ -279,3 +279,29 @@ final class StuckMutedFallbackPolicyTests: XCTestCase {
         XCTAssertEqual(QualityThresholds.stuckMutedFallbackDelaySeconds, 2.0)
     }
 }
+
+// MARK: - Platform CallKit gate
+
+/// CallKit is only functional where the system call UI exists. iOS-app-on-Mac
+/// (reportNewIncomingCall error 3, didActivate never fires) and the simulator
+/// (callservicesd sends an autonomous CXEndCallAction ~3s after an outgoing
+/// start) must both drive calls entirely in-app via [AUDIO_FALLBACK].
+final class PlatformCallKitPolicyTests: XCTestCase {
+    func test_platformUsesCallKit_physicalDevice_returnsTrue() {
+        XCTAssertTrue(CallReliabilityPolicy.platformUsesCallKit(
+            isiOSAppOnMac: false, isSimulator: false
+        ))
+    }
+
+    func test_platformUsesCallKit_iosAppOnMac_returnsFalse() {
+        XCTAssertFalse(CallReliabilityPolicy.platformUsesCallKit(
+            isiOSAppOnMac: true, isSimulator: false
+        ))
+    }
+
+    func test_platformUsesCallKit_simulator_returnsFalse() {
+        XCTAssertFalse(CallReliabilityPolicy.platformUsesCallKit(
+            isiOSAppOnMac: false, isSimulator: true
+        ))
+    }
+}
