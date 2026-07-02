@@ -4,27 +4,27 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Calls) — slice `call-viewmodel-signal-fold` ✅
-The VM-fold — turns the call screen into a live two-way socket endpoint by folding
-`CallSignalManager.events` into `CallViewModel`, placing outgoing calls via the ACK, and keying every
-outbound emit by the real `callId`.
-- `CallConfig` gains `conversationId` (outgoing `emitInitiate` target) + `callId` (id an incoming call
-  already carries); both default `""` so `:app`'s placeholder compiles unchanged.
-- `CallViewModel` `@Inject`s `CallSignalManager`: `init` collects `events` in `viewModelScope` and
-  reduces each mapped `CallEvent` through the unchanged FSM; outgoing `start` rings optimistically then
-  `emitInitiate` mints `callId` (`Success`) or settles `Ended(Failed)` (`ServerError`/`Timeout`/
-  `Malformed`, gateway message surfaced); accept→`emitJoin`, decline/hangUp→`emitEnd`, mute→
-  `emitToggleAudio`, camera→`emitToggleVideo`, all `emitIfIdentified`-guarded (inert while `callId` blank).
-- +14 tests (28 total in `CallViewModelTest`; all 14 prior preserved). Whole-project `assembleDebug` +
-  `testDebugUnitTest` green (system Gradle `/opt/gradle`, wrapper 403s through proxy — see NOTES).
-  Diff = `apps/android` only (3 code files).
+## This loop (Phase: Calls) — slice `realtime-session-coordinator` ✅
+The app-level socket-lifecycle caller — turns the whole realtime layer live. It was **dead code**:
+nothing called `SocketManager.connect()` and no manager's `attach()` ran, so `CallSignalManager.events`
+(and every `message:*`/social frame) never flowed.
+- `:sdk-core` pure `RealtimeLifecyclePlan.commandsFor(was, is)` owns the ordering (sign-in →
+  `[Connect, Attach]`, connect-before-attach since `on()` no-ops on a null socket) + edge-only invariants
+  (act only on real auth transitions; **attach paired with every connect** so logout→login re-attaches on
+  the new socket).
+- `:sdk-core` `@Singleton RealtimeSessionCoordinator.onAuthenticatedChanged(isAuthenticated)` holds the
+  edge (`@Synchronized`) and dispatches the plan's commands (connect / attach message+social+call /
+  disconnect) to the SDK singletons. `AuthViewModel` drives it at init (restored token) / login / logout.
+- +16 tests (5 `RealtimeLifecyclePlanTest`, 6 `RealtimeSessionCoordinatorTest`, +5 `AuthViewModelTest`).
+  `assembleDebug` + `testDebugUnitTest` green (system Gradle `/opt/gradle`, wrapper 403s — see NOTES).
+  Diff = `apps/android` only (2 modified, 4 new).
 
 ### Next
-1. **App-level `CallSignalManager.attach()` lifecycle caller** — an app-startup hook so inbound `events`
-   begin flowing (currently nothing calls `attach()`).
-2. A Calls-tab nav entry threading the real `conversationId` into the outgoing `CallConfig` + wiring
+1. A Calls-tab nav entry threading the real `conversationId` into the outgoing `CallConfig` + wiring
    `CallHistoryScreen` (`:app`, own explicit run since it touches nav).
-3. Then the WebRTC / Telecom / FCM full-screen-intent plumbing.
+2. Then the WebRTC / Telecom / FCM full-screen-intent plumbing.
+3. Follow-up: `SocketManager.reconnectWithToken()` has no caller yet — a token-refresh slice must
+   re-attach after it (same attach-per-connect rule).
 
 ## Prior loop (Phase: Calls) — slice `call-initiate-ack` ✅
 The ACK-based `call:initiate` — mints the real server `callId` (+ mode / ICE servers / ttl). `core:model`
