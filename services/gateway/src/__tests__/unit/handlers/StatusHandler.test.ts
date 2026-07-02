@@ -356,6 +356,35 @@ describe('StatusHandler', () => {
       await handler.handleTypingStart(socket as any, TYPING_PAYLOAD);
       expect(deps.prisma.user.findUnique).toHaveBeenCalledTimes(2);
     });
+
+    it('periodic sweep evicts expired identity entries from the cache map', async () => {
+      const deps = makeDeps();
+      const handler = new StatusHandler(deps);
+      await handler.handleTypingStart(makeSocket() as any, TYPING_PAYLOAD);
+      const cache = (handler as any).identityCache as Map<string, unknown>;
+      expect(cache.size).toBe(1);
+      // Past the 60s identity TTL AND at least one 30s cleanup-timer tick.
+      jest.advanceTimersByTime(60_000 + 30_000);
+      expect(cache.size).toBe(0);
+      handler.destroy();
+    });
+
+    it('bounds the identity cache with FIFO eviction of the oldest entry at capacity', async () => {
+      const deps = makeDeps();
+      const handler = new StatusHandler(deps);
+      const cache = (handler as any).identityCache as Map<string, { expiresAt: number }>;
+      const notExpired = Date.now() + 60_000;
+      for (let i = 0; i < 5_000; i++) {
+        cache.set(`user:filler-${i}`, { username: 'x', displayName: 'x', expiresAt: notExpired } as any);
+      }
+      expect(cache.size).toBe(5_000);
+      await handler.handleTypingStart(makeSocket() as any, TYPING_PAYLOAD);
+      // Capacity held: oldest fresh entry evicted, new identity inserted.
+      expect(cache.size).toBe(5_000);
+      expect(cache.has('user:filler-0')).toBe(false);
+      expect(cache.has(`user:${USER_ID}`)).toBe(true);
+      handler.destroy();
+    });
   });
 
   // ─── clearTypingThrottle ─────────────────────────────────────────────────
