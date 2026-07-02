@@ -57,6 +57,7 @@ import { CLIENT_EVENTS, SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socket
 import { conversationStatsService } from '../services/ConversationStatsService';
 import type { Message } from '@meeshy/shared/types/index';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { BoundedTtlCache } from '../utils/bounded-cache';
 import type { ZmqAgentClient } from '../services/zmq-agent/ZmqAgentClient';
 import { MentionService } from '../services/MentionService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
@@ -154,9 +155,9 @@ export class MeeshySocketIOManager {
   // Rate limiter in-memory par socket (clé → timestamps des requêtes)
   private socketRateLimits: Map<string, number[]> = new Map();
 
-  // Cache immutable identifier → ObjectId (populated on first lookup, bounded to 2000 entries LRU)
-  private conversationIdCache = new Map<string, string>();
+  // Cache immutable identifier → ObjectId (populated on first lookup, bounded to 2000 entries FIFO)
   private readonly CONVERSATION_ID_CACHE_MAX = 2000;
+  private conversationIdCache = new BoundedTtlCache<string, string>({ maxSize: this.CONVERSATION_ID_CACHE_MAX });
 
   // Cache presence snapshot par userId — évite 2 queries Prisma par reconnexion (TTL 60s)
   private presenceSnapshotCache = new Map<string, { users: Array<{ userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }>; cachedAt: number }>();
@@ -473,11 +474,6 @@ export class MeeshySocketIOManager {
         select: { id: true, identifier: true }
       });
       if (conversation) {
-        // Evict oldest entry when cap reached (simple FIFO bounded LRU)
-        if (this.conversationIdCache.size >= this.CONVERSATION_ID_CACHE_MAX) {
-          const firstKey = this.conversationIdCache.keys().next().value;
-          if (firstKey !== undefined) this.conversationIdCache.delete(firstKey);
-        }
         this.conversationIdCache.set(conversationId, conversation.id);
         return conversation.id;
       }

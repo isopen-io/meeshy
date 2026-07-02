@@ -9,6 +9,7 @@
 
 import type { Socket } from 'socket.io';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { BoundedTtlCache } from '../../utils/bounded-cache.js';
 
 const logger = enhancedLogger.child({ module: 'SocketHelpers' });
 
@@ -89,7 +90,7 @@ export function getConnectedUser(
 // every distinct conversation identifier ever seen. Mirrors the bound
 // already applied to MeeshySocketIOManager's private duplicate of this cache.
 export const CONVERSATION_ID_CACHE_MAX = 2000;
-const conversationIdCache = new Map<string, string>();
+const conversationIdCache = new BoundedTtlCache<string, string>({ maxSize: CONVERSATION_ID_CACHE_MAX });
 
 /**
  * Normalise un identifiant de conversation (ObjectId ou identifier)
@@ -104,10 +105,6 @@ export async function normalizeConversationId(
     if (cached) return cached;
     const conversation = await prismaFindUnique({ identifier: conversationId });
     if (conversation) {
-      if (conversationIdCache.size >= CONVERSATION_ID_CACHE_MAX) {
-        const firstKey = conversationIdCache.keys().next().value;
-        if (firstKey !== undefined) conversationIdCache.delete(firstKey);
-      }
       conversationIdCache.set(conversationId, conversation.id);
       return conversation.id;
     }

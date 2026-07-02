@@ -1689,16 +1689,15 @@ describe('MeeshySocketIOManager', () => {
     });
 
     it('evicts oldest entry when cache exceeds 2000 items', async () => {
-      const cache: Map<string, string> = (manager as any).conversationIdCache;
-      // Fill to max
+      const cache = (manager as any).conversationIdCache;
+      // Fill to max — 'key-0' is the oldest (first-inserted) entry.
       for (let i = 0; i < 2000; i++) {
         cache.set(`key-${i}`, `val-${i}`);
       }
-      const firstKey = cache.keys().next().value;
-      // Add one more via DB
+      // Add one more via DB — pushes past the cap and FIFO-evicts the oldest.
       prisma.conversation.findUnique.mockResolvedValue({ id: 'd'.repeat(24), identifier: 'new-key' });
       await (manager as any).normalizeConversationId('new-key');
-      expect(cache.has(firstKey)).toBe(false);
+      expect(cache.has('key-0')).toBe(false);
       expect(cache.has('new-key')).toBe(true);
     });
 
