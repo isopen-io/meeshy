@@ -14,6 +14,20 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 113i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> - **113i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `51a28527`)** :
+>   Dynamic Type + a11y du **chrome** de `OnboardingFlowView` (shell du wizard : top bar, en-tête,
+>   bottom bar). **7/8** `.font(.system(size:))` → `MeeshyFont.relative` (chevron retour 15, libellé
+>   « Retour » 14, icône d'étape 20, compteur `n/N` 13 rounded, `funHeader` 26 bold rounded,
+>   `funSubtitle` 14, « passer l'étape » 14). **1 glyphe figé** : croix fermeture (15, cadre tap fixe
+>   38×38, doctrine 82i). `accessibilityLabel(common.close)` sur la croix, `accessibilityHidden` sur
+>   l'icône d'étape décorative, `accessibilityAddTraits(.isHeader)` sur `funHeader`. 1 fichier,
+>   0 logique, 0 test/clé i18n neuve. 0 contention iOS. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `OnboardingFlowView` chrome Dynamic Type + a11y SOLDÉ** : ne plus reprendre la croix figée (38×38).
+> - **Base de départ 114i : `main` HEAD**. Gros lots restants : `StoryViewerView+Content` (⚠️ i18n),
+>   `ConversationView+Composer` (lot critique prudent), `OnboardingAnimations`, `StoryViewerView+Canvas`,
+>   `FeedPostCard`, `StoryExportShareSheet`, `CallView` ; audit palette hexes proches.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 112i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
 > - **112i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `9408c957`)** :
 >   Dynamic Type + a11y de `OnboardingStepViews` (wizard d'inscription 8 étapes). Texte déjà
