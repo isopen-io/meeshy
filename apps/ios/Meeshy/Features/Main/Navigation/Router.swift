@@ -205,6 +205,11 @@ final class Router: ObservableObject {
 
     @Published var pendingHighlightMessageId: String?
 
+    /// Quand true, la prochaine `ConversationView` ouverte active directement sa
+    /// vue recherche (bouton Recherche de l'aperçu long-press). Consommé + remis
+    /// à false par `ConversationView` à l'ouverture.
+    @Published var pendingOpenSearch: Bool = false
+
     func navigateToConversation(_ conversation: Conversation, highlightMessageId: String? = nil) {
         pendingHighlightMessageId = highlightMessageId
 

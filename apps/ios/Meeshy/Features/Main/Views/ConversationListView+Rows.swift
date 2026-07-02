@@ -19,7 +19,7 @@ import MeeshyUI
 /// + hard-press preview. Extracted from `ConversationListView.conversationRow`.
 /// All inputs are plain values / closures so the row re-evaluates only when
 /// its own inputs change, not on every ConversationListView body pass.
-struct ConversationRowItem<Menu: View>: View {
+struct ConversationRowItem: View {
     let conversation: Conversation
     let community: MeeshyCommunity?
     let rowWidth: CGFloat
@@ -47,7 +47,9 @@ struct ConversationRowItem<Menu: View>: View {
     let onTap: () -> Void
     let onDragStart: () -> Void
     let onLoadPreview: () async -> Void
-    @ViewBuilder let contextMenu: () -> Menu
+    /// Appui long → overlay de menu custom (dessine ses icônes ; le
+    /// `.contextMenu` natif ne les affiche pas sur iOS 26).
+    let onLongPress: () -> Void
 
     var body: some View {
         SwipeableRow(
@@ -82,17 +84,15 @@ struct ConversationRowItem<Menu: View>: View {
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(String(localized: "conversation.row.hint", bundle: .main))
-            .onDrag {
-                onDragStart()
-                return NSItemProvider(object: conversation.id as NSString)
-            }
-            .contextMenu {
-                contextMenu()
-            } preview: {
-                ConversationPreviewView(
-                    conversation: conversation,
-                    cachedMessages: cachedPreviewMessages
-                )
+            // Appui long → overlay custom (icônes garanties iOS 26). Le
+            // drag-to-reorder natif (`.onDrag`) a été retiré : il installe une
+            // UIDragInteraction UIKit qui capte le long-press système et
+            // empêchait la gesture SwiftUI d'ouvrir le menu (le `.contextMenu`
+            // natif, lui, se coordonnait avec `.onDrag`). Le déplacement reste
+            // accessible via « Déplacer vers » dans le menu.
+            .onLongPressGesture(minimumDuration: 0.4) {
+                HapticFeedback.medium()
+                onLongPress()
             }
             .task {
                 await onLoadPreview()

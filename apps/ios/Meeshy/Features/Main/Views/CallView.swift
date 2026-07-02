@@ -132,8 +132,11 @@ struct CallView: View {
                     .transition(.opacity)
             }
 
-            // Effects overlay — accessible dans tous les etats actifs (pas seulement connected)
-            if callManager.callState.isActive && !callManager.callState.isRinging {
+            // Effects overlay — accessible dans tous les etats actifs (pas seulement
+            // connected). Video-only depuis 2026-07-02 : le panneau d'effets vocaux
+            // est retiré (pipeline de capture audio inexistant — voir
+            // CallEffectsOverlay), il ne reste que les filtres vidéo.
+            if callManager.callState.isActive && !callManager.callState.isRinging && callManager.isVideoEnabled {
                 CallEffectsOverlay(
                     isExpanded: $showEffectsToolbar,
                     isVideoEnabled: callManager.isVideoEnabled
@@ -157,6 +160,8 @@ struct CallView: View {
                             HapticFeedback.medium()
                         } label: {
                             Image(systemName: "chevron.down")
+                                // Doctrine 82i : glyphe de chrome dans un cadre glass fixe
+                                // (diameter 40) → taille figée (ne doit pas déborder du cercle).
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(.white)
                                 .callControlGlass(diameter: 40, isActive: false, tint: .white)
@@ -907,6 +912,7 @@ struct CallView: View {
                     )
                     .frame(width: 56, height: 56)
                 Text(initial)
+                    // Doctrine 86i : initiale d'avatar dans un cercle fixe 56×56 → figée.
                     .font(.system(size: 24, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
             }
@@ -914,8 +920,9 @@ struct CallView: View {
             // …"video paused" affordance on top.
             VStack(spacing: 6) {
                 Image(systemName: "video.slash.fill")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(MeeshyFont.relative(18, weight: .semibold))
                     .foregroundColor(MeeshyColors.warning)
+                    .accessibilityHidden(true)
                 Text(String(localized: "call.video.suspended", defaultValue: "Vidéo en pause", bundle: .main))
                     .font(.caption2.weight(.semibold))
                     .foregroundColor(.white)
@@ -1003,7 +1010,9 @@ struct CallView: View {
     // MARK: - Control Bar
 
     private var hasActiveEffects: Bool {
-        callManager.activeAudioEffect != nil || callManager.videoFilters.config.isEnabled
+        // Voice effects are no longer settable from the UI (dead pipeline,
+        // entry removed) — only video filters light this up.
+        callManager.videoFilters.config.isEnabled
     }
 
     /// §7.3 + iOS 26 Liquid Glass. The buttons are grouped in a
@@ -1074,19 +1083,24 @@ struct CallView: View {
 
             // Effects (Plus button) — label is state-aware so VoiceOver users
             // hear the expected outcome (open vs. close) rather than a static noun.
-            callControlButton(
-                icon: showEffectsToolbar ? "xmark" : "plus",
-                color: hasActiveEffects ? MeeshyColors.indigo500 : .white,
-                bgColor: hasActiveEffects ? MeeshyColors.indigo500 : .white,
-                isActive: showEffectsToolbar || hasActiveEffects,
-                caption: String(localized: "call.control.effects", defaultValue: "Effets", bundle: .main),
-                label: showEffectsToolbar
-                    ? String(localized: "call.control.effects.close", defaultValue: "Fermer les effets", bundle: .main)
-                    : String(localized: "call.control.effects.open", defaultValue: "Ouvrir les effets", bundle: .main),
-                isToggle: true
-            ) {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showEffectsToolbar.toggle()
+            // Video calls only: the overlay now offers video filters exclusively
+            // (voice-effects entry removed — dead pipeline, see CallEffectsOverlay),
+            // so exposing it in an audio call would open an empty panel.
+            if callManager.isVideoEnabled {
+                callControlButton(
+                    icon: showEffectsToolbar ? "xmark" : "plus",
+                    color: hasActiveEffects ? MeeshyColors.indigo500 : .white,
+                    bgColor: hasActiveEffects ? MeeshyColors.indigo500 : .white,
+                    isActive: showEffectsToolbar || hasActiveEffects,
+                    caption: String(localized: "call.control.effects", defaultValue: "Effets", bundle: .main),
+                    label: showEffectsToolbar
+                        ? String(localized: "call.control.effects.close", defaultValue: "Fermer les effets", bundle: .main)
+                        : String(localized: "call.control.effects.open", defaultValue: "Ouvrir les effets", bundle: .main),
+                    isToggle: true
+                ) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showEffectsToolbar.toggle()
+                    }
                 }
             }
 
@@ -1186,6 +1200,7 @@ struct CallView: View {
         } label: {
             VStack(spacing: 6) {
                 Image(systemName: "camera.badge.ellipsis")
+                    // Doctrine 86i : glyphe de contrôle dans un cercle glass fixe (diameter 56) → figé.
                     .font(.system(size: 22, weight: .medium))
                     .foregroundColor(.white.opacity(0.9))
                     .callControlGlass(diameter: 56, isActive: false, tint: .white)
@@ -1253,6 +1268,7 @@ struct CallView: View {
                 .frame(width: size, height: size)
 
             Text(initial)
+                // Doctrine 86i : initiale d'avatar proportionnelle au cercle fixe `size` → figée.
                 .font(.system(size: size * 0.4, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
         }
@@ -1289,6 +1305,8 @@ struct CallView: View {
         Button(action: action) {
             VStack(spacing: 6) {
                 Image(systemName: icon)
+                    // Doctrine 86i : glyphe de contrôle dans un cercle glass fixe (diameter 56) → figé
+                    // (la caption `.caption2` sous le bouton porte, elle, le Dynamic Type).
                     .font(.system(size: 22, weight: .medium))
                     .foregroundColor(isActive ? color : .white.opacity(0.9))
                     .callControlGlass(diameter: 56, isActive: isActive, tint: bgColor)
@@ -1315,6 +1333,7 @@ struct CallView: View {
         } label: {
             VStack(spacing: 6) {
                 Image(systemName: showEffectsToolbar ? "xmark" : "camera.filters")
+                    // Doctrine 86i : glyphe de contrôle dans un cercle glass fixe (diameter 64) → figé.
                     .font(.system(size: 24, weight: .medium))
                     .foregroundColor(hasActiveEffects ? MeeshyColors.indigo500 : .white.opacity(0.9))
                     .callControlGlass(diameter: 64, isActive: hasActiveEffects, tint: MeeshyColors.indigo500)
@@ -1335,6 +1354,7 @@ struct CallView: View {
         } label: {
             VStack(spacing: 6) {
                 Image(systemName: "phone.down.fill")
+                    // Doctrine 86i : glyphe de fin d'appel dans un cercle glass fixe (diameter 56) → figé.
                     .font(.system(size: 24, weight: .medium))
                     .foregroundColor(.white)
                     .endCallGlass(diameter: 56)

@@ -228,6 +228,160 @@ extension ConversationListView {
             Label(String(localized: "context.delete", defaultValue: "Supprimer"), systemImage: "trash.fill")
         }
     }
+
+    // MARK: - Custom Context Menu Overlay (icônes garanties iOS 26)
+
+    func dismissContextMenu() {
+        // Zoom-out : anime la sortie (aperçu rétrécit, menu redescend) puis
+        // retire réellement l'overlay après la durée du spring.
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) { contextMenuAppeared = false }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.26) {
+            contextMenuConversation = nil
+        }
+    }
+
+    @ViewBuilder
+    var conversationContextMenuOverlay: some View {
+        if let conversation = contextMenuConversation {
+            ZStack {
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                    .ignoresSafeArea()
+                    .overlay(Color.black.opacity(0.12).ignoresSafeArea())
+                    .contentShape(Rectangle())
+                    .onTapGesture { dismissContextMenu() }
+                    .opacity(contextMenuAppeared ? 1 : 0)
+
+                VStack(spacing: 16) {
+                    ConversationPreviewView(
+                        conversation: conversation,
+                        cachedMessages: conversationViewModel.previewMessages[conversation.id] ?? [],
+                        bannerURL: (conversation.type == .direct ? conversation.participantBanner : conversation.banner).flatMap { MeeshyConfig.resolveMediaURL($0) },
+                        avatarURL: conversation.type == .direct ? conversation.participantAvatarURL : conversation.avatar,
+                        storyState: storyRingState(for: conversation),
+                        moodEmoji: conversationMoodStatus(for: conversation)?.moodEmoji,
+                        presenceState: conversation.type == .direct
+                            ? PresenceManager.shared.presenceState(for: conversation.participantUserId ?? "")
+                            : .offline,
+                        isDirect: conversation.type == .direct,
+                        onCall: (conversation.type == .direct && conversation.participantUserId != nil) ? {
+                            dismissContextMenu()
+                            if let uid = conversation.participantUserId {
+                                CallManager.shared.startCall(
+                                    conversationId: conversation.id,
+                                    userId: uid,
+                                    displayName: conversation.name ?? "",
+                                    isVideo: false
+                                )
+                            }
+                        } : nil,
+                        onSearch: {
+                            dismissContextMenu()
+                            router.pendingOpenSearch = true
+                            onSelect(conversation)
+                        },
+                        onInfo: { dismissContextMenu(); conversationInfoConversation = conversation },
+                        onProfileInfo: { dismissContextMenu(); handleProfileView(conversation) }
+                    )
+                    .frame(maxWidth: 340)
+                    // Aperçu : zoom (grandit depuis 0.7) + fondu, piloté par
+                    // `contextMenuAppeared` (spring à rebond, cf. .onAppear).
+                    .scaleEffect(contextMenuAppeared ? 1 : 0.7, anchor: .center)
+                    .opacity(contextMenuAppeared ? 1 : 0)
+
+                    ConversationContextMenuView(
+                        accentHex: conversation.accentColor,
+                        isPinned: conversation.userState.isPinned,
+                        isMuted: conversation.userState.isMuted,
+                        hasUnread: conversation.userState.unreadCount > 0,
+                        currentReaction: conversation.userState.reaction,
+                        categories: conversationViewModel.userCategories.map {
+                            ConversationMenuCategory(id: $0.id, name: $0.name, icon: $0.icon)
+                        },
+                        currentSectionId: conversation.userState.sectionId,
+                        canInvite: canCreateShareLink(for: conversation),
+                        isLocked: ConversationLockManager.shared.isLocked(conversation.id),
+                        isArchived: conversation.userState.isArchived,
+                        isBlockableDM: conversation.type == .direct && conversation.participantUserId != nil,
+                        isBlocked: conversation.participantUserId.map { BlockService.shared.isBlocked(userId: $0) } ?? false,
+                        canRename: conversation.type != .direct,
+                        onPin: { Task { await conversationViewModel.togglePin(for: conversation.id) } },
+                        onMute: { Task { await conversationViewModel.toggleMute(for: conversation.id) } },
+                        onMarkReadToggle: {
+                            Task {
+                                if conversation.userState.unreadCount > 0 {
+                                    await conversationViewModel.markAsRead(conversationId: conversation.id)
+                                } else {
+                                    await conversationViewModel.markAsUnread(conversationId: conversation.id)
+                                }
+                            }
+                        },
+                        onDetails: { conversationInfoConversation = conversation },
+                        onRename: {
+                            renameText = conversation.name ?? ""
+                            renameTarget = conversation
+                        },
+                        onSetFavorite: { emoji in
+                            Task { await conversationViewModel.setFavoriteReaction(conversationId: conversation.id, emoji: emoji) }
+                        },
+                        onRemoveFavorite: {
+                            Task { await conversationViewModel.setFavoriteReaction(conversationId: conversation.id, emoji: nil) }
+                        },
+                        onMove: { sectionId in
+                            conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: sectionId)
+                        },
+                        onInvite: { inviteSheetConversation = conversation },
+                        onLock: {
+                            if ConversationLockManager.shared.isLocked(conversation.id) {
+                                lockSheetMode = .unlockConversation
+                                lockSheetConversation = conversation
+                            } else if ConversationLockManager.shared.masterPinConfigured {
+                                lockSheetMode = .lockConversation
+                                lockSheetConversation = conversation
+                            } else {
+                                showNoMasterPinAlert = true
+                            }
+                        },
+                        onArchive: {
+                            Task {
+                                if conversation.userState.isArchived {
+                                    await conversationViewModel.unarchiveConversation(conversationId: conversation.id)
+                                } else {
+                                    await conversationViewModel.archiveConversation(conversationId: conversation.id)
+                                }
+                            }
+                        },
+                        onBlock: {
+                            if let uid = conversation.participantUserId, BlockService.shared.isBlocked(userId: uid) {
+                                Task {
+                                    try? await BlockService.shared.unblockUser(userId: uid)
+                                    await MainActor.run { HapticFeedback.success() }
+                                }
+                            } else {
+                                blockTargetConversation = conversation
+                                showBlockConfirmation = true
+                            }
+                        },
+                        onDelete: {
+                            Task { await conversationViewModel.deleteConversation(conversationId: conversation.id) }
+                        },
+                        onDismiss: { dismissContextMenu() }
+                    )
+                    // Menu : remonte depuis le bas + fondu (piloté).
+                    .offset(y: contextMenuAppeared ? 0 : 70)
+                    .opacity(contextMenuAppeared ? 1 : 0)
+                }
+                .padding(.horizontal, 20)
+            }
+            .zIndex(300)
+            .onAppear {
+                // Zoom + rebond : l'aperçu grandit et le menu remonte au montage.
+                withAnimation(.spring(response: 0.44, dampingFraction: 0.6)) {
+                    contextMenuAppeared = true
+                }
+            }
+        }
+    }
 }
 
 // MARK: - Header Overlay

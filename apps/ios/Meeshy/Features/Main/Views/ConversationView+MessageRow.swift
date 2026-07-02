@@ -292,8 +292,7 @@ extension ConversationView {
                 closeReactionBar()
                 guard let msg = resolved else { return }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    overlayState.detailSheetMessage = msg
-                    overlayState.detailSheetInitialTab = .react
+                    overlayState.fullReactionPickerMessage = msg
                 }
             }
         )

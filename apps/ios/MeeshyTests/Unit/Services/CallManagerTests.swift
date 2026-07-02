@@ -611,6 +611,48 @@ final class CallManagerEarlyJoinTests: XCTestCase {
         )
     }
 
+    /// Mirrors `test_reportIncomingVoIPCall_evictsDedupRingEntry_onCallKitReportFailure`
+    /// for the `guard callState == .idle else { ... }` busy branch a few lines
+    /// above: a second VoIP push arriving mid-call is reported-then-immediately-
+    /// ended, but the completion handler used to discard the error entirely
+    /// (`{ _ in }`). If CallKit refuses that report (two call groups already
+    /// used, restricted mode, a transient error), the dedup ring — already
+    /// populated for this callId before this method ran — was never evicted,
+    /// so a legitimate APNs retry within the TTL got silently phantom-acked
+    /// instead of re-ringing the callee.
+    func test_reportIncomingVoIPCall_evictsDedupRingEntry_onCallKitReportFailure_busyPath() throws {
+        let source = try sourceText()
+        guard let body = body(of: "func reportIncomingVoIPCall", in: source) else {
+            XCTFail("reportIncomingVoIPCall not found")
+            return
+        }
+        guard let busyGuardRange = body.range(of: "guard callState == .idle else {") else {
+            XCTFail("Expected the busy-path guard in reportIncomingVoIPCall")
+            return
+        }
+        guard let reportRange = body.range(
+            of: "reportNewIncomingCall(with: uuid, update: update) { error in",
+            range: busyGuardRange.upperBound..<body.endIndex
+        ) else {
+            XCTFail("Expected the busy-path reportNewIncomingCall closure in reportIncomingVoIPCall")
+            return
+        }
+        guard let endedAtRange = body.range(
+            of: "reportCall(with: uuid, endedAt: nil, reason: .unanswered)",
+            range: reportRange.upperBound..<body.endIndex
+        ) else {
+            XCTFail("Expected reportCall(...endedAt: nil...) after the busy-path report closure")
+            return
+        }
+        let closureBody = String(body[reportRange.upperBound..<endedAtRange.lowerBound])
+        XCTAssertTrue(
+            closureBody.contains("VoIPPushManager.shared.clearDedup(callId: callId)"),
+            "reportIncomingVoIPCall's BUSY-path CallKit-report-failure closure must also evict the callId " +
+            "from the dedup ring — otherwise a genuine APNs retry while the user is on another call is " +
+            "dropped as a duplicate, leaving the callee with zero call UI."
+        )
+    }
+
     func test_answerCall_awaitsLocalMediaBeforeCreateAnswer() throws {
         let source = try sourceText()
         guard let body = body(of: "func answerCall()", in: source) else {
@@ -1623,26 +1665,36 @@ final class ICERestartTaskSerializationTests: XCTestCase {
         )
     }
 
-    /// `attemptReconnection` must cancel any previous task before starting a new
-    /// one. A second reconnection attempt (e.g. the watchdog fires mid-backoff)
-    /// must kill the sleeping first attempt to prevent two concurrent offers.
+    /// Every (re-)arm of the ICE restart must cancel any previous task before
+    /// starting a new one. A second reconnection trigger (e.g. the watchdog
+    /// fires mid-backoff, or a coalesced NWPath edge re-arms the in-flight
+    /// attempt) must kill the sleeping first attempt to prevent two concurrent
+    /// offers. Since the trigger-arbitration refactor the single seam is
+    /// `scheduleICERestart` — `attemptReconnection` delegates to it for both
+    /// new cycles and coalesced re-arms.
     func test_attemptReconnection_cancelsExistingTaskBeforeStartingNew() throws {
         let src = try callManagerSource()
-        guard let funcRange = src.range(of: "func attemptReconnection()") else {
-            XCTFail("attemptReconnection() not found in CallManager.swift"); return
+        guard let funcRange = src.range(of: "func scheduleICERestart(") else {
+            XCTFail("scheduleICERestart() not found in CallManager.swift"); return
         }
         let bodyEnd = src.range(of: "\n    }", range: funcRange.upperBound..<src.endIndex)?.upperBound
             ?? src.endIndex
         let body = String(src[funcRange.lowerBound..<bodyEnd])
         XCTAssertTrue(
             body.contains("iceRestartTask?.cancel()"),
-            "attemptReconnection must cancel the previous iceRestartTask before creating a " +
+            "scheduleICERestart must cancel the previous iceRestartTask before creating a " +
             "new one — two concurrent Tasks sending restart offers corrupt perfect negotiation."
         )
         XCTAssertTrue(
             body.contains("iceRestartTask = Task"),
-            "attemptReconnection must assign the new Task to iceRestartTask so subsequent " +
+            "scheduleICERestart must assign the new Task to iceRestartTask so subsequent " +
             "calls can cancel it."
+        )
+        // attemptReconnection must route every arm through that single seam.
+        XCTAssertTrue(
+            src.contains("scheduleICERestart(attempt: reconnectAttempt"),
+            "attemptReconnection must delegate to scheduleICERestart — a second, direct " +
+            "iceRestartTask assignment would bypass the cancel-before-arm contract."
         )
     }
 
@@ -3414,10 +3466,16 @@ final class CallManagerTURNRefreshGuardTests: XCTestCase {
         guard let body = refreshBody(source) else {
             XCTFail("scheduleTURNCredentialRefresh body not found"); return
         }
+        // The floor-clamp lives in CallReliabilityPolicy.turnRefreshDelay
+        // (unit-tested in TurnRefreshDelayPolicyTests): a degenerate TTL clamps
+        // to turnMinRefreshDelaySeconds instead of disarming the refresh — the
+        // old `guard ttl >= 60 else return` skipped scheduling entirely and let
+        // mid-call credentials expire with no refresh armed.
         XCTAssertTrue(
-            body.contains("guard ttl >= 60") || body.contains("ttl < 60"),
-            "scheduleTURNCredentialRefresh must guard against TTL < 60s to prevent " +
-            "a tight request loop when the gateway sends a malformed or zero TTL."
+            body.contains("CallReliabilityPolicy.turnRefreshDelay"),
+            "scheduleTURNCredentialRefresh must compute its delay via " +
+            "CallReliabilityPolicy.turnRefreshDelay — the policy owns the minimum-TTL " +
+            "clamp that prevents a tight request loop on a malformed or zero TTL."
         )
     }
 
@@ -3438,10 +3496,15 @@ final class CallManagerTURNRefreshGuardTests: XCTestCase {
         guard let body = refreshBody(source) else {
             XCTFail("scheduleTURNCredentialRefresh body not found"); return
         }
+        // The 80%-of-TTL computation moved into CallReliabilityPolicy.turnRefreshDelay,
+        // where it is behaviour-tested (TurnRefreshDelayPolicyTests
+        // .test_turnRefreshDelay_nominalTTL_is80Percent). Here we guard the wiring:
+        // the scheduler must delegate to the policy with the gateway TTL.
         XCTAssertTrue(
-            body.contains("ttl * 0.8"),
-            "scheduleTURNCredentialRefresh must schedule the refresh at 80% of TTL " +
-            "to ensure credentials are renewed before they expire (leaving a 20% safety window)."
+            body.contains("CallReliabilityPolicy.turnRefreshDelay(ttl: ttl)"),
+            "scheduleTURNCredentialRefresh must delegate its delay to " +
+            "CallReliabilityPolicy.turnRefreshDelay(ttl:) so credentials are renewed at " +
+            "80% of TTL (20% safety window) with the minimum-delay clamp applied."
         )
     }
 

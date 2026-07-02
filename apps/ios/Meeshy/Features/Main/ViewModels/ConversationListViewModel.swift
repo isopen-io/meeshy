@@ -1389,6 +1389,24 @@ class ConversationListViewModel: ObservableObject {
         try? await store.apply(.setMuted(newValue), for: conversationId)
     }
 
+    // MARK: - Rename
+
+    /// Renomme une conversation (groupes / communautés). Enqueue via l'outbox
+    /// (`PUT /conversations/:id`) ; le nouveau nom se propage au retour serveur
+    /// via l'event socket `conversationUpdated` déjà observé par ce VM.
+    func renameConversation(conversationId: String, title: String) async {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let payload = UpdateConversationPayload(
+            clientMutationId: ClientMutationId.generate(),
+            conversationId: conversationId,
+            title: trimmed,
+            description: nil,
+            avatarUrl: nil
+        )
+        try? await OfflineQueue.shared.enqueue(.updateConversation, payload: payload, conversationId: conversationId)
+    }
+
     // MARK: - Mark as Read
 
     func markAsRead(conversationId: String) async {

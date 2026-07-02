@@ -187,3 +187,48 @@ vérifiable ici.
   échec réseau `ECONNRESET` sur le téléchargement du binaire moteur, indépendant de ce changement).
 - Non étendu à `call:transcription-segment`/`call:request-ice-servers` (même faille théorique, non
   vérifiée en détail cette session) — piste pour une prochaine passe.
+
+## Session 2026-07-02 — audit iOS AVEC toolchain Xcode (premier passage compilable)
+Environnement macOS + Xcode 26.1.1 enfin disponible — le backlog iOS déféré des sessions Linux a été
+traité. Audit par 3 agents parallèles (FSM reconnexion / transport+TURN / session audio+CallKit),
+chaque piste re-vérifiée dans le code réel avant fix. Fixes commités `6b5e238d8` + `b3f704ba1` :
+
+- **[FIX HIGH] Budget reconnexion épuisé par un blip** — `attemptReconnection()` incrémentait
+  `reconnectAttempt` sans garde ; NWPathMonitor tire sur path-lost ET path-restored ET interface-change
+  → un hoquet réseau 1-2s brûlait le budget de 3 et tuait l'appel (`.connectionLost`). Fix :
+  `CallReliabilityPolicy.evaluateReconnectTrigger` — les triggers externes COALESCENT dans le cycle en
+  vol (re-armement de l'iceRestartTask du même attempt, compteur intact) ; seuls le watchdog
+  `.reconnecting` et un `performICERestart` nil escaladent (`escalate: true`).
+- **[FIX MED] TURN non rafraîchi à l'ICE restart** — le refresh périodique (80% TTL) et le refresh
+  didReconnect existaient, mais le chemin network-change→ICE-restart réutilisait les creds courants
+  (potentiellement proches de l'horizon). Fix : `emitRequestIceServers` fire-and-forget à chaque
+  nouveau cycle (la réponse s'applique via le listener `call:ice-servers-refreshed` existant ; une
+  escalade watchdog re-gather avec les creds frais). + `turnRefreshDelay` clamp : un TTL dégénéré
+  (<60s) ne désarme plus le refresh périodique (ancien `guard ttl >= 60 else return`).
+- **[FIX MED-LOW] Self-heal half-open gelé + re-détection inopérante** — `halfOpenSettled` (var locale
+  de la boucle monitor, tick 2s) n'était resetée que si la boucle OBSERVAIT `.reconnecting` (raté si le
+  cycle complet passe entre 2 ticks), et la re-détection comparait des compteurs RTP CUMULATIFS (déjà
+  au-dessus du seuil après restart → `.healthy` instantané, half-open post-restart indétectable). Fix :
+  `HalfOpenMonitorState` (struct pure testée) à époque de connexion (`connectionEpoch` bumpé dans
+  `transitionToConnected`) + baselines par époque, évaluation en deltas.
+- **[FIX RC-2] Stuck-muted iPhone** — `RTCAudioSession.isAudioEnabled` n'est flippé QUE par
+  `provider:didActivate:` ; s'il n'arrive jamais, appel connecté mais muet, aucun filet (le détecteur
+  half-open ne voit rien : comfort-noise/DTX maintient les compteurs RTP). Fix : fallback one-shot 2s
+  après `.connected` (flag `callKitDidActivateFired` thread-safe pattern `isCallActiveFlag`, bridge
+  miroir du recovery interruption-end). **À valider sur device réel** (timing CallKit ≠ simulateur).
+- **[FIX produit, décision utilisateur] Effets vocaux = UI mensongère** — le panneau in-call Voice
+  Coder/Baby/Demon (CallView→CallEffectsOverlay→AudioEffectsPanel) était branché sur un pipeline MORT :
+  `processAudioBuffer` n'a AUCUN appelant prod depuis la suppression de `MeeshyAudioProcessingModule`
+  (lui-même scaffold jamais branché — la feature n'a JAMAIS modifié la voix envoyée au pair). Décision
+  utilisateur : masquer. Entry points retirés (bouton « + » et overlay = video-only, bouton audio de la
+  toolbar supprimé) ; `AudioEffectsPanel` + `CallAudioEffectsService` restent dans l'arbre pour un futur
+  recâblage (nécessite un hook de capture WebRTC — chantier dédié). Back-sound (AVAudioEngine concurrent
+  du mic WebRTC, lecture locale) désactivé de facto par le même masquage.
+- **Vérifiés NON-bugs cette session** (ne pas re-creuser) : `.forcePolling` déjà retiré (transport
+  auto-upgrade WS + suppression forceReconnect mid-call) ; watchdog `.reconnecting` présent
+  (`evaluateReconnecting`, budget 10s×3) ; un blip socket 2s ne tue PAS l'appel (aucun listener
+  socket-disconnect ne termine d'appel ; debounce PC-state 3.5s ; didReconnect re-join+flush ICE) ;
+  interruption-end réactive sans `.shouldResume` ; contrats CXAction fulfill-once corrects ;
+  `deactivateAudioSession` uniquement au teardown.
+- 23 tests unitaires nouveaux (`CallReconnectPolicyTests.swift`) sur les 4 politiques pures.
+  Build-for-testing Xcode 26.1.1 VERT. Suite MeeshyTests 18.2 + E2E simu↔web : voir suite session.

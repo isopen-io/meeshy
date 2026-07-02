@@ -159,6 +159,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     public var participantUserId: String? = nil
     public var participantUsername: String? = nil
     public var participantAvatarURL: String? = nil
+    public var participantBanner: String? = nil
     public var lastSeenAt: Date? = nil
 
     public var closedAt: Date? = nil
@@ -261,6 +262,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         h.combine(avatar)
         h.combine(participantUsername)
         h.combine(participantAvatarURL)
+        h.combine(participantBanner)
         h.combine(tags)
         h.combine(userState.reaction)
         // New userState fields surfaced to the row (locked, draft, pending sync).
@@ -302,7 +304,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
                 recentMessages: [RecentMessagePreview] = [],
                 tags: [MeeshyConversationTag] = [], isAnnouncementChannel: Bool = false, defaultWriteRole: String? = nil, slowModeSeconds: Int? = nil, autoTranslateEnabled: Bool? = nil, isPinned: Bool = false, sectionId: String? = nil,
                 isMuted: Bool = false, mentionsOnly: Bool = false, isArchivedByUser: Bool = false, customName: String? = nil,
-                participantUserId: String? = nil, participantUsername: String? = nil, participantAvatarURL: String? = nil, lastSeenAt: Date? = nil,
+                participantUserId: String? = nil, participantUsername: String? = nil, participantAvatarURL: String? = nil, participantBanner: String? = nil, lastSeenAt: Date? = nil,
                 closedAt: Date? = nil, closedBy: String? = nil,
                 currentUserRole: String? = nil, currentUserJoinedAt: Date? = nil, reaction: String? = nil,
                 language: ConversationContext.ConversationLanguage = .french,
@@ -316,7 +318,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.createdAt = createdAt; self.updatedAt = updatedAt
         self.isAnnouncementChannel = isAnnouncementChannel
         self.defaultWriteRole = defaultWriteRole; self.slowModeSeconds = slowModeSeconds; self.autoTranslateEnabled = autoTranslateEnabled
-        self.participantUserId = participantUserId; self.participantUsername = participantUsername; self.participantAvatarURL = participantAvatarURL; self.lastSeenAt = lastSeenAt
+        self.participantUserId = participantUserId; self.participantUsername = participantUsername; self.participantAvatarURL = participantAvatarURL; self.participantBanner = participantBanner; self.lastSeenAt = lastSeenAt
         self.closedAt = closedAt; self.closedBy = closedBy
         self.currentUserRole = currentUserRole; self.currentUserJoinedAt = currentUserJoinedAt
         self.lastMessagePreview = lastMessagePreview
@@ -372,7 +374,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         case lastMessageSenderName, lastMessageIsBlurred, lastMessageIsViewOnce, lastMessageExpiresAt
         case recentMessages, tags
         case isAnnouncementChannel, defaultWriteRole, slowModeSeconds, autoTranslateEnabled
-        case participantUserId, participantUsername, participantAvatarURL, lastSeenAt
+        case participantUserId, participantUsername, participantAvatarURL, participantBanner, lastSeenAt
         case closedAt, closedBy, currentUserRole, currentUserJoinedAt
         case language, theme, colorPalette
 
@@ -430,6 +432,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.participantUserId = try c.decodeIfPresent(String.self, forKey: .participantUserId)
         self.participantUsername = try c.decodeIfPresent(String.self, forKey: .participantUsername)
         self.participantAvatarURL = try c.decodeIfPresent(String.self, forKey: .participantAvatarURL)
+        self.participantBanner = try c.decodeIfPresent(String.self, forKey: .participantBanner)
         self.lastSeenAt = try c.decodeIfPresent(Date.self, forKey: .lastSeenAt)
         self.closedAt = try c.decodeIfPresent(Date.self, forKey: .closedAt)
         self.closedBy = try c.decodeIfPresent(String.self, forKey: .closedBy)
@@ -515,6 +518,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         try c.encodeIfPresent(participantUserId, forKey: .participantUserId)
         try c.encodeIfPresent(participantUsername, forKey: .participantUsername)
         try c.encodeIfPresent(participantAvatarURL, forKey: .participantAvatarURL)
+        try c.encodeIfPresent(participantBanner, forKey: .participantBanner)
         try c.encodeIfPresent(lastSeenAt, forKey: .lastSeenAt)
         try c.encodeIfPresent(closedAt, forKey: .closedAt)
         try c.encodeIfPresent(closedBy, forKey: .closedBy)

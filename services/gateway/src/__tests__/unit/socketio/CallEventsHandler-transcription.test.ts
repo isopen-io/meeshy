@@ -18,8 +18,11 @@ import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 // CallService / TURNCredentialService / SocketRateLimiter (setInterval hazard)
 // ---------------------------------------------------------------------------
 
+const mockGetCallSession = jest.fn<any>();
 jest.mock('../../../services/CallService', () => ({
-  CallService: jest.fn(),
+  CallService: jest.fn().mockImplementation(() => ({
+    getCallSession: mockGetCallSession,
+  })),
 }));
 
 jest.mock('../../../services/notifications/NotificationService', () => ({
@@ -149,10 +152,15 @@ describe('CallEventsHandler — call:transcription-segment relay', () => {
     (validateSocketEvent as jest.MockedFunction<any>).mockReturnValue({ success: true });
     mockCheckSocketRateLimit.mockClear();
     mockCheckSocketRateLimit.mockResolvedValue(true);
+    // Default: no active call participant — each scenario opts in via
+    // activeCallSession(userId) when it needs authorization to succeed.
+    mockGetCallSession.mockReset();
+    mockGetCallSession.mockResolvedValue({ participants: [] });
   });
 
   describe('rate limiting', () => {
     it('checks the rate limit before relaying a segment', async () => {
+      mockGetCallSession.mockResolvedValue(activeCallSession(SPEAKER_ID));
       const prisma = makePrisma({
         callSessionFindUnique: jest.fn<any>().mockResolvedValue({ status: 'active', metadata: null }),
       });

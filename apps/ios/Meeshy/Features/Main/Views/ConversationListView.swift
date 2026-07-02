@@ -140,6 +140,19 @@ struct ConversationListView: View {
     // Preview state for hard press
     @State private var previewConversation: Conversation? = nil
 
+    /// Conversation dont l'overlay de menu contextuel custom est présenté
+    /// (appui long). Menu custom qui dessine ses icônes — le `.contextMenu`
+    /// natif ne les affiche pas sur iOS 26.
+    @State var contextMenuConversation: Conversation? = nil
+    /// Pilote l'animation zoom + rebond de l'overlay (false au montage → true
+    /// via `.onAppear` ; false à la fermeture). Voir `conversationContextMenuOverlay`.
+    @State var contextMenuAppeared = false
+
+    /// Renommage : conversation cible + texte en cours d'édition (action
+    /// « Renommer » du menu contextuel, groupes/communautés uniquement).
+    @State var renameTarget: Conversation? = nil
+    @State var renameText: String = ""
+
     // Drag & Drop state
     @State private var draggingConversation: Conversation? = nil
     @State private var dropTargetSection: String? = nil
@@ -248,12 +261,12 @@ struct ConversationListView: View {
         }
     }
 
-    private func storyRingState(for conversation: Conversation) -> StoryRingState {
+    func storyRingState(for conversation: Conversation) -> StoryRingState {
         guard conversation.type == .direct, let userId = conversation.participantUserId else { return .none }
         return storyViewModel.storyRingState(forUserId: userId)
     }
 
-    private func conversationMoodStatus(for conversation: Conversation) -> StatusEntry? {
+    func conversationMoodStatus(for conversation: Conversation) -> StatusEntry? {
         guard conversation.type == .direct, let userId = conversation.participantUserId else { return nil }
         return statusViewModel.statusForUser(userId: userId)
     }
@@ -312,10 +325,16 @@ struct ConversationListView: View {
             },
             onLoadPreview: {
                 await conversationViewModel.loadPreviewMessages(for: conversation.id)
+            },
+            onLongPress: {
+                Task { await conversationViewModel.loadPreviewMessages(for: conversation.id) }
+                // Montage instantané à l'état "replié" ; l'overlay anime
+                // ensuite via `.onAppear` (zoom + rebond). Reset explicite au
+                // cas où l'état resterait à true d'une ouverture précédente.
+                contextMenuAppeared = false
+                contextMenuConversation = conversation
             }
-        ) {
-            conversationContextMenu(for: conversation)
-        }
+        )
         .equatable()
     }
 
@@ -595,6 +614,7 @@ struct ConversationListView: View {
                         .zIndex(200)
                 }
             }
+            .overlay { conversationContextMenuOverlay }
             .sheet(item: $lockSheetConversation) { conversation in
                 ConversationLockSheet(
                     mode: lockSheetMode,
@@ -611,6 +631,24 @@ struct ConversationListView: View {
                 Button(String(localized: "common.cancel", bundle: .main), role: .cancel) {}
             } message: {
                 Text(String(localized: "conversation.list.master_pin_required.message", bundle: .main))
+            }
+            .alert(
+                String(localized: "conversation.rename.title", defaultValue: "Renommer la conversation", bundle: .main),
+                isPresented: Binding(
+                    get: { renameTarget != nil },
+                    set: { if !$0 { renameTarget = nil } }
+                )
+            ) {
+                TextField(String(localized: "conversation.rename.placeholder", defaultValue: "Nom", bundle: .main), text: $renameText)
+                Button(String(localized: "common.save", defaultValue: "Enregistrer", bundle: .main)) {
+                    if let target = renameTarget {
+                        Task { await conversationViewModel.renameConversation(conversationId: target.id, title: renameText) }
+                    }
+                    renameTarget = nil
+                }
+                Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {
+                    renameTarget = nil
+                }
             }
             .sheet(isPresented: $showWidgetPreview) {
                 WidgetPreviewView(onNewConversation: onNewConversation)
@@ -827,7 +865,7 @@ struct ConversationListView: View {
     }
 
     // MARK: - Handle Profile View
-    private func handleProfileView(_ conversation: Conversation) {
+    func handleProfileView(_ conversation: Conversation) {
         // Open user profile sheet (works for DM, uses participant data)
         selectedProfileUser = .from(conversation: conversation)
     }

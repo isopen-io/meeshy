@@ -118,6 +118,17 @@ struct ConversationPreviewView: View {
     let conversation: Conversation
     var cachedMessages: [Message] = []
 
+    var bannerURL: URL? = nil
+    var avatarURL: String? = nil
+    var storyState: StoryRingState = .none
+    var moodEmoji: String? = nil
+    var presenceState: PresenceState = .offline
+    var isDirect: Bool = false
+    var onCall: (() -> Void)? = nil
+    var onSearch: (() -> Void)? = nil
+    var onInfo: (() -> Void)? = nil
+    var onProfileInfo: (() -> Void)? = nil
+
     @Environment(\.colorScheme) private var colorScheme
     @StateObject private var previewRouter = Router()
 
@@ -128,96 +139,67 @@ struct ConversationPreviewView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header with avatar and name
-            HStack(spacing: 12) {
-                // Avatar
+            // Header — banner background + dark overlay for legibility
+            HStack(alignment: .top, spacing: 12) {
+                // Real avatar with story ring / mood / presence
                 MeeshyAvatar(
                     name: conversation.name,
                     context: .conversationList,
                     accentColor: accentColor,
-                    secondaryColor: secondaryColor
+                    secondaryColor: secondaryColor,
+                    avatarURL: avatarURL,
+                    storyState: storyState,
+                    moodEmoji: moodEmoji,
+                    presenceState: presenceState
                 )
 
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: 8) {
+                    // Titre pleine largeur — peut aller à la ligne (2 lignes).
+                    HStack(alignment: .top, spacing: 6) {
                         Text(conversation.name)
                             .font(.callout.weight(.bold))
-                            .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
-                            .lineLimit(1)
+                            .foregroundColor(.white)
+                            .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
 
                         if conversation.userState.isPinned {
                             Image(systemName: "pin.fill")
                                 .font(.caption2)
                                 .foregroundColor(MeeshyColors.error)
+                                .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
                         }
 
                         if conversation.userState.isMuted {
                             Image(systemName: "bell.slash.fill")
                                 .font(.caption2)
-                                .foregroundColor(isDark ? MeeshyColors.indigo400.opacity(0.5) : MeeshyColors.indigo500.opacity(0.4))
+                                .foregroundColor(.white.opacity(0.7))
+                                .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
                         }
+
+                        Spacer(minLength: 0)
                     }
 
-                    HStack(spacing: 6) {
-                        if conversation.type != .direct {
-                            HStack(spacing: 3) {
-                                Image(systemName: conversation.type == .group ? "person.2.fill" : "person.3.fill")
-                                    .font(.caption2)
-                                Text("\(conversation.memberCount) " + String(localized: "unit.members", defaultValue: "membres"))
-                                    .font(.caption2.weight(.medium))
-                            }
-                            .foregroundColor(Color(hex: accentColor))
-                        } else {
-                            Circle()
-                                .fill(MeeshyColors.success)
-                                .frame(width: 8, height: 8)
-                            Text(String(localized: "status.online", defaultValue: "En ligne"))
+                    if conversation.type != .direct {
+                        HStack(spacing: 3) {
+                            Image(systemName: conversation.type == .group ? "person.2.fill" : "person.3.fill")
+                                .font(.caption2)
+                            Text("\(conversation.memberCount) " + String(localized: "unit.members", defaultValue: "membres"))
                                 .font(.caption2.weight(.medium))
-                                .foregroundColor(MeeshyColors.success)
                         }
+                        .foregroundColor(.white.opacity(0.9))
+                        .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
                     }
-                }
 
-                Spacer()
-
-                if conversation.userState.unreadCount > 0 {
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 26, height: 26)
-
-                        Text("\(min(conversation.userState.unreadCount, 99))")
-                            .font(.caption2.weight(.bold))
-                            .foregroundColor(.white)
+                    // Boutons d'action SOUS le titre, alignés à droite.
+                    HStack(spacing: 8) {
+                        Spacer(minLength: 0)
+                        headerActions
                     }
                 }
             }
             .padding(14)
-            .background(
-                LinearGradient(
-                        colors: [
-                            Color(hex: accentColor).opacity(isDark ? 0.15 : 0.08),
-                            Color(hex: accentColor).opacity(isDark ? 0.045 : 0.024)
-                        ],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
-                    )
-                    .overlay(
-                        Rectangle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color(hex: accentColor).opacity(0.1), Color.clear],
-                                    startPoint: .top,
-                                    endPoint: .bottom
-                                )
-                            )
-                    )
-            )
+            .background(headerBackground)
 
             // Recent messages preview
             VStack(spacing: 0) {
@@ -231,21 +213,27 @@ struct ConversationPreviewView: View {
                     )
                     .padding(.bottom, 10)
                 } else {
-                    ScrollView(.vertical, showsIndicators: false) {
-                        VStack(spacing: 0) {
-                            ForEach(cachedMessages) { msg in
-                                ThemedMessageBubble(
-                                    message: msg,
-                                    contactColor: accentColor,
-                                    showAvatar: !msg.isMe
-                                )
-                                .allowsHitTesting(false)
+                    ScrollViewReader { proxy in
+                        ScrollView(.vertical, showsIndicators: false) {
+                            VStack(spacing: 0) {
+                                ForEach(cachedMessages) { msg in
+                                    ThemedMessageBubble(
+                                        message: msg,
+                                        contactColor: accentColor,
+                                        showAvatar: !msg.isMe
+                                    )
+                                    .allowsHitTesting(false)
+                                }
                             }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 8)
                         }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
+                        .environmentObject(previewRouter)
+                        .onAppear {
+                            guard let lastID = cachedMessages.last?.id else { return }
+                            proxy.scrollTo(lastID, anchor: .bottom)
+                        }
                     }
-                    .environmentObject(previewRouter)
                 }
             }
             .frame(minHeight: 120, maxHeight: 300)
@@ -265,6 +253,115 @@ struct ConversationPreviewView: View {
                 )
         )
         .shadow(color: Color(hex: accentColor).opacity(0.3), radius: 20, y: 10)
+    }
+
+    // MARK: - Header background (banner + dark gradient)
+
+    @ViewBuilder
+    private var headerBackground: some View {
+        if let bannerURL {
+            ZStack {
+                CachedAsyncImage(url: bannerURL.absoluteString) {
+                    LinearGradient(
+                        colors: [
+                            Color(hex: accentColor).opacity(0.6),
+                            Color(hex: secondaryColor).opacity(0.4)
+                        ],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
+                    )
+                }
+                .scaledToFill()
+                .clipped()
+
+                // Dark gradient (top → bottom) + light global veil for title legibility
+                LinearGradient(
+                    colors: [Color.black.opacity(0.0), Color.black.opacity(0.55)],
+                    startPoint: .top, endPoint: .bottom
+                )
+                Color.black.opacity(0.15)
+            }
+        } else {
+            LinearGradient(
+                    colors: [
+                        Color(hex: accentColor).opacity(isDark ? 0.15 : 0.08),
+                        Color(hex: accentColor).opacity(isDark ? 0.045 : 0.024)
+                    ],
+                    startPoint: .topLeading, endPoint: .bottomTrailing
+                )
+                .overlay(
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(hex: accentColor).opacity(0.1), Color.clear],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                )
+        }
+    }
+
+    // MARK: - Header action buttons (glass call / search / info)
+
+    @ViewBuilder
+    private var headerActions: some View {
+        HStack(spacing: 8) {
+            if conversation.userState.unreadCount > 0 {
+                Text("\(min(conversation.userState.unreadCount, 99))")
+                    .font(.caption2.weight(.bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 6)
+                    .frame(minWidth: 20, minHeight: 20)
+                    .background(
+                        Capsule().fill(
+                            LinearGradient(
+                                colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
+                                startPoint: .topLeading, endPoint: .bottomTrailing
+                            )
+                        )
+                    )
+            }
+
+            if let onCall {
+                headerGlassButton(icon: "phone.fill", action: onCall)
+            }
+
+            headerGlassButton(icon: "magnifyingglass") { onSearch?() }
+
+            if isDirect {
+                Menu {
+                    Button {
+                        onInfo?()
+                    } label: {
+                        Label(String(localized: "conversation.info", defaultValue: "Infos conversation", bundle: .main), systemImage: "info.circle")
+                    }
+                    Button {
+                        onProfileInfo?()
+                    } label: {
+                        Label(String(localized: "profile.title", defaultValue: "Profil", bundle: .main), systemImage: "person.crop.circle")
+                    }
+                } label: {
+                    headerGlassButtonLabel(icon: "info.circle.fill")
+                }
+            } else {
+                headerGlassButton(icon: "info.circle.fill") { onInfo?() }
+            }
+        }
+    }
+
+    private func headerGlassButton(icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            headerGlassButtonLabel(icon: icon)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    private func headerGlassButtonLabel(icon: String) -> some View {
+        Image(systemName: icon)
+            .font(.footnote.weight(.semibold))
+            .foregroundColor(.white)
+            .frame(width: 34, height: 34)
+            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.25))
     }
 
     private var previewBackground: some View {
