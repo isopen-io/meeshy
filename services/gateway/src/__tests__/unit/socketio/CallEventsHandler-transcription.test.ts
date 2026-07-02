@@ -113,14 +113,16 @@ function makePrisma(overrides: {
 // callService.getCallSession(callId) (the membership-bypass fix), NOT the old
 // prisma.participant.findFirst path. Tests inject a CallService whose
 // getCallSession reports whether the sender is an ACTIVE participant of THIS call.
-const ACTIVE_CALL_SESSION = {
-  participants: [
-    { participantId: 'participant-1', participant: { userId: SPEAKER_ID }, leftAt: null },
-  ],
-};
+function activeCallSession(userId: string) {
+  return {
+    participants: [
+      { participantId: 'participant-1', participant: { userId }, leftAt: null },
+    ],
+  };
+}
 
 function makeCallService(
-  getCallSession: jest.MockedFunction<any> = jest.fn<any>().mockResolvedValue(ACTIVE_CALL_SESSION)
+  getCallSession: jest.MockedFunction<any> = jest.fn<any>().mockResolvedValue(activeCallSession(SPEAKER_ID))
 ) {
   return { getCallSession } as unknown as import('../../../services/CallService').CallService;
 }

@@ -1972,7 +1972,14 @@ export class CallEventsHandler {
         const validation = validateSocketEvent(socketHeartbeatSchema, data);
         if (!validation.success) return;
 
-        const participantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        // Authorization — only an ACTIVE PARTICIPANT OF THIS CALL may record a
+        // heartbeat against it (not merely a member of its conversation).
+        // `resolveParticipantIdFromCall` only checked conversation membership,
+        // letting any other conversation member plant a phantom in-memory
+        // heartbeat entry for a call they never joined (or already left) —
+        // polluting `CallService.hasHeartbeatData`/`getStaleHeartbeats`, which
+        // `CallCleanupService` relies on to reap zombie calls.
+        const participantId = await this.resolveActiveCallParticipantId(userId, data.callId);
         if (participantId) {
           this.callService.recordHeartbeat(data.callId, participantId);
         }
