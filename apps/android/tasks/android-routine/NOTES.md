@@ -29,6 +29,11 @@ Append-only log of gotchas and decisions that save time next run.
   `AssertionError`/`EOFException` cause — not a real assertion failure). It is a network flake: simply
   **re-run the same test task** and it passes once the jar is cached. Don't chase it as a code bug.
   Seen in `call-history-repository` on `:core:database`'s first run.
+- The `:app` module now has a **JVM test source set** (`app/src/test/kotlin`, first added in
+  `call-nav-conversation-thread`). Test deps (junit/robolectric/truth/turbine/mockk) were already declared
+  in `app/build.gradle.kts`. Navigation-decision logic belongs in a pure helper under
+  `me.meeshy.app.navigation` (e.g. `CallRoute`) so it is unit-testable while the `NavHost` glue stays
+  exempt. `android.net.Uri` needs `@RunWith(RobolectricTestRunner::class)`.
 
 ## Serialization gotchas
 - ⚠ **Never put a `private companion object` on a `@Serializable` class.** The plugin generates the
