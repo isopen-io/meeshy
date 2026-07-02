@@ -967,3 +967,64 @@ final class SwitchCameraSourceGuardTests: XCTestCase {
         )
     }
 }
+
+// MARK: - No-WebRTC fallback conformance (`#else` branch, CI without the WebRTC package resolved)
+
+/// `P2PWebRTCClient`'s `#else` fallback (compiled only when `canImport(WebRTC)` is
+/// false) must implement every `WebRTCClientProviding` requirement like the real
+/// implementation does — a gap here only breaks a build that never resolves the
+/// WebRTC SPM package, so it is easy to introduce silently while editing the real
+/// implementation's protocol conformance.
+@MainActor
+final class P2PWebRTCClientFallbackConformanceSourceGuardTests: XCTestCase {
+
+    private func p2pClientSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func fallbackClassBody() throws -> String {
+        let source = try p2pClientSource()
+        guard let elseRange = source.range(of: "\n#else\n") else {
+            XCTFail("`#else` fallback branch not found in P2PWebRTCClient.swift"); throw XCTSkip()
+        }
+        guard let endRange = source.range(of: "\n#endif", range: elseRange.upperBound..<source.endIndex) else {
+            XCTFail("`#endif` closing the fallback branch not found"); throw XCTSkip()
+        }
+        return String(source[elseRange.upperBound..<endRange.lowerBound])
+    }
+
+    func test_fallback_implementsApplyAudioEncoding() throws {
+        let body = try fallbackClassBody()
+        XCTAssertTrue(
+            body.contains("func applyAudioEncoding(maxBitrateBps: Int)"),
+            "The no-WebRTC fallback class must implement applyAudioEncoding(maxBitrateBps:) " +
+            "(a WebRTCClientProviding requirement) — without it, a build with the WebRTC " +
+            "package unresolved fails to compile."
+        )
+    }
+
+    func test_fallback_declaresVideoFilterPipeline() throws {
+        let body = try fallbackClassBody()
+        XCTAssertTrue(
+            body.contains("videoFilterPipeline"),
+            "The no-WebRTC fallback class must declare videoFilterPipeline " +
+            "(a WebRTCClientProviding requirement) — without it, a build with the WebRTC " +
+            "package unresolved fails to compile."
+        )
+    }
+
+    func test_fallback_doesNotDeclareRemovedSetMaxAudioBitrate() throws {
+        let body = try fallbackClassBody()
+        XCTAssertFalse(
+            body.contains("setMaxAudioBitrate"),
+            "setMaxAudioBitrate was removed from WebRTCClientProviding (dead API, superseded " +
+            "by applyAudioEncoding, zero prod callers) — it must not reappear in the fallback."
+        )
+    }
+}

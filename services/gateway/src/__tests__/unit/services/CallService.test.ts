@@ -1105,6 +1105,42 @@ describe('CallService', () => {
       expect(result.status).toBe(CallStatus.ended);
     });
 
+    it('should return current state without overwriting when call already resolved to missed (duplicate call:end)', async () => {
+      // Mirrors the real race: the ringing-timeout path (`markCallAsMissed`)
+      // resolves the CallSession to `missed` WITHOUT touching participant
+      // rows (see markCallAsMissed) — so a delayed/retried `call:end` from
+      // the initiator still finds its own participant with `leftAt: null`.
+      const missedCall = createMockCallSession({
+        status: CallStatus.missed,
+        participants: [createMockParticipant({ user: createMockUser() })],
+        initiator: createMockUser(),
+        conversation: createMockConversation()
+      });
+
+      mockPrisma.callSession.findUnique.mockResolvedValue(missedCall);
+
+      const result = await callService.endCall('call-123', 'user-123', 'participant-123');
+
+      expect(result.status).toBe(CallStatus.missed);
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('should return current state without overwriting when call already rejected (duplicate call:end)', async () => {
+      const rejectedCall = createMockCallSession({
+        status: CallStatus.rejected,
+        participants: [createMockParticipant({ user: createMockUser() })],
+        initiator: createMockUser(),
+        conversation: createMockConversation()
+      });
+
+      mockPrisma.callSession.findUnique.mockResolvedValue(rejectedCall);
+
+      const result = await callService.endCall('call-123', 'user-123', 'participant-123');
+
+      expect(result.status).toBe(CallStatus.rejected);
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
     it('should throw error when user not in call', async () => {
       const mockCall = createMockCallSession({
         status: CallStatus.active,
