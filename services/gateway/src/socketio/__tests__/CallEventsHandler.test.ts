@@ -2425,18 +2425,11 @@ describe('CallEventsHandler', () => {
   // ── Heartbeat and quality-report branch coverage ──────────────────────────
 
   describe('heartbeat and quality-report branches', () => {
-    it('call:heartbeat does not call recordHeartbeat when participantId is null', async () => {
-      const { socket } = setupWithSocket({
-        callSession: {
-          findUnique: jest.fn<any>().mockResolvedValue({ id: CALL_ID, conversationId: CONV_ID }),
-          findMany: jest.fn<any>().mockResolvedValue([]),
-          updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
-        },
-        participant: {
-          findFirst: jest.fn<any>().mockResolvedValue(null),
-          findMany: jest.fn<any>().mockResolvedValue([]),
-        },
-      });
+    it('call:heartbeat does not call recordHeartbeat when the caller is not an active participant of this call', async () => {
+      // Authorization runs through resolveActiveCallParticipantId →
+      // callService.getCallSession(callId), not conversation membership.
+      mockCallServiceGetCallSession.mockResolvedValue(makeCallSession({ participants: [] }));
+      const { socket } = setupWithSocket();
       await socket._trigger('call:heartbeat', { callId: CALL_ID });
       expect(mockCallServiceRecordHeartbeat).not.toHaveBeenCalled();
     });
@@ -3159,6 +3152,12 @@ describe('CallEventsHandler', () => {
     it('emits call:ice-servers-refreshed with iceServers and ttl on happy path', async () => {
       const iceServers = [{ urls: 'turn:turn.example.com:3478' }];
       mockCallServiceGenerateIceServers.mockReturnValueOnce(iceServers);
+      // Authz upgrade (audit 2026-07-02) — the handler now resolves the caller
+      // via `resolveActiveCallParticipantId`, which reads `callService.getCallSession`
+      // instead of trusting room membership alone.
+      mockCallServiceGetCallSession.mockResolvedValue(
+        makeCallSession({ participants: [makeParticipant()] })
+      );
       const { handler, io } = buildHandler();
       const socket = makeSocket({ rooms: new Set([`call:${CALL_ID}`]) });
       const getUserId = jest.fn<any>().mockReturnValue(USER_ID);
