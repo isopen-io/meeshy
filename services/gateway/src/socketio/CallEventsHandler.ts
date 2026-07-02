@@ -132,6 +132,18 @@ export class CallEventsHandler {
   private isShuttingDown = false;
   private disconnectGraceTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private static readonly DISCONNECT_GRACE_MS = 30_000;
+  // CALL-RESILIENCE (chaos-test prod 2026-07-02, callId 6a46713b…) — the
+  // socket.io reconnect backoff can legitimately exceed the 30s grace (the
+  // re-join landed 18s late on a call whose BOTH apps were alive and whose
+  // P2P media was healthy). When the user still has ANY connected socket at
+  // expiry, the re-join is coming: extend rather than kill, capped so the
+  // total stays under the heartbeat GC tier (30s + 4×15s = 90s < 120s).
+  private static readonly GRACE_EXTENSION_MS = 15_000;
+  private static readonly MAX_GRACE_EXTENSIONS = 4;
+  // Pre-answer disconnects: long enough to absorb a socket churn / transport
+  // blip of the caller mid-ring, short enough that a real crash still resolves
+  // the ring quickly (the 60s ringing timeout remains the hard cap).
+  private static readonly PRE_ANSWER_GRACE_MS = 10_000;
 
   // RC-4 — accepts an externally-owned CallService so the socket manager,
   // AuthHandler disconnect cleanup, and CallCleanupService's heartbeat GC
@@ -329,19 +341,19 @@ export class CallEventsHandler {
     getUserId: (socketId: string) => string | undefined;
     participation: DisconnectParticipation;
     userId: string;
-  }): void {
+  }, graceMs: number = CallEventsHandler.DISCONNECT_GRACE_MS): void {
     const { participation, userId } = opts;
     const callId = participation.callSessionId;
     const key = this.graceKey(callId, userId);
     const existing = this.disconnectGraceTimers.get(key);
     if (existing) clearTimeout(existing);
-    logger.info('📞 Active-call socket dropped — arming reconnect grace window', {
-      callId, userId, graceMs: CallEventsHandler.DISCONNECT_GRACE_MS
+    logger.info('📞 Call socket dropped — arming reconnect grace window', {
+      callId, userId, graceMs, status: participation.callSession.status
     });
     const timer = setTimeout(() => {
       this.disconnectGraceTimers.delete(key);
       void this.onDisconnectGraceExpired(opts);
-    }, CallEventsHandler.DISCONNECT_GRACE_MS);
+    }, graceMs);
     timer.unref?.();
     this.disconnectGraceTimers.set(key, timer);
   }
@@ -357,6 +369,7 @@ export class CallEventsHandler {
     getUserId: (socketId: string) => string | undefined;
     participation: DisconnectParticipation;
     userId: string;
+    extensionCount?: number;
   }): Promise<void> {
     const { io, getUserId, participation, userId } = opts;
     const callId = participation.callSessionId;
@@ -378,6 +391,29 @@ export class CallEventsHandler {
           callId, userId
         });
         return;
+      }
+
+      // Not in the call room yet — but if the user still has a live socket
+      // anywhere (user room, joined at auth), the client is up and its
+      // didReconnect re-join is on its way. Extend rather than end healthy
+      // P2P media; a re-join cancels the extension via the same grace key.
+      const extensions = opts.extensionCount ?? 0;
+      if (extensions < CallEventsHandler.MAX_GRACE_EXTENSIONS) {
+        const userSockets = await io.in(ROOMS.user(userId)).fetchSockets();
+        if (userSockets.length > 0) {
+          logger.info('📞 Grace expired but user still has a live socket — extending grace', {
+            callId, userId, extension: extensions + 1,
+            maxExtensions: CallEventsHandler.MAX_GRACE_EXTENSIONS
+          });
+          const key = this.graceKey(callId, userId);
+          const timer = setTimeout(() => {
+            this.disconnectGraceTimers.delete(key);
+            void this.onDisconnectGraceExpired({ ...opts, extensionCount: extensions + 1 });
+          }, CallEventsHandler.GRACE_EXTENSION_MS);
+          timer.unref?.();
+          this.disconnectGraceTimers.set(key, timer);
+          return;
+        }
       }
 
       logger.info('📞 Reconnect grace expired without re-join — ending call', { callId, userId });
@@ -2826,27 +2862,30 @@ export class CallEventsHandler {
           // CALL-RESILIENCE — an ANSWERED call (active/reconnecting) rides on a
           // direct P2P media connection that a transient socket drop does NOT
           // sever. Arm a reconnect grace window instead of ending it now; a
-          // re-join cancels it, expiry ends it. Pre-answer calls
-          // (initiated/ringing/connecting) keep the immediate end — a
-          // caller/callee dropping before answer is a real cancel/decline the
-          // other party must learn about at once.
+          // re-join cancels it, expiry ends it.
+          //
+          // Pre-answer calls (initiated/ringing/connecting) get a SHORT grace
+          // instead of the historical immediate end (chaos-test prod
+          // 2026-07-02, callId 6a466a60…): the caller's sockets churned within
+          // 100ms during RINGING and the immediate end resolved the call
+          // missed while the caller's app was alive — its re-join 3s later hit
+          // "Call is in terminal state". A REAL cancel/decline goes through an
+          // explicit call:end; this path only serves crash/force-quit, for
+          // which a few extra ringing seconds are harmless (the 60s ringing
+          // timeout stays the hard cap).
           const dcStatus = participation.callSession.status as string;
           const isAnswered = dcStatus === 'active' || dcStatus === 'reconnecting';
-          if (isAnswered) {
-            this.armDisconnectGrace({
+          this.armDisconnectGrace(
+            {
               io,
               getUserId,
               participation: participation as unknown as DisconnectParticipation,
               userId
-            });
-            continue;
-          }
-
-          await this.leaveParticipationAndBroadcast({
-            io,
-            participation: participation as unknown as DisconnectParticipation,
-            userId
-          });
+            },
+            isAnswered
+              ? CallEventsHandler.DISCONNECT_GRACE_MS
+              : CallEventsHandler.PRE_ANSWER_GRACE_MS
+          );
         }
       } catch (error) {
         logger.error('❌ Socket: Error handling disconnect for calls', error);

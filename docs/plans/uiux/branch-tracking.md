@@ -14,6 +14,20 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 119i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> - **119i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `ed63724f`)** :
+>   Dynamic Type + a11y de `BubbleStandardLayout+Media` (grille média de la bulle, leaf view).
+>   **9/12** `.font(.system(size:))` → `MeeshyFont.relative` (emojis+total réactions, `+N`
+>   débordement, durée, overlay flou glyphe+libellés, indicateur page `n/m`, placeholder photo).
+>   **3 glyphes figés** : compteur vue-unique (pastille fixe 18×18, 86i), play (cercle de lecture
+>   fixe 48/36, 86i), croix carrousel (cadre fixe 26×26, 82i). `accessibilityLabel(common.close)`
+>   sur la croix + `accessibilityHidden` sur le placeholder photo décoratif. 1 fichier, 0 logique,
+>   0 test/clé i18n neuve, zéro-re-render préservé. 0 contention iOS. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `BubbleStandardLayout+Media` Dynamic Type + a11y SOLDÉ** : ne plus reprendre les 3 glyphes figés.
+> - **Base de départ 120i : `main` HEAD**. Gros lots restants : `StoryViewerView+Content` (⚠️ i18n +
+>   piège `@State private` cross-file), `ConversationView+Composer` (lot critique prudent),
+>   `ConversationAnimatedBackground` (décor animé → hide + gel). `FeedPostCard` (9) = chrome d'action-bar → gel documenté.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 118i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
 > - **118i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `f07928f1`)** :
 >   Dynamic Type + a11y de `ConversationView+MessageRow` (affordances de conversation). **14/16**

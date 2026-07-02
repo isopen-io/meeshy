@@ -137,19 +137,49 @@ final class CallViewAccessibilityTests: XCTestCase {
 
     // MARK: - Reduce Motion in FloatingCallPillView
 
+    private func islandEmergingBannerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Components/IslandEmergingBanner.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
     func test_reconnectingBanner_usesReduceMotionForTransition() throws {
+        // The banner's motion moved into IslandEmergingBanner (Dynamic Island
+        // emergence). The a11y invariant survives relocated: the builder must
+        // hand `reduceMotion` to the wrapper, and the wrapper must collapse to
+        // a static fade-only presentation when it is set — the emergence
+        // movement can trigger vestibular discomfort.
         let source = try callViewSource()
-        guard let bannerRange = source.range(of: "reconnecting banner") else {
-            XCTFail("CallView must have a reconnecting banner comment block")
+        guard let builderRange = source.range(of: "private var reconnectingBanner") else {
+            XCTFail("CallView must have a reconnectingBanner builder")
             return
         }
-        let end = source.index(bannerRange.lowerBound, offsetBy: 500, limitedBy: source.endIndex) ?? source.endIndex
-        let vicinity = String(source[bannerRange.lowerBound ..< end])
+        let end = source.index(builderRange.lowerBound, offsetBy: 500, limitedBy: source.endIndex) ?? source.endIndex
+        let vicinity = String(source[builderRange.lowerBound ..< end])
+        XCTAssertTrue(
+            vicinity.contains("IslandEmergingBanner"),
+            "The reconnecting banner must be wrapped in IslandEmergingBanner so its " +
+            "motion policy is centralised with the other call banners."
+        )
         XCTAssertTrue(
             vicinity.contains("reduceMotion"),
-            "The reconnecting banner transition must check `reduceMotion` and collapse " +
-            "to .opacity for motion-sensitive users — the slide-from-top movement can " +
-            "trigger vestibular discomfort."
+            "The reconnecting banner must forward `reduceMotion` to IslandEmergingBanner " +
+            "so motion-sensitive users get a static presentation."
+        )
+
+        let wrapper = try islandEmergingBannerSource()
+        XCTAssertTrue(
+            wrapper.contains("reduceMotion"),
+            "IslandEmergingBanner must honour the forwarded reduceMotion flag."
+        )
+        XCTAssertTrue(
+            wrapper.contains("!reduceMotion"),
+            "IslandEmergingBanner must disable the emergence animation when " +
+            "reduceMotion is set (render directly at the settled position)."
         )
     }
 

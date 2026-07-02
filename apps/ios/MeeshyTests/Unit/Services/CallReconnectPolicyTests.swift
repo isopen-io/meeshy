@@ -361,3 +361,79 @@ final class SignalingDegradedPolicyTests: XCTestCase {
         XCTAssertFalse(CallReliabilityPolicy.signalingDegraded(callEstablished: false, socketConnected: true))
     }
 }
+
+// MARK: - Reconnecting entry guard (FSM §3.2)
+
+/// `.reconnecting` is reserved for calls whose media negotiation has begun
+/// (remote description applied). Before the answer (.ringing/.offering) an ICE
+/// restart is semantically impossible — no remote description exists — and
+/// flipping the state made CallView render the connected layout (frozen 00:00
+/// timer) while the callee was still ringing.
+final class ReconnectingEntryPolicyTests: XCTestCase {
+
+    func test_reconnectingAllowed_fromConnected_isTrue() {
+        XCTAssertTrue(CallReliabilityPolicy.reconnectingAllowed(from: .connected))
+    }
+
+    func test_reconnectingAllowed_fromReconnecting_isTrue() {
+        XCTAssertTrue(CallReliabilityPolicy.reconnectingAllowed(from: .reconnecting(attempt: 2)))
+    }
+
+    func test_reconnectingAllowed_fromConnecting_isTrue() {
+        // Answer received, real ICE in flight: the .connecting watchdog's
+        // one-shot ICE restart is a legitimate recovery.
+        XCTAssertTrue(CallReliabilityPolicy.reconnectingAllowed(from: .connecting))
+    }
+
+    func test_reconnectingAllowed_fromOffering_isFalse() {
+        // The callee has not answered yet — a >12s human ring delay is not an
+        // ICE failure.
+        XCTAssertFalse(CallReliabilityPolicy.reconnectingAllowed(from: .offering))
+    }
+
+    func test_reconnectingAllowed_fromRinging_isFalse() {
+        XCTAssertFalse(CallReliabilityPolicy.reconnectingAllowed(from: .ringing(isOutgoing: true)))
+        XCTAssertFalse(CallReliabilityPolicy.reconnectingAllowed(from: .ringing(isOutgoing: false)))
+    }
+
+    func test_reconnectingAllowed_fromIdleOrEnded_isFalse() {
+        XCTAssertFalse(CallReliabilityPolicy.reconnectingAllowed(from: .idle))
+        XCTAssertFalse(CallReliabilityPolicy.reconnectingAllowed(from: .ended(reason: .missed)))
+    }
+}
+
+// MARK: - Call clock reset on connect
+
+/// The duration clock must reset on the FIRST real media connection of a call
+/// — even when the FSM transited through `.reconnecting` without the media
+/// ever having been established (pre-establishment ICE restart). Without the
+/// nil-clock clause, `durationTask` died on a nil `callStartDate` and the UI
+/// stayed frozen at 00:00 forever.
+final class CallClockPolicyTests: XCTestCase {
+
+    func test_shouldResetCallClock_freshConnect_resets() {
+        XCTAssertTrue(CallReliabilityPolicy.shouldResetCallClock(
+            wasReconnecting: false, hasExistingStartDate: false
+        ))
+    }
+
+    func test_shouldResetCallClock_freshConnectWithStaleClock_resets() {
+        XCTAssertTrue(CallReliabilityPolicy.shouldResetCallClock(
+            wasReconnecting: false, hasExistingStartDate: true
+        ))
+    }
+
+    func test_shouldResetCallClock_midCallReconnect_preservesRunningClock() {
+        XCTAssertFalse(CallReliabilityPolicy.shouldResetCallClock(
+            wasReconnecting: true, hasExistingStartDate: true
+        ))
+    }
+
+    func test_shouldResetCallClock_reconnectWithoutClock_resets() {
+        // The frozen-00:00 bug path: .connected reached via .reconnecting on a
+        // call that was never connected before.
+        XCTAssertTrue(CallReliabilityPolicy.shouldResetCallClock(
+            wasReconnecting: true, hasExistingStartDate: false
+        ))
+    }
+}
