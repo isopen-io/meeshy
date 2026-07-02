@@ -144,6 +144,12 @@ struct BubbleContent: Equatable {
         /// Gateway-localized label ("Appel vidéo · 04:32", "Appel audio manqué"),
         /// used as the human title base + VoiceOver fallback.
         let fallbackText: String
+        /// Short clock label ("18:41") shown inline in the compact bubble — same
+        /// resolved value as the standard bubble's meta timestamp.
+        let timeString: String
+        /// Full call timestamp, formatted (date + time) in the long-press detail
+        /// sheet. Kept as a `Date` so the sheet controls its own formatting.
+        let timestamp: Date
     }
 
     let messageId: String
