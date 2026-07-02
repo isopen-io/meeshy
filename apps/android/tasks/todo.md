@@ -4,7 +4,28 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Calls) — slice `incoming-call-push-decision` ✅
+## This loop (Phase: Calls) — slice `fcm-call-push-route` ✅
+The **FCM call-push routing** — wires the pure decision bricks into the live FCM service so a
+backgrounded/killed device actually rings on an incoming-call data push.
+- `core:model` pure `IncomingCallPushRouter.route(data, context) → IncomingCallPushRoute`
+  (`NotACallPush` | `Ring(push, updatedSeen)` | `Suppress(reason)`): folds parser → decider → ring-insert;
+  the dedup ring advances **only** on a `Ring`, so a retry is deduped and a suppressed push never poisons it.
+- `:app` `@Singleton IncomingCallRingStore`: the sole owner of the live `SeenCallRing`; synchronized
+  `route`/`forget`, self-user id threaded from `SessionRepository`.
+- `:app` `MeeshyFcmService.onMessageReceived`: routes by kind — `Ring` → full-screen CATEGORY_CALL /
+  `PRIORITY_MAX` notification on the new `meeshy_calls` channel (`setFullScreenIntent` → `MainActivity` +
+  `callId`/`conversationId`/`callerName`/`isVideo` extras); `Suppress` → silent drop; `NotACallPush` →
+  the existing message path.
+- +19 behavioural tests (11 router, 8 store). `assembleDebug` + all `testDebugUnitTest` green.
+  Diff = `apps/android` only (5 files, glue outside is exempt platform code).
+
+### Next
+1. Consume the `MainActivity` call extras → NavHost deep-link into the incoming-call screen (shared
+   plumbing with the still-unwired message-notification `conversationId` deep-link).
+2. `ConnectionService`/Telecom integration + ringtone; then WebRTC media transport.
+3. Follow-up: `SocketManager.reconnectWithToken()` still has no caller (token-refresh re-attach slice).
+
+## Prior loop (Phase: Calls) — slice `incoming-call-push-decision` ✅
 The **pure incoming-call push decision core** — the brick before the Android Telecom/`ConnectionService`
 full-screen-intent plumbing. When the app is backgrounded/killed the socket is down, so the gateway
 delivers the ring as a data-only FCM push; this slice is the typed shape + gating that wiring consumes.
@@ -22,14 +43,6 @@ delivers the ring as a data-only FCM push; this slice is the typed shape + gatin
   ordering: self-fanout → duplicate (active-or-seen) → busy → ring.
 - +39 behavioural tests (18 parser, 11 ring, 10 decider). `assembleDebug` + all `testDebugUnitTest` green.
   Diff = `apps/android` only (4 files, 0 production logic outside android).
-
-### Next
-1. `MeeshyFcmService` call-push routing: route a `type ∈ {call,voip_call}` data push through the parser +
-   decider, hold the live `SeenCallRing`, and on `Ring` fire a full-screen `ConnectionService` /
-   CATEGORY_CALL notification → the call screen (Android-platform glue).
-2. Then the actual WebRTC media transport (peer connection, ICE, SDP over `CallSignalManager`).
-3. Follow-up: `SocketManager.reconnectWithToken()` has no caller yet — a token-refresh slice must
-   re-attach after it (same attach-per-connect rule).
 
 ## Prior loop (Phase: Calls) — slice `realtime-session-coordinator` ✅
 The app-level socket-lifecycle caller — turns the whole realtime layer live. `:sdk-core` pure

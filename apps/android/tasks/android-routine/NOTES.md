@@ -34,6 +34,19 @@ Append-only log of gotchas and decisions that save time next run.
   in `app/build.gradle.kts`. Navigation-decision logic belongs in a pure helper under
   `me.meeshy.app.navigation` (e.g. `CallRoute`) so it is unit-testable while the `NavHost` glue stays
   exempt. `android.net.Uri` needs `@RunWith(RobolectricTestRunner::class)`.
+- **Pattern for platform-glue slices (FCM/Service/BroadcastReceiver): a pure router + a synchronized
+  live-state holder.** `fcm-call-push-route` kept `MeeshyFcmService` (untestable `FirebaseMessagingService`)
+  a 3-line delegation: (1) a pure `IncomingCallPushRouter.route(data, ctx) → sealed Route` in `:core:model`
+  folds all the decisions and *returns* the advanced state (never mutates), (2) a plain `@Singleton`
+  holder (`IncomingCallRingStore`, `@Inject constructor()`, no Android deps → JVM-testable without Hilt)
+  owns the live state and persists it only on the outcome that should advance it, (3) the Service just
+  pattern-matches the Route. 19 tests hit the real behaviour; zero test touches the Service. A store test
+  needs **no** `Dispatchers.setMain` — it's synchronous, so instantiate it real (`IncomingCallRingStore()`).
+- **`| tee file | tail -N` hides progress from a backgrounded Bash task.** `tail -N` only emits at pipe
+  close, so the task's own output file stays empty until the build ends — poll the **`tee` target**
+  (`appcheck.log`) for live `> Task :…` lines, or grep it for `BUILD SUCCESSFUL|BUILD FAILED` in a
+  `run_in_background` `until` loop to get one clean completion ping. First full `:app` `check` in a fresh
+  container ≈ 5 min (assembleDebug compiles the whole feature graph); `:core:model` alone ≈ 3.5 min cold.
 
 ## Serialization gotchas
 - ⚠ **Never put a `private companion object` on a `@Serializable` class.** The plugin generates the
