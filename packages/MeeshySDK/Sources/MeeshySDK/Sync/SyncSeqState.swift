@@ -47,16 +47,24 @@ public actor SyncSeqTracker {
 
     private var state = SyncSeqState()
 
+    /// A5.2 — émet le `_seq` du trou détecté (la valeur de `next` qui a sauté).
+    /// Un abonné app-side (A5.3) y branchera une resync idempotente des
+    /// notifications (refetch `/notifications` → `save("all")`, dédup par id).
+    /// `nonisolated let` : les abonnés Combine s'y attachent hors de l'actor.
+    public nonisolated let gapDetected = SendablePassthrough<Int64>()
+
     public init() {}
 
     /// Observe un `_seq` : retourne `true` si un gap est détecté AVANT
-    /// d'avancer le curseur, puis enregistre. Un `nil` (event sans `_seq`,
-    /// gateway antérieur) est un no-op qui ne rapporte pas de gap.
+    /// d'avancer le curseur, émet sur `gapDetected` dans ce cas, puis
+    /// enregistre. Un `nil` (event sans `_seq`, gateway antérieur) est un no-op
+    /// qui ne rapporte pas de gap.
     @discardableResult
     public func observe(_ seq: Int64?) -> Bool {
         guard let seq else { return false }
         let gap = state.detectGap(next: seq)
         state.record(seq)
+        if gap { gapDetected.send(seq) }
         return gap
     }
 
