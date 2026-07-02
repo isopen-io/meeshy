@@ -216,12 +216,17 @@ final class CallViewAccessibilityTests: XCTestCase {
 
     func test_effectsToggleButton_hasAccessibilityHint() throws {
         let source = try callViewSource()
-        guard let labelRange = source.range(of: "call.filters.a11y") else {
-            XCTFail("effectsToggleButton must carry the call.filters.a11y accessibility label")
+        // Anchor on the effectsToggleButton declaration itself: the
+        // `call.filters.a11y` label is now shared with the PiP-frame filters
+        // button, so scanning from the first label occurrence would inspect the
+        // wrong control. Scoping to the declaration body keeps the guard honest.
+        guard let declRange = source.range(of: "private var effectsToggleButton") else {
+            XCTFail("CallView must define effectsToggleButton")
             return
         }
-        let end = source.index(labelRange.lowerBound, offsetBy: 400, limitedBy: source.endIndex) ?? source.endIndex
-        let vicinity = String(source[labelRange.lowerBound ..< end])
+        let rest = source[declRange.upperBound...]
+        let end = rest.range(of: "private var ")?.lowerBound ?? rest.endIndex
+        let vicinity = String(rest[..<end])
         XCTAssertTrue(
             vicinity.contains(".accessibilityHint"),
             "effectsToggleButton only carries .accessibilityLabel — unlike every sibling " +

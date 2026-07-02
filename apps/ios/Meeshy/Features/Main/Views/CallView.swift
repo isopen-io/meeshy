@@ -859,7 +859,8 @@ struct CallView: View {
                             }
                             pipFrameButton(
                                 icon: "camera.filters",
-                                label: String(localized: "call.filters.a11y", defaultValue: "Filtres video", bundle: .main)
+                                label: String(localized: "call.filters.a11y", defaultValue: "Filtres video", bundle: .main),
+                                hint: String(localized: "call.filters.hint", defaultValue: "Ouvre ou ferme la barre de filtres video", bundle: .main)
                             ) {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                     showEffectsToolbar.toggle()
@@ -900,7 +901,7 @@ struct CallView: View {
     /// Small circular control pinned to the local self-view frame (flip
     /// camera, filters). Buttons win the hit-test over the frame's tap-to-swap
     /// and drag gestures, so they stay usable on the 100×140 tile.
-    private func pipFrameButton(icon: String, label: String, action: @escaping () -> Void) -> some View {
+    private func pipFrameButton(icon: String, label: String, hint: String? = nil, action: @escaping () -> Void) -> some View {
         Button {
             action()
             HapticFeedback.light()
@@ -913,6 +914,7 @@ struct CallView: View {
                 .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 0.5))
         }
         .accessibilityLabel(label)
+        .optionalAccessibilityHint(hint)
     }
 
     /// True when the survival layer has auto-dropped our outbound video while the
