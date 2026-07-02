@@ -1132,7 +1132,25 @@ export class CallService {
       ? Math.floor((endedAt.getTime() - call.answeredAt.getTime()) / 1000)
       : 0;
 
-    const endReason = this.resolveEndReason(reason);
+    // Audit C3/C4 (2026-07-02 prod audit) — mirror leaveCall()'s pre-answer
+    // handling: a call ended before it was ever answered (still initiated/
+    // ringing/connecting) must resolve to `missed`, never `completed`.
+    // Without this, `call:end` fired before the callee's `call:join` (a race
+    // observed in prod) persisted status='ended'/duration=0/reason='completed'
+    // — a phantom "completed" call in history that never triggered a
+    // missed-call notification for the other party. An explicit non-default
+    // reason (rejected/failed/...) is preserved as endReason; only the status
+    // is normalized to `missed` so history/Recents filters stay consistent
+    // with leaveCall().
+    const wasPreAnswered =
+      call.status === CallStatus.initiated ||
+      call.status === CallStatus.ringing ||
+      call.status === CallStatus.connecting;
+    const resolvedReason = this.resolveEndReason(reason);
+    const endReason = wasPreAnswered && resolvedReason === CallEndReason.completed
+      ? CallEndReason.missed
+      : resolvedReason;
+    const targetStatus = wasPreAnswered ? CallStatus.missed : CallStatus.ended;
 
     await this.prisma.$transaction(async (tx) => {
       await tx.callParticipant.updateMany({
@@ -1146,7 +1164,7 @@ export class CallService {
       await tx.callSession.update({
         where: { id: callId },
         data: {
-          status: CallStatus.ended,
+          status: targetStatus,
           endedAt,
           duration,
           endReason,
@@ -1161,7 +1179,7 @@ export class CallService {
     this.clearHeartbeats(callId);
     await this.releaseActiveCallClaim(call.conversationId, callId);
 
-    logger.info('Call ended successfully', { callId, duration, endedBy, endReason });
+    logger.info('Call ended successfully', { callId, duration, endedBy, endReason, wasPreAnswered });
 
     return this.getCallSession(callId);
   }

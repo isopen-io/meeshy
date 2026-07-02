@@ -1043,6 +1043,100 @@ describe('CallService', () => {
         callService.endCall('call-123', 'user-456', 'participant-456')
       ).resolves.toBeDefined();
     });
+
+    it('audit C3/C4: resolves a pre-answer end (still ringing) as missed, not completed', async () => {
+      const initiatorParticipant = createMockParticipant({
+        role: ParticipantRole.initiator
+      });
+      const mockCall = createMockCallSession({
+        status: CallStatus.ringing,
+        answeredAt: null,
+        participants: [initiatorParticipant]
+      });
+      const endedCall = {
+        ...mockCall,
+        status: CallStatus.missed,
+        endedAt: new Date(),
+        participants: [{ ...initiatorParticipant, leftAt: new Date(), user: createMockUser() }],
+        initiator: createMockUser(),
+        conversation: createMockConversation()
+      };
+
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(mockCall);
+      mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockPrisma));
+      mockPrisma.callSession.update.mockResolvedValue(undefined);
+      mockPrisma.callParticipant.updateMany.mockResolvedValue(undefined);
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(endedCall);
+
+      await callService.endCall('call-123', 'user-123', 'participant-123');
+
+      const updateCall = mockPrisma.callSession.update.mock.calls[0];
+      expect(updateCall[0].data.status).toBe(CallStatus.missed);
+      expect(updateCall[0].data.endReason).toBe(CallEndReason.missed);
+      expect(updateCall[0].data.duration).toBe(0);
+    });
+
+    it('audit C3/C4: preserves an explicit reason (rejected) while still marking status missed pre-answer', async () => {
+      const initiatorParticipant = createMockParticipant({
+        role: ParticipantRole.initiator
+      });
+      const mockCall = createMockCallSession({
+        status: CallStatus.ringing,
+        answeredAt: null,
+        participants: [initiatorParticipant]
+      });
+      const endedCall = {
+        ...mockCall,
+        status: CallStatus.missed,
+        endedAt: new Date(),
+        participants: [{ ...initiatorParticipant, leftAt: new Date(), user: createMockUser() }],
+        initiator: createMockUser(),
+        conversation: createMockConversation()
+      };
+
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(mockCall);
+      mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockPrisma));
+      mockPrisma.callSession.update.mockResolvedValue(undefined);
+      mockPrisma.callParticipant.updateMany.mockResolvedValue(undefined);
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(endedCall);
+
+      await callService.endCall('call-123', 'user-123', 'participant-123', false, 'rejected');
+
+      const updateCall = mockPrisma.callSession.update.mock.calls[0];
+      expect(updateCall[0].data.status).toBe(CallStatus.missed);
+      expect(updateCall[0].data.endReason).toBe(CallEndReason.rejected);
+    });
+
+    it('audit C3/C4: an answered call still ends as completed regardless of pre-answer logic', async () => {
+      const initiatorParticipant = createMockParticipant({
+        role: ParticipantRole.initiator
+      });
+      const mockCall = createMockCallSession({
+        status: CallStatus.active,
+        answeredAt: new Date(),
+        participants: [initiatorParticipant]
+      });
+      const endedCall = {
+        ...mockCall,
+        status: CallStatus.ended,
+        endedAt: new Date(),
+        participants: [{ ...initiatorParticipant, leftAt: new Date(), user: createMockUser() }],
+        initiator: createMockUser(),
+        conversation: createMockConversation()
+      };
+
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(mockCall);
+      mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockPrisma));
+      mockPrisma.callSession.update.mockResolvedValue(undefined);
+      mockPrisma.callParticipant.updateMany.mockResolvedValue(undefined);
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(endedCall);
+
+      await callService.endCall('call-123', 'user-123', 'participant-123');
+
+      const updateCall = mockPrisma.callSession.update.mock.calls[0];
+      expect(updateCall[0].data.status).toBe(CallStatus.ended);
+      expect(updateCall[0].data.endReason).toBe(CallEndReason.completed);
+    });
   });
 
   describe('getActiveCallForConversation', () => {
