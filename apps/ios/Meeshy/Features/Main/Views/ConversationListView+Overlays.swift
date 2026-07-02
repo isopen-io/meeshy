@@ -256,7 +256,7 @@ extension ConversationListView {
                     ConversationPreviewView(
                         conversation: conversation,
                         cachedMessages: conversationViewModel.previewMessages[conversation.id] ?? [],
-                        bannerURL: conversation.banner.flatMap { MeeshyConfig.resolveMediaURL($0) },
+                        bannerURL: (conversation.type == .direct ? conversation.participantBanner : conversation.banner).flatMap { MeeshyConfig.resolveMediaURL($0) },
                         avatarURL: conversation.type == .direct ? conversation.participantAvatarURL : conversation.avatar,
                         storyState: storyRingState(for: conversation),
                         moodEmoji: conversationMoodStatus(for: conversation)?.moodEmoji,

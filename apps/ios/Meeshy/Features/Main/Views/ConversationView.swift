@@ -1448,7 +1448,7 @@ struct ConversationView: View {
                 .font(MeeshyFont.relative(13, weight: .semibold))
                 .foregroundStyle(LinearGradient(colors: [Color(hex: accentColor), Color(hex: secondaryColor)], startPoint: .topLeading, endPoint: .bottomTrailing))
                 .frame(width: 28, height: 28)
-                .background(Circle().fill(Color(hex: accentColor).opacity(0.15)))
+                .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.25))
                 .meeshyTapTarget()
         }
         .accessibilityLabel(String(localized: "conversation.view.search_in_conversation", bundle: .main))

@@ -9,6 +9,7 @@ public struct APIConversationUserNested: Decodable, Sendable {
     public let firstName: String?
     public let lastName: String?
     public let avatar: String?
+    public let banner: String?
     public let isOnline: Bool?
     public let lastActiveAt: Date?
 }
@@ -21,6 +22,7 @@ public struct APIConversationUser: Decodable, Sendable {
     public let firstName: String?
     public let lastName: String?
     public let avatar: String?
+    public let banner: String?
     public let isOnline: Bool?
     public let lastActiveAt: Date?
     public let type: String?
@@ -32,6 +34,10 @@ public struct APIConversationUser: Decodable, Sendable {
 
     public var resolvedAvatar: String? {
         nonEmpty(avatar) ?? nonEmpty(user?.avatar)
+    }
+
+    public var resolvedBanner: String? {
+        nonEmpty(banner) ?? nonEmpty(user?.banner)
     }
 
     public var resolvedUserId: String? {
@@ -240,6 +246,7 @@ extension APIConversation {
         }()
 
         let participantAvatar: String? = otherParticipant?.resolvedAvatar ?? otherUser?.resolvedAvatar
+        let participantBanner: String? = otherParticipant?.resolvedBanner ?? otherUser?.resolvedBanner
         let participantUsername: String? = otherUser?.username ?? otherParticipant?.user?.username
         let currentRole = currentUserRole ?? participants?.first(where: { $0.userId == currentUserId })?.role
         let prefs = userPreferences?.first
@@ -318,6 +325,7 @@ extension APIConversation {
             participantUserId: otherParticipant?.userId,
             participantUsername: participantUsername,
             participantAvatarURL: participantAvatar,
+            participantBanner: participantBanner,
             closedAt: closedAt,
             closedBy: closedBy,
             currentUserRole: currentRole,

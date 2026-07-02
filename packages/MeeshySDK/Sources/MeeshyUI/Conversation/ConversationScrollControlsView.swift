@@ -134,19 +134,12 @@ public struct ConversationScrollControlsView: View {
                         .padding(12)
                 }
             }
-            .background(
-                RoundedRectangle(cornerRadius: (hasUnreadContent || isOffline || isSearchingQuotedMessage) ? 16 : 20)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                isOffline ? MeeshyColors.neutral400 : Color(hex: accentColor).opacity(0.95),
-                                isOffline ? MeeshyColors.neutral500 : Color(hex: secondaryColor).opacity(0.9)
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .shadow(color: isOffline ? MeeshyColors.neutral400.opacity(0.4) : Color(hex: accentColor).opacity(0.4), radius: 8, y: 4)
+            // Liquid Glass iOS 26 (fallback material teinté < 26). Teinte accent
+            // FORTE pour préserver le contraste du contenu blanc (badge non-lus,
+            // aperçu pièce jointe) — toutes les infos restent visibles.
+            .adaptiveGlass(
+                in: RoundedRectangle(cornerRadius: (hasUnreadContent || isOffline || isSearchingQuotedMessage) ? 16 : 20, style: .continuous),
+                tint: isOffline ? MeeshyColors.neutral500.opacity(0.9) : Color(hex: accentColor).opacity(0.85)
             )
         }
         .allowsHitTesting(!isSearchingQuotedMessage)

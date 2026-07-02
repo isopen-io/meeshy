@@ -70,6 +70,7 @@ export const conversationListParticipantSelect = {
       firstName: true,
       lastName: true,
       avatar: true,
+      banner: true,
       isOnline: true,
       lastActiveAt: true
     }
@@ -508,6 +509,10 @@ export function registerCoreRoutes(
             const liveOnline = presenceChecker?.isOnline(m.userId ?? m.id);
             return {
               ...m,
+              // Bannière de profil top-level : le schéma participant est plat
+              // (strippe `user`), donc on expose la bannière du destinataire
+              // au niveau participant pour la remontée en DM.
+              banner: m.user?.banner ?? m.banner ?? null,
               isOnline: liveOnline === undefined ? m.isOnline : liveOnline,
               user: m.userId
                 ? { ...m.user, isOnline: liveOnline === undefined ? m.user?.isOnline : liveOnline }
@@ -895,7 +900,8 @@ export function registerCoreRoutes(
                   id: true,
                   username: true,
                   displayName: true,
-                  avatar: true
+                  avatar: true,
+                  banner: true
                 }
               }
             }
@@ -1117,7 +1123,8 @@ export function registerCoreRoutes(
                   id: true,
                   username: true,
                   displayName: true,
-                  avatar: true
+                  avatar: true,
+                  banner: true
                 }
               }
             }
