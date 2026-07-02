@@ -232,7 +232,12 @@ extension ConversationListView {
     // MARK: - Custom Context Menu Overlay (icônes garanties iOS 26)
 
     func dismissContextMenu() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.86)) { contextMenuConversation = nil }
+        // Zoom-out : anime la sortie (aperçu rétrécit, menu redescend) puis
+        // retire réellement l'overlay après la durée du spring.
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) { contextMenuAppeared = false }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.26) {
+            contextMenuConversation = nil
+        }
     }
 
     @ViewBuilder
@@ -245,7 +250,7 @@ extension ConversationListView {
                     .overlay(Color.black.opacity(0.12).ignoresSafeArea())
                     .contentShape(Rectangle())
                     .onTapGesture { dismissContextMenu() }
-                    .transition(.opacity)
+                    .opacity(contextMenuAppeared ? 1 : 0)
 
                 VStack(spacing: 16) {
                     ConversationPreviewView(
@@ -270,11 +275,19 @@ extension ConversationListView {
                                 )
                             }
                         } : nil,
-                        onSearch: { dismissContextMenu(); onSelect(conversation) },
+                        onSearch: {
+                            dismissContextMenu()
+                            router.pendingOpenSearch = true
+                            onSelect(conversation)
+                        },
                         onInfo: { dismissContextMenu(); conversationInfoConversation = conversation },
                         onProfileInfo: { dismissContextMenu(); handleProfileView(conversation) }
                     )
                     .frame(maxWidth: 340)
+                    // Aperçu : zoom (grandit depuis 0.7) + fondu, piloté par
+                    // `contextMenuAppeared` (spring à rebond, cf. .onAppear).
+                    .scaleEffect(contextMenuAppeared ? 1 : 0.7, anchor: .center)
+                    .opacity(contextMenuAppeared ? 1 : 0)
 
                     ConversationContextMenuView(
                         accentHex: conversation.accentColor,
@@ -354,14 +367,19 @@ extension ConversationListView {
                         },
                         onDismiss: { dismissContextMenu() }
                     )
+                    // Menu : remonte depuis le bas + fondu (piloté).
+                    .offset(y: contextMenuAppeared ? 0 : 70)
+                    .opacity(contextMenuAppeared ? 1 : 0)
                 }
                 .padding(.horizontal, 20)
-                // Zoom in/out : l'aperçu + le menu apparaissent en grandissant
-                // (spring) et se referment en rétrécissant, façon menu natif /
-                // overlay message.
-                .transition(.scale(scale: 0.88, anchor: .center).combined(with: .opacity))
             }
             .zIndex(300)
+            .onAppear {
+                // Zoom + rebond : l'aperçu grandit et le menu remonte au montage.
+                withAnimation(.spring(response: 0.44, dampingFraction: 0.6)) {
+                    contextMenuAppeared = true
+                }
+            }
         }
     }
 }

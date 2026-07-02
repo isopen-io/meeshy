@@ -140,7 +140,7 @@ struct ConversationPreviewView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Header — banner background + dark overlay for legibility
-            HStack(spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
                 // Real avatar with story ring / mood / presence
                 MeeshyAvatar(
                     name: conversation.name,
@@ -153,13 +153,15 @@ struct ConversationPreviewView: View {
                     presenceState: presenceState
                 )
 
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: 8) {
+                    // Titre pleine largeur — peut aller à la ligne (2 lignes).
+                    HStack(alignment: .top, spacing: 6) {
                         Text(conversation.name)
                             .font(.callout.weight(.bold))
                             .foregroundColor(.white)
                             .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
-                            .lineLimit(1)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
 
                         if conversation.userState.isPinned {
                             Image(systemName: "pin.fill")
@@ -174,6 +176,8 @@ struct ConversationPreviewView: View {
                                 .foregroundColor(.white.opacity(0.7))
                                 .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
                         }
+
+                        Spacer(minLength: 0)
                     }
 
                     if conversation.type != .direct {
@@ -186,11 +190,13 @@ struct ConversationPreviewView: View {
                         .foregroundColor(.white.opacity(0.9))
                         .shadow(color: .black.opacity(0.5), radius: 2, y: 1)
                     }
+
+                    // Boutons d'action SOUS le titre, alignés à droite.
+                    HStack(spacing: 8) {
+                        Spacer(minLength: 0)
+                        headerActions
+                    }
                 }
-
-                Spacer()
-
-                headerActions
             }
             .padding(14)
             .background(headerBackground)

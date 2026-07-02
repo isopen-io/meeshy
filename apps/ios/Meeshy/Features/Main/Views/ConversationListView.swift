@@ -144,6 +144,9 @@ struct ConversationListView: View {
     /// (appui long). Menu custom qui dessine ses icônes — le `.contextMenu`
     /// natif ne les affiche pas sur iOS 26.
     @State var contextMenuConversation: Conversation? = nil
+    /// Pilote l'animation zoom + rebond de l'overlay (false au montage → true
+    /// via `.onAppear` ; false à la fermeture). Voir `conversationContextMenuOverlay`.
+    @State var contextMenuAppeared = false
 
     /// Renommage : conversation cible + texte en cours d'édition (action
     /// « Renommer » du menu contextuel, groupes/communautés uniquement).
@@ -325,9 +328,11 @@ struct ConversationListView: View {
             },
             onLongPress: {
                 Task { await conversationViewModel.loadPreviewMessages(for: conversation.id) }
-                // Zoom + rebond : damping bas (0.58) => léger dépassement avant
-                // stabilisation de l'aperçu et du menu.
-                withAnimation(.spring(response: 0.42, dampingFraction: 0.58)) { contextMenuConversation = conversation }
+                // Montage instantané à l'état "replié" ; l'overlay anime
+                // ensuite via `.onAppear` (zoom + rebond). Reset explicite au
+                // cas où l'état resterait à true d'une ouverture précédente.
+                contextMenuAppeared = false
+                contextMenuConversation = conversation
             }
         )
         .equatable()

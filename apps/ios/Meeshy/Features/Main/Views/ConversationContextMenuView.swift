@@ -71,11 +71,11 @@ struct ConversationContextMenuView: View {
             case .more: morePanel
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
         .frame(width: 260)
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 16, style: .continuous), tint: accent.opacity(0.14))
-        .shadow(color: accent.opacity(0.18), radius: 12, x: 0, y: 4)
-        .shadow(color: .black.opacity(0.18), radius: 18, x: 0, y: 8)
+        // Liquid Glass natif iOS 26 (`.regular` pur, sans teinte ni ombre
+        // manuelle) pour matcher le rendu système ; fallback material < 26.
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .animation(.easeInOut(duration: 0.2), value: panel)
         .accessibilityElement(children: .contain)
     }

@@ -701,6 +701,17 @@ struct ConversationView: View {
                         scrollState.scrollToMessageTrigger += 1
                     }
                 }
+
+                // Ouverture depuis le bouton Recherche de l'aperçu long-press :
+                // active directement la barre de recherche in-conversation.
+                if router.pendingOpenSearch {
+                    router.pendingOpenSearch = false
+                    try? await Task.sleep(nanoseconds: 250_000_000)
+                    guard !Task.isCancelled else { return }
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        headerState.showSearch = true
+                    }
+                }
             }
             .onAppear {
                 if let context = replyContext { composerState.pendingReplyReference = context.toReplyReference }
