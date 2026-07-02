@@ -9,8 +9,19 @@
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { logger } from '../../utils/logger';
+import { withTimeout } from '../../utils/with-timeout';
 import * as fs from 'fs';
 import type { NotificationEventData } from './types';
+
+/**
+ * Minimal shape of Firebase's `sendEachForMulticast` result that this service
+ * consumes. `firebase-admin` is loaded via `require` as `any` (optional dep),
+ * so we type the response explicitly instead of inheriting `any`.
+ */
+type MulticastResponse = {
+  successCount: number;
+  responses: Array<{ success: boolean; error?: { code?: string } }>;
+};
 
 // Firebase Admin SDK (optionnel)
 let admin: any = null;
@@ -185,12 +196,11 @@ export class FirebaseNotificationService {
       };
 
       // 4. Envoyer via Firebase multicast (avec timeout)
-      const batchResponse = await Promise.race([
+      const batchResponse = await withTimeout<MulticastResponse>(
         admin.messaging().sendEachForMulticast(message),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Firebase timeout')), 5000)
-        )
-      ]);
+        5000,
+        'Firebase timeout'
+      );
 
       // Remove stale tokens that Firebase rejected
       const staleTokenIds = batchResponse.responses
