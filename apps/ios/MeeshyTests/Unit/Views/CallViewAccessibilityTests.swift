@@ -220,7 +220,7 @@ final class CallViewAccessibilityTests: XCTestCase {
             XCTFail("effectsToggleButton must carry the call.filters.a11y accessibility label")
             return
         }
-        let end = source.index(labelRange.lowerBound, offsetBy: 400, limitedBy: source.endIndex) ?? source.endIndex
+        let end = source.index(labelRange.lowerBound, offsetBy: 450, limitedBy: source.endIndex) ?? source.endIndex
         let vicinity = String(source[labelRange.lowerBound ..< end])
         XCTAssertTrue(
             vicinity.contains(".accessibilityHint"),

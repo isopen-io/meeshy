@@ -865,6 +865,7 @@ struct CallView: View {
                                     showEffectsToolbar.toggle()
                                 }
                             }
+                            .accessibilityHint(String(localized: "call.filters.hint", defaultValue: "Ouvre ou ferme la barre de filtres video", bundle: .main))
                         }
                         .padding(.bottom, 6)
                     }

@@ -3482,7 +3482,15 @@ final class CallViewAutoHideControlsSourceGuardTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    func test_shouldAutoHideControls_gatesOnIsVideoEnabled() throws {
+    func test_shouldAutoHideControls_gatesOnIsVideoUIActive() throws {
+        // Audit fix 7 (§ calls-fonctionnel-todo.md) replaced a direct
+        // `isVideoEnabled` (local camera only) gate with `isVideoUIActive`
+        // (`CallReliabilityPolicy.videoLayoutActive` — local OR remote video
+        // active), so controls also stay visible while only the REMOTE peer
+        // has escalated to video during an audio call. `isVideoUIActive` is
+        // false whenever neither side has video, so the original intent —
+        // never auto-hide on an audio-only call — still holds, just via the
+        // more complete gate.
         let source = try callViewSource()
         guard let fnRange = source.range(of: "private var shouldAutoHideControls: Bool") else {
             XCTFail("shouldAutoHideControls not found in CallView.swift")
@@ -3491,9 +3499,10 @@ final class CallViewAutoHideControlsSourceGuardTests: XCTestCase {
         let end = source.index(fnRange.lowerBound, offsetBy: 300, limitedBy: source.endIndex) ?? source.endIndex
         let body = String(source[fnRange.lowerBound ..< end])
         XCTAssertTrue(
-            body.contains("isVideoEnabled"),
-            "shouldAutoHideControls must gate on isVideoEnabled — controls must never " +
-            "auto-hide on an audio-only call (there's no video surface to tap for recall)."
+            body.contains("isVideoUIActive"),
+            "shouldAutoHideControls must gate on isVideoUIActive — controls must never " +
+            "auto-hide when there's no video surface to tap for recall, whether that's " +
+            "because the call is audio-only or because only the remote peer has video."
         )
     }
 
