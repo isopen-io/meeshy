@@ -313,6 +313,38 @@ describe('CallService', () => {
       expect(capturedData).toHaveProperty('leftAt', null);
     });
 
+    it('audit C5: phantom cleanup scans initiator participations matching leftAt null OR unset', async () => {
+      const mockConversation = createMockConversation();
+      const mockCallSession = createMockCallSession({
+        participants: [createMockParticipant()],
+        initiator: createMockUser(),
+        conversation: mockConversation
+      });
+
+      mockPrisma.conversation.findUnique.mockResolvedValue(mockConversation);
+      mockPrisma.participant.findFirst.mockResolvedValue({
+        id: 'member-123',
+        conversationId: 'conv-123',
+        userId: 'user-123',
+        isActive: true
+      });
+      mockPrisma.callParticipant.findMany.mockResolvedValue([]);
+      mockPrisma.callSession.findFirst.mockResolvedValue(null);
+      mockPrisma.$transaction.mockResolvedValue(mockCallSession);
+      mockPrisma.callSession.findUnique.mockResolvedValue(mockCallSession);
+
+      await callService.initiateCall(validInitiateData);
+
+      expect(mockPrisma.callParticipant.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
+            participant: { userId: 'user-123' }
+          })
+        })
+      );
+    });
+
     it('should successfully initiate an audio-only call', async () => {
       const audioCallData = {
         ...validInitiateData,
@@ -726,6 +758,37 @@ describe('CallService', () => {
       expect(result).toBeDefined();
     });
 
+    it('audit C5: finds the leaver matching leftAt null OR unset (Mongo missing-field docs)', async () => {
+      const participant = createMockParticipant();
+      const callWithParticipants = createMockCallSession({
+        status: CallStatus.active,
+        participants: [
+          participant,
+          createMockParticipant({ id: 'participant-456', userId: 'user-456' })
+        ]
+      });
+      const updatedCall = {
+        ...callWithParticipants,
+        initiator: createMockUser(),
+        conversation: createMockConversation()
+      };
+
+      mockPrisma.callParticipant.findFirst.mockResolvedValue(participant);
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(callWithParticipants);
+      mockPrisma.$transaction.mockResolvedValue(undefined);
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(updatedCall);
+
+      await callService.leaveCall(validLeaveData);
+
+      expect(mockPrisma.callParticipant.findFirst).toHaveBeenCalledWith({
+        where: {
+          callSessionId: 'call-123',
+          participantId: 'participant-123',
+          OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
+        }
+      });
+    });
+
     it('should throw error when participant not found and call session missing', async () => {
       // CALL-FIX 2026-06-06 — leaveCall is now idempotent: a missing active
       // CallParticipant row no longer throws on its own. It only throws when the
@@ -983,6 +1046,40 @@ describe('CallService', () => {
       ).rejects.toThrow(
         'PERMISSION_DENIED: Anonymous users cannot end calls. Use leave instead.'
       );
+    });
+
+    it('clears a pending ringing timer on end (item I — REST DELETE never cleared it, leaving a stray timer)', async () => {
+      jest.useFakeTimers();
+      try {
+        const staleTimerCallback = jest.fn();
+        callService.scheduleRingingTimeout('call-123', staleTimerCallback);
+
+        const initiatorParticipant = createMockParticipant({
+          role: ParticipantRole.initiator
+        });
+        const mockCall = createMockCallSession({
+          status: CallStatus.active,
+          participants: [initiatorParticipant]
+        });
+        const endedCall = {
+          ...mockCall,
+          status: CallStatus.ended,
+          endedAt: new Date(),
+          participants: [{ ...initiatorParticipant, leftAt: new Date(), user: createMockUser() }],
+          initiator: createMockUser(),
+          conversation: createMockConversation()
+        };
+        mockPrisma.callSession.findUnique.mockResolvedValueOnce(mockCall);
+        mockPrisma.$transaction.mockResolvedValue(undefined);
+        mockPrisma.callSession.findUnique.mockResolvedValueOnce(endedCall);
+
+        await callService.endCall('call-123', 'user-123', 'participant-123');
+
+        jest.advanceTimersByTime(61_000);
+        expect(staleTimerCallback).not.toHaveBeenCalled();
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     it('should throw error when call not found', async () => {
@@ -1286,6 +1383,29 @@ describe('CallService', () => {
       });
     });
 
+    it('audit C5: looks up the active participant matching leftAt null OR unset (100% media-toggle no-op in prod)', async () => {
+      const participant = createMockParticipant({ isAudioEnabled: true });
+      const updatedCall = createMockCallSession({
+        participants: [{ ...participant, isAudioEnabled: false, user: createMockUser() }],
+        initiator: createMockUser(),
+        conversation: createMockConversation()
+      });
+
+      mockPrisma.callParticipant.findFirst.mockResolvedValue(participant);
+      mockPrisma.callParticipant.update.mockResolvedValue({ ...participant, isAudioEnabled: false });
+      mockPrisma.callSession.findUnique.mockResolvedValue(updatedCall);
+
+      await callService.updateParticipantMedia('call-123', 'user-123', 'audio', false);
+
+      expect(mockPrisma.callParticipant.findFirst).toHaveBeenCalledWith({
+        where: {
+          callSessionId: 'call-123',
+          participantId: 'user-123',
+          OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
+        }
+      });
+    });
+
     it('should throw error when participant not found and call session missing', async () => {
       // CALL-FIX 2026-06-06 — updateParticipantMedia is now tolerant: a missing
       // active CallParticipant row no longer throws (the toggle still broadcasts).
@@ -1337,6 +1457,37 @@ describe('CallService', () => {
       await expect(callService.markCallAsMissed('invalid-call')).rejects.toThrow(
         'CALL_NOT_FOUND: Call session not found'
       );
+    });
+
+    it('clears a pending ringing timer when marking missed (item I)', async () => {
+      jest.useFakeTimers();
+      try {
+        const staleTimerCallback = jest.fn();
+        callService.scheduleRingingTimeout('call-123', staleTimerCallback);
+
+        const callSession = createMockCallSession({
+          status: CallStatus.initiated,
+          participants: [createMockParticipant()]
+        });
+        const missedCall = {
+          ...callSession,
+          status: CallStatus.missed,
+          endedAt: new Date(),
+          participants: [createMockParticipant({ user: createMockUser() })],
+          initiator: createMockUser(),
+          conversation: createMockConversation()
+        };
+        mockPrisma.callSession.findUnique.mockResolvedValueOnce(callSession);
+        mockPrisma.callSession.update.mockResolvedValue(missedCall);
+        mockPrisma.callSession.findUnique.mockResolvedValueOnce(missedCall);
+
+        await callService.markCallAsMissed('call-123');
+
+        jest.advanceTimersByTime(61_000);
+        expect(staleTimerCallback).not.toHaveBeenCalled();
+      } finally {
+        jest.useRealTimers();
+      }
     });
   });
 

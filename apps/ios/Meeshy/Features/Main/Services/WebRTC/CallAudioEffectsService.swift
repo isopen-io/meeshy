@@ -41,7 +41,11 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
 
     // MARK: - Engine & Nodes
 
-    private let engine = AVAudioEngine()
+    // Audit 2026-07-02 (bug 4) — lazy: the render pipeline has no production
+    // feed (UI entry points removed), so the engine must not be built at
+    // CallManager.shared startup. First touch happens on configQueue when an
+    // effect is actually activated (all engine accesses are configQueue-serial).
+    private lazy var engine = AVAudioEngine()
     private var voiceEffectNodes: [AVAudioNode] = []
     private var backSoundPlayerNode: AVAudioPlayerNode?
     private var backSoundMixerNode: AVAudioMixerNode?

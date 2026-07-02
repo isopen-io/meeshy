@@ -62,6 +62,7 @@ const createMockPrisma = () => ({
 const createMockCallService = (hasData = true) => ({
   getStaleHeartbeats: jest.fn() as MockFn,
   clearHeartbeats: jest.fn() as MockFn,
+  clearRingingTimeout: jest.fn() as MockFn,
   hasHeartbeatData: jest.fn().mockReturnValue(hasData) as MockFn
 });
 
@@ -271,6 +272,53 @@ describe('CallCleanupService', () => {
       const result = await service.runCleanup();
 
       expect(result).toEqual({ cleaned: 0, errors: 0 });
+    });
+
+    it('audit C5: heartbeat tier fetches participants matching leftAt null OR unset (Mongo missing-field docs)', async () => {
+      const service = new CallCleanupService(prisma as any, callService as any);
+      prisma.callSession.findMany.mockResolvedValue([]);
+
+      await service.runCleanup();
+
+      expect(prisma.callSession.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          include: {
+            participants: {
+              where: { OR: [{ leftAt: null }, { leftAt: { isSet: false } }] }
+            }
+          }
+        })
+      );
+    });
+
+    it('audit C5: forceEndCall stamps leftAt on participants matching leftAt null OR unset', async () => {
+      const service = new CallCleanupService(prisma as any);
+      const staleCall = makeStaleCall(CallStatus.initiated, 130_000);
+
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([staleCall])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-1' });
+
+      const txParticipantUpdateMany = jest.fn().mockResolvedValue({ count: 1 }) as MockFn;
+      prisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
+        const tx = {
+          callParticipant: { updateMany: txParticipantUpdateMany },
+          callSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }
+        };
+        return cb(tx);
+      });
+
+      await service.runCleanup();
+
+      expect(txParticipantUpdateMany).toHaveBeenCalledWith({
+        where: {
+          callSessionId: staleCall.id,
+          OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
+        },
+        data: { leftAt: expect.any(Date) }
+      });
     });
 
     it('force-MISSED a stale initiated call (>120s) → cleaned:1', async () => {
@@ -553,9 +601,12 @@ describe('CallCleanupService', () => {
     });
 
     // DB-fallback tests (post-restart recovery)
-    it('DB fallback: force-ends when no in-memory data and all participants have stale DB lastHeartbeatAt', async () => {
+    it('DB fallback: force-ends when boot grace has elapsed and all participants have stale DB lastHeartbeatAt', async () => {
       const noMemoryCallService = createMockCallService(false);
-      const service = new CallCleanupService(prisma as any, noMemoryCallService as any);
+      // Booted 10 min ago — well past the 120s boot grace window.
+      const service = new CallCleanupService(
+        prisma as any, noMemoryCallService as any, new Date(Date.now() - 600_000)
+      );
 
       const staleTs = new Date(Date.now() - 130_000); // 130s ago — older than 120s timeout
       const participant = { id: 'p-1', participantId: 'part-1', leftAt: null, lastHeartbeatAt: staleTs };
@@ -608,7 +659,10 @@ describe('CallCleanupService', () => {
 
     it('DB fallback: force-ends when no in-memory data, lastHeartbeatAt is null, and the participant joined long ago (genuine zombie)', async () => {
       const noMemoryCallService = createMockCallService(false);
-      const service = new CallCleanupService(prisma as any, noMemoryCallService as any);
+      // Booted 10 min ago — well past the 120s boot grace window.
+      const service = new CallCleanupService(
+        prisma as any, noMemoryCallService as any, new Date(Date.now() - 600_000)
+      );
 
       // Joined 130s ago (older than the 120s timeout) and never got a heartbeat
       // persisted — a real zombie, not a just-restarted-gateway false positive.
@@ -665,6 +719,88 @@ describe('CallCleanupService', () => {
 
       expect(result.cleaned).toBe(0);
       expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('DB fallback: does NOT force-end right after boot even when every DB lastHeartbeatAt is stale (boot grace — heartbeats were impossible while the gateway was down)', async () => {
+      const noMemoryCallService = createMockCallService(false);
+      // Default construction — bootedAt = now, i.e. the gateway just restarted.
+      const service = new CallCleanupService(prisma as any, noMemoryCallService as any);
+
+      // Gateway was down for 10 minutes: every heartbeat timestamp is ancient,
+      // but the clients are alive (P2P media survived) and will re-join within
+      // seconds. This call must NOT be reaped on the first post-boot tick.
+      const participant = {
+        id: 'p-1', participantId: 'part-1', leftAt: null,
+        lastHeartbeatAt: new Date(Date.now() - 600_000),
+        joinedAt: new Date(Date.now() - 900_000)
+      };
+      const activeCall = {
+        id: 'call-boot-grace',
+        startedAt: new Date(Date.now() - 900_000),
+        conversationId: 'conv-boot-grace',
+        participants: [participant]
+      };
+
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([]) // tier 1
+        .mockResolvedValueOnce([]) // tier 2
+        .mockResolvedValueOnce([]) // tier 3
+        .mockResolvedValueOnce([activeCall]); // heartbeat tier
+
+      const result = await service.runCleanup();
+
+      expect(result.cleaned).toBe(0);
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('DB fallback: reaps the call once the boot grace elapsed with still no heartbeat resumption', async () => {
+      const noMemoryCallService = createMockCallService(false);
+      // Booted 130s ago (> 120s grace) and nobody resumed heartbeats since.
+      const service = new CallCleanupService(
+        prisma as any, noMemoryCallService as any, new Date(Date.now() - 130_000)
+      );
+
+      const participant = {
+        id: 'p-1', participantId: 'part-1', leftAt: null,
+        lastHeartbeatAt: new Date(Date.now() - 600_000),
+        joinedAt: new Date(Date.now() - 900_000)
+      };
+      const activeCall = {
+        id: 'call-boot-grace-expired',
+        startedAt: new Date(Date.now() - 900_000),
+        conversationId: 'conv-boot-grace-expired',
+        participants: [participant]
+      };
+
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([activeCall]);
+
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-boot-grace-expired' });
+      setupTransactionPassthrough(prisma);
+
+      const result = await service.runCleanup();
+
+      expect(result.cleaned).toBe(1);
+    });
+
+    it('forceEndCall clears the ringing timer alongside heartbeats (item I)', async () => {
+      const service = new CallCleanupService(prisma as any, callService as any);
+      const staleCall = makeStaleCall(CallStatus.initiated, 130_000);
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([staleCall]) // tier 1 reaps it
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-1' });
+      setupTransactionPassthrough(prisma);
+
+      await service.runCleanup();
+
+      expect(callService.clearHeartbeats).toHaveBeenCalledWith('call-stale-1');
+      expect(callService.clearRingingTimeout).toHaveBeenCalledWith('call-stale-1');
     });
   });
 

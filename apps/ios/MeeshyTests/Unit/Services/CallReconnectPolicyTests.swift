@@ -343,3 +343,21 @@ final class VideoLayoutPolicyTests: XCTestCase {
         ))
     }
 }
+
+// MARK: - Signaling-degraded indicator policy (EXIGENCE №1)
+
+final class SignalingDegradedPolicyTests: XCTestCase {
+
+    func test_signalingDegraded_connectedCallSocketDown_isTrue() {
+        XCTAssertTrue(CallReliabilityPolicy.signalingDegraded(callEstablished: true, socketConnected: false))
+    }
+
+    func test_signalingDegraded_connectedCallSocketUp_isFalse() {
+        XCTAssertFalse(CallReliabilityPolicy.signalingDegraded(callEstablished: true, socketConnected: true))
+    }
+
+    func test_signalingDegraded_noEstablishedCall_isFalse_regardlessOfSocket() {
+        XCTAssertFalse(CallReliabilityPolicy.signalingDegraded(callEstablished: false, socketConnected: false))
+        XCTAssertFalse(CallReliabilityPolicy.signalingDegraded(callEstablished: false, socketConnected: true))
+    }
+}

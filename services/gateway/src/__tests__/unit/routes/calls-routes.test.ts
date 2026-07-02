@@ -1121,7 +1121,9 @@ describe('callRoutes', () => {
             participants: {
               some: {
                 participant: { userId: USER_ID },
-                leftAt: null,
+                // Audit C5 — Prisma-on-Mongo: null alone misses documents
+                // where the field is absent (historical CallParticipant).
+                OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
               },
             },
           }),

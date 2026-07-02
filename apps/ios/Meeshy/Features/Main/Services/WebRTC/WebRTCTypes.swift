@@ -281,6 +281,16 @@ extension CallStats {
 /// side effects (ICE restart, end-call); this type owns only the *decision*.
 nonisolated enum CallReliabilityPolicy {
 
+    /// EXIGENCE №1 — degraded-signaling indicator. The media path (P2P
+    /// DTLS-SRTP) is decoupled from the signaling socket: a socket drop during
+    /// an established call never tears it down (no listener has that power —
+    /// re-join/resync happens on `didReconnect`). This policy only drives the
+    /// discreet in-call hint that signaling operations (media toggles, hangup
+    /// relay, ICE relay) are deferred until the socket returns.
+    static func signalingDegraded(callEstablished: Bool, socketConnected: Bool) -> Bool {
+        callEstablished && !socketConnected
+    }
+
     /// §5.8 — half-open media detection. We keep `.connected` immediately on
     /// `RTCPeerConnectionState.connected` for snappy UX, but a real half-open
     /// path (we send RTP, the peer's RTP never arrives) is silent audio. After a

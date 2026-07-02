@@ -29559,8 +29559,8 @@
           }
         }
       }
-  },
-  "share.sendTo" : {
+    },
+    "share.sendTo" : {
       "extractionState" : "stale",
       "localizations" : {
         "de" : {

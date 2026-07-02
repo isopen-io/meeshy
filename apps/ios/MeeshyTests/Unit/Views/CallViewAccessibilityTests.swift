@@ -215,23 +215,31 @@ final class CallViewAccessibilityTests: XCTestCase {
     // MARK: - Effects toggle button accessibility
 
     func test_effectsToggleButton_hasAccessibilityHint() throws {
+        // The call.filters.a11y label now appears on TWO controls (the bottom-bar
+        // effects toggle AND the self-preview pipFrameButton, Fix 8) — EVERY
+        // occurrence must pair the label with the call.filters.hint hint, or
+        // VoiceOver users get no indication that the control toggles the video
+        // effects toolbar.
         let source = try callViewSource()
-        guard let labelRange = source.range(of: "call.filters.a11y") else {
-            XCTFail("effectsToggleButton must carry the call.filters.a11y accessibility label")
-            return
+        var searchStart = source.startIndex
+        var occurrences = 0
+        while let labelRange = source.range(of: "call.filters.a11y", range: searchStart..<source.endIndex) {
+            occurrences += 1
+            let end = source.index(labelRange.lowerBound, offsetBy: 600, limitedBy: source.endIndex) ?? source.endIndex
+            let vicinity = String(source[labelRange.lowerBound ..< end])
+            XCTAssertTrue(
+                vicinity.contains(".accessibilityHint"),
+                "occurrence #\(occurrences) of call.filters.a11y has no .accessibilityHint nearby — " +
+                "unlike every sibling control (mute/speaker/camera/end-call via callControlButton)."
+            )
+            XCTAssertTrue(
+                vicinity.contains("call.filters.hint"),
+                "occurrence #\(occurrences) of call.filters.a11y must pair with the " +
+                "call.filters.hint localization key."
+            )
+            searchStart = labelRange.upperBound
         }
-        let end = source.index(labelRange.lowerBound, offsetBy: 450, limitedBy: source.endIndex) ?? source.endIndex
-        let vicinity = String(source[labelRange.lowerBound ..< end])
-        XCTAssertTrue(
-            vicinity.contains(".accessibilityHint"),
-            "effectsToggleButton only carries .accessibilityLabel — unlike every sibling " +
-            "control (mute/speaker/camera/end-call via callControlButton), it has no hint, " +
-            "so VoiceOver users get no indication that this toggles the video effects toolbar."
-        )
-        XCTAssertTrue(
-            vicinity.contains("call.filters.hint"),
-            "effectsToggleButton must use the call.filters.hint localization key."
-        )
+        XCTAssertGreaterThan(occurrences, 0, "effectsToggleButton must carry the call.filters.a11y accessibility label")
     }
 
     // MARK: - End call button accessibility

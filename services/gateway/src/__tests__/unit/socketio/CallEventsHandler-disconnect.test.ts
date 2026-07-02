@@ -88,6 +88,7 @@ jest.mock('../../../utils/logger', () => ({
 
 import { CallEventsHandler } from '../../../socketio/CallEventsHandler';
 import { CALL_EVENTS } from '@meeshy/shared/types/video-call';
+import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 // ---------------------------------------------------------------------------
@@ -184,11 +185,12 @@ function makeSocket() {
   return { socket, handlers, directEmit };
 }
 
-function makeIo() {
+function makeIo(rooms?: Map<string, Set<string>>) {
   const roomEmit = jest.fn<any>();
   const io = {
     to: jest.fn<any>().mockReturnValue({ emit: roomEmit }),
     in: jest.fn<any>().mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) }),
+    ...(rooms ? { sockets: { adapter: { rooms } } } : {}),
   };
   return { io, roomEmit };
 }
@@ -309,6 +311,145 @@ describe('CallEventsHandler — disconnect handler force-cleanup', () => {
       const endedBroadcasts = (roomEmit as jest.MockedFunction<any>).mock.calls
         .filter(([event]) => event === CALL_EVENTS.ENDED);
       expect(endedBroadcasts).toHaveLength(0);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // ZOMBIE-SOCKET GUARD (2026-07-02) — a stale socket from a previous session
+  // expiring must NOT tear down calls the user is actively on through another
+  // live socket (prod: two expired zombies of atabeth killed call 6a464c61
+  // mid-ring while the active socket was still receiving messages).
+  // -------------------------------------------------------------------------
+
+  describe('zombie-socket guard: other live sockets for the same user', () => {
+    it('does nothing (no leave, no grace, no DB scan) when the user room still has a live socket', async () => {
+      mockLeaveCallDc.mockResolvedValue({
+        id: CALL_ID,
+        conversationId: CONV_ID,
+        status: 'active',
+        duration: null,
+        endReason: null,
+        mode: 'p2p',
+      });
+
+      const prisma = makePrisma();
+      const { socket, handlers } = makeSocket();
+      // On 'disconnect' the closing socket has already left its rooms — any
+      // member left in the user room is a DIFFERENT, live connection.
+      const { io, roomEmit } = makeIo(
+        new Map([[ROOMS.user(USER_ID), new Set(['other-live-socket'])]])
+      );
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(GRACE_EXPIRY_MS);
+
+      expect(prisma.callParticipant.findMany).not.toHaveBeenCalled();
+      expect(mockLeaveCallDc).not.toHaveBeenCalled();
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(roomEmit).not.toHaveBeenCalled();
+    });
+
+    it('proceeds with normal disconnect cleanup when the user room is empty', async () => {
+      const leftSession = {
+        id: CALL_ID,
+        conversationId: CONV_ID,
+        status: 'active',
+        duration: null,
+        endReason: null,
+        mode: 'p2p',
+      };
+      mockLeaveCallDc.mockResolvedValue(leftSession);
+
+      const prisma = makePrisma();
+      const { socket, handlers } = makeSocket();
+      const { io, roomEmit } = makeIo(new Map());
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(GRACE_EXPIRY_MS);
+
+      expect(prisma.callParticipant.findMany).toHaveBeenCalled();
+      expect(roomEmit).toHaveBeenCalledWith(
+        CALL_EVENTS.PARTICIPANT_LEFT,
+        expect.objectContaining({ callId: CALL_ID })
+      );
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Audit C5 (2026-07-02) — Prisma-on-Mongo `{leftAt: null}` does not match
+  // documents whose leftAt field was never written; every "still in call"
+  // filter must cover both shapes.
+  // -------------------------------------------------------------------------
+
+  describe('audit C5: leftAt filters match null OR unset', () => {
+    it('scans active participations matching leftAt null OR unset', async () => {
+      mockLeaveCallDc.mockResolvedValue({
+        id: CALL_ID,
+        conversationId: CONV_ID,
+        status: 'active',
+        duration: null,
+        endReason: null,
+        mode: 'p2p',
+      });
+
+      const prisma = makePrisma();
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(GRACE_EXPIRY_MS);
+
+      expect(prisma.callParticipant.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
+            participant: { userId: USER_ID }
+          })
+        })
+      );
+    });
+
+    it('force-cleanup counts remaining participants matching leftAt null OR unset', async () => {
+      mockLeaveCallDc.mockRejectedValue(new Error('DB error'));
+
+      const prisma = makePrisma();
+      const countMock = jest.fn<any>().mockResolvedValue(1);
+      (prisma.$transaction as jest.MockedFunction<any>).mockImplementation(
+        async (callback: (tx: any) => Promise<any>) => {
+          const tx = {
+            callParticipant: {
+              update: jest.fn<any>().mockResolvedValue(undefined),
+              count: countMock,
+            },
+            callSession: {
+              findUnique: jest.fn<any>().mockResolvedValue(null),
+              update: jest.fn<any>().mockResolvedValue(undefined),
+            },
+          };
+          return callback(tx);
+        }
+      );
+
+      const { socket, handlers } = makeSocket();
+      const { io } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(GRACE_EXPIRY_MS);
+
+      expect(countMock).toHaveBeenCalledWith({
+        where: {
+          callSessionId: CALL_ID,
+          OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
+        }
+      });
     });
   });
 

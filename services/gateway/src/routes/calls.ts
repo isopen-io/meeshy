@@ -992,7 +992,9 @@ export default async function callRoutes(fastify: FastifyInstance) {
               participant: {
                 userId: userId,
               },
-              leftAt: null,
+              // Audit C5 (2026-07-02) — Prisma-on-Mongo: `leftAt: null` misses
+              // historical documents where the field is absent entirely.
+              OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
             },
           },
         },
