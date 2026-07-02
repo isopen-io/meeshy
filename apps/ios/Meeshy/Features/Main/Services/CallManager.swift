@@ -1397,20 +1397,28 @@ final class CallManager: ObservableObject {
         } else {
             // SDP offer not yet received — wait for it via handleSignalOffer with timeout
             Logger.calls.info("Call answered but SDP offer not yet received, waiting: \(callId)")
-            sdpOfferTimeoutTask?.cancel()
-            sdpOfferTimeoutTask = Task { @MainActor [weak self] in
-                try? await Task.sleep(for: .seconds(QualityThresholds.sdpOfferTimeoutSeconds))
-                guard let self, !Task.isCancelled else { return }
-                guard case .connecting = self.callState, self.currentCallId == callId else { return }
-                Logger.calls.error("SDP offer timeout for call: \(callId)")
-                // The peer is still waiting on an answer that will never come —
-                // tell the gateway now instead of leaving it to the cron reaper.
-                MessageSocketManager.shared.emitCallEnd(callId: callId)
-                self.failCall(String(localized: "call.error.timeout"))
-            }
+            scheduleSdpOfferTimeout(callId: callId)
         }
 
         HapticFeedback.success()
+    }
+
+    /// Arms the "peer never sent an SDP offer" watchdog shared by `answerCall()`
+    /// and `answerCallReady()` — both enter `.connecting` before the offer has
+    /// arrived and must proactively fail (and notify the gateway) instead of
+    /// hanging until the cron reaper eventually cleans up the zombie call.
+    private func scheduleSdpOfferTimeout(callId: String) {
+        sdpOfferTimeoutTask?.cancel()
+        sdpOfferTimeoutTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(QualityThresholds.sdpOfferTimeoutSeconds))
+            guard let self, !Task.isCancelled else { return }
+            guard case .connecting = self.callState, self.currentCallId == callId else { return }
+            Logger.calls.error("SDP offer timeout for call: \(callId)")
+            // The peer is still waiting on an answer that will never come —
+            // tell the gateway now instead of leaving it to the cron reaper.
+            MessageSocketManager.shared.emitCallEnd(callId: callId)
+            self.failCall(String(localized: "call.error.timeout"))
+        }
     }
 
     /// Async SDP+media setup kicked off by `CXAnswerCallAction` AFTER
@@ -1452,17 +1460,7 @@ final class CallManager: ObservableObject {
             Logger.calls.info("Call answered (CallKit) with buffered SDP offer: \(callId)")
         } else {
             Logger.calls.info("Call answered (CallKit), awaiting SDP offer: \(callId)")
-            sdpOfferTimeoutTask?.cancel()
-            sdpOfferTimeoutTask = Task { @MainActor [weak self] in
-                try? await Task.sleep(for: .seconds(QualityThresholds.sdpOfferTimeoutSeconds))
-                guard let self, !Task.isCancelled else { return }
-                guard case .connecting = self.callState, self.currentCallId == callId else { return }
-                Logger.calls.error("SDP offer timeout for call: \(callId)")
-                // The peer is still waiting on an answer that will never come —
-                // tell the gateway now instead of leaving it to the cron reaper.
-                MessageSocketManager.shared.emitCallEnd(callId: callId)
-                self.failCall(String(localized: "call.error.timeout"))
-            }
+            scheduleSdpOfferTimeout(callId: callId)
         }
 
         HapticFeedback.success()
@@ -1903,6 +1901,10 @@ final class CallManager: ObservableObject {
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(0.5))
             guard let self else { return }
+            // The waiting call may have been ended, answered elsewhere, or
+            // replaced by a newer incoming call while we were asleep — only
+            // answer if it's still the exact call the user acted on.
+            guard self.pendingIncomingCall?.callId == pending.callId else { return }
             self.handleIncomingCallNotification(
                 callId: pending.callId,
                 fromUserId: pending.fromUserId,
@@ -4070,6 +4072,11 @@ extension CallManager: WebRTCServiceDelegate {
                 guard !Task.isCancelled, case .reconnecting(let current) = self.callState, current == attempt else { return }
             }
             guard let offer = await self.webRTCService.performICERestart() else {
+                // The call may have ended (or a newer reconnect cycle already
+                // took over) while `performICERestart()` was in flight — only
+                // escalate if this attempt is still the live one, otherwise
+                // this would resurrect a dead call or clobber a fresher cycle.
+                guard !Task.isCancelled, case .reconnecting(let current) = self.callState, current == attempt else { return }
                 self.attemptReconnection(escalate: true); return
             }
             guard !Task.isCancelled, case .reconnecting(let current) = self.callState, current == attempt else { return }

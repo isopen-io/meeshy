@@ -1721,6 +1721,34 @@ final class ICERestartTaskSerializationTests: XCTestCase {
             "endCallInternal must nil iceRestartTask after cancelling to release the Task object."
         )
     }
+
+    /// Audit 2026-07-02: `performICERestart()` can still be awaiting when the
+    /// call ends (or a fresher reconnect cycle takes over). Its `nil` branch
+    /// must re-check `Task.isCancelled`/`callState` — exactly like the
+    /// success branch two lines below it — before calling
+    /// `attemptReconnection(escalate:)`. Without that guard, a stale restart
+    /// failure resurrects an already-ended call or clobbers a newer cycle's
+    /// `.reconnecting` state.
+    func test_scheduleICERestart_nilOfferBranch_guardsStaleAttemptBeforeEscalating() throws {
+        let src = try callManagerSource()
+        guard let funcRange = src.range(of: "func scheduleICERestart(") else {
+            XCTFail("scheduleICERestart() not found in CallManager.swift"); return
+        }
+        let bodyEnd = src.range(of: "\n    }", range: funcRange.upperBound..<src.endIndex)?.upperBound
+            ?? src.endIndex
+        let body = String(src[funcRange.lowerBound..<bodyEnd])
+        guard let nilBranchStart = body.range(of: "performICERestart() else {")?.upperBound,
+              let nilBranchEnd = body.range(of: "attemptReconnection(escalate: true)")?.upperBound else {
+            XCTFail("Expected the nil-offer branch calling attemptReconnection(escalate:) in scheduleICERestart"); return
+        }
+        let nilBranch = String(body[nilBranchStart..<nilBranchEnd])
+        XCTAssertTrue(
+            nilBranch.contains("Task.isCancelled") && nilBranch.contains("case .reconnecting"),
+            "The nil-offer branch of scheduleICERestart must guard on Task.isCancelled and the " +
+            "current .reconnecting(attempt:) generation before calling attemptReconnection(escalate:) " +
+            "— otherwise a superseded/ended reconnect cycle can resurrect a dead call."
+        )
+    }
 }
 
 // MARK: - isCallActiveFlag thread-safety source guard
@@ -2104,6 +2132,30 @@ final class EndCurrentAndAnswerPendingTests: XCTestCase {
             guardRange.lowerBound,
             endCallRange.lowerBound,
             "endCurrentAndAnswerPending must guard that a pending call exists before ending the current call"
+        )
+    }
+
+    /// Audit 2026-07-02 (bug 3 follow-up): the waiting call can be ended,
+    /// answered elsewhere, or replaced by a newer incoming call during the
+    /// 0.5s settle sleep. The Task must re-validate that `pendingIncomingCall`
+    /// still matches the captured `pending.callId` BEFORE routing it to
+    /// `handleIncomingCallNotification` — otherwise it answers a torn-down or
+    /// wrong call, presenting a phantom ringing/connecting UI.
+    func test_endCurrentAndAnswerPending_revalidatesPendingBeforeAnswering() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(of: "func endCurrentAndAnswerPending", in: source) else {
+            XCTFail("endCurrentAndAnswerPending not found"); return
+        }
+        guard let taskRange = body.range(of: "Task {"),
+              let handleRange = body.range(of: "handleIncomingCallNotification(") else {
+            XCTFail("Expected Task { ... handleIncomingCallNotification(...) in endCurrentAndAnswerPending"); return
+        }
+        let beforeHandle = String(body[taskRange.upperBound..<handleRange.lowerBound])
+        XCTAssertTrue(
+            beforeHandle.contains("self.pendingIncomingCall?.callId == pending.callId"),
+            "endCurrentAndAnswerPending's Task must guard `self.pendingIncomingCall?.callId == " +
+            "pending.callId` before calling handleIncomingCallNotification — the waiting call may " +
+            "have been ended/answered/replaced during the settle sleep."
         )
     }
 }
