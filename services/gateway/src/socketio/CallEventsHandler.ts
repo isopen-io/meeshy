@@ -1942,6 +1942,18 @@ export class CallEventsHandler {
         // "Appel refusé", …). Primary hangup/reject path; idempotent.
         await this.postCallSummary(callSession.id);
 
+        // Audit C3/C4 (2026-07-02 prod audit) — endCall() now mirrors leaveCall()
+        // and resolves a pre-answer end to `missed`. Mirror the call:leave handler:
+        // trigger the same missed-call notification path (push + in-app banner) so
+        // the OTHER party is notified, regardless of whether the call was ended via
+        // call:leave or call:end.
+        if ((callSession.status as string) === 'missed') {
+          /* istanbul ignore next -- handleMissedCall has its own internal catch and never rejects */
+          this.handleMissedCall(callSession.id).catch((err) => {
+            logger.error('❌ handleMissedCall failed after end', { callId: data.callId, err });
+          });
+        }
+
         // Cleanup: remove all sockets from call room
         const socketsInCallRoom = await io.in(ROOMS.call(data.callId)).fetchSockets();
         await Promise.all(socketsInCallRoom.map(s => s.leave(ROOMS.call(data.callId))));

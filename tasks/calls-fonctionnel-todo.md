@@ -366,3 +366,24 @@ propre) :
       pipeline effets vocaux mort mais toujours instancié par appel (`CallAudioEffectsService`,
       AVAudioEngine construit inutilement) ; `WebRTCService.handleRemoteAudioMuted`/`setMaxAudioBitrate`
       dead code (aucun appelant prod, superseded par `applyAudioEncoding`)
+
+### Session 2026-07-02 (routine calling-feature, gateway-only — toujours pas de toolchain Swift ici)
+
+- **[FIX C3/C4]** `CallService.endCall()` alignée sur `leaveCall()` (audit P1-29/P1 rec. #6-7) : un
+  `call:end` reçu avant que l'appel ait été décroché (`status` encore `initiated`/`ringing`/`connecting`)
+  résout désormais en `status=missed` (au lieu de `ended`) et `endReason=missed` (au lieu de `completed`,
+  sauf raison explicite plus spécifique — `rejected`/`failed`/… — préservée). Root cause confirmée par
+  l'audit prod : `endCall()` ne faisait AUCUNE distinction pré/post-answer contrairement à `leaveCall()`,
+  d'où des appels fantômes « completed » durée 0 dans l'historique et aucune notification manquée pour
+  l'autre partie (callIds `…9356`, `…9378`, `…937c` de l'audit). Handler `call:end`
+  (`CallEventsHandler.ts`) mis en miroir de `call:leave` : déclenche désormais `handleMissedCall` (push +
+  bannière in-app) quand `endCall()` résout en `missed`, exactement comme le fait déjà `call:leave`. Pas
+  de changement de signature (contrairement à ce qui avait été envisagé pour le court-circuit C6
+  ci-dessus — jugé hors scope à nouveau, la correction C3/C4 est la plus haute valeur du backlog restant
+  et reste un diff minimal sur les mêmes lignes). 3 tests TDD `CallService.test.ts` (pre-answer→missed,
+  raison explicite préservée, appel répondu reste `completed`) + 2 tests `CallEventsHandler-end.test.ts`
+  (broadcast+summary sur missed, pas de `handleMissedCall` sur un end normal). Suite complète : 488/488
+  suites gateway, 13418/13419 tests (1 skip pré-existant), `tsc --noEmit` propre.
+- **Reste ouvert (C6 court-circuit)** : toujours non fait, mêmes raisons (changerait la signature
+  `endCall()` sur 2 call sites + ~9 tests pour un gain cosmétique — la dédup DB réelle est déjà couverte
+  par le catch P2002 sur l'index unique partiel corrigé la session précédente).
