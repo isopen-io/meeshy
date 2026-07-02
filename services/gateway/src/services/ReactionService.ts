@@ -344,39 +344,33 @@ export class ReactionService {
     action: 'add' | 'remove',
     count: number = 1
   ): Promise<void> {
-    const message = await this.prisma.message.findUnique({
-      where: { id: messageId },
-      select: { reactionSummary: true, reactionCount: true }
-    });
+    await this.prisma.$transaction(async (tx) => {
+      const message = await tx.message.findUnique({
+        where: { id: messageId },
+        select: { reactionSummary: true }
+      });
 
-    if (!message) {
-      return;
-    }
+      if (!message) return;
 
-    const currentSummary = (message.reactionSummary as Record<string, number>) || {};
-    const currentCount = message.reactionCount || 0;
+      const currentSummary = (message.reactionSummary as Record<string, number>) || {};
 
-    if (action === 'add') {
-      currentSummary[emoji] = (currentSummary[emoji] || 0) + count;
-    } else {
-      if (currentSummary[emoji]) {
+      if (action === 'add') {
+        currentSummary[emoji] = (currentSummary[emoji] || 0) + count;
+      } else if (currentSummary[emoji]) {
         currentSummary[emoji] -= count;
-        if (currentSummary[emoji] <= 0) {
-          delete currentSummary[emoji];
-        }
+        if (currentSummary[emoji] <= 0) delete currentSummary[emoji];
       }
-    }
 
-    const newReactionCount = action === 'add'
-      ? currentCount + count
-      : Math.max(0, currentCount - count);
+      // Compteur AUTORITAIRE depuis la table `Reaction` (la ligne add/remove a déjà
+      // été appliquée par addReaction/removeReaction avant cet appel). Auto-réparant
+      // (pas de dérive du compteur dénormalisé) — miroir de
+      // PostReactionService.updatePostReactionSummary / CommentReactionService.updateCommentReactionSummary.
+      const total = await tx.reaction.count({ where: { messageId } });
 
-    await this.prisma.message.update({
-      where: { id: messageId },
-      data: {
-        reactionSummary: currentSummary,
-        reactionCount: newReactionCount
-      }
+      await tx.message.update({
+        where: { id: messageId },
+        data: { reactionSummary: currentSummary, reactionCount: total }
+      });
     });
   }
 
