@@ -333,6 +333,27 @@ export class CallService {
   }
 
   /**
+   * Release the conversation's active-call claim taken by `initiateCall`'s
+   * atomic claim step, so a future `initiateCall` on this conversation is no
+   * longer blocked. Scoped to `activeCallId: callId` (compare-and-clear) so a
+   * call that never held the claim — or one that already lost it to a newer
+   * call — can never clobber someone else's live claim. Best-effort: a
+   * failure here is logged, not thrown, since the call's own status write is
+   * always the source of truth and the claim self-heals the next time a call
+   * is attempted for this conversation and finds this one already terminal.
+   */
+  private async releaseActiveCallClaim(conversationId: string, callId: string): Promise<void> {
+    try {
+      await this.prisma.conversation.updateMany({
+        where: { id: conversationId, activeCallId: callId },
+        data: { activeCallId: null }
+      });
+    } catch (error) {
+      logger.error('Failed to release active-call claim', { conversationId, callId, error });
+    }
+  }
+
+  /**
    * Update call status with validation (state machine transition)
    */
   async updateCallStatus(callId: string, newStatus: CallStatus, endReason?: CallEndReason): Promise<CallSessionWithParticipants> {
@@ -368,6 +389,10 @@ export class CallService {
       where: { id: callId },
       data: updateData
     });
+
+    if (TERMINAL_STATUSES.includes(newStatus)) {
+      await this.releaseActiveCallClaim(call.conversationId, callId);
+    }
 
     logger.info('Call status updated', { callId, from: call.status, to: newStatus, endReason });
 
@@ -490,6 +515,7 @@ export class CallService {
           });
           this.clearHeartbeats(staleCallId);
           this.clearRingingTimeout(staleCallId);
+          await this.releaseActiveCallClaim(staleSession?.conversationId ?? conversationId, staleCallId);
         } catch (cleanupErr) {
           logger.error('phantom-cleanup failed for stale call', { staleCallId, error: cleanupErr });
         }
@@ -534,6 +560,7 @@ export class CallService {
         });
 
         this.clearHeartbeats(activeCall.id);
+        await this.releaseActiveCallClaim(conversationId, activeCall.id);
 
         logger.info('Zombie call cleaned up', { zombieCallId: activeCall.id });
       } else {
@@ -573,6 +600,33 @@ export class CallService {
       return session;
     });
 
+    // TOCTOU close (audit 2026-07-02): the zombie/active-call check above is a
+    // plain read that ran BEFORE this session was created — two near-
+    // simultaneous `initiateCall` calls for the same conversation (mutual
+    // calling, or a client double-tap racing its own UI's disable-button)
+    // can both pass that read and each create a `CallSession`. MongoDB
+    // guarantees single-document writes are atomic even without a
+    // transaction, so this conditional `updateMany` against `Conversation`
+    // deterministically lets exactly one of two concurrent callers win the
+    // claim; the loser observes `count === 0` and unwinds its own orphaned
+    // session instead of leaving two live sessions for one conversation.
+    const claim = await this.prisma.conversation.updateMany({
+      where: { id: conversationId, activeCallId: null },
+      data: { activeCallId: callSession.id }
+    });
+
+    if (claim.count === 0) {
+      logger.error('❌ Call already active (lost race to claim conversation)', {
+        conversationId,
+        orphanedCallId: callSession.id
+      });
+      await this.prisma.$transaction(async (tx) => {
+        await tx.callParticipant.deleteMany({ where: { callSessionId: callSession.id } });
+        await tx.callSession.delete({ where: { id: callSession.id } });
+      });
+      throw new Error(`${CALL_ERROR_CODES.CALL_ALREADY_ACTIVE}: A call is already active in this conversation`);
+    }
+
     logger.info('✅ Call initiated successfully', {
       callId: callSession.id,
       conversationId,
@@ -593,6 +647,27 @@ export class CallService {
    * - Returns updated CallSession with ICE servers
    */
   async joinCall(data: JoinCallData): Promise<{
+    callSession: CallSessionWithParticipants;
+    iceServers: RTCIceServer[]
+  }> {
+    return this.joinCallAttempt(data, 0);
+  }
+
+  /**
+   * TOCTOU close (audit 2026-07-02): `activeParticipants.length >= 2` below
+   * reads a snapshot fetched before this method's own write, so two callers
+   * racing to join the same call (a third party racing the intended callee,
+   * or the same user answering from two devices within milliseconds) could
+   * both read `< 2` and both insert a `CallParticipant`, exceeding the P2P
+   * cap every downstream consumer assumes. The join transaction now also
+   * does a version-guarded conditional update on the shared `CallSession`
+   * document — MongoDB detects the write conflict when two transactions
+   * touch that same document concurrently, so at most one caller's
+   * transaction commits. The loser retries once against freshly-read state,
+   * where the cap check above will correctly reject it if the winner took
+   * the last slot.
+   */
+  private async joinCallAttempt(data: JoinCallData, attempt: number): Promise<{
     callSession: CallSessionWithParticipants;
     iceServers: RTCIceServer[]
   }> {
@@ -674,8 +749,11 @@ export class CallService {
       );
     }
 
-    // Join call in transaction
-    await this.prisma.$transaction(async (tx) => {
+    // Join call in transaction, guarded by an optimistic-lock claim on
+    // CallSession.version so a concurrent joiner can't silently slip past
+    // the cap check above (see joinCallAttempt's doc comment).
+    const versionConflict = Symbol('versionConflict');
+    const outcome = await this.prisma.$transaction(async (tx) => {
       // Create participant
       await tx.callParticipant.create({
         data: {
@@ -687,17 +765,41 @@ export class CallService {
         }
       });
 
-      // Transition: initiated/ringing → connecting (WebRTC negotiation starts)
-      if (call.status === CallStatus.initiated || call.status === CallStatus.ringing) {
-        await tx.callSession.update({
-          where: { id: callId },
-          data: {
-            status: CallStatus.connecting,
-            answeredAt: new Date()
-          }
-        });
+      const statusChange =
+        call.status === CallStatus.initiated || call.status === CallStatus.ringing
+          ? { status: CallStatus.connecting, answeredAt: new Date() }
+          : {};
+
+      // Conditional update scoped to the version we read at the top of this
+      // attempt: if a concurrent joiner already committed a change to this
+      // CallSession, `count` is 0 and we roll back (including the
+      // CallParticipant just created above) by throwing.
+      const lock = await tx.callSession.updateMany({
+        where: { id: callId, version: call.version },
+        data: { version: { increment: 1 }, ...statusChange }
+      });
+
+      if (lock.count === 0) {
+        throw versionConflict;
       }
-    });
+    }).then(
+      () => 'joined' as const,
+      (error) => {
+        if (error === versionConflict) {
+          return 'conflict' as const;
+        }
+        throw error;
+      }
+    );
+
+    if (outcome === 'conflict') {
+      if (attempt >= 1) {
+        logger.error('❌ Call state conflict persisted after retry', { callId, userId });
+        throw new Error(`${CALL_ERROR_CODES.CALL_STATE_CONFLICT}: Call state changed concurrently, please retry`);
+      }
+      logger.warn('⚠️ Call state conflict on join — retrying with fresh state', { callId, userId });
+      return this.joinCallAttempt(data, attempt + 1);
+    }
 
     logger.info('✅ User joined call successfully', { callId, userId });
 
@@ -798,6 +900,7 @@ export class CallService {
         });
       });
       this.clearHeartbeats(callId);
+      await this.releaseActiveCallClaim(existing.conversationId, callId);
       logger.info('✅ Idempotent leave — call force-ended for absent participant', {
         callId, userId, wasPreAnswered: idemPreAnswered
       });
@@ -886,6 +989,7 @@ export class CallService {
 
     if (isLastParticipant) {
       this.clearHeartbeats(callId);
+      await this.releaseActiveCallClaim(call.conversationId, callId);
     } else {
       // Mid-call leave: clear only this participant's backgrounded state and
       // heartbeat entry. clearHeartbeats() handles the full call cleanup when
@@ -1033,6 +1137,7 @@ export class CallService {
     });
 
     this.clearHeartbeats(callId);
+    await this.releaseActiveCallClaim(call.conversationId, callId);
 
     logger.info('Call ended successfully', { callId, duration, endedBy, endReason });
 
@@ -1268,6 +1373,7 @@ export class CallService {
     });
 
     this.clearHeartbeats(callId);
+    await this.releaseActiveCallClaim(callSession.conversationId, callId);
 
     logger.info('Call marked as missed', { callId, duration });
 

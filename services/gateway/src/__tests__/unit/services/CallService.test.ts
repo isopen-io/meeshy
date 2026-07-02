@@ -42,6 +42,7 @@ jest.mock('@meeshy/shared/types/video-call', () => ({
     UNSUPPORTED_CALL_TYPE: 'UNSUPPORTED_CALL_TYPE',
     ALREADY_IN_CALL: 'ALREADY_IN_CALL',
     NOT_IN_CALL: 'NOT_IN_CALL',
+    CALL_STATE_CONFLICT: 'CALL_STATE_CONFLICT',
     MEDIA_TOGGLE_FAILED: 'MEDIA_TOGGLE_FAILED',
     VIDEO_CALLS_NOT_SUPPORTED: 'VIDEO_CALLS_NOT_SUPPORTED',
     BROWSER_NOT_SUPPORTED: 'BROWSER_NOT_SUPPORTED',
@@ -94,7 +95,11 @@ const createMockPrisma = () => {
   return {
     conversation: {
       findUnique: jest.fn() as MockFn,
-      findFirst: jest.fn() as MockFn
+      findFirst: jest.fn() as MockFn,
+      // Atomic active-call claim (see CallService.initiateCall/releaseActiveCallClaim).
+      // Defaults to "claim won" so existing tests that don't exercise the
+      // race path are unaffected.
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }) as MockFn
     },
     participant: {
       findFirst: jest.fn() as MockFn
@@ -164,6 +169,7 @@ interface MockCallSession {
   participants: MockCallParticipant[];
   initiator?: MockUser;
   conversation?: MockConversation;
+  version: number;
 }
 
 // Test data factories
@@ -194,6 +200,7 @@ const createMockCallSession = (overrides: Partial<MockCallSession> = {}): MockCa
   duration: null,
   metadata: { type: 'video' },
   participants: [],
+  version: 1,
   ...overrides
 });
 
@@ -526,6 +533,7 @@ describe('CallService', () => {
 
     it('should return current state when user already in call', async () => {
       const existingParticipant = createMockParticipant({
+        participantId: 'participant-456',
         userId: 'user-456',
         user: createMockUser({ id: 'user-456' })
       });
@@ -597,7 +605,7 @@ describe('CallService', () => {
       mockPrisma.$transaction.mockImplementation(async (callback: (tx: any) => Promise<void>) => {
         await callback({
           callParticipant: { create: jest.fn() },
-          callSession: { update: jest.fn() }
+          callSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }
         });
       });
       mockPrisma.callSession.findUnique.mockResolvedValueOnce(activeCall);
@@ -1986,6 +1994,84 @@ describe('CallService - initiateCall phantom cleanup & transaction', () => {
     expect(sessionCreated).toBe(true);
     expect(participantCreated).toBe(true);
   });
+
+  it('active-call claim race: unwinds the orphaned session when the atomic claim is lost', async () => {
+    // Reproduces the TOCTOU window (audit 2026-07-02): the zombie/active-call
+    // read above already passed (no active call), a session got created, but
+    // a concurrent initiateCall for the same conversation won the atomic
+    // Conversation.activeCallId claim first.
+    const mockConversation = createMockConversation();
+    const createdSession = { id: 'call-race-loser' };
+
+    mockPrisma.conversation.findUnique.mockResolvedValue(mockConversation);
+    mockPrisma.participant.findFirst.mockResolvedValue({
+      id: 'participant-123', conversationId: 'conv-123', userId: 'user-123', isActive: true
+    });
+    mockPrisma.callParticipant.findMany.mockResolvedValue([]);
+    mockPrisma.callSession.findFirst.mockResolvedValue(null);
+
+    let deletedParticipants = false;
+    let deletedSession = false;
+    mockPrisma.$transaction
+      .mockImplementationOnce(async (cb: (tx: any) => Promise<any>) =>
+        cb({
+          callSession: { create: jest.fn().mockResolvedValue(createdSession) },
+          callParticipant: { create: jest.fn().mockResolvedValue({}) }
+        })
+      )
+      .mockImplementationOnce(async (cb: (tx: any) => Promise<any>) =>
+        cb({
+          callParticipant: { deleteMany: jest.fn().mockImplementation(() => { deletedParticipants = true; return { count: 1 }; }) },
+          callSession: { delete: jest.fn().mockImplementation(() => { deletedSession = true; return createdSession; }) }
+        })
+      );
+
+    // Lost the race: another caller already claimed the conversation's active-call slot.
+    mockPrisma.conversation.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(callService.initiateCall(validInitiateData)).rejects.toThrow(
+      'CALL_ALREADY_ACTIVE: A call is already active in this conversation'
+    );
+
+    expect(mockPrisma.conversation.updateMany).toHaveBeenCalledWith({
+      where: { id: 'conv-123', activeCallId: null },
+      data: { activeCallId: 'call-race-loser' }
+    });
+    expect(deletedParticipants).toBe(true);
+    expect(deletedSession).toBe(true);
+  });
+
+  it('active-call claim: wins atomically when no concurrent claim exists', async () => {
+    const mockConversation = createMockConversation();
+    const createdSession = { id: 'call-race-winner' };
+    const fullSession = createMockCallSession({
+      id: 'call-race-winner',
+      participants: [createMockParticipant()],
+      initiator: createMockUser(),
+      conversation: mockConversation
+    });
+
+    mockPrisma.conversation.findUnique.mockResolvedValue(mockConversation);
+    mockPrisma.participant.findFirst.mockResolvedValue({
+      id: 'participant-123', conversationId: 'conv-123', userId: 'user-123', isActive: true
+    });
+    mockPrisma.callParticipant.findMany.mockResolvedValue([]);
+    mockPrisma.callSession.findFirst.mockResolvedValue(null);
+    mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) =>
+      cb({
+        callSession: { create: jest.fn().mockResolvedValue(createdSession) },
+        callParticipant: { create: jest.fn().mockResolvedValue({}) }
+      })
+    );
+    mockPrisma.conversation.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.callSession.findUnique.mockResolvedValue(fullSession);
+
+    const result = await callService.initiateCall(validInitiateData);
+
+    expect(result.id).toBe('call-race-winner');
+    // Only the creation transaction ran — no compensating delete transaction.
+    expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('CallService - joinCall already-in-call path', () => {
@@ -2742,7 +2828,7 @@ describe('CallService - joinCall settings branches', () => {
             return {};
           })
         },
-        callSession: { update: jest.fn().mockResolvedValue({}) }
+        callSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }
       };
       return cb(tx);
     });
@@ -2777,14 +2863,14 @@ describe('CallService - joinCall settings branches', () => {
       id: 'member-456', conversationId: 'conv-123', userId: 'user-456', isActive: true
     });
 
-    let sessionUpdateCalled = false;
+    let capturedUpdateData: Record<string, unknown> | undefined;
     mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
       const tx = {
         callParticipant: { create: jest.fn().mockResolvedValue({}) },
         callSession: {
-          update: jest.fn().mockImplementation(() => {
-            sessionUpdateCalled = true;
-            return {};
+          updateMany: jest.fn().mockImplementation(({ data }: any) => {
+            capturedUpdateData = data;
+            return { count: 1 };
           })
         }
       };
@@ -2797,7 +2883,10 @@ describe('CallService - joinCall settings branches', () => {
       participantId: 'participant-456'
     });
 
-    expect(sessionUpdateCalled).toBe(false);
+    // Status is 'connecting' already (not 'initiated'/'ringing'), so the
+    // version-lock update must not also carry a status/answeredAt transition.
+    expect(capturedUpdateData).not.toHaveProperty('status');
+    expect(capturedUpdateData).not.toHaveProperty('answeredAt');
   });
 
   it('does not update callSession when joining active call (not initiated/ringing)', async () => {
@@ -2819,14 +2908,14 @@ describe('CallService - joinCall settings branches', () => {
       id: 'member-456', conversationId: 'conv-123', userId: 'user-456', isActive: true
     });
 
-    let sessionUpdateCalled = false;
+    let capturedUpdateData: Record<string, unknown> | undefined;
     mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
       const tx = {
         callParticipant: { create: jest.fn().mockResolvedValue({}) },
         callSession: {
-          update: jest.fn().mockImplementation(() => {
-            sessionUpdateCalled = true;
-            return {};
+          updateMany: jest.fn().mockImplementation(({ data }: any) => {
+            capturedUpdateData = data;
+            return { count: 1 };
           })
         }
       };
@@ -2839,8 +2928,107 @@ describe('CallService - joinCall settings branches', () => {
       participantId: 'participant-456'
     });
 
-    // Status is 'active', not 'initiated'/'ringing', so callSession.update should NOT be called
-    expect(sessionUpdateCalled).toBe(false);
+    // Status is 'active', not 'initiated'/'ringing', so the version-lock
+    // update must not also carry a status/answeredAt transition.
+    expect(capturedUpdateData).not.toHaveProperty('status');
+    expect(capturedUpdateData).not.toHaveProperty('answeredAt');
+  });
+});
+
+describe('CallService - joinCall version-lock race', () => {
+  let callService: CallService;
+  let mockPrisma: ReturnType<typeof createMockPrisma>;
+
+  const joinData = {
+    callId: 'call-123',
+    userId: 'user-456',
+    participantId: 'participant-456'
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockPrisma = createMockPrisma();
+    callService = new CallService(mockPrisma as any);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('retries once and succeeds when a concurrent joiner wins the first version claim', async () => {
+    // Reproduces the TOCTOU window (audit 2026-07-02): both joiners read the
+    // same `activeParticipants.length < 2` snapshot; the version-guarded
+    // update forces exactly one to lose, and the loser retries against fresh
+    // state instead of silently exceeding the P2P cap.
+    const initiatedCall = createMockCallSession({
+      status: CallStatus.initiated,
+      version: 5,
+      participants: [createMockParticipant()],
+      conversation: createMockConversation()
+    });
+    const activeCall = {
+      ...initiatedCall,
+      status: CallStatus.active,
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    };
+
+    // First read (attempt 0) sees version 5; retry (attempt 1) must re-fetch
+    // and see the version a concurrent winner already bumped to 6.
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(initiatedCall)
+      .mockResolvedValueOnce({ ...initiatedCall, version: 6 })
+      .mockResolvedValueOnce(activeCall);
+    mockPrisma.participant.findFirst.mockResolvedValue({
+      id: 'member-456', conversationId: 'conv-123', userId: 'user-456', isActive: true
+    });
+
+    mockPrisma.$transaction
+      .mockImplementationOnce(async (cb: (tx: any) => Promise<any>) =>
+        cb({
+          callParticipant: { create: jest.fn().mockResolvedValue({}) },
+          // Lost the race: a concurrent joiner already bumped the version.
+          callSession: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) }
+        })
+      )
+      .mockImplementationOnce(async (cb: (tx: any) => Promise<any>) =>
+        cb({
+          callParticipant: { create: jest.fn().mockResolvedValue({}) },
+          callSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }
+        })
+      );
+
+    const result = await callService.joinCall(joinData);
+
+    expect(result.callSession).toBeDefined();
+    expect(mockPrisma.$transaction).toHaveBeenCalledTimes(2);
+  });
+
+  it('throws CALL_STATE_CONFLICT when the version conflict persists after one retry', async () => {
+    const initiatedCall = createMockCallSession({
+      status: CallStatus.initiated,
+      version: 5,
+      participants: [createMockParticipant()],
+      conversation: createMockConversation()
+    });
+
+    mockPrisma.callSession.findUnique.mockResolvedValue(initiatedCall);
+    mockPrisma.participant.findFirst.mockResolvedValue({
+      id: 'member-456', conversationId: 'conv-123', userId: 'user-456', isActive: true
+    });
+    mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) =>
+      cb({
+        callParticipant: { create: jest.fn().mockResolvedValue({}) },
+        callSession: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) }
+      })
+    );
+
+    await expect(callService.joinCall(joinData)).rejects.toThrow(
+      'CALL_STATE_CONFLICT: Call state changed concurrently, please retry'
+    );
+
+    // One initial attempt + one retry, then give up.
+    expect(mockPrisma.$transaction).toHaveBeenCalledTimes(2);
   });
 });
 
