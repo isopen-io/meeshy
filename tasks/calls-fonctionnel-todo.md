@@ -484,6 +484,36 @@ Pilotage idb (taps en POINTS, pas pixels ; keychain simulateur survit à la dés
   le churn a aussi tué un appel EN SONNERIE (fin pré-answer immédiate alors qu'un vrai cancel passe
   par call:end explicite) ; callId 6a466a604f950a0526227353.
 
+**6e vague — 3 fixes systémiques (TDD, gateway commit a7da93f1e déployé prod ; iOS en attente du
+GREEN du chantier parallèle) et CHAOS-TEST 1 DÉMONTRÉ (callId 6a4680ef67ae80d43c57d4cc, sims dédiés) :**
+- Fixes : (1) call:end fiable + réconciliation au reconnect (emitCallEndReliably — un teardown local
+  qui n'atteint pas le serveur laissait le pair zombie ~48s, prouvé logs 13:56-13:59Z zéro call:end
+  reçu) ; (2) extension de grâce serveur si le user garde un socket vivant (15s ×4, cap 90s<120s GC) ;
+  (3) grâce courte pré-answer 10s sur disconnect (un vrai cancel = call:end explicite).
+- Protocole final EN PROD, preuves serveur : SIGTERM → « preserving active calls » ×4 → re-joins auto
+  des 2 participants ~28s + resync toggle-audio → appel VIVANT à t+180s (chrono 04:05 ; il mourait à
+  60-90s avant les fixes) → toggle micro relayé post-restart (15:23:22Z enabled:false) → raccroché
+  caller → « Ending call » + UN SEUL summary completed. Chaos-test 4 (restart+réseau instable) couvert
+  de facto par le churn simulateur permanent + gardes isReconnecting (aucun budget épuisé à tort).
+- Env : sims dédiés ChaosA=atabeth (86992F04) / ChaosB=meeshy (0AA8DF6C), runtime 18.2, pour isoler
+  les E2E des runs xctest des agents parallèles qui réquisitionnent le simulateur standard (un run
+  xctest relance l'app et TUE l'appel en cours). Popups premier lancement (notifications,
+  Save Password) à dismiss AVANT la saisie login (elles volent les frappes idb).
+- **PROTOCOLE CHAOS BOUCLÉ (17:36)** : test 2 (restart mid-ring, callId 6a4690a2) → résolution UX
+  propre (pas de sonnerie infinie/fantôme, caller missed via ring-timeout client 45s) MAIS DB
+  failed/91s au lieu de missed → 2 affinements consignés : (a) emitCallEndReliably doit réconcilier
+  AUSSI sur ACK-échec (le call:end du caller s'est perdu post-restart avec socket cru connecté) ;
+  (b) l'early-join du callee pose connecting+answeredAt dès la sonnerie → « ringing » invisible
+  serveur (item F revisité), la réhydratation (initiated/ringing) n'a rien à ré-armer et le tier GC
+  connecting>90s résout failed — piste : answeredAt au call:answer réel, pas au join early.
+  Test 3 (STOP 100s mid-call, callId 6a4691d9) → **l'appel SURVIT** (04:57 à t+135, zéro
+  « Heartbeat timeout » : le plancher boot protège), raccrochage propre ended/completed/403s,
+  1 seul summary. Test 4 couvert de facto (churn permanent + gardes isReconnecting).
+  Le lot iOS (TARGET_NOT_FOUND, emitCallEndReliably, indicateur, bugs 1-5) est DANS main via la
+  PR #1359 du chantier parallèle (co-commit vert, CI+Docker success).
+  NON TESTÉ — protocole fourni : bascule cellulaire réelle, CarPlay, iOS↔iOS 2 iPhones physiques,
+  validation device réel CallKit didActivate (stuck-muted Fix 4).
+
 ### Session 2026-07-02 (routine calling-feature, gateway-only — toujours pas de toolchain Swift ici)
 
 - **[FIX C3/C4]** `CallService.endCall()` alignée sur `leaveCall()` (audit P1-29/P1 rec. #6-7) : un
