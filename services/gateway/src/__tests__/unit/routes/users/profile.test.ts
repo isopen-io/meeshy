@@ -210,6 +210,7 @@ async function buildApp(opts: {
   if (withNotificationService) {
     app.decorate('notificationService', {
       createPasswordChangedNotification: jest.fn<any>().mockResolvedValue(undefined),
+      emitUserUpdated: jest.fn<any>().mockResolvedValue(undefined),
     });
   } else {
     app.decorate('notificationService', null as any);
@@ -358,6 +359,37 @@ describe('PATCH /users/me — with language change fires socketIO refresh', () =
   });
 });
 
+describe('PATCH /users/me — realtime propagation to conversation partners', () => {
+  it('emits USER_UPDATED with only the changed public fields when displayName/firstName/lastName change', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp({ routes: [updateUserProfile], prisma, withNotificationService: true });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me',
+      payload: { firstName: 'Bob', lastName: 'Jones', displayName: 'Bob Jones' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((app as any).notificationService.emitUserUpdated).toHaveBeenCalledWith({
+      userId: USER_ID,
+      changes: { firstName: 'Alice', lastName: 'Smith', displayName: 'Alice Smith' },
+    });
+    await app.close();
+  });
+
+  it('does not emit USER_UPDATED when only private fields (bio, language) change', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp({ routes: [updateUserProfile], prisma, withNotificationService: true });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me',
+      payload: { bio: 'New bio', systemLanguage: 'en' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((app as any).notificationService.emitUserUpdated).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
 // ─── PATCH /users/me/avatar ───────────────────────────────────────────────────
 
 describe('PATCH /users/me/avatar — unauthenticated', () => {
@@ -380,6 +412,28 @@ describe('PATCH /users/me/avatar — success', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
+    await app.close();
+  });
+});
+
+describe('PATCH /users/me/avatar — realtime propagation to conversation partners', () => {
+  it('emits USER_UPDATED with the new avatar URL', async () => {
+    const prisma = makePrisma({
+      user: {
+        update: jest.fn<any>().mockResolvedValue({ ...mockUser, avatar: 'https://example.com/avatar.jpg' }),
+      },
+    });
+    const app = await buildApp({ routes: [updateUserAvatar], prisma, withNotificationService: true });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me/avatar',
+      payload: { avatar: 'https://example.com/avatar.jpg' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((app as any).notificationService.emitUserUpdated).toHaveBeenCalledWith({
+      userId: USER_ID,
+      changes: { avatar: 'https://example.com/avatar.jpg' },
+    });
     await app.close();
   });
 });
@@ -437,6 +491,28 @@ describe('PATCH /users/me/banner — success', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
+    await app.close();
+  });
+});
+
+describe('PATCH /users/me/banner — realtime propagation to conversation partners', () => {
+  it('emits USER_UPDATED with the new banner URL', async () => {
+    const prisma = makePrisma({
+      user: {
+        update: jest.fn<any>().mockResolvedValue({ ...mockUser, banner: 'https://example.com/banner.jpg' }),
+      },
+    });
+    const app = await buildApp({ routes: [updateUserBanner], prisma, withNotificationService: true });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me/banner',
+      payload: { banner: 'https://example.com/banner.jpg' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((app as any).notificationService.emitUserUpdated).toHaveBeenCalledWith({
+      userId: USER_ID,
+      changes: { banner: 'https://example.com/banner.jpg' },
+    });
     await app.close();
   });
 });
@@ -674,6 +750,30 @@ describe('PATCH /users/me/username — success', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.username).toBe('bob');
+    await app.close();
+  });
+});
+
+describe('PATCH /users/me/username — realtime propagation to conversation partners', () => {
+  it('emits USER_UPDATED with the new username', async () => {
+    mockBcryptCompare.mockResolvedValueOnce(true);
+    const prisma = makePrisma({
+      user: {
+        findUnique: jest.fn<any>().mockResolvedValue({ ...mockUser, username: 'alice', usernameHistory: [] }),
+        findFirst: jest.fn<any>().mockResolvedValue(null),
+        update: jest.fn<any>().mockResolvedValue({ id: USER_ID, username: 'bob' }),
+      },
+    });
+    const app = await buildApp({ routes: [updateUsername], prisma, withNotificationService: true });
+    const res = await app.inject({
+      method: 'PATCH', url: '/users/me/username',
+      payload: { newUsername: 'bob', currentPassword: 'correctpass' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((app as any).notificationService.emitUserUpdated).toHaveBeenCalledWith({
+      userId: USER_ID,
+      changes: { username: 'bob' },
+    });
     await app.close();
   });
 });
