@@ -130,7 +130,6 @@ struct ConversationPreviewView: View {
     var onProfileInfo: (() -> Void)? = nil
 
     @Environment(\.colorScheme) private var colorScheme
-    @StateObject private var previewRouter = Router()
 
     private var isDark: Bool { colorScheme == .dark }
 
@@ -237,7 +236,6 @@ struct ConversationPreviewView: View {
                             .padding(.horizontal, 10)
                             .padding(.vertical, 8)
                         }
-                        .environmentObject(previewRouter)
                         .onAppear {
                             guard let lastID = cachedMessages.last?.id else { return }
                             proxy.scrollTo(lastID, anchor: .bottom)
@@ -248,7 +246,9 @@ struct ConversationPreviewView: View {
             .frame(minHeight: 120, maxHeight: 300)
             .background(previewBackground)
         }
-        .frame(width: 350)
+        // Largeur pilotée par le call site (overlay) — source de vérité unique.
+        // La carte remplit la largeur proposée ; le conteneur la fixe à 340.
+        .frame(maxWidth: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: 20))
         .overlay(
             RoundedRectangle(cornerRadius: 20)
