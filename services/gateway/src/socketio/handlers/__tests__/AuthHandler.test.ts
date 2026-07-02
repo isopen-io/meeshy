@@ -284,10 +284,18 @@ describe('AuthHandler', () => {
       expect(userSockets.size).toBe(0);
     });
 
-    it('should still delete from connectedUsers when call leaveCall throws', async () => {
-      mockCallService.leaveCall.mockRejectedValue(new Error('call service down'));
+    it('does not auto-leave calls for a registered user on last-socket disconnect', async () => {
+      // CALL-RESILIENCE — call lifecycle on disconnect is owned by
+      // CallEventsHandler (grace window for answered calls, immediate leave
+      // pre-answer, shutdown guard). Auto-leaving here ended answered calls in
+      // DB while their P2P media was still alive (socket blip / gateway
+      // restart on a single-device user), defeating the grace window.
       (mockPrisma.callParticipant.findMany as jest.Mock).mockResolvedValue([
-        { callSessionId: 'call-99', participantId: 'p-1' }
+        {
+          callSessionId: 'call-1',
+          participantId: 'participant-a',
+          callSession: { id: 'call-1', status: 'active', type: 'direct' }
+        }
       ]);
 
       socketToUser.set('socket-123', 'user-123');
@@ -301,60 +309,99 @@ describe('AuthHandler', () => {
 
       await authHandler.handleDisconnection(createMockSocket());
 
-      // Even though leaveCall threw, maps must be fully cleaned to avoid orphaned presence
+      expect(mockCallService.leaveCall).not.toHaveBeenCalled();
+      expect(mockPrisma.callParticipant.findMany).not.toHaveBeenCalled();
+      // Presence cleanup still fully applied
       expect(connectedUsers.has('user-123')).toBe(false);
       expect(socketToUser.has('socket-123')).toBe(false);
       expect(userSockets.has('user-123')).toBe(false);
     });
 
-    it('should still clean maps when callParticipant.findMany throws', async () => {
-      (mockPrisma.callParticipant.findMany as jest.Mock).mockRejectedValue(new Error('db timeout'));
+    it('should still delete from connectedUsers when call leaveCall throws (anonymous)', async () => {
+      mockCallService.leaveCall.mockRejectedValue(new Error('call service down'));
+      (mockPrisma.callParticipant.findMany as jest.Mock).mockResolvedValue([
+        { callSessionId: 'call-99', participantId: 'p-1' }
+      ]);
 
-      socketToUser.set('socket-123', 'user-123');
-      connectedUsers.set('user-123', {
-        id: 'user-123',
+      socketToUser.set('socket-123', 'anon-123');
+      connectedUsers.set('anon-123', {
+        id: 'anon-123',
         socketId: 'socket-123',
-        isAnonymous: false,
+        isAnonymous: true,
         language: 'en'
       });
-      userSockets.set('user-123', new Set(['socket-123']));
+      userSockets.set('anon-123', new Set(['socket-123']));
 
       await authHandler.handleDisconnection(createMockSocket());
 
-      expect(connectedUsers.has('user-123')).toBe(false);
+      // Even though leaveCall threw, maps must be fully cleaned to avoid orphaned presence
+      expect(connectedUsers.has('anon-123')).toBe(false);
+      expect(socketToUser.has('socket-123')).toBe(false);
+      expect(userSockets.has('anon-123')).toBe(false);
+    });
+
+    it('should still clean maps when callParticipant.findMany throws (anonymous)', async () => {
+      (mockPrisma.callParticipant.findMany as jest.Mock).mockRejectedValue(new Error('db timeout'));
+
+      socketToUser.set('socket-123', 'anon-123');
+      connectedUsers.set('anon-123', {
+        id: 'anon-123',
+        socketId: 'socket-123',
+        isAnonymous: true,
+        language: 'en'
+      });
+      userSockets.set('anon-123', new Set(['socket-123']));
+
+      await authHandler.handleDisconnection(createMockSocket());
+
+      expect(connectedUsers.has('anon-123')).toBe(false);
       expect(socketToUser.has('socket-123')).toBe(false);
     });
 
-    it('should call leaveCall with correct args for each active call participation', async () => {
+    it('should auto-leave calls with correct args for an anonymous participant', async () => {
+      // Anonymous participants are the one case CallEventsHandler's disconnect
+      // handler cannot resolve (its lookup is keyed on participant.userId) and
+      // they get no reconnect grace (ADR-6) — immediate auto-leave stays here.
       (mockPrisma.callParticipant.findMany as jest.Mock).mockResolvedValue([
         { callSessionId: 'call-1', participantId: 'participant-a' },
         { callSessionId: 'call-2', participantId: 'participant-b' }
       ]);
 
-      socketToUser.set('socket-123', 'user-123');
-      connectedUsers.set('user-123', {
-        id: 'user-123',
+      socketToUser.set('socket-123', 'anon-123');
+      connectedUsers.set('anon-123', {
+        id: 'anon-123',
         socketId: 'socket-123',
-        isAnonymous: false,
+        isAnonymous: true,
         language: 'en'
       });
-      userSockets.set('user-123', new Set(['socket-123']));
+      userSockets.set('anon-123', new Set(['socket-123']));
 
       await authHandler.handleDisconnection(createMockSocket());
 
+      // Audit C5 (2026-07-02) — Prisma-on-Mongo `{leftAt: null}` does NOT match
+      // documents whose leftAt field was never written; the filter must cover
+      // both shapes or historical participations are invisible to the cleanup.
+      expect(mockPrisma.callParticipant.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
+            participant: { id: 'anon-123' }
+          })
+        })
+      );
       expect(mockCallService.leaveCall).toHaveBeenCalledTimes(2);
       expect(mockCallService.leaveCall).toHaveBeenCalledWith({
         callId: 'call-1',
-        userId: 'user-123',
+        userId: 'anon-123',
         participantId: 'participant-a'
       });
       expect(mockCallService.leaveCall).toHaveBeenCalledWith({
         callId: 'call-2',
-        userId: 'user-123',
+        userId: 'anon-123',
         participantId: 'participant-b'
       });
       // Maps cleaned despite leaving calls
-      expect(connectedUsers.has('user-123')).toBe(false);
+      expect(connectedUsers.has('anon-123')).toBe(false);
       expect(socketToUser.has('socket-123')).toBe(false);
     });
 

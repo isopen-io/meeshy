@@ -10,6 +10,7 @@
  */
 
 import { Socket } from 'socket.io';
+import type { Server as SocketIOServer } from 'socket.io';
 import { PrismaClient, CallStatus, CallEndReason } from '@meeshy/shared/prisma/client';
 import { CallService } from '../services/CallService';
 import { NotificationService } from '../services/notifications/NotificationService';
@@ -185,6 +186,121 @@ export class CallEventsHandler {
     logger.info('📞 CallEventsHandler entering shutdown mode — active calls preserved for reconnect');
   }
 
+  /**
+   * CALL-RESILIENCE (item H) — a crash/restart wiped the in-process ringing
+   * timers (CallService.ringingTimeouts). Re-arm them from MongoDB at boot so
+   * a pre-answer call interrupted by the restart still resolves to `missed`
+   * (broadcasts + summary + missed-call push) on its nominal ringing budget,
+   * instead of ringing server-side until the 120s GC tier reaps it without
+   * any missed-call notification. Answered calls need no rehydration: their
+   * liveness is re-established by client re-joins and the heartbeat tier's
+   * boot-grace floor (CallCleanupService). Never throws — a DB hiccup here
+   * must not crash the boot.
+   */
+  async rehydrateActiveCalls(io: SocketIOServer): Promise<void> {
+    try {
+      const preAnswer = await this.prisma.callSession.findMany({
+        where: { status: { in: [CallStatus.initiated, CallStatus.ringing] } },
+        select: { id: true, startedAt: true }
+      });
+      for (const call of preAnswer) {
+        this.callService.rescheduleRingingTimeout(
+          call.id,
+          call.startedAt,
+          this.buildRingingTimeoutHandler(io, call.id)
+        );
+      }
+      if (preAnswer.length > 0) {
+        logger.info('📞 Boot rehydration — ringing timers re-armed for pre-answer calls', {
+          count: preAnswer.length,
+          callIds: preAnswer.map(c => c.id)
+        });
+      }
+    } catch (error) {
+      logger.error('❌ Boot rehydration failed — stale pre-answer calls will be reaped by GC instead', error);
+    }
+  }
+
+  /**
+   * Shared ringing-timeout handler — used by call:initiate (fresh 60s timer)
+   * and by boot rehydration (remaining budget). Phase 1 fix P2 + audit
+   * 2026-05-11 fixes: atomic status-guarded updateMany (TOCTOU-safe against
+   * concurrent join/end/leave), CALL_EVENTS.ENDED + MISSED broadcasts,
+   * call-summary system message, and the missed-call push pipeline.
+   */
+  private buildRingingTimeoutHandler(io: SocketIOServer, callId: string): () => Promise<void> {
+    return async () => {
+      try {
+        // Atomic conditional transition — count > 0 means we won the
+        // race; count === 0 means another path (call:join, call:end,
+        // call:leave) already moved the status off ringing/initiated.
+        const result = await this.prisma.callSession.updateMany({
+          where: {
+            id: callId,
+            status: { in: [CallStatus.initiated, CallStatus.ringing] }
+          },
+          data: {
+            status: CallStatus.missed,
+            endReason: CallEndReason.missed,
+            endedAt: new Date()
+          }
+        });
+        if (result.count === 0) {
+          return; // already transitioned
+        }
+        const missedContext = await this.prisma.callSession.findUnique({
+          where: { id: callId },
+          select: {
+            conversationId: true,
+            initiatorId: true,
+            initiator: { select: { displayName: true, username: true } }
+          }
+        });
+        const conversationId = missedContext?.conversationId;
+        const endedEvent = {
+          callId,
+          duration: 0,
+          endedBy: undefined,
+          reason: 'missed',
+        };
+        io.to(ROOMS.call(callId)).emit(CALL_EVENTS.ENDED, endedEvent);
+        if (conversationId) {
+          io.to(ROOMS.conversation(conversationId)).emit(CALL_EVENTS.ENDED, endedEvent);
+        }
+        // Contract: CallMissedEvent requires all 4 fields — a `{ callId }`
+        // only payload made the iOS decoder fail (keyNotFound conversationId).
+        const missedEvent: CallMissedEvent = {
+          callId,
+          conversationId: conversationId ?? '',
+          callerId: missedContext?.initiatorId ?? '',
+          callerName: missedContext?.initiator?.displayName
+            || missedContext?.initiator?.username
+            || ''
+        };
+        io.to(ROOMS.call(callId)).emit(CALL_EVENTS.MISSED, missedEvent);
+
+        // P3 — post the "Appel … manqué" system message into the conversation.
+        await this.postCallSummary(callId);
+
+        // Push notification for offline callees. The whole pipeline
+        // (createMissedCallNotifications) was already wired but never
+        // called from this path before audit 2026-05-11.
+        /* istanbul ignore next -- handleMissedCall has its own internal catch and never rejects */
+        await this.handleMissedCall(callId).catch((err: any) => {
+          logger.error('handleMissedCall failed for ringing timeout', {
+            callId, err: err?.message
+          });
+        });
+
+        logger.info('Ringing timeout fired — call marked as missed', {
+          callId,
+        });
+      } catch (err) {
+        logger.error('Ringing timeout handler error', err);
+      }
+    };
+  }
+
   private graceKey(callId: string, userId: string): string {
     return `${callId}:${userId}`;
   }
@@ -336,10 +452,12 @@ export class CallEventsHandler {
             data: { leftAt: now }
           });
 
+          // Audit C5 (2026-07-02) — `{leftAt: null}` alone misses Mongo docs
+          // whose leftAt field was never written (pre-C5 participants).
           const remainingParticipants = await tx.callParticipant.count({
             where: {
               callSessionId: participation.callSessionId,
-              leftAt: null
+              OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
             }
           });
 
@@ -549,7 +667,7 @@ export class CallEventsHandler {
     speakerUserId: string
   ): Promise<void> {
     const activeParticipants = await this.prisma.callParticipant.findMany({
-      where: { callSessionId: data.callId, leftAt: null },
+      where: { callSessionId: data.callId, OR: [{ leftAt: null }, { leftAt: { isSet: false } }] },
       select: {
         participant: {
           select: {
@@ -1050,76 +1168,10 @@ export class CallEventsHandler {
         //   - Emit CALL_EVENTS.MISSED in addition to CALL_EVENTS.ENDED so
         //     online clients can render an in-app missed-call banner
         //     without round-tripping through push.
-        this.callService.scheduleRingingTimeout(callSession.id, async () => {
-          try {
-            // Atomic conditional transition — count > 0 means we won the
-            // race; count === 0 means another path (call:join, call:end,
-            // call:leave) already moved the status off ringing/initiated.
-            const result = await this.prisma.callSession.updateMany({
-              where: {
-                id: callSession.id,
-                status: { in: [CallStatus.initiated, CallStatus.ringing] }
-              },
-              data: {
-                status: CallStatus.missed,
-                endReason: CallEndReason.missed,
-                endedAt: new Date()
-              }
-            });
-            if (result.count === 0) {
-              return; // already transitioned
-            }
-            const missedContext = await this.prisma.callSession.findUnique({
-              where: { id: callSession.id },
-              select: {
-                conversationId: true,
-                initiatorId: true,
-                initiator: { select: { displayName: true, username: true } }
-              }
-            });
-            const conversationId = missedContext?.conversationId;
-            const endedEvent = {
-              callId: callSession.id,
-              duration: 0,
-              endedBy: undefined,
-              reason: 'missed',
-            };
-            io.to(ROOMS.call(callSession.id)).emit(CALL_EVENTS.ENDED, endedEvent);
-            if (conversationId) {
-              io.to(ROOMS.conversation(conversationId)).emit(CALL_EVENTS.ENDED, endedEvent);
-            }
-            // Contract: CallMissedEvent requires all 4 fields — a `{ callId }`
-            // only payload made the iOS decoder fail (keyNotFound conversationId).
-            const missedEvent: CallMissedEvent = {
-              callId: callSession.id,
-              conversationId: conversationId ?? '',
-              callerId: missedContext?.initiatorId ?? '',
-              callerName: missedContext?.initiator?.displayName
-                || missedContext?.initiator?.username
-                || ''
-            };
-            io.to(ROOMS.call(callSession.id)).emit(CALL_EVENTS.MISSED, missedEvent);
-
-            // P3 — post the "Appel … manqué" system message into the conversation.
-            await this.postCallSummary(callSession.id);
-
-            // Push notification for offline callees. The whole pipeline
-            // (createMissedCallNotifications) was already wired but never
-            // called from this path before audit 2026-05-11.
-            /* istanbul ignore next -- handleMissedCall has its own internal catch and never rejects */
-            await this.handleMissedCall(callSession.id).catch((err: any) => {
-              logger.error('handleMissedCall failed for ringing timeout', {
-                callId: callSession.id, err: err?.message
-              });
-            });
-
-            logger.info('Ringing timeout fired — call marked as missed', {
-              callId: callSession.id,
-            });
-          } catch (err) {
-            logger.error('Ringing timeout handler error', err);
-          }
-        });
+        this.callService.scheduleRingingTimeout(
+          callSession.id,
+          this.buildRingingTimeoutHandler(io, callSession.id)
+        );
 
         // Send VoIP push to offline members for incoming call wake-up
         if (this.pushService) {
@@ -2723,15 +2775,35 @@ export class CallEventsHandler {
           return;
         }
 
+        // ZOMBIE-SOCKET GUARD (2026-07-02) — a stale socket from a previous
+        // session expiring must NOT tear down calls the user is actively on
+        // through ANOTHER live socket (prod: two expired zombies killed call
+        // 6a464c61 mid-ring while the active socket still received messages).
+        // This handler listens on 'disconnect', so the closing socket has
+        // already left its rooms — any member left in the user room is a
+        // different, live connection: no leave, no grace, the user is here.
+        const remainingUserSockets =
+          io?.sockets?.adapter?.rooms?.get(ROOMS.user(userId))?.size ?? 0;
+        if (remainingUserSockets > 0) {
+          logger.info('📞 Socket disconnect ignored for calls — user still has live sockets', {
+            socketId: socket.id,
+            userId,
+            remainingUserSockets
+          });
+          return;
+        }
+
         logger.info('📞 Socket: disconnect - checking for active calls', {
           socketId: socket.id,
           userId
         });
 
-        // Find any active calls the user is in
+        // Find any active calls the user is in. Audit C5 (2026-07-02) —
+        // `{leftAt: null}` alone misses Mongo docs whose leftAt field was
+        // never written (pre-C5 participants).
         const activeParticipations = await this.prisma.callParticipant.findMany({
           where: {
-            leftAt: null,
+            OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
             participant: { userId }
           },
           include: {

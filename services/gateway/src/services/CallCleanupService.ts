@@ -53,7 +53,13 @@ export class CallCleanupService {
 
   constructor(
     private prisma: PrismaClient,
-    private callService?: CallService
+    private callService?: CallService,
+    // CALL-RESILIENCE (item H) — liveness floor for the post-restart DB
+    // fallback of the heartbeat tier: heartbeats were impossible to record
+    // while the process was down, so a stale `lastHeartbeatAt` alone must not
+    // reap a call until clients have had a full heartbeat window since boot
+    // to re-join and resume beating. Injectable for tests.
+    private readonly bootedAt: Date = new Date()
   ) {}
 
   attachSocketServer(io: SocketIOServer): void {
@@ -204,7 +210,10 @@ export class CallCleanupService {
         where: {
           status: { in: [CallStatus.active, CallStatus.reconnecting] }
         },
-        include: { participants: { where: { leftAt: null } } }
+        // Audit C5 (2026-07-02) — Prisma-on-Mongo `{leftAt: null}` does not
+        // match documents whose leftAt field was never written (historical
+        // participants created before the explicit `leftAt: null` write).
+        include: { participants: { where: { OR: [{ leftAt: null }, { leftAt: { isSet: false } }] } } }
       });
 
       for (const call of activeCalls) {
@@ -237,10 +246,21 @@ export class CallCleanupService {
           // would otherwise have every participant read back as "stale" (null
           // lastHeartbeatAt) and get force-ended seconds after a routine deploy.
           // Fall back to `joinedAt` as the last-known-liveness signal instead.
-          const staleThreshold = new Date(now.getTime() - this.HEARTBEAT_TIMEOUT_MS);
+          //
+          // CALL-RESILIENCE (item H) — `bootedAt` is an additional liveness
+          // floor: while the gateway was down, clients could not record any
+          // heartbeat, so after an outage longer than HEARTBEAT_TIMEOUT_MS
+          // every DB timestamp reads stale even though the P2P media is alive
+          // and the clients are about to re-join. Reaping is therefore only
+          // possible once a full heartbeat window has elapsed SINCE BOOT with
+          // still no resumption.
+          const staleThresholdMs = now.getTime() - this.HEARTBEAT_TIMEOUT_MS;
+          const bootFloorMs = this.bootedAt.getTime();
           const dbStaleParticipants = call.participants.filter(
-            (p: { lastHeartbeatAt: Date | null; joinedAt: Date }) =>
-              (p.lastHeartbeatAt ?? p.joinedAt) < staleThreshold
+            (p: { lastHeartbeatAt: Date | null; joinedAt: Date }) => {
+              const lastKnownMs = (p.lastHeartbeatAt ?? p.joinedAt).getTime();
+              return Math.max(lastKnownMs, bootFloorMs) < staleThresholdMs;
+            }
           );
           if (dbStaleParticipants.length > 0 && dbStaleParticipants.length >= call.participants.length) {
             try {
@@ -312,7 +332,7 @@ export class CallCleanupService {
       }
 
       await tx.callParticipant.updateMany({
-        where: { callSessionId: callId, leftAt: null },
+        where: { callSessionId: callId, OR: [{ leftAt: null }, { leftAt: { isSet: false } }] },
         data: { leftAt: now }
       });
       return true;
@@ -326,6 +346,10 @@ export class CallCleanupService {
     }
 
     this.callService?.clearHeartbeats(callId);
+    // Item I — a reaped pre-answer call may still hold its in-process ringing
+    // timer; without this, the timer fires later against an already-terminal
+    // row (a no-op thanks to the status guard) and lingers in memory.
+    this.callService?.clearRingingTimeout(callId);
 
     // Release the conversation's active-call claim (CallService.initiateCall's
     // atomic race guard) so a new call can be started once this one is

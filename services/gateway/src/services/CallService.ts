@@ -180,6 +180,7 @@ export class CallService {
   // heartbeat grace period so CallKit audio calls survive iOS socket suspension.
   private backgroundedParticipants: Map<string, Set<string>> = new Map();
   private readonly RINGING_TIMEOUT_MS = 60_000;   // Phase 1 fix P2 — FaceTime parity
+  private readonly RINGING_REHYDRATE_FLOOR_MS = 5_000; // item H — min budget after boot rehydration
   private readonly HEARTBEAT_DB_DEBOUNCE_MS = 30_000; // Write at most every 30s per participant
   // iOS suspends the socket after ~45s in background; CallKit keeps the RTP
   // stream alive. Give backgrounded participants 5 min before timing them out.
@@ -200,13 +201,33 @@ export class CallService {
    *
    * Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §2.5
    */
-  scheduleRingingTimeout(callId: string, onTimeout: () => void): void {
+  scheduleRingingTimeout(
+    callId: string,
+    onTimeout: () => void,
+    delayMs: number = this.RINGING_TIMEOUT_MS
+  ): void {
     this.clearRingingTimeout(callId);
     const handle = setTimeout(() => {
       this.ringingTimeouts.delete(callId);
       onTimeout();
-    }, this.RINGING_TIMEOUT_MS);
+    }, delayMs);
     this.ringingTimeouts.set(callId, handle);
+  }
+
+  /**
+   * CALL-RESILIENCE (item H) — re-arm a ringing timer lost to a process
+   * restart. Fires at `startedAt + RINGING_TIMEOUT_MS`, as if the in-process
+   * timer had never been wiped; when that budget is already exhausted the
+   * short floor still gives just-rebooted clients a beat to answer or cancel
+   * before the call resolves to missed.
+   */
+  rescheduleRingingTimeout(callId: string, startedAt: Date, onTimeout: () => void): void {
+    const elapsedMs = Date.now() - startedAt.getTime();
+    const remainingMs = Math.max(
+      this.RINGING_REHYDRATE_FLOOR_MS,
+      this.RINGING_TIMEOUT_MS - elapsedMs
+    );
+    this.scheduleRingingTimeout(callId, onTimeout, remainingMs);
   }
 
   clearRingingTimeout(callId: string): void {
@@ -251,7 +272,7 @@ export class CallService {
   private async persistHeartbeatToDb(callId: string, participantId: string): Promise<void> {
     try {
       await this.prisma.callParticipant.updateMany({
-        where: { callSessionId: callId, participantId, leftAt: null },
+        where: { callSessionId: callId, participantId, OR: [{ leftAt: null }, { leftAt: { isSet: false } }] },
         data: { lastHeartbeatAt: new Date() }
       });
     } catch (err) {
@@ -476,7 +497,9 @@ export class CallService {
     // marked left + status ended) so it can never block the conversation either.
     const initiatorStaleParticipations = await this.prisma.callParticipant.findMany({
       where: {
-        leftAt: null,
+        // Audit C5 (2026-07-02) — `{leftAt: null}` alone misses Mongo docs
+        // whose leftAt field was never written (pre-C5 participants).
+        OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
         participant: { userId: initiatorId },
         callSession: { status: { in: ACTIVE_STATUSES } }
       },
@@ -500,7 +523,7 @@ export class CallService {
         try {
           await this.prisma.$transaction(async (tx) => {
             await tx.callParticipant.updateMany({
-              where: { callSessionId: staleCallId, leftAt: null },
+              where: { callSessionId: staleCallId, OR: [{ leftAt: null }, { leftAt: { isSet: false } }] },
               data: { leftAt: now }
             });
             await tx.callSession.updateMany({
@@ -847,12 +870,13 @@ export class CallService {
 
     logger.info('📞 User leaving call', { callId, userId });
 
-    // Find the call participant
+    // Find the call participant. Audit C5 (2026-07-02) — match both explicit
+    // null and never-written leftAt (pre-C5 Mongo docs).
     const callParticipant = await this.prisma.callParticipant.findFirst({
       where: {
         callSessionId: callId,
         participantId,
-        leftAt: null
+        OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
       }
     });
 
@@ -908,7 +932,7 @@ export class CallService {
         existing.status === CallStatus.connecting;
       await this.prisma.$transaction(async (tx) => {
         await tx.callParticipant.updateMany({
-          where: { callSessionId: callId, leftAt: null },
+          where: { callSessionId: callId, OR: [{ leftAt: null }, { leftAt: { isSet: false } }] },
           data: { leftAt: idemNow }
         });
         await tx.callSession.update({
@@ -922,6 +946,7 @@ export class CallService {
         });
       });
       this.clearHeartbeats(callId);
+      this.clearRingingTimeout(callId);
       await this.releaseActiveCallClaim(existing.conversationId, callId);
       logger.info('✅ Idempotent leave — call force-ended for absent participant', {
         callId, userId, wasPreAnswered: idemPreAnswered
@@ -1011,6 +1036,7 @@ export class CallService {
 
     if (isLastParticipant) {
       this.clearHeartbeats(callId);
+      this.clearRingingTimeout(callId);
       await this.releaseActiveCallClaim(call.conversationId, callId);
     } else {
       // Mid-call leave: clear only this participant's backgrounded state and
@@ -1156,7 +1182,7 @@ export class CallService {
       await tx.callParticipant.updateMany({
         where: {
           callSessionId: callId,
-          leftAt: null
+          OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
         },
         data: { leftAt: endedAt }
       });
@@ -1177,6 +1203,7 @@ export class CallService {
     });
 
     this.clearHeartbeats(callId);
+    this.clearRingingTimeout(callId);
     await this.releaseActiveCallClaim(call.conversationId, callId);
 
     logger.info('Call ended successfully', { callId, duration, endedBy, endReason, wasPreAnswered });
@@ -1321,12 +1348,14 @@ export class CallService {
       enabled
     });
 
-    // Find the call participant
+    // Find the call participant. Audit C5 (2026-07-02) — the `{leftAt: null}`
+    // filter alone never matched docs whose leftAt field was never written,
+    // making this lookup (and the DB media flag below) a 100% no-op in prod.
     const callParticipant = await this.prisma.callParticipant.findFirst({
       where: {
         callSessionId: callId,
         participantId,
-        leftAt: null
+        OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
       }
     });
 
@@ -1413,6 +1442,7 @@ export class CallService {
     });
 
     this.clearHeartbeats(callId);
+    this.clearRingingTimeout(callId);
     await this.releaseActiveCallClaim(callSession.conversationId, callId);
 
     logger.info('Call marked as missed', { callId, duration });
