@@ -290,6 +290,55 @@ describe('CallEventsHandler — restart / disconnect resilience', () => {
       expect(mockLeaveCall).not.toHaveBeenCalled();
     });
 
+    it('does NOT end the call if the participant already left by expiry', async () => {
+      const prisma = makePrisma({
+        activeParticipations: [makeParticipation('active')],
+        freshParticipant: { leftAt: new Date(), callSession: { status: 'active' } },
+      });
+      const { handlers } = setup({ prisma });
+
+      await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(GRACE_MS + 100);
+
+      expect(mockLeaveCall).not.toHaveBeenCalled();
+    });
+
+    it('does NOT end the call if the participant row is gone by expiry', async () => {
+      const prisma = makePrisma({
+        activeParticipations: [makeParticipation('active')],
+        freshParticipant: null,
+      });
+      const { handlers } = setup({ prisma });
+
+      await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(GRACE_MS + 100);
+
+      expect(mockLeaveCall).not.toHaveBeenCalled();
+    });
+
+    it('swallows a DB error during the grace-expiry re-check (no crash, no end)', async () => {
+      const prisma = makePrisma({ activeParticipations: [makeParticipation('active')] });
+      (prisma.callParticipant.findUnique as jest.Mock).mockRejectedValue(new Error('DB down'));
+      const { handlers } = setup({ prisma });
+
+      await handlers['disconnect']();
+      await expect(jest.advanceTimersByTimeAsync(GRACE_MS + 100)).resolves.toBeUndefined();
+
+      expect(mockLeaveCall).not.toHaveBeenCalled();
+    });
+
+    it('re-arms (replaces) the grace timer on a repeat disconnect for the same call', async () => {
+      const prisma = makePrisma({ activeParticipations: [makeParticipation('active')] });
+      const { handlers } = setup({ prisma });
+
+      await handlers['disconnect']();            // arm
+      await handlers['disconnect']();            // re-arm (clears the first timer)
+      await jest.advanceTimersByTimeAsync(GRACE_MS + 100);
+
+      // A single call ends once — the replaced timer does not double-fire.
+      expect(mockLeaveCall).toHaveBeenCalledTimes(1);
+    });
+
     it('re-join (call:join) within the window cancels the pending end', async () => {
       const prisma = makePrisma({ activeParticipations: [makeParticipation('active')] });
       const { handlers } = setup({ prisma });
