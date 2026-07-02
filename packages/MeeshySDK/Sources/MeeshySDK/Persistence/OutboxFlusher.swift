@@ -188,6 +188,35 @@ public actor OutboxFlusher {
         return false
     }
 
+    /// P7-7 — codes URLError de TRANSPORT (réseau/serveur injoignable). Liste
+    /// explicite : les URLError applicatifs synthétiques du chemin TUS
+    /// (`.badServerResponse`, `.badURL`, `.cannotParseResponse`) doivent, eux,
+    /// continuer à consommer le budget (erreur potentiellement permanente).
+    private static let transportURLErrorCodes: Set<URLError.Code> = [
+        .notConnectedToInternet, .networkConnectionLost,
+        .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed,
+        .timedOut, .dataNotAllowed, .internationalRoamingOff,
+    ]
+
+    /// P7-7 — une panne gateway (connection refused, DNS, timeout) est un échec
+    /// de TRANSPORT, pas applicatif : le budget d'attempts est réservé aux
+    /// refus du serveur. Sans cette distinction, ~2 min d'outage (connection
+    /// refused = échec instantané, seul le backoff espace les tentatives)
+    /// consomment les 5 attempts → `.exhausted` → l'utilisateur doit re-taper
+    /// Retry PAR message au lieu du flush FIFO automatique au reconnect
+    /// (observé E2E 2026-07-02). Même principe que le gate BW1 (mode avion)
+    /// et que l'exemption session-expiry ci-dessus.
+    /// `MeeshyError.network` est la normalisation APIClient de tout URLError
+    /// transport ; les URLError bruts couvrent le chemin TUS qui ne passe pas
+    /// par cette normalisation.
+    private static func isNetworkTransportError(_ error: Error) -> Bool {
+        if case MeeshyError.network = error { return true }
+        if let urlError = error as? URLError {
+            return transportURLErrorCodes.contains(urlError.code)
+        }
+        return false
+    }
+
     private func processRecord(_ record: OutboxRecord) async {
         // S1 — claim atomically; skip dispatch if another flusher beat us to it.
         guard await claimPending(record) else { return }
@@ -220,7 +249,11 @@ public actor OutboxFlusher {
             // expiry — observed in prod: a whole outbox marked `.exhausted` with
             // `auth(sessionExpired)`. Defer WITHOUT consuming the budget so the row
             // survives until re-auth, then flushes on the next scheduled attempt.
-            if Self.isSessionExpiry(error) {
+            // P7-7 — même exemption pour les échecs de TRANSPORT (gateway
+            // injoignable réseau-up) : defer sans consommer le budget, le
+            // flush au reconnect (NWPath / socket reconnect / boot) rejoue
+            // la file en FIFO — l'ordre de composition est préservé.
+            if Self.isSessionExpiry(error) || Self.isNetworkTransportError(error) {
                 current.lastError = String(describing: error)
                 current.status = .pending
                 current.updatedAt = Date()

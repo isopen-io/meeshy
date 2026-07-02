@@ -98,6 +98,103 @@ final class OutboxFlusherTests: XCTestCase {
             "Row must be deferred for a later retry once the session is refreshed")
     }
 
+    func test_flush_networkTransportError_doesNotConsumeRetryBudget_norExhaust() async throws {
+        let pool = try makeFreshPool()
+        try MessageDatabaseMigrations.runAll(on: pool)
+
+        let now = Date()
+        // Already failed 4× — one NORMAL failure away from `.exhausted`.
+        try await pool.write { db in
+            try OutboxRecord(
+                id: "net", kind: .sendMessage, conversationId: "c1",
+                clientMessageId: "cid_net",
+                payload: Data(), status: .pending, attempts: 4, lastError: nil,
+                createdAt: now, updatedAt: now, nextAttemptAt: now
+            ).insert(db)
+        }
+
+        // Ce que APIClient jette pour un gateway mort réseau-up (connection
+        // refused → MeeshyError.network(.serverUnreachable)).
+        let flusher = OutboxFlusher(
+            pool: pool,
+            dispatcher: MockOutboxDispatcher(failure: MeeshyError.network(.serverUnreachable))
+        )
+        await flusher.flush()
+
+        let after = try await pool.read { db in
+            try OutboxRecord.fetchOne(db, key: "net")!
+        }
+        // P7-7 : une panne gateway est un échec de TRANSPORT, pas applicatif.
+        // Observé E2E 2026-07-02 : ~2 min d'outage (connection refused =
+        // échec instantané) consommaient les 5 attempts → `.exhausted` →
+        // Retry MANUEL par message au lieu du flush FIFO auto au reconnect.
+        XCTAssertEqual(after.status, .pending,
+            "A gateway outage must leave the row pending (not exhausted)")
+        XCTAssertEqual(after.attempts, 4,
+            "A transport failure must NOT consume the retry budget")
+        XCTAssertGreaterThan(after.nextAttemptAt, now,
+            "Row must be deferred so the scheduler retries after the outage")
+    }
+
+    func test_flush_rawTransportURLError_doesNotConsumeRetryBudget() async throws {
+        let pool = try makeFreshPool()
+        try MessageDatabaseMigrations.runAll(on: pool)
+
+        let now = Date()
+        try await pool.write { db in
+            try OutboxRecord(
+                id: "tus", kind: .sendMessage, conversationId: "c1",
+                clientMessageId: "cid_tus",
+                payload: Data(), status: .pending, attempts: 4, lastError: nil,
+                createdAt: now, updatedAt: now, nextAttemptAt: now
+            ).insert(db)
+        }
+
+        // Le chemin TUS (upload media) rethrow les URLError transport BRUTS
+        // (non normalisés par APIClient).
+        let flusher = OutboxFlusher(
+            pool: pool,
+            dispatcher: MockOutboxDispatcher(failure: URLError(.cannotConnectToHost))
+        )
+        await flusher.flush()
+
+        let after = try await pool.read { db in
+            try OutboxRecord.fetchOne(db, key: "tus")!
+        }
+        XCTAssertEqual(after.status, .pending)
+        XCTAssertEqual(after.attempts, 4)
+    }
+
+    func test_flush_nonTransportURLError_stillConsumesRetryBudget() async throws {
+        let pool = try makeFreshPool()
+        try MessageDatabaseMigrations.runAll(on: pool)
+
+        let now = Date()
+        try await pool.write { db in
+            try OutboxRecord(
+                id: "bad", kind: .sendMessage, conversationId: "c1",
+                clientMessageId: "cid_bad",
+                payload: Data(), status: .pending, attempts: 0, lastError: nil,
+                createdAt: now, updatedAt: now, nextAttemptAt: now
+            ).insert(db)
+        }
+
+        // `.badServerResponse` (TUS synthétique) est APPLICATIF, pas une
+        // panne de transport : il doit continuer à consommer le budget,
+        // sinon une erreur permanente resterait pending à jamais.
+        let flusher = OutboxFlusher(
+            pool: pool,
+            dispatcher: MockOutboxDispatcher(failure: URLError(.badServerResponse))
+        )
+        await flusher.flush()
+
+        let after = try await pool.read { db in
+            try OutboxRecord.fetchOne(db, key: "bad")!
+        }
+        XCTAssertEqual(after.attempts, 1,
+            "An application-level URLError must keep consuming the budget")
+    }
+
     func test_flush_marksExhausted_after5Attempts() async throws {
         let pool = try makeFreshPool()
         try MessageDatabaseMigrations.runAll(on: pool)
@@ -292,16 +389,21 @@ actor MockOutboxDispatcher: OutboxDispatching {
     private var _processedIds: [String] = []
     let shouldFail: Bool
     let authFailure: Bool
+    let failure: Error?
 
-    init(shouldFail: Bool = false, authFailure: Bool = false) {
+    init(shouldFail: Bool = false, authFailure: Bool = false, failure: Error? = nil) {
         self.shouldFail = shouldFail
         self.authFailure = authFailure
+        self.failure = failure
     }
 
     var processedIds: [String] { _processedIds }
 
     func dispatch(_ record: OutboxRecord) async throws {
         _processedIds.append(record.id)
+        if let failure {
+            throw failure
+        }
         if authFailure {
             throw MeeshyError.auth(.sessionExpired)
         }

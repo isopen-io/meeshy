@@ -149,7 +149,14 @@ extension ConversationView {
             externalRecordingDuration: audioRecorder.duration,
             externalAudioLevels: audioRecorder.audioLevels,
             externalHasContent: !composerState.pendingAttachments.isEmpty || audioRecorder.isRecording,
-            externalIsSending: viewModel.isSending,
+            // ⚠️ NE PAS câbler `viewModel.isSending` ici : il reste true pendant
+            // tout le cycle REST(12s)+fallback socket(10s) d'UN message — le
+            // bouton d'envoi serait mort ~22s par message en réseau dégradé
+            // (bug « ⏳ bloque le composer », 2026-07-02). Un vrai messenger
+            // enchaîne les envois : chaque message a sa bulle + horloge, l'outbox
+            // les rejoue FIFO. Les double-taps restent couverts par : champ vidé
+            // synchrone (hasContent), guard isUploading (attachments), et le
+            // dedup par contenu du VM (duplicateSendDebounce).
             onPhotoLibrary: { composerState.showPhotoPicker = true },
             onCamera: { composerState.showCamera = true },
             onFilePicker: { composerState.showFilePicker = true },

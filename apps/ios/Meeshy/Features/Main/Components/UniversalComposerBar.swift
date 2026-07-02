@@ -126,8 +126,13 @@ struct UniversalComposerBar: View {
 
     // MARK: - External send state (disables button while a send is in flight)
 
-    /// When true, the send button is non-interactive. Pass `viewModel.isSending`
-    /// to prevent double-taps during the 0.2s bounce animation window.
+    /// When true, the send button is non-interactive. Réservé aux hosts dont le
+    /// flux d'envoi est LOCAL et COURT (ex. ThreadView et son `isSending`
+    /// éphémère). ⚠️ Ne JAMAIS passer `ConversationViewModel.isSending` : il
+    /// couvre tout le cycle REST+fallback (~22s en réseau dégradé) et gèlerait
+    /// le composer pendant qu'un message est sur l'horloge ⏳ — les envois de
+    /// messages DISTINCTS doivent s'enchaîner (outbox FIFO), le dedup double-tap
+    /// vit dans le ViewModel (`duplicateSendDebounce`).
     var externalIsSending: Bool = false
 
     // MARK: - Attachment ladder callbacks
