@@ -785,8 +785,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       faithful to the iOS `VoIPPushManager`/`CallManager.reportIncomingVoIPCall` ordering: self-fanout →
       duplicate (active-or-seen) → busy (different call active) → ring. The SSOT the FCM service +
       Telecom/`ConnectionService` full-screen-intent wiring will consume. +39 behavioural tests.
-      **Pending:** the `MeeshyFcmService` call-push routing + full-screen `ConnectionService` /
-      notification (Android-platform glue, next slice).
+      **FCM routing landed** (slice `fcm-call-push-route`): the pure `IncomingCallPushRouter.route(data,
+      context) → IncomingCallPushRoute` (`NotACallPush` | `Ring(push, updatedSeen)` | `Suppress(reason)`)
+      folds parser + decider + ring-insert into the single total decision the service delegates to
+      (ring advanced only on a `Ring`, so a retried push is deduped while a suppressed one never
+      poisons the ring); the app-layer `@Singleton IncomingCallRingStore` owns the live `SeenCallRing`
+      (synchronized `route`/`forget`, self-user id threaded from `SessionRepository`); and
+      `MeeshyFcmService.onMessageReceived` now routes a call push → a full-screen, CATEGORY_CALL /
+      `PRIORITY_MAX` notification on the new `meeshy_calls` channel (`setFullScreenIntent` → `MainActivity`
+      with `callId`/`conversationId`/`callerName`/`isVideo` extras), suppresses duplicates silently, and
+      hands every non-call push to the existing message path. +19 behavioural tests (11 router, 8 store).
+      **Pending:** MainActivity extra → NavHost deep-link into the incoming-call screen (shared with the
+      still-unwired message-notification `conversationId` deep-link), a full `ConnectionService`/Telecom
+      integration + ringtone, then the WebRTC media transport.
 - [ ] Call reconnection on network change (ICE restart)
 - [~] Call states: ringing/connecting/connected/ended; PiP / floating call pill —
       **pure call-lifecycle FSM landed** (`core:model` `me.meeshy.sdk.model.call`):

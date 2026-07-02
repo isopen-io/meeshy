@@ -77,9 +77,22 @@
 > `IncomingCallDecider.decide` (`Ring` | `Ignore(DUPLICATE/BUSY/SELF_INITIATED)`, ordering faithful to
 > `VoIPPushManager`/`reportIncomingVoIPCall`). +39 behavioural tests. The SSOT the FCM-service routing +
 > full-screen notification will consume.
-> **Next:** wire `MeeshyFcmService` to route a call-type data push through the parser+decider and fire a
-> full-screen `ConnectionService` / CATEGORY_CALL notification → the call screen (Android-platform glue);
-> then the actual WebRTC media transport. See the run log + `feature-parity.md §H`.
+> On 2026-07-02 the **FCM call-push routing** landed (slice `fcm-call-push-route`): the pure
+> `IncomingCallPushRouter.route(data, context) → IncomingCallPushRoute` (`NotACallPush` | `Ring(push,
+> updatedSeen)` | `Suppress(reason)`) folds the parser + decider + ring-insert into the single total
+> decision the FCM service delegates to — the dedup ring is advanced **only** on a `Ring` outcome, so a
+> retried VoIP push is caught next time while a suppressed (self / busy / duplicate) push never poisons a
+> future legitimate ring. The app-layer `@Singleton IncomingCallRingStore` is the sole owner of the live
+> `SeenCallRing` (synchronized `route`/`forget`; self-user id threaded from `SessionRepository`), and
+> `MeeshyFcmService.onMessageReceived` now routes each push by kind: a `Ring` fires a full-screen,
+> CATEGORY_CALL / `PRIORITY_MAX` notification on the new `meeshy_calls` channel (`setFullScreenIntent` →
+> `MainActivity` with `callId`/`conversationId`/`callerName`/`isVideo` extras), a `Suppress` drops
+> silently, and a `NotACallPush` falls through to the existing message-notification + outbox-flush path.
+> +19 behavioural tests (11 router, 8 store). `:app:assembleDebug` + `testDebugUnitTest` green.
+> **Next:** consume the `MainActivity` call extras → NavHost deep-link into the incoming-call screen
+> (shared plumbing with the still-unwired message-notification `conversationId` deep-link), add a
+> `ConnectionService`/Telecom integration + ringtone, then the actual WebRTC media transport. See the run
+> log + `feature-parity.md §H`.
 
 Stories so far: tray (ring carousel) + cross-group viewer playback engine +
 quick-reaction strip + swipe gestures + realtime reaction socket deltas +
@@ -460,6 +473,49 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-02 — slice `fcm-call-push-route` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration. The open PRs (#1346 iOS a11y,
+  #1350–#1353 gateway/web/iOS) are `jcnm` branches from other sessions, disjoint from `apps/android`;
+  left untouched. Branched off freshly-fetched `origin/main` (`cdf00714`) as
+  `claude/apps/android/fcm-call-push-route`. Confirmed HEAD's `apps/android` byte-identical to
+  `origin/main` (all prior Android work merged; verified `IncomingCallPush.kt` present before coding).
+- **Gap closed:** the prior slice landed the pure decision bricks but `MeeshyFcmService.onMessageReceived`
+  still ignored them — a data-only call push was silently dropped, only a `message.notification` display
+  push was handled. This slice wires the bricks into the service via a single pure router + a stateful
+  live-ring holder, then fires the full-screen call notification.
+- **Design:**
+  - `core:model` `IncomingCallPushRoute` (`NotACallPush` | `Ring(push, updatedSeen)` | `Suppress(reason)`)
+    + pure `IncomingCallPushRouter.route(data, context)` — folds `IncomingCallPushParser.parse` →
+    `IncomingCallDecider.decide` → (on `Ring` only) `SeenCallRing.insert`, returning the advanced ring so
+    the caller just adopts it. Total, side-effect-free; a `Suppress`/`NotACall` never advances the ring.
+  - `:app` `@Singleton IncomingCallRingStore` — the sole owner of the live `SeenCallRing`; `route(data,
+    nowMillis, activeCallId?, selfUserId?)` threads its ring through the router and persists `updatedSeen`
+    **only** on `Ring`; `forget(callId)` for a refused/torn-down ring. Synchronized (FCM deliveries +
+    teardown may hit different threads).
+  - `:app` glue (exempt): `MeeshyFcmService` injects the store + `SessionRepository` (self-user id →
+    self-fanout guard), routes each push by kind — `Ring` → full-screen CATEGORY_CALL / `PRIORITY_MAX`
+    notification on a new `meeshy_calls` channel (`setFullScreenIntent` → `MainActivity` + call extras),
+    `Suppress` → silent drop (logged), `NotACallPush` → the existing message path (outbox flush + rich
+    notification). Removed a pre-existing unused `OneTimeWorkRequestBuilder` import.
+- **Tests:** +19 behavioural through the public API only. `IncomingCallPushRouterTest` (11): non-call/
+  typeless/blank-callId → `NotACallPush`; `voip_call` routes like `call`; fresh idle → `Ring` with the
+  parsed push (video/conversationId threaded) + id recorded in `updatedSeen`; replay with the advanced
+  ring → `Suppress(DUPLICATE)`; self/busy/active-dup → the right `Suppress` reason; a busy `Suppress`
+  does **not** record the id (rings once the active call frees). `IncomingCallRingStoreTest` (8): fresh
+  rings; retry deduped; different id still rings; past-ttl re-delivery rings; self-suppress never poisons
+  the ring; non-call leaves the ring untouched; `forget` re-opens a ring; busy-suppress rings once free.
+  No tautologies, no floor lowered, no test weakened.
+- **Verification:** `:core:model:testDebugUnitTest` (router 11/11) then `:app:testDebugUnitTest`
+  (`IncomingCallRingStoreTest` 8/8, `CallRouteTest` unchanged) + `:app:assembleDebug` — both **BUILD
+  SUCCESSFUL** via system Gradle 8.14.3 (`--no-daemon`; wrapper still 403s — see NOTES). No suite regressed.
+- **Reviewer gate:** PASS — diff `apps/android` only (5 files: `IncomingCallPushRouter.kt` +
+  `IncomingCallRingStore.kt` prod, 2 test files, `MeeshyFcmService.kt` glue). SDK purity respected (pure
+  router in `:core:model`, stateful holder + platform glue in `:app`); single source of truth (reuses the
+  parser/decider/ring, no re-implementation); UDF n/a (no VM); behaviour through public API; the only
+  async is the synchronized store (cancellation n/a — no coroutines). **Next:** consume `MainActivity`
+  call extras → NavHost deep-link into the incoming-call screen; `ConnectionService`/Telecom + ringtone;
+  WebRTC media transport.
 
 ### 2026-07-02 — slice `incoming-call-push-decision` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration. The open PRs (#1344 gateway
