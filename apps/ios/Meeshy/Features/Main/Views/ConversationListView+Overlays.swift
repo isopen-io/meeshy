@@ -270,6 +270,7 @@ extension ConversationListView {
                         isArchived: conversation.userState.isArchived,
                         isBlockableDM: conversation.type == .direct && conversation.participantUserId != nil,
                         isBlocked: conversation.participantUserId.map { BlockService.shared.isBlocked(userId: $0) } ?? false,
+                        canRename: conversation.type != .direct,
                         onPin: { Task { await conversationViewModel.togglePin(for: conversation.id) } },
                         onMute: { Task { await conversationViewModel.toggleMute(for: conversation.id) } },
                         onMarkReadToggle: {
@@ -282,6 +283,10 @@ extension ConversationListView {
                             }
                         },
                         onDetails: { conversationInfoConversation = conversation },
+                        onRename: {
+                            renameText = conversation.name ?? ""
+                            renameTarget = conversation
+                        },
                         onSetFavorite: { emoji in
                             Task { await conversationViewModel.setFavoriteReaction(conversationId: conversation.id, emoji: emoji) }
                         },

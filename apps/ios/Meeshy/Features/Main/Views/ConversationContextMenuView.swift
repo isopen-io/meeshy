@@ -36,11 +36,14 @@ struct ConversationContextMenuView: View {
     let isArchived: Bool
     let isBlockableDM: Bool
     let isBlocked: Bool
+    /// Renommable = conversation de groupe/communauté (pas un DM).
+    let canRename: Bool
     // Callbacks — chacun = action ; la fermeture est faite par l'appelant via onDismiss
     let onPin: () -> Void
     let onMute: () -> Void
     let onMarkReadToggle: () -> Void
     let onDetails: () -> Void
+    let onRename: () -> Void
     let onSetFavorite: (String) -> Void
     let onRemoveFavorite: () -> Void
     let onMove: (String) -> Void
@@ -112,6 +115,14 @@ struct ConversationContextMenuView: View {
                 icon: "info.circle.fill",
                 label: String(localized: "context.details", defaultValue: "Détails", bundle: .main)
             ) { onDetails(); onDismiss() }
+
+            if canRename {
+                separator
+                actionRow(
+                    icon: "pencil",
+                    label: String(localized: "context.rename", defaultValue: "Renommer", bundle: .main)
+                ) { onRename(); onDismiss() }
+            }
 
             separator
 
