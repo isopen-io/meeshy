@@ -3,6 +3,7 @@ import {
   extractSessionToken,
   getConnectedUser,
   normalizeConversationId,
+  CONVERSATION_ID_CACHE_MAX,
   buildParticipantDisplayName,
   buildAnonymousDisplayName,
   isValidConversationId,
@@ -141,6 +142,31 @@ describe('normalizeConversationId', () => {
 
     const second = await normalizeConversationId('cached-convo', mockFind);
     expect(second).toBe('resolved-cached');
+    expect(mockFind).not.toHaveBeenCalled();
+  });
+
+  it('evicts the oldest entry once the cache exceeds CONVERSATION_ID_CACHE_MAX', async () => {
+    // Fill the cache past its bound with distinct identifiers.
+    for (let i = 0; i < CONVERSATION_ID_CACHE_MAX + 1; i++) {
+      mockFind.mockResolvedValueOnce({ id: `resolved-${i}`, identifier: `convo-${i}` });
+      await normalizeConversationId(`convo-${i}`, mockFind);
+    }
+
+    // The very first identifier inserted must have been evicted — a lookup
+    // for it hits the DB again instead of returning the stale cached id.
+    mockFind.mockReset();
+    mockFind.mockResolvedValueOnce({ id: 'resolved-0-again', identifier: 'convo-0' });
+    const evicted = await normalizeConversationId('convo-0', mockFind);
+    expect(evicted).toBe('resolved-0-again');
+    expect(mockFind).toHaveBeenCalledWith({ identifier: 'convo-0' });
+
+    // The most recently inserted identifier must still be cached.
+    mockFind.mockReset();
+    const stillCached = await normalizeConversationId(
+      `convo-${CONVERSATION_ID_CACHE_MAX}`,
+      mockFind
+    );
+    expect(stillCached).toBe(`resolved-${CONVERSATION_ID_CACHE_MAX}`);
     expect(mockFind).not.toHaveBeenCalled();
   });
 });

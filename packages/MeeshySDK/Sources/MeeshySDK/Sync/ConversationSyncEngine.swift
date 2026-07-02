@@ -869,6 +869,11 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             await cache.conversations.update(for: "list") { conversations in
                 var updated = conversations
                 if let idx = updated.firstIndex(where: { $0.id == msg.conversationId }) {
+                    // Monotone guard: a REST send racing the socket broadcast
+                    // (or any other out-of-order `message:new`) must not
+                    // regress the row to older content/position once a
+                    // newer message has already been applied.
+                    guard msg.createdAt > updated[idx].lastMessageAt else { return updated }
                     updated[idx].lastMessagePreview = msg.content
                     updated[idx].lastMessageId = msg.id
                     if let resolvedSenderName, !resolvedSenderName.isEmpty {

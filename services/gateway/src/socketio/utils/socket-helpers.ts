@@ -82,6 +82,13 @@ export function getConnectedUser(
   return { user, realUserId: user.id };
 }
 
+// Cache immutable identifier → ObjectId (populated on first lookup). Bounded
+// to CONVERSATION_ID_CACHE_MAX entries (FIFO eviction) — this is the hottest
+// call site (every message send, typing event, reaction and join/leave), so
+// an unbounded map would grow for the life of the gateway process across
+// every distinct conversation identifier ever seen. Mirrors the bound
+// already applied to MeeshySocketIOManager's private duplicate of this cache.
+export const CONVERSATION_ID_CACHE_MAX = 2000;
 const conversationIdCache = new Map<string, string>();
 
 /**
@@ -97,6 +104,10 @@ export async function normalizeConversationId(
     if (cached) return cached;
     const conversation = await prismaFindUnique({ identifier: conversationId });
     if (conversation) {
+      if (conversationIdCache.size >= CONVERSATION_ID_CACHE_MAX) {
+        const firstKey = conversationIdCache.keys().next().value;
+        if (firstKey !== undefined) conversationIdCache.delete(firstKey);
+      }
       conversationIdCache.set(conversationId, conversation.id);
       return conversation.id;
     }

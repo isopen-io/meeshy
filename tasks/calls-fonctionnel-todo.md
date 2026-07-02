@@ -342,15 +342,66 @@ la fin d'un appel dont le tuyau média fonctionnait toujours.
 - Tests : `CallEventsHandler-restart-resilience.test.ts` (8), `CallEventsHandler-disconnect.test.ts`
   mis à jour pour le flux grâce (fake timers), 20/20 suites socketio (196) + 5/5 services call (219) verts.
 
+### Session continue (routine calling-feature, gateway-only — pas de toolchain Swift dans cet environnement)
+Backend uniquement (TDD complet, vérifié : gateway 488/488 suites / 13402/13403 tests, `tsc --noEmit`
+propre) :
+- **[FIX C5]** `CallService.initiateCall`/`joinCallAttempt` écrivent maintenant `leftAt: null` explicitement
+  au `callParticipant.create` — sans ça Prisma n'écrit jamais le champ (optionnel omis ≠ écrit `null`
+  sur MongoDB), donc tous les `findFirst({ leftAt: null })` en aval (`updateParticipantMedia` et 5 autres
+  sites) ne matchaient jamais la ligne, d'où 100 % d'échec de persistance des toggles média observé en
+  prod. 2 tests TDD ajoutés (initiator + joiner).
+- **[FIX C6, partiel]** Root cause trouvée : la migration `2026-05-09-message-client-id.mongodb.js` utilise
+  `$ne: ''` dans un `partialFilterExpression`, un opérateur NON supporté par MongoDB pour les index
+  partiels (seuls égalité/`$exists`/`$gt`/`$gte`/`$lt`/`$lte`/`$type`/`$and` le sont) — `createIndex`
+  lève donc une erreur et l'index unique `(conversationId, clientMessageId)` n'a **jamais existé en prod**.
+  Sans lui, le catch Prisma P2002 dont dépend `createCallSummaryMessage()` (et toute la dédup offline-queue
+  des messages ordinaires) ne se déclenche jamais — deux chemins terminaux concurrents insèrent chacun leur
+  propre résumé. Fix : nouvelle migration `2026-07-02-fix-message-client-id-partial-index.mongodb.js`
+  (`$gt: ''` à la place, équivalent pour exclure la chaîne vide), idempotente, drop+recrée si un index
+  du même nom existe avec une spec différente. L'ancienne migration est annotée SUPERSEDÉE (ne pas
+  l'exécuter). **Reste ouvert** : le court-circuit des effets de bord du handler (`call:end` rebroadcast
+  même quand `endCall()` retourne "already ended" sans rien avoir changé) nécessiterait de changer la
+  signature de `CallService.endCall()` (3 call sites + 8 tests) — jugé hors scope, l'index corrige déjà
+  le symptôme observable (double persistance DB).
+- **[FIX C7]** Handler `call:force-leave` ne traitait que `callSession.status === 'ended'` (summary +
+  broadcast) — un force-leave pré-answer (idempotent leave sur teardown CallKit) résout en `'missed'`,
+  jamais couvert : le callee qui avait pourtant décroché n'avait ni résumé ni notification. Fix : miroir
+  exact du handler `call:leave` (déjà correct) — traite `'ended' || 'missed'`, déclenche `handleMissedCall`
+  sur `'missed'`. 2 tests TDD ajoutés (missed → broadcast+summary ; active → no-op).
+- **[FIX, rate limit]** `CALL_ICE_CANDIDATE` porté de 50/5s à 150/5s (recommandation #5 de l'audit) — un
+  flush de gathering légitime (15-25 candidats/ms) OU une renégociation (jusqu'à 7 cycles observés sur un
+  appel sain de 262s) épuisait la fenêtre et faisait passer un throttle serveur pour fatal côté client
+  (déjà mitigé côté iOS par le fix C2 de la session précédente, whitelist non-fatal — ce fix réduit
+  maintenant aussi la fréquence réelle du throttle).
+- **[FIX, authz]** `call:request-ice-servers` vérifiait la conversation-membership
+  (`resolveParticipantIdFromCall`) + la room Socket.IO, mais pas la participation ACTIVE à cet appel précis
+  (`resolveActiveCallParticipantId`, même pattern que les 7 autres handlers déjà durcis le 2026-07-01) —
+  aligné par cohérence défense-en-profondeur. `call:transcription-segment` était déjà sur le bon pattern
+  (contrairement à ce que ce fichier indiquait) ; note corrigée.
+- **[Audit iOS, non appliqué]** Agent d'exploration dédié (lecture de code uniquement, pas de build —
+  toolchain Swift absente ici) a confirmé 5 pistes concrètes détaillées dans "Reste à faire" ci-dessus.
+  Non implémentées cette session (nécessitent `./apps/ios/meeshy.sh build`/CI macOS pour vérification).
+
 ### Reste à faire
 - [ ] Déployer gateway (résilience restart) + valider live : appel établi → `restart gateway` → l'appel
       continue, re-join auto des 2 côtés (web + iOS)
 - [ ] Re-test E2E vidéo après Fix 7 : appel audio → user active sa caméra → le simu AFFICHE le flux
 - [ ] Déployer gateway (fix call:missed) + TestFlight (fixes 11/12 côté callee iPhone)
-- [ ] Backlog audit prod : C3/C4 (endCall → missed pas completed), C5 (leftAt isSet), C6 (index unique
-      partiel + court-circuit double summary), C7 (force-leave missed → summary+notif), C8 (dédup
-      multi-socket), limite ICE gateway 150/5 s, bulle de statut orange illisible derrière la Dynamic
-      Island (retour user, StatusBubbleOverlay)
+- [ ] Backlog audit prod : C3/C4 (endCall → missed pas completed), C8 (dédup multi-socket), bulle de
+      statut orange illisible derrière la Dynamic Island (retour user, StatusBubbleOverlay)
 - [ ] Appel vidéo complet + envoi vidéo : device réel uniquement (guard simulateur)
 - [ ] Validation device réel du fallback stuck-muted (Fix 4)
-- [ ] Gateway : authz `call:transcription-segment` / `call:request-ice-servers` (piste connue)
+- [ ] C6 reste partiel : l'index unique est corrigé (voir session ci-dessous) mais le court-circuit des
+      effets de bord (`endCall()` retourne au lieu de throw sur "already ended", le handler rebroadcast
+      quand même) n'est pas fait — changerait la signature de `CallService.endCall()` (routes/calls.ts +
+      CallEventsHandler.ts + ~8 tests), jugé hors scope pour cette session vu que l'index corrige déjà le
+      symptôme observable (double persistance en DB)
+- [ ] iOS (déféré, pas de toolchain Swift dans cet environnement — voir session ci-dessous pour le détail) :
+      CallKit jamais informé (`reportCall`/`CXEndCallAction`) sur les téardowns `.failed(...)` après
+      engagement CallKit (`CallManager.swift` ~L855, motif répété ~L1250/1375/1430/1892/3312) ; TURN perdu
+      sur le flow « End & Answer waiting call » (`pendingIncomingCall` ne porte pas `iceServers`,
+      `CallManager.swift` ~L198/1096/1858) ; banner call-waiting jamais nettoyé si l'appelant raccroche
+      avant que l'utilisateur réponde (aucun listener socket ne vérifie `pendingIncomingCall?.callId`) ;
+      pipeline effets vocaux mort mais toujours instancié par appel (`CallAudioEffectsService`,
+      AVAudioEngine construit inutilement) ; `WebRTCService.handleRemoteAudioMuted`/`setMaxAudioBitrate`
+      dead code (aucun appelant prod, superseded par `applyAudioEncoding`)

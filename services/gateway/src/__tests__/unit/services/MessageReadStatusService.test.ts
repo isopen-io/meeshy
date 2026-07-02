@@ -2395,6 +2395,38 @@ describe('MessageReadStatusService', () => {
       expect(mockPrisma.conversationReadCursor.upsert.mock.calls.length).toBe(upsertCallsAfterFirst);
     });
 
+    it('does NOT dedup markMessagesAsRead calls for a DIFFERENT messageId within the TTL window', async () => {
+      mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
+      mockPrisma.participant.findUnique.mockResolvedValue({ userId: null });
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId);
+      // A second, newer message arrives and is read < 2s later: must NOT be dropped by dedup.
+      await service.markMessagesAsRead(testParticipantId, testConversationId, testMessageId2);
+
+      expect(mockPrisma.conversationReadCursor.upsert).toHaveBeenCalledTimes(2);
+      expect(mockPrisma.conversationReadCursor.upsert).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          update: expect.objectContaining({ lastReadMessageId: testMessageId2 }),
+        })
+      );
+    });
+
+    it('does NOT dedup markMessagesAsReceived calls for a DIFFERENT messageId within the TTL window', async () => {
+      mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
+      mockPrisma.message.count.mockResolvedValue(0);
+
+      await service.markMessagesAsReceived(testParticipantId, testConversationId, testMessageId);
+      await service.markMessagesAsReceived(testParticipantId, testConversationId, testMessageId2);
+
+      expect(mockPrisma.conversationReadCursor.upsert).toHaveBeenCalledTimes(2);
+      expect(mockPrisma.conversationReadCursor.upsert).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          update: expect.objectContaining({ lastDeliveredMessageId: testMessageId2 }),
+        })
+      );
+    });
+
     it('triggers cleanupDedupCache when cache exceeds 100 entries', async () => {
       mockPrisma.message.findFirst.mockResolvedValue({ id: testMessageId });
       mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
