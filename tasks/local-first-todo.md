@@ -166,5 +166,30 @@ Source : logs du container `meeshy-gateway` en production (`docker logs --since 
 
 - [x] **H — bannière « Synchronisation… » persistante** (dette originale) — ✅ **RÉFUTÉ avec preuve exécutable (2026-07-02)**. Le fix existait déjà : `80e7dc874` (2026-05-19) — `publishOutcome` (callback `OutboxFlusher.onOutcome`) rafraîchit `pendingCountSubject` sur le chemin de DRAINAGE (avant, le compteur ne tournait que sur enqueue/retry → bannière figée à vie). Vérifié : les 3 sites de construction de flusher (MeeshyApp boot, BackgroundTransitionCoordinator, OutboxFlushTrigger.flushNow — utilisé aussi par OutboxRetryScheduler timer+reconnect) câblent TOUS `onOutcome → publishOutcome`. GAP comblé : AUCUN test ne verrouillait le chemin descendant (seule la montée enqueue était testée) → ajout `test_pendingCountPublisher_returnsToBaseline_afterFlusherDrainsQueue` (vrai flusher câblé comme en prod : claim → dispatch OK → delete → outcome → count revient au baseline) — VERT du premier coup = réfutation prouvée. Si une bannière persistante réapparaît, chercher app-side (ConnectionStatusViewModel, combinaison d'autres signaux), le mécanisme SDK est sain et verrouillé.
 
+## Item A — SyncEngine unifié (spec §5+§7) : DÉCOMPOSITION + ÉVALUATION ADVERSARIALE (2026-07-03)
+
+**État vérifié : ENTIÈREMENT GREENFIELD** — aucune brique n'existe (grep : ni `UserEventSeq`, ni `_seq`/`sequenceNumber`, ni `emitWithSeq`, ni `actor SyncEngine`, ni `protocol Syncable`, ni table `sync_checkpoints`, ni route `/api/v1/sync`).
+
+**Ce qui est DÉJÀ acquis sans le SyncEngine (réfutation adversariale du besoin) :**
+- Conversations : delta `?updatedSince=` (upsert-by-id, tombstone `isActive:false`) + fullSync paginé + **réconciliation complète 24h P7-10** (purge des hard-deletes) → exactly-once de la collection critique.
+- Messages : gap recovery `syncMissedMessages` watermark `?after=` (forward-paging, cap) → collection critique n°2 couverte.
+- Écritures : MutationLog cmid + P2002 + echo cmid (post:created U1) → exactly-once des mutations.
+- Lectures : 16 ViewModels en CacheFirstLoader cache-first + SWR → l'UX local-first est LÀ.
+
+**Verdict honnête sur la valeur MARGINALE :**
+- **HAUTE valeur, encore absente** : le `_seq` per-user + gap detection EXACTE. Aujourd'hui le gap recovery est TEMPOREL (`updatedSince`/`after`) — vulnérable aux events à timestamp identique (même ms) et au sur-fetch. Un `_seq` monotone donne « j'ai vu 91230, serveur à 91234 → 4 events manqués » précis. Bénéfice réel surtout pour **multi-device (ordering, causal consistency)** et le gap recovery exact.
+- **MOYENNE valeur** : endpoint `/sync` unifié (1 round-trip cold-start multi-collections vs 16 loaders lazy). Les loaders actuels suffisent déjà en pratique.
+- **FAIBLE valeur / HAUT risque** : migrer les 16 VMs vers l'actor central. Gros refactor pour de la propreté architecturale ; l'approche per-VM actuelle livre déjà l'UX. **À NE PAS entreprendre sauf priorité multi-device explicite.**
+
+**DÉCOUPAGE en sous-tâches livrables indépendamment (risque croissant) :**
+- **A1** (BE, S, autonome, backward-compat) — Table Prisma `UserEventSeq { userId @id, lastSeq }` + service `SequenceService.nextSeq(userId)` atomique (upsert `increment`). AUCUN câblage (dead-but-ready). Test jest pur. **← LIVRÉ CETTE ITÉRATION.**
+- **A2** (BE, M, dépend A1) — Middleware `emitWithSeq()` enveloppant les émissions user-scoped (`payload._seq = nextSeq(userId)`) ; câbler d'abord 1 event PILOTE (`message:new`) derrière un flag, puis généraliser aux 53. Backward-compat (clients ignorent `_seq` inconnu). Test : l'event émis porte un `_seq` croissant.
+- **A3** (BE, M, dépend A1) — Endpoint `GET /api/v1/sync?since=&collections=&seq=&cursor=` read-only (§7), une collection pilote (`messages`), pagination `truncated+nextCursor`, ETag, `hasGap` si `seq < lastSeq-10000`. Indexes Prisma `updatedAt`. Tests jest (pagination, gap, permissions RLS). **AUTONOME du client.**
+- **A4** (iOS SDK, M, dépend rien de A2/A3 pour compiler) — Table GRDB `sync_checkpoints` + `actor SyncEngine` SQUELETTE (checkpoints read/write debounced, pas de migration VM) + `protocol Syncable` + `SyncCollection`. Consomme `/sync` (A3) pour UNE collection derrière `SyncEngineFeatureFlag` OFF par défaut. Tests SDK (checkpoint persist, decode delta).
+- **A5** (iOS, M, dépend A4) — Décoder `_seq` sur le socket pilote + avancer `lastSeq` + gap detection (reconnect → si trou, `syncNow`). **C'est ici que la valeur multi-device se matérialise.**
+- **A6+** (iOS, L, HAUT risque) — Migration progressive des VMs derrière flag (cohabitation CacheFirstLoader). **DIFFÉRÉ sauf priorité multi-device** (cf. verdict).
+
+Ordre de livraison recommandé : A1 → A2(pilote) → A3(pilote) → A5(gap detection sur le pilote, LE bénéfice réel) → STOP et réévaluer si A6 (migration 16 VMs) vaut le coût. A4 en parallèle d'A3.
+
 ## Review log
 _(rempli au fil des tâches)_
