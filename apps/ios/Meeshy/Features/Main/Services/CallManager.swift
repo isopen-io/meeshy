@@ -3093,6 +3093,16 @@ final class CallManager: ObservableObject {
                 if event.code == "INVALID_SIGNAL" {
                     return
                 }
+                // [Audit prod 2026-07-02, C2] RATE_LIMIT_EXCEEDED is throttling
+                // of ONE event (gateway cap `socket:call:ice` = 50 per 5 s; a
+                // legitimate ICE-gathering flush emits 15-25 candidates per
+                // millisecond) — dropping a candidate degrades nothing (ICE is
+                // redundant by design). Treating it as fatal killed a live call
+                // 382 ms after connection (callId 6a461199…935c, prod).
+                if event.code == "RATE_LIMIT_EXCEEDED" {
+                    Logger.calls.warning("call:error RATE_LIMIT_EXCEEDED — non-fatal, dropping throttled event")
+                    return
+                }
                 FeedbackToastManager.shared.showError(message)
                 // Ne teardown que si un appel est réellement en vol (ringing →
                 // reconnecting). Une erreur hors-appel ne fait qu'afficher le toast.
