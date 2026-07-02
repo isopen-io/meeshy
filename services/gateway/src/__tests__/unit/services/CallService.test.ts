@@ -275,6 +275,44 @@ describe('CallService', () => {
       });
     });
 
+    it('audit C5: writes leftAt: null explicitly on the initiator\'s CallParticipant (see matching joinCall test — findFirst({leftAt: null}) never matches a field Prisma never wrote to the Mongo document)', async () => {
+      const mockConversation = createMockConversation();
+      const mockCallSession = createMockCallSession({
+        participants: [createMockParticipant()],
+        initiator: createMockUser(),
+        conversation: mockConversation
+      });
+
+      mockPrisma.conversation.findUnique.mockResolvedValue(mockConversation);
+      mockPrisma.participant.findFirst.mockResolvedValue({
+        id: 'member-123',
+        conversationId: 'conv-123',
+        userId: 'user-123',
+        isActive: true
+      });
+      mockPrisma.callParticipant.findMany.mockResolvedValue([]);
+      mockPrisma.callSession.findFirst.mockResolvedValue(null);
+      mockPrisma.callSession.findUnique.mockResolvedValue(mockCallSession);
+
+      let capturedData: Record<string, unknown> | undefined;
+      mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
+        const tx = {
+          callSession: { create: jest.fn().mockResolvedValue(mockCallSession) },
+          callParticipant: {
+            create: jest.fn().mockImplementation(({ data }: any) => {
+              capturedData = data;
+              return {};
+            })
+          }
+        };
+        return cb(tx);
+      });
+
+      await callService.initiateCall(validInitiateData);
+
+      expect(capturedData).toHaveProperty('leftAt', null);
+    });
+
     it('should successfully initiate an audio-only call', async () => {
       const audioCallData = {
         ...validInitiateData,
@@ -2852,6 +2890,49 @@ describe('CallService - joinCall settings branches', () => {
 
     expect(capturedAudio).toBe(false);
     expect(capturedVideo).toBe(false);
+  });
+
+  it('audit C5: writes leftAt: null explicitly on the joiner\'s CallParticipant (MongoDB has no missing-vs-null distinction at the Prisma query-engine level; later findFirst({leftAt: null}) lookups only match a field that was actually written)', async () => {
+    const existingCall = createMockCallSession({
+      status: CallStatus.initiated,
+      participants: [createMockParticipant()],
+      conversation: createMockConversation()
+    });
+    const updatedCall = {
+      ...existingCall,
+      status: CallStatus.connecting,
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    };
+
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(existingCall)
+      .mockResolvedValueOnce(updatedCall);
+    mockPrisma.participant.findFirst.mockResolvedValue({
+      id: 'member-456', conversationId: 'conv-123', userId: 'user-456', isActive: true
+    });
+
+    let capturedData: Record<string, unknown> | undefined;
+    mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
+      const tx = {
+        callParticipant: {
+          create: jest.fn().mockImplementation(({ data }: any) => {
+            capturedData = data;
+            return {};
+          })
+        },
+        callSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }
+      };
+      return cb(tx);
+    });
+
+    await callService.joinCall({
+      callId: 'call-123',
+      userId: 'user-456',
+      participantId: 'participant-456'
+    });
+
+    expect(capturedData).toHaveProperty('leftAt', null);
   });
 
   it('does not update callSession when joining connecting call (not initiated/ringing)', async () => {

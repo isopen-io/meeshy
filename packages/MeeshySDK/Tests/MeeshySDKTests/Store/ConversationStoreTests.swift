@@ -552,11 +552,13 @@ final class ConversationStoreTests: XCTestCase {
         XCTAssertEqual(updatedConv?.lastMessageAt, t1)
     }
 
-    func test_applyConversationUpdated_staleLastMessageAt_skippedButOtherFieldsApplied() async {
+    func test_applyConversationUpdated_staleLastMessageAt_wholeMessageGroupSkipped() async {
         let (store, _, _, _) = makeStore()
         let t0 = Date(timeIntervalSince1970: 1_700_000_000)
         var conv = makeConv(id: "conv-1")
         conv.lastMessageAt = t0
+        conv.lastMessageId = "msg-current"
+        conv.lastMessagePreview = "current preview"
         await store.hydrate(conv)
 
         let older = Date(timeIntervalSince1970: 1_699_000_000)
@@ -569,8 +571,29 @@ final class ConversationStoreTests: XCTestCase {
 
         let after = await store.conversation(id: "conv-1")!
         XCTAssertEqual(after.lastMessageAt, t0, "stale lastMessageAt must not overwrite")
-        XCTAssertEqual(after.lastMessageId, "msg-stale", "other fields must still be applied")
-        XCTAssertEqual(after.lastMessagePreview, "stale preview")
+        XCTAssertEqual(after.lastMessageId, "msg-current",
+                       "a stale broadcast must not overwrite the id paired with the newer timestamp")
+        XCTAssertEqual(after.lastMessagePreview, "current preview",
+                       "a stale broadcast must not overwrite the preview paired with the newer timestamp")
+    }
+
+    func test_applyConversationUpdated_staleLastMessageAt_unrelatedFieldsStillApplied() async {
+        let (store, _, _, _) = makeStore()
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        var conv = makeConv(id: "conv-1")
+        conv.lastMessageAt = t0
+        await store.hydrate(conv)
+
+        let older = Date(timeIntervalSince1970: 1_699_000_000)
+        await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            lastMessageAt: older,
+            title: "Renamed Group"
+        ))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.lastMessageAt, t0, "stale lastMessageAt must not overwrite")
+        XCTAssertEqual(after.title, "Renamed Group", "fields unrelated to message ordering still apply")
     }
 
     func test_applyConversationUpdated_lastMessageIdAndPreview_applied() async {

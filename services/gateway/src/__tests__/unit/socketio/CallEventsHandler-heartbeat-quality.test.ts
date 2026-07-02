@@ -148,6 +148,54 @@ describe('CallEventsHandler — call:heartbeat / call:quality-report hardening',
 
       expect(callService.recordHeartbeat).not.toHaveBeenCalled();
     });
+
+    it('never records a heartbeat for a callId the caller is not a participant of', async () => {
+      const prisma = makePrisma();
+      const callService = makeCallService({ participants: [] });
+      const { socket, io, handlers } = makeSocket();
+
+      const handler = new CallEventsHandler(prisma, callService);
+      handler.setupCallEvents(socket as any, io as any, () => USER_ID);
+
+      await handlers[CALL_EVENTS.HEARTBEAT]({ callId: VALID_CALL_ID });
+
+      expect(callService.recordHeartbeat).not.toHaveBeenCalled();
+    });
+
+    it('never records a heartbeat when the caller is a member of the conversation but not an active participant of THIS call', async () => {
+      // Regression: `resolveActiveCallParticipantId` must check the caller is
+      // an active CallParticipant of the specific callId, not merely a member
+      // of the underlying conversation — otherwise any other conversation
+      // member could plant a phantom in-memory heartbeat entry for a call
+      // they never joined, polluting the zombie-call GC's liveness data.
+      const prisma = makePrisma();
+      const callService = makeCallService({
+        participants: [{ participantId: 'someone-elses-participant-id', userId: 'other-user', leftAt: null }],
+      });
+      const { socket, io, handlers } = makeSocket();
+
+      const handler = new CallEventsHandler(prisma, callService);
+      handler.setupCallEvents(socket as any, io as any, () => USER_ID);
+
+      await handlers[CALL_EVENTS.HEARTBEAT]({ callId: VALID_CALL_ID });
+
+      expect(callService.recordHeartbeat).not.toHaveBeenCalled();
+    });
+
+    it('never records a heartbeat when the caller already left THIS call (leftAt set)', async () => {
+      const prisma = makePrisma();
+      const callService = makeCallService({
+        participants: [{ participantId: 'participant-1', userId: USER_ID, leftAt: new Date() }],
+      });
+      const { socket, io, handlers } = makeSocket();
+
+      const handler = new CallEventsHandler(prisma, callService);
+      handler.setupCallEvents(socket as any, io as any, () => USER_ID);
+
+      await handlers[CALL_EVENTS.HEARTBEAT]({ callId: VALID_CALL_ID });
+
+      expect(callService.recordHeartbeat).not.toHaveBeenCalled();
+    });
   });
 
   describe('call:quality-report', () => {
