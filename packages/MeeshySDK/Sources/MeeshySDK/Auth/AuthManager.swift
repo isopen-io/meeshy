@@ -359,6 +359,10 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // U3 — drop any in-flight optimistic profile guard so it can't leak onto
         // the next user's profile after a re-login.
         pendingOptimisticProfile = nil
+        // T15b — HTTP cache purge AVANT le guard : l'état déconnecté ne doit
+        // jamais laisser de bodies REST (conversations, messages) d'un compte
+        // au repos sur disque, quel que soit le chemin de logout emprunté.
+        APIClient.shared.clearHTTPCache()
         guard let userId = activeUserId else {
             // Idempotent : peut être appelée plusieurs fois sans crash.
             // Garde un état cohérent même quand aucune session n'est active.
@@ -412,6 +416,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // avant que le cache soit purgé (sinon LoginView risque de se monter
         // pendant que les caches user A sont encore en RAM).
         await CacheCoordinator.shared.reset()
+
+        // T15b — seconde purge HTTP : un store disque URLCache bufferisé
+        // (réponse d'un fetch juste avant le logout) peut atterrir APRÈS la
+        // première purge et ressusciter le body. Re-purger en fin de logout
+        // ferme cette fenêtre.
+        APIClient.shared.clearHTTPCache()
 
         // En DERNIER : déclenche le router et tous les `wireAuthLogoutHook`
         // app-side (ConversationAudioCoordinator, FeedbackToastManager, etc.).
