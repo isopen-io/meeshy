@@ -273,8 +273,45 @@ journal « Appel audio sortant · 01:20 », 7.6 MB, qualité Excellent. Le refre
   `presentationBackground(.ultraThinMaterial)` gated 16.4+) ; carte détails en
   `adaptiveGlass(tint:)` ; CTA rappel en `adaptiveGlassProminent`.
 
+### 2e vague (même session, après retours user live + audit prod multi-agents)
+
+Diagnostic majeur (logs gateway prod) : **le chemin décrochage-via-VoIP-push est cassé à 100 %**
+(7/7 appels notifiedSockets=0 → push APNS OK → app réveillée (REST OK) → socket JAMAIS connecté
+pendant le ring (connect() n'est déclenché que par les vues au foreground) → `call:join` fire-and-forget
+perdu → gateway rejette les signaux (« Sender not a participant » ×26 sur …e6) → missed malgré le
+décrochage). L'appel réussi de 07:36 : app au premier plan → socket vivant → in-app ring → OK.
+
+- **[FIX 11] `joinCallRoomReliably`** — remplace les 2 émissions early fire-and-forget (chemins VoIP
+  et foreground) : force `connect()` si nécessaire, attend `isConnected` (poll 200 ms, budget 30 s),
+  `emitCallJoinWithAck` + 1 retry, annulé au teardown. Source-guards EarlyJoin migrés vers le nouveau seam.
+- **[FIX 12, retour user] Chrono CallKit au connect réel** — l'answer action CallKit est TENUE
+  (`holdPendingAnswerAction`, hand-off synchrone `MainActor.assumeIsolated`, delegate queue=main) et
+  settled à `transitionToConnected` (fulfill) / teardown pré-connexion (fail) / filet 10 s (fulfill).
+  Le compteur ne démarre plus à 0:00 avant l'établissement. Source-guard CXAnswer migré.
+- **[FIX 8b, retour user] Contrôles du cadre sans doublons** — bouton Effets (« + ») et flip iPhone
+  retirés de la barre du bas (le picker multi-caméras Mac/iPad reste) ; l'overlay filtres ouvre
+  directement le panneau `VideoFiltersPanel` (plus de toolbar intermédiaire à 1 bouton).
+- **[FIX C2 audit, HIGH] RATE_LIMIT_EXCEEDED non-fatal côté iOS** — le gateway limite
+  `socket:call:ice` à 50/5 s ; un flush de gathering légitime (15-25 candidats/ms) le dépasse et le
+  client tuait l'appel (prod : appel …935c tué 382 ms après connexion). Ajouté à la whitelist comme
+  INVALID_SIGNAL (drop silencieux, ICE est redondant par design).
+- **[FIX gateway, TDD] Payload `call:missed` conforme au contrat** — le ringing-timeout n'émettait
+  que `{callId}` (violation de CallMissedEvent, decode iOS KO). Enrichi conversationId/callerId/
+  callerName + 5 tests, 188/188 socketio, 683/683 suites call, tsc 0 erreur. Côté SDK iOS,
+  `CallMissedData` décode désormais défensivement (champs optionnels) pour les vieux gateways.
+- **Audit prod multi-agents archivé** : `docs/analyses/2026-07-02-audit-gateway-appels-prod.md`
+  (C1-C8 confirmés dont : appels « completed » duration 0 au lieu de missed ; updateParticipantMedia
+  100 % d'échec DB — sémantique Prisma/Mongo `leftAt: null` vs missing ; double summary + index unique
+  `(conversationId, clientMessageId)` JAMAIS créé en prod — `$ne:''` non supporté en
+  partialFilterExpression ; force-leave pré-answer sans summary ni notification).
+
 ### Reste à faire
 - [ ] Re-test E2E vidéo après Fix 7 : appel audio → user active sa caméra → le simu AFFICHE le flux
+- [ ] Déployer gateway (fix call:missed) + TestFlight (fixes 11/12 côté callee iPhone)
+- [ ] Backlog audit prod : C3/C4 (endCall → missed pas completed), C5 (leftAt isSet), C6 (index unique
+      partiel + court-circuit double summary), C7 (force-leave missed → summary+notif), C8 (dédup
+      multi-socket), limite ICE gateway 150/5 s, bulle de statut orange illisible derrière la Dynamic
+      Island (retour user, StatusBubbleOverlay)
 - [ ] Appel vidéo complet + envoi vidéo : device réel uniquement (guard simulateur)
 - [ ] Validation device réel du fallback stuck-muted (Fix 4)
 - [ ] Gateway : authz `call:transcription-segment` / `call:request-ice-servers` (piste connue)
