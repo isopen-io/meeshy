@@ -4357,3 +4357,36 @@ final class LocalTeardownServerReconciliationTests: XCTestCase {
         )
     }
 }
+
+// MARK: - ACK-failure must also reconcile (chaos-test 2, callId 6a4690a2…)
+
+@MainActor
+final class AckFailureReconciliationTests: XCTestCase {
+
+    func test_emitCallEndReliably_remembersCallId_whenAckFails() throws {
+        // Chaos-test 2: the caller's ring-timeout call:end had its ACK fail
+        // during the post-restart churn — the socket LOOKED connected so the
+        // deferred-reconciliation path never armed, the fire-and-forget
+        // fallback was lost, and the CallSession decayed to failed/91s via the
+        // GC instead of resolving missed. An unacked end must be remembered
+        // and replayed on the next connect exactly like a socket-down end
+        // (the gateway end handler is idempotent).
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        guard let fnRange = source.range(of: "private func emitCallEndReliably(") else {
+            XCTFail("emitCallEndReliably not found"); return
+        }
+        let body = String(source[fnRange.lowerBound...].prefix(1600))
+        let occurrences = body.components(separatedBy: "pendingEndReconciliationCallId = callId").count - 1
+        XCTAssertGreaterThanOrEqual(
+            occurrences, 2,
+            "emitCallEndReliably must arm the reconciliation in BOTH branches: socket known down " +
+            "AND ACK failure (socket believed up but the emit never materialised server-side)"
+        )
+    }
+}
