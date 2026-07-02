@@ -2033,8 +2033,18 @@ describe('CallService - initiateCall phantom cleanup & transaction', () => {
       'CALL_ALREADY_ACTIVE: A call is already active in this conversation'
     );
 
+    // Prisma-on-MongoDB: `activeCallId: null` matches ONLY documents where
+    // the field is explicitly null — NOT documents missing the field (every
+    // conversation created before the claim was introduced, and every new
+    // conversation Prisma creates while omitting unset optionals). Without
+    // the `isSet: false` arm the claim can NEVER succeed on those documents
+    // and every initiateCall fails CALL_ALREADY_ACTIVE (prod incident
+    // 2026-07-02: 211/211 conversations lacked the field).
     expect(mockPrisma.conversation.updateMany).toHaveBeenCalledWith({
-      where: { id: 'conv-123', activeCallId: null },
+      where: {
+        id: 'conv-123',
+        OR: [{ activeCallId: null }, { activeCallId: { isSet: false } }]
+      },
       data: { activeCallId: 'call-race-loser' }
     });
     expect(deletedParticipants).toBe(true);

@@ -610,8 +610,19 @@ export class CallService {
     // deterministically lets exactly one of two concurrent callers win the
     // claim; the loser observes `count === 0` and unwinds its own orphaned
     // session instead of leaving two live sessions for one conversation.
+    // Prisma-on-MongoDB null semantics: `activeCallId: null` matches ONLY
+    // documents where the field is explicitly null — NOT documents missing
+    // the field entirely (every conversation created before this claim was
+    // introduced, plus any new conversation Prisma creates while omitting
+    // unset optionals). Without the `isSet: false` arm the claim can NEVER
+    // succeed on those documents and every initiateCall fails
+    // CALL_ALREADY_ACTIVE (prod incident 2026-07-02: 211/211 conversations
+    // lacked the field; hot-fixed by backfilling `activeCallId: null`).
     const claim = await this.prisma.conversation.updateMany({
-      where: { id: conversationId, activeCallId: null },
+      where: {
+        id: conversationId,
+        OR: [{ activeCallId: null }, { activeCallId: { isSet: false } }]
+      },
       data: { activeCallId: callSession.id }
     });
 
