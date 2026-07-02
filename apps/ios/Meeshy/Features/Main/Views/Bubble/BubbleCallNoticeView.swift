@@ -11,8 +11,11 @@ import MeeshyUI
 ///   plus a corner direction chip. Incoming arrow points **down** (`arrow.down.left`),
 ///   outgoing points up (`arrow.up.right`) — the trailing call-back badge was
 ///   removed so the bubble hugs its content instead of stretching wide.
-/// - **Title + timestamp only** in the bubble body ("Appel vidéo entrant" · "18:41").
-///   Duration, data spent and network quality moved OUT of the always-visible row.
+/// - **Title + metrics row** in the bubble body: the title ("Appel vidéo entrant")
+///   over a glyphed metrics line — clock glyph + duration · transfer glyph + data
+///   spent ("⏱ 00:49 · ⇅ ~9.3 MB"). Network quality still lives in the detail sheet.
+/// - **Call time bottom-right** like every other chat bubble ("18:41"), so the
+///   metrics carry the "how much" and the corner carries the "when".
 /// - **Long-press → detail sheet** (`CallSummaryDetailSheet`) surfaces the full
 ///   record: type, precise timestamp, duration, data, network quality (histogram
 ///   later) and a one-tap call-back.
@@ -75,24 +78,61 @@ struct BubbleCallNoticeView: View, Equatable {
     }
 
     private var card: some View {
-        HStack(spacing: 11) {
-            leadingGlyph
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(ThemeManager.shared.textPrimary)
-                    .lineLimit(1)
-                Text(subtitle)
-                    .font(.caption.weight(.medium))
-                    .foregroundColor(ThemeManager.shared.textMuted)
-                    .lineLimit(1)
+        VStack(alignment: .trailing, spacing: 3) {
+            HStack(spacing: 11) {
+                leadingGlyph
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(ThemeManager.shared.textPrimary)
+                        .lineLimit(1)
+                    metricsRow
+                }
             }
+            Text(notice.timeString)
+                .font(.caption2.weight(.medium))
+                .foregroundColor(ThemeManager.shared.textMuted)
+                .accessibilityHidden(true)
         }
         .padding(.horizontal, 13)
         .padding(.vertical, 9)
         .frame(minHeight: 44)
         .background(simpleContour)
         .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous))
+    }
+
+    // MARK: - Metrics row (glyphed duration + data spent)
+
+    /// Duration and data spent, each led by its glyph — clock for duration,
+    /// up/down arrows for the data transferred — separated by a middot. Absent
+    /// entirely when neither exists (missed / rejected / zero-length calls), so
+    /// those bubbles collapse to just the title. Mirrors the detail sheet's
+    /// `clock` / `arrow.up.arrow.down` glyphs for cross-surface consistency.
+    @ViewBuilder private var metricsRow: some View {
+        let duration = durationLabel
+        let data = summary.dataSpentLabel
+        if duration != nil || data != nil {
+            HStack(spacing: 5) {
+                if let duration { metric(icon: "clock", text: duration) }
+                if duration != nil, data != nil {
+                    Text("·")
+                        .font(.caption.weight(.medium))
+                        .foregroundColor(ThemeManager.shared.textMuted)
+                }
+                if let data { metric(icon: "arrow.up.arrow.down", text: data) }
+            }
+        }
+    }
+
+    private func metric(icon: String, text: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .semibold))
+            Text(text)
+                .font(.caption.weight(.medium))
+                .lineLimit(1)
+        }
+        .foregroundColor(ThemeManager.shared.textMuted)
     }
 
     // MARK: - Leading media + direction glyph
@@ -124,15 +164,6 @@ struct BubbleCallNoticeView: View, Equatable {
                 .foregroundColor(tint)
         }
         .offset(x: 3, y: 3)
-    }
-
-    // MARK: - Body text
-
-    /// Timestamp is always shown; duration appended only for connected calls
-    /// that actually lasted. Data + quality live in the detail sheet.
-    private var subtitle: String {
-        guard let duration = durationLabel else { return notice.timeString }
-        return "\(notice.timeString) · \(duration)"
     }
 
     // MARK: - Simple contour background
@@ -209,6 +240,7 @@ struct BubbleCallNoticeView: View, Equatable {
     private var accessibilityLabel: Text {
         var parts: [String] = [title, directionWord, notice.timeString]
         if let duration = durationLabel { parts.append(duration) }
+        if let data = summary.dataSpentLabel { parts.append(data) }
         return Text(parts.joined(separator: ", "))
     }
 }
