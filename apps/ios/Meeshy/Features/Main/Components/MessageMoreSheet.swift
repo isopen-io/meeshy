@@ -242,6 +242,10 @@ struct MessageMoreSheet: View {
         .padding(.horizontal, 18)
     }
 
+    /// Contenu détaillé rendu INLINE sous la grille. La feuille est présentée
+    /// sans `NavigationStack` → les `.navigationTitle` / `.navigationBarTitleDisplayMode`
+    /// seraient inertes. L'en-tête visible (icône + libellé + fermeture) est
+    /// fourni par `inlineContent(for:)`.
     @ViewBuilder
     private func destination(for item: MoreItem) -> some View {
         switch item {
@@ -249,33 +253,19 @@ struct MessageMoreSheet: View {
             MessageLanguageDetailView(message: message, contactColor: contactColor, conversationId: conversationId,
                 textTranslations: textTranslations, transcription: transcription, translatedAudios: translatedAudios,
                 onSelectTranslation: onSelectTranslation, onSelectAudioLanguage: onSelectAudioLanguage)
-                .navigationTitle(labelText(.language))
-                .navigationBarTitleDisplayMode(.inline)
         case .views:
             MessageViewsDetailView(message: message, contactColor: contactColor, conversationId: conversationId)
-                .navigationTitle(labelText(.views))
-                .navigationBarTitleDisplayMode(.inline)
         case .reactions:
             MessageReactionsDetailView(message: message, contactColor: contactColor, conversationId: conversationId)
-                .navigationTitle(labelText(.reactions))
-                .navigationBarTitleDisplayMode(.inline)
         case .transcription:
             MessageTranscriptionDetailView(message: message, contactColor: contactColor, conversationId: conversationId,
                 transcription: transcription, translatedAudios: translatedAudios, onSelectAudioLanguage: onSelectAudioLanguage)
-                .navigationTitle(labelText(.transcription))
-                .navigationBarTitleDisplayMode(.inline)
         case .sentiment:
             MessageDetailSentimentTab(content: message.content, isDark: colorScheme == .dark).equatable()
-                .navigationTitle(labelText(.sentiment))
-                .navigationBarTitleDisplayMode(.inline)
         case .history:
             MessageEditsDetailView(message: message, editRevisions: editRevisions)
-                .navigationTitle(labelText(.history))
-                .navigationBarTitleDisplayMode(.inline)
         case .report:
             MessageReportDetailView(message: message, onReport: { onReport?($0, $1); dismiss() }, onDismiss: { dismiss() })
-                .navigationTitle(labelText(.report))
-                .navigationBarTitleDisplayMode(.inline)
         case .reply, .forward, .thread, .deleteMedia:
             EmptyView()
         }

@@ -10,6 +10,14 @@ struct MessageActionsMenu: View {
     let accentHex: String
     let onSelect: (PrimaryAction) -> Void
 
+    // Dynamic Type : la hauteur de row et la colonne d'icône scalent avec la
+    // taille de texte préférée. `estimatedSize` (statique, utilisée par
+    // l'overlay pour positionner le menu sans PreferenceKey) applique le même
+    // facteur via `UIFontMetrics` → le calcul de layout reste cohérent avec le
+    // rendu quelle que soit la taille Dynamic Type.
+    @ScaledMetric(relativeTo: .body) private var rowMinHeight: CGFloat = 44
+    @ScaledMetric(relativeTo: .body) private var iconColumnWidth: CGFloat = 24
+
     private var accent: Color { Color(hex: accentHex) }
 
     var body: some View {
@@ -41,21 +49,21 @@ struct MessageActionsMenu: View {
         } label: {
             HStack(spacing: 14) {
                 Image(systemName: symbol(action))
-                    .font(.system(size: 17, weight: .medium))
+                    .font(MeeshyFont.relative(17, weight: .medium))
                     .symbolRenderingMode(.hierarchical)
-                    .frame(width: 24)
+                    .frame(width: iconColumnWidth)
                 Text(label(action))
-                    .font(.system(size: 16, weight: .regular))
+                    .font(MeeshyFont.relative(16))
                 Spacer(minLength: 0)
                 if action == .more {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
                         .opacity(0.4)
                 }
             }
             .foregroundStyle(tint)
             .padding(.horizontal, 16)
-            .frame(minHeight: 44)
+            .frame(minHeight: rowMinHeight)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -68,9 +76,13 @@ struct MessageActionsMenu: View {
 
     /// Taille déterministe pour un nombre d'actions donné — utilisée par le
     /// conteneur de l'overlay pour positionner le menu sans PreferenceKey.
+    /// La hauteur de row est scalée par `UIFontMetrics` pour rester cohérente
+    /// avec le rendu Dynamic Type (`@ScaledMetric` côté vue). À la taille par
+    /// défaut, `scaledValue(for: 44) == 44` → aucun changement de layout.
     static func estimatedSize(actionCount: Int) -> CGSize {
         let count = max(1, actionCount)
-        return CGSize(width: menuWidth, height: CGFloat(count) * rowHeight + 16)
+        let scaledRow = UIFontMetrics.default.scaledValue(for: rowHeight)
+        return CGSize(width: menuWidth, height: CGFloat(count) * scaledRow + 16)
     }
 
     private func symbol(_ a: PrimaryAction) -> String {
