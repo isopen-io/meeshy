@@ -329,4 +329,70 @@ describe('CallEventsHandler — call:force-leave handler', () => {
       expect(mockLeaveCall5).not.toHaveBeenCalled();
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Audit C7 (2026-07-02) — a pre-answer force-leave (idempotent leave)
+  // resolves to `missed`, not `ended`. The handler used to only post a
+  // summary / broadcast call:ended when status was exactly `ended`, so these
+  // calls left the callee with no summary message and no missed-call
+  // notification even though they had genuinely answered.
+  // -------------------------------------------------------------------------
+
+  describe('C7: pre-answer force-leave resolving to missed status', () => {
+    it('broadcasts call:ended and posts a summary when leaveCall resolves to missed', async () => {
+      const prisma = makePrisma({
+        callSessionFindMany: jest.fn<any>().mockResolvedValue([
+          makeActiveCallWithParticipant(USER_ID),
+        ]),
+      });
+      mockLeaveCall5.mockResolvedValue({
+        id: CALL_ID,
+        conversationId: CONV_ID,
+        status: 'missed',
+        duration: 0,
+        endReason: 'missed',
+        mode: 'p2p',
+      });
+      mockCreateCallSummaryMessage5.mockResolvedValue(null);
+
+      const { socket, handlers } = makeSocket();
+      const { io, roomEmit } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers['call:force-leave'](FORCE_LEAVE_DATA);
+
+      expect(roomEmit).toHaveBeenCalledWith(
+        CALL_EVENTS.ENDED,
+        expect.objectContaining({ callId: CALL_ID, reason: 'missed' })
+      );
+      expect(mockCreateCallSummaryMessage5).toHaveBeenCalledWith(CALL_ID);
+    });
+
+    it('does nothing extra (no crash) when leaveCall resolves to an active status', async () => {
+      const prisma = makePrisma({
+        callSessionFindMany: jest.fn<any>().mockResolvedValue([
+          makeActiveCallWithParticipant(USER_ID),
+        ]),
+      });
+      mockLeaveCall5.mockResolvedValue({
+        id: CALL_ID,
+        conversationId: CONV_ID,
+        status: 'active',
+        duration: 30,
+        endReason: null,
+        mode: 'p2p',
+      });
+
+      const { socket, handlers } = makeSocket();
+      const { io, roomEmit } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers['call:force-leave'](FORCE_LEAVE_DATA);
+
+      expect(roomEmit).not.toHaveBeenCalledWith(CALL_EVENTS.ENDED, expect.anything());
+      expect(mockCreateCallSummaryMessage5).not.toHaveBeenCalled();
+    });
+  });
 });

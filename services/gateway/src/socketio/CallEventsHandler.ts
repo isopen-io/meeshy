@@ -1424,7 +1424,14 @@ export class CallEventsHandler {
               // Leave the room
               await socket.leave(ROOMS.call(call.id));
 
-              if (callSession.status === 'ended') {
+              // Audit C7 (2026-07-02) — mirror the `call:leave` handler above:
+              // a pre-answer force-leave (e.g. idempotent leave on CallKit
+              // teardown) lands the session in `missed`, not `ended`. This
+              // branch used to only fire on `ended`, so those calls got no
+              // summary message and no missed-call notification — the callee
+              // had no UX trace the call ever happened, even after answering.
+              const forceLeaveStatus = callSession.status as string;
+              if (forceLeaveStatus === 'ended' || forceLeaveStatus === 'missed') {
                 const endedEvent: CallEndedEvent = {
                   callId: callSession.id,
                   duration: callSession.duration || 0,
@@ -1437,6 +1444,13 @@ export class CallEventsHandler {
 
                 // P3 — post the call-summary system message (idempotent).
                 await this.postCallSummary(callSession.id);
+
+                if (forceLeaveStatus === 'missed') {
+                  /* istanbul ignore next -- handleMissedCall has its own internal catch and never rejects */
+                  this.handleMissedCall(callSession.id).catch((err) => {
+                    logger.error('❌ handleMissedCall failed after force-leave', { callId: call.id, err });
+                  });
+                }
               }
             } catch (leaveError) {
               logger.error('❌ Error force leaving call', { callId: call.id, error: leaveError });
@@ -2195,10 +2209,13 @@ export class CallEventsHandler {
         }
 
         // Defense-in-depth: confirm the caller is still an active participant
-        // of this call (not just that their socket is in the room — room
+        // of THIS call (not just that their socket is in the room — room
         // membership and participant state could diverge if cleanup ever
-        // races) before minting fresh TURN credentials for them.
-        const iceParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        // races — and not merely a member of its conversation, which is all
+        // `resolveParticipantIdFromCall` verifies) before minting fresh TURN
+        // credentials for them. Same fix as QUALITY_REPORT / TRANSCRIPTION_SEGMENT
+        // (audit gateway prod 2026-07-02, backlog item "authz call:request-ice-servers").
+        const iceParticipantId = await this.resolveActiveCallParticipantId(userId, data.callId);
         if (!iceParticipantId) {
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,

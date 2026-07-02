@@ -587,11 +587,19 @@ export class CallService {
       });
 
       // Create participant for initiator
+      // Audit C5 (2026-07-02): `leftAt` must be written explicitly as `null`
+      // — MongoDB has no NULL-vs-missing-field distinction at the storage
+      // layer, but Prisma's query engine treats them differently: a field
+      // omitted from `data` at create time is never written to the document,
+      // so a later `findFirst({ where: { leftAt: null } })` (used throughout
+      // this service, e.g. updateParticipantMedia) never matches it. That
+      // caused 100% of media-toggle DB writes to silently no-op in prod.
       await tx.callParticipant.create({
         data: {
           callSessionId: session.id,
           participantId,
           role: ParticipantRole.initiator,
+          leftAt: null,
           isAudioEnabled: settings?.audioEnabled ?? true,
           isVideoEnabled: type === 'video' ? (settings?.videoEnabled ?? true) : false
         }
@@ -754,12 +762,15 @@ export class CallService {
     // the cap check above (see joinCallAttempt's doc comment).
     const versionConflict = Symbol('versionConflict');
     const outcome = await this.prisma.$transaction(async (tx) => {
-      // Create participant
+      // Create participant. See the C5 note on the initiator's `create` above
+      // — `leftAt: null` must be explicit or later `findFirst({ leftAt: null })`
+      // lookups (e.g. updateParticipantMedia) never match this row.
       await tx.callParticipant.create({
         data: {
           callSessionId: callId,
           participantId,
           role: ParticipantRole.participant,
+          leftAt: null,
           isAudioEnabled: settings?.audioEnabled ?? true,
           isVideoEnabled: settings?.videoEnabled ?? true
         }
