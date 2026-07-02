@@ -17,6 +17,7 @@ import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketTypingSchema } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
+import { BoundedTtlCache } from '../../utils/bounded-cache.js';
 
 const logger = enhancedLogger.child({ module: 'StatusHandler' });
 
@@ -29,8 +30,9 @@ export interface StatusHandlerDependencies {
 }
 
 const IDENTITY_CACHE_TTL_MS = 60_000;
+const IDENTITY_CACHE_MAX_SIZE = 5_000;
 
-type CachedIdentity = { username: string; displayName: string; expiresAt: number };
+type CachedIdentity = { username: string; displayName: string };
 
 type ActiveTyper = { conversationId: string; userId: string; username: string; displayName: string };
 
@@ -40,13 +42,15 @@ export class StatusHandler {
   private privacyPreferencesService: PrivacyPreferencesService;
   private connectedUsers: Map<string, SocketUser>;
   private socketToUser: Map<string, string>;
-  private identityCache = new Map<string, CachedIdentity>();
+  private identityCache = new BoundedTtlCache<string, CachedIdentity>({
+    maxSize: IDENTITY_CACHE_MAX_SIZE,
+    ttlMs: IDENTITY_CACHE_TTL_MS
+  });
   private typingThrottleMap = new Map<string, number>();
   private activeTypers = new Map<string, Array<ActiveTyper>>();
   private static readonly TYPING_THROTTLE_MS = 2_000;
   private static readonly TYPING_THROTTLE_TTL_MS = 30_000;
   private static readonly TYPING_THROTTLE_CLEANUP_SIZE = 1_000;
-  private static readonly IDENTITY_CACHE_MAX_SIZE = 5_000;
   private typingThrottleCleanupTimer: ReturnType<typeof setInterval> | null = null;
   private rateLimiter = getSocketRateLimiter();
 
@@ -69,7 +73,7 @@ export class StatusHandler {
 
   private _evictStale(): void {
     this._evictStaleThrottleEntries();
-    this._evictExpiredIdentities();
+    this.identityCache.evictExpired();
   }
 
   private _evictStaleThrottleEntries(): void {
@@ -77,25 +81,6 @@ export class StatusHandler {
     for (const [k, ts] of this.typingThrottleMap) {
       if (ts < stale) this.typingThrottleMap.delete(k);
     }
-  }
-
-  private _evictExpiredIdentities(): void {
-    const now = Date.now();
-    for (const [k, entry] of this.identityCache) {
-      if (entry.expiresAt <= now) this.identityCache.delete(k);
-    }
-  }
-
-  private _cacheIdentity(cacheKey: string, identity: { username: string; displayName: string }): void {
-    if (this.identityCache.size >= StatusHandler.IDENTITY_CACHE_MAX_SIZE) {
-      this._evictExpiredIdentities();
-      // Still at cap after removing expired entries → evict oldest (FIFO bound).
-      if (this.identityCache.size >= StatusHandler.IDENTITY_CACHE_MAX_SIZE) {
-        const firstKey = this.identityCache.keys().next().value;
-        if (firstKey !== undefined) this.identityCache.delete(firstKey);
-      }
-    }
-    this.identityCache.set(cacheKey, { ...identity, expiresAt: Date.now() + IDENTITY_CACHE_TTL_MS });
   }
 
   invalidateIdentityCache(userId: string): void {
@@ -186,7 +171,7 @@ export class StatusHandler {
     }
     const cacheKey = `user:${userId}`;
     const cached = this.identityCache.get(cacheKey);
-    const identity = cached && cached.expiresAt > Date.now()
+    const identity = cached
       ? { username: cached.username, displayName: cached.displayName }
       : null;
     return { conversationIds, identity };
@@ -332,7 +317,7 @@ export class StatusHandler {
   ): Promise<{ username: string; displayName: string } | null> {
     const cacheKey = `${isAnonymous ? 'anon' : 'user'}:${userId}`;
     const cached = this.identityCache.get(cacheKey);
-    if (cached && cached.expiresAt > Date.now()) {
+    if (cached) {
       return { username: cached.username, displayName: cached.displayName };
     }
 
@@ -354,7 +339,7 @@ export class StatusHandler {
 
       const displayName = participant.nickname || participant.displayName;
       const identity = { username: displayName, displayName };
-      this._cacheIdentity(cacheKey, identity);
+      this.identityCache.set(cacheKey, identity);
       return identity;
     } else {
       const dbUser = await this.prisma.user.findUnique({
@@ -378,7 +363,7 @@ export class StatusHandler {
         `${dbUser.firstName || ''} ${dbUser.lastName || ''}`.trim() ||
         dbUser.username;
       const identity = { username: dbUser.username, displayName };
-      this._cacheIdentity(cacheKey, identity);
+      this.identityCache.set(cacheKey, identity);
       return identity;
     }
   }
