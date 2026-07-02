@@ -132,9 +132,12 @@ private fun statusLabel(state: CallUiState): String = when (state.status) {
     CallStatus.INCOMING -> stringResource(R.string.call_status_incoming)
     CallStatus.OUTGOING_RINGING -> stringResource(R.string.call_status_ringing)
     CallStatus.CONNECTING -> stringResource(R.string.call_status_connecting)
-    CallStatus.CONNECTED -> stringResource(R.string.call_status_connected)
+    CallStatus.CONNECTED -> state.durationLabel ?: stringResource(R.string.call_status_connected)
     CallStatus.RECONNECTING -> stringResource(R.string.call_status_reconnecting, state.reconnectAttempt)
-    CallStatus.ENDED -> endedLabel(state.endReason)
+    CallStatus.ENDED -> {
+        val base = endedLabel(state.endReason)
+        state.durationLabel?.let { "$base · $it" } ?: base
+    }
 }
 
 @Composable

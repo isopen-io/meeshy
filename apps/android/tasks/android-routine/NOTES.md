@@ -775,3 +775,16 @@ Append-only log of gotchas and decisions that save time next run.
   `onNewIntent`, not a fresh `onCreate`). `MeeshyApp` navigates from a `LaunchedEffect(route, isAuth)` — gate
   on `isAuthenticated` so a not-yet-logged-in cold launch defers the route across the login gate — then a
   `onLaunchRouteConsumed` callback nulls the state so a recomposition never re-navigates.
+- **⚠ A self-rescheduling `while(true){ delay }` loop in `viewModelScope` HANGS `runTest`.**
+  `call-duration-timer` first shipped the 1-Hz timer as `viewModelScope.launch { while (isActive) {
+  delay(1000); elapsed++ } }`. Any existing test that merely *reached* the connected phase then spun a
+  gradle worker at 100% CPU forever: `runTest`'s end-of-test `advanceUntilIdle()` chases the infinite
+  chain of virtual-time-scheduled `delay` continuations and never idles (the ticker always has one more
+  task queued). A `SharedFlow.collect` that just *suspends* (like `signalManager.events`) is fine — it
+  schedules no timed task — which is why only the `delay`-loop version hung. **Fix / pattern:** inject the
+  tick source as a `Flow<Unit>` seam (`CallSecondsTicker` interface + `@Binds RealCallSecondsTicker`, whose
+  prod impl is the `flow { while(true){ delay(1000); emit(Unit) } }`), and collect it in the VM. Tests pass
+  a fake backed by a `MutableSharedFlow<Unit>` and drive the clock with plain `emit(Unit)` calls — fully
+  deterministic, no `advanceTimeBy`, no wall-clock, and impossible to hang because the fake schedules no
+  timed work. Same grain as every other "push the decision out of the untestable primitive" lesson: the
+  ticker is the primitive, the elapsed-count logic is what we test.

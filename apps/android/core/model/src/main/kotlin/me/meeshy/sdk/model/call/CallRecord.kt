@@ -119,13 +119,7 @@ data class CallRecord(
 
     /** `"M:SS"` (or `"H:MM:SS"` past an hour). Empty for a zero-duration call. */
     val durationLabel: String
-        get() {
-            if (durationSec <= 0) return ""
-            val h = durationSec / 3600
-            val m = (durationSec % 3600) / 60
-            val s = durationSec % 60
-            return if (h > 0) "$h:${pad2(m)}:${pad2(s)}" else "$m:${pad2(s)}"
-        }
+        get() = if (durationSec <= 0) "" else CallDuration.clock(durationSec.toLong())
 
     /**
      * Total data transferred, human-readable (e.g. `"1.2 MB"`); `null` when no
@@ -143,8 +137,6 @@ data class CallRecord(
 
 private const val FALLBACK_NAME = "Inconnu"
 private val BYTE_UNITS = listOf("KB", "MB", "GB", "TB")
-
-private fun pad2(value: Int): String = value.toString().padStart(2, '0')
 
 private fun formatBytes(total: Int): String {
     if (total < 1024) return "$total B"

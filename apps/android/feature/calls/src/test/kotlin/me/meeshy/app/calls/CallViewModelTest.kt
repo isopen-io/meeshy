@@ -8,6 +8,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -29,6 +30,12 @@ class CallViewModelTest {
     private val events = MutableSharedFlow<CallEvent>(extraBufferCapacity = 64)
     private val signalManager: CallSignalManager = mockk(relaxed = true)
 
+    /** Test-driven 1-Hz clock: emit a `Unit` per second the timer should advance. */
+    private val tickerFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 64)
+    private val ticker = object : CallSecondsTicker {
+        override val seconds: Flow<Unit> = tickerFlow
+    }
+
     private val outgoingVideo =
         CallConfig(peerId = "u1", peerName = "Alice", isVideo = true, isOutgoing = true, conversationId = "conv-1")
     private val incomingAudio =
@@ -47,7 +54,7 @@ class CallViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun vm() = CallViewModel(signalManager)
+    private fun vm() = CallViewModel(signalManager, ticker)
 
     @Test
     fun `starts idle`() {
@@ -346,5 +353,93 @@ class CallViewModelTest {
         events.emit(CallEvent.MediaConnected)
 
         assertThat(vm.state.value.status).isEqualTo(CallStatus.CONNECTED)
+    }
+
+    // --- in-call duration timer --------------------------------------------
+
+    /** Drive [incomingAudio] all the way to a connected call (`callId` already known). */
+    private fun CallViewModel.connect(): CallViewModel = apply {
+        start(incomingAudio)
+        accept()
+        onSignal(CallEvent.MediaConnected)
+    }
+
+    /** Fire [times] one-second ticks; each is delivered to the connected timer collector. */
+    private suspend fun tick(times: Int) = repeat(times) { tickerFlow.emit(Unit) }
+
+    @Test
+    fun `no duration is shown before the call connects`() {
+        val vm = vm()
+        vm.start(outgoingVideo)
+        assertThat(vm.state.value.durationLabel).isNull()
+
+        vm.onSignal(CallEvent.ParticipantJoined)
+        vm.onSignal(CallEvent.RemoteAnswer)
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.CONNECTING)
+        assertThat(vm.state.value.durationLabel).isNull()
+    }
+
+    @Test
+    fun `the timer reads 0 00 the instant the call connects`() {
+        val vm = vm().connect()
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.CONNECTED)
+        assertThat(vm.state.value.durationLabel).isEqualTo("0:00")
+    }
+
+    @Test
+    fun `the timer ticks up once per second while connected`() = runTest {
+        val vm = vm().connect()
+
+        tick(3)
+
+        assertThat(vm.state.value.durationLabel).isEqualTo("0:03")
+    }
+
+    @Test
+    fun `the timer keeps counting through a reconnect`() = runTest {
+        val vm = vm().connect()
+        tick(2)
+        assertThat(vm.state.value.durationLabel).isEqualTo("0:02")
+
+        vm.onSignal(CallEvent.ConnectionStalled)
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.RECONNECTING)
+
+        tick(2)
+        assertThat(vm.state.value.durationLabel).isEqualTo("0:04")
+    }
+
+    @Test
+    fun `ending freezes the final length and stops the timer`() = runTest {
+        val vm = vm().connect()
+        tick(2)
+
+        vm.onSignal(CallEvent.RemoteHangUp)
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.ENDED)
+        assertThat(vm.state.value.durationLabel).isEqualTo("0:02")
+
+        tick(5)
+        assertThat(vm.state.value.durationLabel).isEqualTo("0:02")
+    }
+
+    @Test
+    fun `a call that never connected shows no final duration`() {
+        val vm = vm()
+        vm.start(incomingAudio)
+        vm.decline()
+
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.ENDED)
+        assertThat(vm.state.value.durationLabel).isNull()
+    }
+
+    @Test
+    fun `starting a new call resets the duration to zero`() = runTest {
+        val first = vm().connect()
+        tick(3)
+        first.hangUp()
+        first.dismiss()
+        assertThat(first.state.value.status).isEqualTo(CallStatus.IDLE)
+
+        first.connect()
+        assertThat(first.state.value.durationLabel).isEqualTo("0:00")
     }
 }

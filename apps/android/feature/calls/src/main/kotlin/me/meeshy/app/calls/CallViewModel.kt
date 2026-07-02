@@ -3,6 +3,7 @@ package me.meeshy.app.calls
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,6 +37,7 @@ import javax.inject.Inject
 @HiltViewModel
 class CallViewModel @Inject constructor(
     private val signalManager: CallSignalManager,
+    private val ticker: CallSecondsTicker,
 ) : ViewModel() {
 
     private var config: CallConfig = CallConfig.EMPTY
@@ -45,7 +47,13 @@ class CallViewModel @Inject constructor(
     /** The id every outbound emit is keyed by: from the incoming config, or minted by [start]. */
     private var callId: String = ""
 
-    private val _state = MutableStateFlow(CallPresenter.present(callState, config, media))
+    /** Seconds of connected media, ticked once the call reaches [CallState.Connected]. */
+    private var elapsedSeconds: Long = 0L
+
+    /** The 1-Hz timer job; alive only while media is (or was) flowing this call. */
+    private var tickerJob: Job? = null
+
+    private val _state = MutableStateFlow(CallPresenter.present(callState, config, media, elapsedSeconds))
     val state: StateFlow<CallUiState> = _state.asStateFlow()
 
     init {
@@ -66,6 +74,8 @@ class CallViewModel @Inject constructor(
         this.config = config
         this.media = CallMedia(isCameraOn = config.isVideo)
         this.callId = config.callId
+        this.elapsedSeconds = 0L
+        stopTicker()
         if (config.isOutgoing) startOutgoing(config) else dispatch(CallEvent.ReceiveIncoming)
     }
 
@@ -131,11 +141,37 @@ class CallViewModel @Inject constructor(
 
     private fun dispatch(event: CallEvent) {
         callState = CallStateMachine.reduce(callState, event)
+        syncTicker()
         publish()
     }
 
+    /**
+     * Runs the 1-Hz timer exactly while media is (or is being re-)established
+     * ([CallState.Connected]/[CallState.Reconnecting]) and stops it on any other
+     * phase — so the elapsed count freezes at the call's final length once ended.
+     */
+    private fun syncTicker() {
+        val clockRunning = callState is CallState.Connected || callState is CallState.Reconnecting
+        if (clockRunning) startTickerIfNeeded() else stopTicker()
+    }
+
+    private fun startTickerIfNeeded() {
+        if (tickerJob != null) return
+        tickerJob = viewModelScope.launch {
+            ticker.seconds.collect {
+                elapsedSeconds += 1
+                publish()
+            }
+        }
+    }
+
+    private fun stopTicker() {
+        tickerJob?.cancel()
+        tickerJob = null
+    }
+
     private fun publish() {
-        _state.value = CallPresenter.present(callState, config, media)
+        _state.value = CallPresenter.present(callState, config, media, elapsedSeconds)
     }
 
     private companion object {

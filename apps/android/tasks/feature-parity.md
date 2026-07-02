@@ -822,6 +822,14 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       reconnect attempt). A minimal accent-coherent Compose call screen renders ringing/connecting/
       connected/ended and is reachable from **audio/video call buttons in the chat header** (iOS parity);
       dismissal returns to chat. +34 behavioural tests. WebRTC/signalling plumbing still pending.
+      **Live in-call duration timer landed** (slice `call-duration-timer`): a pure `CallDuration.clock(
+      seconds)` in `:core:model` is now the SSOT for call-length formatting (`M:SS` / `H:MM:SS`, `"0:00"`
+      at zero), reused by `CallRecord.durationLabel`; `CallViewModel` runs a 1-Hz timer (injected
+      `CallSecondsTicker` flow seam) exactly while connected/reconnecting, and `CallPresenter` derives a
+      `CallUiState.durationLabel` — `"0:00"` the instant media connects, ticking up through a reconnect,
+      frozen at the final length on the ended screen, and `null` for a call that never connected. The
+      connected screen renders the running clock; the ended screen appends the final length. +18
+      behavioural tests (6 formatter, 5 presenter, 7 VM).
 - [ ] Live in-call transcription overlay (on-device speech-to-text, leader/follower)
 - [ ] In-call translation data channel (dual-stream clean audio)
 - [ ] In-call video filters (colour presets, low-light boost, background blur, skin smoothing)
