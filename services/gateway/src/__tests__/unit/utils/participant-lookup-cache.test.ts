@@ -118,4 +118,72 @@ describe('participant-lookup-cache', () => {
       expect(getCachedParticipant(PARTICIPANT_ID, CONVERSATION_ID)).toBeUndefined();
     });
   });
+
+  describe('memory bound (FIFO eviction)', () => {
+    it('test_cacheParticipant_atCapacity_evictsOldestEntry', () => {
+      const mod = loadFreshModule();
+      const { getCachedParticipant, cacheParticipant, PARTICIPANT_LOOKUP_CACHE_MAX } = mod;
+
+      const makeParticipant = (i: number) => ({
+        id: `p${i}`,
+        conversationId: `c${i}`,
+        isActive: true
+      });
+
+      cacheParticipant('p0', 'c0', makeParticipant(0));
+      for (let i = 1; i < PARTICIPANT_LOOKUP_CACHE_MAX; i++) {
+        cacheParticipant(`p${i}`, `c${i}`, makeParticipant(i));
+      }
+
+      expect(getCachedParticipant('p0', 'c0')).toEqual(makeParticipant(0));
+
+      cacheParticipant('pNew', 'cNew', makeParticipant(-1));
+
+      expect(getCachedParticipant('p0', 'c0')).toBeUndefined();
+      expect(getCachedParticipant('pNew', 'cNew')).toEqual(makeParticipant(-1));
+      expect(getCachedParticipant('p1', 'c1')).toEqual(makeParticipant(1));
+    });
+
+    it('test_cacheParticipant_atCapacity_prefersEvictingExpiredEntries', () => {
+      jest.useFakeTimers();
+      const mod = loadFreshModule();
+      const { getCachedParticipant, cacheParticipant, PARTICIPANT_LOOKUP_CACHE_MAX } = mod;
+
+      const makeParticipant = (i: number) => ({
+        id: `p${i}`,
+        conversationId: `c${i}`,
+        isActive: true
+      });
+
+      for (let i = 0; i < PARTICIPANT_LOOKUP_CACHE_MAX; i++) {
+        cacheParticipant(`p${i}`, `c${i}`, makeParticipant(i));
+      }
+
+      jest.advanceTimersByTime(30_001);
+
+      cacheParticipant('pFresh', 'cFresh', makeParticipant(-1));
+
+      expect(getCachedParticipant('pFresh', 'cFresh')).toEqual(makeParticipant(-1));
+    });
+
+    it('test_cacheParticipant_refreshingExistingKey_doesNotEvict', () => {
+      const mod = loadFreshModule();
+      const { getCachedParticipant, cacheParticipant, PARTICIPANT_LOOKUP_CACHE_MAX } = mod;
+
+      const makeParticipant = (i: number) => ({
+        id: `p${i}`,
+        conversationId: `c${i}`,
+        isActive: true
+      });
+
+      for (let i = 0; i < PARTICIPANT_LOOKUP_CACHE_MAX; i++) {
+        cacheParticipant(`p${i}`, `c${i}`, makeParticipant(i));
+      }
+
+      cacheParticipant('p0', 'c0', { ...makeParticipant(0), isActive: false });
+
+      expect(getCachedParticipant('p0', 'c0')).toEqual({ ...makeParticipant(0), isActive: false });
+      expect(getCachedParticipant('p1', 'c1')).toEqual(makeParticipant(1));
+    });
+  });
 });
