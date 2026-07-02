@@ -76,7 +76,6 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 // ---------------------------------------------------------------------------
 
 const VALID_CALL_ID = '507f1f77bcf86cd799439011';
-const VALID_CONV_ID = '507f1f77bcf86cd799439012';
 const SPEAKER_ID = 'user-speaker-abc';
 
 const VALID_SEGMENT = {
@@ -110,8 +109,20 @@ function makePrisma(overrides: {
   } as unknown as PrismaClient;
 }
 
-function activeCallSession(userId: string, participantId = 'participant-1') {
-  return { participants: [{ participantId, leftAt: null, participant: { userId } }] };
+// Authorization now runs through resolveActiveCallParticipantId →
+// callService.getCallSession(callId) (the membership-bypass fix), NOT the old
+// prisma.participant.findFirst path. Tests inject a CallService whose
+// getCallSession reports whether the sender is an ACTIVE participant of THIS call.
+const ACTIVE_CALL_SESSION = {
+  participants: [
+    { participantId: 'participant-1', participant: { userId: SPEAKER_ID }, leftAt: null },
+  ],
+};
+
+function makeCallService(
+  getCallSession: jest.MockedFunction<any> = jest.fn<any>().mockResolvedValue(ACTIVE_CALL_SESSION)
+) {
+  return { getCallSession } as unknown as import('../../../services/CallService').CallService;
 }
 
 function makeSocket() {
@@ -152,11 +163,10 @@ describe('CallEventsHandler — call:transcription-segment relay', () => {
       mockGetCallSession.mockResolvedValue(activeCallSession(SPEAKER_ID));
       const prisma = makePrisma({
         callSessionFindUnique: jest.fn<any>().mockResolvedValue({ status: 'active', metadata: null }),
-        participantFindFirst: jest.fn<any>().mockResolvedValue({ id: 'participant-1' }),
       });
       const { socket, handlers, roomEmit } = makeSocket();
 
-      const handler = new CallEventsHandler(prisma);
+      const handler = new CallEventsHandler(prisma, makeCallService());
       handler.setupCallEvents(socket as any, {} as any, () => SPEAKER_ID);
 
       await handlers[CALL_EVENTS.TRANSCRIPTION_SEGMENT](VALID_SEGMENT);
@@ -187,17 +197,16 @@ describe('CallEventsHandler — call:transcription-segment relay', () => {
     let directEmit: jest.MockedFunction<any>;
 
     beforeEach(async () => {
-      mockGetCallSession.mockResolvedValue(activeCallSession(SPEAKER_ID));
+      // Authorization resolves via callService.getCallSession (active participant);
+      // the single prisma.callSession.findUnique reports call status + metadata.
       const prisma = makePrisma({
-        // Status + metadata check (authorization no longer consults prisma)
         callSessionFindUnique: jest.fn<any>().mockResolvedValue({ status: 'active', metadata: null }),
-        participantFindFirst: jest.fn<any>().mockResolvedValue({ id: 'participant-1' }),
       });
       const { socket, handlers, roomEmit: r, directEmit: d } = makeSocket();
       roomEmit = r;
       directEmit = d;
 
-      const handler = new CallEventsHandler(prisma);
+      const handler = new CallEventsHandler(prisma, makeCallService());
       handler.setupCallEvents(socket as any, {} as any, () => SPEAKER_ID);
 
       await handlers[CALL_EVENTS.TRANSCRIPTION_SEGMENT](VALID_SEGMENT);
@@ -242,17 +251,17 @@ describe('CallEventsHandler — call:transcription-segment relay', () => {
     let directEmit: jest.MockedFunction<any>;
 
     beforeEach(async () => {
-      // mockGetCallSession defaults (see top-level beforeEach) to a session
-      // with no active participants → resolveActiveCallParticipantId returns null.
-      const prisma = makePrisma({
-        callSessionFindUnique: jest.fn<any>().mockResolvedValue(null),
-        participantFindFirst: jest.fn<any>().mockResolvedValue(null),
-      });
+      // Sender is not an active participant of this call: getCallSession has no
+      // matching active participant → resolveActiveCallParticipantId returns null.
+      const prisma = makePrisma();
       const { socket, handlers, roomEmit: r, directEmit: d } = makeSocket();
       roomEmit = r;
       directEmit = d;
 
-      const handler = new CallEventsHandler(prisma);
+      const callService = makeCallService(
+        jest.fn<any>().mockResolvedValue({ participants: [] })
+      );
+      const handler = new CallEventsHandler(prisma, callService);
       handler.setupCallEvents(socket as any, {} as any, () => SPEAKER_ID);
 
       await handlers[CALL_EVENTS.TRANSCRIPTION_SEGMENT](VALID_SEGMENT);
@@ -275,17 +284,16 @@ describe('CallEventsHandler — call:transcription-segment relay', () => {
     let directEmit: jest.MockedFunction<any>;
 
     beforeEach(async () => {
-      mockGetCallSession.mockResolvedValue(activeCallSession(SPEAKER_ID));
+      // Sender IS an active participant, but the call has ended → the handler
+      // reaches the status check and silently drops the segment (no relay, no error).
       const prisma = makePrisma({
-        // status check: call is ended
         callSessionFindUnique: jest.fn<any>().mockResolvedValue({ status: 'ended', metadata: null }),
-        participantFindFirst: jest.fn<any>().mockResolvedValue({ id: 'participant-1' }),
       });
       const { socket, handlers, roomEmit: r, directEmit: d } = makeSocket();
       roomEmit = r;
       directEmit = d;
 
-      const handler = new CallEventsHandler(prisma);
+      const handler = new CallEventsHandler(prisma, makeCallService());
       handler.setupCallEvents(socket as any, {} as any, () => SPEAKER_ID);
 
       await handlers[CALL_EVENTS.TRANSCRIPTION_SEGMENT](VALID_SEGMENT);
