@@ -681,6 +681,7 @@ export class MessageHandler {
           conversation: {
             select: {
               createdAt: true,
+              lastMessageAt: true,
               participants: {
                 where: { userId, isActive: true },
                 select: { role: true },
@@ -729,14 +730,22 @@ export class MessageHandler {
         data: { translations: null, deletedAt: new Date() },
       });
 
-      // Update conversation's lastMessageAt to the latest non-deleted message
+      // Recompute conversation's lastMessageAt to the latest non-deleted message.
+      // Optimistic-concurrency guard: only write while lastMessageAt is still the
+      // value read at handler start. A `message:new` committing between the read
+      // and this write advances lastMessageAt; the guard then mismatches (0 rows
+      // updated) so the cursor never regresses backward onto the deleted message
+      // and mis-sorts the conversation list.
       const lastNonDeleted = await this.prisma.message.findFirst({
         where: { conversationId: message.conversationId, deletedAt: null },
         orderBy: { createdAt: 'desc' },
         select: { createdAt: true },
       });
-      await this.prisma.conversation.update({
-        where: { id: message.conversationId },
+      await this.prisma.conversation.updateMany({
+        where: {
+          id: message.conversationId,
+          lastMessageAt: message.conversation.lastMessageAt,
+        },
         data: {
           lastMessageAt: lastNonDeleted?.createdAt ?? message.conversation.createdAt,
         },

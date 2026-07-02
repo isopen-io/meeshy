@@ -3530,6 +3530,7 @@ describe('MessageHandler.handleMessageDelete', () => {
       sender: { id: 'participant-1', userId: 'user-1' },
       conversation: {
         createdAt: new Date('2025-01-01'),
+        lastMessageAt: new Date('2026-02-01'),
         participants: [{ role: 'member' }],
       },
       attachments: [],
@@ -3610,7 +3611,7 @@ describe('MessageHandler.handleMessageDelete', () => {
         update: jest.fn(async () => ({})),
         findUnique: jest.fn(async () => null),
       },
-      conversation: { update: jest.fn(async () => ({})) },
+      conversation: { updateMany: jest.fn(async () => ({ count: 1 })) },
     });
     const io = makeMockIo();
     const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma, io });
@@ -3641,7 +3642,7 @@ describe('MessageHandler.handleMessageDelete', () => {
         findFirst: jest.fn(async () => message),
         update: jest.fn(async () => ({})),
       },
-      conversation: { update: jest.fn(async () => ({})) },
+      conversation: { updateMany: jest.fn(async () => ({ count: 1 })) },
     });
     const io = makeMockIo();
     const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma, io });
@@ -3664,7 +3665,7 @@ describe('MessageHandler.handleMessageDelete', () => {
         update: jest.fn(async () => ({})),
       },
       user: { findUnique: jest.fn(async () => ({ role: 'BIGBOSS' })) },
-      conversation: { update: jest.fn(async () => ({})) },
+      conversation: { updateMany: jest.fn(async () => ({ count: 1 })) },
     });
     const io = makeMockIo();
     const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma, io });
@@ -3688,7 +3689,7 @@ describe('MessageHandler.handleMessageDelete', () => {
         findFirst: jest.fn(async () => message),
         update: jest.fn(async () => ({})),
       },
-      conversation: { update: jest.fn(async () => ({})) },
+      conversation: { updateMany: jest.fn(async () => ({ count: 1 })) },
     });
     const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma, attachmentService: attachmentService as any });
     await handler.handleMessageDelete(socket, makeDeleteData(), callback);
@@ -3698,7 +3699,7 @@ describe('MessageHandler.handleMessageDelete', () => {
     expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
   });
 
-  it('updates conversation lastMessageAt after deletion', async () => {
+  it('recomputes conversation lastMessageAt after deletion, guarded against cursor regression', async () => {
     mockValidateSocketEvent.mockReturnValue({ success: true, data: makeDeleteData() });
     const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
     const socket = makeSocket();
@@ -3712,14 +3713,49 @@ describe('MessageHandler.handleMessageDelete', () => {
           .mockResolvedValueOnce({ createdAt: lastMsgDate }),
         update: jest.fn(async () => ({})),
       },
-      conversation: { update: jest.fn(async () => ({})) },
+      conversation: { updateMany: jest.fn(async () => ({ count: 1 })) },
     });
     const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma });
     await handler.handleMessageDelete(socket, makeDeleteData(), callback);
 
-    expect(prisma.conversation.update).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({ lastMessageAt: lastMsgDate }),
-    }));
+    // Optimistic-concurrency guard: the write only lands while lastMessageAt is
+    // still the value read at handler start. A `message:new` committing in the
+    // gap advances lastMessageAt, the guard mismatches (updateMany count 0), and
+    // the cursor never regresses backward onto the just-deleted message.
+    expect(prisma.conversation.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: message.conversationId,
+        lastMessageAt: message.conversation.lastMessageAt,
+      },
+      data: { lastMessageAt: lastMsgDate },
+    });
+  });
+
+  it('falls back to conversation.createdAt when no message remains, still guarded', async () => {
+    mockValidateSocketEvent.mockReturnValue({ success: true, data: makeDeleteData() });
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const socket = makeSocket();
+    const callback = jest.fn();
+    const message = makeMessageForDelete();
+    const prisma = makeMockPrisma({
+      message: {
+        findFirst: jest.fn()
+          .mockResolvedValueOnce(message)
+          .mockResolvedValueOnce(null),
+        update: jest.fn(async () => ({})),
+      },
+      conversation: { updateMany: jest.fn(async () => ({ count: 1 })) },
+    });
+    const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma });
+    await handler.handleMessageDelete(socket, makeDeleteData(), callback);
+
+    expect(prisma.conversation.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: message.conversationId,
+        lastMessageAt: message.conversation.lastMessageAt,
+      },
+      data: { lastMessageAt: message.conversation.createdAt },
+    });
   });
 
   it('handles DB errors gracefully and returns failure to callback', async () => {
@@ -3746,7 +3782,7 @@ describe('MessageHandler.handleMessageDelete', () => {
         findFirst: jest.fn(async () => message),
         update: jest.fn(async () => ({})),
       },
-      conversation: { update: jest.fn(async () => ({})) },
+      conversation: { updateMany: jest.fn(async () => ({ count: 1 })) },
     });
     const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma });
     await expect(handler.handleMessageDelete(socket, makeDeleteData())).resolves.not.toThrow();

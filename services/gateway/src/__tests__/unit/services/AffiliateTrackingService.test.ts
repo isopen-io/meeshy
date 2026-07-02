@@ -235,7 +235,7 @@ describe('AffiliateTrackingService.convertAffiliateVisit', () => {
 
     expect(prisma.affiliateToken.update).toHaveBeenCalledWith({
       where: { id: 'tok_001' },
-      data: { currentUses: 1 },
+      data: { currentUses: { increment: 1 } },
     });
 
     expect(prisma.friendRequest.create).toHaveBeenCalledWith({
@@ -245,6 +245,22 @@ describe('AffiliateTrackingService.convertAffiliateVisit', () => {
         status: 'accepted',
       },
     });
+  });
+
+  it('increments the counter atomically, never via a read-then-write value', async () => {
+    // Regression guard for the lost-update race: two concurrent conversions on
+    // the same token both read currentUses=N and would each write N+1 with a
+    // JS-computed value, losing one increment. Delegating to Prisma's atomic
+    // `{ increment: 1 }` lets MongoDB serialize both, so neither is lost.
+    const prisma = makePrisma({
+      affiliateToken: { findUnique: jest.fn().mockResolvedValue(makeToken({ currentUses: 7 })) },
+    });
+    await AffiliateTrackingService.convertAffiliateVisit(prisma, token, userId);
+
+    const updateCall = prisma.affiliateToken.update.mock.calls[0][0];
+    expect(updateCall.data.currentUses).toEqual({ increment: 1 });
+    // Must NOT pass a pre-computed number (which is what loses updates).
+    expect(typeof updateCall.data.currentUses).not.toBe('number');
   });
 
   it('ignores friendRequest creation errors (already exists)', async () => {
