@@ -2216,6 +2216,10 @@ final class CallManagerHardeningTests: XCTestCase {
     /// scheduleTURNCredentialRefresh must clamp TTL to at least
     /// turnMinRefreshDelaySeconds so a malformed TTL=0 from the gateway never
     /// schedules an immediate refresh that would hammer the signalling server.
+    /// The clamp lives in CallReliabilityPolicy.turnRefreshDelay (which defaults
+    /// its floor to turnMinRefreshDelaySeconds and is behaviour-tested in
+    /// TurnRefreshDelayPolicyTests) — here we guard that the scheduler wires
+    /// through it instead of computing a raw delay.
     func test_scheduleTURNCredentialRefresh_clampsZeroTTL() throws {
         let source = try callManagerSource()
         guard let methodRange = source.range(of: "func scheduleTURNCredentialRefresh(ttl:") else {
@@ -2226,10 +2230,11 @@ final class CallManagerHardeningTests: XCTestCase {
         }
         let body = String(source[methodRange.upperBound..<closingBrace.lowerBound])
         XCTAssertTrue(
-            body.contains("turnMinRefreshDelaySeconds"),
-            "scheduleTURNCredentialRefresh must clamp via QualityThresholds.turnMinRefreshDelaySeconds " +
-            "— a TTL=0 response would otherwise schedule a 0-second refresh that fires " +
-            "immediately on every credential event, hammering the gateway")
+            body.contains("CallReliabilityPolicy.turnRefreshDelay"),
+            "scheduleTURNCredentialRefresh must compute its delay via " +
+            "CallReliabilityPolicy.turnRefreshDelay — a TTL=0 response would otherwise " +
+            "schedule a 0-second refresh that fires immediately on every credential " +
+            "event, hammering the gateway")
     }
 
     /// QualityThresholds must declare turnMinRefreshDelaySeconds so the TURN
@@ -2819,10 +2824,15 @@ final class CallManagerForegroundRestoreHoldGuardTests: XCTestCase {
 
 // MARK: - Reliability monitor half-open re-arm after reconnect
 
-/// Guards the invariant that `halfOpenSettled` is reset when the call
-/// enters `.reconnecting`. Without the reset, an ICE restart that produces
-/// an asymmetric path (outbound OK, inbound silent) skips the half-open
-/// health check and stays `.connected` with no incoming audio/video.
+/// Guards the invariant that half-open detection re-arms after every
+/// (re)connect. Since the HalfOpenMonitorState refactor the re-arm is driven
+/// by `connectionEpoch` (bumped in `transitionToConnected`) instead of a
+/// loop-local `halfOpenSettled` bool — the old mechanism was only reset when
+/// the poll loop *observed* `.reconnecting`, so a reconnection completing
+/// between two 2s ticks froze self-heal for the rest of the call, and its
+/// cumulative-counter comparison masked post-restart half-opens anyway.
+/// The delta/epoch behaviour itself is unit-tested in HalfOpenMonitorStateTests;
+/// here we guard the CallManager wiring.
 @MainActor
 final class CallManagerHalfOpenReArmTests: XCTestCase {
 
@@ -2836,27 +2846,36 @@ final class CallManagerHalfOpenReArmTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    func test_reliabilityMonitor_reconnectingBranch_resetsHalfOpenSettled() throws {
+    func test_transitionToConnected_bumpsConnectionEpoch() throws {
         let source = try callManagerSource()
+        guard let fnRange = source.range(of: "private func transitionToConnected()") else {
+            XCTFail("transitionToConnected not found"); return
+        }
+        let fnBody = String(source[fnRange.upperBound...].prefix(4000))
+        XCTAssertTrue(
+            fnBody.contains("connectionEpoch += 1"),
+            "transitionToConnected must bump connectionEpoch — it is the signal that " +
+            "re-arms half-open detection with a fresh RTP baseline after every " +
+            "(re)connect, even when the reconnection completed between two poll ticks."
+        )
+    }
 
-        // Locate the `.reconnecting` branch inside `startReliabilityMonitor`.
+    func test_reliabilityMonitor_connectedBranch_evaluatesViaEpochMonitor() throws {
+        let source = try callManagerSource()
         guard let monitorRange = source.range(of: "private func startReliabilityMonitor()") else {
             XCTFail("startReliabilityMonitor not found"); return
         }
-        // The reconnecting branch is a `case .reconnecting` inside the monitor body.
-        let monitorBody = String(source[monitorRange.upperBound...])
-        guard let reconnectingRange = monitorBody.range(of: "case .reconnecting(let attempt):") else {
-            XCTFail(".reconnecting case not found inside startReliabilityMonitor"); return
-        }
-        // Capture enough of the branch body to see the reset.
-        let branchBody = String(monitorBody[reconnectingRange.upperBound...].prefix(600))
-
+        let monitorBody = String(source[monitorRange.upperBound...].prefix(6000))
         XCTAssertTrue(
-            branchBody.contains("halfOpenSettled = false"),
-            ".reconnecting branch must reset halfOpenSettled = false so the " +
-            "half-open health check re-runs after each ICE restart reconnect. " +
-            "Without this, a post-reconnect asymmetric path (outbound OK, inbound " +
-            "silent) would bypass detection and stay .connected indefinitely."
+            monitorBody.contains("halfOpenMonitor.evaluate("),
+            ".connected branch must evaluate half-open via HalfOpenMonitorState — " +
+            "a raw evaluateHalfOpen call on cumulative counters would instantly " +
+            "report .healthy after an ICE restart from pre-restart traffic."
+        )
+        XCTAssertTrue(
+            monitorBody.contains("epoch: self.connectionEpoch"),
+            "HalfOpenMonitorState must be keyed off self.connectionEpoch so a " +
+            "reconnect that completes between two poll ticks still re-arms detection."
         )
     }
 }
@@ -2932,11 +2951,13 @@ final class CallManagerICERestartStaleOfferTests: XCTestCase {
     /// `.reconnecting(attempt:)` with the same attempt number, not merely that the
     /// call `isActive`. Sending a restart offer on an already-connected peer
     /// connection resets ICE to gathering and breaks the live media path.
+    /// (The Task body lives in `scheduleICERestart` since the trigger-arbitration
+    /// refactor — `attemptReconnection` delegates to it.)
     func test_iceRestartTask_afterBackoffSleep_guardsOnReconnectingState() throws {
         let source = try callManagerSource()
 
-        guard let fnRange = source.range(of: "private func attemptReconnection()") else {
-            XCTFail("attemptReconnection() not found"); return
+        guard let fnRange = source.range(of: "private func scheduleICERestart(") else {
+            XCTFail("scheduleICERestart() not found"); return
         }
         let fnBody = String(source[fnRange.upperBound...].prefix(1500))
 
