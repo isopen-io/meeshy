@@ -603,3 +603,65 @@ périmés du backlog) avant tout fix.
   `updateCallStatus`/`leaveCall`/`joinCall` (leçon #42/#45 : drift de patterns siblings). 2 tests TDD
   ajoutés (missed→pas réécrit, rejected→pas réécrit, assertion `$transaction` jamais appelé). Suite
   complète : 23/23 suites call (709/709 tests), `CallService.test.ts` 150/150.
+
+### Session 2026-07-02 (routine calling-feature, gateway-only) — micro-fix "item F" implémenté
+Point d'entrée : reprise du micro-fix candidat documenté dans la 7e vague ci-dessus mais jamais
+appliqué ("avec la FSM ringing, le join ne devrait plus clear ce timer"). Lecture attentive du code
+réel a confirmé le bug : `CallEventsHandler.ts` `call:join` avait un bloc `finally` qui appelait
+`clearRingingTimeout(data.callId)` **inconditionnellement**, sur succès ET échec. Or depuis le
+passage à la FSM `initiated → ringing → active` (item F, session précédente), `joinCall()` transitionne
+un appel `initiated`/`ringing` vers `ringing` — PAS `active` — car le callee early-join la room dès que
+ça sonne (nécessaire pour recevoir l'offer SDP), bien avant que l'utilisateur tape "répondre". Le vrai
+answer passe par `call:signal` type `answer`, qui clear déjà le timer à la bonne ligne. Conséquence du
+bug : chaque early-join (y compris le re-join après une réhydratation de timer au boot, cf. item H)
+tuait silencieusement la protection anti-sonnerie-infinie de 60s — un appel jamais réellement décroché
+aurait sonné jusqu'au tier GC heartbeat bien plus grossier (120s) au lieu du timeout dédié. Un échec de
+`joinCall` (ex. 3e participant sur un appel P2P déjà plein) clearait aussi à tort le timer légitime des
+2 vrais participants. Fix : suppression du `clearRingingTimeout` du bloc `finally` — le nettoyage reste
+couvert par (1) `call:signal` type `answer` (déjà en place), (2) les 5 chemins terminaux déjà appairés
+par l'item I, (3) le callback de timeout lui-même est status-guardé (`updateMany` atomique scopé à
+`[initiated, ringing]`, no-op si déjà `active`/terminal) — donc laisser le timer armé à travers un join
+est sûr même dans le cas nominal. Test existant `call:join additional branches > emits error and clears
+ringing on joinCall failure` renommé + assertion inversée (`not.toHaveBeenCalled()`), + nouveau test
+`item F regression: does NOT clear the ringing timeout on a successful early-join while the call is
+still ringing`. Suite `CallEventsHandler.test.ts` : 201/201 (dont 25 suites/739 tests sur tout le
+périmètre `*[Cc]all*`). `tsc --noEmit` non vérifiable dans cet environnement (client Prisma non généré,
+même limitation réseau que les sessions précédentes — aucune erreur nouvelle imputable à ce diff, le
+seul fichier modifié hors tests n'introduit aucune construction TS nouvelle). Suite gateway complète
+re-vérifiée après le fix : 492/492 suites, 13491/13492 tests (1 skip pré-existant).
+
+### Session 2026-07-02 (routine calling-feature) — bug web CONFIRMÉ : offre dupliquée en course sur reconnect
+Point d'entrée : agent d'exploration dédié (lecture seule, cross-checké contre ce fichier pour éviter un
+faux positif déjà classé) a trouvé un bug réel côté web jamais documenté ici. Vérifié à la main avant fix
+(lecture `use-webrtc-p2p.ts` + `webrtc-service.ts` en entier sur les chemins concernés).
+
+- **[BUG RÉEL, web, CONFIRMÉ]** `apps/web/hooks/use-webrtc-p2p.ts` — le gateway relaie une offer EN DIRECT
+  aux sockets connectés ET la bufferise systématiquement pour un replay au prochain `call:join` du
+  destinataire (`bufferOffer`/`bufferedOfferFor`, résilience reconnect/churn — voir §4.6 plus haut). Le
+  MÊME onglet navigateur peut donc légitimement recevoir la même offer initiale deux fois (live + replay
+  après un blip socket bref). `handleIncomingSignal` décide routing initial-offer vs renégociation via
+  `existingService && isEstablished` — mais ces deux refs (`webrtcServicesRef`, `remoteDescriptionSetRef`)
+  ne sont peuplées qu'après que `handleOffer` ait `await`é `ensureLocalStream()` (potentiellement lent :
+  prompt permission caméra/micro, media pas encore caché). Si la 2e livraison arrive dans cette fenêtre,
+  aucune des deux refs n'est encore posée → `handleOffer` est réinvoqué une 2e fois pour le même pair →
+  les deux continuations appellent `service.createPeerConnection(fromUserId)` sur la MÊME instance
+  `WebRTCService` (clé participantId, pas par offer) → la 2e écrase silencieusement `this.peerConnection`
+  (aucun guard/close-old-first dans `createPeerConnection`, `webrtc-service.ts:316`) → le `createAnswer()`
+  en vol de la 1re continuation lève `InvalidStateError` sur un `pc` qui n'a jamais reçu de remote
+  description → appel qui ne se connecte jamais, `RTCPeerConnection` orpheline jamais fermée. Fix (TDD) :
+  nouveau ref `offerInFlightRef` posé SYNCHRONEMENT (avant le premier `await`, donc avant que
+  `handleIncomingSignal` ne traite un événement suivant — JS single-threaded) au tout début de
+  `handleOffer`, nettoyé en `finally`. `handleIncomingSignal` droppe silencieusement une 2e offer initiale
+  dont le pair a déjà un traitement en vol. Test RED vérifié manuellement (revert temporaire du guard →
+  `createPeerConnection` appelé 2×, test échoue) puis GREEN. `use-webrtc-p2p.test.tsx` : 24/24 (1 nouveau).
+  `webrtc-service.test.ts`+`webrtc-service.coverage.test.ts` : 168/168 inchangé. Suite web complète filtrée
+  `*call*` : 15 suites/212 tests verts. `tsc --noEmit` du fichier touché : aucune erreur (le reste du repo
+  a des erreurs TS préexistantes sans rapport, non touchées par ce diff).
+- **[BUG SECONDAIRE, web, corrigé au passage]** Même fichier : `void existingService.handleRenegotiationOffer(...)`
+  et `void existingService.setRemoteAnswer(...)` (chemin renégociation établie) n'avaient aucun `.catch` —
+  contrairement aux chemins offer/answer initiaux qui `setError`/`toast.error` sur échec. Un rejet devenait
+  une unhandled rejection silencieuse sans retour utilisateur (y compris un rejet déclenché par le bug
+  ci-dessus). Fix : `.catch()` miroir du pattern déjà utilisé ailleurs dans le fichier. A nécessité
+  d'ajouter `mockHandleRenegotiationOffer.mockResolvedValue(undefined)` /
+  `mockSetRemoteAnswer.mockResolvedValue(undefined)` aux mocks du test existant (les mocks `jest.fn()` nus
+  ne retournaient pas de Promise, `.catch` sur `undefined` faisait planter 2 tests préexistants).
