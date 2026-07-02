@@ -132,8 +132,11 @@ struct CallView: View {
                     .transition(.opacity)
             }
 
-            // Effects overlay — accessible dans tous les etats actifs (pas seulement connected)
-            if callManager.callState.isActive && !callManager.callState.isRinging {
+            // Effects overlay — accessible dans tous les etats actifs (pas seulement
+            // connected). Video-only depuis 2026-07-02 : le panneau d'effets vocaux
+            // est retiré (pipeline de capture audio inexistant — voir
+            // CallEffectsOverlay), il ne reste que les filtres vidéo.
+            if callManager.callState.isActive && !callManager.callState.isRinging && callManager.isVideoEnabled {
                 CallEffectsOverlay(
                     isExpanded: $showEffectsToolbar,
                     isVideoEnabled: callManager.isVideoEnabled
@@ -1003,7 +1006,9 @@ struct CallView: View {
     // MARK: - Control Bar
 
     private var hasActiveEffects: Bool {
-        callManager.activeAudioEffect != nil || callManager.videoFilters.config.isEnabled
+        // Voice effects are no longer settable from the UI (dead pipeline,
+        // entry removed) — only video filters light this up.
+        callManager.videoFilters.config.isEnabled
     }
 
     /// §7.3 + iOS 26 Liquid Glass. The buttons are grouped in a
@@ -1074,19 +1079,24 @@ struct CallView: View {
 
             // Effects (Plus button) — label is state-aware so VoiceOver users
             // hear the expected outcome (open vs. close) rather than a static noun.
-            callControlButton(
-                icon: showEffectsToolbar ? "xmark" : "plus",
-                color: hasActiveEffects ? MeeshyColors.indigo500 : .white,
-                bgColor: hasActiveEffects ? MeeshyColors.indigo500 : .white,
-                isActive: showEffectsToolbar || hasActiveEffects,
-                caption: String(localized: "call.control.effects", defaultValue: "Effets", bundle: .main),
-                label: showEffectsToolbar
-                    ? String(localized: "call.control.effects.close", defaultValue: "Fermer les effets", bundle: .main)
-                    : String(localized: "call.control.effects.open", defaultValue: "Ouvrir les effets", bundle: .main),
-                isToggle: true
-            ) {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showEffectsToolbar.toggle()
+            // Video calls only: the overlay now offers video filters exclusively
+            // (voice-effects entry removed — dead pipeline, see CallEffectsOverlay),
+            // so exposing it in an audio call would open an empty panel.
+            if callManager.isVideoEnabled {
+                callControlButton(
+                    icon: showEffectsToolbar ? "xmark" : "plus",
+                    color: hasActiveEffects ? MeeshyColors.indigo500 : .white,
+                    bgColor: hasActiveEffects ? MeeshyColors.indigo500 : .white,
+                    isActive: showEffectsToolbar || hasActiveEffects,
+                    caption: String(localized: "call.control.effects", defaultValue: "Effets", bundle: .main),
+                    label: showEffectsToolbar
+                        ? String(localized: "call.control.effects.close", defaultValue: "Fermer les effets", bundle: .main)
+                        : String(localized: "call.control.effects.open", defaultValue: "Ouvrir les effets", bundle: .main),
+                    isToggle: true
+                ) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showEffectsToolbar.toggle()
+                    }
                 }
             }
 

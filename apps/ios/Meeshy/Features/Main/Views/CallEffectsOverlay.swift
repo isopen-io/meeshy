@@ -4,8 +4,13 @@ import MeeshyUI
 
 // MARK: - Effects Panel Type
 
+// Voice-effects entry (`.audioEffects` / AudioEffectsPanel) removed 2026-07-02:
+// the audio-effects pipeline has no production capture hook —
+// `CallAudioEffectsService.processAudioBuffer` has had zero production callers
+// since the `MeeshyAudioProcessingModule` scaffold was dropped, so the panel
+// silently no-oped: the peer always heard the unmodified voice. Re-add the case
+// and the toolbar button once a real WebRTC capture hook feeds the service.
 enum EffectsPanelType: Equatable {
-    case audioEffects
     case videoFilters
 }
 
@@ -31,8 +36,6 @@ struct CallEffectsOverlay: View {
                         if let panel = activePanel {
                             ScrollView(.vertical, showsIndicators: false) {
                                 switch panel {
-                                case .audioEffects:
-                                    AudioEffectsPanel()
                                 case .videoFilters:
                                     VideoFiltersPanel()
                                 }
@@ -58,13 +61,6 @@ struct CallEffectsOverlay: View {
 
     private var secondaryToolbar: some View {
         HStack(spacing: 20) {
-            toolbarButton(
-                icon: "waveform.path.ecg",
-                label: String(localized: "call.effects.audio", defaultValue: "Effets"),
-                isActive: activePanel == .audioEffects || callManager.activeAudioEffect != nil,
-                panel: .audioEffects
-            )
-
             if isVideoEnabled {
                 toolbarButton(
                     icon: "camera.filters",
