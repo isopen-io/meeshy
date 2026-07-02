@@ -619,6 +619,10 @@ public actor MessagePersistenceActor {
     // ObjectId) and `serverId` (an ObjectId) never collide, so the OR
     // resolves at most one row.
 
+    /// Slack for the `markEdited` ordering guard — see its comment for why a
+    /// strict `<` is unsafe across a GRDB `Date` round-trip.
+    private static let editOrderingTolerance: TimeInterval = 0.05
+
     public func markEdited(localId: String, newContent: String, editedAt: Date) throws {
         var affectedConversationId: String?
         var didApply = false
@@ -631,7 +635,17 @@ public actor MessagePersistenceActor {
             // delayed/duplicate socket delivery can arrive after a newer edit was
             // already applied. Comparing against the stored `editedAt` stops a
             // stale edit from permanently clobbering the current content.
-            if let currentEditedAt = existing.editedAt, editedAt < currentEditedAt {
+            //
+            // A tolerance (rather than a strict `<`) is required: GRDB round-trips
+            // `Date` through a millisecond-precision text column, so re-applying
+            // the exact same in-memory `Date` twice (e.g. an optimistic edit
+            // followed by its own failure rollback, which reuses the same
+            // `editedAt`) can read back a value a fraction of a millisecond off
+            // from what was passed in — enough to misfire a strict comparison.
+            // Genuine out-of-order deliveries differ by network-delay magnitudes
+            // (well beyond this), so the tolerance doesn't weaken the guard.
+            if let currentEditedAt = existing.editedAt,
+               editedAt.timeIntervalSince(currentEditedAt) < -Self.editOrderingTolerance {
                 return
             }
             affectedConversationId = existing.conversationId
