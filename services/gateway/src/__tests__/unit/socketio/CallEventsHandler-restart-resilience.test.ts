@@ -101,6 +101,7 @@ const CONV_ID = '507f1f77bcf86cd799439012';
 const PARTICIPANT_ID = 'conv-participant-abc';
 const PARTICIPANT_DBID = 'call-participant-row-abc';
 const GRACE_MS = 30_000;
+const PRE_ANSWER_GRACE_MS = 10_000;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -239,6 +240,64 @@ describe('CallEventsHandler — restart / disconnect resilience', () => {
     });
   });
 
+  describe('grace extension when the user still has a live socket (chaos-test prod 2026-07-02)', () => {
+    // Prod run (callId 6a46713b…): the caller's socket.io reconnect backoff
+    // grew past the 30s grace; the server ended a call whose BOTH apps were
+    // alive and whose P2P media was healthy — the re-join landed 18s too late.
+    // If the user still has ANY connected socket (user room), the re-join is
+    // coming: extend the grace instead of killing healthy media, up to a cap
+    // that stays under the heartbeat GC tier.
+
+    function setupWithUserSocket(opts: { userSocketsAtExpiry: Array<{ id: string }> }) {
+      const prisma = makePrisma({ activeParticipations: [makeParticipation('active')] });
+      const emissions: RoomEmission[] = [];
+      const io = {
+        to: jest.fn((room: string) => ({
+          emit: jest.fn((event: string, payload: unknown) => {
+            emissions.push({ room, event, payload });
+          }),
+        })),
+        in: jest.fn((room: string) => ({
+          fetchSockets: jest.fn<any>().mockImplementation(async () =>
+            room === `user:${USER_ID}` ? opts.userSocketsAtExpiry : []
+          ),
+        })),
+      };
+      const { socket, handlers } = makeSocket();
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io as any, () => USER_ID);
+      return { handler, handlers, io, emissions, prisma };
+    }
+
+    it('extends the grace instead of ending when the user still has a connected socket', async () => {
+      const { handlers } = setupWithUserSocket({ userSocketsAtExpiry: [{ id: 'sock-alive' }] });
+
+      await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(GRACE_MS + 100);
+
+      expect(mockLeaveCall).not.toHaveBeenCalled();
+    });
+
+    it('ends the call once the extension budget is exhausted with no re-join', async () => {
+      const { handlers } = setupWithUserSocket({ userSocketsAtExpiry: [{ id: 'sock-alive' }] });
+
+      await handlers['disconnect']();
+      // initial grace + every extension + margin — the cap must eventually fire
+      await jest.advanceTimersByTimeAsync(GRACE_MS + 10 * 15_000 + 1000);
+
+      expect(mockLeaveCall).toHaveBeenCalled();
+    });
+
+    it('still ends at the first expiry when the user has no socket at all', async () => {
+      const { handlers } = setupWithUserSocket({ userSocketsAtExpiry: [] });
+
+      await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(GRACE_MS + 100);
+
+      expect(mockLeaveCall).toHaveBeenCalled();
+    });
+  });
+
   describe('reconnect grace window (active call)', () => {
     it('does NOT end the call immediately when the socket drops', async () => {
       const prisma = makePrisma({ activeParticipations: [makeParticipation('active')] });
@@ -353,9 +412,15 @@ describe('CallEventsHandler — restart / disconnect resilience', () => {
     });
   });
 
-  describe('pre-answer disconnect still ends immediately', () => {
-    it('ends a ringing call as soon as the socket drops (no grace)', async () => {
-      const prisma = makePrisma({ activeParticipations: [makeParticipation('ringing')] });
+  describe('pre-answer disconnect gets a SHORT grace (chaos-test prod 2026-07-02)', () => {
+    // Prod (callId 6a466a60…): the caller's two sockets churned within 100ms
+    // during RINGING — the immediate pre-answer end resolved the call missed
+    // while the caller's app was alive; its re-join 3s later hit "Call is in
+    // terminal state". A REAL cancel goes through an explicit call:end — the
+    // disconnect path only serves crash/force-quit, for which a few extra
+    // seconds of ringing are harmless.
+
+    beforeEach(() => {
       mockLeaveCall.mockResolvedValue({
         id: CALL_ID,
         status: 'missed',
@@ -363,9 +428,23 @@ describe('CallEventsHandler — restart / disconnect resilience', () => {
         endReason: 'missed',
         conversationId: CONV_ID,
       });
+    });
+
+    it('does NOT end a ringing call at the instant the socket drops', async () => {
+      const prisma = makePrisma({ activeParticipations: [makeParticipation('ringing')] });
       const { handlers } = setup({ prisma });
 
       await handlers['disconnect']();
+
+      expect(mockLeaveCall).not.toHaveBeenCalled();
+    });
+
+    it('resolves the ringing call missed once the short grace expires without re-join', async () => {
+      const prisma = makePrisma({ activeParticipations: [makeParticipation('ringing')] });
+      const { handlers } = setup({ prisma });
+
+      await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(PRE_ANSWER_GRACE_MS + 100);
 
       expect(mockLeaveCall).toHaveBeenCalledWith({
         callId: CALL_ID,
@@ -373,5 +452,6 @@ describe('CallEventsHandler — restart / disconnect resilience', () => {
         participantId: PARTICIPANT_ID,
       });
     });
+
   });
 });
