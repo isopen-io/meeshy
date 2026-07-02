@@ -1,14 +1,23 @@
 /**
  * CallEventsHandler — disconnect handler: force-cleanup path
  *
- * Covers line 1932: `if (remainingParticipants === 0)` — the branch that
- * force-ends a call when every participant has left.
+ * Covers the `if (remainingParticipants === 0)` branch that force-ends a call
+ * when every participant has left, reached when the normal `leaveCall()` path
+ * throws and the fallback `$transaction` cleanup runs with zero remaining
+ * participants.
  *
- * This branch is reached only when the normal `leaveCall()` path throws and
- * the fallback `$transaction` cleanup runs with zero remaining participants.
+ * CALL-RESILIENCE 2026-07-02 — a disconnect of an ANSWERED (active) call no
+ * longer ends it immediately: it arms a reconnect grace window (the P2P media
+ * survives a transient signaling drop / gateway restart). The terminal
+ * leave/force-cleanup path below therefore runs at grace EXPIRY, which these
+ * tests drive with fake timers (`advanceTimersByTimeAsync`). The pre-answer
+ * immediate-end path and the grace-vs-reconnect matrix are covered by
+ * CallEventsHandler-restart-resilience.test.ts.
  */
 
-import { jest, describe, it, expect, beforeEach } from '@jest/globals';
+import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+
+const GRACE_EXPIRY_MS = 31_000;
 
 // ---------------------------------------------------------------------------
 // Module-level mocks
@@ -144,6 +153,12 @@ function makePrisma(): PrismaClient & {
   return {
     callParticipant: {
       findMany: jest.fn<any>().mockResolvedValue([makeActiveParticipation()]),
+      // CALL-RESILIENCE — grace-expiry re-check: participant still present, call
+      // not ended elsewhere → the terminal leave path proceeds.
+      findUnique: jest.fn<any>().mockResolvedValue({
+        leftAt: null,
+        callSession: { status: 'active' },
+      }),
     },
     $transaction,
   } as unknown as PrismaClient & {
@@ -186,7 +201,12 @@ describe('CallEventsHandler — disconnect handler force-cleanup', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.useFakeTimers();
     mockCreateCallSummaryMessageDc.mockResolvedValue(null);
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   // -------------------------------------------------------------------------
@@ -207,6 +227,7 @@ describe('CallEventsHandler — disconnect handler force-cleanup', () => {
 
       // Fire the disconnect event
       await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(GRACE_EXPIRY_MS);
 
       // $transaction must have been invoked for force cleanup
       expect(prisma.$transaction).toHaveBeenCalled();
@@ -222,6 +243,7 @@ describe('CallEventsHandler — disconnect handler force-cleanup', () => {
       const handler = new CallEventsHandler(prisma);
       handler.setupCallEvents(socket as any, io, () => USER_ID);
       await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(GRACE_EXPIRY_MS);
 
       // After force cleanup, call:ended is broadcast to both rooms
       const endedEmits = (io.to as jest.MockedFunction<any>).mock.calls
@@ -248,6 +270,7 @@ describe('CallEventsHandler — disconnect handler force-cleanup', () => {
       const handler = new CallEventsHandler(prisma);
       handler.setupCallEvents(socket as any, io, () => USER_ID);
       await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(GRACE_EXPIRY_MS);
 
       expect(mockCreateCallSummaryMessageDc).toHaveBeenCalledWith(CALL_ID);
     });
@@ -280,6 +303,7 @@ describe('CallEventsHandler — disconnect handler force-cleanup', () => {
       const handler = new CallEventsHandler(prisma);
       handler.setupCallEvents(socket as any, io, () => USER_ID);
       await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(GRACE_EXPIRY_MS);
 
       // With 1 remaining participant, call:ended should NOT be broadcast
       const endedBroadcasts = (roomEmit as jest.MockedFunction<any>).mock.calls
@@ -303,6 +327,7 @@ describe('CallEventsHandler — disconnect handler force-cleanup', () => {
       const handler = new CallEventsHandler(prisma);
       handler.setupCallEvents(socket as any, io, () => USER_ID);
       await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(GRACE_EXPIRY_MS);
 
       expect(mockLeaveCallDc).not.toHaveBeenCalled();
       expect(prisma.$transaction).not.toHaveBeenCalled();
@@ -324,6 +349,7 @@ describe('CallEventsHandler — disconnect handler force-cleanup', () => {
       // getUserId always returns undefined; no prior authenticated event → cachedUserId is also undefined
       handler.setupCallEvents(socket as any, io, () => undefined);
       await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(GRACE_EXPIRY_MS);
 
       expect(prisma.callParticipant.findMany).not.toHaveBeenCalled();
     });
@@ -352,6 +378,7 @@ describe('CallEventsHandler — disconnect handler force-cleanup', () => {
       const handler = new CallEventsHandler(prisma);
       handler.setupCallEvents(socket as any, io, () => USER_ID);
       await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(GRACE_EXPIRY_MS);
 
       expect(roomEmit).toHaveBeenCalledWith(
         CALL_EVENTS.PARTICIPANT_LEFT,
@@ -379,6 +406,7 @@ describe('CallEventsHandler — disconnect handler force-cleanup', () => {
       const handler = new CallEventsHandler(prisma);
       handler.setupCallEvents(socket as any, io, () => USER_ID);
       await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(GRACE_EXPIRY_MS);
 
       expect(mockCreateCallSummaryMessageDc).toHaveBeenCalledWith(CALL_ID);
     });

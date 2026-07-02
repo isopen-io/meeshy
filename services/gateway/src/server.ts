@@ -1337,6 +1337,19 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     logger.info('🛑 Shutting down server...');
 
     try {
+      // CALL-RESILIENCE — tell the call handler we're shutting down BEFORE the
+      // HTTP/Socket.IO server closes and mass-drops every socket, so it does not
+      // interpret the restart's disconnect storm as everyone hanging up and end
+      // active peer-to-peer calls. Clients re-join the restarted instance; the
+      // media (direct P2P) never dropped.
+      try {
+        const socketManager = this.socketIOHandler?.getManager?.();
+        socketManager?.getCallEventsHandler?.().prepareForShutdown();
+        logger.info('✓ Call handler set to shutdown mode (active calls preserved for reconnect)');
+      } catch (callShutdownError) {
+        logger.warn('⚠️ Could not set call handler shutdown mode', callShutdownError);
+      }
+
       // Stop call cleanup service
       if (this.callCleanupService) {
         this.callCleanupService.stop();
