@@ -1364,6 +1364,7 @@ describe('CallEventsHandler', () => {
     });
 
     it('emits error when not a participant', async () => {
+      mockCallServiceGetCallSession.mockResolvedValue(makeCallSession({ participants: [] }));
       const { socket } = setupWithSocket({
         callSession: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
       });
@@ -1371,12 +1372,28 @@ describe('CallEventsHandler', () => {
       expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({ code: 'NOT_A_PARTICIPANT' }));
     });
 
+    it('does NOT relay when caller is a conversation member but not an active participant of THIS call', async () => {
+      // Regression test for the membership-check bypass fixed in call:quality-report
+      // (Audit P1-21) but left unfixed here: resolveParticipantIdFromCall only checks
+      // conversation membership, so any other member of the call's conversation could
+      // inject arbitrary transcription text into a call they never joined.
+      mockCallServiceGetCallSession.mockResolvedValue(makeCallSession({ participants: [] }));
+      const { socket, io } = setupWithSocket({
+        callSession: { findUnique: jest.fn<any>().mockResolvedValue({ conversationId: CONV_ID }), findMany: jest.fn<any>().mockResolvedValue([]) },
+      });
+
+      await socket._trigger('call:transcription-segment', validData);
+
+      expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({ code: 'NOT_A_PARTICIPANT' }));
+      expect(socket.to).not.toHaveBeenCalled();
+      expect((io.to as jest.Mock<any>).mock.calls.length).toBe(0);
+    });
+
     it('returns early when call not found or ended', async () => {
+      mockCallServiceGetCallSession.mockResolvedValue(makeCallSession({ participants: [makeParticipant()] }));
       const { socket } = setupWithSocket({
         callSession: {
-          findUnique: jest.fn<any>()
-            .mockResolvedValueOnce({ conversationId: CONV_ID }) // for resolveParticipantIdFromCall
-            .mockResolvedValueOnce(null), // for callSession.findUnique in transcription handler
+          findUnique: jest.fn<any>().mockResolvedValue(null), // callSession.findUnique in transcription handler
           findMany: jest.fn<any>().mockResolvedValue([]),
         },
       });
@@ -1386,11 +1403,10 @@ describe('CallEventsHandler', () => {
     });
 
     it('relays segment to other participants', async () => {
+      mockCallServiceGetCallSession.mockResolvedValue(makeCallSession({ participants: [makeParticipant()] }));
       const { socket } = setupWithSocket({
         callSession: {
-          findUnique: jest.fn<any>()
-            .mockResolvedValueOnce({ conversationId: CONV_ID })
-            .mockResolvedValueOnce({ status: 'active', metadata: {} }),
+          findUnique: jest.fn<any>().mockResolvedValue({ status: 'active', metadata: {} }),
           findMany: jest.fn<any>().mockResolvedValue([]),
         },
       });
@@ -1401,11 +1417,10 @@ describe('CallEventsHandler', () => {
     });
 
     it('logs debug when translationEnabled=true (without ZMQ forwarding)', async () => {
+      mockCallServiceGetCallSession.mockResolvedValue(makeCallSession({ participants: [makeParticipant()] }));
       const { socket } = setupWithSocket({
         callSession: {
-          findUnique: jest.fn<any>()
-            .mockResolvedValueOnce({ conversationId: CONV_ID })
-            .mockResolvedValueOnce({ status: 'active', metadata: { translationEnabled: true } }),
+          findUnique: jest.fn<any>().mockResolvedValue({ status: 'active', metadata: { translationEnabled: true } }),
           findMany: jest.fn<any>().mockResolvedValue([]),
         },
       });
@@ -1897,11 +1912,10 @@ describe('CallEventsHandler', () => {
     });
 
     it('call:transcription-segment: logs error when callSession.findUnique throws', async () => {
+      mockCallServiceGetCallSession.mockResolvedValue(makeCallSession({ participants: [makeParticipant()] }));
       const { socket } = setupWithSocket({
         callSession: {
-          findUnique: jest.fn<any>()
-            .mockResolvedValueOnce({ conversationId: CONV_ID }) // for resolveParticipantIdFromCall
-            .mockRejectedValueOnce(new Error('DB error')),      // for the segment handler
+          findUnique: jest.fn<any>().mockRejectedValueOnce(new Error('DB error')), // for the segment handler
           findMany: jest.fn<any>().mockResolvedValue([]),
         },
       });
