@@ -54,9 +54,15 @@
 > `RealtimeLifecyclePlan.commandsFor(was, is)`; **attach is paired with every connect** (not once ever) so a
 > logout→login cycle re-attaches on the new socket. `AuthViewModel` drives it at init (restored token),
 > login success, and logout. +11 tests (5 plan, 6 coordinator) + 5 AuthViewModel wiring tests.
-> **Next:** a Calls-tab nav entry threading the real `conversationId` into the outgoing `CallConfig`
-> (`:app`) + wiring `CallHistoryScreen` there; then the WebRTC/Telecom/FCM plumbing. See the run log +
-> `feature-parity.md §H`.
+> On 2026-07-02 the **outgoing-call room threading** landed (slice `call-nav-conversation-thread`): the
+> `:app` CALL route dropped the `conversationId`, so `CallViewModel.start` → `emitInitiate("", …)` fired
+> into an empty room (every outgoing call dead-on-arrival). A new pure `me.meeshy.app.navigation.CallRoute`
+> (SSOT: `PATTERN`, `path(...)`, `config(conversationId?, peerName?, isVideo?) → CallConfig`) now owns the
+> route; the CHAT `composable` threads its own `conversationId` nav-arg into `Routes.call(...)`, and the
+> CALL `composable` decodes the args through `CallRoute.config`. Outgoing calls now initiate into the real
+> room. +8 tests (first `:app` test source set).
+> **Next:** a dedicated Calls tab in the bottom nav wiring `CallHistoryScreen` (`:app`); then the
+> WebRTC/Telecom/FCM plumbing. See the run log + `feature-parity.md §H`.
 
 Stories so far: tray (ring carousel) + cross-group viewer playback engine +
 quick-reaction strip + swipe gestures + realtime reaction socket deltas +
@@ -241,9 +247,12 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
    (attach paired with **every** connect so logout→login re-attaches). Driven by `AuthViewModel` at
    init/login/logout. +16 tests. See run log.
 
-**Next (highest value now the socket is a live endpoint):** a Calls-tab nav entry threading the real
-`conversationId` into the outgoing `CallConfig` and wiring `CallHistoryScreen` (`:app`, own explicit run
-since it touches nav). Then the heavier WebRTC/Telecom/FCM plumbing.
+**Next (highest value):** ~~a Calls-tab nav entry threading the real `conversationId` into the outgoing
+`CallConfig`~~ ✅ the **conversationId threading** shipped as `call-nav-conversation-thread` (2026-07-02)
+— pure `:app` `CallRoute` (`PATTERN`/`path`/`config`) owns the route, the CHAT composable threads its
+nav-arg `conversationId`, outgoing calls now `emitInitiate` into the real room. +8 tests. Remaining: a
+dedicated **Calls tab** in the bottom nav wiring `CallHistoryScreen` (`:app`). Then the heavier
+WebRTC/Telecom/FCM plumbing.
 
 Then the heavier WebRTC/Telecom/FCM-full-screen-intent plumbing (glue-heavy; push every testable
 decision into pure helpers/the VM).
@@ -434,6 +443,42 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-02 — slice `call-nav-conversation-thread` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration — the only open PR (#1324) is an
+  iOS Dynamic-Type branch (`claude/upbeat-euler-s5qysh`, author `jcnm`), disjoint from `apps/android`.
+  Branched off freshly-fetched `origin/main` (`0e0ac302`) as `claude/apps/android/call-nav-conversation-thread`.
+- **Root cause found while scoping:** the outgoing-call route dropped the `conversationId`. `Routes.CALL`
+  only carried `{peerName}/{video}`, so the `NavHost` built a `CallConfig(conversationId = "")` and
+  `CallViewModel.start` → `emitInitiate("", isVideo)` fired into an **empty room** — every outgoing call
+  was dead-on-arrival (the gateway rejects a blank room → `ServerError` → `Ended(Failed)`). This is the
+  tracked "Calls-tab nav entry threading the real `conversationId`" follow-up; the `conversationId` is a
+  nav-level fact already known at the chat destination, so no ViewModel/state plumbing was needed.
+- **Design (pure-decision-first):**
+  - `:app` `me.meeshy.app.navigation.CallRoute` — the single source of truth for the outgoing-call route.
+    `PATTERN` (`call/{conversationId}/{peerName}/{video}`), `path(conversationId, peerName, isVideo)`
+    (percent-encodes both free-text segments so a peer name with `/`/`&` never adds path segments), and
+    the pure `config(conversationId?, peerName?, isVideo?) → CallConfig` mapping (null/absent args degrade
+    to blank/audio — a malformed deep link yields an inert call, never an NPE; `callId` left blank so an
+    outgoing call mints its own via the initiate ACK; `isOutgoing = true`).
+  - `MeeshyApp` glue: the CHAT `composable` now captures its `entry`, reads
+    `ChatViewModel.CONVERSATION_ID_ARG`, and threads it into `Routes.call(conversationId, peerName,
+    isVideo)`; the CALL `composable` decodes the three args and delegates to `CallRoute.config`. Removed
+    the ad-hoc `CALL_PEER_ARG`/`CALL_VIDEO_ARG`/inline `CallConfig` construction (dead once `CallRoute`
+    owns it). `ChatScreen`'s public signature is untouched (the id rides in from nav, not from state).
+- **Tests:** +8 behavioural (`CallRouteTest`, Robolectric for `Uri`): `config` threads the id / leaves
+  callId+peerId blank / defaults absent video to audio / keeps explicit audio / degrades null
+  conversationId (no crash, still outgoing) / degrades null peerName; `path` embeds the id and round-trips
+  a peer name with reserved chars through exactly 4 segments; `PATTERN` exposes all three named args.
+  Every `config` branch (null conversationId, null peerName, `isVideo` null/true/false) is hit. This is
+  the **first `:app` test source set** (deps were already declared).
+- **Verification:** whole-project `assembleDebug testDebugUnitTest` **BUILD SUCCESSFUL** (890 tasks) via
+  system Gradle 8.14.3 (wrapper 8.11.1 still 403s — github-releases egress blocked, see NOTES; AGP 8.7.3
+  runs fine on 8.14.3). `CallRouteTest` 8/8 green; debug APK assembles; no other suite regressed.
+- **Reviewer gate:** PASS — diff `apps/android` only (1 code file edited + 1 new helper + 1 new test),
+  navigation orchestration correctly in `:app` (SDK building blocks untouched), behaviour tested through
+  the public API, no tautologies, no floor lowered, no unguarded async. **Next:** a dedicated Calls tab in
+  the bottom nav wiring `CallHistoryScreen`, then the heavier WebRTC/Telecom/FCM plumbing.
 
 ### 2026-07-02 — slice `realtime-session-coordinator` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR was open. The 4 open PRs (#1317–#1320) are iOS/web/gateway

@@ -843,9 +843,15 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       double-connect). Ordering (connect-before-attach) + edge invariants live in the pure
       `RealtimeLifecyclePlan`; **attach is paired with every connect** so a logout→login re-attaches on
       the new socket. Driven by `AuthViewModel` at init (restored token) / login / logout. +16 behavioural
-      tests. **Pending:** WebRTC-plumbing emits (`request-ice-servers`/`heartbeat`/`quality-report`/
-      `reconnecting`/`reconnected`); and a Calls-tab nav entry threading the real `conversationId` into
-      the outgoing `CallConfig` (`:app`).
+      tests. **Outgoing-call room threading landed** (slice `call-nav-conversation-thread`): the `:app`
+      CALL route previously dropped the `conversationId`, so `CallViewModel.start` → `emitInitiate("", …)`
+      fired into an empty room (every outgoing call dead-on-arrival). A pure
+      `me.meeshy.app.navigation.CallRoute` (`PATTERN`/`path`/`config(conversationId?, peerName?, isVideo?)
+      → CallConfig`) now owns the route as the SSOT; the CHAT composable threads its own `conversationId`
+      nav-arg into `Routes.call(...)` and the CALL composable decodes the args through `CallRoute.config`.
+      Outgoing calls now initiate into the real room. +8 behavioural tests (first `:app` test source set).
+      **Pending:** WebRTC-plumbing emits (`request-ice-servers`/`heartbeat`/`quality-report`/
+      `reconnecting`/`reconnected`).
 - [x] Call history / journal (recent + missed calls list, direction, duration, data usage) —
       **pure call-journal model landed** (slice `call-history-model`): `core:model`
       `me.meeshy.sdk.model.call` gains `CallDirection` (incoming/outgoing/missed, `fromRaw` degrades
@@ -875,9 +881,9 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       paging — backed by pure `CallHistoryList` (combine+filter) and `CallTimeLabel` (ISO → relative
       label), rendered by an accent-coherent `CallHistoryScreen` (avatar rows, direction icon with
       missed=error colour, relative time, All/Missed filter chips, skeleton/empty states). +30
-      behavioural tests. **Pending follow-up:** a Calls-tab navigation entry (`:app`) once the app shell
-      exposes one, and folding `CallSignalManager.events` into `CallViewModel` (needs the `initiate`-ACK
-      call-id lifecycle).
+      behavioural tests. **Pending follow-up:** a dedicated Calls **tab** in the bottom nav wiring
+      `CallHistoryScreen` (`:app`). (The outgoing-call `conversationId` threading + folding
+      `CallSignalManager.events` into `CallViewModel` both landed — see the signalling row above.)
 
 ## I. Communities
 - [ ] Community creation (name, `mshy_` identifier, description, emoji, privacy, initial members)
