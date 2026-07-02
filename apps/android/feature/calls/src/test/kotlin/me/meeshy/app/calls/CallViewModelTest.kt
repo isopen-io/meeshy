@@ -14,10 +14,12 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.model.call.CallCue
 import me.meeshy.sdk.model.call.CallEndReason
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateAck
 import me.meeshy.sdk.model.call.CallInitiateResult
+import me.meeshy.sdk.model.call.CallSound
 import me.meeshy.sdk.socket.CallSignalManager
 import org.junit.After
 import org.junit.Before
@@ -41,6 +43,18 @@ class CallViewModelTest {
     private val incomingAudio =
         CallConfig(peerId = "u2", peerName = "Bob", isVideo = false, isOutgoing = false, callId = "call-9")
 
+    /** Records the exact sequence of loop switches + cues the VM asks of the seam. */
+    private class RecordingToneController : CallToneController {
+        val loops = mutableListOf<CallSound>()
+        val cues = mutableListOf<CallCue>()
+        var releaseCount = 0
+        override fun setLoop(sound: CallSound) { loops += sound }
+        override fun playCue(cue: CallCue) { cues += cue }
+        override fun release() { releaseCount += 1 }
+    }
+
+    private val tones = RecordingToneController()
+
     @Before
     fun setUp() {
         Dispatchers.setMain(dispatcher)
@@ -54,7 +68,7 @@ class CallViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun vm() = CallViewModel(signalManager, ticker)
+    private fun vm() = CallViewModel(signalManager, ticker, tones)
 
     @Test
     fun `starts idle`() {
@@ -441,5 +455,94 @@ class CallViewModelTest {
 
         first.connect()
         assertThat(first.state.value.durationLabel).isEqualTo("0:00")
+    }
+
+    // --- call audio: loops + cues driven from the FSM ----------------------
+
+    @Test
+    fun `an outgoing call starts the ringback loop`() = runTest {
+        val vm = vm()
+        vm.start(outgoingVideo)
+
+        assertThat(tones.loops).containsExactly(CallSound.Ringback)
+        assertThat(tones.cues).isEmpty()
+    }
+
+    @Test
+    fun `an incoming call starts the ringtone loop`() {
+        val vm = vm()
+        vm.start(incomingAudio)
+
+        assertThat(tones.loops).containsExactly(CallSound.Ringtone)
+        assertThat(tones.cues).isEmpty()
+    }
+
+    @Test
+    fun `an outgoing call stops the ringback and cues connected when media flows`() = runTest {
+        val vm = vm()
+        vm.start(outgoingVideo)
+        vm.onSignal(CallEvent.ParticipantJoined) // → offering: ringback continues
+        vm.onSignal(CallEvent.RemoteAnswer)      // → connecting: ringback stops
+        vm.onSignal(CallEvent.MediaConnected)    // → connected: connected cue
+
+        assertThat(tones.loops).containsExactly(CallSound.Ringback, CallSound.None).inOrder()
+        assertThat(tones.cues).containsExactly(CallCue.Connected)
+    }
+
+    @Test
+    fun `an inert event never restarts the ringback loop`() = runTest {
+        val vm = vm()
+        vm.start(outgoingVideo)
+        vm.onSignal(CallEvent.MediaConnected) // inert while ringing → no state change
+
+        assertThat(tones.loops).containsExactly(CallSound.Ringback)
+    }
+
+    @Test
+    fun `accepting an incoming call stops the ringtone and cues connected`() = runTest {
+        val vm = vm()
+        vm.start(incomingAudio)
+        vm.accept()                           // → connecting: ringtone stops
+        vm.onSignal(CallEvent.MediaConnected) // → connected: connected cue
+
+        assertThat(tones.loops).containsExactly(CallSound.Ringtone, CallSound.None).inOrder()
+        assertThat(tones.cues).containsExactly(CallCue.Connected)
+    }
+
+    @Test
+    fun `declining an incoming call stops the ringtone and cues the ended tone`() {
+        val vm = vm()
+        vm.start(incomingAudio)
+        vm.decline()
+
+        assertThat(tones.loops).containsExactly(CallSound.Ringtone, CallSound.None).inOrder()
+        assertThat(tones.cues).containsExactly(CallCue.Ended)
+    }
+
+    @Test
+    fun `hanging up a ringing outgoing call cues the ended tone`() = runTest {
+        val vm = vm()
+        vm.start(outgoingVideo)
+        vm.hangUp()
+
+        assertThat(tones.loops).containsExactly(CallSound.Ringback, CallSound.None).inOrder()
+        assertThat(tones.cues).containsExactly(CallCue.Ended)
+    }
+
+    @Test
+    fun `a remote hang-up after connection cues the ended tone`() = runTest {
+        val vm = vm().connect()
+        vm.onSignal(CallEvent.RemoteHangUp)
+
+        assertThat(tones.cues).containsExactly(CallCue.Connected, CallCue.Ended).inOrder()
+    }
+
+    @Test
+    fun `a successful reconnect cues connected a second time`() = runTest {
+        val vm = vm().connect()
+        vm.onSignal(CallEvent.ConnectionStalled) // → reconnecting
+        vm.onSignal(CallEvent.MediaConnected)    // → connected again
+
+        assertThat(tones.cues).containsExactly(CallCue.Connected, CallCue.Connected).inOrder()
     }
 }
