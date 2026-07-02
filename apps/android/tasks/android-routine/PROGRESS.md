@@ -61,8 +61,16 @@
 > route; the CHAT `composable` threads its own `conversationId` nav-arg into `Routes.call(...)`, and the
 > CALL `composable` decodes the args through `CallRoute.config`. Outgoing calls now initiate into the real
 > room. +8 tests (first `:app` test source set).
-> **Next:** a dedicated Calls tab in the bottom nav wiring `CallHistoryScreen` (`:app`); then the
-> WebRTC/Telecom/FCM plumbing. See the run log + `feature-parity.md §H`.
+> On 2026-07-02 the **Calls bottom-nav tab** landed (slice `calls-tab-nav`): `CallHistoryScreen` was
+> reachable-by-nobody dead UI — no route pointed at it. A new `Routes.CALLS` tab (`Call` icon, placed
+> Messages · Feed · **Calls** · Activity · Profile) mounts it in the `NavHost`, and tapping a journal row
+> re-dials via the new pure `CallRoute.redial(record)` — the natural "tap a past call to call back" gesture,
+> threading the record's conversation, resolved `displayName` and media straight into the outgoing-call
+> route (identical to a call from the chat header). +4 `CallRouteTest` cases (conversation/name/media round
+> trip, displayName-over-username resolution + reserved-char encoding, audio-only, peer-absent group
+> fallback). `assembleDebug` + `:app:testDebugUnitTest` green.
+> **Next:** the WebRTC / Telecom / FCM full-screen-intent plumbing (incoming-call notification + connection
+> service); then the actual media transport. See the run log + `feature-parity.md §H`.
 
 Stories so far: tray (ring carousel) + cross-group viewer playback engine +
 quick-reaction strip + swipe gestures + realtime reaction socket deltas +
@@ -443,6 +451,36 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-02 — slice `calls-tab-nav` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration — the 4 open PRs (#1335, #1337–#1339)
+  are gateway/iOS branches from other sessions (`jcnm`), disjoint from `apps/android`; left untouched.
+  Branched off freshly-fetched `origin/main` (`c46f8d14`) as `claude/apps/android/calls-tab-nav`.
+- **Gap found while scoping:** `CallHistoryScreen` (shipped in `call-history-list`) was **dead UI** — no
+  route pointed at it, so the whole recent/missed-calls journal was reachable by nobody. This is the tracked
+  "dedicated Calls tab" follow-up.
+- **Design (pure-decision-first):**
+  - `:app` `CallRoute.redial(record: CallRecord)` — the pure re-dial decision: threads the journal row's
+    own `conversationId`, its already-resolved `displayName` (peer displayName → username → group title →
+    fallback, owned by `CallRecord`), and its `isVideo` straight through the existing `path(...)` (so
+    reserved chars in the name stay encoded). Re-dialling from history is now byte-identical to a call
+    placed from the chat header — one SSOT, no re-derivation at the call site.
+  - `MeeshyApp` glue: new `Routes.CALLS` tab (`Icons.*.Call`), added to `tabRoutes` and `rememberTabs`
+    (order Messages · Feed · **Calls** · Activity · Profile — Calls central, WhatsApp-like); a
+    `composable(Routes.CALLS)` mounts `CallHistoryScreen(onOpenCall = { navController.navigate(
+    CallRoute.redial(it)) })`. New `tab_calls` string.
+- **Tests:** +4 behavioural (`CallRouteTest`, Robolectric for `Uri`): `redial` round-trips
+  conversation/name/media into a `CallConfig`; resolves `displayName` **over** the raw username then
+  encodes a reserved-char name into exactly 4 path segments; carries an audio-only record as audio; falls
+  back to the group `conversationTitle` when `peer == null`. Behaviour asserted by decoding the built path,
+  not by reading back a set constant. No floor lowered, no tautology.
+- **Verification:** `assembleDebug` + `:app:testDebugUnitTest` **BUILD SUCCESSFUL** via system Gradle
+  8.14.3 (wrapper still 403s — see NOTES); debug APK assembles; `CallRouteTest` 12/12 green; no suite
+  regressed.
+- **Reviewer gate:** PASS — diff `apps/android` only (4 files: `CallRoute.kt` +helper, `MeeshyApp.kt`
+  wiring, `strings.xml`, `CallRouteTest.kt`), navigation orchestration correctly in `:app`, behaviour
+  through the public API, no unguarded async (pure route builder). **Next:** WebRTC/Telecom/FCM
+  full-screen-intent plumbing.
 
 ### 2026-07-02 — slice `call-nav-conversation-thread` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration — the only open PR (#1324) is an

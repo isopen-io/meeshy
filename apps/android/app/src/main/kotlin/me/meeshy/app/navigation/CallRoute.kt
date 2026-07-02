@@ -2,6 +2,7 @@ package me.meeshy.app.navigation
 
 import android.net.Uri
 import me.meeshy.app.calls.CallConfig
+import me.meeshy.sdk.model.call.CallRecord
 
 /**
  * Single source of truth for the outgoing-call navigation route: how the chat
@@ -45,5 +46,19 @@ object CallRoute {
             isVideo = isVideo ?: false,
             isOutgoing = true,
             conversationId = conversationId.orEmpty(),
+        )
+
+    /**
+     * Re-dial route from a call-journal row: the natural "tap a past call to
+     * call back" gesture. Threads the record's own conversation, its resolved
+     * [CallRecord.displayName] and its media type straight into [path], so the
+     * outgoing call re-initiates into the exact room — identical to a call
+     * placed from the chat header.
+     */
+    fun redial(record: CallRecord): String =
+        path(
+            conversationId = record.conversationId,
+            peerName = record.displayName,
+            isVideo = record.isVideo,
         )
 }
