@@ -807,6 +807,14 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
         manager.setDeliveryQueue(this.deliveryQueue);
         logger.info('[GWY] ✅ RedisDeliveryQueue injected into SocketIOManager');
 
+        // Share the Socket.IO layer's CallService with REST call routes so
+        // both observe the same in-memory ringingTimeouts/heartbeats maps
+        // (previously routes/calls.ts constructed its own, disconnected
+        // instance — a call initiated via REST never had its ringing timeout
+        // registered on the instance CallCleanupService/CallEventsHandler read).
+        this.server.decorate('callService', manager.getCallService());
+        logger.info('[GWY] ✅ CallService shared with REST routes');
+
         const notificationService = manager.getNotificationService();
         this.server.decorate('notificationService', notificationService);
         logger.info('[GWY] ✅ NotificationService exposed for routes');

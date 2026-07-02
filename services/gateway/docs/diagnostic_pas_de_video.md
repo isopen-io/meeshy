@@ -185,7 +185,7 @@ participants={currentCall?.participants || []}        // participants.id
 ## 📋 CHECKLIST DE DIAGNOSTIC
 
 1. [ ] Redémarrer le Gateway après le fix du bug #2
-2. [ ] Nettoyer les appels zombies : `node cleanup-zombie-call.js`
+2. [ ] Vérifier qu'aucun appel zombie ne persiste — `CallCleanupService` (GC périodique + self-heal de `Conversation.activeCallId`) le fait automatiquement ; le script ad hoc `cleanup-zombie-call.js` a été retiré (obsolète, ciblait un seul incident historique)
 3. [ ] Chrome : Ouvrir DevTools Console
 4. [ ] Safari : Ouvrir Console Web (⌥⌘C)
 5. [ ] Chrome : Démarrer l'appel
