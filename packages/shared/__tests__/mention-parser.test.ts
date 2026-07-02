@@ -40,6 +40,38 @@ describe('parseMentions', () => {
       const result = parseMentions('@Marie tu viens ?', participants);
       expect(result).toEqual(['u3']);
     });
+
+    it('accepte une frontière de ponctuation après le displayName', () => {
+      const result = parseMentions('@Marie!', participants);
+      expect(result).toEqual(['u3']);
+    });
+  });
+
+  describe('résolution exacte (pas de préfixe)', () => {
+    it('ne résout PAS un displayName comme préfixe d’un mot plus long', () => {
+      const result = parseMentions('Bonjour @Marienne', participants);
+      expect(result).toEqual([]);
+    });
+
+    it('ne résout PAS un displayName multi-mots comme préfixe', () => {
+      const result = parseMentions('@Jean Charleston est une ville', participants);
+      expect(result).toEqual([]);
+    });
+
+    it('ne résout PAS un displayName suivi d’un chiffre ou underscore', () => {
+      expect(parseMentions('@Marie2024', participants)).toEqual([]);
+      expect(parseMentions('@Marie_bot', participants)).toEqual([]);
+    });
+
+    it('ne résout PAS un username capturé dans une adresse e-mail', () => {
+      const result = parseMentions('écris à contact@marie.com', participants);
+      expect(result).toEqual([]);
+    });
+
+    it('ne résout PAS un displayName précédé d’un caractère de mot (e-mail)', () => {
+      const result = parseMentions('écris à contact@Marie.com', participants);
+      expect(result).toEqual([]);
+    });
   });
 
   describe('@username fallback', () => {
