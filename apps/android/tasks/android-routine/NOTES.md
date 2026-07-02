@@ -710,3 +710,26 @@ Append-only log of gotchas and decisions that save time next run.
   `main`, re-check `main`'s latest CI — once green, rebase the blocked branch onto it
   (`git rebase origin/main`, force-with-lease push), re-run CI, and squash-merge once green. Never merge
   past red CI; the red must be gone (fixed on `main`), not bypassed.
+
+## Realtime socket lifecycle (slice `realtime-session-coordinator`, 2026-07-02)
+- ⚠ **The realtime layer was entirely dead until this slice.** `SocketManager.connect()` had **zero
+  callers in production** and no socket manager's `attach()` (message/social/call) ran anywhere. Only
+  `SocketManager.connectionState` was ever observed (for the connection banner). So no `call:*`,
+  `message:*` or social frame could reach any ViewModel — the whole `attach()`/`events` machinery built
+  over prior loops was orphaned. If you wire a new socket manager, remember it also needs its `attach()`
+  called from `RealtimeSessionCoordinator.attachAll()`, or it stays dead.
+- **Attach must follow every connect, and exactly once per socket.** `SocketManager.on(event, cb)`
+  registers on the current `_socket` and **no-ops when `_socket` is null** — so `attach()` before
+  `connect()` silently loses every listener. And `disconnect()` nulls `_socket`; a later `connect()`
+  mints a **new** `Socket` (socket.io's internal auto-reconnect reuses the *same* instance and keeps its
+  listeners, but a full disconnect→connect does not). Therefore the rule encoded in the pure
+  `RealtimeLifecyclePlan`: sign-in emits `[Connect, Attach]` **in that order**, and `Attach` is paired
+  with **every** `Connect` (a logout→login re-attaches on the new socket) — NOT an "attach once ever"
+  flag, which would leave the second session's socket listener-less.
+- **`SocketManager.reconnectWithToken()` (disconnect+connect on token refresh) still has no caller.**
+  When a token-refresh path is wired, it must also re-attach (it mints a new socket) — either route it
+  through the coordinator or call `attachAll()` after it. Tracked follow-up.
+- **Driver placement.** The "when to connect" edge is product orchestration → driven from `AuthViewModel`
+  (`:feature:auth`, the app-level auth holder created above the NavHost in `MeeshyApp`, so effectively
+  process-lifetime for the session). The coordinator + pure plan are stateless-ish SDK building blocks in
+  `:sdk-core`. The `@Singleton` coordinator dedups on the edge, so a VM recreation can't double-connect.
