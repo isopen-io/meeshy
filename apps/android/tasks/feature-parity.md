@@ -770,7 +770,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 ## H. Calls (audio / video)
 - [ ] 1:1 audio & video calls (WebRTC P2P, ICE/STUN, hardware H.264)
 - [ ] System call UI (Telecom/ConnectionService) + ringback tone
-- [ ] Incoming-call delivery via FCM data push when backgrounded/killed (full-screen intent)
+- [~] Incoming-call delivery via FCM data push when backgrounded/killed (full-screen intent) —
+      **pure decision core landed** (slice `incoming-call-push-decision`): `core:model`
+      `me.meeshy.sdk.model.call` gains `IncomingCallPush` (typed FCM `data`-map / VoIP payload at
+      parity with the gateway `CallEventsHandler` push `type:"call"` and `PushNotificationService`
+      `type:"voip_call"` — `callId`/`conversationId`/`callerUserId`/`callerName`/`isVideo` string flag/
+      `iceServers` JSON) + blank-skipping `displayName`; the total, side-effect-free
+      `IncomingCallPushParser.parse(Map<String,String>) → IncomingCallPush?` (call iff `type ∈
+      {call,voip_call}` AND non-blank `callId`; leniently decodes `iceServers`, degrading a
+      missing/malformed value to `[]` rather than dropping the push); the immutable `SeenCallRing`
+      (pure port of the iOS `VoIPDedupRing`, capacity 24 / ttl 30s — `contains`/`insert`/`remove`,
+      expiry-pruning + capacity-trimming, every mutation returns a new ring); and the pure
+      `IncomingCallDecider.decide(push, context) → IncomingCallDecision` (`Ring` | `Ignore(reason)`)
+      faithful to the iOS `VoIPPushManager`/`CallManager.reportIncomingVoIPCall` ordering: self-fanout →
+      duplicate (active-or-seen) → busy (different call active) → ring. The SSOT the FCM service +
+      Telecom/`ConnectionService` full-screen-intent wiring will consume. +39 behavioural tests.
+      **Pending:** the `MeeshyFcmService` call-push routing + full-screen `ConnectionService` /
+      notification (Android-platform glue, next slice).
 - [ ] Call reconnection on network change (ICE restart)
 - [~] Call states: ringing/connecting/connected/ended; PiP / floating call pill —
       **pure call-lifecycle FSM landed** (`core:model` `me.meeshy.sdk.model.call`):
