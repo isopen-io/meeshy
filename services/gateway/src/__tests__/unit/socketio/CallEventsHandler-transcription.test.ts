@@ -160,7 +160,6 @@ describe('CallEventsHandler — call:transcription-segment relay', () => {
 
   describe('rate limiting', () => {
     it('checks the rate limit before relaying a segment', async () => {
-      mockGetCallSession.mockResolvedValue(activeCallSession(SPEAKER_ID));
       const prisma = makePrisma({
         callSessionFindUnique: jest.fn<any>().mockResolvedValue({ status: 'active', metadata: null }),
       });
