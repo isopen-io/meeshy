@@ -1494,15 +1494,15 @@ export class CallEventsHandler {
           code: errorCode,
           message
         } as CallError);
-      } finally {
-        // Audit 2026-05-11 — guarantee timer cleanup even if joinCall (or
-        // any of the post-transaction work above) throws. clearRingingTimeout
-        // is idempotent — safe to call when the timer was never scheduled
-        // (e.g. early auth/rate-limit/validation rejection above).
-        if (data?.callId) {
-          this.callService.clearRingingTimeout(data.callId);
-        }
       }
+      // Item F follow-up (chaos-2 re-test) — the join deliberately does NOT
+      // clear the ringing timer anymore: the callee EARLY-joins while still
+      // ringing (the offer must flow during the ring), and clearing here left
+      // no server-side bound on the ring after any join — and wiped the timer
+      // the boot rehydration had just re-armed after a mid-ring restart (the
+      // call then decayed via the GC tier at ~150s instead of resolving
+      // missed at its nominal remaining budget). The SDP answer path and the
+      // terminal paths (leave/end/GC, item I) own the clear.
     });
 
     /**

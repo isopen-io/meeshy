@@ -1715,12 +1715,17 @@ describe('CallEventsHandler', () => {
       expect(socket.emit).toHaveBeenCalledWith('call:error', expect.any(Object));
     });
 
-    it('emits error and clears ringing on joinCall failure', async () => {
+    it('emits error WITHOUT clearing the ringing timer on joinCall failure (item F follow-up)', async () => {
+      // A failed join must not disarm the ring: the call is still ringing for
+      // everyone else and the timer must resolve missed at its nominal budget.
+      // (The old finally-clear also wiped the timer the boot rehydration had
+      // just re-armed after a mid-ring restart.) The SDP answer and the
+      // terminal paths own the clear.
       mockCallServiceJoinCall.mockRejectedValue(new Error('JOIN_FAIL: server error'));
       const { socket } = setupWithSocket();
       await socket._trigger('call:join', validData);
       expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({ code: 'JOIN_FAIL' }));
-      expect(mockCallServiceClearRingingTimeout).toHaveBeenCalledWith(CALL_ID);
+      expect(mockCallServiceClearRingingTimeout).not.toHaveBeenCalled();
     });
 
     it('skips the participant-joined ICE push when getUserId returns undefined (never emits a TURN-less STUN-only config)', async () => {
