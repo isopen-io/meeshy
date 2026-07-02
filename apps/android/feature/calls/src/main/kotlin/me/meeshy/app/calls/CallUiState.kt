@@ -1,5 +1,6 @@
 package me.meeshy.app.calls
 
+import me.meeshy.sdk.model.call.CallDuration
 import me.meeshy.sdk.model.call.CallEndReason
 import me.meeshy.sdk.model.call.CallState
 
@@ -78,6 +79,14 @@ data class CallUiState(
     val isCameraOn: Boolean,
     val endReason: CallEndReason?,
     val reconnectAttempt: Int,
+    /**
+     * The `M:SS` / `H:MM:SS` call length while media is (or was) flowing —
+     * `"0:00"` the instant the call connects, ticking up through a reconnect,
+     * and frozen at the final length on the ended screen. `null` before the call
+     * ever connects (ringing / connecting) and for a call that ended without ever
+     * connecting (missed / declined / failed), where there is nothing to show.
+     */
+    val durationLabel: String?,
 ) {
     /** Accept / decline are only offered for an incoming, still-ringing call. */
     val showAnswerControls: Boolean
@@ -119,7 +128,12 @@ data class CallUiState(
  */
 object CallPresenter {
 
-    fun present(state: CallState, config: CallConfig, media: CallMedia): CallUiState {
+    fun present(
+        state: CallState,
+        config: CallConfig,
+        media: CallMedia,
+        elapsedSeconds: Long = 0,
+    ): CallUiState {
         val status = statusOf(state)
         return CallUiState(
             status = status,
@@ -129,7 +143,19 @@ object CallPresenter {
             isCameraOn = config.isVideo && media.isCameraOn,
             endReason = (state as? CallState.Ended)?.reason,
             reconnectAttempt = (state as? CallState.Reconnecting)?.attempt ?: 0,
+            durationLabel = durationLabelFor(status, elapsedSeconds),
         )
+    }
+
+    /**
+     * The timer is live for the connected/reconnecting phases (starting at
+     * `"0:00"`), frozen as the final length once ended **iff** the call actually
+     * connected (`elapsedSeconds > 0`), and absent otherwise.
+     */
+    private fun durationLabelFor(status: CallStatus, elapsedSeconds: Long): String? = when (status) {
+        CallStatus.CONNECTED, CallStatus.RECONNECTING -> CallDuration.clock(elapsedSeconds)
+        CallStatus.ENDED -> if (elapsedSeconds > 0) CallDuration.clock(elapsedSeconds) else null
+        else -> null
     }
 
     fun statusOf(state: CallState): CallStatus = when (state) {

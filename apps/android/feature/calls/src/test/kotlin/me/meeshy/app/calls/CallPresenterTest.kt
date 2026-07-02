@@ -144,4 +144,44 @@ class CallPresenterTest {
         assertThat(present(CallState.Ended(CallEndReason.Remote)).isEnded).isTrue()
         assertThat(present(CallState.Connected).isEnded).isFalse()
     }
+
+    // --- durationLabel ------------------------------------------------------
+
+    @Test
+    fun `no duration label before a call ever connects`() {
+        assertThat(CallPresenter.present(CallState.Ringing(isOutgoing = true), config, media, 0).durationLabel)
+            .isNull()
+        assertThat(CallPresenter.present(CallState.Ringing(isOutgoing = false), config, media, 0).durationLabel)
+            .isNull()
+        assertThat(CallPresenter.present(CallState.Offering, config, media, 0).durationLabel).isNull()
+        assertThat(CallPresenter.present(CallState.Connecting, config, media, 0).durationLabel).isNull()
+        assertThat(CallPresenter.present(CallState.Idle, config, media, 0).durationLabel).isNull()
+    }
+
+    @Test
+    fun `connected shows the elapsed clock starting at 0 00`() {
+        assertThat(CallPresenter.present(CallState.Connected, config, media, 0).durationLabel).isEqualTo("0:00")
+        assertThat(CallPresenter.present(CallState.Connected, config, media, 7).durationLabel).isEqualTo("0:07")
+        assertThat(CallPresenter.present(CallState.Connected, config, media, 65).durationLabel).isEqualTo("1:05")
+    }
+
+    @Test
+    fun `reconnecting keeps showing the running clock`() {
+        assertThat(CallPresenter.present(CallState.Reconnecting(attempt = 2), config, media, 42).durationLabel)
+            .isEqualTo("0:42")
+    }
+
+    @Test
+    fun `ended freezes the final length only when the call had connected`() {
+        assertThat(CallPresenter.present(CallState.Ended(CallEndReason.Remote), config, media, 125).durationLabel)
+            .isEqualTo("2:05")
+    }
+
+    @Test
+    fun `ended without ever connecting has no duration label`() {
+        assertThat(CallPresenter.present(CallState.Ended(CallEndReason.Missed), config, media, 0).durationLabel)
+            .isNull()
+        assertThat(CallPresenter.present(CallState.Ended(CallEndReason.Rejected), config, media, 0).durationLabel)
+            .isNull()
+    }
 }

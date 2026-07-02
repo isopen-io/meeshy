@@ -105,9 +105,17 @@
 > (an unauthenticated cold launch defers the route across the login gate), then marks it consumed so a
 > recomposition never re-navigates. +14 behavioural tests (8 `LaunchRouterTest`, 6 new `CallRouteTest`).
 > `assembleDebug` + all `testDebugUnitTest` green.
+> On 2026-07-02 the **live in-call duration timer** landed (slice `call-duration-timer`): the pure
+> `CallDuration.clock(seconds)` in `:core:model` is now the SSOT for call-length formatting (reused by
+> `CallRecord.durationLabel`), `CallViewModel` runs a 1-Hz timer via an injected `CallSecondsTicker` flow
+> seam while connected/reconnecting, and `CallPresenter` derives `CallUiState.durationLabel` — `"0:00"` on
+> connect, ticking through a reconnect, frozen at the final length on the ended screen, `null` for a call
+> that never connected. The connected screen shows the running clock; the ended screen appends the final
+> length. +18 tests.
 > **Next:** a full `ConnectionService`/Telecom integration + ringback tone (system call UI), then the
 > actual WebRTC media transport (`stream-webrtc-android`). Follow-up: `SocketManager.reconnectWithToken()`
-> still has no caller (token-refresh re-attach slice). See the run log + `feature-parity.md §H`.
+> still has no caller (token-refresh re-attach slice — deferred until a token-rotation trigger exists).
+> See the run log + `feature-parity.md §H`.
 
 Stories so far: tray (ring carousel) + cross-group viewer playback engine +
 quick-reaction strip + swipe gestures + realtime reaction socket deltas +
@@ -488,6 +496,44 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-02 — slice `call-duration-timer` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration. The open PRs (#1366–#1369) are
+  `jcnm` branches from other sessions touching web/ios/gateway only — disjoint from `apps/android`, left
+  untouched. Branched off freshly-fetched `origin/main` (`dc8f37a4`) as
+  `claude/apps/android/call-duration-timer`. Confirmed HEAD's `apps/android` matched `origin/main` (all prior
+  Android work merged; `CallViewModel.kt`/`CallPresenter` verified before coding).
+- **Gap closed:** the connected call screen showed a static "Connecté" label with **no call timer** —
+  iOS shows a live in-call duration. The connected/ended screens had nothing to show elapsed time.
+- **What shipped (thin vertical slice, TDD red→green):**
+  - `:core:model` `CallDuration.clock(seconds: Long)` — the pure SSOT for call-length formatting
+    (`M:SS`, widening to `H:MM:SS` past an hour; `"0:00"` at zero; negatives clamped). `CallRecord.durationLabel`
+    was refactored to reuse it (dropping its private `pad2`), so a completed call and its journal row read
+    identically. **6 tests.**
+  - `:feature:calls` `CallPresenter` gains a derived `CallUiState.durationLabel`: `"0:00"` the instant the
+    call connects, the running clock through connected/reconnecting, the **final length frozen** on the ended
+    screen **iff** the call actually connected (`elapsedSeconds > 0`), and `null` before connect / for a
+    missed/declined/failed call that never connected. **5 tests** (every arm).
+  - `CallViewModel` runs a 1-Hz timer while media is (or is being re-)established, resetting the elapsed
+    count on a new call and freezing it on end. The tick source is an **injected `CallSecondsTicker` flow
+    seam** (`@Binds RealCallSecondsTicker`, a `flow { while(true){ delay(1000); emit } }`), so the
+    elapsed-count logic is driven deterministically in tests via plain `emit(Unit)` — and, crucially, avoids
+    a self-rescheduling `delay` loop that hangs `runTest` (see NOTES). **7 tests.**
+  - `CallScreen` renders the running clock as the connected-status subtitle and appends the final length to
+    the ended label — thin glue, no decision in the Composable.
+- **Reviewer gate: PASS.** Scope `apps/android` only (6 files changed, 3 new; all under `apps/android`);
+  behavioural tests through the public API (VM `StateFlow`, presenter output, `CallDuration.clock`); no
+  tautologies; no floor lowered; SDK purity respected (pure formatter SSOT in `:core:model`, product
+  orchestration in `:feature:calls`); ticker cancellation-safe (`viewModelScope`, `collect` cancelled on
+  `stopTicker`). Edge cases covered: zero/negative/hour boundary, never-connected (inert), reset on new call,
+  freeze-and-stop on end, reconnect continuation.
+- **Verification:** `assembleDebug` + `testDebugUnitTest` → **BUILD SUCCESSFUL** (system Gradle 8.14.3
+  `--no-daemon`; wrapper still 403s). CallViewModelTest 35, CallPresenterTest 25, CallDurationTest 6,
+  CallRecordTest 22 — all green, 0 failures. **+18 new behavioural tests.**
+- **Next:** the heavier WebRTC media transport (`stream-webrtc-android`) + `ConnectionService`/Telecom
+  system call UI + ringback tone (glue-heavy — push every testable decision into pure helpers/the VM).
+  Follow-up still open: `SocketManager.reconnectWithToken()` has no caller (a token-refresh re-attach slice —
+  deferred until a token-rotation trigger exists, else it would be orphan code).
 
 ### 2026-07-02 — slice `incoming-call-deeplink` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration. The two open PRs (#1360 iOS a11y,
