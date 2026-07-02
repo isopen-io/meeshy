@@ -368,7 +368,9 @@ export class MessageReadStatusService {
     latestMessageId?: string
   ): Promise<void> {
     try {
-      const dedupKey = `${participantId}:${conversationId}:received`;
+      // Keyed by messageId (or "latest" when unspecified) so a genuinely newer
+      // message is never dropped by the TTL gate — only identical repeats are.
+      const dedupKey = `${participantId}:${conversationId}:received:${latestMessageId ?? "latest"}`;
       const dedupNow = Date.now();
       const lastCall = MessageReadStatusService.recentActionCache.get(dedupKey);
 
@@ -465,7 +467,9 @@ export class MessageReadStatusService {
     latestMessageId?: string
   ): Promise<void> {
     try {
-      const dedupKey = `${participantId}:${conversationId}:read`;
+      // Keyed by messageId (or "latest" when unspecified) so a genuinely newer
+      // message is never dropped by the TTL gate — only identical repeats are.
+      const dedupKey = `${participantId}:${conversationId}:read:${latestMessageId ?? "latest"}`;
       const dedupNow = Date.now();
       const lastCall = MessageReadStatusService.recentActionCache.get(dedupKey);
 
