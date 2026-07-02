@@ -125,6 +125,29 @@ final class CallWaitingBannerViewTests: XCTestCase {
         )
     }
 
+    // MARK: - Auto-dismiss timeout must reject the pending call, not just hide the banner
+
+    func test_scheduleAutoDismiss_callsOnReject() throws {
+        // Regression 2026-07-02: before this fix, the 15s auto-dismiss timeout
+        // only flipped `isVisible = false` and never called `onReject()` —
+        // unlike the explicit "Refuser" button, which calls both. That left
+        // the second caller ringing indefinitely (no busy signal sent) with
+        // no visible UI for the user to act on once the banner vanished.
+        let source = try bannerSource()
+        guard let fnRange = source.range(of: "private func scheduleAutoDismiss()") else {
+            XCTFail("scheduleAutoDismiss() not found in CallWaitingBannerView.swift")
+            return
+        }
+        let end = source.index(fnRange.lowerBound, offsetBy: 600, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[fnRange.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains("onReject()"),
+            "scheduleAutoDismiss()'s Task body must call onReject() after the timeout " +
+            "fires — mirroring the explicit reject button — so the caller receives a " +
+            "busy/reject signal instead of being left ringing until their own timeout."
+        )
+    }
+
     // MARK: - dismiss() cancels the Task before hiding
 
     func test_dismiss_cancelsTaskBeforeHiding() throws {

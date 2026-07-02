@@ -91,6 +91,18 @@ export const SOCKET_RATE_LIMITS = {
     windowMs: 60000, // 1 minute — client reports stats every few seconds
     keyPrefix: 'socket:call:quality'
   },
+  // Fire-and-forget lifecycle telemetry emitted once per finished call —
+  // a handful per minute covers normal use with headroom for retries.
+  CALL_ANALYTICS: {
+    maxRequests: 10,
+    windowMs: 60000, // 1 minute
+    keyPrefix: 'socket:call:analytics'
+  },
+  CALL_SCREEN_CAPTURE: {
+    maxRequests: 20,
+    windowMs: 60000, // 1 minute — start/stop toggles only, not a steady stream
+    keyPrefix: 'socket:call:screen-capture'
+  },
   REACTION_ADD: {
     maxRequests: 30,
     windowMs: 60000, // 1 minute — prevents emoji spam floods

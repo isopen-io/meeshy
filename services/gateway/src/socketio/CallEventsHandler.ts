@@ -2733,6 +2733,15 @@ export class CallEventsHandler {
         if (!userId) return;
         rememberAuth(userId);
 
+        const rateLimitPassed = await checkSocketRateLimit(
+          socket,
+          userId,
+          SOCKET_RATE_LIMITS.CALL_SCREEN_CAPTURE,
+          this.rateLimiter,
+          CALL_EVENTS.ERROR
+        );
+        if (!rateLimitPassed) return;
+
         const validation = validateSocketEvent(socketCallScreenCaptureDetectedSchema, data);
         if (!validation.success) return;
 
@@ -2785,8 +2794,26 @@ export class CallEventsHandler {
         if (!userId) return;
         rememberAuth(userId);
 
+        const rateLimitPassed = await checkSocketRateLimit(
+          socket,
+          userId,
+          SOCKET_RATE_LIMITS.CALL_ANALYTICS,
+          this.rateLimiter,
+          CALL_EVENTS.ERROR
+        );
+        if (!rateLimitPassed) return;
+
         const validation = validateSocketEvent(socketCallAnalyticsSchema, data);
         if (!validation.success) return;
+
+        // Authorization — was previously unchecked, letting any authenticated
+        // user submit telemetry against an arbitrary callId. Scoped to
+        // conversation membership (not `resolveActiveCallParticipantId`,
+        // which requires `leftAt: null` — analytics fires after the client
+        // has already left the call, so an active-participant check would
+        // reject the legitimate sender).
+        const analyticsParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        if (!analyticsParticipantId) return;
 
         logger.info('📞 Socket: call:analytics received', {
           callId: data.callId,

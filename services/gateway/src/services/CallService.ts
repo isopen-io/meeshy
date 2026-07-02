@@ -1542,6 +1542,20 @@ export class CallService {
         callId,
         currentStatus: callSession.status
       });
+      // Audit 2026-07-02 — if the status write already landed via another
+      // path (the ringing-timeout handler's own atomic `updateMany`), that
+      // path only touches CallSession.status: it never stamps participant
+      // rows, clears in-memory heartbeats/timers, or releases the
+      // conversation's active-call claim. Skipping those here left the claim
+      // locked forever (every future `call:initiate` on the conversation
+      // failed CALL_ALREADY_ACTIVE) and left `call:signal` still relaying
+      // SDP/ICE between "missed" participants (their `leftAt` was never
+      // set). Only run this for genuinely terminal statuses — an `active`/
+      // `connecting`/`reconnecting` call must never be torn down here.
+      // Idempotent: a no-op if another terminal path already did it.
+      if (TERMINAL_STATUSES.includes(callSession.status)) {
+        await this.finalizeMissedCallCleanup(callSession.conversationId, callId);
+      }
       return this.getCallSession(callId);
     }
 
@@ -1559,13 +1573,31 @@ export class CallService {
       }
     });
 
-    this.clearHeartbeats(callId);
-    this.clearRingingTimeout(callId);
-    await this.releaseActiveCallClaim(callSession.conversationId, callId);
+    await this.finalizeMissedCallCleanup(callSession.conversationId, callId);
 
     logger.info('Call marked as missed', { callId, duration });
 
     return this.getCallSession(callId);
+  }
+
+  /**
+   * Shared terminal cleanup for a call resolved to `missed` — stamps any
+   * still-open participant rows so `call:signal` stops relaying between them,
+   * clears in-memory heartbeat/ringing-timer state, and releases the
+   * conversation's active-call claim. Safe to call more than once: every
+   * write here is scoped/idempotent.
+   */
+  private async finalizeMissedCallCleanup(conversationId: string, callId: string): Promise<void> {
+    await this.prisma.callParticipant.updateMany({
+      where: {
+        callSessionId: callId,
+        OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
+      },
+      data: { leftAt: new Date() }
+    });
+    this.clearHeartbeats(callId);
+    this.clearRingingTimeout(callId);
+    await this.releaseActiveCallClaim(conversationId, callId);
   }
 
   /**

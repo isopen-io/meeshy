@@ -2697,9 +2697,21 @@ describe('CallService - markCallAsMissed non-ringing guard', () => {
 
     expect(result.status).toBe(CallStatus.active);
     expect(mockPrisma.callSession.update).not.toHaveBeenCalled();
+    // An in-progress call (active/connecting/reconnecting) must never be
+    // torn down by this path — no participant leftAt stamping, no
+    // active-call claim release, it's not terminal.
+    expect(mockPrisma.callParticipant.updateMany).not.toHaveBeenCalled();
+    expect(mockPrisma.conversation.updateMany).not.toHaveBeenCalled();
   });
 
-  it('returns current session without writing when call is already missed', async () => {
+  it('releases the active-call claim and cleans up when the call was already resolved to missed elsewhere', async () => {
+    // Regression for the 2026-07-02 audit: the ringing-timeout handler's own
+    // atomic `callSession.updateMany` (CallEventsHandler.buildRingingTimeoutHandler)
+    // flips status to `missed` directly, bypassing this method's write path
+    // entirely. Before this fix, hitting the early-return guard below meant
+    // `releaseActiveCallClaim`/`clearHeartbeats`/`clearRingingTimeout` never
+    // ran for that call — permanently locking Conversation.activeCallId and
+    // leaving CallParticipant.leftAt unset (so call:signal kept relaying).
     const missedCall = createMockCallSession({
       status: CallStatus.missed,
       endedAt: new Date(),
@@ -2715,9 +2727,20 @@ describe('CallService - markCallAsMissed non-ringing guard', () => {
 
     expect(result.status).toBe(CallStatus.missed);
     expect(mockPrisma.callSession.update).not.toHaveBeenCalled();
+    expect(mockPrisma.callParticipant.updateMany).toHaveBeenCalledWith({
+      where: {
+        callSessionId: 'call-123',
+        OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
+      },
+      data: { leftAt: expect.any(Date) }
+    });
+    expect(mockPrisma.conversation.updateMany).toHaveBeenCalledWith({
+      where: { id: 'conv-123', activeCallId: 'call-123' },
+      data: { activeCallId: null }
+    });
   });
 
-  it('marks ringing call as missed (allowed)', async () => {
+  it('marks ringing call as missed (allowed) and releases the active-call claim', async () => {
     const ringingCall = createMockCallSession({
       status: CallStatus.ringing,
       participants: [createMockParticipant()],
@@ -2740,6 +2763,17 @@ describe('CallService - markCallAsMissed non-ringing guard', () => {
 
     expect(result.status).toBe(CallStatus.missed);
     expect(mockPrisma.callSession.update).toHaveBeenCalled();
+    expect(mockPrisma.callParticipant.updateMany).toHaveBeenCalledWith({
+      where: {
+        callSessionId: 'call-123',
+        OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
+      },
+      data: { leftAt: expect.any(Date) }
+    });
+    expect(mockPrisma.conversation.updateMany).toHaveBeenCalledWith({
+      where: { id: 'conv-123', activeCallId: 'call-123' },
+      data: { activeCallId: null }
+    });
   });
 });
 
