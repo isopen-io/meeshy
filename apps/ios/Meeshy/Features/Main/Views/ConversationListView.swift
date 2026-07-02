@@ -482,7 +482,7 @@ struct ConversationListView: View {
             ) {
                 if isBlocked {
                     Task {
-                        try? await BlockService.shared.unblockUser(userId: userId)
+                        await BlockActionCoordinator.shared.unblock(userId: userId)
                         HapticFeedback.success()
                     }
                 } else {
@@ -679,7 +679,7 @@ struct ConversationListView: View {
                     guard let conv = blockTargetConversation,
                           let targetUserId = conv.participantUserId else { return }
                     Task {
-                        try? await BlockService.shared.blockUser(userId: targetUserId)
+                        await BlockActionCoordinator.shared.block(userId: targetUserId)
                         await conversationViewModel.archiveConversation(conversationId: conv.id)
                         HapticFeedback.success()
                     }
