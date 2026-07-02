@@ -906,7 +906,9 @@ export const CALL_ERROR_CODES = {
   UNSUPPORTED_CALL_TYPE: 'UNSUPPORTED_CALL_TYPE',
   ALREADY_IN_CALL: 'ALREADY_IN_CALL',
   NOT_IN_CALL: 'NOT_IN_CALL',
-  
+  /** Optimistic-locking conflict on CallSession.version persisted after retry (see CallService.joinCall). */
+  CALL_STATE_CONFLICT: 'CALL_STATE_CONFLICT',
+
   // Media control errors
   MEDIA_TOGGLE_FAILED: 'MEDIA_TOGGLE_FAILED',
 
