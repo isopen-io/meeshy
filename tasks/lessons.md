@@ -1,5 +1,19 @@
 # Lessons
 
+## Leçon 56 — Un fix "documenté + testé" peut vivre dans un hook jamais monté (2026-07-03)
+`apps/web/hooks/useCallSignaling.ts` (répertoire `components/video-calls/`, PLURIEL) porte une
+ré-émission `call:join` au reconnect socket, entièrement testée (`useCallSignaling.reconnect.test.ts`
+vert) et créditée dans le backlog comme le miroir web du `didReconnect` iOS — mais n'est importé nulle
+part dans l'app réellement rendue. Le composant monté à `app/call/[callId]/page.tsx` est
+`components/video-call/CallManager.tsx` (SINGULIER), qui réagit bien à `'connect'` mais ne fait que
+ré-attacher des listeners d'événements, jamais ré-émettre `call:join` — rendant tout l'investissement
+gateway "résilience restart/reconnect" inopérant côté web malgré un test vert qui semblait le prouver.
+**Règle : avant de créditer un fix "hook + test passent" dans un backlog, vérifier que ce hook/composant
+est réellement import-atteignable depuis une route rendue (`grep` l'arbre d'imports depuis `app/**/
+page.tsx` jusqu'au fichier en question) — un test vert sur du code mort ne prouve rien en production.**
+Variante du thème sibling-drift (#5/#40/#42/#45/#50/#51/#55) : ici la divergence n'est pas entre deux
+implémentations actives, mais entre une implémentation active et un jumeau non branché au nom de
+répertoire trompeur (`video-call` vs `video-calls`).
 ## 2026-07-02 — Calling-feature routine: REST/socket CallService split + no Swift toolchain in this sandbox
 
 1. **A shared in-memory service constructed twice (once per transport) silently desyncs, and it's easy to miss because each half looks correct in isolation.** `routes/calls.ts` built its own `new CallService(prisma)` while `MeeshySocketIOManager` built another — both correct on their own, but a call initiated via REST never registered its ringing-timeout on the instance `CallEventsHandler`/`CallCleanupService` actually read (and vice versa for cleanup). Same root cause class as this file's `RC-4` entries for `CallCleanupService`, just never extended to the REST routes. **Rule: when a service holds server-lifetime in-memory state (maps/timers, not just DB access), grep every `new ServiceClass(` call site in the codebase, not just the one you're touching — two constructions of a "just a DB wrapper"-looking service is a decoupled-state bug waiting to happen.** Fixed by decorating the Socket.IO layer's instance onto `fastify` (`server.ts` `setupSocketIO()`) and having `routes/calls.ts` consume `fastify.callService ?? new CallService(prisma)` (fallback kept for route-isolation tests / boot-order safety, mirroring the existing `presenceChecker`/`notificationService` decorator pattern).

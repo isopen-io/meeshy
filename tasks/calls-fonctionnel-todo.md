@@ -699,3 +699,42 @@ Découvert PENDANT la validation device (item J) : mes appels vidéo sim→iPhon
   décrochage jcnm → média actif 73 s (RTT 11 ms, opus). RESTE : appel vidéo décroché, caméra, PiP
   swipe-home, stuck-muted — en attente de disponibilité utilisateur. Sim instable ce soir (2 relaunches
   spontanés + churn sockets) — envisager un run dédié pour la prochaine session device.
+
+## Vague 10 — le fix web reconnect-rejoin de la vague 3 vivait dans un hook mort, jamais monté (2026-07-03)
+
+Point d'entrée : routine de suivi continu, audit dédié gateway/web (agent d'exploration, lecture seule)
+mandaté à croiser tout candidat contre ce fichier + lessons.md avant de le rapporter.
+
+- **[BUG CRITIQUE, web, CONFIRMÉ + CORRIGÉ]** La vague 3 (« Re-join au reconnect ») documentait
+  `apps/web/hooks/useCallSignaling.ts` + `useCallSignaling.reconnect.test.ts` comme le fix web
+  symétrique du `didReconnect` iOS. Les deux existent réellement et le test passe — **mais le hook
+  n'est importé nulle part dans l'app rendue**. Le composant réellement monté à `app/call/[callId]/
+  page.tsx` est `apps/web/components/video-call/CallManager.tsx` (répertoire SINGULIER, à distinguer
+  du répertoire PLURIEL `components/video-calls/` qui contient le hook mort) : son `useEffect`
+  d'attache des listeners socket réagit bien à `'connect'` (reconnexion incluse) mais ne fait que
+  ré-attacher les 6 listeners `CALL_INITIATED`/`PARTICIPANT_JOINED`/`PARTICIPANT_LEFT`/`CALL_ENDED`/
+  `MEDIA_TOGGLED`/`CALL_ERROR` — **aucune ré-émission de `call:join`**. Conséquence : tout
+  l'investissement résilience-restart des vagues 3/4/6/7/8 (grâce 30s + extensions, réhydratation
+  ringing, etc.) protège iOS mais est **inopérant pour le web** — un redémarrage gateway ou un simple
+  blip réseau navigateur fait tourner les 4 extensions de grâce à vide (le socket ne rejoint jamais la
+  room `call:<callId>` faute de `call:join`), puis le serveur termine un appel dont le média P2P était
+  pourtant sain. Fix (TDD, miroir exact de `rejoinAfterReconnect` du hook mort, appliqué au composant
+  RÉELLEMENT monté) : `CallManager.tsx` — `hasConnectedRef` distingue le 1er `connect` d'un reconnect
+  réel, `rejoinActiveCallAfterReconnect()` ré-émet `call:join` (lecture live `useCallStore.getState()`,
+  pas de dépendance d'effet) si un appel est actif, avec le même traitement `CALL_ENDED` (teardown via
+  `handleCallEndedRef`) que le hook mort. Nouveau fichier `__tests__/components/video-call/
+  CallManager.reconnect.test.tsx` (4 tests : reconnect réel → rejoin ; 1er connect → pas de rejoin ;
+  pas d'appel actif → pas de rejoin ; ack `CALL_ENDED` → teardown), RED confirmé en stashant le fix
+  (2/4 rouges) puis GREEN restauré. Suite complète `*call*` : 16 suites/216 tests verts. Suite web
+  complète : 432/432 suites, 10832/10853 tests (21 skips pré-existants) — aucune régression. `tsc
+  --noEmit` : diff avant/après identique sur `CallManager.tsx` (mêmes erreurs `unknown`/`{}` pré-
+  existantes du typage `socket: unknown`, aucune nouvelle). Le hook mort (`useCallSignaling.ts` +
+  son test) n'a pas été supprimé cette session (portée volontairement minimale) — à trancher : soit le
+  monter pour de vrai en remplaçant l'orchestration ad-hoc de `CallManager.tsx`, soit le supprimer pour
+  ne plus induire les futurs audits en erreur (cette session en particulier a failli le faire).
+- **Leçon pour la prochaine session** : nommage quasi-identique `video-call/` (singulier, réellement
+  monté) vs `video-calls/` (pluriel, contient un hook testé mais mort) — **toujours vérifier qu'un
+  hook/composant "fix" est bien import-atteignable depuis une route rendue** avant de le créditer comme
+  correctif dans ce fichier (variante du thème sibling-drift #5/#40/#42/#45/#50/#51/#55 : ici la
+  divergence est entre un hook réellement utilisé et un jumeau non branché, pas entre deux siblings
+  actifs).
