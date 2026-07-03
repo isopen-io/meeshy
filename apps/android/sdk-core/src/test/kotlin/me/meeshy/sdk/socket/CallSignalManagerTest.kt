@@ -9,6 +9,8 @@ import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateResult
+import me.meeshy.sdk.model.call.CallQualityReport
+import me.meeshy.sdk.model.call.ConnectionQuality
 import org.json.JSONObject
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -287,5 +289,100 @@ class CallSignalManagerTest {
         assertThat(payload.captured.getString("callId")).isEqualTo("call-9")
         assertThat(payload.captured.getJSONObject("signal").getString("type")).isEqualTo("answer")
         assertThat(payload.captured.getJSONObject("signal").getString("sdp")).isEqualTo("blob")
+    }
+
+    // --- Outbound: the WebRTC-plumbing emits (iOS payload-key parity) ---
+
+    @Test
+    fun `emitRequestIceServers sends call request-ice-servers with the callId payload`() {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, socket) = managerAndSocket
+        val payload = slot<JSONObject>()
+        manager.emitRequestIceServers("call-9")
+        verify { socket.emit("call:request-ice-servers", capture(payload)) }
+        assertThat(payload.captured.getString("callId")).isEqualTo("call-9")
+    }
+
+    @Test
+    fun `emitHeartbeat sends call heartbeat with the callId payload`() {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, socket) = managerAndSocket
+        val payload = slot<JSONObject>()
+        manager.emitHeartbeat("call-9")
+        verify { socket.emit("call:heartbeat", capture(payload)) }
+        assertThat(payload.captured.getString("callId")).isEqualTo("call-9")
+    }
+
+    @Test
+    fun `emitQualityReport nests the stats sub-object under the callId envelope`() {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, socket) = managerAndSocket
+        val payload = slot<JSONObject>()
+        manager.emitQualityReport(
+            "call-9",
+            CallQualityReport(
+                level = ConnectionQuality.FAIR,
+                rttMs = 180.0,
+                packetLoss = 0.04,
+                bytesSent = 5_000L,
+                bytesReceived = 7_000L,
+                availableOutgoingBitrateBps = 800_000,
+                jitterMs = 4.0,
+            ),
+        )
+        verify { socket.emit("call:quality-report", capture(payload)) }
+        assertThat(payload.captured.getString("callId")).isEqualTo("call-9")
+        val stats = payload.captured.getJSONObject("stats")
+        assertThat(stats.getString("level")).isEqualTo("fair")
+        assertThat(stats.getDouble("rtt")).isEqualTo(180.0)
+        assertThat(stats.getDouble("packetLoss")).isEqualTo(0.04)
+        assertThat(stats.getLong("bytesSent")).isEqualTo(5_000L)
+        assertThat(stats.getLong("bytesReceived")).isEqualTo(7_000L)
+        assertThat(stats.getInt("availableOutgoingBitrateBps")).isEqualTo(800_000)
+        assertThat(stats.getDouble("jitterMs")).isEqualTo(4.0)
+    }
+
+    @Test
+    fun `emitQualityReport omits the optional stats when not positive`() {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, socket) = managerAndSocket
+        val payload = slot<JSONObject>()
+        manager.emitQualityReport(
+            "call-9",
+            CallQualityReport(
+                level = ConnectionQuality.EXCELLENT,
+                rttMs = 40.0,
+                packetLoss = 0.0,
+                bytesSent = 10L,
+                bytesReceived = 20L,
+            ),
+        )
+        verify { socket.emit("call:quality-report", capture(payload)) }
+        val stats = payload.captured.getJSONObject("stats")
+        assertThat(stats.has("availableOutgoingBitrateBps")).isFalse()
+        assertThat(stats.has("jitterMs")).isFalse()
+    }
+
+    @Test
+    fun `emitReconnecting sends callId participantId and attempt`() {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, socket) = managerAndSocket
+        val payload = slot<JSONObject>()
+        manager.emitReconnecting("call-9", participantId = "p-1", attempt = 2)
+        verify { socket.emit("call:reconnecting", capture(payload)) }
+        assertThat(payload.captured.getString("callId")).isEqualTo("call-9")
+        assertThat(payload.captured.getString("participantId")).isEqualTo("p-1")
+        assertThat(payload.captured.getInt("attempt")).isEqualTo(2)
+    }
+
+    @Test
+    fun `emitReconnected sends callId and participantId`() {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, socket) = managerAndSocket
+        val payload = slot<JSONObject>()
+        manager.emitReconnected("call-9", participantId = "p-1")
+        verify { socket.emit("call:reconnected", capture(payload)) }
+        assertThat(payload.captured.getString("callId")).isEqualTo("call-9")
+        assertThat(payload.captured.getString("participantId")).isEqualTo("p-1")
     }
 }
