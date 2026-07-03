@@ -226,4 +226,24 @@ final class FloatingCallPillViewTests: XCTestCase {
             "— pre-connection states must show a textual label, never 00:00."
         )
     }
+
+    // MARK: - Dynamic Type sizing
+
+    func test_pillContent_usesMinHeightNotExactHeight() throws {
+        let source = try pillSource()
+        // userInfoSection stacks two Dynamic-Type-scalable Text lines that can
+        // exceed pillHeight at accessibility text sizes (AX1+). An exact
+        // `.frame(height:)` would force-clip the name/status instead of letting
+        // the pill grow to fit its content.
+        XCTAssertTrue(
+            source.contains(".frame(minHeight: pillHeight)"),
+            "pillContent must use .frame(minHeight: pillHeight), not an exact .frame(height:), " +
+            "so the pill grows to fit Dynamic Type text instead of clipping it."
+        )
+        XCTAssertFalse(
+            source.contains(".frame(height: pillHeight)"),
+            "pillContent must not force an exact height on the pill — that clips " +
+            "userInfoSection's text at large accessibility text sizes."
+        )
+    }
 }

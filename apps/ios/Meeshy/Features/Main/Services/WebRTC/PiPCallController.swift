@@ -214,7 +214,22 @@ extension PiPCallController {
 
     func attachRenderer() {
         guard renderer == nil, let remoteTrack else { return }
-        let renderer = PiPVideoRenderer(displayLayer: surfaceView.displayLayer, maxFrameRate: desiredFrameRate)
+        // `PiPVideoRenderer` bypasses WebRTC's own RTCMTLVideoView (which applies
+        // frame.rotation internally) and enqueues the raw, unrotated pixel buffer
+        // straight onto the display layer — so a portrait-held remote camera
+        // (the common case) renders sideways in the system PiP window unless the
+        // rotation is compensated here. `PiPVideoSampleBufferView.applyRotation`
+        // already existed for exactly this but was never wired to a rotation
+        // source; `onRotation` closes that loop.
+        let renderer = PiPVideoRenderer(
+            displayLayer: surfaceView.displayLayer,
+            maxFrameRate: desiredFrameRate,
+            onRotation: { [weak self] degrees in
+                Task { @MainActor [weak self] in
+                    self?.surfaceView.applyRotation(degrees)
+                }
+            }
+        )
         remoteTrack.add(renderer)
         self.renderer = renderer
     }

@@ -391,4 +391,33 @@ final class CallViewAccessibilityTests: XCTestCase {
             "reuses the parent's @ObservedObject subscription instead of creating its own."
         )
     }
+
+    // MARK: - audioCallLayout avatar VoiceOver double-read
+
+    func test_audioCallLayout_avatarPairIsAccessibilityHidden() throws {
+        // `pulsingAvatar` already hides its avatar because the remote user's
+        // name is rendered as a Text directly below it — without this, VoiceOver
+        // reads the avatar initial, then "Vous", then the full name as three
+        // disjoint stops. `audioCallLayout` (the established audio-call screen)
+        // has the exact same avatar-then-name shape but was missing the guard.
+        let source = try callViewSource()
+        guard let layoutRange = source.range(of: "private var audioCallLayout: some View {") else {
+            XCTFail("CallView must define audioCallLayout")
+            return
+        }
+        guard let avatarRange = source.range(
+            of: "callAvatarPair(size: 120)",
+            range: layoutRange.upperBound..<source.endIndex
+        ) else {
+            XCTFail("audioCallLayout must call callAvatarPair(size: 120)")
+            return
+        }
+        let end = source.index(avatarRange.upperBound, offsetBy: 60, limitedBy: source.endIndex) ?? source.endIndex
+        let vicinity = String(source[avatarRange.lowerBound ..< end])
+        XCTAssertTrue(
+            vicinity.contains(".accessibilityHidden(true)"),
+            "audioCallLayout's callAvatarPair(size: 120) must carry .accessibilityHidden(true) " +
+            "to avoid VoiceOver double-reading the avatar initial and the adjacent remote-name Text."
+        )
+    }
 }

@@ -222,4 +222,28 @@ final class PiPCallControllerSourceTests: XCTestCase {
             "tearDown() must reset desiredFrameRate to the default so the next call's PiP doesn't inherit a throttled fps from a previous call"
         )
     }
+
+    // MARK: - Rotation wiring (PiPVideoRenderer.onRotation → surfaceView.applyRotation)
+
+    func test_attachRenderer_wiresOnRotationToSurfaceViewApplyRotation() {
+        // PiPVideoRenderer enqueues the raw, unrotated pixel buffer (unlike
+        // WebRTC's own RTCMTLVideoView) — without forwarding onRotation to
+        // PiPVideoSampleBufferView.applyRotation, the system PiP window renders
+        // a portrait-held remote camera sideways.
+        let attachRange = Self.source.range(of: "func attachRenderer() {\n")
+        XCTAssertNotNil(attachRange, "PiPCallController.attachRenderer() implementation must be present")
+        guard let attachStart = attachRange?.lowerBound,
+              let bodyEnd = Self.source.range(of: "\n    }", range: attachStart..<Self.source.endIndex) else {
+            return XCTFail("Could not locate attachRenderer() body")
+        }
+        let body = Self.source[attachStart..<bodyEnd.lowerBound]
+        XCTAssertTrue(
+            body.contains("onRotation:"),
+            "attachRenderer() must pass an onRotation callback to PiPVideoRenderer"
+        )
+        XCTAssertTrue(
+            body.contains("surfaceView.applyRotation(degrees)"),
+            "The onRotation callback must forward the rotation degrees to surfaceView.applyRotation so the PiP window compensates for the remote camera's orientation"
+        )
+    }
 }
