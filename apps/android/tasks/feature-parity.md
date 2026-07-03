@@ -870,8 +870,27 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] In-call audio effects (voice changer, baby/demon voice, looping background sound)
 - [ ] Camera-covered ("dark frame") detection during video calls
 - [ ] Thermal-aware quality degradation (fps/resolution caps, video disable)
-- [ ] Adaptive call quality (bitrate ladder, auto video-disable on critical link)
-- [ ] Connection-quality indicator; call-waiting banner (second incoming call)
+- [~] Adaptive call quality (bitrate ladder, auto video-disable on critical link) —
+      **quality-tier SSOT landed** (slice `call-quality-level`): pure `core:model`
+      `VideoQualityLevel` (5-tier `CRITICAL<POOR<FAIR<GOOD<EXCELLENT`, port of iOS
+      `VideoQualityLevel`) with `CallQualityThresholds` (the iOS `QualityThresholds`
+      constants) + two classifiers `from(rttMs, packetLoss)` (worse-of-two-axes,
+      strict `>` boundaries) and `from(availableOutgoingBitrateBps)`, plus each
+      tier's sender caps (`targetResolutionHeight`/`targetFps`/`targetVideoBitrateBps`)
+      the future adaptive-bitrate ladder will apply. **Pending:** the real WebRTC
+      sender-cap application + the time-hysteresis auto-video-disable policy (port of
+      iOS `VideoSurvivalPolicy`).
+- [~] Connection-quality indicator; call-waiting banner (second incoming call) —
+      **connection-quality indicator landed** (slice `call-quality-level`): the pure
+      four-tier `ConnectionQuality` (`VideoQualityLevel` collapsed `CRITICAL→POOR`,
+      parity with iOS `CallManager.connectionQualityLabel`) with `bars`(1–4)/`isWeak`;
+      a `CallQualitySampler` stats seam (interim `NoopCallQualitySampler`) folded into
+      `CallViewModel` exactly while media flows (connected/reconnecting), projected by
+      `CallPresenter` into `CallUiState.connectionQuality` and rendered as an
+      accent-coherent 4-bar signal indicator on the call screen (error hue on a weak
+      link, VoiceOver tier label). +37 tests. **Pending:** the WebRTC stats source
+      that feeds real samples, and the **call-waiting banner** for a second incoming
+      call (port of iOS `CallWaitingBannerView`).
 - [ ] Front-camera mirroring; extensible call media pipeline hook bus
 - [~] Voice/video call signaling events (initiate, answer, ICE, end, missed, media toggle) —
       **inbound event models + pure frame→`CallEvent` mapper landed** (slice `call-signalling-events`):

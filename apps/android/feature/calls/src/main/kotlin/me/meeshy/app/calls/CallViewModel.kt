@@ -14,6 +14,7 @@ import me.meeshy.sdk.model.call.CallSound
 import me.meeshy.sdk.model.call.CallSoundPolicy
 import me.meeshy.sdk.model.call.CallState
 import me.meeshy.sdk.model.call.CallStateMachine
+import me.meeshy.sdk.model.call.ConnectionQuality
 import me.meeshy.sdk.model.call.TelecomCallPolicy
 import me.meeshy.sdk.socket.CallSignalManager
 import javax.inject.Inject
@@ -43,6 +44,7 @@ class CallViewModel @Inject constructor(
     private val ticker: CallSecondsTicker,
     private val toneController: CallToneController,
     private val telecomReporter: TelecomCallReporter,
+    private val qualitySampler: CallQualitySampler,
 ) : ViewModel() {
 
     private var config: CallConfig = CallConfig.EMPTY
@@ -60,6 +62,12 @@ class CallViewModel @Inject constructor(
 
     /** The 1-Hz timer job; alive only while media is (or was) flowing this call. */
     private var tickerJob: Job? = null
+
+    /** The latest connection-quality indicator tier, or `null` until a sample arrives. */
+    private var connectionQuality: ConnectionQuality? = null
+
+    /** Collects [CallQualitySampler.samples]; alive only while media is flowing. */
+    private var qualityJob: Job? = null
 
     private val _state = MutableStateFlow(CallPresenter.present(callState, config, media, elapsedSeconds))
     val state: StateFlow<CallUiState> = _state.asStateFlow()
@@ -83,7 +91,9 @@ class CallViewModel @Inject constructor(
         this.media = CallMedia(isCameraOn = config.isVideo)
         this.callId = config.callId
         this.elapsedSeconds = 0L
+        this.connectionQuality = null
         stopTicker()
+        stopQuality()
         if (config.isOutgoing) startOutgoing(config) else dispatch(CallEvent.ReceiveIncoming)
     }
 
@@ -153,6 +163,7 @@ class CallViewModel @Inject constructor(
         driveTone(previous, callState)
         driveTelecom(previous, callState)
         syncTicker()
+        syncQuality()
         publish()
     }
 
@@ -210,8 +221,35 @@ class CallViewModel @Inject constructor(
         tickerJob = null
     }
 
+    /**
+     * Collects live quality samples exactly while media is (or is being
+     * re-)established, mapping each through the pure [ConnectionQuality] SSOT; on
+     * any other phase the collection stops and the last reading is cleared so a
+     * stale bar count never lingers past the connected window.
+     */
+    private fun syncQuality() {
+        val clockRunning = callState is CallState.Connected || callState is CallState.Reconnecting
+        if (clockRunning) startQualityIfNeeded() else stopQuality()
+    }
+
+    private fun startQualityIfNeeded() {
+        if (qualityJob != null) return
+        qualityJob = viewModelScope.launch {
+            qualitySampler.samples.collect { sample ->
+                connectionQuality = ConnectionQuality.from(sample.level())
+                publish()
+            }
+        }
+    }
+
+    private fun stopQuality() {
+        qualityJob?.cancel()
+        qualityJob = null
+        connectionQuality = null
+    }
+
     private fun publish() {
-        _state.value = CallPresenter.present(callState, config, media, elapsedSeconds)
+        _state.value = CallPresenter.present(callState, config, media, elapsedSeconds, connectionQuality)
     }
 
     private companion object {

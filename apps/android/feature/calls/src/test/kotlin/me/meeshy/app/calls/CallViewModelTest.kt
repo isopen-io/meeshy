@@ -19,7 +19,9 @@ import me.meeshy.sdk.model.call.CallEndReason
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateAck
 import me.meeshy.sdk.model.call.CallInitiateResult
+import me.meeshy.sdk.model.call.CallQualitySample
 import me.meeshy.sdk.model.call.CallSound
+import me.meeshy.sdk.model.call.ConnectionQuality
 import me.meeshy.sdk.model.call.TelecomConnectionState
 import me.meeshy.sdk.model.call.TelecomConnectionUpdate
 import me.meeshy.sdk.model.call.TelecomDisconnectCause
@@ -39,6 +41,12 @@ class CallViewModelTest {
     private val tickerFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 64)
     private val ticker = object : CallSecondsTicker {
         override val seconds: Flow<Unit> = tickerFlow
+    }
+
+    /** Test-driven stats source: emit a sample to drive the quality indicator. */
+    private val qualityFlow = MutableSharedFlow<CallQualitySample>(extraBufferCapacity = 64)
+    private val qualitySampler = object : CallQualitySampler {
+        override val samples: Flow<CallQualitySample> = qualityFlow
     }
 
     private val outgoingVideo =
@@ -81,7 +89,7 @@ class CallViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun vm() = CallViewModel(signalManager, ticker, tones, telecom)
+    private fun vm() = CallViewModel(signalManager, ticker, tones, telecom, qualitySampler)
 
     @Test
     fun `starts idle`() {
@@ -468,6 +476,77 @@ class CallViewModelTest {
 
         first.connect()
         assertThat(first.state.value.durationLabel).isEqualTo("0:00")
+    }
+
+    // --- live connection-quality indicator ---------------------------------
+
+    /** Emit one quality stats sample to the connected collector. */
+    private suspend fun emitQuality(rttMs: Double, loss: Double = 0.0) =
+        qualityFlow.emit(CallQualitySample(rttMs = rttMs, packetLoss = loss))
+
+    @Test
+    fun `no connection quality is shown before the call connects`() = runTest {
+        val vm = vm()
+        vm.start(outgoingVideo)
+        emitQuality(rttMs = 40.0) // no collector while ringing → ignored
+        assertThat(vm.state.value.connectionQuality).isNull()
+
+        vm.onSignal(CallEvent.ParticipantJoined)
+        vm.onSignal(CallEvent.RemoteAnswer)
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.CONNECTING)
+        assertThat(vm.state.value.connectionQuality).isNull()
+    }
+
+    @Test
+    fun `a healthy sample lights the indicator once connected`() = runTest {
+        val vm = vm().connect()
+        emitQuality(rttMs = 150.0) // > excellentRTT(100), <= fair(200) → GOOD
+
+        assertThat(vm.state.value.connectionQuality).isEqualTo(ConnectionQuality.GOOD)
+    }
+
+    @Test
+    fun `a critical sample collapses onto the poor indicator`() = runTest {
+        val vm = vm().connect()
+        emitQuality(rttMs = 900.0) // critical tier → indicator POOR
+
+        assertThat(vm.state.value.connectionQuality).isEqualTo(ConnectionQuality.POOR)
+    }
+
+    @Test
+    fun `the indicator keeps updating through a reconnect`() = runTest {
+        val vm = vm().connect()
+        emitQuality(rttMs = 50.0)
+        assertThat(vm.state.value.connectionQuality).isEqualTo(ConnectionQuality.EXCELLENT)
+
+        vm.onSignal(CallEvent.ConnectionStalled)
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.RECONNECTING)
+
+        emitQuality(rttMs = 350.0) // > videoPoorRTT(300) → POOR tier → indicator POOR
+        assertThat(vm.state.value.connectionQuality).isEqualTo(ConnectionQuality.POOR)
+    }
+
+    @Test
+    fun `ending the call clears the connection quality`() = runTest {
+        val vm = vm().connect()
+        emitQuality(rttMs = 50.0)
+        assertThat(vm.state.value.connectionQuality).isEqualTo(ConnectionQuality.EXCELLENT)
+
+        vm.onSignal(CallEvent.RemoteHangUp)
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.ENDED)
+        assertThat(vm.state.value.connectionQuality).isNull()
+    }
+
+    @Test
+    fun `starting a new call clears the previous quality`() = runTest {
+        val vm = vm().connect()
+        emitQuality(rttMs = 50.0)
+        assertThat(vm.state.value.connectionQuality).isEqualTo(ConnectionQuality.EXCELLENT)
+        vm.hangUp()
+        vm.dismiss()
+
+        vm.connect() // fresh call, no sample yet
+        assertThat(vm.state.value.connectionQuality).isNull()
     }
 
     // --- call audio: loops + cues driven from the FSM ----------------------
