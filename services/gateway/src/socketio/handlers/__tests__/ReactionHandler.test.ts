@@ -268,15 +268,20 @@ describe('ReactionHandler', () => {
       expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Could not resolve participant' }));
     });
 
-    it('returns error when removeReaction returns false (reaction not found)', async () => {
-      const { handler } = buildHandler({
+    it('returns idempotent success (no broadcast) when removeReaction returns false (reaction already absent)', async () => {
+      const { handler, io } = buildHandler({
         reactionService: { removeReaction: jest.fn<any>().mockResolvedValue(false), createUpdateEvent: jest.fn<any>() },
       });
       const callback = jest.fn<any>();
 
       await handler.handleReactionRemove(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, callback);
 
-      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Reaction not found' }));
+      // Mirrors the idempotent REST DELETE (R-GW2): the caller's desired
+      // end-state (no reaction) is already achieved, so this is a success,
+      // not an error — an error would make an optimistic-UI client roll back
+      // a removal that already happened, resurrecting a phantom reaction.
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true, data: { message: 'Reaction already absent' } }));
+      expect(io.to).not.toHaveBeenCalled();
     });
 
     it('broadcasts removal and calls callback with success on happy path', async () => {
