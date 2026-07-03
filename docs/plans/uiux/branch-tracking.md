@@ -14,6 +14,20 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 125i, 2026-07-03)** — piste iOS indépendante (suffixe `i`).
+> - **125i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `e027b523`)** :
+>   Dynamic Type + a11y de `AttachmentLoadingTile` (tuile de chargement d'attachment, carré fixe
+>   `size`×`size`). Ajout `import MeeshyUI`. **1/6** `.font(.system(size:))` → `MeeshyFont.relative`
+>   (libellé SOUS la tuile, hors carré). **5 figés** : croix d'annulation (cercle fixe 18×18), label
+>   d'étape, icône+libellé d'erreur, glyphe play — tous bornés par la tuile fixe (86i). 2 masquages
+>   décoratifs (icône erreur + play). 1 fichier, 0 logique, 0 test/clé i18n neuve. 0 contention iOS.
+>   Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `AttachmentLoadingTile` Dynamic Type + a11y SOLDÉ** : ne plus reprendre les 5 glyphes/labels figés.
+> - **Base de départ 126i : `main` HEAD**. Gros lots restants : `StoryViewerView+Content` (⚠️ i18n +
+>   piège `@State private` cross-file), `ConversationView+Composer` (lot critique prudent),
+>   `ConversationMediaGalleryView` (6 mix, vérifier contention). Ensuite : passe state-of-the-art
+>   (palette hexes inline vs tokens, dark/light, gestes).
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 124i, 2026-07-03)** — piste iOS indépendante (suffixe `i`).
 > - **124i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `e0e9b3a6`)** :
 >   Dynamic Type + a11y de `iPadRootView+Panels` (en-tête de panneau du split-view iPad). **5/6**
