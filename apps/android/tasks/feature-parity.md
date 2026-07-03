@@ -769,7 +769,26 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 
 ## H. Calls (audio / video)
 - [ ] 1:1 audio & video calls (WebRTC P2P, ICE/STUN, hardware H.264)
-- [ ] System call UI (Telecom/ConnectionService) + ringback tone
+- [~] System call UI (Telecom/ConnectionService) + ringback tone —
+      **call-audio decision core landed** (slice `call-sound-policy`): the pure
+      `core:model` `CallSoundPolicy` is the SSOT mapping call lifecycle → sound,
+      the Android analogue of the iOS `RingbackTonePlayer` call sites collected
+      into one total function. `loopFor(state)` (`CallSound.None/Ringback/Ringtone`)
+      plays the caller **ringback** through the whole pre-answer wait
+      (`Ringing(outgoing)` + `Offering`) and stops it the instant the answer lands
+      (`Connecting`) — tighter than iOS, which drags it to `.connected` — and the
+      callee **ringtone** while `Ringing(incoming)`; `cueFor(prev, next)` fires the
+      one-shot `CallCue.Connected` on every entry into `Connected` (first connect
+      **and** a successful reconnect) and `CallCue.Ended` only when a *live* call
+      ends (`prev.isActive`, mirroring iOS `if wasActive`), so a phantom `Idle→Ended`
+      or idempotent `Ended→Ended` stays silent; `plan(prev, next)` bundles both per
+      edge. The `:feature:calls` `CallToneController` seam (thin `ToneGenerator`/
+      `RingtoneManager` glue behind an interface, `@Binds` `AndroidCallToneController`)
+      is folded into `CallViewModel.dispatch`: each FSM edge drives the loop (switched
+      only on a genuine change — an inert event never restarts the ringback) + fires
+      the cue, released on `onCleared`. +28 tests (19 policy, 9 VM-fold via a recording
+      fake). **Pending:** the real `ConnectionService`/Telecom self-managed call UI +
+      foreground service, then the WebRTC media transport.
 - [~] Incoming-call delivery via FCM data push when backgrounded/killed (full-screen intent) —
       **pure decision core landed** (slice `incoming-call-push-decision`): `core:model`
       `me.meeshy.sdk.model.call` gains `IncomingCallPush` (typed FCM `data`-map / VoIP payload at

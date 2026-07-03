@@ -112,8 +112,23 @@
 > connect, ticking through a reconnect, frozen at the final length on the ended screen, `null` for a call
 > that never connected. The connected screen shows the running clock; the ended screen appends the final
 > length. +18 tests.
-> **Next:** a full `ConnectionService`/Telecom integration + ringback tone (system call UI), then the
-> actual WebRTC media transport (`stream-webrtc-android`). Follow-up: `SocketManager.reconnectWithToken()`
+> On 2026-07-02 the **call-audio decision core** landed (slice `call-sound-policy`): the pure
+> `core:model` `CallSoundPolicy` is the SSOT mapping call lifecycle → sound — the Android analogue of the
+> iOS `RingbackTonePlayer` call sites collected into one total function. `loopFor(state)`
+> (`CallSound.None/Ringback/Ringtone`) plays the caller **ringback** through the whole pre-answer wait
+> (`Ringing(outgoing)` + `Offering`) and stops it the instant the answer lands (`Connecting`) — tighter
+> than iOS, which drags it to `.connected` — and the callee **ringtone** while `Ringing(incoming)`;
+> `cueFor(prev,next)` fires `CallCue.Connected` on every entry into `Connected` (first connect **and**
+> reconnect-success) and `CallCue.Ended` only when a *live* call ends (`prev.isActive`, mirroring iOS
+> `if wasActive`), so a phantom `Idle→Ended`/idempotent `Ended→Ended` stays silent; `plan(prev,next)`
+> bundles both per edge. The `:feature:calls` `CallToneController` seam (thin `ToneGenerator`/
+> `RingtoneManager` glue behind an interface, `@Binds AndroidCallToneController`) is folded into
+> `CallViewModel.dispatch` — each FSM edge drives the loop (switched only on a genuine change, so an inert
+> event never restarts the ringback) + fires the cue, released on `onCleared`. +28 tests (19 policy, 9
+> VM-fold via a recording fake). `assembleDebug` + all `testDebugUnitTest` green.
+> **Next:** a full self-managed `ConnectionService`/Telecom integration + foreground-service call UI (the
+> real audio-session/full-screen owner the tone controller plugs into), then the actual WebRTC media
+> transport (`stream-webrtc-android`). Follow-up: `SocketManager.reconnectWithToken()`
 > still has no caller (token-refresh re-attach slice — deferred until a token-rotation trigger exists).
 > See the run log + `feature-parity.md §H`.
 
@@ -496,6 +511,39 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-02 — slice `call-sound-policy` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration. The open PRs (#1367–#1374) are
+  `jcnm` branches from other sessions touching web/ios/gateway only — disjoint from `apps/android`, left
+  untouched. Branched off freshly-fetched `origin/main` (`ad3c3b2`) as `claude/apps/android/call-sound-policy`.
+  Confirmed the latest state (top-of-PROGRESS) was `call-duration-timer`; next Calls step per the routine is
+  the Telecom/ringback area — carved a thin, fully-testable pure core out of it.
+- **Gap closed:** the call screen was silent — no ringback for the caller, no ringtone for the callee, no
+  connect/end cue. iOS has a `RingbackTonePlayer` ("the call sound manager") whose start/stop/cue calls are
+  scattered across `CallManager`; Android had nothing.
+- **What shipped (thin vertical slice, TDD red→green):**
+  - `:core:model` `CallSoundPolicy` — the pure, side-effect-free SSOT collecting every iOS `RingbackTonePlayer`
+    call site into one total function. `CallSound` (`None/Ringback/Ringtone`) + `CallCue` (`Connected/Ended`)
+    + `CallSoundPlan`. `loopFor(state)` plays **ringback** across the whole pre-answer wait
+    (`Ringing(outgoing)` + `Offering`, both outgoing-exclusive → no direction ambiguity) and stops it at the
+    answer (`Connecting`) — tighter than iOS which drags it to `.connected` — and **ringtone** while
+    `Ringing(incoming)`. `cueFor(prev,next)` fires `Connected` on every entry into `Connected` (first connect
+    **and** reconnect-success) and `Ended` only when a *live* call ends (`prev.isActive`, iOS `if wasActive`),
+    silent on `Idle→Ended`/`Ended→Ended`. `plan()` bundles both. **19 tests** (every branch of both maps + plan).
+  - `:feature:calls` `CallToneController` — the output seam (interface), with a thin
+    `AndroidCallToneController` glue impl (`ToneGenerator.TONE_SUP_RINGTONE` ringback + `RingtoneManager`
+    ringtone + `TONE_PROP_ACK`/`TONE_PROP_PROMPT` cues, every entry `runCatching`-guarded), `@Binds` into a
+    Hilt module (mirrors `CallTickerModule`). Framework glue → exempt from JVM coverage per `TDD-COVERAGE.md`.
+  - `CallViewModel.dispatch` folds each FSM edge through `CallSoundPolicy.plan`: switches the loop **only on a
+    genuine change** (an inert event never restarts the ringback — tracked via `activeLoop`) and fires the cue;
+    `onCleared` releases. **9 VM-fold tests** via a recording fake controller (outgoing ringback→stop→connected
+    cue, incoming ringtone→stop→connected cue, decline/hang-up ended cue, remote-hangup-after-connect, inert
+    no-restart, reconnect re-cues). CallViewModelTest 35→44.
+- **Verification:** `/opt/gradle/bin/gradle assembleDebug testDebugUnitTest` → **BUILD SUCCESSFUL** (all
+  modules; CallSoundPolicyTest 19/19, CallViewModelTest 44/44). See NOTES.md for the Gradle-8.14.3 fallback.
+- **Reviewer verdict:** **PASS** — diff is `apps/android` only (5 files, +456/−2), no production logic, TDD
+  behavioural (no tautologies, no floor lowered), SDK purity respected (pure decision in `:core:model`,
+  orchestration/glue in `:feature:calls`), UDF preserved, cancellation-safe (all pure/`runCatching`).
 
 ### 2026-07-02 — slice `call-duration-timer` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration. The open PRs (#1366–#1369) are
