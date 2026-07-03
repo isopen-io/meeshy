@@ -429,8 +429,10 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - [ ] **U6 (P3) Dynamic Type/VoiceOver du viewer** : étendre la passe a11y (PR #1211) aux
   overlays reader (labels des zones tap prev/next, annonce du changement de slide,
   `accessibilityValue` de progression).
-- [ ] **U7 (P3) ProMotion** : vérifier `CADisplayLink.preferredFrameRateRange` du timer reader
-  (économie batterie 120 Hz → ne commiter la barre qu'à 1/300 déjà fait ; vérifier le link).
+- [x] **U7 (P3) ProMotion.** ✅ ÉCARTÉ it.30 — déjà satisfait : le timer viewer pose
+  `CAFrameRateRange(min 30, max 60, preferred 60)` (StoryReaderTimerController:270, jamais
+  120 Hz) et le canvas est à preferred 60 (max 120 réservé aux keyframes edit). Granularité
+  barre 1/300 confirmée. Aucun fix nécessaire.
 
 ## 4. Décisions produit EN ATTENTE (ne pas trancher seul)
 
@@ -522,7 +524,11 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.29 — W5 : preload du slide suivant web (hash au push)
+## it.30 — U7 : ÉCARTÉ avec preuve (frame rate déjà borné)
+
+- Vérification pure, zéro changement de code.
+
+## it.29 — W5 : preload du slide suivant web (4776ff52f)
 
 - 147/147 suites story web.
 
