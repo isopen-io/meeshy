@@ -202,3 +202,24 @@ deux sources d'animation pour la même valeur compliquent les réglages fins.
 | Tap vs swipe-actions ouvertes | Bug UX latent (pré-existant) | Gater le tap sur `swipeProgress > 0` |
 | VoiceOver sur le menu custom | Régression a11y depuis le 01-07 | `.accessibilityAction(named:)` sur la ligne |
 | `UIScreen.main.bounds` | Dette (iPad multitâche) | GeometryReader / containerRelativeFrame |
+
+## 6. Addendum — décisions d'implémentation (mesure « connecter vs supprimer »)
+
+Règle appliquée : avant toute suppression, évaluer si brancher la feature est
+préférable. Bilan par élément :
+
+| Élément | Décision | Mesure |
+|---|---|---|
+| `highPriorityGesture(DragGesture)` plein-ligne | **Supprimé** | Connecter est impossible sans casser soit le scroll (un drag vertical plein-ligne EST un scroll : toute priorisation le vole au ScrollView), soit le menu long-press (`.onDrag` natif ⇄ UIDragInteraction, conflit documenté à `135af8f2`). |
+| Drag-to-reorder au doigt | **Non rebranché** (déjà couvert) | La feature réordonnancement est déjà connectée et fonctionnelle via « Déplacer vers » dans le menu contextuel. Un retour du drag au doigt passera par une poignée dédiée ou un mode édition — jamais par un geste plein-ligne. |
+| Repli de l'aperçu (`previewScale`) + `dragOffsetY` | **Branchés** (pas supprimés) | Feature de `a98b93a7` déplacée au bon étage : `previewCollapseGesture` sur la carte d'aperçu de l'overlay (`+Overlays`). Drag vers le haut = repli progressif (ancre `.bottom`), drag vers le bas > 110 pt = fermeture (parité `.contextMenu` natif). `dragOffsetY` est enfin lu par un `.offset(y:)`. Zéro contention scroll : l'overlay masque la liste. |
+| `dragStarted`, `dragOffset`, `gestureStartTime` | **Supprimés** | États porteurs du geste supprimé, jamais lus pour le rendu. Rien à connecter. |
+| `isPressed` (@State ligne) + `onMenuDismissed` + onChange | **Remplacés par dérivation** | `isActivelyPressed: Bool` dérivé de l'état parent : même visuel (scale 0.90, même spring), moins d'états, la ligne redevient sans `@State` (gate `.equatable()` conforme à sa propre doc), et l'ouverture/fermeture du menu n'invalide plus que les lignes concernées. |
+| Infra drop (`SectionDropDelegate`, `handleDrop`, `dropTargetSection`) | **Conservée dormante** | Coût runtime nul tant que `draggingConversation` reste nil ; point de reconnexion naturel pour un futur mode édition. Commentée comme telle. |
+| Tap-pour-fermer de `SwipeableRow` | **Réparé** (GestureMask) | L'`onTapGesture` du composant était court-circuité par le tap enfant ; `gesture(_:including:)` avec `.gesture`/`.subviews` selon l'état ouvert rend le comportement documenté effectif sans toucher au drag. |
+| VoiceOver menu custom | **Rebranché** | `.accessibilityAction(named: "Ouvrir le menu")` sur la ligne → parité avec l'ancien `.contextMenu` natif. |
+
+Différé (hors périmètre du correctif scroll) : remplacement de
+`UIScreen.main.bounds` (§4.7) et extraction de l'overlay en struct dédiée avec
+état local (§4.3 — atténué : les lignes ne reçoivent plus `previewScale`, le
+gate Equatable les protège pendant le geste).

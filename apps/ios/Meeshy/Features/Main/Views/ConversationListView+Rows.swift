@@ -45,24 +45,16 @@ struct ConversationRowItem: View {
     let onMoodBadgeTap: (CGPoint) -> Void
     let onCreateShareLink: (() -> Void)?
     let onTap: () -> Void
-    let onDragStart: () -> Void
     let onLoadPreview: () async -> Void
     /// Appui long → overlay de menu custom (dessine ses icônes ; le
     /// `.contextMenu` natif ne les affiche pas sur iOS 26).
     let onLongPress: () -> Void
-    /// Menu is dismissed → parent calls this to reset row press state
-    let onMenuDismissed: (() -> Void)?
-    /// Tracks which conversation has scale animation active (parent state)
-    let activelyPressedConversationId: String?
-    /// When a conversation is being dragged to reorder, close this row's menu
-    let draggingConversationId: String?
-    @Binding var previewScale: CGFloat
-    @Binding var dragOffsetY: CGFloat
-
-    @State private var isPressed = false
-    @State private var dragStarted = false
-    @State private var dragOffset: CGSize = .zero
-    @State private var gestureStartTime: Date = .now
+    /// true quand cette ligne est celle dont le menu contextuel est ouvert
+    /// (`activelyPressedConversationId == conversation.id` côté parent).
+    /// État DÉRIVÉ, pas local : la fermeture du menu (ou son ouverture sur
+    /// une autre ligne) remet la scale à 1.0 sans machinerie onChange, et la
+    /// ligne reste sans @State — condition du gate `.equatable()` ci-dessous.
+    let isActivelyPressed: Bool
 
     var body: some View {
         SwipeableRow(
@@ -89,7 +81,7 @@ struct ConversationRowItem: View {
                 preferredContentLanguages: preferredContentLanguages
             )
             .equatable()
-            .scaleEffect(isPressed ? 0.90 : 1.0)
+            .scaleEffect(isActivelyPressed ? 0.90 : 1.0)
             .contentShape(Rectangle())
             .onTapGesture {
                 HapticFeedback.light()
@@ -98,89 +90,42 @@ struct ConversationRowItem: View {
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(String(localized: "conversation.row.hint", bundle: .main))
+            // Le menu custom n'est plus un `.contextMenu` natif (auto-exposé
+            // à VoiceOver) : cette action de rotor reste le seul accès non-visuel
+            // à épingler/sourdine/archiver/verrouiller depuis la ligne.
+            .accessibilityAction(named: String(
+                localized: "conversation.row.menu_action",
+                defaultValue: "Ouvrir le menu",
+                bundle: .main
+            )) {
+                onLongPress()
+            }
             // Appui long → overlay custom (icônes garanties iOS 26). Le
             // drag-to-reorder natif (`.onDrag`) a été retiré : il installe une
             // UIDragInteraction UIKit qui capte le long-press système et
             // empêchait la gesture SwiftUI d'ouvrir le menu (le `.contextMenu`
             // natif, lui, se coordonnait avec `.onDrag`). Le déplacement reste
             // accessible via « Déplacer vers » dans le menu.
-            // P7-XX: Drag-to-reorder in highPriority captures immediate drags
-            // before long-press timer fires. If user drags > 30pt within 0.4s → drag mode.
-            .highPriorityGesture(
-                DragGesture()
-                    .onChanged { value in
-                        dragOffset = value.translation
-                        let yDelta = abs(value.translation.height)
-                        let isDragging = yDelta > 30 && Date.now.timeIntervalSince(gestureStartTime) < 0.4
-
-                        if isDragging && !dragStarted {
-                            // Immediate drag-to-reorder before long-press
-                            dragStarted = true
-                            isPressed = false
-                            HapticFeedback.medium()
-                            onDragStart()
-                        } else if dragStarted && isPressed {
-                            // Drag after preview appeared: shrink preview, grow menu
-                            let dragUpAmount = max(0, -value.translation.height) / 100
-                            previewScale = max(0, 1.0 - dragUpAmount)
-                            dragOffsetY = value.translation.height
-                        }
-                    }
-                    .onEnded { _ in
-                        if dragStarted {
-                            dragStarted = false
-                        }
-                        dragOffset = .zero
-                        dragOffsetY = 0
-                        // Don't reset previewScale here; let menu dismiss handle it
-                    }
-            )
-            // P7-XX: Long-press still works, but only if no drag detected
+            //
+            // AUCUN DragGesture custom ici — jamais. Un `highPriorityGesture(
+            // DragGesture())` plein-ligne (régression ff5d5649) capturait le
+            // pan vertical du ScrollView parent et figeait le scroll de la
+            // liste sous le doigt. Le LongPressGesture (distance max 10 pt)
+            // s'annule de lui-même dès que le scroll démarre : le pan reste
+            // la propriété exclusive du ScrollView. Le geste « replier
+            // l'aperçu » vit dans l'overlay du menu (+Overlays), hors de tout
+            // contexte scrollable.
             .simultaneousGesture(
                 LongPressGesture(minimumDuration: 0.4)
                     .onEnded { _ in
-                        if !dragStarted {
-                            // Only show preview if no drag started
-                            withAnimation(.spring(response: 0.65, dampingFraction: 0.99)) {
-                                isPressed = true
-                            }
-                            HapticFeedback.medium()
-                            previewScale = 1.0
-                            dragOffsetY = 0
-                            onLongPress()
-                        }
+                        HapticFeedback.medium()
+                        onLongPress()
                     }
             )
             .task {
                 await onLoadPreview()
             }
-            .onAppear {
-                gestureStartTime = Date.now
-            }
-            .animation(.spring(response: 0.65, dampingFraction: 0.99), value: isPressed)
-            // adaptiveOnChange : la signature (old, new) de .onChange est iOS 17+ ;
-            // le shim maison couvre le plancher iOS 16 du projet.
-            .adaptiveOnChange(of: activelyPressedConversationId) { oldId, newId in
-                // If menu is dismissed (newId becomes nil) or switched to another row (newId != our ID),
-                // reset this row's press state with animation
-                if oldId == conversation.id && (newId == nil || newId != conversation.id) {
-                    withAnimation(.spring(response: 0.65, dampingFraction: 0.99)) {
-                        isPressed = false
-                    }
-                    onMenuDismissed?()
-                }
-            }
-            .adaptiveOnChange(of: draggingConversationId) { oldId, newId in
-                // If another conversation starts dragging, close this row's menu
-                if newId != nil && newId != conversation.id && isPressed {
-                    withAnimation(.spring(response: 0.65, dampingFraction: 0.99)) {
-                        isPressed = false
-                    }
-                    previewScale = 1.0
-                    dragOffsetY = 0
-                    onMenuDismissed?()
-                }
-            }
+            .animation(.spring(response: 0.65, dampingFraction: 0.99), value: isActivelyPressed)
         }
     }
 }
@@ -229,8 +174,10 @@ extension ConversationRowItem: @MainActor Equatable {
         zip(lhs.trailingActions, rhs.trailingActions).allSatisfy { $0.icon == $1.icon } &&
         (lhs.onCreateShareLink == nil) == (rhs.onCreateShareLink == nil) &&
         lhs.cachedPreviewMessages.count == rhs.cachedPreviewMessages.count &&
-        lhs.activelyPressedConversationId == rhs.activelyPressedConversationId &&
-        lhs.draggingConversationId == rhs.draggingConversationId
+        // Booléen DÉRIVÉ par ligne (et non l'id global du menu ouvert) :
+        // ouvrir/fermer le menu n'invalide que les lignes dont ce booléen
+        // bascule — pas les ~30 lignes visibles.
+        lhs.isActivelyPressed == rhs.isActivelyPressed
     }
 }
 
