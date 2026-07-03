@@ -1648,12 +1648,19 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     /// surfaced (cache TTL > 24h is intentional so we don't redownload
     /// avatars/text on every cold start, but the *content* must not be
     /// rendered).
+    /// G6 — durée de vie d'une story SANS `expiresAt` explicite : alignée sur
+    /// la constante serveur `STORY_EXPIRY_HOURS = 21` (PostService.ts) et sur
+    /// le fallback client de `toStoryGroups`/`pinDeadline` (createdAt + 21 h).
+    /// L'ancien défaut interne de 24 h était un piège dormant : sans effet
+    /// tant que le serveur pose toujours `expiresAt`, mais une story au
+    /// fallback aurait survécu 3 h de plus que sa vie serveur.
+    public static let defaultExpiryInterval: TimeInterval = 21 * 60 * 60
+
     public func isExpired(at now: Date = Date()) -> Bool {
         if let explicit = expiresAt {
             return explicit <= now
         }
-        let twentyFourHoursAfterCreation = createdAt.addingTimeInterval(24 * 60 * 60)
-        return twentyFourHoursAfterCreation <= now
+        return createdAt.addingTimeInterval(Self.defaultExpiryInterval) <= now
     }
 
     /// Prisme realtime : le gateway diffuse les traductions PAR text-object via

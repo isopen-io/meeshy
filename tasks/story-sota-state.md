@@ -343,9 +343,10 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   est la vérité). Retirer du schema (migration) ou documenter.
 - [ ] **G5 (P3) Consolider les 3 implémentations de visibilité** (PostFeedService,
   PostService, canUserViewPost) en un module unique — risque de dérive/fuite documenté.
-- [ ] **G6 (P3) Constante d'expiry unifiée.** Serveur = 21 h (`STORY_EXPIRY_HOURS`), client
-  `toStoryGroups` fallback = createdAt+21 h mais `isExpired` défaut interne = +24 h. Sans effet
-  aujourd'hui (expiresAt toujours posé) mais piège dormant — une seule constante partagée.
+- [x] **G6 (P3) Constante d'expiry unifiée.** ✅ it.26
+  `StoryItem.defaultExpiryInterval = 21 h` (aligné STORY_EXPIRY_HOURS serveur) remplace le
+  défaut interne 24 h d'`isExpired` ; test du contrat + pins adaptés (le pin 24 h a échoué
+  comme attendu — preuve que le piège était réel). toStoryGroups/pinDeadline déjà à 21 h.
 
 ### WEB (secondaire — parité lecteur)
 
@@ -512,7 +513,11 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.25 — U2 : haptics slide-change + gel/reprise (hash au push)
+## it.26 — G6 : expiry fallback client aligné sur le serveur, 21 h partout (hash au push)
+
+- 13/13 StoryItemExpirationTests (pins 24 h adaptés + test de contrat) ; build vert.
+
+## it.25 — U2 : haptics slide-change + gel/reprise (e078f29ab)
 
 - 2 points d'ancrage branchés sur l'abstraction existante ; build vert (clean build 929 s).
 
