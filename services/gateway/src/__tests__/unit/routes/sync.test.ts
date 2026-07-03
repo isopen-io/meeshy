@@ -16,7 +16,7 @@ jest.mock('../../../middleware/auth', () => ({
   },
 }));
 
-import { syncRoutes } from '../../../routes/sync';
+import { syncRoutes, encodeSyncCursor, decodeSyncCursor } from '../../../routes/sync';
 
 type PrismaStub = {
   participant: { findMany: jest.Mock };
@@ -177,5 +177,117 @@ describe('GET /sync — ETag / 304', () => {
     });
     expect(second.statusCode).toBe(304);
     await app.close();
+  });
+});
+
+// In-memory prisma.message.findMany that HONORS the composite keyset cursor,
+// the `since` floor, the ordering and `take` — so a full round-trip proves the
+// pages tile the dataset with NO overlap and NO gap, including an updatedAt tie
+// (the exact case a time-only watermark would drop or duplicate).
+function keysetMessageStore(
+  changed: Array<{ id: string; conversationId: string; senderId: string; content: string; createdAt: Date; updatedAt: Date }>,
+) {
+  return jest.fn<any>().mockImplementation((args: any) => {
+    const where = args.where ?? {};
+    // Two streams per request: changed (deletedAt === null) vs deleted.
+    if (where.deletedAt !== null) return Promise.resolve([]); // no tombstones here
+    let rows = [...changed];
+    const or = where.OR as Array<any> | undefined;
+    if (or) {
+      const gtU = new Date(or[0].updatedAt.gt).getTime();
+      const eqU = new Date(or[1].updatedAt).getTime();
+      const gtI = or[1].id.gt as string;
+      rows = rows.filter((r) => r.updatedAt.getTime() > gtU || (r.updatedAt.getTime() === eqU && r.id > gtI));
+    } else if (where.updatedAt?.gt) {
+      const floor = new Date(where.updatedAt.gt).getTime();
+      rows = rows.filter((r) => r.updatedAt.getTime() > floor);
+    }
+    rows.sort((a, b) => a.updatedAt.getTime() - b.updatedAt.getTime() || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    return Promise.resolve(rows.slice(0, args.take));
+  });
+}
+
+describe('GET /sync — cursor pagination (A3.2)', () => {
+  const rows = (n: number) =>
+    Array.from({ length: n }, (_, k) => ({
+      id: `m${k}`,
+      conversationId: 'c1',
+      senderId: 'u',
+      content: `#${k}`,
+      createdAt: new Date('2026-06-01T00:00:00Z'),
+      updatedAt: new Date(`2026-07-02T00:00:${String(k).padStart(2, '0')}.000Z`),
+    }));
+
+  it('truncation emits a non-null opaque nextCursor and hasMore=true', async () => {
+    const prisma = makePrisma();
+    prisma.message.findMany
+      .mockResolvedValueOnce(rows(3)) // changed: 3 rows for cap=2 → truncated
+      .mockResolvedValueOnce([]); // deleted
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages&limit=2` });
+    const data = res.json().data;
+    expect(data.collections.messages.truncated).toBe(true);
+    expect(typeof data.collections.messages.nextCursor).toBe('string');
+    expect(data.nextCursor).toBe(data.collections.messages.nextCursor);
+    expect(data.hasMore).toBe(true);
+    await app.close();
+  });
+
+  it('paginates the full changed set with no overlap and no gap (incl. an updatedAt tie)', async () => {
+    const T = (s: string) => new Date(s);
+    const dataset = [
+      { id: 'a', conversationId: 'c1', senderId: 'u', content: '', createdAt: T('2026-06-01T00:00:00Z'), updatedAt: T('2026-07-02T00:00:01Z') },
+      { id: 'b1', conversationId: 'c1', senderId: 'u', content: '', createdAt: T('2026-06-01T00:00:00Z'), updatedAt: T('2026-07-02T00:00:02Z') },
+      { id: 'b2', conversationId: 'c1', senderId: 'u', content: '', createdAt: T('2026-06-01T00:00:00Z'), updatedAt: T('2026-07-02T00:00:02Z') }, // tie w/ b1
+      { id: 'c', conversationId: 'c1', senderId: 'u', content: '', createdAt: T('2026-06-01T00:00:00Z'), updatedAt: T('2026-07-02T00:00:03Z') },
+      { id: 'd', conversationId: 'c1', senderId: 'u', content: '', createdAt: T('2026-06-01T00:00:00Z'), updatedAt: T('2026-07-02T00:00:04Z') },
+    ];
+    const prisma = makePrisma({ message: { findMany: keysetMessageStore(dataset) } });
+    const app = await buildApp(prisma);
+
+    const seen: string[] = [];
+    let cursor: string | null = null;
+    let guard = 0;
+    for (; guard < 10; guard++) {
+      const url = `/sync?since=${SINCE}&collections=messages&limit=2` + (cursor ? `&cursor=${encodeURIComponent(cursor)}` : '');
+      const res: any = await app.inject({ method: 'GET', url });
+      const msgs = res.json().data.collections.messages;
+      for (const m of [...msgs.added, ...msgs.modified]) seen.push(m.id as string);
+      if (!msgs.truncated) {
+        cursor = null;
+        break;
+      }
+      cursor = msgs.nextCursor as string;
+    }
+    expect(guard).toBeLessThan(10); // terminated, no infinite loop
+    expect(cursor).toBeNull();
+    expect([...seen].sort()).toEqual(['a', 'b1', 'b2', 'c', 'd']);
+    expect(new Set(seen).size).toBe(seen.length); // no duplicates
+    await app.close();
+  });
+
+  it('400 INVALID_CURSOR on a malformed cursor', async () => {
+    const app = await buildApp(makePrisma());
+    const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages&cursor=not-json` });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.code).toBe('INVALID_CURSOR');
+    await app.close();
+  });
+});
+
+describe('sync cursor codec', () => {
+  it('round-trips a changed + deleted keyset position', () => {
+    const pos = { c: { u: '2026-07-02T00:00:02.000Z', i: 'b1' }, d: { u: '2026-07-02T00:00:09.000Z', i: 'z' } };
+    expect(decodeSyncCursor(encodeSyncCursor(pos))).toEqual(pos);
+  });
+
+  it('omits an absent stream key on round-trip', () => {
+    const pos = { c: { u: '2026-07-02T00:00:02.000Z', i: 'b1' } };
+    expect(decodeSyncCursor(encodeSyncCursor(pos))).toEqual(pos);
+  });
+
+  it('throws on a malformed token', () => {
+    expect(() => decodeSyncCursor('%%%not-json%%%')).toThrow();
   });
 });

@@ -8,16 +8,57 @@ import { computeETag, ifNoneMatchMatches } from '../utils/etag';
  * SyncEngine unifié (spec §7, sous-tâche A3.1) — endpoint delta `/sync`
  * read-only, collection PILOTE `messages`.
  *
- * A3.1 livre : validation Zod des query params, la collection `messages`
- * (added / modified / deleted par watermark `since`, cap 1000, tri ASC),
- * `hasGap` exact via `SequenceService.currentSeq` (A1), ETag/304, RLS
- * participant-only. A3.2 ajoutera la pagination cursor complète (ici la
- * troncature est signalée par `truncated` + `nextCursor: null`).
+ * A3.1 a livré : validation Zod, la collection `messages` (added / modified /
+ * deleted par watermark `since`, cap 1000, tri ASC), `hasGap` exact via
+ * `SequenceService.currentSeq` (A1), ETag/304, RLS participant-only.
+ *
+ * A3.2 ajoute la PAGINATION CURSOR : keyset composite `(updatedAt, id)` (resp.
+ * `(deletedAt, id)`) — pas un cursor id-only, car `updatedAt` n'est PAS monotone
+ * avec l'id (un vieux message ré-édité a un updatedAt récent mais un id ancien).
+ * Le tiebreaker `id` garantit qu'une page reprend EXACTEMENT après la précédente,
+ * même sur des `updatedAt` égaux (que le watermark temporel raterait). Le token
+ * est opaque (base64url d'un JSON versionné) et encode la position des DEUX
+ * streams ; un stream épuisé conserve sa clé (report) pour ne rien re-livrer.
  */
 
 const MAX_ITEMS_PER_COLLECTION = 1000;
 const GAP_THRESHOLD = 10_000;
 const SUPPORTED_COLLECTIONS = ['messages'] as const;
+
+type CursorKey = { u: string; i: string };
+export type SyncCursor = { c?: CursorKey; d?: CursorKey };
+
+/** Encode une position keyset en token opaque (base64url JSON versionné). */
+export function encodeSyncCursor(cursor: SyncCursor): string {
+  const payload: Record<string, unknown> = { v: 1 };
+  if (cursor.c) payload.c = cursor.c;
+  if (cursor.d) payload.d = cursor.d;
+  return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+}
+
+/** Décode un token opaque ; jette sur version/forme/date invalide (→ 400). */
+export function decodeSyncCursor(token: string): SyncCursor {
+  const parsed = JSON.parse(Buffer.from(token, 'base64url').toString('utf8')) as {
+    v?: unknown;
+    c?: unknown;
+    d?: unknown;
+  };
+  if (parsed.v !== 1) throw new Error('unsupported cursor version');
+  const key = (v: unknown): CursorKey | undefined => {
+    if (v === undefined) return undefined;
+    if (typeof v !== 'object' || v === null) throw new Error('malformed cursor key');
+    const { u, i } = v as Record<string, unknown>;
+    if (typeof u !== 'string' || typeof i !== 'string') throw new Error('malformed cursor key');
+    if (Number.isNaN(new Date(u).getTime())) throw new Error('malformed cursor date');
+    return { u, i };
+  };
+  const out: SyncCursor = {};
+  const c = key(parsed.c);
+  const d = key(parsed.d);
+  if (c) out.c = c;
+  if (d) out.d = d;
+  return out;
+}
 
 const syncQuerySchema = z.object({
   since: z.string().datetime({ offset: true }),
@@ -64,7 +105,7 @@ export async function syncRoutes(fastify: FastifyInstance): Promise<void> {
         error: { code: 'INVALID_QUERY', message: parsed.error.issues[0]?.message ?? 'Invalid query' },
       });
     }
-    const { since, collections, seq, limit, scope } = parsed.data;
+    const { since, collections, seq, limit, scope, cursor } = parsed.data;
 
     const requested = collections.split(',').map((c) => c.trim()).filter(Boolean);
     const unknown = requested.filter(
@@ -75,6 +116,20 @@ export async function syncRoutes(fastify: FastifyInstance): Promise<void> {
         success: false,
         error: { code: 'UNSUPPORTED_COLLECTION', message: `Unsupported collections: ${unknown.join(', ')}` },
       });
+    }
+
+    // Décodage strict du cursor (opaque) AVANT toute requête — un token corrompu
+    // est un bug client, on le surface en 400 plutôt que de repartir de zéro.
+    let syncCursor: SyncCursor | undefined;
+    if (cursor !== undefined) {
+      try {
+        syncCursor = decodeSyncCursor(cursor);
+      } catch {
+        return reply.status(400).send({
+          success: false,
+          error: { code: 'INVALID_CURSOR', message: 'Malformed cursor' },
+        });
+      }
     }
 
     const authRequest = request as UnifiedAuthRequest;
@@ -92,8 +147,10 @@ export async function syncRoutes(fastify: FastifyInstance): Promise<void> {
     if (requested.includes('messages')) {
       collectionsResult.messages = hasGap
         ? { added: [], modified: [], deleted: [], truncated: false, nextCursor: null }
-        : await syncMessages({ prisma, userId, sinceDate, cap, scope });
+        : await syncMessages({ prisma, userId, sinceDate, cap, scope, cursor: syncCursor });
     }
+
+    const messagesCol = collectionsResult.messages as { nextCursor?: string | null } | undefined;
 
     const payload = {
       checkpoint: new Date().toISOString(),
@@ -102,7 +159,9 @@ export async function syncRoutes(fastify: FastifyInstance): Promise<void> {
       hasMore: Object.values(collectionsResult).some(
         (c) => (c as { truncated?: boolean }).truncated === true,
       ),
-      nextCursor: null,
+      // Pilote mono-collection : le token top-level EST celui de `messages`.
+      // Multi-collection (A6) le namespacera par collection.
+      nextCursor: messagesCol?.nextCursor ?? null,
       hasGap,
       gapAction: hasGap ? 'full_resync_required' : null,
     };
@@ -128,14 +187,15 @@ async function syncMessages(opts: {
   sinceDate: Date;
   cap: number;
   scope?: string;
+  cursor?: SyncCursor;
 }): Promise<{
   added: SyncMessage[];
   modified: SyncMessage[];
   deleted: DeletedRef[];
   truncated: boolean;
-  nextCursor: null;
+  nextCursor: string | null;
 }> {
-  const { prisma, userId, sinceDate, cap, scope } = opts;
+  const { prisma, userId, sinceDate, cap, scope, cursor } = opts;
 
   // RLS : uniquement les conversations où l'utilisateur est participant actif.
   const memberships = await prisma.participant.findMany({
@@ -147,42 +207,79 @@ async function syncMessages(opts: {
     return { added: [], modified: [], deleted: [], truncated: false, nextCursor: null };
   }
 
-  // Non supprimés modifiés depuis `since`, triés updatedAt ASC, cap+1 pour
-  // détecter la troncature (la pagination cursor viendra en A3.2).
-  const changed = await prisma.message.findMany({
+  // CHANGED — non supprimés modifiés depuis `since`. Keyset `(updatedAt, id)` :
+  // à la 1re page on part du floor `since` ; ensuite on reprend STRICTEMENT après
+  // la position du cursor (le tiebreaker `id` évite trou/doublon sur updatedAt égal).
+  const changedRows = await prisma.message.findMany({
     where: {
       conversationId: { in: conversationIds },
       deletedAt: null,
-      updatedAt: { gt: sinceDate },
+      ...(cursor?.c
+        ? {
+            OR: [
+              { updatedAt: { gt: new Date(cursor.c.u) } },
+              { updatedAt: new Date(cursor.c.u), id: { gt: cursor.c.i } },
+            ],
+          }
+        : { updatedAt: { gt: sinceDate } }),
     },
     select: messageSelect,
-    orderBy: { updatedAt: 'asc' },
+    orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
     take: cap + 1,
   });
-  const truncated = changed.length > cap;
-  const page = truncated ? changed.slice(0, cap) : changed;
+  const changedTruncated = changedRows.length > cap;
+  const changedPage = changedTruncated ? changedRows.slice(0, cap) : changedRows;
 
   // added = créé après `since` ; modified = pré-existant mais modifié.
-  const added = page.filter((m) => m.createdAt > sinceDate);
-  const modified = page.filter((m) => m.createdAt <= sinceDate);
+  const added = changedPage.filter((m) => m.createdAt > sinceDate);
+  const modified = changedPage.filter((m) => m.createdAt <= sinceDate);
 
-  // Tombstones : supprimés depuis `since`, triés deletedAt ASC.
+  // DELETED — tombstones supprimés depuis `since`. Même keyset `(deletedAt, id)`
+  // avec cap+1 : le stream tombstones est désormais paginé (A3.1 le tronquait
+  // silencieusement à `cap` sans signal — trou corrigé).
   const deletedRows = await prisma.message.findMany({
     where: {
       conversationId: { in: conversationIds },
-      deletedAt: { gt: sinceDate },
+      ...(cursor?.d
+        ? {
+            OR: [
+              { deletedAt: { gt: new Date(cursor.d.u) } },
+              { deletedAt: new Date(cursor.d.u), id: { gt: cursor.d.i } },
+            ],
+          }
+        : { deletedAt: { gt: sinceDate } }),
     },
     select: { id: true, conversationId: true, deletedAt: true },
-    orderBy: { deletedAt: 'asc' },
-    take: cap,
+    orderBy: [{ deletedAt: 'asc' }, { id: 'asc' }],
+    take: cap + 1,
   });
-  const deleted: DeletedRef[] = deletedRows.map((d) => ({
+  const deletedTruncated = deletedRows.length > cap;
+  const deletedPage = deletedTruncated ? deletedRows.slice(0, cap) : deletedRows;
+  const deleted: DeletedRef[] = deletedPage.map((d) => ({
     id: d.id,
     conversationId: d.conversationId,
     deletedAt: d.deletedAt as Date,
   }));
 
-  return { added, modified, deleted, truncated, nextCursor: null };
+  const truncated = changedTruncated || deletedTruncated;
+
+  // Report par stream : on avance la clé si cette page a livré des items, sinon
+  // on conserve la clé entrante — un stream épuisé reste sur sa dernière position
+  // pour que la requête keyset suivante ne re-livre ni ne saute rien.
+  const lastChanged = changedPage[changedPage.length - 1];
+  const lastDeleted = deletedPage[deletedPage.length - 1];
+  const cKey: CursorKey | undefined = lastChanged
+    ? { u: lastChanged.updatedAt.toISOString(), i: lastChanged.id }
+    : cursor?.c;
+  const dKey: CursorKey | undefined = lastDeleted
+    ? { u: (lastDeleted.deletedAt as Date).toISOString(), i: lastDeleted.id }
+    : cursor?.d;
+  const nextKey: SyncCursor = {};
+  if (cKey) nextKey.c = cKey;
+  if (dKey) nextKey.d = dKey;
+  const nextCursor = truncated ? encodeSyncCursor(nextKey) : null;
+
+  return { added, modified, deleted, truncated, nextCursor };
 }
 
 // Fastify request typing helper for tests / callers that need the query shape.
