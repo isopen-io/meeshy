@@ -3828,8 +3828,11 @@ final class CallManagerSocketReconnectMediaResyncTests: XCTestCase {
         guard let body = reconnectHandlerBody(source) else {
             XCTFail("socket.didReconnect handler not found in CallManager.swift"); return
         }
+        // Routed through requestFreshTurnCredentials (not a bare emitRequestIceServers)
+        // so this refresh is also covered by the retry watchdog — see
+        // CallManagerTURNRefreshWatchdogTests.test_allRequestIceServersCallSites_routeThroughWatchdogHelper.
         XCTAssertTrue(
-            body.contains("emitRequestIceServers"),
+            body.contains("requestFreshTurnCredentials"),
             "Socket reconnect handler must request fresh TURN credentials — " +
             "the socket may have been down long enough for credentials to near expiry."
         )
