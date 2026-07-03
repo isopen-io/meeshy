@@ -376,6 +376,10 @@ final class CallManager: ObservableObject {
 
     // MARK: - Analytics accumulators (reset in endCallInternal)
     private var analyticsCallInitiatedDate: Date?
+    /// answer/join → début de la négociation WebRTC : answerCall côté appelé,
+    /// participant-joined côté appelant. Sépare le temps de sonnerie humain
+    /// (dans setupTimeMs) du temps technique (negotiationTimeMs).
+    private var analyticsNegotiationStartDate: Date?
     private var analyticsConnectedDate: Date?
     private var analyticsNetworkTransitions: Int = 0
     private var analyticsQualitySeconds: [VideoQualityLevel: Double] = [:]
@@ -1411,6 +1415,7 @@ final class CallManager: ObservableObject {
         ringbackPlayer.stop()
         ringbackPlayer.stopRingtone()
 
+        analyticsNegotiationStartDate = Date()
         callState = .connecting
         // Audio session is configured at peer-connection setup (handleIncoming…),
         // not here — CallKit drives activation via provider:didActivate:.
@@ -1485,6 +1490,7 @@ final class CallManager: ObservableObject {
         guard case .ringing(isOutgoing: false) = callState else { return }
         guard let callId = currentCallId, let userId = remoteUserId else { return }
 
+        analyticsNegotiationStartDate = Date()
         callState = .connecting
 
         if let remoteOffer = pendingRemoteOffer {
@@ -2747,9 +2753,11 @@ final class CallManager: ObservableObject {
             analyticsQualitySeconds[prevLevel, default: 0] += now.timeIntervalSince(prevDate)
         }
 
-        let setupTimeMs: Int = analyticsConnectedDate.map {
-            Int($0.timeIntervalSince(analyticsCallInitiatedDate ?? $0) * 1000)
-        } ?? -1
+        let setupMetrics = CallReliabilityPolicy.callSetupMetrics(
+            initiatedAt: analyticsCallInitiatedDate,
+            negotiationStartAt: analyticsNegotiationStartDate,
+            connectedAt: analyticsConnectedDate
+        )
 
         let totalSecs = analyticsQualitySeconds.values.reduce(0, +)
         let qualityDistribution: [String: Double]
@@ -2771,7 +2779,8 @@ final class CallManager: ObservableObject {
         let filtersUsed = analyticsVideoFiltersUsed || webRTCService.videoFilters.config.isEnabled
 
         let payload: [String: Any] = [
-            "setupTimeMs":         setupTimeMs,
+            "setupTimeMs":         setupMetrics.setupTimeMs,
+            "negotiationTimeMs":   setupMetrics.negotiationTimeMs,
             "durationSeconds":     callDuration,
             "reconnectionCount":   reconnectAttempt,
             "networkTransitions":  analyticsNetworkTransitions,
@@ -2792,6 +2801,7 @@ final class CallManager: ObservableObject {
 
         // Reset accumulators so a subsequent call starts clean.
         analyticsCallInitiatedDate = nil
+        analyticsNegotiationStartDate = nil
         analyticsConnectedDate = nil
         analyticsNetworkTransitions = 0
         analyticsQualitySeconds = [:]
@@ -3512,6 +3522,9 @@ final class CallManager: ObservableObject {
             }
             self.participantJoinedCancellable?.cancel()
             Logger.calls.info("Participant joined call \(callId), creating offer")
+            // Ancrage négociation côté appelant : l'appelé vient de décrocher,
+            // la sonnerie est finie — tout ce qui suit est du setup technique.
+            self.analyticsNegotiationStartDate = Date()
 
             // Update ICE servers with TURN credentials without recreating the peer connection
             if let servers = event.iceServers, !servers.isEmpty {

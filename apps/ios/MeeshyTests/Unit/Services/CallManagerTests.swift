@@ -4534,3 +4534,79 @@ final class CallAnsweredElsewherePushTests: XCTestCase {
         )
     }
 }
+
+// MARK: - Call setup metrics (ring vs negotiation split)
+
+/// `setupTimeMs` (initiated→connected) inclut le temps de sonnerie HUMAIN —
+/// 23 s observés en prod, inutilisable pour détecter une régression du setup
+/// WebRTC. `negotiationTimeMs` (answer/join→connected) isole la partie
+/// technique. Fonction pure : -1 dès qu'un ancrage manque, jamais de 0 menteur.
+@MainActor
+final class CallSetupMetricsTests: XCTestCase {
+
+    private let t0 = Date(timeIntervalSince1970: 1_000_000)
+
+    func test_bothAnchors_present_splitsRingFromNegotiation() {
+        let metrics = CallReliabilityPolicy.callSetupMetrics(
+            initiatedAt: t0,
+            negotiationStartAt: t0.addingTimeInterval(20),   // 20 s de sonnerie
+            connectedAt: t0.addingTimeInterval(21.5)          // 1.5 s de négo
+        )
+        XCTAssertEqual(metrics.setupTimeMs, 21_500)
+        XCTAssertEqual(metrics.negotiationTimeMs, 1_500)
+    }
+
+    func test_neverConnected_bothMinusOne() {
+        let metrics = CallReliabilityPolicy.callSetupMetrics(
+            initiatedAt: t0, negotiationStartAt: t0.addingTimeInterval(5), connectedAt: nil
+        )
+        XCTAssertEqual(metrics.setupTimeMs, -1)
+        XCTAssertEqual(metrics.negotiationTimeMs, -1)
+    }
+
+    func test_missingNegotiationAnchor_negotiationMinusOne_setupStillComputed() {
+        let metrics = CallReliabilityPolicy.callSetupMetrics(
+            initiatedAt: t0, negotiationStartAt: nil, connectedAt: t0.addingTimeInterval(3)
+        )
+        XCTAssertEqual(metrics.setupTimeMs, 3_000)
+        XCTAssertEqual(metrics.negotiationTimeMs, -1)
+    }
+
+    func test_missingInitiatedAnchor_setupMinusOne_negotiationStillComputed() {
+        let metrics = CallReliabilityPolicy.callSetupMetrics(
+            initiatedAt: nil, negotiationStartAt: t0, connectedAt: t0.addingTimeInterval(2)
+        )
+        XCTAssertEqual(metrics.setupTimeMs, -1)
+        XCTAssertEqual(metrics.negotiationTimeMs, 2_000)
+    }
+
+    /// Câblage : le payload analytics porte negotiationTimeMs et les DEUX
+    /// ancrages existent (answerCall côté appelé, participant-joined côté
+    /// appelant), avec reset per-call.
+    func test_wiring_payloadCarriesNegotiationTime_andAnchorsAreSet() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(
+            source.contains("\"negotiationTimeMs\""),
+            "call:analytics payload must carry negotiationTimeMs"
+        )
+        XCTAssertTrue(
+            source.contains("callSetupMetrics"),
+            "emitCallAnalyticsIfNeeded must compute metrics via the pure CallReliabilityPolicy.callSetupMetrics"
+        )
+        let anchorCount = source.components(separatedBy: "analyticsNegotiationStartDate = Date()").count - 1
+        XCTAssertGreaterThanOrEqual(
+            anchorCount, 2,
+            "The negotiation anchor must be stamped on BOTH sides: answerCall (callee) and participant-joined (caller)"
+        )
+        XCTAssertTrue(
+            source.contains("analyticsNegotiationStartDate = nil"),
+            "The negotiation anchor must be reset per call"
+        )
+    }
+}

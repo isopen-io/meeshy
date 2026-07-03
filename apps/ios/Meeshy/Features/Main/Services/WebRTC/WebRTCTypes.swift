@@ -432,6 +432,22 @@ nonisolated enum CallReliabilityPolicy {
         return min(heuristic, bwe)
     }
 
+    /// Ring/negotiation split for the end-of-call analytics. `setupTimeMs`
+    /// (initiated → connected) includes the HUMAN ringing time — 23 s observed
+    /// in prod, useless for spotting a WebRTC setup regression.
+    /// `negotiationTimeMs` (answer/join → connected) isolates the technical
+    /// part. Pure: -1 whenever an anchor is missing — never a lying 0.
+    static func callSetupMetrics(
+        initiatedAt: Date?,
+        negotiationStartAt: Date?,
+        connectedAt: Date?
+    ) -> (setupTimeMs: Int, negotiationTimeMs: Int) {
+        guard let connectedAt else { return (-1, -1) }
+        let setup = initiatedAt.map { Int(connectedAt.timeIntervalSince($0) * 1000) } ?? -1
+        let negotiation = negotiationStartAt.map { Int(connectedAt.timeIntervalSince($0) * 1000) } ?? -1
+        return (setup, negotiation)
+    }
+
     /// Gate for the `call_cancel` silent push (phantom-ring hardening): the
     /// gateway sends it when a call ends WITHOUT ever being answered, aimed
     /// at devices whose socket never came up (VoIP push delivered, WebSocket
