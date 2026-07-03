@@ -188,6 +188,46 @@ class CallSignalManagerTest {
         }
     }
 
+    // --- Inbound: teardown frames republish the ended call id on endedCalls ---
+
+    @Test
+    fun `an ended frame republishes the ended call id on endedCalls`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.endedCalls.test {
+            deliver(handlers, "call:ended", """{"callId":"c7","reason":"completed"}""")
+            assertThat(awaitItem()).isEqualTo("c7")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a missed frame republishes the ended call id on endedCalls`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.endedCalls.test {
+            deliver(handlers, "call:missed", """{"callId":"c8"}""")
+            assertThat(awaitItem()).isEqualTo("c8")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a non-teardown frame emits nothing on endedCalls`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.endedCalls.test {
+            deliver(handlers, "call:participant-joined", """{"callId":"c1"}""")
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `an ended frame with a blank call id emits nothing on endedCalls`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.endedCalls.test {
+            deliver(handlers, "call:ended", """{"callId":"","reason":"completed"}""")
+            expectNoEvents()
+        }
+    }
+
     // --- Outbound: the fire-and-forget emit table mirrors the iOS payload keys ---
 
     @Test

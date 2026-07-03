@@ -4,7 +4,28 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Calls) — slice `incoming-call-deeplink` ✅
+## This loop (Phase: Calls) — slice `call-ended-signal-identity` ✅
+The **`RemotelyEnded` socket driver** — a call-waiting banner now auto-dismisses when its caller hangs up
+(or the ring times out) before the user acts, driving the already-tested `CallWaitingReducer.RemotelyEnded`
+branch from a real signal (parity with iOS `clearPendingIncomingCall(ifMatching:)`).
+- `core:model` pure `CallSignalMapper.endedCallId(eventName, rawJson): String?` — decodes the `callId` of a
+  `call:ended`/`call:missed` frame; non-teardown / blank / absent / malformed → `null`. `map` untouched.
+- `sdk-core` `CallSignalManager.endedCalls: SharedFlow<String>` — republishes the ended id per teardown
+  frame in `listen`, the same parallel-stream pattern as `incomingOffers`; identity-less `events` unchanged.
+- `feature:calls` `CallViewModel.onRemoteEnded` — folds a match on the *pending* call's id into
+  `RemotelyEnded` (stop the 15s timer + clear the banner), **no** `emitEnd` (caller already ended it); inert
+  for no-banner / other-call ids so the active call is untouched.
+- +15 behavioural tests (7 mapper, 4 manager, 4 VM). Full `assembleDebug` + all `testDebugUnitTest` green
+  (via `/opt/gradle`; the wrapper dist download is 403-blocked in this container — see NOTES). Diff =
+  `apps/android` only (3 prod + 3 test).
+
+### Next
+1. **Identity-aware active-call teardown** — the identity-less `events` fold still routes a *waiting* call's
+   `call:ended` → `RemoteHangUp` into the *active* FSM; gate the FSM teardown on the active `callId`.
+2. `ConnectionService`/Telecom integration + ringback tone (system call UI); then WebRTC media transport.
+3. Follow-up: `SocketManager.reconnectWithToken()` still has no caller (token-refresh re-attach slice).
+
+## Prior loop (Phase: Calls) — slice `incoming-call-deeplink` ✅
 The **incoming-call deep-link** — consumes the `MainActivity` launch/full-screen intent extras and routes
 them into the NavHost, so a ring tap actually opens the incoming-call screen.
 - `:app` pure `LaunchRouter.route(LaunchExtras) → String?` (SSOT): non-blank `callId` → `CallRoute.incoming`
@@ -18,10 +39,6 @@ them into the NavHost, so a ring tap actually opens the incoming-call screen.
   `onNewIntent`.
 - +14 behavioural tests (8 router, 6 route). `assembleDebug` + all `testDebugUnitTest` green.
   Diff = `apps/android` only (6 files; MeeshyApp/MainActivity glue is exempt platform code).
-
-### Next
-1. `ConnectionService`/Telecom integration + ringback tone (system call UI); then WebRTC media transport.
-2. Follow-up: `SocketManager.reconnectWithToken()` still has no caller (token-refresh re-attach slice).
 
 ## Prior loop (Phase: Calls) — slice `incoming-call-push-decision` ✅
 The **pure incoming-call push decision core** — the brick before the Android Telecom/`ConnectionService`

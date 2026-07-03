@@ -827,3 +827,33 @@ Append-only log of gotchas and decisions that save time next run.
   deterministic, no `advanceTimeBy`, no wall-clock, and impossible to hang because the fake schedules no
   timed work. Same grain as every other "push the decision out of the untestable primitive" lesson: the
   ticker is the primitive, the elapsed-count logic is what we test.
+
+## 2026-07-03 — env: gradle wrapper dist download is 403-blocked; use `/opt/gradle`
+- In a fresh web container the wrapper's `distributionUrl` (services.gradle.org →
+  github releases) returns **403 through the agent proxy**, and the cached
+  `~/.gradle/wrapper/dists/gradle-8.11.1-bin/` holds only a `.lck`/`.part` (incomplete).
+  `./gradlew` / `meeshy.sh` therefore can't bootstrap.
+- **Recipe:** a matching system gradle is preinstalled at `/opt/gradle/bin/gradle`
+  (8.11.1 — same version the wrapper pins). Run tasks with it directly, e.g.
+  `export ANDROID_HOME=$HOME/android-sdk ANDROID_SDK_ROOT=$HOME/android-sdk &&
+  /opt/gradle/bin/gradle assembleDebug testDebugUnitTest --console=plain`. Maven
+  dependency resolution goes through the proxy fine; only the wrapper's own dist zip is
+  blocked. (Follow-up if it recurs: pre-seed the dist, or point `distributionUrl` at a
+  reachable mirror — but that touches `apps/android/gradle/…`, a legit apps/android edit.)
+
+## 2026-07-03 — pattern: parallel *identity* stream beside the identity-less FSM `events`
+- The call socket layer republishes a decoded FSM `CallEvent` on `CallSignalManager.events`
+  — deliberately **identity-less** (`ReceiveIncoming`/`RemoteHangUp`/`RingTimeout` carry no
+  `callId`). When a feature needs the *identity* of a frame (which call?), do **not** widen
+  `events` or the `map` contract (that breaks every existing mapper/manager test). Instead add
+  a **parallel `SharedFlow`** fed by a separate pure decode: `incomingOffers` (call-waiting
+  raise, from `call:initiated`) and now `endedCalls` (banner dismiss, from `call:ended`/
+  `call:missed`) both follow this shape — pure `CallSignalMapper.{incomingOffer,endedCallId}`
+  decode + `_flow.tryEmit` in `listen`, collected in the VM. Keeps `map`/`events` frozen, adds
+  zero risk to the FSM path, and each stream is independently unit-testable.
+- **Known limitation this exposes (next Calls slice):** because `events` is identity-less, a
+  teardown for a *different* call (e.g. the waiting call's `call:ended`, which the gateway fans
+  out to member USER rooms) is folded into the *active* call's FSM as `RemoteHangUp` and wrongly
+  ends it. The `endedCalls` banner-dismiss is correct and self-contained, but the full fix is an
+  **identity-aware active-call teardown**: gate the FSM teardown so only a teardown whose `callId`
+  matches the active call reduces it. Deferred to keep this slice thin and non-test-breaking.

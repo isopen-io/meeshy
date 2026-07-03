@@ -90,6 +90,9 @@ class CallViewModel @Inject constructor(
         viewModelScope.launch {
             signalManager.incomingOffers.collect(::onIncomingOffer)
         }
+        viewModelScope.launch {
+            signalManager.endedCalls.collect(::onRemoteEnded)
+        }
     }
 
     /**
@@ -217,6 +220,21 @@ class CallViewModel @Inject constructor(
                 callId = pending.callId,
             ),
         )
+    }
+
+    /**
+     * A call ended remotely (`call:ended` / `call:missed`). Only acts when the id
+     * is the *waiting* call's: its caller hung up (or the ring timed out) before the
+     * user chose, so the banner is dismissed and its auto-reject timer cancelled —
+     * **without** an `emitEnd` (unlike a user/timeout reject: nothing is left to end
+     * once the caller has already gone). Inert when there is no pending banner or the
+     * id belongs to another call, so the active call is never disturbed.
+     */
+    private fun onRemoteEnded(endedCallId: String) {
+        val pending = waiting.pending ?: return
+        if (pending.callId != endedCallId) return
+        stopWaitingTimer()
+        waitingReduce(CallWaitingEvent.RemotelyEnded(endedCallId))
     }
 
     private fun endWaiting(pending: WaitingCall) {

@@ -394,10 +394,17 @@ remaining platform glue.
    its own id (active call untouched); `acceptWaitingSwap()` hangs up the active call, settles, and
    re-presents the waiting call as a fresh incoming (iOS `endCurrentAndAnswerPending`). Accent-coherent
    top banner in `CallScreen` (error-hue reject + peer-accent answer, a11y-labelled). +35 tests. See run log.
-   **Next:** the `RemotelyEnded` driver needs the ended-call **identity** on the socket (`call:ended`/
-   `call:missed` carry `callId` but `events` maps them identity-less) — a small signalling-identity slice
-   to auto-dismiss a banner whose caller hangs up before the user acts (the reducer branch is already the
-   tested SSOT).
+   The `RemotelyEnded` driver ✅ shipped as `call-ended-signal-identity` (2026-07-03) — the pure
+   `CallSignalMapper.endedCallId(eventName, rawJson)` decodes the `callId` from a `call:ended`/`call:missed`
+   frame (blank/absent/malformed → `null`), a new `CallSignalManager.endedCalls: SharedFlow<String>`
+   republishes it alongside the identity-less `events` (same parallel-stream pattern as `incomingOffers`),
+   and `CallViewModel.onRemoteEnded` folds it into `CallWaitingEvent.RemotelyEnded` — auto-dismissing the
+   banner (and cancelling its 15s auto-reject timer) **only** when the ended id is the *pending* call's,
+   with **no** `emitEnd` (the caller already hung up), leaving the active call untouched. +15 tests.
+   See run log. **Next (known follow-up):** the identity-less `events` fold still routes a *waiting* call's
+   `call:ended` → `RemoteHangUp` into the *active* FSM (the gateway fans `call:ended` out to member USER
+   rooms, so a busy user receives the waiting call's teardown) — an **identity-aware active-call teardown**
+   slice should gate the FSM teardown on the active `callId` so only the active call's own end reduces it.
 3. **Adaptive sender-cap plan** — a pure `level → (resolutionHeight, fps, bitrate)` mapping (already on
    `VideoQualityLevel`) folded into the future WebRTC sender-parameters actuator.
 
@@ -587,6 +594,51 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-03 — slice `call-ended-signal-identity` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration (only open PR #1410 was iOS,
+  untouched). Branched `claude/apps/android/call-ended-signal-identity` off latest `origin/main`
+  (`6de9912e`).
+- **What:** drove the `CallWaitingEvent.RemotelyEnded` reducer branch (already the tested SSOT, shipped
+  with `call-waiting-banner`) from a real socket signal — a call-waiting banner now auto-dismisses when
+  its caller hangs up (or its ring times out) before the user acts, parity with iOS
+  `clearPendingIncomingCall(ifMatching:)`.
+- **Added (production, 3 files, +50 lines):**
+  - `CallSignalMapper.endedCallId(eventName, rawJson): String?` (`core:model`, pure/total) — decodes the
+    `callId` from a `call:ended`/`call:missed` frame; a non-teardown event, a blank/absent id, or malformed
+    JSON all yield `null`. Mirrors the existing `incomingOffer` identity decode; `map` left untouched so no
+    existing mapper contract changes.
+  - `CallSignalManager.endedCalls: SharedFlow<String>` (`sdk-core`) — republishes the ended id for every
+    teardown frame in `listen`, the same parallel-stream pattern as `incomingOffers` (hot, no replay). The
+    identity-less `events` emission is unchanged (existing manager tests intact).
+  - `CallViewModel.onRemoteEnded(endedCallId)` (`feature:calls`) — collected in `viewModelScope`; folds a
+    match on the *pending* call's id into `CallWaitingEvent.RemotelyEnded` (stop the auto-reject timer +
+    clear the banner) with **no** `emitEnd` (the caller already ended it); inert when there is no pending
+    banner or the id is another call's, so the active call is never disturbed.
+- **Tests (+15, red→green):**
+  - `CallSignalMapperTest` +7 — ended→id, missed→id, non-teardown→null, initiated→null, blank id→null,
+    absent id→null, malformed JSON→null.
+  - `CallSignalManagerTest` +4 — ended frame republishes id, missed frame republishes id, non-teardown
+    emits nothing, blank id emits nothing.
+  - `CallViewModelTest` +4 — waiting caller hangs up → banner cleared, **no** `emitEnd`, active call
+    untouched (still `INCOMING`); ended id ≠ waiting id → banner stays; ended id with no banner → inert;
+    a remotely-ended waiting call cancels its auto-dismiss timer (a later timer fire does not `emitEnd`).
+- **Edge cases covered:** blank/absent/malformed teardown payload; non-teardown frame; no pending banner
+  (inert); id mismatch (active-call id, unknown id) leaves banner up; timer cancellation after a remote
+  end (no double-resolve → no spurious `emitEnd`); remote end distinguished from user reject (no wire emit).
+- **Verify:** system `gradle assembleDebug testDebugUnitTest` (wrapper dist download is 403-blocked in this
+  container; `/opt/gradle` 8.11.1 matches the wrapper version) → **BUILD SUCCESSFUL in 2m30s** (full
+  assemble + all module JVM unit tests). Targeted: `:core:model` 32/`:sdk-core` (CallSignalManagerTest 36)
+  /`:feature:calls` (CallViewModelTest 72) — 0 failures, 0 errors.
+- **Reviewer:** PASS — scope `apps/android` only (3 prod + 3 test, +184 lines); behavioural tests through
+  the public API (`endedCallId` return, `endedCalls` flow emission, VM `waitingBanner` + `emitEnd`
+  verification), no tautologies, no coverage floor lowered, no existing test weakened; SDK purity (the
+  identity decode + republish are building blocks in `core:model`/`sdk-core`; the "when a teardown dismisses
+  *this* banner" product rule lives in `:feature:calls`); single source of truth (the `CallWaitingReducer`
+  `RemotelyEnded` branch); UDF + immutable `UiState`, pure reducer; no dead end (banner dismiss returns to a
+  coherent active call). **Known follow-up (logged in Next):** the identity-less `events` fold still routes a
+  *waiting* call's `call:ended` into the *active* FSM — an identity-aware active-call teardown is the next
+  Calls slice.
 
 ### 2026-07-03 — slice `call-waiting-banner` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration. The three open PRs at start

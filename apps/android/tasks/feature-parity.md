@@ -902,9 +902,14 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       raises the banner for a *second* offer while active, a 15s auto-dismiss-as-reject
       `CallWaitingTimer` seam, `rejectWaiting()`/`acceptWaitingSwap()` (end-and-answer,
       parity with iOS `endCurrentAndAnswerPending`), and an accent-coherent top banner in
-      `CallScreen`. +35 tests. **Pending:** the WebRTC stats source that feeds real quality
-      samples, and the `RemotelyEnded` socket driver (needs the ended-call `callId` — a
-      small signalling-identity slice; the reducer arm is already the tested SSOT).
+      `CallScreen`. +35 tests. The **`RemotelyEnded` socket driver** landed (slice
+      `call-ended-signal-identity`, 2026-07-03): pure `CallSignalMapper.endedCallId` decode
+      of a `call:ended`/`call:missed` frame's `callId`, a `CallSignalManager.endedCalls`
+      identity stream (parallel to `incomingOffers`), and a `CallViewModel.onRemoteEnded`
+      fold that auto-dismisses the banner + cancels its timer (no `emitEnd`) only for the
+      *pending* call's id. +15 tests. **Pending:** the WebRTC stats source that feeds real
+      quality samples; an identity-aware *active*-call teardown (the identity-less `events`
+      fold still routes a waiting call's `call:ended` into the active FSM — next Calls slice).
 - [ ] Front-camera mirroring; extensible call media pipeline hook bus
 - [~] Voice/video call signaling events (initiate, answer, ICE, end, missed, media toggle) —
       **inbound event models + pure frame→`CallEvent` mapper landed** (slice `call-signalling-events`):
