@@ -9,12 +9,10 @@ import os
 
 struct CallView: View {
     @ObservedObject var callManager = CallManager.shared
-    @Environment(\.colorScheme) private var colorScheme
     // Audit P2-iOS-9 — respect the user's Reduce Motion preference. Without
     // this check, the continuous pulse/ring animations ran indefinitely
     // even for motion-sensitive users (and burned battery).
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     // Instance du CallManager (et non un `@StateObject` local) : les segments
     // distants (DataChannel) et `toggleTranscription` opèrent sur CELLE-CI —
@@ -173,7 +171,8 @@ struct CallView: View {
             if callManager.callState.isActive && !callManager.callState.isRinging && callManager.isVideoEnabled {
                 CallEffectsOverlay(
                     isExpanded: $showEffectsToolbar,
-                    isVideoEnabled: callManager.isVideoEnabled
+                    isVideoEnabled: callManager.isVideoEnabled,
+                    callManager: callManager
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -1729,7 +1728,10 @@ private extension View {
     }
 }
 
-private extension View {
+// Not `private`: FloatingCallPillView reuses both modifiers so its mute/speaker
+// controls expose the same toggle semantics (trait + on/off value) as the
+// full-screen call surface's equivalent buttons instead of a plain label swap.
+extension View {
     @ViewBuilder
     func optionalAccessibilityHint(_ hint: String?) -> some View {
         if let h = hint {
@@ -1740,7 +1742,7 @@ private extension View {
     }
 }
 
-private extension View {
+extension View {
     @ViewBuilder
     func callToggleAccessibility(isToggle: Bool, isActive: Bool) -> some View {
         if isToggle {

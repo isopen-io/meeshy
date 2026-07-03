@@ -14,6 +14,21 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 126i, 2026-07-03)** — piste iOS indépendante (suffixe `i`).
+> - **126i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `3fa30792`)** :
+>   Dynamic Type + a11y de `ConversationView+Composer` (bandeaux réponse/édition, previews & tuiles
+>   d'attachments). Lot critique → **édits `.font()`-only, 0 logique, 0 accès `@State`**. **10/22**
+>   `.font(.system(size:))` → `MeeshyFont.relative` (textes des bandeaux + libellé de tuile). **12
+>   figés** : 3 croix (annuler réponse/édition, supprimer) dans cercles fixes 24×24/18×18 (82i) ; 9
+>   glyphes décoratifs (overlays play/eye/mappin/type/fallback) bornés par tuiles fixes 40×40/56×56
+>   (86i). 9 masquages décoratifs + crayon masqué ; croix déjà labellisées. 1 fichier, 0 test/clé i18n
+>   neuve. 0 contention iOS. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `ConversationView+Composer` Dynamic Type + a11y SOLDÉ** : ne plus reprendre les 12 glyphes figés.
+>   **`ConversationMediaGalleryView` déjà soldé** (7 `relative` + 6 figés commentés « doctrine » minuscule) → ne pas reprendre.
+> - **Base de départ 127i : `main` HEAD**. Reste le gros lot risqué `StoryViewerView+Content` (⚠️ i18n +
+>   piège `@State private` cross-file). Sinon : passe state-of-the-art (palette hexes inline vs tokens —
+>   `F8B500`/`9B59B6` dans FeedView, `9933CC` dans ConversationAnimatedBackground —, dark/light, gestes).
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 125i, 2026-07-03)** — piste iOS indépendante (suffixe `i`).
 > - **125i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `e027b523`)** :
 >   Dynamic Type + a11y de `AttachmentLoadingTile` (tuile de chargement d'attachment, carré fixe

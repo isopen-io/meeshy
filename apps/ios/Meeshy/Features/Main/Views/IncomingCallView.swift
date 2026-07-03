@@ -12,11 +12,9 @@ struct IncomingCallView: View {
     // Receive the manager from the parent so SwiftUI keeps the same
     // subscription throughout the view's lifetime.
     @ObservedObject var callManager: CallManager
-    @Environment(\.colorScheme) private var colorScheme
     // Audit P2-iOS-9 — see CallView; skip repeating animations for
     // motion-sensitive users.
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @State private var ringScale: CGFloat = 0.8
     @State private var ringOpacity: Double = 1.0
