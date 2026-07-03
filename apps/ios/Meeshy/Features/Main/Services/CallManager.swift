@@ -4289,7 +4289,7 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
         // [Fix 2026-07-03] `CXProvider.setDelegate(_:queue: nil)` makes
         // CallKit create its OWN private serial queue for delegate callbacks
         // — it does NOT dispatch on main (Apple's documented behaviour for a
-        // `nil` queue). The previous `Thread.isMainThread` branch was
+        // `nil` queue). The previous "are we on the main queue?" check was
         // therefore always false in production, so the hold above never
         // engaged: every answered call still fulfilled at tap time and
         // reintroduced the exact "timer starts before connection" bug this

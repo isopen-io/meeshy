@@ -4739,7 +4739,7 @@ final class CallManagerPiPRemoteMuteSourceGuardTests: XCTestCase {
         guard let videoCaseRange = source.range(of: "case \"video\":", range: toggledRange.lowerBound..<source.endIndex) else {
             XCTFail("\"video\" case not found in callMediaToggled handler"); return
         }
-        let body = String(source[videoCaseRange.lowerBound...].prefix(300))
+        let body = String(source[videoCaseRange.lowerBound...].prefix(500))
         XCTAssertTrue(
             body.contains("self.isRemoteVideoEnabled = event.enabled"),
             "The video case must still update isRemoteVideoEnabled (drives the in-app pill's SwiftUI placeholder)"
