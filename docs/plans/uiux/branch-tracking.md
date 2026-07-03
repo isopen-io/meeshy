@@ -14,6 +14,20 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 129i, 2026-07-03)** — piste iOS indépendante (suffixe `i`).
+> - **129i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `806fc972`)** :
+>   Dynamic Type + a11y de `CameraView` (écran de capture photo/vidéo). **2/5** `.font(.system(size:))` →
+>   `MeeshyFont.relative` (libellé onglet de mode « Photo »/« Vidéo » ; chrono d'enregistrement monospaced).
+>   **3 figés** commentés **82i** : `xmark` fermer + `flashIcon` (cercles tap 44×44), `camera.rotate.fill`
+>   switch (cercle tap 50×50). Les 3 boutons icône portent déjà leur `.accessibilityLabel` (flash à état
+>   dynamique) → a11y intacte. 1 fichier, 0 logique, 0 test/clé i18n neuve. 0 PR iOS ouverte → 0 contention.
+>   Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `CameraView` Dynamic Type + a11y SOLDÉ** : ne plus reprendre les 3 glyphes figés (cadres tap fixes).
+> - **Note i18n** : « Photo »/« Vidéo » de `CameraView` restent des littéraux (gap **pré-existant**, hors
+>   périmètre d'un sweep font/a11y) — à traiter en passe i18n dédiée.
+> - **Base de départ 130i : `main` HEAD**. Reste `StoryViewerView+Content` (⚠️ i18n + `@State private`
+>   cross-file). Sinon : `ReelFeedCard` (4), `MessageDetailSheet` (4), `StatusBubbleController` (4), ou passe state-of-the-art.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 128i, 2026-07-03)** — piste iOS indépendante (suffixe `i`).
 > - **128i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `14f80c20`)** :
 >   Dynamic Type de `FeedPostCard` (carte de publication du feed — barre d'actions + menu « … »).

@@ -237,7 +237,9 @@ extension ConversationListView {
         // si l'utilisateur rouvre un menu avant la fin du zoom-out, `onLongPress`
         // annule ce work item, sinon il effacerait le menu fraîchement rouvert.
         contextMenuDismissWork?.cancel()
-        previewScale = 0.7
+        // min() : ne jamais RE-déplier une carte repliée par le drag vers le
+        // haut (0.0 → 0.7 ferait flasher l'aperçu pendant le fondu de sortie).
+        previewScale = min(previewScale, 0.7)
         dragOffsetY = 0
         withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) { contextMenuAppeared = false }
         let work = DispatchWorkItem {
@@ -295,10 +297,18 @@ extension ConversationListView {
                     )
                     .frame(width: 340)
                     // Aperçu : zoom (grandit depuis 0.7) + fondu, piloté par
-                    // `contextMenuAppeared` (spring à rebond) + drag vers le haut.
-                    // Pendant drag upward, preview rétrécit (previewScale → 0).
-                    .scaleEffect(previewScale, anchor: .center)
+                    // `contextMenuAppeared` (spring à rebond).
+                    // Glisser vers le haut replie la carte (previewScale → 0,
+                    // ancre .bottom : elle se résorbe vers le menu) pour donner
+                    // toute la place au menu ; glisser vers le bas au-delà du
+                    // seuil ferme l'overlay (parité contextMenu natif). Ce
+                    // geste vit ICI et jamais sur les lignes de la liste : un
+                    // DragGesture plein-ligne entrait en contention avec le pan
+                    // du ScrollView et figeait le scroll (régression ff5d5649).
+                    .scaleEffect(previewScale, anchor: .bottom)
+                    .offset(y: dragOffsetY)
                     .opacity(contextMenuAppeared ? 1 : 0)
+                    .gesture(previewCollapseGesture)
 
                     ConversationContextMenuView(
                         accentHex: conversation.accentColor,
@@ -394,6 +404,38 @@ extension ConversationListView {
                 }
             }
         }
+    }
+
+    /// Geste de repli de l'aperçu (feature « shrink preview » de a98b93a7,
+    /// rebranchée au bon étage). Vers le haut : repli progressif (100 pt =
+    /// replié) ; au lâcher sous 0.45 la carte reste repliée jusqu'à la
+    /// fermeture (`dismissContextMenu` restaure 1.0). Vers le bas :
+    /// rubber-band, et au-delà de 110 pt le menu se ferme — même affordance
+    /// que le `.contextMenu` natif. Les lignes de la liste ne portent AUCUN
+    /// DragGesture : ici le ScrollView est masqué par l'overlay, zéro
+    /// contention de scroll possible.
+    private var previewCollapseGesture: some Gesture {
+        DragGesture()
+            .onChanged { value in
+                let translation = value.translation.height
+                if translation < 0 {
+                    previewScale = max(0, 1.0 + translation / 100)
+                    dragOffsetY = 0
+                } else {
+                    dragOffsetY = translation * 0.35
+                }
+            }
+            .onEnded { value in
+                if value.translation.height > 110 {
+                    dismissContextMenu()
+                    return
+                }
+                let collapsed = previewScale < 0.45
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    previewScale = collapsed ? 0 : 1.0
+                    dragOffsetY = 0
+                }
+            }
     }
 }
 

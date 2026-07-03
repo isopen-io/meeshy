@@ -531,6 +531,12 @@ export interface CallQualityFeedback {
 
 export interface CallAnalytics {
   readonly setupTimeMs: number
+  /**
+   * answer/join → connected : la négociation WebRTC seule, SANS le temps de
+   * sonnerie humain inclus dans `setupTimeMs`. Optionnel (absent des builds
+   * iOS < 2026-07-03) ; -1 = jamais connecté / ancrage manquant.
+   */
+  readonly negotiationTimeMs?: number
   readonly iceMethod: 'direct' | 'stun' | 'turn'
   readonly codec: { readonly audio: string; readonly video: string }
   readonly averageRtt: number

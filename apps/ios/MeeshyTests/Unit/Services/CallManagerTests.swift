@@ -2831,14 +2831,19 @@ final class CallManagerAlreadyAnsweredTests: XCTestCase {
             .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
         let source = try String(contentsOf: url, encoding: .utf8)
 
-        // Find the already-answered handler in CallManager
-        guard let range = source.range(of: "already-answered") else {
-            XCTFail("call:already-answered handler not found in CallManager.swift — required for multi-device dismissal")
+        // Anchor on the SUBSCRIBER (`socket.callAlreadyAnswered`), not on the
+        // first textual occurrence of "already-answered" — doc comments
+        // elsewhere in the file (e.g. endRingingAnsweredElsewhere's docstring,
+        // added 2026-07-03) legitimately mention the event name and would
+        // hijack the analysis window (CI-only failure: the local targeted run
+        // didn't include this suite).
+        guard let range = source.range(of: "socket.callAlreadyAnswered") else {
+            XCTFail("call:already-answered subscriber not found in CallManager.swift — required for multi-device dismissal")
             return
         }
         // Grab surrounding context
         let start = source.index(range.lowerBound, offsetBy: -200, limitedBy: source.startIndex) ?? source.startIndex
-        let end = source.index(range.upperBound, offsetBy: 500, limitedBy: source.endIndex) ?? source.endIndex
+        let end = source.index(range.upperBound, offsetBy: 800, limitedBy: source.endIndex) ?? source.endIndex
         let context = String(source[start ..< end])
 
         let endsCall = context.contains("endCallInternal") || context.contains("callState = .ended") || context.contains("endCall")
@@ -4526,6 +4531,82 @@ final class CallAnsweredElsewherePushTests: XCTestCase {
         XCTAssertTrue(
             body.contains(".answeredElsewhere"),
             "endRingingAnsweredElsewhere must report the CallKit end with reason .answeredElsewhere (Recents parity with the socket path)"
+        )
+    }
+}
+
+// MARK: - Call setup metrics (ring vs negotiation split)
+
+/// `setupTimeMs` (initiated→connected) inclut le temps de sonnerie HUMAIN —
+/// 23 s observés en prod, inutilisable pour détecter une régression du setup
+/// WebRTC. `negotiationTimeMs` (answer/join→connected) isole la partie
+/// technique. Fonction pure : -1 dès qu'un ancrage manque, jamais de 0 menteur.
+@MainActor
+final class CallSetupMetricsTests: XCTestCase {
+
+    private let t0 = Date(timeIntervalSince1970: 1_000_000)
+
+    func test_bothAnchors_present_splitsRingFromNegotiation() {
+        let metrics = CallReliabilityPolicy.callSetupMetrics(
+            initiatedAt: t0,
+            negotiationStartAt: t0.addingTimeInterval(20),   // 20 s de sonnerie
+            connectedAt: t0.addingTimeInterval(21.5)          // 1.5 s de négo
+        )
+        XCTAssertEqual(metrics.setupTimeMs, 21_500)
+        XCTAssertEqual(metrics.negotiationTimeMs, 1_500)
+    }
+
+    func test_neverConnected_bothMinusOne() {
+        let metrics = CallReliabilityPolicy.callSetupMetrics(
+            initiatedAt: t0, negotiationStartAt: t0.addingTimeInterval(5), connectedAt: nil
+        )
+        XCTAssertEqual(metrics.setupTimeMs, -1)
+        XCTAssertEqual(metrics.negotiationTimeMs, -1)
+    }
+
+    func test_missingNegotiationAnchor_negotiationMinusOne_setupStillComputed() {
+        let metrics = CallReliabilityPolicy.callSetupMetrics(
+            initiatedAt: t0, negotiationStartAt: nil, connectedAt: t0.addingTimeInterval(3)
+        )
+        XCTAssertEqual(metrics.setupTimeMs, 3_000)
+        XCTAssertEqual(metrics.negotiationTimeMs, -1)
+    }
+
+    func test_missingInitiatedAnchor_setupMinusOne_negotiationStillComputed() {
+        let metrics = CallReliabilityPolicy.callSetupMetrics(
+            initiatedAt: nil, negotiationStartAt: t0, connectedAt: t0.addingTimeInterval(2)
+        )
+        XCTAssertEqual(metrics.setupTimeMs, -1)
+        XCTAssertEqual(metrics.negotiationTimeMs, 2_000)
+    }
+
+    /// Câblage : le payload analytics porte negotiationTimeMs et les DEUX
+    /// ancrages existent (answerCall côté appelé, participant-joined côté
+    /// appelant), avec reset per-call.
+    func test_wiring_payloadCarriesNegotiationTime_andAnchorsAreSet() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(
+            source.contains("\"negotiationTimeMs\""),
+            "call:analytics payload must carry negotiationTimeMs"
+        )
+        XCTAssertTrue(
+            source.contains("callSetupMetrics"),
+            "emitCallAnalyticsIfNeeded must compute metrics via the pure CallReliabilityPolicy.callSetupMetrics"
+        )
+        let anchorCount = source.components(separatedBy: "analyticsNegotiationStartDate = Date()").count - 1
+        XCTAssertGreaterThanOrEqual(
+            anchorCount, 2,
+            "The negotiation anchor must be stamped on BOTH sides: answerCall (callee) and participant-joined (caller)"
+        )
+        XCTAssertTrue(
+            source.contains("analyticsNegotiationStartDate = nil"),
+            "The negotiation anchor must be reset per call"
         )
     }
 }
