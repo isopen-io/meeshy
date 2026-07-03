@@ -333,9 +333,12 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   (son test « should not double-translate » ne voyait pas le double côté service !) —
   adaptée au nouveau contrat : la route ne déclenche AUCUN pipeline story.
   DÉPLOIEMENT : gateway prod = pull+up explicite (comme G1).
-- [ ] **G3 (P2) textObjects → langues audience-driven.** `getActiveTargetLanguages` = 10 langues
-  codées en dur (TODO explicite `PostService.ts:392`). Réutiliser la résolution d'audience du
-  pipeline A (contacts de l'auteur).
+- [x] **G3 (P2) textObjects → langues audience-driven.** ✅ it.21
+  Livré : résolution partagée `resolveAudienceTargetLanguages(authorId)` (extraite du
+  pipeline content) + cœur pur `PostService.audienceLanguages` (dédup, hors 'en', cap 10,
+  testé ×4) ; le pipeline textObjects l'utilise (async + authorId), liste fixe SUPPRIMÉE ;
+  audience vide → zéro job ZMQ (l'original sert le Prisme). Même règle que le content.
+  DÉPLOIEMENT gateway requis (avec G1/G2).
 - [ ] **G4 (P3) Champ mort `Post.storyViews Json?`** (schema L2874, jamais écrit/lu — PostView
   est la vérité). Retirer du schema (migration) ou documenter.
 - [ ] **G5 (P3) Consolider les 3 implémentations de visibilité** (PostFeedService,
@@ -491,7 +494,13 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.20 — G2 : un seul pipeline de traduction du content story (hash au push)
+## it.21 — G3 : textObjects traduits vers l'audience réelle (hash au push)
+
+- 906/906 les 40 suites posts + 4 tests purs neufs ; tsc gateway 0 err.
+- getActiveTargetLanguages (10 langues fixes) supprimée — les DEUX pipelines partagent
+  désormais la même résolution d'audience.
+
+## it.20 — G2 : un seul pipeline de traduction du content story (496dc4aab)
 
 - RED : 2 nouveaux tests core.test.ts + adaptation de la suite dédiée (2 tests pinnaient
   le comportement supprimé). 902/902 sur les 40 suites posts (bun).
