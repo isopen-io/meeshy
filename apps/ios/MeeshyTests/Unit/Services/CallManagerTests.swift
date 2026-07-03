@@ -3889,6 +3889,36 @@ final class CallManagerToggleVideoCXUpdateTests: XCTestCase {
             "calling CXProvider methods when CallKit is not active (Mac / foreground in-app calls)."
         )
     }
+
+    /// `cancel()` on `videoToggleTask` is cooperative — `upgradeToVideo`/
+    /// `downgradeFromVideo` never check `Task.isCancelled` mid-flight, so a rapid
+    /// double-tap could otherwise run two camera/transceiver actuations
+    /// concurrently and corrupt state. `toggleVideo` must serialize on the
+    /// previous task's completion before starting its own actuation — the same
+    /// fix already shipped in `handleHold` (CallKit hold path).
+    func test_toggleVideo_serializesOnPreviousTask_beforeActuating() throws {
+        let source = try callManagerSource()
+        guard let funcRange = source.range(of: "func toggleVideo()") else {
+            XCTFail("toggleVideo() not found in CallManager.swift"); return
+        }
+        let searchEnd = source.range(
+            of: "func switchCamera()",
+            range: funcRange.upperBound..<source.endIndex
+        )?.lowerBound ?? source.endIndex
+        let toggleFunc = String(source[funcRange.lowerBound..<searchEnd])
+
+        XCTAssertTrue(
+            toggleFunc.contains("let previousTask = videoToggleTask"),
+            "toggleVideo must capture the previous videoToggleTask before overwriting it, " +
+            "so the new Task can await its completion."
+        )
+        XCTAssertTrue(
+            toggleFunc.contains("await previousTask?.value"),
+            "toggleVideo must await the previous task's completion before invoking " +
+            "upgradeToVideo/downgradeFromVideo, otherwise two toggles can actuate the " +
+            "camera/transceiver concurrently (cancel() alone does not stop in-flight work)."
+        )
+    }
 }
 
 // MARK: - Audio Session Opus alignment (audit Phase 3)
