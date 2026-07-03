@@ -30,6 +30,7 @@ import type {
   FriendRequestRejectedListener,
   ConversationDeletedListener,
   ConversationUpdatedListener,
+  UserUpdatedListener,
   UnsubscribeFn
 } from './types';
 
@@ -54,6 +55,7 @@ export class PresenceService {
   private friendRequestNewListeners: Set<FriendRequestNewListener> = new Set();
   private friendRequestAcceptedListeners: Set<FriendRequestAcceptedListener> = new Set();
   private friendRequestRejectedListeners: Set<FriendRequestRejectedListener> = new Set();
+  private userUpdatedListeners: Set<UserUpdatedListener> = new Set();
   private conversationDeletedListeners: Set<ConversationDeletedListener> = new Set();
   private conversationUpdatedListeners: Set<ConversationUpdatedListener> = new Set();
   private conversationParticipantLeftListeners: Set<(data: { conversationId: string; userId: string; displayName: string; leftAt: string }) => void> = new Set();
@@ -150,6 +152,10 @@ export class PresenceService {
 
     socket.on(SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED as any, (data: any) => {
       this.friendRequestAcceptedListeners.forEach(listener => listener(data));
+    });
+
+    socket.on(SERVER_EVENTS.USER_UPDATED as any, (data: any) => {
+      this.userUpdatedListeners.forEach(listener => listener(data));
     });
 
     socket.on(SERVER_EVENTS.FRIEND_REQUEST_REJECTED as any, (data: any) => {
@@ -295,6 +301,11 @@ export class PresenceService {
     return () => this.friendRequestRejectedListeners.delete(listener);
   }
 
+  onUserUpdated(listener: UserUpdatedListener): UnsubscribeFn {
+    this.userUpdatedListeners.add(listener);
+    return () => this.userUpdatedListeners.delete(listener);
+  }
+
   onConversationDeleted(listener: ConversationDeletedListener): UnsubscribeFn {
     this.conversationDeletedListeners.add(listener);
     return () => this.conversationDeletedListeners.delete(listener);
@@ -350,6 +361,7 @@ export class PresenceService {
     this.friendRequestNewListeners.clear();
     this.friendRequestAcceptedListeners.clear();
     this.friendRequestRejectedListeners.clear();
+    this.userUpdatedListeners.clear();
     this.conversationDeletedListeners.clear();
     this.conversationUpdatedListeners.clear();
     this.conversationParticipantLeftListeners.clear();
