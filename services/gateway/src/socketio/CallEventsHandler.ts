@@ -2967,6 +2967,7 @@ export class CallEventsHandler {
     socket.on(CALL_EVENTS.ANALYTICS, async (data: {
       callId: string;
       setupTimeMs: number;
+      negotiationTimeMs?: number;
       durationSeconds: number;
       reconnectionCount: number;
       networkTransitions: number;
@@ -3014,6 +3015,7 @@ export class CallEventsHandler {
           platform: data.platform,
           durationSeconds: data.durationSeconds,
           setupTimeMs: data.setupTimeMs,
+          negotiationTimeMs: data.negotiationTimeMs ?? -1,
           reconnectionCount: data.reconnectionCount,
           networkTransitions: data.networkTransitions,
           averageRtt: data.averageRtt,
