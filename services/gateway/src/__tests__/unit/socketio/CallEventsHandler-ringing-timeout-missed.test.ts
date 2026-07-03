@@ -275,21 +275,19 @@ describe('CallEventsHandler — ringing timeout call:missed contract', () => {
   });
 
   describe('call:ended payload is preserved', () => {
-    it('emits the existing ended payload to both call and conversation rooms', async () => {
+    it('emits the ended payload once, targeting call + conversation rooms (single deduplicated emit)', async () => {
       const { emissions } = await fireRingingTimeout(makePrisma());
 
       const ended = emissions.filter(e => e.event === CALL_EVENTS.ENDED);
-      expect(ended.map(e => e.room)).toEqual([
-        `call:${CALL_ID}`,
-        `conversation:${CONV_ID}`,
-      ]);
-      ended.forEach(e => {
-        expect(e.payload).toEqual({
-          callId: CALL_ID,
-          duration: 0,
-          endedBy: undefined,
-          reason: 'missed',
-        });
+      expect(ended).toHaveLength(1);
+      expect(ended[0].room).toEqual(
+        expect.arrayContaining([`call:${CALL_ID}`, `conversation:${CONV_ID}`])
+      );
+      expect(ended[0].payload).toEqual({
+        callId: CALL_ID,
+        duration: 0,
+        endedBy: undefined,
+        reason: 'missed',
       });
     });
   });

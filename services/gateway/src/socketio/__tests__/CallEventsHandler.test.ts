@@ -574,7 +574,13 @@ describe('CallEventsHandler', () => {
       expect(capturedCallback).not.toBeNull();
       await capturedCallback!();
 
-      expect(io.to).toHaveBeenCalledWith(`call:${CALL_ID}`);
+      // Terminal broadcast targets call room + conversation room + every
+      // member USER room in one deduplicated emit (same audience as the
+      // call:initiated invitation — a still-ringing callee sits in neither
+      // of the first two rooms).
+      expect(io.to).toHaveBeenCalledWith(
+        expect.arrayContaining([`call:${CALL_ID}`, `conversation:${CONV_ID}`, `user:${USER_ID}`])
+      );
     });
 
     it('ack with error when callService.initiateCall throws', async () => {
@@ -738,6 +744,34 @@ describe('CallEventsHandler', () => {
       // handleMissedCall fires async; need to flush
       await new Promise(r => setImmediate(r));
       expect(mockCallServiceMarkCallAsMissed).toHaveBeenCalledWith(CALL_ID);
+    });
+
+    it('fans out call:ended to member USER rooms when the last leave closes the call', async () => {
+      const participant = makeParticipant();
+      mockCallServiceGetCallSession.mockResolvedValue(makeCallSession({ participants: [participant] }));
+      const leftSession = makeCallSession({ status: 'missed', duration: 0, endReason: 'missed' });
+      mockCallServiceLeaveCall.mockResolvedValue(leftSession);
+
+      const { socket, io } = setupWithSocket({
+        participant: {
+          findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }),
+          findMany: jest.fn<any>().mockResolvedValue([
+            { userId: USER_ID },
+            { userId: 'ringing-callee-id' },
+          ]),
+        },
+      });
+      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
+
+      await socket._trigger('call:leave', validData);
+
+      expect(io.to).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          `call:${CALL_ID}`,
+          `conversation:${CONV_ID}`,
+          'user:ringing-callee-id',
+        ])
+      );
     });
 
     it('broadcasts only participant-left when call is still ongoing', async () => {
@@ -1150,7 +1184,7 @@ describe('CallEventsHandler', () => {
       expect(ack).toHaveBeenCalledWith({ success: false });
     });
 
-    it('ends call, broadcasts to both rooms, removes all sockets, ack(true)', async () => {
+    it('ends call, broadcasts ended to call+conversation rooms in ONE deduplicated emit, removes all sockets, ack(true)', async () => {
       const endedSession = makeCallSession({ status: 'ended', duration: 90 });
       mockCallServiceEndCall.mockResolvedValue(endedSession);
 
@@ -1161,10 +1195,49 @@ describe('CallEventsHandler', () => {
       const ack = jest.fn();
       await socket._trigger('call:end', validData, ack);
 
-      expect(io.to).toHaveBeenCalledWith(`call:${CALL_ID}`);
-      expect(io.to).toHaveBeenCalledWith(`conversation:${CONV_ID}`);
+      expect(io.to).toHaveBeenCalledWith(
+        expect.arrayContaining([`call:${CALL_ID}`, `conversation:${CONV_ID}`])
+      );
       expect(s1.leave).toHaveBeenCalledWith(`call:${CALL_ID}`);
       expect(ack).toHaveBeenCalledWith({ success: true });
+    });
+
+    it('fans out call:ended to every conversation member USER room (ringing callee is in neither the call nor the conversation room)', async () => {
+      // Incident prod 2026-07-03 06:14 — the caller hung up while the callee
+      // was still ringing; the callee had joined NEITHER the call room (never
+      // answered) NOR the conversation room (conversation not open). The
+      // ended broadcast never reached it → it kept ringing and later joined a
+      // dead call ("This call has already ended"). The terminal broadcast must
+      // target the SAME audience as the call:initiated invitation: the user
+      // room of every active conversation member.
+      const endedSession = makeCallSession({ status: 'ended', duration: 90 });
+      mockCallServiceEndCall.mockResolvedValue(endedSession);
+
+      const { socket, io } = setupWithSocket({
+        participant: {
+          findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }),
+          findMany: jest.fn<any>().mockResolvedValue([
+            { userId: USER_ID },
+            { userId: 'ringing-callee-id' },
+          ]),
+        },
+      });
+      io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
+
+      await socket._trigger('call:end', validData, jest.fn());
+
+      expect(io.to).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          `call:${CALL_ID}`,
+          `conversation:${CONV_ID}`,
+          `user:${USER_ID}`,
+          'user:ringing-callee-id',
+        ])
+      );
+      expect(io._roomEmit).toHaveBeenCalledWith(
+        'call:ended',
+        expect.objectContaining({ callId: CALL_ID })
+      );
     });
 
     it('ack(false) and emits error when endCall throws', async () => {
@@ -2761,7 +2834,11 @@ describe('CallEventsHandler', () => {
       io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
 
       await socket._trigger('call:end', { callId: CALL_ID });
-      expect(io.to).toHaveBeenCalledWith(`call:${CALL_ID}`);
+      expect(io.to).toHaveBeenCalledWith(expect.arrayContaining([`call:${CALL_ID}`]));
+      expect(io._roomEmit).toHaveBeenCalledWith(
+        'call:ended',
+        expect.objectContaining({ reason: 'completed' })
+      );
     });
 
     it('uses raw error message when it contains no colon', async () => {

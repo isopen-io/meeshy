@@ -240,6 +240,45 @@ export class CallEventsHandler {
    * concurrent join/end/leave), CALL_EVENTS.ENDED + MISSED broadcasts,
    * call-summary system message, and the missed-call push pipeline.
    */
+  /**
+   * Broadcast `call:ended` to the FULL termination audience in one
+   * deduplicated emit: the call room (joined participants), the conversation
+   * room (members with the conversation open) AND the user room of every
+   * active conversation member — the SAME audience as the `call:initiated`
+   * invitation. A still-ringing callee has joined NEITHER of the first two
+   * rooms: without the user-room fanout it never learns the call ended and
+   * keeps ringing after the caller hung up (prod incident 2026-07-03 06:14 —
+   * `call:join` arrived 25 s after "Call ended" and was rejected with
+   * "This call has already ended"). Socket.IO deduplicates sockets present
+   * in several of the targeted rooms, so clients receive the event once.
+   */
+  private async broadcastCallEnded(
+    io: SocketIOServer,
+    callId: string,
+    conversationId: string | undefined,
+    endedEvent: Omit<CallEndedEvent, 'endedBy'> & { endedBy?: string }
+  ): Promise<void> {
+    const rooms: string[] = [ROOMS.call(callId)];
+    if (conversationId) {
+      rooms.push(ROOMS.conversation(conversationId));
+      try {
+        const members = await this.prisma.participant.findMany({
+          where: { conversationId, isActive: true, userId: { not: null } },
+          select: { userId: true }
+        });
+        for (const member of members) {
+          if (member.userId) rooms.push(ROOMS.user(member.userId));
+        }
+      } catch (error) {
+        logger.error('broadcastCallEnded: member fanout lookup failed — falling back to call+conversation rooms', {
+          callId,
+          error
+        });
+      }
+    }
+    io.to(rooms).emit(CALL_EVENTS.ENDED, endedEvent);
+  }
+
   private buildRingingTimeoutHandler(io: SocketIOServer, callId: string): () => Promise<void> {
     return async () => {
       try {
@@ -287,12 +326,9 @@ export class CallEventsHandler {
           callId,
           duration: 0,
           endedBy: undefined,
-          reason: 'missed',
+          reason: 'missed' as CallEndReason,
         };
-        io.to(ROOMS.call(callId)).emit(CALL_EVENTS.ENDED, endedEvent);
-        if (conversationId) {
-          io.to(ROOMS.conversation(conversationId)).emit(CALL_EVENTS.ENDED, endedEvent);
-        }
+        await this.broadcastCallEnded(io, callId, conversationId, endedEvent);
         // Contract: CallMissedEvent requires all 4 fields — a `{ callId }`
         // only payload made the iOS decoder fail (keyNotFound conversationId).
         const missedEvent: CallMissedEvent = {
@@ -1663,8 +1699,7 @@ export class CallEventsHandler {
             reason: (callSession.endReason || 'completed') as CallEndReason
           };
 
-          io.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.ENDED, endedEvent);
-          io.to(ROOMS.conversation(callSession.conversationId)).emit(CALL_EVENTS.ENDED, endedEvent);
+          await this.broadcastCallEnded(io, data.callId, callSession.conversationId, endedEvent);
 
           // P3 — post the call-summary system message ("Appel … · MM:SS" /
           // "… manqué" / "Appel refusé"). Idempotent across terminal paths.
@@ -2350,9 +2385,9 @@ export class CallEventsHandler {
           reason: endReason
         };
 
-        // Broadcast to both call room and conversation room
-        io.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.ENDED, endedEvent);
-        io.to(ROOMS.conversation(callSession.conversationId)).emit(CALL_EVENTS.ENDED, endedEvent);
+        // Broadcast to call room + conversation room + member user rooms
+        // (deduplicated single emit — see broadcastCallEnded).
+        await this.broadcastCallEnded(io, data.callId, callSession.conversationId, endedEvent);
 
         // P3 — post the call-summary system message ("Appel … · MM:SS",
         // "Appel refusé", …). Primary hangup/reject path; idempotent.
