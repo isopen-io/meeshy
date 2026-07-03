@@ -459,6 +459,32 @@ describe('ConversationStatsService', () => {
       expect(stats.onlineUsers[0].id).toBe(testUserId1);
     });
 
+    it('should not lose an increment when two updateOnNewMessage calls race for the same conversation', async () => {
+      // Populate cache first
+      mockPrisma.conversation.findFirst.mockResolvedValue(createMockConversation(testConversationId));
+      mockPrisma.message.groupBy.mockResolvedValue([
+        { originalLanguage: 'en', _count: { _all: 10 } }
+      ]);
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { user: { id: testUserId1, systemLanguage: 'en' }, userId: testUserId1 }
+      ]);
+      mockPrisma.user.findMany.mockResolvedValue([]);
+
+      const getConnectedUserIds = () => [];
+      await service.getOrCompute(mockPrisma as PrismaClient, testConversationId, getConnectedUserIds);
+
+      // Two messages committing to the DB at ~the same time both notify the
+      // cache before either update has a chance to write back — both
+      // increments must survive, not just the last writer's.
+      await Promise.all([
+        service.updateOnNewMessage(mockPrisma as PrismaClient, testConversationId, 'en', getConnectedUserIds),
+        service.updateOnNewMessage(mockPrisma as PrismaClient, testConversationId, 'en', getConnectedUserIds)
+      ]);
+
+      const finalStats = await service.getOrCompute(mockPrisma as PrismaClient, testConversationId, getConnectedUserIds);
+      expect(finalStats.messagesPerLanguage['en']).toBe(12);
+    });
+
     it('should update updatedAt timestamp', async () => {
       // Populate cache
       mockPrisma.conversation.findFirst.mockResolvedValue(createMockConversation(testConversationId));

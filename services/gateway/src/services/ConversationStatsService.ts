@@ -96,13 +96,20 @@ export class ConversationStatsService {
       return await this.getOrCompute(prisma, conversationId, getConnectedUserIds);
     }
 
-    // Incremental update on message language count
-    const stats = { ...existing!.stats };
-    stats.messagesPerLanguage = { ...stats.messagesPerLanguage };
-    stats.messagesPerLanguage[messageLanguage] = (stats.messagesPerLanguage[messageLanguage] || 0) + 1;
+    // Refresh online users snapshot first — the only async work here. The
+    // counter base is read AFTER this await (not before), so two calls
+    // racing on the same conversation each increment from the freshest
+    // committed value: nothing yields again between that read and the
+    // synchronous cache.set below, so no interleaving can clobber it.
+    const onlineUsers = await this.computeOnlineUsers(prisma, conversationId, getConnectedUserIds());
 
-    // Refresh online users snapshot quickly (cheap intersection)
-    stats.onlineUsers = await this.computeOnlineUsers(prisma, conversationId, getConnectedUserIds());
+    const latest = this.cache.get(conversationId);
+    const base = this.isValid(latest) ? latest!.stats : existing!.stats;
+
+    const stats = { ...base };
+    stats.messagesPerLanguage = { ...base.messagesPerLanguage };
+    stats.messagesPerLanguage[messageLanguage] = (stats.messagesPerLanguage[messageLanguage] || 0) + 1;
+    stats.onlineUsers = onlineUsers;
     stats.updatedAt = new Date();
 
     this.cache.set(conversationId, {
