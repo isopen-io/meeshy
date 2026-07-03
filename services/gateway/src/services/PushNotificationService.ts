@@ -346,45 +346,60 @@ export class PushNotificationService {
       return [];
     }
 
-    const results: PushResult[] = [];
+    // Fan out to every device token in parallel: a user's devices are
+    // independent, and each provider call is wrapped in a CircuitBreaker with a
+    // 10s timeout plus retries. A sequential loop lets one slow/timing-out token
+    // stall delivery to all the user's other healthy devices. Each token's
+    // follow-up DB write targets a distinct row and handleFailedToken is guarded
+    // per-tokenId, so concurrent execution is safe.
+    const results = await Promise.all(
+      tokens.map(async (tokenRecord): Promise<PushResult> => {
+        try {
+          let result: PushResult;
 
-    // Send to each token
-    for (const tokenRecord of tokens) {
-      try {
-        let result: PushResult;
+          if (tokenRecord.type === 'fcm') {
+            result = await this.sendViaFCM(tokenRecord, payload);
+          } else if (tokenRecord.type === 'apns') {
+            result = await this.sendViaAPNS(tokenRecord, payload, false);
+          } else if (tokenRecord.type === 'voip') {
+            result = await this.sendViaAPNS(tokenRecord, payload, true);
+          } else {
+            result = { success: false, tokenId: tokenRecord.id, error: `Unknown token type: ${tokenRecord.type}` };
+          }
 
-        if (tokenRecord.type === 'fcm') {
-          result = await this.sendViaFCM(tokenRecord, payload);
-        } else if (tokenRecord.type === 'apns') {
-          result = await this.sendViaAPNS(tokenRecord, payload, false);
-        } else if (tokenRecord.type === 'voip') {
-          result = await this.sendViaAPNS(tokenRecord, payload, true);
-        } else {
-          result = { success: false, tokenId: tokenRecord.id, error: `Unknown token type: ${tokenRecord.type}` };
+          // Handle failed tokens
+          if (!result.success) {
+            await this.handleFailedToken(tokenRecord.id, result.error || 'Unknown error', result.transient);
+            return result;
+          }
+
+          // The push was delivered. Bookkeeping (lastUsedAt / failure reset) is
+          // best-effort: a DB hiccup here must not flip a delivered push to
+          // failed, which would make callers retry and double-send.
+          try {
+            await this.prisma.pushToken.update({
+              where: { id: tokenRecord.id },
+              data: {
+                lastUsedAt: new Date(),
+                failedAttempts: 0,
+                lastError: null,
+              },
+            });
+          } catch (updateError) {
+            pushLogger.warn('Failed to update push token bookkeeping after successful send', {
+              tokenId: tokenRecord.id,
+              error: updateError instanceof Error ? updateError.message : 'Unknown error',
+            });
+          }
+
+          return result;
+        } catch (error) {
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          await this.handleFailedToken(tokenRecord.id, errorMsg);
+          return { success: false, tokenId: tokenRecord.id, error: errorMsg };
         }
-
-        results.push(result);
-
-        // Handle failed tokens
-        if (!result.success) {
-          await this.handleFailedToken(tokenRecord.id, result.error || 'Unknown error', result.transient);
-        } else {
-          // Update last used timestamp
-          await this.prisma.pushToken.update({
-            where: { id: tokenRecord.id },
-            data: {
-              lastUsedAt: new Date(),
-              failedAttempts: 0,
-              lastError: null,
-            },
-          });
-        }
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-        results.push({ success: false, tokenId: tokenRecord.id, error: errorMsg });
-        await this.handleFailedToken(tokenRecord.id, errorMsg);
-      }
-    }
+      })
+    );
 
     return results;
   }
