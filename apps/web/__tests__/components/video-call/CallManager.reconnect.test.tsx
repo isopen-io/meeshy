@@ -8,9 +8,10 @@
  * (and the gateway's disconnect-grace bookkeeping) survives — otherwise the
  * gateway's grace window expires and force-ends an otherwise-healthy call.
  *
- * This mirrors `components/video-calls/hooks/useCallSignaling.ts` (tested,
- * but never mounted anywhere in the app) — CallManager is the component that
- * actually ships, so the rejoin logic must live here.
+ * CallManager is the component that actually ships, so the rejoin logic
+ * lives here (a duplicate, never-mounted sibling hook — `useCallSignaling`,
+ * `components/video-calls/hooks/` — was removed; see
+ * tasks/calls-fonctionnel-todo.md wave 10).
  */
 
 import { render } from '@testing-library/react';

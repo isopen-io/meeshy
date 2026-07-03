@@ -2656,6 +2656,11 @@ export class CallEventsHandler {
         if (!userId) return;
         rememberAuth(userId);
 
+        const rateLimitPassed = await checkSocketRateLimit(
+          socket, userId, SOCKET_RATE_LIMITS.CALL_RECONNECTING, this.rateLimiter, CALL_EVENTS.ERROR
+        );
+        if (!rateLimitPassed) return;
+
         const validation = validateSocketEvent(socketReconnectingSchema, data);
         if (!validation.success) return;
 
@@ -2686,6 +2691,11 @@ export class CallEventsHandler {
         const userId = getUserId(socket.id);
         if (!userId) return;
         rememberAuth(userId);
+
+        const rateLimitPassed = await checkSocketRateLimit(
+          socket, userId, SOCKET_RATE_LIMITS.CALL_RECONNECTED, this.rateLimiter, CALL_EVENTS.ERROR
+        );
+        if (!rateLimitPassed) return;
 
         const validation = validateSocketEvent(socketReconnectedSchema, data);
         if (!validation.success) return;
@@ -2790,6 +2800,11 @@ export class CallEventsHandler {
         const userId = getUserId(socket.id);
         if (!userId) return;
         rememberAuth(userId);
+
+        const rateLimitPassed = await checkSocketRateLimit(
+          socket, userId, SOCKET_RATE_LIMITS.CALL_ICE_SERVERS_REFRESH, this.rateLimiter, CALL_EVENTS.ERROR
+        );
+        if (!rateLimitPassed) return;
 
         const validation = validateSocketEvent(socketRequestIceServersSchema, data);
         if (!validation.success) return;
