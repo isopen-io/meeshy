@@ -5,6 +5,7 @@ import { formatTimeRemaining } from '@meeshy/shared/utils/time-remaining';
 import { useI18n } from '@/hooks/use-i18n';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
+import { resolveKeyframeState, type StoryKeyframeData } from '@/lib/story-transforms';
 import { Avatar } from './Avatar';
 import { TranslationToggle } from './TranslationToggle';
 import { CommentList } from './CommentList';
@@ -41,6 +42,9 @@ export interface StoryTextObjectData {
   textAlign?: string;
   textBg?: string;
   zIndex?: number;
+  /// W1 — timing par élément + keyframes posés par le composer iOS.
+  startTime?: number;
+  keyframes?: StoryKeyframeData[];
 }
 
 export interface StoryMediaObjectData {
@@ -445,6 +449,28 @@ function StoryViewer({
     return () => clearTimeout(watchdog);
   }, [isBuffering]);
 
+  // W1 — playhead du slide pour l'interpolation des keyframes : rAF actif
+  // UNIQUEMENT si le slide courant porte des keyframes (les stories statiques
+  // ne paient rien) ; hérite du gel W2/pause gratuitement — quand le timer est
+  // gelé, startedAtRef est nul et le temps consommé cesse d'avancer.
+  const slideHasKeyframes = Boolean(
+    stories[currentIndex]?.storyEffects?.textObjects?.some((t) => t.keyframes?.length)
+  );
+  const [playheadSec, setPlayheadSec] = useState(0);
+  useEffect(() => {
+    setPlayheadSec(0);
+    if (!slideHasKeyframes) return;
+    let raf = 0;
+    const tick = () => {
+      const consumedMs = storyDurationMs - remainingMsRef.current;
+      const liveMs = startedAtRef.current != null ? Date.now() - startedAtRef.current : 0;
+      setPlayheadSec(Math.max(0, (consumedMs + liveMs) / 1000));
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [slideHasKeyframes, currentIndex, storyDurationMs]);
+
   const primaryVideoGateHandlers = {
     onWaiting: () => setIsBuffering(true),
     onStalled: () => setIsBuffering(true),
@@ -735,6 +761,12 @@ function StoryViewer({
           const fontSize = t.fontSizeDesign != null
             ? `${((t.fontSizeDesign / STORY_DESIGN_WIDTH) * 100).toFixed(4)}cqw`
             : `${t.textSize ?? 24}px`;
+          // W1 — keyframes interpolés (fallback : pose statique). `time` est
+          // relatif au startTime de l'objet, easing par segment (parité iOS).
+          const kf = resolveKeyframeState(t.keyframes, playheadSec, t.startTime ?? 0);
+          const kx = kf?.x ?? t.x;
+          const ky = kf?.y ?? t.y;
+          const kScale = kf?.scale ?? t.scale;
           return (
             <div
               key={t.id}
@@ -743,9 +775,10 @@ function StoryViewer({
                 textObjectClass(t.textStyle),
               )}
               style={{
-                left: `${t.x * 100}%`,
-                top: `${t.y * 100}%`,
-                transform: `translate(-50%, -50%) scale(${t.scale}) rotate(${t.rotation}deg)`,
+                left: `${kx * 100}%`,
+                top: `${ky * 100}%`,
+                opacity: kf?.opacity,
+                transform: `translate(-50%, -50%) scale(${kScale}) rotate(${t.rotation}deg)`,
                 fontSize,
                 color: t.textColor ? (t.textColor.startsWith('#') ? t.textColor : `#${t.textColor}`) : '#ffffff',
                 textShadow: textObjectShadow(t.textStyle),

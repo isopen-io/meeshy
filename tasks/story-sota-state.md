@@ -349,8 +349,13 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 
 ### WEB (secondaire — parité lecteur)
 
-- [ ] **W1 (P2) Keyframes/transitions non rendus** (objets statiques). Interpolation CSS/JS
-  depuis `StoryKeyframe[]` (portés par chaque textObject/mediaObject).
+- [~] **W1 (P2) Keyframes/transitions non rendus.** — INCRÉMENT 1 FAIT it.23
+  Plan : `docs/superpowers/plans/2026-07-03-web-story-keyframes-plan.md`.
+  ✅ Inc.1 : portage 1:1 de `KeyframeInterpolator.swift` en TS pur (`story-transforms.ts` —
+  tri, constante, clamp, easing du kf BAS, canaux indépendants, time relatif au startTime),
+  hook playhead rAF activé UNIQUEMENT si le slide a des keyframes (hérite du gel W2 :
+  startedAtRef nul → temps figé), appliqué aux TEXTOBJECTS (x/y/scale/opacity).
+  RESTE : inc.2 mediaObjects, inc.4 clipTransitions (voir plan).
 - [x] **W2 (P2) Timer découplé de la vidéo.** ✅ it.22
   Porté le pattern iOS R1/R2 : `isBuffering` piloté par les événements natifs du <video>
   principal (waiting/stalled → gel ; playing/canplay → reprise), watchdog 5 s anti-deadlock
@@ -501,7 +506,12 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.22 — W2 : le timer web gèle sur le buffering vidéo (hash au push)
+## it.23 — W1 inc.1 : keyframes des textObjects rendus sur le web (hash au push)
+
+- 8 tests de parité iOS (formules easing, clamp, segment, canaux, startTime offset) ;
+  147/147 les 9 suites story web.
+
+## it.22 — W2 : le timer web gèle sur le buffering vidéo (fe76f7411)
 
 - 3 tests RED→GREEN (gel, reprise au restant, watchdog) + suites story web en non-régression.
 
