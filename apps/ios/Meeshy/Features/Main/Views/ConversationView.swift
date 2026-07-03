@@ -251,6 +251,10 @@ struct ConversationView: View {
     @StateObject var audioRecorder = AudioRecorderManager()
     @StateObject var scrollButtonAudioPlayer = AudioPlaybackManager()
     @StateObject var pendingAudioPlayer = AudioPlaybackManager()
+    /// Composant unifié « Enregistrer » au niveau écran — sert l'action
+    /// `.saveMedia` du menu appui-long (l'overlay n'est pas un cover, la
+    /// sheet de destinations se présente sans conflit).
+    @StateObject var mediaSaveCoordinator = MediaSaveCoordinator()
     
     @FocusState var isTyping: Bool
     @FocusState var isSearchFocused: Bool
@@ -609,6 +613,7 @@ struct ConversationView: View {
                     ImageFullscreen(imageUrl: media.url, accentColor: accentColor)
                 }
             }
+            .mediaSaveFlow(mediaSaveCoordinator)
             .sheet(item: $overlayState.detailSheetMessage) { msg in
                 let ctx = MessageMenuContext(
                     isMine: msg.isMe,
@@ -1536,6 +1541,18 @@ struct ConversationView: View {
                 },
                 onDeleteAttachment: { attachmentId in
                     Task { await viewModel.deleteAttachment(messageId: msg.id, attachmentId: attachmentId) }
+                },
+                onSaveMedia: {
+                    // Composant unifié « Enregistrer » — l'action n'apparaît
+                    // que pour un message à exactement UN attachment.
+                    guard let attachment = msg.attachments.first(where: { $0.type != .location }) else { return }
+                    HapticFeedback.light()
+                    mediaSaveCoordinator.requestSave(MediaSaveRequest(
+                        kind: attachment.kind,
+                        remoteURLString: attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl,
+                        suggestedFileName: attachment.originalName.isEmpty ? nil : attachment.originalName,
+                        attachmentId: attachment.id.isEmpty ? nil : attachment.id
+                    ))
                 },
                 onShowThread: {
                     overlayState.replyThreadParentId = msg.id

@@ -30,6 +30,9 @@ struct MessageOverlayMenu: View {
     var onReport: ((String, String?) -> Void)?
     var onDelete: (() -> Void)?
     var onDeleteAttachment: ((String) -> Void)?
+    /// Composant unifié « Enregistrer » : déclenché par l'action `.saveMedia`
+    /// (message à exactement un attachment enregistrable).
+    var onSaveMedia: (() -> Void)? = nil
     var onShowThread: (() -> Void)?
 
     // Full bubble-rendering context — when `messageBubbleFrame != .zero`, the
@@ -214,7 +217,8 @@ struct MessageOverlayMenu: View {
             // `.history` de la feuille « Plus… », dont le contexte est construit
             // séparément (ConversationView) avec la vraie valeur
             // `!editRevisions(for:).isEmpty`.
-            hasEditRevisions: true
+            hasEditRevisions: true,
+            saveableAttachmentCount: message.attachments.filter { $0.type != .location }.count
         )
     }
 
@@ -230,6 +234,8 @@ struct MessageOverlayMenu: View {
             onShowTranslate?()
         case .copy:
             onCopy?()
+        case .saveMedia:
+            onSaveMedia?()
         case .pin, .unpin:
             onPin?()
         case .star, .unstar:
