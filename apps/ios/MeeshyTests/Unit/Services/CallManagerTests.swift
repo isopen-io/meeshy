@@ -2831,14 +2831,19 @@ final class CallManagerAlreadyAnsweredTests: XCTestCase {
             .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
         let source = try String(contentsOf: url, encoding: .utf8)
 
-        // Find the already-answered handler in CallManager
-        guard let range = source.range(of: "already-answered") else {
-            XCTFail("call:already-answered handler not found in CallManager.swift — required for multi-device dismissal")
+        // Anchor on the SUBSCRIBER (`socket.callAlreadyAnswered`), not on the
+        // first textual occurrence of "already-answered" — doc comments
+        // elsewhere in the file (e.g. endRingingAnsweredElsewhere's docstring,
+        // added 2026-07-03) legitimately mention the event name and would
+        // hijack the analysis window (CI-only failure: the local targeted run
+        // didn't include this suite).
+        guard let range = source.range(of: "socket.callAlreadyAnswered") else {
+            XCTFail("call:already-answered subscriber not found in CallManager.swift — required for multi-device dismissal")
             return
         }
         // Grab surrounding context
         let start = source.index(range.lowerBound, offsetBy: -200, limitedBy: source.startIndex) ?? source.startIndex
-        let end = source.index(range.upperBound, offsetBy: 500, limitedBy: source.endIndex) ?? source.endIndex
+        let end = source.index(range.upperBound, offsetBy: 800, limitedBy: source.endIndex) ?? source.endIndex
         let context = String(source[start ..< end])
 
         let endsCall = context.contains("endCallInternal") || context.contains("callState = .ended") || context.contains("endCall")
