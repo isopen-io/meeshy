@@ -150,12 +150,26 @@ private struct RowPressBounceModifier: ViewModifier {
                     : .spring(response: 0.55, dampingFraction: 0.25),
                 value: isPressing
             )
-            .onLongPressGesture(minimumDuration: 0.4, maximumDistance: 10) {
-                HapticFeedback.medium()
-                onTrigger()
-            } onPressingChanged: { pressing in
-                isPressing = pressing
-            }
+            // Détecteur d'état d'appui PUR : minimumDuration inatteignable,
+            // seul `onPressingChanged` sert (true au touch-down, false au
+            // relâchement/échec). Sa variante `perform:` composée avec le
+            // `.onTapGesture` de la ligne ne fire qu'au RELÂCHEMENT (vérifié
+            // frame par frame 2026-07-03) — d'où le déclencheur séparé.
+            .onLongPressGesture(
+                minimumDuration: 3600,
+                maximumDistance: 10,
+                perform: {},
+                onPressingChanged: { pressing in isPressing = pressing }
+            )
+            // Déclencheur du menu : la variante simultanée fire à
+            // minimumDuration PENDANT l'appui (0.4 s), pas au relâchement.
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: 0.4)
+                    .onEnded { _ in
+                        HapticFeedback.medium()
+                        onTrigger()
+                    }
+            )
     }
 }
 

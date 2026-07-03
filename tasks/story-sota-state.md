@@ -425,7 +425,11 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.7 — R3 : indicateur discret de buffering mid-slide (hash au push)
+## it.7 — R3 : indicateur discret de buffering mid-slide (27fdaa7c2 + 23cb48875)
+
+- ⚠️ Worktree partagé en action : l'agent longpress a commité une PARTIE de mes hunks R3
+  en vol (23cb48875) ; mon commit 27fdaa7c2 porte le reste. Intégrité vérifiée post-rebase
+  (grep par symbole : zéro duplication, struct unique). Le code final main est complet.
 
 - Le gel R1/R2/it.55 était une frame figée muette — désormais un spinner glass discret
   centré carte, grâce 350 ms, disparition immédiate, gate post-chargement-initial, reset
