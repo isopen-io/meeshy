@@ -40,6 +40,7 @@ let linkMessageNewCallback: ((data: { message: Record<string, unknown> }) => voi
 let conversationJoinErrorCallback: ((data: { conversationId: string; reason: string; message: string }) => void) | null = null;
 let messagePinnedCallback: ((data: { messageId: string; conversationId: string; pinnedBy: string; pinnedAt: string }) => void) | null = null;
 let messageUnpinnedCallback: ((data: { messageId: string; conversationId: string }) => void) | null = null;
+let userUpdatedCallback: ((data: { userId: string; changes: Record<string, unknown> }) => void) | null = null;
 
 // Mock unsubscribe functions
 const mockUnsubscribeMessage = jest.fn();
@@ -140,6 +141,10 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
       messageUnpinnedCallback = callback;
       return jest.fn();
     },
+    onUserUpdated: (callback: (data: { userId: string; changes: Record<string, unknown> }) => void) => {
+      userUpdatedCallback = callback;
+      return jest.fn();
+    },
     onStatusChange: jest.fn(() => () => {}),
   },
 }));
@@ -168,6 +173,11 @@ jest.mock('@/lib/react-query/query-keys', () => ({
     preferences: {
       all: ['user-preferences'],
       categories: () => ['user-preferences', 'categories'],
+    },
+    users: {
+      all: ['users'],
+      details: () => ['users', 'detail'],
+      detail: (id: string) => ['users', 'detail', id],
     },
   },
 }));
@@ -280,6 +290,7 @@ describe('useSocketCacheSync', () => {
     conversationJoinErrorCallback = null;
     messagePinnedCallback = null;
     messageUnpinnedCallback = null;
+    userUpdatedCallback = null;
   });
 
   describe('Event Listener Registration', () => {
@@ -476,6 +487,46 @@ describe('useSocketCacheSync', () => {
       const updatedMessage = cachedData.pages[0].messages.find((m) => m.id === 'msg-1');
       expect(updatedMessage?.content).toBe('Edited content');
       expect(updatedMessage?.isEdited).toBe(true);
+    });
+
+    it('should ignore a stale out-of-order edit older than the currently cached edit', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+        pages: [{ messages: mockMessages, hasMore: false, total: 2 }],
+        pageParams: [1],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      const newerEdit = {
+        ...mockMessages[0],
+        content: 'Newer edit',
+        isEdited: true,
+        editedAt: new Date('2024-06-01T12:00:00Z'),
+      };
+      const staleEdit = {
+        ...mockMessages[0],
+        content: 'Stale edit',
+        isEdited: true,
+        editedAt: new Date('2024-06-01T11:00:00Z'),
+      };
+
+      act(() => {
+        messageEditedCallback?.(newerEdit);
+      });
+      act(() => {
+        // Simulates a reordered/delayed duplicate delivery of an older edit
+        // arriving after the newer one was already applied.
+        messageEditedCallback?.(staleEdit);
+      });
+
+      const cachedData = queryClient.getQueryData(['messages', 'list', 'conv-1', 'infinite']) as {
+        pages: { messages: Message[] }[];
+      };
+
+      const updatedMessage = cachedData.pages[0].messages.find((m) => m.id === 'msg-1');
+      expect(updatedMessage?.content).toBe('Newer edit');
     });
   });
 
@@ -832,6 +883,36 @@ describe('useSocketCacheSync', () => {
       expect(invalidateSpy).toHaveBeenCalledWith(
         expect.objectContaining({ queryKey: ['user-preferences', 'categories'] })
       );
+    });
+  });
+
+  describe('User Updated Handler', () => {
+    it('invalidates the cached profile query for the updated user', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+      const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        userUpdatedCallback?.({ userId: 'user-42', changes: { displayName: 'New Name' } });
+      });
+
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: ['users', 'detail', 'user-42'] })
+      );
+    });
+
+    it('ignores malformed events without a userId', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+      const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        userUpdatedCallback?.({ userId: '', changes: {} });
+      });
+
+      expect(invalidateSpy).not.toHaveBeenCalled();
     });
   });
 

@@ -3,6 +3,7 @@ package me.meeshy.app.calls
 import me.meeshy.sdk.model.call.CallDuration
 import me.meeshy.sdk.model.call.CallEndReason
 import me.meeshy.sdk.model.call.CallState
+import me.meeshy.sdk.model.call.ConnectionQuality
 
 /**
  * The coarse phase the call screen renders, derived from the pure
@@ -87,6 +88,13 @@ data class CallUiState(
      * connecting (missed / declined / failed), where there is nothing to show.
      */
     val durationLabel: String?,
+    /**
+     * The live connection-quality indicator tier while media is (or is being
+     * re-)established — `null` before the call connects, once it ends, and
+     * whenever no stats sample has arrived yet (the indicator simply stays
+     * hidden). Surfaced only for the connected/reconnecting phases.
+     */
+    val connectionQuality: ConnectionQuality? = null,
 ) {
     /** Accept / decline are only offered for an incoming, still-ringing call. */
     val showAnswerControls: Boolean
@@ -133,6 +141,7 @@ object CallPresenter {
         config: CallConfig,
         media: CallMedia,
         elapsedSeconds: Long = 0,
+        connectionQuality: ConnectionQuality? = null,
     ): CallUiState {
         val status = statusOf(state)
         return CallUiState(
@@ -144,7 +153,21 @@ object CallPresenter {
             endReason = (state as? CallState.Ended)?.reason,
             reconnectAttempt = (state as? CallState.Reconnecting)?.attempt ?: 0,
             durationLabel = durationLabelFor(status, elapsedSeconds),
+            connectionQuality = connectionQualityFor(status, connectionQuality),
         )
+    }
+
+    /**
+     * The indicator is meaningful only while media is (or is being re-)negotiated;
+     * a stray quality reading from a stale sample never leaks onto a ringing or
+     * ended screen.
+     */
+    private fun connectionQualityFor(
+        status: CallStatus,
+        quality: ConnectionQuality?,
+    ): ConnectionQuality? = when (status) {
+        CallStatus.CONNECTED, CallStatus.RECONNECTING -> quality
+        else -> null
     }
 
     /**

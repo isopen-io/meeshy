@@ -629,6 +629,8 @@ struct FeedView: View {
                         .shadow(color: MeeshyColors.indigo300.opacity(0.4), radius: 8, y: 4)
 
                     Image(systemName: "plus")
+                        // Doctrine 86i : glyphe du FAB dans un cercle de dimension fixe 40×40 → figé
+                        // (l'icône ne doit pas déborder du bouton flottant). Bouton déjà labellisé.
                         .font(.system(size: 18, weight: .bold))
                         .foregroundColor(.white)
                 }
@@ -1307,6 +1309,10 @@ struct FeedView: View {
                 Spacer(minLength: 0)
 
                 // Toolbar
+                // Doctrine 82i : les 6 glyphes d'action du composer ci-dessous (photo/caméra/
+                // emoji/fichier/position/audio, 20pt) sont figés — rangée horizontale contrainte
+                // (HStack spacing 16 + Spacer) qui déborderait si les icônes scalaient en XXXL.
+                // Chaque bouton porte déjà son `.accessibilityLabel` → VoiceOver reste complet.
                 HStack(spacing: 16) {
                     Button { showPhotoPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "photo.fill")

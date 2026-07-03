@@ -1076,6 +1076,10 @@ struct CallView: View {
                 .frame(width: 28, height: 28)
                 .background(Color.black.opacity(0.45), in: Circle())
                 .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 0.5))
+                // Apple HIG minimum touch target is 44×44pt — the 28pt visual
+                // circle stays unchanged, only the tappable area grows.
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .accessibilityLabel(label)
         .optionalAccessibilityHint(hint)
