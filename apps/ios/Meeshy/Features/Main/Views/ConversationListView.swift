@@ -151,6 +151,11 @@ struct ConversationListView: View {
     /// pour l'annuler si une nouvelle ouverture survient avant la fin du zoom-out,
     /// sinon la purge en vol effacerait le menu qui vient de se rouvrir.
     @State var contextMenuDismissWork: DispatchWorkItem? = nil
+    /// Tracks which conversation row has isPressed = true (scale animation active).
+    /// When menu closes, this resets to nil and rows use .onChange to reset isPressed.
+    /// Pas `private` : lu par les fichiers d'extension +Overlays/+Rows (un @State
+    /// private est inaccessible depuis un fichier extension frère — cf. CLAUDE.md).
+    @State var activelyPressedConversationId: String? = nil
 
     /// Renommage : conversation cible + texte en cours d'édition (action
     /// « Renommer » du menu contextuel, groupes/communautés uniquement).
@@ -325,6 +330,8 @@ struct ConversationListView: View {
             },
             onDragStart: {
                 draggingConversation = conversation
+                // Close menu when drag-to-reorder starts
+                activelyPressedConversationId = nil
                 HapticFeedback.medium()
             },
             onLoadPreview: {
@@ -341,7 +348,14 @@ struct ConversationListView: View {
                 contextMenuDismissWork = nil
                 contextMenuAppeared = false
                 contextMenuConversation = conversation
-            }
+                // P7-XX: Track which row has scale animation active
+                activelyPressedConversationId = conversation.id
+            },
+            onMenuDismissed: {
+                activelyPressedConversationId = nil
+            },
+            activelyPressedConversationId: activelyPressedConversationId,
+            draggingConversationId: draggingConversation?.id
         )
         .equatable()
     }

@@ -322,15 +322,15 @@ struct CallView: View {
                 .scaledToFill()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .scaleEffect(1.08)
-                .blur(radius: 24)
+                .blur(radius: 20)
                 .clipped()
-                .opacity(0.45)
+                .opacity(0.55)
                 .overlay(
                     LinearGradient(
                         colors: [
-                            Color.black.opacity(0.55),
-                            Color.black.opacity(0.25),
-                            Color.black.opacity(0.60)
+                            Color.black.opacity(0.50),
+                            Color.black.opacity(0.18),
+                            Color.black.opacity(0.55)
                         ],
                         startPoint: .top,
                         endPoint: .bottom
@@ -390,7 +390,10 @@ struct CallView: View {
 
     /// Résolution cache-first du profil du correspondant (Instant App) : le
     /// store `.profiles` sert `.fresh`/`.stale` immédiatement, l'API rafraîchit
-    /// en silence (et ré-alimente le cache) sauf si le cache était frais.
+    /// en silence (et ré-alimente le cache). Un profil caché PARTIEL — sans
+    /// bannière ni avatar, hydraté par un flux léger — ne court-circuite PAS
+    /// l'API : sinon le fond pleine page restait sur le gradient alors que le
+    /// serveur a les images.
     private func resolveRemoteProfile(userId: String?) async {
         guard let userId, !userId.isEmpty else {
             remoteProfile = nil
@@ -399,7 +402,7 @@ struct CallView: View {
         switch await CacheCoordinator.shared.profiles.load(for: userId) {
         case .fresh(let users, _):
             remoteProfile = users.first
-            return
+            if let user = users.first, Self.hasBackdropImage(user) { return }
         case .stale(let users, _):
             remoteProfile = users.first
         case .expired, .empty:
@@ -411,8 +414,12 @@ struct CallView: View {
             remoteProfile = user
             try? await CacheCoordinator.shared.profiles.save([user], for: userId)
         } catch {
-            Logger.calls.debug("CallView: profil distant non résolu (\(userId)): \(error.localizedDescription)")
+            Logger.calls.warning("CallView: profil distant non résolu (\(userId)): \(error.localizedDescription)")
         }
+    }
+
+    private static func hasBackdropImage(_ user: MeeshyUser) -> Bool {
+        (user.banner?.isEmpty == false) || (user.avatar?.isEmpty == false)
     }
 
     // MARK: - Outgoing Ringing

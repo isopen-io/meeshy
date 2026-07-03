@@ -69,8 +69,15 @@ export default async function callRoutes(fastify: FastifyInstance) {
   // Get decorated prisma instance
   const prisma = fastify.prisma;
 
-  // Initialize CallService
-  const callService = new CallService(prisma);
+  // Reuse the Socket.IO layer's CallService (shares its in-memory
+  // ringingTimeouts/heartbeats/backgroundedParticipants maps with
+  // CallEventsHandler and CallCleanupService) so a call initiated via REST
+  // gets its ringing timeout tracked on the same instance that later reads
+  // it. Falls back to a fresh instance only if routes register before
+  // setupSocketIO() decorates it (should not happen in normal boot order —
+  // see Server.setupSocketIO/setupRoutes call sequence — but keeps this
+  // route usable in isolation, e.g. targeted route tests).
+  const callService = fastify.callService ?? new CallService(prisma);
 
   // Authentication middleware (required for all routes)
   const requiredAuth = createUnifiedAuthMiddleware(prisma, {

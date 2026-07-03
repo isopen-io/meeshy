@@ -23,6 +23,9 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
         var isAutoDegraded: Bool = false
         var consecutiveOverBudgetFrames: Int = 0
         var consecutiveUnderBudgetFrames: Int = 0
+        // Same dual-thread hazard as the two counters above: written from the
+        // audio thread (processAudioBuffer) and reset from any caller thread
+        // (reset()) — guarded by stateLock rather than a plain property.
         var lastProcessingTimeMs: Double?
     }
 

@@ -1022,6 +1022,75 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertNotNil(updated, "removeReaction must clear reactions in GRDB")
     }
 
+    /// Modèle 1-réaction-par-user (miroir attachment-level + serveur) : poser un
+    /// emoji DIFFÉRENT remplace ma réaction précédente au lieu de l'empiler.
+    /// Les réactions des AUTRES participants ne sont jamais touchées.
+    func test_toggleReaction_differentEmoji_replacesPreviousOwnReaction() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+
+        let myPrevious = MeeshyReaction(
+            messageId: "msg-swap", participantId: testUserId, emoji: "heart"
+        )
+        let someoneElses = MeeshyReaction(
+            messageId: "msg-swap", participantId: "other-user", emoji: "heart"
+        )
+        let record = MessageStoreObservationHelper.makeRecord(
+            localId: "msg-swap", conversationId: testConversationId,
+            senderId: "other-user", content: "Swap my reaction",
+            reactions: [myPrevious, someoneElses]
+        )
+        try await persistence.insertOptimistic(record)
+        let seeded = await MessageStoreObservationHelper.awaitMessageProperty(
+            id: "msg-swap", in: sut
+        ) { msg in msg.reactions.count == 2 }
+        XCTAssertTrue(seeded, "Seed reactions must surface via store observation")
+
+        sut.toggleReaction(messageId: "msg-swap", emoji: "thumbsup")
+
+        let updated = await MessageStoreObservationHelper.awaitRecord(
+            localId: "msg-swap", from: pool
+        ) { record in
+            let reactions = (try? JSONDecoder().decode([MeeshyReaction].self,
+                                                       from: record.reactionsJson ?? Data())) ?? []
+            let mine = reactions.filter { $0.participantId == self.testUserId }
+            return mine.map(\.emoji) == ["thumbsup"]
+        }
+        // awaitRecord returns the last-fetched record on timeout even when the
+        // predicate never matched — re-assert the swap explicitly on the result.
+        let reactions = (try? JSONDecoder().decode([MeeshyReaction].self,
+                                                   from: updated?.reactionsJson ?? Data())) ?? []
+        let mine = reactions.filter { $0.participantId == testUserId }.map(\.emoji)
+        XCTAssertEqual(mine, ["thumbsup"], "my previous emoji must be swapped out, not stacked")
+        XCTAssertTrue(
+            reactions.contains { $0.participantId == "other-user" && $0.emoji == "heart" },
+            "another participant's reaction must survive my swap"
+        )
+    }
+
+    func test_toggleReaction_systemMessage_isIgnored() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+
+        let record = MessageStoreObservationHelper.makeRecord(
+            localId: "msg-system", conversationId: testConversationId,
+            senderId: "other-user", content: "Call ended",
+            messageSource: "system"
+        )
+        try await persistence.insertOptimistic(record)
+        _ = await MessageStoreObservationHelper.awaitMessage(in: sut) { $0.id == "msg-system" }
+
+        sut.toggleReaction(messageId: "msg-system", emoji: "thumbsup")
+
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        let stable = try await MessageStoreObservationHelper.fetchRecord(
+            localId: "msg-system", from: pool
+        )
+        XCTAssertNil(stable?.reactionsJson, "system messages must not accept reactions")
+    }
+
     func test_toggleReaction_doesNothingForUnknownMessageId() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)

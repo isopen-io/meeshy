@@ -378,6 +378,10 @@ class MeeshySocketIOService {
     return this.orchestrator.onFriendRequestRejected(listener);
   }
 
+  public onUserUpdated(listener: (data: { userId: string; changes: Record<string, unknown> }) => void): () => void {
+    return this.orchestrator.onUserUpdated(listener);
+  }
+
   public onConversationDeleted(listener: (data: { userId: string; conversationId: string }) => void): () => void {
     return this.orchestrator.onConversationDeleted(listener);
   }

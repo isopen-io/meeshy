@@ -160,15 +160,17 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'You are not a participant of this conversation');
       }
 
-      const reaction = await reactionService.addReaction({
+      const addResult = await reactionService.addReaction({
         messageId,
         emoji,
         participantId,
       });
 
-      if (!reaction) {
+      if (!addResult) {
         return sendInternalError(reply, 'Failed to add reaction');
       }
+
+      const { reaction, replacedEmojis } = addResult;
 
       // Récupérer la conversation pour savoir à qui broadcaster
       const message = await prisma.message.findUnique({
@@ -189,12 +191,29 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       if (socketIOHandler) {
 
         if (message) {
-          // Broadcaster l'événement à tous les participants de la conversation
-          // Note: La méthode broadcastToConversation sera ajoutée au handler Socket.IO
-          fastify.socketIOHandler.getManager()?.getIO().to(ROOMS.conversation(message.conversationId)).emit(
-            SERVER_EVENTS.REACTION_ADDED,
-            updateEvent
-          );
+          const io = fastify.socketIOHandler.getManager()?.getIO();
+          if (io) {
+            // Swap 1-réaction-par-user : signaler la disparition de l'ancien
+            // emoji avant l'ajout du nouveau, pour que les autres clients le
+            // retirent (chaque event porte son agrégation recalculée).
+            for (const removedEmoji of replacedEmojis) {
+              const removeEvent = await reactionService.createUpdateEvent(
+                messageId,
+                removedEmoji,
+                'remove',
+                participantId,
+                message.conversationId
+              );
+              io.to(ROOMS.conversation(message.conversationId)).emit(
+                SERVER_EVENTS.REACTION_REMOVED,
+                removeEvent
+              );
+            }
+            io.to(ROOMS.conversation(message.conversationId)).emit(
+              SERVER_EVENTS.REACTION_ADDED,
+              updateEvent
+            );
+          }
         }
       }
 
@@ -221,6 +240,10 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
 
       if (error.message === 'Message not found') {
         return sendNotFound(reply, 'Message not found');
+      }
+
+      if (error.message === 'Cannot react to a system message') {
+        return sendBadRequest(reply, 'Cannot react to a system message');
       }
 
       if (error.message.includes('not a member') || error.message.includes('not a participant')) {

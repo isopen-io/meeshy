@@ -560,38 +560,48 @@ struct BubbleStandardLayout: View {
                     targetWidthPx: targetPx
                 )
                 let caption = message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : message.content
-                ImageFullscreen(
-                    imageUrl: chosen.isEmpty ? nil : MeeshyConfig.resolveMediaURL(chosen),
-                    accentColor: contactColor,
-                    caption: caption,
-                    mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
-                )
+                // Composant UNIFIÉ « Enregistrer » : le flow vit DANS le cover
+                // pour que la sheet de destinations se présente par-dessus.
+                SavableMediaFullscreen(attachment: attachment) { requestSave in
+                    ImageFullscreen(
+                        imageUrl: chosen.isEmpty ? nil : MeeshyConfig.resolveMediaURL(chosen),
+                        accentColor: contactColor,
+                        caption: caption,
+                        mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames,
+                        onSaveRequested: requestSave
+                    )
+                }
             case .video:
                 if !attachment.fileUrl.isEmpty {
                     let caption = message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : message.content
                     let resolvedShareURL = MeeshyConfig.resolveMediaURL(attachment.fileUrl)
-                    VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
-                        MeeshyVideoPlayer(
-                            attachment: attachment,
-                            style: .fullscreen,
-                            controls: .fullscreenDefault,
-                            accentColor: contactColor,
-                            frame: .flat,
-                            availability: availability,
-                            performance: .fullscreen,
-                            author: makeFullscreenVideoAuthor(),
-                            caption: caption,
-                            fileName: attachment.originalName,
-                            mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames,
-                            onDownload: onDownload,
-                            onShare: resolvedShareURL.map { url in
-                                {
-                                    shareURL = url
-                                    showShareSheet = true
-                                }
-                            },
-                            onClose: { fullscreenAttachment = nil }
-                        )
+                    // Composant UNIFIÉ « Enregistrer » : flow DANS le cover
+                    // (miroir du case .image ci-dessus).
+                    SavableMediaFullscreen(attachment: attachment) { requestSave in
+                        VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
+                            MeeshyVideoPlayer(
+                                attachment: attachment,
+                                style: .fullscreen,
+                                controls: .fullscreenDefault,
+                                accentColor: contactColor,
+                                frame: .flat,
+                                availability: availability,
+                                performance: .fullscreen,
+                                author: makeFullscreenVideoAuthor(),
+                                caption: caption,
+                                fileName: attachment.originalName,
+                                mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames,
+                                onDownload: onDownload,
+                                onShare: resolvedShareURL.map { url in
+                                    {
+                                        shareURL = url
+                                        showShareSheet = true
+                                    }
+                                },
+                                onClose: { fullscreenAttachment = nil },
+                                onSaveRequested: requestSave
+                            )
+                        }
                     }
                 } else {
                     Color.black.onAppear { fullscreenAttachment = nil }
