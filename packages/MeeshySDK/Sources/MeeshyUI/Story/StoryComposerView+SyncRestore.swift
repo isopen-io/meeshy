@@ -107,6 +107,56 @@ extension StoryComposerView {
         }
     }
 
+    /// Snapshot des champs de `StoryEffects` dont le CANVAS composer (View
+    /// `@State` + props ViewModel dédiées) est l'auteur. Tout champ ABSENT
+    /// d'ici est, par construction, conservé tel quel depuis `currentEffects`
+    /// par `mergeEffects` — c'est le renversement qui ferme la classe de bug
+    /// « champ autoritaire oublié par buildEffects » (voice 2026-05, filter
+    /// 2026-06-03, drawingStrokes 2026-05-30, timelineDuration/clipTransitions
+    /// E2 2026-07-03).
+    struct CanvasAuthoredState {
+        var backgroundHex: String?
+        var stickerObjects: [StorySticker] = []
+        var drawingData: Data?
+        var drawingStrokes: [StoryDrawingStroke] = []
+        var backgroundAudioId: String?
+        var audioVolume: Float = 1.0
+        var audioTrimStart: TimeInterval = 0
+        var audioTrimEnd: TimeInterval = 0
+        var opening: StoryTransitionEffect?
+        var closing: StoryTransitionEffect?
+        var backgroundTransform: StoryBackgroundTransform?
+    }
+
+    /// Cœur PUR de `buildEffects()` : copie intégrale de `current` (aucun
+    /// champ ne peut plus être perdu silencieusement) puis écrase UNIQUEMENT
+    /// les champs pilotés par le canvas. Les champs pilotés ailleurs — filter
+    /// (grid → `applyFilter`), voice (recorder/TTS), textObjects/mediaObjects/
+    /// audioPlayerObjects (canvas objets), timelineDuration/clipTransitions
+    /// (Timeline), thumbHash (publish) — traversent sans ré-émission manuelle.
+    static func mergeEffects(current: StoryEffects, canvas: CanvasAuthoredState) -> StoryEffects {
+        var effects = current
+        effects.background = canvas.backgroundHex
+        effects.stickers = canvas.stickerObjects.isEmpty ? nil : canvas.stickerObjects.map(\.emoji)
+        effects.stickerObjects = canvas.stickerObjects.isEmpty ? nil : canvas.stickerObjects
+        effects.drawingData = canvas.drawingData
+        effects.drawingStrokes = canvas.drawingStrokes.isEmpty ? nil : canvas.drawingStrokes
+        effects.backgroundAudioId = canvas.backgroundAudioId
+        effects.backgroundAudioVolume = canvas.backgroundAudioId != nil ? canvas.audioVolume : nil
+        effects.backgroundAudioStart = canvas.backgroundAudioId != nil ? canvas.audioTrimStart : nil
+        effects.backgroundAudioEnd = canvas.backgroundAudioId != nil && canvas.audioTrimEnd > 0
+            ? canvas.audioTrimEnd : nil
+        effects.opening = canvas.opening
+        effects.closing = canvas.closing
+        effects.backgroundTransform = canvas.backgroundTransform.flatMap { $0.isIdentity ? nil : $0 }
+        // `slideDuration = nil` — la durée n'est plus stockée dans `effects`.
+        // Le viewer la recalcule via `StorySlide.computedTotalDuration()`
+        // (centralisation 2026-05-28) ; `timelineDuration` reste, lui, la
+        // valeur AUTORITAIRE posée par la Timeline et traverse par copie.
+        effects.slideDuration = nil
+        return effects
+    }
+
     func buildEffects() -> StoryEffects {
         let bgHex = selectedImage != nil ? nil : viewModel.backgroundColor.replacingOccurrences(of: "#", with: "")
         let bt = viewModel.backgroundTransform
@@ -117,50 +167,21 @@ extension StoryComposerView {
             rotation: bt.rotation != 0 ? bt.rotation : nil,
             videoFitMode: bt.videoFitMode
         )
-        // Voice fields are NOT a function of the composer's @State — they live
-        // entirely on `viewModel.currentEffects` (set by the voice recorder /
-        // TTS pipeline). Re-emitting them here ensures `buildEffects()` is the
-        // FULL slide snapshot and not a partial overwrite. Same for
-        // `backgroundAudioVariants` (TTS variants per language). Without this,
-        // every slide-switch + sync wiped the voice payload.
-        let current = viewModel.currentEffects
-        return StoryEffects(
-            background: bgHex,
-            // Read the filter from `currentEffects` (the authoritative source the
-            // active filter grid writes via `viewModel.applyFilter`), NOT the
-            // View-local `@State selectedFilter` which only the vestigial legacy
-            // picker updates. Reading the stale @State made `buildEffects()`
-            // overwrite the slide's effects with `filter: nil`, so the Play
-            // preview (and publish) lost the effect even though the composer
-            // canvas showed it. Bug « effet pas préservé dans le preview » 2026-06-03.
-            filter: current.filter,
-            filterIntensity: current.filterIntensity,
-            stickers: stickerObjects.isEmpty ? nil : stickerObjects.map(\.emoji),
-            stickerObjects: stickerObjects.isEmpty ? nil : stickerObjects,
-            drawingData: viewModel.drawingData,
-            // Refonte dessin (2026-05-30) : `drawingStrokes` est la source de vérité
-            // moderne. `buildEffects` reconstruit l'effet from scratch, donc on doit
-            // ré-émettre les traits sinon ils sont effacés à chaque sync de slide.
-            drawingStrokes: viewModel.drawingStrokes.isEmpty ? nil : viewModel.drawingStrokes,
-            backgroundAudioId: selectedAudioId,
-            backgroundAudioVolume: selectedAudioId != nil ? audioVolume : nil,
-            backgroundAudioStart: selectedAudioId != nil ? audioTrimStart : nil,
-            backgroundAudioEnd: selectedAudioId != nil && audioTrimEnd > 0 ? audioTrimEnd : nil,
-            voiceAttachmentId: current.voiceAttachmentId,
-            voiceTranscriptions: current.voiceTranscriptions,
-            opening: openingEffect,
-            closing: closingEffect,
-            textObjects: current.textObjects,
-            mediaObjects: current.mediaObjects,
-            audioPlayerObjects: current.audioPlayerObjects,
-            backgroundAudioVariants: current.backgroundAudioVariants,
-            backgroundTransform: bgTransform.isIdentity ? nil : bgTransform,
-            // `slideDuration: nil` — la durée n'est plus stockée dans
-            // `effects`. Le viewer la recalcule from-scratch via
-            // `StorySlide.computedTotalDuration()` (cf. centralisation
-            // 2026-05-28). Évite que les vieilles valeurs persistées
-            // (12 s, etc.) écrasent le défaut 6 s pour les statics.
-            slideDuration: nil
+        return Self.mergeEffects(
+            current: viewModel.currentEffects,
+            canvas: CanvasAuthoredState(
+                backgroundHex: bgHex,
+                stickerObjects: stickerObjects,
+                drawingData: viewModel.drawingData,
+                drawingStrokes: viewModel.drawingStrokes,
+                backgroundAudioId: selectedAudioId,
+                audioVolume: audioVolume,
+                audioTrimStart: audioTrimStart,
+                audioTrimEnd: audioTrimEnd,
+                opening: openingEffect,
+                closing: closingEffect,
+                backgroundTransform: bgTransform
+            )
         )
     }
 

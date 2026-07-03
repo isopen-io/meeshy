@@ -133,13 +133,17 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   seulement). Restauration : proposer la reprise AU LANCEMENT du composer (déjà `checkForDraft`
   en `.onAppear`) — améliorer l'UX en preview du brouillon (mini-rendu composite) au lieu d'une
   alerte texte.
-- [ ] **E2 (P0) `buildEffects()` écrase `clipTransitions` + `timelineDuration` à nil.**
-  Preuve : `StoryComposerView+SyncRestore.swift:127-164` — l'init `StoryEffects(...)` omet ces
-  2 champs alors que `syncCurrentSlideEffects()` s'exécute avant CHAQUE publish
-  (`+Publication.swift:30`) et dans `persistDraft()`. Perte des transitions inter-clips et de la
-  durée timeline du slide courant. Fix : préserver depuis `currentEffects` (copy-through des
-  champs non pilotés par le canvas). Test RED d'abord (slide avec timelineDuration + publish →
-  champ survivant).
+- [x] **E2 (P0) `buildEffects()` écrase `clipTransitions` + `timelineDuration` à nil.** ✅ it.4
+  Preuve re-confirmée : chaîne complète — slider durée (`+Slides.swift:42`) et Timeline
+  (`TimelineProject.apply`, StoryModels.swift:2121-2126) écrivent effects.timelineDuration/
+  clipTransitions (lus EN PRIORITÉ par `computedTotalDuration`, :1001) ; `buildEffects()` les
+  omettait → perdus à CHAQUE sync (publish + persistDraft). Fix D'ALTITUDE (classe de bug
+  récidiviste : voice, filter, drawingStrokes déjà touchés) : inversion du défaut —
+  `mergeEffects(current:canvas:)` copie `current` INTÉGRALEMENT puis n'écrase que les champs
+  `CanvasAuthoredState` (bg, stickers, drawing, audio panel, opening/closing, bgTransform,
+  slideDuration=nil volontaire). Plus AUCUN champ ne peut être oublié (thumbHash, music*,
+  textStyle legacy traversent aussi désormais). Tests StoryComposerMergeEffectsTests (5) +
+  ResetState en non-régression.
 - [ ] **E3 (P1) `persistDraft()` ne flushe pas la timeline ouverte.**
   Preuve : commit timeline seulement sur dismiss de sheet (`+Media.swift:60`) ; `persistDraft`
   (`+SyncRestore.swift:169`) n'appelle pas `commitTimelineToCurrentSlide()`. Passage en
@@ -403,7 +407,7 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.3 — R5(b2) : pin des stories vues au markViewed (hash à compléter au push)
+## it.3 — R5(b2) : pin des stories vues au markViewed (8a424e806)
 
 - RED : `pinTargets`/`pinDeadline` inexistants ; markViewed ne pinnait rien (isPinned false).
 - Fix app-side (`StoryViewModel`) : plan pur `pinTargets(for:)` + `pinDeadline(for:)` +
