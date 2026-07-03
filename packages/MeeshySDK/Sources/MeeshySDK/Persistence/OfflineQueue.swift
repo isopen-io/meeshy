@@ -1730,8 +1730,9 @@ public actor OfflineQueue {
         let now = Date()
         let conversationId = payload.conversationId
         let clientMessageId = payload.clientMessageId
+        let dec = decoder
         do {
-            try await pool.write { db in
+            let filesToSweep: [String] = try await pool.write { db -> [String] in
                 let existing = try OutboxRecord
                     .filter(Column("conversationId") == conversationId)
                     .filter(Column("clientMessageId") == clientMessageId)
@@ -1751,10 +1752,19 @@ public actor OfflineQueue {
                         status: .pending,
                         createdAt: now
                     ).insert(db)
+                    return []
 
                 case .sendMessage:
                     // Send + delete on the same pending id = no-op locally.
+                    // Collect the cancelled send's pending media/audio files so
+                    // they can be swept AFTER commit — otherwise the row vanishes
+                    // but its files orphan under Documents/pending-*/ forever
+                    // (parity with cancelCreatePost).
+                    let sweep = existing
+                        .flatMap { try? dec.decode(OfflineQueueItem.self, from: $0.payload) }
+                        .map { Self.pendingLocalFileAbsolutePaths(for: $0) } ?? []
                     _ = try OutboxRecord.deleteOne(db, key: existing!.id)
+                    return sweep
 
                 case .editMessage:
                     // Pending edit becomes irrelevant; replace with a delete.
@@ -1769,12 +1779,14 @@ public actor OfflineQueue {
                         status: .pending,
                         createdAt: now
                     ).insert(db)
+                    return []
 
                 case .deleteMessage:
                     // Already pending — idempotent, refresh timestamp only.
                     try db.execute(sql: """
                         UPDATE outbox SET updatedAt = ? WHERE id = ?
                         """, arguments: [now, existing!.id])
+                    return []
 
                 case .sendReaction:
                     // Delete alongside a pending reaction — INSERT.
@@ -1788,6 +1800,7 @@ public actor OfflineQueue {
                         status: .pending,
                         createdAt: now
                     ).insert(db)
+                    return []
 
                 case .some(let other):
                     // Wave 1 Task 3.2 — non-message outbox kinds. Should not
@@ -1805,7 +1818,14 @@ public actor OfflineQueue {
                         status: .pending,
                         createdAt: now
                     ).insert(db)
+                    return []
                 }
+            }
+            // Sweep AFTER the row is durably gone, so a rolled-back write never
+            // orphans a still-live send's files.
+            let fm = FileManager.default
+            for path in filesToSweep {
+                try? fm.removeItem(atPath: path)
             }
         } catch {
             throw OfflineQueueError.writeFailed(underlying: error)
@@ -2261,6 +2281,18 @@ public actor OfflineQueue {
     /// same Documents-relative resolution as audio.
     public static func absoluteMediaPath(forStored relativePath: String) -> String {
         absoluteAudioPath(forStored: relativePath)
+    }
+
+    /// Absolute on-disk paths of every pending media/audio file a send item
+    /// references. Used to reclaim them when the send is cancelled/superseded
+    /// (delete-before-flush) so they don't orphan under `Documents/pending-*/`.
+    static func pendingLocalFileAbsolutePaths(for item: OfflineQueueItem) -> [String] {
+        var paths = (item.localMediaPaths ?? []).map { absoluteMediaPath(forStored: $0) }
+        paths += (item.localAudioPaths ?? []).map { absoluteAudioPath(forStored: $0) }
+        if let single = item.localAudioPath, !single.isEmpty {
+            paths.append(absoluteAudioPath(forStored: single))
+        }
+        return paths
     }
 
     /// Canonical relative path under

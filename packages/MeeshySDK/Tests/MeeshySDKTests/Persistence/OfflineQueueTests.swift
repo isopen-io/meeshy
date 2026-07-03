@@ -502,6 +502,29 @@ final class OfflineQueueTests: XCTestCase {
             "the pending images/videos must survive the caption edit — else they are silently lost on flush")
     }
 
+    /// Cancelling a pending media send (delete-before-flush) must reclaim its
+    /// relocated `pending-media/` file. Otherwise the row vanishes but the file
+    /// orphans under Documents/ forever (disk leak) — parity with cancelCreatePost.
+    func test_enqueueDelete_cancellingPendingMediaSend_sweepsOrphanedFile() async throws {
+        let cid = "cid_\(UUID().uuidString.lowercased())"
+        let result = try await queue.enqueueMedia(
+            sourceMediaURLs: [try makeTempMediaFile(ext: "jpg")],
+            kinds: [AttachmentKind.image.rawValue],
+            conversationId: "conv-1", content: "photo", clientMessageId: cid
+        )
+        let abs = OfflineQueue.absoluteMediaPath(forStored: result.localMediaPaths[0])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: abs), "precondition: media file relocated")
+
+        // User deletes the message before it flushes → the send is cancelled locally.
+        try await queue.enqueueDelete(OfflineDeletePayload(
+            messageId: cid, clientMessageId: cid, conversationId: "conv-1"))
+
+        let items = try await readBackItems(forClientMessageId: cid)
+        XCTAssertEqual(items.count, 0, "the cancelled send must be removed from the outbox")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: abs),
+            "the cancelled send's pending-media file must be swept — else it orphans forever")
+    }
+
     private func readBackItems(forClientMessageId cmid: String) async throws -> [OfflineQueueItem] {
         let maybePool = await queue.outboxPoolForTesting
         let pool = try XCTUnwrap(maybePool)
