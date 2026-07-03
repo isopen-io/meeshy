@@ -438,6 +438,83 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         return Array(Set(urls))
     }
 
+    // MARK: - Group intro (interstitiel d'identité inter-groupes — directive user 2026-07-03)
+
+    /// Données de l'interstitiel affiché au passage au groupe de story d'une
+    /// AUTRE personne : identité complète (nom, bannière) + mood. La présence
+    /// est lue par la vue directement (`PresenceManager.shared`, singleton).
+    struct StoryGroupIntro: Equatable {
+        let userId: String
+        let username: String
+        var displayName: String?
+        var bannerURL: String?
+        var bannerThumbHash: String?
+        var moodEmoji: String?
+        var moodMessage: String?
+    }
+
+    /// Seams injectables (tests) — closures plutôt qu'une extension des
+    /// protocols services : ajouter `getProfile` à `UserServiceProviding`
+    /// ferait dériver tous les mocks existants pour une seule feature.
+    var introProfileResolver: (String) async throws -> MeeshyUser = { userId in
+        try await UserService.shared.getProfile(idOrUsername: userId)
+    }
+    var introMoodFeedLoader: () async throws -> [APIPost] = {
+        try await StatusService.shared.list(mode: .friends, cursor: nil, limit: 50).data
+    }
+
+    /// Cache SESSION des moods par userId — un seul fetch réseau du feed
+    /// statuses par session de ViewModel, réutilisé pour chaque transition.
+    private var introMoodsByUserId: [String: StatusEntry]?
+
+    /// Résout les données de l'interstitiel, cache-first : profil depuis
+    /// `CacheCoordinator.profiles` (fresh/stale servis tels quels), fetch
+    /// réseau UNIQUEMENT si le cache n'a ni nom ni bannière (persisté au
+    /// cache ensuite), mood best-effort depuis le feed statuses de session.
+    /// Ne throw jamais : au pire l'interstitiel affiche username + avatar
+    /// du groupe (données déjà en main).
+    func resolveGroupIntro(for group: StoryGroup) async -> StoryGroupIntro {
+        var intro = StoryGroupIntro(userId: group.id, username: group.username)
+
+        switch await CacheCoordinator.shared.profiles.load(for: group.id) {
+        case .fresh(let users, _), .stale(let users, _):
+            if let user = users.first { Self.applyIntroProfile(user, to: &intro) }
+        case .expired, .empty:
+            break
+        }
+        if intro.displayName == nil && intro.bannerURL == nil,
+           let fetched = try? await introProfileResolver(group.id) {
+            Self.applyIntroProfile(fetched, to: &intro)
+            try? await CacheCoordinator.shared.profiles.save([fetched], for: group.id)
+        }
+
+        if introMoodsByUserId == nil {
+            let posts = (try? await introMoodFeedLoader()) ?? []
+            introMoodsByUserId = Dictionary(
+                posts.compactMap { $0.toStatusEntry() }.map { ($0.userId, $0) },
+                uniquingKeysWith: { a, b in a.createdAt > b.createdAt ? a : b }
+            )
+        }
+        if let mood = introMoodsByUserId?[group.id],
+           mood.expiresAt.map({ $0 > Date() }) ?? true {
+            intro.moodEmoji = mood.moodEmoji
+            intro.moodMessage = mood.content
+        }
+        return intro
+    }
+
+    /// Mapping pur profil → intro (testable) : displayName explicite, sinon
+    /// « Prénom Nom », sinon nil (la vue retombe sur le username).
+    static func applyIntroProfile(_ user: MeeshyUser, to intro: inout StoryGroupIntro) {
+        let fullName = [user.firstName, user.lastName]
+            .compactMap { $0?.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        intro.displayName = user.displayName ?? (fullName.isEmpty ? nil : fullName)
+        intro.bannerURL = user.banner
+        intro.bannerThumbHash = user.bannerThumbHash
+    }
+
     // MARK: - R5 Offline replay pin (story vue = médias non-évincables jusqu'à expiry)
 
     /// Store disque cible d'un pin de média story.

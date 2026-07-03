@@ -317,6 +317,87 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertTrue(pinned, "Viewing a story must pin its media for offline replay until expiry")
     }
 
+    // MARK: - Group intro (interstitiel inter-groupes)
+
+    private func makeIntroGroup(id: String = "intro-user-\(UUID().uuidString)",
+                                username: String = "alice") -> StoryGroup {
+        StoryGroup(id: id, username: username, avatarColor: "6366F1",
+                   stories: [makeStoryItem()])
+    }
+
+    private static func makeStatusPost(authorId: String, authorName: String,
+                                       mood: String, content: String?) -> APIPost {
+        let contentJSON = content.map { "\"\($0)\"" } ?? "null"
+        return JSONStub.decode("""
+        {
+            "id": "status-\(authorId)",
+            "type": "STATUS",
+            "moodEmoji": "\(mood)",
+            "content": \(contentJSON),
+            "createdAt": "2026-07-03T10:00:00.000Z",
+            "author": {"id": "\(authorId)", "username": "\(authorName)"}
+        }
+        """)
+    }
+
+    func test_resolveGroupIntro_mapsProfileFromResolver() async {
+        let group = makeIntroGroup()
+        sut.introProfileResolver = { _ in
+            MeeshyUser(id: group.id, username: "alice",
+                       firstName: "Alice", lastName: "Martin",
+                       banner: "https://cdn.test/banner.jpg", bannerThumbHash: "bh")
+        }
+        sut.introMoodFeedLoader = { [] }
+
+        let intro = await sut.resolveGroupIntro(for: group)
+
+        XCTAssertEqual(intro.displayName, "Alice Martin",
+                       "Full name is built from first+last when displayName is absent")
+        XCTAssertEqual(intro.bannerURL, "https://cdn.test/banner.jpg")
+        XCTAssertEqual(intro.bannerThumbHash, "bh")
+    }
+
+    func test_resolveGroupIntro_mapsMoodFromStatusFeed() async {
+        let group = makeIntroGroup()
+        sut.introProfileResolver = { _ in MeeshyUser(id: group.id, username: "alice") }
+        sut.introMoodFeedLoader = {
+            [Self.makeStatusPost(authorId: group.id, authorName: "alice",
+                                 mood: "🔥", content: "En feu aujourd'hui")]
+        }
+
+        let intro = await sut.resolveGroupIntro(for: group)
+
+        XCTAssertEqual(intro.moodEmoji, "🔥")
+        XCTAssertEqual(intro.moodMessage, "En feu aujourd'hui")
+    }
+
+    func test_resolveGroupIntro_moodFeedFetchedOncePerSession() async {
+        let group = makeIntroGroup()
+        sut.introProfileResolver = { _ in MeeshyUser(id: group.id, username: "alice") }
+        var fetchCount = 0
+        sut.introMoodFeedLoader = { fetchCount += 1; return [] }
+
+        _ = await sut.resolveGroupIntro(for: group)
+        _ = await sut.resolveGroupIntro(for: makeIntroGroup(username: "bob"))
+
+        XCTAssertEqual(fetchCount, 1,
+                       "The statuses feed is fetched once per ViewModel session, then reused")
+    }
+
+    func test_resolveGroupIntro_survivesResolverFailure() async {
+        let group = makeIntroGroup(username: "carol")
+        sut.introProfileResolver = { _ in throw URLError(.notConnectedToInternet) }
+        sut.introMoodFeedLoader = { throw URLError(.notConnectedToInternet) }
+
+        let intro = await sut.resolveGroupIntro(for: group)
+
+        XCTAssertEqual(intro.userId, group.id)
+        XCTAssertEqual(intro.username, "carol",
+                       "Offline: the intro still renders with the group's own data")
+        XCTAssertNil(intro.displayName)
+        XCTAssertNil(intro.moodEmoji)
+    }
+
     func test_markViewed_expiredStory_doesNotPin() async {
         let unique = UUID().uuidString
         let videoURL = "https://cdn.test/\(unique).mp4"

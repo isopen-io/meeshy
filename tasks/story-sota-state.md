@@ -312,6 +312,27 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   (écouté dans use-social-socket mais handler absent de useStoriesRealtime).
 - [ ] **W5 (P3) Préchargement du média du slide suivant** (aucun `preload` dans StoryViewer.tsx).
 
+### DIRECTIVES PRODUIT UTILISATEUR (hors backlog initial)
+
+- [~] **U-DIR1 Interstitiel d'identité inter-groupes (directive user 2026-07-03).** — it.8
+  « Au passage au groupe de story d'une autre personne : pseudo + nom + présence en ligne +
+  mood et message, bannière en fond, ~2,2 s avant le slide. »
+  Livré : `StoryViewModel.resolveGroupIntro` (cache-first profiles, fetch si ni nom ni bannière,
+  mood via feed statuses fetché UNE fois par session, seams closures pour tests) ;
+  `StoryViewerView` : overlay plein écran zIndex 30 (bannière + ThumbHash/gradient fallback,
+  avatar 88 pt storyTray, nom + @pseudo, badge présence PresenceManager, capsule mood glass),
+  2,2 s (`groupIntroDuration`), tap = skip, gel lecture via `shouldPauseTimer || showGroupIntro`,
+  exclusions : mes stories + mode preview ; placeholder immédiat enrichi pendant l'affichage.
+  Tests : 4 nouveaux dans StoryViewModelTests. Décisions : interstitiel sur TRANSITION de
+  groupe uniquement (pas à l'ouverture initiale du viewer — le tray vient d'afficher l'identité) ;
+  skippable au tap (UX standard, non spécifié par la directive).
+  Vérif : build vert, 78/78 StoryViewModelTests (4 nouveaux resolver), non-régression
+  simulateur (ouverture/lecture/dismiss sains, aucun overlay parasite). ⚠️ La transition
+  inter-groupes N'A PAS PU être déclenchée visuellement : l'environnement de test n'avait
+  qu'UN groupe de tiers (stories elvira/J.Charles expirées pendant la session ; story publiée
+  via compte BIGBOSS non visible — pas contact). RESTE : validation visuelle dès que 2+
+  groupes de contacts existent (ou device user) + éventuel réglage design.
+
 ### UI/UX — design system par version d'iOS (à traiter APRÈS les P0/P1 fonctionnels)
 
 - [ ] **U1 (P2) Transition tray→viewer** : sur iOS 18+, `navigationTransition(.zoom)` /
@@ -424,6 +445,13 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.8 — U-DIR1 : interstitiel d'identité inter-groupes (hash au push)
+
+- Directive utilisateur directe (priorité sur backlog). Détail dans l'item U-DIR1 §3.
+- Pièges rencontrés : build bloqué ~10 min par le fichier en vol d'un autre agent
+  (ConversationListView — réparé par son commit 517b543a4) ; MeeshyAvatar n'a pas de
+  param `size:` (taille par AvatarContext → .storyTray 88 pt).
 
 ## it.7 — R3 : indicateur discret de buffering mid-slide (27fdaa7c2 + 23cb48875)
 
