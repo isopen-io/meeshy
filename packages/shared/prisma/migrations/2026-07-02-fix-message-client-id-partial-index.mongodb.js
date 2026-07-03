@@ -9,7 +9,7 @@
  * `$gt`/`$gte`/`$lt`/`$lte`, `$type`, et `$and` au niveau racine — voir
  * https://www.mongodb.com/docs/manual/core/index-partial/#supported-operators).
  * `createIndex` lève donc une erreur et l'index n'a JAMAIS existé en prod
- * (vérifié via `db.messages.getIndexes()`). Conséquence directe : la dédup
+ * (vérifié via `db.Message.getIndexes()`). Conséquence directe : la dédup
  * offline-queue des messages ET des résumés d'appel (`call-summary:{callId}`,
  * cf. `CallService.createCallSummaryMessage`) repose sur un catch Prisma
  * P2002 qui ne se déclenche jamais sans contrainte unique réelle — deux
@@ -25,6 +25,18 @@
  * spec DIFFÉRENTE (ex. résidu d'une tentative manuelle), il est droppé et
  * recréé.
  *
+ * ⚠️ COLLECTION : `db.Message` (majuscule) — le model Prisma `Message` n'a pas
+ * de `@@map`, donc la collection MongoDB porte le nom du model. Les premières
+ * versions de ce script (et la migration 2026-05-09) ciblaient `db.messages`,
+ * une collection VIDE — l'index semblait créé mais ne protégeait rien.
+ * Vérifier après exécution : `db.Message.getIndexes()`.
+ *
+ * ⚠️ PRÉ-REQUIS DÉDUP : la création échoue (E11000) si des doublons
+ * (conversationId, clientMessageId) existent déjà. Appliqué en prod le
+ * 2026-07-02 : 33 paires dédupliquées (13 call-summaries tardifs supprimés,
+ * 25 messages utilisateur préservés via $unset clientMessageId), puis index
+ * créé et vérifié par insertion-sonde rejetée E11000.
+ *
  * Exécution :
  *   mongosh "$DATABASE_URL" < 2026-07-02-fix-message-client-id-partial-index.mongodb.js
  */
@@ -38,16 +50,16 @@ const indexName = 'messages_conversationId_clientMessageId_unique';
 const correctedFilter = { clientMessageId: { $exists: true, $type: 'string', $gt: '' } };
 
 print('🔍 Validation pré-migration (aucun document ne doit avoir clientMessageId = "")...');
-const emptyStringCount = db.messages.countDocuments({ clientMessageId: '' });
+const emptyStringCount = db.Message.countDocuments({ clientMessageId: '' });
 if (emptyStringCount > 0) {
   print(`❌ ERREUR : ${emptyStringCount} document(s) avec clientMessageId = "".`);
-  print('   db.messages.updateMany({ clientMessageId: "" }, { $unset: { clientMessageId: "" } });');
+  print('   db.Message.updateMany({ clientMessageId: "" }, { $unset: { clientMessageId: "" } });');
   quit(1);
 }
 print('   ✅ OK');
 print('');
 
-const existing = db.messages.getIndexes().find(idx => idx.name === indexName);
+const existing = db.Message.getIndexes().find(idx => idx.name === indexName);
 if (existing) {
   const sameFilter = JSON.stringify(existing.partialFilterExpression) === JSON.stringify(correctedFilter);
   if (sameFilter) {
@@ -55,15 +67,15 @@ if (existing) {
   } else {
     print(`   ⚠️  L'index "${indexName}" existe avec une spec différente — drop + recréation.`);
     print(`      Ancienne spec : ${JSON.stringify(existing.partialFilterExpression)}`);
-    db.messages.dropIndex(indexName);
-    const result = db.messages.createIndex(
+    db.Message.dropIndex(indexName);
+    const result = db.Message.createIndex(
       { conversationId: 1, clientMessageId: 1 },
       { unique: true, name: indexName, partialFilterExpression: correctedFilter }
     );
     print(`   ✅ Index recréé : ${result}`);
   }
 } else {
-  const result = db.messages.createIndex(
+  const result = db.Message.createIndex(
     { conversationId: 1, clientMessageId: 1 },
     { unique: true, name: indexName, partialFilterExpression: correctedFilter }
   );
@@ -71,7 +83,7 @@ if (existing) {
 }
 print('');
 
-const finalIndex = db.messages.getIndexes().find(idx => idx.name === indexName);
+const finalIndex = db.Message.getIndexes().find(idx => idx.name === indexName);
 if (finalIndex) {
   print(`   ✅ Index "${indexName}" présent`);
   print(`      Keys           : ${JSON.stringify(finalIndex.key)}`);

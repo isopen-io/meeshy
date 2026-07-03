@@ -399,6 +399,9 @@ public final class AuthManager: ObservableObject, AuthManaging {
         await ConversationStore.shared.reset()
         UserPreferencesManager.shared.resetSession()
         FriendshipCache.shared.clear()
+        // A5 — le curseur de séquence est per-user : le remettre à zéro évite
+        // un faux gap au premier event du compte suivant sur le même device.
+        Task { await SyncSeqTracker.shared.reset() }
 
         // Keychain wipe + saved account remove (existant).
         keychain.delete(forKey: tokenKey(for: userId), account: nil)

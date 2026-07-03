@@ -206,11 +206,13 @@ export class ReactionHandler {
       });
 
       if (!removed) {
-        const errorResponse: SocketIOResponse<unknown> = {
-          success: false,
-          error: 'Reaction not found'
-        };
-        if (callback) callback(errorResponse);
+        // Idempotent: the reaction is already absent — the caller's desired
+        // end-state is achieved. Reply success (no broadcast, nothing changed)
+        // instead of an error, which the client would treat as a failed un-react
+        // and roll the optimistic removal back, re-showing a reaction that is
+        // gone. Mirrors the idempotent REST DELETE (R-GW2) and the add path's
+        // P2002 handling.
+        if (callback) callback({ success: true, data: { message: 'Reaction already absent' } });
         return;
       }
 

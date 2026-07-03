@@ -48,6 +48,20 @@ Append-only log of gotchas and decisions that save time next run.
   `run_in_background` `until` loop to get one clean completion ping. First full `:app` `check` in a fresh
   container ≈ 5 min (assembleDebug compiles the whole feature graph); `:core:model` alone ≈ 3.5 min cold.
 
+## CI / GitHub gotchas
+- ⚠ **Never poll GitHub via raw `curl` to `api.github.com`.** Even with `$GITHUB_TOKEN` set, the direct
+  API returns `{"message":"GitHub access is not enabled for this session..."}` — the token is not scoped
+  for it. All GitHub reads/writes must go through the **`mcp__github__*` tools** (they use the proxied auth
+  path). A `curl` poll loop will spin forever on a `None` status. Use `mcp__github__actions_list`
+  (`method:list_workflow_jobs`, `resource_id:<run_id>`, `filter:latest`) for a compact per-job
+  status/conclusion view — much smaller than `list_workflow_runs`, which overflows the token limit.
+- ⚠ **`pull_request_read get_status` shows `total_count:0` for an `apps/android`-only PR** — that's the
+  *legacy commit-status* API, which GitHub **Actions** check-runs do not populate. It does NOT mean CI
+  didn't run or failed. Confirm the real state via the workflow **jobs** endpoint above.
+- The monorepo `ci.yml` runs on **every** PR to `main` (no path filter), so an `apps/android`-only PR does
+  trigger the full JS/TS/Python suite (~10 min) — but it stays green because it touches none of that code.
+  Merge only once every job's `conclusion` is `success` (a `skipped` benchmark job is fine).
+
 ## Serialization gotchas
 - ⚠ **Never put a `private companion object` on a `@Serializable` class.** The plugin generates the
   public `serializer()` *onto the class's companion*; if you declare your own `private companion object`

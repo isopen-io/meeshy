@@ -3211,4 +3211,46 @@ describe('MessageReadStatusService', () => {
       expect(result).toEqual(new Map());
     });
   });
+
+  describe('getMessageReadStatus — totalMembers denominator', () => {
+    const activeParticipant = (id: string) => ({
+      id, displayName: id, avatar: null, user: { avatar: null },
+    });
+
+    it('excludes the sender by identity (not a blind -1), so a message from a member who LEFT still counts every active recipient', async () => {
+      // Alice sent the message, then left the group → she is NOT among the
+      // active participants. The 3 remaining active members are all recipients,
+      // so totalMembers must be 3. A blind `participants.length - 1` yields 2 and
+      // lights up "received/read by all" one recipient too early.
+      mockPrisma.message.findUnique.mockResolvedValue({
+        createdAt: new Date('2026-07-01T00:00:00Z'),
+        senderId: 'alice',
+      });
+      mockPrisma.participant.findMany.mockResolvedValue([
+        activeParticipant('bob'), activeParticipant('carol'), activeParticipant('dave'),
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([]);
+      mockPrisma.attachmentStatusEntry.findMany.mockResolvedValue([]);
+
+      const status = await service.getMessageReadStatus('m1', 'c1');
+      expect(status.totalMembers).toBe(3);
+    });
+
+    it('excludes the sender when the sender IS still active (normal case) — no regression', async () => {
+      mockPrisma.message.findUnique.mockResolvedValue({
+        createdAt: new Date('2026-07-01T00:00:00Z'),
+        senderId: 'alice',
+      });
+      mockPrisma.participant.findMany.mockResolvedValue([
+        activeParticipant('alice'), activeParticipant('bob'), activeParticipant('carol'),
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([]);
+      mockPrisma.attachmentStatusEntry.findMany.mockResolvedValue([]);
+
+      const status = await service.getMessageReadStatus('m1', 'c1');
+      expect(status.totalMembers).toBe(2);
+    });
+  });
 });

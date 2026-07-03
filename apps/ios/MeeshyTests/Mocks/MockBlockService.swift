@@ -58,6 +58,12 @@ final class MockBlockService: BlockServiceProviding, @unchecked Sendable {
         return blockedUserIds.contains(userId)
     }
 
+    func setBlockedOptimistic(userId: String, blocked: Bool) {
+        setBlockedOptimisticCallCount += 1
+        if blocked { blockedUserIds.insert(userId) } else { blockedUserIds.remove(userId) }
+    }
+    var setBlockedOptimisticCallCount = 0
+
     func refreshCache() async {
         refreshCacheCallCount += 1
         _ = try? await listBlockedUsers()

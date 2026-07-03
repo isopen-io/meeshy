@@ -29,6 +29,7 @@ const mockCallServicePersistCallStats = jest.fn() as jest.Mock<any>;
 const mockCallServiceRecordParticipantBackgrounded = jest.fn() as jest.Mock<any>;
 const mockCallServiceClearParticipantBackgrounded = jest.fn() as jest.Mock<any>;
 const mockCallServiceCreateCallSummaryMessage = jest.fn() as jest.Mock<any>;
+const mockCallServiceReleaseActiveCallClaim = jest.fn() as jest.Mock<any>;
 
 jest.mock('../../services/CallService', () => ({
   CallService: jest.fn().mockImplementation(() => ({
@@ -50,6 +51,7 @@ jest.mock('../../services/CallService', () => ({
     createCallSummaryMessage: (...a: unknown[]) => mockCallServiceCreateCallSummaryMessage(...a),
     recordParticipantBackgrounded: (...a: unknown[]) => mockCallServiceRecordParticipantBackgrounded(...a),
     clearParticipantBackgrounded: (...a: unknown[]) => mockCallServiceClearParticipantBackgrounded(...a),
+    releaseActiveCallClaim: (...a: unknown[]) => mockCallServiceReleaseActiveCallClaim(...a),
   })),
 }));
 
@@ -143,6 +145,7 @@ jest.mock('@meeshy/shared/types/video-call', () => ({
     SIGNAL_SENDER_MISMATCH: 'SIGNAL_SENDER_MISMATCH',
     TARGET_NOT_FOUND: 'TARGET_NOT_FOUND',
   },
+  CALL_TERMINAL_STATUSES: ['ended', 'missed', 'rejected', 'failed'],
 }));
 
 jest.mock('@meeshy/shared/prisma/client', () => ({

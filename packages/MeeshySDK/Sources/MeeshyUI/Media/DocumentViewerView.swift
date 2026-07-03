@@ -246,6 +246,18 @@ public struct DocumentFullSheet: View {
                 let preferred = attachment.originalName.isEmpty ? nil : attachment.originalName
                 _ = try MediaFileSaver.save(tempFile, preferredName: preferred)
 
+                // P7-9 gap — parité avec ImageViewerView : reporter la
+                // consommation `downloaded` pour que le panneau « Qui a vu »
+                // reflète les téléchargements de DOCUMENTS, pas seulement les
+                // images. Best-effort (try?) : un échec de report ne doit pas
+                // faire échouer un enregistrement réussi.
+                if !attachment.id.isEmpty {
+                    let body = AttachmentStatusBody(action: "downloaded", playPositionMs: 0, durationMs: 0, complete: true)
+                    let _: APIResponse<[String: String]>? = try? await APIClient.shared.post(
+                        endpoint: "/attachments/\(attachment.id)/status", body: body
+                    )
+                }
+
                 await MainActor.run {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         saveState = .saved
