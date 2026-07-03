@@ -355,7 +355,8 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   tri, constante, clamp, easing du kf BAS, canaux indépendants, time relatif au startTime),
   hook playhead rAF activé UNIQUEMENT si le slide a des keyframes (hérite du gel W2 :
   startedAtRef nul → temps figé), appliqué aux TEXTOBJECTS (x/y/scale/opacity).
-  RESTE : inc.2 mediaObjects, inc.4 clipTransitions (voir plan).
+  ✅ Inc.2 (it.24) : mediaObjects foreground animés (mêmes canaux, style factorisé,
+  slideHasKeyframes étendu). RESTE : inc.4 clipTransitions (voir plan).
 - [x] **W2 (P2) Timer découplé de la vidéo.** ✅ it.22
   Porté le pattern iOS R1/R2 : `isBuffering` piloté par les événements natifs du <video>
   principal (waiting/stalled → gel ; playing/canplay → reprise), watchdog 5 s anti-deadlock
@@ -506,7 +507,11 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.23 — W1 inc.1 : keyframes des textObjects rendus sur le web (hash au push)
+## it.24 — W1 inc.2 : keyframes des mediaObjects foreground (hash au push)
+
+- Réutilisation directe de l'infra it.23 (resolveKeyframeState + playhead) ; 147/147.
+
+## it.23 — W1 inc.1 : keyframes des textObjects rendus sur le web (7c428a086)
 
 - 8 tests de parité iOS (formules easing, clamp, segment, canaux, startTime offset) ;
   147/147 les 9 suites story web.

@@ -12,7 +12,7 @@ easing du keyframe BAS : linear / easeIn t² / easeOut 1-(1-t)² / easeInOut cub
 1. ✅ (it.23) Portage 1:1 de l'interpolateur en TS pur (`story-transforms.ts`) +
    hook playhead rAF (activé UNIQUEMENT si le slide porte des keyframes ; gelé avec
    le gate W2 pause/buffering) + application aux TEXTOBJECTS (x/y/scale/opacity).
-2. mediaObjects foreground (mêmes canaux, translate/scale du conteneur).
+2. ✅ (it.24) mediaObjects foreground (mêmes canaux, opacity/left/top/width animés).
 3. Rotation animée si le composer l'émet un jour (canal absent du modèle actuel).
 4. Transitions inter-clips (`clipTransitions`) — dissolve/slide au changement de clip.
 

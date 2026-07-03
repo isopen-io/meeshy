@@ -57,6 +57,9 @@ export interface StoryMediaObjectData {
   rotation: number;
   isBackground?: boolean;
   zIndex?: number;
+  /// W1 inc.2 — timing par élément + keyframes posés par le composer iOS.
+  startTime?: number;
+  keyframes?: StoryKeyframeData[];
 }
 
 export interface StoryAudioObjectData {
@@ -455,6 +458,9 @@ function StoryViewer({
   // gelé, startedAtRef est nul et le temps consommé cesse d'avancer.
   const slideHasKeyframes = Boolean(
     stories[currentIndex]?.storyEffects?.textObjects?.some((t) => t.keyframes?.length)
+    || stories[currentIndex]?.storyEffects?.mediaObjects?.some(
+      (m) => !m.isBackground && m.keyframes?.length
+    )
   );
   const [playheadSec, setPlayheadSec] = useState(0);
   useEffect(() => {
@@ -707,7 +713,20 @@ function StoryViewer({
           // Foreground: 65% of canvas short-dimension at scale=1, matches iOS
           // `baseMediaSize = shortDim * 0.65` heuristic so cross-platform render
           // stays roughly consistent.
-          const sizePct = 65 * m.scale;
+          // W1 inc.2 — keyframes interpolés (parité iOS, fallback statique).
+          const mkf = resolveKeyframeState(m.keyframes, playheadSec, m.startTime ?? 0);
+          const mx = mkf?.x ?? m.x;
+          const my = mkf?.y ?? m.y;
+          const mScale = mkf?.scale ?? m.scale;
+          const sizePct = 65 * mScale;
+          const fgStyle = {
+            left: `${mx * 100}%`,
+            top: `${my * 100}%`,
+            width: `${sizePct}%`,
+            opacity: mkf?.opacity,
+            transform: `translate(-50%, -50%) rotate(${m.rotation}deg)`,
+            zIndex: m.zIndex ?? 1,
+          };
           return m.mediaType === 'video' ? (
             <video
               key={m.id}
@@ -717,13 +736,7 @@ function StoryViewer({
               playsInline
               loop
               className="absolute pointer-events-none rounded-lg"
-              style={{
-                left: `${m.x * 100}%`,
-                top: `${m.y * 100}%`,
-                width: `${sizePct}%`,
-                transform: `translate(-50%, -50%) rotate(${m.rotation}deg)`,
-                zIndex: m.zIndex ?? 1,
-              }}
+              style={fgStyle}
             />
           ) : (
             <img
@@ -731,13 +744,7 @@ function StoryViewer({
               src={resolved.url}
               alt=""
               className="absolute pointer-events-none rounded-lg"
-              style={{
-                left: `${m.x * 100}%`,
-                top: `${m.y * 100}%`,
-                width: `${sizePct}%`,
-                transform: `translate(-50%, -50%) rotate(${m.rotation}deg)`,
-                zIndex: m.zIndex ?? 1,
-              }}
+              style={fgStyle}
             />
           );
         })}
