@@ -131,13 +131,16 @@ struct CallWaitingBannerView: View {
         autoDismissTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(seconds))
             guard !Task.isCancelled else { return }
-            if UIAccessibility.isReduceMotionEnabled {
-                isVisible = false
-            } else {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    isVisible = false
-                }
-            }
+            // Audit 2026-07-02 — ignoring the banner for `autoDismissSeconds`
+            // used to just hide it (isVisible = false) without ever calling
+            // `onReject()`, unlike the explicit "Refuser" button. The caller
+            // was left ringing indefinitely (no busy signal) until their own
+            // client-side timeout or the gateway's 60s ringing timer, and
+            // `CallManager.pendingIncomingCall` stayed set with no visible
+            // UI to act on it. The timeout must resolve the pending call the
+            // same way the reject button does.
+            dismiss()
+            onReject()
         }
     }
 }
