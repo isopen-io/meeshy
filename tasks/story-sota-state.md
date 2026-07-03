@@ -296,14 +296,15 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 
 ### BACKEND — instantanéité réseau
 
-- [ ] **G1 (P1) Tray léger + delta-sync.**
-  Preuve : `GET /posts/feed/stories` = 50 stories plein corps (`storyEffects` ≤256 KB chacune,
-  translations, media[], top-3 comments) sans pagination ni `?since=` ; ETag tout-ou-rien
-  quasi jamais 304 sur tray actif. Cible (compatible ascendant) : (a) param `?since=<updatedAt>`
-  → ne renvoyer que les groupes modifiés ; (b) projection légère optionnelle
-  `?projection=tray` (auteur, compteurs, premier slide, thumbHash) avec fetch complet à
-  l'ouverture du groupe ; (c) pagination cursor. Coordonner avec R8/W5. Le client garde son
-  cache 24 h et fusionne le delta.
+- [~] **G1 (P1) Tray léger + delta-sync.** — DELTA-SYNC FAIT it.13
+  ✅ Incrément (a) : `GET /posts/feed/stories?updatedSince=<ISO8601>` — ne renvoie que les
+  stories créées/modifiées depuis le timestamp (`where.AND += { updatedAt: { gt } }`),
+  convention alignée sur le précédent `GET /conversations?updatedSince`. Timestamp invalide
+  ignoré (full). Rétro-compatible. Disparitions couvertes par story:deleted + expiry client.
+  RESTE : (b) projection légère `?projection=tray`, (c) pagination cursor (avec R8 client),
+  consommation iOS du delta (`fetchStoriesFromNetwork` + merge), index Prisma
+  `@@index([type, updatedAt])` sur Post à poser avec un déploiement schema, et DÉPLOIEMENT
+  gateway prod (pull+up explicite) avant que le client ne s'y branche.
 - [ ] **G2 (P2) Double pipeline de traduction du `content` story.**
   Preuve : `PostService.createPost` L193 (`triggerStoryTextTranslation`, audience-driven) ET
   `routes/posts/core.ts` L98-115 (`translatePost`, 5 langues fixes) écrivent tous deux dans
@@ -467,7 +468,14 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.12 — E5 : write-ahead du publish online, story insubmersible (hash au push)
+## it.13 — G1 incrément delta-sync : ?updatedSince sur le tray stories (hash au push)
+
+- RED : 2 tests PostFeedService (filtre présent avec option, absent sans). 34/34 service,
+  111/111 les 6 suites feed (bun). Route : parse manuel tolérant (invalide → full).
+- Note : le fichier d'état citait un ETag global — le code actuel n'en a plus (Cache-Control
+  no-cache seul) ; citation corrigée de fait par la re-preuve.
+
+## it.12 — E5 : write-ahead du publish online, story insubmersible (bb6bc9584)
 
 - RED initial sur la suite queue : setPublishHandler AUTO-DRAINE une queue non vide (M5) —
   handler à poser AVANT enqueue dans les tests processNext (piège consigné).
