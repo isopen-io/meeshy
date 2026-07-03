@@ -103,6 +103,27 @@ export const SOCKET_RATE_LIMITS = {
     windowMs: 60000, // 1 minute — start/stop toggles only, not a steady stream
     keyPrefix: 'socket:call:screen-capture'
   },
+  // Audit calling-feature routine 2026-07-03 — RECONNECTING/RECONNECTED/
+  // REQUEST_ICE_SERVERS were the only call:* handlers left unrate-limited
+  // (unlike every sibling: HEARTBEAT, QUALITY_REPORT, TRANSCRIPTION_SEGMENT,
+  // ANALYTICS, SCREEN_CAPTURE). Each triggers a DB write or HMAC credential
+  // mint, so a flooding client could still amplify load onto the DB/TURN
+  // secret even though authorization was already enforced.
+  CALL_RECONNECTING: {
+    maxRequests: 20,
+    windowMs: 60000, // 1 minute — one ICE-restart attempt notification per retry, generous buffer
+    keyPrefix: 'socket:call:reconnecting'
+  },
+  CALL_RECONNECTED: {
+    maxRequests: 20,
+    windowMs: 60000, // 1 minute — mirrors CALL_RECONNECTING
+    keyPrefix: 'socket:call:reconnected'
+  },
+  CALL_ICE_SERVERS_REFRESH: {
+    maxRequests: 10,
+    windowMs: 60000, // 1 minute — client refreshes at ~80% of TTL (minutes apart), not a steady stream
+    keyPrefix: 'socket:call:ice-servers-refresh'
+  },
   REACTION_ADD: {
     maxRequests: 30,
     windowMs: 60000, // 1 minute — prevents emoji spam floods
