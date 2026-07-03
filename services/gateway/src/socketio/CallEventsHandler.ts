@@ -18,6 +18,7 @@ import { PushNotificationService } from '../services/PushNotificationService';
 import { logger } from '../utils/logger';
 import { CALL_EVENTS, CALL_ERROR_CODES, CALL_TERMINAL_STATUSES } from '@meeshy/shared/types/video-call';
 import { ROOMS } from '@meeshy/shared/types/socketio-events';
+import { resolveCallEndedRooms } from '../utils/callEndedFanout';
 import { validateSocketEvent, isValidationFailure } from '../middleware/validation';
 import {
   socketInitiateCallSchema,
@@ -258,24 +259,7 @@ export class CallEventsHandler {
     conversationId: string | undefined,
     endedEvent: Omit<CallEndedEvent, 'endedBy'> & { endedBy?: string }
   ): Promise<void> {
-    const rooms: string[] = [ROOMS.call(callId)];
-    if (conversationId) {
-      rooms.push(ROOMS.conversation(conversationId));
-      try {
-        const members = await this.prisma.participant.findMany({
-          where: { conversationId, isActive: true, userId: { not: null } },
-          select: { userId: true }
-        });
-        for (const member of members) {
-          if (member.userId) rooms.push(ROOMS.user(member.userId));
-        }
-      } catch (error) {
-        logger.error('broadcastCallEnded: member fanout lookup failed — falling back to call+conversation rooms', {
-          callId,
-          error
-        });
-      }
-    }
+    const rooms = await resolveCallEndedRooms(this.prisma, callId, conversationId);
     io.to(rooms).emit(CALL_EVENTS.ENDED, endedEvent);
   }
 

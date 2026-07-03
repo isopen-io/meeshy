@@ -11,7 +11,7 @@
 import { PrismaClient, CallStatus, CallEndReason } from '@meeshy/shared/prisma/client';
 import type { Server as SocketIOServer } from 'socket.io';
 import { CALL_EVENTS } from '@meeshy/shared/types/video-call';
-import { ROOMS } from '@meeshy/shared/types/socketio-events';
+import { resolveCallEndedRooms } from '../utils/callEndedFanout';
 import { logger } from '../utils/logger';
 import type { CallService } from './CallService';
 
@@ -371,12 +371,14 @@ export class CallCleanupService {
       });
     }
 
-    // Broadcast `call:ended` so clients (caller stuck in `.ringing`,
-    // callee stuck in `.connecting`) leave their hung state instead of
-    // ringing forever. Mirrors the inline path in CallEventsHandler's
-    // scheduleRingingTimeout callback. The DB write is the source of
-    // truth — if the broadcast fails, the next client reconnect will
-    // observe the call status as ended.
+    // Broadcast `call:ended` to the FULL termination audience — call room,
+    // conversation room AND every conversation member's user room (same
+    // audience as `call:initiated`). Without the user-room fanout, a callee
+    // GC'd out of `.ringing`/`.connecting` (caller vanished without a clean
+    // hangup) never learns the call ended and keeps ringing — the same
+    // prod incident CallEventsHandler.broadcastCallEnded fixed for the
+    // client-driven end/leave/ringing-timeout paths (2026-07-03), but this
+    // GC path used its own two-room emit and was missed by that fix.
     if (this.io) {
       const endedEvent = {
         callId,
@@ -384,10 +386,8 @@ export class CallCleanupService {
         endedBy: undefined,
         reason: endReason
       };
-      this.io.to(ROOMS.call(callId)).emit(CALL_EVENTS.ENDED, endedEvent);
-      if (session?.conversationId) {
-        this.io.to(ROOMS.conversation(session.conversationId)).emit(CALL_EVENTS.ENDED, endedEvent);
-      }
+      const rooms = await resolveCallEndedRooms(this.prisma, callId, session?.conversationId);
+      this.io.to(rooms).emit(CALL_EVENTS.ENDED, endedEvent);
       logger.info('[CallCleanupService] Broadcast call:ended', { callId, endReason, conversationId: session?.conversationId });
     } else {
       logger.warn('[CallCleanupService] No Socket.IO server attached — clients will not receive call:ended', { callId });
