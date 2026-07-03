@@ -792,6 +792,15 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       );
     };
 
+    // Handler for user:updated — a contact's profile changed (displayName,
+    // avatar, banner, username). Invalidate the cached profile so any
+    // currently-mounted `useUserProfileQuery(userId)` refetches instead of
+    // showing a stale snapshot until the next manual refresh.
+    const handleUserUpdated = (data: { userId: string; changes: Record<string, unknown> }) => {
+      if (!data?.userId) return;
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.detail(data.userId) });
+    };
+
     // Handler for conversation:new — a group was created or the user was added to one.
     // The event carries only partial data, so fetch the full conversation and prepend it.
     const handleConversationNew = (data: { conversationId: string }) => {
@@ -859,6 +868,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const unsubscribeConversationJoinError = meeshySocketIOService.onConversationJoinError(handleConversationJoinError);
     const unsubscribeMessagePinned = meeshySocketIOService.onMessagePinned(handleMessagePinned);
     const unsubscribeMessageUnpinned = meeshySocketIOService.onMessageUnpinned(handleMessageUnpinned);
+    const unsubscribeUserUpdated = meeshySocketIOService.onUserUpdated(handleUserUpdated);
 
     return () => {
       unsubscribeMessage?.();
@@ -887,6 +897,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       unsubscribeConversationJoinError?.();
       unsubscribeMessagePinned?.();
       unsubscribeMessageUnpinned?.();
+      unsubscribeUserUpdated?.();
     };
   }, [conversationId, enabled, queryClient]);
 }

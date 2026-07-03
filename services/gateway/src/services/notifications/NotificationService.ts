@@ -20,6 +20,8 @@ import type {
   NotificationType,
   Notification,
 } from '@meeshy/shared/types/notification';
+import type { UserUpdatedEventData } from '@meeshy/shared/types/socketio-events';
+import { getDistinctConversationPartnerUserIds } from '../../utils/conversation-partners';
 import {
   NOTIFICATION_PREFERENCE_DEFAULTS,
   type NotificationPreference as NotifPrefs,
@@ -2197,6 +2199,27 @@ export class NotificationService {
       friendRequestId: params.friendRequestId,
       rejecterId: params.rejecterId,
     });
+  }
+
+  /**
+   * Propagates a profile change (displayName, avatar, banner, username) to
+   * every user sharing an active conversation with `userId`, instead of a
+   * full broadcast. Realtime-only signal — no `Notification` row, same
+   * pattern as `emitFriendRequestCancelled`. See
+   * tasks/socketio-events-cleanup.md #6.
+   */
+  async emitUserUpdated(params: {
+    userId: string;
+    changes: UserUpdatedEventData['changes'];
+  }): Promise<void> {
+    if (!this.io) return;
+    const partnerIds = await getDistinctConversationPartnerUserIds(this.prisma, params.userId);
+    if (partnerIds.length === 0) return;
+
+    const payload: UserUpdatedEventData = { userId: params.userId, changes: params.changes };
+    for (const partnerId of partnerIds) {
+      this.io.to(ROOMS.user(partnerId)).emit(SERVER_EVENTS.USER_UPDATED, payload);
+    }
   }
 
   // ==============================================
