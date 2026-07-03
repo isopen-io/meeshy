@@ -366,6 +366,9 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Gateway : tests sous bun (`bun run test:coverage`), prisma generate + shared build d'abord ;
   route Fastify dupliquée = boot silencieusement cassé.
 - Déploiement = push main → CI ; gateway prod nécessite pull+up -d explicite.
+- **Bumps de version (directive user 2026-07-03)** : committer RÉGULIÈREMENT ; à chaque commit,
+  vérifier `git diff` des 5 fichiers bump (pbxproj + 4 Info.plist) — si PUR bump de version,
+  l'intégrer au commit (« Includes build NNNN version bump ») ; sinon le laisser.
 
 ## 7. Journal d'itérations (l'agent APPEND ici)
 
@@ -406,6 +409,16 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.4 — E2 : mergeEffects copy-through, timelineDuration/clipTransitions survivent (23e22b6eb)
+
+- RED : StoryComposerMergeEffectsTests — mergeEffects inexistant ; l'ancien buildEffects
+  perdait timelineDuration (12.5→nil) et clipTransitions à chaque sync.
+- Fix d'altitude : inversion du défaut (copie intégrale de current + écrasement des seuls
+  champs CanvasAuthoredState). Ferme la classe de bug récidiviste. Choix : E2 AVANT E1 (listé
+  premier) car persistDraft→buildEffects — l'autosave E1 aurait amplifié la perte.
+- Vérif : 8/8 (5 nouveaux + ResetState, 1 skip préexistant XCTSkip chemin bundle) 18.2 ;
+  build app vert (76 s). Bumps 1211 intégrés au commit (directive user).
 
 ## it.3 — R5(b2) : pin des stories vues au markViewed (8a424e806)
 
