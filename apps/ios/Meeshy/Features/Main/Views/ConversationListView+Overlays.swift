@@ -244,11 +244,11 @@ extension ConversationListView {
         // menu redescend et se dissout — miroir du zoom d'ouverture.
         withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
             previewScale = min(previewScale, 0.7)
-            if dragOffsetY <= 110 {
+            if !chipModeLatched && dragOffsetY <= 110 {
                 // Fermeture normale : la carte revient en place en fondant.
-                // Fermeture depuis le morph drag (relâché > 110 pt) : la
-                // carte fond SUR PLACE sous le doigt — la faire remonter au
-                // centre pendant le fondu serait un aller-retour parasite.
+                // Fermeture depuis le morph drag (chip relâchée) : la carte
+                // fond SUR PLACE sous le doigt — la faire remonter au centre
+                // pendant le fondu serait un aller-retour parasite.
                 dragOffsetY = 0
                 dragOffsetX = 0
             }
@@ -260,6 +260,7 @@ extension ConversationListView {
             previewEmergeOffset = 0
             dragOffsetY = 0
             dragOffsetX = 0
+            chipModeLatched = false
             contextMenuSourceFrame = nil
         }
         contextMenuDismissWork = work
@@ -270,8 +271,10 @@ extension ConversationListView {
     /// carte (0 = menu ouvert, 1 = carte devenue chip draggable) : le blur du
     /// fond s'efface, le menu se dissout, la carte rétrécit et suit le doigt.
     /// Tout dérive de `dragOffsetY` — le snap-back du geste restaure tout.
+    /// Une fois LATCHÉE (`chipModeLatched`), la chip reste chip même si le
+    /// doigt remonte (pour viser un header de section au-dessus).
     var dragMorphProgress: CGFloat {
-        min(1, max(0, dragOffsetY / 140))
+        chipModeLatched ? 1 : min(1, max(0, dragOffsetY / 140))
     }
 
     /// Émergence de l'aperçu depuis la ligne pressée. Tick 1 : la frame de
@@ -532,19 +535,36 @@ extension ConversationListView {
     /// ScrollView est masqué par l'overlay, zéro contention de scroll
     /// possible.
     private var previewCollapseGesture: some Gesture {
-        DragGesture()
+        DragGesture(coordinateSpace: .global)
             .onChanged { value in
                 let translation = value.translation.height
-                if translation < 0 {
+                if chipModeLatched {
+                    // Chip libre : suit le doigt sur les deux axes, y compris
+                    // vers le haut pour viser un header de section.
+                    dragOffsetY = translation
+                    dragOffsetX = value.translation.width
+                    updateChipDropTarget(at: value.location)
+                } else if translation < 0 {
                     previewScale = max(0, 1.0 + translation / 100)
                     dragOffsetY = 0
                     dragOffsetX = 0
                 } else {
                     dragOffsetY = translation
                     dragOffsetX = value.translation.width * dragMorphProgress
+                    if dragMorphProgress >= 1 {
+                        // Morph complet → verrouille le mode chip (drag n drop
+                        // engagé tant que le doigt reste posé).
+                        chipModeLatched = true
+                        HapticFeedback.light()
+                        updateChipDropTarget(at: value.location)
+                    }
                 }
             }
             .onEnded { value in
+                if chipModeLatched {
+                    handleChipDrop(at: value.location)
+                    return
+                }
                 if value.translation.height > 110 {
                     dismissContextMenu()
                     return
@@ -558,6 +578,47 @@ extension ConversationListView {
                     dragOffsetX = 0
                 }
             }
+    }
+
+    /// Surligne le header de section sous le doigt pendant le drag de la chip
+    /// (réutilise l'affordance `isDropTarget` du `SectionDropDelegate`
+    /// historique). "pinned" n'est pas une cible (l'épinglage a son action
+    /// dédiée dans le menu). N'écrit l'état QUE sur changement — le registre
+    /// est hit-testé à chaque tick mais la liste n'est invalidée qu'aux
+    /// franchissements de frontière.
+    private func updateChipDropTarget(at location: CGPoint) {
+        let target = sectionFrameRegistry.frames
+            .first(where: { $0.key != "pinned" && $0.value.contains(location) })?
+            .key
+        if dropTargetSection != target {
+            withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                dropTargetSection = target
+            }
+            if target != nil { HapticFeedback.light() }
+        }
+    }
+
+    /// Relâchement de la chip : si le doigt est sur un header de section,
+    /// déplace la conversation ("other" = « Mes conversations » = sectionId
+    /// vide, ids de catégorie sinon) puis ferme ; sinon ferme simplement —
+    /// la chip fond sur place (annulation, parité drag n drop natif).
+    private func handleChipDrop(at location: CGPoint) {
+        defer {
+            withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                dropTargetSection = nil
+            }
+            dismissContextMenu()
+        }
+        guard let conversation = contextMenuConversation,
+              let sectionId = sectionFrameRegistry.frames
+                  .first(where: { $0.key != "pinned" && $0.value.contains(location) })?
+                  .key
+        else { return }
+        let targetId = sectionId == "other" ? "" : sectionId
+        let currentId = conversation.userState.sectionId ?? ""
+        guard targetId != currentId else { return }
+        HapticFeedback.success()
+        conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: targetId)
     }
 }
 
