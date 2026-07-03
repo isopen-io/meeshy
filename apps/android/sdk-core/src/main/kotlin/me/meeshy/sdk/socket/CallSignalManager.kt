@@ -55,6 +55,17 @@ class CallSignalManager @Inject constructor(
     private val _incomingOffers = MutableSharedFlow<WaitingCall>(replay = 0, extraBufferCapacity = 16)
     val incomingOffers: SharedFlow<WaitingCall> = _incomingOffers.asSharedFlow()
 
+    /**
+     * The **identity** of each inbound teardown frame (`call:ended` / `call:missed`),
+     * alongside the FSM-facing [events]. [events] republishes an identity-less
+     * [CallEvent.RemoteHangUp] / [CallEvent.RingTimeout]; this parallel stream
+     * carries the ended call's id so a call-waiting banner whose caller hangs up
+     * before the user acts can be auto-dismissed by its own id (leaving the active
+     * call untouched). Hot, no replay — like [events].
+     */
+    private val _endedCalls = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 16)
+    val endedCalls: SharedFlow<String> = _endedCalls.asSharedFlow()
+
     fun attach() {
         INBOUND_EVENTS.forEach(::listen)
     }
@@ -171,6 +182,7 @@ class CallSignalManager @Inject constructor(
             if (event == INITIATED_EVENT) {
                 CallSignalMapper.incomingOffer(raw)?.let(_incomingOffers::tryEmit)
             }
+            CallSignalMapper.endedCallId(event, raw)?.let(_endedCalls::tryEmit)
         }
     }
 

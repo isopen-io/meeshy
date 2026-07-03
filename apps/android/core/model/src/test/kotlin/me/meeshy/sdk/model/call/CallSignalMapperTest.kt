@@ -198,4 +198,46 @@ class CallSignalMapperTest {
     fun `incomingOffer is inert on malformed JSON rather than crashing`() {
         assertThat(CallSignalMapper.incomingOffer("not-json-at-all")).isNull()
     }
+
+    // --- endedCallId: identity decode for the call-waiting banner dismiss ----
+
+    @Test
+    fun `endedCallId decodes the call id from an ended frame`() {
+        assertThat(CallSignalMapper.endedCallId("call:ended", """{"callId":"c7","reason":"completed"}"""))
+            .isEqualTo("c7")
+    }
+
+    @Test
+    fun `endedCallId decodes the call id from a missed frame`() {
+        assertThat(CallSignalMapper.endedCallId("call:missed", """{"callId":"c8","callerId":"u3"}"""))
+            .isEqualTo("c8")
+    }
+
+    @Test
+    fun `endedCallId is null for a non-teardown frame`() {
+        assertThat(CallSignalMapper.endedCallId("call:signal", """{"callId":"c9","signal":{"type":"answer"}}"""))
+            .isNull()
+    }
+
+    @Test
+    fun `endedCallId is null for an initiated frame`() {
+        assertThat(CallSignalMapper.endedCallId("call:initiated", """{"callId":"c1","type":"video"}"""))
+            .isNull()
+    }
+
+    @Test
+    fun `endedCallId returns null for an ended frame carrying a blank call id`() {
+        assertThat(CallSignalMapper.endedCallId("call:ended", """{"callId":"","reason":"completed"}"""))
+            .isNull()
+    }
+
+    @Test
+    fun `endedCallId returns null for an ended frame carrying no call id`() {
+        assertThat(CallSignalMapper.endedCallId("call:ended", """{"reason":"completed"}""")).isNull()
+    }
+
+    @Test
+    fun `endedCallId is inert on malformed JSON rather than crashing`() {
+        assertThat(CallSignalMapper.endedCallId("call:ended", "not-json-at-all")).isNull()
+    }
 }

@@ -37,6 +37,7 @@ class CallViewModelTest {
     private val dispatcher = UnconfinedTestDispatcher()
     private val events = MutableSharedFlow<CallEvent>(extraBufferCapacity = 64)
     private val incomingOffers = MutableSharedFlow<WaitingCall>(extraBufferCapacity = 16)
+    private val endedCalls = MutableSharedFlow<String>(extraBufferCapacity = 16)
     private val signalManager: CallSignalManager = mockk(relaxed = true)
 
     /** Test-driven auto-dismiss countdown: emit once to fire the 15 s timeout. */
@@ -89,6 +90,7 @@ class CallViewModelTest {
         Dispatchers.setMain(dispatcher)
         every { signalManager.events } returns events
         every { signalManager.incomingOffers } returns incomingOffers
+        every { signalManager.endedCalls } returns endedCalls
         coEvery { signalManager.emitInitiate(any(), any()) } returns
             CallInitiateResult.Success(CallInitiateAck(callId = "call-1"))
     }
@@ -848,6 +850,56 @@ class CallViewModelTest {
         vm.acceptWaitingSwap()
 
         assertThat(vm.state.value.status).isEqualTo(CallStatus.CONNECTED)
+    }
+
+    @Test
+    fun `the waiting call ending remotely dismisses the banner without ending it on the wire`() = runTest {
+        val vm = vm()
+        vm.start(incomingAudio) // active call call-9
+        incomingOffers.emit(offer(callId = "call-77"))
+        assertThat(vm.state.value.waitingBanner).isNotNull()
+
+        endedCalls.emit("call-77") // the waiting caller hangs up
+
+        assertThat(vm.state.value.waitingBanner).isNull()
+        // The caller already ended it — nothing to end on the wire, and the
+        // active call is untouched.
+        verify(exactly = 0) { signalManager.emitEnd(any()) }
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.INCOMING)
+    }
+
+    @Test
+    fun `an ended id that is not the waiting call leaves the banner up`() = runTest {
+        val vm = vm()
+        vm.start(incomingAudio) // active call call-9
+        incomingOffers.emit(offer(callId = "call-77"))
+
+        endedCalls.emit("call-9") // the active call's own teardown id
+
+        assertThat(vm.state.value.waitingBanner).isNotNull()
+    }
+
+    @Test
+    fun `an ended id with no waiting banner is inert`() = runTest {
+        val vm = vm()
+        vm.start(incomingAudio)
+
+        endedCalls.emit("call-77")
+
+        assertThat(vm.state.value.waitingBanner).isNull()
+        verify(exactly = 0) { signalManager.emitEnd(any()) }
+    }
+
+    @Test
+    fun `a remotely-ended waiting call cancels its auto-dismiss timer`() = runTest {
+        val vm = vm()
+        vm.start(incomingAudio) // active call call-9
+        incomingOffers.emit(offer(callId = "call-77"))
+
+        endedCalls.emit("call-77") // dismissed by the remote end...
+        waitingTimerFlow.emit(Unit) // ...so a later timer fire must not re-end it
+
+        verify(exactly = 0) { signalManager.emitEnd(any()) }
     }
 
     @Test

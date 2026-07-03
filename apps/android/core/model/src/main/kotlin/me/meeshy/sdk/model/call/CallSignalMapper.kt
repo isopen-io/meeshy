@@ -65,6 +65,26 @@ object CallSignalMapper {
     }.getOrNull()
 
     /**
+     * Decode the **identity** of an inbound teardown frame (`call:ended` /
+     * `call:missed`) into the id of the call that ended, or `null` when the frame
+     * is not a teardown, is malformed, or carries no (blank) call id.
+     *
+     * The FSM-facing [map] routes both frames to identity-less events
+     * ([CallEvent.RemoteHangUp] / [CallEvent.RingTimeout]); this parallel, total,
+     * side-effect-free decode surfaces the ended call's id so a call-waiting banner
+     * whose caller hangs up (or whose ring times out) before the user acts can be
+     * auto-dismissed via [CallWaitingEvent.RemotelyEnded] — keyed by the id, so an
+     * unrelated teardown never dismisses the wrong banner.
+     */
+    fun endedCallId(eventName: String, rawJson: String): String? = runCatching {
+        when (eventName) {
+            "call:ended" -> json.decodeFromString<CallEndedPayload>(rawJson).callId
+            "call:missed" -> json.decodeFromString<CallMissedPayload>(rawJson).callId
+            else -> null
+        }?.takeIf { it.isNotBlank() }
+    }.getOrNull()
+
+    /**
      * Only the callee's SDP `answer` advances the FSM (Offering → Connecting).
      * Renegotiation `offer`s and `ice-candidate`s are WebRTC plumbing — inert to
      * the phase machine.
