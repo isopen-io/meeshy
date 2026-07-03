@@ -79,6 +79,17 @@ Append-only log of gotchas and decisions that save time next run.
   **file-private top-level** declarations (no companion), or make the companion non-private. Hit on
   `call-history-model` (`CallRecord`).
 
+## Socket-emit patterns (established in repo)
+- **Keep the conditional payload shape as a pure `Map<String, Any>` in `:core:model`, not inline in the
+  emit.** `call-webrtc-plumbing-emits` put the `call:quality-report` `stats` decision (which optional
+  fields are present) in `CallQualityReport.statsFields()` — a pure map, JVM-tested for every branch with
+  no `org.json` dependency — and the `:sdk-core` emit just does `JSONObject(report.statsFields())`.
+  `org.json.JSONObject(Map)` works under Robolectric, so the manager test asserts the nested `stats` keys
+  directly. This mirrors the `CallInitiateAckParser` grain: transport in the manager, decision in the model.
+- **Prefer `Long` over `Int` for cumulative WebRTC byte counters.** iOS uses a 64-bit Swift `Int`; Kotlin
+  `Int` is 32-bit and a long video call's totals exceed ~2.1 GB → silent overflow. Modelling them as `Long`
+  is a correctness win over a literal iOS port (assert with a `> Int.MAX_VALUE` test case).
+
 ## Test patterns (established in repo)
 - ViewModel tests: `UnconfinedTestDispatcher` + `Dispatchers.setMain/resetMain`
   in `@Before/@After`; Truth `assertThat`; MockK (`relaxed = true`); Turbine

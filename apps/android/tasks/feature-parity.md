@@ -953,8 +953,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       → CallConfig`) now owns the route as the SSOT; the CHAT composable threads its own `conversationId`
       nav-arg into `Routes.call(...)` and the CALL composable decodes the args through `CallRoute.config`.
       Outgoing calls now initiate into the real room. +8 behavioural tests (first `:app` test source set).
-      **Pending:** WebRTC-plumbing emits (`request-ice-servers`/`heartbeat`/`quality-report`/
-      `reconnecting`/`reconnected`).
+      **WebRTC-plumbing emits landed** (slice `call-webrtc-plumbing-emits`): `CallSignalManager` gains the
+      five remaining outbound frames at iOS payload-key parity — `emitRequestIceServers(callId)`
+      (`call:request-ice-servers`, TURN-credential refresh), `emitHeartbeat(callId)` (`call:heartbeat`,
+      dead-peer liveness), `emitQualityReport(callId, report)` (`call:quality-report`, `{callId, stats}`),
+      `emitReconnecting(callId, participantId, attempt)` and `emitReconnected(callId, participantId)`
+      (ICE-restart bookkeeping). The `stats` shape is decided once by the pure `core:model`
+      `CallQualityReport.statsFields()` — base five metrics always present, `availableOutgoingBitrateBps`
+      and `jitterMs` appended only when strictly positive (iOS parity); `ConnectionQuality.wireValue`
+      (`excellent|good|fair|poor`) is the SSOT for the `level` token. Byte counters modelled as `Long`
+      (iOS `Int`) so a long call's cumulative totals never overflow the 32-bit range. +16 tests (10 report,
+      6 manager). **Pending:** the app-side driver seams (heartbeat/quality-report timers, ICE-restart
+      controller) that call these emits — land with the WebRTC media transport.
 - [x] Call history / journal (recent + missed calls list, direction, duration, data usage) —
       **pure call-journal model landed** (slice `call-history-model`): `core:model`
       `me.meeshy.sdk.model.call` gains `CallDirection` (incoming/outgoing/missed, `fromRaw` degrades

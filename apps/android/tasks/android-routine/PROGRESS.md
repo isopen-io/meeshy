@@ -152,6 +152,21 @@
 > `CallUiState.connectionQuality`, and rendered as an accent-coherent 4-bar signal indicator on the call
 > screen (error hue on a weak link). +37 tests (24 core, 6 VM-fold, 3 presenter, +4 strings×4 locales).
 > `assembleDebug` + all `testDebugUnitTest` green.
+> On 2026-07-03 the **video-survival auto-disable policy** landed (slice `call-video-survival-policy`, #1387):
+> the pure `core:model` `VideoSurvivalPolicy.reduce(state, level, nowSeconds, userWantsVideo)` drops
+> outbound video to audio-only after a sustained ≥6 s `POOR`/`CRITICAL` streak and resumes after a
+> sustained ≥10 s `EXCELLENT`/`GOOD` streak (duration-based hysteresis on a monotonic clock, `FAIR` holds
+> the recovery window). +19 tests. The actuator seam is deferred to the WebRTC layer.
+> On 2026-07-03 the **WebRTC-plumbing emits** landed (slice `call-webrtc-plumbing-emits`): `:sdk-core`
+> `CallSignalManager` gains the five remaining outbound call frames at iOS payload-key parity —
+> `emitRequestIceServers`/`emitHeartbeat`/`emitQualityReport`/`emitReconnecting`/`emitReconnected`. The
+> `call:quality-report` `stats` shape is decided once by the pure `core:model` `CallQualityReport.
+> statsFields()` (base five metrics always present; `availableOutgoingBitrateBps`/`jitterMs` appended only
+> when strictly positive, iOS parity), with `ConnectionQuality.wireValue` as the `level` SSOT and `Long`
+> byte counters (surpasses iOS's 32-bit `Int` — no overflow on a marathon call). The outbound emit table
+> for the whole call domain is now complete; only the **app-side driver seams** (heartbeat/quality-report
+> timers, ICE-restart controller) that *call* these emits remain, and land with the WebRTC media
+> transport. +16 tests (10 report, 6 manager). `assembleDebug` + all `testDebugUnitTest` green.
 > **Next:** the real self-managed `ConnectionService`/`PhoneAccount` registration + full-screen call UI +
 > foreground service (the platform glue that swaps the `LogTelecomCallReporter` `@Binds` for a real
 > reporter and owns the audio session), then the actual WebRTC media transport (`stream-webrtc-android`).
@@ -561,6 +576,48 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-03 — slice `call-webrtc-plumbing-emits` ✅ shipped
+- **Step 0 (housekeeping):** the prior Android iteration's PR **#1387 (`call-video-survival-policy`) was
+  already squash-merged to `main`** (`1c2bb259`, verified `VideoSurvivalPolicy.kt` present on
+  `origin/main`). No open Android PR from a prior iteration. The one open PR (#1392) is a `jcnm`
+  iOS-a11y branch from another session — disjoint from `apps/android`, left untouched. Branched
+  `claude/apps/android/call-webrtc-plumbing-emits` off freshly-fetched `origin/main` (verified the recent
+  `VideoSurvivalPolicy.kt` symbol is present on the fresh checkout before coding).
+- **Gap closed:** the call-domain outbound emit table stopped at the lifecycle frames
+  (`join`/`leave`/`end`/`toggle-audio`/`toggle-video`/`signal`/`initiate`). iOS also emits five
+  WebRTC-plumbing frames the gateway needs for liveness, TURN refresh, quality persistence, and reconnect
+  bookkeeping (`MessageSocketManager.emitRequestIceServers`/`emitCallHeartbeat`/`emitCallQualityReport`/
+  `emitCallReconnecting`/`emitCallReconnected`). Android had none of them — feature-parity §H flagged this
+  as the last outbound-signalling gap. This slice ports the emits with the branch-rich `stats` builder as a
+  pure, JVM-tested core.
+- **What shipped (thin vertical slice, TDD red→green):**
+  - `:core:model` `CallQuality.kt` gains `ConnectionQuality.wireValue` (`excellent|good|fair|poor`, spelled
+    out so an enum rename can't silently change the wire token) and the new `CallQualityReport` data class
+    with the total pure `statsFields(): Map<String, Any>` — the SSOT for the `call:quality-report` `stats`
+    sub-object. Base five metrics (`level`/`rtt`/`packetLoss`/`bytesSent`/`bytesReceived`) always present;
+    `availableOutgoingBitrateBps` and `jitterMs` appended **only when strictly positive** (iOS parity — a
+    not-yet-available `0` or degenerate negative is dropped so the gateway never persists a meaningless
+    value). Byte counters are `Long` (iOS uses a 64-bit `Int`) so a long video call whose cumulative totals
+    exceed the 32-bit range are reported faithfully instead of overflowing.
+  - `:sdk-core` `CallSignalManager` gains `emitRequestIceServers(callId)`, `emitHeartbeat(callId)`,
+    `emitQualityReport(callId, report)` (wraps `report.statsFields()` in `{callId, stats}`),
+    `emitReconnecting(callId, participantId, attempt)`, `emitReconnected(callId, participantId)` — all at
+    iOS-exact event names + payload keys. The manager owns only the transport; the `stats` decision lives
+    once in the pure builder.
+  - **+16 behavioural tests:** 10 `CallQualityReportTest` (base keys/values, every `ConnectionQuality`
+    tier → wire level, bitrate present/absent across the `0`/negative/positive boundary, jitter likewise,
+    both-optionals ordering `inOrder`, `Long` counters beyond `Int.MAX`) + 6 `CallSignalManagerTest`
+    (request-ice-servers/heartbeat callId payloads, quality-report nested stats with & without the
+    optionals, reconnecting callId/participantId/attempt, reconnected callId/participantId). Every branch
+    of `statsFields()` is exercised.
+- **Verification:** `/opt/gradle/bin/gradle :core:model:testDebugUnitTest :sdk-core:testDebugUnitTest`
+  → **BUILD SUCCESSFUL** (CallQualityReportTest 10/10, CallSignalManagerTest 29/29, 0 skipped/failed);
+  full-project `assembleDebug` green. System Gradle 8.14.3 (`--no-daemon`) per NOTES.md.
+- **Reviewer gate:** PASS — diff is `apps/android` only (3 code files + docs), no production logic
+  outside `apps/android`, TDD behavioural (no tautologies, no floor lowered), SDK purity respected (pure
+  payload SSOT in `:core:model`, transport-only emits in `:sdk-core`), near-total branch coverage on the
+  new pure logic, iOS payload-key parity. No secrets, `local.properties` gitignored.
 
 ### 2026-07-03 — slice `call-video-survival-policy` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration. The three open PRs

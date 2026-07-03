@@ -8,6 +8,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateAckParser
 import me.meeshy.sdk.model.call.CallInitiateResult
+import me.meeshy.sdk.model.call.CallQualityReport
 import me.meeshy.sdk.model.call.CallSignalMapper
 import org.json.JSONObject
 import javax.inject.Inject
@@ -29,8 +30,9 @@ import kotlin.coroutines.resume
  * **Outbound.** The fire-and-forget call-lifecycle emits (`join`/`leave`/`end`/
  * `toggle-audio`/`toggle-video`/`signal`) mirror the iOS payload keys exactly so a
  * rename can never silently break the gateway handler. The ACK-based `call:initiate`
- * and the WebRTC-plumbing emits (`request-ice-servers`/`heartbeat`/`quality-report`/
- * `reconnecting`/`reconnected`) land with the WebRTC slice.
+ * mints the real `callId`; the WebRTC-plumbing emits (`request-ice-servers`/
+ * `heartbeat`/`quality-report`/`reconnecting`/`reconnected`) drive the gateway's
+ * liveness, TURN-refresh, quality-persistence, and reconnect bookkeeping.
  *
  * [events] is a hot [SharedFlow]; late subscribers miss prior events (no replay),
  * matching [MessageSocketManager]/[SocialSocketManager].
@@ -96,6 +98,57 @@ class CallSignalManager @Inject constructor(
     /** Forward an SDP/ICE [signal] to the peer through the gateway relay. */
     fun emitSignal(callId: String, signal: JSONObject) =
         socketManager.emit("call:signal", JSONObject().put("callId", callId).put("signal", signal))
+
+    // --- WebRTC-plumbing emits (parity with iOS MessageSocketManager) ---
+
+    /**
+     * Ask the gateway for fresh ICE (STUN/TURN) servers; it responds out-of-band
+     * with `call:ice-servers-refreshed`. Fired on the TURN-credential-TTL refresh
+     * timer and on ICE-restart. Parity with iOS `emitRequestIceServers`.
+     */
+    fun emitRequestIceServers(callId: String) = emit("call:request-ice-servers", callId)
+
+    /**
+     * Liveness beat the gateway uses to detect a dead peer (heartbeat timeout →
+     * zombie-call cleanup) instead of waiting for the multi-hour GC. Parity with
+     * iOS `emitCallHeartbeat` — the gateway resolves the participant from the
+     * socket's userId, so no from/to payload is needed.
+     */
+    fun emitHeartbeat(callId: String) = emit("call:heartbeat", callId)
+
+    /**
+     * Report the periodic quality + cumulative data-usage snapshot. The `stats`
+     * shape is decided once by the pure [CallQualityReport.statsFields] (iOS parity:
+     * base metrics always present, bitrate/jitter only when positive); this method
+     * owns only the transport. The last report before teardown carries the call
+     * totals the gateway persists on the `CallSession`.
+     */
+    fun emitQualityReport(callId: String, report: CallQualityReport) =
+        socketManager.emit(
+            "call:quality-report",
+            JSONObject().put("callId", callId).put("stats", JSONObject(report.statsFields())),
+        )
+
+    /**
+     * Notify the gateway a local ICE restart is in progress (network handoff /
+     * connectivity loss) so it marks the call `reconnecting` and suppresses
+     * premature cleanup. Parity with iOS `emitCallReconnecting`.
+     */
+    fun emitReconnecting(callId: String, participantId: String, attempt: Int) =
+        socketManager.emit(
+            "call:reconnecting",
+            JSONObject().put("callId", callId).put("participantId", participantId).put("attempt", attempt),
+        )
+
+    /**
+     * Notify the gateway the ICE restart completed and the call is active again
+     * (resets the call status to `active`). Parity with iOS `emitCallReconnected`.
+     */
+    fun emitReconnected(callId: String, participantId: String) =
+        socketManager.emit(
+            "call:reconnected",
+            JSONObject().put("callId", callId).put("participantId", participantId),
+        )
 
     private fun emit(event: String, callId: String) =
         socketManager.emit(event, JSONObject().put("callId", callId))

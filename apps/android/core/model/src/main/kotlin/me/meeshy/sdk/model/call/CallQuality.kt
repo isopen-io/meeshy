@@ -183,6 +183,21 @@ enum class ConnectionQuality {
     val isWeak: Boolean
         get() = this == POOR
 
+    /**
+     * The lowercase token the gateway expects in the `call:quality-report` `level`
+     * field (`excellent|good|fair|poor`), matching the iOS
+     * `MessageSocketManager.emitCallQualityReport` contract. Spelled out explicitly
+     * (rather than `name.lowercase()`) so an enum rename can never silently change
+     * the wire value the gateway persists.
+     */
+    val wireValue: String
+        get() = when (this) {
+            EXCELLENT -> "excellent"
+            GOOD -> "good"
+            FAIR -> "fair"
+            POOR -> "poor"
+        }
+
     companion object {
         /** Collapse the five-tier ladder onto the four-tier indicator. */
         fun from(level: VideoQualityLevel): ConnectionQuality = when (level) {
@@ -191,5 +206,46 @@ enum class ConnectionQuality {
             VideoQualityLevel.FAIR -> FAIR
             VideoQualityLevel.POOR, VideoQualityLevel.CRITICAL -> POOR
         }
+    }
+}
+
+/**
+ * The periodic call-quality + cumulative data-usage snapshot the client reports to
+ * the gateway via `call:quality-report`. Pure port of the iOS
+ * `MessageSocketManager.emitCallQualityReport` payload: the gateway persists the
+ * last report before teardown on the `CallSession` so the call-summary message can
+ * surface "data spent · network quality".
+ *
+ * [statsFields] is the single tested SSOT for the wire `stats` sub-object; the
+ * `:sdk-core` `CallSignalManager` only wraps it in `{callId, stats}` and emits.
+ *
+ * [bytesSent]/[bytesReceived] are the **cumulative** WebRTC byte counters and are
+ * modelled as [Long] (iOS uses a 64-bit `Int`) so a long video call whose totals
+ * exceed the 32-bit range are reported faithfully rather than overflowing.
+ */
+data class CallQualityReport(
+    val level: ConnectionQuality,
+    val rttMs: Double,
+    val packetLoss: Double,
+    val bytesSent: Long,
+    val bytesReceived: Long,
+    val availableOutgoingBitrateBps: Int = 0,
+    val jitterMs: Double = 0.0,
+) {
+    /**
+     * The ordered `stats` map at iOS parity: the five base metrics are always
+     * present; [availableOutgoingBitrateBps] and [jitterMs] are appended **only
+     * when strictly positive** (a not-yet-available estimate of `0` — or a
+     * degenerate negative — is dropped so the gateway never persists a
+     * meaningless value).
+     */
+    fun statsFields(): Map<String, Any> = buildMap {
+        put("level", level.wireValue)
+        put("rtt", rttMs)
+        put("packetLoss", packetLoss)
+        put("bytesSent", bytesSent)
+        put("bytesReceived", bytesReceived)
+        if (availableOutgoingBitrateBps > 0) put("availableOutgoingBitrateBps", availableOutgoingBitrateBps)
+        if (jitterMs > 0) put("jitterMs", jitterMs)
     }
 }
