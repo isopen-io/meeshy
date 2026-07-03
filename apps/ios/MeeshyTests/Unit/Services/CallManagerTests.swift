@@ -3588,6 +3588,177 @@ final class CallManagerTURNRefreshGuardTests: XCTestCase {
     }
 }
 
+// MARK: - TURN Refresh Retry Watchdog (§requestFreshTurnCredentials)
+
+/// Source-level guards verifying every `call:request-ice-servers` requester
+/// routes through the shared watchdog helper, so a single dropped emit/reply
+/// (the emit carries no ACK) can't silently kill TURN renewal for the rest of
+/// a long call. Behavior of the retry bound itself is unit-tested in
+/// `TurnRefreshRetryPolicyTests` (CallReconnectPolicyTests.swift).
+@MainActor
+final class CallManagerTURNRefreshWatchdogTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(_ source: String, signature: String) -> String? {
+        guard let start = source.range(of: signature) else { return nil }
+        let end = source.range(of: "\n    private func ", range: start.upperBound..<source.endIndex)?.lowerBound
+                ?? source.range(of: "\n    func ", range: start.upperBound..<source.endIndex)?.lowerBound
+                ?? source.endIndex
+        return String(source[start.lowerBound..<end])
+    }
+
+    func test_requestFreshTurnCredentials_existsAndArmsWatchdog() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(source, signature: "func requestFreshTurnCredentials(callId: String)") else {
+            XCTFail("requestFreshTurnCredentials not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("MessageSocketManager.shared.emitRequestIceServers(callId: callId)"),
+            "requestFreshTurnCredentials must emit call:request-ice-servers"
+        )
+        XCTAssertTrue(
+            body.contains("armTurnRefreshWatchdog(callId: callId)"),
+            "requestFreshTurnCredentials must arm the retry watchdog after every emit — " +
+            "otherwise a dropped reply is never retried."
+        )
+    }
+
+    func test_armTurnRefreshWatchdog_retriesViaPolicy() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(source, signature: "func armTurnRefreshWatchdog(callId: String)") else {
+            XCTFail("armTurnRefreshWatchdog not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("CallReliabilityPolicy.turnRefreshShouldRetry"),
+            "armTurnRefreshWatchdog must delegate the retry-bound decision to " +
+            "CallReliabilityPolicy.turnRefreshShouldRetry (unit-tested in isolation)."
+        )
+        XCTAssertTrue(
+            body.contains("self.requestFreshTurnCredentials(callId: callId)"),
+            "armTurnRefreshWatchdog must retry by re-emitting via requestFreshTurnCredentials, " +
+            "not a bare emitRequestIceServers call, so the retry itself is also watchdog-armed."
+        )
+        XCTAssertTrue(
+            body.contains("self.scheduleTURNCredentialRefresh(ttl:"),
+            "Once retries are exhausted, armTurnRefreshWatchdog must still re-arm the next " +
+            "periodic refresh cycle instead of leaving the call with no refresh armed at all."
+        )
+    }
+
+    func test_allRequestIceServersCallSites_routeThroughWatchdogHelper() throws {
+        let source = try callManagerSource()
+        // Every direct `emitRequestIceServers` call must live inside
+        // `requestFreshTurnCredentials` itself — every other call site (the
+        // periodic scheduler, socket-reconnect resync, reconnection-cycle
+        // refresh) must call the wrapping helper instead of emitting directly,
+        // so none of them can bypass the retry watchdog.
+        let directEmitOccurrences = source.components(separatedBy: "MessageSocketManager.shared.emitRequestIceServers(callId:").count - 1
+        XCTAssertEqual(
+            directEmitOccurrences, 1,
+            "MessageSocketManager.shared.emitRequestIceServers must be called from exactly one " +
+            "place (requestFreshTurnCredentials) — every other TURN-refresh trigger must route " +
+            "through requestFreshTurnCredentials(callId:) so it's covered by the retry watchdog."
+        )
+    }
+
+    func test_scheduleTURNCredentialRefresh_resetsWatchdogState() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(source, signature: "func scheduleTURNCredentialRefresh(ttl: TimeInterval)") else {
+            XCTFail("scheduleTURNCredentialRefresh body not found"); return
+        }
+        XCTAssertTrue(
+            body.contains("turnRefreshWatchdogTask?.cancel()"),
+            "scheduleTURNCredentialRefresh must cancel any in-flight watchdog before starting " +
+            "a fresh cycle — otherwise a stale watchdog from the previous cycle can fire " +
+            "against the new one's callId."
+        )
+        XCTAssertTrue(
+            body.contains("turnRefreshRetryAttempt = 0"),
+            "scheduleTURNCredentialRefresh must reset the retry counter for the new cycle."
+        )
+    }
+}
+
+// MARK: - Busy-Call Feedback (§startCall rejection)
+
+/// Source-level guards verifying `startCall` tells the user when it rejects a
+/// dial because another call is already active. Every entry point (conversation
+/// header, call-summary "call back", conversation-list context menu,
+/// CallStarter) previously called this in a fire-and-forget way — a tap that
+/// visibly did nothing, indistinguishable from a dead button.
+@MainActor
+final class CallManagerBusyFeedbackTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func startCallBody(_ source: String) -> String? {
+        guard let start = source.range(of: "func startCall(conversationId: String") else { return nil }
+        let end = source.range(of: "\n    // MARK: - VoIP Push Incoming Call", range: start.upperBound..<source.endIndex)?.lowerBound
+                ?? source.endIndex
+        return String(source[start.lowerBound..<end])
+    }
+
+    func test_startCall_isDiscardableResultReturningBool() throws {
+        let source = try callManagerSource()
+        guard let declRange = source.range(of: "func startCall(conversationId: String") else {
+            XCTFail("startCall not found in CallManager.swift"); return
+        }
+        let precedingDistance = min(80, source.distance(from: source.startIndex, to: declRange.lowerBound))
+        let precedingStart = source.index(declRange.lowerBound, offsetBy: -precedingDistance)
+        let precedingLines = source[precedingStart..<declRange.lowerBound]
+        XCTAssertTrue(
+            precedingLines.contains("@discardableResult"),
+            "startCall must be @discardableResult — most call sites intentionally ignore " +
+            "the return value and must not be forced to handle it."
+        )
+        let declLine = source[declRange.lowerBound...].prefix(while: { $0 != "\n" })
+        XCTAssertTrue(
+            declLine.contains("-> Bool"),
+            "startCall must return Bool so CallStarter (and any future caller) can detect " +
+            "a rejected dial instead of only ever seeing a fire-and-forget no-op."
+        )
+    }
+
+    func test_startCall_busyGuard_surfacesToastAndReturnsFalse() throws {
+        let source = try callManagerSource()
+        guard let body = startCallBody(source) else {
+            XCTFail("startCall body not found"); return
+        }
+        guard let guardRange = body.range(of: "guard callState == .idle else {") else {
+            XCTFail("startCall busy guard not found"); return
+        }
+        let guardBlockEnd = body.range(of: "\n        }", range: guardRange.upperBound..<body.endIndex)?.upperBound ?? body.endIndex
+        let guardBlock = String(body[guardRange.lowerBound..<guardBlockEnd])
+        XCTAssertTrue(
+            guardBlock.contains("FeedbackToastManager.shared.showError"),
+            "The busy guard must surface a FeedbackToastManager error toast — per the " +
+            "two-tier toast rule (apps/ios/CLAUDE.md), a local-action failure like this " +
+            "goes through FeedbackToastManager, never NotificationToastManager."
+        )
+        XCTAssertTrue(
+            guardBlock.contains("return false"),
+            "The busy guard must return false so callers can detect the rejection."
+        )
+    }
+}
+
 // MARK: - Socket Reconnect Media Re-Sync (§P1-30 / audit P1-30)
 
 /// Source-level guards verifying that after a Socket.IO reconnect, the
