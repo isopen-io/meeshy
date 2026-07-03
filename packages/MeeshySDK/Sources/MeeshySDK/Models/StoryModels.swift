@@ -1617,6 +1617,20 @@ public struct StoryItem: Identifiable, Codable, Sendable {
         return translations.first { $0.language == lang }?.content ?? content
     }
 
+    /// R10 — résolution du `content` legacy sur la CHAÎNE de langue COMPLÈTE
+    /// (parité avec les textObjects qui la parcourent déjà) : première langue
+    /// de la chaîne ayant une traduction. Aucun match → ORIGINAL (Prisme
+    /// règle n°1 : jamais `translations.first`).
+    public func resolvedContent(preferredLanguages: [String]) -> String? {
+        guard let translations, !translations.isEmpty else { return content }
+        for lang in preferredLanguages {
+            if let hit = translations.first(where: { $0.language == lang })?.content {
+                return hit
+            }
+        }
+        return content
+    }
+
     public init(id: String, content: String? = nil, media: [FeedMedia] = [], storyEffects: StoryEffects? = nil,
                 createdAt: Date = Date(), expiresAt: Date? = nil, repostOfId: String? = nil,
                 originalRepostOfId: String? = nil, repostAuthorName: String? = nil,
@@ -1995,7 +2009,9 @@ extension StoryItem {
     /// donc le BG layer reste vide et le loader infini masque tout — y
     /// compris le foreground correctement stampé par `StoryMediaLayer`.
     public func toRenderableSlide(preferredLanguages: [String]) -> StorySlide {
-        let resolvedContent = self.resolvedContent(preferredLanguage: preferredLanguages.first)
+        // R10 — chaîne complète (et plus seulement `.first`) : un viewer
+        // fr→es voit la traduction es si la fr manque, au lieu de l'original.
+        let resolvedContent = self.resolvedContent(preferredLanguages: preferredLanguages)
                               ?? self.content
         var effects = self.storyEffects ?? StoryEffects()
 

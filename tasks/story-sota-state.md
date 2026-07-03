@@ -305,8 +305,10 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   test_load_whenDecryptFails) → un refetch réseau unique au premier lancement.
   NOTE : le coût d'écriture du blob tray unique ré-encodé/chiffré à chaque write renforce
   R12 (store relationnel par groupe) — les deux items sont liés.
-- [ ] **R10 (P3) `toRenderableSlide` : `content` legacy résolu sur `chain.first` seulement**
-  (`StoryModels.swift:1990-2058`) vs chaîne complète pour textObjects. Harmoniser.
+- [x] **R10 (P3) `content` legacy résolu sur la chaîne complète.** ✅ it.27
+  Surcharge `resolvedContent(preferredLanguages:)` (première langue de la chaîne ayant une
+  traduction ; aucun match → ORIGINAL, Prisme n°1) branchée dans toRenderableSlide.
+  4 tests Prisme (fallthrough chaîne, ordre, no-match→original, sans translations).
 - [ ] **R11 (P3) `isViewed: Bool` → `viewedAt: Date?`** (règle CLAUDE.md « nullable DateTime,
   pas de boolean redondant »). Migration douce : garder le decode Bool, ajouter le timestamp.
 - [ ] **R12 (P2, architecture) Story store relationnel.** Le tray = UN blob JSON
@@ -513,7 +515,11 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.26 — G6 : expiry fallback client aligné sur le serveur, 21 h partout (hash au push)
+## it.27 — R10 : content legacy sur la chaîne de langue complète (hash au push)
+
+- 4/4 StoryItemPrismeContentTests ; build vert.
+
+## it.26 — G6 : expiry fallback client aligné sur le serveur, 21 h partout (0c81a2270)
 
 - 13/13 StoryItemExpirationTests (pins 24 h adaptés + test de contrat) ; build vert.
 
