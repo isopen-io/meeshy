@@ -92,6 +92,35 @@ extension View {
     }
 }
 
+// MARK: - Wrapper de présentation fullscreen
+
+/// Enveloppe le CONTENU d'une présentation fullscreen (cover/sheet) avec le
+/// flux unifié « Enregistrer ». Le coordinateur vit DANS la présentation :
+/// le confirmationDialog peut donc s'afficher par-dessus le viewer — un
+/// dialog attaché SOUS un fullScreenCover ne se présente pas (SwiftUI iOS 16).
+/// Créé uniquement quand le fullscreen s'ouvre — aucun coût par cellule.
+struct SavableMediaFullscreen<Content: View>: View {
+    let attachment: MessageAttachment
+    @ViewBuilder let content: (_ requestSave: @escaping () -> Void) -> Content
+
+    @StateObject private var saveCoordinator = MediaSaveCoordinator()
+
+    var body: some View {
+        content(requestSave)
+            .mediaSaveFlow(saveCoordinator)
+    }
+
+    private func requestSave() {
+        HapticFeedback.light()
+        saveCoordinator.requestSave(MediaSaveRequest(
+            kind: attachment.kind,
+            remoteURLString: attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl,
+            suggestedFileName: attachment.originalName.isEmpty ? nil : attachment.originalName,
+            attachmentId: attachment.id.isEmpty ? nil : attachment.id
+        ))
+    }
+}
+
 // MARK: - Export picker (Fichiers — l'utilisateur choisit le dossier)
 
 /// `UIDocumentPickerViewController(forExporting:)` en mode COPY : le fichier

@@ -166,6 +166,9 @@ public struct MeeshyVideoPlayer: View {
     public let onShare: (() -> Void)?
     public let onClose: (() -> Void)?
     public let onSaveSuccess: (() -> Void)?
+    /// Hook paramétrique « Enregistrer » — délègue au composant unifié de
+    /// l'app quand fourni ; nil = save Photos direct legacy.
+    public let onSaveRequested: (() -> Void)?
 
     public init(
         attachment: MeeshyMessageAttachment,
@@ -185,7 +188,8 @@ public struct MeeshyVideoPlayer: View {
         onExpand: (() -> Void)? = nil,
         onShare: (() -> Void)? = nil,
         onClose: (() -> Void)? = nil,
-        onSaveSuccess: (() -> Void)? = nil
+        onSaveSuccess: (() -> Void)? = nil,
+        onSaveRequested: (() -> Void)? = nil
     ) {
         self.attachment = attachment
         self.style = style
@@ -205,6 +209,7 @@ public struct MeeshyVideoPlayer: View {
         self.onShare = onShare
         self.onClose = onClose
         self.onSaveSuccess = onSaveSuccess
+        self.onSaveRequested = onSaveRequested
     }
 
     private static func inferPerformance(for style: Style) -> PerformanceOptions {
