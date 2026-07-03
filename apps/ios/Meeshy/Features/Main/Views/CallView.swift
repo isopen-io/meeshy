@@ -132,11 +132,14 @@ struct CallView: View {
             // restart recovers. Même gate que le layout : pré-établissement,
             // connectingView affiche déjà "Connexion…" — pas de bannière.
             if showsReconnectingBanner {
+                // P2-iOS-9 / 2026-07-03 — le mouvement (émergence de l'île À
+                // L'INSERTION, retour dans l'île AU RETRAIT) est porté par la
+                // transition interne d'IslandEmergingBanner. Ne PAS reposer de
+                // .transition ici : une transition externe écrase l'interne et
+                // la capsule disparaîtrait en fondu sur place.
                 reconnectingBanner
                     .padding(.horizontal, 56)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    // P2-iOS-9 — l'émergence Island porte le mouvement ; fade à l'insertion/retrait.
-                    .transition(.opacity)
             }
 
             // §4.4 — remote peer quality alert. Gateway emits `call:quality-alert`
@@ -148,7 +151,6 @@ struct CallView: View {
                     .padding(.horizontal, 56)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .padding(.top, showsReconnectingBanner ? 52 : 0)
-                    .transition(.opacity)
             }
 
             // EXIGENCE №1 — signaling dégradé : le socket est tombé pendant un
@@ -161,7 +163,6 @@ struct CallView: View {
                     .padding(.horizontal, 56)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .padding(.top, stackedOffset)
-                    .transition(.opacity)
             }
 
             // Effects overlay — accessible dans tous les etats actifs (pas seulement

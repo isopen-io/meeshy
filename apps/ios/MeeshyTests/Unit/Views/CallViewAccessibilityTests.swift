@@ -421,3 +421,55 @@ final class CallViewAccessibilityTests: XCTestCase {
         )
     }
 }
+
+// MARK: - Island banner emergence transition (2026-07-03 UX feedback)
+
+/// Retour user : « la pill doit apparaître plus lentement avec une
+/// accélération à mi-chemin — on doit voir comment ça sort de l'encoche, et
+/// comment ça y retourne ». Le mouvement (les DEUX sens) vit dans la
+/// transition interne d'IslandEmergingBanner ; un `.transition` externe au
+/// call-site l'écraserait et la capsule disparaîtrait en fondu sur place.
+@MainActor
+final class IslandBannerEmergenceTransitionTests: XCTestCase {
+
+    private func source(_ path: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent(path)
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_banner_usesSlowStartTimingCurves_forBothDirections() throws {
+        let banner = try source("Meeshy/Features/Main/Components/IslandEmergingBanner.swift")
+        XCTAssertTrue(
+            banner.contains(".asymmetric") && banner.contains("insertion:") && banner.contains("removal:"),
+            "The emergence must be an asymmetric transition — insertion (out of the island) AND removal (back into the island) each with their own curve."
+        )
+        let curveCount = banner.components(separatedBy: ".timingCurve(").count - 1
+        XCTAssertGreaterThanOrEqual(
+            curveCount, 2,
+            "Both directions must use custom slow-start timing curves (user feedback 2026-07-03: slow appearance, mid-way acceleration) — a spring starts fast and hides the emergence from the island."
+        )
+        XCTAssertFalse(
+            banner.contains("withAnimation(.spring"),
+            "The old fast-start spring emergence must not come back — the capsule must visibly grow out of the island."
+        )
+    }
+
+    func test_callSites_haveNoExternalTransition_thatWouldOverrideEmergence() throws {
+        let callView = try source("Meeshy/Features/Main/Views/CallView.swift")
+        guard let start = callView.range(of: "showsReconnectingBanner: Bool"),
+              let end = callView.range(of: "Effects overlay") else {
+            XCTFail("CallView banner block markers not found")
+            return
+        }
+        let bannerBlock = String(callView[start.lowerBound ..< end.lowerBound])
+        XCTAssertFalse(
+            bannerBlock.contains(".transition("),
+            "Island banner call-sites must NOT attach an external .transition — it overrides the internal island-emergence transition and the capsule would fade in place instead of returning into the island."
+        )
+    }
+}
