@@ -405,6 +405,33 @@ nonisolated enum CallReliabilityPolicy {
         !wasReconnecting || !hasExistingStartDate
     }
 
+    /// Seconds after quality-monitor start during which the BWE signal is
+    /// ignored: GCC ramps from its conservative kick-off estimate (~300 kbps)
+    /// and converges in ~5-10 s on a healthy path — reading the ramp as
+    /// .poor flags a perfectly good call.
+    static let bweWarmupSeconds: TimeInterval = 15
+
+    /// Merge policy for the two quality signals (RTT/loss heuristic vs TWCC
+    /// GCC bandwidth estimate). The BWE ladder is calibrated against VIDEO
+    /// tier bitrates (poor < 400 kbps): on an audio-only call GCC never
+    /// probes above the ~64 kbps the Opus encoder asks for, so every audio
+    /// call read as .poor/.critical for its whole duration (prod analytics
+    /// 2026-07-03: RTT 7 ms, 0 % loss, still "poor"). The BWE signal only
+    /// constrains the level when video is actually being sent AND the
+    /// estimator has had time to converge; the RTT/loss heuristic is never
+    /// gated.
+    static func effectiveQualityLevel(
+        heuristic: VideoQualityLevel,
+        bwe: VideoQualityLevel?,
+        isSendingVideo: Bool,
+        secondsSinceMonitorStart: TimeInterval
+    ) -> VideoQualityLevel {
+        guard isSendingVideo,
+              secondsSinceMonitorStart >= bweWarmupSeconds,
+              let bwe else { return heuristic }
+        return min(heuristic, bwe)
+    }
+
     /// Delay before the periodic TURN credential refresh, at 80% of the TTL.
     /// A degenerate TTL (zero, negative, or shorter than the floor) clamps to
     /// `minimumDelay` instead of disarming the refresh — silently skipping it
@@ -461,6 +488,37 @@ nonisolated enum CallReliabilityPolicy {
         remoteVideoEnabled: Bool
     ) -> Bool {
         localVideoEnabled || (hasRemoteVideoTrack && remoteVideoEnabled)
+    }
+}
+
+/// Sustained-degradation gate for the "Connexion instable" pill. One 5 s
+/// stats tick is not a bad call — a transient RTT spike or a single loss
+/// burst self-heals without the user ever needing a warning. Alert only
+/// after two consecutive degraded ticks (~10 s); a single healthy tick
+/// clears immediately (fast recovery feedback). `.fair` is a working link —
+/// it never alerts.
+nonisolated struct DegradedLinkTracker {
+    static let consecutiveTicksToAlert = 2
+
+    private var degradedStreak = 0
+    private(set) var isDegraded = false
+
+    @discardableResult
+    mutating func record(level: VideoQualityLevel) -> Bool {
+        switch level {
+        case .poor, .critical:
+            degradedStreak += 1
+            if degradedStreak >= Self.consecutiveTicksToAlert { isDegraded = true }
+        case .excellent, .good, .fair:
+            degradedStreak = 0
+            isDegraded = false
+        }
+        return isDegraded
+    }
+
+    mutating func reset() {
+        degradedStreak = 0
+        isDegraded = false
     }
 }
 
@@ -989,7 +1047,10 @@ nonisolated enum QualityThresholds {
 
 // MARK: - Video Quality Level (§4.8)
 
-enum VideoQualityLevel: String, Comparable, Sendable {
+// `nonisolated` — pure value ladder consumed from nonisolated policy code
+// (CallReliabilityPolicy.effectiveQualityLevel needs the Comparable
+// conformance outside the MainActor) and libwebrtc stats callbacks.
+nonisolated enum VideoQualityLevel: String, Comparable, Sendable {
     case excellent
     case good
     case fair

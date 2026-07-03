@@ -253,9 +253,7 @@ struct CallView: View {
                 break
             }
         }
-        .adaptiveOnChange(of: callManager.liveVideoQualityLevel) { oldLevel, newLevel in
-            let wasDegraded = oldLevel.map { $0 == .poor || $0 == .critical } ?? false
-            let isDegraded = newLevel.map { $0 == .poor || $0 == .critical } ?? false
+        .adaptiveOnChange(of: callManager.isLinkQualityDegraded) { wasDegraded, isDegraded in
             if isDegraded && !wasDegraded {
                 UIAccessibility.post(
                     notification: .announcement,
@@ -312,29 +310,38 @@ struct CallView: View {
             // contact (façon FaceTime audio). Blur + voile sombre dégradé pour
             // préserver la lisibilité du chrome blanc (écran épinglé .dark).
             if !hasActiveRemoteVideo, let backdrop = remoteBackdropURL {
-                CachedAsyncImage(url: backdrop, thumbHash: remoteBackdropThumbHash) {
-                    Color.clear
-                }
-                .scaledToFill()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .scaleEffect(1.08)
-                .blur(radius: 20)
-                .clipped()
-                .opacity(0.55)
-                .overlay(
-                    LinearGradient(
-                        colors: [
-                            Color.black.opacity(0.50),
-                            Color.black.opacity(0.18),
-                            Color.black.opacity(0.55)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
+                // Layout-neutre : `Color.clear` prend EXACTEMENT la proposition
+                // (l'écran) et l'image ne vit qu'en `.overlay` — hors layout.
+                // L'ancien `CachedAsyncImage.scaledToFill()` posé directement
+                // dans le ZStack RÉPONDAIT sa largeur débordante (bannière
+                // paysage ~1400 pt), gonflait le ZStack racine entier et
+                // décalait TOUT l'écran d'appel de +30 pt (chevron minimize
+                // expulsé hors écran à x≈-475). Bug repro simu 2026-07-03.
+                Color.clear
+                    .overlay {
+                        CachedAsyncImage(url: backdrop, thumbHash: remoteBackdropThumbHash) {
+                            Color.clear
+                        }
+                        .scaledToFill()
+                    }
+                    .scaleEffect(1.08)
+                    .blur(radius: 20)
+                    .clipped()
+                    .opacity(0.55)
+                    .overlay(
+                        LinearGradient(
+                            colors: [
+                                Color.black.opacity(0.50),
+                                Color.black.opacity(0.18),
+                                Color.black.opacity(0.55)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
                     )
-                )
-                .ignoresSafeArea()
-                .transition(.opacity)
-                .accessibilityHidden(true)
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+                    .accessibilityHidden(true)
             }
 
             // Animated ambient orbs — decorative only
@@ -821,8 +828,10 @@ struct CallView: View {
     }
 
     private var isConnectionDegraded: Bool {
-        if let level = callManager.liveVideoQualityLevel {
-            return level == .poor || level == .critical
+        // Sustained flag only (2 consecutive degraded stats ticks) — a single
+        // 5 s sample must never flash the "Connexion instable" pill.
+        if callManager.liveVideoQualityLevel != nil {
+            return callManager.isLinkQualityDegraded
         }
         switch callManager.connectionQuality {
         case .disconnected, .failed: return true

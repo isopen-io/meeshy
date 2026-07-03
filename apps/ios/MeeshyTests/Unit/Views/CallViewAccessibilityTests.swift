@@ -185,32 +185,34 @@ final class CallViewAccessibilityTests: XCTestCase {
 
     // MARK: - Video quality VoiceOver announcement
 
-    func test_liveVideoQualityLevel_postsVoiceOverAnnouncement() throws {
+    func test_linkQualityDegraded_postsVoiceOverAnnouncement() throws {
         let source = try callViewSource()
         XCTAssertTrue(
-            source.contains("liveVideoQualityLevel"),
-            "CallView must observe liveVideoQualityLevel to announce quality changes."
+            source.contains("adaptiveOnChange(of: callManager.isLinkQualityDegraded)"),
+            "CallView must observe the SUSTAINED degradation flag — not raw " +
+            "liveVideoQualityLevel, whose single 5 s ticks would chat at VoiceOver " +
+            "users on every transient spike — to announce quality changes."
         )
         XCTAssertTrue(
             source.contains("call.a11y.quality"),
-            "CallView must post a VoiceOver announcement when video quality degrades so " +
-            "blind users are informed the video stream is degraded — they cannot see the " +
+            "CallView must post a VoiceOver announcement when the link degrades so " +
+            "blind users are informed the stream is degraded — they cannot see the " +
             "visual quality indicator and would otherwise have no feedback."
         )
     }
 
-    func test_qualityAnnouncement_isInsideLiveQualityOnChangeHandler() throws {
+    func test_qualityAnnouncement_isInsideDegradedFlagOnChangeHandler() throws {
         let source = try callViewSource()
-        guard let changeRange = source.range(of: "liveVideoQualityLevel") else {
-            XCTFail("CallView must observe liveVideoQualityLevel via adaptiveOnChange")
+        guard let changeRange = source.range(of: "adaptiveOnChange(of: callManager.isLinkQualityDegraded)") else {
+            XCTFail("CallView must observe isLinkQualityDegraded via adaptiveOnChange")
             return
         }
         let end = source.index(changeRange.lowerBound, offsetBy: 600, limitedBy: source.endIndex) ?? source.endIndex
         let handler = String(source[changeRange.lowerBound ..< end])
         XCTAssertTrue(
             handler.contains("call.a11y.quality"),
-            "The quality VoiceOver announcement must live inside the liveVideoQualityLevel " +
-            "onChange handler so it fires on every quality transition, not just once."
+            "The quality VoiceOver announcement must live inside the isLinkQualityDegraded " +
+            "onChange handler so it fires on every sustained transition, not just once."
         )
     }
 

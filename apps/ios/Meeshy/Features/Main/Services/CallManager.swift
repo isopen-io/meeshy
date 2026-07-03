@@ -163,6 +163,12 @@ final class CallManager: ObservableObject {
     @Published private(set) var connectionQuality: PeerConnectionState = .new
     /// RTT+packet-loss quality level from stats samples; nil until first sample.
     @Published private(set) var liveVideoQualityLevel: VideoQualityLevel? = nil
+    /// Sustained-degradation flag for the "Connexion instable" pill — set only
+    /// after `DegradedLinkTracker.consecutiveTicksToAlert` consecutive
+    /// poor/critical stats ticks, cleared on the first healthy one. A single
+    /// bad 5 s sample never alerts the user.
+    @Published private(set) var isLinkQualityDegraded = false
+    private var degradedLinkTracker = DegradedLinkTracker()
     /// Most-recent stats snapshot collected during the active call. Updated every
     /// `QualityThresholds.statsIntervalSeconds`; nil before the first sample.
     /// Persisted to UserDefaults at call teardown for post-call diagnostics.
@@ -2855,6 +2861,8 @@ final class CallManager: ObservableObject {
         callState = .ended(reason: reason)
         connectionQuality = .new
         liveVideoQualityLevel = nil
+        degradedLinkTracker.reset()
+        isLinkQualityDegraded = false
         activeCallUUID = nil
         // Audit P2-iOS-1 — drop any pending "busy" incoming call. If a 2nd
         // call arrived while this one was active and got immediately ended
@@ -3956,6 +3964,7 @@ extension CallManager: WebRTCServiceDelegate {
             // on callState == .connected.
             guard case .connected = self.callState else { return }
             self.liveVideoQualityLevel = level
+            self.isLinkQualityDegraded = self.degradedLinkTracker.record(level: level)
             MessageSocketManager.shared.emitCallQualityReport(
                 callId: callId,
                 level: Self.connectionQualityLabel(for: level),

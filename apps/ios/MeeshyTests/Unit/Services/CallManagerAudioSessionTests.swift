@@ -1210,9 +1210,10 @@ final class CallViewVoiceOverAnnouncementTests: XCTestCase {
     func test_voiceOver_usesAdaptiveOnChange_forQualityLevel() throws {
         let source = try callViewSource()
         XCTAssertTrue(
-            source.contains("adaptiveOnChange(of: callManager.liveVideoQualityLevel)"),
-            "Quality VoiceOver announcement must use adaptiveOnChange so it " +
-            "only fires when the quality tier actually changes")
+            source.contains("adaptiveOnChange(of: callManager.isLinkQualityDegraded)"),
+            "Quality VoiceOver announcement must use adaptiveOnChange on the " +
+            "SUSTAINED degradation flag so it only fires when the link is " +
+            "genuinely degraded (2+ consecutive ticks), not on transient spikes")
     }
 }
 
