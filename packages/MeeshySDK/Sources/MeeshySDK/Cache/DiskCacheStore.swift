@@ -16,6 +16,15 @@ public actor DiskCacheStore: ReadableCacheStore {
     private var inFlightTasks: [String: InFlightDownload] = [:]
     private var fileTimestamps: [String: Date] = [:]
 
+    /// Pin registry (R5 offline replay) : fileKey → pin expiry. A file whose
+    /// pin is still active is exempt from BOTH `evictOverBudget()` (LRU) and
+    /// `evictExpired()` (TTL). Persisted to a hidden sidecar (`.pins.json`)
+    /// so a boot-time sweep cannot evict media pinned in a previous launch —
+    /// the eviction/sizing enumerators use `.skipsHiddenFiles`, so the sidecar
+    /// itself is never a candidate. Loaded lazily on first pin/sweep access.
+    private var pinExpiries: [String: Date] = [:]
+    private var pinsLoaded = false
+
     /// Wraps an in-flight network task with an identity token so a stale
     /// completion never clears a NEWER entry registered under the same key.
     private struct InFlightDownload {
@@ -100,11 +109,20 @@ public actor DiskCacheStore: ReadableCacheStore {
         fileTimestamps.removeValue(forKey: fileKey)
         let filePath = diskFilePath(for: fileKey)
         try? fileManager.removeItem(at: filePath)
+        // Une invalidation explicite prime sur la protection d'éviction : un
+        // pin conservé re-protégerait un futur re-download de la même clé.
+        loadPinsIfNeeded()
+        if pinExpiries.removeValue(forKey: fileKey) != nil { persistPins() }
     }
 
     public func invalidateAll() async {
         memoryCache.removeAllObjects()
         fileTimestamps.removeAll()
+        // Le sidecar `.pins.json` part avec le dossier — vider aussi le
+        // registre en mémoire, sinon des pins fantômes seraient re-persistés
+        // au prochain `pin()` (logout multi-compte).
+        pinExpiries.removeAll()
+        pinsLoaded = true
         try? fileManager.removeItem(at: baseDirectory)
         try? fileManager.createDirectory(at: baseDirectory, withIntermediateDirectories: true)
     }
@@ -377,6 +395,7 @@ public actor DiskCacheStore: ReadableCacheStore {
     public func evictExpired() async {
         guard let enumerator = fileManager.enumerator(at: baseDirectory, includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey], options: [.skipsHiddenFiles]) else { return }
         let now = Date()
+        purgeExpiredPins(now: now)
         var evictedCount = 0
         while let fileURL = enumerator.nextObject() as? URL {
             guard let values = try? fileURL.resourceValues(forKeys: [.contentModificationDateKey]),
@@ -384,6 +403,7 @@ public actor DiskCacheStore: ReadableCacheStore {
             let age = now.timeIntervalSince(modDate)
             if policy.freshness(age: age) == .expired {
                 let fileName = fileURL.lastPathComponent
+                if isPinActive(fileKey: fileName, now: now) { continue }
                 memoryCache.removeObject(forKey: fileName as NSString)
                 fileTimestamps.removeValue(forKey: fileName)
                 try? fileManager.removeItem(at: fileURL)
@@ -399,6 +419,8 @@ public actor DiskCacheStore: ReadableCacheStore {
             maxBytes = max
         } else { return }
         guard let enumerator = fileManager.enumerator(at: baseDirectory, includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey], options: [.skipsHiddenFiles]) else { return }
+        let now = Date()
+        purgeExpiredPins(now: now)
         var totalSize = 0
         var files: [(url: URL, date: Date, size: Int)] = []
         while let fileURL = enumerator.nextObject() as? URL {
@@ -413,12 +435,81 @@ public actor DiskCacheStore: ReadableCacheStore {
         for file in sorted {
             guard totalSize > maxBytes else { break }
             let fileName = file.url.lastPathComponent
+            // Un pin actif exempte le fichier du LRU. Borné dans le temps par
+            // construction (`until` obligatoire) : si tout est pinné, la passe
+            // ne libère rien MAINTENANT mais se résorbe à l'échéance des pins.
+            if isPinActive(fileKey: fileName, now: now) { continue }
             memoryCache.removeObject(forKey: fileName as NSString)
             fileTimestamps.removeValue(forKey: fileName)
             try? fileManager.removeItem(at: file.url)
             totalSize -= file.size
         }
         logger.debug("Budget eviction: trimmed to \(totalSize) bytes (max \(maxBytes))")
+    }
+
+    // MARK: - Pinning (eviction exemption — R5 offline replay)
+
+    /// Marks `key` as non-evictable until `until`. Building block only: the
+    /// store never decides WHAT deserves a pin — the app-side policy does
+    /// (e.g. "media of a viewed story until the story expires"). Pinning a
+    /// key whose download has not landed yet is valid: the exemption applies
+    /// as soon as the file exists.
+    public func pin(_ key: String, until: Date) {
+        loadPinsIfNeeded()
+        pinExpiries[Self.fileKey(for: key)] = until
+        persistPins()
+    }
+
+    public func unpin(_ key: String) {
+        loadPinsIfNeeded()
+        guard pinExpiries.removeValue(forKey: Self.fileKey(for: key)) != nil else { return }
+        persistPins()
+    }
+
+    /// `true` while `key` holds a pin whose expiry is in the future.
+    public func isPinned(_ key: String) -> Bool {
+        loadPinsIfNeeded()
+        return isPinActive(fileKey: Self.fileKey(for: key), now: Date())
+    }
+
+    private func isPinActive(fileKey: String, now: Date) -> Bool {
+        loadPinsIfNeeded()
+        guard let until = pinExpiries[fileKey] else { return false }
+        return until > now
+    }
+
+    /// Drops pins past their expiry so the registry (and sidecar) cannot grow
+    /// unbounded. Called by both eviction sweeps.
+    private func purgeExpiredPins(now: Date) {
+        loadPinsIfNeeded()
+        let before = pinExpiries.count
+        pinExpiries = pinExpiries.filter { $0.value > now }
+        if pinExpiries.count != before { persistPins() }
+    }
+
+    private var pinsSidecarURL: URL {
+        baseDirectory.appendingPathComponent(".pins.json")
+    }
+
+    private func loadPinsIfNeeded() {
+        guard !pinsLoaded else { return }
+        pinsLoaded = true
+        guard fileManager.fileExists(atPath: pinsSidecarURL.path) else { return }
+        do {
+            let data = try Data(contentsOf: pinsSidecarURL)
+            pinExpiries = try JSONDecoder().decode([String: Date].self, from: data)
+        } catch {
+            logger.error("Pin sidecar unreadable, starting empty: \(error.localizedDescription)")
+        }
+    }
+
+    private func persistPins() {
+        do {
+            let data = try JSONEncoder().encode(pinExpiries)
+            try data.write(to: pinsSidecarURL, options: .atomic)
+        } catch {
+            logger.error("Pin sidecar write failed: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - UIImage Cache
