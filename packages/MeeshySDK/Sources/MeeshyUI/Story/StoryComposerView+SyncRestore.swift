@@ -187,7 +187,20 @@ extension StoryComposerView {
 
     /// Persiste le draft (GRDB + fichiers média) sans feedback haptique —
     /// utilisé par l'auto-save background (D1) où un haptic n'a pas de sens.
+    /// E3 — flush de la timeline OUVERTE avant toute persistance : les
+    /// éditions keyframes/clips en cours vivent dans `TimelineViewModel.project`
+    /// tant que la sheet n'est pas fermée (commit au `onDismiss` seulement) ;
+    /// sans ce flush, un save background/autosave pendant l'édition timeline
+    /// persiste un draft SANS elles. Non-destructif pour l'édition en cours
+    /// (copie locale → slide, le projet timeline reste intact) et gated sur
+    /// `isTimelineVisible` — n'instancie jamais le `timelineViewModel` lazy.
+    func flushOpenTimelineIntoSlide() {
+        guard viewModel.isTimelineVisible else { return }
+        viewModel.commitTimelineToCurrentSlide()
+    }
+
     func persistDraft() {
+        flushOpenTimelineIntoSlide()
         syncCurrentSlideEffects()
         StoryDraftStore.shared.save(slides: viewModel.slides, visibility: visibility)
         StoryDraftStore.shared.saveMedia(
@@ -233,6 +246,7 @@ extension StoryComposerView {
     /// re-persister un brouillon explicitement jeté/publié).
     func autosaveDraftAfterMutation() {
         guard !draftAutosaveSuspended, composerHasContent, publishTask == nil else { return }
+        flushOpenTimelineIntoSlide()
         syncCurrentSlideEffects()
         StoryDraftStore.shared.save(slides: viewModel.slides, visibility: visibility)
         let keys = Self.mediaKeysFingerprint(images: viewModel.loadedImages,

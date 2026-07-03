@@ -147,10 +147,13 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   slideDuration=nil volontaire). Plus AUCUN champ ne peut être oublié (thumbHash, music*,
   textStyle legacy traversent aussi désormais). Tests StoryComposerMergeEffectsTests (5) +
   ResetState en non-régression.
-- [ ] **E3 (P1) `persistDraft()` ne flushe pas la timeline ouverte.**
-  Preuve : commit timeline seulement sur dismiss de sheet (`+Media.swift:60`) ; `persistDraft`
-  (`+SyncRestore.swift:169`) n'appelle pas `commitTimelineToCurrentSlide()`. Passage en
-  background avec sheet Timeline ouverte = éditions keyframes perdues du draft.
+- [x] **E3 (P1) `persistDraft()` ne flushe pas la timeline ouverte.** ✅ it.10
+  Re-preuve : commit uniquement au `onDismiss` de la sheet (`isTimelineVisible`) ; s'appliquait
+  AUSSI à l'autosave E1 (it.5). Fix : `flushOpenTimelineIntoSlide()` (gate `isTimelineVisible`,
+  n'instancie jamais le lazy timelineViewModel, non-destructif pour l'édition en cours) appelé
+  en tête de `persistDraft()` ET `autosaveDraftAfterMutation()` — ordre flush → sync → save,
+  compatible mergeEffects (E2 : timelineDuration/clipTransitions traversent).
+  Vérif : 13/13 suites composer non-régression, build 22 s vert.
 - [ ] **E4 (P1) Persister le CommandStack (undo/redo) avec le draft.**
   Preuve : `commandHistorySnapshot()`/`restoreCommandHistory()` ZÉRO caller prod ; grep
   `commands.json` → aucune écriture ; `shutdownTimelineIfNeeded()` (`+Timeline.swift:27`) recrée
@@ -450,7 +453,12 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.9 — R4 incrément 1 : container deep link cache-first (hash au push)
+## it.10 — E3 : flush timeline ouverte avant persistance (hash au push)
+
+- Fix 12 lignes sur les 2 chemins de persistance ; briques VM (commitTimelineToCurrentSlide)
+  déjà testées (roundtrip). 13/13 non-régression, build vert.
+
+## it.9 — R4 incrément 1 : container deep link cache-first (e6bdabfa9)
 
 - Fix 10 lignes View-only sur chemin froid uniquement (le hit `groupIndex` early-return
   inchangé) ; chemins VM sous-jacents déjà testés (loadStories SWR). Build 20 s vert.
