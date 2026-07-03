@@ -1724,6 +1724,7 @@ final class CallManager: ObservableObject {
     /// case). Replaces the old track.enabled flip, which left the upgrade
     /// invisible to the peer (no transceiver / no renegotiation).
     func toggleVideo() {
+        let previousTask = videoToggleTask
         videoToggleTask?.cancel()
         let target = !isVideoEnabled
         // Optimistic update: reflect intent immediately so rapid double-taps
@@ -1733,6 +1734,13 @@ final class CallManager: ObservableObject {
         // any state — the second Task's result is authoritative.
         isVideoEnabled = target
         videoToggleTask = Task { @MainActor [weak self] in
+            // Serialize on the previous toggle's actuation before starting ours:
+            // `cancel()` above is cooperative and upgradeToVideo/downgradeFromVideo
+            // never observe it mid-flight (they await stopCapture/startCapture), so
+            // without this a rapid double-tap could run two camera/transceiver
+            // actuations concurrently and corrupt state. Mirrors the identical fix
+            // already shipped in handleHold (CallKit hold path).
+            await previousTask?.value
             guard let self, !Task.isCancelled else { return }
             do {
                 let needsRenegotiation: Bool

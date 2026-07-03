@@ -20,7 +20,8 @@ jest.mock('@meeshy/shared/types/video-call', () => ({
 jest.mock('@meeshy/shared/types/socketio-events', () => ({
   ROOMS: {
     call: (id: string) => `call:${id}`,
-    conversation: (id: string) => `conversation:${id}`
+    conversation: (id: string) => `conversation:${id}`,
+    user: (id: string) => `user:${id}`
   }
 }));
 
@@ -55,6 +56,10 @@ const createMockPrisma = () => ({
   // forceEndCall clears it directly since it isn't a CallService method.
   conversation: {
     updateMany: jest.fn().mockResolvedValue({ count: 1 }) as MockFn
+  },
+  // Member lookup for the call:ended user-room fanout (resolveCallEndedRooms).
+  participant: {
+    findMany: jest.fn().mockResolvedValue([]) as MockFn
   },
   $transaction: jest.fn() as MockFn
 });
@@ -951,9 +956,37 @@ describe('CallCleanupService', () => {
 
       await service.runCleanup();
 
-      expect(io.to).toHaveBeenCalledWith('call:call-bc1');
-      expect(io.to).toHaveBeenCalledWith('conversation:conv-bc1');
+      const rooms = (io.to as MockFn).mock.calls[0][0];
+      expect(rooms).toEqual(expect.arrayContaining(['call:call-bc1', 'conversation:conv-bc1']));
       expect(io.emit).toHaveBeenCalledWith('call:ended', expect.objectContaining({ callId: 'call-bc1' }));
+    });
+
+    it('fans out call:ended to every conversation member user room (GC path must match the invitation audience — a ringing callee has joined neither the call nor conversation room)', async () => {
+      const io = createMockIo();
+      const service = new CallCleanupService(prisma as any);
+      service.attachSocketServer(io);
+
+      const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-fanout');
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([staleCall])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-fanout' });
+      prisma.participant.findMany.mockResolvedValue([{ userId: 'caller-1' }, { userId: 'callee-1' }]);
+      setupTransactionPassthrough(prisma);
+
+      await service.runCleanup();
+
+      expect(prisma.participant.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ conversationId: 'conv-fanout' }) })
+      );
+      const rooms = (io.to as MockFn).mock.calls[0][0];
+      expect(rooms).toEqual(
+        expect.arrayContaining(['call:call-fanout', 'conversation:conv-fanout', 'user:caller-1', 'user:callee-1'])
+      );
+      // Single deduplicated multi-room emit, not one call per room.
+      expect(io.to).toHaveBeenCalledTimes(1);
+      expect(io.emit).toHaveBeenCalledTimes(1);
     });
 
     it('emits only to call room when conversationId is null', async () => {
@@ -971,12 +1004,8 @@ describe('CallCleanupService', () => {
 
       await service.runCleanup();
 
-      // Called once (call room only), NOT twice
-      const convRoomCalls = (io.to as MockFn).mock.calls.filter(
-        (args: unknown[]) => typeof args[0] === 'string' && (args[0] as string).startsWith('conversation:')
-      );
-      expect(convRoomCalls.length).toBe(0);
-      expect(io.to).toHaveBeenCalledWith('call:call-bc2');
+      const rooms = (io.to as MockFn).mock.calls[0][0];
+      expect(rooms).toEqual(['call:call-bc2']);
     });
 
     it('emits only to call room when session.conversationId is undefined (findUnique returns null)', async () => {
@@ -995,11 +1024,29 @@ describe('CallCleanupService', () => {
 
       await service.runCleanup();
 
-      // only call room, no conversation room
-      const convRoomCalls = (io.to as MockFn).mock.calls.filter(
-        (args: unknown[]) => typeof args[0] === 'string' && (args[0] as string).startsWith('conversation:')
-      );
-      expect(convRoomCalls.length).toBe(0);
+      const rooms = (io.to as MockFn).mock.calls[0][0];
+      expect(rooms).toEqual(['call:call-bc3']);
+    });
+
+    it('falls back to call+conversation rooms (no crash) when the member fanout lookup throws', async () => {
+      const io = createMockIo();
+      const service = new CallCleanupService(prisma as any);
+      service.attachSocketServer(io);
+
+      const staleCall = makeStaleCall(CallStatus.initiated, 90_000, 'call-bc4');
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([staleCall])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-bc4' });
+      prisma.participant.findMany.mockRejectedValue(new Error('member lookup DB error'));
+      setupTransactionPassthrough(prisma);
+
+      const result = await service.runCleanup();
+
+      expect(result.cleaned).toBe(1);
+      const rooms = (io.to as MockFn).mock.calls[0][0];
+      expect(rooms).toEqual(['call:call-bc4', 'conversation:conv-bc4']);
     });
 
     it('logs warning instead of emitting when no io attached', async () => {
