@@ -86,6 +86,7 @@ function makePrisma(overrides: {
   phoneTokenFindUnique?: Record<string, jest.Mock>;
   phoneTokenCreate?: Record<string, jest.Mock>;
   phoneTokenUpdate?: Record<string, jest.Mock>;
+  phoneTokenUpdateMany?: Record<string, jest.Mock>;
   passwordResetCreate?: Record<string, jest.Mock>;
   securityEventCreate?: Record<string, jest.Mock>;
   transaction?: jest.Mock;
@@ -99,6 +100,7 @@ function makePrisma(overrides: {
       findUnique: (overrides.phoneTokenFindUnique?.findUnique ?? jest.fn().mockResolvedValue(null)) as jest.Mock,
       create: (overrides.phoneTokenCreate?.create ?? jest.fn().mockResolvedValue({ id: 'tok_001' })) as jest.Mock,
       update: jest.fn().mockResolvedValue({}),
+      updateMany: (overrides.phoneTokenUpdateMany?.updateMany ?? jest.fn().mockResolvedValue({ count: 1 })) as jest.Mock,
     },
     passwordResetToken: {
       create: jest.fn().mockResolvedValue({}),
@@ -429,9 +431,10 @@ describe('PhonePasswordResetService — verifyIdentity', () => {
     expect(await svc.verifyIdentity(IDENTITY_REQUEST)).toEqual({ success: false, error: 'invalid_step' });
   });
 
-  it('returns max_attempts_exceeded when identityAttempts >= 3 and revokes token', async () => {
+  it('returns max_attempts_exceeded when the attempt cannot be consumed (cap reached) and revokes token', async () => {
     const prisma = makePrisma({
       phoneTokenFindUnique: { findUnique: jest.fn().mockResolvedValue(makeToken({ identityAttempts: 3 })) },
+      phoneTokenUpdateMany: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
     });
     const svc = new PhonePasswordResetService(prisma, makeCache(), makeSms(), makeGeo());
 
@@ -440,6 +443,26 @@ describe('PhonePasswordResetService — verifyIdentity', () => {
     expect(result).toEqual({ success: false, error: 'max_attempts_exceeded' });
     expect(prisma.phonePasswordResetToken.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: { isRevoked: true } })
+    );
+  });
+
+  it('consumes an identity attempt atomically with a conditional cap guard (no check-then-act)', async () => {
+    const prisma = makePrisma({
+      phoneTokenFindUnique: { findUnique: jest.fn().mockResolvedValue(makeToken({ identityAttempts: 0 })) },
+    });
+    const svc = new PhonePasswordResetService(prisma, makeCache(), makeSms(), makeGeo());
+
+    await svc.verifyIdentity({ ...IDENTITY_REQUEST, fullUsername: 'wronguser' });
+
+    expect(prisma.phonePasswordResetToken.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'tok_001', identityAttempts: { lt: 3 } }),
+        data: { identityAttempts: { increment: 1 } },
+      })
+    );
+    // The consume replaces the old failure-path .update increment (no double count).
+    expect(prisma.phonePasswordResetToken.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: { identityAttempts: { increment: 1 } } })
     );
   });
 
@@ -583,9 +606,10 @@ describe('PhonePasswordResetService — verifyCode', () => {
     expect(await svc.verifyCode(CODE_REQUEST)).toEqual({ success: false, error: 'invalid_step' });
   });
 
-  it('returns max_attempts_exceeded when codeAttempts >= 5 and revokes token', async () => {
+  it('returns max_attempts_exceeded when the attempt cannot be consumed (cap reached) and revokes token', async () => {
     const prisma = makePrisma({
       phoneTokenFindUnique: { findUnique: jest.fn().mockResolvedValue({ ...CODE_TOKEN(), codeAttempts: 5 }) },
+      phoneTokenUpdateMany: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
     });
     const svc = new PhonePasswordResetService(prisma, makeCache(), makeSms(), makeGeo());
     const result = await svc.verifyCode(CODE_REQUEST);
@@ -604,13 +628,20 @@ describe('PhonePasswordResetService — verifyCode', () => {
     expect(result).toEqual({ success: false, error: 'invalid_code' });
   });
 
-  it('increments codeAttempts on invalid code', async () => {
+  it('consumes a code attempt atomically with a conditional cap guard (no check-then-act)', async () => {
     const prisma = makePrisma({
       phoneTokenFindUnique: { findUnique: jest.fn().mockResolvedValue(CODE_TOKEN()) },
     });
     const svc = new PhonePasswordResetService(prisma, makeCache(), makeSms(), makeGeo());
     await svc.verifyCode({ ...CODE_REQUEST, code: '000000' });
-    expect(prisma.phonePasswordResetToken.update).toHaveBeenCalledWith(
+    expect(prisma.phonePasswordResetToken.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'tok_001', codeAttempts: { lt: 5 } }),
+        data: { codeAttempts: { increment: 1 } },
+      })
+    );
+    // The consume replaces the old failure-path .update increment (no double count).
+    expect(prisma.phonePasswordResetToken.update).not.toHaveBeenCalledWith(
       expect.objectContaining({ data: { codeAttempts: { increment: 1 } } })
     );
   });
