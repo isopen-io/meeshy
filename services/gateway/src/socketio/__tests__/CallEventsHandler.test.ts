@@ -1286,7 +1286,28 @@ describe('CallEventsHandler', () => {
       expect(mockCallServicePersistCallStats).not.toHaveBeenCalled();
     });
 
-    it('persists stats and emits quality alert on high RTT', async () => {
+    it('persists stats and emits quality alert on SUSTAINED high RTT (2nd consecutive report), reporter excluded', async () => {
+      mockCallServicePersistCallStats.mockResolvedValue(undefined);
+      const { socket, io } = setupWithSocket();
+      const degraded = {
+        callId: CALL_ID,
+        stats: { rtt: 500, packetLoss: 1, bytesSent: 1000, bytesReceived: 2000, level: 'good' },
+      };
+
+      await socket._trigger('call:quality-report', degraded);
+      await socket._trigger('call:quality-report', degraded);
+
+      expect(mockCallServicePersistCallStats).toHaveBeenCalled();
+      // The alert goes through socket.to (room minus the reporter) — the
+      // degraded participant must never see "your contact has a bad
+      // connection" about its OWN link. io.to would include it.
+      const ioCalls = (io.to as jest.Mock<any>).mock.calls;
+      expect(ioCalls.some((c: any[]) => c[0] === `call:${CALL_ID}`)).toBe(false);
+      const socketToCalls = (socket.to as jest.Mock<any>).mock.calls;
+      expect(socketToCalls.some((c: any[]) => c[0] === `call:${CALL_ID}`)).toBe(true);
+    });
+
+    it('does NOT alert on a single isolated degraded report (sustained gate)', async () => {
       mockCallServicePersistCallStats.mockResolvedValue(undefined);
       const { socket, io } = setupWithSocket();
 
@@ -1295,21 +1316,22 @@ describe('CallEventsHandler', () => {
         stats: { rtt: 500, packetLoss: 1, bytesSent: 1000, bytesReceived: 2000, level: 'good' },
       });
 
-      expect(mockCallServicePersistCallStats).toHaveBeenCalled();
-      const ioCalls = (io.to as jest.Mock<any>).mock.calls;
-      expect(ioCalls.some((c: any[]) => c[0] === `call:${CALL_ID}`)).toBe(true);
+      expect((io.to as jest.Mock<any>).mock.calls.length).toBe(0);
+      expect((socket.to as jest.Mock<any>).mock.calls.length).toBe(0);
     });
 
-    it('emits quality alert on high packet loss', async () => {
+    it('emits quality alert on sustained high packet loss', async () => {
       mockCallServicePersistCallStats.mockResolvedValue(undefined);
-      const { socket, io } = setupWithSocket();
-
-      await socket._trigger('call:quality-report', {
+      const { socket } = setupWithSocket();
+      const degraded = {
         callId: CALL_ID,
         stats: { rtt: 100, packetLoss: 10, bytesSent: 100, bytesReceived: 100, level: 'poor' },
-      });
+      };
 
-      const roomEmit = (io.to as jest.Mock<any>).mock.results[0]?.value?.emit as jest.Mock<any>;
+      await socket._trigger('call:quality-report', degraded);
+      await socket._trigger('call:quality-report', degraded);
+
+      const roomEmit = (socket.to as jest.Mock<any>).mock.results[0]?.value?.emit as jest.Mock<any>;
       expect(roomEmit).toHaveBeenCalledWith('call:quality-alert', expect.objectContaining({ metric: 'packetLoss' }));
     });
 
@@ -1327,16 +1349,18 @@ describe('CallEventsHandler', () => {
       expect(ioCalls.length).toBe(0);
     });
 
-    it('emits rtt alert when both RTT and packet loss exceed thresholds (RTT wins)', async () => {
+    it('emits rtt alert when both RTT and packet loss exceed thresholds (RTT wins, sustained)', async () => {
       mockCallServicePersistCallStats.mockResolvedValue(undefined);
-      const { socket, io } = setupWithSocket();
-
-      await socket._trigger('call:quality-report', {
+      const { socket } = setupWithSocket();
+      const degraded = {
         callId: CALL_ID,
         stats: { rtt: 450, packetLoss: 8, bytesSent: 500, bytesReceived: 500, level: 'poor' },
-      });
+      };
 
-      const roomEmit = (io.to as jest.Mock<any>).mock.results[0]?.value?.emit as jest.Mock<any>;
+      await socket._trigger('call:quality-report', degraded);
+      await socket._trigger('call:quality-report', degraded);
+
+      const roomEmit = (socket.to as jest.Mock<any>).mock.results[0]?.value?.emit as jest.Mock<any>;
       expect(roomEmit).toHaveBeenCalledWith(
         'call:quality-alert',
         expect.objectContaining({ metric: 'rtt', value: 450, threshold: 300 })

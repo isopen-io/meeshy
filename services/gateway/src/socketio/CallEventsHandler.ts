@@ -97,6 +97,20 @@ export class CallEventsHandler {
   private rateLimiter = getSocketRateLimiter();
 
   /**
+   * Consecutive degraded quality-report streaks per `${callId}:${participantId}`.
+   * The remote-quality alert only fires once a participant's link has been bad
+   * for SUSTAINED consecutive reports (~10 s at the client's 5 s cadence) —
+   * server-side mirror of the client's DegradedLinkTracker, so an isolated RTT
+   * blip never flashes "your contact has a bad connection" at the other side.
+   * A healthy report clears the streak; entries older than STREAK_STALE_MS
+   * restart from zero (reports stopped flowing — not consecutive anymore).
+   */
+  private qualityDegradedStreaks = new Map<string, { streak: number; lastAt: number }>();
+  private static readonly QUALITY_ALERT_SUSTAINED_REPORTS = 2;
+  private static readonly QUALITY_STREAK_STALE_MS = 60_000;
+  private static readonly QUALITY_STREAK_MAP_MAX = 5_000;
+
+  /**
    * §4.6 — last-offer buffer per call. The signaling relay is otherwise
    * fire-and-forget: if the caller's offer arrives while the callee's socket
    * is not yet in the call room (PushKit wake, background/foreground churn,
@@ -2488,18 +2502,48 @@ export class CallEventsHandler {
           level: stats.level
         });
 
-        if (stats.rtt > 300 || stats.packetLoss > 5) {
-          const metric = stats.rtt > 300 ? 'rtt' : 'packetLoss';
-          const value = metric === 'rtt' ? stats.rtt : stats.packetLoss;
-          const threshold = metric === 'rtt' ? 300 : 5;
+        const isDegraded = stats.rtt > 300 || stats.packetLoss > 5;
+        const streakKey = `${data.callId}:${participantId}`;
+        if (!isDegraded) {
+          this.qualityDegradedStreaks.delete(streakKey);
+        } else {
+          const nowMs = Date.now();
+          const prev = this.qualityDegradedStreaks.get(streakKey);
+          const consecutive = prev && nowMs - prev.lastAt <= CallEventsHandler.QUALITY_STREAK_STALE_MS
+            ? prev.streak
+            : 0;
+          const streak = consecutive + 1;
+          this.qualityDegradedStreaks.set(streakKey, { streak, lastAt: nowMs });
 
-          io.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.QUALITY_ALERT, {
-            callId: data.callId,
-            participantId,
-            metric,
-            value,
-            threshold
-          });
+          // Leak guard: calls that end on a degraded report leave their entry
+          // behind — sweep stale entries when the map grows unusually large.
+          if (this.qualityDegradedStreaks.size > CallEventsHandler.QUALITY_STREAK_MAP_MAX) {
+            for (const [key, entry] of this.qualityDegradedStreaks) {
+              if (nowMs - entry.lastAt > CallEventsHandler.QUALITY_STREAK_STALE_MS) {
+                this.qualityDegradedStreaks.delete(key);
+              }
+            }
+          }
+
+          if (streak >= CallEventsHandler.QUALITY_ALERT_SUSTAINED_REPORTS) {
+            const metric = stats.rtt > 300 ? 'rtt' : 'packetLoss';
+            const value = metric === 'rtt' ? stats.rtt : stats.packetLoss;
+            const threshold = metric === 'rtt' ? 300 : 5;
+
+            // `socket.to` (NOT `io.to`): the reporter must never receive the
+            // "your contact has a bad connection" alert about ITS OWN link —
+            // its local pill already covers that, and the double banner read
+            // as contradictory. Re-emitted on every sustained report so the
+            // remote's 15 s auto-clear keeps being refreshed while the link
+            // stays bad.
+            socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.QUALITY_ALERT, {
+              callId: data.callId,
+              participantId,
+              metric,
+              value,
+              threshold
+            });
+          }
         }
       } catch (error) {
         logger.error('Error processing quality report', { error });
