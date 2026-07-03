@@ -56,11 +56,13 @@ struct ConversationRowItem: View {
     let activelyPressedConversationId: String?
     /// When a conversation is being dragged to reorder, close this row's menu
     let draggingConversationId: String?
+    @Binding var previewScale: CGFloat
+    @Binding var dragOffsetY: CGFloat
 
     @State private var isPressed = false
+    @State private var dragStarted = false
     @State private var dragOffset: CGSize = .zero
-    @State private var pressStartLocation: CGPoint = .zero
-    @State private var isDraggingToReorder = false
+    @State private var gestureStartTime: Date = .now
 
     var body: some View {
         SwipeableRow(
@@ -87,7 +89,7 @@ struct ConversationRowItem: View {
                 preferredContentLanguages: preferredContentLanguages
             )
             .equatable()
-            .scaleEffect(isPressed && !isDraggingToReorder ? 0.90 : 1.0)
+            .scaleEffect(isPressed ? 0.90 : 1.0)
             .contentShape(Rectangle())
             .onTapGesture {
                 HapticFeedback.light()
@@ -102,40 +104,58 @@ struct ConversationRowItem: View {
             // empêchait la gesture SwiftUI d'ouvrir le menu (le `.contextMenu`
             // natif, lui, se coordonnait avec `.onDrag`). Le déplacement reste
             // accessible via « Déplacer vers » dans le menu.
+            // P7-XX: Drag-to-reorder in highPriority captures immediate drags
+            // before long-press timer fires. If user drags > 30pt within 0.4s → drag mode.
+            .highPriorityGesture(
+                DragGesture()
+                    .onChanged { value in
+                        dragOffset = value.translation
+                        let yDelta = abs(value.translation.height)
+                        let isDragging = yDelta > 30 && Date.now.timeIntervalSince(gestureStartTime) < 0.4
+
+                        if isDragging && !dragStarted {
+                            // Immediate drag-to-reorder before long-press
+                            dragStarted = true
+                            isPressed = false
+                            HapticFeedback.medium()
+                            onDragStart()
+                        } else if dragStarted && isPressed {
+                            // Drag after preview appeared: shrink preview, grow menu
+                            let dragUpAmount = max(0, -value.translation.height) / 100
+                            previewScale = max(0, 1.0 - dragUpAmount)
+                            dragOffsetY = value.translation.height
+                        }
+                    }
+                    .onEnded { _ in
+                        if dragStarted {
+                            dragStarted = false
+                        }
+                        dragOffset = .zero
+                        dragOffsetY = 0
+                        // Don't reset previewScale here; let menu dismiss handle it
+                    }
+            )
+            // P7-XX: Long-press still works, but only if no drag detected
             .simultaneousGesture(
                 LongPressGesture(minimumDuration: 0.4)
                     .onEnded { _ in
-                        withAnimation(.spring(response: 0.65, dampingFraction: 0.99)) {
-                            isPressed = true
-                        }
-                        HapticFeedback.medium()
-                        onLongPress()
-                    }
-            )
-            .simultaneousGesture(
-                DragGesture()
-                    .onChanged { value in
-                        if isPressed && !isDraggingToReorder {
-                            dragOffset = value.translation
-                            // Detect upward drag threshold (-50pt)
-                            if value.translation.height < -50 {
-                                isDraggingToReorder = true
-                                dragOffset = .zero
-                                onDragStart()
+                        if !dragStarted {
+                            // Only show preview if no drag started
+                            withAnimation(.spring(response: 0.65, dampingFraction: 0.99)) {
+                                isPressed = true
                             }
-                        } else if isDraggingToReorder {
-                            dragOffset = value.translation
-                        }
-                    }
-                    .onEnded { _ in
-                        dragOffset = .zero
-                        if isDraggingToReorder {
-                            isDraggingToReorder = false
+                            HapticFeedback.medium()
+                            previewScale = 1.0
+                            dragOffsetY = 0
+                            onLongPress()
                         }
                     }
             )
             .task {
                 await onLoadPreview()
+            }
+            .onAppear {
+                gestureStartTime = Date.now
             }
             .animation(.spring(response: 0.65, dampingFraction: 0.99), value: isPressed)
             // adaptiveOnChange : la signature (old, new) de .onChange est iOS 17+ ;
@@ -156,13 +176,9 @@ struct ConversationRowItem: View {
                     withAnimation(.spring(response: 0.65, dampingFraction: 0.99)) {
                         isPressed = false
                     }
+                    previewScale = 1.0
+                    dragOffsetY = 0
                     onMenuDismissed?()
-                }
-            }
-            .adaptiveOnChange(of: isDraggingToReorder) { _, newValue in
-                // When drag-to-reorder starts, close the menu
-                if newValue && isPressed {
-                    activelyPressedConversationId == nil ? () : ()
                 }
             }
         }

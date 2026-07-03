@@ -156,6 +156,10 @@ struct ConversationListView: View {
     /// Pas `private` : lu par les fichiers d'extension +Overlays/+Rows (un @State
     /// private est inaccessible depuis un fichier extension frère — cf. CLAUDE.md).
     @State var activelyPressedConversationId: String? = nil
+    /// Dynamic preview scale during upward drag (1.0 = full size, 0.0 = hidden)
+    @State var previewScale: CGFloat = 1.0
+    /// Upward drag offset (negative = upward, used to shrink preview and grow menu)
+    @State var dragOffsetY: CGFloat = 0
 
     /// Renommage : conversation cible + texte en cours d'édition (action
     /// « Renommer » du menu contextuel, groupes/communautés uniquement).
@@ -355,7 +359,9 @@ struct ConversationListView: View {
                 activelyPressedConversationId = nil
             },
             activelyPressedConversationId: activelyPressedConversationId,
-            draggingConversationId: draggingConversation?.id
+            draggingConversationId: draggingConversation?.id,
+            previewScale: $previewScale,
+            dragOffsetY: $dragOffsetY
         )
         .equatable()
     }

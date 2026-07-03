@@ -237,11 +237,14 @@ extension ConversationListView {
         // si l'utilisateur rouvre un menu avant la fin du zoom-out, `onLongPress`
         // annule ce work item, sinon il effacerait le menu fraîchement rouvert.
         contextMenuDismissWork?.cancel()
+        previewScale = 0.7
+        dragOffsetY = 0
         withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) { contextMenuAppeared = false }
         let work = DispatchWorkItem {
             contextMenuConversation = nil
             // Reset row press state (animation will be triggered by .onChange in row)
             activelyPressedConversationId = nil
+            previewScale = 1.0
         }
         contextMenuDismissWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.26, execute: work)
@@ -292,8 +295,9 @@ extension ConversationListView {
                     )
                     .frame(width: 340)
                     // Aperçu : zoom (grandit depuis 0.7) + fondu, piloté par
-                    // `contextMenuAppeared` (spring à rebond, cf. .onAppear).
-                    .scaleEffect(contextMenuAppeared ? 1 : 0.7, anchor: .center)
+                    // `contextMenuAppeared` (spring à rebond) + drag vers le haut.
+                    // Pendant drag upward, preview rétrécit (previewScale → 0).
+                    .scaleEffect(previewScale, anchor: .center)
                     .opacity(contextMenuAppeared ? 1 : 0)
 
                     ConversationContextMenuView(
@@ -383,6 +387,8 @@ extension ConversationListView {
             .zIndex(300)
             .onAppear {
                 // Zoom + rebond : l'aperçu grandit et le menu remonte au montage.
+                previewScale = 1.0
+                dragOffsetY = 0
                 withAnimation(.spring(response: 0.44, dampingFraction: 0.6)) {
                     contextMenuAppeared = true
                 }
