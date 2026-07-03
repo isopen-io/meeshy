@@ -14,6 +14,19 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 130i, 2026-07-03)** — piste iOS indépendante (suffixe `i`).
+> - **130i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `1061dcb0`)** :
+>   Dynamic Type de `ReelFeedCard` (carte Réel plein-cadre du feed). **4/4** `.font(.system(size:))` →
+>   `MeeshyFont.relative` : badge logo Réel (15 bold, `.padding`-driven), métrique inline reach (10 semibold),
+>   glyphe d'action (18) + overlay de bordure accent (18, même taille → aligné). Tous **scalent avec le texte
+>   adjacent** (méta `.caption2`, compteurs `.footnote`) sous Dynamic Type. **0 gel** (aucun cadre fixe).
+>   A11y déjà en place (badge/like/reelButton labellisés, metricInline combiné). 1 fichier, 0 logique,
+>   0 test/clé i18n neuve. 0 PR iOS ouverte → 0 contention. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `ReelFeedCard` Dynamic Type SOLDÉ** : ne plus reprendre (4 glyphes → `relative`).
+> - **Base de départ 131i : `main` HEAD**. Reste `StoryViewerView+Content` (⚠️ i18n + `@State private`
+>   cross-file). Sinon : `MessageDetailSheet` (4), `StatusBubbleController` (4), `ReelRepostEmbedCell`/
+>   `AchievementBadgeView`/`SyncPill` (3), ou passe state-of-the-art.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 129i, 2026-07-03)** — piste iOS indépendante (suffixe `i`).
 > - **129i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `806fc972`)** :
 >   Dynamic Type + a11y de `CameraView` (écran de capture photo/vidéo). **2/5** `.font(.system(size:))` →

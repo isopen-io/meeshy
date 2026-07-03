@@ -202,7 +202,7 @@ struct ReelFeedCard: View, Equatable {
                     HapticFeedback.light()
                 } label: {
                     Image(systemName: "play.rectangle.on.rectangle.fill")
-                        .font(.system(size: 15, weight: .bold))
+                        .font(MeeshyFont.relative(15, weight: .bold))
                         .foregroundColor(.white)
                         .padding(8)
                         .background(Circle().fill(.ultraThinMaterial))
@@ -306,7 +306,7 @@ struct ReelFeedCard: View, Equatable {
 
     private func metricInline(icon: String, count: Int, a11yLabel: String) -> some View {
         HStack(spacing: 3) {
-            Image(systemName: icon).font(.system(size: 10, weight: .semibold))
+            Image(systemName: icon).font(MeeshyFont.relative(10, weight: .semibold))
             Text(Self.compactCount(count)).font(.caption2.weight(.medium))
         }
         .foregroundColor(.white.opacity(0.85))
@@ -361,11 +361,11 @@ struct ReelFeedCard: View, Equatable {
     private func actionGlyph(outline: String, filled: String, tint: Color, participated: Bool) -> some View {
         ZStack {
             Image(systemName: participated ? filled : outline)
-                .font(.system(size: 18))
+                .font(MeeshyFont.relative(18))
                 .foregroundColor(participated ? tint : .white)
             if participated {
                 Image(systemName: outline)
-                    .font(.system(size: 18))
+                    .font(MeeshyFont.relative(18))
                     .foregroundColor(Color(hex: accentHex))
             }
         }
