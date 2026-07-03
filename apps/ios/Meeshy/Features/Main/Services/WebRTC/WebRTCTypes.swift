@@ -432,6 +432,22 @@ nonisolated enum CallReliabilityPolicy {
         return min(heuristic, bwe)
     }
 
+    /// Gate for the `call_cancel` silent push (phantom-ring hardening): the
+    /// gateway sends it when a call ends WITHOUT ever being answered, aimed
+    /// at devices whose socket never came up (VoIP push delivered, WebSocket
+    /// blocked). It may ONLY kill a still-ringing INCOMING call whose callId
+    /// matches — a late/replayed cancel must never end a connected call, an
+    /// outgoing ring, or an unrelated call.
+    static func shouldEndRingingOnCancellation(
+        pushCallId: String,
+        currentCallId: String?,
+        callState: CallState
+    ) -> Bool {
+        guard pushCallId == currentCallId else { return false }
+        guard case .ringing(isOutgoing: false) = callState else { return false }
+        return true
+    }
+
     /// Delay before the periodic TURN credential refresh, at 80% of the TTL.
     /// A degenerate TTL (zero, negative, or shorter than the floor) clamps to
     /// `minimumDelay` instead of disarming the refresh — silently skipping it

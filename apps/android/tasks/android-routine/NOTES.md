@@ -25,6 +25,12 @@ Append-only log of gotchas and decisions that save time next run.
   hiccup once; `--no-daemon` is reliable). 8.14.3 builds this AGP project fine. **Do NOT edit the
   committed `gradle-wrapper.properties`** to work around this — that's a repo change unrelated to the
   slice; keep the wrapper pinned and use the system gradle locally.
+  - **Run ONLINE, not `--offline`** (2026-07-03): AGP 8.7.3 + its transitive deps are **not** in the
+    local Gradle cache on a fresh container, so `gradle … --offline` fails with `Plugin [id:
+    'com.android.application'] … was not found`. Let it fetch through the agent proxy (Google Maven +
+    Maven Central are allowed). The partially-downloaded wrapper leaves a **0-byte
+    `~/.gradle/wrapper/dists/gradle-8.11.1-bin/*/*.part`** — harmless, ignore it. The daemon worked fine
+    this run (plain `gradle <tasks>`); `--no-daemon` remains the fallback if it hiccups.
 - Fresh container has **no Android SDK**. Install per `ROUTINE.md` recipe (~2 min).
 - JDK 21 preinstalled; modules target JVM 17 — fine.
 - First Gradle run downloads the whole toolchain (slow); run it in the

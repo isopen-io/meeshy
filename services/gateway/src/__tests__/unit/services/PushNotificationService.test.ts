@@ -498,6 +498,49 @@ describe('PushNotificationService', () => {
       expect(result[0].success).toBe(true);
     });
 
+    it('silent payload builds a pure background APNS push: no alert, no sound, pushType background, priority 5', async () => {
+      mockApnsProviderSend.mockResolvedValue({ sent: [{ device: 'apns-token-123' }], failed: [] });
+
+      const { PushNotificationService } = await getServiceWithEnv({
+        ENABLE_PUSH_NOTIFICATIONS: 'true',
+        ENABLE_APNS_PUSH: 'true',
+        APNS_KEY_ID: 'test-key-id',
+        APNS_TEAM_ID: 'test-team-id',
+        APNS_KEY_PATH: '/path/to/key.p8',
+        APNS_BUNDLE_ID: 'me.meeshy.app',
+      });
+      const service = new PushNotificationService(mockPrisma as any);
+
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'token-1', token: 'apns-token-123', type: 'apns', platform: 'ios', bundleId: 'me.meeshy.app' },
+      ]);
+      mockPrisma.pushToken.update.mockResolvedValue({});
+
+      const result = await service.sendToUser({
+        userId: 'user-123',
+        payload: {
+          title: '',
+          body: '',
+          silent: true,
+          data: { type: 'call_cancel', callId: 'call-123' },
+        },
+      });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].success).toBe(true);
+      const sentNotification = mockApnsProviderSend.mock.calls[0][0];
+      // A visible alert/sound on a cancellation signal would surface a blank
+      // banner; the whole point is a data-only background wake.
+      expect(sentNotification.alert).toBeUndefined();
+      expect(sentNotification.sound).toBeUndefined();
+      expect(sentNotification.pushType).toBe('background');
+      expect(sentNotification.priority).toBe(5);
+      expect(sentNotification.contentAvailable).toBe(true);
+      expect(sentNotification.payload).toEqual(
+        expect.objectContaining({ type: 'call_cancel', callId: 'call-123' })
+      );
+    });
+
     it('should filter tokens by type when specified', async () => {
       const { PushNotificationService } = await getServiceWithEnv({
         ENABLE_PUSH_NOTIFICATIONS: 'true',

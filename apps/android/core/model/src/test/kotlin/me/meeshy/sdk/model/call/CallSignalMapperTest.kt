@@ -175,4 +175,27 @@ class CallSignalMapperTest {
         assertThat(map("call:ended", "not-json-at-all")).isNull()
         assertThat(map("call:signal", "")).isNull()
     }
+
+    // --- incomingOffer: identity decode for the call-waiting banner --------
+
+    @Test
+    fun `incomingOffer decodes the caller identity and media from an initiated frame`() {
+        val json = """
+            {"callId":"c1","type":"video",
+             "initiator":{"userId":"u9","username":"alice","displayName":"Alice"}}
+        """.trimIndent()
+
+        assertThat(CallSignalMapper.incomingOffer(json))
+            .isEqualTo(WaitingCall(callId = "c1", callerId = "u9", callerName = "Alice", isVideo = true))
+    }
+
+    @Test
+    fun `incomingOffer returns null for a frame carrying no call id`() {
+        assertThat(CallSignalMapper.incomingOffer("""{"type":"video"}""")).isNull()
+    }
+
+    @Test
+    fun `incomingOffer is inert on malformed JSON rather than crashing`() {
+        assertThat(CallSignalMapper.incomingOffer("not-json-at-all")).isNull()
+    }
 }

@@ -2831,14 +2831,19 @@ final class CallManagerAlreadyAnsweredTests: XCTestCase {
             .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
         let source = try String(contentsOf: url, encoding: .utf8)
 
-        // Find the already-answered handler in CallManager
-        guard let range = source.range(of: "already-answered") else {
-            XCTFail("call:already-answered handler not found in CallManager.swift — required for multi-device dismissal")
+        // Anchor on the SUBSCRIBER (`socket.callAlreadyAnswered`), not on the
+        // first textual occurrence of "already-answered" — doc comments
+        // elsewhere in the file (e.g. endRingingAnsweredElsewhere's docstring,
+        // added 2026-07-03) legitimately mention the event name and would
+        // hijack the analysis window (CI-only failure: the local targeted run
+        // didn't include this suite).
+        guard let range = source.range(of: "socket.callAlreadyAnswered") else {
+            XCTFail("call:already-answered subscriber not found in CallManager.swift — required for multi-device dismissal")
             return
         }
         // Grab surrounding context
         let start = source.index(range.lowerBound, offsetBy: -200, limitedBy: source.startIndex) ?? source.startIndex
-        let end = source.index(range.upperBound, offsetBy: 500, limitedBy: source.endIndex) ?? source.endIndex
+        let end = source.index(range.upperBound, offsetBy: 800, limitedBy: source.endIndex) ?? source.endIndex
         let context = String(source[start ..< end])
 
         let endsCall = context.contains("endCallInternal") || context.contains("callState = .ended") || context.contains("endCall")
@@ -4417,6 +4422,115 @@ final class AckFailureReconciliationTests: XCTestCase {
             occurrences, 2,
             "emitCallEndReliably must arm the reconciliation in BOTH branches: socket known down " +
             "AND ACK failure (socket believed up but the emit never materialised server-side)"
+        )
+    }
+}
+
+// MARK: - call_cancel background push → end ringing policy (phantom-ring hardening)
+
+/// Pure decision for the `call_cancel` silent push: it may ONLY kill a
+/// still-ringing INCOMING call whose callId matches the push. A late or
+/// replayed cancel must never touch a connected call, an outgoing ring, or
+/// an unrelated call.
+@MainActor
+final class CallCancellationPolicyTests: XCTestCase {
+
+    func test_matchingIncomingRing_ends() {
+        XCTAssertTrue(CallReliabilityPolicy.shouldEndRingingOnCancellation(
+            pushCallId: "c1", currentCallId: "c1", callState: .ringing(isOutgoing: false)
+        ))
+    }
+
+    func test_callIdMismatch_ignored() {
+        XCTAssertFalse(CallReliabilityPolicy.shouldEndRingingOnCancellation(
+            pushCallId: "c1", currentCallId: "c2", callState: .ringing(isOutgoing: false)
+        ))
+    }
+
+    func test_noCurrentCall_ignored() {
+        XCTAssertFalse(CallReliabilityPolicy.shouldEndRingingOnCancellation(
+            pushCallId: "c1", currentCallId: nil, callState: .idle
+        ))
+    }
+
+    func test_connectedCall_neverEndedByLateCancel() {
+        XCTAssertFalse(CallReliabilityPolicy.shouldEndRingingOnCancellation(
+            pushCallId: "c1", currentCallId: "c1", callState: .connected
+        ))
+    }
+
+    func test_outgoingRing_ignored() {
+        XCTAssertFalse(CallReliabilityPolicy.shouldEndRingingOnCancellation(
+            pushCallId: "c1", currentCallId: "c1", callState: .ringing(isOutgoing: true)
+        ))
+    }
+
+    /// Source-guards: the wiring exists end-to-end — AppDelegate routes the
+    /// silent push, CallManager gates on the policy and reports CallKit end.
+    func test_wiring_appDelegateRoutesCancel_andManagerReportsCallKitEnd() throws {
+        let base = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let appDelegate = try String(
+            contentsOf: base.appendingPathComponent("Meeshy/AppDelegate.swift"), encoding: .utf8)
+        XCTAssertTrue(
+            appDelegate.contains("call_cancel") && appDelegate.contains("endRingingFromCancellation"),
+            "AppDelegate.didReceiveRemoteNotification must route type=call_cancel to CallManager.endRingingFromCancellation"
+        )
+        let manager = try String(
+            contentsOf: base.appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift"), encoding: .utf8)
+        guard let fnRange = manager.range(of: "func endRingingFromCancellation(") else {
+            XCTFail("CallManager.endRingingFromCancellation not found"); return
+        }
+        let body = String(manager[fnRange.lowerBound...].prefix(1200))
+        XCTAssertTrue(
+            body.contains("shouldEndRingingOnCancellation"),
+            "endRingingFromCancellation must gate on CallReliabilityPolicy.shouldEndRingingOnCancellation"
+        )
+        XCTAssertTrue(
+            body.contains(".remoteEnded"),
+            "endRingingFromCancellation must report the CallKit end with reason .remoteEnded"
+        )
+    }
+}
+
+// MARK: - call_answered_elsewhere silent push (multi-device socketless)
+
+/// Miroir du call_cancel pour le multi-device : quand un autre device du même
+/// compte décroche, le device secondaire SOCKETLESS (réveillé par push VoIP,
+/// WebSocket jamais monté) ne reçoit pas `call:already-answered` — la push
+/// background `call_answered_elsewhere` doit couper sa sonnerie avec la raison
+/// CallKit `.answeredElsewhere` (Recents : « répondu sur un autre appareil »).
+@MainActor
+final class CallAnsweredElsewherePushTests: XCTestCase {
+
+    func test_wiring_appDelegateRoutesAnsweredElsewhere_andManagerReportsAnsweredElsewhere() throws {
+        let base = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let appDelegate = try String(
+            contentsOf: base.appendingPathComponent("Meeshy/AppDelegate.swift"), encoding: .utf8)
+        XCTAssertTrue(
+            appDelegate.contains("call_answered_elsewhere") && appDelegate.contains("endRingingAnsweredElsewhere"),
+            "AppDelegate.didReceiveRemoteNotification must route type=call_answered_elsewhere to CallManager.endRingingAnsweredElsewhere"
+        )
+        let manager = try String(
+            contentsOf: base.appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift"), encoding: .utf8)
+        guard let fnRange = manager.range(of: "func endRingingAnsweredElsewhere(") else {
+            XCTFail("CallManager.endRingingAnsweredElsewhere not found"); return
+        }
+        let body = String(manager[fnRange.lowerBound...].prefix(1200))
+        XCTAssertTrue(
+            body.contains("shouldEndRingingOnCancellation"),
+            "endRingingAnsweredElsewhere must gate on the same pure policy as call_cancel (exact callId + incoming ring only)"
+        )
+        XCTAssertTrue(
+            body.contains(".answeredElsewhere"),
+            "endRingingAnsweredElsewhere must report the CallKit end with reason .answeredElsewhere (Recents parity with the socket path)"
         )
     }
 }

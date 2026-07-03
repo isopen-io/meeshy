@@ -34,6 +34,16 @@ export interface PushNotificationPayload {
    */
   subtitle?: string;
   body: string;
+  /**
+   * Pure background push (APNs `apns-push-type: background`, priority 5,
+   * `content-available: 1`, NO alert/sound/badge): a data-only wake for
+   * signals the user must never see as a banner — e.g. `call_cancel`, which
+   * stops CallKit ringing on a device whose socket never came up. iOS only;
+   * FCM sends currently ignore this flag (alert path unchanged). NEVER use
+   * the `voip` type for such signals: every VoIP push must report a new
+   * incoming call to CallKit or the system kills the app.
+   */
+  silent?: boolean;
   data?: Record<string, string>;
   link?: string;
   badge?: number;
@@ -623,17 +633,26 @@ export class PushNotificationService {
       const apn = await import('@parse/node-apn');
       const notification = new apn.Notification();
 
-      notification.alert = {
-        title: payload.title,
-        body: payload.body,
-        ...(payload.subtitle ? { subtitle: payload.subtitle } : {}),
-      };
+      const isSilent = payload.silent === true && !isVoIP;
+      if (isSilent) {
+        // Explicitly strip every user-visible field — a background push that
+        // carries an alert/sound/badge is rejected or displayed by APNs.
+        notification.alert = undefined as never;
+        notification.sound = undefined as never;
+        notification.badge = undefined as never;
+      } else {
+        notification.alert = {
+          title: payload.title,
+          body: payload.body,
+          ...(payload.subtitle ? { subtitle: payload.subtitle } : {}),
+        };
 
-      if (payload.badge !== undefined) {
-        notification.badge = payload.badge;
+        if (payload.badge !== undefined) {
+          notification.badge = payload.badge;
+        }
+
+        notification.sound = payload.sound || 'default';
       }
-
-      notification.sound = payload.sound || 'default';
       notification.topic = isVoIP
         ? config.apns.voipBundleId
         : (tokenRecord.bundleId || config.apns.bundleId);
@@ -641,6 +660,12 @@ export class PushNotificationService {
       if (isVoIP) {
         notification.pushType = 'voip';
         notification.priority = 10; // Immediate delivery for calls
+      } else if (isSilent) {
+        // Apple requires `apns-push-type: background` + priority 5 for pure
+        // content-available pushes; priority 10 on a background push is
+        // rejected/deprioritized by APNs.
+        notification.pushType = 'background';
+        notification.priority = 5;
       }
 
       if (payload.category) {
@@ -651,7 +676,12 @@ export class PushNotificationService {
         notification.threadId = payload.threadId;
       }
 
-      notification.mutableContent = true;
+      // mutable-content routes ALERT pushes through the Notification Service
+      // Extension; it has no meaning on a background push (Apple rejects the
+      // combination), so only set it on visible notifications.
+      if (!isSilent) {
+        notification.mutableContent = true;
+      }
 
       if (payload.collapseId) {
         notification.collapseId = payload.collapseId;

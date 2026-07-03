@@ -1070,6 +1070,53 @@ final class CallManager: ObservableObject {
         }
     }
 
+    // MARK: - call_cancel Silent Push (phantom-ring hardening)
+
+    /// Le gateway envoie une push APNs background `call_cancel` quand un appel
+    /// se termine SANS avoir été décroché (missed/rejected), à destination des
+    /// membres dont le socket n'est jamais monté (push VoIP passée par APNs,
+    /// WebSocket bloqué par le réseau) : le fanout socket `call:ended` ne peut
+    /// pas les atteindre et CallKit sonnerait jusqu'au timeout local. Gardé par
+    /// `CallReliabilityPolicy.shouldEndRingingOnCancellation` : seul l'appel
+    /// ENTRANT encore en sonnerie au callId EXACT est terminé — un cancel
+    /// tardif/rejoué ne touche jamais un appel décroché ni un ring sortant.
+    func endRingingFromCancellation(callId: String) {
+        guard CallReliabilityPolicy.shouldEndRingingOnCancellation(
+            pushCallId: callId,
+            currentCallId: currentCallId,
+            callState: callState
+        ) else {
+            Logger.calls.info("call_cancel push ignored (callId=\(callId)) — no matching incoming ring")
+            return
+        }
+        Logger.calls.info("call_cancel push — ending still-ringing call \(callId)")
+        if let uuid = activeCallUUID {
+            callProvider.reportCall(with: uuid, endedAt: Date(), reason: .remoteEnded)
+        }
+        endCallInternal(reason: .remote)
+    }
+
+    /// Pendant multi-device de `endRingingFromCancellation` : un AUTRE device
+    /// du même compte a décroché (push background `call_answered_elsewhere`,
+    /// miroir socketless de `call:already-answered`). Même garde FSM pure ;
+    /// seule la raison CallKit diffère — `.answeredElsewhere` pour que
+    /// Recents affiche « répondu sur un autre appareil » et non « manqué ».
+    func endRingingAnsweredElsewhere(callId: String) {
+        guard CallReliabilityPolicy.shouldEndRingingOnCancellation(
+            pushCallId: callId,
+            currentCallId: currentCallId,
+            callState: callState
+        ) else {
+            Logger.calls.info("call_answered_elsewhere push ignored (callId=\(callId)) — no matching incoming ring")
+            return
+        }
+        Logger.calls.info("call_answered_elsewhere push — dismissing ring for \(callId)")
+        if let uuid = activeCallUUID {
+            callProvider.reportCall(with: uuid, endedAt: Date(), reason: .answeredElsewhere)
+        }
+        endCallInternal(reason: .remote)
+    }
+
     // MARK: - Phantom VoIP Call (defense-in-depth)
 
     /// Apple PushKit requires reporting a call for every incoming VoIP push,
