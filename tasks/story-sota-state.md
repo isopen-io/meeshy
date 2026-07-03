@@ -122,17 +122,20 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 
 ### ÉDITION — crash recovery & intégrité des données
 
-- [ ] **E1 (P0) Autosave draft sur mutation, pas seulement en background.**
-  Preuve : unique déclencheur = `scenePhase == .background`
-  (`StoryComposerView.swift:240-242` → `autoSaveDraftForBackground`). Un crash dur (OOM,
-  fatalError) en pleine édition perd tout depuis le dernier background.
-  Cible SOTA : autosave débouncé (~2-3 s) sur toute mutation de `slides`/`currentEffects`
-  (miroir du dirty-tracking GRDBCacheStore), + save immédiat sur événements structurants
-  (ajout slide, import média, commit timeline). Attention coût : `saveMedia` copie les bitmaps —
-  séparer save des effects JSON (léger, fréquent) du save des médias (lourd, sur ajout média
-  seulement). Restauration : proposer la reprise AU LANCEMENT du composer (déjà `checkForDraft`
-  en `.onAppear`) — améliorer l'UX en preview du brouillon (mini-rendu composite) au lieu d'une
-  alerte texte.
+- [x] **E1 (P0) Autosave draft sur mutation, pas seulement en background.** ✅ it.5
+  Preuve re-confirmée : unique déclencheur = `scenePhase == .background`.
+  Livré : `StoryComposerViewModel.autosaveTrigger` — publisher LAZY STORED
+  `objectWillChange.debounce(2,5 s)` (stable entre renders ; un debounce inline dans `body`
+  serait re-souscrit à chaque évaluation → timer perpétuellement reset, save jamais tiré) ;
+  `.onReceive` → `autosaveDraftAfterMutation()` : save JSON GRDB à chaque accalmie (léger),
+  `saveMedia` (bitmaps) UNIQUEMENT si `mediaKeysFingerprint` change ; guards = ceux du save
+  background + `draftAutosaveSuspended` (posé après clearAllDrafts dans publish et quit —
+  un debounce en vol ne re-persiste pas un brouillon jeté ; « Effacer le brouillon » de
+  l'alerte restore ne suspend PAS, l'édition continue).
+  Ambiguïté tranchée : PAS de chemin « save immédiat » séparé pour les événements structurants —
+  le debounce 2,5 s les couvre (fenêtre de perte ≤2,5 s acceptable pour du crash-safe, un seul
+  chemin d'écriture). L'UX de reprise (preview composite au lieu d'alerte texte) = U4, séparé.
+  Tests : StoryComposerAutosaveTests (5 : burst→1 tir, 2 bursts→2 tirs, fingerprint ×3).
 - [x] **E2 (P0) `buildEffects()` écrase `clipTransitions` + `timelineDuration` à nil.** ✅ it.4
   Preuve re-confirmée : chaîne complète — slider durée (`+Slides.swift:42`) et Timeline
   (`TimelineProject.apply`, StoryModels.swift:2121-2126) écrivent effects.timelineDuration/

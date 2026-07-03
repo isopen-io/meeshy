@@ -29,6 +29,24 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
 
     @Published var selectedElementId: String?
 
+    // MARK: - Draft autosave (E1 — crash-safe editing)
+
+    /// Intervalle du debounce d'autosave. `var` pour les tests uniquement :
+    /// poser une valeur courte AVANT le premier accès à `autosaveTrigger`
+    /// (le publisher est figé au premier accès, lazy).
+    var autosaveDebounceInterval: TimeInterval = 2.5
+
+    /// Publisher STABLE (lazy stored) qui émet ~2,5 s après la DERNIÈRE
+    /// mutation du ViewModel — le signal « l'édition s'est posée, persiste le
+    /// brouillon ». Stocké et non recalculé : un `objectWillChange.debounce`
+    /// construit inline dans `body` serait re-souscrit à chaque évaluation de
+    /// la vue, ce qui resetterait perpétuellement le timer sous édition
+    /// active (renders fréquents) — le save ne tirerait jamais.
+    private(set) lazy var autosaveTrigger: AnyPublisher<Void, Never> = objectWillChange
+        .debounce(for: .seconds(autosaveDebounceInterval), scheduler: DispatchQueue.main)
+        .map { _ in () }
+        .eraseToAnyPublisher()
+
     // MARK: - Floating Text Edit Mode
 
     /// Mode d'édition de texte plein écran (overlay flottant). `.inactive` par

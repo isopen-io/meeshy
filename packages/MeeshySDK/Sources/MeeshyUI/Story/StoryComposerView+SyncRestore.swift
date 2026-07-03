@@ -214,6 +214,39 @@ extension StoryComposerView {
         persistDraft()
     }
 
+    /// E1 — fingerprint pur des clés média chargées. Gate le `saveMedia`
+    /// LOURD (copie des bitmaps) : une édition purement JSON (texte, filtre,
+    /// durée) ne re-copie jamais les médias ; seul un ajout/retrait de média
+    /// change l'ensemble des clés.
+    static func mediaKeysFingerprint(images: [String: UIImage],
+                                     videos: [String: URL],
+                                     audios: [String: URL]) -> Set<String> {
+        Set(images.keys).union(videos.keys).union(audios.keys)
+    }
+
+    /// E1 — autosave débouncé post-mutation (`viewModel.autosaveTrigger`) :
+    /// le travail d'édition survit désormais à un CRASH DUR (OOM, fatalError),
+    /// pas seulement au passage en background. Le save JSON (GRDB) est léger
+    /// et court à chaque accalmie de ~2,5 s ; les médias ne sont re-copiés
+    /// que si l'ensemble des clés a changé. Mêmes guards que le save
+    /// background + `draftAutosaveSuspended` (un debounce en vol ne doit pas
+    /// re-persister un brouillon explicitement jeté/publié).
+    func autosaveDraftAfterMutation() {
+        guard !draftAutosaveSuspended, composerHasContent, publishTask == nil else { return }
+        syncCurrentSlideEffects()
+        StoryDraftStore.shared.save(slides: viewModel.slides, visibility: visibility)
+        let keys = Self.mediaKeysFingerprint(images: viewModel.loadedImages,
+                                             videos: viewModel.loadedVideoURLs,
+                                             audios: viewModel.loadedAudioURLs)
+        guard keys != lastAutosavedMediaKeys else { return }
+        lastAutosavedMediaKeys = keys
+        StoryDraftStore.shared.saveMedia(
+            images: viewModel.loadedImages,
+            videoURLs: viewModel.loadedVideoURLs,
+            audioURLs: viewModel.loadedAudioURLs
+        )
+    }
+
     func checkForDraft() {
         if StoryDraftStore.shared.load() != nil {
             showRestoreDraftAlert = true
