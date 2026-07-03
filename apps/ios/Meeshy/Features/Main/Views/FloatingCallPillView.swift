@@ -83,7 +83,11 @@ struct FloatingCallPillView: View {
             controlButtons
         }
         .padding(.horizontal, 16)
-        .frame(height: pillHeight)
+        // minHeight (not an exact height): userInfoSection stacks two
+        // Dynamic-Type-scalable Text lines that can exceed pillHeight at
+        // accessibility text sizes (AX1+) — an exact frame would force-clip
+        // the name/status instead of letting the pill grow to fit.
+        .frame(minHeight: pillHeight)
         // iOS 26 Liquid Glass capsule surface (SDK Compatibility wrapper owns the
         // gating + the .ultraThinMaterial fallback). The small inner controls stay
         // as vibrancy fills ON the glass — Apple HIG: don't nest glass in glass.

@@ -667,7 +667,12 @@ struct CallView: View {
     private var audioCallLayout: some View {
         VStack(spacing: 16) {
             // Duo d'avatars (no pulse) — correspondant + pastille locale.
+            // Decorative: the remote user's name is shown as a Text element
+            // directly below, mirroring pulsingAvatar's rationale — without
+            // .accessibilityHidden VoiceOver reads the avatar initial, then
+            // "Vous", then the full name as three disjoint stops.
             callAvatarPair(size: 120)
+                .accessibilityHidden(true)
                 .padding(.bottom, 8)
 
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
