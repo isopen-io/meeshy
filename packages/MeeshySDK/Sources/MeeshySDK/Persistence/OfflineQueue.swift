@@ -1121,6 +1121,12 @@ public actor OfflineQueue {
         switch kind {
         case .markAsRead:
             return true
+        case .markStoryViewed:
+            // R6 — anchor = storyId : re-voir la même story remplace le row
+            // pendant/failed précédent (le « vu » est binaire et idempotent) ;
+            // des stories différentes ont des anchors différents et sont
+            // toutes conservées.
+            return true
         default:
             return false
         }

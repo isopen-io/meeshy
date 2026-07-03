@@ -4,6 +4,17 @@ import os
 import MeeshySDK
 import MeeshyUI
 
+// MARK: - Section Frame Registry
+
+/// Boîte mutable INERTE : les GeometryReader des headers de section y écrivent
+/// leur frame globale à chaque layout (scroll compris) sans déclencher
+/// d'invalidation SwiftUI — une @State [String: CGRect] re-évaluerait la liste
+/// à chaque tick. Le morph drag de l'overlay (+Overlays) hit-teste le doigt
+/// contre ces frames pour surligner puis résoudre la section de drop.
+final class SectionFrameRegistry {
+    var frames: [String: CGRect] = [:]
+}
+
 // MARK: - Section Drop Delegate
 
 struct SectionDropDelegate: DropDelegate {
@@ -188,7 +199,19 @@ struct ConversationListView: View {
     // coût runtime nul tant que rien ne pose `draggingConversation`.
     // Le déplacement utilisateur passe par « Déplacer vers » dans le menu.
     @State private var draggingConversation: Conversation? = nil
-    @State private var dropTargetSection: String? = nil
+    /// Section surlignée comme cible de drop. Alimenté par le morph drag de
+    /// l'overlay (chip sous le doigt — voir `previewCollapseGesture`,
+    /// +Overlays) en plus du `SectionDropDelegate` historique. Pas `private` :
+    /// muté depuis le fichier d'extension +Overlays.
+    @State var dropTargetSection: String? = nil
+    /// Frames GLOBALES des headers de section, tenues à jour par leurs
+    /// GeometryReader dans une boîte INERTE (aucune invalidation par tick de
+    /// scroll) — hit-test du drop de la chip du morph drag.
+    @State var sectionFrameRegistry = SectionFrameRegistry()
+    /// true dès que le morph drag a atteint sa pleine progression : la carte
+    /// RESTE une chip qui suit librement le doigt (y compris vers le haut,
+    /// pour viser un header au-dessus) jusqu'au relâchement — drop ou dismiss.
+    @State var chipModeLatched = false
 
     @State var userCommunityLookup: [String: MeeshyCommunity] = [:]
 
@@ -249,6 +272,17 @@ struct ConversationListView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
+            // Frame globale du header → registre inerte : cible de drop de la
+            // chip du morph drag (l'overlay hit-teste le doigt au relâchement).
+            .background(
+                GeometryReader { geo in
+                    Color.clear
+                        .onAppear { sectionFrameRegistry.frames[group.section.id] = geo.frame(in: .global) }
+                        .adaptiveOnChange(of: geo.frame(in: .global)) { _, frame in
+                            sectionFrameRegistry.frames[group.section.id] = frame
+                        }
+                }
+            )
             .onDrop(of: [.text], delegate: SectionDropDelegate(
                 sectionId: group.section.id,
                 dropTargetSection: $dropTargetSection,
@@ -372,6 +406,7 @@ struct ConversationListView: View {
                 previewEmergeOffset = 0
                 dragOffsetY = 0
                 dragOffsetX = 0
+                chipModeLatched = false
                 contextMenuConversation = conversation
                 if wasMounted {
                     // Réouverture rapide : l'overlay est encore monté, donc

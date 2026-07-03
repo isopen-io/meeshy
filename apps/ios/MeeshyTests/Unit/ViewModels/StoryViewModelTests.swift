@@ -228,18 +228,21 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertTrue(sut.storyGroups[0].stories[0].isViewed)
     }
 
-    func test_markViewed_callsServiceMarkViewed() async {
+    func test_markViewed_enqueuesDurableOutboxRecord() async {
+        // R6 — le « vu » passe par l'outbox durable (survit kill/offline),
+        // plus par le POST fire-and-forget direct.
         let item = makeStoryItem(id: "view-service-test", isViewed: false)
         let group = makeStoryGroup(userId: "u1", stories: [item])
         sut.storyGroups = [group]
+        var enqueuedStoryIds: [String] = []
+        sut.markViewedOutboxEnqueuer = { enqueuedStoryIds.append($0) }
 
         sut.markViewed(storyId: "view-service-test")
 
         // Give the fire-and-forget Task time to execute
         try? await Task.sleep(nanoseconds: 100_000_000)
 
-        XCTAssertEqual(mockStoryService.markViewedCallCount, 1)
-        XCTAssertEqual(mockStoryService.lastMarkViewedStoryId, "view-service-test")
+        XCTAssertEqual(enqueuedStoryIds, ["view-service-test"])
     }
 
     func test_markViewed_nonExistentStoryId_doesNothing() {
@@ -290,6 +293,20 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertEqual(targets.first(where: { $0.urlString == "https://cdn.test/voice.m4a" })?.store, .audio)
         XCTAssertEqual(targets.first(where: { $0.urlString == "https://cdn.test/photo.jpg" })?.store, .images,
                        "Images (and unknown types) route to the images store, mirroring the prefetch path")
+    }
+
+    func test_pinTargets_contradictoryDeclaredType_sniffedByExtension() {
+        // R7 — un mp4 déclaré image doit être pinné dans le store video
+        // (là où prefetch/lecture le rangent réellement).
+        let media = [FeedMedia(id: "m-x", type: .image, url: "https://cdn.test/really-a-video.mp4")]
+        let story = StoryItem(
+            id: "pin-sniff", content: nil, media: media, storyEffects: nil,
+            createdAt: Date(), expiresAt: Date().addingTimeInterval(3600), isViewed: false
+        )
+
+        let targets = StoryViewModel.pinTargets(for: story)
+
+        XCTAssertEqual(targets.first(where: { $0.urlString.hasSuffix(".mp4") })?.store, .video)
     }
 
     func test_pinDeadline_usesStoryExpiry() {

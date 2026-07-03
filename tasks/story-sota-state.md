@@ -269,16 +269,22 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   RESTE (it.4+) : (c) test d'intégration « voir → couper réseau → relire → zéro requête »
   (scénario simulateur) ; raffinement : les stories de l'AUTEUR courant ne passent pas par
   markViewed → non pinnées (mineur : l'auteur garde ses assets composer en local).
-- [ ] **R6 (P2) `OutboxKind.markStoryViewed` — état vu durable offline.**
-  Preuve : fire-and-forget REST (`StoryViewModel.markViewed`), aucun kind outbox, perte possible
-  si éviction cache avant sync. Ajouter le kind + flush FIFO au reconnect (l'infra outbox T10
-  existe). Idempotent côté serveur (P2002 no-op déjà géré).
-- [ ] **R7 (P2) Défense de routage média : sniff avant store.**
-  Preuve (bug mp4-dans-Images CONFIRMÉ) : `prefetchStoryMediaURLs`
-  (`StoryViewModel.swift:442-459`) route par `FeedMedia.type` ; type nil/mal classé → mp4 dans
-  le store `images` (300 Mo) → cache-miss au replay vidéo. Même risque
-  `StoryBackgroundLayer.swift:317`. Fix : fallback sniff extension/mime de l'URL quand `type`
-  est nil/incohérent + (option) migration lazy des .mp4 orphelins du store Images.
+- [x] **R6 (P2) `OutboxKind.markStoryViewed` — état vu durable offline.** ✅ it.14
+  Livré : kind appendé (règle append-only de l'enum), `MarkStoryViewedPayload`
+  (cmid + storyId), coalescing par anchor = storyId (re-voir la même story remplace le row —
+  mécanisme markAsRead réutilisé tel quel), `dispatchMarkStoryViewed` (POST /posts/:id/view,
+  404 = story disparue → succès), `markViewed` passe par l'outbox via seam injectable
+  (`markViewedOutboxEnqueuer`) — le POST fire-and-forget direct est remplacé.
+  Test adapté : `test_markViewed_enqueuesDurableOutboxRecord` (seam).
+- [x] **R7 (P2) Défense de routage média : sniff avant store.** ✅ it.15
+  Livré : `StoryMediaStoreRouter.effectiveKind(declaredType:urlString:)` — rule engine PUR
+  SDK (FeedModels) : extension reconnue > type déclaré > défaut .image. Branché dans
+  `prefetchStoryMediaURLs` ET `pinTargets` (le pin protège le MÊME store que le rangement
+  réel). 6 tests SDK + test app (image déclarée + .mp4 → store video).
+  ÉCARTÉ de R7 après re-preuve : `StoryBackgroundLayer.loadImage` (:317 cité) résout son
+  Kind depuis les EFFECTS (StoryMediaObject.mediaType), pas FeedMedia.type — autre source,
+  à auditer séparément si un symptôme apparaît. Migration lazy des .mp4 orphelins du store
+  Images : NON faite (option) — les orphelins expirent au TTL 1 an/éviction budget.
 - [ ] **R8 (P2) Pagination du tray (client).** `fetchStoriesFromNetwork` appelle
   `list(cursor: nil, limit: 50)` — curseur ignoré, plafond 50. À traiter AVEC G1 (le serveur ne
   pagine pas non plus).
@@ -468,7 +474,22 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.13 — G1 incrément delta-sync : ?updatedSince sur le tray stories (hash au push)
+## it.15 — R7 : sniff d'extension avant routage vers les stores (hash au push)
+
+- Router pur SDK, 6/6 tests ; branché prefetch + pin (cohérence des deux chemins) ;
+  test app RED→GREEN sur le cas confirmé (mp4 déclaré image).
+
+## it.14 — R6 : markStoryViewed durable via l'outbox (018750c72)
+
+- Réutilisation maximale : payload/coalescing/dispatch calqués sur le jumeau markAsRead
+  (anchor générique = storyId). Aucun nouveau mécanisme.
+- Vérif : StoryViewModelTests 78/78 (test adapté au seam outbox) + build app 53 s vert.
+- Pièges rencontrés : (1) Swift 6 « actor-isolated default value » sur le default de la
+  closure seam → corps extrait en `nonisolated static` ; (2) l'ajout d'un OutboxKind casse
+  le switch exhaustif d'OutboxUIItem (groupe background receipts) — à retenir pour tout
+  futur kind ; labels SyncPill ajoutés (string-based, pas de casse).
+
+## it.13 — G1 incrément delta-sync : ?updatedSince sur le tray stories (ecfd6c9fd)
 
 - RED : 2 tests PostFeedService (filtre présent avec option, absent sans). 34/34 service,
   111/111 les 6 suites feed (bun). Route : parse manuel tolérant (invalide → full).
