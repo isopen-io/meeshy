@@ -85,29 +85,47 @@ export class PostFeedService {
     const candidateLimit = limit + 1;
     const cursorData = cursor ? decodeCursor(cursor) : null;
 
+    // Resolve the viewer's social graph BEFORE the candidate query: the feed
+    // MUST gate FRIENDS/COMMUNITY/ONLY/EXCEPT visibility to people the viewer is
+    // actually entitled to see (buildVisibilityFilter — the same SSOT every
+    // sibling feed method uses). A flat `visibility: { in: ['PUBLIC','FRIENDS'] }`
+    // leaked every user's friends-only posts to every viewer. `friendIds`
+    // (accepted friends only) is reused below for affinity scoring; contacts
+    // (friends ∪ direct-conversation partners) widen the FRIENDS gate exactly
+    // like getStories/getStatuses/getReels.
+    const [friendIds, dmContactIds, communityCoMemberIds] = await Promise.all([
+      this.getFriendIds(userId),
+      this.getDirectConversationContactIds(userId),
+      getCommunityCoMemberIds(this.prisma, userId, this.cache),
+    ]);
+    const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
+    const visibilityFilter = this.buildVisibilityFilter(userId, allContactIds, communityCoMemberIds);
+
     // Phase 1 — Fetch candidates
     const where: any = {
       deletedAt: NOT_DELETED,
       type: { in: [PostType.POST, PostType.REEL] },
-      visibility: { in: ['PUBLIC', 'FRIENDS'] },
-      // Exclude expired (isSet: false matches MongoDB docs where field is absent)
-      OR: [
-        { expiresAt: { isSet: false } },
-        { expiresAt: { equals: null } },
-        { expiresAt: { gt: new Date() } },
+      AND: [
+        visibilityFilter,
+        // Exclude expired (isSet: false matches MongoDB docs where field is absent)
+        {
+          OR: [
+            { expiresAt: { isSet: false } },
+            { expiresAt: { equals: null } },
+            { expiresAt: { gt: new Date() } },
+          ],
+        },
       ],
     };
 
     if (cursorData) {
-      // Cursor-based: get posts before cursor
-      where.AND = [
-        {
-          OR: [
-            { createdAt: { lt: new Date(cursorData.createdAt) } },
-            { createdAt: new Date(cursorData.createdAt), id: { lt: cursorData.id } },
-          ],
-        },
-      ];
+      // Cursor-based: get posts strictly before the cursor (createdAt, id).
+      where.AND.push({
+        OR: [
+          { createdAt: { lt: new Date(cursorData.createdAt) } },
+          { createdAt: new Date(cursorData.createdAt), id: { lt: cursorData.id } },
+        ],
+      });
     }
 
     const candidates = await this.prisma.post.findMany({
@@ -134,12 +152,11 @@ export class PostFeedService {
 
     const candidateIds = page.map((c) => c.id);
 
-    // Fetch affinity & intent signals in parallel:
-    // - friendIds       : graphe social (affinité binaire)
+    // Fetch intent signals in parallel (friendIds already resolved above for the
+    // visibility gate, and reused here for binary affinity scoring):
     // - interestAffinity : intérêt personnalisé dérivé de l'engagement passé du viewer
     // - seenCounts       : combien de fois chaque candidat est déjà remonté (fatigue)
-    const [friendIds, interestAffinity, seenCounts] = await Promise.all([
-      this.getFriendIds(userId),
+    const [interestAffinity, seenCounts] = await Promise.all([
       this.getInterestAffinity(userId),
       this.getSeenCounts(userId, candidateIds),
     ]);
@@ -583,16 +600,37 @@ export class PostFeedService {
       type: { in: [PostType.POST, PostType.REEL] },
     };
 
-    // Visibility filter
-    if (viewerUserId !== targetUserId) {
-      where.visibility = 'PUBLIC';
+    const andClauses: any[] = [];
+
+    // Visibility gate. The author sees all of their own posts; an anonymous
+    // viewer only PUBLIC; an authenticated non-author viewer sees PUBLIC plus
+    // whatever the author shared with them (FRIENDS if a contact, COMMUNITY if a
+    // co-member, ONLY/EXCEPT if targeted) — the same buildVisibilityFilter SSOT
+    // used by every feed method. Hard-coding PUBLIC here previously hid an
+    // author's friends-only posts from their actual friends.
+    if (!viewerUserId) {
+      where.visibility = PostVisibility.PUBLIC;
+    } else if (viewerUserId !== targetUserId) {
+      const [friendIds, dmContactIds, communityCoMemberIds] = await Promise.all([
+        this.getFriendIds(viewerUserId),
+        this.getDirectConversationContactIds(viewerUserId),
+        getCommunityCoMemberIds(this.prisma, viewerUserId, this.cache),
+      ]);
+      const allContactIds = [...new Set([...friendIds, ...dmContactIds])];
+      andClauses.push(this.buildVisibilityFilter(viewerUserId, allContactIds, communityCoMemberIds));
     }
 
     if (cursorData) {
-      where.OR = [
-        { createdAt: { lt: new Date(cursorData.createdAt) } },
-        { createdAt: new Date(cursorData.createdAt), id: { lt: cursorData.id } },
-      ];
+      andClauses.push({
+        OR: [
+          { createdAt: { lt: new Date(cursorData.createdAt) } },
+          { createdAt: new Date(cursorData.createdAt), id: { lt: cursorData.id } },
+        ],
+      });
+    }
+
+    if (andClauses.length > 0) {
+      where.AND = andClauses;
     }
 
     const posts = await this.prisma.post.findMany({
