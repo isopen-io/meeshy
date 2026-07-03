@@ -1917,6 +1917,54 @@ describe('PushNotificationService', () => {
       expect(sentMsg?.webpush?.fcmOptions?.link).toBe('/posts/123');
     });
 
+    it('should forward payload.badge as android notificationCount for android FCM', async () => {
+      const service = await getFCMService();
+
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'tok', token: 'fcm-android', type: 'fcm', platform: 'android', bundleId: null, apnsEnvironment: null },
+      ]);
+
+      await service.sendToUser({
+        userId: 'user-android-badge',
+        payload: { title: 'Message', body: 'Hello', badge: 7 },
+      });
+
+      const sentMsg = mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
+      expect(sentMsg?.android?.notification?.notificationCount).toBe(7);
+    });
+
+    it('should forward a zero badge as android notificationCount for android FCM', async () => {
+      const service = await getFCMService();
+
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'tok', token: 'fcm-android', type: 'fcm', platform: 'android', bundleId: null, apnsEnvironment: null },
+      ]);
+
+      await service.sendToUser({
+        userId: 'user-android-badge-zero',
+        payload: { title: 'Message', body: 'Hello', badge: 0 },
+      });
+
+      const sentMsg = mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
+      expect(sentMsg?.android?.notification?.notificationCount).toBe(0);
+    });
+
+    it('should omit android notificationCount when no badge is provided', async () => {
+      const service = await getFCMService();
+
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'tok', token: 'fcm-android', type: 'fcm', platform: 'android', bundleId: null, apnsEnvironment: null },
+      ]);
+
+      await service.sendToUser({
+        userId: 'user-android-no-badge',
+        payload: { title: 'Message', body: 'Hello' },
+      });
+
+      const sentMsg = mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
+      expect(sentMsg?.android?.notification).not.toHaveProperty('notificationCount');
+    });
+
     it('should include collapseKey in FCM android config when collapseId set', async () => {
       const service = await getFCMService();
 

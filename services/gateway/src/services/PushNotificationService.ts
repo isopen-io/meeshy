@@ -488,11 +488,17 @@ export class PushNotificationService {
           },
         };
       } else if (tokenRecord.platform === 'android') {
+        // `notificationCount` is the Android analog of `aps.badge`: launchers
+        // that support badging render it on the app icon. Forwarding it keeps
+        // the Android launcher badge in sync with the unread count carried by
+        // the push payload — the same F1 guarantee already wired for iOS above,
+        // which otherwise leaves the Android badge frozen when the app is closed.
         message.android = {
           priority: 'high',
           notification: {
             sound: payload.sound || 'default',
             channelId: 'meeshy_notifications',
+            ...(payload.badge !== undefined ? { notificationCount: payload.badge } : {}),
           },
         };
       } else if (tokenRecord.platform === 'web') {
