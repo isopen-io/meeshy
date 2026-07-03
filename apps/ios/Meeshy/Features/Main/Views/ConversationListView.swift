@@ -341,7 +341,8 @@ struct ConversationListView: View {
                 contextMenuDismissWork = nil
                 contextMenuAppeared = false
                 contextMenuConversation = conversation
-            }
+            },
+            onMenuDismissed: nil
         )
         .equatable()
     }

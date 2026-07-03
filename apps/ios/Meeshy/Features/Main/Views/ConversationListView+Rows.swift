@@ -50,6 +50,10 @@ struct ConversationRowItem: View {
     /// Appui long → overlay de menu custom (dessine ses icônes ; le
     /// `.contextMenu` natif ne les affiche pas sur iOS 26).
     let onLongPress: () -> Void
+    /// Menu is dismissed → parent calls this to reset row press state
+    let onMenuDismissed: (() -> Void)?
+
+    @State private var isPressed = false
 
     var body: some View {
         SwipeableRow(
@@ -76,6 +80,7 @@ struct ConversationRowItem: View {
                 preferredContentLanguages: preferredContentLanguages
             )
             .equatable()
+            .scaleEffect(isPressed ? 0.90 : 1.0)
             .contentShape(Rectangle())
             .onTapGesture {
                 HapticFeedback.light()
@@ -91,12 +96,16 @@ struct ConversationRowItem: View {
             // natif, lui, se coordonnait avec `.onDrag`). Le déplacement reste
             // accessible via « Déplacer vers » dans le menu.
             .onLongPressGesture(minimumDuration: 0.4) {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                    isPressed = true
+                }
                 HapticFeedback.medium()
                 onLongPress()
             }
             .task {
                 await onLoadPreview()
             }
+            .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isPressed)
         }
     }
 }
