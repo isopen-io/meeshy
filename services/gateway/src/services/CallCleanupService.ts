@@ -179,16 +179,30 @@ export class CallCleanupService {
       }
     }
 
-    // 3. active/reconnecting > 2h → ENDED (garbageCollected)
+    // 3. active/reconnecting > 2h with NO fresh liveness → ENDED (garbageCollected).
+    // The wall-clock cap is a safety net for rows the heartbeat tier cannot
+    // judge (orphans with zero live participants, or no CallService attached) —
+    // never a duration limit: a multi-hour call whose participants still beat
+    // is legitimate and must be spared (tier 4 already reaps real zombies
+    // within HEARTBEAT_TIMEOUT_MS, no need to wait 2h for those).
     const activeCutoff = new Date(now.getTime() - this.MAX_ACTIVE_MS);
     const staleActive = await this.prisma.callSession.findMany({
       where: {
         status: { in: [CallStatus.active, CallStatus.reconnecting] },
         startedAt: { lt: activeCutoff }
-      }
+      },
+      // Same live-participant filter as the heartbeat tier (Audit C5): rows
+      // whose leftAt was never written must still count as live.
+      include: { participants: { where: { OR: [{ leftAt: null }, { leftAt: { isSet: false } }] } } }
     });
 
     for (const call of staleActive) {
+      if (this.hasFreshLiveness(call, now)) {
+        logger.info('[CallCleanupService] Sparing long-running live call from 2h cap', {
+          callId: call.id, status: call.status, startedAt: call.startedAt
+        });
+        continue;
+      }
       try {
         const ended = await this.forceEndCall(
           call.id, now, call.startedAt,
@@ -289,6 +303,35 @@ export class CallCleanupService {
     }
 
     return { cleaned, errors };
+  }
+
+  /**
+   * Tier-3 liveness guard — mirrors the heartbeat tier's staleness semantics
+   * exactly (a call is live iff at least one live participant beat within
+   * HEARTBEAT_TIMEOUT_MS): in-memory heartbeats when available, else the DB
+   * `lastHeartbeatAt ?? joinedAt` fallback with the same post-restart
+   * boot-time floor. Returns `false` (reap) for orphans with zero live
+   * participants and when no CallService is attached (heartbeat data
+   * unavailable → the 2h wall-clock cap stays the last-resort safety net).
+   */
+  private hasFreshLiveness(
+    call: { id: string; participants?: Array<{ lastHeartbeatAt: Date | null; joinedAt: Date }> },
+    now: Date
+  ): boolean {
+    if (!this.callService) return false;
+    const participants = call.participants ?? [];
+    if (participants.length === 0) return false;
+
+    if (this.callService.hasHeartbeatData(call.id)) {
+      const stale = this.callService.getStaleHeartbeats(call.id, this.HEARTBEAT_TIMEOUT_MS);
+      return stale.length < participants.length;
+    }
+
+    const staleThresholdMs = now.getTime() - this.HEARTBEAT_TIMEOUT_MS;
+    const bootFloorMs = this.bootedAt.getTime();
+    return participants.some(
+      (p) => Math.max((p.lastHeartbeatAt ?? p.joinedAt).getTime(), bootFloorMs) >= staleThresholdMs
+    );
   }
 
   /**

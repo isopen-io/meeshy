@@ -428,6 +428,124 @@ describe('CallCleanupService', () => {
       expect(result.errors).toBe(0);
     });
 
+    // Tier-3 liveness guard — a multi-hour call whose participants still beat
+    // must NEVER be reaped by the wall-clock cap. The 2h cap only applies to
+    // rows with no fresh liveness (orphans, dead clients, or no CallService).
+    describe('tier 3 liveness guard (multi-hour calls)', () => {
+      const threeHoursMs = 3 * 60 * 60 * 1000;
+      const makeLongCall = (participants: unknown[], id = 'call-long') => ({
+        ...makeStaleCall(CallStatus.active, threeHoursMs, id),
+        participants
+      });
+
+      it('spares an active call >2h whose in-memory heartbeats are fresh', async () => {
+        const service = new CallCleanupService(prisma as any, callService as any);
+        const longCall = makeLongCall([{ id: 'p-1', leftAt: null }]);
+
+        prisma.callSession.findMany
+          .mockResolvedValueOnce([])          // tier 1
+          .mockResolvedValueOnce([])          // tier 2
+          .mockResolvedValueOnce([longCall])  // tier 3
+          .mockResolvedValueOnce([]);         // heartbeat tier
+        callService.hasHeartbeatData.mockReturnValue(true);
+        callService.getStaleHeartbeats.mockReturnValue([]); // everyone fresh
+
+        const result = await service.runCleanup();
+
+        expect(result.cleaned).toBe(0);
+        expect(result.errors).toBe(0);
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+      });
+
+      it('still GCs an active call >2h when ALL in-memory heartbeats are stale', async () => {
+        const service = new CallCleanupService(prisma as any, callService as any);
+        const longCall = makeLongCall([{ id: 'p-1', leftAt: null }], 'call-long-stale');
+
+        prisma.callSession.findMany
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([longCall])
+          .mockResolvedValueOnce([]);
+        callService.hasHeartbeatData.mockReturnValue(true);
+        callService.getStaleHeartbeats.mockReturnValue(['p-1']); // 1 stale >= 1 total
+
+        prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-1' });
+        setupTransactionPassthrough(prisma);
+
+        const result = await service.runCleanup();
+
+        expect(result.cleaned).toBe(1);
+        expect(result.errors).toBe(0);
+      });
+
+      it('still GCs an orphaned active call >2h with zero live participants', async () => {
+        const service = new CallCleanupService(prisma as any, callService as any);
+        const orphan = makeLongCall([], 'call-long-orphan');
+
+        prisma.callSession.findMany
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([orphan])
+          .mockResolvedValueOnce([]);
+        callService.hasHeartbeatData.mockReturnValue(false);
+
+        prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-1' });
+        setupTransactionPassthrough(prisma);
+
+        const result = await service.runCleanup();
+
+        expect(result.cleaned).toBe(1);
+        expect(result.errors).toBe(0);
+      });
+
+      it('spares an active call >2h via the DB fallback when lastHeartbeatAt is fresh', async () => {
+        // bootedAt is old so the boot-floor grace period cannot mask the check.
+        const oldBoot = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const service = new CallCleanupService(prisma as any, callService as any, oldBoot);
+        const longCall = makeLongCall(
+          [{ id: 'p-1', leftAt: null, lastHeartbeatAt: new Date(), joinedAt: new Date(Date.now() - threeHoursMs) }],
+          'call-long-db-fresh'
+        );
+
+        prisma.callSession.findMany
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([longCall])
+          .mockResolvedValueOnce([]);
+        callService.hasHeartbeatData.mockReturnValue(false); // post-restart
+
+        const result = await service.runCleanup();
+
+        expect(result.cleaned).toBe(0);
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+      });
+
+      it('still GCs >2h via the DB fallback when every lastHeartbeatAt is stale', async () => {
+        const oldBoot = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const service = new CallCleanupService(prisma as any, callService as any, oldBoot);
+        const stale = new Date(Date.now() - 10 * 60 * 1000);
+        const longCall = makeLongCall(
+          [{ id: 'p-1', leftAt: null, lastHeartbeatAt: stale, joinedAt: new Date(Date.now() - threeHoursMs) }],
+          'call-long-db-stale'
+        );
+
+        prisma.callSession.findMany
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([longCall])
+          .mockResolvedValueOnce([]);
+        callService.hasHeartbeatData.mockReturnValue(false);
+
+        prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-1' });
+        setupTransactionPassthrough(prisma);
+
+        const result = await service.runCleanup();
+
+        expect(result.cleaned).toBe(1);
+        expect(result.errors).toBe(0);
+      });
+    });
+
     it('counts errors when forceEndCall throws on tier 1 (initiated) → errors:1', async () => {
       const service = new CallCleanupService(prisma as any);
       const staleCall = makeStaleCall(CallStatus.initiated, 90_000);
