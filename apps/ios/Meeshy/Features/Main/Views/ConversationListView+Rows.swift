@@ -50,6 +50,17 @@ struct ConversationRowItem: View {
     /// Appui long → overlay de menu custom (dessine ses icônes ; le
     /// `.contextMenu` natif ne les affiche pas sur iOS 26).
     let onLongPress: () -> Void
+    /// Menu is dismissed → parent calls this to reset row press state
+    let onMenuDismissed: (() -> Void)?
+    /// Tracks which conversation has scale animation active (parent state)
+    let activelyPressedConversationId: String?
+    /// When a conversation is being dragged to reorder, close this row's menu
+    let draggingConversationId: String?
+
+    @State private var isPressed = false
+    @State private var dragOffset: CGSize = .zero
+    @State private var pressStartLocation: CGPoint = .zero
+    @State private var isDraggingToReorder = false
 
     var body: some View {
         SwipeableRow(
@@ -76,6 +87,7 @@ struct ConversationRowItem: View {
                 preferredContentLanguages: preferredContentLanguages
             )
             .equatable()
+            .scaleEffect(isPressed && !isDraggingToReorder ? 0.90 : 1.0)
             .contentShape(Rectangle())
             .onTapGesture {
                 HapticFeedback.light()
@@ -90,12 +102,68 @@ struct ConversationRowItem: View {
             // empêchait la gesture SwiftUI d'ouvrir le menu (le `.contextMenu`
             // natif, lui, se coordonnait avec `.onDrag`). Le déplacement reste
             // accessible via « Déplacer vers » dans le menu.
-            .onLongPressGesture(minimumDuration: 0.4) {
-                HapticFeedback.medium()
-                onLongPress()
-            }
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: 0.4)
+                    .onEnded { _ in
+                        withAnimation(.spring(response: 0.65, dampingFraction: 0.99)) {
+                            isPressed = true
+                        }
+                        HapticFeedback.medium()
+                        onLongPress()
+                    }
+            )
+            .simultaneousGesture(
+                DragGesture()
+                    .onChanged { value in
+                        if isPressed && !isDraggingToReorder {
+                            dragOffset = value.translation
+                            // Detect upward drag threshold (-50pt)
+                            if value.translation.height < -50 {
+                                isDraggingToReorder = true
+                                dragOffset = .zero
+                                onDragStart()
+                            }
+                        } else if isDraggingToReorder {
+                            dragOffset = value.translation
+                        }
+                    }
+                    .onEnded { _ in
+                        dragOffset = .zero
+                        if isDraggingToReorder {
+                            isDraggingToReorder = false
+                        }
+                    }
+            )
             .task {
                 await onLoadPreview()
+            }
+            .animation(.spring(response: 0.65, dampingFraction: 0.99), value: isPressed)
+            // adaptiveOnChange : la signature (old, new) de .onChange est iOS 17+ ;
+            // le shim maison couvre le plancher iOS 16 du projet.
+            .adaptiveOnChange(of: activelyPressedConversationId) { oldId, newId in
+                // If menu is dismissed (newId becomes nil) or switched to another row (newId != our ID),
+                // reset this row's press state with animation
+                if oldId == conversation.id && (newId == nil || newId != conversation.id) {
+                    withAnimation(.spring(response: 0.65, dampingFraction: 0.99)) {
+                        isPressed = false
+                    }
+                    onMenuDismissed?()
+                }
+            }
+            .adaptiveOnChange(of: draggingConversationId) { oldId, newId in
+                // If another conversation starts dragging, close this row's menu
+                if newId != nil && newId != conversation.id && isPressed {
+                    withAnimation(.spring(response: 0.65, dampingFraction: 0.99)) {
+                        isPressed = false
+                    }
+                    onMenuDismissed?()
+                }
+            }
+            .adaptiveOnChange(of: isDraggingToReorder) { _, newValue in
+                // When drag-to-reorder starts, close the menu
+                if newValue && isPressed {
+                    activelyPressedConversationId == nil ? () : ()
+                }
             }
         }
     }
@@ -144,7 +212,9 @@ extension ConversationRowItem: @MainActor Equatable {
         zip(lhs.leadingActions, rhs.leadingActions).allSatisfy { $0.icon == $1.icon } &&
         zip(lhs.trailingActions, rhs.trailingActions).allSatisfy { $0.icon == $1.icon } &&
         (lhs.onCreateShareLink == nil) == (rhs.onCreateShareLink == nil) &&
-        lhs.cachedPreviewMessages.count == rhs.cachedPreviewMessages.count
+        lhs.cachedPreviewMessages.count == rhs.cachedPreviewMessages.count &&
+        lhs.activelyPressedConversationId == rhs.activelyPressedConversationId &&
+        lhs.draggingConversationId == rhs.draggingConversationId
     }
 }
 

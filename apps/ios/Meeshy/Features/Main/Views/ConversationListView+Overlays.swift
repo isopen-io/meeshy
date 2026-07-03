@@ -238,7 +238,11 @@ extension ConversationListView {
         // annule ce work item, sinon il effacerait le menu fraîchement rouvert.
         contextMenuDismissWork?.cancel()
         withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) { contextMenuAppeared = false }
-        let work = DispatchWorkItem { contextMenuConversation = nil }
+        let work = DispatchWorkItem {
+            contextMenuConversation = nil
+            // Reset row press state (animation will be triggered by .onChange in row)
+            activelyPressedConversationId = nil
+        }
         contextMenuDismissWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.26, execute: work)
     }

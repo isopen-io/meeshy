@@ -2203,6 +2203,18 @@ export class MeeshySocketIOManager {
 
       if (message) {
         const normalizedConversationId = message.conversationId;
+        // Swap 1-réaction-par-user : broadcast du retrait de l'ancien emoji de
+        // l'agent avant l'ajout du nouveau.
+        for (const removedEmoji of result.replacedEmojis) {
+          const removeEvent = await reactionService.createUpdateEvent(
+            reaction.targetMessageId,
+            removedEmoji,
+            'remove',
+            participant.id,
+            normalizedConversationId
+          );
+          this.io.to(ROOMS.conversation(normalizedConversationId)).emit(SERVER_EVENTS.REACTION_REMOVED, removeEvent);
+        }
         this.io.to(ROOMS.conversation(normalizedConversationId)).emit(SERVER_EVENTS.REACTION_ADDED, updateEvent);
 
         const authorParticipant = message.senderId

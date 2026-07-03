@@ -22,25 +22,14 @@ struct ConversationMediaGalleryView: View {
     @State private var showControls = true
     @State private var scale: CGFloat = 1.0
     @State private var offset: CGSize = .zero
-    @State private var saveState: SaveState = .idle
+    @StateObject private var saveCoordinator = MediaSaveCoordinator()
     @ObservedObject private var videoManager = SharedAVPlayerManager.shared
 
-    private enum SaveState { case idle, saving, saved, failed }
-
-    /// Annonce VoiceOver de l'état du bouton d'enregistrement (le glyphe qui
-    /// change — spinner / checkmark / xmark — est décoratif, l'état est porté
-    /// par cette `accessibilityValue`). Vide au repos.
+    /// Annonce VoiceOver de l'état du bouton d'enregistrement. Vide au repos.
     private var saveStateAccessibilityValue: String {
-        switch saveState {
-        case .idle:
-            return ""
-        case .saving:
-            return String(localized: "common.saving", defaultValue: "Enregistrement…", bundle: .main)
-        case .saved:
-            return String(localized: "common.saved", defaultValue: "Enregistré", bundle: .main)
-        case .failed:
-            return String(localized: "common.failed", defaultValue: "Échec", bundle: .main)
-        }
+        saveCoordinator.isProcessing
+            ? String(localized: "common.saving", defaultValue: "Enregistrement…", bundle: .main)
+            : ""
     }
 
     var body: some View {
@@ -314,17 +303,12 @@ struct ConversationMediaGalleryView: View {
                 Spacer()
 
                 if currentIndex < allAttachments.count {
-                    Button { saveCurrentToPhotos() } label: {
+                    Button { requestSaveCurrent() } label: {
                         Group {
-                            switch saveState {
-                            case .idle:
-                                Image(systemName: "arrow.down.to.line")
-                            case .saving:
+                            if saveCoordinator.isProcessing {
                                 ProgressView().tint(.white)
-                            case .saved:
-                                Image(systemName: "checkmark")
-                            case .failed:
-                                Image(systemName: "xmark")
+                            } else {
+                                Image(systemName: "arrow.down.to.line")
                             }
                         }
                         // Chrome : glyphe d'état figé dans un cadre tap fixe
@@ -336,9 +320,13 @@ struct ConversationMediaGalleryView: View {
                         .padding(.trailing, 12)
                         .padding(.top, 8)
                     }
-                    .disabled(saveState == .saving || saveState == .saved)
-                    .accessibilityLabel(String(localized: "media.saveToPhotos", defaultValue: "Enregistrer dans Photos", bundle: .main))
+                    .disabled(saveCoordinator.isProcessing)
+                    .accessibilityLabel(String(localized: "media.save.title", defaultValue: "Enregistrer", bundle: .main))
                     .accessibilityValue(saveStateAccessibilityValue)
+                    // Composant UNIFIÉ « Enregistrer » : même sheet de
+                    // destinations pour image et vidéo (Photos / Fichiers /
+                    // Partager), issue via toast + haptics.
+                    .mediaSaveFlow(saveCoordinator)
                 } else {
                     Color.clear.frame(width: 52, height: 40).padding(.trailing, 12)
                 }
@@ -484,39 +472,18 @@ struct ConversationMediaGalleryView: View {
         }
     }
 
-    private func saveCurrentToPhotos() {
+    private func requestSaveCurrent() {
         guard currentIndex < allAttachments.count else { return }
         let att = allAttachments[currentIndex]
         let urlStr = att.fileUrl.isEmpty ? (att.thumbnailUrl ?? "") : att.fileUrl
-        guard !urlStr.isEmpty, let url = MeeshyConfig.resolveMediaURL(urlStr) else { return }
-        saveState = .saving
+        guard !urlStr.isEmpty else { return }
         HapticFeedback.light()
-        Task {
-            do {
-                if att.type == .video {
-                    let (tempURL, _) = try await URLSession.shared.download(from: url)
-                    let tempFile = FileManager.default.temporaryDirectory
-                        .appendingPathComponent("save_\(UUID().uuidString).mp4")
-                    try FileManager.default.moveItem(at: tempURL, to: tempFile)
-                    let saved = await PhotoLibraryManager.shared.saveVideo(at: tempFile)
-                    try? FileManager.default.removeItem(at: tempFile)
-                    withAnimation(.spring(response: 0.3)) { saveState = saved ? .saved : .failed }
-                    saved ? HapticFeedback.success() : HapticFeedback.error()
-                } else {
-                    let (data, _) = try await URLSession.shared.data(from: url)
-                    let saved = await PhotoLibraryManager.shared.saveImage(data)
-                    withAnimation(.spring(response: 0.3)) { saveState = saved ? .saved : .failed }
-                    saved ? HapticFeedback.success() : HapticFeedback.error()
-                }
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
-                withAnimation { saveState = .idle }
-            } catch {
-                withAnimation { saveState = .failed }
-                HapticFeedback.error()
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
-                withAnimation { saveState = .idle }
-            }
-        }
+        saveCoordinator.requestSave(MediaSaveRequest(
+            kind: att.type == .video ? .video : .image,
+            remoteURLString: urlStr,
+            suggestedFileName: att.originalName.isEmpty ? nil : att.originalName,
+            attachmentId: att.id.isEmpty ? nil : att.id
+        ))
     }
 }
 
