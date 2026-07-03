@@ -1725,7 +1725,7 @@ final class CallManager: ObservableObject {
     /// invisible to the peer (no transceiver / no renegotiation).
     func toggleVideo() {
         let previousTask = videoToggleTask
-        previousTask?.cancel()
+        videoToggleTask?.cancel()
         let target = !isVideoEnabled
         // Optimistic update: reflect intent immediately so rapid double-taps
         // read the new isVideoEnabled value and don't launch a duplicate toggle.
