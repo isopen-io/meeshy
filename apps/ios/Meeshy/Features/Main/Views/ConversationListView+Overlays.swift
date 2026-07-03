@@ -389,7 +389,9 @@ extension ConversationListView {
                         onDismiss: { dismissContextMenu() }
                     )
                     // Menu : remonte depuis le bas + fondu (piloté).
-                    .offset(y: contextMenuAppeared ? 0 : 70)
+                    // Offset coordonné avec preview scale pour illusion que menu est poussé
+                    // par la croissance de l'aperçu (0.7 scale = menu commence push-up)
+                    .offset(y: contextMenuAppeared ? 0 : min(70, CGFloat(70 * (1.0 - previewScale))))
                     .opacity(contextMenuAppeared ? 1 : 0)
                 }
                 .padding(.horizontal, 20)
@@ -399,7 +401,9 @@ extension ConversationListView {
                 // Zoom + rebond : l'aperçu grandit et le menu remonte au montage.
                 previewScale = 1.0
                 dragOffsetY = 0
-                withAnimation(.spring(response: 0.44, dampingFraction: 0.6)) {
+                // Improved spring: more bouncy (0.58 vs 0.6) + faster response (0.45 vs 0.44)
+                // Creates coordinated preview+menu animation with visible rebounce
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.58)) {
                     contextMenuAppeared = true
                 }
             }
