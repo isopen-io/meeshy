@@ -843,6 +843,44 @@ export function registerCoreRoutes(
         if (blocked) {
           throw createError(ErrorCode.USER_BLOCKED);
         }
+
+        // Idempotence DM — une conversation directe entre deux users est
+        // UNIQUE. Sans ce check, chaque « Nouvelle conversation → Créer »
+        // fabriquait une DM de plus (2 DM identiques observées en prod le
+        // 2026-07-03 pendant les tests d'appel) : on rouvre l'existante
+        // (200) au lieu d'en créer une deuxième. Les archivées comptent —
+        // recréer la DM d'un contact archivé doit la ROUVRIR, pas la
+        // dupliquer. Groupes : jamais dédupliqués (même-membres légitime).
+        const existingDirect = await prisma.conversation.findFirst({
+          where: {
+            type: 'direct',
+            AND: [
+              { participants: { some: { userId, isActive: true } } },
+              { participants: { some: { userId: uniqueParticipantIds[0], isActive: true } } }
+            ]
+          },
+          include: {
+            participants: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    username: true,
+                    displayName: true,
+                    avatar: true,
+                    banner: true
+                  }
+                }
+              }
+            }
+          }
+        });
+        if (existingDirect) {
+          return sendSuccess(reply, {
+            ...existingDirect,
+            title: existingDirect.title || null
+          }, { statusCode: 200 });
+        }
       }
 
       const allUserIds = [userId, ...uniqueParticipantIds];
