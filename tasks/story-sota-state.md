@@ -224,11 +224,15 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   Vérif : simulateur — story lue normalement, barre avance, AUCUN spinner parasite en lecture
   saine (screenshot) ; build 23 s vert. Reste terrain : provoquer un vrai stall réseau device
   (à grouper avec les tests device réseau dégradé).
-- [ ] **R4 (P1) Deep link / notification : rendu progressif au lieu du spinner bloquant.**
-  Preuve : `StoryViewerContainer.swift:171-192` — groupe absent → `loadStories(forceNetwork:
-  true)` (refetch du TRAY ENTIER) + spinner plein écran + timeout 2,5 s.
-  Cible : fetch unitaire `GET /posts/:id` (existe déjà) → construire le groupe minimal → rendu
-  immédiat sur ThumbHash pendant que le média arrive ; le tray se rafraîchit en fond.
+- [~] **R4 (P1) Deep link / notification : rendu progressif au lieu du spinner bloquant.** — it.9
+  ✅ Incrément 1 (le cas majoritaire) : `ensureGroupAvailable` est désormais CACHE-FIRST —
+  `loadStories()` (SWR : .fresh zéro réseau / .stale servi + refetch silencieux) sert le tray
+  du cache 24 h AVANT tout réseau ; le body réactif (`groupIndex` sur @Published) monte le
+  viewer sans spinner. `forceNetwork: true` ne court plus QUE si le cache ignore le groupe
+  (comportement historique conservé, y c. guard isLoading vs boot load).
+  RESTE (incrément 2) : fetch unitaire par POST id → groupe minimal → rendu ThumbHash
+  immédiat pour le cas « story hors tray » (nécessite le plumbing postId dans les ~5 call
+  sites du container + éventuellement endpoint stories-par-user, à coordonner avec G1/R8).
 - [~] **R5 (P0) Garantir la relecture OFFLINE des stories vues.** — EN COURS
   (a) ÉCARTÉ après re-preuve it.2 : l'annulation des `prefetchTasks`/`currentVideoLoadTask`
   ne tue PAS un download en vol — le funnel `DiskCacheStore.networkData` exécute chaque
@@ -446,7 +450,12 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.8 — U-DIR1 : interstitiel d'identité inter-groupes (hash au push)
+## it.9 — R4 incrément 1 : container deep link cache-first (hash au push)
+
+- Fix 10 lignes View-only sur chemin froid uniquement (le hit `groupIndex` early-return
+  inchangé) ; chemins VM sous-jacents déjà testés (loadStories SWR). Build 20 s vert.
+
+## it.8 — U-DIR1 : interstitiel d'identité inter-groupes (1551a249e)
 
 - Directive utilisateur directe (priorité sur backlog). Détail dans l'item U-DIR1 §3.
 - Pièges rencontrés : build bloqué ~10 min par le fichier en vol d'un autre agent
