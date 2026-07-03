@@ -308,6 +308,9 @@ extension ConversationListView {
                     .scaleEffect(previewScale, anchor: .bottom)
                     .offset(y: dragOffsetY)
                     .opacity(contextMenuAppeared ? 1 : 0)
+                    // Blur effect during collapse: scales from 0 at 50% → 2.0 at 0% scale
+                    // Creates visual feedback that preview is "disappearing" into menu
+                    .blur(radius: previewScale < 0.5 ? 2.0 * (1.0 - previewScale) : 0)
                     .gesture(previewCollapseGesture)
 
                     ConversationContextMenuView(
@@ -435,7 +438,9 @@ extension ConversationListView {
                     return
                 }
                 let collapsed = previewScale < 0.45
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                // Faster, bouncier snap-back: (0.35, 0.8) → (0.30, 0.72)
+                // Creates snappier feel when preview collapses or re-expands
+                withAnimation(.spring(response: 0.30, dampingFraction: 0.72)) {
                     previewScale = collapsed ? 0 : 1.0
                     dragOffsetY = 0
                 }
