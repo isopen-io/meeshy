@@ -1057,9 +1057,12 @@ final class ConversationViewModelTests: XCTestCase {
             let mine = reactions.filter { $0.participantId == self.testUserId }
             return mine.map(\.emoji) == ["thumbsup"]
         }
-        XCTAssertNotNil(updated, "my previous emoji must be swapped out, not stacked")
+        // awaitRecord returns the last-fetched record on timeout even when the
+        // predicate never matched — re-assert the swap explicitly on the result.
         let reactions = (try? JSONDecoder().decode([MeeshyReaction].self,
                                                    from: updated?.reactionsJson ?? Data())) ?? []
+        let mine = reactions.filter { $0.participantId == testUserId }.map(\.emoji)
+        XCTAssertEqual(mine, ["thumbsup"], "my previous emoji must be swapped out, not stacked")
         XCTAssertTrue(
             reactions.contains { $0.participantId == "other-user" && $0.emoji == "heart" },
             "another participant's reaction must survive my swap"
