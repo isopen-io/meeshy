@@ -372,8 +372,13 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - [ ] **W3 (P2) Composer web : visibilités COMMUNITY/EXCEPT/ONLY + overlays.** Reliquat connu
   (mémoire story-status-community-visibility). `visibilityUserIds` déjà dans
   `CreateStoryRequest` web — manque l'UI.
-- [ ] **W4 (P3) Realtime web : écouter `story:deleted` ; brancher `story:translation-updated`**
-  (écouté dans use-social-socket mais handler absent de useStoriesRealtime).
+- [x] **W4 (P3) Realtime web : story:deleted + story:translation-updated.** ✅ it.28
+  `story:deleted` abonné dans use-social-socket (événement absent) + handlers dans
+  useStoriesRealtime : suppression → retirée du cache tray en direct ; traduction →
+  merge PAR TEXT-OBJECT ({postId, textObjectIndex, translations} — parité iOS
+  withTextObjectTranslationsMerged ; le type vit dans socketio-events, PAS post.ts).
+  Piège évité en re-preuve : un premier jet écrasait s.translations (content) avec les
+  traductions d'un textObject.
 - [ ] **W5 (P3) Préchargement du média du slide suivant** (aucun `preload` dans StoryViewer.tsx).
 
 ### DIRECTIVES PRODUIT UTILISATEUR (hors backlog initial)
@@ -515,7 +520,11 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.27 — R10 : content legacy sur la chaîne de langue complète (hash au push)
+## it.28 — W4 : réaltime web deleted + translation-updated (hash au push)
+
+- 226/226 suites social+story web.
+
+## it.27 — R10 : content legacy sur la chaîne de langue complète (ac378a96b)
 
 - 4/4 StoryItemPrismeContentTests ; build vert.
 
