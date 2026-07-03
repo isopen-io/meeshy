@@ -199,14 +199,20 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   quand le reader est muté (le schedule volume-0 garde la sync pour un unmute mid-slide).
   Tests : 27/27 verts (StoryPlaybackHealthTests 14, StoryCanvasPlaybackHealthTests 13) simu 18.2.
   Reste (couvert par R3) : indicateur visuel discret pendant ce gel.
-- [ ] **R2 (P1) Failsafe 2 s : ne pas démarrer la timeline sur du contenu absent.**
-  Preuve : `ContentReadiness.swift:104,178,381` — après 2 s, `contentReady` est forcé même si le
-  média n'a pas chargé → la barre court sur le ThumbHash flou. Redesign : le failsafe ne doit
-  plus démarrer le TIMER ; il bascule vers un état « chargement prolongé » : ThumbHash + spinner
-  discret + timer toujours pending ; vrai timeout long (10-15 s) → UI d'erreur (retry / passer
-  au slide suivant). Garder un failsafe anti-deadlock pour les cas sans média (couleur/gradient).
-  ⚠️ Rejouer les scénarios de `tasks/unified-story-timeline.md` (image-only, broken URL,
-  user-pause) — AUCUN deadlock permis.
+- [~] **R2 (P1) Failsafe 2 s : ne pas démarrer la timeline sur du contenu absent.** — CŒUR FAIT it.6
+  Re-preuve actualisée post-it.1 : la crainte originelle est déjà à moitié résolue — pour une
+  VIDÉO bg absente, le stall gate R1 (`timeControlStatus == .waiting`) gèle la barre après le
+  failsafe. Trou résiduel prouvé = IMAGE bg lente (status nil → jamais gatée → barre sur le
+  ThumbHash flou) + vidéo fg sans player sur fond couleur.
+  ✅ it.6 : `isPrimaryMediaPending` dans le rule engine + sonde `isBackgroundImagePending()`
+  (`backgroundLayer.hasFinalContentStamped`, unique choke point `stampFinalImage` — tous
+  chemins) ; watchdog 5 s anti-deadlock inchangé. Le failsafe readiness 2 s peut toujours
+  démarrer le TIMER mais la barre GÈLE dès le premier tick tant que le bitmap final n'est pas
+  là, reprise en phase au stamp. AUCUNE modif de la machinerie readiness (risque deadlock ~0,
+  pattern R1 éprouvé).
+  RESTE (avec R3/U5) : indicateur « chargement prolongé » pendant ce gel (spinner discret),
+  timeout long UI d'erreur (10-15 s, retry/skip), et le cas résiduel vidéo FG sans player
+  attaché sur fond couleur (rare : URL non résolue + fond non-média).
 - [ ] **R3 (P1) Indicateur de buffering pendant un stall mid-slide.**
   Preuve : `StoryReaderLoadingOverlay` piloté par `onContentProgress` (chargement initial) ; le
   gel `isPlaybackStalled` ne montre RIEN (frame figée). Fix : brancher
@@ -412,6 +418,16 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.5 — E1 : autosave débouncé du draft, édition crash-safe (294c89e5c)
+
+- RED : StoryComposerAutosaveTests — autosaveTrigger/mediaKeysFingerprint inexistants.
+- Fix : publisher lazy stored debounce 2,5 s (VM) + autosaveDraftAfterMutation (View) ;
+  JSON léger à chaque accalmie, saveMedia gated par fingerprint des clés ; suspension
+  post-clearAllDrafts (publish/quit). Piège évité : debounce inline dans body = re-souscrit
+  à chaque render → timer jamais échu.
+- Vérif : 13/13 (5 nouveaux + MergeEffects + ResetState) 18.2 ; build app 28 s vert.
+- **Fin des P0.** Prochain : P1, ordre R2 → R3 → R4 → E3 → E4 → E5 → G1.
 
 ## it.4 — E2 : mergeEffects copy-through, timelineDuration/clipTransitions survivent (23e22b6eb)
 
