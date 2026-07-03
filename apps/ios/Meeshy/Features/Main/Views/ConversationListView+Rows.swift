@@ -52,6 +52,8 @@ struct ConversationRowItem: View {
     let onLongPress: () -> Void
     /// Menu is dismissed → parent calls this to reset row press state
     let onMenuDismissed: (() -> Void)?
+    /// Tracks which conversation has scale animation active (parent state)
+    let activelyPressedConversationId: String?
 
     @State private var isPressed = false
 
@@ -106,6 +108,16 @@ struct ConversationRowItem: View {
                 await onLoadPreview()
             }
             .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isPressed)
+            .onChange(of: activelyPressedConversationId) { oldId, newId in
+                // If menu is dismissed (newId becomes nil) or switched to another row (newId != our ID),
+                // reset this row's press state with animation
+                if oldId == conversation.id && (newId == nil || newId != conversation.id) {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                        isPressed = false
+                    }
+                    onMenuDismissed?()
+                }
+            }
         }
     }
 }
@@ -153,7 +165,8 @@ extension ConversationRowItem: @MainActor Equatable {
         zip(lhs.leadingActions, rhs.leadingActions).allSatisfy { $0.icon == $1.icon } &&
         zip(lhs.trailingActions, rhs.trailingActions).allSatisfy { $0.icon == $1.icon } &&
         (lhs.onCreateShareLink == nil) == (rhs.onCreateShareLink == nil) &&
-        lhs.cachedPreviewMessages.count == rhs.cachedPreviewMessages.count
+        lhs.cachedPreviewMessages.count == rhs.cachedPreviewMessages.count &&
+        lhs.activelyPressedConversationId == rhs.activelyPressedConversationId
     }
 }
 
