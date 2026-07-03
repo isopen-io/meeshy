@@ -217,6 +217,29 @@ public actor OutboxFlusher {
         return false
     }
 
+    /// PERMANENT server rejections — a 4xx that will NEVER succeed on retry
+    /// (malformed / forbidden / not found / too large / unprocessable). These
+    /// dead-letter on the FIRST attempt instead of burning the whole retry
+    /// budget + exponential backoff (≈1 min of ⏳ before the user sees "failed").
+    ///
+    /// Deliberately CONSERVATIVE — excludes anything that might recover:
+    /// - 401 → session-expiry, deferred without consuming budget (above);
+    /// - 408 / 429 / 503 → retryable (mirrors APIClient.retryableStatusCodes);
+    /// - 5xx → the server may come back;
+    /// - 409 → a conflict on a deduped clientMessageId can mean "already
+    ///   delivered", which must NOT surface as a failure — left to the generic
+    ///   path rather than dead-lettered.
+    private static let permanentRejectionStatusCodes: Set<Int> = [400, 403, 404, 413, 422]
+    private static func isPermanentServerRejection(_ error: Error) -> Bool {
+        // 403 is surfaced as a distinct `.forbidden` case by APIClient (resource
+        // access loss, not a session problem) — a permanent reject all the same.
+        if case MeeshyError.forbidden = error { return true }
+        if case let MeeshyError.server(statusCode, _) = error {
+            return permanentRejectionStatusCodes.contains(statusCode)
+        }
+        return false
+    }
+
     private func processRecord(_ record: OutboxRecord) async {
         // S1 — claim atomically; skip dispatch if another flusher beat us to it.
         guard await claimPending(record) else { return }
@@ -269,7 +292,9 @@ public actor OutboxFlusher {
             current.lastError = String(describing: error)
             current.updatedAt = Date()
 
-            if current.attempts >= maxAttempts {
+            // A permanent 4xx will never succeed — dead-letter now rather than
+            // spin the full backoff schedule. Otherwise cap at `maxAttempts`.
+            if Self.isPermanentServerRejection(error) || current.attempts >= maxAttempts {
                 current.status = .exhausted
             } else {
                 current.status = .pending

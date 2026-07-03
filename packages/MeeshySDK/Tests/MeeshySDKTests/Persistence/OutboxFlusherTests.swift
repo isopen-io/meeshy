@@ -66,6 +66,88 @@ final class OutboxFlusherTests: XCTestCase {
             "flush() must report the earliest deferred retry so OutboxRetryScheduler can re-arm")
     }
 
+    func test_flush_permanentServerRejection_deadLettersImmediately_withoutBurningBudget() async throws {
+        let pool = try makeFreshPool()
+        try MessageDatabaseMigrations.runAll(on: pool)
+
+        let now = Date()
+        try await pool.write { db in
+            try OutboxRecord(
+                id: "poison", kind: .sendMessage, conversationId: "c1",
+                clientMessageId: "cid_poison",
+                payload: Data(), status: .pending, attempts: 0, lastError: nil,
+                createdAt: now, updatedAt: now, nextAttemptAt: now
+            ).insert(db)
+        }
+
+        // 413 Payload Too Large — a permanent rejection that will NEVER succeed
+        // on retry. It must dead-letter on the FIRST attempt, not burn all 5
+        // attempts + exponential backoff before the user sees "failed".
+        let flusher = OutboxFlusher(pool: pool, dispatcher: MockOutboxDispatcher(failure: MeeshyError.server(statusCode: 413, message: "too large")))
+        await flusher.flush()
+
+        let after = try await pool.read { db in
+            try OutboxRecord.fetchOne(db, key: "poison")!
+        }
+        XCTAssertEqual(after.status, .exhausted, "a permanent 4xx must dead-letter immediately")
+        XCTAssertEqual(after.attempts, 1, "it must not burn the whole retry budget on an un-retryable error")
+    }
+
+    func test_flush_corruptPayloadRejection_deadLettersImmediately_withoutBurningBudget() async throws {
+        let pool = try makeFreshPool()
+        try MessageDatabaseMigrations.runAll(on: pool)
+
+        let now = Date()
+        try await pool.write { db in
+            try OutboxRecord(
+                id: "corrupt", kind: .markAsRead, conversationId: "c1",
+                clientMessageId: "cid_corrupt",
+                payload: Data(), status: .pending, attempts: 0, lastError: nil,
+                createdAt: now, updatedAt: now, nextAttemptAt: now
+            ).insert(db)
+        }
+
+        // R-OB1-suivi — `OutboxDispatcher.decodePayload` (app) throws
+        // `MeeshyError.server(statusCode: 400, _)` for a corrupt local row.
+        // It must classify identically to a genuine server 4xx: dead-letter
+        // on the FIRST attempt rather than burn the whole retry budget on a
+        // row that can never decode successfully.
+        let flusher = OutboxFlusher(pool: pool, dispatcher: MockOutboxDispatcher(failure: MeeshyError.server(statusCode: 400, message: "corrupt payload")))
+        await flusher.flush()
+
+        let after = try await pool.read { db in
+            try OutboxRecord.fetchOne(db, key: "corrupt")!
+        }
+        XCTAssertEqual(after.status, .exhausted, "a corrupt payload must dead-letter immediately")
+        XCTAssertEqual(after.attempts, 1, "it must not burn the whole retry budget on an un-decodable row")
+    }
+
+    func test_flush_retryableServerError_stillConsumesBudget_notDeadLettered() async throws {
+        let pool = try makeFreshPool()
+        try MessageDatabaseMigrations.runAll(on: pool)
+
+        let now = Date()
+        try await pool.write { db in
+            try OutboxRecord(
+                id: "recoverable", kind: .sendMessage, conversationId: "c1",
+                clientMessageId: "cid_recoverable",
+                payload: Data(), status: .pending, attempts: 0, lastError: nil,
+                createdAt: now, updatedAt: now, nextAttemptAt: now
+            ).insert(db)
+        }
+
+        // 500 may recover — the classifier must stay CONSERVATIVE and keep it
+        // pending for retry rather than dead-lettering a transient server error.
+        let flusher = OutboxFlusher(pool: pool, dispatcher: MockOutboxDispatcher(failure: MeeshyError.server(statusCode: 500, message: "boom")))
+        await flusher.flush()
+
+        let after = try await pool.read { db in
+            try OutboxRecord.fetchOne(db, key: "recoverable")!
+        }
+        XCTAssertEqual(after.status, .pending, "a 5xx may recover — must remain pending for retry")
+        XCTAssertEqual(after.attempts, 1, "a retryable error consumes exactly one attempt")
+    }
+
     func test_flush_sessionExpiry_doesNotConsumeRetryBudget_norExhaust() async throws {
         let pool = try makeFreshPool()
         try MessageDatabaseMigrations.runAll(on: pool)

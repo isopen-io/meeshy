@@ -192,7 +192,7 @@ extension ConversationListView {
                     Button {
                         HapticFeedback.heavy()
                         Task {
-                            try? await BlockService.shared.unblockUser(userId: userId)
+                            await BlockActionCoordinator.shared.unblock(userId: userId)
                             await MainActor.run { HapticFeedback.success() }
                         }
                     } label: {
@@ -357,7 +357,7 @@ extension ConversationListView {
                         onBlock: {
                             if let uid = conversation.participantUserId, BlockService.shared.isBlocked(userId: uid) {
                                 Task {
-                                    try? await BlockService.shared.unblockUser(userId: uid)
+                                    await BlockActionCoordinator.shared.unblock(userId: uid)
                                     await MainActor.run { HapticFeedback.success() }
                                 }
                             } else {

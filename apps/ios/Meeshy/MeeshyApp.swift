@@ -528,6 +528,9 @@ struct MeeshyApp: App {
                         // publishers would be left without subscribers.
                         NotificationCoordinator.shared.widgetSink = WidgetDataManager.shared
                         NotificationCoordinator.shared.start()
+                        // A5.3 — resync notifications quand SyncSeqTracker
+                        // détecte un trou de séquence (_seq) sur notification:new.
+                        NotificationGapResyncCoordinator.shared.start()
                         Task { await CacheCoordinator.shared.start() }
                         // SOTA audit Pilier 22 V2 — register the publish-queue
                         // handler + listeners so any pending stories from a

@@ -91,6 +91,28 @@ final class NotificationEventTests: XCTestCase {
         XCTAssertEqual(event.notificationId, "notif-xyz-789")
     }
 
+    // MARK: - SyncEngine A5 — `_seq` decoding
+
+    /// Le gateway (A2.1 `emitWithSeq`) enrichit `notification:new` d'un `_seq`
+    /// monotone. Le SDK doit le décoder (clé JSON `_seq` → propriété `seq`)
+    /// pour la détection de gap multi-device — additif/backward-compat.
+    func test_socketNotificationEvent_decodesUnderscoreSeq() throws {
+        let json = """
+        { "id": "n1", "userId": "u1", "type": "system", "content": "x", "_seq": 91234 }
+        """.data(using: .utf8)!
+        let event = try decoder.decode(SocketNotificationEvent.self, from: json)
+        XCTAssertEqual(event.seq, 91234)
+    }
+
+    /// Backward-compat : un event SANS `_seq` (ancien gateway) décode `nil`.
+    func test_socketNotificationEvent_missingSeq_isNil() throws {
+        let json = """
+        { "id": "n1", "userId": "u1", "type": "system", "content": "x" }
+        """.data(using: .utf8)!
+        let event = try decoder.decode(SocketNotificationEvent.self, from: json)
+        XCTAssertNil(event.seq)
+    }
+
     // MARK: - SocketNotificationEvent: nested gateway format (actor/context/metadata)
 
     func test_socketNotificationEvent_gatewayFormat_friendRequest() throws {

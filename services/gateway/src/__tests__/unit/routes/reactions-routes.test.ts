@@ -602,19 +602,25 @@ describe('reactionRoutes', () => {
       );
     });
 
-    it('returns 404 when removeReaction returns false', async () => {
+    it('is idempotent — returns success (not 404) when the reaction is already absent', async () => {
       const { fastify, reply } = setup();
       const handler = getHandler(fastify, 'DELETE', '/reactions/:messageId/:emoji');
 
-      mockRemoveReaction.mockResolvedValue(false);
+      mockRemoveReaction.mockResolvedValue(false); // no matching reaction row
 
       const req = makeRequest({
         params: { messageId: MESSAGE_ID, emoji: encodedEmoji },
       });
       await handler(req, reply);
 
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Reaction not found');
-      expect(reply.statusCode).toBe(404);
+      // DELETE is idempotent: the desired end-state (reaction absent) is already
+      // achieved, so return success. A 404 makes the iOS outbox treat it as a
+      // permanent reject and roll the optimistic un-react back, re-showing a
+      // reaction that is gone. Mirrors the add path's idempotent P2002 handling.
+      expect(mockSendNotFound).not.toHaveBeenCalled();
+      expect(mockSendSuccess).toHaveBeenCalledWith(reply, { message: 'Reaction already absent' });
+      // Nothing changed → no broadcast.
+      expect(mockEmit).not.toHaveBeenCalledWith('reaction:removed', expect.anything());
     });
 
     it('returns 400 when service throws "Invalid emoji format"', async () => {

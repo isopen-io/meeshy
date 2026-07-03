@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import CryptoKit
 import Security
+import MeeshySDK
 
 @MainActor
 class ConversationLockManager: ObservableObject {
@@ -14,9 +15,25 @@ class ConversationLockManager: ObservableObject {
     private let masterPinKey = "meeshy_master_pin"
     private let lockedIdsDefaultsKey = "meeshy.lockedConversationIds"
 
+    private var cancellables = Set<AnyCancellable>()
+
     private init() {
         loadLockedIds()
         masterPinConfigured = readFromKeychain(key: masterPinKey) != nil
+        wireAuthLogoutHook()
+    }
+
+    /// P7-11 — pattern calqué sur `FeedbackToastManager.wireAuthLogoutHook` :
+    /// à la déconnexion (`isAuthenticated` → false, valeur initiale ignorée),
+    /// wipe des verrous + master PIN pour qu'aucun état de A ne s'applique à B.
+    private func wireAuthLogoutHook() {
+        AuthManager.shared.$isAuthenticated
+            .removeDuplicates()
+            .dropFirst()
+            .filter { !$0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.resetForLogout() }
+            .store(in: &cancellables)
     }
 
     // MARK: - Master PIN (6 digits)
@@ -46,6 +63,17 @@ class ConversationLockManager: ObservableObject {
     func forceRemoveMasterPin() {
         deleteFromKeychain(key: masterPinKey)
         masterPinConfigured = false
+    }
+
+    /// P7-11 — logout = purge cross-compte totale (invariant 9). Le keychain
+    /// (`me.meeshy.app.conversation-locks`) survit au logout ET à la
+    /// réinstallation, et n'est pas namespacé par compte : sans wipe, le
+    /// master PIN et les verrous du compte A s'appliquent au compte B.
+    /// Après logout les conversations elles-mêmes sont purgées (7 tables +
+    /// prefs + URLCache) — leurs PINs n'ont plus d'objet.
+    func resetForLogout() {
+        removeAllLocks()
+        forceRemoveMasterPin()
     }
 
     // MARK: - Per-conversation PIN (4 digits)

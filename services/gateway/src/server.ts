@@ -36,6 +36,7 @@ import { conditionalGetOnSend } from './utils/etag';
 import { MutationLogService } from './services/MutationLogService';
 import { authRoutes } from './routes/auth';
 import { conversationRoutes } from './routes/conversations';
+import { syncRoutes } from './routes/sync';
 import { linksRoutes } from './routes/links';
 import { trackingLinksRoutes } from './routes/tracking-links';
 import { anonymousRoutes } from './routes/anonymous';
@@ -807,6 +808,14 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
         manager.setDeliveryQueue(this.deliveryQueue);
         logger.info('[GWY] ✅ RedisDeliveryQueue injected into SocketIOManager');
 
+        // Share the Socket.IO layer's CallService with REST call routes so
+        // both observe the same in-memory ringingTimeouts/heartbeats maps
+        // (previously routes/calls.ts constructed its own, disconnected
+        // instance — a call initiated via REST never had its ringing timeout
+        // registered on the instance CallCleanupService/CallEventsHandler read).
+        this.server.decorate('callService', manager.getCallService());
+        logger.info('[GWY] ✅ CallService shared with REST routes');
+
         const notificationService = manager.getNotificationService();
         this.server.decorate('notificationService', notificationService);
         logger.info('[GWY] ✅ NotificationService exposed for routes');
@@ -956,6 +965,8 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     }, { prefix: API_PREFIX });
     // Register links management routes
     await this.server.register(linksRoutes, { prefix: API_PREFIX });
+    // SyncEngine unifié — endpoint delta /sync (spec §7, A3)
+    await this.server.register(syncRoutes, { prefix: API_PREFIX });
 
     // Register tracking links routes
     await this.server.register(trackingLinksRoutes, { prefix: API_PREFIX });

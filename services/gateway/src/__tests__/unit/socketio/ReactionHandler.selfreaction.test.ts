@@ -229,4 +229,23 @@ describe('ReactionHandler — Fix 4: self-reaction notification guard', () => {
       })
     );
   });
+
+  it('handleReactionRemove is idempotent — removing an absent reaction returns success (not an error) and does not broadcast', async () => {
+    // The reaction is already gone (concurrent removal, retry of an applied
+    // remove, double-tap). A `{ success: false }` makes the client roll the
+    // optimistic un-react back, re-showing a reaction that is gone. Mirror the
+    // idempotent REST DELETE (R-GW2).
+    mockReactionService.removeReaction.mockResolvedValue(false);
+    const socket = createMockSocket();
+    const callback = jest.fn();
+
+    await handler.handleReactionRemove(socket as any, { messageId: MESSAGE_ID, emoji: EMOJI }, callback);
+
+    expect(callback).toHaveBeenCalledWith({
+      success: true,
+      data: { message: 'Reaction already absent' },
+    });
+    // Nothing changed → no reaction:removed broadcast.
+    expect(mockIO.emit).not.toHaveBeenCalled();
+  });
 });

@@ -29,6 +29,8 @@ const CALL_HISTORY_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
 const clampNonNegativeInt = (value?: number | null): number | null =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : null;
 
+// Mirror of `CALL_TERMINAL_STATUSES` (@meeshy/shared/types/video-call),
+// typed on the Prisma enum — keep both lists in sync.
 const TERMINAL_STATUSES: CallStatus[] = [
   CallStatus.ended,
   CallStatus.missed,
@@ -281,13 +283,6 @@ export class CallService {
   }
 
   /**
-   * Get last heartbeat timestamp for a participant
-   */
-  getLastHeartbeat(callId: string, participantId: string): number | undefined {
-    return this.heartbeats.get(callId)?.get(participantId);
-  }
-
-  /**
    * Returns true when at least one heartbeat has been recorded in-memory for
    * this call. Used by CallCleanupService to distinguish "no data yet" (post-restart)
    * from "data exists but no stale entries".
@@ -362,8 +357,12 @@ export class CallService {
    * failure here is logged, not thrown, since the call's own status write is
    * always the source of truth and the claim self-heals the next time a call
    * is attempted for this conversation and finds this one already terminal.
+   * Public: the ringing-timeout handler (CallEventsHandler) owns the atomic
+   * missed-transition and must release the claim itself — delegating to
+   * markCallAsMissed hit the non-ringing guard and leaked the claim (prod
+   * incident 2026-07-02, conversation blocked CALL_ALREADY_ACTIVE ~5 min).
    */
-  private async releaseActiveCallClaim(conversationId: string, callId: string): Promise<void> {
+  async releaseActiveCallClaim(conversationId: string, callId: string): Promise<void> {
     try {
       await this.prisma.conversation.updateMany({
         where: { id: conversationId, activeCallId: callId },
@@ -372,6 +371,57 @@ export class CallService {
     } catch (error) {
       logger.error('Failed to release active-call claim', { conversationId, callId, error });
     }
+  }
+
+  /**
+   * Self-heal a leaked active-call claim. A claim can outlive its call when
+   * a terminal write raced the release (prod incident 2026-07-02: ringing
+   * timeout won the missed-transition, the delegated release was skipped by
+   * markCallAsMissed's non-ringing guard, and the conversation rejected
+   * every initiateCall for minutes). When the current holder is terminal —
+   * or the claim vanished between our failed claim and this read — take the
+   * claim for `newCallId` with a single compare-and-swap, so a concurrent
+   * healthy claim can never be clobbered. Returns true when the claim is won.
+   */
+  private async reclaimFromTerminalHolder(conversationId: string, newCallId: string): Promise<boolean> {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { activeCallId: true }
+    });
+    const holderId = conversation?.activeCallId;
+
+    if (!holderId) {
+      const retry = await this.prisma.conversation.updateMany({
+        where: {
+          id: conversationId,
+          OR: [{ activeCallId: null }, { activeCallId: { isSet: false } }]
+        },
+        data: { activeCallId: newCallId }
+      });
+      return retry.count > 0;
+    }
+
+    const holder = await this.prisma.callSession.findUnique({
+      where: { id: holderId },
+      select: { status: true }
+    });
+    if (holder && ACTIVE_STATUSES.includes(holder.status)) {
+      return false;
+    }
+
+    const swap = await this.prisma.conversation.updateMany({
+      where: { id: conversationId, activeCallId: holderId },
+      data: { activeCallId: newCallId }
+    });
+    if (swap.count > 0) {
+      logger.warn('⚠️ Active-call claim self-healed from terminal holder', {
+        conversationId,
+        staleHolderCallId: holderId,
+        newCallId
+      });
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -676,15 +726,18 @@ export class CallService {
     });
 
     if (claim.count === 0) {
-      logger.error('❌ Call already active (lost race to claim conversation)', {
-        conversationId,
-        orphanedCallId: callSession.id
-      });
-      await this.prisma.$transaction(async (tx) => {
-        await tx.callParticipant.deleteMany({ where: { callSessionId: callSession.id } });
-        await tx.callSession.delete({ where: { id: callSession.id } });
-      });
-      throw new Error(`${CALL_ERROR_CODES.CALL_ALREADY_ACTIVE}: A call is already active in this conversation`);
+      const healed = await this.reclaimFromTerminalHolder(conversationId, callSession.id);
+      if (!healed) {
+        logger.error('❌ Call already active (lost race to claim conversation)', {
+          conversationId,
+          orphanedCallId: callSession.id
+        });
+        await this.prisma.$transaction(async (tx) => {
+          await tx.callParticipant.deleteMany({ where: { callSessionId: callSession.id } });
+          await tx.callSession.delete({ where: { id: callSession.id } });
+        });
+        throw new Error(`${CALL_ERROR_CODES.CALL_ALREADY_ACTIVE}: A call is already active in this conversation`);
+      }
     }
 
     logger.info('✅ Call initiated successfully', {
@@ -1017,6 +1070,26 @@ export class CallService {
     if (!call) {
       logger.error('❌ Call not found', { callId });
       throw new Error(`${CALL_ERROR_CODES.CALL_NOT_FOUND}: Call session not found`);
+    }
+
+    // Terminal guard (probe prod 2026-07-02 22:41Z): a leave landing on a call
+    // that another path already resolved (ringing timeout → missed, force-end,
+    // concurrent hangup) must only stamp the leaver's leftAt. Recomputing the
+    // outcome from a terminal status corrupts history — `missed` is not a
+    // pre-answer status, so the old path rewrote it ended/completed with a
+    // duration measured to the leave, and the handler posted a second summary.
+    if (TERMINAL_STATUSES.includes(call.status) || call.endedAt) {
+      await this.prisma.callParticipant.update({
+        where: { id: callParticipant.id },
+        data: { leftAt: new Date() }
+      });
+      this.clearParticipantBackgrounded(callId, participantId);
+      this.heartbeats.get(callId)?.delete(participantId);
+      await this.releaseActiveCallClaim(call.conversationId, callId);
+      logger.info('ℹ️ Leave on already-terminal call — participant marked left, terminal status preserved', {
+        callId, userId, status: call.status
+      });
+      return this.getCallSession(callId);
     }
 
     const leftAt = new Date();
@@ -1538,6 +1611,11 @@ export class CallService {
     // already `missed`. Unconditionally re-writing it drifts `endedAt`
     // (+a few ms) and `duration` (+a few seconds) on every retry.
     if (callSession.status !== CallStatus.initiated && callSession.status !== CallStatus.ringing) {
+      if (TERMINAL_STATUSES.includes(callSession.status)) {
+        this.clearHeartbeats(callId);
+        this.clearRingingTimeout(callId);
+        await this.releaseActiveCallClaim(callSession.conversationId, callId);
+      }
       logger.info('Call already in non-ringing state — skipping markCallAsMissed write', {
         callId,
         currentStatus: callSession.status
@@ -1549,8 +1627,17 @@ export class CallService {
     const now = new Date();
     const duration = Math.floor((now.getTime() - callSession.startedAt.getTime()) / 1000);
 
-    await this.prisma.callSession.update({
-      where: { id: callId },
+    // Version/status-scoped write, mirroring updateCallStatus()'s optimistic
+    // lock — a concurrent terminal writer (call:end, call:leave, the ringing
+    // timeout handler on another path, CallCleanupService GC) can resolve this
+    // call between the findUnique read above and this write. Scoping the
+    // update to the source statuses we actually read makes a losing writer's
+    // update a no-op instead of clobbering endedAt/duration/endReason.
+    const result = await this.prisma.callSession.updateMany({
+      where: {
+        id: callId,
+        status: { in: [CallStatus.initiated, CallStatus.ringing] }
+      },
       data: {
         status: CallStatus.missed,
         endedAt: now,
@@ -1558,6 +1645,11 @@ export class CallService {
         endReason: CallEndReason.missed
       }
     });
+
+    if (result.count === 0) {
+      logger.warn('⚠️ markCallAsMissed lost race to a concurrent terminal write — no-op', { callId });
+      return this.getCallSession(callId);
+    }
 
     this.clearHeartbeats(callId);
     this.clearRingingTimeout(callId);
