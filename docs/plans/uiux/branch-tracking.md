@@ -14,6 +14,19 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 124i, 2026-07-03)** — piste iOS indépendante (suffixe `i`).
+> - **124i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `e0e9b3a6`)** :
+>   Dynamic Type + a11y de `iPadRootView+Panels` (en-tête de panneau du split-view iPad). **5/6**
+>   `.font(.system(size:))` → `MeeshyFont.relative` (glyphe+libellé « Feed », titre du panneau, cloche
+>   de notifications, engrenage de réglages). **1 figé** : compteur du badge (pastille circulaire fixe
+>   16×16, 86i, hidden). Titre marqué `.isHeader`. **a11y ajoutée** : labels VoiceOver sur les boutons
+>   notifications (+`accessibilityValue(count)`) et réglages, auparavant icon-only muets. 1 fichier,
+>   0 logique, 0 test neuf, 2 clés i18n inline. 0 contention iOS. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `iPadRootView+Panels` Dynamic Type + a11y SOLDÉ** : ne plus reprendre le badge figé (16×16).
+> - **Base de départ 125i : `main` HEAD**. Gros lots restants : `StoryViewerView+Content` (⚠️ i18n +
+>   piège `@State private` cross-file), `ConversationView+Composer` (lot critique prudent),
+>   `AttachmentLoadingTile` (6), `ConversationMediaGalleryView` (6, vérifier contention). Ensuite : passe state-of-the-art.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 123i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
 > - **123i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `bc59c0b6`)** :
 >   Gel documenté de la chrome de `FeedView`. **7/7** `.font(.system(size:))` **figés** avec commentaires
