@@ -299,8 +299,12 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - [ ] **R8 (P2) Pagination du tray (client).** `fetchStoriesFromNetwork` appelle
   `list(cursor: nil, limit: 50)` — curseur ignoré, plafond 50. À traiter AVEC G1 (le serveur ne
   pagine pas non plus).
-- [ ] **R9 (P2) Chiffrer le store `stories`.** `CacheCoordinator.swift:230` — stories en clair
-  alors que messages/profiles/notifications sont chiffrés. Contenu social sensible.
+- [x] **R9 (P2) Chiffrer le store `stories`.** ✅ it.19
+  `encrypted: true` (1 ligne). Migration douce sans code : rows legacy en clair → decrypt
+  fail → cache-miss propre (contrat DÉJÀ pinné par GRDBCacheStoreEncryptionTests
+  test_load_whenDecryptFails) → un refetch réseau unique au premier lancement.
+  NOTE : le coût d'écriture du blob tray unique ré-encodé/chiffré à chaque write renforce
+  R12 (store relationnel par groupe) — les deux items sont liés.
 - [ ] **R10 (P3) `toRenderableSlide` : `content` legacy résolu sur `chain.first` seulement**
   (`StoryModels.swift:1990-2058`) vs chaîne complète pour textObjects. Harmoniser.
 - [ ] **R11 (P3) `isViewed: Bool` → `viewedAt: Date?`** (règle CLAUDE.md « nullable DateTime,
@@ -485,7 +489,11 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.18 — E9 élargi : draft + publish queue purgés au logout (hash au push)
+## it.19 — R9 : store stories chiffré (hash au push)
+
+- 1 ligne + doc ; 49/49 suites cache (Encryption/GRDB/Coordinator) ; build vert.
+
+## it.18 — E9 élargi : draft + publish queue purgés au logout (830ec1a61)
 
 - Finding élargi en re-preuve : la queue persistée était le trou le plus grave (publication
   cross-compte au drain). 16/16 StoryPublishQueueTests (+1 clearAll purge fichiers), build 56 s.
