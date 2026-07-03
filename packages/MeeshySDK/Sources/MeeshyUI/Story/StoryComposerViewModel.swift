@@ -29,6 +29,18 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
 
     @Published var selectedElementId: String?
 
+    // MARK: - Timeline history (E4 — undo/redo survit au teardown du moteur)
+
+    /// Historique undo/redo PAR SLIDE : le `CommandStack` vit avec le moteur
+    /// timeline lazy, qui est jeté à chaque démontage du canvas
+    /// (`shutdownTimelineIfNeeded`) — sans ce stash, l'historique était perdu
+    /// à chaque fermeture de sheet ET fuyait entre slides (bootstrap ne reset
+    /// pas le stack).
+    var timelineHistoryBySlide: [String: CommandStackSnapshot] = [:]
+    /// Slide dont l'historique est actuellement chargé dans le moteur —
+    /// la clé de stash au prochain load/shutdown.
+    var timelineLoadedSlideId: String?
+
     // MARK: - Draft autosave (E1 — crash-safe editing)
 
     /// Intervalle du debounce d'autosave. `var` pour les tests uniquement :

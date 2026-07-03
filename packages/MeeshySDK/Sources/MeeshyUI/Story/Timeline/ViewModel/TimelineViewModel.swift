@@ -497,6 +497,17 @@ public final class TimelineViewModel: ObservableObject {
 
     // MARK: - Persistence
 
+    /// E4 — restore du stack SANS rejouer les commandes : à utiliser quand
+    /// `project` est DÉJÀ l'état au cursor (slide committée rechargée dans un
+    /// moteur frais). `restoreCommandHistory` ci-dessous, lui, REJOUE le
+    /// préfixe et suppose un projet à l'état d'origine — sur un projet
+    /// committé il double-appliquerait les commandes non idempotentes
+    /// (AddClip → clip dupliqué). Sûr car les commandes sont auto-inversibles
+    /// (`revert(from:)` opère depuis l'état courant).
+    public func restoreCommandHistoryWithoutReplay(_ snapshot: CommandStackSnapshot) {
+        commandStack.restore(snapshot)
+    }
+
     public func restoreCommandHistory(_ snapshot: CommandStackSnapshot) {
         let originalProject = project
         commandStack.restore(snapshot)

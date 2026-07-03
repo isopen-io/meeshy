@@ -154,12 +154,17 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   en tête de `persistDraft()` ET `autosaveDraftAfterMutation()` — ordre flush → sync → save,
   compatible mergeEffects (E2 : timelineDuration/clipTransitions traversent).
   Vérif : 13/13 suites composer non-régression, build 22 s vert.
-- [ ] **E4 (P1) Persister le CommandStack (undo/redo) avec le draft.**
-  Preuve : `commandHistorySnapshot()`/`restoreCommandHistory()` ZÉRO caller prod ; grep
-  `commands.json` → aucune écriture ; `shutdownTimelineIfNeeded()` (`+Timeline.swift:27`) recrée
-  un stack neuf au démontage → undo/redo perdu même intra-session. Cible : snapshot dans
-  `story_draft_meta` (ou fichier sidecar) au même rythme que E1 ; restore dans
-  `loadCurrentSlideIntoTimeline`.
+- [~] **E4 (P1) Persister le CommandStack (undo/redo) avec le draft.** — INTRA-SESSION FAIT it.11
+  ✅ Incrément 1 : `timelineHistoryBySlide` (composer VM) — stash au shutdown ET avant chaque
+  re-bootstrap ; restore via NOUVELLE API `restoreCommandHistoryWithoutReplay` (le projet
+  committé EST l'état au cursor ; le `restoreCommandHistory` existant REJOUE et suppose l'état
+  zéro → aurait doublé les AddClip). Undo/redo survit à chaque fermeture de sheet + BONUS :
+  corrige la contamination cross-slide préexistante (bootstrap ne resettait pas le stack —
+  l'historique de la slide A restait actif sur la slide B).
+  RESTE (incrément 2) : persistance disque cross-crash — blob opaque Data dans un sidecar
+  StoryDraftStore (`saveCommandHistoryBlob`/`loadCommandHistoryBlob` + purge dans `clear()`,
+  le store SDK core ne peut pas dépendre de CommandStackSnapshot/MeeshyUI) ; encode/restore
+  au rythme E1 ; restore du dict au restore du draft.
 - [ ] **E5 (P1) Publish online in-flight non résumable après kill.**
   Preuve : `activeUpload` mémoire seulement ; commentaire `StoryViewModel.swift:181` («
   cross-restart resume is the StoryPublishQueue scope ») ; un kill pendant l'upload online perd
@@ -453,7 +458,14 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.10 — E3 : flush timeline ouverte avant persistance (hash au push)
+## it.11 — E4 incrément 1 : undo/redo survit au cycle de vie timeline (hash au push)
+
+- RED : TimelineHistoryPersistenceTests 3 tests (no-replay/no-double-apply, survie teardown,
+  isolation cross-slide). Découvertes : commandes AUTO-INVERSIBLES (revert(from:)) → restore
+  sans replay valide ; bootstrap ne reset PAS le stack (fuite cross-slide préexistante, fixée).
+- Vérif : 69/69 (3 nouveaux + TimelineViewModelTests 23 + CommandStackTests 43), build 25 s.
+
+## it.10 — E3 : flush timeline ouverte avant persistance (e96e94f10)
 
 - Fix 12 lignes sur les 2 chemins de persistance ; briques VM (commitTimelineToCurrentSlide)
   déjà testées (roundtrip). 13/13 non-régression, build vert.
