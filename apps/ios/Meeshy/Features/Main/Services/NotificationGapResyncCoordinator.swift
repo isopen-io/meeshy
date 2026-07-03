@@ -21,15 +21,18 @@ final class NotificationGapResyncCoordinator {
     private let debounce: TimeInterval
     private let resync: @Sendable () async -> Void
     private let gapPublisher: AnyPublisher<Int64, Never>
+    private let reconnectPublisher: AnyPublisher<Void, Never>
     private var cancellables = Set<AnyCancellable>()
     private var debounceTask: Task<Void, Never>?
 
     init(
         gapPublisher: AnyPublisher<Int64, Never> = SyncSeqTracker.shared.gapDetected.publisher,
+        reconnectPublisher: AnyPublisher<Void, Never> = MessageSocketManager.shared.didReconnect.eraseToAnyPublisher(),
         debounce: TimeInterval = 0.3,
         resync: @escaping @Sendable () async -> Void = NotificationGapResyncCoordinator.defaultResync
     ) {
         self.gapPublisher = gapPublisher
+        self.reconnectPublisher = reconnectPublisher
         self.debounce = debounce
         self.resync = resync
     }
@@ -38,7 +41,18 @@ final class NotificationGapResyncCoordinator {
     /// double pas l'abonnement (l'ancien est remplacé).
     func start() {
         cancellables.removeAll()
+        // Trou de séquence détecté pendant la session (A5.3).
         gapPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.scheduleResync() }
+            .store(in: &cancellables)
+        // A5.4 — reconnect : la coupure a créé une fenêtre aveugle (le gap
+        // detection ne couvre que les events REÇUS) → refresh inconditionnel,
+        // miroir de `syncMissedMessages` pour les messages. `didReconnect` ne
+        // fire QUE sur un vrai reconnect (hadPreviousConnection), pas au cold
+        // boot. La resync étant débouncée+idempotente, un double-déclenchement
+        // gap+reconnect coalesce sans doublon.
+        reconnectPublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleResync() }
             .store(in: &cancellables)

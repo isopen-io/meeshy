@@ -84,4 +84,26 @@ final class NotificationGapResyncCoordinatorTests: XCTestCase {
         XCTAssertEqual(count, 1)
         XCTAssertEqual(final, 1, "une rafale de gaps doit être coalescée en une seule resync")
     }
+
+    // MARK: - A5.4 — refresh au reconnect
+
+    /// A5.4 — après une coupure socket, le client a raté des events dans la
+    /// fenêtre aveugle (le gap detection ne couvre que les events REÇUS) →
+    /// `didReconnect` doit déclencher une resync inconditionnelle.
+    func test_reconnect_triggersResync() async {
+        let reconnect = PassthroughSubject<Void, Never>()
+        let counter = ResyncCounter()
+        let sut = NotificationGapResyncCoordinator(
+            gapPublisher: Empty().eraseToAnyPublisher(),
+            reconnectPublisher: reconnect.eraseToAnyPublisher(),
+            debounce: 0.05,
+            resync: { await counter.increment() }
+        )
+        sut.start()
+
+        reconnect.send(())
+
+        let count = await waitForCount(counter, toReach: 1)
+        XCTAssertEqual(count, 1, "un reconnect doit déclencher une resync des notifications")
+    }
 }
