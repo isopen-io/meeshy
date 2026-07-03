@@ -258,7 +258,31 @@ public actor StoryPublishQueue {
 
     public func dequeue(_ itemId: String) {
         items.removeAll { $0.id == itemId }
+        inFlightIds.remove(itemId)
         saveToDisk()
+    }
+
+    // MARK: - In-flight marking (E5 write-ahead)
+
+    /// E5 — ids des items dont l'upload est piloté EN CE MOMENT par le chemin
+    /// online de l'UI (write-ahead). VOLATILE à dessein : jamais persisté.
+    /// Pendant la vie du process, `processNext()` saute ces items (pas de
+    /// double publication pendant que l'upload UI tourne) ; après un kill le
+    /// marqueur disparaît et l'item persisté redevient naturellement éligible
+    /// au drain de boot — la sémantique « inflight orphelin → pending » sans
+    /// champ persisté ni migration de format.
+    private var inFlightIds: Set<String> = []
+
+    public func markInFlight(_ itemId: String) {
+        inFlightIds.insert(itemId)
+    }
+
+    public func clearInFlight(_ itemId: String) {
+        inFlightIds.remove(itemId)
+    }
+
+    public func isInFlight(_ itemId: String) -> Bool {
+        inFlightIds.contains(itemId)
     }
 
     public var pendingItems: [StoryPublishQueueItem] {
@@ -313,6 +337,9 @@ public actor StoryPublishQueue {
         var successIds: [String] = []
 
         for (index, item) in items.enumerated() {
+            // E5 — un item write-ahead dont l'upload online est en cours dans
+            // CE process ne doit pas être double-publié par le drain.
+            if inFlightIds.contains(item.id) { continue }
             // Backoff between consecutive retries within the same processing
             // pass — small jitter to avoid thundering-herd on reconnect.
             if index > 0 {

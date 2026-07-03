@@ -165,14 +165,23 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   StoryDraftStore (`saveCommandHistoryBlob`/`loadCommandHistoryBlob` + purge dans `clear()`,
   le store SDK core ne peut pas dépendre de CommandStackSnapshot/MeeshyUI) ; encode/restore
   au rythme E1 ; restore du dict au restore du draft.
-- [ ] **E5 (P1) Publish online in-flight non résumable après kill.**
-  Preuve : `activeUpload` mémoire seulement ; commentaire `StoryViewModel.swift:181` («
-  cross-restart resume is the StoryPublishQueue scope ») ; un kill pendant l'upload online perd
-  la story (les TUS checkpoints survivent mais rien ne relance le pipeline).
-  Design élégant : **write-ahead systématique** — toujours enqueue dans `StoryPublishQueue`
-  (persistée) AVANT de lancer l'upload, marquer l'item `inflight`, le retirer au succès ;
-  au boot, tout item `inflight` orphelin redevient `pending`. Unifie les 2 chemins
-  online/offline (supprime la bifurcation `isOffline`).
+- [ ] **E10 (P2, NOUVEAU it.12) Fuite disque : dossiers `meeshy_offline_queue/<tempStoryId>/`
+  jamais nettoyés au succès du chemin QUEUE.** Preuve : grep `removeItem` sur StoryPublishQueue +
+  StoryPublishService → zéro cleanup des copies médias après publication réussie via drain.
+  Le chemin ONLINE est couvert depuis it.12 (`removeOfflineQueueMediaDirectory` au dequeue) —
+  brancher le même helper sur le succès du drain (publishSucceeded → tempStoryId → rm dir),
+  + balayage one-shot des dossiers orphelins (sans item de queue correspondant) au boot.
+- [x] **E5 (P1) Publish online in-flight non résumable après kill.** ✅ it.12
+  Livré (design write-ahead du backlog) : cœur de persistance extrait
+  (`persistPublishIntentToQueue`, partagé offline/online) ; le chemin ONLINE persiste
+  l'intent AVANT `launchUploadTask` (séquencé — le succès peut toujours retirer SON intent),
+  marqué in-flight via un Set VOLATILE côté queue (`markInFlight`/`clearInFlight`/`isInFlight`,
+  jamais persisté → un kill efface le marqueur et l'item redevient éligible au drain de boot :
+  la sémantique « inflight orphelin → pending » SANS migration de format). `processNext()`
+  skippe les in-flight (pas de double publication pendant l'upload UI). Succès → dequeue +
+  rm dossier médias ; annulation explicite → idem (pas de résurrection au boot) ; échec →
+  l'item RESTE (retry UI ou reprise au prochain boot). La bifurcation isOffline demeure pour
+  l'UX (banner vs upload visible) mais la DURABILITÉ est unifiée.
 - [ ] **E6 (P2) `StoryQueueMigrator.migrateLegacyOfflineQueue()` jamais appelé en prod.**
   Preuve : grep → définition + tests seulement. Soit l'appeler au boot (one-shot idempotent,
   déjà testé), soit supprimer le legacy si plus aucun install n'a l'ancien fichier.
@@ -458,7 +467,15 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.11 — E4 incrément 1 : undo/redo survit au cycle de vie timeline (hash au push)
+## it.12 — E5 : write-ahead du publish online, story insubmersible (hash au push)
+
+- RED initial sur la suite queue : setPublishHandler AUTO-DRAINE une queue non vide (M5) —
+  handler à poser AVANT enqueue dans les tests processNext (piège consigné).
+- 13/13 StoryPublishQueueTests (3 nouveaux : skip in-flight, dequeue clears marker,
+  clearInFlight ré-éligible) ; StoryViewModelTests en non-régression ; build app vert.
+- Nouveau finding E10 (fuite disque dossiers queue) ajouté au backlog.
+
+## it.11 — E4 incrément 1 : undo/redo survit au cycle de vie timeline (134ccf428)
 
 - RED : TimelineHistoryPersistenceTests 3 tests (no-replay/no-double-apply, survie teardown,
   isolation cross-slide). Découvertes : commandes AUTO-INVERSIBLES (revert(from:)) → restore

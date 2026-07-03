@@ -205,6 +205,11 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     struct StoryUploadState: Identifiable {
         let id: String
         let thumbnailImage: UIImage
+        /// E5 — id de l'item write-ahead dans `StoryPublishQueue` (et le
+        /// tempStoryId de son dossier médias) : retiré au succès/cancel ;
+        /// un kill le laisse en queue → repris au boot.
+        var queueId: String?
+        var queueTempStoryId: String?
         var progress: Double
         var phase: UploadPhase
 
@@ -857,7 +862,30 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         activeUpload = upload
         showStoryComposer = false
 
-        launchUploadTask()
+        // E5 — write-ahead : la MÊME persistance que le chemin offline court
+        // AVANT l'upload, marquée in-flight pour que le drain (reconnect) ne
+        // double-publie pas pendant que l'upload UI tourne. Un kill efface le
+        // marqueur volatile → le drain de boot reprend l'item : une story en
+        // cours de publication ne peut plus se perdre. Séquencé (persist PUIS
+        // launch) pour que le succès puisse toujours retirer son intent.
+        Task { [weak self] in
+            guard let self else { return }
+            if let intent = await self.persistPublishIntentToQueue(
+                slides: slides,
+                slideImages: slideImages,
+                loadedImages: loadedImages,
+                loadedVideoURLs: loadedVideoURLs,
+                loadedAudioURLs: loadedAudioURLs,
+                originalLanguage: originalLanguage,
+                visibility: visibility,
+                visibilityUserIds: visibilityUserIds
+            ) {
+                await StoryPublishQueue.shared.markInFlight(intent.queueId)
+                self.activeUpload?.queueId = intent.queueId
+                self.activeUpload?.queueTempStoryId = intent.tempStoryId
+            }
+            self.launchUploadTask()
+        }
     }
 
     /// Persists the in-memory composer state to disk and enqueues the
@@ -879,11 +907,53 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         slideImages: [String: UIImage],
         loadedImages: [String: UIImage],
         loadedVideoURLs: [String: URL],
+        loadedAudioURLs: [String: URL] = [:],
+        originalLanguage: String? = nil,
+        visibility: String = "FRIENDS",
+        visibilityUserIds: [String] = []
+    ) async {
+        guard let intent = await persistPublishIntentToQueue(
+            slides: slides,
+            slideImages: slideImages,
+            loadedImages: loadedImages,
+            loadedVideoURLs: loadedVideoURLs,
+            loadedAudioURLs: loadedAudioURLs,
+            originalLanguage: originalLanguage,
+            visibility: visibility,
+            visibilityUserIds: visibilityUserIds
+        ) else { return }
+
+        insertOptimisticOfflineStories(
+            slides: slides,
+            slideImages: slideImages,
+            loadedImages: loadedImages,
+            tempStoryId: intent.tempStoryId,
+            visibility: visibility
+        )
+
+        HapticFeedback.success()
+        FeedbackToastManager.shared.showSuccess(String(
+            localized: "story.publish.queue.enqueued",
+            defaultValue: "Story enregistrée — publication au retour en ligne"
+        ))
+    }
+
+    /// E5 — cœur de persistance du publish (write-ahead) partagé par les DEUX
+    /// chemins : offline (enqueue + UX optimiste ci-dessus) et online
+    /// (`publishStoryInBackground` persiste AVANT de lancer l'upload, marque
+    /// l'item in-flight, le retire au succès — un kill mid-upload laisse
+    /// l'item en queue, repris au drain de boot). Retourne les ids de l'item
+    /// persisté, `nil` si l'encodage échoue.
+    func persistPublishIntentToQueue(
+        slides: [StorySlide],
+        slideImages: [String: UIImage],
+        loadedImages: [String: UIImage],
+        loadedVideoURLs: [String: URL],
         loadedAudioURLs: [String: URL],
         originalLanguage: String? = nil,
         visibility: String,
         visibilityUserIds: [String]
-    ) async {
+    ) async -> (queueId: String, tempStoryId: String)? {
         // 1. Re-key slide backgrounds.
         let bgImages = Dictionary(
             uniqueKeysWithValues: slideImages.map { (slideId, img) in
@@ -941,7 +1011,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 localized: "story.publish.queue.encodeError",
                 defaultValue: "Impossible d'enregistrer la story pour publication différée"
             ))
-            return
+            return nil
         }
 
         // 4. Enqueue. The queue persists to disk synchronously so a crash
@@ -956,28 +1026,18 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             originalLanguage: originalLanguage
         )
         _ = await StoryPublishQueue.shared.enqueue(item)
+        return (queueId: item.id, tempStoryId: tempStoryId)
+    }
 
-        // 5. Visibilité optimiste hors-ligne : l'auteur DOIT voir ses propres
-        //    stories immédiatement, même sans réseau et même après un cold start.
-        //    On insère un StoryItem local par slide (id `pending_<uuid>#<idx>`),
-        //    avec un cover composite rendu localement (texte + dessin + média),
-        //    exactement comme le cover du chemin online. Réconcilié au succès de
-        //    publication (`reconcilePublishedQueueSlide`) qui retire le pending.
-        insertOptimisticOfflineStories(
-            slides: slides,
-            slideImages: slideImages,
-            loadedImages: loadedImages,
-            tempStoryId: tempStoryId,
-            visibility: visibility
-        )
-
-        // 6. User feedback. The PendingStoryBanner mounted in RootView
-        //    reflects the new pending count via StoryPublishService.
-        HapticFeedback.success()
-        FeedbackToastManager.shared.showSuccess(String(
-            localized: "story.publish.queue.enqueued",
-            defaultValue: "Story enregistrée — publication au retour en ligne"
-        ))
+    /// E5 — supprime le dossier médias `meeshy_offline_queue/<tempStoryId>/`
+    /// d'un intent retiré de la queue (succès ou annulation du chemin online).
+    /// Sans ce cleanup, chaque publish online laisserait ses copies de médias
+    /// orphelines sur disque.
+    nonisolated static func removeOfflineQueueMediaDirectory(tempStoryId: String) {
+        let docDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let dir = docDir.appendingPathComponent("meeshy_offline_queue")
+            .appendingPathComponent(tempStoryId)
+        try? FileManager.default.removeItem(at: dir)
     }
 
     // MARK: - Optimistic offline stories (visibilité auteur hors-ligne)
@@ -1103,6 +1163,15 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
 
                 // Upload complete — cleanup temp files now
                 self.cleanupUploadTempFiles(upload)
+                // E5 — l'upload online a abouti : retirer l'intent write-ahead
+                // (queue + dossier médias), sinon le boot suivant re-publierait.
+                if let queueId = self.activeUpload?.queueId {
+                    let tempId = self.activeUpload?.queueTempStoryId
+                    Task.detached {
+                        await StoryPublishQueue.shared.dequeue(queueId)
+                        if let tempId { Self.removeOfflineQueueMediaDirectory(tempStoryId: tempId) }
+                    }
+                }
                 self.activeUpload = nil
                 self.uploadTask = nil
                 HapticFeedback.success()
@@ -1422,6 +1491,15 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                         try? await storyService.delete(storyId: postId)
                     }
                 }
+            }
+        }
+        // E5 — annulation EXPLICITE : l'intent write-ahead part avec (sinon la
+        // story annulée ressusciterait au prochain boot via le drain de queue).
+        if let queueId = activeUpload?.queueId {
+            let tempId = activeUpload?.queueTempStoryId
+            Task.detached {
+                await StoryPublishQueue.shared.dequeue(queueId)
+                if let tempId { Self.removeOfflineQueueMediaDirectory(tempStoryId: tempId) }
             }
         }
         uploadTask?.cancel()

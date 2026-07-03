@@ -25,6 +25,64 @@ final class StoryPublishQueueTests: XCTestCase {
         try await super.tearDown()
     }
 
+    // MARK: - E5 write-ahead : in-flight marking
+
+    func test_processNext_skipsInFlightItems() async {
+        // Handler AVANT l'enqueue : setPublishHandler auto-draine (M5) une
+        // queue non vide, ce qui courserait le processNext explicite du test.
+        let published = PublishedIds()
+        await queue.setPublishHandler { item in
+            await published.append(item.id)
+            return "server-\(item.id)"
+        }
+
+        let uiDriven = makeItem(visibility: "PUBLIC")
+        let queued = makeItem(visibility: "FRIENDS")
+        await queue.enqueue(uiDriven)
+        await queue.enqueue(queued)
+        await queue.markInFlight(uiDriven.id)
+        await queue.processNext()
+
+        let ids = await published.values
+        XCTAssertEqual(ids, [queued.id],
+                       "The drain must skip the item whose upload is UI-driven right now")
+        let stillQueued = await queue.pendingItems.map(\.id)
+        XCTAssertTrue(stillQueued.contains(uiDriven.id),
+                      "The in-flight item stays persisted (killed process = boot replays it)")
+    }
+
+    func test_dequeue_clearsInFlightMarker() async {
+        let item = makeItem(visibility: "PUBLIC")
+        await queue.enqueue(item)
+        await queue.markInFlight(item.id)
+        await queue.dequeue(item.id)
+        let inFlight = await queue.isInFlight(item.id)
+        XCTAssertFalse(inFlight)
+    }
+
+    func test_clearInFlight_makesItemEligibleForDrainAgain() async {
+        let published = PublishedIds()
+        await queue.setPublishHandler { item in
+            await published.append(item.id)
+            return "server-\(item.id)"
+        }
+
+        let item = makeItem(visibility: "PUBLIC")
+        await queue.enqueue(item)
+        await queue.markInFlight(item.id)
+        await queue.clearInFlight(item.id)
+        await queue.processNext()
+
+        let ids = await published.values
+        XCTAssertEqual(ids, [item.id])
+    }
+
+    /// Collecteur Sendable pour les handlers @Sendable de la queue.
+    private actor PublishedIds {
+        private(set) var values: [String] = []
+        func append(_ id: String) { values.append(id) }
+    }
+
     // MARK: - enqueue / dequeue
 
     func test_enqueue_addsItemToQueue() async {
