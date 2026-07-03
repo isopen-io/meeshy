@@ -31,15 +31,21 @@ final class CallEffectsOverlayTests: XCTestCase {
         // IncomingCallView were already fixed for this exact hazard
         // (Audit P1-16); the overlay must follow the same pattern.
         let source = try overlaySource()
-        XCTAssertFalse(
-            source.contains("= CallManager.shared"),
-            "CallEffectsOverlay must not instantiate CallManager.shared locally — it must " +
-            "receive the manager from its parent as a plain @ObservedObject property."
-        )
+        guard let range = source.range(of: "@ObservedObject var callManager") else {
+            XCTFail("CallEffectsOverlay must declare callManager as an @ObservedObject var")
+            return
+        }
+        // Scoped to the declaration itself (not a whole-file scan) so an
+        // explanatory comment mentioning the anti-pattern by name — e.g.
+        // documenting why `= CallManager.shared` must not be used here —
+        // cannot make this assertion false-positive.
+        let end = source.index(range.lowerBound, offsetBy: 60, limitedBy: source.endIndex) ?? source.endIndex
+        let declaration = String(source[range.lowerBound ..< end])
         XCTAssertTrue(
-            source.contains("@ObservedObject var callManager: CallManager"),
-            "CallEffectsOverlay must declare callManager as a received (non-private, no " +
-            "default value) @ObservedObject so CallView can inject its own instance."
+            declaration.contains(": CallManager") && !declaration.contains("="),
+            "CallEffectsOverlay must declare callManager as a received (no default value) " +
+            "@ObservedObject typed as CallManager, not instantiate CallManager.shared locally " +
+            "— that would re-create the subscription on every parent body re-evaluation."
         )
     }
 

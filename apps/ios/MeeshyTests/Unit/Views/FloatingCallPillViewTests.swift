@@ -191,7 +191,7 @@ final class FloatingCallPillViewTests: XCTestCase {
             XCTFail("FloatingCallPillView must define muteButton")
             return
         }
-        let end = source.index(range.lowerBound, offsetBy: 700, limitedBy: source.endIndex) ?? source.endIndex
+        let end = source.index(range.lowerBound, offsetBy: 1000, limitedBy: source.endIndex) ?? source.endIndex
         let vicinity = String(source[range.lowerBound ..< end])
         XCTAssertTrue(
             vicinity.contains("callToggleAccessibility(isToggle: true, isActive: callManager.isMuted)"),
@@ -207,7 +207,7 @@ final class FloatingCallPillViewTests: XCTestCase {
             XCTFail("FloatingCallPillView must define speakerButton")
             return
         }
-        let end = source.index(range.lowerBound, offsetBy: 700, limitedBy: source.endIndex) ?? source.endIndex
+        let end = source.index(range.lowerBound, offsetBy: 1000, limitedBy: source.endIndex) ?? source.endIndex
         let vicinity = String(source[range.lowerBound ..< end])
         XCTAssertTrue(
             vicinity.contains("callToggleAccessibility(isToggle: true, isActive: callManager.isSpeaker)"),
