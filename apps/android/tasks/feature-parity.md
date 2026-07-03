@@ -787,8 +787,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       is folded into `CallViewModel.dispatch`: each FSM edge drives the loop (switched
       only on a genuine change — an inert event never restarts the ringback) + fires
       the cue, released on `onCleared`. +28 tests (19 policy, 9 VM-fold via a recording
-      fake). **Pending:** the real `ConnectionService`/Telecom self-managed call UI +
-      foreground service, then the WebRTC media transport.
+      fake). **Telecom-connection decision core landed** (slice `call-telecom-state-plan`):
+      the pure `core:model` `TelecomCallPolicy` is the SSOT mapping call lifecycle → the OS
+      telecom reports a self-managed `ConnectionService` must make — the Android analogue of
+      the `CXProvider.reportCall(...)`/`report(_:endedAt:)` calls the iOS `CallManager` makes
+      to CallKit. `connectionStateFor(state)` keys purely on `CallState` (outgoing ring/
+      `Offering` → `Dialing`, incoming ring → `Ringing`, answered = `Active` for
+      `Connecting`/`Connected`/`Reconnecting` so an ICE restart never tears the system call
+      down, `Ended` → `Disconnected`, `Idle` → none); `disconnectCauseFor(reason)` maps every
+      `CallEndReason` (lost/failed → `Error`); `plan(prev,next)` reports only on a genuine
+      transition (dedupes already-active edges, phantom `Idle→Ended`, idempotent `Ended→Ended`
+      and settle `Ended→Idle` to `null`). The `:feature:calls` `TelecomCallReporter` seam
+      (thin `LogTelecomCallReporter` interim glue behind an interface, `@Binds` into a Hilt
+      module) is folded into `CallViewModel.dispatch` (report each genuine edge; released on
+      `onCleared`). +35 tests (28 policy, 7 VM-fold via a recording fake). **Pending:** the
+      real self-managed `ConnectionService`/`PhoneAccount` registration + full-screen call UI +
+      foreground service (swaps the `LogTelecomCallReporter` `@Binds`), then the WebRTC media
+      transport.
 - [~] Incoming-call delivery via FCM data push when backgrounded/killed (full-screen intent) —
       **pure decision core landed** (slice `incoming-call-push-decision`): `core:model`
       `me.meeshy.sdk.model.call` gains `IncomingCallPush` (typed FCM `data`-map / VoIP payload at
