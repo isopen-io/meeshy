@@ -125,7 +125,9 @@ struct ConversationRowItem: View {
             .task {
                 await onLoadPreview()
             }
-            .animation(.spring(response: 0.65, dampingFraction: 0.99), value: isActivelyPressed)
+            // Spring avec rebounce visible : 0.99 était trop amorti (smooth infini)
+            // 0.68 donne 1-2 oscillations perceptibles (0.90→1.0→0.93→1.0)
+            .animation(.spring(response: 0.60, dampingFraction: 0.68), value: isActivelyPressed)
         }
     }
 }
