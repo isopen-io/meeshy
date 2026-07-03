@@ -828,7 +828,8 @@ export function registerMessagesRoutes(
               select: {
                 systemLanguage: true,
                 regionalLanguage: true,
-                customDestinationLanguage: true
+                customDestinationLanguage: true,
+                deviceLocale: true
               }
             })
           : Promise.resolve(null)
@@ -897,7 +898,7 @@ export function registerMessagesRoutes(
 
       // Déterminer la langue préférée de l'utilisateur
       const userPreferredLanguage = userPrefs
-        ? resolveUserLanguage(userPrefs)
+        ? resolveUserLanguage(userPrefs, { deviceLocale: userPrefs.deviceLocale ?? undefined })
         : 'fr';
 
       // DEBUG: Log détaillé pour vérifier les transcriptions audio
