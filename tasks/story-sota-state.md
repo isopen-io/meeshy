@@ -326,11 +326,13 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   consommation iOS du delta (`fetchStoriesFromNetwork` + merge), index Prisma
   `@@index([type, updatedAt])` sur Post à poser avec un déploiement schema, et DÉPLOIEMENT
   gateway prod (pull+up explicite) avant que le client ne s'y branche.
-- [ ] **G2 (P2) Double pipeline de traduction du `content` story.**
-  Preuve : `PostService.createPost` L193 (`triggerStoryTextTranslation`, audience-driven) ET
-  `routes/posts/core.ts` L98-115 (`translatePost`, 5 langues fixes) écrivent tous deux dans
-  `Post.translations`. Redondance ZMQ + écritures concurrentes. Garder le pipeline
-  audience-driven, gater l'autre pour type STORY (vérifier les tests gateway existants).
+- [x] **G2 (P2) Double pipeline de traduction du `content` story.** ✅ it.20
+  Fix : `shouldTranslateContent = content && postType === 'POST'` (la branche STORY retirée
+  de la route ; le service audience-driven `triggerStoryTextTranslation` possède la
+  traduction). La suite dédiée `core.story-translation.test.ts` PINNAIT l'ancien monde
+  (son test « should not double-translate » ne voyait pas le double côté service !) —
+  adaptée au nouveau contrat : la route ne déclenche AUCUN pipeline story.
+  DÉPLOIEMENT : gateway prod = pull+up explicite (comme G1).
 - [ ] **G3 (P2) textObjects → langues audience-driven.** `getActiveTargetLanguages` = 10 langues
   codées en dur (TODO explicite `PostService.ts:392`). Réutiliser la résolution d'audience du
   pipeline A (contacts de l'auteur).
@@ -489,7 +491,12 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.19 — R9 : store stories chiffré (hash au push)
+## it.20 — G2 : un seul pipeline de traduction du content story (hash au push)
+
+- RED : 2 nouveaux tests core.test.ts + adaptation de la suite dédiée (2 tests pinnaient
+  le comportement supprimé). 902/902 sur les 40 suites posts (bun).
+
+## it.19 — R9 : store stories chiffré (79a4543e0)
 
 - 1 ligne + doc ; 49/49 suites cache (Encryption/GRDB/Coordinator) ; build vert.
 
