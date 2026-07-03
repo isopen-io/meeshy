@@ -369,8 +369,20 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - [ ] **W3 (P2) Composer web : visibilités COMMUNITY/EXCEPT/ONLY + overlays.** Reliquat connu
   (mémoire story-status-community-visibility). `visibilityUserIds` déjà dans
   `CreateStoryRequest` web — manque l'UI.
-- [ ] **W4 (P3) Realtime web : écouter `story:deleted` ; brancher `story:translation-updated`**
-  (écouté dans use-social-socket mais handler absent de useStoriesRealtime).
+- [x] **W4 (P3) Realtime web : écouter `story:deleted` ; brancher `story:translation-updated`.**
+  ✅ it.25 (2026-07-03)
+  Re-preuve : `use-social-socket` enregistrait déjà `story:translation-updated` MAIS
+  `useStoriesRealtime` ne fournissait aucun handler → l'événement était reçu puis jeté (cache feed
+  jamais muté, spectateur web bloqué sur le texte original jusqu'au refresh — écart Prisme vs iOS
+  qui applique la traduction en direct). `story:deleted` n'était écouté NULLE PART côté web.
+  Livré : (1) `use-social-socket` — option `onStoryDeleted` + `socket.on/off(STORY_DELETED)`.
+  (2) `useStoriesRealtime` — `onStoryTranslationUpdated` merge immuable de `data.translations`
+  dans `storyEffects.textObjects[index].translations` (helper pur `mergeStoryTextObjectTranslations`,
+  retour de la même référence si rien à muter → pas de re-render parasite) ; `onStoryDeleted` filtre
+  la story du cache feed. La chaîne viewer est live (`useStoriesFeedQuery` → `postToStoryData` →
+  `resolvePrismeText`) → la traduction apparaît sans refresh, parité iOS.
+  Vérif : 17/17 use-stories-realtime (RED prouvé par stash : 4 échecs), 9/9 use-social-socket,
+  192/192 sur `hooks/social` + `lib/story`, tsc web 0 régression (baseline 1198 inchangé).
 - [ ] **W5 (P3) Préchargement du média du slide suivant** (aucun `preload` dans StoryViewer.tsx).
 
 ### DIRECTIVES PRODUIT UTILISATEUR (hors backlog initial)
@@ -506,6 +518,14 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.25 — W4 : realtime web des stories (translation-updated + deleted)
+
+- `useStoriesRealtime` branchait `story:translation-updated` (déjà écouté par use-social-socket
+  mais handler absent → jeté) et `story:deleted` (jamais écouté côté web). Merge immuable des
+  traductions dans `storyEffects.textObjects[index]` (helper pur), suppression du feed sur delete.
+- Parité Prisme iOS ↔ web : la traduction NLLB apparaît dans le viewer web ouvert sans refresh.
+- 17/17 (RED prouvé par stash : 4 échecs) + 192/192 `hooks/social`+`lib/story` ; tsc web 0 régression.
 
 ## it.24 — W1 inc.2 : keyframes des mediaObjects foreground (hash au push)
 

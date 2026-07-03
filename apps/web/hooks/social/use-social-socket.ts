@@ -26,6 +26,7 @@ import type {
   StoryCreatedEventData,
   StoryViewedEventData,
   StoryReactedEventData,
+  StoryDeletedEventData,
   StatusCreatedEventData,
   StatusUpdatedEventData,
   StatusDeletedEventData,
@@ -56,6 +57,7 @@ export interface UseSocialSocketOptions {
   onStoryCreated?: (data: StoryCreatedEventData) => void;
   onStoryViewed?: (data: StoryViewedEventData) => void;
   onStoryReacted?: (data: StoryReactedEventData) => void;
+  onStoryDeleted?: (data: StoryDeletedEventData) => void;
 
   /** Status events */
   onStatusCreated?: (data: StatusCreatedEventData) => void;
@@ -172,6 +174,9 @@ export function useSocialSocket(options: UseSocialSocketOptions = {}): void {
     function handleStoryReacted(data: StoryReactedEventData): void {
       handlersRef.current.onStoryReacted?.(data);
     }
+    function handleStoryDeleted(data: StoryDeletedEventData): void {
+      handlersRef.current.onStoryDeleted?.(data);
+    }
 
     function handleStatusCreated(data: StatusCreatedEventData): void {
       handlersRef.current.onStatusCreated?.(data);
@@ -219,6 +224,7 @@ export function useSocialSocket(options: UseSocialSocketOptions = {}): void {
     socket.on(SERVER_EVENTS.STORY_CREATED, handleStoryCreated);
     socket.on(SERVER_EVENTS.STORY_VIEWED, handleStoryViewed);
     socket.on(SERVER_EVENTS.STORY_REACTED, handleStoryReacted);
+    socket.on(SERVER_EVENTS.STORY_DELETED, handleStoryDeleted);
 
     socket.on(SERVER_EVENTS.STATUS_CREATED, handleStatusCreated);
     socket.on(SERVER_EVENTS.STATUS_UPDATED, handleStatusUpdated);
@@ -250,6 +256,7 @@ export function useSocialSocket(options: UseSocialSocketOptions = {}): void {
       socket.off(SERVER_EVENTS.STORY_CREATED, handleStoryCreated);
       socket.off(SERVER_EVENTS.STORY_VIEWED, handleStoryViewed);
       socket.off(SERVER_EVENTS.STORY_REACTED, handleStoryReacted);
+      socket.off(SERVER_EVENTS.STORY_DELETED, handleStoryDeleted);
 
       socket.off(SERVER_EVENTS.STATUS_CREATED, handleStatusCreated);
       socket.off(SERVER_EVENTS.STATUS_UPDATED, handleStatusUpdated);
