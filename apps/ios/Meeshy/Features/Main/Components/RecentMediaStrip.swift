@@ -32,7 +32,10 @@ private struct PlayerItemBox: @unchecked Sendable { let item: AVPlayerItem? }
 
 /// Ordered multi-selection state for the strip. Pure value type so the
 /// begin/toggle/clear semantics stay unit-testable outside SwiftUI.
-struct RecentMediaSelection: Equatable {
+/// `nonisolated` opts out of the target's MainActor default isolation —
+/// without it the synchronous nonisolated tests can't touch the type (same
+/// precedent as `MeeshyVideoPlayer.ControlSet`).
+nonisolated struct RecentMediaSelection: Equatable {
     private(set) var isActive = false
     private(set) var ids: [String] = []
 
