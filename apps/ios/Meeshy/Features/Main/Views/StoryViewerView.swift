@@ -494,6 +494,8 @@ struct StoryViewerView: View {
             slideTimer.markContentReady(slideId: id)
         }
         .adaptiveOnChange(of: currentStoryIndex) { oldValue, _ in
+            // U2 — tick haptique léger au passage de slide (parité Instagram).
+            HapticFeedback.light()
             skipExpiredStoriesIfNeeded()
             isContentReady = false
             refreshPrefetchWindowAndTimer()

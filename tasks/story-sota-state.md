@@ -399,8 +399,13 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - [ ] **U1 (P2) Transition tray→viewer** : sur iOS 18+, `navigationTransition(.zoom)` /
   matched-geometry depuis l'anneau du tray vers la carte reader ; fallback animation actuelle
   iOS 16-17. Ne PAS casser appearScale/drag-dismiss existants (cf. it.33).
-- [ ] **U2 (P2) Haptics** : `.sensoryFeedback` (iOS 17+) sur changement de slide, gel/reprise
-  buffering, publication réussie ; fallback `UIImpactFeedbackGenerator` iOS 16.
+- [x] **U2 (P2) Haptics du reader.** ✅ it.25
+  Livré via l'abstraction multi-version EXISTANTE `HapticFeedback` (UIImpactFeedbackGenerator,
+  iOS 16+) : tick léger au changement de slide + gel perceptible quand le spinner R3 apparaît
+  (après la grâce 350 ms — pas de haptic sur micro-stall) + reprise SI le gel avait été montré.
+  Publication réussie : déjà couvert (HapticFeedback.success au publish, it.12 constaté).
+  Décision : pas de doublon .sensoryFeedback 17+ — l'abstraction existante est le single
+  source du produit ; migrer TOUTE l'app vers .sensoryFeedback = chantier design system global.
 - [ ] **U3 (P2) Chrome du reader en matériaux natifs** : header/footer/sidebar en
   `.ultraThinMaterial` + sur iOS 26 adopter les surfaces Liquid Glass (`glassEffect` API si
   dispo dans le SDK cible) — TOUJOURS via gating `if #available`, jamais de régression 16-25.
@@ -507,7 +512,11 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.24 — W1 inc.2 : keyframes des mediaObjects foreground (hash au push)
+## it.25 — U2 : haptics slide-change + gel/reprise (hash au push)
+
+- 2 points d'ancrage branchés sur l'abstraction existante ; build vert (clean build 929 s).
+
+## it.24 — W1 inc.2 : keyframes des mediaObjects foreground (9c90f496e)
 
 - Réutilisation directe de l'infra it.23 (resolveKeyframeState + playhead) ; 147/147.
 
