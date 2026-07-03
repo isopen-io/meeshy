@@ -3468,6 +3468,11 @@ final class CallManager: ObservableObject {
                 switch event.mediaType {
                 case "video":
                     self.isRemoteVideoEnabled = event.enabled
+                    // System PiP renders the raw remote track directly onto an
+                    // AVSampleBufferDisplayLayer (bypassing SwiftUI's declarative
+                    // placeholder branch below) — it needs an explicit nudge or
+                    // it keeps showing the last live frame frozen indefinitely.
+                    self.pip.setRemoteVideoMuted(!event.enabled)
                     Logger.calls.info("Remote video \(event.enabled ? "enabled" : "disabled") (callId=\(event.callId))")
                 case "audio":
                     self.isRemoteAudioEnabled = event.enabled
@@ -4279,24 +4284,26 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
         // WebRTC connection existed. The manager HOLDS the action and settles
         // it in `transitionToConnected` (fulfill), on pre-connect teardown
         // (fail), or via a 10 s safety net (fulfill) so CallKit can never time
-        // it out. The delegate queue is `nil` = main, so the hand-off to the
-        // @MainActor manager is synchronous (no Sendable capture of the
-        // non-Sendable CXAction in a Task); the off-main branch is a defensive
-        // fallback that preserves the old immediate-fulfill behaviour.
-        if Thread.isMainThread {
-            MainActor.assumeIsolated {
-                guard let manager else {
-                    action.fulfill()
-                    return
-                }
-                manager.holdPendingAnswerAction(action)
-                Task { @MainActor in await manager.answerCallReady() }
+        // it out.
+        //
+        // [Fix 2026-07-03] `CXProvider.setDelegate(_:queue: nil)` makes
+        // CallKit create its OWN private serial queue for delegate callbacks
+        // — it does NOT dispatch on main (Apple's documented behaviour for a
+        // `nil` queue). The previous `Thread.isMainThread` branch was
+        // therefore always false in production, so the hold above never
+        // engaged: every answered call still fulfilled at tap time and
+        // reintroduced the exact "timer starts before connection" bug this
+        // fix was written for. Always hop to the MainActor and hold — the
+        // 10 s safety net (`holdPendingAnswerAction`) bounds the worst case,
+        // and `@preconcurrency import CallKit` above permits capturing the
+        // non-Sendable `CXAnswerCallAction` across the actor hop.
+        Task { @MainActor [weak self] in
+            guard let manager = self?.manager else {
+                action.fulfill()
+                return
             }
-        } else {
-            action.fulfill()
-            Task { @MainActor [weak self] in
-                await self?.manager?.answerCallReady()
-            }
+            manager.holdPendingAnswerAction(action)
+            await manager.answerCallReady()
         }
     }
 

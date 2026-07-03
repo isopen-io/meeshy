@@ -1803,10 +1803,13 @@ final class CallKitActionFulfillmentSourceGuardTests: XCTestCase {
     /// [Fix 2026-07-02] The answer action is HELD (`holdPendingAnswerAction`)
     /// and settled at `.connected` so the CallKit elapsed timer reflects the
     /// REAL connection, not the tap (user-reported "0:00 before the connection
-    /// exists"). The handler must still keep a defensive immediate
-    /// `action.fulfill()` on the non-main fallback path, and the settlement
-    /// sites must exist: fulfill at connect, fail on pre-connect teardown,
-    /// 10 s safety net inside holdPendingAnswerAction.
+    /// exists"). The settlement sites must exist: fulfill at connect, fail on
+    /// pre-connect teardown, 10 s safety net inside holdPendingAnswerAction.
+    ///
+    /// [Fix 2026-07-03] `CXProvider.setDelegate(_:queue: nil)` dispatches on
+    /// CallKit's own private serial queue, NOT main — a `Thread.isMainThread`
+    /// branch is always false in production and must never gate the hold.
+    /// The hand-off must unconditionally hop to the MainActor via `Task`.
     func test_cxAnswerCallAction_heldUntilConnected() throws {
         let src = try callManagerSource()
         guard let answerRange = src.range(of: "perform action: CXAnswerCallAction") else {
@@ -1818,12 +1821,16 @@ final class CallKitActionFulfillmentSourceGuardTests: XCTestCase {
         XCTAssertTrue(bodyFragment.contains("holdPendingAnswerAction(action)"),
             "CXAnswerCallAction: the action must be handed to the manager (holdPendingAnswerAction) " +
             "so the CallKit timer starts at the real connection, not at tap time.")
-        XCTAssertTrue(bodyFragment.contains("MainActor.assumeIsolated"),
-            "CXAnswerCallAction: the hand-off must be synchronous on the main queue " +
-            "(delegate queue is nil = main) — no Sendable capture of the CXAction in a Task.")
+        XCTAssertTrue(bodyFragment.contains("Task { @MainActor"),
+            "CXAnswerCallAction: the hand-off must unconditionally hop to the MainActor — the delegate " +
+            "queue is CallKit's own private serial queue (setDelegate(_:queue: nil)), never main, so a " +
+            "Thread.isMainThread branch would never engage the hold in production.")
+        XCTAssertFalse(bodyFragment.contains("Thread.isMainThread"),
+            "CXAnswerCallAction: must NOT branch on Thread.isMainThread — CallKit's nil-queue delegate " +
+            "callback never runs on main, so that branch is always false and defeats the hold.")
         XCTAssertTrue(bodyFragment.contains("action.fulfill()"),
-            "CXAnswerCallAction: the defensive fallback (off-main / nil manager) must still " +
-            "fulfill immediately so the action can never be lost.")
+            "CXAnswerCallAction: the defensive fallback (nil manager) must still fulfill immediately " +
+            "so the action can never be lost.")
 
         XCTAssertTrue(src.contains("settlePendingAnswerAction(fulfilled: true, reason: \"connected\")"),
             "transitionToConnected must fulfill the held answer action at the real connection.")
@@ -4700,6 +4707,47 @@ final class CallAnalyticsSnapshotTests: XCTestCase {
         XCTAssertFalse(
             body.contains("analyticsQualitySeconds[prevLevel, default: 0] +="),
             "The final emit must not mutate the quality accumulators — the open window is folded in PURELY by CallReliabilityPolicy.qualityDistribution"
+        )
+    }
+}
+
+// MARK: - System PiP placeholder on remote camera toggle (source guard)
+
+@MainActor
+final class CallManagerPiPRemoteMuteSourceGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// The system PiP window renders the raw remote track directly onto an
+    /// `AVSampleBufferDisplayLayer`, bypassing the SwiftUI placeholder branch
+    /// that `videoStream(local:)` already uses for the in-app floating pill.
+    /// Without this call, a peer turning their camera off mid-PiP leaves the
+    /// floating window showing their last live frame frozen indefinitely.
+    func test_callMediaToggled_video_forwardsMuteStateToSystemPiP() throws {
+        let source = try callManagerSource()
+        guard let toggledRange = source.range(of: "socket.callMediaToggled") else {
+            XCTFail("callMediaToggled subscription not found"); return
+        }
+        guard let videoCaseRange = source.range(of: "case \"video\":", range: toggledRange.lowerBound..<source.endIndex) else {
+            XCTFail("\"video\" case not found in callMediaToggled handler"); return
+        }
+        let body = String(source[videoCaseRange.lowerBound...].prefix(300))
+        XCTAssertTrue(
+            body.contains("self.isRemoteVideoEnabled = event.enabled"),
+            "The video case must still update isRemoteVideoEnabled (drives the in-app pill's SwiftUI placeholder)"
+        )
+        XCTAssertTrue(
+            body.contains("self.pip.setRemoteVideoMuted(!event.enabled)"),
+            "The video case must forward the inverse of event.enabled to the system PiP controller so it swaps " +
+            "to a generic placeholder instead of freezing on the peer's last frame"
         )
     }
 }
