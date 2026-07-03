@@ -227,6 +227,17 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         });
       }
 
+      // Realtime propagation to conversation partners (tasks/socketio-events-cleanup.md #6).
+      // Only public-facing fields matter to other users' cached profile view.
+      const publicChanges: { displayName?: string; firstName?: string; lastName?: string } = {};
+      if (body.firstName !== undefined) publicChanges.firstName = updatedUser.firstName;
+      if (body.lastName !== undefined) publicChanges.lastName = updatedUser.lastName;
+      if (body.displayName !== undefined) publicChanges.displayName = updatedUser.displayName;
+      if (Object.keys(publicChanges).length > 0) {
+        fastify.notificationService?.emitUserUpdated({ userId: userId!, changes: publicChanges })
+          .catch((err: unknown) => fastify.log.error({ err }, '[PROFILE_UPDATE] emitUserUpdated failed'));
+      }
+
       const isAdmin = updatedUser.role === 'ADMIN' || updatedUser.role === 'BIGBOSS';
       const permissions = {
         canAccessAdmin: isAdmin,
@@ -350,6 +361,9 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
 
       try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
 
+      fastify.notificationService?.emitUserUpdated({ userId: userId!, changes: { avatar: updatedUser.avatar } })
+        .catch((err: unknown) => fastify.log.error({ err }, '[AVATAR_UPDATE] emitUserUpdated failed'));
+
       fastify.log.info(`[AVATAR_UPDATE] Avatar updated successfully for user ${userId}`);
 
       return sendSuccess(reply, {
@@ -452,6 +466,9 @@ export async function updateUserBanner(fastify: FastifyInstance) {
       });
 
       try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
+
+      fastify.notificationService?.emitUserUpdated({ userId: userId!, changes: { banner: updatedUser.banner } })
+        .catch((err: unknown) => fastify.log.error({ err }, '[BANNER_UPDATE] emitUserUpdated failed'));
 
       fastify.log.info(`[BANNER_UPDATE] Banner updated successfully for user ${userId}`);
 
@@ -718,6 +735,9 @@ export async function updateUsername(fastify: FastifyInstance) {
       });
 
       try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
+
+      fastify.notificationService?.emitUserUpdated({ userId: userId!, changes: { username: updatedUser.username } })
+        .catch((err: unknown) => fastify.log.error({ err }, '[USERNAME_CHANGE] emitUserUpdated failed'));
 
       fastify.log.info(`[USERNAME_CHANGE] User ${userId} changed username from "${user.username}" to "${body.newUsername}"`);
 

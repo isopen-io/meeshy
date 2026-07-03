@@ -188,6 +188,58 @@ public actor OutboxFlusher {
         return false
     }
 
+    /// P7-7 — codes URLError de TRANSPORT (réseau/serveur injoignable). Liste
+    /// explicite : les URLError applicatifs synthétiques du chemin TUS
+    /// (`.badServerResponse`, `.badURL`, `.cannotParseResponse`) doivent, eux,
+    /// continuer à consommer le budget (erreur potentiellement permanente).
+    private static let transportURLErrorCodes: Set<URLError.Code> = [
+        .notConnectedToInternet, .networkConnectionLost,
+        .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed,
+        .timedOut, .dataNotAllowed, .internationalRoamingOff,
+    ]
+
+    /// P7-7 — une panne gateway (connection refused, DNS, timeout) est un échec
+    /// de TRANSPORT, pas applicatif : le budget d'attempts est réservé aux
+    /// refus du serveur. Sans cette distinction, ~2 min d'outage (connection
+    /// refused = échec instantané, seul le backoff espace les tentatives)
+    /// consomment les 5 attempts → `.exhausted` → l'utilisateur doit re-taper
+    /// Retry PAR message au lieu du flush FIFO automatique au reconnect
+    /// (observé E2E 2026-07-02). Même principe que le gate BW1 (mode avion)
+    /// et que l'exemption session-expiry ci-dessus.
+    /// `MeeshyError.network` est la normalisation APIClient de tout URLError
+    /// transport ; les URLError bruts couvrent le chemin TUS qui ne passe pas
+    /// par cette normalisation.
+    private static func isNetworkTransportError(_ error: Error) -> Bool {
+        if case MeeshyError.network = error { return true }
+        if let urlError = error as? URLError {
+            return transportURLErrorCodes.contains(urlError.code)
+        }
+        return false
+    }
+
+    /// PERMANENT server rejections — a 4xx that will NEVER succeed on retry
+    /// (malformed / forbidden / not found / too large / unprocessable). These
+    /// dead-letter on the FIRST attempt instead of burning the whole retry
+    /// budget + exponential backoff (≈1 min of ⏳ before the user sees "failed").
+    ///
+    /// Deliberately CONSERVATIVE — excludes anything that might recover:
+    /// - 401 → session-expiry, deferred without consuming budget (above);
+    /// - 408 / 429 / 503 → retryable (mirrors APIClient.retryableStatusCodes);
+    /// - 5xx → the server may come back;
+    /// - 409 → a conflict on a deduped clientMessageId can mean "already
+    ///   delivered", which must NOT surface as a failure — left to the generic
+    ///   path rather than dead-lettered.
+    private static let permanentRejectionStatusCodes: Set<Int> = [400, 403, 404, 413, 422]
+    private static func isPermanentServerRejection(_ error: Error) -> Bool {
+        // 403 is surfaced as a distinct `.forbidden` case by APIClient (resource
+        // access loss, not a session problem) — a permanent reject all the same.
+        if case MeeshyError.forbidden = error { return true }
+        if case let MeeshyError.server(statusCode, _) = error {
+            return permanentRejectionStatusCodes.contains(statusCode)
+        }
+        return false
+    }
+
     private func processRecord(_ record: OutboxRecord) async {
         // S1 — claim atomically; skip dispatch if another flusher beat us to it.
         guard await claimPending(record) else { return }
@@ -220,7 +272,11 @@ public actor OutboxFlusher {
             // expiry — observed in prod: a whole outbox marked `.exhausted` with
             // `auth(sessionExpired)`. Defer WITHOUT consuming the budget so the row
             // survives until re-auth, then flushes on the next scheduled attempt.
-            if Self.isSessionExpiry(error) {
+            // P7-7 — même exemption pour les échecs de TRANSPORT (gateway
+            // injoignable réseau-up) : defer sans consommer le budget, le
+            // flush au reconnect (NWPath / socket reconnect / boot) rejoue
+            // la file en FIFO — l'ordre de composition est préservé.
+            if Self.isSessionExpiry(error) || Self.isNetworkTransportError(error) {
                 current.lastError = String(describing: error)
                 current.status = .pending
                 current.updatedAt = Date()
@@ -236,7 +292,9 @@ public actor OutboxFlusher {
             current.lastError = String(describing: error)
             current.updatedAt = Date()
 
-            if current.attempts >= maxAttempts {
+            // A permanent 4xx will never succeed — dead-letter now rather than
+            // spin the full backoff schedule. Otherwise cap at `maxAttempts`.
+            if Self.isPermanentServerRejection(error) || current.attempts >= maxAttempts {
                 current.status = .exhausted
             } else {
                 current.status = .pending

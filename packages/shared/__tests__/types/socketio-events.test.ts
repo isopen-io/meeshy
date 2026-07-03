@@ -25,4 +25,10 @@ describe('SERVER_EVENTS', () => {
       expect(eventName).not.toContain('_');
     }
   });
+
+  it('declares USER_UPDATED for realtime profile propagation to conversation partners', () => {
+    expect(SERVER_EVENTS.USER_UPDATED).toBe('user:updated');
+    expect(SERVER_EVENTS.USER_UPDATED).toMatch(/^[a-z]+:[a-z-]+$/);
+    expect(SERVER_EVENTS.USER_UPDATED).not.toContain('_');
+  });
 });

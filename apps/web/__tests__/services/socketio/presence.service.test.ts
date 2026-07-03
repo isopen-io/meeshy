@@ -505,6 +505,30 @@ describe('PresenceService', () => {
     });
   });
 
+  // ─── user:updated ────────────────────────────────────────────────────────────
+
+  describe('user:updated', () => {
+    it('forwards user:updated events to registered listeners', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      service.onUserUpdated(listener);
+      const event = { userId: 'user-1', changes: { displayName: 'New Name' } };
+      socket._trigger('user:updated', event);
+      expect(listener).toHaveBeenCalledWith(event);
+    });
+
+    it('onUserUpdated unsubscribe works', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      const unsub = service.onUserUpdated(listener);
+      unsub();
+      socket._trigger('user:updated', { userId: 'user-1', changes: {} });
+      expect(listener).not.toHaveBeenCalled();
+    });
+  });
+
   // ─── conversation:participant-left ──────────────────────────────────────────
 
   describe('conversation:participant-left', () => {

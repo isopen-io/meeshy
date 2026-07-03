@@ -367,6 +367,9 @@ export const SERVER_EVENTS = {
   USER_PREFERENCES_UPDATED: 'user:preferences-updated',
   USER_PREFERENCES_REORDERED: 'user:preferences-reordered',
 
+  // --- User Profile (realtime propagation to conversation partners) ---
+  USER_UPDATED: 'user:updated',
+
   // --- Conversation Categories ---
   CATEGORY_CREATED: 'category:created',
   CATEGORY_UPDATED: 'category:updated',
@@ -632,6 +635,25 @@ export interface FriendRequestAcceptedEventData {
 export interface FriendRequestRejectedEventData {
   readonly friendRequestId: string;
   readonly rejecterId: string;
+}
+
+/**
+ * Payload de `USER_UPDATED` — émis aux user-rooms de tous les contacts
+ * (utilisateurs partageant au moins une conversation avec `userId`) quand un
+ * profil change (displayName, avatar, banner, username). Delta léger : seuls
+ * les champs modifiés sont présents dans `changes`, pas le user complet.
+ * Voir tasks/socketio-events-cleanup.md #6.
+ */
+export interface UserUpdatedEventData {
+  readonly userId: string;
+  readonly changes: Readonly<{
+    displayName?: string;
+    avatar?: string | null;
+    banner?: string | null;
+    username?: string;
+    firstName?: string;
+    lastName?: string;
+  }>;
 }
 
 /**
@@ -1354,6 +1376,9 @@ export interface ServerToClientEvents {
   // User Preferences
   [SERVER_EVENTS.USER_PREFERENCES_UPDATED]: (data: UserPreferencesUpdatedEventData) => void;
   [SERVER_EVENTS.USER_PREFERENCES_REORDERED]: (data: UserPreferencesReorderedEventData) => void;
+
+  // User Profile
+  [SERVER_EVENTS.USER_UPDATED]: (data: UserUpdatedEventData) => void;
 
   // Conversation Categories
   [SERVER_EVENTS.CATEGORY_CREATED]: (data: CategoryCreatedEventData) => void;

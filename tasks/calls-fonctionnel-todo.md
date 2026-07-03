@@ -665,3 +665,37 @@ faux positif déjà classé) a trouvé un bug réel côté web jamais documenté
   d'ajouter `mockHandleRenegotiationOffer.mockResolvedValue(undefined)` /
   `mockSetRemoteAnswer.mockResolvedValue(undefined)` aux mocks du test existant (les mocks `jest.fn()` nus
   ne retournaient pas de Promise, `.catch` sur `undefined` faisait planter 2 tests préexistants).
+
+## Vague 9 — claim orpheline post-missed + statuts terminaux immuables + index dédup fantôme (2026-07-03, validée E2E prod)
+
+Découvert PENDANT la validation device (item J) : mes appels vidéo sim→iPhone étaient rejetés
+`CALL_ALREADY_ACTIVE` alors qu'aucun appel n'était actif.
+
+- **[CRITIQUE, gateway, b02de2eee, déployé + validé prod]** Claim `Conversation.activeCallId` jamais
+  relâchée quand le ringing timeout résout l'appel `missed` : le handler gagne l'updateMany atomique
+  puis délègue à `handleMissedCall → markCallAsMissed` dont le guard non-ringing early-return AVANT
+  `releaseActiveCallClaim`. Toute la conversation rejetait les `call:initiate` (observé : ~5 min de
+  blocage, et la directe « Compte De Test Store » bloquée 12 HEURES par le missed du matin). Fix 3
+  couches : release dans le handler dès la transition gagnée (avant les étapes qui peuvent throw) ;
+  cleanup idempotent dans l'early-return du guard (statuts terminaux seulement) ; **self-heal** dans
+  `initiateCall` (claim tenue par un holder terminal → compare-and-swap atomique, un claim sain n'est
+  jamais clobberé). 2 claims orphelines hot-fixées en prod avant déploiement. Validation : sonde
+  socket.io headless (ring 60 s sans raccrocher) → missed à 60,04 s → claim `null` ✓.
+- **[CRITIQUE, gateway, c00076e6f, déployé + validé prod]** Statuts terminaux réécrits : la sonde a
+  révélé qu'après le missed, la déconnexion du caller armait une grâce (guards armement l.2893 +
+  expiration l.392 ne couvraient QUE `'ended'`) → `leaveCall` lisait le doc missed et recomputait
+  l'issue → `ended/completed/89s` + 2e summary posté. Fix 4 couches : version-increment sur l'écriture
+  terminale du timeout (protocole version-guard réparé) ; `leaveCall` court-circuite sur appel terminal
+  (leftAt du participant seulement) ; guards `CALL_TERMINAL_STATUSES` (nouvelle constante runtime dans
+  @meeshy/shared/types/video-call) à l'armement ET à l'expiration. Validation : sonde rejouée → statut
+  `missed` préservé, version=2, claim null, UN summary ✓.
+- **[CRITIQUE, prod DB, appliqué manuellement]** L'index unique partiel `(conversationId,
+  clientMessageId)` n'a JAMAIS existé : la migration C6 (et l'originale 2026-05-09) ciblait
+  `db.messages` — collection VIDE (model Prisma `Message` sans `@@map` → collection `db.Message`).
+  Dédup P2002 (summaries + offline-queue) inopérante → 33 paires de doublons en prod : 13 summaries
+  tardifs supprimés (0 référence), 25 messages utilisateur préservés (`$unset clientMessageId`), index
+  créé sur `db.Message` et vérifié par insertion-sonde E11000 ✓. Script de migration corrigé au repo.
+- **[Item J, partiel]** Chemin device réel validé : VoIP push APNs production → CallKit lock-screen →
+  décrochage jcnm → média actif 73 s (RTT 11 ms, opus). RESTE : appel vidéo décroché, caméra, PiP
+  swipe-home, stuck-muted — en attente de disponibilité utilisateur. Sim instable ce soir (2 relaunches
+  spontanés + churn sockets) — envisager un run dédié pour la prochaine session device.

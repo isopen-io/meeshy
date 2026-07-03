@@ -3328,12 +3328,15 @@ class ConversationViewModel: ObservableObject {
     // MARK: - Reconnection Sync (called by ConversationSocketHandler)
 
     func syncMissedMessages() async {
-        // The high-water mark is the newest message we already hold. With no
-        // local messages there is nothing to backfill *from* — a full load
-        // happens on conversation open instead, so no-op rather than refetch
-        // from the top. `.max()` is order-independent (doesn't assume the
-        // store sort).
-        guard let newestLocal = messages.map(\.createdAt).max() else { return }
+        // The high-water mark is the newest SERVER-TIMESTAMPED message we already
+        // hold. Optimistic own-sends still in flight carry a LOCAL device-clock
+        // `createdAt`; if the clock runs ahead of the server they would poison the
+        // watermark and the gateway's strict `createdAt > after` (server time)
+        // would silently skip real missed messages. `SyncWatermark.newest` (SDK
+        // rule) excludes them. With no server-timestamped message there is nothing
+        // to backfill *from* — a full load happens on conversation open instead,
+        // so no-op rather than refetch from the top.
+        guard let newestLocal = SyncWatermark.newest(among: messages) else { return }
 
         // Page size and total cap mirror the contiguous-backfill contract: a
         // missed-message gap of any size is filled by paging forward, not just

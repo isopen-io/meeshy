@@ -112,8 +112,50 @@
 > connect, ticking through a reconnect, frozen at the final length on the ended screen, `null` for a call
 > that never connected. The connected screen shows the running clock; the ended screen appends the final
 > length. +18 tests.
-> **Next:** a full `ConnectionService`/Telecom integration + ringback tone (system call UI), then the
-> actual WebRTC media transport (`stream-webrtc-android`). Follow-up: `SocketManager.reconnectWithToken()`
+> On 2026-07-02 the **call-audio decision core** landed (slice `call-sound-policy`): the pure
+> `core:model` `CallSoundPolicy` is the SSOT mapping call lifecycle → sound — the Android analogue of the
+> iOS `RingbackTonePlayer` call sites collected into one total function. `loopFor(state)`
+> (`CallSound.None/Ringback/Ringtone`) plays the caller **ringback** through the whole pre-answer wait
+> (`Ringing(outgoing)` + `Offering`) and stops it the instant the answer lands (`Connecting`) — tighter
+> than iOS, which drags it to `.connected` — and the callee **ringtone** while `Ringing(incoming)`;
+> `cueFor(prev,next)` fires `CallCue.Connected` on every entry into `Connected` (first connect **and**
+> reconnect-success) and `CallCue.Ended` only when a *live* call ends (`prev.isActive`, mirroring iOS
+> `if wasActive`), so a phantom `Idle→Ended`/idempotent `Ended→Ended` stays silent; `plan(prev,next)`
+> bundles both per edge. The `:feature:calls` `CallToneController` seam (thin `ToneGenerator`/
+> `RingtoneManager` glue behind an interface, `@Binds AndroidCallToneController`) is folded into
+> `CallViewModel.dispatch` — each FSM edge drives the loop (switched only on a genuine change, so an inert
+> event never restarts the ringback) + fires the cue, released on `onCleared`. +28 tests (19 policy, 9
+> VM-fold via a recording fake). `assembleDebug` + all `testDebugUnitTest` green.
+> On 2026-07-03 the **telecom-connection decision core** landed (slice `call-telecom-state-plan`): the pure
+> `core:model` `TelecomCallPolicy` is the SSOT mapping call lifecycle → the OS telecom reports a
+> self-managed `ConnectionService` must make — the Android analogue of the `CXProvider.reportCall(...)` /
+> `report(_:endedAt:)` calls the iOS `CallManager` makes to CallKit, collected into one total function.
+> `connectionStateFor(state)` keys purely on `CallState` (no direction leak): outgoing ring/`Offering` →
+> `Dialing`, incoming ring → `Ringing`, **answered = `Active`** (`Connecting`/`Connected`/`Reconnecting`
+> collapse onto `Active` so an ICE restart never tears the system call down), `Ended` → `Disconnected`,
+> `Idle` → none. `disconnectCauseFor(reason)` maps every `CallEndReason` (lost/failed → `Error`).
+> `plan(prev,next)` reports **only on a genuine transition** — dedupes an already-active edge, a phantom
+> `Idle→Ended` (no connection ever created, mirroring `CallSoundPolicy`'s `prev.isActive` guard), an
+> idempotent `Ended→Ended`, and a settle `Ended→Idle` all to `null`. The `:feature:calls`
+> `TelecomCallReporter` seam (thin `LogTelecomCallReporter` interim glue behind an interface, `@Binds` into
+> a Hilt module) is folded into `CallViewModel.dispatch` (report each genuine edge; released on
+> `onCleared`). +35 tests (28 policy, 7 VM-fold via a recording fake). `assembleDebug` + all
+> `testDebugUnitTest` green.
+> On 2026-07-03 the **connection-quality core + indicator** landed (slice `call-quality-level`): the pure
+> `core:model` `VideoQualityLevel` (5-tier `CRITICAL<POOR<FAIR<GOOD<EXCELLENT`, port of iOS
+> `VideoQualityLevel`/`QualityThresholds`) classifies live stats via `from(rttMs, packetLoss)`
+> (worse-of-two-axes, strict `>`) + `from(availableOutgoingBitrateBps)` and carries each tier's sender
+> caps for the future adaptive-bitrate ladder; the four-tier `ConnectionQuality` collapses it
+> (`CRITICAL→POOR`, parity with iOS `connectionQualityLabel`) with `bars`/`isWeak`. A `CallQualitySampler`
+> stats seam (interim `NoopCallQualitySampler`) is folded into `CallViewModel` exactly while media flows
+> (a `qualityJob` mirroring the duration ticker), projected by `CallPresenter` into
+> `CallUiState.connectionQuality`, and rendered as an accent-coherent 4-bar signal indicator on the call
+> screen (error hue on a weak link). +37 tests (24 core, 6 VM-fold, 3 presenter, +4 strings×4 locales).
+> `assembleDebug` + all `testDebugUnitTest` green.
+> **Next:** the real self-managed `ConnectionService`/`PhoneAccount` registration + full-screen call UI +
+> foreground service (the platform glue that swaps the `LogTelecomCallReporter` `@Binds` for a real
+> reporter and owns the audio session), then the actual WebRTC media transport (`stream-webrtc-android`).
+> Follow-up: `SocketManager.reconnectWithToken()`
 > still has no caller (token-refresh re-attach slice — deferred until a token-rotation trigger exists).
 > See the run log + `feature-parity.md §H`.
 
@@ -308,7 +350,25 @@ dedicated **Calls tab** in the bottom nav wiring `CallHistoryScreen` (`:app`). T
 WebRTC/Telecom/FCM plumbing.
 
 Then the heavier WebRTC/Telecom/FCM-full-screen-intent plumbing (glue-heavy; push every testable
-decision into pure helpers/the VM).
+decision into pure helpers/the VM). The **ringback/ringtone/cue** decision core shipped as
+`call-sound-policy` (2026-07-02), the **telecom-connection** decision core as `call-telecom-state-plan`
+(2026-07-03), and the **connection-quality classification + indicator** as `call-quality-level`
+(2026-07-03) — all pure `core:model` SSOTs folded into `CallViewModel`, leaving only the real
+self-managed `ConnectionService`/`PhoneAccount` registration + foreground-service call UI (which swaps the
+`LogTelecomCallReporter` `@Binds`) and the WebRTC media transport (`stream-webrtc-android`) as the
+remaining platform glue.
+
+**Next testable pure cores in Calls** (highest value first):
+1. **Video-survival auto-disable policy** — port iOS `VideoSurvivalPolicy` (time-hysteresis
+   `reduce(state, level, now, userWantsVideo) → (state, suspend|resume|none)`): drop outbound video to
+   audio-only on a sustained `POOR`/`CRITICAL` link, resume on a sustained good streak. Pure/monotonic →
+   exhaustively testable; consumed by the future WebRTC actuator seam. Feeds off the `VideoQualityLevel`
+   shipped this slice.
+2. **Call-waiting banner** — a second incoming call while one is active. `IncomingCallDecider` already
+   returns `Ignore(BUSY)`; iOS instead surfaces a `CallWaitingBannerView` (accept-and-swap / reject-busy /
+   15s auto-dismiss-as-reject). A pure decision core + a banner surface.
+3. **Adaptive sender-cap plan** — a pure `level → (resolutionHeight, fps, bitrate)` mapping (already on
+   `VideoQualityLevel`) folded into the future WebRTC sender-parameters actuator.
 
 --- Stories backlog (area is rich; revisit only if Calls stalls) ---
 Ordered by value:
@@ -496,6 +556,119 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-03 — slice `call-quality-level` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration. The open PRs (#1367–#1379)
+  are `jcnm` web/ios/gateway branches from other sessions — disjoint from `apps/android`, left
+  untouched. Branched `claude/apps/android/call-quality-level` off freshly-fetched `origin/main`
+  (`4a69ef0`).
+- **Gap closed:** the call had no notion of link quality — no connection-quality indicator, no tier
+  model for the future adaptive-bitrate ladder. iOS has `VideoQualityLevel` + `QualityThresholds`
+  (`WebRTCTypes.swift`) classifying live stats into a 5-tier ladder and `connectionQualityLabel`
+  collapsing it to the 4-tier indicator; Android had nothing.
+- **What shipped (thin vertical slice, TDD red→green, same shape as `call-duration-timer`):**
+  - `:core:model` `CallQuality.kt` — the pure classification SSOT. `CallQualityThresholds` (the iOS
+    `QualityThresholds` constants), `VideoQualityLevel` (`CRITICAL<POOR<FAIR<GOOD<EXCELLENT`) with
+    per-tier sender caps (`targetResolutionHeight`/`targetFps`/`targetVideoBitrateBps`) + two total
+    classifiers `from(rttMs, packetLoss)` (worse-of-two-axes, **strict `>`** so a value exactly on a
+    threshold stays in the better tier — iOS parity) and `from(availableOutgoingBitrateBps)`;
+    `CallQualitySample(rttMs, packetLoss).level()`; and the four-tier `ConnectionQuality`
+    (`from(VideoQualityLevel)` collapsing `CRITICAL→POOR`, `bars` 1–4, `isWeak`). **24 tests** (every
+    boundary of both classifiers pinned on both sides, all tier accessors, ordering, collapse/bars/weak).
+  - `:feature:calls` `CallQualitySampler` — the input seam (interface `samples: Flow<CallQualitySample>`)
+    with an interim `NoopCallQualitySampler` (`emptyFlow`, so the indicator stays hidden until the
+    WebRTC stats collector swaps the `@Binds`) + Hilt module. Framework glue → exempt from JVM coverage.
+  - `CallViewModel` folds the sampler stream **only while media flows** (a `qualityJob` started/stopped
+    in `syncQuality` exactly like the ticker's `syncTicker`): each sample → `ConnectionQuality`, cleared
+    to `null` on leaving connected/reconnecting and on a fresh `start`. `CallPresenter` projects
+    `CallUiState.connectionQuality`, suppressing any stale reading off the connected/reconnecting phases.
+    **+6 VM-fold tests** (no quality before connect, healthy→GOOD, critical→POOR collapse, updates through
+    a reconnect, cleared on end, cleared on a new call) + **+3 presenter tests**. CallViewModelTest 51→57,
+    CallPresenterTest 25→28.
+  - `CallScreen` renders an accent-coherent 4-bar signal indicator under the status label when
+    `connectionQuality != null` (bars fill to `bars`, tinted the peer accent or the error hue on a weak
+    link, one VoiceOver tier label; +4 strings × 4 locales).
+- **Verification:** `/opt/gradle/bin/gradle assembleDebug testDebugUnitTest` → **BUILD SUCCESSFUL** (all
+  modules; CallQualityTest 24/24, CallViewModelTest 57/57, CallPresenterTest 28/28). System Gradle
+  8.14.3 per NOTES.md.
+- **Reviewer verdict:** **PASS** — diff is `apps/android` only (12 files), no production logic, TDD
+  behavioural (no tautologies, no floor lowered), SDK purity respected (pure classification in
+  `:core:model`, seam/glue/fold in `:feature:calls`), UDF preserved, cancellation-safe (qualityJob in
+  `viewModelScope`, structured cancel), accent-coherent indicator with no dead-end.
+
+### 2026-07-03 — slice `call-telecom-state-plan` ✅ shipped
+- **Step 0 (housekeeping):** the prior Android iteration's PR **#1375 (`call-sound-policy`) was still
+  open** — rebased it clean on the latest `origin/main` (no `apps/android` file overlap since its base),
+  pushed, waited for all 14 CI jobs green, **squash-merged to `main`** (`26e2500`). The other open PRs
+  (#1367–#1374, #1376) are `jcnm` web/ios/gateway branches — disjoint from `apps/android`, left untouched.
+  Branched `claude/apps/android/call-telecom-state-plan` off the post-merge `origin/main` (`26e2500`) so
+  the tree already carries the sound-policy fold this slice extends.
+- **Gap closed:** the call lifecycle had no bridge to the **OS telecom layer** — no self-managed
+  `ConnectionService`/`PhoneAccount` reporting (the Android analogue of the iOS `CXProvider.reportCall(...)`
+  / `report(_:endedAt:)` calls the `CallManager` makes to CallKit). This slice ships the pure decision core
+  that a future `ConnectionService` glue consumes, so the heavy platform integration is left decision-free.
+- **What shipped (thin vertical slice, TDD red→green):**
+  - `:core:model` `TelecomCallPolicy` — the pure, side-effect-free SSOT mapping call lifecycle → the OS
+    telecom reports. `TelecomConnectionState` (`Dialing/Ringing/Active/Disconnected`) +
+    `TelecomDisconnectCause` (`Local/Remote/Rejected/Missed/Error/Busy`) + `TelecomConnectionUpdate`.
+    `connectionStateFor(state)` keys purely on `CallState` with no direction leak: outgoing ring/offering →
+    `Dialing`, incoming ring → `Ringing`, **answered = `Active`** (`Connecting`/`Connected`/`Reconnecting`
+    all collapse onto `Active`, so an ICE restart never tears the system call down), `Ended` →
+    `Disconnected`, `Idle` → no connection. `disconnectCauseFor(reason)` maps every `CallEndReason`
+    (lost/failed → `Error`). `plan(prev,next)` emits a report **only on a genuine transition** — it dedupes
+    an already-active edge, a phantom `Idle→Ended` (no connection was ever created — mirrors
+    `CallSoundPolicy`'s `prev.isActive` guard), an idempotent `Ended→Ended`, and a settle `Ended→Idle` all
+    to `null`. **28 tests** (every arm of `connectionStateFor` incl. both ring directions, every
+    `disconnectCauseFor`, every `plan` branch: creation / ring→active / dedupe×3 / all disconnect causes /
+    phantom / idempotent / settle).
+  - `:feature:calls` `TelecomCallReporter` — the output seam (interface), with a thin `LogTelecomCallReporter`
+    interim glue (emits each transition to the system log so the seam is live end-to-end while the heavier
+    self-managed `ConnectionService`/`PhoneAccount` registration — which will swap this `@Binds` — is built
+    as its own glue slice), `@Binds` into a Hilt module (mirrors `CallToneModule`/`CallTickerModule`).
+    Framework glue → exempt from JVM coverage per `TDD-COVERAGE.md`.
+  - `CallViewModel.dispatch` folds each FSM edge through `TelecomCallPolicy.plan` — reporting only the
+    genuine transitions the policy surfaces; `onCleared` releases the reporter alongside the tone controller.
+    **7 VM-fold tests** via a recording fake reporter (outgoing→dialing, incoming→ringing, answered→active-
+    once-with-dedupe, inert-no-report, decline→disconnected(rejected), hang-up→disconnected(local),
+    failed-initiate→disconnected(error)). CallViewModelTest 44→51.
+- **Verification:** `/opt/gradle/bin/gradle assembleDebug testDebugUnitTest` → **BUILD SUCCESSFUL** (all
+  modules; TelecomCallPolicyTest 28/28, CallViewModelTest 51/51). System Gradle 8.14.3 fallback per NOTES.md.
+- **Reviewer verdict:** **PASS** — diff is `apps/android` only (6 files), no production logic, TDD
+  behavioural (no tautologies, no floor lowered), SDK purity respected (pure decision in `:core:model`,
+  orchestration/glue in `:feature:calls`), UDF preserved, cancellation-safe (all pure).
+
+### 2026-07-02 — slice `call-sound-policy` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration. The open PRs (#1367–#1374) are
+  `jcnm` branches from other sessions touching web/ios/gateway only — disjoint from `apps/android`, left
+  untouched. Branched off freshly-fetched `origin/main` (`ad3c3b2`) as `claude/apps/android/call-sound-policy`.
+  Confirmed the latest state (top-of-PROGRESS) was `call-duration-timer`; next Calls step per the routine is
+  the Telecom/ringback area — carved a thin, fully-testable pure core out of it.
+- **Gap closed:** the call screen was silent — no ringback for the caller, no ringtone for the callee, no
+  connect/end cue. iOS has a `RingbackTonePlayer` ("the call sound manager") whose start/stop/cue calls are
+  scattered across `CallManager`; Android had nothing.
+- **What shipped (thin vertical slice, TDD red→green):**
+  - `:core:model` `CallSoundPolicy` — the pure, side-effect-free SSOT collecting every iOS `RingbackTonePlayer`
+    call site into one total function. `CallSound` (`None/Ringback/Ringtone`) + `CallCue` (`Connected/Ended`)
+    + `CallSoundPlan`. `loopFor(state)` plays **ringback** across the whole pre-answer wait
+    (`Ringing(outgoing)` + `Offering`, both outgoing-exclusive → no direction ambiguity) and stops it at the
+    answer (`Connecting`) — tighter than iOS which drags it to `.connected` — and **ringtone** while
+    `Ringing(incoming)`. `cueFor(prev,next)` fires `Connected` on every entry into `Connected` (first connect
+    **and** reconnect-success) and `Ended` only when a *live* call ends (`prev.isActive`, iOS `if wasActive`),
+    silent on `Idle→Ended`/`Ended→Ended`. `plan()` bundles both. **19 tests** (every branch of both maps + plan).
+  - `:feature:calls` `CallToneController` — the output seam (interface), with a thin
+    `AndroidCallToneController` glue impl (`ToneGenerator.TONE_SUP_RINGTONE` ringback + `RingtoneManager`
+    ringtone + `TONE_PROP_ACK`/`TONE_PROP_PROMPT` cues, every entry `runCatching`-guarded), `@Binds` into a
+    Hilt module (mirrors `CallTickerModule`). Framework glue → exempt from JVM coverage per `TDD-COVERAGE.md`.
+  - `CallViewModel.dispatch` folds each FSM edge through `CallSoundPolicy.plan`: switches the loop **only on a
+    genuine change** (an inert event never restarts the ringback — tracked via `activeLoop`) and fires the cue;
+    `onCleared` releases. **9 VM-fold tests** via a recording fake controller (outgoing ringback→stop→connected
+    cue, incoming ringtone→stop→connected cue, decline/hang-up ended cue, remote-hangup-after-connect, inert
+    no-restart, reconnect re-cues). CallViewModelTest 35→44.
+- **Verification:** `/opt/gradle/bin/gradle assembleDebug testDebugUnitTest` → **BUILD SUCCESSFUL** (all
+  modules; CallSoundPolicyTest 19/19, CallViewModelTest 44/44). See NOTES.md for the Gradle-8.14.3 fallback.
+- **Reviewer verdict:** **PASS** — diff is `apps/android` only (5 files, +456/−2), no production logic, TDD
+  behavioural (no tautologies, no floor lowered), SDK purity respected (pure decision in `:core:model`,
+  orchestration/glue in `:feature:calls`), UDF preserved, cancellation-safe (all pure/`runCatching`).
 
 ### 2026-07-02 — slice `call-duration-timer` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration. The open PRs (#1366–#1369) are

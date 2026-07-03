@@ -268,15 +268,22 @@ describe('ReactionHandler', () => {
       expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Could not resolve participant' }));
     });
 
-    it('returns error when removeReaction returns false (reaction not found)', async () => {
-      const { handler } = buildHandler({
+    it('replies idempotent success when removeReaction returns false (reaction already absent)', async () => {
+      // Contract 6b5ca4448: an un-react whose reaction is already gone has
+      // reached the caller's desired end-state — replying an error made the
+      // client roll back its optimistic removal and re-show a dead reaction.
+      const { handler, io } = buildHandler({
         reactionService: { removeReaction: jest.fn<any>().mockResolvedValue(false), createUpdateEvent: jest.fn<any>() },
       });
       const callback = jest.fn<any>();
 
       await handler.handleReactionRemove(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, callback);
 
-      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Reaction not found' }));
+      expect(callback).toHaveBeenCalledWith(
+        expect.objectContaining({ success: true, data: { message: 'Reaction already absent' } })
+      );
+      // Nothing changed — no broadcast to the conversation room.
+      expect(io.to).not.toHaveBeenCalled();
     });
 
     it('broadcasts removal and calls callback with success on happy path', async () => {

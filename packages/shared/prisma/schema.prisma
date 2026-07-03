@@ -3759,6 +3759,20 @@ model MutationLog {
   @@map("mutation_logs")
 }
 
+/// SyncEngine unifié (spec §5, sous-tâche A1) — compteur de séquence monotone
+/// PAR utilisateur. `SequenceService.nextSeq(userId)` incrémente atomiquement
+/// `lastSeq` (upsert `increment`) et retourne la nouvelle valeur, tamponnée sur
+/// chaque event Socket.IO user-scoped (`_seq`) pour la détection EXACTE des gaps
+/// (« vu 91230, serveur à 91234 → 4 events manqués ») — supérieure au gap
+/// recovery temporel actuel (watermarks `updatedSince`/`after`), notamment pour
+/// l'ordering multi-device. Une ligne par utilisateur.
+model UserEventSeq {
+  userId  String @id @map("_id") @db.ObjectId
+  lastSeq BigInt @default(0)
+
+  @@map("user_event_seq")
+}
+
 /// Mention d'un utilisateur dans un commentaire de post
 model CommentMention {
   id                String   @id @default(auto()) @map("_id") @db.ObjectId
