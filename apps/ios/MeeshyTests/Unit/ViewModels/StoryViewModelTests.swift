@@ -228,18 +228,21 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertTrue(sut.storyGroups[0].stories[0].isViewed)
     }
 
-    func test_markViewed_callsServiceMarkViewed() async {
+    func test_markViewed_enqueuesDurableOutboxRecord() async {
+        // R6 — le « vu » passe par l'outbox durable (survit kill/offline),
+        // plus par le POST fire-and-forget direct.
         let item = makeStoryItem(id: "view-service-test", isViewed: false)
         let group = makeStoryGroup(userId: "u1", stories: [item])
         sut.storyGroups = [group]
+        var enqueuedStoryIds: [String] = []
+        sut.markViewedOutboxEnqueuer = { enqueuedStoryIds.append($0) }
 
         sut.markViewed(storyId: "view-service-test")
 
         // Give the fire-and-forget Task time to execute
         try? await Task.sleep(nanoseconds: 100_000_000)
 
-        XCTAssertEqual(mockStoryService.markViewedCallCount, 1)
-        XCTAssertEqual(mockStoryService.lastMarkViewedStoryId, "view-service-test")
+        XCTAssertEqual(enqueuedStoryIds, ["view-service-test"])
     }
 
     func test_markViewed_nonExistentStoryId_doesNothing() {

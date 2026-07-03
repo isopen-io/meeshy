@@ -269,10 +269,13 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   RESTE (it.4+) : (c) test d'intégration « voir → couper réseau → relire → zéro requête »
   (scénario simulateur) ; raffinement : les stories de l'AUTEUR courant ne passent pas par
   markViewed → non pinnées (mineur : l'auteur garde ses assets composer en local).
-- [ ] **R6 (P2) `OutboxKind.markStoryViewed` — état vu durable offline.**
-  Preuve : fire-and-forget REST (`StoryViewModel.markViewed`), aucun kind outbox, perte possible
-  si éviction cache avant sync. Ajouter le kind + flush FIFO au reconnect (l'infra outbox T10
-  existe). Idempotent côté serveur (P2002 no-op déjà géré).
+- [x] **R6 (P2) `OutboxKind.markStoryViewed` — état vu durable offline.** ✅ it.14
+  Livré : kind appendé (règle append-only de l'enum), `MarkStoryViewedPayload`
+  (cmid + storyId), coalescing par anchor = storyId (re-voir la même story remplace le row —
+  mécanisme markAsRead réutilisé tel quel), `dispatchMarkStoryViewed` (POST /posts/:id/view,
+  404 = story disparue → succès), `markViewed` passe par l'outbox via seam injectable
+  (`markViewedOutboxEnqueuer`) — le POST fire-and-forget direct est remplacé.
+  Test adapté : `test_markViewed_enqueuesDurableOutboxRecord` (seam).
 - [ ] **R7 (P2) Défense de routage média : sniff avant store.**
   Preuve (bug mp4-dans-Images CONFIRMÉ) : `prefetchStoryMediaURLs`
   (`StoryViewModel.swift:442-459`) route par `FeedMedia.type` ; type nil/mal classé → mp4 dans
@@ -468,7 +471,17 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.13 — G1 incrément delta-sync : ?updatedSince sur le tray stories (hash au push)
+## it.14 — R6 : markStoryViewed durable via l'outbox (hash au push)
+
+- Réutilisation maximale : payload/coalescing/dispatch calqués sur le jumeau markAsRead
+  (anchor générique = storyId). Aucun nouveau mécanisme.
+- Vérif : StoryViewModelTests 78/78 (test adapté au seam outbox) + build app 53 s vert.
+- Pièges rencontrés : (1) Swift 6 « actor-isolated default value » sur le default de la
+  closure seam → corps extrait en `nonisolated static` ; (2) l'ajout d'un OutboxKind casse
+  le switch exhaustif d'OutboxUIItem (groupe background receipts) — à retenir pour tout
+  futur kind ; labels SyncPill ajoutés (string-based, pas de casse).
+
+## it.13 — G1 incrément delta-sync : ?updatedSince sur le tray stories (ecfd6c9fd)
 
 - RED : 2 tests PostFeedService (filtre présent avec option, absent sans). 34/34 service,
   111/111 les 6 suites feed (bun). Route : parse manuel tolérant (invalide → full).

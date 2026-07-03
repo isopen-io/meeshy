@@ -592,18 +592,39 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
 
     // MARK: - Mark Story as Viewed
 
+    /// R6 — seam injectable (tests) : le chemin réel enqueue dans l'outbox
+    /// durable (`.markStoryViewed`, anchor = storyId pour le coalescing) au
+    /// lieu du POST fire-and-forget historique — le « vu » survit à un
+    /// kill/offline et se rejoue FIFO au reconnect via OutboxDispatcher.
+    var markViewedOutboxEnqueuer: (String) async throws -> Void = { storyId in
+        try await StoryViewModel.enqueueMarkStoryViewed(storyId)
+    }
+
+    /// Corps réel du seam ci-dessus — `nonisolated static` pour que la valeur
+    /// PAR DÉFAUT de la propriété n'évalue rien d'actor-isolé (Swift 6 :
+    /// « actor-isolated default value in a main actor-isolated context »).
+    nonisolated static func enqueueMarkStoryViewed(_ storyId: String) async throws {
+        let payload = MarkStoryViewedPayload(
+            clientMutationId: ClientMutationId.generate(),
+            storyId: storyId
+        )
+        _ = try await OfflineQueue.shared.enqueue(
+            .markStoryViewed, payload: payload, conversationId: storyId
+        )
+    }
+
     func markViewed(storyId: String) {
         // Fire & forget : l'état « vu » local est posé optimistiquement (local-first).
         // L'échec réseau ne déclenche PAS de toast (marquer-vu est un effet de bord de
         // fond, pas une action utilisateur attendant un feedback — un toast serait du
         // bruit), mais il est désormais LOGGÉ (avant : catch vide → échec invisible,
         // ring « vu » localement mais jamais côté serveur → revert au prochain fetch).
-        Task {
+        Task { [markViewedOutboxEnqueuer] in
             do {
-                try await storyService.markViewed(storyId: storyId)
+                try await markViewedOutboxEnqueuer(storyId)
             } catch {
                 Logger.stories.error(
-                    "markViewed failed for \(storyId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    "markViewed enqueue failed for \(storyId, privacy: .public): \(error.localizedDescription, privacy: .public)")
             }
         }
 
