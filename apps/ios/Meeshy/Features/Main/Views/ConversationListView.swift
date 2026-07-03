@@ -153,7 +153,9 @@ struct ConversationListView: View {
     @State var contextMenuDismissWork: DispatchWorkItem? = nil
     /// Tracks which conversation row has isPressed = true (scale animation active).
     /// When menu closes, this resets to nil and rows use .onChange to reset isPressed.
-    @State private var activelyPressedConversationId: String? = nil
+    /// Pas `private` : lu par les fichiers d'extension +Overlays/+Rows (un @State
+    /// private est inaccessible depuis un fichier extension frère — cf. CLAUDE.md).
+    @State var activelyPressedConversationId: String? = nil
 
     /// Renommage : conversation cible + texte en cours d'édition (action
     /// « Renommer » du menu contextuel, groupes/communautés uniquement).

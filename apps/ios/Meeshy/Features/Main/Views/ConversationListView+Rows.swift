@@ -98,7 +98,7 @@ struct ConversationRowItem: View {
             // natif, lui, se coordonnait avec `.onDrag`). Le déplacement reste
             // accessible via « Déplacer vers » dans le menu.
             .onLongPressGesture(minimumDuration: 0.4) {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                withAnimation(.spring(response: 0.65, dampingFraction: 0.99)) {
                     isPressed = true
                 }
                 HapticFeedback.medium()
@@ -107,12 +107,14 @@ struct ConversationRowItem: View {
             .task {
                 await onLoadPreview()
             }
-            .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isPressed)
-            .onChange(of: activelyPressedConversationId) { oldId, newId in
+            .animation(.spring(response: 0.65, dampingFraction: 0.99), value: isPressed)
+            // adaptiveOnChange : la signature (old, new) de .onChange est iOS 17+ ;
+            // le shim maison couvre le plancher iOS 16 du projet.
+            .adaptiveOnChange(of: activelyPressedConversationId) { oldId, newId in
                 // If menu is dismissed (newId becomes nil) or switched to another row (newId != our ID),
                 // reset this row's press state with animation
                 if oldId == conversation.id && (newId == nil || newId != conversation.id) {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                    withAnimation(.spring(response: 0.65, dampingFraction: 0.99)) {
                         isPressed = false
                     }
                     onMenuDismissed?()
