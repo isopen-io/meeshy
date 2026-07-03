@@ -330,6 +330,8 @@ struct ConversationListView: View {
             },
             onDragStart: {
                 draggingConversation = conversation
+                // Close menu when drag-to-reorder starts
+                activelyPressedConversationId = nil
                 HapticFeedback.medium()
             },
             onLoadPreview: {
@@ -352,7 +354,8 @@ struct ConversationListView: View {
             onMenuDismissed: {
                 activelyPressedConversationId = nil
             },
-            activelyPressedConversationId: activelyPressedConversationId
+            activelyPressedConversationId: activelyPressedConversationId,
+            draggingConversationId: draggingConversation?.id
         )
         .equatable()
     }
