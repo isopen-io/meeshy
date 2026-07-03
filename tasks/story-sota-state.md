@@ -185,9 +185,13 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   rm dossier médias ; annulation explicite → idem (pas de résurrection au boot) ; échec →
   l'item RESTE (retry UI ou reprise au prochain boot). La bifurcation isOffline demeure pour
   l'UX (banner vs upload visible) mais la DURABILITÉ est unifiée.
-- [ ] **E6 (P2) `StoryQueueMigrator.migrateLegacyOfflineQueue()` jamais appelé en prod.**
-  Preuve : grep → définition + tests seulement. Soit l'appeler au boot (one-shot idempotent,
-  déjà testé), soit supprimer le legacy si plus aucun install n'a l'ancien fichier.
+- [x] **E6 (P2) `StoryQueueMigrator.migrateLegacyOfflineQueue()` jamais appelé en prod.** ✅ it.17
+  Choix : APPELER (pas supprimer — impossible de prouver qu'aucun install n'a l'ancien
+  fichier). Câblé dans `StoryPublishService.configure()` AVANT `setExecutor`/auto-drain
+  (les items migrés doivent exister au drain), avec refreshPendingCount après migration.
+  Le migrator lui-même était déjà idempotent + testé (no-op sans fichier, quarantaine JSON
+  corrompu). Retrait du legacy StoryOfflineQueue = candidat futur une fois la population
+  migrée (noter une échéance produit).
 - [ ] **E7 (P2) Code mort Timeline publish** : `handlePublishTap` + `StubOnlinePublisher`
   (throw toujours, zéro caller) ; `buildOfflineQueueItem` limitation F5 (perd
   background/filter/drawing sur flush). Décision : retirer ou câbler — trancher avec le user si
@@ -477,7 +481,12 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.16 — E10 : la queue nettoie ses copies média (hash au push)
+## it.17 — E6 : le migrator de queue legacy court enfin au boot (hash au push)
+
+- Câblage 10 lignes (le migrator SDK était écrit/testé, zéro caller). Ordre critique :
+  migrate → sweep E10 → subscribe → executor/drain.
+
+## it.16 — E10 : la queue nettoie ses copies média (de9f32797)
 
 - 15/15 StoryPublishQueueTests (2 nouveaux : succès rm fichiers+dossier, retryable garde) ;
   tests purs du sweep app ; build vert.
