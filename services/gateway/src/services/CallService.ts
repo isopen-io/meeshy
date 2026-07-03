@@ -283,13 +283,6 @@ export class CallService {
   }
 
   /**
-   * Get last heartbeat timestamp for a participant
-   */
-  getLastHeartbeat(callId: string, participantId: string): number | undefined {
-    return this.heartbeats.get(callId)?.get(participantId);
-  }
-
-  /**
    * Returns true when at least one heartbeat has been recorded in-memory for
    * this call. Used by CallCleanupService to distinguish "no data yet" (post-restart)
    * from "data exists but no stale entries".
@@ -1634,8 +1627,17 @@ export class CallService {
     const now = new Date();
     const duration = Math.floor((now.getTime() - callSession.startedAt.getTime()) / 1000);
 
-    await this.prisma.callSession.update({
-      where: { id: callId },
+    // Version/status-scoped write, mirroring updateCallStatus()'s optimistic
+    // lock — a concurrent terminal writer (call:end, call:leave, the ringing
+    // timeout handler on another path, CallCleanupService GC) can resolve this
+    // call between the findUnique read above and this write. Scoping the
+    // update to the source statuses we actually read makes a losing writer's
+    // update a no-op instead of clobbering endedAt/duration/endReason.
+    const result = await this.prisma.callSession.updateMany({
+      where: {
+        id: callId,
+        status: { in: [CallStatus.initiated, CallStatus.ringing] }
+      },
       data: {
         status: CallStatus.missed,
         endedAt: now,
@@ -1643,6 +1645,11 @@ export class CallService {
         endReason: CallEndReason.missed
       }
     });
+
+    if (result.count === 0) {
+      logger.warn('⚠️ markCallAsMissed lost race to a concurrent terminal write — no-op', { callId });
+      return this.getCallSession(callId);
+    }
 
     this.clearHeartbeats(callId);
     this.clearRingingTimeout(callId);
