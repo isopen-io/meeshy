@@ -351,8 +351,15 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 
 - [ ] **W1 (P2) Keyframes/transitions non rendus** (objets statiques). Interpolation CSS/JS
   depuis `StoryKeyframe[]` (portés par chaque textObject/mediaObject).
-- [ ] **W2 (P2) Timer découplé de la vidéo** (`setTimeout` indépendant, vidéos muettes forcées).
-  Porter le pattern iOS : gate sur `canplay`/`waiting`/`stalled` du `<video>`.
+- [x] **W2 (P2) Timer découplé de la vidéo.** ✅ it.22
+  Porté le pattern iOS R1/R2 : `isBuffering` piloté par les événements natifs du <video>
+  principal (waiting/stalled → gel ; playing/canplay → reprise), watchdog 5 s anti-deadlock
+  (parité playbackStallWatchdogSeconds), barre CSS gelée via prop `isFrozen` (pause OU
+  buffering). BONUS préexistant corrigé : le timer repart du temps RESTANT (avant, une
+  pause rejouait la durée entière pendant que la barre CSS gardait sa position → désync).
+  Handlers posés sur les 2 formes de fond vidéo (mediaUrl + mediaObjects isBackground).
+  Piège de test consigné : avec fake timers, le timer reposé par un effet React post-watchdog
+  ne se flush qu'à la fin de l'act → découper les advanceTimersByTime.
 - [ ] **W3 (P2) Composer web : visibilités COMMUNITY/EXCEPT/ONLY + overlays.** Reliquat connu
   (mémoire story-status-community-visibility). `visibilityUserIds` déjà dans
   `CreateStoryRequest` web — manque l'UI.
@@ -494,7 +501,11 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.21 — G3 : textObjects traduits vers l'audience réelle (hash au push)
+## it.22 — W2 : le timer web gèle sur le buffering vidéo (hash au push)
+
+- 3 tests RED→GREEN (gel, reprise au restant, watchdog) + suites story web en non-régression.
+
+## it.21 — G3 : textObjects traduits vers l'audience réelle (9f562ea89)
 
 - 906/906 les 40 suites posts + 4 tests purs neufs ; tsc gateway 0 err.
 - getActiveTargetLanguages (10 langues fixes) supprimée — les DEUX pipelines partagent

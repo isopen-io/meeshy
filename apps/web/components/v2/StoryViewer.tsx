@@ -258,12 +258,13 @@ function StoryAudioElement({
 function ProgressBar({
   total,
   current,
-  isPaused,
+  isFrozen,
   durationMs,
 }: {
   total: number;
   current: number;
-  isPaused: boolean;
+  /** Pause utilisateur OU buffering vidéo (W2) — la barre gèle dans les deux cas. */
+  isFrozen: boolean;
   durationMs: number;
 }) {
   return (
@@ -278,8 +279,8 @@ function ProgressBar({
               'h-full rounded-full bg-white',
               i < current && 'w-full',
               i > current && 'w-0',
-              i === current && !isPaused && 'animate-story-progress',
-              i === current && isPaused && 'story-progress-paused'
+              i === current && !isFrozen && 'animate-story-progress',
+              i === current && isFrozen && 'story-progress-paused'
             )}
             style={
               i === current
@@ -392,20 +393,64 @@ function StoryViewer({
   // Honor the per-story `slideDurationMs` (set by the composer to fit longer
   // videos / TTS narrations) instead of a global 5s constant.
   const storyDurationMs = stories[currentIndex]?.storyEffects?.slideDurationMs ?? DEFAULT_STORY_DURATION_MS;
-  useEffect(() => {
-    if (isPaused) return;
 
+  // W2 — unified-timeline gate (portage du pattern iOS R1/R2) : le timer NE
+  // court plus sur une vidéo de fond qui bufferise. `isBuffering` est piloté
+  // par les événements natifs du <video> principal (waiting/stalled → gel,
+  // playing/canplay → reprise) ; le watchdog 5 s ci-dessous garantit qu'un
+  // flux mort ne gèle jamais la story pour toujours (parité iOS
+  // playbackStallWatchdogSeconds).
+  const [isBuffering, setIsBuffering] = useState(false);
+  const remainingMsRef = useRef<number>(storyDurationMs);
+  const startedAtRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    remainingMsRef.current = storyDurationMs;
+    startedAtRef.current = null;
+    setIsBuffering(false);
+  }, [currentIndex, storyDurationMs]);
+
+  const isTimerFrozen = isPaused || isBuffering;
+  useEffect(() => {
+    if (isTimerFrozen) return;
+
+    // Reprend depuis le temps RESTANT — un gel (pause utilisateur ou
+    // buffering) ne rejoue plus la durée entière alors que la barre CSS,
+    // elle, conservait déjà sa position (défaut préexistant corrigé).
+    startedAtRef.current = Date.now();
     timerRef.current = setTimeout(() => {
       goNext();
-    }, storyDurationMs);
+    }, remainingMsRef.current);
 
     return () => {
       if (timerRef.current) {
         clearTimeout(timerRef.current);
         timerRef.current = null;
       }
+      if (startedAtRef.current != null) {
+        remainingMsRef.current = Math.max(
+          0,
+          remainingMsRef.current - (Date.now() - startedAtRef.current)
+        );
+        startedAtRef.current = null;
+      }
     };
-  }, [currentIndex, isPaused, goNext, storyDurationMs]);
+  }, [currentIndex, isTimerFrozen, goNext, storyDurationMs]);
+
+  // Watchdog anti-deadlock : un buffering qui dure > 5 s retombe sur
+  // l'horloge murale (le timer reprend) plutôt que de geler la story.
+  useEffect(() => {
+    if (!isBuffering) return;
+    const watchdog = setTimeout(() => setIsBuffering(false), 5000);
+    return () => clearTimeout(watchdog);
+  }, [isBuffering]);
+
+  const primaryVideoGateHandlers = {
+    onWaiting: () => setIsBuffering(true),
+    onStalled: () => setIsBuffering(true),
+    onPlaying: () => setIsBuffering(false),
+    onCanPlay: () => setIsBuffering(false),
+  };
 
   // ---- Escape key ----
   useEffect(() => {
@@ -595,6 +640,8 @@ function StoryViewer({
             playsInline
             loop
             className="absolute inset-0 w-full h-full object-cover"
+            data-testid="story-primary-video"
+            {...primaryVideoGateHandlers}
           />
         )}
 
@@ -619,6 +666,7 @@ function StoryViewer({
                 loop
                 className="absolute inset-0 w-full h-full object-cover"
                 style={{ zIndex: m.zIndex ?? 0 }}
+                {...primaryVideoGateHandlers}
               />
             ) : (
               <img
@@ -755,7 +803,7 @@ function StoryViewer({
             <ProgressBar
               total={stories.length}
               current={currentIndex}
-              isPaused={isPaused}
+              isFrozen={isPaused || isBuffering}
               durationMs={storyDurationMs}
             />
           </div>
