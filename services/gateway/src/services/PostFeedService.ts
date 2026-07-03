@@ -391,7 +391,15 @@ export class PostFeedService {
     opts: { seedReelId?: string; cursor?: string; limit?: number } = {}
   ) {
     const { seedReelId, cursor, limit = 20 } = opts;
-    const candidatePoolSize = Math.min(limit * 4, 120);
+    // Chronological window + 1 probe row to detect `hasMore`, mirroring getFeed.
+    // We deliberately do NOT over-fetch then drop: the cursor advances by
+    // `createdAt`, so any candidate we fetch-but-drop (the old `limit * 4` pool)
+    // would be silently skipped — or re-served as a duplicate — on the next
+    // page, because the cursor was taken from the score-sorted last item rather
+    // than the chronological boundary. Affinity ranking reorders *within* the
+    // window only, which keeps infinite scroll lossless: every reel appears
+    // exactly once. Same invariant as getFeed (see its Phase 1 comment).
+    const candidatePoolSize = limit + 1;
     const cursorData = cursor ? decodeCursor(cursor) : null;
 
     const [friendIds, dmContactIds, viewerLanguages, seed, communityCoMemberIds] = await Promise.all([
@@ -431,7 +439,17 @@ export class PostFeedService {
       return { items: [], nextCursor: null, hasMore: false };
     }
 
-    const candidateIds = candidates.map((c) => c.id);
+    // The page is the chronological window (candidates arrive createdAt desc).
+    // The cursor is the OLDEST reel of the shown window, captured BEFORE score
+    // reordering, so the next page is strictly older — no skips, no duplicates.
+    const hasMore = candidates.length > limit;
+    const page = hasMore ? candidates.slice(0, limit) : candidates;
+    const oldest = page[page.length - 1];
+    const nextCursor = hasMore && oldest
+      ? encodeCursor(oldest.createdAt, oldest.id)
+      : null;
+
+    const candidateIds = page.map((c) => c.id);
     const [seenReelIds, mentionsByPost] = await Promise.all([
       this.getSeenPostIds(userId, candidateIds),
       this.getMentionsByPost(candidateIds),
@@ -446,7 +464,8 @@ export class PostFeedService {
       seed,
     };
 
-    const scored = candidates
+    // Score the window for display order only (cursor is fixed above).
+    const scored = page
       .map((post) => ({
         post,
         score: reelAffinityScore(
@@ -467,16 +486,8 @@ export class PostFeedService {
       }))
       .sort((a, b) => b.score - a.score);
 
-    const top = scored.slice(0, limit + 1);
-    const hasMore = top.length > limit;
-    const items = hasMore ? top.slice(0, limit) : top;
-    const lastItem = items[items.length - 1];
-    const nextCursor = hasMore && lastItem
-      ? encodeCursor(lastItem.post.createdAt, lastItem.post.id)
-      : null;
-
     return {
-      items: await this.enrichReelsForViewer(items.map((s) => s.post), userId),
+      items: await this.enrichReelsForViewer(scored.map((s) => s.post), userId),
       nextCursor,
       hasMore,
     };
