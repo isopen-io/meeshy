@@ -1657,6 +1657,7 @@ public actor OfflineQueue {
                         attachmentKinds: item.attachmentKinds,
                         localAudioPath: item.localAudioPath,
                         localAudioPaths: item.localAudioPaths,
+                        localMediaPaths: item.localMediaPaths,
                         createdAt: item.createdAt
                     )
                     let mergedPayload = (try? enc.encode(merged)) ?? send.payload

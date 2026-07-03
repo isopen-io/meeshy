@@ -474,6 +474,34 @@ final class OfflineQueueTests: XCTestCase {
 
     /// Reads back the single persisted `OfflineQueueItem` for a given
     /// `clientMessageId` by decoding the matching `OutboxRecord` payloads.
+    /// T11 edit-into-send merge must PRESERVE the pending visual media
+    /// (`localMediaPaths`). Editing the caption of an offline photo/video message
+    /// BEFORE it flushes rebuilds the send item — dropping the media there sends
+    /// the message with NO images/videos (silent data loss).
+    func test_enqueueEdit_mergingIntoPendingSend_preservesLocalMediaPaths() async throws {
+        let cid = "cid_\(UUID().uuidString.lowercased())"
+        let media = ["conv-1/0.jpg", "conv-1/1.mp4"]
+        try await queue.enqueue(OfflineQueueItem(
+            conversationId: "conv-1",
+            content: "original caption",
+            clientMessageId: cid,
+            attachmentKinds: [AttachmentKind.image.rawValue, AttachmentKind.video.rawValue],
+            localMediaPaths: media
+        ))
+
+        try await queue.enqueueEdit(OfflineEditPayload(
+            messageId: cid, clientMessageId: cid,
+            content: "edited caption", conversationId: "conv-1"
+        ))
+
+        let items = try await readBackItems(forClientMessageId: cid)
+        XCTAssertEqual(items.count, 1, "the edit must coalesce into the pending send (exactly one row)")
+        let merged = try XCTUnwrap(items.first)
+        XCTAssertEqual(merged.content, "edited caption", "the edit's content must win")
+        XCTAssertEqual(merged.localMediaPaths, media,
+            "the pending images/videos must survive the caption edit — else they are silently lost on flush")
+    }
+
     private func readBackItems(forClientMessageId cmid: String) async throws -> [OfflineQueueItem] {
         let maybePool = await queue.outboxPoolForTesting
         let pool = try XCTUnwrap(maybePool)
