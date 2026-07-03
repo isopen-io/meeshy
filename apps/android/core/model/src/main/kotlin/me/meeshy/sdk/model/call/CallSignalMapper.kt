@@ -33,11 +33,11 @@ object CallSignalMapper {
                 CallEvent.ParticipantJoined
             }
             "call:signal" -> mapSignal(json.decodeFromString<CallSignalEnvelope>(rawJson))
-            "call:ended" -> mapEnded(json.decodeFromString<CallEndedPayload>(rawJson))
-            "call:missed" -> {
-                json.decodeFromString<CallMissedPayload>(rawJson)
-                CallEvent.RingTimeout
-            }
+            // `call:ended` / `call:missed` are **identity-gated** teardown — decoded
+            // by [endedSignal], not folded here. They are inert to the identity-less
+            // FSM-facing stream so a *waiting* call's teardown (fanned out to a busy
+            // user's rooms) can never blindly reduce the *active* call.
+            "call:ended", "call:missed" -> null
             "call:media-toggled" -> {
                 json.decodeFromString<CallMediaTogglePayload>(rawJson)
                 null
@@ -65,23 +65,31 @@ object CallSignalMapper {
     }.getOrNull()
 
     /**
-     * Decode the **identity** of an inbound teardown frame (`call:ended` /
-     * `call:missed`) into the id of the call that ended, or `null` when the frame
-     * is not a teardown, is malformed, or carries no (blank) call id.
+     * Decode an inbound teardown frame (`call:ended` / `call:missed`) into the
+     * identity-carrying [CallEndedSignal] — the ended call's id plus the
+     * [CallEvent] the FSM reduces iff that id is the *active* call's — or `null`
+     * when the frame is not a teardown, is malformed, or carries no (blank) id.
      *
-     * The FSM-facing [map] routes both frames to identity-less events
-     * ([CallEvent.RemoteHangUp] / [CallEvent.RingTimeout]); this parallel, total,
-     * side-effect-free decode surfaces the ended call's id so a call-waiting banner
-     * whose caller hangs up (or whose ring times out) before the user acts can be
-     * auto-dismissed via [CallWaitingEvent.RemotelyEnded] — keyed by the id, so an
-     * unrelated teardown never dismisses the wrong banner.
+     * The FSM-facing [map] deliberately returns `null` for both frames; this
+     * parallel, total, side-effect-free decode is the **only** teardown path, so
+     * the consumer can gate the FSM teardown on the active id (only the active
+     * call's own end reduces it) while dismissing a call-waiting banner keyed by
+     * the *waiting* call's id via [CallWaitingEvent.RemotelyEnded]. A blank/absent
+     * id yields `null` — an untargetable teardown is dropped, never applied to an
+     * arbitrary call.
      */
-    fun endedCallId(eventName: String, rawJson: String): String? = runCatching {
+    fun endedSignal(eventName: String, rawJson: String): CallEndedSignal? = runCatching {
         when (eventName) {
-            "call:ended" -> json.decodeFromString<CallEndedPayload>(rawJson).callId
-            "call:missed" -> json.decodeFromString<CallMissedPayload>(rawJson).callId
+            "call:ended" -> {
+                val payload = json.decodeFromString<CallEndedPayload>(rawJson)
+                payload.callId.takeIf { it.isNotBlank() }?.let { CallEndedSignal(it, endedEvent(payload)) }
+            }
+            "call:missed" -> {
+                val payload = json.decodeFromString<CallMissedPayload>(rawJson)
+                payload.callId.takeIf { it.isNotBlank() }?.let { CallEndedSignal(it, CallEvent.RingTimeout) }
+            }
             else -> null
-        }?.takeIf { it.isNotBlank() }
+        }
     }.getOrNull()
 
     /**
@@ -97,11 +105,11 @@ object CallSignalMapper {
 
     /**
      * The FSM has no distinct remote-reject/failed event, so every remote
-     * teardown except a ring-timeout maps to [CallEvent.RemoteHangUp]; a
-     * `missed` reason maps to [CallEvent.RingTimeout] (parity with the dedicated
+     * teardown except a ring-timeout carries [CallEvent.RemoteHangUp]; a
+     * `missed` reason carries [CallEvent.RingTimeout] (parity with the dedicated
      * `call:missed` event the gateway emits alongside).
      */
-    private fun mapEnded(payload: CallEndedPayload): CallEvent =
+    private fun endedEvent(payload: CallEndedPayload): CallEvent =
         when (payload.reason) {
             "missed" -> CallEvent.RingTimeout
             else -> CallEvent.RemoteHangUp

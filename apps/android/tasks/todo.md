@@ -4,26 +4,27 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Calls) — slice `call-ended-signal-identity` ✅
-The **`RemotelyEnded` socket driver** — a call-waiting banner now auto-dismisses when its caller hangs up
-(or the ring times out) before the user acts, driving the already-tested `CallWaitingReducer.RemotelyEnded`
-branch from a real signal (parity with iOS `clearPendingIncomingCall(ifMatching:)`).
-- `core:model` pure `CallSignalMapper.endedCallId(eventName, rawJson): String?` — decodes the `callId` of a
-  `call:ended`/`call:missed` frame; non-teardown / blank / absent / malformed → `null`. `map` untouched.
-- `sdk-core` `CallSignalManager.endedCalls: SharedFlow<String>` — republishes the ended id per teardown
-  frame in `listen`, the same parallel-stream pattern as `incomingOffers`; identity-less `events` unchanged.
-- `feature:calls` `CallViewModel.onRemoteEnded` — folds a match on the *pending* call's id into
-  `RemotelyEnded` (stop the 15s timer + clear the banner), **no** `emitEnd` (caller already ended it); inert
-  for no-banner / other-call ids so the active call is untouched.
-- +15 behavioural tests (7 mapper, 4 manager, 4 VM). Full `assembleDebug` + all `testDebugUnitTest` green
-  (via `/opt/gradle`; the wrapper dist download is 403-blocked in this container — see NOTES). Diff =
-  `apps/android` only (3 prod + 3 test).
+## This loop (Phase: Calls) — slice `call-ended-identity-teardown` ✅
+The **identity-aware active-call teardown** — bug fix closing the `call-ended-signal-identity` follow-up.
+The gateway fans `call:ended` out to every member USER room, so a busy user (active call + a waiting-call
+banner) received the *waiting* call's teardown on the identity-less `events` stream, which the VM folded
+blindly into the *active* FSM — tearing down the wrong call. Teardown is now identity-gated end-to-end.
+- `core:model` `CallSignalMapper.map` returns `null` for `call:ended`/`call:missed` (off the FSM-facing
+  stream). New pure `endedSignal(): CallEndedSignal?` (id + `RemoteHangUp`/`RingTimeout`) is the sole
+  teardown decode; blank/absent id or malformed → `null`. New pure `CallEndedSignal(callId, event)`.
+- `sdk-core` `CallSignalManager.endedCalls: SharedFlow<CallEndedSignal>` (was `String`) — `listen` routes
+  teardown frames through `endedSignal` only.
+- `feature:calls` `CallViewModel.onRemoteEnded(CallEndedSignal)` — active id → `dispatch(event)` (FSM
+  teardown); waiting id → `RemotelyEnded` (dismiss banner, no `emitEnd`); neither → inert.
+- Red→green tests across all three modules (mapper inert + 11 `endedSignal` cases; manager events-silent +
+  rich endedCalls; VM active-end / waiting-untouched / missed-ringing / neither-inert / idle-inert). Full
+  `assembleDebug` + all `testDebugUnitTest` green (via `/opt/gradle`; wrapper dist is 403-blocked — see
+  NOTES). Diff = `apps/android` only (3 prod + 3 test + docs).
 
 ### Next
-1. **Identity-aware active-call teardown** — the identity-less `events` fold still routes a *waiting* call's
-   `call:ended` → `RemoteHangUp` into the *active* FSM; gate the FSM teardown on the active `callId`.
-2. `ConnectionService`/Telecom integration + ringback tone (system call UI); then WebRTC media transport.
-3. Follow-up: `SocketManager.reconnectWithToken()` still has no caller (token-refresh re-attach slice).
+1. Real self-managed `ConnectionService`/`PhoneAccount` + full-screen call UI + foreground service (swaps
+   the `LogTelecomCallReporter` `@Binds`); then WebRTC media transport (`stream-webrtc-android`).
+2. Follow-up: `SocketManager.reconnectWithToken()` still has no caller (token-refresh re-attach slice).
 
 ## Prior loop (Phase: Calls) — slice `incoming-call-deeplink` ✅
 The **incoming-call deep-link** — consumes the `MainActivity` launch/full-screen intent extras and routes

@@ -167,6 +167,13 @@
 > for the whole call domain is now complete; only the **app-side driver seams** (heartbeat/quality-report
 > timers, ICE-restart controller) that *call* these emits remain, and land with the WebRTC media
 > transport. +16 tests (10 report, 6 manager). `assembleDebug` + all `testDebugUnitTest` green.
+> On 2026-07-03 the **identity-aware active-call teardown** landed (slice `call-ended-identity-teardown`):
+> a bug fix closing the `call-ended-signal-identity` follow-up. `call:ended`/`call:missed` no longer ride the
+> identity-less `CallSignalManager.events` (they now map to `null` in `CallSignalMapper.map`); the single pure
+> `CallSignalMapper.endedSignal → CallEndedSignal(callId, event)` decode is the sole teardown path, carried on
+> `endedCalls: SharedFlow<CallEndedSignal>`. `CallViewModel.onRemoteEnded` gates on identity — the active
+> call's id reduces its FSM, the waiting call's id only dismisses the banner, neither is inert — so a waiting
+> call's teardown fanned out to a busy user's rooms can no longer tear down the active call.
 > **Next:** the real self-managed `ConnectionService`/`PhoneAccount` registration + full-screen call UI +
 > foreground service (the platform glue that swaps the `LogTelecomCallReporter` `@Binds` for a real
 > reporter and owns the audio session), then the actual WebRTC media transport (`stream-webrtc-android`).
@@ -401,10 +408,14 @@ remaining platform glue.
    and `CallViewModel.onRemoteEnded` folds it into `CallWaitingEvent.RemotelyEnded` — auto-dismissing the
    banner (and cancelling its 15s auto-reject timer) **only** when the ended id is the *pending* call's,
    with **no** `emitEnd` (the caller already hung up), leaving the active call untouched. +15 tests.
-   See run log. **Next (known follow-up):** the identity-less `events` fold still routes a *waiting* call's
-   `call:ended` → `RemoteHangUp` into the *active* FSM (the gateway fans `call:ended` out to member USER
-   rooms, so a busy user receives the waiting call's teardown) — an **identity-aware active-call teardown**
-   slice should gate the FSM teardown on the active `callId` so only the active call's own end reduces it.
+   See run log. The **identity-aware active-call teardown** ✅ shipped as `call-ended-identity-teardown`
+   (2026-07-03) — closed that known follow-up: `call:ended`/`call:missed` now route to `null` in
+   `CallSignalMapper.map` (never the identity-less `events`) and are decoded once by the new pure
+   `CallSignalMapper.endedSignal → CallEndedSignal(callId, event)`, so `CallSignalManager.endedCalls` is
+   now `SharedFlow<CallEndedSignal>` (was `String`) — the **sole** teardown path. `CallViewModel.onRemoteEnded`
+   gates on identity: the *active* call's id → reduce the FSM by the carried `RemoteHangUp`/`RingTimeout`;
+   the *waiting* call's id → dismiss the banner (no `emitEnd`); neither → inert. A waiting call's teardown
+   fanned out to a busy user's rooms can no longer tear down the active call. +new tests. See run log.
 3. **Adaptive sender-cap plan** — a pure `level → (resolutionHeight, fps, bitrate)` mapping (already on
    `VideoQualityLevel`) folded into the future WebRTC sender-parameters actuator.
 
@@ -594,6 +605,45 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-03 — slice `call-ended-identity-teardown` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration (open PRs #1410/#1412/#1413/#1414
+  were all iOS/gateway, untouched). Branched `claude/apps/android/call-ended-identity-teardown` off latest
+  `origin/main` (`b2fcdf5`).
+- **What (bug fix, closes the `call-ended-signal-identity` known follow-up):** the FSM-facing identity-less
+  `CallSignalManager.events` used to carry a `call:ended`/`call:missed` teardown as `RemoteHangUp`/`RingTimeout`,
+  which `CallViewModel.dispatch` folded **blindly** into the *active* FSM. The gateway fans `call:ended` out
+  to every member USER room, so a busy user (one call active + a second ringing as a call-waiting banner)
+  received the *waiting* call's teardown too — and it tore down the **active** call. Now teardown is
+  identity-gated end-to-end: only the active call's own end reduces its FSM.
+- **Changed (production, 3 files):**
+  - `CallSignalMapper` (`core:model`) — `map` now returns `null` for `call:ended`/`call:missed` (they are
+    no longer FSM-facing). Replaced `endedCallId(): String?` with `endedSignal(): CallEndedSignal?` — the
+    single, total, identity-carrying teardown decode (id + the `RemoteHangUp`/`RingTimeout` the FSM reduces).
+    Blank/absent id or malformed JSON → `null` (an untargetable teardown is dropped, never applied blindly).
+  - new `CallEndedSignal(callId, event)` (`core:model`, pure value type).
+  - `CallSignalManager.endedCalls` (`sdk-core`) — now `SharedFlow<CallEndedSignal>` (was `String`); `listen`
+    routes teardown frames through `endedSignal` only. This is the **sole** teardown path.
+  - `CallViewModel.onRemoteEnded(CallEndedSignal)` (`feature:calls`) — active id match → `dispatch(event)`
+    into the FSM; else waiting id match → `RemotelyEnded` (dismiss banner, no `emitEnd`); else inert.
+- **Tests (red→green):**
+  - `CallSignalMapperTest` — ended/missed now inert to `map`; +11 `endedSignal` cases (completed/rejected/
+    no-reason→RemoteHangUp, missed-reason & missed-frame→RingTimeout, non-teardown/initiated→null,
+    blank-ended/blank-missed/absent id→null, malformed→null).
+  - `CallSignalManagerTest` — ended/missed emit **nothing** on `events`; endedCalls republishes the rich
+    `CallEndedSignal` (RemoteHangUp / RingTimeout by reason); non-teardown & blank id emit nothing.
+  - `CallViewModelTest` — the waiting caller hangs up → banner cleared, **active call untouched** (the bug);
+    the active call's own remote end → `ENDED`/`Remote` (with a banner up → banner stays; without one too);
+    a missed teardown for the active ringing call → `ENDED`/`Missed`; an id matching neither → fully inert;
+    an ended id with no active call & no banner → inert.
+- **Verification:** `/opt/gradle/bin/gradle :core:model:testDebugUnitTest :sdk-core:testDebugUnitTest
+  :feature:calls:testDebugUnitTest` green; `:app:assembleDebug` green; full `testDebugUnitTest` (all modules)
+  green. (`./gradlew`/`meeshy.sh` still 403 on the wrapper dist — used the preinstalled `/opt/gradle`, per NOTES.)
+- **Reviewer verdict:** PASS — diff is `apps/android` only (3 prod files + tests + these docs), no production
+  logic elsewhere; TDD red→green, no tautologies, no weakened floors (the two `map`→teardown tests were
+  *re-specified* because that mapping was the bug, not weakened); SDK purity kept (pure decode in `core:model`,
+  stateless stream in `sdk-core`, the "which call to tear down" rule in the `feature:calls` VM); every edge
+  covered (blank/absent/unrelated id, idle, malformed).
 
 ### 2026-07-03 — slice `call-ended-signal-identity` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration (only open PR #1410 was iOS,
