@@ -325,7 +325,12 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       });
 
       if (!removed) {
-        return sendNotFound(reply, 'Reaction not found');
+        // Idempotent DELETE: the reaction is already absent — the caller's
+        // desired end-state is achieved. Return success (nothing changed → no
+        // broadcast) instead of 404, which the iOS outbox treats as a permanent
+        // reject and rolls the optimistic un-react back, re-showing a reaction
+        // that is gone. Mirrors the idempotent P2002 handling on the add path.
+        return sendSuccess(reply, { message: 'Reaction already absent' });
       }
 
       // Récupérer la conversation pour broadcaster
