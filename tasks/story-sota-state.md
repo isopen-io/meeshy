@@ -165,12 +165,15 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   StoryDraftStore (`saveCommandHistoryBlob`/`loadCommandHistoryBlob` + purge dans `clear()`,
   le store SDK core ne peut pas dépendre de CommandStackSnapshot/MeeshyUI) ; encode/restore
   au rythme E1 ; restore du dict au restore du draft.
-- [ ] **E10 (P2, NOUVEAU it.12) Fuite disque : dossiers `meeshy_offline_queue/<tempStoryId>/`
-  jamais nettoyés au succès du chemin QUEUE.** Preuve : grep `removeItem` sur StoryPublishQueue +
-  StoryPublishService → zéro cleanup des copies médias après publication réussie via drain.
-  Le chemin ONLINE est couvert depuis it.12 (`removeOfflineQueueMediaDirectory` au dequeue) —
-  brancher le même helper sur le succès du drain (publishSucceeded → tempStoryId → rm dir),
-  + balayage one-shot des dossiers orphelins (sans item de queue correspondant) au boot.
+- [x] **E10 (P2, découvert it.12) Fuite disque : dossiers `meeshy_offline_queue/` jamais
+  nettoyés au succès du chemin QUEUE.** ✅ it.16
+  Livré : (1) SDK — `removeLocalMedia(of:)` aux DEUX dispositions terminales du drain (succès
+  ET échec permanent) : rm des `mediaReferences.localFilePath` + rm du parent devenu VIDE
+  (agnostique produit, la queue possède ses references) ; un échec retryable garde tout.
+  (2) App — `sweepOrphanedQueueMediaDirectories()` one-shot au boot (StoryPublishService.
+  configure, après le guard d'idempotence) : purge les dossiers sans item vivant ET plus
+  vieux qu'1 h (garde d'âge contre la course « dossier créé avant l'insertion de l'item ») ;
+  cœur pur `orphanedQueueDirectories` testé. mtime illisible = traité comme vieux.
 - [x] **E5 (P1) Publish online in-flight non résumable après kill.** ✅ it.12
   Livré (design write-ahead du backlog) : cœur de persistance extrait
   (`persistPublishIntentToQueue`, partagé offline/online) ; le chemin ONLINE persiste
@@ -474,7 +477,12 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.15 — R7 : sniff d'extension avant routage vers les stores (hash au push)
+## it.16 — E10 : la queue nettoie ses copies média (hash au push)
+
+- 15/15 StoryPublishQueueTests (2 nouveaux : succès rm fichiers+dossier, retryable garde) ;
+  tests purs du sweep app ; build vert.
+
+## it.15 — R7 : sniff d'extension avant routage vers les stores (c112ec962)
 
 - Router pur SDK, 6/6 tests ; branché prefetch + pin (cohérence des deux chemins) ;
   test app RED→GREEN sur le cas confirmé (mp4 déclaré image).

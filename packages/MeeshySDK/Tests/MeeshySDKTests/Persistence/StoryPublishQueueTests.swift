@@ -25,6 +25,52 @@ final class StoryPublishQueueTests: XCTestCase {
         try await super.tearDown()
     }
 
+    // MARK: - E10 : cleanup des copies média aux dispositions terminales
+
+    func test_processNext_success_removesLocalMediaAndEmptyParentDir() async throws {
+        let published = PublishedIds()
+        await queue.setPublishHandler { item in
+            await published.append(item.id)
+            return "server-ok"
+        }
+
+        let mediaDir = tempDir.appendingPathComponent("pending_e10", isDirectory: true)
+        try FileManager.default.createDirectory(at: mediaDir, withIntermediateDirectories: true)
+        let mediaFile = mediaDir.appendingPathComponent("clip.mp4")
+        try Data([0x01]).write(to: mediaFile)
+
+        let item = makeItem(visibility: "PUBLIC", mediaReferences: [
+            StoryMediaReference(elementId: "e1", mediaType: "video", localFilePath: mediaFile.path),
+        ])
+        await queue.enqueue(item)
+        await queue.processNext()
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: mediaFile.path),
+                       "A successfully drained item must remove its local media copies")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: mediaDir.path),
+                       "The per-story directory is removed once empty")
+    }
+
+    func test_processNext_retryableFailure_keepsLocalMedia() async throws {
+        await queue.setPublishHandler { _ in
+            throw URLError(.notConnectedToInternet)
+        }
+
+        let mediaDir = tempDir.appendingPathComponent("pending_retry", isDirectory: true)
+        try FileManager.default.createDirectory(at: mediaDir, withIntermediateDirectories: true)
+        let mediaFile = mediaDir.appendingPathComponent("clip.mp4")
+        try Data([0x01]).write(to: mediaFile)
+
+        let item = makeItem(visibility: "PUBLIC", mediaReferences: [
+            StoryMediaReference(elementId: "e1", mediaType: "video", localFilePath: mediaFile.path),
+        ])
+        await queue.enqueue(item)
+        await queue.processNext()
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: mediaFile.path),
+                      "A retryable failure keeps the media — the next drain still needs it")
+    }
+
     // MARK: - E5 write-ahead : in-flight marking
 
     func test_processNext_skipsInFlightItems() async {
