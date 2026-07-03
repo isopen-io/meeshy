@@ -126,6 +126,18 @@ public actor OutboxFlusher {
     /// `nil` si rien n'est différé. Le planificateur de re-flush s'en sert
     /// pour rejouer le flush à l'échéance plutôt que d'attendre un évènement
     /// de cycle de vie de l'app (boot / premier plan / enqueue / BGTask).
+    /// Visibility timeout des claims : une row `.inflight` dont le claim
+    /// (`updatedAt`, bumpé par `claimPending`) est plus vieux que cette
+    /// fenêtre est un ORPHELIN (dispatch jamais conclu — Task annulée,
+    /// crash post-claim) : comptée par `pendingCount` (bannière
+    /// « Synchronisation… » allumée à vie) mais jamais reprise par le
+    /// SELECT `.pending`. `bootRecovery` ne couvre que le boot et le
+    /// retour foreground — le reclaim au flush ferme la fenêtre des
+    /// longues sessions. 30 min > pire dispatch légitime (gros upload TUS
+    /// sur réseau lent) ; un double-dispatch résiduel est neutralisé par
+    /// l'idempotence cmid côté gateway.
+    public static let staleInflightReclaimSeconds: TimeInterval = 30 * 60
+
     @discardableResult
     public func flush() async -> Date? {
         // BW1 — bandwidth gate. Re-arm later via the same earliestDeferred
@@ -134,6 +146,18 @@ public actor OutboxFlusher {
         guard await isNetworkReachable() else { return nil }
 
         let now = Date()
+        let reclaimCutoff = now.addingTimeInterval(-Self.staleInflightReclaimSeconds)
+        _ = try? await pool.write { db in
+            try OutboxRecord
+                .filter(Column("status") == OutboxStatus.inflight.rawValue)
+                .filter(Column("updatedAt") < reclaimCutoff)
+                .updateAll(
+                    db,
+                    Column("status").set(to: OutboxStatus.pending.rawValue),
+                    Column("updatedAt").set(to: now),
+                    Column("nextAttemptAt").set(to: now)
+                )
+        }
         let pending: [OutboxRecord] = (try? await pool.read { db in
             try OutboxRecord
                 .filter(Column("status") == OutboxStatus.pending.rawValue)
