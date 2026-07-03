@@ -183,6 +183,39 @@ final class FloatingCallPillViewTests: XCTestCase {
         )
     }
 
+    // MARK: - Toggle semantics parity with CallView
+
+    func test_muteButton_appliesToggleAccessibility() throws {
+        let source = try pillSource()
+        guard let range = source.range(of: "private var muteButton") else {
+            XCTFail("FloatingCallPillView must define muteButton")
+            return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 700, limitedBy: source.endIndex) ?? source.endIndex
+        let vicinity = String(source[range.lowerBound ..< end])
+        XCTAssertTrue(
+            vicinity.contains("callToggleAccessibility(isToggle: true, isActive: callManager.isMuted)"),
+            "The mute button must apply .callToggleAccessibility so VoiceOver exposes the " +
+            "same toggle trait + on/off value as the equivalent control in CallView — a plain " +
+            "label swap alone loses the toggle semantics and rotor navigation support."
+        )
+    }
+
+    func test_speakerButton_appliesToggleAccessibility() throws {
+        let source = try pillSource()
+        guard let range = source.range(of: "private var speakerButton") else {
+            XCTFail("FloatingCallPillView must define speakerButton")
+            return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 700, limitedBy: source.endIndex) ?? source.endIndex
+        let vicinity = String(source[range.lowerBound ..< end])
+        XCTAssertTrue(
+            vicinity.contains("callToggleAccessibility(isToggle: true, isActive: callManager.isSpeaker)"),
+            "The speaker button must apply .callToggleAccessibility so VoiceOver exposes the " +
+            "same toggle trait + on/off value as the equivalent control in CallView."
+        )
+    }
+
     // MARK: - Status text
 
     func test_statusLine_showsDurationOnlyWhenConnected() throws {

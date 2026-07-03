@@ -107,6 +107,20 @@ final class CallViewAccessibilityTests: XCTestCase {
         )
     }
 
+    func test_callToggleAccessibility_isNotFilePrivate() throws {
+        // FloatingCallPillView (a different file) reuses this modifier for its
+        // mute/speaker buttons so both call surfaces expose identical toggle
+        // semantics to VoiceOver. `private extension View { ... }` at top level
+        // is file-scoped in Swift and would make the modifier invisible outside
+        // CallView.swift.
+        let source = try callViewSource()
+        XCTAssertFalse(
+            source.contains("private extension View {\n    @ViewBuilder\n    func callToggleAccessibility"),
+            "callToggleAccessibility must not be declared in a `private extension View` — " +
+            "that restricts it to CallView.swift and FloatingCallPillView could not reuse it."
+        )
+    }
+
     // MARK: - Connecting state VoiceOver announcement
 
     func test_callState_connecting_postsVoiceOverAnnouncement() throws {
@@ -326,6 +340,55 @@ final class CallViewAccessibilityTests: XCTestCase {
             vicinity.contains(".frame(width: 44, height: 44)") && vicinity.contains(".contentShape(Rectangle())"),
             "The minimize chevron's visual glass circle is 40pt, but its tappable area must " +
             "still meet the HIG 44×44 minimum via an invisible expanded frame + contentShape."
+        )
+    }
+
+    // MARK: - Dead code
+
+    func test_doesNotDeclareUnusedColorSchemeReader() throws {
+        // CallView pins `.environment(\.colorScheme, .dark)` on its own subtree
+        // (the call chrome is intentionally white-on-dark, FaceTime/WhatsApp
+        // style) so a locally-read `@Environment(\.colorScheme)` always
+        // resolves to `.dark` and the derived `isDark` was permanently `true`
+        // and unused — verified unreferenced anywhere else in this file.
+        let source = try callViewSource()
+        XCTAssertFalse(
+            source.contains("@Environment(\\.colorScheme) private var colorScheme"),
+            "CallView must not declare a dead colorScheme reader — it forces .dark on its " +
+            "own subtree, so a locally-read colorScheme value can never be anything else."
+        )
+        XCTAssertFalse(
+            source.contains("private var isDark: Bool { colorScheme == .dark }"),
+            "CallView must not declare a dead isDark computed property with no readers."
+        )
+        XCTAssertTrue(
+            source.contains(".environment(\\.colorScheme, .dark)"),
+            "CallView must still pin the call chrome subtree to .dark — only the unused " +
+            "local reader/computed property were dead, not the environment override itself."
+        )
+    }
+
+    // MARK: - CallEffectsOverlay wiring
+
+    func test_callEffectsOverlay_receivesCallManagerFromParent() throws {
+        // `CallEffectsOverlay(... )` must not fall back to instantiating
+        // `CallManager.shared` itself (`@ObservedObject private var callManager
+        // = CallManager.shared`) — that re-creates the subscription on every
+        // CallView body re-evaluation (pulse animation, showEffectsToolbar
+        // toggle, control-bar auto-hide). CallView and IncomingCallView were
+        // already fixed for this exact hazard (Audit P1-16); the overlay must
+        // receive the same singleton instance CallView already holds.
+        let source = try callViewSource()
+        guard let range = source.range(of: "CallEffectsOverlay(") else {
+            XCTFail("CallView must instantiate CallEffectsOverlay")
+            return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 200, limitedBy: source.endIndex) ?? source.endIndex
+        let call = String(source[range.lowerBound ..< end])
+        XCTAssertTrue(
+            call.contains("callManager: callManager"),
+            "CallView must pass its own `callManager` into CallEffectsOverlay so the child " +
+            "reuses the parent's @ObservedObject subscription instead of creating its own."
         )
     }
 }
