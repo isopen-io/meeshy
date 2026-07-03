@@ -1621,6 +1621,35 @@ export class CallEventsHandler {
           callId: data.callId
         });
 
+        // Multi-device socketless — the socket event above cannot reach a
+        // secondary device woken by the VoIP push whose WebSocket never came
+        // up: it would ring until its local timeout although the call was
+        // answered elsewhere. Mirror of the call_cancel hardening: a silent
+        // background push to the joiner's devices; the answering device (and
+        // any device not ringing on this callId) drops it via the client-side
+        // FSM guard. Only on a real ANSWER (callee, initiated/ringing →
+        // connecting) — never for the initiator's own room join nor rejoins.
+        // Best-effort: a push failure must never fail the join.
+        if (this.pushService
+            && userId !== callSession.initiatorId
+            && (callSession.status as string) === 'connecting') {
+          this.pushService.sendToUser({
+            userId,
+            payload: {
+              title: '',
+              body: '',
+              silent: true,
+              data: { type: 'call_answered_elsewhere', callId: data.callId }
+            },
+            types: ['apns'],
+            platforms: ['ios']
+          }).catch((error) => {
+            logger.error('call_answered_elsewhere push failed (join unaffected)', {
+              callId: data.callId, userId, error
+            });
+          });
+        }
+
         logger.info('✅ Socket: User joined call', {
           callId: data.callId,
           userId,

@@ -1096,6 +1096,27 @@ final class CallManager: ObservableObject {
         endCallInternal(reason: .remote)
     }
 
+    /// Pendant multi-device de `endRingingFromCancellation` : un AUTRE device
+    /// du même compte a décroché (push background `call_answered_elsewhere`,
+    /// miroir socketless de `call:already-answered`). Même garde FSM pure ;
+    /// seule la raison CallKit diffère — `.answeredElsewhere` pour que
+    /// Recents affiche « répondu sur un autre appareil » et non « manqué ».
+    func endRingingAnsweredElsewhere(callId: String) {
+        guard CallReliabilityPolicy.shouldEndRingingOnCancellation(
+            pushCallId: callId,
+            currentCallId: currentCallId,
+            callState: callState
+        ) else {
+            Logger.calls.info("call_answered_elsewhere push ignored (callId=\(callId)) — no matching incoming ring")
+            return
+        }
+        Logger.calls.info("call_answered_elsewhere push — dismissing ring for \(callId)")
+        if let uuid = activeCallUUID {
+            callProvider.reportCall(with: uuid, endedAt: Date(), reason: .answeredElsewhere)
+        }
+        endCallInternal(reason: .remote)
+    }
+
     // MARK: - Phantom VoIP Call (defense-in-depth)
 
     /// Apple PushKit requires reporting a call for every incoming VoIP push,

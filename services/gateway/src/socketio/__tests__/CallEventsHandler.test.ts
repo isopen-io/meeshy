@@ -693,6 +693,69 @@ describe('CallEventsHandler', () => {
 
       await expect(socket._trigger('call:join', validData)).resolves.not.toThrow();
     });
+
+    // Multi-device socketless : le `call:already-answered` (socket) ne peut
+    // pas atteindre un device secondaire réveillé par push VoIP dont le
+    // WebSocket n'est jamais monté — il sonnerait jusqu'au timeout alors que
+    // l'appel a été décroché ailleurs. Miroir du call_cancel : une push APNs
+    // background `call_answered_elsewhere` part vers les devices du joiner
+    // (le device qui a décroché l'ignore par garde FSM côté client).
+    describe('call_answered_elsewhere background push on answer join', () => {
+      const answerSetup = (sessionOverrides: Record<string, any>) => {
+        const participant = makeParticipant();
+        const callSession = makeCallSession({ participants: [participant], ...sessionOverrides });
+        mockCallServiceJoinCall.mockResolvedValue({ callSession, iceServers: [] });
+        const ctx = setupWithSocket();
+        ctx.io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
+        const pushService = { sendToUser: jest.fn<any>().mockResolvedValue([]) };
+        ctx.handler.setPushNotificationService(pushService as any);
+        return { ...ctx, pushService };
+      };
+
+      it('callee answer join (status connecting) → silent call_answered_elsewhere push to the joiner devices', async () => {
+        const { socket, pushService } = answerSetup({ initiatorId: 'caller-user', status: 'connecting' });
+
+        await socket._trigger('call:join', validData, jest.fn());
+
+        expect(pushService.sendToUser).toHaveBeenCalledWith(
+          expect.objectContaining({
+            userId: USER_ID,
+            types: ['apns'],
+            platforms: ['ios'],
+            payload: expect.objectContaining({
+              silent: true,
+              data: expect.objectContaining({ type: 'call_answered_elsewhere', callId: CALL_ID }),
+            }),
+          })
+        );
+      });
+
+      it('initiator join never sends the push (their other devices are not ringing)', async () => {
+        const { socket, pushService } = answerSetup({ initiatorId: USER_ID, status: 'connecting' });
+
+        await socket._trigger('call:join', validData, jest.fn());
+
+        expect(pushService.sendToUser).not.toHaveBeenCalled();
+      });
+
+      it('rejoin of an active call never sends the push (not an answer)', async () => {
+        const { socket, pushService } = answerSetup({ initiatorId: 'caller-user', status: 'active' });
+
+        await socket._trigger('call:join', validData, jest.fn());
+
+        expect(pushService.sendToUser).not.toHaveBeenCalled();
+      });
+
+      it('push failure never breaks the join (ack still success)', async () => {
+        const { socket, pushService } = answerSetup({ initiatorId: 'caller-user', status: 'connecting' });
+        pushService.sendToUser.mockRejectedValue(new Error('APNS down'));
+
+        const ack = jest.fn();
+        await socket._trigger('call:join', validData, ack);
+
+        expect(ack).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+      });
+    });
   });
 
   // ── call:leave ───────────────────────────────────────────────────────────

@@ -138,6 +138,20 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             return
         }
 
+        // Multi-device : un autre appareil du compte a décroché — pendant
+        // socketless de `call:already-answered` (voir sendCallCancellationPushes
+        // côté gateway pour le rationale réseau). Le device qui a décroché
+        // reçoit aussi cette push et l'ignore par garde FSM.
+        if (userInfo["type"] as? String) == "call_answered_elsewhere",
+           let answeredCallId = userInfo["callId"] as? String, !answeredCallId.isEmpty {
+            Logger.network.info("call_answered_elsewhere silent push received (callId=\(answeredCallId, privacy: .public))")
+            Task { @MainActor in
+                CallManager.shared.endRingingAnsweredElsewhere(callId: answeredCallId)
+                completionHandler(.noData)
+            }
+            return
+        }
+
         let unreadTotal = userInfo["unreadCount"] as? Int
         let convId = userInfo["conversationId"] as? String
         let convUnread = userInfo["conversationUnread"] as? Int

@@ -4490,3 +4490,42 @@ final class CallCancellationPolicyTests: XCTestCase {
         )
     }
 }
+
+// MARK: - call_answered_elsewhere silent push (multi-device socketless)
+
+/// Miroir du call_cancel pour le multi-device : quand un autre device du même
+/// compte décroche, le device secondaire SOCKETLESS (réveillé par push VoIP,
+/// WebSocket jamais monté) ne reçoit pas `call:already-answered` — la push
+/// background `call_answered_elsewhere` doit couper sa sonnerie avec la raison
+/// CallKit `.answeredElsewhere` (Recents : « répondu sur un autre appareil »).
+@MainActor
+final class CallAnsweredElsewherePushTests: XCTestCase {
+
+    func test_wiring_appDelegateRoutesAnsweredElsewhere_andManagerReportsAnsweredElsewhere() throws {
+        let base = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let appDelegate = try String(
+            contentsOf: base.appendingPathComponent("Meeshy/AppDelegate.swift"), encoding: .utf8)
+        XCTAssertTrue(
+            appDelegate.contains("call_answered_elsewhere") && appDelegate.contains("endRingingAnsweredElsewhere"),
+            "AppDelegate.didReceiveRemoteNotification must route type=call_answered_elsewhere to CallManager.endRingingAnsweredElsewhere"
+        )
+        let manager = try String(
+            contentsOf: base.appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift"), encoding: .utf8)
+        guard let fnRange = manager.range(of: "func endRingingAnsweredElsewhere(") else {
+            XCTFail("CallManager.endRingingAnsweredElsewhere not found"); return
+        }
+        let body = String(manager[fnRange.lowerBound...].prefix(1200))
+        XCTAssertTrue(
+            body.contains("shouldEndRingingOnCancellation"),
+            "endRingingAnsweredElsewhere must gate on the same pure policy as call_cancel (exact callId + incoming ring only)"
+        )
+        XCTAssertTrue(
+            body.contains(".answeredElsewhere"),
+            "endRingingAnsweredElsewhere must report the CallKit end with reason .answeredElsewhere (Recents parity with the socket path)"
+        )
+    }
+}
