@@ -151,15 +151,30 @@ struct ConversationListView: View {
     /// pour l'annuler si une nouvelle ouverture survient avant la fin du zoom-out,
     /// sinon la purge en vol effacerait le menu qui vient de se rouvrir.
     @State var contextMenuDismissWork: DispatchWorkItem? = nil
-    /// Scale de la carte d'aperçu de l'overlay (1.0 = dépliée, 0.7 = état
-    /// replié de départ du zoom d'ouverture, 0 = repliée via le drag vers le
-    /// haut sur la carte — `previewCollapseGesture`, +Overlays).
+    /// Scale de la carte d'aperçu de l'overlay (1.0 = dépliée, 0 = repliée via
+    /// le drag vers le haut sur la carte — `previewCollapseGesture`, +Overlays).
     /// Muté uniquement quand l'overlay est ouvert ; les lignes ne le reçoivent
     /// plus (gate Equatable intact pendant le geste).
     @State var previewScale: CGFloat = 1.0
-    /// Offset rubber-band de la carte d'aperçu pendant le drag vers le bas
-    /// (> 110 pt au lâcher = fermeture du menu). Voir `previewCollapseGesture`.
+    /// Offset de la carte d'aperçu pendant le drag vers le bas — suit le doigt
+    /// 1:1 et pilote le morph drag-n-drop (`dragMorphProgress`, +Overlays).
+    /// > 110 pt au lâcher = fermeture du menu.
     @State var dragOffsetY: CGFloat = 0
+    /// Offset horizontal du drag — actif uniquement en morph (la carte suit
+    /// le doigt latéralement une fois le mode drag engagé).
+    @State var dragOffsetX: CGFloat = 0
+    /// Frame GLOBALE de la ligne pressée au déclenchement du long-press —
+    /// point de départ de l'émergence de l'aperçu. nil = inconnu (rotor
+    /// accessibilité) → fallback zoom centré 0.7 → 1.0.
+    @State var contextMenuSourceFrame: CGRect? = nil
+    /// Frame de REPOS de la carte d'aperçu (mesurée hors transformation,
+    /// overlay invisible) — sert à calculer le placement initial de
+    /// l'émergence depuis la ligne. Voir `runContextMenuEmergence` (+Overlays).
+    @State var previewRestFrame: CGRect = .zero
+    /// Offset y d'émergence : la carte part de la position de la ligne
+    /// (placement invisible) puis rejoint sa position finale — départ lent,
+    /// accélération, léger rebond (timingCurve overshoot).
+    @State var previewEmergeOffset: CGFloat = 0
 
     /// Renommage : conversation cible + texte en cours d'édition (action
     /// « Renommer » du menu contextuel, groupes/communautés uniquement).
@@ -340,31 +355,29 @@ struct ConversationListView: View {
             onLoadPreview: {
                 await conversationViewModel.loadPreviewMessages(for: conversation.id)
             },
-            onLongPress: {
+            onLongPress: { sourceFrame in
                 Task { await conversationViewModel.loadPreviewMessages(for: conversation.id) }
-                // Montage à l'état "replié" (scale 0.7, menu bas) ; l'overlay
-                // anime ensuite via `.onAppear` (zoom 0.7 → 1.0 + rebond).
+                // Montage au REPOS invisible (scale 1, offset 0, opacité 0) :
+                // le GeometryReader de l'overlay mesure la frame de repos de
+                // la carte, puis `runContextMenuEmergence` place la carte sur
+                // la ligne pressée (toujours invisible) et anime l'émergence.
                 // Annule une purge de fermeture encore en vol, sinon elle
                 // effacerait ce menu fraîchement ouvert (~0.26 s plus tard).
                 contextMenuDismissWork?.cancel()
                 contextMenuDismissWork = nil
                 let wasMounted = contextMenuConversation != nil
                 contextMenuAppeared = false
-                previewScale = 0.7
+                contextMenuSourceFrame = sourceFrame.height > 0 ? sourceFrame : nil
+                previewScale = 1.0
+                previewEmergeOffset = 0
                 dragOffsetY = 0
+                dragOffsetX = 0
                 contextMenuConversation = conversation
                 if wasMounted {
                     // Réouverture rapide : l'overlay est encore monté, donc
                     // `.onAppear` ne re-fire pas — sans relance ici le menu
-                    // resterait invisible (contextMenuAppeared bloqué à
-                    // false). Un tick pour laisser rendre l'état replié,
-                    // puis la même animation d'ouverture que `.onAppear`.
-                    DispatchQueue.main.async {
-                        withAnimation(.spring(response: 0.45, dampingFraction: 0.58)) {
-                            contextMenuAppeared = true
-                            previewScale = 1.0
-                        }
-                    }
+                    // resterait invisible (contextMenuAppeared bloqué à false).
+                    runContextMenuEmergence()
                 }
             }
         )

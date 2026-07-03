@@ -47,8 +47,12 @@ struct ConversationRowItem: View {
     let onTap: () -> Void
     let onLoadPreview: () async -> Void
     /// Appui long → overlay de menu custom (dessine ses icônes ; le
-    /// `.contextMenu` natif ne les affiche pas sur iOS 26).
-    let onLongPress: () -> Void
+    /// `.contextMenu` natif ne les affiche pas sur iOS 26). Reçoit la frame
+    /// GLOBALE de la ligne pressée — point de départ de l'émergence de
+    /// l'aperçu (+Overlays). `.zero` quand la frame n'est pas connue
+    /// (action de rotor accessibilité) : l'overlay retombe sur le zoom
+    /// centré 0.7 → 1.0.
+    let onLongPress: (CGRect) -> Void
 
     var body: some View {
         SwipeableRow(
@@ -91,7 +95,7 @@ struct ConversationRowItem: View {
                 defaultValue: "Ouvrir le menu",
                 bundle: .main
             )) {
-                onLongPress()
+                onLongPress(.zero)
             }
             // Appui long → overlay custom (icônes garanties iOS 26). Le
             // drag-to-reorder natif (`.onDrag`) a été retiré : il installe une
@@ -137,17 +141,45 @@ struct ConversationRowItem: View {
 /// `.equatable()` — son state s'invalide indépendamment, comme le drag
 /// interne de `SwipeableRow`.
 private struct RowPressBounceModifier: ViewModifier {
-    let onTrigger: () -> Void
+    let onTrigger: (CGRect) -> Void
 
     @State private var isPressing = false
+    /// true quand le long-press a ABOUTI (menu ouvert) : le retour de scale
+    /// rebondit alors visiblement (damping 0.25). Tout autre relâchement —
+    /// début de swipe d'actions, départ de scroll, tap — retombe sur un
+    /// retour discret quasi sans rebond (damping 0.85) : le rebond appartient
+    /// au long-press/preview, PAS au swipe des lignes (feedback user
+    /// 2026-07-03).
+    @State private var triggered = false
+    @State private var frameBox = RowFrameBox()
 
     func body(content: Content) -> some View {
         content
+            // Frame globale de la ligne, tenue à jour à chaque layout (scroll
+            // compris) dans une boîte INERTE : écrire dans la classe ne
+            // déclenche aucune invalidation SwiftUI — une @State CGRect
+            // invaliderait la ligne à chaque tick de scroll. `onTrigger` la
+            // lit au déclenchement : point de départ de l'émergence.
+            .background(
+                GeometryReader { geo in
+                    Color.clear
+                        .onAppear { frameBox.rect = geo.frame(in: .global) }
+                        .adaptiveOnChange(of: geo.frame(in: .global)) { _, frame in
+                            frameBox.rect = frame
+                        }
+                }
+            )
             .scaleEffect(isPressing ? 0.90 : 1.0)
+            // Appui : réduction nette, atteinte vers ~0.2 s (léger delay pour
+            // que les débuts de scroll/swipe ne fassent pas flasher la ligne).
+            // Relâchement : rebond visible UNIQUEMENT si le menu s'est ouvert ;
+            // annulation (swipe, scroll, tap) = retour discret.
             .animation(
                 isPressing
-                    ? .easeOut(duration: 0.18)
-                    : .spring(response: 0.55, dampingFraction: 0.25),
+                    ? .easeOut(duration: 0.15).delay(0.05)
+                    : (triggered
+                        ? .spring(response: 0.55, dampingFraction: 0.25)
+                        : .spring(response: 0.35, dampingFraction: 0.85)),
                 value: isPressing
             )
             // Détecteur d'état d'appui PUR : minimumDuration inatteignable,
@@ -159,18 +191,28 @@ private struct RowPressBounceModifier: ViewModifier {
                 minimumDuration: 3600,
                 maximumDistance: 10,
                 perform: {},
-                onPressingChanged: { pressing in isPressing = pressing }
+                onPressingChanged: { pressing in
+                    if pressing { triggered = false }
+                    isPressing = pressing
+                }
             )
             // Déclencheur du menu : la variante simultanée fire à
             // minimumDuration PENDANT l'appui (0.4 s), pas au relâchement.
             .simultaneousGesture(
                 LongPressGesture(minimumDuration: 0.4)
                     .onEnded { _ in
+                        triggered = true
                         HapticFeedback.medium()
-                        onTrigger()
+                        onTrigger(frameBox.rect)
                     }
             )
     }
+}
+
+/// Boîte mutable inerte pour la frame globale de la ligne — voir le
+/// commentaire du `background` dans `RowPressBounceModifier`.
+private final class RowFrameBox {
+    var rect: CGRect = .zero
 }
 
 // MARK: - Equatable re-render gate (list rows)
