@@ -14,13 +14,15 @@ import AVFoundation
 /// A wrong gate that freezes a story forever is worse than the bug it fixes, so
 /// the function defaults to *progressing* in every ambiguous case:
 /// - `status == nil` — the slide has no primary video (image / colour / gradient
-///   / audio-only). It is NEVER gated on playback.
+///   / audio-only). It is never gated on VIDEO playback; audio availability is
+///   gated separately via `isAudioPending` (R1) with the same watchdog fallback.
 /// - `isUserPaused` — a user/lifecycle pause is handled by the timer's separate
 ///   `setPaused` path; the stall gate must not double-freeze it.
 /// - `isFailed` — a failed player can never recover, so fall back to the wall
 ///   clock immediately rather than hanging on a dead asset.
 /// - `watchdogExpired` — a stall that outlives the watchdog window falls back to
-///   the wall clock so a permanently-stuck stream cannot hard-stall the story.
+///   the wall clock so a permanently-stuck stream (or audio that never schedules)
+///   cannot hard-stall the story.
 public enum StoryPlaybackHealth {
 
     /// - Parameters:
@@ -31,6 +33,11 @@ public enum StoryPlaybackHealth {
     ///   - isFailed: the primary player's current item reached `.failed`.
     ///   - watchdogExpired: the primary playback has been continuously
     ///     non-`.playing` for longer than the stall watchdog window.
+    ///   - isAudioPending: the slide carries resolved audio clips that the
+    ///     reader mixer has not scheduled yet (files still downloading /
+    ///     caching). Once scheduled, the mixer plays local files — there is no
+    ///     mid-flight underrun, so this covers the whole audio-availability
+    ///     window. Guarded by the same watchdog as a video stall.
     /// - Returns: `true` when the timeline may advance, `false` when it must freeze.
     ///
     /// `nonisolated` : MeeshyUI builds with `SWIFT_DEFAULT_ACTOR_ISOLATION =
@@ -40,12 +47,14 @@ public enum StoryPlaybackHealth {
         status: AVPlayer.TimeControlStatus?,
         isUserPaused: Bool,
         isFailed: Bool,
-        watchdogExpired: Bool
+        watchdogExpired: Bool,
+        isAudioPending: Bool = false
     ) -> Bool {
-        guard let status else { return true }
         if isUserPaused { return true }
         if isFailed { return true }
         if watchdogExpired { return true }
+        if isAudioPending { return false }
+        guard let status else { return true }
         switch status {
         case .playing:
             return true

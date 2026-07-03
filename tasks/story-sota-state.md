@@ -1,0 +1,379 @@
+# Story SOTA — État d'analyse & backlog vivant (édition + lecture local-first)
+
+> **CE FICHIER EST LA SOURCE DE VÉRITÉ DE L'ITÉRATION.** L'agent DOIT le lire en entier avant
+> toute action, et le METTRE À JOUR à la fin de chaque itération (item → DONE avec preuve,
+> nouveaux findings → backlog). Analyse initiale : 2026-07-03 (5 agents d'exploration parallèles,
+> citations code vérifiées à cette date — re-vérifier les lignes avant de fixer, le code bouge).
+
+## 0. Mission produit (non négociable)
+
+1. **Édition crash-safe** : on revient dans le composer et on retrouve la story en cours
+   d'édition, même après un CRASH DUR (pas seulement un passage en background).
+2. **Lecture instantanée depuis N'IMPORTE QUEL point d'entrée** (tray, profil, deep link,
+   notification, repost embed) : jamais de spinner plein écran si un rendu partiel est possible.
+3. **Relecture offline** : une story déjà chargée se relit sans réseau, garanti.
+4. **Progression = disponibilité des données** : la barre de progression n'avance JAMAIS sur du
+   contenu non disponible (vidéo ET audio) ; elle gèle pendant le buffering avec un indicateur
+   discret, et reprend en phase.
+5. **SOTA UI/UX** : exploiter le design system de chaque version d'iOS (16 → 26) au maximum,
+   sans jamais retirer d'effet visuel existant (règle user ferme).
+
+## 1. Architecture — fichiers pivots (carte vérifiée)
+
+### Lecture (iOS)
+- `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryReaderTimerController.swift` — timer
+  gated CADisplayLink : n'avance que si `isActive && !isPaused && !isPlaybackStalled` ; gel
+  UI (`setPaused`) et gel buffer (`setPlaybackStalled`) indépendants ; reprise sans saut.
+- `.../Canvas/StoryCanvasUIView+ContentReadiness.swift` — `markContentReady` par slide :
+  image = KVO contents, vidéo = `AVPlayerLayer.isReadyForDisplay`, failsafe 2 s.
+- `.../Canvas/StoryCanvasUIView+Playback.swift` — `refreshPlaybackHealth` sonde
+  `primaryMediaPlayer()?.timeControlStatus` (vidéo BG sinon 1ʳᵉ vidéo FG) + watchdog →
+  `onPlaybackProgressing`.
+- `.../Canvas/StoryPlaybackHealth.swift` — rule engine pur du stall.
+- `.../Canvas/StoryReaderPrefetcher.swift` — fenêtre glissante de canvas `[N-1…N+2]` en `.edit`.
+- `.../Story/StoryReaderRepresentable.swift` — wrapper UIKit ; resolver `postMediaId → URL`.
+- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView*.swift` — viewer plein écran (carte
+  arrondie ↔ plein écran, `StoryCanvasFraming`), câblage timer/prefetch/markViewed.
+- `apps/ios/Meeshy/Features/Main/Views/StoryViewerContainer.swift` — hub d'entrée : groupe en
+  cache → rendu immédiat ; sinon `loadStories(forceNetwork:true)` BLOQUANT + spinner (lacune R4).
+- `apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift` — `loadStories` cache-first
+  SWR (`CacheCoordinator.stories`, clé unique `recent_tray_v2`), prefetch (`prefetchAllStoryMedia`
+  8 groupes), markViewed optimiste, sinks realtime, publish (voir Édition).
+- `.../MeeshyUI/Story/Canvas/Layers/StoryBackgroundLayer.swift` + `StoryMediaLayer.swift` —
+  résolution média : `file://` direct → disk-hit cache → stream distant + peuplement
+  `Task.detached(.utility)` best-effort.
+
+### Édition (iOS)
+- `packages/MeeshySDK/Sources/MeeshySDK/Store/StoryDraftStore.swift` — draft GRDB SQLite dédié
+  (`Documents/meeshy_story_draft.db` + `meeshy_draft_media/`), draft UNIQUE, détection médias
+  perdus (`lostElementIds`).
+- `.../MeeshyUI/Story/StoryComposerView.swift` + 20 extensions (`+SyncRestore` = draft,
+  `+Publication` = snapshot/publish, `+Media` = sheet timeline...) ; VM
+  `StoryComposerViewModel.swift` + extensions (`+Timeline` = lazy TimelineViewModel).
+- `.../MeeshyUI/Story/Timeline/` — CommandStack (undo/redo EN MÉMOIRE SEULEMENT),
+  StoryTimelineEngine, TimelineViewModel(+OfflinePublish = code mort partiel).
+- `.../MeeshySDK/Persistence/StoryPublishQueue.swift` — actor, JSON persisté
+  (`Documents/meeshy_cache/story_publish_queue.json`), retry 5×, hash-check médias, drain au
+  reconnect + boot. `StoryOfflineQueue` = adaptateur mince legacy.
+- `apps/ios/Meeshy/Features/Main/Services/StoryPublishService.swift` — orchestration + toasts.
+- `.../MeeshySDK/Networking/TusUploadManager.swift` — upload résumable, checkpoints GRDB
+  (`tus_upload_checkpoint`), reprise après kill VÉRIFIÉE (Wave 2 R-OB5).
+- `.../MeeshySDK/Models/StoryEffects+Sanitization.swift` — strip `file://` au boundary SDK.
+
+### Cache / local-first (iOS)
+- `packages/MeeshySDK/Sources/MeeshySDK/Cache/CacheCoordinator.swift` — store `stories`
+  (`GRDBCacheStore<String, StoryGroup>`, ttl 24 h / stale 5 min, NON chiffré) ; stores disque
+  `images` (1 an/300 Mo), `video` (6 mois/500 Mo), `audio` (6 mois/200 Mo), `thumbnails` (7 j).
+- `.../Cache/GRDBCacheStore.swift` / `DiskCacheStore.swift` — SWR, funnel réseau coalescé,
+  éviction budget LRU.
+- `.../Persistence/OfflineQueue.swift` + `OutboxRecord.swift` — outbox unifié ;
+  `publishStory`/`repostStory` déclarés mais NON câblés ; PAS de kind markViewed.
+- `tasks/local-first-todo.md` — Waves 1+2 (messagerie/feed) ; stories hors périmètre.
+
+### Backend (gateway/shared)
+- Pas de StoryService dédié : `Post` type STORY. Routes `services/gateway/src/routes/posts/`
+  (`core.ts`, `feed.ts` L65 = `GET /posts/feed/stories` — 50 stories PLEIN CORPS, pas de
+  pagination/delta, ETag global tout-ou-rien), `interactions.ts` (view L246, viewers L601).
+- `PostService.ts` — expiry STORY = **21 h** (`STORY_EXPIRY_HOURS`, L27) ; double pipeline de
+  traduction du `content` (L193 + route core.ts L98-115) ; textObjects traduits vers 10 langues
+  FIXES (TODO audience-driven L392).
+- `SocialEventsHandler.ts` — story:created (payload complet), viewed, deleted, reacted/unreacted,
+  translation-updated. `StoryTextObjectTranslationService.ts` — dot-notation `$runCommandRaw`.
+- Médias : `/attachments/file/*` supporte HTTP Range (206) vidéo/audio + `Cache-Control` 1 an —
+  le streaming/seek serveur est DÉJÀ bon.
+- `ExpiredStoriesCleanupService.ts` — cron 1 h, soft-delete puis hard-delete J+7.
+
+### Web
+- `apps/web/components/v2/StoryViewer.tsx` (re-rend les storyEffects, fidèle SAUF
+  keyframes/transitions), `StoryComposer.tsx` (pauvre), `story-transforms.ts`
+  (`computeStoryDurationMs` = portage 1:1 iOS), React Query + persistance IndexedDB 24 h.
+
+## 2. ZONES AUDITÉES SAINES — NE PAS RÉ-ANALYSER (sauf commit récent les touchant)
+
+Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + exploration 2026-07-03 :
+- **Parité composite cover/thumbHash vs canvas** (rotation, scale texte, transform fond, dessin,
+  vidéos bg/fg, filtres via pont Kind) — it.48/49/51, it.24-28. ⚠️ SEULE exception : it.58
+  (scope filtre bg-only vs composite entier) à re-vérifier si la migration filtre est figée.
+- **Sync realtime end-to-end** (viewCount it.52, commentCount it.53, reactions it.23/54,
+  translation-updated it.9, isViewed monotone it.45) — client sinks + gateway emits croisés.
+- **Mutations StoryItem/StoryGroup in-place** (markViewed it.42 fixé, mutateStoryItem,
+  insertOrAppend, deleteStory) — pas de reconstruction partielle restante.
+- **Expiry viewer/tray** (skipExpired + isFullyExpired) — it.39/40.
+- **Publication** : gate online/offline, partial-failure multi-slides, anti-doublon retry,
+  rollback slides orphelines, réconciliation optimiste — it.38, it.11. Queue : dispositions
+  atomiques, missing-media permanent, quarantine JSON corrompu — it.46/47.
+- **TUS resumable cross-kill** — Wave 2 R-OB5 (état de l'art, checkpoints GRDB post-PATCH).
+- **markViewed decode** (`APIResponse<[String: Bool]>` ↔ `{viewed:true}`) — CORRIGÉ, ne plus citer.
+- **Conception du timer reader** (gated, granularité 1/300, prefetch N+1, pas de saut à la
+  reprise) — it.55. Les trous sont dans la COUVERTURE (audio, failsafe), pas la conception.
+- **Timing par-élément + timelineDuration autoritaire end-to-end** (viewer/exporter/publish
+  round-trip passthrough gateway) — it.18-22. ⚠️ MAIS voir E2 : `buildEffects()` le perd.
+- **Drawing capture↔render, ops multi-slides add/delete/duplicate/reorder** — it.13, it.36/37.
+- **Story reply flow, story REST reply = Message.storyReplyToId + snapshot gelé** — it.57.
+- **Prisme viewer** : chaîne de langue + override session (it.8), merge realtime (it.9),
+  voice caption fallback original — sains.
+
+## 3. BACKLOG PRIORISÉ — bugs & lacunes CONFIRMÉS (preuves citées)
+
+> Protocole : prendre l'item ouvert le plus prioritaire NON bloqué, re-prouver dans le code
+> actuel, fixer en TDD, vérifier, commit+push, mettre à jour ce fichier. Un item par itération
+> (ou un groupe cohérent petit). P0 = casse la mission produit ; P1 = écart majeur ; P2 = dette
+> structurante ; P3 = polish/mineur.
+
+### ÉDITION — crash recovery & intégrité des données
+
+- [ ] **E1 (P0) Autosave draft sur mutation, pas seulement en background.**
+  Preuve : unique déclencheur = `scenePhase == .background`
+  (`StoryComposerView.swift:240-242` → `autoSaveDraftForBackground`). Un crash dur (OOM,
+  fatalError) en pleine édition perd tout depuis le dernier background.
+  Cible SOTA : autosave débouncé (~2-3 s) sur toute mutation de `slides`/`currentEffects`
+  (miroir du dirty-tracking GRDBCacheStore), + save immédiat sur événements structurants
+  (ajout slide, import média, commit timeline). Attention coût : `saveMedia` copie les bitmaps —
+  séparer save des effects JSON (léger, fréquent) du save des médias (lourd, sur ajout média
+  seulement). Restauration : proposer la reprise AU LANCEMENT du composer (déjà `checkForDraft`
+  en `.onAppear`) — améliorer l'UX en preview du brouillon (mini-rendu composite) au lieu d'une
+  alerte texte.
+- [ ] **E2 (P0) `buildEffects()` écrase `clipTransitions` + `timelineDuration` à nil.**
+  Preuve : `StoryComposerView+SyncRestore.swift:127-164` — l'init `StoryEffects(...)` omet ces
+  2 champs alors que `syncCurrentSlideEffects()` s'exécute avant CHAQUE publish
+  (`+Publication.swift:30`) et dans `persistDraft()`. Perte des transitions inter-clips et de la
+  durée timeline du slide courant. Fix : préserver depuis `currentEffects` (copy-through des
+  champs non pilotés par le canvas). Test RED d'abord (slide avec timelineDuration + publish →
+  champ survivant).
+- [ ] **E3 (P1) `persistDraft()` ne flushe pas la timeline ouverte.**
+  Preuve : commit timeline seulement sur dismiss de sheet (`+Media.swift:60`) ; `persistDraft`
+  (`+SyncRestore.swift:169`) n'appelle pas `commitTimelineToCurrentSlide()`. Passage en
+  background avec sheet Timeline ouverte = éditions keyframes perdues du draft.
+- [ ] **E4 (P1) Persister le CommandStack (undo/redo) avec le draft.**
+  Preuve : `commandHistorySnapshot()`/`restoreCommandHistory()` ZÉRO caller prod ; grep
+  `commands.json` → aucune écriture ; `shutdownTimelineIfNeeded()` (`+Timeline.swift:27`) recrée
+  un stack neuf au démontage → undo/redo perdu même intra-session. Cible : snapshot dans
+  `story_draft_meta` (ou fichier sidecar) au même rythme que E1 ; restore dans
+  `loadCurrentSlideIntoTimeline`.
+- [ ] **E5 (P1) Publish online in-flight non résumable après kill.**
+  Preuve : `activeUpload` mémoire seulement ; commentaire `StoryViewModel.swift:181` («
+  cross-restart resume is the StoryPublishQueue scope ») ; un kill pendant l'upload online perd
+  la story (les TUS checkpoints survivent mais rien ne relance le pipeline).
+  Design élégant : **write-ahead systématique** — toujours enqueue dans `StoryPublishQueue`
+  (persistée) AVANT de lancer l'upload, marquer l'item `inflight`, le retirer au succès ;
+  au boot, tout item `inflight` orphelin redevient `pending`. Unifie les 2 chemins
+  online/offline (supprime la bifurcation `isOffline`).
+- [ ] **E6 (P2) `StoryQueueMigrator.migrateLegacyOfflineQueue()` jamais appelé en prod.**
+  Preuve : grep → définition + tests seulement. Soit l'appeler au boot (one-shot idempotent,
+  déjà testé), soit supprimer le legacy si plus aucun install n'a l'ancien fichier.
+- [ ] **E7 (P2) Code mort Timeline publish** : `handlePublishTap` + `StubOnlinePublisher`
+  (throw toujours, zéro caller) ; `buildOfflineQueueItem` limitation F5 (perd
+  background/filter/drawing sur flush). Décision : retirer ou câbler — trancher avec le user si
+  le bouton publish in-timeline est souhaité.
+- [ ] **E8 (P2) Multi-draft.** `save()` fait `DELETE FROM story_draft_slide` — un seul brouillon.
+  Feature : galerie de brouillons (id draft + updatedAt + cover composite), reprise au choix.
+  Décision produit à confirmer avant d'implémenter (scope UI non trivial).
+- [ ] **E9 (P2) Draft store hors purge de compte.** `meeshy_story_draft.db` séparé
+  d'AppDatabase ; `CacheCoordinator.reset()` (logout) ne l'atteint pas — vérifier et brancher
+  `StoryDraftStore.clear()` sur le logout (confidentialité multi-compte).
+
+### LECTURE — progression synchronisée aux données
+
+- [x] **R1 (P0) Étendre le gel de progression à l'AUDIO.** ✅ it.1 (commit ci-dessous)
+  Preuve re-confirmée : `primaryMediaPlayer()` = vidéo uniquement ; audio pré-caché ASYNC
+  (`reconfigureAudioForPlayback` → `cachedAudioFileURL`) pendant que la timeline avançait.
+  Découverte en route : `startAudioPlayback()` schedulait un `play()` À VIDE quand contentReady
+  précédait la fin du pré-cache → clé de slide posée sur mixer silencieux + vrai schedule
+  back-daté ensuite (cause racine du démarrage audio désynchronisé).
+  Livré : `StoryPlaybackHealth.isProgressing(isAudioPending:)` (deadlock-guards intacts :
+  userPaused/failed/watchdog 5 s forcent la reprise) ; `ReaderAudioMixer.hasStartedPlayback(slideKey:)`
+  (réponse PAR slide — le flag global confondait la passe de la slide précédente) ; sonde
+  `isSlideAudioPending()` 60 Hz sur flag sync `slideHasSchedulableAudio` ; interdiction du play()
+  à vide sur slide audio ; re-pose du flag post-configure (échec total de cache = slide
+  silencieuse → gate libéré sans watchdog) ; gate appel actif (story joue muette, pas de gel).
+  NOTE : le mixer joue des fichiers LOCAUX une fois schedulé → pas d'underrun mid-flight ;
+  le gate couvre TOUTE la fenêtre de disponibilité audio. La reprise repart en phase
+  (`captureSlideTimelineOrigin` sur playhead gelé = 0). Ambiguïté tranchée : on gèle AUSSI
+  quand le reader est muté (le schedule volume-0 garde la sync pour un unmute mid-slide).
+  Tests : 27/27 verts (StoryPlaybackHealthTests 14, StoryCanvasPlaybackHealthTests 13) simu 18.2.
+  Reste (couvert par R3) : indicateur visuel discret pendant ce gel.
+- [ ] **R2 (P1) Failsafe 2 s : ne pas démarrer la timeline sur du contenu absent.**
+  Preuve : `ContentReadiness.swift:104,178,381` — après 2 s, `contentReady` est forcé même si le
+  média n'a pas chargé → la barre court sur le ThumbHash flou. Redesign : le failsafe ne doit
+  plus démarrer le TIMER ; il bascule vers un état « chargement prolongé » : ThumbHash + spinner
+  discret + timer toujours pending ; vrai timeout long (10-15 s) → UI d'erreur (retry / passer
+  au slide suivant). Garder un failsafe anti-deadlock pour les cas sans média (couleur/gradient).
+  ⚠️ Rejouer les scénarios de `tasks/unified-story-timeline.md` (image-only, broken URL,
+  user-pause) — AUCUN deadlock permis.
+- [ ] **R3 (P1) Indicateur de buffering pendant un stall mid-slide.**
+  Preuve : `StoryReaderLoadingOverlay` piloté par `onContentProgress` (chargement initial) ; le
+  gel `isPlaybackStalled` ne montre RIEN (frame figée). Fix : brancher
+  `onPlaybackProgressing(false)` → overlay discret (spinner fin style Instagram au centre ou
+  ring sur la barre), disparition immédiate à la reprise. Design : discret, pas de plein écran.
+- [ ] **R4 (P1) Deep link / notification : rendu progressif au lieu du spinner bloquant.**
+  Preuve : `StoryViewerContainer.swift:171-192` — groupe absent → `loadStories(forceNetwork:
+  true)` (refetch du TRAY ENTIER) + spinner plein écran + timeout 2,5 s.
+  Cible : fetch unitaire `GET /posts/:id` (existe déjà) → construire le groupe minimal → rendu
+  immédiat sur ThumbHash pendant que le média arrive ; le tray se rafraîchit en fond.
+- [ ] **R5 (P0) Garantir la relecture OFFLINE des stories vues.**
+  Preuves : peuplement cache vidéo `Task.detached(.utility)` best-effort
+  (`StoryBackgroundLayer.swift:702`) ; `prefetchTasks` annulés à `onDisappear`
+  (`StoryViewerView.swift:434`) ; aucune politique de rétention/pinning story.
+  Cible SOTA : (a) NE PAS annuler un téléchargement de média dont la slide a été AFFICHÉE —
+  le laisser finir (detached, budget-aware) ; (b) pin léger : les médias des stories du tray
+  (ou au minimum des stories VUES) marqués non-évincables tant que la story n'est pas expirée
+  (le TTL disque de 6 mois est déjà large, le risque réel = éviction budget LRU + download
+  incomplet) ; (c) test d'intégration : voir une story → couper le réseau → relire → zéro
+  requête réseau. Respecter `MediaDownloadPreferences`/`NetworkConditionMonitor` (pas de
+  full-download cellulaire agressif).
+- [ ] **R6 (P2) `OutboxKind.markStoryViewed` — état vu durable offline.**
+  Preuve : fire-and-forget REST (`StoryViewModel.markViewed`), aucun kind outbox, perte possible
+  si éviction cache avant sync. Ajouter le kind + flush FIFO au reconnect (l'infra outbox T10
+  existe). Idempotent côté serveur (P2002 no-op déjà géré).
+- [ ] **R7 (P2) Défense de routage média : sniff avant store.**
+  Preuve (bug mp4-dans-Images CONFIRMÉ) : `prefetchStoryMediaURLs`
+  (`StoryViewModel.swift:442-459`) route par `FeedMedia.type` ; type nil/mal classé → mp4 dans
+  le store `images` (300 Mo) → cache-miss au replay vidéo. Même risque
+  `StoryBackgroundLayer.swift:317`. Fix : fallback sniff extension/mime de l'URL quand `type`
+  est nil/incohérent + (option) migration lazy des .mp4 orphelins du store Images.
+- [ ] **R8 (P2) Pagination du tray (client).** `fetchStoriesFromNetwork` appelle
+  `list(cursor: nil, limit: 50)` — curseur ignoré, plafond 50. À traiter AVEC G1 (le serveur ne
+  pagine pas non plus).
+- [ ] **R9 (P2) Chiffrer le store `stories`.** `CacheCoordinator.swift:230` — stories en clair
+  alors que messages/profiles/notifications sont chiffrés. Contenu social sensible.
+- [ ] **R10 (P3) `toRenderableSlide` : `content` legacy résolu sur `chain.first` seulement**
+  (`StoryModels.swift:1990-2058`) vs chaîne complète pour textObjects. Harmoniser.
+- [ ] **R11 (P3) `isViewed: Bool` → `viewedAt: Date?`** (règle CLAUDE.md « nullable DateTime,
+  pas de boolean redondant »). Migration douce : garder le decode Bool, ajouter le timestamp.
+- [ ] **R12 (P2, architecture) Story store relationnel.** Le tray = UN blob JSON
+  `stories:recent_tray_v2` ré-encodé en entier à chaque write (chiffrement futur = encore plus
+  cher). Cible : clé par groupe (`stories:group:<authorId>`) ou table dédiée + persistence
+  actor (parité feed/messages). Gros chantier — passer par un plan dédié
+  (`docs/superpowers/plans/`), pas une itération loop.
+
+### BACKEND — instantanéité réseau
+
+- [ ] **G1 (P1) Tray léger + delta-sync.**
+  Preuve : `GET /posts/feed/stories` = 50 stories plein corps (`storyEffects` ≤256 KB chacune,
+  translations, media[], top-3 comments) sans pagination ni `?since=` ; ETag tout-ou-rien
+  quasi jamais 304 sur tray actif. Cible (compatible ascendant) : (a) param `?since=<updatedAt>`
+  → ne renvoyer que les groupes modifiés ; (b) projection légère optionnelle
+  `?projection=tray` (auteur, compteurs, premier slide, thumbHash) avec fetch complet à
+  l'ouverture du groupe ; (c) pagination cursor. Coordonner avec R8/W5. Le client garde son
+  cache 24 h et fusionne le delta.
+- [ ] **G2 (P2) Double pipeline de traduction du `content` story.**
+  Preuve : `PostService.createPost` L193 (`triggerStoryTextTranslation`, audience-driven) ET
+  `routes/posts/core.ts` L98-115 (`translatePost`, 5 langues fixes) écrivent tous deux dans
+  `Post.translations`. Redondance ZMQ + écritures concurrentes. Garder le pipeline
+  audience-driven, gater l'autre pour type STORY (vérifier les tests gateway existants).
+- [ ] **G3 (P2) textObjects → langues audience-driven.** `getActiveTargetLanguages` = 10 langues
+  codées en dur (TODO explicite `PostService.ts:392`). Réutiliser la résolution d'audience du
+  pipeline A (contacts de l'auteur).
+- [ ] **G4 (P3) Champ mort `Post.storyViews Json?`** (schema L2874, jamais écrit/lu — PostView
+  est la vérité). Retirer du schema (migration) ou documenter.
+- [ ] **G5 (P3) Consolider les 3 implémentations de visibilité** (PostFeedService,
+  PostService, canUserViewPost) en un module unique — risque de dérive/fuite documenté.
+- [ ] **G6 (P3) Constante d'expiry unifiée.** Serveur = 21 h (`STORY_EXPIRY_HOURS`), client
+  `toStoryGroups` fallback = createdAt+21 h mais `isExpired` défaut interne = +24 h. Sans effet
+  aujourd'hui (expiresAt toujours posé) mais piège dormant — une seule constante partagée.
+
+### WEB (secondaire — parité lecteur)
+
+- [ ] **W1 (P2) Keyframes/transitions non rendus** (objets statiques). Interpolation CSS/JS
+  depuis `StoryKeyframe[]` (portés par chaque textObject/mediaObject).
+- [ ] **W2 (P2) Timer découplé de la vidéo** (`setTimeout` indépendant, vidéos muettes forcées).
+  Porter le pattern iOS : gate sur `canplay`/`waiting`/`stalled` du `<video>`.
+- [ ] **W3 (P2) Composer web : visibilités COMMUNITY/EXCEPT/ONLY + overlays.** Reliquat connu
+  (mémoire story-status-community-visibility). `visibilityUserIds` déjà dans
+  `CreateStoryRequest` web — manque l'UI.
+- [ ] **W4 (P3) Realtime web : écouter `story:deleted` ; brancher `story:translation-updated`**
+  (écouté dans use-social-socket mais handler absent de useStoriesRealtime).
+- [ ] **W5 (P3) Préchargement du média du slide suivant** (aucun `preload` dans StoryViewer.tsx).
+
+### UI/UX — design system par version d'iOS (à traiter APRÈS les P0/P1 fonctionnels)
+
+- [ ] **U1 (P2) Transition tray→viewer** : sur iOS 18+, `navigationTransition(.zoom)` /
+  matched-geometry depuis l'anneau du tray vers la carte reader ; fallback animation actuelle
+  iOS 16-17. Ne PAS casser appearScale/drag-dismiss existants (cf. it.33).
+- [ ] **U2 (P2) Haptics** : `.sensoryFeedback` (iOS 17+) sur changement de slide, gel/reprise
+  buffering, publication réussie ; fallback `UIImpactFeedbackGenerator` iOS 16.
+- [ ] **U3 (P2) Chrome du reader en matériaux natifs** : header/footer/sidebar en
+  `.ultraThinMaterial` + sur iOS 26 adopter les surfaces Liquid Glass (`glassEffect` API si
+  dispo dans le SDK cible) — TOUJOURS via gating `if #available`, jamais de régression 16-25.
+  Respecter la mémoire « texte blanc illisible en Light sur verre » (épingler colorScheme si
+  besoin).
+- [ ] **U4 (P2) Reprise de brouillon** : remplacer l'alerte texte par une carte de reprise
+  (cover composite du draft, « Reprendre / Recommencer »), présentée dans le composer et/ou en
+  chip sur « Ma story ». C'est le pendant UX de E1.
+- [ ] **U5 (P3) État de chargement prolongé** (avec R2) : ThumbHash + progress ring fine autour
+  de l'avatar auteur (métaphore déjà connue du tray), bouton passer.
+- [ ] **U6 (P3) Dynamic Type/VoiceOver du viewer** : étendre la passe a11y (PR #1211) aux
+  overlays reader (labels des zones tap prev/next, annonce du changement de slide,
+  `accessibilityValue` de progression).
+- [ ] **U7 (P3) ProMotion** : vérifier `CADisplayLink.preferredFrameRateRange` du timer reader
+  (économie batterie 120 Hz → ne commiter la barre qu'à 1/300 déjà fait ; vérifier le link).
+
+## 4. Décisions produit EN ATTENTE (ne pas trancher seul)
+
+- E7 : câbler ou retirer le publish in-timeline (`handlePublishTap`).
+- E8 : multi-draft (galerie) — oui/non + scope.
+- WS5.4b (hérité) : promotion `media[0]` non flaggé en fond statique — règle produit requise.
+- it.44 C.2 : import repost-as-post (compléter l'éditeur ou retirer le scaffolding).
+- Phase 2 cover baké uploadé (tous les viewers voient les overlays dans le tray) — touche la
+  règle RAW-publish/Prisme.
+- P1 filtres : 6 filtres sans kernel Metal (unifier sur CoreImage vs écrire les kernels vs
+  retirer de la grille) + it.58 (scope filtre bg-only vs composite) — chantier archi dédié.
+
+## 5. Invariants à ne JAMAIS violer
+
+1. **RAW publish** : jamais de MP4 composite uploadé au backend (Prisme Linguistique). Export
+   MP4 = local auteur-only.
+2. **Prisme règle n°1** : pas de traduction matchée → contenu ORIGINAL (jamais
+   `translations.first`).
+3. **SDK purity** : orchestration UX (cascades cache→downloader→policy, décisions « quand ») =
+   app-side ; le SDK reste building blocks paramétrés.
+4. **Ne jamais retirer d'effet visuel** (règle user) — optimisations INVISIBLES seulement.
+5. **Un seul moteur audio call-safe** — pas de double-start ; gate `isCallActive`.
+6. **Sanitize `file://`** avant tout POST (StoryEffects+Sanitization).
+7. **TDD** : test RED avant fix ; ne jamais dégrader la prod pour faire passer un test.
+8. **Mutations StoryItem IN PLACE** — jamais de reconstruction partielle (classe de bug it.42).
+9. **Timer reader** : toute reprise re-seed `lastTick` (pas de saut) ; aucun chemin ne doit
+   pouvoir DEADLOCKER la progression (failsafe anti-deadlock obligatoire sur les slides sans
+   média).
+
+## 6. Pièges d'exécution connus (mémoire projet)
+
+- `meeshy.sh build` : grep « BUILD SUCCEEDED » dans le log, JAMAIS l'exit code ; exit 0 possible
+  sur échec ; stale .app possible → rm + rebuild avant test simu.
+- `meeshy.sh test` : lire le xcresult (totalTestCount/failedTests), pas l'exit ; exit 64 si
+  `test-results/unit-tests.xcresult` existe déjà.
+- Tests SDK : scheme `MeeshySDK-Package` (PAS MeeshyUI), simulateur 18.2 (CI pin), derivedData
+  partagé (pas de path per-agent), `-clonedSourcePackagesDirPath` si contention SPM.
+- `build-for-testing` ≠ exécuter les tests. Exécuter avant tout push main.
+- Worktree potentiellement PARTAGÉ avec d'autres agents : jamais `git commit --amend`, jamais
+  `gh pr checkout` ; vérifier `git status` avant de toucher un fichier modifié par un tiers ;
+  commits SÉLECTIFS (pathspec).
+- Xcode ouvert = deadlock build CLI (IDEContainer lock).
+- MeeshyUI defaultIsolation = MainActor ; tests non @MainActor ; Combine `.map` pré-receive =
+  background (SIGTRAP si @MainActor) ; pas de raw `.onChange` (adaptiveOnChange iOS 16).
+- Gateway : tests sous bun (`bun run test:coverage`), prisma generate + shared build d'abord ;
+  route Fastify dupliquée = boot silencieusement cassé.
+- Déploiement = push main → CI ; gateway prod nécessite pull+up -d explicite.
+
+## 7. Journal d'itérations (l'agent APPEND ici)
+
+> Format : `## it.N — <titre> (<commit>)` + preuves (RED reproduit, tests verts, vérif visuelle)
+> + items cochés/ajoutés ci-dessus. Si un item s'avère déjà corrigé ou infondé au re-check :
+> le cocher avec la mention ÉCARTÉ + preuve, sans fix.
+
+## it.1 — R1 : gel de progression étendu à l'audio (commit: voir git log fix(story/reader))
+
+- RED : nouveaux tests `isAudioPending` (rule engine) + gate canvas ne compilaient/passaient pas
+  sur l'ancien code (paramètre inexistant, playhead avançait sur audio non schedulé).
+- Fix SDK (5 fichiers) : `StoryPlaybackHealth.swift` (+`isAudioPending`, guards intacts),
+  `ReaderAudioMixer.swift` (+`hasStartedPlayback(slideKey:)`), `StoryCanvasUIView.swift`
+  (+`slideHasSchedulableAudio`), `+Playback.swift` (watchdog vidéo OU audio, seam étendu),
+  `+Audio.swift` (flag sync, `isSlideAudioPending()`, anti play-à-vide, re-pose post-configure).
+- Bonus racine : le play() à vide (contentReady avant fin du pré-cache) causait le démarrage
+  audio désynchronisé — désormais le schedule attend les buffers et part du playhead gelé.
+- Vérif : 27/27 tests verts (suites StoryPlaybackHealthTests + StoryCanvasPlaybackHealthTests,
+  simu iOS 18.2, scheme MeeshySDK-Package) ; `meeshy.sh build` → BUILD SUCCEEDED (app entière).
+- Découvertes backlog : aucune nouvelle (le trou play-à-vide était le volet caché de R1, fixé ici).
+- Piège noté : les guards de `isProgressing` réordonnés (userPaused/failed/watchdog AVANT le
+  `guard let status`) — sémantique identique pour la matrice vidéo, nécessaire pour que les
+  guards s'appliquent aussi aux slides sans vidéo (status nil + audio pending).

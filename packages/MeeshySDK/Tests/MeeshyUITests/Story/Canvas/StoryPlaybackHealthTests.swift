@@ -68,4 +68,41 @@ final class StoryPlaybackHealthTests: XCTestCase {
         XCTAssertTrue(StoryPlaybackHealth.isProgressing(
             status: .paused, isUserPaused: false, isFailed: false, watchdogExpired: true))
     }
+
+    // MARK: - Audio pending (R1) : the slide's audio is not scheduled yet
+
+    func test_isProgressing_audioPending_noVideo_returnsFalse() {
+        XCTAssertFalse(StoryPlaybackHealth.isProgressing(
+            status: nil, isUserPaused: false, isFailed: false, watchdogExpired: false,
+            isAudioPending: true),
+            "An audio-driven slide whose clips are still downloading must freeze the timeline")
+    }
+
+    func test_isProgressing_audioPending_playingVideo_returnsFalse() {
+        XCTAssertFalse(StoryPlaybackHealth.isProgressing(
+            status: .playing, isUserPaused: false, isFailed: false, watchdogExpired: false,
+            isAudioPending: true),
+            "A playing video must not unfreeze a slide whose audio is still pending")
+    }
+
+    func test_isProgressing_audioPending_userPaused_returnsTrue() {
+        XCTAssertTrue(StoryPlaybackHealth.isProgressing(
+            status: nil, isUserPaused: true, isFailed: false, watchdogExpired: false,
+            isAudioPending: true),
+            "A user/lifecycle pause is handled by setPaused, not the audio gate")
+    }
+
+    func test_isProgressing_audioPending_failed_returnsTrue() {
+        XCTAssertTrue(StoryPlaybackHealth.isProgressing(
+            status: .waitingToPlayAtSpecifiedRate, isUserPaused: false, isFailed: true, watchdogExpired: false,
+            isAudioPending: true),
+            "A failed primary player falls back to wall-clock even with audio pending")
+    }
+
+    func test_isProgressing_audioPending_watchdogExpired_returnsTrue() {
+        XCTAssertTrue(StoryPlaybackHealth.isProgressing(
+            status: nil, isUserPaused: false, isFailed: false, watchdogExpired: true,
+            isAudioPending: true),
+            "Audio that never schedules must fall back to wall-clock, never deadlock")
+    }
 }

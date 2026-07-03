@@ -285,6 +285,7 @@ extension StoryCanvasUIView {
         let player = primaryMediaPlayer()
         applyPlaybackHealth(status: player?.timeControlStatus,
                             failed: player?.currentItem?.status == .failed,
+                            audioPending: isSlideAudioPending(),
                             now: now)
     }
 
@@ -293,12 +294,15 @@ extension StoryCanvasUIView {
     /// par `_refreshPlaybackHealthForTesting` (statut injecté).
     func applyPlaybackHealth(status: AVPlayer.TimeControlStatus?,
                                      failed: Bool,
+                                     audioPending: Bool = false,
                                      now: CFTimeInterval) {
-        // Le watchdog n'accumule QUE pendant une non-lecture réelle d'un média
-        // gaté. `.playing`, absence de vidéo, pause user, et échec comptent comme
-        // « sains » (reset) — l'échec retombe déjà sur l'horloge murale.
-        let healthyForWatchdog = status == .playing || status == nil || isPlaybackPaused || failed
-        if healthyForWatchdog {
+        // Le watchdog n'accumule QUE pendant une non-disponibilité réelle d'un
+        // média gaté — vidéo primaire non-`.playing` OU audio pas encore
+        // schedulé (R1). Pause user et échec comptent comme « sains » (reset) —
+        // l'échec retombe déjà sur l'horloge murale.
+        let videoGated = status != nil && status != .playing
+        let gatedForWatchdog = (videoGated || audioPending) && !isPlaybackPaused && !failed
+        if !gatedForWatchdog {
             playbackStallSince = nil
         } else if playbackStallSince == nil {
             playbackStallSince = now
@@ -308,7 +312,8 @@ extension StoryCanvasUIView {
             status: status,
             isUserPaused: isPlaybackPaused,
             isFailed: failed,
-            watchdogExpired: watchdogExpired
+            watchdogExpired: watchdogExpired,
+            isAudioPending: audioPending
         )
         isPlaybackStalled = !progressing
         guard progressing != lastProgressingEmitted else { return }
@@ -326,12 +331,14 @@ extension StoryCanvasUIView {
     }
 
     /// Test-only seam : drive the health core with an injected `timeControlStatus`
-    /// (and `failed`) at an explicit `now` so the watchdog + emit-on-change +
-    /// freeze contract is exercised without a live `AVPlayer` or `CADisplayLink`.
+    /// (and `failed` / `audioPending`) at an explicit `now` so the watchdog +
+    /// emit-on-change + freeze contract is exercised without a live `AVPlayer`
+    /// or `CADisplayLink`.
     public func _refreshPlaybackHealthForTesting(status: AVPlayer.TimeControlStatus?,
                                                  failed: Bool,
+                                                 audioPending: Bool = false,
                                                  now: CFTimeInterval) {
-        applyPlaybackHealth(status: status, failed: failed, now: now)
+        applyPlaybackHealth(status: status, failed: failed, audioPending: audioPending, now: now)
     }
 
     /// Test-only seam : run the gated playhead advance exactly as `displayLinkTick`
