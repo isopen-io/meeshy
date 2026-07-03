@@ -32,4 +32,8 @@
     <string name="call_quality_good">Boa conexão</string>
     <string name="call_quality_fair">Conexão razoável</string>
     <string name="call_quality_poor">Conexão fraca</string>
+    <string name="call_waiting_subtitle">Chamada recebida…</string>
+    <string name="call_waiting_banner_a11y">Chamada recebida de %1$s</string>
+    <string name="call_waiting_reject_a11y">Recusar a chamada de %1$s</string>
+    <string name="call_waiting_answer_a11y">Desligar e atender %1$s</string>
 </resources>
