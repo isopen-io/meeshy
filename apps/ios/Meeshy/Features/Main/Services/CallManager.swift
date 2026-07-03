@@ -658,7 +658,7 @@ final class CallManager: ObservableObject {
         // the engine is live again.
         configureAudioSession()
         audioSessionQueue.async { [weak self] in
-            guard let self else { return }
+            guard self != nil else { return }
             do {
                 try AVAudioSession.sharedInstance().setActive(true, options: [])
             } catch {
@@ -2455,13 +2455,15 @@ final class CallManager: ObservableObject {
         callUsesCallKit = true
         ringbackPlayer.shouldSelfActivateSession = false
         callProvider.reportNewIncomingCall(with: uuid, update: update) { [weak self] error in
-            guard let self else { return }
-            if let error {
-                Logger.calls.error("CallKit late-promote on background failed: \(error.localizedDescription)")
-                self.callUsesCallKit = false
-                self.ringbackPlayer.shouldSelfActivateSession = true
-            } else {
-                Logger.calls.info("Promoted ringing call to CallKit on background entry")
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if let error {
+                    Logger.calls.error("CallKit late-promote on background failed: \(error.localizedDescription)")
+                    self.callUsesCallKit = false
+                    self.ringbackPlayer.shouldSelfActivateSession = true
+                } else {
+                    Logger.calls.info("Promoted ringing call to CallKit on background entry")
+                }
             }
         }
     }

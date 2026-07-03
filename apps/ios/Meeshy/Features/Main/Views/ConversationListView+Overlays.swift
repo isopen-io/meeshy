@@ -280,7 +280,7 @@ extension ConversationListView {
                                 CallManager.shared.startCall(
                                     conversationId: conversation.id,
                                     userId: uid,
-                                    displayName: conversation.name ?? "",
+                                    displayName: conversation.name,
                                     isVideo: false
                                 )
                             }
@@ -329,7 +329,7 @@ extension ConversationListView {
                         },
                         onDetails: { conversationInfoConversation = conversation },
                         onRename: {
-                            renameText = conversation.name ?? ""
+                            renameText = conversation.name
                             renameTarget = conversation
                         },
                         onSetFavorite: { emoji in
