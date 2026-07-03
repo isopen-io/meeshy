@@ -121,17 +121,38 @@ extension StoryComposerView {
         }
     }
 
-    func handleDismiss() {
-        let hasContent = viewModel.slides.contains { slide in
+    /// Règle PURE « le composer porte du contenu » — source unique partagée
+    /// par l'alerte de sortie (`handleDismiss`) et l'auto-save de draft au
+    /// passage en background (D1). Testable sans UI.
+    static func composerHasContent(
+        slides: [StorySlide],
+        slideImageIds: Set<String>,
+        hasStickerObjects: Bool,
+        hasDrawingData: Bool,
+        hasDrawingStrokes: Bool
+    ) -> Bool {
+        slides.contains { slide in
             slide.content != nil
-                || viewModel.slideImages[slide.id] != nil
+                || slideImageIds.contains(slide.id)
                 || slide.effects.background != nil
                 || !slide.effects.textObjects.isEmpty
                 || !(slide.effects.mediaObjects ?? []).isEmpty
                 || !(slide.effects.drawingStrokes ?? []).isEmpty
-        } || !stickerObjects.isEmpty || viewModel.drawingData != nil || !viewModel.drawingStrokes.isEmpty
+        } || hasStickerObjects || hasDrawingData || hasDrawingStrokes
+    }
 
-        if hasContent { showDiscardAlert = true }
+    var composerHasContent: Bool {
+        Self.composerHasContent(
+            slides: viewModel.slides,
+            slideImageIds: Set(viewModel.slideImages.keys),
+            hasStickerObjects: !stickerObjects.isEmpty,
+            hasDrawingData: viewModel.drawingData != nil,
+            hasDrawingStrokes: !viewModel.drawingStrokes.isEmpty
+        )
+    }
+
+    func handleDismiss() {
+        if composerHasContent { showDiscardAlert = true }
         else { publishTask?.cancel(); publishTask = nil; clearAllDrafts(); onDismiss() }
     }
 

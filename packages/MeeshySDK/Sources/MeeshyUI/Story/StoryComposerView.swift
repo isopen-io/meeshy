@@ -17,6 +17,7 @@ public struct StoryComposerView: View {
     // MARK: - System environment
 
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.scenePhase) var scenePhase
 
     // MARK: - Canvas-local state
 
@@ -233,6 +234,12 @@ public struct StoryComposerView: View {
             )
         }
         .onAppear { checkForDraft() }
+        // D1 — le travail d'édition survit au kill de l'app : auto-save du
+        // draft au passage en BACKGROUND (jamais onDisappear — le discard
+        // fire onDisappear et re-persisterait un draft explicitement jeté).
+        .adaptiveOnChange(of: scenePhase) { _, newPhase in
+            if newPhase == .background { autoSaveDraftForBackground() }
+        }
     }
 
     static let composerBandMinHeight: CGFloat = 160

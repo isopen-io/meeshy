@@ -164,7 +164,9 @@ extension StoryComposerView {
         )
     }
 
-    func saveDraft() {
+    /// Persiste le draft (GRDB + fichiers média) sans feedback haptique —
+    /// utilisé par l'auto-save background (D1) où un haptic n'a pas de sens.
+    func persistDraft() {
         syncCurrentSlideEffects()
         StoryDraftStore.shared.save(slides: viewModel.slides, visibility: visibility)
         StoryDraftStore.shared.saveMedia(
@@ -172,7 +174,23 @@ extension StoryComposerView {
             videoURLs: viewModel.loadedVideoURLs,
             audioURLs: viewModel.loadedAudioURLs
         )
+    }
+
+    func saveDraft() {
+        persistDraft()
         HapticFeedback.light()
+    }
+
+    /// D1 — auto-save au passage en background : une story en cours d'édition
+    /// survit au kill de l'app. Gates : contenu réel uniquement (jamais un
+    /// composer vide) et pas de publication en vol (`publishTask` actif =
+    /// l'upload possède l'état). Un discard explicite postérieur
+    /// (`cancelAndDismiss` → `clearAllDrafts`) efface ce qui a été auto-sauvé.
+    /// JAMAIS sur onDisappear : le discard fire onDisappear et
+    /// re-persisterait le draft que l'utilisateur vient de jeter.
+    func autoSaveDraftForBackground() {
+        guard composerHasContent, publishTask == nil else { return }
+        persistDraft()
     }
 
     func checkForDraft() {
