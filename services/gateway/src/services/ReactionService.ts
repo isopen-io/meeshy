@@ -30,6 +30,16 @@ export interface GetReactionsOptions {
   currentParticipantId?: string;
 }
 
+export interface AddReactionResult {
+  reaction: ReactionData;
+  /**
+   * Emojis the participant had on this message before this add and that were
+   * swapped out by it (single-reaction-per-user model). Callers must broadcast
+   * a REACTION_REMOVED event per entry so other clients drop the old emoji.
+   */
+  replacedEmojis: string[];
+}
+
 export class ReactionService {
   private static readonly OBJECT_ID_REGEX = /^[0-9a-fA-F]{24}$/;
 
@@ -41,7 +51,7 @@ export class ReactionService {
 
   constructor(private readonly prisma: PrismaClient) {}
 
-  async addReaction(options: AddReactionOptions): Promise<ReactionData | null> {
+  async addReaction(options: AddReactionOptions): Promise<AddReactionResult | null> {
     const { messageId, participantId, emoji } = options;
 
     this.validateMessageId(messageId);
@@ -70,12 +80,14 @@ export class ReactionService {
       throw new Error('Message not found');
     }
 
+    if (message.messageType === 'system') {
+      throw new Error('Cannot react to a system message');
+    }
+
     const isParticipant = message.conversation.participants.some(p => p.id === participantId);
     if (!isParticipant) {
       throw new Error('User is not a participant of this conversation');
     }
-
-    const MAX_REACTIONS_PER_USER = 1;
 
     const userExistingReactions = await this.prisma.reaction.findMany({
       where: {
@@ -85,10 +97,24 @@ export class ReactionService {
       select: { emoji: true }
     });
 
-    const uniqueEmojis = new Set(userExistingReactions.map(r => r.emoji));
+    // Single-reaction-per-user model (mirror of AttachmentReactionService):
+    // sending a different emoji swaps the previous one instead of stacking or
+    // rejecting. The DB unique key is (messageId, participantId, emoji), so
+    // this application-level swap is what enforces the one-emoji cap.
+    const replacedEmojis = Array.from(new Set(userExistingReactions.map(r => r.emoji)))
+      .filter(existing => existing !== sanitized);
 
-    if (uniqueEmojis.size >= MAX_REACTIONS_PER_USER && !uniqueEmojis.has(sanitized)) {
-      throw new Error(`Maximum ${MAX_REACTIONS_PER_USER} different reactions per message reached`);
+    if (replacedEmojis.length > 0) {
+      await this.prisma.reaction.deleteMany({
+        where: {
+          messageId,
+          participantId,
+          emoji: { in: replacedEmojis }
+        }
+      });
+      for (const removed of replacedEmojis) {
+        await this.updateMessageReactionSummary(messageId, removed, 'remove', 1);
+      }
     }
 
     const existingReaction = await this.prisma.reaction.findFirst({
@@ -100,7 +126,7 @@ export class ReactionService {
     });
 
     if (existingReaction) {
-      return this.mapReactionToData(existingReaction);
+      return { reaction: this.mapReactionToData(existingReaction), replacedEmojis };
     }
 
     try {
@@ -114,14 +140,14 @@ export class ReactionService {
 
       await this.updateMessageReactionSummary(messageId, sanitized, 'add');
 
-      return this.mapReactionToData(reaction);
+      return { reaction: this.mapReactionToData(reaction), replacedEmojis };
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'code' in err && err.code === 'P2002') {
         // Concurrent insert race: treat as idempotent success, summary already correct.
         const existing = await this.prisma.reaction.findFirst({
           where: { messageId, participantId, emoji: sanitized }
         });
-        if (existing) return this.mapReactionToData(existing);
+        if (existing) return { reaction: this.mapReactionToData(existing), replacedEmojis };
       }
       throw err;
     }

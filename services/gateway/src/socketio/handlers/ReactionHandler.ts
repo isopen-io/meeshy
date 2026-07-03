@@ -97,13 +97,13 @@ export class ReactionHandler {
 
       const reactionService = this.reactionService;
 
-      const reaction = await reactionService.addReaction({
+      const addResult = await reactionService.addReaction({
         messageId: validated.messageId,
         emoji: validated.emoji,
         participantId
       });
 
-      if (!reaction) {
+      if (!addResult) {
         const errorResponse: SocketIOResponse<unknown> = {
           success: false,
           error: 'Failed to add reaction'
@@ -111,6 +111,8 @@ export class ReactionHandler {
         if (callback) callback(errorResponse);
         return;
       }
+
+      const { reaction, replacedEmojis } = addResult;
 
       const message = await this.prisma.message.findUnique({
         where: { id: validated.messageId },
@@ -134,6 +136,20 @@ export class ReactionHandler {
       // Fire-and-forget post-success side-effects so errors in broadcast or
       // notification do not confuse the already-confirmed client response.
       if (message) {
+        // Single-reaction-per-user swap: tell other clients the previous emoji
+        // is gone before announcing the new one (order is cosmetic — the two
+        // events target different emojis and merge independently client-side).
+        for (const removedEmoji of replacedEmojis) {
+          reactionService.createUpdateEvent(
+            validated.messageId,
+            removedEmoji,
+            'remove',
+            participantId,
+            message.conversationId
+          )
+            .then(removeEvent => this._broadcastReactionEventWithConversationId(message.conversationId, removeEvent, SERVER_EVENTS.REACTION_REMOVED))
+            .catch(err => logger.error('reaction:add replaced-emoji broadcast failed', { error: err, conversationId: message.conversationId }));
+        }
         this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_ADDED)
           .catch(err => logger.error('reaction:add broadcast failed', { error: err, conversationId: message.conversationId }));
       }
