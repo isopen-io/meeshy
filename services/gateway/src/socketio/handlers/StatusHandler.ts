@@ -11,6 +11,7 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { StatusService } from '../../services/StatusService';
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
 import { getConnectedUser, normalizeConversationId, type SocketUser } from '../utils/socket-helpers';
+import { resolveParticipant } from '../utils/participant-resolver';
 import type { TypingEvent } from '@meeshy/shared/types/socketio-events';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { validateSocketEvent } from '../../middleware/validation.js';
@@ -207,6 +208,22 @@ export class StatusHandler {
       }
       const { user: connectedUser, realUserId: userId } = result;
 
+      // Every sibling handler (message send, reaction add, location share) verifies
+      // the caller is an active participant of the target conversation before
+      // broadcasting into its room. typing:start skipped this check, letting any
+      // authenticated user — including one removed/banned from the conversation —
+      // broadcast their identity into a room they don't belong to.
+      const participant = await resolveParticipant({
+        prisma: this.prisma,
+        userIdOrToken,
+        conversationId: normalizedId,
+        connectedUsers: this.connectedUsers,
+      });
+      if (!participant) {
+        logger.warn('typing:start — not a participant in conversation', { userId, conversationId: normalizedId });
+        return;
+      }
+
       // Mettre à jour l'activité
       this.statusService.updateLastSeen(userId, connectedUser.isAnonymous);
 
@@ -273,6 +290,17 @@ export class StatusHandler {
         return;
       }
       const { user: connectedUser, realUserId: userId } = result;
+
+      const participant = await resolveParticipant({
+        prisma: this.prisma,
+        userIdOrToken,
+        conversationId: normalizedId,
+        connectedUsers: this.connectedUsers,
+      });
+      if (!participant) {
+        logger.warn('typing:stop — not a participant in conversation', { userId, conversationId: normalizedId });
+        return;
+      }
 
       const shouldShowTyping = await this.privacyPreferencesService.shouldShowTypingIndicator(
         userId,
