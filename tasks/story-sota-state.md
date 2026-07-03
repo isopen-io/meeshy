@@ -174,7 +174,7 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 
 ### LECTURE — progression synchronisée aux données
 
-- [x] **R1 (P0) Étendre le gel de progression à l'AUDIO.** ✅ it.1 (commit ci-dessous)
+- [x] **R1 (P0) Étendre le gel de progression à l'AUDIO.** ✅ it.1 (86c2c27de)
   Preuve re-confirmée : `primaryMediaPlayer()` = vidéo uniquement ; audio pré-caché ASYNC
   (`reconfigureAudioForPlayback` → `cachedAudioFileURL`) pendant que la timeline avançait.
   Découverte en route : `startAudioPlayback()` schedulait un `play()` À VIDE quand contentReady
@@ -361,7 +361,10 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 > + items cochés/ajoutés ci-dessus. Si un item s'avère déjà corrigé ou infondé au re-check :
 > le cocher avec la mention ÉCARTÉ + preuve, sans fix.
 
-## it.1 — R1 : gel de progression étendu à l'audio (commit: voir git log fix(story/reader))
+## it.1 — R1 : gel de progression étendu à l'audio (86c2c27de)
+
+> ⚠️ it.2 : vérifier d'abord que la CI « iOS Tests » est passée sur 86c2c27de (gh run list) —
+> si rouge sur ce commit, c'est la priorité immédiate.
 
 - RED : nouveaux tests `isAudioPending` (rule engine) + gate canvas ne compilaient/passaient pas
   sur l'ancien code (paramètre inexistant, playhead avançait sur audio non schedulé).
