@@ -604,6 +604,35 @@ final class OfflineQueueTests: XCTestCase {
             "an audio-orphan row must be terminal (.exhausted, GC-eligible), not .failed")
     }
 
+    /// Same crash window as audio, but for a VISUAL media send: the copied
+    /// `pending-media/` bytes are gone after a crash. bootRecovery must detect
+    /// the missing file and mark the row `.exhausted` — not leave it `.pending`
+    /// so the dispatcher burns 5 upload attempts (or, if some files survived,
+    /// silently sends a PARTIAL message with fewer images than composed).
+    func test_bootRecovery_mediaFileMissing_marksExhaustedNotFailed() async throws {
+        let maybePool = await queue.outboxPoolForTesting
+        let pool = try XCTUnwrap(maybePool)
+        let cid = "cid_bootmedia_\(UUID().uuidString.lowercased())"
+        let result = try await queue.enqueueMedia(
+            sourceMediaURLs: [try makeTempMediaFile(ext: "jpg")],
+            kinds: [AttachmentKind.image.rawValue],
+            conversationId: "conv-1", content: nil, clientMessageId: cid
+        )
+        for path in result.localMediaPaths {
+            try? FileManager.default.removeItem(
+                atPath: OfflineQueue.absoluteMediaPath(forStored: path))
+        }
+
+        let report = try await queue.bootRecovery()
+
+        XCTAssertEqual(report.mediaOrphanFailed, 1, "the missing-media row must be swept")
+        let status = try await pool.read { db in
+            try OutboxRecord.filter(Column("clientMessageId") == cid).fetchOne(db)?.status
+        }
+        XCTAssertEqual(status, .exhausted,
+            "a media-orphan row must be terminal (.exhausted, GC-eligible), not .failed")
+    }
+
     /// A copy failure in enqueueAudios (source bytes unreadable) is permanent —
     /// the row must end `.exhausted`, not `.failed`.
     func test_enqueueAudios_copyFailure_marksExhaustedNotFailed_andThrows() async throws {

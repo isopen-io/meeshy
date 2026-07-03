@@ -2181,7 +2181,9 @@ public actor OfflineQueue {
                     local.inflightReset += 1
                 }
 
-                // Audio missing-file sweep.
+                // Missing-file sweep — audio AND visual media (R-OB4). Any
+                // referenced pending file gone on disk means the pre-crash copy
+                // never landed → the bytes are gone, the row can never succeed.
                 let pendingSends = try OutboxRecord
                     .filter(Column("status") == OutboxStatus.pending.rawValue)
                     .filter(Column("kind") == OutboxKind.sendMessage.rawValue)
@@ -2189,31 +2191,35 @@ public actor OfflineQueue {
                 let fm = FileManager.default
                 for record in pendingSends {
                     guard let item = try? dec.decode(OfflineQueueItem.self, from: record.payload) else { continue }
-                    // Single-track legacy path + multi-track paths are both
-                    // checked: any referenced file missing on disk means the
-                    // pre-crash copy never landed → the audio bytes are gone, so
-                    // the row can never succeed. S6 — mark it `.exhausted`
-                    // (terminal + GC-eligible via purgeExhaustedOlderThan), NOT
-                    // `.failed`, which the flusher never picks up and the GC
-                    // never reclaims, so it would leak in the outbox + SyncPill
-                    // across every session.
-                    let referencedPaths = ([item.localAudioPath].compactMap { $0 } + (item.localAudioPaths ?? []))
+                    // Legacy single-track + multi-track audio AND visual media
+                    // paths are all checked. S6 — a row with any missing file is
+                    // marked `.exhausted` (terminal + GC-eligible via
+                    // purgeExhaustedOlderThan), NOT `.failed`, which the flusher
+                    // never picks up and the GC never reclaims, so it would leak
+                    // in the outbox + SyncPill across every session. Without the
+                    // media branch a pending photo/video send with vanished files
+                    // stayed `.pending` and burned 5 dispatcher upload attempts
+                    // (or sent a PARTIAL message if only some files survived).
+                    let audioPaths = ([item.localAudioPath].compactMap { $0 } + (item.localAudioPaths ?? []))
                         .filter { !$0.isEmpty }
-                    guard !referencedPaths.isEmpty else { continue }
-                    let anyMissing = referencedPaths.contains { !fm.fileExists(atPath: Self.absoluteAudioPath(forStored: $0)) }
-                    if anyMissing {
+                    let mediaPaths = (item.localMediaPaths ?? []).filter { !$0.isEmpty }
+                    guard !audioPaths.isEmpty || !mediaPaths.isEmpty else { continue }
+                    let audioMissing = audioPaths.contains { !fm.fileExists(atPath: Self.absoluteAudioPath(forStored: $0)) }
+                    let mediaMissing = mediaPaths.contains { !fm.fileExists(atPath: Self.absoluteMediaPath(forStored: $0)) }
+                    if audioMissing || mediaMissing {
                         try db.execute(sql: """
                             UPDATE outbox
                             SET status = ?, lastError = ?, updatedAt = ?
                             WHERE id = ?
                             """, arguments: [
                                 OutboxStatus.exhausted.rawValue,
-                                "Audio file missing after crash",
+                                audioMissing ? "Audio file missing after crash" : "Media file missing after crash",
                                 Date(),
                                 record.id
                             ])
-                        log.warning("Audio file missing for OutboxRecord \(record.id, privacy: .public), marked .exhausted")
-                        local.audioOrphanFailed += 1
+                        log.warning("Pending file missing for OutboxRecord \(record.id, privacy: .public), marked .exhausted")
+                        if audioMissing { local.audioOrphanFailed += 1 }
+                        if mediaMissing { local.mediaOrphanFailed += 1 }
                     }
                 }
                 return local
@@ -2230,6 +2236,7 @@ public actor OfflineQueue {
     public struct BootRecoveryReport: Sendable, Equatable {
         public var inflightReset: Int = 0
         public var audioOrphanFailed: Int = 0
+        public var mediaOrphanFailed: Int = 0
         public init() {}
     }
 
