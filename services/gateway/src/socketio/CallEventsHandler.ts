@@ -3027,6 +3027,23 @@ export class CallEventsHandler {
           qualityDistribution: data.qualityDistribution,
           userId,
         });
+
+        // Persist the VALIDATED payload on this participant's CallParticipant
+        // row so reliability can be tracked on real calls (reconnectionCount,
+        // qualityDistribution, negotiationTimeMs…) — log-only telemetry is
+        // invisible to dashboards. Per-participant row: both ends emit at
+        // hangup within the same second and must never clobber each other.
+        // Best-effort — telemetry loss must stay invisible to the client.
+        try {
+          await this.prisma.callParticipant.updateMany({
+            where: { callSessionId: data.callId, participantId: analyticsParticipantId },
+            data: { analytics: validation.data }
+          });
+        } catch (persistError) {
+          logger.error('call:analytics persistence failed (telemetry lost, client unaffected)', {
+            callId: data.callId, participantId: analyticsParticipantId, error: persistError
+          });
+        }
       } catch (error) {
         logger.error('Error handling call:analytics', { error });
       }

@@ -233,6 +233,7 @@ function makePrisma(overrides: Record<string, any> = {}) {
     },
     callParticipant: {
       findMany: jest.fn<any>().mockResolvedValue([]),
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
     },
     $transaction: jest.fn<any>().mockImplementation(async (fn: Function) => fn({
       callParticipant: {
@@ -3697,6 +3698,34 @@ describe('CallEventsHandler', () => {
       // analytics is log-only — no response emitted back to client
       expect(socket.emit).not.toHaveBeenCalled();
       expect(socket.to).not.toHaveBeenCalled();
+    });
+
+    // La télémétrie de fin d'appel n'était que loggée : impossible de suivre
+    // la fiabilité (reconnectionCount, qualityDistribution, negotiationTimeMs)
+    // sur les appels réels. Persistée par PARTICIPANT (une row CallParticipant
+    // chacun — deux emitters simultanés en fin d'appel n'écrasent rien,
+    // contrairement à un champ unique sur CallSession).
+    it('persists the validated payload on the emitter CallParticipant row', async () => {
+      const { socket, prisma } = setupWithSocket();
+
+      await socket._trigger('call:analytics', validAnalyticsData);
+
+      expect((prisma as any).callParticipant.updateMany).toHaveBeenCalledWith({
+        where: { callSessionId: CALL_ID, participantId: PARTICIPANT_ID },
+        data: { analytics: expect.objectContaining({ setupTimeMs: 1250, platform: 'ios' }) },
+      });
+    });
+
+    it('a persistence failure stays silent (fire-and-forget, no emit, no throw)', async () => {
+      const { socket } = setupWithSocket({
+        callParticipant: {
+          findMany: jest.fn<any>().mockResolvedValue([]),
+          updateMany: jest.fn<any>().mockRejectedValue(new Error('DB down')),
+        },
+      });
+
+      await expect(socket._trigger('call:analytics', validAnalyticsData)).resolves.not.toThrow();
+      expect(socket.emit).not.toHaveBeenCalled();
     });
   });
 });
