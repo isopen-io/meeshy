@@ -858,6 +858,10 @@ describe('CallService', () => {
       const participant = createMockParticipant();
       const callWithOneParticipant = createMockCallSession({
         status: CallStatus.active,
+        // A real `active` session always carries answeredAt (stamped by
+        // updateCallStatus on the SDP answer) — the missed/ended split keys
+        // on it since 2026-07-03.
+        answeredAt: new Date(Date.now() - 30_000),
         participants: [participant]
       });
       const endedCall = {
@@ -1292,6 +1296,74 @@ describe('CallService', () => {
       const mockCall = createMockCallSession({
         status: CallStatus.active,
         answeredAt: new Date(),
+        participants: [initiatorParticipant]
+      });
+      const endedCall = {
+        ...mockCall,
+        status: CallStatus.ended,
+        endedAt: new Date(),
+        participants: [{ ...initiatorParticipant, leftAt: new Date(), user: createMockUser() }],
+        initiator: createMockUser(),
+        conversation: createMockConversation()
+      };
+
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(mockCall);
+      mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockPrisma));
+      mockPrisma.callSession.update.mockResolvedValue(undefined);
+      mockPrisma.callParticipant.updateMany.mockResolvedValue(undefined);
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(endedCall);
+
+      await callService.endCall('call-123', 'user-123', 'participant-123');
+
+      const updateCall = mockPrisma.callSession.updateMany.mock.calls[0];
+      expect(updateCall[0].data.status).toBe(CallStatus.ended);
+      expect(updateCall[0].data.endReason).toBe(CallEndReason.completed);
+    });
+
+    it('resolves a never-answered call stuck in reconnecting as missed (prod 2026-07-03, call 6a47689d)', async () => {
+      // A pre-answer client watchdog dragged the session ringing→reconnecting
+      // while the callee was still ringing; the caller then hung up. The old
+      // status-list check (initiated|ringing|connecting) missed `reconnecting`
+      // and classified this never-answered call as ended/completed. The
+      // authoritative pre-answer signal is answeredAt being null.
+      const initiatorParticipant = createMockParticipant({
+        role: ParticipantRole.initiator
+      });
+      const mockCall = createMockCallSession({
+        status: CallStatus.reconnecting,
+        answeredAt: null,
+        participants: [initiatorParticipant]
+      });
+      const endedCall = {
+        ...mockCall,
+        status: CallStatus.missed,
+        endedAt: new Date(),
+        participants: [{ ...initiatorParticipant, leftAt: new Date(), user: createMockUser() }],
+        initiator: createMockUser(),
+        conversation: createMockConversation()
+      };
+
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(mockCall);
+      mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockPrisma));
+      mockPrisma.callSession.update.mockResolvedValue(undefined);
+      mockPrisma.callParticipant.updateMany.mockResolvedValue(undefined);
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(endedCall);
+
+      await callService.endCall('call-123', 'user-123', 'participant-123');
+
+      const updateCall = mockPrisma.callSession.updateMany.mock.calls[0];
+      expect(updateCall[0].data.status).toBe(CallStatus.missed);
+      expect(updateCall[0].data.endReason).toBe(CallEndReason.missed);
+      expect(updateCall[0].data.duration).toBe(0);
+    });
+
+    it('resolves an ANSWERED call ending during reconnecting as ended/completed (genuine mid-call reconnect)', async () => {
+      const initiatorParticipant = createMockParticipant({
+        role: ParticipantRole.initiator
+      });
+      const mockCall = createMockCallSession({
+        status: CallStatus.reconnecting,
+        answeredAt: new Date(Date.now() - 60_000),
         participants: [initiatorParticipant]
       });
       const endedCall = {
@@ -2081,6 +2153,51 @@ describe('CallService - updateCallStatus', () => {
     const result = await callService.updateCallStatus('call-123', CallStatus.active);
     expect(result.status).toBe(CallStatus.ended);
     expect(mockPrisma.callSession.update).not.toHaveBeenCalled();
+  });
+
+  it('FSM guard: refuses the reconnecting transition on a never-answered call (pre-answer watchdog)', async () => {
+    // Prod 2026-07-03 (call 6a47689d): the CALLER's client fired its
+    // reconnect watchdog while the call was still RINGING and dragged the
+    // session ringing→reconnecting server-side — hiding `ringing` from the
+    // boot-rehydration path and making endCall classify the never-answered
+    // call as completed. `reconnecting` only makes sense once the call was
+    // answered (media once established).
+    const ringingCall = createMockCallSession({
+      status: CallStatus.ringing,
+      answeredAt: null,
+      participants: [createMockParticipant({ user: createMockUser() })],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    });
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(ringingCall)  // status check read
+      .mockResolvedValueOnce(ringingCall); // getCallSession
+    const result = await callService.updateCallStatus('call-123', CallStatus.reconnecting);
+    expect(result.status).toBe(CallStatus.ringing);
+    expect(mockPrisma.callSession.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('FSM guard: allows the reconnecting transition on an answered call (genuine mid-call reconnect)', async () => {
+    const activeCall = createMockCallSession({
+      status: CallStatus.active,
+      answeredAt: new Date(Date.now() - 30_000),
+      participants: [createMockParticipant({ user: createMockUser() })],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    });
+    const reconnectingCall = { ...activeCall, status: CallStatus.reconnecting };
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(activeCall)
+      .mockResolvedValueOnce(reconnectingCall);
+    mockPrisma.callSession.updateMany.mockResolvedValue({ count: 1 });
+
+    await callService.updateCallStatus('call-123', CallStatus.reconnecting);
+
+    expect(mockPrisma.callSession.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: CallStatus.reconnecting })
+      })
+    );
   });
 
   it('sets endedAt and duration when transitioning to terminal status', async () => {
@@ -3277,6 +3394,9 @@ describe('CallService - leaveCall wasPreAnswered=false branch (active call)', ()
     const participant = createMockParticipant({ userId: 'user-123', participantId: 'participant-123' });
     const activeCall = createMockCallSession({
       status: CallStatus.active, // NOT initiated/ringing/connecting
+      // answeredAt is the wasPreAnswered criterion since 2026-07-03 — a real
+      // active session always carries it.
+      answeredAt: new Date(Date.now() - 30_000),
       participants: [participant]
     });
     const endedCall = {
