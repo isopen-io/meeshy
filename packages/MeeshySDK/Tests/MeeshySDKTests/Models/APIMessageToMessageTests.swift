@@ -129,6 +129,24 @@ final class APIMessageToMessageTests: XCTestCase {
         XCTAssertEqual(msg.senderUserId, "user-77")
     }
 
+    // MARK: - editedAt decoded (server's clock, used to order `message:edited` events)
+
+    func test_decode_preservesEditedAt() {
+        let editedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let api = makeAPIMessage(extraFields: [
+            "isEdited": true,
+            "editedAt": ISO8601DateFormatter().string(from: editedAt),
+        ])
+
+        XCTAssertEqual(api.editedAt, editedAt)
+    }
+
+    func test_decode_editedAtNilWhenAbsent() {
+        let api = makeAPIMessage()
+
+        XCTAssertNil(api.editedAt)
+    }
+
     // MARK: - senderUsername preserved
 
     func test_toMessage_preservesSenderUsername() {

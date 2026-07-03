@@ -28,4 +28,8 @@
     <string name="call_history_outgoing">Chamada realizada</string>
     <string name="call_history_missed">Chamada perdida</string>
     <string name="call_history_retry">Tentar novamente</string>
+    <string name="call_quality_excellent">Conexão excelente</string>
+    <string name="call_quality_good">Boa conexão</string>
+    <string name="call_quality_fair">Conexão razoável</string>
+    <string name="call_quality_poor">Conexão fraca</string>
 </resources>

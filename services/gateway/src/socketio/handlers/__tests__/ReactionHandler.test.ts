@@ -269,18 +269,21 @@ describe('ReactionHandler', () => {
     });
 
     it('replies idempotent success when removeReaction returns false (reaction already absent)', async () => {
-      const { handler } = buildHandler({
+      // Contract 6b5ca4448: an un-react whose reaction is already gone has
+      // reached the caller's desired end-state — replying an error made the
+      // client roll back its optimistic removal and re-show a dead reaction.
+      const { handler, io } = buildHandler({
         reactionService: { removeReaction: jest.fn<any>().mockResolvedValue(false), createUpdateEvent: jest.fn<any>() },
       });
       const callback = jest.fn<any>();
 
       await handler.handleReactionRemove(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, callback);
 
-      // The un-react is idempotent: absent reaction ⇒ desired end-state already
-      // reached ⇒ success (never an error the client would roll back to).
       expect(callback).toHaveBeenCalledWith(
-        expect.objectContaining({ success: true, data: { message: 'Reaction already absent' } }),
+        expect.objectContaining({ success: true, data: { message: 'Reaction already absent' } })
       );
+      // Nothing changed — no broadcast to the conversation room.
+      expect(io.to).not.toHaveBeenCalled();
     });
 
     it('broadcasts removal and calls callback with success on happy path', async () => {
