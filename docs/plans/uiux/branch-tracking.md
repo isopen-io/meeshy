@@ -14,6 +14,19 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 128i, 2026-07-03)** — piste iOS indépendante (suffixe `i`).
+> - **128i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `14f80c20`)** :
+>   Dynamic Type de `FeedPostCard` (carte de publication du feed — barre d'actions + menu « … »).
+>   **9/9** `.font(.system(size:))` → `MeeshyFont.relative` : ellipsis (16), like `heart.fill`+bordure (18),
+>   commenter `bubble.right` (17), repartager+bordure (17), enregistrer+bordure (17), partager (17) → les
+>   glyphes d'action **scalent avec leurs compteurs** (`.footnote`) sous Dynamic Type. **0 gel** : icônes
+>   inline non bornées (HStack+padding, pas de `.frame` fixe) ; overlays de bordure migrés à la même taille
+>   → alignés. A11y déjà en place (labels/values/hints sur chaque bouton). 1 fichier, 0 logique, 0 test/clé
+>   i18n neuve. 2 PR iOS ouvertes (#1396 push-Android, #1395 _calls_ — disjointes) → 0 contention. PR à venir.
+> - **⚠️ `FeedPostCard` Dynamic Type SOLDÉ** : ne plus reprendre (9 glyphes d'action → `relative`).
+> - **Base de départ 129i : `main` HEAD**. Reste `StoryViewerView+Content` (⚠️ i18n + `@State private`
+>   cross-file). Sinon : `CameraView` (5), `ReelFeedCard` (4), `MessageDetailSheet` (4), ou passe state-of-the-art.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 127i, 2026-07-03)** — piste iOS indépendante (suffixe `i`).
 > - **127i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `7f187ca8`)** :
 >   Dynamic Type de `BubbleDeliveryCheck` (glyphe unique de statut de distribution des pieds de bulle,

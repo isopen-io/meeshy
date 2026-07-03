@@ -673,7 +673,7 @@ struct FeedPostCard: View {
                 }
             } label: {
                 Image(systemName: "ellipsis")
-                    .font(.system(size: 16))
+                    .font(MeeshyFont.relative(16))
                     .foregroundColor(theme.textMuted)
                     .padding(8)
             }
@@ -799,7 +799,7 @@ struct FeedPostCard: View {
 
                         let heartColor: Color = effectiveIsLiked ? MeeshyColors.error : (effectiveLikeCount > 0 ? Color(hex: accentColor) : theme.textSecondary)
                         Image(systemName: effectiveIsLiked || effectiveLikeCount > 0 ? "heart.fill" : "heart")
-                            .font(.system(size: 18))
+                            .font(MeeshyFont.relative(18))
                             .foregroundColor(heartColor)
                             .scaleEffect(likeAnimating ? 1.3 : (effectiveIsLiked ? 1.1 : 1.0))
                             .rotationEffect(.degrees(likeAnimating ? -15 : 0))
@@ -807,7 +807,7 @@ struct FeedPostCard: View {
                         // Accent BORDER on the glyph when the current user liked.
                         if effectiveIsLiked {
                             Image(systemName: "heart")
-                                .font(.system(size: 18))
+                                .font(MeeshyFont.relative(18))
                                 .foregroundColor(Color(hex: accentColor))
                                 .scaleEffect(likeAnimating ? 1.3 : 1.1)
                                 .rotationEffect(.degrees(likeAnimating ? -15 : 0))
@@ -835,7 +835,7 @@ struct FeedPostCard: View {
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "bubble.right")
-                        .font(.system(size: 17))
+                        .font(MeeshyFont.relative(17))
 
                     if post.commentCount > 0 {
                         Text("\(post.commentCount)")
@@ -857,12 +857,12 @@ struct FeedPostCard: View {
                 HStack(spacing: 6) {
                     ZStack {
                         Image(systemName: isReposted ? "arrow.2.squarepath.circle.fill" : "arrow.2.squarepath")
-                            .font(.system(size: 17))
+                            .font(MeeshyFont.relative(17))
                             .scaleEffect(isRepostInFlight ? 0.85 : 1.0)
                         // Accent BORDER on the glyph when the current user reposted.
                         if isReposted {
                             Image(systemName: "arrow.2.squarepath.circle")
-                                .font(.system(size: 17))
+                                .font(MeeshyFont.relative(17))
                                 .foregroundColor(Color(hex: accentColor))
                         }
                     }
@@ -898,12 +898,12 @@ struct FeedPostCard: View {
                 HStack(spacing: 6) {
                     ZStack {
                         Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
-                            .font(.system(size: 17))
+                            .font(MeeshyFont.relative(17))
                             .scaleEffect(isBookmarkInFlight ? 0.85 : 1.0)
                         // Accent BORDER on the glyph when the current user bookmarked.
                         if isBookmarked {
                             Image(systemName: "bookmark")
-                                .font(.system(size: 17))
+                                .font(MeeshyFont.relative(17))
                                 .foregroundColor(Color(hex: accentColor))
                         }
                     }
@@ -934,7 +934,7 @@ struct FeedPostCard: View {
                 HStack(spacing: 6) {
                     ZStack {
                         Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 17))
+                            .font(MeeshyFont.relative(17))
                             .opacity(isShareInFlight ? 0 : 1)
                         if isShareInFlight {
                             ProgressView()
