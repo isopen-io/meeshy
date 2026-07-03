@@ -200,6 +200,7 @@ struct FloatingCallPillView: View {
         .accessibilityLabel(callManager.isMuted
             ? String(localized: "call.pill.unmute", defaultValue: "Réactiver le micro")
             : String(localized: "call.pill.mute", defaultValue: "Couper le micro"))
+        .callToggleAccessibility(isToggle: true, isActive: callManager.isMuted)
     }
 
     private var speakerButton: some View {
@@ -220,6 +221,7 @@ struct FloatingCallPillView: View {
         .accessibilityLabel(callManager.isSpeaker
             ? String(localized: "call.pill.speaker.off", defaultValue: "Désactiver le haut-parleur")
             : String(localized: "call.pill.speaker.on", defaultValue: "Activer le haut-parleur"))
+        .callToggleAccessibility(isToggle: true, isActive: callManager.isSpeaker)
     }
 
     private var expandButton: some View {
