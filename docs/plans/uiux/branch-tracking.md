@@ -14,6 +14,21 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 123i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
+> - **123i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `bc59c0b6`)** :
+>   Gel documenté de la chrome de `FeedView`. **7/7** `.font(.system(size:))` **figés** avec commentaires
+>   doctrine — glyphe `plus` du FAB (cercle fixe 40×40, 86i) + 6 glyphes d'action du composer
+>   (photo/caméra/emoji/fichier/position/audio, 20pt, rangée horizontale contrainte, 82i). **0 migration**
+>   (affordances de contrôle, pas du texte ; le texte du Feed est déjà sémantique/`relative`). a11y déjà
+>   complète (chaque bouton labellisé). 1 fichier, 0 logique, 0 test/clé i18n neuve. 0 contention iOS.
+>   Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `FeedView` (chrome) SOLDÉ** : 7 glyphes figés documentés → ne plus re-flagger.
+> - **Base de départ 124i : `main` HEAD**. Gros lots restants : `StoryViewerView+Content` (⚠️ i18n +
+>   piège `@State private` cross-file), `ConversationView+Composer` (lot critique prudent). Fresh à texte
+>   réel : `ConversationMediaGalleryView` (6, mix hero+labels — un autre agent l'a touché ~103i, vérifier
+>   contention), `AttachmentLoadingTile` (6), `iPadRootView+Panels` (6). Ensuite : passe state-of-the-art
+>   (palette hexes inline vs tokens — ex `F8B500`/`9B59B6` dans FeedView —, dark/light, gestes).
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 122i, 2026-07-01)** — piste iOS indépendante (suffixe `i`).
 > - **122i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `75d87347`)** :
 >   Dynamic Type + a11y de `EmojiPickerSheet` (sheet de sélection d'emoji). Ajout `import MeeshyUI`.
