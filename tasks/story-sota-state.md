@@ -199,9 +199,13 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - [ ] **E8 (P2) Multi-draft.** `save()` fait `DELETE FROM story_draft_slide` — un seul brouillon.
   Feature : galerie de brouillons (id draft + updatedAt + cover composite), reprise au choix.
   Décision produit à confirmer avant d'implémenter (scope UI non trivial).
-- [ ] **E9 (P2) Draft store hors purge de compte.** `meeshy_story_draft.db` séparé
-  d'AppDatabase ; `CacheCoordinator.reset()` (logout) ne l'atteint pas — vérifier et brancher
-  `StoryDraftStore.clear()` sur le logout (confidentialité multi-compte).
+- [x] **E9 (P2) Draft store hors purge de compte.** ✅ it.18 — ÉLARGI
+  Re-preuve : le logout (AuthManager) purgeait tout SAUF (1) le draft store ET (2) la
+  StoryPublishQueue persistée — le compte suivant retrouvait le brouillon du précédent et
+  le drain aurait PUBLIÉ ses stories en attente sous la mauvaise session (plus grave que
+  le finding original). Livré : `StoryDraftStore.shared.clear()` + `StoryPublishQueue.shared.
+  clearAll()` dans le bloc reset des singletons SDK du logout ; `clearAll()` étendu pour
+  emporter aussi les copies médias (cohérence E10) + reset des marqueurs in-flight E5.
 
 ### LECTURE — progression synchronisée aux données
 
@@ -481,7 +485,12 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.17 — E6 : le migrator de queue legacy court enfin au boot (hash au push)
+## it.18 — E9 élargi : draft + publish queue purgés au logout (hash au push)
+
+- Finding élargi en re-preuve : la queue persistée était le trou le plus grave (publication
+  cross-compte au drain). 16/16 StoryPublishQueueTests (+1 clearAll purge fichiers), build 56 s.
+
+## it.17 — E6 : le migrator de queue legacy court enfin au boot (b2fcdf5a5)
 
 - Câblage 10 lignes (le migrator SDK était écrit/testé, zéro caller). Ordre critique :
   migrate → sweep E10 → subscribe → executor/drain.

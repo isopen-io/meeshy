@@ -308,7 +308,14 @@ public actor StoryPublishQueue {
     }
 
     public func clearAll() {
+        // E9/E10 — un clearAll (logout multi-compte) emporte aussi les copies
+        // médias locales de chaque item : les stories en attente d'un compte
+        // ne doivent laisser ni queue ni fichiers au compte suivant.
+        for item in items {
+            removeLocalMedia(of: item)
+        }
         items.removeAll()
+        inFlightIds.removeAll()
         saveToDisk()
     }
 
