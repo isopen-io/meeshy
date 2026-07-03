@@ -404,6 +404,12 @@ extension ConversationView {
     // MARK: - Attachment Handlers
     func handlePhotoSelection(_ items: [PhotosPickerItem]) {
         guard !items.isEmpty else { return }
+        // Priming echo (strip multi-selection injected before presenting the
+        // picker) — not a user confirmation, nothing to ingest yet.
+        if composerState.photoPickerPriming {
+            composerState.photoPickerPriming = false
+            return
+        }
         composerState.selectedPhotoItems.removeAll()
         HapticFeedback.light()
         for item in items {
