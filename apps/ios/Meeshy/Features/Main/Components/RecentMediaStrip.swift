@@ -68,8 +68,12 @@ struct RecentMediaSelection: Equatable {
 /// Fetches the most recent photos & videos from the photo library and resolves
 /// thumbnails / full assets on demand. Pure photo-library plumbing — no Meeshy
 /// state, so it stays app-side next to the composer that drives it.
+///
+/// `NSObject` subclass solely for `PHPhotoLibraryChangeObserver`: the strip
+/// refreshes live when the library changes (new capture, limited-access
+/// selection extended) instead of showing a stale grid.
 @MainActor
-final class RecentMediaStripModel: ObservableObject {
+final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryChangeObserver {
     @Published private(set) var assets: [PHAsset] = []
     @Published private(set) var status: PHAuthorizationStatus =
         PHPhotoLibrary.authorizationStatus(for: .readWrite)
@@ -78,10 +82,19 @@ final class RecentMediaStripModel: ObservableObject {
 
     /// True once a fetch attempt has run, so the view never re-prompts.
     private var didLoad = false
+    private var fetchLimit = 40
+    private var isObservingLibrary = false
+
+    deinit {
+        if isObservingLibrary {
+            PHPhotoLibrary.shared().unregisterChangeObserver(self)
+        }
+    }
 
     func load(limit: Int = 40) {
         guard !didLoad else { return }
         didLoad = true
+        fetchLimit = limit
         switch status {
         case .authorized, .limited:
             fetch(limit: limit)
@@ -113,6 +126,21 @@ final class RecentMediaStripModel: ObservableObject {
         fetched.reserveCapacity(result.count)
         result.enumerateObjects { asset, _, _ in fetched.append(asset) }
         assets = fetched
+        if !isObservingLibrary {
+            isObservingLibrary = true
+            PHPhotoLibrary.shared().register(self)
+        }
+    }
+
+    /// Any library change re-runs the tiny head fetch (≤ `fetchLimit` assets).
+    /// The `PHChange` payload is deliberately not diffed: it is non-Sendable
+    /// (this callback arrives off the main actor) and an unconditional refetch
+    /// of 40 records is cheaper than shipping change details across isolation.
+    nonisolated func photoLibraryDidChange(_ changeInstance: PHChange) {
+        Task { @MainActor [weak self] in
+            guard let self, self.status == .authorized || self.status == .limited else { return }
+            self.fetch(limit: self.fetchLimit)
+        }
     }
 
     /// Square thumbnail for a cell. `.fastFormat` guarantees a single callback,
@@ -294,51 +322,58 @@ struct RecentMediaStrip: View {
 
     /// Shown while multi-selecting: cancel on the left, a counting "Ajouter"
     /// confirm on the right that stages every selected item in tap order.
+    /// iOS 26 renders both pills in native Liquid Glass (regular / tinted
+    /// prominent) via the SDK Compatibility wrappers, grouped in a glass
+    /// container so the adjacent shapes blend; earlier versions degrade to
+    /// `.ultraThinMaterial` / solid accent — same layout, no behavior change.
     private var selectionBar: some View {
-        HStack(spacing: 10) {
-            Button {
-                HapticFeedback.light()
-                exitSelection()
-            } label: {
-                Text(String(localized: "composer.recent.cancelSelection", defaultValue: "Annuler", bundle: .main))
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 7)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(String(localized: "composer.a11y.cancelSelection", defaultValue: "Annuler la s\u{00E9}lection", bundle: .main))
-
-            Spacer()
-
-            Button {
-                confirmSelection()
-            } label: {
-                HStack(spacing: 6) {
-                    if isBatchResolving {
-                        ProgressView()
-                            .tint(.white)
-                            .scaleEffect(0.7)
-                    } else {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.caption)
-                    }
-                    Text(String(localized: "composer.recent.addSelected", defaultValue: "Ajouter (\(selection.count))", bundle: .main))
-                        .font(.caption.weight(.bold))
+        AdaptiveGlassContainer(spacing: 12) {
+            HStack(spacing: 10) {
+                Button {
+                    HapticFeedback.light()
+                    exitSelection()
+                } label: {
+                    Text(String(localized: "composer.recent.cancelSelection", defaultValue: "Annuler", bundle: .main))
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
                 }
-                .foregroundColor(.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 7)
-                .background(Capsule().fill(Color(hex: accentColor)))
+                .buttonStyle(.plain)
+                .adaptiveGlass(in: Capsule(), interactive: true)
+                .accessibilityLabel(String(localized: "composer.a11y.cancelSelection", defaultValue: "Annuler la s\u{00E9}lection", bundle: .main))
+
+                Spacer()
+
+                Button {
+                    confirmSelection()
+                } label: {
+                    HStack(spacing: 6) {
+                        if isBatchResolving {
+                            ProgressView()
+                                .tint(.white)
+                                .scaleEffect(0.7)
+                        } else {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.caption)
+                        }
+                        Text(String(localized: "composer.recent.addSelected", defaultValue: "Ajouter (\(selection.count))", bundle: .main))
+                            .font(.caption.weight(.bold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                }
+                .buttonStyle(.plain)
+                .adaptiveGlassProminent(in: Capsule(), tint: Color(hex: accentColor))
+                .disabled(selection.isEmpty || isBatchResolving)
+                .opacity(selection.isEmpty ? 0.5 : 1)
+                .accessibilityLabel(String(localized: "composer.a11y.addSelection", defaultValue: "Ajouter la s\u{00E9}lection", bundle: .main))
             }
-            .buttonStyle(.plain)
-            .disabled(selection.isEmpty || isBatchResolving)
-            .opacity(selection.isEmpty ? 0.5 : 1)
-            .accessibilityLabel(String(localized: "composer.a11y.addSelection", defaultValue: "Ajouter la s\u{00E9}lection", bundle: .main))
+            .padding(.horizontal, hPadding)
+            .padding(.top, 8)
+            .padding(.bottom, 2)
         }
-        .padding(.horizontal, hPadding)
-        .padding(.top, 8)
-        .padding(.bottom, 2)
     }
 
     /// iPad / macOS — a roomy four-column vertical grid sized to the REAL
