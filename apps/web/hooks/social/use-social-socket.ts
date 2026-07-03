@@ -109,7 +109,13 @@ export function useSocialSocket(options: UseSocialSocketOptions = {}): void {
     if (!socket) return;
 
     // ---- Subscribe to feed room ----
-    socket.emit(CLIENT_EVENTS.FEED_SUBSCRIBE);
+    // Room membership lives on the transient server-side socket and is lost
+    // on every disconnect/reconnect (new socket.id) even though this hook
+    // stays mounted, so the join is re-emitted on `connect` too (mirrors
+    // usePostRoom's reconnect handling).
+    const subscribe = () => socket.emit(CLIENT_EVENTS.FEED_SUBSCRIBE);
+    subscribe();
+    socket.on('connect', subscribe);
 
     // ---- Event handlers (delegate to latest ref) ----
 
@@ -208,6 +214,7 @@ export function useSocialSocket(options: UseSocialSocketOptions = {}): void {
     // ---- Cleanup ----
 
     return () => {
+      socket.off('connect', subscribe);
       socket.emit(CLIENT_EVENTS.FEED_UNSUBSCRIBE);
 
       socket.off(SERVER_EVENTS.POST_CREATED, handlePostCreated);

@@ -198,8 +198,16 @@ export function useConversationTyping({
   const handleTypingStart = useCallback(() => {
     if (!isTyping) {
       setIsTyping(true);
-      startTyping();
     }
+
+    // Re-emit on every keystroke, not just the first one of the session:
+    // the underlying transport throttles this to ~1 emit/2s, and that
+    // steady trickle is what refreshes the remote safety timeout above.
+    // Gating this on `!isTyping` (as before) meant a single continuous
+    // typing session only ever sent one `typing:start`, so anyone typing
+    // longer than REMOTE_TYPING_SAFETY_TIMEOUT had their indicator dropped
+    // by peers while still actively typing.
+    startTyping();
 
     // Reset timeout
     if (typingTimeoutRef.current) {
