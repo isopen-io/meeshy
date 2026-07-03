@@ -3096,7 +3096,11 @@ final class CallManager: ObservableObject {
         // raccrochage — l'audio des autres apps restait ducké jusqu'à une
         // reconfiguration fortuite. Désactivation explicite symétrique.
         if !callUsesCallKit {
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            do {
+                try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            } catch {
+                Logger.calls.error("[no-callkit] AVAudioSession deactivation failed: \(error.localizedDescription)")
+            }
         }
     }
 

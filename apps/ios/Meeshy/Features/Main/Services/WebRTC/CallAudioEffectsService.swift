@@ -34,6 +34,7 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
     var activeVoiceEffect: AudioEffectType? { stateLock.withLock { $0.activeVoiceEffect } }
     var isBackSoundActive: Bool { stateLock.withLock { $0.isBackSoundActive } }
     var isAutoDegraded: Bool { stateLock.withLock { $0.isAutoDegraded } }
+    var lastProcessingTimeMs: Double? { stateLock.withLock { $0.lastProcessingTimeMs } }
 
     var isEffectsActive: Bool {
         stateLock.withLock { $0.activeVoiceEffect != nil || $0.isBackSoundActive }
@@ -84,13 +85,11 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
 
     // MARK: - Performance Monitoring
     //
-    // consecutiveOverBudgetFrames/consecutiveUnderBudgetFrames live in
-    // LockedState (guarded by stateLock) because they are written from the
-    // audio thread (processAudioBuffer) and can be reset concurrently from
-    // any other thread (reset()) — an unsynchronized Int mutation from two
-    // threads is a data race even though it rarely crashes.
-
-    var lastProcessingTimeMs: Double? { stateLock.withLock { $0.lastProcessingTimeMs } }
+    // consecutiveOverBudgetFrames/consecutiveUnderBudgetFrames/lastProcessingTimeMs
+    // live in LockedState (guarded by stateLock) because they are written from
+    // the audio thread (processAudioBuffer) and can be reset concurrently from
+    // any other thread (reset()) — an unsynchronized mutation from two threads
+    // is a data race even though it rarely crashes.
 
     // MARK: - Set Effect
 
@@ -172,7 +171,6 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
         let start = CACurrentMediaTime()
         let processed = renderThroughBlocks(buffer, blocks: blocks)
         let elapsed = (CACurrentMediaTime() - start) * 1000
-        stateLock.withLock { $0.lastProcessingTimeMs = elapsed }
         updatePerformanceCounters(ms: elapsed)
 
         return processed
@@ -221,6 +219,7 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
         let underBudgetThreshold = AudioEffectsConstants.underBudgetThreshold
 
         let transition = stateLock.withLock { state -> PerformanceTransition in
+            state.lastProcessingTimeMs = ms
             if ms > maxProcessingTimeMs {
                 state.consecutiveOverBudgetFrames += 1
                 state.consecutiveUnderBudgetFrames = 0

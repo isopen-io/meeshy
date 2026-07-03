@@ -794,8 +794,6 @@ nonisolated enum QualityThresholds {
     /// SDP-level absolute codec minimum set in `RTCRtpEncodingParameters`.
     /// Lower than `minBitrate` so the encoder can survive an extreme network
     /// event even after the adaptation algorithm has already reduced to 24 kbps.
-    /// Source of truth for both `P2PWebRTCClient` audio encoding and
-    /// `AudioConfig.default.minBitrateBps` in `CallMediaConfig`.
     static let audioCodecFloorBitrateBps: Int = 16_000
 
     // Audit P2-iOS-12 — bumped from 3s to 5s. RTCPeerConnection.statistics
@@ -1199,6 +1197,21 @@ enum VideoThermalProfile {
         let flooredScale = max(scaleDownBy, c.minScaleDownBy)
         return (max(1, cappedBitrate), max(1, cappedFramerate), max(1.0, flooredScale))
     }
+}
+
+// MARK: - Video capture ceiling
+
+/// Video capture/encoding ceiling. Kept as a single source of truth so the
+/// camera format picker (`P2PWebRTCClient.selectFormat`) and the encoding
+/// config stay in sync when the preset is updated.
+struct VideoConfig: Sendable {
+    let maxResolution: CGSize
+    let maxFrameRate: Int
+
+    static let hd720p30 = VideoConfig(
+        maxResolution: CGSize(width: 1280, height: 720),
+        maxFrameRate: 30
+    )
 }
 
 // MARK: - Camera device catalog (§7.1 — Continuity / external camera picker)
