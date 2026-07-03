@@ -779,3 +779,46 @@ trouvée, un seul gap réel restant.
   via `git stash`, sans rapport avec les fichiers touchés).
 - **Reste ouvert** : items J (validation device), C6 (court-circuit dédup cosmétique), CALL-DIAG
   retagging (12 sites, cosmétique) — mêmes raisons de dépriorisation que les vagues précédentes.
+
+## Vague 12 — fuite de télémétrie privée (`CallParticipant.analytics`) sur `GET .../active-call` (2026-07-03)
+
+Point d'entrée : routine calling-feature. Deux commits gateway non encore documentés dans ce backlog
+(`d52b77f` négociationTimeMs, `f4d75121` persistance `CallParticipant.analytics`) ont été audités par
+deux agents dédiés (iOS lecture seule — confirmé `negotiationTimeMs` déjà émis côté iOS depuis
+`CallReliabilityPolicy.callSetupMetrics`, rien à faire ; gateway — exposition/authz de la nouvelle
+persistance).
+
+- **[BUG SÉCURITÉ RÉEL, gateway, CONFIRMÉ + CORRIGÉ]** `GET
+  /conversations/:conversationId/active-call` (`routes/calls.ts`) déclarait son schema
+  `response[200]` avec `additionalProperties: true` et AUCUN schema sur `data` — contournement d'un
+  bug `fast-json-stringify` (`oneOf` + `null` crashe, fix du 2026-05-12) qui avait pour effet de bord
+  de désactiver tout filtrage de champs sur cette route, contrairement à ses 5 routes soeurs
+  (`data: callSessionSchema`, whitelist stricte). `callService.getActiveCallForConversation()` inclut
+  les `CallParticipant` sans `select` dédié (`callSessionInclude`, `CallService.ts:113`) → chaque
+  participant sérialisé brut, y compris le nouveau champ `analytics` (télémétrie privée : deviceModel,
+  codec, averageRtt/packetLoss, negotiationTimeMs…) — lisible par N'IMPORTE QUEL membre de la
+  conversation (authz = membership, pas participation à CET appel), y compris pour un participant
+  ayant déjà raccroché. Fix : remplacé `additionalProperties: true` par `data: { ...callSessionSchema,
+  nullable: true }` — `nullable` (pas `oneOf`) évite le bug fast-json-stringify tout en restaurant le
+  whitelist. Vérifié à la main (script Node direct sur `fast-json-stringify`) : cas `data: null` OK,
+  cas fuite (`analytics` injecté manuellement dans le payload) → strippé.
+- **Nouveau test** `calls-active-call-analytics-leak.test.ts` — contrairement à
+  `calls-routes.test.ts` (mocke `sendSuccess` ET `@meeshy/shared/types/api-schemas` en stubs
+  `{type:'object'}`, bypassant toute sérialisation réelle — ne pouvait PAS attraper ce bug), ce nouveau
+  fichier boote un VRAI Fastify + `.inject()` avec le schema réel. RED confirmé (`git stash` du fix →
+  `analytics`/`SECRET-INTERNAL-CODENAME` présents dans la réponse sérialisée), GREEN restauré. Suite
+  gateway complète filtrée `*[Cc]all*` : 28/28 suites, 801/801 tests verts.
+- **Piège rencontré en écrivant ce test** : un mock de middleware `preValidation` déclaré comme
+  `jest.fn()` nu (0 arguments, aucune implémentation) fait **hang indéfiniment** `.inject()` sous un
+  vrai dispatch Fastify — invisible dans `calls-routes.test.ts` qui extrait et appelle le handler
+  directement (jamais les hooks `preValidation`). Le mock doit être une vraie fonction
+  `async (request) => {...}` qui pose `request.authContext`. Symptôme : timeout Jest sur l'`await
+  app.inject(...)`, aucune des méthodes prisma/service mockées jamais invoquée (log de debug ajouté
+  pour isoler) — piste à vérifier en premier pour tout futur test `.inject()`-based sur une route de
+  ce fichier.
+- **Autres vérifications de cette session (SAFE, aucun fix nécessaire)** : authz de la persistance
+  `call:analytics` (`resolveParticipantIdFromCall` ne peut résoudre qu'au PROPRE participant de
+  l'appelant — aucun vecteur de sur-écriture cross-participant) ; `GET /calls/history` et `GET
+  /calls/active` (schemas de réponse stricts, `analytics` jamais sélectionné côté `listHistory`) ;
+  modèles iOS (`CallModels.swift`/`CallSummaryMetadata.swift`) ne décodent aucun tableau
+  `participants`, non concernés.
