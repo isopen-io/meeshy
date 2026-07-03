@@ -213,11 +213,17 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   RESTE (avec R3/U5) : indicateur « chargement prolongé » pendant ce gel (spinner discret),
   timeout long UI d'erreur (10-15 s, retry/skip), et le cas résiduel vidéo FG sans player
   attaché sur fond couleur (rare : URL non résolue + fond non-média).
-- [ ] **R3 (P1) Indicateur de buffering pendant un stall mid-slide.**
-  Preuve : `StoryReaderLoadingOverlay` piloté par `onContentProgress` (chargement initial) ; le
-  gel `isPlaybackStalled` ne montre RIEN (frame figée). Fix : brancher
-  `onPlaybackProgressing(false)` → overlay discret (spinner fin style Instagram au centre ou
-  ring sur la barre), disparition immédiate à la reprise. Design : discret, pas de plein écran.
+- [x] **R3 (P1) Indicateur de buffering pendant un stall mid-slide.** ✅ it.7
+  Livré app-side (`StoryViewerView+Canvas.swift`, PAS de nouveau fichier — meeshy.sh build ne
+  relance pas xcodegen) : `handleStallIndicatorSignal` branché sur `onPlaybackProgressing`
+  (sans toucher le forward slideTimer) — apparition différée 350 ms (grâce anti-flash sur
+  micro-stall seek/loop), disparition immédiate ; `StoryPlaybackStallIndicator` = ProgressView
+  blanc 52 pt sur `.ultraThinMaterial` Circle, colorScheme .dark épinglé (règle « blanc sur
+  verre Light »), a11y label ; gate `slideContentProgress >= 0.95` (le loader initial couvre
+  le chargement) + reset au slide-change (le canvas n'émet pas au reset).
+  Vérif : simulateur — story lue normalement, barre avance, AUCUN spinner parasite en lecture
+  saine (screenshot) ; build 23 s vert. Reste terrain : provoquer un vrai stall réseau device
+  (à grouper avec les tests device réseau dégradé).
 - [ ] **R4 (P1) Deep link / notification : rendu progressif au lieu du spinner bloquant.**
   Preuve : `StoryViewerContainer.swift:171-192` — groupe absent → `loadStories(forceNetwork:
   true)` (refetch du TRAY ENTIER) + spinner plein écran + timeout 2,5 s.
@@ -418,6 +424,14 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.7 — R3 : indicateur discret de buffering mid-slide (hash au push)
+
+- Le gel R1/R2/it.55 était une frame figée muette — désormais un spinner glass discret
+  centré carte, grâce 350 ms, disparition immédiate, gate post-chargement-initial, reset
+  au slide-change. App-side pur (le SDK n'expose que le signal brut).
+- Vérif simulateur : lecture saine sans spinner parasite (screenshot scratchpad
+  r3-viewer-2.png) ; pas de bump généré ce tour.
 
 ## it.6 — R2 : gel du playhead sur image bg non stampée (1c6873e34)
 

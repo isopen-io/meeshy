@@ -1847,7 +1847,7 @@ struct NeighborGroupCubeFace: View {
 
 /// Spinner discret style Instagram affiché au CENTRE de la carte quand la
 /// timeline unifiée est gelée par le stall gate (vidéo qui bufferise, audio /
-/// image bg en cours de cache — R1/R2/R6) après le chargement initial. Pas de
+/// image bg en cours de cache — R1/R2) après le chargement initial. Pas de
 /// plein écran, pas de voile : le média figé reste visible, seul un petit
 /// disque glass signale l'attente. `colorScheme .dark` épinglé : sur verre en
 /// Light, le spinner blanc serait illisible (règle mémoire « texte blanc
