@@ -20,6 +20,9 @@ import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateAck
 import me.meeshy.sdk.model.call.CallInitiateResult
 import me.meeshy.sdk.model.call.CallSound
+import me.meeshy.sdk.model.call.TelecomConnectionState
+import me.meeshy.sdk.model.call.TelecomConnectionUpdate
+import me.meeshy.sdk.model.call.TelecomDisconnectCause
 import me.meeshy.sdk.socket.CallSignalManager
 import org.junit.After
 import org.junit.Before
@@ -55,6 +58,16 @@ class CallViewModelTest {
 
     private val tones = RecordingToneController()
 
+    /** Records the exact sequence of telecom connection reports the VM makes. */
+    private class RecordingTelecomReporter : TelecomCallReporter {
+        val updates = mutableListOf<TelecomConnectionUpdate>()
+        var releaseCount = 0
+        override fun report(update: TelecomConnectionUpdate) { updates += update }
+        override fun release() { releaseCount += 1 }
+    }
+
+    private val telecom = RecordingTelecomReporter()
+
     @Before
     fun setUp() {
         Dispatchers.setMain(dispatcher)
@@ -68,7 +81,7 @@ class CallViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun vm() = CallViewModel(signalManager, ticker, tones)
+    private fun vm() = CallViewModel(signalManager, ticker, tones, telecom)
 
     @Test
     fun `starts idle`() {
@@ -544,5 +557,85 @@ class CallViewModelTest {
         vm.onSignal(CallEvent.MediaConnected)    // → connected again
 
         assertThat(tones.cues).containsExactly(CallCue.Connected, CallCue.Connected).inOrder()
+    }
+
+    // --- OS telecom reporting driven from the FSM --------------------------
+
+    @Test
+    fun `an outgoing call registers a dialing telecom connection`() = runTest {
+        val vm = vm()
+        vm.start(outgoingVideo)
+
+        assertThat(telecom.updates)
+            .containsExactly(TelecomConnectionUpdate(TelecomConnectionState.Dialing))
+    }
+
+    @Test
+    fun `an incoming call registers a ringing telecom connection`() {
+        val vm = vm()
+        vm.start(incomingAudio)
+
+        assertThat(telecom.updates)
+            .containsExactly(TelecomConnectionUpdate(TelecomConnectionState.Ringing))
+    }
+
+    @Test
+    fun `an answered outgoing call goes active once and dedupes the media edges`() = runTest {
+        val vm = vm()
+        vm.start(outgoingVideo)
+        vm.onSignal(CallEvent.ParticipantJoined) // → offering: still dialing, no report
+        vm.onSignal(CallEvent.RemoteAnswer)      // → connecting: active
+        vm.onSignal(CallEvent.MediaConnected)    // → connected: already active, no report
+
+        assertThat(telecom.updates).containsExactly(
+            TelecomConnectionUpdate(TelecomConnectionState.Dialing),
+            TelecomConnectionUpdate(TelecomConnectionState.Active),
+        ).inOrder()
+    }
+
+    @Test
+    fun `an inert event emits no telecom report`() = runTest {
+        val vm = vm()
+        vm.start(outgoingVideo)
+        vm.onSignal(CallEvent.MediaConnected) // inert while ringing → no state change
+
+        assertThat(telecom.updates)
+            .containsExactly(TelecomConnectionUpdate(TelecomConnectionState.Dialing))
+    }
+
+    @Test
+    fun `declining an incoming call disconnects the telecom connection as rejected`() {
+        val vm = vm()
+        vm.start(incomingAudio)
+        vm.decline()
+
+        assertThat(telecom.updates).containsExactly(
+            TelecomConnectionUpdate(TelecomConnectionState.Ringing),
+            TelecomConnectionUpdate(TelecomConnectionState.Disconnected, TelecomDisconnectCause.Rejected),
+        ).inOrder()
+    }
+
+    @Test
+    fun `hanging up a connected call disconnects the telecom connection locally`() = runTest {
+        val vm = vm().connect()
+        vm.hangUp()
+
+        assertThat(telecom.updates).containsExactly(
+            TelecomConnectionUpdate(TelecomConnectionState.Ringing),
+            TelecomConnectionUpdate(TelecomConnectionState.Active),
+            TelecomConnectionUpdate(TelecomConnectionState.Disconnected, TelecomDisconnectCause.Local),
+        ).inOrder()
+    }
+
+    @Test
+    fun `a failed outgoing initiate disconnects the dialing telecom connection`() = runTest {
+        coEvery { signalManager.emitInitiate(any(), any()) } returns CallInitiateResult.Timeout
+        val vm = vm()
+        vm.start(outgoingVideo)
+
+        assertThat(telecom.updates).containsExactly(
+            TelecomConnectionUpdate(TelecomConnectionState.Dialing),
+            TelecomConnectionUpdate(TelecomConnectionState.Disconnected, TelecomDisconnectCause.Error),
+        ).inOrder()
     }
 }

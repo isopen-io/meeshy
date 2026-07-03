@@ -14,6 +14,7 @@ import me.meeshy.sdk.model.call.CallSound
 import me.meeshy.sdk.model.call.CallSoundPolicy
 import me.meeshy.sdk.model.call.CallState
 import me.meeshy.sdk.model.call.CallStateMachine
+import me.meeshy.sdk.model.call.TelecomCallPolicy
 import me.meeshy.sdk.socket.CallSignalManager
 import javax.inject.Inject
 
@@ -41,6 +42,7 @@ class CallViewModel @Inject constructor(
     private val signalManager: CallSignalManager,
     private val ticker: CallSecondsTicker,
     private val toneController: CallToneController,
+    private val telecomReporter: TelecomCallReporter,
 ) : ViewModel() {
 
     private var config: CallConfig = CallConfig.EMPTY
@@ -149,8 +151,19 @@ class CallViewModel @Inject constructor(
         val previous = callState
         callState = CallStateMachine.reduce(previous, event)
         driveTone(previous, callState)
+        driveTelecom(previous, callState)
         syncTicker()
         publish()
+    }
+
+    /**
+     * Report each genuine FSM edge to the OS telecom layer via the pure
+     * [TelecomCallPolicy]: the policy dedupes inert edges (an already-active call,
+     * a phantom disconnect, a settle back to idle) to `null`, so the reporter only
+     * ever sees a real connection transition.
+     */
+    private fun driveTelecom(previous: CallState, next: CallState) {
+        TelecomCallPolicy.plan(previous, next)?.let(telecomReporter::report)
     }
 
     /**
@@ -169,6 +182,7 @@ class CallViewModel @Inject constructor(
 
     override fun onCleared() {
         toneController.release()
+        telecomReporter.release()
     }
 
     /**
