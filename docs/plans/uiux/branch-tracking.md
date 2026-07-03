@@ -14,6 +14,20 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 131i, 2026-07-03)** — piste iOS indépendante (suffixe `i`).
+> - **131i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `eb74172e`)** :
+>   Dynamic Type + a11y de `MessageDetailSheet` (glyphes hero d'états vides/erreur/confirmation). **3/4**
+>   `.font(.system(size:))` → `MeeshyFont.relative(28, weight: .light)` (empty-state générique, `wifi.slash`,
+>   `text.word.spacing` — < 40pt, scalent avec le texte). **1 figé** commenté **84i** : `trash.fill` (48,
+>   animé, hero décoratif ≥40pt). **4 `.accessibilityHidden(true)`** sur les hero décoratifs (le texte
+>   adjacent porte le sens) → a11y améliorée. 1 fichier, 0 logique, 0 test/clé i18n neuve. 0 PR iOS ouverte
+>   → 0 contention. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `MessageDetailSheet` glyphes hero SOLDÉ** : ne plus reprendre le `trash.fill` figé (84i).
+> - **Note i18n** : valeurs FR littérales de `viewsSentContent`/`deliveryBadge` (« Distribue », « Envoye »…)
+>   → gap **pré-existant**, passe i18n dédiée.
+> - **Base de départ 132i : `main` HEAD**. Reste `StoryViewerView+Content` (⚠️ i18n + `@State private`
+>   cross-file). Sinon : `StatusBubbleController` (4), `ReelRepostEmbedCell`/`AchievementBadgeView`/`SyncPill` (3), ou passe state-of-the-art.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 130i, 2026-07-03)** — piste iOS indépendante (suffixe `i`).
 > - **130i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `1061dcb0`)** :
 >   Dynamic Type de `ReelFeedCard` (carte Réel plein-cadre du feed). **4/4** `.font(.system(size:))` →
