@@ -58,8 +58,13 @@ export const CommonSchemas = {
   // ID MongoDB
   mongoId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'ID MongoDB invalide'),
   
-  // Langue
-  language: z.string().min(2).max(5).regex(/^[a-z]{2}(-[A-Z]{2})?$/, 'Code langue invalide'),
+  // Langue — ISO 639-1 (2 lettres) OU ISO 639-3 (3 lettres, ex. 'bas', 'ksf',
+  // 'nnh', 'ewo' — langues camerounaises officiellement supportées, préservées
+  // verbatim par normalizeLanguageCode), avec sous-tag région BCP-47 optionnel.
+  // Le corps `{2}` seul rejetait tout code 639-3 sur sendMessage/editMessage
+  // alors que systemLanguage/regionalLanguage (refine isSupportedLanguage) les
+  // acceptent — incohérence qui bloquait l'envoi dans une langue supportée.
+  language: z.string().min(2).max(5).regex(/^[a-z]{2,3}(-[A-Z]{2})?$/, 'Code langue invalide'),
   
   // Type de conversation
   conversationType: z.enum(['direct', 'group', 'public', 'global', 'broadcast']),

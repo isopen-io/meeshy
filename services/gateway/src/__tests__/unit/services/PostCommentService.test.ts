@@ -268,6 +268,47 @@ describe('PostCommentService.getReplies', () => {
 });
 
 // ---------------------------------------------------------------------------
+// getReplies — cursor advances forward (asc ordering)
+//
+// Regression: replies order ASCENDING but the cursor predicate used `lt`
+// (descending semantics), so page 2 walked BACKWARD — re-yielding already-shown
+// replies and permanently dropping the newer ones. The comparator must be `gt`.
+// ---------------------------------------------------------------------------
+describe('PostCommentService.getReplies — pagination', () => {
+  it('sélectionne les réponses APRÈS le curseur (gt) pour un ordre ascendant', async () => {
+    mockPostCommentFindMany.mockResolvedValue([]);
+
+    const service = new PostCommentService(mockPrisma as PrismaClient);
+    const cursor = encodeCursor(new Date('2025-01-01T10:01:00Z'), 'r-2');
+    await service.getReplies('parent-1', cursor, 2, 'user-1');
+
+    const where = mockPostCommentFindMany.mock.calls[0][0].where;
+    const orderBy = mockPostCommentFindMany.mock.calls[0][0].orderBy;
+
+    // L'ordre est ascendant …
+    expect(orderBy).toEqual([{ createdAt: 'asc' }, { id: 'asc' }]);
+    // … donc le curseur DOIT avancer avec `gt`, jamais `lt`.
+    const serialized = JSON.stringify(where.OR);
+    expect(serialized).toContain('gt');
+    expect(serialized).not.toContain('lt');
+    expect(where.OR[0].createdAt.gt).toEqual(new Date('2025-01-01T10:01:00Z'));
+    expect(where.OR[1].id.gt).toBe('r-2');
+  });
+
+  it('conserve le filtre parentId à côté du curseur', async () => {
+    mockPostCommentFindMany.mockResolvedValue([]);
+
+    const service = new PostCommentService(mockPrisma as PrismaClient);
+    const cursor = encodeCursor(new Date('2025-01-01T00:00:00Z'), 'r-1');
+    await service.getReplies('parent-9', cursor, 20, 'user-1');
+
+    const where = mockPostCommentFindMany.mock.calls[0][0].where;
+    expect(where.parentId).toBe('parent-9');
+    expect(Array.isArray(where.OR)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // getComments — top-level filter survives pagination
 //
 // Regression: when a cursor was present, `where.OR = [cursor clauses]` clobbered
