@@ -379,7 +379,9 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   withTextObjectTranslationsMerged ; le type vit dans socketio-events, PAS post.ts).
   Piège évité en re-preuve : un premier jet écrasait s.translations (content) avec les
   traductions d'un textObject.
-- [ ] **W5 (P3) Préchargement du média du slide suivant** (aucun `preload` dans StoryViewer.tsx).
+- [x] **W5 (P3) Préchargement du média du slide suivant.** ✅ it.29
+  Fenêtre N+1 (parité prefetcher iOS) : Image() décodée pour les images, <video preload=auto>
+  détaché pour les vidéos (cache HTTP partagé avec le montage suivant), cleanup au unmount.
 
 ### DIRECTIVES PRODUIT UTILISATEUR (hors backlog initial)
 
@@ -520,7 +522,11 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.28 — W4 : réaltime web deleted + translation-updated (hash au push)
+## it.29 — W5 : preload du slide suivant web (hash au push)
+
+- 147/147 suites story web.
+
+## it.28 — W4 : réaltime web deleted + translation-updated (a263a16ba)
 
 - 226/226 suites social+story web.
 
