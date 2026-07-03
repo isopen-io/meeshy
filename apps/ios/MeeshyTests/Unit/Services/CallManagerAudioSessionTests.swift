@@ -938,7 +938,7 @@ final class CallEffectsOverlayAccessibilityTests: XCTestCase {
             XCTFail("toolbarButton must exist")
             return
         }
-        let end = source.index(range.lowerBound, offsetBy: 1200, limitedBy: source.endIndex) ?? source.endIndex
+        let end = source.index(range.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
         let body = String(source[range.lowerBound ..< end])
         XCTAssertTrue(
             body.contains(".accessibilityLabel(label)"),

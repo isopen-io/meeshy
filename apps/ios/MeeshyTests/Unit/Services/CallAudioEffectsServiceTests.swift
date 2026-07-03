@@ -236,15 +236,17 @@ final class CallAudioEffectsServiceTests: XCTestCase {
 
     // MARK: - Performance Timing (guarded by stateLock — see CallAudioEffectsService.swift)
 
-    func test_processBuffer_recordsLastProcessingTimeMs() {
+    func test_processBuffer_recordsLastProcessingTimeMs() throws {
         let sut = makeSUT()
+        try sut.setEffect(.voiceCoder(.default))
         XCTAssertNil(sut.lastProcessingTimeMs)
         _ = sut.processAudioBuffer(makeBuffer())
         XCTAssertNotNil(sut.lastProcessingTimeMs)
     }
 
-    func test_reset_clearsLastProcessingTimeMs() {
+    func test_reset_clearsLastProcessingTimeMs() throws {
         let sut = makeSUT()
+        try sut.setEffect(.voiceCoder(.default))
         _ = sut.processAudioBuffer(makeBuffer())
         XCTAssertNotNil(sut.lastProcessingTimeMs)
         sut.reset()

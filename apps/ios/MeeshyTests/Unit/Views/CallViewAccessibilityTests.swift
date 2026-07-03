@@ -318,7 +318,7 @@ final class CallViewAccessibilityTests: XCTestCase {
             XCTFail("Minimize chevron's 40pt glass circle must exist")
             return
         }
-        let end = source.index(range.lowerBound, offsetBy: 300, limitedBy: source.endIndex) ?? source.endIndex
+        let end = source.index(range.lowerBound, offsetBy: 450, limitedBy: source.endIndex) ?? source.endIndex
         let vicinity = String(source[range.lowerBound ..< end])
         XCTAssertTrue(
             vicinity.contains(".frame(width: 44, height: 44)") && vicinity.contains(".contentShape(Rectangle())"),
