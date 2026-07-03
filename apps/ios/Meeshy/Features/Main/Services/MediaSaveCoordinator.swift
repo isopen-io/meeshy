@@ -1,5 +1,6 @@
 import Foundation
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Request
 
@@ -49,6 +50,12 @@ protocol PhotoLibrarySaving: Sendable {
     func saveVideo(at url: URL) async throws
 }
 
+/// Report best-effort de la consommation « downloaded » (panneau « Qui a
+/// vu ») — parité P7-9 avec les chemins historiques ImageViewer/DocumentViewer.
+protocol MediaSaveDownloadReporting: Sendable {
+    func reportDownloaded(attachmentId: String) async
+}
+
 enum MediaSaveError: LocalizedError, Equatable {
     case sourceUnavailable
     case photoLibraryDenied
@@ -88,17 +95,26 @@ final class MediaSaveCoordinator: ObservableObject {
     @Published private(set) var isProcessing = false
     @Published private(set) var lastOutcome: Outcome?
 
+    /// Requête en cours de traitement (après le choix de destination) —
+    /// portée jusqu'à la complétion différée de l'export Fichiers pour le
+    /// report « downloaded ».
+    private(set) var activeRequest: MediaSaveRequest?
+
     private let resolver: MediaSaveSourceResolving
     private let photoSaver: PhotoLibrarySaving
+    private let downloadReporter: MediaSaveDownloadReporting
 
     init(resolver: MediaSaveSourceResolving = AttachmentMediaSaveResolver(),
-         photoSaver: PhotoLibrarySaving = PhotoLibraryManagerAdapter()) {
+         photoSaver: PhotoLibrarySaving = PhotoLibraryManagerAdapter(),
+         downloadReporter: MediaSaveDownloadReporting = AttachmentStatusDownloadReporter()) {
         self.resolver = resolver
         self.photoSaver = photoSaver
+        self.downloadReporter = downloadReporter
     }
 
     func requestSave(_ request: MediaSaveRequest) {
         lastOutcome = nil
+        activeRequest = nil
         pendingRequest = request
     }
 
@@ -113,6 +129,7 @@ final class MediaSaveCoordinator: ObservableObject {
             lastOutcome = .failed(MediaSaveError.destinationUnsupported.localizedDescription)
             return
         }
+        activeRequest = request
         isProcessing = true
         defer { isProcessing = false }
         do {
@@ -126,6 +143,7 @@ final class MediaSaveCoordinator: ObservableObject {
                     try await photoSaver.saveVideo(at: localFile)
                 }
                 lastOutcome = .saved(.photoLibrary)
+                await reportDownloadedOnce()
             case .files:
                 // Le save n'est acquis qu'au retour du document picker — pas
                 // d'outcome ici, l'hôte UI le rapporte à la complétion.
@@ -135,16 +153,29 @@ final class MediaSaveCoordinator: ObservableObject {
             }
         } catch {
             lastOutcome = .failed(error.localizedDescription)
+            activeRequest = nil
         }
     }
 
     func reportExportCompleted() {
         exportURL = nil
         lastOutcome = .saved(.files)
+        Task { await reportDownloadedOnce() }
     }
 
     func reportExportCancelled() {
         exportURL = nil
+        activeRequest = nil
+    }
+
+    /// Report « downloaded » best-effort, UNE fois par requête servie
+    /// (`activeRequest` est consommée). Sans attachment id (média local,
+    /// story…), no-op.
+    private func reportDownloadedOnce() async {
+        guard let request = activeRequest else { return }
+        activeRequest = nil
+        guard let attachmentId = request.attachmentId, !attachmentId.isEmpty else { return }
+        await downloadReporter.reportDownloaded(attachmentId: attachmentId)
     }
 
     // MARK: - Pure helpers (testables sans I/O réseau)
@@ -234,6 +265,18 @@ struct AttachmentMediaSaveResolver: MediaSaveSourceResolving {
             .appendingPathComponent("media-save-dl-\(UUID().uuidString)\(suffix)")
         try data.write(to: destination)
         return destination
+    }
+}
+
+/// Report production : `POST /attachments/:id/status` action `downloaded`
+/// (même contrat que les chemins historiques ImageViewer/DocumentViewer —
+/// P7-9). Best-effort : un échec ne dégrade jamais un enregistrement réussi.
+struct AttachmentStatusDownloadReporter: MediaSaveDownloadReporting {
+    func reportDownloaded(attachmentId: String) async {
+        let body = AttachmentStatusBody(action: "downloaded", playPositionMs: 0, durationMs: 0, complete: true)
+        let _: APIResponse<[String: String]>? = try? await APIClient.shared.post(
+            endpoint: "/attachments/\(attachmentId)/status", body: body
+        )
     }
 }
 
