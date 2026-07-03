@@ -69,4 +69,41 @@ final class SyncWatermarkTests: XCTestCase {
         ]
         XCTAssertEqual(SyncWatermark.newest(among: messages), newest)
     }
+
+    // MARK: - Conversation delta / full-sync watermark (R15b)
+
+    func test_advanced_derivesFromServerMax_notLocalClock() {
+        // Delta conversations are stamped in SERVER time (behind a device clock
+        // running ahead). The next `updatedSince` watermark must be the server
+        // max — never the local now — else the next delta skips server updates.
+        let serverMax = past.addingTimeInterval(30)
+        let received = [past.addingTimeInterval(10), serverMax, past.addingTimeInterval(5)]
+        XCTAssertEqual(SyncWatermark.advanced(previous: past, receivedUpdatedAt: received), serverMax)
+    }
+
+    func test_advanced_neverRegressesBelowPrevious() {
+        // A stray older updatedAt must not pull the watermark backwards.
+        let prev = past.addingTimeInterval(100)
+        XCTAssertEqual(SyncWatermark.advanced(previous: prev, receivedUpdatedAt: [past]), prev)
+    }
+
+    func test_advanced_emptyDeltaKeepsPrevious() {
+        let prev = past.addingTimeInterval(42)
+        XCTAssertEqual(SyncWatermark.advanced(previous: prev, receivedUpdatedAt: []), prev)
+    }
+
+    func test_fromFullSync_setsToServerMax_flushingStaleLocalClockWatermark() {
+        // A legacy device-ahead watermark (server-FUTURE) would freeze delta sync
+        // forever (server returns nothing past a future cutoff). A full,
+        // authoritative fetch TRUSTS the server: it resets to the real newest
+        // updatedAt, flushing the poisoned value.
+        let poison = future.addingTimeInterval(9999)
+        let serverMax = past.addingTimeInterval(50)
+        XCTAssertEqual(SyncWatermark.fromFullSync(receivedUpdatedAt: [past, serverMax], fallback: poison), serverMax)
+    }
+
+    func test_fromFullSync_emptyAccountKeepsFallback() {
+        let fallback = past.addingTimeInterval(7)
+        XCTAssertEqual(SyncWatermark.fromFullSync(receivedUpdatedAt: [], fallback: fallback), fallback)
+    }
 }
