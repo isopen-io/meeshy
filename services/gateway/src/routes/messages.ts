@@ -421,7 +421,11 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         }
       });
 
-      // Mettre à jour le lastMessageAt de la conversation avec le dernier message non supprimé
+      // Mettre à jour le lastMessageAt de la conversation avec le dernier message non supprimé.
+      // Optimistic-concurrency guard: only write while lastMessageAt is still the
+      // value read at handler start. A message:new committing between the read
+      // and this write advances lastMessageAt; the guard then mismatches (0 rows
+      // updated) so the cursor never regresses backward onto the deleted message.
       const lastNonDeletedMessage = await prisma.message.findFirst({
         where: {
           conversationId: message.conversationId,
@@ -431,8 +435,11 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         select: { createdAt: true }
       });
 
-      await prisma.conversation.update({
-        where: { id: message.conversationId },
+      await prisma.conversation.updateMany({
+        where: {
+          id: message.conversationId,
+          lastMessageAt: message.conversation.lastMessageAt
+        },
         data: {
           lastMessageAt: lastNonDeletedMessage?.createdAt || message.conversation.createdAt
         }
