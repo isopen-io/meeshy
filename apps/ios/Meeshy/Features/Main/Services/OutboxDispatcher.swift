@@ -99,17 +99,21 @@ struct OutboxDispatcher: OutboxDispatching {
     /// Decoded the typed payload from `record.payload`. Treats a decode
     /// failure as permanent so the flusher escalates to `.exhausted` after
     /// the next attempt instead of looping forever on a corrupt row.
+    ///
+    /// Throws a typed `MeeshyError.server(statusCode: 400, _)` — not a raw
+    /// `NSError` — so `OutboxFlusher.isPermanentServerRejection` (which
+    /// pattern-matches on `MeeshyError`) recognizes a corrupt local payload
+    /// as permanent and dead-letters it on the first attempt, the same as
+    /// any other 4xx rejection, instead of burning the full retry budget
+    /// (~1 min of exponential backoff) on a row that can never succeed.
     private func decodePayload<P: Decodable>(_ record: OutboxRecord, as type: P.Type) throws -> P {
         do {
             return try decoder.decode(P.self, from: record.payload)
         } catch {
             logger.error("Failed to decode \(String(describing: P.self), privacy: .public) for outbox \(record.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
-            throw NSError(
-                domain: "OutboxDispatcher",
-                code: 400,
-                userInfo: [
-                    NSLocalizedDescriptionKey: "Corrupt \(record.kind.rawValue) payload for \(record.id)"
-                ]
+            throw MeeshyError.server(
+                statusCode: 400,
+                message: "Corrupt \(record.kind.rawValue) payload for \(record.id)"
             )
         }
     }
