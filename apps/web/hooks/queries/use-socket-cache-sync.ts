@@ -16,6 +16,24 @@ function isOptimisticMessage(m: Message): m is OptimisticMessage {
   return '_tempId' in m;
 }
 
+function editedAtMs(value: Date | string | undefined | null): number | null {
+  if (!value) return null;
+  const ms = new Date(value).getTime();
+  return Number.isNaN(ms) ? null : ms;
+}
+
+// A `message:edited` socket event carries no monotonic sequence — a delayed
+// duplicate delivery or reordered frame can arrive after a newer edit was
+// already applied. Comparing `editedAt` against the cached row's stops a
+// stale edit from permanently clobbering the current content.
+function isStaleEdit(cached: Message, incoming: Message): boolean {
+  const cachedMs = editedAtMs(cached.editedAt);
+  if (cachedMs === null) return false;
+  const incomingMs = editedAtMs(incoming.editedAt);
+  if (incomingMs === null) return false;
+  return incomingMs < cachedMs;
+}
+
 type CachedMessage = Message & {
   translatedAudios?: Record<string, SocketIOTranslation>;
 };
@@ -287,7 +305,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
             pages: old.pages.map((page) => ({
               ...page,
               messages: page.messages.map((m) =>
-                m.id === message.id ? { ...m, ...message } : m
+                m.id === message.id && !isStaleEdit(m, message) ? { ...m, ...message } : m
               ),
             })),
           };
@@ -300,7 +318,11 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         (old) => {
           if (!old) return old;
           return old.map((conv) => {
-            if (conv.id === targetConversationId && conv.lastMessage?.id === message.id) {
+            if (
+              conv.id === targetConversationId &&
+              conv.lastMessage?.id === message.id &&
+              !isStaleEdit(conv.lastMessage, message)
+            ) {
               return { ...conv, lastMessage: message };
             }
             return conv;
@@ -309,7 +331,9 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       );
       updateInfiniteConversationCache(queryClient, (convs) =>
         convs.map((conv) =>
-          conv.id === targetConversationId && conv.lastMessage?.id === message.id
+          conv.id === targetConversationId &&
+          conv.lastMessage?.id === message.id &&
+          !isStaleEdit(conv.lastMessage, message)
             ? { ...conv, lastMessage: message }
             : conv
         )
