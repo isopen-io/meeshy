@@ -2943,16 +2943,24 @@ export class CallEventsHandler {
           return;
         }
 
+        // Security fix 2026-07-03: resolve the caller's own participantId
+        // server-side rather than trusting the client-supplied one — same
+        // rationale as call:backgrounded/call:foregrounded. Otherwise either
+        // participant in a call could impersonate the other, forging or
+        // suppressing that peer's screen-capture privacy alert.
+        const screenCaptureParticipantId = await this.resolveActiveCallParticipantId(userId, data.callId);
+        if (!screenCaptureParticipantId) return;
+
         const alertEvent: CallScreenCaptureEvent = {
           callId: data.callId,
-          participantId: data.participantId,
+          participantId: screenCaptureParticipantId,
           isCapturing: data.isCapturing,
         };
         socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.SCREEN_CAPTURE_ALERT, alertEvent);
 
         logger.info('📞 Socket: call:screen-capture-detected relayed', {
           callId: data.callId,
-          participantId: data.participantId,
+          participantId: screenCaptureParticipantId,
           isCapturing: data.isCapturing,
           userId,
         });
