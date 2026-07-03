@@ -359,11 +359,16 @@ self-managed `ConnectionService`/`PhoneAccount` registration + foreground-servic
 remaining platform glue.
 
 **Next testable pure cores in Calls** (highest value first):
-1. **Video-survival auto-disable policy** — port iOS `VideoSurvivalPolicy` (time-hysteresis
-   `reduce(state, level, now, userWantsVideo) → (state, suspend|resume|none)`): drop outbound video to
-   audio-only on a sustained `POOR`/`CRITICAL` link, resume on a sustained good streak. Pure/monotonic →
-   exhaustively testable; consumed by the future WebRTC actuator seam. Feeds off the `VideoQualityLevel`
-   shipped this slice.
+1. ~~**Video-survival auto-disable policy**~~ ✅ shipped as `call-video-survival-policy` (2026-07-03) —
+   the pure `core:model` `VideoSurvivalPolicy` (port of iOS `VideoSurvivalPolicy`): `reduce(state, level,
+   nowSeconds, userWantsVideo) → VideoSurvivalDecision(state, action)`. A sustained `POOR`/`CRITICAL`
+   streak of ≥6 s while sending yields `Suspend` (drop to audio-only); a sustained `EXCELLENT`/`GOOD`
+   streak of ≥10 s while suspended yields `Resume`; `FAIR` **holds** the recovery timer (a brief dip
+   doesn't restart the window) while `POOR`/`CRITICAL` wipes it; a good/fair sample while sending clears
+   the degraded streak. Duration-based hysteresis (monotonic-seconds, cadence-independent), fixed-size
+   `VideoSurvivalState` (O(1) over a marathon call), user camera-off resets to `INITIAL`. Two survival
+   thresholds added to `CallQualityThresholds` at iOS parity. +19 tests. See run log. **Next:** the
+   WebRTC actuator seam that consumes `Suspend`/`Resume` (app-side orchestration).
 2. **Call-waiting banner** — a second incoming call while one is active. `IncomingCallDecider` already
    returns `Ignore(BUSY)`; iOS instead surfaces a `CallWaitingBannerView` (accept-and-swap / reject-busy /
    15s auto-dismiss-as-reject). A pure decision core + a banner surface.
@@ -556,6 +561,49 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-03 — slice `call-video-survival-policy` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration. The three open PRs
+  (#1384 iOS-a11y, #1385 web-realtime, #1386 gateway/shared) are `jcnm` continuous-improvement
+  branches from other sessions — disjoint from `apps/android`, left untouched. Branched
+  `claude/apps/android/call-video-survival-policy` off freshly-fetched `origin/main` (`80dab7b4`).
+- **Gap closed:** the adaptive-quality story stopped at the tier ladder (`VideoQualityLevel`, slice
+  `call-quality-level`). iOS layers a **last-resort** survival controller on top of the bitrate ladder
+  (`VideoSurvivalController.swift`): when the link stays degraded past the `POOR`/`CRITICAL` floor long
+  enough, it drops outbound video so the call lives on as audio-only, then restores video once the link
+  clearly recovers. Android had the ladder but not this graceful-degradation layer. This slice ports the
+  **pure policy half** (`VideoSurvivalPolicy`, the exhaustively-testable decision core); the async
+  actuator/controller (renegotiation, transition-timeout, one-in-flight guard) is deliberately deferred
+  to the app-side WebRTC seam — SDK purity.
+- **What shipped (thin vertical slice, TDD red→green):**
+  - `:core:model` `VideoSurvivalPolicy.kt` — `VideoSurvivalAction` (`None`/`Suspend`/`Resume`), the
+    fixed-size `VideoSurvivalState(isSending, degradedSince, recoveringSince)` (+ `INITIAL`), the
+    `VideoSurvivalDecision(state, action)` return, and the total pure
+    `VideoSurvivalPolicy.reduce(state, level, nowSeconds, userWantsVideo)`. Faithful port of the iOS
+    `reduce`: **duration-based** hysteresis (thresholds are wall-clock seconds fed a **monotonic** clock,
+    not sample counts → independent of monitor cadence and immune to clock jumps over a multi-hour call);
+    `Suspend` after a sustained ≥6 s `POOR`/`CRITICAL` streak while sending, `Resume` after a sustained
+    ≥10 s `EXCELLENT`/`GOOD` streak while suspended (resume window longer on purpose — renegotiation is
+    expensive, avoid oscillation); `FAIR` **holds** the recovery timer (a brief mid-recovery dip doesn't
+    restart the window) while a degraded dip wipes it; a good/fair sample while sending clears the degraded
+    streak; `userWantsVideo=false` resets to `INITIAL` so survival never re-enables video against intent.
+  - `CallQualityThresholds` gains `VIDEO_SURVIVAL_SUSPEND_AFTER_SECONDS = 6.0` /
+    `VIDEO_SURVIVAL_RESUME_AFTER_SECONDS = 10.0` at iOS `QualityThresholds` parity (the policy's default
+    ctor args, so the tuning lives in one SSOT next to the tier thresholds).
+  - **+19 behavioural tests** (`VideoSurvivalPolicyTest`): the intent gate; opening/holding/tripping the
+    degraded streak (boundary `now-since == 6.0` suspends, `5.9` doesn't); `CRITICAL` counts as degraded;
+    good/fair clearing the streak while sending; opening/holding/tripping the recovery streak (boundary
+    `10.0` resumes); degraded-while-suspended wipe vs `FAIR`-hold (asserted `isSameInstanceAs` — state
+    held verbatim); transient good/fair/degraded dips (window reset vs held); a full sustained
+    degraded→recovered lifecycle suspending then resuming exactly once each; and the default-ctor 6 s/10 s
+    thresholds. Every branch of `reduce` is exercised.
+- **Verification:** `/opt/gradle/bin/gradle :core:model:testDebugUnitTest` → 19/19 green + full module
+  suite green; `:core:model:assembleDebug` green. (`meeshy.sh check`/`./gradlew` unusable — the pinned
+  wrapper distro 403s through the egress proxy; system Gradle 8.14.3 at `/opt/gradle` is the local gate,
+  per NOTES.)
+- **Reviewer gate:** PASS — diff is `apps/android` only (2 `core:model` files + docs), pure stateless
+  building block (SDK purity: the async controller stays app-side), no tautological tests, near-total
+  branch coverage, monotonic/O(1) design faithful to iOS. No production logic outside `apps/android`.
 
 ### 2026-07-03 — slice `call-quality-level` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration. The open PRs (#1367–#1379)

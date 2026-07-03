@@ -39,6 +39,24 @@ object CallQualityThresholds {
     const val BWE_GOOD_BPS: Int = 1_000_000
     const val BWE_FAIR_BPS: Int = 400_000
     const val BWE_POOR_BPS: Int = 150_000
+
+    /**
+     * Sustained degraded (`POOR`/`CRITICAL`) duration, in seconds, before the
+     * video-survival policy drops outbound video to audio-only. 6 s absorbs
+     * transient spikes (cellular handoff, brief congestion) without prematurely
+     * killing video while the link is still likely to recover on its own. Parity
+     * with iOS `QualityThresholds.videoSurvivalSuspendAfterSeconds`.
+     */
+    const val VIDEO_SURVIVAL_SUSPEND_AFTER_SECONDS: Double = 6.0
+
+    /**
+     * Sustained good (`EXCELLENT`/`GOOD`) duration, in seconds, before the policy
+     * re-enables outbound video. Intentionally longer than the suspend window:
+     * re-acquiring the camera + renegotiating is expensive, so the link must have
+     * clearly settled before committing. Parity with iOS
+     * `QualityThresholds.videoSurvivalResumeAfterSeconds`.
+     */
+    const val VIDEO_SURVIVAL_RESUME_AFTER_SECONDS: Double = 10.0
 }
 
 /**

@@ -877,9 +877,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       constants) + two classifiers `from(rttMs, packetLoss)` (worse-of-two-axes,
       strict `>` boundaries) and `from(availableOutgoingBitrateBps)`, plus each
       tier's sender caps (`targetResolutionHeight`/`targetFps`/`targetVideoBitrateBps`)
-      the future adaptive-bitrate ladder will apply. **Pending:** the real WebRTC
-      sender-cap application + the time-hysteresis auto-video-disable policy (port of
-      iOS `VideoSurvivalPolicy`).
+      the future adaptive-bitrate ladder will apply. **Time-hysteresis auto-video-disable
+      policy landed** (slice `call-video-survival-policy`): the pure `core:model`
+      `VideoSurvivalPolicy` (port of iOS `VideoSurvivalPolicy`) — `reduce(state, level,
+      nowSeconds, userWantsVideo) → (state, VideoSurvivalAction)` drops outbound video to
+      audio-only after a sustained `POOR`/`CRITICAL` streak (`Suspend`, 6 s) and resumes
+      after a sustained `EXCELLENT`/`GOOD` streak (`Resume`, 10 s), with `FAIR` holding the
+      recovery timer and a monotonic-seconds `VideoSurvivalState` (fixed-size, O(1) over a
+      marathon call). Duration-based hysteresis (cadence-independent); user camera-off resets
+      to `INITIAL`. +19 tests. **Pending:** the real WebRTC sender-cap application + the
+      actuator seam that consumes `Suspend`/`Resume`.
 - [~] Connection-quality indicator; call-waiting banner (second incoming call) —
       **connection-quality indicator landed** (slice `call-quality-level`): the pure
       four-tier `ConnectionQuality` (`VideoQualityLevel` collapsed `CRITICAL→POOR`,

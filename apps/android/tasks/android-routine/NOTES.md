@@ -2,6 +2,14 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## PR / CI
+- ⚠ **The monorepo CI (`ci.yml`) is the only gate on an `apps/android` PR, and it stays green
+  by construction** — the diff touches none of the JS/TS/Python stack it exercises. `mergeable_state:
+  unstable` right after opening just means checks are still running; poll the CI run to completion
+  before squash-merging. Webhooks deliver CI *failures* but NOT success, and `send_later` is not
+  available in this env — poll `pull_request_read get_status` (or `actions_list list_workflow_runs
+  ci.yml`) yourself; a short background timer to re-check is fine.
+
 ## Environment
 - ⚠ **Always rebase the slice onto `origin/main`, never local `main`.** Fresh containers ship a
   stale local `main`, and `git pull origin main` can hard-fail with `Need to specify how to
