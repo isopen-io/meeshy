@@ -774,6 +774,23 @@ export class NotificationService {
             undefined;
           const pushBody = params.content.substring(0, 200);
 
+          // F1 — app fermée, le badge d'icône iOS et le widget ne vivent QUE
+          // par le payload push : embarquer le même compte unread que
+          // `notification:counts` (même source → même sémantique, pas de
+          // flicker au recale foreground). `badge` pilote `aps.badge`
+          // nativement ; `data.unreadCount` (string) alimente le miroir App
+          // Group écrit par la NSE pour le widget. Best-effort : sur échec
+          // du count, le push part sans badge (comportement historique).
+          let unreadBadge: number | undefined;
+          try {
+            const count = await this.prisma.notification.count({
+              where: { userId: params.userId, readAt: null },
+            });
+            if (typeof count === 'number') unreadBadge = count;
+          } catch {
+            unreadBadge = undefined;
+          }
+
           notificationLogger.debug('push (APNs/FCM) sending', { userId: params.userId, type: params.type, conversationId: params.context.conversationId ?? 'none' });
           this.pushService.sendToUser({
             userId: params.userId,
@@ -791,7 +808,9 @@ export class NotificationService {
               body: pushBody,
               link,
               collapseId: params.collapseId,
+              ...(unreadBadge !== undefined ? { badge: unreadBadge } : {}),
               data: {
+                ...(unreadBadge !== undefined ? { unreadCount: String(unreadBadge) } : {}),
                 type: params.type,
                 conversationId: params.context.conversationId || '',
                 conversationTitle: params.context.conversationTitle || '',

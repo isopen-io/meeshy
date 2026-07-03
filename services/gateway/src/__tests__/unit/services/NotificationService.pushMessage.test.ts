@@ -466,4 +466,44 @@ describe('NotificationService — message push title/body', () => {
       expect(data.parentCommentId).toBe('');
     });
   });
+  describe('badge du push (F1 — badge/widget gelés app fermée)', () => {
+    it('test_push_carriesUnreadBadge_andDataUnreadCount', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        username: 'alice', displayName: 'Alice Martin', avatar: null,
+      });
+      (prisma.notification.count as jest.Mock).mockResolvedValue(7);
+
+      await service.createMessageNotification({
+        recipientUserId: RECIPIENT_ID,
+        senderId: SENDER_ID,
+        messageId: MESSAGE_ID,
+        conversationId: CONVERSATION_ID,
+        messagePreview: 'Salut !',
+      });
+
+      const payload = lastPushPayload() as { badge?: number; data?: Record<string, string> };
+      expect(payload.badge).toBe(7);
+      expect(payload.data?.unreadCount).toBe('7');
+    });
+
+    it('test_push_omitsBadge_whenCountUnavailable_bestEffort', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        username: 'alice', displayName: 'Alice Martin', avatar: null,
+      });
+      (prisma.notification.count as jest.Mock).mockRejectedValue(new Error('db down'));
+
+      await service.createMessageNotification({
+        recipientUserId: RECIPIENT_ID,
+        senderId: SENDER_ID,
+        messageId: MESSAGE_ID,
+        conversationId: CONVERSATION_ID,
+        messagePreview: 'Salut !',
+      });
+
+      const payload = lastPushPayload() as { badge?: number; data?: Record<string, string> };
+      expect(payload.badge).toBeUndefined();
+      expect(payload.data?.unreadCount).toBeUndefined();
+      expect(sendToUser).toHaveBeenCalledTimes(1);
+    });
+  });
 });
