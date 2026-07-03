@@ -4420,3 +4420,73 @@ final class AckFailureReconciliationTests: XCTestCase {
         )
     }
 }
+
+// MARK: - call_cancel background push → end ringing policy (phantom-ring hardening)
+
+/// Pure decision for the `call_cancel` silent push: it may ONLY kill a
+/// still-ringing INCOMING call whose callId matches the push. A late or
+/// replayed cancel must never touch a connected call, an outgoing ring, or
+/// an unrelated call.
+@MainActor
+final class CallCancellationPolicyTests: XCTestCase {
+
+    func test_matchingIncomingRing_ends() {
+        XCTAssertTrue(CallReliabilityPolicy.shouldEndRingingOnCancellation(
+            pushCallId: "c1", currentCallId: "c1", callState: .ringing(isOutgoing: false)
+        ))
+    }
+
+    func test_callIdMismatch_ignored() {
+        XCTAssertFalse(CallReliabilityPolicy.shouldEndRingingOnCancellation(
+            pushCallId: "c1", currentCallId: "c2", callState: .ringing(isOutgoing: false)
+        ))
+    }
+
+    func test_noCurrentCall_ignored() {
+        XCTAssertFalse(CallReliabilityPolicy.shouldEndRingingOnCancellation(
+            pushCallId: "c1", currentCallId: nil, callState: .idle
+        ))
+    }
+
+    func test_connectedCall_neverEndedByLateCancel() {
+        XCTAssertFalse(CallReliabilityPolicy.shouldEndRingingOnCancellation(
+            pushCallId: "c1", currentCallId: "c1", callState: .connected
+        ))
+    }
+
+    func test_outgoingRing_ignored() {
+        XCTAssertFalse(CallReliabilityPolicy.shouldEndRingingOnCancellation(
+            pushCallId: "c1", currentCallId: "c1", callState: .ringing(isOutgoing: true)
+        ))
+    }
+
+    /// Source-guards: the wiring exists end-to-end — AppDelegate routes the
+    /// silent push, CallManager gates on the policy and reports CallKit end.
+    func test_wiring_appDelegateRoutesCancel_andManagerReportsCallKitEnd() throws {
+        let base = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let appDelegate = try String(
+            contentsOf: base.appendingPathComponent("Meeshy/AppDelegate.swift"), encoding: .utf8)
+        XCTAssertTrue(
+            appDelegate.contains("call_cancel") && appDelegate.contains("endRingingFromCancellation"),
+            "AppDelegate.didReceiveRemoteNotification must route type=call_cancel to CallManager.endRingingFromCancellation"
+        )
+        let manager = try String(
+            contentsOf: base.appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift"), encoding: .utf8)
+        guard let fnRange = manager.range(of: "func endRingingFromCancellation(") else {
+            XCTFail("CallManager.endRingingFromCancellation not found"); return
+        }
+        let body = String(manager[fnRange.lowerBound...].prefix(1200))
+        XCTAssertTrue(
+            body.contains("shouldEndRingingOnCancellation"),
+            "endRingingFromCancellation must gate on CallReliabilityPolicy.shouldEndRingingOnCancellation"
+        )
+        XCTAssertTrue(
+            body.contains(".remoteEnded"),
+            "endRingingFromCancellation must report the CallKit end with reason .remoteEnded"
+        )
+    }
+}

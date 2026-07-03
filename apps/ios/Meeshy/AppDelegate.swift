@@ -123,6 +123,21 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
         fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) {
+        // Sonnerie fantôme — le gateway envoie une push background `call_cancel`
+        // quand l'appel se termine sans avoir été décroché : si CallKit sonne
+        // encore pour ce callId (socket jamais monté, le fanout call:ended ne
+        // nous a pas atteints), on coupe. Gardes FSM dans CallManager — un
+        // cancel tardif ne touche jamais un appel décroché.
+        if (userInfo["type"] as? String) == "call_cancel",
+           let cancelCallId = userInfo["callId"] as? String, !cancelCallId.isEmpty {
+            Logger.network.info("call_cancel silent push received (callId=\(cancelCallId, privacy: .public))")
+            Task { @MainActor in
+                CallManager.shared.endRingingFromCancellation(callId: cancelCallId)
+                completionHandler(.noData)
+            }
+            return
+        }
+
         let unreadTotal = userInfo["unreadCount"] as? Int
         let convId = userInfo["conversationId"] as? String
         let convUnread = userInfo["conversationUnread"] as? Int
