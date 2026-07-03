@@ -1248,6 +1248,91 @@ describe('CallEventsHandler', () => {
       expect(ack).toHaveBeenCalledWith({ success: false });
       expect(socket.emit).toHaveBeenCalledWith('call:error', expect.any(Object));
     });
+
+    // Durcissement sonnerie fantôme (app suspendue) : quand un appel se
+    // termine SANS avoir été décroché (missed/rejected), les membres qui
+    // n'ont jamais rejoint la call room ont potentiellement CallKit qui
+    // sonne via la push VoIP initiale ET un socket jamais monté (réseau
+    // pauvre) — le fanout call:ended ne les atteint pas. On leur envoie une
+    // push APNs background `call_cancel` (JAMAIS VoIP : chaque push VoIP
+    // exige un reportNewIncomingCall). Best-effort, silencieuse, iOS only.
+    describe('call_cancel background push to never-joined members on pre-answer termination', () => {
+      const cancelSetup = (endReason: string) => {
+        const endedSession = makeCallSession({
+          status: endReason === 'completed' ? 'ended' : 'missed',
+          endReason,
+          duration: 0,
+        });
+        mockCallServiceEndCall.mockResolvedValue(endedSession);
+        const ctx = setupWithSocket({
+          participant: {
+            findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }),
+            findMany: jest.fn<any>().mockResolvedValue([
+              { userId: USER_ID },              // endedBy (the caller)
+              { userId: 'ringing-callee-id' },  // never joined — target
+              { userId: 'joined-member-id' },   // joined the call — not a target
+            ]),
+          },
+          callParticipant: {
+            findMany: jest.fn<any>().mockResolvedValue([
+              { participant: { userId: USER_ID } },
+              { participant: { userId: 'joined-member-id' } },
+            ]),
+          },
+        });
+        ctx.io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
+        const pushService = { sendToUser: jest.fn<any>().mockResolvedValue([]) };
+        ctx.handler.setPushNotificationService(pushService as any);
+        return { ...ctx, pushService };
+      };
+
+      it('sends a silent call_cancel push to never-joined members only (not endedBy, not joined)', async () => {
+        const { socket, pushService } = cancelSetup('missed');
+
+        await socket._trigger('call:end', validData, jest.fn());
+
+        expect(pushService.sendToUser).toHaveBeenCalledTimes(1);
+        expect(pushService.sendToUser).toHaveBeenCalledWith(
+          expect.objectContaining({
+            userId: 'ringing-callee-id',
+            types: ['apns'],
+            platforms: ['ios'],
+            payload: expect.objectContaining({
+              silent: true,
+              data: expect.objectContaining({ type: 'call_cancel', callId: CALL_ID }),
+            }),
+          })
+        );
+      });
+
+      it('sends the cancel push on rejected (other multi-device sockets may still ring)', async () => {
+        const { socket, pushService } = cancelSetup('rejected');
+
+        await socket._trigger('call:end', validData, jest.fn());
+
+        expect(pushService.sendToUser).toHaveBeenCalledWith(
+          expect.objectContaining({ userId: 'ringing-callee-id' })
+        );
+      });
+
+      it('does NOT send any cancel push when the call was answered (completed)', async () => {
+        const { socket, pushService } = cancelSetup('completed');
+
+        await socket._trigger('call:end', validData, jest.fn());
+
+        expect(pushService.sendToUser).not.toHaveBeenCalled();
+      });
+
+      it('cancel-push failure never breaks the terminal path (ack still true)', async () => {
+        const { socket, pushService } = cancelSetup('missed');
+        pushService.sendToUser.mockRejectedValue(new Error('APNS down'));
+
+        const ack = jest.fn();
+        await socket._trigger('call:end', validData, ack);
+
+        expect(ack).toHaveBeenCalledWith({ success: true });
+      });
+    });
   });
 
   // ── call:heartbeat ───────────────────────────────────────────────────────

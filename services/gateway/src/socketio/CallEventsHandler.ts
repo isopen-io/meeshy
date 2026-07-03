@@ -275,6 +275,74 @@ export class CallEventsHandler {
   ): Promise<void> {
     const rooms = await resolveCallEndedRooms(this.prisma, callId, conversationId);
     io.to(rooms).emit(CALL_EVENTS.ENDED, endedEvent);
+    await this.sendCallCancellationPushes(callId, conversationId, endedEvent);
+  }
+
+  /**
+   * Sonnerie fantôme (app suspendue) — le fanout socket ci-dessus n'atteint
+   * pas un appelé dont le socket n'est JAMAIS monté (réseau pauvre : la push
+   * VoIP passe par APNs mais le WebSocket ne s'établit pas ; le freshness
+   * check REST a déjà validé l'appel au moment du push). Quand l'appel se
+   * termine SANS avoir été décroché (missed/rejected), on envoie aux membres
+   * n'ayant jamais rejoint la call room une push APNs **background**
+   * `call_cancel` qui coupe CallKit. JAMAIS en type voip : chaque push VoIP
+   * exige un reportNewIncomingCall (sinon kill) — c'est précisément pourquoi
+   * la cancellation passe par une push standard silencieuse. Best-effort :
+   * aucun échec ne doit casser le chemin terminal.
+   */
+  private async sendCallCancellationPushes(
+    callId: string,
+    conversationId: string | undefined,
+    endedEvent: Omit<CallEndedEvent, 'endedBy'> & { endedBy?: string }
+  ): Promise<void> {
+    if (!this.pushService || !conversationId) return;
+    if (endedEvent.reason !== 'missed' && endedEvent.reason !== 'rejected') return;
+
+    try {
+      const [members, joined] = await Promise.all([
+        this.prisma.participant.findMany({
+          where: { conversationId, isActive: true, userId: { not: null } },
+          select: { userId: true }
+        }),
+        this.prisma.callParticipant.findMany({
+          where: { callSessionId: callId },
+          select: { participant: { select: { userId: true } } }
+        })
+      ]);
+
+      const excluded = new Set<string>(
+        joined.map((p) => p.participant?.userId).filter((uid): uid is string => !!uid)
+      );
+      if (endedEvent.endedBy) excluded.add(endedEvent.endedBy);
+
+      const targets = members
+        .map((m) => m.userId)
+        .filter((uid): uid is string => !!uid && !excluded.has(uid));
+      if (targets.length === 0) return;
+
+      await Promise.all(targets.map((uid) =>
+        this.pushService!.sendToUser({
+          userId: uid,
+          payload: {
+            title: '',
+            body: '',
+            silent: true,
+            data: { type: 'call_cancel', callId }
+          },
+          types: ['apns'],
+          platforms: ['ios']
+        }).catch((error) => {
+          logger.error('call_cancel push failed', { callId, userId: uid, error });
+        })
+      ));
+
+      logger.info('📲 call_cancel background push sent to never-joined members', {
+        callId,
+        targets
+      });
+    } catch (error) {
+      logger.error('call_cancel push fanout failed — terminal path unaffected', { callId, error });
+    }
   }
 
   private buildRingingTimeoutHandler(io: SocketIOServer, callId: string): () => Promise<void> {
