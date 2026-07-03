@@ -438,6 +438,56 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         return Array(Set(urls))
     }
 
+    // MARK: - R5 Offline replay pin (story vue = médias non-évincables jusqu'à expiry)
+
+    /// Store disque cible d'un pin de média story.
+    enum StoryPinStore: Equatable {
+        case video, audio, images
+    }
+
+    /// Échéance du pin : l'expiry de la story (le pin ne doit jamais lui
+    /// survivre). Fallback aligné sur `toStoryGroups` : createdAt + 21 h.
+    static func pinDeadline(for story: StoryItem) -> Date {
+        story.expiresAt ?? story.createdAt.addingTimeInterval(21 * 3600)
+    }
+
+    /// Plan de pin PUR (testable) : chaque URL média de la story routée vers
+    /// son store disque — miroir exact du routage de `prefetchStoryMediaURLs`
+    /// (par `FeedMedia.type`, inconnu → images). Le pin ne télécharge RIEN :
+    /// il protège de l'éviction budget LRU ce que les chemins de lecture /
+    /// prefetch ont déposé (ou déposeront — pin-avant-download supporté).
+    static func pinTargets(for story: StoryItem) -> [(urlString: String, store: StoryPinStore)] {
+        Self.mediaURLStrings(for: story).map { urlString in
+            switch story.media.first(where: { $0.url == urlString })?.type {
+            case .video: return (urlString, .video)
+            case .audio: return (urlString, .audio)
+            default: return (urlString, .images)
+            }
+        }
+    }
+
+    /// Décision produit (app-side, cf. SDK purity) : une story VUE doit se
+    /// relire offline → ses médias sont pinnés dans leurs stores jusqu'à
+    /// l'expiry. Les pins échus s'auto-purgent côté `DiskCacheStore`.
+    private func pinStoryMediaForOfflineReplay(_ story: StoryItem) {
+        let until = Self.pinDeadline(for: story)
+        guard until > Date() else { return }
+        let targets = Self.pinTargets(for: story)
+        guard !targets.isEmpty else { return }
+        Task {
+            for target in targets {
+                switch target.store {
+                case .video:
+                    await CacheCoordinator.shared.video.pin(target.urlString, until: until)
+                case .audio:
+                    await CacheCoordinator.shared.audio.pin(target.urlString, until: until)
+                case .images:
+                    await CacheCoordinator.shared.images.pin(target.urlString, until: until)
+                }
+            }
+        }
+    }
+
     /// Prefetch les URLs (déjà filtrées) d'une story dans les stores disque + mémoire.
     private static func prefetchStoryMediaURLs(_ urls: [String], in story: StoryItem, imageCache: DiskCacheStore, prerollPlayer: Bool) async {
         for urlString in urls {
@@ -488,6 +538,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 updated[j].isViewed = true
                 storyGroups[i] = storyGroups[i].with(stories: updated)
                 persistStoryCache()
+                // R5 — la story vient d'être VUE : garantir sa relecture
+                // offline en protégeant ses médias de l'éviction LRU.
+                pinStoryMediaForOfflineReplay(updated[j])
                 return
             }
         }

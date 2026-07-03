@@ -221,10 +221,14 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   exemption dans `evictOverBudget` ET `evictExpired`, purge auto des pins échus, cohérence
   `invalidate`/`invalidateAll` (logout). Tests : DiskCacheStorePinningTests 7/7 + 3 suites
   DiskCacheStore en non-régression (39/39), build app vert.
-  RESTE (it.3+) : (b2) câblage APP-SIDE — pinner les médias d'une story à l'affichage
-  (`until = story.expiresAt`, respecter `MediaDownloadPreferences`/`NetworkConditionMonitor`),
-  candidats : `StoryViewerView` onAppear slide / `StoryViewModel.markViewed` ;
-  (c) test d'intégration « voir → couper réseau → relire → zéro requête ».
+  (b2) ✅ it.3 : câblage app-side dans `StoryViewModel.markViewed` — plan pur
+  `pinTargets(for:)` (routage FeedMedia.type miroir du prefetch) + `pinDeadline(for:)`
+  (expiresAt, fallback createdAt+21 h) + `pinStoryMediaForOfflineReplay` (fire-and-forget,
+  ne télécharge rien → pas d'interaction MediaDownloadPreferences). Tests StoryViewModelTests
+  (plan pur + câblage bout-en-bout via `isPinned`, story expirée → pas de pin).
+  RESTE (it.4+) : (c) test d'intégration « voir → couper réseau → relire → zéro requête »
+  (scénario simulateur) ; raffinement : les stories de l'AUTEUR courant ne passent pas par
+  markViewed → non pinnées (mineur : l'auteur garde ses assets composer en local).
 - [ ] **R6 (P2) `OutboxKind.markStoryViewed` — état vu durable offline.**
   Preuve : fire-and-forget REST (`StoryViewModel.markViewed`), aucun kind outbox, perte possible
   si éviction cache avant sync. Ajouter le kind + flush FIFO au reconnect (l'infra outbox T10
@@ -386,7 +390,7 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   `guard let status`) — sémantique identique pour la matrice vidéo, nécessaire pour que les
   guards s'appliquent aussi aux slides sans vidéo (status nil + audio pending).
 
-## it.2 — R5(b) : pin anti-éviction dans DiskCacheStore (voir hash git log feat(sdk/cache))
+## it.2 — R5(b) : pin anti-éviction dans DiskCacheStore (32dd5753f)
 
 - Re-preuve : R5(a) ÉCARTÉ (funnel réseau non structuré → downloads en vol survivent au
   dismiss — détail dans l'item). Vrai trou = éviction budget LRU sur stores partagés
@@ -398,3 +402,14 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.3 — R5(b2) : pin des stories vues au markViewed (hash à compléter au push)
+
+- RED : `pinTargets`/`pinDeadline` inexistants ; markViewed ne pinnait rien (isPinned false).
+- Fix app-side (`StoryViewModel`) : plan pur `pinTargets(for:)` + `pinDeadline(for:)` +
+  `pinStoryMediaForOfflineReplay` câblé dans `markViewed` après le flip in-place (mutation
+  StoryItem IN PLACE respectée — le pin lit `updated[j]`, pas de reconstruction).
+- Décision : pin sur markViewed (signal « vu » exact) et PAS sur le prefetch du tray —
+  pinner 8 groupes × N médias rendrait le store massivement non-évincable.
+- Vérif : StoryViewModelTests (4 nouveaux tests) verts sur 18.2, dont câblage réel via
+  `CacheCoordinator.shared.video.isPinned` (le pin ne touche pas le réseau).

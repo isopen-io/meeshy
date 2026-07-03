@@ -252,6 +252,88 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertFalse(sut.storyGroups[0].stories[0].isViewed, "Should not modify unrelated stories")
     }
 
+    // MARK: - R5 offline replay : pin plan + wiring
+
+    private func makeMediaStoryItem(id: String = "pin-item",
+                                    videoURL: String? = "https://cdn.test/clip.mp4",
+                                    audioURL: String? = "https://cdn.test/voice.m4a",
+                                    imageURL: String? = "https://cdn.test/photo.jpg",
+                                    expiresAt: Date = Date().addingTimeInterval(3600)) -> StoryItem {
+        var media: [FeedMedia] = []
+        if let videoURL {
+            media.append(FeedMedia(id: "m-video", type: .video, url: videoURL, duration: 5))
+        }
+        if let audioURL {
+            media.append(FeedMedia(id: "m-audio", type: .audio, url: audioURL, duration: 5))
+        }
+        if let imageURL {
+            media.append(FeedMedia(id: "m-image", type: .image, url: imageURL))
+        }
+        return StoryItem(
+            id: id,
+            content: nil,
+            media: media,
+            storyEffects: nil,
+            createdAt: Date(),
+            expiresAt: expiresAt,
+            isViewed: false
+        )
+    }
+
+    func test_pinTargets_routesMediaByType() {
+        let story = makeMediaStoryItem()
+
+        let targets = StoryViewModel.pinTargets(for: story)
+
+        XCTAssertEqual(targets.count, 3)
+        XCTAssertEqual(targets.first(where: { $0.urlString == "https://cdn.test/clip.mp4" })?.store, .video)
+        XCTAssertEqual(targets.first(where: { $0.urlString == "https://cdn.test/voice.m4a" })?.store, .audio)
+        XCTAssertEqual(targets.first(where: { $0.urlString == "https://cdn.test/photo.jpg" })?.store, .images,
+                       "Images (and unknown types) route to the images store, mirroring the prefetch path")
+    }
+
+    func test_pinDeadline_usesStoryExpiry() {
+        let expiry = Date().addingTimeInterval(1234)
+        let story = makeMediaStoryItem(expiresAt: expiry)
+
+        XCTAssertEqual(StoryViewModel.pinDeadline(for: story), expiry,
+                       "The pin must not outlive the story")
+    }
+
+    func test_markViewed_pinsViewedStoryMediaUntilExpiry() async {
+        let unique = UUID().uuidString
+        let videoURL = "https://cdn.test/\(unique).mp4"
+        let story = makeMediaStoryItem(id: "pin-wiring", videoURL: videoURL,
+                                       audioURL: nil, imageURL: nil)
+        let group = makeStoryGroup(userId: "u1", stories: [story])
+        sut.storyGroups = [group]
+
+        sut.markViewed(storyId: "pin-wiring")
+
+        // The pin runs in a fire-and-forget Task — give it time to land.
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        let pinned = await CacheCoordinator.shared.video.isPinned(videoURL)
+        XCTAssertTrue(pinned, "Viewing a story must pin its media for offline replay until expiry")
+    }
+
+    func test_markViewed_expiredStory_doesNotPin() async {
+        let unique = UUID().uuidString
+        let videoURL = "https://cdn.test/\(unique).mp4"
+        let story = makeMediaStoryItem(id: "pin-expired", videoURL: videoURL,
+                                       audioURL: nil, imageURL: nil,
+                                       expiresAt: Date().addingTimeInterval(-60))
+        let group = makeStoryGroup(userId: "u1", stories: [story])
+        sut.storyGroups = [group]
+
+        sut.markViewed(storyId: "pin-expired")
+
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        let pinned = await CacheCoordinator.shared.video.isPinned(videoURL)
+        XCTAssertFalse(pinned, "An already-expired story must not leave a pin behind")
+    }
+
     func test_markViewed_preservesAllStoryFields() {
         // markViewed ne doit poser QUE isViewed=true. Avant le fix il reconstruisait
         // le StoryItem via un init partiel → ~13 champs (translations, réactions,
