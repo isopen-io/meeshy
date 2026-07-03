@@ -239,13 +239,16 @@ extension ConversationListView {
         contextMenuDismissWork?.cancel()
         // min() : ne jamais RE-déplier une carte repliée par le drag vers le
         // haut (0.0 → 0.7 ferait flasher l'aperçu pendant le fondu de sortie).
-        previewScale = min(previewScale, 0.7)
-        dragOffsetY = 0
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) { contextMenuAppeared = false }
+        // Le shrink est ANIMÉ dans la même transaction que le fondu : la carte
+        // se résorbe (zoom-out + blur progressif lié au scale) pendant que le
+        // menu redescend et se dissout — miroir du zoom d'ouverture.
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) {
+            previewScale = min(previewScale, 0.7)
+            dragOffsetY = 0
+            contextMenuAppeared = false
+        }
         let work = DispatchWorkItem {
             contextMenuConversation = nil
-            // Reset row press state (animation will be triggered by .onChange in row)
-            activelyPressedConversationId = nil
             previewScale = 1.0
         }
         contextMenuDismissWork = work
@@ -296,8 +299,9 @@ extension ConversationListView {
                         onProfileInfo: { dismissContextMenu(); handleProfileView(conversation) }
                     )
                     .frame(width: 340)
-                    // Aperçu : zoom (grandit depuis 0.7) + fondu, piloté par
-                    // `contextMenuAppeared` (spring à rebond).
+                    // Aperçu : vrai zoom 0.7 → 1.0 (previewScale, posé replié
+                    // par `onLongPress` puis animé par `.onAppear` — spring à
+                    // rebond perceptible, overshoot ≈ 1.03).
                     // Glisser vers le haut replie la carte (previewScale → 0,
                     // ancre .bottom : elle se résorbe vers le menu) pour donner
                     // toute la place au menu ; glisser vers le bas au-delà du
@@ -308,9 +312,13 @@ extension ConversationListView {
                     .scaleEffect(previewScale, anchor: .bottom)
                     .offset(y: dragOffsetY)
                     .opacity(contextMenuAppeared ? 1 : 0)
-                    // Blur effect during collapse: scales from 0 at 50% → 2.0 at 0% scale
-                    // Creates visual feedback that preview is "disappearing" into menu
-                    .blur(radius: previewScale < 0.5 ? 2.0 * (1.0 - previewScale) : 0)
+                    // Blur PROGRESSIF lié au scale (continu, sans saut au
+                    // franchissement d'un seuil) : net à 1.0, ≈ 0.9 au départ
+                    // du zoom d'ouverture (0.7), jusqu'à 3.0 carte repliée —
+                    // la carte se matérialise à l'ouverture et se dissout au
+                    // repli/fermeture. max(0,…) : l'overshoot du spring
+                    // dépasse 1.0, le radius ne doit jamais être négatif.
+                    .blur(radius: 3.0 * max(0, 1.0 - previewScale))
                     .gesture(previewCollapseGesture)
 
                     ConversationContextMenuView(
@@ -391,23 +399,29 @@ extension ConversationListView {
                         },
                         onDismiss: { dismissContextMenu() }
                     )
-                    // Menu : remonte depuis le bas + fondu (piloté).
-                    // Offset coordonné avec preview scale pour illusion que menu est poussé
-                    // par la croissance de l'aperçu (0.7 scale = menu commence push-up)
-                    .offset(y: contextMenuAppeared ? 0 : min(70, CGFloat(70 * (1.0 - previewScale))))
+                    // Menu : slide-up 70 pt + fondu + dé-blur, dans la MÊME
+                    // transaction spring que le zoom de l'aperçu — le menu
+                    // remonte en rebondissant pendant que la carte grandit
+                    // (coordonné), et redescend en se dissolvant (blur) à la
+                    // fermeture. L'ancienne formule `70 * (1 - previewScale)`
+                    // valait 0 au montage (previewScale démarrait à 1.0) : le
+                    // slide-up était inerte.
+                    .offset(y: contextMenuAppeared ? 0 : 70)
                     .opacity(contextMenuAppeared ? 1 : 0)
+                    .blur(radius: contextMenuAppeared ? 0 : 6)
                 }
                 .padding(.horizontal, 20)
             }
             .zIndex(300)
             .onAppear {
-                // Zoom + rebond : l'aperçu grandit et le menu remonte au montage.
-                previewScale = 1.0
+                // Zoom + rebond : l'aperçu grandit depuis l'état replié posé
+                // par `onLongPress` (scale 0.7, menu 70 pt plus bas) et le
+                // menu remonte, dans une seule transaction spring à rebond
+                // (0.58 → overshoot ≈ 1.03, perceptible sur une carte 340 pt).
                 dragOffsetY = 0
-                // Improved spring: more bouncy (0.58 vs 0.6) + faster response (0.45 vs 0.44)
-                // Creates coordinated preview+menu animation with visible rebounce
                 withAnimation(.spring(response: 0.45, dampingFraction: 0.58)) {
                     contextMenuAppeared = true
+                    previewScale = 1.0
                 }
             }
         }

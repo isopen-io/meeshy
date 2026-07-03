@@ -151,14 +151,9 @@ struct ConversationListView: View {
     /// pour l'annuler si une nouvelle ouverture survient avant la fin du zoom-out,
     /// sinon la purge en vol effacerait le menu qui vient de se rouvrir.
     @State var contextMenuDismissWork: DispatchWorkItem? = nil
-    /// Id de la conversation dont la ligne est en état "pressée" (scale 0.90).
-    /// Chaque ligne reçoit le booléen dérivé `isActivelyPressed` — état par
-    /// ligne 100 % piloté d'ici, aucune machinerie onChange côté ligne.
-    /// Pas `private` : lu par les fichiers d'extension +Overlays/+Rows (un @State
-    /// private est inaccessible depuis un fichier extension frère — cf. CLAUDE.md).
-    @State var activelyPressedConversationId: String? = nil
-    /// Scale de la carte d'aperçu de l'overlay (1.0 = dépliée, 0 = repliée via
-    /// le drag vers le haut sur la carte — `previewCollapseGesture`, +Overlays).
+    /// Scale de la carte d'aperçu de l'overlay (1.0 = dépliée, 0.7 = état
+    /// replié de départ du zoom d'ouverture, 0 = repliée via le drag vers le
+    /// haut sur la carte — `previewCollapseGesture`, +Overlays).
     /// Muté uniquement quand l'overlay est ouvert ; les lignes ne le reçoivent
     /// plus (gate Equatable intact pendant le geste).
     @State var previewScale: CGFloat = 1.0
@@ -347,22 +342,31 @@ struct ConversationListView: View {
             },
             onLongPress: {
                 Task { await conversationViewModel.loadPreviewMessages(for: conversation.id) }
-                // Montage instantané à l'état "replié" ; l'overlay anime
-                // ensuite via `.onAppear` (zoom + rebond). Reset explicite au
-                // cas où l'état resterait à true d'une ouverture précédente.
+                // Montage à l'état "replié" (scale 0.7, menu bas) ; l'overlay
+                // anime ensuite via `.onAppear` (zoom 0.7 → 1.0 + rebond).
                 // Annule une purge de fermeture encore en vol, sinon elle
                 // effacerait ce menu fraîchement ouvert (~0.26 s plus tard).
                 contextMenuDismissWork?.cancel()
                 contextMenuDismissWork = nil
+                let wasMounted = contextMenuConversation != nil
                 contextMenuAppeared = false
-                contextMenuConversation = conversation
-                // Réouverture rapide : l'overlay est encore monté (pas de
-                // nouveau `.onAppear`), l'aperçu doit donc être re-déplié ici.
-                previewScale = 1.0
+                previewScale = 0.7
                 dragOffsetY = 0
-                activelyPressedConversationId = conversation.id
-            },
-            isActivelyPressed: activelyPressedConversationId == conversation.id
+                contextMenuConversation = conversation
+                if wasMounted {
+                    // Réouverture rapide : l'overlay est encore monté, donc
+                    // `.onAppear` ne re-fire pas — sans relance ici le menu
+                    // resterait invisible (contextMenuAppeared bloqué à
+                    // false). Un tick pour laisser rendre l'état replié,
+                    // puis la même animation d'ouverture que `.onAppear`.
+                    DispatchQueue.main.async {
+                        withAnimation(.spring(response: 0.45, dampingFraction: 0.58)) {
+                            contextMenuAppeared = true
+                            previewScale = 1.0
+                        }
+                    }
+                }
+            }
         )
         .equatable()
     }

@@ -49,12 +49,6 @@ struct ConversationRowItem: View {
     /// Appui long → overlay de menu custom (dessine ses icônes ; le
     /// `.contextMenu` natif ne les affiche pas sur iOS 26).
     let onLongPress: () -> Void
-    /// true quand cette ligne est celle dont le menu contextuel est ouvert
-    /// (`activelyPressedConversationId == conversation.id` côté parent).
-    /// État DÉRIVÉ, pas local : la fermeture du menu (ou son ouverture sur
-    /// une autre ligne) remet la scale à 1.0 sans machinerie onChange, et la
-    /// ligne reste sans @State — condition du gate `.equatable()` ci-dessous.
-    let isActivelyPressed: Bool
 
     var body: some View {
         SwipeableRow(
@@ -81,7 +75,6 @@ struct ConversationRowItem: View {
                 preferredContentLanguages: preferredContentLanguages
             )
             .equatable()
-            .scaleEffect(isActivelyPressed ? 0.90 : 1.0)
             .contentShape(Rectangle())
             .onTapGesture {
                 HapticFeedback.light()
@@ -115,20 +108,54 @@ struct ConversationRowItem: View {
             // la propriété exclusive du ScrollView. Le geste « replier
             // l'aperçu » vit dans l'overlay du menu (+Overlays), hors de tout
             // contexte scrollable.
-            .simultaneousGesture(
-                LongPressGesture(minimumDuration: 0.4)
-                    .onEnded { _ in
-                        HapticFeedback.medium()
-                        onLongPress()
-                    }
-            )
+            .modifier(RowPressBounceModifier(onTrigger: onLongPress))
             .task {
                 await onLoadPreview()
             }
-            // Spring avec rebounce visible : 0.99 était trop amorti (smooth infini)
-            // 0.68 donne 1-2 oscillations perceptibles (0.90→1.0→0.93→1.0)
-            .animation(.spring(response: 0.60, dampingFraction: 0.68), value: isActivelyPressed)
         }
+    }
+}
+
+// MARK: - Press feedback (réduction pendant l'appui + rebond au trigger)
+
+/// Feedback d'appui de la ligne : réduction à 0.90 dès le toucher (easeOut
+/// ≈ 0.2 s), puis rebond élastique visible quand le long-press aboutit à
+/// 0.4 s — le spring peu amorti (0.25) donne ≈ 1.05 à ~0.6 s, ≈ 0.98 à
+/// ~0.9 s, repos à ~1.5 s, pendant que l'overlay preview jaillit (zoom
+/// 0.7 → 1.0, +Overlays). Relâcher (ou scroller > 10 pt) avant les 0.4 s
+/// ANNULE : `onPressingChanged(false)` arrive à l'échec du geste et la
+/// ligne remonte élastiquement, sans ouvrir le menu.
+///
+/// `onPressingChanged` (et PAS `LongPressGesture.updating`) : le callback
+/// `updating`/@GestureState ne fire qu'à la RECONNAISSANCE du long-press,
+/// pas au touch-down (vérifié frame par frame sur simulateur 2026-07-03 —
+/// aucune réduction pendant l'appui) ; `onPressingChanged(true)` arrive,
+/// lui, dès le toucher. Le @State vit dans ce ViewModifier, PAS dans
+/// `ConversationRowItem` : une View conformée manuellement à Equatable avec
+/// du state interne perd ses invalidations @State sur iOS 18+ (footgun
+/// BubbleExpandableText). Le modifier est un nœud enfant du gate
+/// `.equatable()` — son state s'invalide indépendamment, comme le drag
+/// interne de `SwipeableRow`.
+private struct RowPressBounceModifier: ViewModifier {
+    let onTrigger: () -> Void
+
+    @State private var isPressing = false
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(isPressing ? 0.90 : 1.0)
+            .animation(
+                isPressing
+                    ? .easeOut(duration: 0.18)
+                    : .spring(response: 0.55, dampingFraction: 0.25),
+                value: isPressing
+            )
+            .onLongPressGesture(minimumDuration: 0.4, maximumDistance: 10) {
+                HapticFeedback.medium()
+                onTrigger()
+            } onPressingChanged: { pressing in
+                isPressing = pressing
+            }
     }
 }
 
@@ -175,11 +202,7 @@ extension ConversationRowItem: @MainActor Equatable {
         zip(lhs.leadingActions, rhs.leadingActions).allSatisfy { $0.icon == $1.icon } &&
         zip(lhs.trailingActions, rhs.trailingActions).allSatisfy { $0.icon == $1.icon } &&
         (lhs.onCreateShareLink == nil) == (rhs.onCreateShareLink == nil) &&
-        lhs.cachedPreviewMessages.count == rhs.cachedPreviewMessages.count &&
-        // Booléen DÉRIVÉ par ligne (et non l'id global du menu ouvert) :
-        // ouvrir/fermer le menu n'invalide que les lignes dont ce booléen
-        // bascule — pas les ~30 lignes visibles.
-        lhs.isActivelyPressed == rhs.isActivelyPressed
+        lhs.cachedPreviewMessages.count == rhs.cachedPreviewMessages.count
     }
 }
 

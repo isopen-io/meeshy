@@ -419,6 +419,16 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
+## it.6 — R2 : gel du playhead sur image bg non stampée (1c6873e34)
+
+- Re-preuve actualisée : vidéo bg couverte par R1 depuis it.1 ; trou résiduel = image bg
+  (status nil, jamais gatée). RED : 7 tests (matrice pure mediaPending + seam canvas).
+- Fix : `isPrimaryMediaPending` (rule engine) + `isBackgroundImagePending()` sondant
+  `hasFinalContentStamped` — readiness INTOUCHÉE, zéro nouvelle surface de deadlock.
+- Vérif : 34/34 les 2 suites santé, build app 23 s vert. Pas de bump généré ce tour.
+- Restes consignés dans l'item [~] : indicateur visuel (R3/U5), timeout long UI erreur,
+  cas vidéo FG sans player sur fond couleur.
+
 ## it.5 — E1 : autosave débouncé du draft, édition crash-safe (294c89e5c)
 
 - RED : StoryComposerAutosaveTests — autosaveTrigger/mediaKeysFingerprint inexistants.
