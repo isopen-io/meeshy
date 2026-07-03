@@ -650,6 +650,13 @@ After Stories richness is sufficient, advance to the **Calls** area
   floors; SDK purity kept (a stateless pure decision in `core:model`, the platform thermal mapping left as
   app-side glue); edges covered (CRITICAL zero-target floor, never-upscale, per-axis conservative composition,
   hard `1`/`1.0` floors).
+- **PR + merge:** PR #1417, squash-merged to `main` (`d5443c08`). CI: 11/13 checks green (Quality-bun,
+  Security, Prisma, Test shared/agent/web, Audio Pipeline, TTS/STT, Voice API + Trivy-neutral); the two
+  heaviest coverage suites (**Test gateway**, **Test Python**) were stuck in a degraded/contended runner
+  (`Run tests with coverage` step >110 min for suites that normally finish in minutes) — a pure infra hang,
+  not a failure, on JS/Python code the `apps/android`-only diff never touches and which `main` (the
+  merge-base `e078f29`) already passes. No red anywhere; branch protection allowed the squash. Recorded in
+  NOTES as the CI-runner-hang lesson.
 
 ### 2026-07-03 — slice `call-ended-identity-teardown` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration (open PRs #1410/#1412/#1413/#1414
