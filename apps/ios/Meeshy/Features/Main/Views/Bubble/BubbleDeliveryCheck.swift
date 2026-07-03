@@ -27,7 +27,7 @@ struct BubbleDeliveryCheck: View, Equatable {
     var body: some View {
         if isOffline, isInFlight {
             Image(systemName: "hourglass")
-                .font(.system(size: 10, weight: .semibold))
+                .font(MeeshyFont.relative(10, weight: .semibold))
                 .foregroundColor(MeeshyColors.warning)
                 .accessibilityLabel(Self.label(.offlinePending))
         } else {
@@ -42,22 +42,22 @@ struct BubbleDeliveryCheck: View, Equatable {
             EmptyView()
         case .sending:
             Image(systemName: "clock")
-                .font(.system(size: 10))
+                .font(MeeshyFont.relative(10))
                 .foregroundColor(tint)
                 .accessibilityLabel(Self.label(.sending))
         case .clock:
             Image(systemName: "clock")
-                .font(.system(size: 10))
+                .font(MeeshyFont.relative(10))
                 .foregroundColor(tint.opacity(0.7))
                 .accessibilityLabel(Self.label(.sending))
         case .slow:
             Image(systemName: "clock.badge.exclamationmark")
-                .font(.system(size: 10, weight: .semibold))
+                .font(MeeshyFont.relative(10, weight: .semibold))
                 .foregroundColor(MeeshyColors.warning)
                 .accessibilityLabel(Self.label(.slow))
         case .sent:
             Image(systemName: "checkmark")
-                .font(.system(size: 10, weight: .semibold))
+                .font(MeeshyFont.relative(10, weight: .semibold))
                 .foregroundColor(tint)
                 .accessibilityLabel(Self.label(.sent))
         case .delivered:
@@ -68,7 +68,7 @@ struct BubbleDeliveryCheck: View, Equatable {
                 .accessibilityLabel(Self.label(.read))
         case .failed:
             Image(systemName: "exclamationmark.circle.fill")
-                .font(.system(size: 10, weight: .bold))
+                .font(MeeshyFont.relative(10, weight: .bold))
                 .foregroundColor(MeeshyColors.error)
                 .accessibilityLabel(Self.label(.failed))
         }
@@ -76,8 +76,8 @@ struct BubbleDeliveryCheck: View, Equatable {
 
     private func doubleCheck(weight: Font.Weight, size: CGFloat, color: Color, width: CGFloat) -> some View {
         ZStack(alignment: .leading) {
-            Image(systemName: "checkmark").font(.system(size: size, weight: weight))
-            Image(systemName: "checkmark").font(.system(size: size, weight: weight)).offset(x: 4)
+            Image(systemName: "checkmark").font(MeeshyFont.relative(size, weight: weight))
+            Image(systemName: "checkmark").font(MeeshyFont.relative(size, weight: weight)).offset(x: 4)
         }
         .foregroundColor(color)
         .frame(width: width)

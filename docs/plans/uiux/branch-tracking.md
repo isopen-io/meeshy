@@ -14,6 +14,19 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 127i, 2026-07-03)** — piste iOS indépendante (suffixe `i`).
+> - **127i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `7f187ca8`)** :
+>   Dynamic Type de `BubbleDeliveryCheck` (glyphe unique de statut de distribution des pieds de bulle,
+>   inline avec l'horodatage de la meta-row). **8/8** `.font(.system(size:))` → `MeeshyFont.relative`
+>   (hourglass, 2×clock, slow, checkmark envoyé, échec, 2×checkmark du `doubleCheck`) → les glyphes de
+>   statut **scalent avec le texte** sous Dynamic Type. **0 gel** : indicateurs inline non bornés par un
+>   cadre fixe (le `.frame(width:)` du `doubleCheck` réserve la largeur mais ne rogne pas — pas de
+>   `.clipped()`). Les 7 `.accessibilityLabel` déjà en place. 1 fichier, 0 logique, 0 test/clé i18n neuve.
+>   1 PR iOS ouverte (#1391 _calls_, disjointe) → 0 contention. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `BubbleDeliveryCheck` Dynamic Type SOLDÉ** : ne plus reprendre (8 glyphes de statut → `relative`).
+> - **Base de départ 128i : `main` HEAD**. Reste le gros lot risqué `StoryViewerView+Content` (⚠️ i18n +
+>   piège `@State private` cross-file). Sinon : passe state-of-the-art (hexes inline vs tokens).
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 126i, 2026-07-03)** — piste iOS indépendante (suffixe `i`).
 > - **126i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `3fa30792`)** :
 >   Dynamic Type + a11y de `ConversationView+Composer` (bandeaux réponse/édition, previews & tuiles
