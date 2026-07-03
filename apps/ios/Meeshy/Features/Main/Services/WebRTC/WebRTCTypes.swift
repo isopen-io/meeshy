@@ -432,6 +432,36 @@ nonisolated enum CallReliabilityPolicy {
         return min(heuristic, bwe)
     }
 
+    /// Quality distribution for the analytics payload — PURE: the currently
+    /// open level window (since the last level change) is folded in
+    /// virtually, the accumulator is never mutated. This lets the same code
+    /// serve the periodic in-call snapshots AND the final teardown emit.
+    /// `critical` merges into `poor` (the payload contract has 4 buckets);
+    /// an empty call (never connected / no samples) reads as fully excellent;
+    /// clock skew (window start in the future) contributes zero, never
+    /// negative time.
+    static func qualityDistribution(
+        accumulatedSeconds: [VideoQualityLevel: Double],
+        openWindowLevel: VideoQualityLevel?,
+        openWindowSince: Date?,
+        now: Date
+    ) -> [String: Double] {
+        var seconds = accumulatedSeconds
+        if let level = openWindowLevel, let since = openWindowSince {
+            seconds[level, default: 0] += max(0, now.timeIntervalSince(since))
+        }
+        let total = seconds.values.reduce(0, +)
+        guard total > 0 else {
+            return ["excellent": 1.0, "good": 0.0, "fair": 0.0, "poor": 0.0]
+        }
+        return [
+            "excellent": (seconds[.excellent] ?? 0) / total,
+            "good": (seconds[.good] ?? 0) / total,
+            "fair": (seconds[.fair] ?? 0) / total,
+            "poor": ((seconds[.poor] ?? 0) + (seconds[.critical] ?? 0)) / total
+        ]
+    }
+
     /// Ring/negotiation split for the end-of-call analytics. `setupTimeMs`
     /// (initiated → connected) includes the HUMAN ringing time — 23 s observed
     /// in prod, useless for spotting a WebRTC setup regression.
@@ -836,6 +866,12 @@ nonisolated enum QualityThresholds {
     /// 15s lost was too aggressive (false-positive reconnects). SOTA matches
     /// WhatsApp/Telegram with 10s/30s. Reference §5.12.
     static let heartbeatIntervalSeconds: TimeInterval = 10.0
+
+    /// Cadence des snapshots analytics « in_progress » pendant un appel
+    /// connecté. 60 s = 1-2 req/min avec l'émission finale — bien sous le
+    /// rate limit gateway CALL_ANALYTICS (10/min) ; un kill de l'app perd au
+    /// pire la dernière minute de télémétrie.
+    static let analyticsSnapshotIntervalSeconds: TimeInterval = 60.0
 
     /// 3 missed beats (~30s) marks heartbeat as lost. After this, FSM
     /// transitions active → reconnecting.

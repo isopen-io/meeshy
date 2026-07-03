@@ -385,6 +385,9 @@ final class CallManager: ObservableObject {
     private var analyticsQualitySeconds: [VideoQualityLevel: Double] = [:]
     private var analyticsLastQualityDate: Date?
     private var analyticsCurrentLevel: VideoQualityLevel?
+    /// Snapshots analytics périodiques (60 s, endReason "in_progress") — un
+    /// kill de l'app en background ne perd plus la télémétrie de l'appel.
+    private var analyticsSnapshotTask: Task<Void, Never>?
     private var analyticsRttSum: Double = 0
     private var analyticsSampleCount: Int = 0
     private var analyticsMaxPacketLoss: Double = 0
@@ -2362,6 +2365,11 @@ final class CallManager: ObservableObject {
             analyticsConnectedDate = callStartDate
             callDuration = 0
         }
+        // Snapshots analytics périodiques — idempotent (les reconnexions
+        // repassent ici sans re-armer) ; annulé dans endCallInternal.
+        if let callId = currentCallId {
+            startAnalyticsSnapshots(callId: callId)
+        }
         // Hygiène timer — l'appel est établi : le cutoff "pas de réponse" n'a
         // plus d'objet (son fire-site ne couvre que .ringing/.offering, mais
         // autant ne pas laisser une task morte armée).
@@ -2746,30 +2754,48 @@ final class CallManager: ObservableObject {
 
     private func emitCallAnalyticsIfNeeded(reason: CallEndReason) {
         guard let callId = currentCallId else { return }
+        // Émission finale — le snapshot est PUR (la fenêtre de niveau ouverte
+        // est repliée virtuellement par qualityDistribution, plus de flush
+        // mutatif ici) ; le gateway écrase le dernier snapshot in_progress
+        // avec la raison terminale réelle.
+        emitCallAnalyticsSnapshot(callId: callId, endReasonLabel: String(describing: reason))
 
-        // Flush the final quality-level window into the distribution table.
-        let now = Date()
-        if let prevDate = analyticsLastQualityDate, let prevLevel = analyticsCurrentLevel {
-            analyticsQualitySeconds[prevLevel, default: 0] += now.timeIntervalSince(prevDate)
-        }
+        // Reset accumulators so a subsequent call starts clean.
+        analyticsCallInitiatedDate = nil
+        analyticsNegotiationStartDate = nil
+        analyticsConnectedDate = nil
+        analyticsNetworkTransitions = 0
+        analyticsQualitySeconds = [:]
+        analyticsLastQualityDate = nil
+        analyticsCurrentLevel = nil
+        analyticsRttSum = 0
+        analyticsSampleCount = 0
+        analyticsMaxPacketLoss = 0
+        analyticsPacketLossSum = 0
+        analyticsEffectsUsed = []
+        analyticsVideoFiltersUsed = false
+    }
 
+    /// Snapshot analytics NON destructif — payload complet construit depuis
+    /// les accumulateurs sans les muter (la fenêtre de niveau ouverte est
+    /// repliée virtuellement par `CallReliabilityPolicy.qualityDistribution`).
+    /// Sert (a) aux émissions périodiques `in_progress` pendant l'appel et
+    /// (b) à l'émission finale de teardown. Le gateway persiste par
+    /// updateMany : chaque envoi écrase le précédent — un kill de l'app en
+    /// background (vécu 2026-07-03 : row analytics perdue après 29 min
+    /// d'appel) ne perd plus que la dernière fenêtre.
+    private func emitCallAnalyticsSnapshot(callId: String, endReasonLabel: String) {
         let setupMetrics = CallReliabilityPolicy.callSetupMetrics(
             initiatedAt: analyticsCallInitiatedDate,
             negotiationStartAt: analyticsNegotiationStartDate,
             connectedAt: analyticsConnectedDate
         )
-
-        let totalSecs = analyticsQualitySeconds.values.reduce(0, +)
-        let qualityDistribution: [String: Double]
-        if totalSecs > 0 {
-            let e = (analyticsQualitySeconds[.excellent] ?? 0) / totalSecs
-            let g = (analyticsQualitySeconds[.good] ?? 0) / totalSecs
-            let f = (analyticsQualitySeconds[.fair] ?? 0) / totalSecs
-            let p = ((analyticsQualitySeconds[.poor] ?? 0) + (analyticsQualitySeconds[.critical] ?? 0)) / totalSecs
-            qualityDistribution = ["excellent": e, "good": g, "fair": f, "poor": p]
-        } else {
-            qualityDistribution = ["excellent": 1.0, "good": 0.0, "fair": 0.0, "poor": 0.0]
-        }
+        let qualityDistribution = CallReliabilityPolicy.qualityDistribution(
+            accumulatedSeconds: analyticsQualitySeconds,
+            openWindowLevel: analyticsCurrentLevel,
+            openWindowSince: analyticsLastQualityDate,
+            now: Date()
+        )
 
         let averageRtt = analyticsSampleCount > 0
             ? analyticsRttSum / Double(analyticsSampleCount) : 0
@@ -2795,24 +2821,29 @@ final class CallManager: ObservableObject {
             "platform":            "ios",
             "deviceModel":         UIDevice.current.model,
             "isVideo":             isVideoEnabled,
-            "endReason":           String(describing: reason)
+            "endReason":           endReasonLabel
         ]
         MessageSocketManager.shared.emitCallAnalytics(callId: callId, payload: payload)
+    }
 
-        // Reset accumulators so a subsequent call starts clean.
-        analyticsCallInitiatedDate = nil
-        analyticsNegotiationStartDate = nil
-        analyticsConnectedDate = nil
-        analyticsNetworkTransitions = 0
-        analyticsQualitySeconds = [:]
-        analyticsLastQualityDate = nil
-        analyticsCurrentLevel = nil
-        analyticsRttSum = 0
-        analyticsSampleCount = 0
-        analyticsMaxPacketLoss = 0
-        analyticsPacketLossSum = 0
-        analyticsEffectsUsed = []
-        analyticsVideoFiltersUsed = false
+    /// Démarre les snapshots analytics périodiques (60 s) pour l'appel
+    /// courant. Idempotent (une seule task par appel — les reconnexions
+    /// mid-call repassent par connected sans re-armer). Annulé au teardown.
+    private func startAnalyticsSnapshots(callId: String) {
+        guard analyticsSnapshotTask == nil else { return }
+        analyticsSnapshotTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(QualityThresholds.analyticsSnapshotIntervalSeconds))
+                guard !Task.isCancelled, let self else { return }
+                // Un autre appel a remplacé celui-ci sans passer par le cancel
+                // (défensif) : cette task ne parle plus pour personne.
+                guard self.currentCallId == callId else { return }
+                // Pendant une reconnexion, les stats sont gelées (RTT/loss à 0
+                // liraient "excellent") — sauter la fenêtre, pas la task.
+                guard case .connected = self.callState else { continue }
+                self.emitCallAnalyticsSnapshot(callId: callId, endReasonLabel: "in_progress")
+            }
+        }
     }
 
     /// Audit 2026-07-02 (bug 1) — shared failure teardown. `endCallInternal`
@@ -2893,6 +2924,8 @@ final class CallManager: ObservableObject {
         CallManager.callKitDidActivateFired = false
         voipFreshnessTask?.cancel()
         voipFreshnessTask = nil
+        analyticsSnapshotTask?.cancel()
+        analyticsSnapshotTask = nil
         isRemoteQualityDegraded = false
         isSignalingDegraded = false
         pendingRemoteOffer = nil

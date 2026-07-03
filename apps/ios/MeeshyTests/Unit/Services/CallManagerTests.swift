@@ -3786,13 +3786,24 @@ final class CallManagerAnalyticsTests: XCTestCase {
 
     /// The `emitCallAnalytics` socket call must pass `callId` in the payload so the
     /// gateway can associate the analytics with the correct call document.
+    /// 2026-07-03 — the emit moved into `emitCallAnalyticsSnapshot` (shared by
+    /// the periodic in_progress snapshots and the final teardown emit); the
+    /// invariant survives through the delegation chain.
     func test_emitCallAnalyticsIfNeeded_passesCallIdToSocket() throws {
         let source = try callManagerSource()
         guard let body = emitAnalyticsBody(in: source) else {
             XCTFail("emitCallAnalyticsIfNeeded not found in CallManager.swift"); return
         }
         XCTAssertTrue(
-            body.contains("emitCallAnalytics(callId: callId"),
+            body.contains("emitCallAnalyticsSnapshot(callId: callId"),
+            "The final emit must forward the current callId to the shared snapshot builder."
+        )
+        guard let snapshotRange = source.range(of: "private func emitCallAnalyticsSnapshot(") else {
+            XCTFail("emitCallAnalyticsSnapshot not found in CallManager.swift"); return
+        }
+        let snapshotBody = String(source[snapshotRange.lowerBound...].prefix(2600))
+        XCTAssertTrue(
+            snapshotBody.contains("emitCallAnalytics(callId: callId"),
             "Analytics must be emitted via emitCallAnalytics(callId:payload:) with the " +
             "current callId so the gateway can correlate them with the call record."
         )
@@ -4607,6 +4618,88 @@ final class CallSetupMetricsTests: XCTestCase {
         XCTAssertTrue(
             source.contains("analyticsNegotiationStartDate = nil"),
             "The negotiation anchor must be reset per call"
+        )
+    }
+}
+
+// MARK: - Analytics quality distribution (pure) + periodic snapshots
+
+/// L'appel réel du 2026-07-03 (29 min 40) a perdu la row analytics du côté
+/// dont l'app a été TUÉE en background avant l'émission de teardown. Les
+/// snapshots périodiques « in_progress » (60 s, écrasés côté gateway par
+/// updateMany) garantissent qu'un kill ne perd au pire que la dernière
+/// minute. La distribution est calculée PUREMENT (fenêtre de niveau ouverte
+/// incluse virtuellement, aucune mutation des accumulateurs).
+@MainActor
+final class CallAnalyticsSnapshotTests: XCTestCase {
+
+    private let t0 = Date(timeIntervalSince1970: 2_000_000)
+
+    func test_distribution_includesOpenWindow_withoutMutation() {
+        let accumulated: [VideoQualityLevel: Double] = [.excellent: 60]
+        let dist = CallReliabilityPolicy.qualityDistribution(
+            accumulatedSeconds: accumulated,
+            openWindowLevel: .poor,
+            openWindowSince: t0,
+            now: t0.addingTimeInterval(40)
+        )
+        XCTAssertEqual(dist["excellent"] ?? 0, 0.6, accuracy: 0.001)
+        XCTAssertEqual(dist["poor"] ?? 0, 0.4, accuracy: 0.001)
+        XCTAssertEqual(accumulated[.excellent], 60, "the input accumulator must never be mutated")
+    }
+
+    func test_distribution_mergesCriticalIntoPoor() {
+        let dist = CallReliabilityPolicy.qualityDistribution(
+            accumulatedSeconds: [.poor: 10, .critical: 10, .good: 80],
+            openWindowLevel: nil, openWindowSince: nil, now: t0
+        )
+        XCTAssertEqual(dist["poor"] ?? 0, 0.2, accuracy: 0.001)
+        XCTAssertEqual(dist["good"] ?? 0, 0.8, accuracy: 0.001)
+    }
+
+    func test_distribution_emptyCall_defaultsToExcellent() {
+        let dist = CallReliabilityPolicy.qualityDistribution(
+            accumulatedSeconds: [:], openWindowLevel: nil, openWindowSince: nil, now: t0
+        )
+        XCTAssertEqual(dist["excellent"], 1.0)
+    }
+
+    func test_distribution_clockSkew_neverNegative() {
+        let dist = CallReliabilityPolicy.qualityDistribution(
+            accumulatedSeconds: [.excellent: 10],
+            openWindowLevel: .poor,
+            openWindowSince: t0.addingTimeInterval(100),   // "since" dans le futur
+            now: t0
+        )
+        XCTAssertEqual(dist["excellent"] ?? 0, 1.0, accuracy: 0.001)
+    }
+
+    /// Câblage : snapshots périodiques armés à connected, annulés au teardown,
+    /// label « in_progress » ; l'émission finale ne mute plus les accumulateurs.
+    func test_wiring_periodicSnapshots_andPureFinalEmit() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+
+        XCTAssertTrue(
+            source.contains("analyticsSnapshotTask") && source.contains("\"in_progress\""),
+            "CallManager must run periodic in_progress analytics snapshots so an app kill loses at most the last window"
+        )
+        XCTAssertTrue(
+            source.contains("analyticsSnapshotTask?.cancel()"),
+            "The periodic snapshot task must be cancelled at call teardown"
+        )
+        guard let fnRange = source.range(of: "private func emitCallAnalyticsIfNeeded(") else {
+            XCTFail("emitCallAnalyticsIfNeeded not found"); return
+        }
+        let body = String(source[fnRange.lowerBound...].prefix(900))
+        XCTAssertFalse(
+            body.contains("analyticsQualitySeconds[prevLevel, default: 0] +="),
+            "The final emit must not mutate the quality accumulators — the open window is folded in PURELY by CallReliabilityPolicy.qualityDistribution"
         )
     }
 }
