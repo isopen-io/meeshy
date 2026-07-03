@@ -326,6 +326,18 @@ final class CodecPreferencesTests: XCTestCase {
         )
     }
 
+    func test_audioCodecFloorBitrateBps_isBelowAdaptationFloor() {
+        // The SDP codec floor must be strictly below the adaptation algorithm's floor
+        // (minBitrate). This allows the encoder to survive extreme network conditions
+        // even after the adaptation algorithm has already descended to its own floor.
+        XCTAssertLessThan(
+            QualityThresholds.audioCodecFloorBitrateBps,
+            QualityThresholds.minBitrate,
+            "SDP codec floor (\(QualityThresholds.audioCodecFloorBitrateBps)) must be < " +
+            "adaptation floor (\(QualityThresholds.minBitrate))"
+        )
+    }
+
     func test_p2pClient_removesAudioRedundancyMunging() throws {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

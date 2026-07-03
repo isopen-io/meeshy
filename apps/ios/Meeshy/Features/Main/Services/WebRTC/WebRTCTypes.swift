@@ -736,8 +736,6 @@ nonisolated enum QualityThresholds {
     /// SDP-level absolute codec minimum set in `RTCRtpEncodingParameters`.
     /// Lower than `minBitrate` so the encoder can survive an extreme network
     /// event even after the adaptation algorithm has already reduced to 24 kbps.
-    /// Source of truth for both `P2PWebRTCClient` audio encoding and
-    /// `AudioConfig.default.minBitrateBps` in `CallMediaConfig`.
     static let audioCodecFloorBitrateBps: Int = 16_000
 
     // Audit P2-iOS-12 — bumped from 3s to 5s. RTCPeerConnection.statistics

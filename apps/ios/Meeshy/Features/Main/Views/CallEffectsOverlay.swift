@@ -25,29 +25,40 @@ struct CallEffectsOverlay: View {
     var body: some View {
         Group {
             if isExpanded {
-                ZStack(alignment: .bottom) {
-                    // Backdrop
-                    Color.black.opacity(0.25)
-                        .ignoresSafeArea()
-                        .onTapGesture { dismiss() }
+                GeometryReader { proxy in
+                    // Panel height caps at 360pt on tall screens but shrinks on
+                    // shorter/landscape viewports (e.g. iPhone SE landscape)
+                    // instead of clipping the video-filters content.
+                    let panelMaxHeight = min(360, proxy.size.height * 0.45)
 
-                    // Content
-                    VStack(spacing: 12) {
-                        if let panel = activePanel {
-                            ScrollView(.vertical, showsIndicators: false) {
-                                switch panel {
-                                case .videoFilters:
-                                    VideoFiltersPanel()
+                    ZStack(alignment: .bottom) {
+                        // Backdrop
+                        Color.black.opacity(0.25)
+                            .ignoresSafeArea()
+                            .onTapGesture { dismiss() }
+                            .accessibilityAddTraits(.isButton)
+                            .accessibilityLabel(String(localized: "call.effects.backdrop.label", defaultValue: "Fermer le panneau", bundle: .main))
+                            .accessibilityHint(String(localized: "call.effects.backdrop.hint", defaultValue: "Ferme le panneau d'effets", bundle: .main))
+
+                        // Content
+                        VStack(spacing: 12) {
+                            if let panel = activePanel {
+                                ScrollView(.vertical, showsIndicators: false) {
+                                    switch panel {
+                                    case .videoFilters:
+                                        VideoFiltersPanel()
+                                    }
                                 }
+                                .frame(maxHeight: panelMaxHeight)
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
                             }
-                            .frame(maxHeight: 360)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-                        }
 
-                        secondaryToolbar
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                            secondaryToolbar
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
+                        .padding(.bottom, 130)
                     }
-                    .padding(.bottom, 130)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 }
                 // Filtres = seul panneau depuis le retrait des effets vocaux :
                 // l'ouvrir directement à chaque présentation, au lieu d'exiger
@@ -61,6 +72,11 @@ struct CallEffectsOverlay: View {
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isExpanded)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: activePanel)
+        // Pinned dark like sibling call chrome (CallWaitingBannerView,
+        // FloatingCallPillView) — this overlay currently only mounts inside
+        // CallView's forced-dark subtree, but pinning here keeps it correct
+        // if it's ever presented standalone.
+        .environment(\.colorScheme, .dark)
     }
 
     // MARK: - Secondary Toolbar
@@ -117,6 +133,7 @@ struct CallEffectsOverlay: View {
             }
         }
         .pressable()
+        .accessibilityLabel(label)
         .accessibilityValue(isActive
             ? String(localized: "accessibility.state.on", defaultValue: "Activé", bundle: .main)
             : String(localized: "accessibility.state.off", defaultValue: "Désactivé", bundle: .main))

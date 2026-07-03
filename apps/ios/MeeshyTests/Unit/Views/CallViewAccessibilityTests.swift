@@ -288,4 +288,42 @@ final class CallViewAccessibilityTests: XCTestCase {
             "colour alone does not convey the destructive action to VoiceOver users."
         )
     }
+
+    // MARK: - HIG 44×44 minimum hit targets
+
+    func test_pipFrameButton_hitTargetMeetsHIGMinimum() throws {
+        let source = try callViewSource()
+        guard let range = source.range(of: "private func pipFrameButton") else {
+            XCTFail("pipFrameButton must exist")
+            return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 900, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[range.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains(".frame(width: 44, height: 44)"),
+            "pipFrameButton's visual glyph is 28pt (too small for the 100×140 self-view tile), " +
+            "but its tappable area must still meet the HIG 44×44 minimum via an invisible " +
+            "expanded frame + contentShape."
+        )
+        XCTAssertTrue(
+            body.contains(".contentShape(Rectangle())"),
+            "pipFrameButton must apply .contentShape(Rectangle()) so the entire expanded " +
+            "44×44 frame is tappable, not just the visible 28pt circle."
+        )
+    }
+
+    func test_minimizeChevron_hitTargetMeetsHIGMinimum() throws {
+        let source = try callViewSource()
+        guard let range = source.range(of: "callControlGlass(diameter: 40, isActive: false, tint: .white)") else {
+            XCTFail("Minimize chevron's 40pt glass circle must exist")
+            return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 300, limitedBy: source.endIndex) ?? source.endIndex
+        let vicinity = String(source[range.lowerBound ..< end])
+        XCTAssertTrue(
+            vicinity.contains(".frame(width: 44, height: 44)") && vicinity.contains(".contentShape(Rectangle())"),
+            "The minimize chevron's visual glass circle is 40pt, but its tappable area must " +
+            "still meet the HIG 44×44 minimum via an invisible expanded frame + contentShape."
+        )
+    }
 }

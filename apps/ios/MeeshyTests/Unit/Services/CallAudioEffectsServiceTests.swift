@@ -234,6 +234,23 @@ final class CallAudioEffectsServiceTests: XCTestCase {
         XCTAssertEqual(result.format.channelCount, buffer.format.channelCount)
     }
 
+    // MARK: - Performance Timing (guarded by stateLock — see CallAudioEffectsService.swift)
+
+    func test_processBuffer_recordsLastProcessingTimeMs() {
+        let sut = makeSUT()
+        XCTAssertNil(sut.lastProcessingTimeMs)
+        _ = sut.processAudioBuffer(makeBuffer())
+        XCTAssertNotNil(sut.lastProcessingTimeMs)
+    }
+
+    func test_reset_clearsLastProcessingTimeMs() {
+        let sut = makeSUT()
+        _ = sut.processAudioBuffer(makeBuffer())
+        XCTAssertNotNil(sut.lastProcessingTimeMs)
+        sut.reset()
+        XCTAssertNil(sut.lastProcessingTimeMs)
+    }
+
     // MARK: - Auto-Degradation
 
     func test_autoDegradation_triggersAfterConsecutiveOverBudget() throws {

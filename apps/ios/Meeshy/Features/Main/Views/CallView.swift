@@ -199,6 +199,10 @@ struct CallView: View {
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(.white)
                                 .callControlGlass(diameter: 40, isActive: false, tint: .white)
+                                // Visual glass circle stays 40pt (doctrine 82i), but the
+                                // tappable area must meet the HIG 44×44 minimum.
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
                         }
                         .accessibilityLabel(String(localized: "call.minimize", defaultValue: "Reduire l'appel", bundle: .main))
                         .accessibilityHint(String(localized: "call.minimize.hint", defaultValue: "Garde l'appel en cours dans une banniere flottante", bundle: .main))
@@ -1069,6 +1073,11 @@ struct CallView: View {
                 .frame(width: 28, height: 28)
                 .background(Color.black.opacity(0.45), in: Circle())
                 .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 0.5))
+                // Visual glyph stays a compact 28pt (the 100×140 tile has no
+                // room for a 44pt circle), but the hit target itself must meet
+                // the HIG 44×44 minimum — expand invisibly via contentShape.
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .accessibilityLabel(label)
         .optionalAccessibilityHint(hint)
