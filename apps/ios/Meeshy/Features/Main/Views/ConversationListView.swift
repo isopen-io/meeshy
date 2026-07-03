@@ -151,14 +151,19 @@ struct ConversationListView: View {
     /// pour l'annuler si une nouvelle ouverture survient avant la fin du zoom-out,
     /// sinon la purge en vol effacerait le menu qui vient de se rouvrir.
     @State var contextMenuDismissWork: DispatchWorkItem? = nil
-    /// Tracks which conversation row has isPressed = true (scale animation active).
-    /// When menu closes, this resets to nil and rows use .onChange to reset isPressed.
+    /// Id de la conversation dont la ligne est en état "pressée" (scale 0.90).
+    /// Chaque ligne reçoit le booléen dérivé `isActivelyPressed` — état par
+    /// ligne 100 % piloté d'ici, aucune machinerie onChange côté ligne.
     /// Pas `private` : lu par les fichiers d'extension +Overlays/+Rows (un @State
     /// private est inaccessible depuis un fichier extension frère — cf. CLAUDE.md).
     @State var activelyPressedConversationId: String? = nil
-    /// Dynamic preview scale during upward drag (1.0 = full size, 0.0 = hidden)
+    /// Scale de la carte d'aperçu de l'overlay (1.0 = dépliée, 0 = repliée via
+    /// le drag vers le haut sur la carte — `previewCollapseGesture`, +Overlays).
+    /// Muté uniquement quand l'overlay est ouvert ; les lignes ne le reçoivent
+    /// plus (gate Equatable intact pendant le geste).
     @State var previewScale: CGFloat = 1.0
-    /// Upward drag offset (negative = upward, used to shrink preview and grow menu)
+    /// Offset rubber-band de la carte d'aperçu pendant le drag vers le bas
+    /// (> 110 pt au lâcher = fermeture du menu). Voir `previewCollapseGesture`.
     @State var dragOffsetY: CGFloat = 0
 
     /// Renommage : conversation cible + texte en cours d'édition (action
@@ -166,7 +171,12 @@ struct ConversationListView: View {
     @State var renameTarget: Conversation? = nil
     @State var renameText: String = ""
 
-    // Drag & Drop state
+    // Drag & Drop state — infra DORMANTE depuis le retrait de `.onDrag`
+    // (135af8f2 : il capturait le long-press du menu custom). Conservée comme
+    // point de reconnexion (poignée dédiée / mode édition futur) : le
+    // `SectionDropDelegate` + `handleDrop` restent câblés sur les sections,
+    // coût runtime nul tant que rien ne pose `draggingConversation`.
+    // Le déplacement utilisateur passe par « Déplacer vers » dans le menu.
     @State private var draggingConversation: Conversation? = nil
     @State private var dropTargetSection: String? = nil
 
@@ -332,12 +342,6 @@ struct ConversationListView: View {
                     onSelect(conversation)
                 }
             },
-            onDragStart: {
-                draggingConversation = conversation
-                // Close menu when drag-to-reorder starts
-                activelyPressedConversationId = nil
-                HapticFeedback.medium()
-            },
             onLoadPreview: {
                 await conversationViewModel.loadPreviewMessages(for: conversation.id)
             },
@@ -352,16 +356,13 @@ struct ConversationListView: View {
                 contextMenuDismissWork = nil
                 contextMenuAppeared = false
                 contextMenuConversation = conversation
-                // P7-XX: Track which row has scale animation active
+                // Réouverture rapide : l'overlay est encore monté (pas de
+                // nouveau `.onAppear`), l'aperçu doit donc être re-déplié ici.
+                previewScale = 1.0
+                dragOffsetY = 0
                 activelyPressedConversationId = conversation.id
             },
-            onMenuDismissed: {
-                activelyPressedConversationId = nil
-            },
-            activelyPressedConversationId: activelyPressedConversationId,
-            draggingConversationId: draggingConversation?.id,
-            previewScale: $previewScale,
-            dragOffsetY: $dragOffsetY
+            isActivelyPressed: activelyPressedConversationId == conversation.id
         )
         .equatable()
     }
