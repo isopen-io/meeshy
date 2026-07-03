@@ -46,6 +46,7 @@ function makePrisma(overrides?: {
     affiliateToken: {
       findUnique: jest.fn(),
       update: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       findMany: jest.fn().mockResolvedValue([]),
       ...overrides?.affiliateToken,
     },
@@ -261,6 +262,60 @@ describe('AffiliateTrackingService.convertAffiliateVisit', () => {
     expect(updateCall.data.currentUses).toEqual({ increment: 1 });
     // Must NOT pass a pre-computed number (which is what loses updates).
     expect(typeof updateCall.data.currentUses).not.toBe('number');
+  });
+
+  it('reserves a capped slot atomically before creating the relation', async () => {
+    // Cap TOCTOU guard: for a capped token, the slot must be reserved via a
+    // conditional `updateMany({ where: { currentUses: { lt: maxUses } } })` — not
+    // a plain increment — so two concurrent conversions can never both push
+    // currentUses past maxUses. Reservation happens BEFORE relation creation.
+    const prisma = makePrisma({
+      affiliateToken: {
+        findUnique: jest.fn().mockResolvedValue(makeToken({ maxUses: 5, currentUses: 4 })),
+      },
+    });
+    const result = await AffiliateTrackingService.convertAffiliateVisit(prisma, token, userId);
+
+    expect(result.success).toBe(true);
+    expect(prisma.affiliateToken.updateMany).toHaveBeenCalledWith({
+      where: { id: 'tok_001', currentUses: { lt: 5 } },
+      data: { currentUses: { increment: 1 } },
+    });
+    // Capped path must NOT use the unconditional `update` (that would reopen the TOCTOU).
+    expect(prisma.affiliateToken.update).not.toHaveBeenCalled();
+    expect(prisma.affiliateRelation.create).toHaveBeenCalled();
+  });
+
+  it('rejects the race-loser when the cap is hit in the reservation window', async () => {
+    // The fast-path check passed (currentUses read below maxUses) but a concurrent
+    // conversion filled the last slot first, so the conditional reservation matches
+    // zero rows. The loser must be rejected WITHOUT creating a relation.
+    const prisma = makePrisma({
+      affiliateToken: {
+        findUnique: jest.fn().mockResolvedValue(makeToken({ maxUses: 5, currentUses: 4 })),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+    });
+    const result = await AffiliateTrackingService.convertAffiliateVisit(prisma, token, userId);
+
+    expect(result).toEqual({ success: false, error: "Limite d'utilisation atteinte" });
+    expect(prisma.affiliateRelation.create).not.toHaveBeenCalled();
+    expect(prisma.friendRequest.create).not.toHaveBeenCalled();
+  });
+
+  it('uses an unconditional atomic increment for an uncapped token', async () => {
+    // maxUses === null → no cap to race on → plain `{ increment: 1 }` (still atomic,
+    // never a JS-computed value) and never the conditional updateMany.
+    const prisma = makePrisma({
+      affiliateToken: { findUnique: jest.fn().mockResolvedValue(makeToken({ maxUses: null })) },
+    });
+    await AffiliateTrackingService.convertAffiliateVisit(prisma, token, userId);
+
+    expect(prisma.affiliateToken.update).toHaveBeenCalledWith({
+      where: { id: 'tok_001' },
+      data: { currentUses: { increment: 1 } },
+    });
+    expect(prisma.affiliateToken.updateMany).not.toHaveBeenCalled();
   });
 
   it('ignores friendRequest creation errors (already exists)', async () => {
