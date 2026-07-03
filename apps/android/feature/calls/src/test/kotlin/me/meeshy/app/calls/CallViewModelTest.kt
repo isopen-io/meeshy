@@ -16,6 +16,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.model.call.CallCue
 import me.meeshy.sdk.model.call.CallEndReason
+import me.meeshy.sdk.model.call.CallEndedSignal
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateAck
 import me.meeshy.sdk.model.call.CallInitiateResult
@@ -37,7 +38,7 @@ class CallViewModelTest {
     private val dispatcher = UnconfinedTestDispatcher()
     private val events = MutableSharedFlow<CallEvent>(extraBufferCapacity = 64)
     private val incomingOffers = MutableSharedFlow<WaitingCall>(extraBufferCapacity = 16)
-    private val endedCalls = MutableSharedFlow<String>(extraBufferCapacity = 16)
+    private val endedCalls = MutableSharedFlow<CallEndedSignal>(extraBufferCapacity = 16)
     private val signalManager: CallSignalManager = mockk(relaxed = true)
 
     /** Test-driven auto-dismiss countdown: emit once to fire the 15 s timeout. */
@@ -859,33 +860,74 @@ class CallViewModelTest {
         incomingOffers.emit(offer(callId = "call-77"))
         assertThat(vm.state.value.waitingBanner).isNotNull()
 
-        endedCalls.emit("call-77") // the waiting caller hangs up
+        endedCalls.emit(CallEndedSignal("call-77", CallEvent.RemoteHangUp)) // the waiting caller hangs up
 
         assertThat(vm.state.value.waitingBanner).isNull()
         // The caller already ended it — nothing to end on the wire, and the
-        // active call is untouched.
+        // active call is untouched (the bug: it used to be torn down by the
+        // waiting call's teardown fanned out to this busy user's rooms).
         verify(exactly = 0) { signalManager.emitEnd(any()) }
         assertThat(vm.state.value.status).isEqualTo(CallStatus.INCOMING)
     }
 
     @Test
-    fun `an ended id that is not the waiting call leaves the banner up`() = runTest {
-        val vm = vm()
-        vm.start(incomingAudio) // active call call-9
+    fun `the active call's own remote end tears it down while a waiting banner stays up`() = runTest {
+        val vm = vm().connect() // active connected call, id call-9
         incomingOffers.emit(offer(callId = "call-77"))
-
-        endedCalls.emit("call-9") // the active call's own teardown id
-
         assertThat(vm.state.value.waitingBanner).isNotNull()
+
+        endedCalls.emit(CallEndedSignal("call-9", CallEvent.RemoteHangUp)) // the active call's own end
+
+        val s = vm.state.value
+        assertThat(s.status).isEqualTo(CallStatus.ENDED)
+        assertThat(s.endReason).isEqualTo(CallEndReason.Remote)
+        // The waiting call is untouched — it is a different call.
+        assertThat(s.waitingBanner).isNotNull()
     }
 
     @Test
-    fun `an ended id with no waiting banner is inert`() = runTest {
+    fun `the active call's own remote end tears it down when no banner is present`() = runTest {
+        val vm = vm().connect() // active connected call, id call-9
+
+        endedCalls.emit(CallEndedSignal("call-9", CallEvent.RemoteHangUp))
+
+        val s = vm.state.value
+        assertThat(s.status).isEqualTo(CallStatus.ENDED)
+        assertThat(s.endReason).isEqualTo(CallEndReason.Remote)
+    }
+
+    @Test
+    fun `a missed teardown for the active ringing call ends it as missed`() = runTest {
         val vm = vm()
-        vm.start(incomingAudio)
+        vm.start(incomingAudio) // ringing incoming, id call-9
 
-        endedCalls.emit("call-77")
+        endedCalls.emit(CallEndedSignal("call-9", CallEvent.RingTimeout))
 
+        val s = vm.state.value
+        assertThat(s.status).isEqualTo(CallStatus.ENDED)
+        assertThat(s.endReason).isEqualTo(CallEndReason.Missed)
+    }
+
+    @Test
+    fun `an ended id matching neither the active nor a waiting call is inert`() = runTest {
+        val vm = vm().connect() // active connected call, id call-9
+        incomingOffers.emit(offer(callId = "call-77"))
+
+        endedCalls.emit(CallEndedSignal("call-stranger", CallEvent.RemoteHangUp))
+
+        val s = vm.state.value
+        assertThat(s.status).isEqualTo(CallStatus.CONNECTED)
+        assertThat(s.waitingBanner).isNotNull()
+        verify(exactly = 0) { signalManager.emitEnd(any()) }
+    }
+
+    @Test
+    fun `an ended id with no active call and no waiting banner is inert`() = runTest {
+        val vm = vm()
+
+        endedCalls.emit(CallEndedSignal("call-77", CallEvent.RemoteHangUp))
+
+        assertThat(vm.state.value.status).isEqualTo(CallStatus.IDLE)
         assertThat(vm.state.value.waitingBanner).isNull()
         verify(exactly = 0) { signalManager.emitEnd(any()) }
     }
@@ -896,7 +938,7 @@ class CallViewModelTest {
         vm.start(incomingAudio) // active call call-9
         incomingOffers.emit(offer(callId = "call-77"))
 
-        endedCalls.emit("call-77") // dismissed by the remote end...
+        endedCalls.emit(CallEndedSignal("call-77", CallEvent.RemoteHangUp)) // dismissed by the remote end...
         waitingTimerFlow.emit(Unit) // ...so a later timer fire must not re-end it
 
         verify(exactly = 0) { signalManager.emitEnd(any()) }

@@ -7,6 +7,7 @@ import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
+import me.meeshy.sdk.model.call.CallEndedSignal
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateResult
 import me.meeshy.sdk.model.call.CallQualityReport
@@ -112,32 +113,23 @@ class CallSignalManagerTest {
     }
 
     @Test
-    fun `call ended with missed reason maps to RingTimeout`() = runTest {
-        val (managerAndSocket, handlers) = managerWithHandlers()
-        managerAndSocket.first.events.test {
-            deliver(handlers, "call:ended", """{"callId":"c1","reason":"missed"}""")
-            assertThat(awaitItem()).isEqualTo(CallEvent.RingTimeout)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `call ended with rejected reason maps to RemoteHangUp`() = runTest {
+    fun `an ended frame emits nothing on the identity-less events stream`() = runTest {
+        // Teardown is identity-gated (endedCalls), never folded blindly into the
+        // active FSM — the bug fix: a *waiting* call's fanned-out teardown must not
+        // reduce the active call.
         val (managerAndSocket, handlers) = managerWithHandlers()
         managerAndSocket.first.events.test {
             deliver(handlers, "call:ended", """{"callId":"c1","reason":"rejected"}""")
-            assertThat(awaitItem()).isEqualTo(CallEvent.RemoteHangUp)
-            cancelAndIgnoreRemainingEvents()
+            expectNoEvents()
         }
     }
 
     @Test
-    fun `call missed maps to RingTimeout`() = runTest {
+    fun `a missed frame emits nothing on the identity-less events stream`() = runTest {
         val (managerAndSocket, handlers) = managerWithHandlers()
         managerAndSocket.first.events.test {
             deliver(handlers, "call:missed", """{"callId":"c1"}""")
-            assertThat(awaitItem()).isEqualTo(CallEvent.RingTimeout)
-            cancelAndIgnoreRemainingEvents()
+            expectNoEvents()
         }
     }
 
@@ -188,24 +180,34 @@ class CallSignalManagerTest {
         }
     }
 
-    // --- Inbound: teardown frames republish the ended call id on endedCalls ---
+    // --- Inbound: teardown frames republish the identity-carrying signal on endedCalls ---
 
     @Test
-    fun `an ended frame republishes the ended call id on endedCalls`() = runTest {
+    fun `an ended frame republishes an identity-carrying RemoteHangUp on endedCalls`() = runTest {
         val (managerAndSocket, handlers) = managerWithHandlers()
         managerAndSocket.first.endedCalls.test {
             deliver(handlers, "call:ended", """{"callId":"c7","reason":"completed"}""")
-            assertThat(awaitItem()).isEqualTo("c7")
+            assertThat(awaitItem()).isEqualTo(CallEndedSignal("c7", CallEvent.RemoteHangUp))
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
-    fun `a missed frame republishes the ended call id on endedCalls`() = runTest {
+    fun `an ended frame with a missed reason republishes a RingTimeout on endedCalls`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.endedCalls.test {
+            deliver(handlers, "call:ended", """{"callId":"c7","reason":"missed"}""")
+            assertThat(awaitItem()).isEqualTo(CallEndedSignal("c7", CallEvent.RingTimeout))
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a missed frame republishes an identity-carrying RingTimeout on endedCalls`() = runTest {
         val (managerAndSocket, handlers) = managerWithHandlers()
         managerAndSocket.first.endedCalls.test {
             deliver(handlers, "call:missed", """{"callId":"c8"}""")
-            assertThat(awaitItem()).isEqualTo("c8")
+            assertThat(awaitItem()).isEqualTo(CallEndedSignal("c8", CallEvent.RingTimeout))
             cancelAndIgnoreRemainingEvents()
         }
     }

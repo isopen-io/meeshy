@@ -907,9 +907,14 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       of a `call:ended`/`call:missed` frame's `callId`, a `CallSignalManager.endedCalls`
       identity stream (parallel to `incomingOffers`), and a `CallViewModel.onRemoteEnded`
       fold that auto-dismisses the banner + cancels its timer (no `emitEnd`) only for the
-      *pending* call's id. +15 tests. **Pending:** the WebRTC stats source that feeds real
-      quality samples; an identity-aware *active*-call teardown (the identity-less `events`
-      fold still routes a waiting call's `call:ended` into the active FSM — next Calls slice).
+      *pending* call's id. +15 tests. The **identity-aware active-call teardown** landed (slice
+      `call-ended-identity-teardown`, 2026-07-03): `call:ended`/`call:missed` are now `null` in
+      `CallSignalMapper.map` (off the identity-less `events`); the single pure `endedSignal →
+      CallEndedSignal(callId, event)` decode on `endedCalls: SharedFlow<CallEndedSignal>` is the
+      sole teardown path, and `onRemoteEnded` gates on identity — active id reduces the FSM,
+      waiting id only dismisses the banner, neither is inert — so a waiting call's fanned-out
+      teardown no longer tears down the active call. **Pending:** the WebRTC stats source that
+      feeds real quality samples.
 - [ ] Front-camera mirroring; extensible call media pipeline hook bus
 - [~] Voice/video call signaling events (initiate, answer, ICE, end, missed, media toggle) —
       **inbound event models + pure frame→`CallEvent` mapper landed** (slice `call-signalling-events`):

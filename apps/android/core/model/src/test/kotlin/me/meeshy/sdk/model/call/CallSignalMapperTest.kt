@@ -88,37 +88,24 @@ class CallSignalMapperTest {
         assertThat(map("call:signal", json)).isEqualTo(CallEvent.RemoteAnswer)
     }
 
-    // --- call:ended ---------------------------------------------------------
+    // --- call:ended / call:missed are identity-gated (see endedSignal), so the ---
+    // --- FSM-facing map deliberately treats them as inert (never a blind teardown) ---
 
     @Test
-    fun `an ended frame with reason missed maps to RingTimeout`() {
-        val json = """{"callId":"c1","reason":"missed","endedBy":"u9"}"""
-        assertThat(map("call:ended", json)).isEqualTo(CallEvent.RingTimeout)
-    }
-
-    @Test
-    fun `an ended frame with reason completed maps to RemoteHangUp`() {
+    fun `an ended frame is inert to the identity-less FSM map`() {
         val json = """{"callId":"c1","reason":"completed","duration":42,"endedBy":"u9"}"""
-        assertThat(map("call:ended", json)).isEqualTo(CallEvent.RemoteHangUp)
+        assertThat(map("call:ended", json)).isNull()
     }
 
     @Test
-    fun `an ended frame with reason rejected maps to RemoteHangUp`() {
-        val json = """{"callId":"c1","reason":"rejected"}"""
-        assertThat(map("call:ended", json)).isEqualTo(CallEvent.RemoteHangUp)
+    fun `an ended frame with reason missed is inert to the identity-less FSM map`() {
+        assertThat(map("call:ended", """{"callId":"c1","reason":"missed"}""")).isNull()
     }
 
     @Test
-    fun `an ended frame with no reason maps to RemoteHangUp`() {
-        assertThat(map("call:ended", """{"callId":"c1"}""")).isEqualTo(CallEvent.RemoteHangUp)
-    }
-
-    // --- call:missed --------------------------------------------------------
-
-    @Test
-    fun `a missed frame maps to RingTimeout`() {
+    fun `a missed frame is inert to the identity-less FSM map`() {
         val json = """{"callId":"c1","conversationId":"conv1","callerId":"u9","callerName":"Alice"}"""
-        assertThat(map("call:missed", json)).isEqualTo(CallEvent.RingTimeout)
+        assertThat(map("call:missed", json)).isNull()
     }
 
     // --- call:media-toggled -------------------------------------------------
@@ -199,45 +186,68 @@ class CallSignalMapperTest {
         assertThat(CallSignalMapper.incomingOffer("not-json-at-all")).isNull()
     }
 
-    // --- endedCallId: identity decode for the call-waiting banner dismiss ----
+    // --- endedSignal: identity-carrying teardown decode (id + FSM event) -----
 
     @Test
-    fun `endedCallId decodes the call id from an ended frame`() {
-        assertThat(CallSignalMapper.endedCallId("call:ended", """{"callId":"c7","reason":"completed"}"""))
-            .isEqualTo("c7")
+    fun `endedSignal decodes a completed ended frame as a RemoteHangUp keyed by its id`() {
+        assertThat(CallSignalMapper.endedSignal("call:ended", """{"callId":"c7","reason":"completed"}"""))
+            .isEqualTo(CallEndedSignal("c7", CallEvent.RemoteHangUp))
     }
 
     @Test
-    fun `endedCallId decodes the call id from a missed frame`() {
-        assertThat(CallSignalMapper.endedCallId("call:missed", """{"callId":"c8","callerId":"u3"}"""))
-            .isEqualTo("c8")
+    fun `endedSignal decodes a rejected ended frame as a RemoteHangUp keyed by its id`() {
+        assertThat(CallSignalMapper.endedSignal("call:ended", """{"callId":"c7","reason":"rejected"}"""))
+            .isEqualTo(CallEndedSignal("c7", CallEvent.RemoteHangUp))
     }
 
     @Test
-    fun `endedCallId is null for a non-teardown frame`() {
-        assertThat(CallSignalMapper.endedCallId("call:signal", """{"callId":"c9","signal":{"type":"answer"}}"""))
+    fun `endedSignal decodes an ended frame with no reason as a RemoteHangUp`() {
+        assertThat(CallSignalMapper.endedSignal("call:ended", """{"callId":"c7"}"""))
+            .isEqualTo(CallEndedSignal("c7", CallEvent.RemoteHangUp))
+    }
+
+    @Test
+    fun `endedSignal decodes a missed-reason ended frame as a RingTimeout keyed by its id`() {
+        assertThat(CallSignalMapper.endedSignal("call:ended", """{"callId":"c7","reason":"missed"}"""))
+            .isEqualTo(CallEndedSignal("c7", CallEvent.RingTimeout))
+    }
+
+    @Test
+    fun `endedSignal decodes a missed frame as a RingTimeout keyed by its id`() {
+        assertThat(CallSignalMapper.endedSignal("call:missed", """{"callId":"c8","callerId":"u3"}"""))
+            .isEqualTo(CallEndedSignal("c8", CallEvent.RingTimeout))
+    }
+
+    @Test
+    fun `endedSignal is null for a non-teardown frame`() {
+        assertThat(CallSignalMapper.endedSignal("call:signal", """{"callId":"c9","signal":{"type":"answer"}}"""))
             .isNull()
     }
 
     @Test
-    fun `endedCallId is null for an initiated frame`() {
-        assertThat(CallSignalMapper.endedCallId("call:initiated", """{"callId":"c1","type":"video"}"""))
+    fun `endedSignal is null for an initiated frame`() {
+        assertThat(CallSignalMapper.endedSignal("call:initiated", """{"callId":"c1","type":"video"}"""))
             .isNull()
     }
 
     @Test
-    fun `endedCallId returns null for an ended frame carrying a blank call id`() {
-        assertThat(CallSignalMapper.endedCallId("call:ended", """{"callId":"","reason":"completed"}"""))
+    fun `endedSignal returns null for an ended frame carrying a blank call id`() {
+        assertThat(CallSignalMapper.endedSignal("call:ended", """{"callId":"","reason":"completed"}"""))
             .isNull()
     }
 
     @Test
-    fun `endedCallId returns null for an ended frame carrying no call id`() {
-        assertThat(CallSignalMapper.endedCallId("call:ended", """{"reason":"completed"}""")).isNull()
+    fun `endedSignal returns null for a missed frame carrying a blank call id`() {
+        assertThat(CallSignalMapper.endedSignal("call:missed", """{"callId":""}""")).isNull()
     }
 
     @Test
-    fun `endedCallId is inert on malformed JSON rather than crashing`() {
-        assertThat(CallSignalMapper.endedCallId("call:ended", "not-json-at-all")).isNull()
+    fun `endedSignal returns null for an ended frame carrying no call id`() {
+        assertThat(CallSignalMapper.endedSignal("call:ended", """{"reason":"completed"}""")).isNull()
+    }
+
+    @Test
+    fun `endedSignal is inert on malformed JSON rather than crashing`() {
+        assertThat(CallSignalMapper.endedSignal("call:ended", "not-json-at-all")).isNull()
     }
 }

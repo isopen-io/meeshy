@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.model.call.CallEndedSignal
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateResult
 import me.meeshy.sdk.model.call.CallSound
@@ -223,18 +224,28 @@ class CallViewModel @Inject constructor(
     }
 
     /**
-     * A call ended remotely (`call:ended` / `call:missed`). Only acts when the id
-     * is the *waiting* call's: its caller hung up (or the ring timed out) before the
-     * user chose, so the banner is dismissed and its auto-reject timer cancelled —
-     * **without** an `emitEnd` (unlike a user/timeout reject: nothing is left to end
-     * once the caller has already gone). Inert when there is no pending banner or the
-     * id belongs to another call, so the active call is never disturbed.
+     * A call ended remotely (`call:ended` / `call:missed`). This is the **sole**
+     * teardown path, gated on identity so only the *right* call is torn down:
+     *  - the ended id is the **active** call's → reduce the FSM by the carried
+     *    event (`RemoteHangUp` / `RingTimeout`), ending the call the user is on.
+     *  - the ended id is the **waiting** call's → its caller hung up (or the ring
+     *    timed out) before the user chose, so the banner is dismissed and its
+     *    auto-reject timer cancelled **without** an `emitEnd` (nothing is left to
+     *    end once the caller has gone), leaving the active call untouched.
+     *  - neither → inert. Crucially, the gateway fans a `call:ended` out to every
+     *    member room, so a busy user also receives the *waiting* call's teardown;
+     *    because teardown never rides the identity-less [CallSignalManager.events],
+     *    that fan-out can no longer blindly reduce the active call's FSM.
      */
-    private fun onRemoteEnded(endedCallId: String) {
+    private fun onRemoteEnded(signal: CallEndedSignal) {
+        if (callId.isNotBlank() && signal.callId == callId) {
+            dispatch(signal.event)
+            return
+        }
         val pending = waiting.pending ?: return
-        if (pending.callId != endedCallId) return
+        if (pending.callId != signal.callId) return
         stopWaitingTimer()
-        waitingReduce(CallWaitingEvent.RemotelyEnded(endedCallId))
+        waitingReduce(CallWaitingEvent.RemotelyEnded(signal.callId))
     }
 
     private fun endWaiting(pending: WaitingCall) {
