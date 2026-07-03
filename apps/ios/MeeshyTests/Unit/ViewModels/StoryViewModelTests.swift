@@ -295,6 +295,20 @@ final class StoryViewModelTests: XCTestCase {
                        "Images (and unknown types) route to the images store, mirroring the prefetch path")
     }
 
+    func test_pinTargets_contradictoryDeclaredType_sniffedByExtension() {
+        // R7 — un mp4 déclaré image doit être pinné dans le store video
+        // (là où prefetch/lecture le rangent réellement).
+        let media = [FeedMedia(id: "m-x", type: .image, url: "https://cdn.test/really-a-video.mp4")]
+        let story = StoryItem(
+            id: "pin-sniff", content: nil, media: media, storyEffects: nil,
+            createdAt: Date(), expiresAt: Date().addingTimeInterval(3600), isViewed: false
+        )
+
+        let targets = StoryViewModel.pinTargets(for: story)
+
+        XCTAssertEqual(targets.first(where: { $0.urlString.hasSuffix(".mp4") })?.store, .video)
+    }
+
     func test_pinDeadline_usesStoryExpiry() {
         let expiry = Date().addingTimeInterval(1234)
         let story = makeMediaStoryItem(expiresAt: expiry)

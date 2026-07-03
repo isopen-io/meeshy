@@ -276,12 +276,15 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   404 = story disparue → succès), `markViewed` passe par l'outbox via seam injectable
   (`markViewedOutboxEnqueuer`) — le POST fire-and-forget direct est remplacé.
   Test adapté : `test_markViewed_enqueuesDurableOutboxRecord` (seam).
-- [ ] **R7 (P2) Défense de routage média : sniff avant store.**
-  Preuve (bug mp4-dans-Images CONFIRMÉ) : `prefetchStoryMediaURLs`
-  (`StoryViewModel.swift:442-459`) route par `FeedMedia.type` ; type nil/mal classé → mp4 dans
-  le store `images` (300 Mo) → cache-miss au replay vidéo. Même risque
-  `StoryBackgroundLayer.swift:317`. Fix : fallback sniff extension/mime de l'URL quand `type`
-  est nil/incohérent + (option) migration lazy des .mp4 orphelins du store Images.
+- [x] **R7 (P2) Défense de routage média : sniff avant store.** ✅ it.15
+  Livré : `StoryMediaStoreRouter.effectiveKind(declaredType:urlString:)` — rule engine PUR
+  SDK (FeedModels) : extension reconnue > type déclaré > défaut .image. Branché dans
+  `prefetchStoryMediaURLs` ET `pinTargets` (le pin protège le MÊME store que le rangement
+  réel). 6 tests SDK + test app (image déclarée + .mp4 → store video).
+  ÉCARTÉ de R7 après re-preuve : `StoryBackgroundLayer.loadImage` (:317 cité) résout son
+  Kind depuis les EFFECTS (StoryMediaObject.mediaType), pas FeedMedia.type — autre source,
+  à auditer séparément si un symptôme apparaît. Migration lazy des .mp4 orphelins du store
+  Images : NON faite (option) — les orphelins expirent au TTL 1 an/éviction budget.
 - [ ] **R8 (P2) Pagination du tray (client).** `fetchStoriesFromNetwork` appelle
   `list(cursor: nil, limit: 50)` — curseur ignoré, plafond 50. À traiter AVEC G1 (le serveur ne
   pagine pas non plus).
@@ -471,7 +474,12 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.14 — R6 : markStoryViewed durable via l'outbox (hash au push)
+## it.15 — R7 : sniff d'extension avant routage vers les stores (hash au push)
+
+- Router pur SDK, 6/6 tests ; branché prefetch + pin (cohérence des deux chemins) ;
+  test app RED→GREEN sur le cas confirmé (mp4 déclaré image).
+
+## it.14 — R6 : markStoryViewed durable via l'outbox (018750c72)
 
 - Réutilisation maximale : payload/coalescing/dispatch calqués sur le jumeau markAsRead
   (anchor générique = storyId). Aucun nouveau mécanisme.
