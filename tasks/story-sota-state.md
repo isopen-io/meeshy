@@ -210,17 +210,21 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   true)` (refetch du TRAY ENTIER) + spinner plein écran + timeout 2,5 s.
   Cible : fetch unitaire `GET /posts/:id` (existe déjà) → construire le groupe minimal → rendu
   immédiat sur ThumbHash pendant que le média arrive ; le tray se rafraîchit en fond.
-- [ ] **R5 (P0) Garantir la relecture OFFLINE des stories vues.**
-  Preuves : peuplement cache vidéo `Task.detached(.utility)` best-effort
-  (`StoryBackgroundLayer.swift:702`) ; `prefetchTasks` annulés à `onDisappear`
-  (`StoryViewerView.swift:434`) ; aucune politique de rétention/pinning story.
-  Cible SOTA : (a) NE PAS annuler un téléchargement de média dont la slide a été AFFICHÉE —
-  le laisser finir (detached, budget-aware) ; (b) pin léger : les médias des stories du tray
-  (ou au minimum des stories VUES) marqués non-évincables tant que la story n'est pas expirée
-  (le TTL disque de 6 mois est déjà large, le risque réel = éviction budget LRU + download
-  incomplet) ; (c) test d'intégration : voir une story → couper le réseau → relire → zéro
-  requête réseau. Respecter `MediaDownloadPreferences`/`NetworkConditionMonitor` (pas de
-  full-download cellulaire agressif).
+- [~] **R5 (P0) Garantir la relecture OFFLINE des stories vues.** — EN COURS
+  (a) ÉCARTÉ après re-preuve it.2 : l'annulation des `prefetchTasks`/`currentVideoLoadTask`
+  ne tue PAS un download en vol — le funnel `DiskCacheStore.networkData` exécute chaque
+  download dans une `Task<Data, Error>` NON STRUCTURÉE (ligne ~281) qui va au bout et
+  `save()` quoi qu'il arrive au caller (`Task.value` ne propage pas l'annulation).
+  L'annulation n'empêche que les downloads PAS ENCORE lancés (prefetch adjacent) — choix sain.
+  (b) ✅ it.2 : mécanisme SDK `DiskCacheStore.pin(_:until:)`/`unpin`/`isPinned` — registre
+  fileKey→échéance persisté en sidecar caché `.pins.json` (hors sweeps via `.skipsHiddenFiles`),
+  exemption dans `evictOverBudget` ET `evictExpired`, purge auto des pins échus, cohérence
+  `invalidate`/`invalidateAll` (logout). Tests : DiskCacheStorePinningTests 7/7 + 3 suites
+  DiskCacheStore en non-régression (39/39), build app vert.
+  RESTE (it.3+) : (b2) câblage APP-SIDE — pinner les médias d'une story à l'affichage
+  (`until = story.expiresAt`, respecter `MediaDownloadPreferences`/`NetworkConditionMonitor`),
+  candidats : `StoryViewerView` onAppear slide / `StoryViewModel.markViewed` ;
+  (c) test d'intégration « voir → couper réseau → relire → zéro requête ».
 - [ ] **R6 (P2) `OutboxKind.markStoryViewed` — état vu durable offline.**
   Preuve : fire-and-forget REST (`StoryViewModel.markViewed`), aucun kind outbox, perte possible
   si éviction cache avant sync. Ajouter le kind + flush FIFO au reconnect (l'infra outbox T10
@@ -363,8 +367,9 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 
 ## it.1 — R1 : gel de progression étendu à l'audio (86c2c27de)
 
-> ⚠️ it.2 : vérifier d'abord que la CI « iOS Tests » est passée sur 86c2c27de (gh run list) —
-> si rouge sur ce commit, c'est la priorité immédiate.
+> ⚠️ it.3 : la CI (iOS Tests/SDK Tests/CI) était encore in_progress sur 07bb04765 et le commit
+> it.2 au moment du push — vérifier `gh run list` en début d'itération ; rouge sur nos commits
+> = priorité immédiate. (Les runs « cancelled » sur 86c2c27de = concurrency group, pas un échec.)
 
 - RED : nouveaux tests `isAudioPending` (rule engine) + gate canvas ne compilaient/passaient pas
   sur l'ancien code (paramètre inexistant, playhead avançait sur audio non schedulé).
@@ -380,3 +385,16 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Piège noté : les guards de `isProgressing` réordonnés (userPaused/failed/watchdog AVANT le
   `guard let status`) — sémantique identique pour la matrice vidéo, nécessaire pour que les
   guards s'appliquent aussi aux slides sans vidéo (status nil + audio pending).
+
+## it.2 — R5(b) : pin anti-éviction dans DiskCacheStore (voir hash git log feat(sdk/cache))
+
+- Re-preuve : R5(a) ÉCARTÉ (funnel réseau non structuré → downloads en vol survivent au
+  dismiss — détail dans l'item). Vrai trou = éviction budget LRU sur stores partagés
+  (video 500 Mo / audio 200 Mo / images 300 Mo, pression messagerie+feed vs story 21 h).
+- RED : DiskCacheStorePinningTests (7 tests) — le plus vieux fichier LRU pinné était évincé.
+- Fix : pin/unpin/isPinned + sidecar `.pins.json` caché + exemption des 2 sweeps + purge
+  pins échus + reset au logout. SDK purity : building block à clés opaques, la politique
+  « quoi pinner » reste app-side (it.3).
+- Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
+- Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
+  car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.

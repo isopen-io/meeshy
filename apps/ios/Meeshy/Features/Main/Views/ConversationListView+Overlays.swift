@@ -308,6 +308,9 @@ extension ConversationListView {
                     .scaleEffect(previewScale, anchor: .bottom)
                     .offset(y: dragOffsetY)
                     .opacity(contextMenuAppeared ? 1 : 0)
+                    // Blur effect during collapse: scales from 0 at 50% → 2.0 at 0% scale
+                    // Creates visual feedback that preview is "disappearing" into menu
+                    .blur(radius: previewScale < 0.5 ? 2.0 * (1.0 - previewScale) : 0)
                     .gesture(previewCollapseGesture)
 
                     ConversationContextMenuView(
@@ -389,7 +392,9 @@ extension ConversationListView {
                         onDismiss: { dismissContextMenu() }
                     )
                     // Menu : remonte depuis le bas + fondu (piloté).
-                    .offset(y: contextMenuAppeared ? 0 : 70)
+                    // Offset coordonné avec preview scale pour illusion que menu est poussé
+                    // par la croissance de l'aperçu (0.7 scale = menu commence push-up)
+                    .offset(y: contextMenuAppeared ? 0 : min(70, CGFloat(70 * (1.0 - previewScale))))
                     .opacity(contextMenuAppeared ? 1 : 0)
                 }
                 .padding(.horizontal, 20)
@@ -399,7 +404,9 @@ extension ConversationListView {
                 // Zoom + rebond : l'aperçu grandit et le menu remonte au montage.
                 previewScale = 1.0
                 dragOffsetY = 0
-                withAnimation(.spring(response: 0.44, dampingFraction: 0.6)) {
+                // Improved spring: more bouncy (0.58 vs 0.6) + faster response (0.45 vs 0.44)
+                // Creates coordinated preview+menu animation with visible rebounce
+                withAnimation(.spring(response: 0.45, dampingFraction: 0.58)) {
                     contextMenuAppeared = true
                 }
             }
@@ -431,7 +438,9 @@ extension ConversationListView {
                     return
                 }
                 let collapsed = previewScale < 0.45
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                // Faster, bouncier snap-back: (0.35, 0.8) → (0.30, 0.72)
+                // Creates snappier feel when preview collapses or re-expands
+                withAnimation(.spring(response: 0.30, dampingFraction: 0.72)) {
                     previewScale = collapsed ? 0 : 1.0
                     dragOffsetY = 0
                 }
