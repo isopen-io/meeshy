@@ -9,7 +9,7 @@
  * unmounts across that event.
  */
 
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import { useSocialSocket } from '@/hooks/social/use-social-socket';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
@@ -35,16 +35,27 @@ let mockSocket: MockSocket | null = {
   connected: true,
 };
 
+const mockStatusListeners = new Set<() => void>();
+
 jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
     getSocket: () => mockSocket,
+    onStatusChange: (cb: () => void) => {
+      mockStatusListeners.add(cb);
+      return () => mockStatusListeners.delete(cb);
+    },
   },
 }));
+
+function emitStatusChange() {
+  mockStatusListeners.forEach(cb => cb());
+}
 
 function resetSocket() {
   mockSocketOn.mockReset();
   mockSocketOff.mockReset();
   mockSocketEmit.mockReset();
+  mockStatusListeners.clear();
   mockSocket = {
     on: mockSocketOn,
     off: mockSocketOff,
@@ -101,6 +112,29 @@ describe('useSocialSocket', () => {
   it('does not throw when there is no socket', () => {
     mockSocket = null;
     expect(() => renderHook(() => useSocialSocket())).not.toThrow();
+  });
+
+  it('subscribes once the socket becomes available after mounting with none (deep-link into a feed route)', () => {
+    mockSocket = null;
+    renderHook(() => useSocialSocket());
+    expect(mockSocketEmit).not.toHaveBeenCalled();
+
+    // Some other code path (e.g. a conversation route) bootstraps the
+    // connection later in the same session.
+    mockSocket = { on: mockSocketOn, off: mockSocketOff, emit: mockSocketEmit, connected: true };
+    act(() => emitStatusChange());
+
+    expect(mockSocketEmit).toHaveBeenCalledWith(CLIENT_EVENTS.FEED_SUBSCRIBE);
+  });
+
+  it('does not resubscribe on every status change once a socket was already picked up', () => {
+    renderHook(() => useSocialSocket());
+    mockSocketEmit.mockClear();
+
+    act(() => emitStatusChange());
+    act(() => emitStatusChange());
+
+    expect(mockSocketEmit).not.toHaveBeenCalledWith(CLIENT_EVENTS.FEED_SUBSCRIBE);
   });
 
   it('still delegates post events to the latest callback after a reconnect re-subscribe', () => {
