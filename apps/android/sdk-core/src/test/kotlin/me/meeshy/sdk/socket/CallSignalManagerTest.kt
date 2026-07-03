@@ -47,6 +47,42 @@ class CallSignalManagerTest {
     }
 
     @Test
+    fun `call initiated also republishes the caller identity on incomingOffers`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.incomingOffers.test {
+            deliver(
+                handlers,
+                "call:initiated",
+                """{"callId":"c1","type":"video","initiator":{"userId":"u9","username":"al","displayName":"Alice"}}""",
+            )
+            val offer = awaitItem()
+            assertThat(offer.callId).isEqualTo("c1")
+            assertThat(offer.callerId).isEqualTo("u9")
+            assertThat(offer.callerName).isEqualTo("Alice")
+            assertThat(offer.isVideo).isTrue()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a malformed initiated frame emits no incoming offer`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.incomingOffers.test {
+            deliver(handlers, "call:initiated", """{"type":"video"}""") // no callId
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `a non-initiated frame emits nothing on incomingOffers`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.incomingOffers.test {
+            deliver(handlers, "call:participant-joined", """{"callId":"c1"}""")
+            expectNoEvents()
+        }
+    }
+
+    @Test
     fun `call participant-joined maps to ParticipantJoined`() = runTest {
         val (managerAndSocket, handlers) = managerWithHandlers()
         managerAndSocket.first.events.test {

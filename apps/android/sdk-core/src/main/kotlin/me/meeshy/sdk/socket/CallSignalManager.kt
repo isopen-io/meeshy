@@ -10,6 +10,7 @@ import me.meeshy.sdk.model.call.CallInitiateAckParser
 import me.meeshy.sdk.model.call.CallInitiateResult
 import me.meeshy.sdk.model.call.CallQualityReport
 import me.meeshy.sdk.model.call.CallSignalMapper
+import me.meeshy.sdk.model.call.WaitingCall
 import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -43,6 +44,16 @@ class CallSignalManager @Inject constructor(
 ) {
     private val _events = MutableSharedFlow<CallEvent>(replay = 0, extraBufferCapacity = 64)
     val events: SharedFlow<CallEvent> = _events.asSharedFlow()
+
+    /**
+     * The **identity** of each inbound `call:initiated` offer, alongside the
+     * FSM-facing [events]. [events] emits an identity-less [CallEvent.ReceiveIncoming];
+     * this parallel stream carries the caller + media so a *second* incoming call
+     * arriving while a call is already active can be surfaced as a call-waiting
+     * banner (and rejected / answered by its own id). Hot, no replay — like [events].
+     */
+    private val _incomingOffers = MutableSharedFlow<WaitingCall>(replay = 0, extraBufferCapacity = 16)
+    val incomingOffers: SharedFlow<WaitingCall> = _incomingOffers.asSharedFlow()
 
     fun attach() {
         INBOUND_EVENTS.forEach(::listen)
@@ -157,6 +168,9 @@ class CallSignalManager @Inject constructor(
         socketManager.on(event) { args ->
             val raw = (args.firstOrNull() as? JSONObject)?.toString() ?: return@on
             CallSignalMapper.map(event, raw)?.let(_events::tryEmit)
+            if (event == INITIATED_EVENT) {
+                CallSignalMapper.incomingOffer(raw)?.let(_incomingOffers::tryEmit)
+            }
         }
     }
 
@@ -164,8 +178,11 @@ class CallSignalManager @Inject constructor(
         /** Matches the iOS `emitCallInitiate` 10 s ACK budget. */
         const val INITIATE_ACK_TIMEOUT_MS = 10_000L
 
+        /** The single inbound frame that also carries incoming-offer identity. */
+        const val INITIATED_EVENT = "call:initiated"
+
         val INBOUND_EVENTS = listOf(
-            "call:initiated",
+            INITIATED_EVENT,
             "call:signal",
             "call:participant-joined",
             "call:ended",

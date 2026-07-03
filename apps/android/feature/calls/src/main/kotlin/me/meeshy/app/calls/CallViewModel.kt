@@ -14,8 +14,12 @@ import me.meeshy.sdk.model.call.CallSound
 import me.meeshy.sdk.model.call.CallSoundPolicy
 import me.meeshy.sdk.model.call.CallState
 import me.meeshy.sdk.model.call.CallStateMachine
+import me.meeshy.sdk.model.call.CallWaitingEvent
+import me.meeshy.sdk.model.call.CallWaitingReducer
+import me.meeshy.sdk.model.call.CallWaitingState
 import me.meeshy.sdk.model.call.ConnectionQuality
 import me.meeshy.sdk.model.call.TelecomCallPolicy
+import me.meeshy.sdk.model.call.WaitingCall
 import me.meeshy.sdk.socket.CallSignalManager
 import javax.inject.Inject
 
@@ -45,6 +49,7 @@ class CallViewModel @Inject constructor(
     private val toneController: CallToneController,
     private val telecomReporter: TelecomCallReporter,
     private val qualitySampler: CallQualitySampler,
+    private val waitingTimer: CallWaitingTimer,
 ) : ViewModel() {
 
     private var config: CallConfig = CallConfig.EMPTY
@@ -69,12 +74,21 @@ class CallViewModel @Inject constructor(
     /** Collects [CallQualitySampler.samples]; alive only while media is flowing. */
     private var qualityJob: Job? = null
 
+    /** At most one second incoming call awaiting an accept-swap / reject decision. */
+    private var waiting: CallWaitingState = CallWaitingState.EMPTY
+
+    /** The 15 s auto-dismiss timer for the current banner; cancelled on any resolution. */
+    private var waitingTimerJob: Job? = null
+
     private val _state = MutableStateFlow(CallPresenter.present(callState, config, media, elapsedSeconds))
     val state: StateFlow<CallUiState> = _state.asStateFlow()
 
     init {
         viewModelScope.launch {
             signalManager.events.collect(::dispatch)
+        }
+        viewModelScope.launch {
+            signalManager.incomingOffers.collect(::onIncomingOffer)
         }
     }
 
@@ -92,8 +106,10 @@ class CallViewModel @Inject constructor(
         this.callId = config.callId
         this.elapsedSeconds = 0L
         this.connectionQuality = null
+        this.waiting = CallWaitingState.EMPTY
         stopTicker()
         stopQuality()
+        stopWaitingTimer()
         if (config.isOutgoing) startOutgoing(config) else dispatch(CallEvent.ReceiveIncoming)
     }
 
@@ -151,6 +167,86 @@ class CallViewModel @Inject constructor(
 
     /** Settle a terminal call back to idle (dismissing the ended screen). */
     fun dismiss() = dispatch(CallEvent.Settle)
+
+    // --- Call waiting: a second incoming call while this one is active ------
+
+    /**
+     * A second incoming offer arrived on the socket. It becomes a call-waiting
+     * banner **only** while a call is already active (parity with iOS busy-path)
+     * and only for a *different* call than the one in progress — a redelivery of
+     * the active call's own offer is ignored. A newer offer replaces an older
+     * pending one and restarts the auto-dismiss window.
+     */
+    private fun onIncomingOffer(call: WaitingCall) {
+        if (!callState.isActive) return
+        if (call.callId == callId) return
+        waitingReduce(CallWaitingEvent.Offered(call))
+        startWaitingTimer(call.callId)
+    }
+
+    /**
+     * Reject the waiting call: end it on the wire (keyed by its own id, leaving
+     * the active call untouched) and dismiss the banner. Also the resolution the
+     * 15 s auto-dismiss reuses — an ignored banner must free the caller, not leave
+     * them ringing.
+     */
+    fun rejectWaiting() {
+        val pending = waiting.pending ?: return
+        stopWaitingTimer()
+        endWaiting(pending)
+    }
+
+    /**
+     * End-this-and-answer: dismiss the banner, hang up the active call, settle it,
+     * and re-present the waiting call as a fresh incoming call the user answers
+     * normally (parity with iOS `endCurrentAndAnswerPending`, which re-reports the
+     * pending call after tearing down the active one).
+     */
+    fun acceptWaitingSwap() {
+        val pending = waiting.pending ?: return
+        stopWaitingTimer()
+        waitingReduce(CallWaitingEvent.Accepted)
+        hangUp()
+        dispatch(CallEvent.Settle)
+        start(
+            CallConfig(
+                peerId = pending.callerId,
+                peerName = pending.callerName,
+                isVideo = pending.isVideo,
+                isOutgoing = false,
+                callId = pending.callId,
+            ),
+        )
+    }
+
+    private fun endWaiting(pending: WaitingCall) {
+        signalManager.emitEnd(pending.callId)
+        waitingReduce(CallWaitingEvent.Rejected)
+    }
+
+    private fun startWaitingTimer(offeredId: String) {
+        waitingTimerJob?.cancel()
+        waitingTimerJob = viewModelScope.launch {
+            waitingTimer.countdown().collect {
+                val pending = waiting.pending ?: return@collect
+                if (pending.callId != offeredId) return@collect
+                // The single-shot countdown completes right after this — mark the
+                // job done so `endWaiting` never cancels the coroutine it runs in.
+                waitingTimerJob = null
+                endWaiting(pending)
+            }
+        }
+    }
+
+    private fun stopWaitingTimer() {
+        waitingTimerJob?.cancel()
+        waitingTimerJob = null
+    }
+
+    private fun waitingReduce(event: CallWaitingEvent) {
+        waiting = CallWaitingReducer.reduce(waiting, event)
+        publish()
+    }
 
     /** Runs [emit] with the current [callId] only once one is known — inert otherwise. */
     private inline fun emitIfIdentified(emit: (String) -> Unit) {
@@ -249,7 +345,7 @@ class CallViewModel @Inject constructor(
     }
 
     private fun publish() {
-        _state.value = CallPresenter.present(callState, config, media, elapsedSeconds, connectionQuality)
+        _state.value = CallPresenter.present(callState, config, media, elapsedSeconds, connectionQuality, waiting)
     }
 
     private companion object {

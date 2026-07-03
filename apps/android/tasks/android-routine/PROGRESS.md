@@ -384,9 +384,20 @@ remaining platform glue.
    `VideoSurvivalState` (O(1) over a marathon call), user camera-off resets to `INITIAL`. Two survival
    thresholds added to `CallQualityThresholds` at iOS parity. +19 tests. See run log. **Next:** the
    WebRTC actuator seam that consumes `Suspend`/`Resume` (app-side orchestration).
-2. **Call-waiting banner** — a second incoming call while one is active. `IncomingCallDecider` already
-   returns `Ignore(BUSY)`; iOS instead surfaces a `CallWaitingBannerView` (accept-and-swap / reject-busy /
-   15s auto-dismiss-as-reject). A pure decision core + a banner surface.
+2. ~~**Call-waiting banner**~~ ✅ shipped as `call-waiting-banner` (2026-07-03) — a second incoming call
+   while one is active. The pure `core:model` decision core (`WaitingCall` + `WaitingCall.from(payload)`,
+   `CallWaitingState`, total `CallWaitingReducer` — Offered/Rejected/Accepted/RemotelyEnded) is the SSOT,
+   folded into `CallViewModel` end-to-end: a new `CallSignalManager.incomingOffers` surfaces the identity
+   of each `call:initiated` frame (which the FSM-facing `events` discards), the VM routes a *second* offer
+   (different callId, while `CallState.isActive`) to the banner, and a `CallWaitingTimer` seam auto-dismisses
+   after 15s **as a reject** (frees the caller, iOS parity). `rejectWaiting()` ends the waiting call keyed by
+   its own id (active call untouched); `acceptWaitingSwap()` hangs up the active call, settles, and
+   re-presents the waiting call as a fresh incoming (iOS `endCurrentAndAnswerPending`). Accent-coherent
+   top banner in `CallScreen` (error-hue reject + peer-accent answer, a11y-labelled). +35 tests. See run log.
+   **Next:** the `RemotelyEnded` driver needs the ended-call **identity** on the socket (`call:ended`/
+   `call:missed` carry `callId` but `events` maps them identity-less) — a small signalling-identity slice
+   to auto-dismiss a banner whose caller hangs up before the user acts (the reducer branch is already the
+   tested SSOT).
 3. **Adaptive sender-cap plan** — a pure `level → (resolutionHeight, fps, bitrate)` mapping (already on
    `VideoQualityLevel`) folded into the future WebRTC sender-parameters actuator.
 
@@ -576,6 +587,60 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-03 — slice `call-waiting-banner` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration. The three open PRs at start
+  (#1399 iOS-a11y `CameraView`, #1400 gateway/security notification routes, #1401 web/gateway calls
+  rate-limit) are `jcnm` continuous-improvement branches from other sessions — all disjoint from
+  `apps/android`, left untouched. Branched `claude/apps/android/call-waiting-banner` off freshly-fetched
+  `origin/main` (`9d30066c`).
+- **Gap closed:** `feature-parity §H` "Next pure core #2" — a second incoming call arriving while a call
+  is active. iOS surfaces a `CallWaitingBannerView` (accept-and-swap / reject-busy / 15s
+  auto-dismiss-as-reject) driven by `CallManager.pendingIncomingCall`; Android had no equivalent — a
+  second offer while busy was silently dropped (the FSM-facing `events` stream discards caller identity,
+  so `ReceiveIncoming` while `Connected` was inert).
+- **What shipped (thin vertical slice, TDD red→green):**
+  - `:core:model` `CallWaiting.kt` — `WaitingCall(callId, callerId, callerName, isVideo)` + the pure
+    `from(CallInitiatedPayload)` builder (blank-id → null; four-tier name resolution display→username→userId
+    →`WAITING_CALL_FALLBACK_NAME`, skipping blank candidates, parity with `CallRecord.displayName`;
+    `type=="video"` → isVideo). `CallWaitingReducer.kt` — `CallWaitingState(pending?)` + total
+    `reduce(state, event)` over `Offered`(newest-wins) / `Rejected` / `Accepted` / `RemotelyEnded(callId)`
+    (clears iff the id matches; inert otherwise or with no pending). `CallSignalMapper.incomingOffer(raw)`
+    — the pure identity decode parallel to `map()`.
+  - `:sdk-core` `CallSignalManager.incomingOffers: SharedFlow<WaitingCall>` — the same `call:initiated`
+    listener now also republishes the decoded caller identity (hot, no replay, like `events`).
+  - `:feature:calls` `CallViewModel` folds `incomingOffers`: `onIncomingOffer` routes a *second* offer
+    (`CallState.isActive` && different callId) to the reducer and arms the auto-dismiss timer;
+    `rejectWaiting()` emits `call:end` keyed by the **waiting** id (active call untouched) + clears;
+    `acceptWaitingSwap()` hangs up the active call, settles, and `start()`s the waiting call as a fresh
+    incoming (parity with iOS re-report). `CallWaitingTimer` seam (mirrors `CallSecondsTicker`) emits once
+    after 15s → reject-if-still-pending. `CallPresenter` derives `CallUiState.waitingBanner: WaitingBannerUi?`.
+    `CallScreen` renders an accent-coherent top banner (error-hue reject + peer-accent answer, a11y labels,
+    FR/ES/PT/EN strings).
+  - **+35 behavioural tests:** 16 `CallWaitingTest` (builder incl. every name-resolution arm + blank-id +
+    media flag; state derivation; every reducer arm incl. newest-wins, match/mismatch/no-pending
+    `RemotelyEnded`), +3 `CallSignalMapperTest` (`incomingOffer` decode/null/malformed), +3
+    `CallSignalManagerTest` (offer republish, malformed no-emit, non-initiated no-emit), +11
+    `CallViewModelTest` (raise banner while active; idle no-banner; redelivery ignored; newest-wins; reject
+    ends waiting id only; reject inert with none; 15s auto-dismiss = reject; accept-swap ends current +
+    re-presents + joins new room; accept inert with none; fresh start clears stale banner), +2
+    `CallPresenterTest` (empty → null, pending → banner).
+- **Verification:** `gradle :core:model:testDebugUnitTest :sdk-core:testDebugUnitTest` then
+  `gradle :feature:calls:testDebugUnitTest`, then full `gradle assembleDebug testDebugUnitTest` →
+  **BUILD SUCCESSFUL** (APK assembles, all module unit tests green). System Gradle 8.14.3 online through
+  the agent proxy — see NOTES.md (the `./gradlew` wrapper's distribution host is egress-blocked 403; the
+  cached wrapper dist is a 0-byte `.part`, so use the system `gradle` binary online, NOT `--offline`).
+- **Reviewer gate:** PASS — diff is `apps/android` only (17 files: 3 new + 6 modified code, 4 strings, 4
+  test files), no production logic outside `apps/android`, TDD behavioural (no tautologies, no floor
+  lowered, no test weakened), edge cases covered (blank id, no-initiator fallback, redelivery, newest-wins,
+  no-pending inert, cancellation-safe self-completing timer job), SDK purity respected (pure SSOT in
+  `:core:model`, transport-only flow in `:sdk-core`, orchestration in `:feature:calls`), accent-coherent
+  banner + natural top-overlay gesture, single source of truth (`DynamicColorGenerator` accent, reducer
+  the sole banner authority). No secrets, `local.properties` gitignored.
+- **Known follow-up (documented, not an orphan):** the `RemotelyEnded` reducer arm is the tested SSOT but
+  is not yet socket-driven — `events` maps `call:ended`/`call:missed` identity-less, so a banner whose
+  caller hangs up before the user acts currently clears only via reject/accept/15s-timeout. A small
+  signalling-identity slice (surface the ended `callId`) wires the last arm. See "Next pure core #2".
 
 ### 2026-07-03 — slice `call-webrtc-plumbing-emits` ✅ shipped
 - **Step 0 (housekeeping):** the prior Android iteration's PR **#1387 (`call-video-survival-policy`) was

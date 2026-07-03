@@ -3,7 +3,9 @@ package me.meeshy.app.calls
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.call.CallEndReason
 import me.meeshy.sdk.model.call.CallState
+import me.meeshy.sdk.model.call.CallWaitingState
 import me.meeshy.sdk.model.call.ConnectionQuality
+import me.meeshy.sdk.model.call.WaitingCall
 import org.junit.Test
 
 class CallPresenterTest {
@@ -212,5 +214,26 @@ class CallPresenterTest {
     @Test
     fun `connection quality is null when no sample has arrived`() {
         assertThat(presentQuality(CallState.Connected, null)).isNull()
+    }
+
+    // --- waiting banner derivation -----------------------------------------
+
+    private fun presentWaiting(waiting: CallWaitingState) =
+        CallPresenter.present(CallState.Connected, config, media, waiting = waiting).waitingBanner
+
+    @Test
+    fun `no waiting banner is shown for the empty waiting state`() {
+        assertThat(presentWaiting(CallWaitingState.EMPTY)).isNull()
+    }
+
+    @Test
+    fun `a pending waiting call derives a banner carrying the caller and media`() {
+        val waiting = CallWaitingState(
+            pending = WaitingCall(callId = "c9", callerId = "u3", callerName = "Carol", isVideo = true),
+        )
+
+        val banner = presentWaiting(waiting)
+
+        assertThat(banner).isEqualTo(WaitingBannerUi(callerName = "Carol", isVideo = true))
     }
 }
