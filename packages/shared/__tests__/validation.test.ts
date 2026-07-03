@@ -39,6 +39,33 @@ describe('CommonSchemas', () => {
     expect(CommonSchemas.mongoId.safeParse('507f1f77bcf86cd799439011').success).toBe(true);
     expect(CommonSchemas.mongoId.safeParse('invalid').success).toBe(false);
   });
+
+  describe('language', () => {
+    it('accepts ISO 639-1 two-letter codes', () => {
+      expect(CommonSchemas.language.safeParse('fr').success).toBe(true);
+      expect(CommonSchemas.language.safeParse('en').success).toBe(true);
+    });
+
+    it('accepts ISO 639-3 three-letter supported codes', () => {
+      // Cameroonian languages first-class in packages/shared/utils/languages.ts
+      // and preserved verbatim by normalizeLanguageCode — must not be rejected
+      // on sendMessage/editMessage while systemLanguage/regionalLanguage accept them.
+      for (const code of ['bas', 'ksf', 'nnh', 'dua', 'ewo']) {
+        expect(CommonSchemas.language.safeParse(code).success).toBe(true);
+      }
+    });
+
+    it('accepts a BCP-47 region subtag', () => {
+      expect(CommonSchemas.language.safeParse('en-US').success).toBe(true);
+    });
+
+    it('rejects malformed codes', () => {
+      expect(CommonSchemas.language.safeParse('f').success).toBe(false);
+      expect(CommonSchemas.language.safeParse('english').success).toBe(false);
+      expect(CommonSchemas.language.safeParse('EN').success).toBe(false);
+      expect(CommonSchemas.language.safeParse('fr2').success).toBe(false);
+    });
+  });
 });
 
 describe('containsEmoji', () => {
