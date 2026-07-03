@@ -1657,6 +1657,7 @@ public actor OfflineQueue {
                         attachmentKinds: item.attachmentKinds,
                         localAudioPath: item.localAudioPath,
                         localAudioPaths: item.localAudioPaths,
+                        localMediaPaths: item.localMediaPaths,
                         createdAt: item.createdAt
                     )
                     let mergedPayload = (try? enc.encode(merged)) ?? send.payload
@@ -1729,8 +1730,9 @@ public actor OfflineQueue {
         let now = Date()
         let conversationId = payload.conversationId
         let clientMessageId = payload.clientMessageId
+        let dec = decoder
         do {
-            try await pool.write { db in
+            let filesToSweep: [String] = try await pool.write { db -> [String] in
                 let existing = try OutboxRecord
                     .filter(Column("conversationId") == conversationId)
                     .filter(Column("clientMessageId") == clientMessageId)
@@ -1750,10 +1752,19 @@ public actor OfflineQueue {
                         status: .pending,
                         createdAt: now
                     ).insert(db)
+                    return []
 
                 case .sendMessage:
                     // Send + delete on the same pending id = no-op locally.
+                    // Collect the cancelled send's pending media/audio files so
+                    // they can be swept AFTER commit — otherwise the row vanishes
+                    // but its files orphan under Documents/pending-*/ forever
+                    // (parity with cancelCreatePost).
+                    let sweep = existing
+                        .flatMap { try? dec.decode(OfflineQueueItem.self, from: $0.payload) }
+                        .map { Self.pendingLocalFileAbsolutePaths(for: $0) } ?? []
                     _ = try OutboxRecord.deleteOne(db, key: existing!.id)
+                    return sweep
 
                 case .editMessage:
                     // Pending edit becomes irrelevant; replace with a delete.
@@ -1768,12 +1779,14 @@ public actor OfflineQueue {
                         status: .pending,
                         createdAt: now
                     ).insert(db)
+                    return []
 
                 case .deleteMessage:
                     // Already pending — idempotent, refresh timestamp only.
                     try db.execute(sql: """
                         UPDATE outbox SET updatedAt = ? WHERE id = ?
                         """, arguments: [now, existing!.id])
+                    return []
 
                 case .sendReaction:
                     // Delete alongside a pending reaction — INSERT.
@@ -1787,6 +1800,7 @@ public actor OfflineQueue {
                         status: .pending,
                         createdAt: now
                     ).insert(db)
+                    return []
 
                 case .some(let other):
                     // Wave 1 Task 3.2 — non-message outbox kinds. Should not
@@ -1804,7 +1818,14 @@ public actor OfflineQueue {
                         status: .pending,
                         createdAt: now
                     ).insert(db)
+                    return []
                 }
+            }
+            // Sweep AFTER the row is durably gone, so a rolled-back write never
+            // orphans a still-live send's files.
+            let fm = FileManager.default
+            for path in filesToSweep {
+                try? fm.removeItem(atPath: path)
             }
         } catch {
             throw OfflineQueueError.writeFailed(underlying: error)
@@ -2160,7 +2181,9 @@ public actor OfflineQueue {
                     local.inflightReset += 1
                 }
 
-                // Audio missing-file sweep.
+                // Missing-file sweep — audio AND visual media (R-OB4). Any
+                // referenced pending file gone on disk means the pre-crash copy
+                // never landed → the bytes are gone, the row can never succeed.
                 let pendingSends = try OutboxRecord
                     .filter(Column("status") == OutboxStatus.pending.rawValue)
                     .filter(Column("kind") == OutboxKind.sendMessage.rawValue)
@@ -2168,31 +2191,35 @@ public actor OfflineQueue {
                 let fm = FileManager.default
                 for record in pendingSends {
                     guard let item = try? dec.decode(OfflineQueueItem.self, from: record.payload) else { continue }
-                    // Single-track legacy path + multi-track paths are both
-                    // checked: any referenced file missing on disk means the
-                    // pre-crash copy never landed → the audio bytes are gone, so
-                    // the row can never succeed. S6 — mark it `.exhausted`
-                    // (terminal + GC-eligible via purgeExhaustedOlderThan), NOT
-                    // `.failed`, which the flusher never picks up and the GC
-                    // never reclaims, so it would leak in the outbox + SyncPill
-                    // across every session.
-                    let referencedPaths = ([item.localAudioPath].compactMap { $0 } + (item.localAudioPaths ?? []))
+                    // Legacy single-track + multi-track audio AND visual media
+                    // paths are all checked. S6 — a row with any missing file is
+                    // marked `.exhausted` (terminal + GC-eligible via
+                    // purgeExhaustedOlderThan), NOT `.failed`, which the flusher
+                    // never picks up and the GC never reclaims, so it would leak
+                    // in the outbox + SyncPill across every session. Without the
+                    // media branch a pending photo/video send with vanished files
+                    // stayed `.pending` and burned 5 dispatcher upload attempts
+                    // (or sent a PARTIAL message if only some files survived).
+                    let audioPaths = ([item.localAudioPath].compactMap { $0 } + (item.localAudioPaths ?? []))
                         .filter { !$0.isEmpty }
-                    guard !referencedPaths.isEmpty else { continue }
-                    let anyMissing = referencedPaths.contains { !fm.fileExists(atPath: Self.absoluteAudioPath(forStored: $0)) }
-                    if anyMissing {
+                    let mediaPaths = (item.localMediaPaths ?? []).filter { !$0.isEmpty }
+                    guard !audioPaths.isEmpty || !mediaPaths.isEmpty else { continue }
+                    let audioMissing = audioPaths.contains { !fm.fileExists(atPath: Self.absoluteAudioPath(forStored: $0)) }
+                    let mediaMissing = mediaPaths.contains { !fm.fileExists(atPath: Self.absoluteMediaPath(forStored: $0)) }
+                    if audioMissing || mediaMissing {
                         try db.execute(sql: """
                             UPDATE outbox
                             SET status = ?, lastError = ?, updatedAt = ?
                             WHERE id = ?
                             """, arguments: [
                                 OutboxStatus.exhausted.rawValue,
-                                "Audio file missing after crash",
+                                audioMissing ? "Audio file missing after crash" : "Media file missing after crash",
                                 Date(),
                                 record.id
                             ])
-                        log.warning("Audio file missing for OutboxRecord \(record.id, privacy: .public), marked .exhausted")
-                        local.audioOrphanFailed += 1
+                        log.warning("Pending file missing for OutboxRecord \(record.id, privacy: .public), marked .exhausted")
+                        if audioMissing { local.audioOrphanFailed += 1 }
+                        if mediaMissing { local.mediaOrphanFailed += 1 }
                     }
                 }
                 return local
@@ -2209,6 +2236,7 @@ public actor OfflineQueue {
     public struct BootRecoveryReport: Sendable, Equatable {
         public var inflightReset: Int = 0
         public var audioOrphanFailed: Int = 0
+        public var mediaOrphanFailed: Int = 0
         public init() {}
     }
 
@@ -2260,6 +2288,18 @@ public actor OfflineQueue {
     /// same Documents-relative resolution as audio.
     public static func absoluteMediaPath(forStored relativePath: String) -> String {
         absoluteAudioPath(forStored: relativePath)
+    }
+
+    /// Absolute on-disk paths of every pending media/audio file a send item
+    /// references. Used to reclaim them when the send is cancelled/superseded
+    /// (delete-before-flush) so they don't orphan under `Documents/pending-*/`.
+    static func pendingLocalFileAbsolutePaths(for item: OfflineQueueItem) -> [String] {
+        var paths = (item.localMediaPaths ?? []).map { absoluteMediaPath(forStored: $0) }
+        paths += (item.localAudioPaths ?? []).map { absoluteAudioPath(forStored: $0) }
+        if let single = item.localAudioPath, !single.isEmpty {
+            paths.append(absoluteAudioPath(forStored: single))
+        }
+        return paths
     }
 
     /// Canonical relative path under

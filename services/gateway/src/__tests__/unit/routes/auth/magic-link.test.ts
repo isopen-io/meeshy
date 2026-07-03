@@ -318,6 +318,35 @@ describe('POST /refresh — with trusted session', () => {
     expect(res.statusCode).toBe(200);
     await app.close();
   });
+
+  /// P7-3 — le modèle UserSession n'a PAS de champ `lastActiveAt` (c'est un
+  /// champ du modèle User) : le slide écrivait `lastActiveAt` → Prisma levait
+  /// PrismaClientValidationError sur CHAQUE refresh (avalée par le .catch →
+  /// « Failed to slide session expiresAt on refresh » en prod) → le sliding
+  /// window des sessions trusted n'a JAMAIS fonctionné : elles expirent à
+  /// leur TTL initial malgré l'activité de l'utilisateur.
+  it('slides the session using the SCHEMA field lastActivityAt (not User.lastActiveAt)', async () => {
+    const update = jest.fn<any>().mockResolvedValue({});
+    const prisma = makePrisma({
+      userSession: {
+        findFirst: jest.fn<any>().mockResolvedValue({ id: 'sess-1', userId: USER_ID, expiresAt: new Date() }),
+        update,
+      },
+    });
+    const app = await buildApp({ prisma });
+    await app.inject({
+      method: 'POST',
+      url: '/refresh',
+      payload: { token: 'valid-jwt-token', sessionToken: 'my-session-token' },
+    });
+
+    expect(update).toHaveBeenCalledTimes(1);
+    const arg = update.mock.calls[0][0] as { data: Record<string, unknown> };
+    expect(arg.data.expiresAt).toBeInstanceOf(Date);
+    expect(arg.data.lastActivityAt).toBeInstanceOf(Date);
+    expect(arg.data.lastActiveAt).toBeUndefined();
+    await app.close();
+  });
 });
 
 // ─── POST /verify-email ───────────────────────────────────────────────────────

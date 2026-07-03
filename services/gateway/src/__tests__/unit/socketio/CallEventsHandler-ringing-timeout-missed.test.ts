@@ -25,6 +25,7 @@ const mockGenerateIceServers = jest.fn<any>();
 const mockScheduleRingingTimeout = jest.fn<any>();
 const mockCreateCallSummaryMessage = jest.fn<any>();
 const mockMarkCallAsMissed = jest.fn<any>();
+const mockReleaseActiveCallClaim = jest.fn<any>();
 
 jest.mock('../../../services/CallService', () => ({
   CallService: jest.fn().mockImplementation(() => ({
@@ -33,6 +34,7 @@ jest.mock('../../../services/CallService', () => ({
     scheduleRingingTimeout: mockScheduleRingingTimeout,
     createCallSummaryMessage: mockCreateCallSummaryMessage,
     markCallAsMissed: mockMarkCallAsMissed,
+    releaseActiveCallClaim: mockReleaseActiveCallClaim,
     getUnrespondedParticipants: jest.fn<any>().mockResolvedValue([]),
     clearRingingTimeout: jest.fn<any>(),
     endCall: jest.fn<any>(),
@@ -299,6 +301,54 @@ describe('CallEventsHandler — ringing timeout call:missed contract', () => {
       );
 
       expect(emissions).toHaveLength(0);
+    });
+
+    it('does not release the active-call claim when the transition was lost', async () => {
+      await fireRingingTimeout(makePrisma({ updateManyCount: 0 }));
+
+      expect(mockReleaseActiveCallClaim).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('terminal write carries a version increment', () => {
+    // Probe prod 2026-07-02 22:41Z: the timeout's terminal updateMany did NOT
+    // bump `version`, so every later version-guarded terminal writer
+    // (leaveCall, endCall, idempotent-leave) still matched the pre-missed
+    // version and could rewrite missed → ended/completed.
+    it('increments the call version when winning the missed transition', async () => {
+      const prisma = makePrisma();
+
+      await fireRingingTimeout(prisma);
+
+      expect((prisma.callSession.updateMany as jest.Mock)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: 'missed',
+            version: { increment: 1 }
+          })
+        })
+      );
+    });
+  });
+
+  describe('active-call claim release on won transition', () => {
+    // Prod incident 2026-07-02 21:30Z: the handler won the atomic
+    // missed-transition but the claim release was delegated to
+    // handleMissedCall → markCallAsMissed, whose non-ringing guard returned
+    // before releasing. Conversation.activeCallId stayed pointed at the
+    // missed call and every initiateCall was rejected CALL_ALREADY_ACTIVE.
+    it('releases the conversation active-call claim after winning the missed transition', async () => {
+      await fireRingingTimeout(makePrisma());
+
+      expect(mockReleaseActiveCallClaim).toHaveBeenCalledWith(CONV_ID, CALL_ID);
+    });
+
+    it('releases the claim even when posting the call summary throws', async () => {
+      mockCreateCallSummaryMessage.mockRejectedValue(new Error('db down'));
+
+      await fireRingingTimeout(makePrisma());
+
+      expect(mockReleaseActiveCallClaim).toHaveBeenCalledWith(CONV_ID, CALL_ID);
     });
   });
 });

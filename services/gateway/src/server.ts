@@ -36,6 +36,7 @@ import { conditionalGetOnSend } from './utils/etag';
 import { MutationLogService } from './services/MutationLogService';
 import { authRoutes } from './routes/auth';
 import { conversationRoutes } from './routes/conversations';
+import { syncRoutes } from './routes/sync';
 import { linksRoutes } from './routes/links';
 import { trackingLinksRoutes } from './routes/tracking-links';
 import { anonymousRoutes } from './routes/anonymous';
@@ -956,6 +957,8 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     }, { prefix: API_PREFIX });
     // Register links management routes
     await this.server.register(linksRoutes, { prefix: API_PREFIX });
+    // SyncEngine unifié — endpoint delta /sync (spec §7, A3)
+    await this.server.register(syncRoutes, { prefix: API_PREFIX });
 
     // Register tracking links routes
     await this.server.register(trackingLinksRoutes, { prefix: API_PREFIX });

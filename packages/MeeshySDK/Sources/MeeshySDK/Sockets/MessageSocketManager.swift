@@ -862,6 +862,18 @@ public struct SocketNotificationEvent: Decodable, Sendable {
     public let context: SocketNotificationContext?
     public let metadata: SocketNotificationMetadata?
 
+    /// SyncEngine A5 — numéro de séquence monotone per-user tamponné par le
+    /// gateway (`emitWithSeq`, A2.1) sous la clé JSON `_seq`. `nil` sur un
+    /// gateway antérieur (backward-compat). Consommé par `SyncSeqState` pour
+    /// la détection de gap EXACTE au reconnect.
+    public let seq: Int64?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, userId, type, title, content, priority, isRead
+        case actor, context, metadata
+        case seq = "_seq"
+    }
+
     // Computed accessors: resolve from nested structs (gateway format)
     public var senderUsername: String? { actor?.username }
     public var senderDisplayName: String? { actor?.displayName }
@@ -2850,6 +2862,10 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         socket.on("notification:new") { [weak self] data, _ in
             guard let self else { return }
             self.decode(SocketNotificationEvent.self, from: data) { [weak self] event in
+                // SyncEngine A5 — observe le `_seq` per-user (pilote). Le gap
+                // détecté est tracké ; le déclenchement d'une resync sur gap
+                // est câblé en A5.2. `observe(nil)` (gateway antérieur) = no-op.
+                Task { await SyncSeqTracker.shared.observe(event.seq) }
                 self?.notificationReceived.send(event)
             }
         }

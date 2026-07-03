@@ -807,6 +807,44 @@ describe('CallService', () => {
       );
     });
 
+    it('preserves a terminal status: leave on an already-missed call marks the participant left without rewriting it', async () => {
+      // Probe prod 2026-07-02 22:41Z: the ringing timeout resolved the call
+      // `missed`; 19s later the caller's socket dropped and the expired grace
+      // called leaveCall, which read the missed row, computed
+      // wasPreAnswered=false (missed ∉ pre-answer statuses) and rewrote the
+      // terminal row ended/completed/duration=89 + posted a second summary.
+      // A leave that lands on a terminal call must only stamp the leaver's
+      // leftAt — never touch status/endReason/duration.
+      const participant = createMockParticipant();
+      const endedAt = new Date();
+      const missedCall = createMockCallSession({
+        status: CallStatus.missed,
+        endedAt,
+        duration: 0,
+        participants: [participant],
+        initiator: createMockUser(),
+        conversation: createMockConversation()
+      });
+
+      mockPrisma.callParticipant.findFirst.mockResolvedValue(participant);
+      mockPrisma.callSession.findUnique
+        .mockResolvedValueOnce(missedCall)   // leaveCall read
+        .mockResolvedValueOnce(missedCall);  // getCallSession
+      mockPrisma.callParticipant.update.mockResolvedValue({ ...participant, leftAt: new Date() });
+
+      const result = await callService.leaveCall(validLeaveData);
+
+      expect(result.status).toBe(CallStatus.missed);
+      expect(mockPrisma.callParticipant.update).toHaveBeenCalledWith({
+        where: { id: participant.id },
+        data: { leftAt: expect.any(Date) }
+      });
+      // The terminal write path (transaction + callSession.updateMany) must
+      // never run for a call that is already terminal.
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+      expect(mockPrisma.callSession.updateMany).not.toHaveBeenCalled();
+    });
+
     it('should throw error when call not found', async () => {
       mockPrisma.callParticipant.findFirst.mockResolvedValue(createMockParticipant());
       mockPrisma.callSession.findUnique.mockResolvedValue(null);
@@ -2408,6 +2446,137 @@ describe('CallService - initiateCall phantom cleanup & transaction', () => {
     // Only the creation transaction ran — no compensating delete transaction.
     expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
   });
+
+  it('active-call claim self-heal: reclaims atomically when the holder call is terminal', async () => {
+    // Prod incident 2026-07-02: a leaked claim (holder already `missed`)
+    // blocked every initiateCall on the conversation. The claim must
+    // self-heal: read the holder, see it is terminal, and compare-and-swap
+    // the claim from the stale holder to the new session in ONE atomic write.
+    const mockConversation = createMockConversation();
+    const createdSession = { id: 'call-self-heal' };
+    const fullSession = createMockCallSession({
+      id: 'call-self-heal',
+      participants: [createMockParticipant()],
+      initiator: createMockUser(),
+      conversation: mockConversation
+    });
+
+    mockPrisma.participant.findFirst.mockResolvedValue({
+      id: 'participant-123', conversationId: 'conv-123', userId: 'user-123', isActive: true
+    });
+    mockPrisma.callParticipant.findMany.mockResolvedValue([]);
+    mockPrisma.callSession.findFirst.mockResolvedValue(null);
+    mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) =>
+      cb({
+        callSession: { create: jest.fn().mockResolvedValue(createdSession) },
+        callParticipant: { create: jest.fn().mockResolvedValue({}) }
+      })
+    );
+    // First claim attempt loses (stale claim in place), the compare-and-swap
+    // against the terminal holder wins.
+    mockPrisma.conversation.updateMany
+      .mockResolvedValueOnce({ count: 0 })
+      .mockResolvedValueOnce({ count: 1 });
+    mockPrisma.conversation.findUnique
+      .mockResolvedValueOnce(mockConversation)                    // type check
+      .mockResolvedValueOnce({ activeCallId: 'stale-holder-1' }); // self-heal read
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce({ status: CallStatus.missed }) // holder status read
+      .mockResolvedValueOnce(fullSession);                  // getCallSession
+
+    const result = await callService.initiateCall(validInitiateData);
+
+    expect(result.id).toBe('call-self-heal');
+    expect(mockPrisma.conversation.updateMany).toHaveBeenNthCalledWith(2, {
+      where: { id: 'conv-123', activeCallId: 'stale-holder-1' },
+      data: { activeCallId: 'call-self-heal' }
+    });
+    // No compensating delete transaction — the session survived.
+    expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('active-call claim self-heal: still rejects when the holder call is genuinely active', async () => {
+    const mockConversation = createMockConversation();
+    const createdSession = { id: 'call-blocked' };
+
+    mockPrisma.participant.findFirst.mockResolvedValue({
+      id: 'participant-123', conversationId: 'conv-123', userId: 'user-123', isActive: true
+    });
+    mockPrisma.callParticipant.findMany.mockResolvedValue([]);
+    mockPrisma.callSession.findFirst.mockResolvedValue(null);
+
+    let deletedSession = false;
+    mockPrisma.$transaction
+      .mockImplementationOnce(async (cb: (tx: any) => Promise<any>) =>
+        cb({
+          callSession: { create: jest.fn().mockResolvedValue(createdSession) },
+          callParticipant: { create: jest.fn().mockResolvedValue({}) }
+        })
+      )
+      .mockImplementationOnce(async (cb: (tx: any) => Promise<any>) =>
+        cb({
+          callParticipant: { deleteMany: jest.fn().mockResolvedValue({ count: 1 }) },
+          callSession: { delete: jest.fn().mockImplementation(() => { deletedSession = true; return createdSession; }) }
+        })
+      );
+
+    mockPrisma.conversation.updateMany.mockResolvedValue({ count: 0 });
+    mockPrisma.conversation.findUnique
+      .mockResolvedValueOnce(mockConversation)                   // type check
+      .mockResolvedValueOnce({ activeCallId: 'live-holder-1' }); // self-heal read
+    mockPrisma.callSession.findUnique.mockResolvedValueOnce({ status: CallStatus.active });
+
+    await expect(callService.initiateCall(validInitiateData)).rejects.toThrow(
+      'CALL_ALREADY_ACTIVE: A call is already active in this conversation'
+    );
+    // Compare-and-swap never attempted against a live holder.
+    expect(mockPrisma.conversation.updateMany).toHaveBeenCalledTimes(1);
+    expect(deletedSession).toBe(true);
+  });
+
+  it('active-call claim self-heal: retries the null-claim once when the claim vanished between attempts', async () => {
+    // The holder released the claim between our failed claim and the
+    // self-heal read (findUnique sees activeCallId: null). One retry of the
+    // normal null/isSet claim closes the gap.
+    const mockConversation = createMockConversation();
+    const createdSession = { id: 'call-retry-win' };
+    const fullSession = createMockCallSession({
+      id: 'call-retry-win',
+      participants: [createMockParticipant()],
+      initiator: createMockUser(),
+      conversation: mockConversation
+    });
+
+    mockPrisma.participant.findFirst.mockResolvedValue({
+      id: 'participant-123', conversationId: 'conv-123', userId: 'user-123', isActive: true
+    });
+    mockPrisma.callParticipant.findMany.mockResolvedValue([]);
+    mockPrisma.callSession.findFirst.mockResolvedValue(null);
+    mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) =>
+      cb({
+        callSession: { create: jest.fn().mockResolvedValue(createdSession) },
+        callParticipant: { create: jest.fn().mockResolvedValue({}) }
+      })
+    );
+    mockPrisma.conversation.updateMany
+      .mockResolvedValueOnce({ count: 0 })  // initial claim lost
+      .mockResolvedValueOnce({ count: 1 }); // retry wins
+    mockPrisma.conversation.findUnique
+      .mockResolvedValueOnce(mockConversation)         // type check
+      .mockResolvedValueOnce({ activeCallId: null });  // self-heal read
+    mockPrisma.callSession.findUnique.mockResolvedValueOnce(fullSession); // getCallSession
+
+    const result = await callService.initiateCall(validInitiateData);
+
+    expect(result.id).toBe('call-retry-win');
+    expect(mockPrisma.conversation.updateMany).toHaveBeenNthCalledWith(2, {
+      where: {
+        id: 'conv-123',
+        OR: [{ activeCallId: null }, { activeCallId: { isSet: false } }]
+      },
+      data: { activeCallId: 'call-retry-win' }
+    });
+  });
 });
 
 describe('CallService - joinCall already-in-call path', () => {
@@ -2697,6 +2866,9 @@ describe('CallService - markCallAsMissed non-ringing guard', () => {
 
     expect(result.status).toBe(CallStatus.active);
     expect(mockPrisma.callSession.update).not.toHaveBeenCalled();
+    // An active call legitimately holds the conversation's active-call
+    // claim — the guard path must NOT strip it.
+    expect(mockPrisma.conversation.updateMany).not.toHaveBeenCalled();
   });
 
   it('returns current session without writing when call is already missed', async () => {
@@ -2715,6 +2887,32 @@ describe('CallService - markCallAsMissed non-ringing guard', () => {
 
     expect(result.status).toBe(CallStatus.missed);
     expect(mockPrisma.callSession.update).not.toHaveBeenCalled();
+  });
+
+  it('releases the stale active-call claim when the call is already missed (ringing-timeout race)', async () => {
+    // Prod incident 2026-07-02 21:30Z: the ringing-timeout handler wins the
+    // atomic updateMany to `missed` FIRST, then calls markCallAsMissed via
+    // handleMissedCall — which hit this guard and returned before
+    // releaseActiveCallClaim, leaving Conversation.activeCallId pointing at
+    // the missed call. Every subsequent initiateCall on the conversation was
+    // rejected CALL_ALREADY_ACTIVE for minutes.
+    const missedCall = createMockCallSession({
+      status: CallStatus.missed,
+      endedAt: new Date(),
+      participants: [createMockParticipant({ user: createMockUser() })],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    });
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(missedCall)
+      .mockResolvedValueOnce(missedCall);
+
+    await callService.markCallAsMissed('call-123');
+
+    expect(mockPrisma.conversation.updateMany).toHaveBeenCalledWith({
+      where: { id: 'conv-123', activeCallId: 'call-123' },
+      data: { activeCallId: null }
+    });
   });
 
   it('marks ringing call as missed (allowed)', async () => {

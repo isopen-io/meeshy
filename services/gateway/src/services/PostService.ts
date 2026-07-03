@@ -972,8 +972,21 @@ export class PostService {
       });
 
       return true;
-    } catch {
-      // Ignore race conditions
+    } catch (error) {
+      // P7-2 — course double-submit : l'index unique (postId,userId) fait
+      // lever P2002 sur le create concurrent. Dédup ATTENDUE → no-op
+      // silencieux ; les compteurs restent exacts (l'incrément n'a pas été
+      // atteint). Pattern miroir de recordAnonymousOpen ci-dessous.
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'P2002') {
+        return false;
+      }
+      // Toute AUTRE erreur (Mongo injoignable, validation) était avalée en
+      // silence par l'ancien `catch {}` — loggée désormais pour ne pas
+      // masquer une vraie panne sur ce chemin (initiative 6cd1a3c47).
+      log.warn('recordView failed', {
+        postId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return false;
     }
   }

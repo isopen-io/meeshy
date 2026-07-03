@@ -10,8 +10,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateResult
+import me.meeshy.sdk.model.call.CallSound
+import me.meeshy.sdk.model.call.CallSoundPolicy
 import me.meeshy.sdk.model.call.CallState
 import me.meeshy.sdk.model.call.CallStateMachine
+import me.meeshy.sdk.model.call.TelecomCallPolicy
 import me.meeshy.sdk.socket.CallSignalManager
 import javax.inject.Inject
 
@@ -38,11 +41,16 @@ import javax.inject.Inject
 class CallViewModel @Inject constructor(
     private val signalManager: CallSignalManager,
     private val ticker: CallSecondsTicker,
+    private val toneController: CallToneController,
+    private val telecomReporter: TelecomCallReporter,
 ) : ViewModel() {
 
     private var config: CallConfig = CallConfig.EMPTY
     private var media: CallMedia = CallMedia()
     private var callState: CallState = CallState.Idle
+
+    /** The loop currently asked of [toneController]; dedups redundant `setLoop` calls. */
+    private var activeLoop: CallSound = CallSound.None
 
     /** The id every outbound emit is keyed by: from the incoming config, or minted by [start]. */
     private var callId: String = ""
@@ -140,9 +148,41 @@ class CallViewModel @Inject constructor(
     }
 
     private fun dispatch(event: CallEvent) {
-        callState = CallStateMachine.reduce(callState, event)
+        val previous = callState
+        callState = CallStateMachine.reduce(previous, event)
+        driveTone(previous, callState)
+        driveTelecom(previous, callState)
         syncTicker()
         publish()
+    }
+
+    /**
+     * Report each genuine FSM edge to the OS telecom layer via the pure
+     * [TelecomCallPolicy]: the policy dedupes inert edges (an already-active call,
+     * a phantom disconnect, a settle back to idle) to `null`, so the reporter only
+     * ever sees a real connection transition.
+     */
+    private fun driveTelecom(previous: CallState, next: CallState) {
+        TelecomCallPolicy.plan(previous, next)?.let(telecomReporter::report)
+    }
+
+    /**
+     * Turn each FSM edge into call audio via the pure [CallSoundPolicy]: switch the
+     * loop only when it genuinely changes (so an inert event never restarts the
+     * ringback) and fire the one-shot cue the edge carries.
+     */
+    private fun driveTone(previous: CallState, next: CallState) {
+        val plan = CallSoundPolicy.plan(previous, next)
+        if (plan.loop != activeLoop) {
+            activeLoop = plan.loop
+            toneController.setLoop(plan.loop)
+        }
+        plan.cue?.let(toneController::playCue)
+    }
+
+    override fun onCleared() {
+        toneController.release()
+        telecomReporter.release()
     }
 
     /**

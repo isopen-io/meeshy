@@ -26,6 +26,7 @@ const mockRescheduleRingingTimeout = jest.fn<any>();
 const mockScheduleRingingTimeout = jest.fn<any>();
 const mockCreateCallSummaryMessage = jest.fn<any>();
 const mockMarkCallAsMissed = jest.fn<any>();
+const mockReleaseActiveCallClaim = jest.fn<any>();
 
 jest.mock('../../../services/CallService', () => ({
   CallService: jest.fn().mockImplementation(() => ({
@@ -33,6 +34,7 @@ jest.mock('../../../services/CallService', () => ({
     scheduleRingingTimeout: mockScheduleRingingTimeout,
     createCallSummaryMessage: mockCreateCallSummaryMessage,
     markCallAsMissed: mockMarkCallAsMissed,
+    releaseActiveCallClaim: mockReleaseActiveCallClaim,
     getUnrespondedParticipants: jest.fn<any>().mockResolvedValue([]),
     clearRingingTimeout: jest.fn<any>(),
     getIceServerTtl: jest.fn<any>().mockReturnValue(86400),
@@ -196,6 +198,10 @@ describe('CallEventsHandler — rehydrateActiveCalls (boot rehydration)', () => 
       callerId: INITIATOR_ID,
       callerName: 'Alice Smith',
     });
+    // The rehydrated handler must release the conversation's active-call
+    // claim exactly like the normal ringing timeout — a leaked claim blocks
+    // every future initiateCall on the conversation (prod 2026-07-02).
+    expect(mockReleaseActiveCallClaim).toHaveBeenCalledWith(CONV_ID, CALL_FRESH);
   });
 
   it('does nothing when no pre-answer call survived the restart', async () => {
