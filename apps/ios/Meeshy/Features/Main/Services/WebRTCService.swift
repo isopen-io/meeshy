@@ -348,7 +348,9 @@ final class WebRTCService {
             heuristic: heuristicLevel,
             bwe: bweLevel,
             isSendingVideo: hasLocalVideoTrack,
-            secondsSinceMonitorStart: qualityMonitorStartDate.map { Date().timeIntervalSince($0) } ?? .infinity
+            // nil start date = monitor not formally started → treat as NOT
+            // warmed up (fail-closed: heuristic only), never as warmed-up.
+            secondsSinceMonitorStart: qualityMonitorStartDate.map { Date().timeIntervalSince($0) } ?? 0
         )
 
         let newBitrate: Int
