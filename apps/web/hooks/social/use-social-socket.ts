@@ -12,7 +12,7 @@
 
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type {
@@ -101,6 +101,28 @@ export function useSocialSocket(options: UseSocialSocketOptions = {}): void {
   useEffect(() => {
     handlersRef.current = options;
   });
+
+  // `meeshySocketIOService.getSocket()` returns null until some other code
+  // path (a conversation route, `use-socketio-messaging`) has bootstrapped
+  // the connection at least once. A caller that mounts this hook first —
+  // e.g. landing directly on a feed route via deep link/PWA shortcut,
+  // without visiting a conversation route in the same session — would
+  // otherwise see `getSocket()` return null forever: the subscribe effect
+  // below bails out once on mount and nothing ever retries it. Listening for
+  // status changes lets the hook pick up the socket the moment it's created
+  // elsewhere, without polling.
+  const [socketBootTick, setSocketBootTick] = useState(0);
+  const hadSocketRef = useRef(Boolean(meeshySocketIOService.getSocket()));
+
+  useEffect(() => {
+    if (!enabled || hadSocketRef.current) return;
+    return meeshySocketIOService.onStatusChange(() => {
+      if (hadSocketRef.current) return;
+      if (!meeshySocketIOService.getSocket()) return;
+      hadSocketRef.current = true;
+      setSocketBootTick(tick => tick + 1);
+    });
+  }, [enabled]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -242,5 +264,5 @@ export function useSocialSocket(options: UseSocialSocketOptions = {}): void {
       socket.off(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, handleCommentTranslationUpdated);
       socket.off(SERVER_EVENTS.STORY_TRANSLATION_UPDATED, handleStoryTranslationUpdated);
     };
-  }, [enabled]);
+  }, [enabled, socketBootTick]);
 }
