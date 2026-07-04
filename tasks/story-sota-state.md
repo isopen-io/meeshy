@@ -338,11 +338,17 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   Champ optionnel sur StoryItem (rétro-compatible cache GRDB + payload serveur Bool-only,
   testé), posé par markViewed au flip local. `isViewed` reste le decode serveur.
   Consommateurs futurs notés : tri des vus, TTL pin R5 par date de vue.
-- [ ] **R12 (P2, architecture) Story store relationnel.** Le tray = UN blob JSON
-  `stories:recent_tray_v2` ré-encodé en entier à chaque write (chiffrement futur = encore plus
-  cher). Cible : clé par groupe (`stories:group:<authorId>`) ou table dédiée + persistence
-  actor (parité feed/messages). Gros chantier — passer par un plan dédié
-  (`docs/superpowers/plans/`), pas une itération loop.
+- [~] **R12 (P2) Écritures ciblées du cache stories.** — RE-SCOPÉ + PLAN it.47
+  ⚠️ Prémisse initiale INVALIDÉE par la re-preuve : writeToL2 range DÉJÀ une row CacheEntry
+  par groupe (itemId=authorId, chiffrée individuellement) — pas de blob unique, pas de
+  migration/clé-par-groupe/table dédiée à faire (non-objectifs documentés). Coût réel :
+  persistStoryCache() ×11 = save() SYNCHRONE qui deleteAll+ré-encode/re-chiffre TOUTES les
+  rows à chaque mutation même mono-story. Remède : APIs EXISTANTES du store (upsertPatch/
+  mergeUpdate + dirty-flush débouncé 2 s, parité messages/conversations).
+  Plan : `docs/superpowers/plans/2026-07-04-story-store-dirty-write-plan.md` — piège
+  freshness consigné (mergeUpdate PRÉSERVE loadedAt ; seuls les sites post-réseau full
+  gardent save). RESTE : inc.2 (2 wrappers + classification des ~11 sites + tests
+  flush/reload/SWR) puis inc.1 (upsertPatch mono-story site par site).
 
 - [ ] **R13 (P3, découvert it.41) Clé cache média non normalisée entre écriture et lecture.**
   Preuve (script Foundation) : `URL(string: raw).absoluteString` ré-encode espaces/accents
@@ -593,6 +599,19 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.47 — R12 : re-preuve + plan (le « gros chantier » n'existe pas — hash au commit suivant)
+
+- Itération de PLAN (protocole R12). La re-preuve a invalidé la prémisse : le store est
+  DÉJÀ relationnel par groupe (writeToL2 = row par item chiffrée) ; le vrai coût = save()
+  synchrone full-rewrite ×11 sites ; les remèdes (upsertPatch/mergeUpdate + dirty-flush
+  2 s) existent déjà dans GRDBCacheStore, utilisés par messages/conversations.
+- Piège sémantique découvert AVANT le code : mergeUpdate préserve loadedAt (mutation
+  locale) vs save qui reset la freshness — basculer aveuglément aurait cassé le SWR
+  (re-refetch en boucle + full bloquant post-expiry). Routage par nature de site consigné
+  au plan. Trade-off durabilité (fenêtre dirty ≤2 s sur kill dur) assumé : cache dont la
+  vérité est serveur, isViewed déjà durable via l'outbox R6.
+- Zéro code de prod ce tour. Exécution : it.48 = inc.2 du plan.
 
 ## it.46 — R8 inc.1 : le refetch silencieux consomme le delta-sync (c5c0c1e33)
 
