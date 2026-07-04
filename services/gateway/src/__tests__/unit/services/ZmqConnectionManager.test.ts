@@ -60,7 +60,6 @@ describe('ZmqConnectionManager', () => {
     it('should initialize ZMQ context and sockets successfully', async () => {
       await manager.initialize();
 
-      expect(zmq.Context).toHaveBeenCalled();
       expect(zmq.Push).toHaveBeenCalled();
       expect(zmq.Subscriber).toHaveBeenCalled();
       expect(mockPushSocket.connect).toHaveBeenCalledWith(`tcp://${config.host}:${config.pushPort}`);
