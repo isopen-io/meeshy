@@ -710,7 +710,7 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.62 — Audit ciblé n°2 → W7 : IP-leak des viewers via background URL, FIXÉ web (a2b878df4)
+## it.62 — Audit ciblé n°2 → W7 : IP-leak des viewers via background URL, FIXÉ web (34ae2d0ff)
 
 - Surface choisie : validation serveur des storyEffects + rendu des URLs qui en sortent.
   Constat positif au passage : le schema Zod serveur est SOLIDE (caps par champ + 256KB
