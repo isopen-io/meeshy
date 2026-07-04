@@ -490,6 +490,11 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - **Bumps de version (directive user 2026-07-03)** : committer RÉGULIÈREMENT ; à chaque commit,
   vérifier `git diff` des 5 fichiers bump (pbxproj + 4 Info.plist) — si PUR bump de version,
   l'intégrer au commit (« Includes build NNNN version bump ») ; sinon le laisser.
+- **CE FICHIER D'ÉTAT se committe RÉGULIÈREMENT (directive user 2026-07-04)** : jamais de
+  modification locale qui attend le tour suivant — toute mise à jour (item coché, journal,
+  hash post-push, piste de repérage) part dans le commit du tour courant ; si le hash n'est
+  connu qu'après le push, un `git commit tasks/story-sota-state.md` immédiat suit le push
+  (ne pas accumuler).
 
 ## 7. Journal d'itérations (l'agent APPEND ici)
 
