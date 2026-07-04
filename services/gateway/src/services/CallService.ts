@@ -1155,6 +1155,25 @@ export class CallService {
 
       // If last participant, end the call (status depends on pre/post-answer).
       if (isLastParticipant) {
+        // Stamp leftAt on any OTHER still-active participant too (mirrors
+        // endCall()'s updateMany and the idempotent-leave branch above). A
+        // direct call always ends here regardless of whether the other party
+        // has formally left — without this, the other party's CallParticipant
+        // row keeps leftAt: null forever even though the CallSession is now
+        // terminal, so every per-event authorization check that gates on
+        // `!leftAt` (resolveActiveCallParticipantId — call:signal, heartbeat,
+        // quality-report, reconnecting/reconnected, request-ice-servers,
+        // backgrounded/foregrounded, screen-capture-detected) keeps accepting
+        // that party's events against a dead call indefinitely.
+        await tx.callParticipant.updateMany({
+          where: {
+            callSessionId: callId,
+            id: { not: callParticipant.id },
+            OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
+          },
+          data: { leftAt }
+        });
+
         const duration = Math.floor(
           (leftAt.getTime() - call.startedAt.getTime()) / 1000
         );
