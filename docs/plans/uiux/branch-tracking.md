@@ -14,6 +14,22 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 139i, 2026-07-04)** — piste iOS indépendante (suffixe `i`).
+> - **139i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `b6ba6a1a`)** :
+>   Dynamic Type de `MentionSuggestionPanel` (panneau d'autocomplétion de mentions au-dessus du composer).
+>   **2/2** `.font(.system(size:))` → `MeeshyFont.relative` (nom d'affichage 14 semibold ; pseudo 12) → les
+>   libellés scalent sous Dynamic Type. **0 gel** (rangée `.frame(minHeight: 44)` = hauteur minimale, pas
+>   fixe). A11y déjà en place (`.accessibilityLabel` « Mention <nom> » ; squelette masqué). Le
+>   `MentionComposerController` non touché. 1 fichier, 0 logique, 0 test/clé i18n neuve. 1 PR ouverte #1448
+>   (calls) — pas `MentionSuggestionPanel` → 0 contention. **Lot des fichiers à 3 `.system` épuisé — on est
+>   dans la traîne à 2.** Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `MentionSuggestionPanel` Dynamic Type SOLDÉ** : ne plus reprendre (2 libellés → `relative`).
+> - **Base de départ 140i : `main` HEAD**. Reste `StoryViewerView+Content` (⚠️ i18n + `@State private`
+>   cross-file). Sinon : traîne 2/1 `.system` (`ContextActionMenu`, `SecurityVerificationView`,
+>   `StatsTimelineChart`, `AudioPostComposerView`, `ConversationBackgroundComponents`, `MessageViewsDetailView`,
+>   `StoryExpiredContent`, `StoryViewerContainer`, `BubbleStandardLayout`, `WebRTCVideoView` post-PR…), ou
+>   **passe state-of-the-art** au tarissement.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 138i, 2026-07-04)** — piste iOS indépendante (suffixe `i`).
 > - **138i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `44053b50`)** :
 >   Dynamic Type de `KeypadTab` (onglet Pavé du hub People). **1/3** `.font(.system(size:))` →

@@ -49,10 +49,10 @@ struct MentionSuggestionPanel: View {
                                 )
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(candidate.displayName)
-                                        .font(.system(size: 14, weight: .semibold))
+                                        .font(MeeshyFont.relative(14, weight: .semibold))
                                         .foregroundColor(theme.textPrimary)
                                     Text("@\(candidate.username)")
-                                        .font(.system(size: 12))
+                                        .font(MeeshyFont.relative(12))
                                         .foregroundColor(theme.textSecondary)
                                 }
                                 Spacer()
