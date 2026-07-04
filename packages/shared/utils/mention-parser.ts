@@ -16,8 +16,9 @@ const NAME_BOUNDARY_RIGHT = `(?!${NAME_CHAR})`;
  * Priorité :
  * 1. @DisplayName → résolution exacte sur les participants (insensible casse, plus long en premier).
  *    Frontières Unicode gauche+droite : `@Marie` ne matche PAS `@Marienne` ni `contact@Marie.com`.
- * 2. @username → résolution par username sur les participants (regex `\w{1,30}`, frontière gauche
- *    pour ignorer les `@` internes d'adresses e-mail).
+ * 2. @username → résolution par username sur les participants (regex `\w{1,30}`, même frontière
+ *    gauche Unicode `NAME_BOUNDARY_LEFT` que le path @DisplayName pour ignorer les `@` internes
+ *    d'adresses e-mail, y compris après une lettre accentuée/non-latine).
  * 3. Sans participants → retourne les handles bruts ("@alice")
  */
 export function parseMentions(
@@ -46,7 +47,7 @@ export function parseMentions(
     }
   }
 
-  const handleRegex = /(?<![\w])@(\w{1,30})/g;
+  const handleRegex = new RegExp(`${NAME_BOUNDARY_LEFT}@(\\w{1,30})`, 'gu');
   for (const match of remaining.matchAll(handleRegex)) {
     const rawHandle = match[1];
     if (rawHandle === undefined) continue;

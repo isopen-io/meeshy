@@ -72,6 +72,14 @@ describe('parseMentions', () => {
       const result = parseMentions('écris à contact@Marie.com', participants);
       expect(result).toEqual([]);
     });
+
+    it('ne résout PAS un handle e-mail précédé d’une lettre Unicode (parité frontière displayName)', () => {
+      // La frontière gauche du fallback @username doit être Unicode comme celle du
+      // path @DisplayName : un `@` collé à une lettre accentuée / non-latine reste
+      // un morceau d'adresse e-mail, pas une mention.
+      expect(parseMentions('écris à André@atabeth.com', participants)).toEqual([]);
+      expect(parseMentions('Привет Влад@jcharlesnm bonjour', participants)).toEqual([]);
+    });
   });
 
   describe('@username fallback', () => {
