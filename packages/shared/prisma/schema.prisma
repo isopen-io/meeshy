@@ -1118,7 +1118,12 @@ model Reaction {
   message     Message     @relation("MessageReactions", fields: [messageId], references: [id], onDelete: Cascade)
   participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
 
-  @@unique([messageId, participantId, emoji], name: "participant_reaction_unique")
+  // Single-reaction-per-user model: the key omits `emoji` on purpose so the DB
+  // itself enforces "at most one row per (message, participant)". This makes
+  // ReactionService.addReaction's upsert atomic — two concurrent adds with
+  // different emojis now race on the SAME document instead of each inserting
+  // their own row (see 2026-07-04-reaction-single-per-user-unique-index.mongodb.js).
+  @@unique([messageId, participantId], name: "participant_reaction_unique")
   @@index([messageId])
   @@index([participantId])
   @@index([emoji])

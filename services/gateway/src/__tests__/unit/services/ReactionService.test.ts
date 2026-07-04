@@ -107,6 +107,7 @@ describe('ReactionService', () => {
       },
       reaction: {
         create: jest.fn(),
+        upsert: jest.fn(),
         findFirst: jest.fn(),
         findMany: jest.fn(),
         deleteMany: jest.fn(),
@@ -146,9 +147,8 @@ describe('ReactionService', () => {
   describe('addReaction', () => {
     beforeEach(() => {
       mockPrisma.message.findUnique.mockResolvedValue(createMockMessage());
-      mockPrisma.reaction.findMany.mockResolvedValue([]);
       mockPrisma.reaction.findFirst.mockResolvedValue(null);
-      mockPrisma.reaction.create.mockResolvedValue(createMockReaction());
+      mockPrisma.reaction.upsert.mockResolvedValue(createMockReaction());
       mockPrisma.message.update.mockResolvedValue(createMockMessage());
       // Wire $transaction to execute callback with a tx that delegates to the same mocks
       mockPrisma.$transaction.mockImplementation((fn: (tx: any) => Promise<unknown>) => {
@@ -173,11 +173,11 @@ describe('ReactionService', () => {
       expect(result?.reaction.emoji).toBe('👍');
       expect(result?.reaction.messageId).toBe(testMessageId);
       expect(result?.reaction.participantId).toBe(testParticipantId);
-      expect(mockPrisma.reaction.create).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.reaction.upsert).toHaveBeenCalledTimes(1);
     });
 
     it('should add a reaction successfully for another participant', async () => {
-      mockPrisma.reaction.create.mockResolvedValue(
+      mockPrisma.reaction.upsert.mockResolvedValue(
         createMockReaction({
           participantId: testParticipantId2
         })
@@ -191,6 +191,27 @@ describe('ReactionService', () => {
 
       expect(result).toBeDefined();
       expect(result?.reaction.participantId).toBe(testParticipantId2);
+    });
+
+    it('should upsert on the (messageId, participantId) compound key — no emoji — so concurrent adds with different emojis race on the same document', async () => {
+      // Regression coverage for the duplicate-reaction race (2026-07-04): the old
+      // find/deleteMany/create sequence let two concurrent addReaction calls with
+      // different emojis both pass the "no existing reaction" check before either
+      // committed, so each inserted its own row. The DB unique key is now
+      // (messageId, participantId) with no emoji, so this upsert always targets the
+      // same document regardless of which emoji is sent.
+      await service.addReaction({
+        messageId: testMessageId,
+        participantId: testParticipantId,
+        emoji: '🔥'
+      });
+
+      expect(mockPrisma.reaction.upsert).toHaveBeenCalledWith({
+        where: { participant_reaction_unique: { messageId: testMessageId, participantId: testParticipantId } },
+        update: { emoji: '🔥' },
+        create: { messageId: testMessageId, participantId: testParticipantId, emoji: '🔥' }
+      });
+      expect(mockPrisma.reaction.deleteMany).not.toHaveBeenCalled();
     });
 
     it('should throw error for invalid emoji format', async () => {
@@ -266,7 +287,10 @@ describe('ReactionService', () => {
 
     it('should return existing reaction if already exists', async () => {
       const existingReaction = createMockReaction();
-      mockPrisma.reaction.findFirst.mockResolvedValue(existingReaction);
+      // First findFirst call resolves the previous emoji, second re-fetches the full row.
+      mockPrisma.reaction.findFirst
+        .mockResolvedValueOnce({ emoji: '👍' })
+        .mockResolvedValueOnce(existingReaction);
 
       const result = await service.addReaction({
         messageId: testMessageId,
@@ -275,17 +299,14 @@ describe('ReactionService', () => {
       });
 
       expect(result).toBeDefined();
-      expect(mockPrisma.reaction.create).not.toHaveBeenCalled();
+      expect(mockPrisma.reaction.upsert).not.toHaveBeenCalled();
     });
 
     it('should replace the previous reaction when adding a different emoji', async () => {
       // Single-reaction-per-user model (WhatsApp/iMessage): the user already
       // has 👍 and now sends 🔥 — the server must swap them, not reject.
-      mockPrisma.reaction.findMany.mockResolvedValue([
-        { emoji: '👍' }
-      ]);
-      mockPrisma.reaction.deleteMany.mockResolvedValue({ count: 1 });
-      mockPrisma.reaction.create.mockResolvedValue(createMockReaction({ emoji: '🔥' }));
+      mockPrisma.reaction.findFirst.mockResolvedValue({ emoji: '👍' });
+      mockPrisma.reaction.upsert.mockResolvedValue(createMockReaction({ emoji: '🔥' }));
 
       const result = await service.addReaction({
         messageId: testMessageId,
@@ -293,20 +314,18 @@ describe('ReactionService', () => {
         emoji: '🔥'
       });
 
-      expect(mockPrisma.reaction.deleteMany).toHaveBeenCalledWith({
-        where: {
-          messageId: testMessageId,
-          participantId: testParticipantId,
-          emoji: { in: ['👍'] }
-        }
+      expect(mockPrisma.reaction.upsert).toHaveBeenCalledWith({
+        where: { participant_reaction_unique: { messageId: testMessageId, participantId: testParticipantId } },
+        update: { emoji: '🔥' },
+        create: { messageId: testMessageId, participantId: testParticipantId, emoji: '🔥' }
       });
-      expect(mockPrisma.reaction.create).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.reaction.deleteMany).not.toHaveBeenCalled();
       expect(result?.reaction.emoji).toBe('🔥');
       expect(result?.replacedEmojis).toEqual(['👍']);
     });
 
-    it('should not delete anything when the user has no previous reaction', async () => {
-      mockPrisma.reaction.findMany.mockResolvedValue([]);
+    it('should not report a replaced emoji when the user has no previous reaction', async () => {
+      mockPrisma.reaction.findFirst.mockResolvedValue(null);
 
       const result = await service.addReaction({
         messageId: testMessageId,
@@ -314,7 +333,6 @@ describe('ReactionService', () => {
         emoji: '👍'
       });
 
-      expect(mockPrisma.reaction.deleteMany).not.toHaveBeenCalled();
       expect(result?.replacedEmojis).toEqual([]);
     });
 
@@ -330,16 +348,14 @@ describe('ReactionService', () => {
           emoji: '👍'
         })
       ).rejects.toThrow('Cannot react to a system message');
-      expect(mockPrisma.reaction.create).not.toHaveBeenCalled();
+      expect(mockPrisma.reaction.upsert).not.toHaveBeenCalled();
     });
 
     it('should allow adding same emoji again (returns existing)', async () => {
-      mockPrisma.reaction.findMany.mockResolvedValue([
-        { emoji: '👍' }
-      ]);
-
       const existingReaction = createMockReaction({ emoji: '👍' });
-      mockPrisma.reaction.findFirst.mockResolvedValue(existingReaction);
+      mockPrisma.reaction.findFirst
+        .mockResolvedValueOnce({ emoji: '👍' })
+        .mockResolvedValueOnce(existingReaction);
 
       const result = await service.addReaction({
         messageId: testMessageId,
@@ -350,11 +366,11 @@ describe('ReactionService', () => {
       expect(result).toBeDefined();
       expect(result?.reaction.emoji).toBe('👍');
       expect(result?.replacedEmojis).toEqual([]);
-      expect(mockPrisma.reaction.deleteMany).not.toHaveBeenCalled();
+      expect(mockPrisma.reaction.upsert).not.toHaveBeenCalled();
     });
 
     it('should allow adding reaction when user has zero emojis', async () => {
-      mockPrisma.reaction.findMany.mockResolvedValue([]);
+      mockPrisma.reaction.findFirst.mockResolvedValue(null);
 
       const result = await service.addReaction({
         messageId: testMessageId,
@@ -363,7 +379,7 @@ describe('ReactionService', () => {
       });
 
       expect(result).toBeDefined();
-      expect(mockPrisma.reaction.create).toHaveBeenCalled();
+      expect(mockPrisma.reaction.upsert).toHaveBeenCalled();
     });
 
     it('should sanitize emoji before creating reaction', async () => {
@@ -375,69 +391,6 @@ describe('ReactionService', () => {
 
       expect(sanitizeEmoji).toHaveBeenCalledWith('  👍  ');
       expect(result).toBeDefined();
-    });
-  });
-
-  // ==============================================
-  // ADD REACTION — P2002 CONCURRENT INSERT
-  // ==============================================
-
-  describe('addReaction — P2002 concurrent insert', () => {
-    beforeEach(() => {
-      mockPrisma.message.findUnique.mockResolvedValue(createMockMessage());
-      mockPrisma.reaction.findMany.mockResolvedValue([]);
-    });
-
-    it('should return the winning row instead of throwing when a concurrent insert wins the unique constraint race', async () => {
-      const existingReaction = createMockReaction();
-      const p2002Error = Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
-
-      // Pre-check finds nothing (TOCTOU window), then a concurrent request wins the insert.
-      mockPrisma.reaction.findFirst
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(existingReaction);
-      mockPrisma.reaction.create.mockRejectedValue(p2002Error);
-
-      const result = await service.addReaction({
-        messageId: testMessageId,
-        participantId: testParticipantId,
-        emoji: '👍'
-      });
-
-      expect(result).toBeDefined();
-      expect(result?.reaction.id).toBe(existingReaction.id);
-      // The race winner already updated the summary — the loser must not double-count it.
-      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
-    });
-
-    it('should rethrow non-P2002 database errors from the create call', async () => {
-      const dbError = Object.assign(new Error('Connection timeout'), { code: 'P1001' });
-      mockPrisma.reaction.findFirst.mockResolvedValueOnce(null);
-      mockPrisma.reaction.create.mockRejectedValue(dbError);
-
-      await expect(
-        service.addReaction({
-          messageId: testMessageId,
-          participantId: testParticipantId,
-          emoji: '👍'
-        })
-      ).rejects.toThrow('Connection timeout');
-    });
-
-    it('should rethrow P2002 when no existing row is found on recovery lookup', async () => {
-      const p2002Error = Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
-      mockPrisma.reaction.findFirst
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(null);
-      mockPrisma.reaction.create.mockRejectedValue(p2002Error);
-
-      await expect(
-        service.addReaction({
-          messageId: testMessageId,
-          participantId: testParticipantId,
-          emoji: '👍'
-        })
-      ).rejects.toThrow('Unique constraint failed');
     });
   });
 
@@ -533,9 +486,8 @@ describe('ReactionService', () => {
   describe('updateMessageReactionSummary — uses $transaction', () => {
     beforeEach(() => {
       mockPrisma.message.findUnique.mockResolvedValue(createMockMessage());
-      mockPrisma.reaction.findMany.mockResolvedValue([]);
       mockPrisma.reaction.findFirst.mockResolvedValue(null);
-      mockPrisma.reaction.create.mockResolvedValue(createMockReaction());
+      mockPrisma.reaction.upsert.mockResolvedValue(createMockReaction());
       mockPrisma.message.update.mockResolvedValue(createMockMessage());
       mockPrisma.$transaction.mockImplementation((fn: (tx: any) => Promise<unknown>) => {
         return fn({
