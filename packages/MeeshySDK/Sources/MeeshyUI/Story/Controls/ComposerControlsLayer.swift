@@ -21,10 +21,6 @@ public struct ComposerControlsLayer: View {
     let bandMinHeight: CGFloat
     let bandMaxHeight: CGFloat
 
-    /// Drawer dessin replié « totalement » (poignée seule). Tirer le grabber sous le
-    /// min le replie (sans quitter le dessin) ; le tirer vers le haut le redéplie.
-    @Binding var bandDrawerCollapsed: Bool
-
     /// Ouvre l'éditeur d'image plein écran pour un média (recadrage/filtres/
     /// ajustements). Seul point d'entrée d'édition média — il n'y a plus de
     /// panneau de contrôles média redondant dans le composer.
@@ -44,7 +40,6 @@ public struct ComposerControlsLayer: View {
         resizableBandHeight: Binding<CGFloat>,
         bandMinHeight: CGFloat,
         bandMaxHeight: CGFloat,
-        bandDrawerCollapsed: Binding<Bool>,
         onOpenMediaCrop: @escaping (String) -> Void,
         onOpenStickerPicker: (() -> Void)? = nil
     ) {
@@ -58,7 +53,6 @@ public struct ComposerControlsLayer: View {
         self._resizableBandHeight = resizableBandHeight
         self.bandMinHeight = bandMinHeight
         self.bandMaxHeight = bandMaxHeight
-        self._bandDrawerCollapsed = bandDrawerCollapsed
         self.onOpenMediaCrop = onOpenMediaCrop
         self.onOpenStickerPicker = onOpenStickerPicker
     }
@@ -85,11 +79,18 @@ public struct ComposerControlsLayer: View {
         return bandStateMachine.state
     }
 
-    /// FABs are visible when the band is hidden; when a band panel is open,
-    /// FABs hide to free space. Swiping down on the band dismisses it and
-    /// restores FABs.
+    /// C-DIR2 (d) : FABs et header partagent la MÊME règle (ComposerChromePolicy)
+    /// — chrome plein uniquement sur canvas plein écran au repos. Le swipe-down
+    /// du band les restaure ; l'édition (texte/dessin/panneau) et le zoom les
+    /// masquent.
     private var shouldShowFABs: Bool {
-        areFabsVisible && effectiveBandState == .hidden
+        ComposerChromePolicy.fullChromeVisible(
+            fabsVisible: areFabsVisible,
+            bandHidden: effectiveBandState == .hidden,
+            isTextEditing: viewModel.textEditingMode != .inactive,
+            isDrawingActive: viewModel.drawingEditingMode.isActive,
+            isViewportZoomed: viewModel.isCanvasZoomed
+        )
     }
 
     public var body: some View {
@@ -213,18 +214,18 @@ public struct ComposerControlsLayer: View {
                     minHeight: bandMinHeight,
                     maxHeight: bandMaxHeight,
                     onResizeDismiss: {
-                        // Grabber tiré sous le min → on REPLIE le drawer (poignée
-                        // seule), pour TOUT outil : le canvas devient 100 % visible
-                        // et l'outil reste actif (en dessin, le contrôleur flottant
-                        // des bulles reste visible). Re-déplier via le grabber ; pour
-                        // fermer l'outil → chevron retour du band (2026-06-02, étend
-                        // le repli dessin à tous les outils).
-                        bandDrawerCollapsed = true
-                    },
-                    drawingCollapsed: isBandResizable && bandDrawerCollapsed,
-                    onExpandDrawer: {
-                        // Grabber (replié) tiré vers le haut → on redéplie le drawer.
-                        bandDrawerCollapsed = false
+                        // C-DIR2 (b), directive user 2026-07-04 : tirer le
+                        // grabber sous le min ne replie PLUS le band en poignée
+                        // — il FERME le panneau et rend les FABs (« quand un
+                        // sheet est replié entièrement, enlever le sheet plutôt
+                        // et faire apparaître les FABs »). En dessin, fermer le
+                        // band = quitter le mode (sinon effectiveBandState le
+                        // re-forcerait aussitôt).
+                        if viewModel.drawingEditingMode.isActive {
+                            viewModel.activeTool = nil
+                        }
+                        bandStateMachine.swipeDownOnBand()
+                        areFabsVisible = true
                     }
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))

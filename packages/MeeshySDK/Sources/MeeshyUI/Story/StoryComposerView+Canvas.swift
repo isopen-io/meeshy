@@ -88,11 +88,6 @@ extension StoryComposerView {
         .animation(.spring(response: 0.3, dampingFraction: 0.85),
                    value: viewModel.drawingEditingMode)
         .adaptiveOnChange(of: viewModel.activeTool) { _, newTool in
-            // Changer d'outil ré-affiche toujours le drawer déplié : sinon l'état
-            // replié d'un outil précédent (poignée seule) persisterait sur le
-            // nouvel outil et son panneau resterait caché (2026-06-02, le repli
-            // s'applique désormais à tous les outils).
-            bandDrawerCollapsed = false
             // Le mode dessin flottant suit l'outil actif : entrer expose les
             // contrôleurs flottants (bulles) ; quitter les masque. La liste des
             // traits vit dans le band PARTAGÉ (`ComposerBottomBand.drawingPanel`)
@@ -203,7 +198,6 @@ extension StoryComposerView {
                     resizableBandHeight: $composerBandHeight,
                     bandMinHeight: Self.composerBandMinHeight,
                     bandMaxHeight: Self.composerBandMaxHeight,
-                    bandDrawerCollapsed: $bandDrawerCollapsed,
                     onOpenMediaCrop: { id in openMediaEditor(elementId: id) },
                     onOpenStickerPicker: { showStickerPicker = true }
                 )
@@ -643,12 +637,12 @@ extension StoryComposerView {
     }
 
     /// Hauteur visible du drawer dessin (band partagé) — sert UNIQUEMENT à lever les
-    /// contrôleurs flottants (`StoryDrawingToolbar`) juste au-dessus du drawer. Replié
-    /// « totalement » = poignée seule ; déplié = panneau (liste des traits) + chrome.
-    /// Ne rétrécit PLUS le canvas (Option A).
+    /// contrôleurs flottants (`StoryDrawingToolbar`) juste au-dessus du drawer.
+    /// (Le repli « poignée seule » a été retiré — C-DIR2 (b) : grabber sous le
+    /// min = fermeture du band + retour des FABs.)
     var drawingDrawerHeight: CGFloat {
         guard canvasIsInset else { return 0 }
-        return bandDrawerCollapsed ? Self.drawingDrawerGrabberHeight : composerBandHeight + 40
+        return composerBandHeight + 40
     }
 
     /// Vrai dès qu'un panneau (band partagé, mode dessin, ou éditeur texte) est
@@ -675,13 +669,6 @@ extension StoryComposerView {
         let cap = cappedSheetMaxHeight(screenHeight: composerScreenHeight)
         if viewModel.textEditingMode != .inactive {
             return min(cap, keyboardHeight + 132)
-        }
-        // Drawer replié (tout outil) → seul le grabber est présenté : le canvas ne
-        // réserve que sa hauteur, au lieu de la pleine hauteur du band. Sans ça la
-        // réservation (composerBandHeight) ne matchait pas la sheet visible (poignée
-        // seule) → canvas mal cadré + écart sous le canvas (bug user 2026-06-02).
-        if bandDrawerCollapsed {
-            return Self.drawingDrawerGrabberHeight
         }
         return min(cap, composerBandHeight)
     }

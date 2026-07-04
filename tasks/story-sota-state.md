@@ -264,16 +264,25 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   traduction EN, les tuiles retombent sur defaultValue FR (locale simu EN). Auditer les
   xcstrings du composer (story.composer.*) pour une couverture homogène 5 langues.
 
-- [ ] **C-DIR2 (P0, directive user 2026-07-04 #2) Canvas TOUJOURS entièrement visible +
-  chrome unifié header/FABs.** Directive verbatim : (a) le canvas ne doit JAMAIS être coupé
-  sous le header ni sous le band/sheet ; (b) un band replié entièrement (poignée seule) doit
-  être RETIRÉ, remplacé par le retour des FABs ; (c) pendant l'édition d'un composant, NI
-  header NI FABs (inutiles) ; (d) le header apparaît sous les MÊMES conditions que les FABs
-  (canvas plein écran + FABs = header visible ; sinon caché — Publier/preview vivent avec le
-  chrome plein). Chantier layout : StoryCanvasFraming/canvasComposerLayer (cadrage carte
-  sous chrome ?), showTopBar (+TopBar:14-16) à recâbler sur shouldShowFABs, bandDrawerCollapsed
-  → à remplacer par band dismiss + FABs restore (C3 handle devient LE pattern), vérifier
-  keyboard shift. DÉCOUPER en incréments (a)-(d).
+- [~] **C-DIR2 (P0, directive user 2026-07-04 #2) Canvas TOUJOURS entièrement visible +
+  chrome unifié header/FABs.** — (b)(c)(d) LIVRÉS it.73 ; (a) vérification dédiée restante.
+  ✅ (d)+(c) : `ComposerChromePolicy.fullChromeVisible` (rule engine pur, 6 tests) — header
+  ET FABs partagent LA même règle : canvas plein écran au repos uniquement (fabsVisible ∧
+  bandHidden ∧ !textEditing ∧ !drawing ∧ !zoomed). L'ancien `showTopBar` gardait le header
+  pendant l'édition (`|| activeTool != nil || selectedElementId != nil`) — supprimé.
+  Changement assumé : en zoom viewport, les FABs se cachent aussi (mêmes conditions).
+  ✅ (b) : mécanisme « band replié en poignée » ENTIÈREMENT RETIRÉ (bandDrawerCollapsed,
+  drawingCollapsed, onExpandDrawer, drawingDrawerGrabberHeight — 4 fichiers) ; grabber tiré
+  sous le min = fermeture du band + retour FABs (+ sortie du mode dessin, sinon
+  effectiveBandState re-forcerait le panneau) ; presentedSheetHeight/drawingDrawerHeight
+  simplifiés (plus de branche poignée).
+  ✅ (a) structurel PRÉEXISTANT confirmé : canvasIsCarded + presentedSheetHeight + cap 42 %
+  (« canvas cardé toujours visible, jamais écrasé sous la sheet ») — le repli était
+  l'exception qui désalignait la réservation. RESTE (a)-vérif : passe simulateur mesurée
+  (canvas entier au-dessus du band pour CHAQUE panneau + sous le header) + edge cases
+  clavier (texte) — prochain tour.
+  Gates : ComposerChromePolicyTests 6 + BandStateMachine 19 + ControlsLayer/Timeline suites
+  verts ; build app 49 s vert.
 - [ ] **C-DIR3 (P1, directive user 2026-07-04 #3) Device iPhone 16 Pro Max : le fond
   vidéo/média d'une story ne JOUE PAS à l'ouverture ni en preview** tant qu'un long-press +
   touch n'est pas fait ; le simulateur, lui, joue correctement. Piste : gating d'activation
@@ -875,6 +884,17 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.73 — C-DIR2 (b)(c)(d) : chrome unifié header↔FABs + suppression du band replié
+
+- Détail dans l'item C-DIR2. Le pattern C3 (poignée fantôme) devient l'UNIQUE mécanisme de
+  chrome minimal — le band ne se replie plus, il se ferme. La grammaire finale : chrome plein
+  (header+FABs) ⟺ canvas au repos ; band ouvert/édition/zoom = canvas + outil seuls ;
+  swipe-down FABs = canvas nu + poignée fantôme.
+- Piège : ComposerControlsLayerTests passait encore bandDrawerCollapsed (extra argument) —
+  adapté ; commentaire périmé Band nettoyé.
+- Reste : (a)-vérif simulateur mesurée (canvas jamais coupé, chaque panneau + clavier texte)
+  + vérif visuelle des nouvelles transitions chrome — prochain tour, avec C3 visuel.
 
 ## it.72 — C8 : stickers de retour (bouton panneau Texte + picker réparé) + 2 directives user
 

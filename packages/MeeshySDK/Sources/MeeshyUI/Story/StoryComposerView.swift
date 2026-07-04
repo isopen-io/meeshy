@@ -100,15 +100,6 @@ public struct StoryComposerView: View {
     /// reste PLEIN — ce drawer flotte par-dessus, il ne rétrécit plus le canvas.
     @State var composerBandHeight: CGFloat = 280
 
-    /// Drawer d'outil replié « totalement » : seul le grabber reste visible et le
-    /// canvas est 100 % visible. Vaut pour TOUS les outils (2026-06-02) — replier ne
-    /// quitte pas l'outil actif (en dessin, le contrôleur flottant `StoryDrawingToolbar`
-    /// persiste en plus). Re-déplier via le grabber.
-    @State var bandDrawerCollapsed = false
-
-    /// Hauteur du drawer dessin une fois replié (poignée seule).
-    static let drawingDrawerGrabberHeight: CGFloat = 38
-
     @State var showDiscardAlert = false
     @State var showRestoreDraftAlert = false
     /// U4 inc.2 — données de la carte de reprise (cover rendu async depuis

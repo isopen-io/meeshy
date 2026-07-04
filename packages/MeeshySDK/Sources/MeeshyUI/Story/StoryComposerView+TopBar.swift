@@ -9,10 +9,19 @@ import MeeshySDK
 // MARK: - StoryComposerView + TopBar
 
 extension StoryComposerView {
-    /// Top bar hides during free canvas manipulation (zoomed, no tool/selection)
-    /// to reveal canvas controls underneath. Reappears when activating a tool or selecting media.
+    /// C-DIR2 (d)+(c) : le header suit EXACTEMENT les conditions des FABs —
+    /// visible uniquement canvas plein écran au repos (aucun panneau, aucune
+    /// édition texte/dessin, pas de zoom). L'ancienne règle le gardait affiché
+    /// pendant l'édition (`|| activeTool != nil || selectedElementId != nil`),
+    /// à rebours de « n'afficher que l'utile à l'instant t ».
     var showTopBar: Bool {
-        (!viewModel.isCanvasZoomed && areFabsVisible) || viewModel.activeTool != nil || viewModel.selectedElementId != nil
+        ComposerChromePolicy.fullChromeVisible(
+            fabsVisible: areFabsVisible,
+            bandHidden: bandStateMachine.state == .hidden,
+            isTextEditing: viewModel.textEditingMode != .inactive,
+            isDrawingActive: viewModel.drawingEditingMode.isActive,
+            isViewportZoomed: viewModel.isCanvasZoomed
+        )
     }
 
     // MARK: - Top Bar
