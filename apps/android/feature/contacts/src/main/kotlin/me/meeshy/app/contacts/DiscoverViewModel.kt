@@ -2,7 +2,9 @@ package me.meeshy.app.contacts
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,6 +25,7 @@ import me.meeshy.sdk.model.friend.DiscoverSearchAction
 import me.meeshy.sdk.model.friend.FriendshipStatus
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.UserSearchResult
+import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.user.UserRepository
 import javax.inject.Inject
@@ -65,9 +68,10 @@ data class DiscoverUiState(
  * shared [UserRelationshipResolver], so accepting/sending from any other screen
  * flips the button here too (via the [FriendshipCache] version stream).
  *
- * The connect action is genuinely two-way: `connect` sends a request (the row
- * flips to Pending once the gateway mints the request id) and `acceptReceived`
- * accepts an inbound one optimistically with rollback on failure.
+ * The connect action is genuinely two-way: `connect` queues a friend request
+ * durably (the row flips to Pending optimistically and instantly, even offline;
+ * the outbox delivers on reconnect) and `acceptReceived` accepts an inbound one
+ * optimistically with rollback on failure.
  */
 @HiltViewModel
 class DiscoverViewModel @Inject constructor(
@@ -76,6 +80,7 @@ class DiscoverViewModel @Inject constructor(
     private val suggestionsRepository: SuggestionsRepository,
     private val friendshipCache: FriendshipCache,
     private val blockCache: BlockCache,
+    private val workManager: WorkManager,
     sessionRepository: SessionRepository,
 ) : ViewModel() {
 
@@ -194,20 +199,30 @@ class DiscoverViewModel @Inject constructor(
         if (userId in _state.value.pendingActionIds) return
         _state.update { it.copy(pendingActionIds = it.pendingActionIds + userId) }
         viewModelScope.launch {
-            when (val result = friendRepository.sendFriendRequest(userId)) {
-                is NetworkResult.Success -> {
-                    // Mint the pending entry only once the gateway confirms and
-                    // returns the real request id (parity with iOS `didSendRequest`).
-                    friendshipCache.didSendRequest(userId, result.data.id)
-                    _state.update { it.copy(pendingActionIds = it.pendingActionIds - userId) }
+            try {
+                // Durably queue first, then flip the shared SSOT keyed by the row's
+                // own cmid as a placeholder request id — so the cache never shows a
+                // Pending with no durable row behind it (a cancellation before the
+                // enqueue commits simply leaves the state untouched). The local Room
+                // write is sub-millisecond, so the flip is still effectively instant;
+                // offline it just waits in the outbox. The worker grafts the real id
+                // back on delivery, and a hard exhaust rolls the pending back.
+                val cmid = friendRepository.enqueueSendFriendRequest(userId)
+                if (cmid != null) {
+                    friendshipCache.didSendRequest(userId, cmid)
+                    workManager.enqueue(OutboxFlushWorker.buildRequest())
                 }
-                is NetworkResult.Failure ->
-                    _state.update {
-                        it.copy(
-                            pendingActionIds = it.pendingActionIds - userId,
-                            errorMessage = result.error.message,
-                        )
-                    }
+                _state.update { it.copy(pendingActionIds = it.pendingActionIds - userId) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // The local enqueue failed before any optimistic flip — surface it.
+                _state.update {
+                    it.copy(
+                        pendingActionIds = it.pendingActionIds - userId,
+                        errorMessage = e.message,
+                    )
+                }
             }
         }
     }

@@ -319,10 +319,19 @@ Contacts slices:**
    `ContactsListTab` Compose UI. **Follow-up:** a persistent Room `friends` cache for cold-start paint
    (iOS `CacheCoordinator.friends`) — today it's network-first + in-memory reconciled; and per-filter
    counts + mood-emoji presence.
-2. **Send friend request (compose-new)** — user search + inline connect, optimistic `didSendRequest`
-   + offline-queue + `cmid` idempotency (the "send" half the Requests tab still lacks). Note: live
-   search + inline connect already shipped (`discover-user-search`); the gap is the durable
-   **offline-queue + idempotency** for the send.
+2. ~~**Send friend request offline-queue + `cmid` idempotency**~~ ✅ shipped as
+   `friend-request-outbox-idempotency` (2026-07-04) — new `OutboxKind.SEND_FRIEND_REQUEST` on the
+   new `OutboxLanes.FRIEND` lane, a `FriendRequestPayload` (optional greeting; receiver is the
+   `targetId`), an `OutboxCoalescer` dedup (repeated send to the same receiver superseded — latest
+   wins), the pure `FriendRequestSend.classify` delivery-outcome classifier (409/blank-id →
+   idempotent AlreadyExists, other 4xx → permanent Rejected + rollback, 5xx/offline → Retry),
+   `FriendRepository.enqueueSendFriendRequest` (durable enqueue), an `OutboxFlushWorker` sender that
+   grafts the real request id over the placeholder on delivery + `onExhausted` `FriendshipCache`
+   rollback, and `DiscoverViewModel.connect` rewired to the durable optimistic path (instant Pending
+   flip even offline, keyed by the outbox cmid). **Also fixed a latent bug:** `OutboxLanes.BLOCK`
+   (and now `FRIEND`) were absent from the worker's shared-lane drain list, so block/unblock rows
+   never delivered — both lanes now drained. +26 tests. See run log. **Follow-up:** the send
+   **compose-new** UI (a dedicated user-search → connect entry point beyond the Discover tab).
 3. ~~**BlockRepository + `BlockStatusProvider` binding**~~ ✅ shipped as `contacts-blocked-list`
    (2026-07-04) — pure `:core:model` `BlockedUser` + `resolvedName`; `:core:network` `BlockApi`;
    `:sdk-core` `@Singleton BlockCache` (blocklist SSOT) + `BlockRepository`; `:feature:contacts`
@@ -343,12 +352,15 @@ Contacts slices:**
    +23 tests. See run log. **Follow-up:** a persistent Room suggestions cache for cross-launch cold-start
    paint (iOS `CacheCoordinator.userSearch`), matching the friends-list in-memory precedent.
 
-**Recommended next (highest value):** slice #2 — **send friend request offline-queue + `cmid` idempotency**
-(the durable send half the Requests tab still lacks). Now the sole remaining Contacts durable-mutation gap
-(durable unblock/block landed 2026-07-04). It routes the friend-request send through the existing outbox
-(`OutboxRepository`/`OutboxKind`), a pure-core-heavy vertical slice (a `cmid`-idempotency/dedup rule +
-outbox mapping + delivery-outcome classification, with the placeholder→real request-id write-back into
-`FriendshipCache` on delivery) and no DB migration.
+**Recommended next (highest value):** the **friends Room cache for cold-start paint** (follow-up #1) —
+a persistent Room `friends` table so the Contacts tab paints instantly on cold launch (iOS
+`CacheCoordinator.friends`), the last in-memory-only reconcile gap. It is a pure-core-heavy SWR slice
+(`friends` entity + DAO, DB version bump, a cache source mirroring `StoryCacheSource`/`CallHistoryCacheSource`,
+and `ContactsListViewModel` reading cache-first) with a clear iOS precedent. Alternatively, the
+**send compose-new UI** (a dedicated user-search → connect surface) now that the durable send half is
+done — but that is Compose-glue-heavy with little new pure core, so the Room cache is the better TDD slice.
+All Contacts durable-mutation gaps are now closed (durable block/unblock 2026-07-04, durable friend-request
+send 2026-07-04).
 
 ---
 _Historical Calls backlog below (revisit only for the platform-glue slices)._
@@ -662,6 +674,67 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-04 — slice `friend-request-outbox-idempotency` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration; no open PRs at all. Branched
+  `claude/apps/android/friend-request-outbox-idempotency` off latest `origin/main` (`fe8c9c6f`).
+- **Why this slice:** PROGRESS "Next" #2 / parity `§J` — the **durable friend-request send** was the
+  sole remaining Contacts durable-mutation gap. `DiscoverViewModel.connect` was online-first REST
+  (`friendRepository.sendFriendRequest`), minting the pending entry only on the gateway's success — a
+  dropped connection silently lost the send and left no pending state. This routes it through the
+  shared durable outbox so it survives offline + process death, with an idempotent-send dedup and a
+  delivery-outcome classifier faithful to the gateway's 409-conflict contract. Pure-core-heavy, **no
+  DB migration** (reuses the outbox schema). Surpasses iOS (online-only send).
+- **Added / changed (production):**
+  - `:sdk-core` `outbox/OutboxModel.kt` — new `OutboxKind.SEND_FRIEND_REQUEST` + `OutboxLanes.FRIEND`
+    lane + `@Serializable FriendRequestPayload(message: String?)` (receiver = the row `targetId`).
+  - `:sdk-core` `outbox/OutboxCoalescer.kt` — `SEND_FRIEND_REQUEST → replaceSameKind`: a repeated send
+    to the same receiver supersedes the pending one (only one request can exist — idempotent, latest
+    greeting wins).
+  - `:sdk-core` `friend/FriendRequestSend.kt` (NEW) — pure total `classify(NetworkResult<FriendRequest>)
+    → FriendRequestDelivery` (`Delivered(id)` / `AlreadyExists` / `Retry` / `Rejected(reason)`): success
+    with a real id grafts it back; a 409 or blank-id success is an idempotent already-exists (never
+    retried, never rolled back); other 4xx (400/403/404/422) are permanent rejects; 5xx/offline retry.
+  - `:sdk-core` `friend/FriendRepository.kt` — `enqueueSendFriendRequest(receiverId, cmid?, message?)`:
+    durable enqueue on the FRIEND lane; blank receiver inert (`null`); accepts a caller-supplied `cmid`
+    so the row and the optimistic placeholder request id share one key. Injects `OutboxRepository`.
+    The online `sendFriendRequest` stays as the building block the worker sender calls.
+  - `:sdk-core` `outbox/OutboxFlushWorker.kt` — `SEND_FRIEND_REQUEST` sender (decode payload →
+    `friendRepository.sendFriendRequest` → `FriendRequestSend.classify` → graft real id via
+    `friendshipCache.didSendRequest` on `Delivered`, `Success` on `AlreadyExists`, `TransientFailure`
+    on `Retry`, `PermanentFailure` on `Rejected`) + `onExhausted` `friendshipCache.rollbackSendRequest`.
+    Injects `FriendRepository` + `FriendshipCache`.
+  - **Latent-bug fix:** `OutboxLanes.BLOCK` (shipped last slice) and the new `FRIEND` were **absent from
+    the worker's shared-lane drain list**, so block/unblock rows never delivered. Added both — closes the
+    silent gap in `block-outbox-durable` and makes this slice's delivery actually run.
+  - `:feature:contacts` `DiscoverViewModel.kt` — `connect` rewired to the durable optimistic path: flips
+    `FriendshipCache` (Pending, instant even offline) keyed by the outbox `cmid` placeholder, queues via
+    `enqueueSendFriendRequest`, wakes the flush worker only on a real cmid, and rolls the optimistic flip
+    back on a **local enqueue failure** (`CancellationException` rethrown). Injects `WorkManager`.
+- **Tests (TDD red→green, +26 net):**
+  - `FriendRequestSendTest` +9 — full branch sweep: delivered-real-id, blank-id→already-exists,
+    409→already-exists, 400/403/404/422→rejected(reason), 5xx→retry, offline(null status)→retry.
+  - `OutboxCoalescerTest` +3 — first friend request enqueues, repeated send to same receiver supersedes,
+    different receiver not coalesced.
+  - `FriendRepositoryTest` (NEW, Robolectric + real in-memory outbox) +5 — durable send queues a
+    SEND_FRIEND_REQUEST row on the FRIEND lane keyed by the returned cmid; payload carries the greeting;
+    blank receiver inert; a supplied cmid keys the row; a repeated send supersedes (latest payload).
+  - `DiscoverViewModelTest` +4 net — connect queues durably + flips Pending optimistically + wakes the
+    flusher; a coalesced (`null` cmid) send flips Pending but skips the flush; a **local enqueue throw**
+    rolls the optimistic Pending back to Connect + surfaces the error + queues nothing; own-row and
+    non-connectable-row inert (assert `enqueueSendFriendRequest` never called).
+- **Verification:** `gradle :app:assembleDebug testDebugUnitTest` — **BUILD SUCCESSFUL** (full project,
+  all modules' unit tests green). The wrapper's pinned 8.11.1 distribution download is egress-blocked
+  (github redirect 403) in this container, so verification used the system Gradle 8.14.3 (forward-
+  compatible superset), same as the prior slice.
+- **Reviewer gate:** **PASS** — diff is `apps/android` only (10 files); TDD behavioural, no tautologies,
+  no floor lowered; edge cases (blank/unknown/own id, coalesce, enqueue-failure rollback, in-flight
+  guard, `CancellationException` rethrown, idempotent 409, permanent-vs-transient split) covered; SDK
+  purity held (classifier/coalescer/repo = stateless rule + durable enqueue in `:sdk-core`, optimistic
+  orchestration in `:feature:contacts`); SSOT = `FriendshipCache`; UDF + instant-app (offline-first
+  optimistic flip) preserved; colour/nav untouched.
+- **Follow-up:** the send **compose-new** UI (dedicated user-search → connect surface); a persistent
+  Room `friends` cache for cold-start paint (iOS `CacheCoordinator.friends`) — the recommended next.
 
 ### 2026-07-04 — slice `block-outbox-durable` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration. The one open PR (#1453) is

@@ -25,7 +25,9 @@ public sealed interface CoalesceDecision {
  * - a delete supersedes pending edits of the same message;
  * - a reaction toggle (add then remove, or remove then add) cancels itself;
  * - a block/unblock toggle of the same user cancels itself, and a repeated
- *   block (or unblock) keeps only the latest (idempotent terminal state).
+ *   block (or unblock) keeps only the latest (idempotent terminal state);
+ * - a repeated friend request to the same receiver keeps only the latest
+ *   (only one request can exist — idempotent send, latest greeting wins).
  *
  * [pending] MUST contain only still-cancellable rows ([OutboxState.PENDING]);
  * an in-flight mutation cannot be undone.
@@ -44,6 +46,8 @@ public object OutboxCoalescer {
             OutboxKind.REMOVE_REACTION -> annihilateOpposite(incoming, sameTarget, OutboxKind.ADD_REACTION)
             OutboxKind.BLOCK_USER -> blockToggle(incoming, sameTarget, OutboxKind.UNBLOCK_USER, OutboxKind.BLOCK_USER)
             OutboxKind.UNBLOCK_USER -> blockToggle(incoming, sameTarget, OutboxKind.BLOCK_USER, OutboxKind.UNBLOCK_USER)
+            OutboxKind.SEND_FRIEND_REQUEST ->
+                replaceSameKind(incoming, sameTarget, OutboxKind.SEND_FRIEND_REQUEST)
             else -> CoalesceDecision.Enqueue(incoming)
         }
     }

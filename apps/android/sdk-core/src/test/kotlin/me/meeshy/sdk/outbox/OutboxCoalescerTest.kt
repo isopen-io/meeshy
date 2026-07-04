@@ -141,4 +141,31 @@ class OutboxCoalescerTest {
         assertThat(OutboxCoalescer.decide(unblockU2, listOf(blockU1)))
             .isEqualTo(CoalesceDecision.Enqueue(unblockU2))
     }
+
+    @Test
+    fun `a first friend request to a receiver is enqueued`() {
+        val request = row("f1", OutboxKind.SEND_FRIEND_REQUEST, "u1")
+
+        assertThat(OutboxCoalescer.decide(request, emptyList()))
+            .isEqualTo(CoalesceDecision.Enqueue(request))
+    }
+
+    @Test
+    fun `a repeated friend request to the same receiver supersedes the pending one`() {
+        val first = row("f1", OutboxKind.SEND_FRIEND_REQUEST, "u1")
+        val second = row("f2", OutboxKind.SEND_FRIEND_REQUEST, "u1")
+
+        // Sending twice is idempotent — only one request can exist, latest wins.
+        assertThat(OutboxCoalescer.decide(second, listOf(first)))
+            .isEqualTo(CoalesceDecision.Replace(listOf("f1"), second))
+    }
+
+    @Test
+    fun `a friend request to a different receiver is not coalesced`() {
+        val toU1 = row("f1", OutboxKind.SEND_FRIEND_REQUEST, "u1")
+        val toU2 = row("f2", OutboxKind.SEND_FRIEND_REQUEST, "u2")
+
+        assertThat(OutboxCoalescer.decide(toU2, listOf(toU1)))
+            .isEqualTo(CoalesceDecision.Enqueue(toU2))
+    }
 }

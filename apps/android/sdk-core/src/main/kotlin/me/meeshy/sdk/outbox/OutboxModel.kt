@@ -17,6 +17,7 @@ public enum class OutboxKind {
     UPLOAD_MEDIA,
     BLOCK_USER,
     UNBLOCK_USER,
+    SEND_FRIEND_REQUEST,
 }
 
 /** Lifecycle of an outbox row; a succeeded mutation is deleted, never flagged. */
@@ -50,6 +51,7 @@ public object OutboxLanes {
     public const val PROFILE: String = "profile"
     public const val SETTINGS: String = "settings"
     public const val BLOCK: String = "block"
+    public const val FRIEND: String = "friend"
 }
 
 /**
@@ -109,6 +111,14 @@ public object OutboxDependencies {
 /** Payload of an `ADD_REACTION` / `REMOVE_REACTION` outbox row. */
 @kotlinx.serialization.Serializable
 public data class ReactionPayload(val emoji: String)
+
+/**
+ * Payload of a `SEND_FRIEND_REQUEST` outbox row. The receiver is the row's
+ * `targetId` (so a repeated send to the same receiver coalesces per-target); the
+ * optional greeting travels here.
+ */
+@kotlinx.serialization.Serializable
+public data class FriendRequestPayload(val message: String? = null)
 
 /**
  * Payload of an `UPDATE_CONVERSATION_PREFS` outbox row — the full desired
