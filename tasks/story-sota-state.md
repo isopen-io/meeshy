@@ -318,7 +318,15 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   (`StoryComposerSupportTypes.swift:19-26`) jamais consommé ; `texturePanel` = couleurs unies
   seulement (`ComposerToolPanelHost.swift:640-667`). Offrir la rangée gradients (réutilisation
   directe).
-- [ ] **C12 (P3, découvert it.68 simulateur) Chrome composer bilingue.** Preuve visuelle
+- [x] **C12 (P3, découvert it.68 simulateur) Chrome composer bilingue.** ✅ it.86
+  Audit scripté : 108 clés story.* utilisées dans MeeshyUI ; 28 ABSENTES du xcstrings
+  (dont les ajouts C4-C9 : addSlide/opening*/undo/redo/showTools + draft.resume/freshness/
+  media/language/tool.*) et 45 PARTIELLES (fr seul — toutes les tuiles empty-state, cause
+  exacte du mélange des captures). Patch : couverture COMPLÈTE fr/en/es/de (161 unités de
+  traduction) + fix bonus `story.repost.reprojected` (le fr contenait de l'anglais).
+  Édition byte-safe (ordre préservé, no-op vérifié identique, insertion alphabétique
+  locale). Contre-audit : 0 absente, 0 partielle. Build vert. pt-BR : hors périmètre
+  (couverture existante hétérogène — suivi possible si demandé). ORIGINE :** Preuve visuelle
   (it68-quit.png) : alerte discard « Quit without publishing? / Save / Quit / Cancel » en
   ANGLAIS pendant que les tuiles/titres sont en français, même écran. Cause probable = piège
   xcstrings devRegion=en vs source=fr (cf. mémoire projet) : les clés de l'alerte ont une
@@ -991,6 +999,12 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.86 — C12 : le chrome composer parle UNE langue (couverture fr/en/es/de complète)
+
+- La mécanique du mélange élucidée : locale EN + clés partiellement traduites = alerte EN
+  au-dessus de tuiles FR. 161 unités ajoutées par patch scripté byte-safe ; l'audit
+  scripté est rejouable pour les futures clés.
 
 ## it.85 — C10 : purge du code mort (7 fichiers, −~1500 lignes, 2 extractions)
 
