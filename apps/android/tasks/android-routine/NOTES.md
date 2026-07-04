@@ -168,6 +168,27 @@ Append-only log of gotchas and decisions that save time next run.
 - ViewModel tests: `UnconfinedTestDispatcher` + `Dispatchers.setMain/resetMain`
   in `@Before/@After`; Truth `assertThat`; MockK (`relaxed = true`); Turbine
   `state.test {}` for flow assertions.
+- **Observe an intermediate cache-first state before the network resolves** (e.g.
+  "cached roster painted while the fetch is in flight"): under `UnconfinedTestDispatcher`
+  the whole `init` runs to completion synchronously, so hold the network stub open with a
+  `CompletableDeferred` and `coEvery { api.call(...) } coAnswers { gate.await() }`. Assert the
+  cached state, then `gate.complete(result)` and assert the network overwrite. NB: `coAnswers`
+  is an **infix member of `MockKStubScope`** (the receiver `coEvery {…}` returns) — do **not**
+  `import io.mockk.coAnswers` (there is no such top-level symbol; it fails to resolve). Used in
+  `contacts-friends-room-cache`.
+- **Dagger `@Inject constructor` ignores Kotlin default args:** a param like
+  `clock: CacheClock = SystemCacheClock` still demands a binding and there is none for
+  `CacheClock`. For `@Singleton` repos that need `now`, call `SystemCacheClock.nowMillis()`
+  inline rather than injecting it (test time isn't asserted). Cf. `FriendListRepository`,
+  `CallHistoryRepository`, `SuggestionsRepository`.
+- **Cache-first cold-paint slice recipe** (`FriendListRepository`, the template to copy for the
+  suggestions cache): a `*Entity` with a serialized-payload column + a `sortIndex` so the DAO
+  (`ORDER BY sortIndex`) replays the pure builder's order verbatim (ordering SSOT stays in the
+  `:core:model` builder, never re-derived in SQL); a focused `@Singleton` repo with
+  `cachedSnapshot()` (null = cold, distinguished from a synced-but-empty roster via `sync_meta`)
+  + `persist()` (write-through; guard the empty case with `dao.clear()`, since Room `deleteNotIn`
+  on an empty list generates invalid `NOT IN ()` SQL); the ViewModel paints from the snapshot
+  first, then revalidates and writes the fresh roster back through.
 - `MeeshyConfig` is a plain `data class` with defaults — instantiate it real,
   do not mock.
 - `SessionRepository` is a concrete class — mock with `mockk(relaxed=true)` and

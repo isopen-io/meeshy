@@ -316,9 +316,13 @@ Contacts slices:**
 1. ~~**Contacts list data slice**~~ ✅ shipped as `contacts-list-friends` (2026-07-04) — pure
    `:core:model` `ContactList` (assemble from accepted requests, online-first sort, filter+search,
    cache reconcile), `ContactsListViewModel` over `FriendRepository` + `FriendshipCache`, and the
-   `ContactsListTab` Compose UI. **Follow-up:** a persistent Room `friends` cache for cold-start paint
-   (iOS `CacheCoordinator.friends`) — today it's network-first + in-memory reconciled; and per-filter
-   counts + mood-emoji presence.
+   `ContactsListTab` Compose UI. **Follow-up:** ~~a persistent Room `friends` cache for cold-start
+   paint (iOS `CacheCoordinator.friends`)~~ ✅ shipped as `contacts-friends-room-cache` (2026-07-04) —
+   `:core:database` `FriendEntity`/`FriendDao` (DB v7→8, `sortIndex` preserves `ContactList`'s order),
+   `:sdk-core` `FriendListRepository` (`cachedSnapshot`/`persist`, cold vs synced-empty via
+   `sync_meta`), `ContactsListViewModel` rewired cache-first (instant cold paint + write-through +
+   prune-through on unfriend). +14 tests. See run log. **Still open:** per-filter counts + mood-emoji
+   presence.
 2. ~~**Send friend request offline-queue + `cmid` idempotency**~~ ✅ shipped as
    `friend-request-outbox-idempotency` (2026-07-04) — new `OutboxKind.SEND_FRIEND_REQUEST` on the
    new `OutboxLanes.FRIEND` lane, a `FriendRequestPayload` (optional greeting; receiver is the
@@ -352,15 +356,16 @@ Contacts slices:**
    +23 tests. See run log. **Follow-up:** a persistent Room suggestions cache for cross-launch cold-start
    paint (iOS `CacheCoordinator.userSearch`), matching the friends-list in-memory precedent.
 
-**Recommended next (highest value):** the **friends Room cache for cold-start paint** (follow-up #1) —
-a persistent Room `friends` table so the Contacts tab paints instantly on cold launch (iOS
-`CacheCoordinator.friends`), the last in-memory-only reconcile gap. It is a pure-core-heavy SWR slice
-(`friends` entity + DAO, DB version bump, a cache source mirroring `StoryCacheSource`/`CallHistoryCacheSource`,
-and `ContactsListViewModel` reading cache-first) with a clear iOS precedent. Alternatively, the
-**send compose-new UI** (a dedicated user-search → connect surface) now that the durable send half is
-done — but that is Compose-glue-heavy with little new pure core, so the Room cache is the better TDD slice.
-All Contacts durable-mutation gaps are now closed (durable block/unblock 2026-07-04, durable friend-request
-send 2026-07-04).
+**Recommended next (highest value):** the **suggestions Room cache for cold-start paint** — a persistent
+Room table behind `SuggestionsRepository` so the Discover tab's empty-query suggestions paint instantly
+on cold launch (iOS `CacheCoordinator.userSearch`), now the **last in-memory-only cache gap** (the
+friends list went durable 2026-07-04 as `contacts-friends-room-cache`, mirroring
+`StoryCacheSource`/`CallHistoryCacheSource`). It is a pure-core-heavy SWR slice with a clear iOS
+precedent and the exact `FriendListRepository` template to follow. Alternatively, the **send compose-new
+UI** (a dedicated user-search → connect surface) now that the durable send half is done — but that is
+Compose-glue-heavy with little new pure core, so the suggestions Room cache is the better TDD slice.
+All Contacts durable-mutation gaps are closed (durable block/unblock + friend-request send 2026-07-04),
+and the friends list now paints cache-first cold (2026-07-04).
 
 ---
 _Historical Calls backlog below (revisit only for the platform-glue slices)._
@@ -674,6 +679,57 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-04 — slice `contacts-friends-room-cache` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration (only an unrelated iOS PR
+  #1459 was open). Branched `claude/apps/android/contacts-friends-room-cache` off latest
+  `origin/main` (`5a7008d8`).
+- **Why this slice:** PROGRESS "Recommended next" / parity `§J` follow-up #1 — a **persistent Room
+  `friends` cache for cold-start paint** (iOS `CacheCoordinator.friends`). The Contacts tab was
+  network-first + in-memory reconciled only: a cold launch showed a skeleton and blocked on the
+  received/sent fetch before any friend appeared. This adds a durable cache so the last-known roster
+  paints instantly (cache-first, ARCHITECTURE.md §4), surviving process death and working offline.
+  Pure-core-heavy SWR slice with a clear iOS precedent; destructive DB migration (v7→8, the module's
+  standing `fallbackToDestructiveMigration`).
+- **Added / changed (production):**
+  - `:core:database` `entity/FriendEntity.kt` (NEW) — `friends` table: `userId` PK, serialized
+    `FriendRequestUser` `payload`, `sortIndex` (preserves `ContactList`'s assembled order verbatim —
+    ordering SSOT stays in `ContactList`, never re-derived in SQL), `cachedAt`.
+  - `:core:database` `dao/FriendDao.kt` (NEW) — `observeAll()` `ORDER BY sortIndex ASC`, `upsertAll`,
+    `deleteNotIn`, `clear`.
+  - `:core:database` `MeeshyDatabase.kt` — register `FriendEntity` + `friendDao()`, **version 7→8**;
+    `DatabaseModule.kt` — Hilt `providesFriendDao`.
+  - `:sdk-core` `friend/FriendListRepository.kt` (NEW, `@Singleton`) — a focused, network-free
+    persistence brick: `cachedSnapshot()` (null = cold/never-synced, distinguished from a
+    synced-but-empty roster via `sync_meta`; else decoded rows in persisted order) + `persist(friends)`
+    (write-through: upsert + `deleteNotIn`, or `clear()` for an empty roster, and stamp `sync_meta`).
+  - `:feature:contacts` `ContactsListViewModel.kt` — cache-first: `load()` now `paintFromCache()`
+    first (instant cold paint; skeleton only on a cold `null` snapshot), then `revalidate()` (the
+    existing received/sent fetch → `ContactList` assemble → `FriendshipCache` hydrate) writes the
+    roster back through `persist`. A cross-screen unfriend prunes locally **and** writes the pruned
+    roster through (no refetch); an addition still triggers one silent refetch.
+- **Tests (TDD red→green, +14 net):**
+  - `FriendListRepositoryTest` (NEW, Robolectric + real in-memory Room) +8 — cold snapshot is `null`;
+    persist→snapshot round-trips order + full payload; **`sortIndex` honoured over any SQL re-sort**
+    (an offline contact deliberately ahead of an online one survives); `deleteNotIn` drops absentees;
+    an empty persist is synced-empty (not cold); newest write wins; rows observable via the DAO.
+  - `ContactsListViewModelTest` +6 — paints the cached roster instantly while the network fetch is
+    suspended; keeps the cache and shows no error when the refresh fails; a cold-empty cache shows the
+    skeleton until the network answers; persists the assembled roster after a load; a cross-screen
+    unfriend writes the pruned roster through **without** a refetch. Existing 13 tests preserved
+    (constructor gained the new dep; no assertion weakened).
+- **Verification:** `gradle assembleDebug testDebugUnitTest` — **BUILD SUCCESSFUL** (full project, all
+  modules' unit tests green; whole-app compile exercises the DB v8 schema + DI wiring). The wrapper's
+  pinned Gradle 8.11.1 distribution is egress-blocked (github redirect 403) in this container, so
+  verification used the system Gradle 8.14.3 (forward-compatible superset), same as prior slices.
+- **Reviewer gate:** **PASS** — diff is `apps/android` only (8 files); TDD behavioural through the
+  public API, no tautologies, no floor lowered; edge cases (cold vs synced-empty vs populated; empty
+  persist; order preservation; refresh-failure keeps cache; unfriend prune-through) covered; SDK
+  purity held (`FriendListRepository` = stateless persistence brick in `:sdk-core`, entity/DAO in
+  `:core:database`, orchestration in `:feature:contacts`); ordering SSOT stays in `ContactList`;
+  instant-app cache-first (skeleton only on cold empty) + UDF preserved; colour/nav untouched.
+- **Follow-up:** the send **compose-new** UI (dedicated user-search → connect surface); a persistent
+  Room suggestions cache (iOS `CacheCoordinator.userSearch`) — the last in-memory-only cache gap.
 
 ### 2026-07-04 — slice `friend-request-outbox-idempotency` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration; no open PRs at all. Branched

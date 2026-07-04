@@ -5,12 +5,14 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.friend.FriendListRepository
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.model.FriendRequest
@@ -39,6 +41,7 @@ class ContactsListViewModelTest {
     }
 
     private val repository: FriendRepository = mockk(relaxed = true)
+    private val listRepository: FriendListRepository = mockk(relaxed = true)
 
     private fun session(id: String? = "me"): SessionRepository =
         mockk<SessionRepository> { every { currentUserId } returns id }
@@ -75,10 +78,12 @@ class ContactsListViewModelTest {
         sent: List<FriendRequest> = emptyList(),
         cache: FriendshipCache = FriendshipCache(),
         session: SessionRepository = session(),
+        cached: List<FriendRequestUser>? = null,
     ): ContactsListViewModel {
         coEvery { repository.receivedRequests(any(), any()) } returns NetworkResult.Success(received)
         coEvery { repository.sentRequests(any(), any()) } returns NetworkResult.Success(sent)
-        return ContactsListViewModel(repository, cache, session)
+        coEvery { listRepository.cachedSnapshot() } returns cached
+        return ContactsListViewModel(repository, listRepository, cache, session)
     }
 
     @Test
@@ -117,8 +122,9 @@ class ContactsListViewModelTest {
     fun `both fetches failing on a cold list surfaces the error`() = runTest {
         coEvery { repository.receivedRequests(any(), any()) } returns NetworkResult.Failure(ApiError("boom"))
         coEvery { repository.sentRequests(any(), any()) } returns NetworkResult.Failure(ApiError("nope"))
+        coEvery { listRepository.cachedSnapshot() } returns null
 
-        val vm = ContactsListViewModel(repository, FriendshipCache(), session())
+        val vm = ContactsListViewModel(repository, listRepository, FriendshipCache(), session())
 
         assertThat(vm.state.value.friends).isEmpty()
         assertThat(vm.state.value.errorMessage).isEqualTo("boom")
@@ -159,11 +165,93 @@ class ContactsListViewModelTest {
     fun `dismissError clears the error message`() = runTest {
         coEvery { repository.receivedRequests(any(), any()) } returns NetworkResult.Failure(ApiError("boom"))
         coEvery { repository.sentRequests(any(), any()) } returns NetworkResult.Failure(ApiError("boom"))
-        val vm = ContactsListViewModel(repository, FriendshipCache(), session())
+        coEvery { listRepository.cachedSnapshot() } returns null
+        val vm = ContactsListViewModel(repository, listRepository, FriendshipCache(), session())
 
         vm.dismissError()
 
         assertThat(vm.state.value.errorMessage).isNull()
+    }
+
+    @Test
+    fun `paints the cached roster instantly before the network answers`() = runTest {
+        val gate = CompletableDeferred<NetworkResult<List<FriendRequest>>>()
+        coEvery { listRepository.cachedSnapshot() } returns listOf(user("cachedFriend"))
+        coEvery { repository.receivedRequests(any(), any()) } coAnswers { gate.await() }
+        coEvery { repository.sentRequests(any(), any()) } returns NetworkResult.Success(emptyList())
+
+        val vm = ContactsListViewModel(repository, listRepository, FriendshipCache(), session())
+
+        // The Room cache painted at once; the network fetch is still suspended, so
+        // there is no cold spinner while a stale-but-present roster is on screen.
+        assertThat(vm.state.value.friends.map { it.id }).containsExactly("cachedFriend")
+        assertThat(vm.state.value.isLoading).isFalse()
+
+        gate.complete(NetworkResult.Success(listOf(accepted("r1", sender = user("networkFriend")))))
+
+        assertThat(vm.state.value.friends.map { it.id }).containsExactly("networkFriend")
+    }
+
+    @Test
+    fun `keeps the cached roster and shows no error when the refresh fails`() = runTest {
+        coEvery { listRepository.cachedSnapshot() } returns listOf(user("alice"), user("bob"))
+        coEvery { repository.receivedRequests(any(), any()) } returns NetworkResult.Failure(ApiError("offline"))
+        coEvery { repository.sentRequests(any(), any()) } returns NetworkResult.Failure(ApiError("offline"))
+
+        val vm = ContactsListViewModel(repository, listRepository, FriendshipCache(), session())
+
+        assertThat(vm.state.value.friends.map { it.id }).containsExactly("alice", "bob").inOrder()
+        assertThat(vm.state.value.errorMessage).isNull()
+        assertThat(vm.state.value.isLoading).isFalse()
+    }
+
+    @Test
+    fun `a cold empty cache shows the skeleton until the network answers`() = runTest {
+        val gate = CompletableDeferred<NetworkResult<List<FriendRequest>>>()
+        coEvery { listRepository.cachedSnapshot() } returns null
+        coEvery { repository.receivedRequests(any(), any()) } coAnswers { gate.await() }
+        coEvery { repository.sentRequests(any(), any()) } returns NetworkResult.Success(emptyList())
+
+        val vm = ContactsListViewModel(repository, listRepository, FriendshipCache(), session())
+
+        assertThat(vm.state.value.friends).isEmpty()
+        assertThat(vm.state.value.showSkeleton).isTrue()
+
+        gate.complete(NetworkResult.Success(emptyList()))
+
+        assertThat(vm.state.value.showSkeleton).isFalse()
+    }
+
+    @Test
+    fun `persists the assembled roster after a successful load`() = runTest {
+        viewModel(
+            received = listOf(
+                accepted("r1", sender = user("online", isOnline = true)),
+                accepted("r2", sender = user("offline", isOnline = false)),
+            ),
+        )
+
+        coVerify {
+            listRepository.persist(match { it.map(FriendRequestUser::id) == listOf("online", "offline") })
+        }
+    }
+
+    @Test
+    fun `a cross-screen unfriend writes the pruned roster through to the cache without a refetch`() = runTest {
+        val cache = FriendshipCache()
+        val vm = viewModel(
+            received = listOf(
+                accepted("r1", sender = user("alice")),
+                accepted("r2", sender = user("bob")),
+            ),
+            cache = cache,
+        )
+
+        cache.didRemoveFriend("bob")
+
+        assertThat(vm.state.value.friends.map { it.id }).containsExactly("alice")
+        coVerify { listRepository.persist(match { it.map(FriendRequestUser::id) == listOf("alice") }) }
+        coVerify(exactly = 1) { repository.receivedRequests(any(), any()) }
     }
 
     @Test

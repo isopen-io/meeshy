@@ -1060,9 +1060,15 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (removals apply locally via `ContactList.reconcile`, additions trigger a single silent refetch —
       port of iOS `reconcileWithCache`), and `ContactList.visible` is the pure filter+search SSOT.
       `FriendshipCache.currentFriendIds` exposes the defensive friend-id snapshot the reconcile reads.
-      **Pending:** a persistent GRDB/Room friends cache (iOS `CacheCoordinator.friends`) for cold-start
-      paint — today the list is network-first + in-memory-cache reconciled. +38 tests
-      (25 `ContactList`, +2 `FriendshipCache`, 11 `ContactsListViewModel`).
+      **Cold-start paint shipped** (slice `contacts-friends-room-cache`, 2026-07-04): a persistent Room
+      `friends` cache (iOS `CacheCoordinator.friends`) — `:core:database` `FriendEntity`/`FriendDao`
+      (DB v7→8; `sortIndex` preserves `ContactList`'s assembled order verbatim, so the ordering SSOT
+      stays in `ContactList`), `:sdk-core` `FriendListRepository` (`cachedSnapshot` distinguishing cold
+      from synced-empty via `sync_meta`, `persist` write-through), and `ContactsListViewModel` rewired
+      cache-first: it paints the last-persisted roster instantly (skeleton only on a cold cache), writes
+      the assembled roster back through on every load, and prune-writes-through on a cross-screen
+      unfriend (no refetch). +14 tests. +52 tests total for the Contacts list
+      (25 `ContactList`, +2 `FriendshipCache`, 17 `ContactsListViewModel`, 8 `FriendListRepository`).
 - [x] Friendship status resolution (friend / pending sent / pending received / blocked) —
       **shipped** (slice `friendship-relationship-resolver`): the pure `:core:model`
       `UserRelationshipRules.resolve(target, currentUserId, isBlocked, friendship)` is the total

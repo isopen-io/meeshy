@@ -4,19 +4,21 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Contacts) — slice `discover-user-search` ✅
-The **Discover live user-search + inline connect** — the read-side consumer of the friendship SSOT.
-The Discover tab (was `ComingSoon()`) now runs a trim+≥2-char-gated user search and renders each result
-with an inline connect control (Connect / Pending / Accept / Contact / Blocked / hidden-for-self) whose
-state is the shared `UserRelationshipResolver`; connect/accept are optimistic and every visible row
-re-derives on any cross-screen friendship mutation via `FriendshipCache.version`. Two new pure SSOTs
-in `:core:model` (`DiscoverSearch.action`, `ConnectAction.from`), a UDF `DiscoverViewModel`, and the
-`DiscoverTab` Compose UI. +29 tests. See PROGRESS.md run log for the full record.
+## This loop (Phase: Contacts) — slice `contacts-friends-room-cache` ✅
+The **friends Room cache for cold-start paint** (iOS `CacheCoordinator.friends`) — the Contacts tab
+now paints the last-known friend list instantly on cold launch, surviving process death and working
+offline, instead of blocking on the received/sent fetch behind a skeleton. `:core:database`
+`FriendEntity`/`FriendDao` (DB v7→8; `sortIndex` preserves `ContactList`'s assembled order verbatim so
+the ordering SSOT stays in `:core:model`), `:sdk-core` `FriendListRepository` (`cachedSnapshot` — cold
+vs synced-empty via `sync_meta` — + `persist` write-through), and `ContactsListViewModel` rewired
+cache-first (paint-from-cache → revalidate → write-through; unfriend prunes and writes through with no
+refetch). +14 tests. Full `assembleDebug` + all `testDebugUnitTest` green (system Gradle 8.14.3; wrapper
+8.11.1 dist is 403-blocked — see NOTES). Diff = `apps/android` only. See PROGRESS.md run log.
 
 ### Next
-1. Discover **empty-query cache-first suggestions** (iOS `loadSuggestions`), or the **Blocked-users list**
-   (needs a `BlockRepository` to fill the resolver's `BlockStatusProvider` seam), or **send-request from
-   the Requests tab compose-new** — any completes the Contacts area.
+1. **Suggestions Room cache** for the Discover empty-query suggestions (iOS `CacheCoordinator.userSearch`)
+   — the last in-memory-only cache gap; copy the `FriendListRepository` template. Or the **send
+   compose-new UI** (dedicated user-search → connect surface).
 2. Then Profile & Account (§K) or back to Calls platform glue (ConnectionService/WebRTC).
 
 ## Prior loop (Phase: Calls) — slice `call-ended-identity-teardown` ✅
