@@ -32,6 +32,32 @@ val FriendRequestUser.resolvedName: String
         return username
     }
 
+/**
+ * The friend counts shown as a badge on each selectable Contacts filter chip
+ * (port of the iOS chip counts). Computed over the roster with the active search
+ * query applied, so each count reflects exactly how many friends that chip would
+ * reveal right now. [online] and [offline] always partition [all].
+ */
+data class ContactFilterCounts(
+    val all: Int,
+    val online: Int,
+    val offline: Int,
+) {
+    /**
+     * The count a filter chip displays. The pass-through filters ([ContactFilter.Phonebook]/
+     * [ContactFilter.Affiliates]) mirror [ContactFilter.All] since they narrow nothing yet.
+     */
+    fun forFilter(filter: ContactFilter): Int = when (filter) {
+        ContactFilter.Online -> online
+        ContactFilter.Offline -> offline
+        ContactFilter.All, ContactFilter.Phonebook, ContactFilter.Affiliates -> all
+    }
+
+    companion object {
+        val Zero = ContactFilterCounts(all = 0, online = 0, offline = 0)
+    }
+}
+
 /** Result of reconciling the shown friend list against the live friendship cache. */
 data class ContactReconcile(
     /** The shown list with anyone no longer a friend removed. */
@@ -97,6 +123,23 @@ object ContactList {
         return byFilter.filter {
             it.username.lowercase().contains(needle) || it.resolvedName.lowercase().contains(needle)
         }
+    }
+
+    /**
+     * The per-filter friend counts for the chip badges. Each count is the size of
+     * the roster that the corresponding [ContactFilter] would reveal under the
+     * current search [query] — so `counts(friends, query).online` equals
+     * `visible(friends, Online, query).size`. [online] and [offline] partition
+     * [all] by construction (Offline is exactly "not online").
+     */
+    fun counts(friends: List<FriendRequestUser>, query: String): ContactFilterCounts {
+        val matching = visible(friends, ContactFilter.All, query)
+        val online = matching.count { it.isOnline == true }
+        return ContactFilterCounts(
+            all = matching.size,
+            online = online,
+            offline = matching.size - online,
+        )
     }
 
     /**
