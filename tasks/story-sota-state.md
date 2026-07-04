@@ -336,12 +336,14 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   COULEUR DU FOND du slide en présentation libre (noir conservé en carded + fond média) —
   le canvas paraît occuper tout l'écran. Compilé/committé ; VÉRIF VISUELLE à faire dans
   une fenêtre simulateur calme (session partagée avec le user en direct it.78).
-  ⏳ BUG-4 (capture user it.78) « canvas COUPÉ en haut quand un tool est actif » : en mode
-  dessin, la carte affiche un ratio ≈ 1:1,47 (mesuré) au lieu de 9:16 → ~100 pt tronqués en
-  HAUT (les chips de couche chevauchent le bord coupé). Suspects : `canvasEditShift` (décalage
-  clavier/édition appliqué en carded ?) ou regionTop du cadrage dessin depuis que le header
-  est masqué pendant l'édition (C-DIR2) — offset calé sur un headerInset devenu 0 pendant
-  que le offset du resolve suppose le header présent. PRIORITÉ prochain tour.
+  ✅ BUG-4 (capture user it.78) « canvas COUPÉ en haut quand un tool est actif » — 2 fixes
+  it.79 : (a) le cadrage réservait TOUJOURS les 59 pt du header même masqué (C-DIR2 le cache
+  pendant l'édition) → la carte cardée démarrait sous un header FANTÔME (bande noire haute
+  perçue « coupé » + place perdue) ; désormais headerInset suit showTopBar (header caché →
+  carte sous la status bar). (b) un zoom/pan viewport résiduel (pinch 3 doigts) COMPOSAIT
+  avec le transform de carding (contenu décalé/débordant, ratio 1:1,47 de la capture) ;
+  entrer en carding reset désormais le viewport à l'échelle 1. Build 71 s vert.
+  VÉRIF VISUELLE : sur la prochaine capture user en mode outil (session sim partagée).
   Note : « recharge des médias » du rapport = conséquence attendue du fix BUG-3 (le
   saveMedia n'écrase plus les copies du draft) — vérif média dédiée à faire.
 
@@ -938,6 +940,12 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.79 — BUG-4 : carte cardée sous header fantôme + zoom viewport résiduel (2 fixes)
+
+- Diagnostic 100 % au code (session sim laissée au user) : la capture 1:1,47 s'explique par
+  la composition transform interne × carding, et la « coupe » du haut par la réservation
+  du header masqué. Les deux corrigés ; le zoom viewport reste entier en présentation libre.
 
 ## it.78 — BUG-2 fixé (letterbox couleur de fond) ; BUG-4 signalé en direct par le user
 

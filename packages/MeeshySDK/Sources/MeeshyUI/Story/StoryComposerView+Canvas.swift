@@ -178,7 +178,15 @@ extension StoryComposerView {
         // Quand le canvas se carde/décarde, sa frame présentée change (post-scale) ;
         // on re-aligne l'éditeur texte inline APRÈS que la carte se soit posée
         // (ressort 0.32s) pour que `canvasEditShift` se base sur le rect final.
-        .adaptiveOnChange(of: canvasIsCarded) { _, _ in
+        .adaptiveOnChange(of: canvasIsCarded) { _, carded in
+            // BUG-4 (C-DIR4) : un zoom/pan viewport résiduel SOUS le carding
+            // compose deux transforms (interne × carte) → contenu décalé/
+            // débordant, perçu tronqué. Entrer en carding ramène le viewport
+            // à l'échelle 1 (le zoom 3 doigts est un outil d'inspection du
+            // canvas LIBRE ; le bouton reset et le double-tap C4 restent).
+            if carded, viewModel.isCanvasZoomed {
+                withAnimation(.spring(response: 0.3)) { viewModel.resetCanvasZoom() }
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.34) { recomputeCanvasShift() }
         }
         .granularCanvasSync(
@@ -569,7 +577,14 @@ extension StoryComposerView {
             // La sheet (band/dessin/éditeur texte) est épinglée en bas ; le canvas
             // se rétracte au-dessus d'elle (`bottomInset = presentedSheetHeight`)
             // au lieu de la chevaucher (ancienne Option A).
-            let headerInset = max(proxy.safeAreaInsets.top, 59) + 12
+            // BUG-4 (C-DIR4) : ne réserver la hauteur du header QUE s'il est
+            // visible. Depuis C-DIR2 le header est masqué pendant l'édition —
+            // garder ses 59 pt réservés faisait démarrer la carte cardée sous
+            // un header FANTÔME (bande noire en haut, perçue « canvas coupé »,
+            // capture user). Header caché → la carte monte sous la status bar.
+            let headerInset = showTopBar
+                ? max(proxy.safeAreaInsets.top, 59) + 12
+                : proxy.safeAreaInsets.top + 12
             // Marge basse minimale même sheet repliée → la carte reste détachée du bas du
             // viewport (et de la poignée), sinon elle touchait quasi le bord en collapse.
             let bottomInset = max(presentedSheetHeight, 16) + max(proxy.safeAreaInsets.bottom, 0)
