@@ -163,8 +163,11 @@ struct ConversationPreviewView: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     // Titre pleine largeur — peut aller à la ligne (2 lignes).
+                    // displayName (customName prioritaire) : même convention
+                    // que la ligne de liste (ThemedConversationRow) — l'avatar
+                    // reste sur `name` (initiales/couleur du vrai nom).
                     HStack(alignment: .top, spacing: 6) {
-                        Text(conversation.name)
+                        Text(conversation.displayName)
                             .font(.callout.weight(.bold))
                             .foregroundColor(headerContentColor)
                             .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
