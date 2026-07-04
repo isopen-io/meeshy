@@ -36,7 +36,19 @@ extension StoryComposerView {
 
     var mainContent: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            // BUG-2 (C-DIR4, user 2026-07-04) : en présentation LIBRE (chrome
+            // plein), le canvas 9:16 aspect-fit laisse des bandes letterbox
+            // haut/bas sur les écrans 19.5:9 — celle du haut se cache sous le
+            // header, celle du bas restait NOIRE et nue (« zone noire en
+            // bas »). Un 9:16 ne peut pas remplir l'écran ; le letterbox prend
+            // donc la COULEUR DU FOND du slide : le canvas paraît occuper tout
+            // l'écran. Noir conservé en carded (contraste voulu de la carte)
+            // et sur fond MÉDIA (letterbox cinéma).
+            (canvasIsCarded || viewModel.hasBackgroundImage
+                ? Color.black
+                : Color(hex: viewModel.backgroundColor))
+                .ignoresSafeArea()
+                .animation(.easeInOut(duration: 0.25), value: canvasIsCarded)
 
             // Canvas core (CALayer) + drawing overlay + viewport modifiers,
             // extracted into `canvasComposerLayer` so the SwiftUI type-checker
