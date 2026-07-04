@@ -901,6 +901,11 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
     }
     func sendDataChannelMessage(_ data: Data) { lastSentData = data }
     func disconnect() { disconnectCallCount += 1; isConnected = false }
+    private(set) var disconnectAfterFlushingPendingSendCallCount = 0
+    func disconnectAfterFlushingPendingSend() {
+        disconnectAfterFlushingPendingSendCallCount += 1
+        disconnect()
+    }
     private(set) var restartIceCallCount = 0
     func restartIce() { restartIceCallCount += 1 }
     func sendDTMF(digits: String) {}
