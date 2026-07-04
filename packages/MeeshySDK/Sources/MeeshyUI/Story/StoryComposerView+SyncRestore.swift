@@ -203,11 +203,20 @@ extension StoryComposerView {
         flushOpenTimelineIntoSlide()
         syncCurrentSlideEffects()
         StoryDraftStore.shared.save(slides: viewModel.slides, visibility: visibility)
+        persistCommandHistory()
         StoryDraftStore.shared.saveMedia(
             images: viewModel.loadedImages,
             videoURLs: viewModel.loadedVideoURLs,
             audioURLs: viewModel.loadedAudioURLs
         )
+    }
+
+    /// E4 inc.2 — l'historique undo/redo accompagne chaque persistance du
+    /// draft (blob opaque, purgé avec lui par `clear()`). Écrit même vide :
+    /// le blob reflète toujours le DERNIER état, jamais un historique périmé.
+    func persistCommandHistory() {
+        guard let blob = viewModel.commandHistoryBlobForPersistence() else { return }
+        StoryDraftStore.shared.saveCommandHistoryBlob(blob)
     }
 
     func saveDraft() {
@@ -249,6 +258,7 @@ extension StoryComposerView {
         flushOpenTimelineIntoSlide()
         syncCurrentSlideEffects()
         StoryDraftStore.shared.save(slides: viewModel.slides, visibility: visibility)
+        persistCommandHistory()
         let keys = Self.mediaKeysFingerprint(images: viewModel.loadedImages,
                                              videos: viewModel.loadedVideoURLs,
                                              audios: viewModel.loadedAudioURLs)
@@ -291,6 +301,9 @@ extension StoryComposerView {
             viewModel.slides = stored.slides.isEmpty ? [StorySlide()] : stored.slides
             viewModel.currentSlideIndex = 0
             visibility = stored.visibility
+            // E4 inc.2 — AVANT tout bootstrap timeline : l'undo/redo de
+            // chaque slide revit avec le draft, même après un crash dur.
+            viewModel.applyPersistedCommandHistory(StoryDraftStore.shared.loadCommandHistoryBlob())
             let media = StoryDraftStore.shared.loadMedia()
             viewModel.loadedImages.merge(media.images) { _, new in new }
             viewModel.loadedVideoURLs.merge(media.videoURLs) { _, new in new }

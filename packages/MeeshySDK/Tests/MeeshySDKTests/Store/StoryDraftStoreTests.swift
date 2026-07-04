@@ -22,6 +22,38 @@ final class StoryDraftStoreSDKTests: XCTestCase {
         super.tearDown()
     }
 
+    // MARK: - E4 inc.2 : command-history blob (opaque sidecar)
+
+    func test_commandHistoryBlob_nilWhenNeverSaved() {
+        XCTAssertNil(store.loadCommandHistoryBlob())
+    }
+
+    func test_commandHistoryBlob_roundTrip() {
+        let payload = Data(#"{"slide-1":{"commands":[],"cursor":0}}"#.utf8)
+
+        store.saveCommandHistoryBlob(payload)
+
+        XCTAssertEqual(store.loadCommandHistoryBlob(), payload,
+                       "The blob is opaque to the core store — bytes in, same bytes out")
+    }
+
+    func test_commandHistoryBlob_overwrittenByLaterSave() {
+        store.saveCommandHistoryBlob(Data("old-history".utf8))
+        store.saveCommandHistoryBlob(Data("new-history".utf8))
+
+        XCTAssertEqual(store.loadCommandHistoryBlob(), Data("new-history".utf8),
+                       "Each autosave replaces the previous history snapshot")
+    }
+
+    func test_clear_purgesCommandHistoryBlob() {
+        store.saveCommandHistoryBlob(Data("history".utf8))
+
+        store.clear()
+
+        XCTAssertNil(store.loadCommandHistoryBlob(),
+                     "Discarding the draft must discard its undo history with it")
+    }
+
     // MARK: - isEmpty
 
     func test_isEmpty_trueInitially() {

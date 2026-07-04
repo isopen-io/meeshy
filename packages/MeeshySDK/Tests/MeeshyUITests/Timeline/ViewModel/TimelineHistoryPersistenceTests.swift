@@ -111,4 +111,54 @@ final class TimelineHistoryPersistenceTests: XCTestCase {
         XCTAssertTrue(composer.timelineViewModel.canUndo,
                       "Coming back to slide A restores its own history")
     }
+
+    // MARK: - E4 inc.2 : cross-crash persistence through the opaque blob
+
+    func test_commandHistoryBlob_roundTrip_undoSurvivesRebuiltComposer() {
+        // Session 1 — real history built through the live timeline, committed
+        // project persisted (what the draft store holds after an autosave).
+        let composer = StoryComposerViewModel()
+        composer.slides = [makeSlideWithOneClip()]
+        composer.currentSlideIndex = 0
+        composer.loadCurrentSlideIntoTimeline()
+        composer.timelineViewModel.addMedia(id: "v-added", postMediaId: "pm-added",
+                                            kind: .video, startTime: 5, duration: 2)
+        composer.commitTimelineToCurrentSlide()
+        let committedSlides = composer.slides
+
+        let blob = composer.commandHistoryBlobForPersistence()
+        XCTAssertNotNil(blob, "An open timeline's live stack must be captured in the blob")
+
+        // Session 2 — hard-crash simulation: a brand-new composer restores the
+        // committed slides + the blob, then reopens the timeline.
+        let revived = StoryComposerViewModel()
+        revived.slides = committedSlides
+        revived.currentSlideIndex = 0
+        revived.applyPersistedCommandHistory(blob)
+        revived.loadCurrentSlideIntoTimeline()
+
+        XCTAssertTrue(revived.timelineViewModel.canUndo,
+                      "Undo history must survive a hard crash via the draft-store blob")
+        revived.timelineViewModel.undo()
+        XCTAssertFalse(revived.timelineViewModel.project.mediaObjects.contains { $0.id == "v-added" },
+                       "The restored stack must revert the committed state without replay side-effects")
+    }
+
+    func test_applyPersistedCommandHistory_garbageData_keepsDictIntact() {
+        let composer = StoryComposerViewModel()
+        composer.timelineHistoryBySlide["keep-me"] = CommandStackSnapshot(commands: [], cursor: 0)
+
+        composer.applyPersistedCommandHistory(Data("not-json".utf8))
+
+        XCTAssertNotNil(composer.timelineHistoryBySlide["keep-me"],
+                        "A corrupt blob must never wipe the in-memory history")
+    }
+
+    func test_applyPersistedCommandHistory_nil_isANoop() {
+        let composer = StoryComposerViewModel()
+
+        composer.applyPersistedCommandHistory(nil)
+
+        XCTAssertTrue(composer.timelineHistoryBySlide.isEmpty)
+    }
 }

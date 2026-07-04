@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import UIKit
+import os
 import MeeshySDK
 import PencilKit
 
@@ -36,6 +37,39 @@ extension StoryComposerViewModel {
     func stashTimelineHistoryIfLoaded() {
         guard let vm = _timelineViewModel, let loadedId = timelineLoadedSlideId else { return }
         timelineHistoryBySlide[loadedId] = vm.commandHistorySnapshot()
+    }
+
+    /// E4 inc.2 — payload persistable de l'historique complet : le dict
+    /// stashé + (via `stashTimelineHistoryIfLoaded`, copie non destructive)
+    /// le stack LIVE de la timeline ouverte. Toujours non-nil dès qu'un
+    /// historique existe ; `{}` si vide — écrit à chaque autosave pour que
+    /// le blob reflète toujours le dernier état (jamais un historique
+    /// périmé au restore). `.sortedKeys` : ordre de sérialisation stable.
+    public func commandHistoryBlobForPersistence() -> Data? {
+        stashTimelineHistoryIfLoaded()
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        do {
+            return try encoder.encode(timelineHistoryBySlide)
+        } catch {
+            Logger.cache.error("[StoryComposerVM] Erreur encode command history: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    /// E4 inc.2 — repeuple le dict au restore du draft, AVANT tout bootstrap
+    /// timeline (`loadCurrentSlideIntoTimeline` lit le snapshot de sa slide
+    /// via `restoreCommandHistoryWithoutReplay` — le projet restauré est déjà
+    /// l'état committé au cursor, aucun replay). Un blob corrompu ne touche
+    /// à rien (l'historique en mémoire prime).
+    public func applyPersistedCommandHistory(_ data: Data?) {
+        guard let data else { return }
+        do {
+            timelineHistoryBySlide = try JSONDecoder()
+                .decode([String: CommandStackSnapshot].self, from: data)
+        } catch {
+            Logger.cache.error("[StoryComposerVM] Blob command history illisible (ignoré): \(error.localizedDescription)")
+        }
     }
 
     /// Prefix used for clips that the timeline editor surfaces for context but
