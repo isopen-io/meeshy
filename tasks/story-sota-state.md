@@ -502,6 +502,18 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   Fenêtre N+1 (parité prefetcher iOS) : Image() décodée pour les images, <video preload=auto>
   détaché pour les vidéos (cache HTTP partagé avec le montage suivant), cleanup au unmount.
 
+- [~] **W7 (P2, découvert it.62 — audit ciblé) `storyEffects.background` URL arbitraire =
+  tracking pixel des viewers.** ✅ FIXÉ WEB it.62 ; volet iOS À AUDITER.
+  Preuve : le serveur ne borne background que par max(64) (types.ts:155 — une URL courte
+  passe) ; le web injectait la string brute dans backgroundImage:url(...) → CHAQUE viewer
+  requêtait le domaine tiers (IP/UA-leak de qui a vu, quand). Fix web :
+  `safeBackgroundImageUrl` (chemins relatifs internes + origins front/gateway seulement,
+  métacaractères CSS rejetés → rien ne sort du contexte url(), sinon fallback gradient),
+  5 tests. RESTE : (a) volet iOS — StoryBackgroundLayer.loadImage accepte une URL http
+  arbitraire par le même champ (même vecteur, audit + garde symétrique) ; (b) option
+  serveur : refine Zod (hex|gradient:|chemin interne) — ATTENTION rétro-compat des stories
+  existantes à URLs absolues internes, à trancher avec le déploiement.
+
 ### DIRECTIVES PRODUIT UTILISATEUR (hors backlog initial)
 
 - [~] **U-DIR1 Interstitiel d'identité inter-groupes (directive user 2026-07-03).** — it.8
@@ -697,6 +709,16 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.62 — Audit ciblé n°2 → W7 : IP-leak des viewers via background URL, FIXÉ web (a2b878df4)
+
+- Surface choisie : validation serveur des storyEffects + rendu des URLs qui en sortent.
+  Constat positif au passage : le schema Zod serveur est SOLIDE (caps par champ + 256KB
+  global + refine EXCEPT/ONLY qui validait déjà côté serveur ce que W6 fixait client).
+- Le vecteur restant : background ≤64 chars = URL tierce rendue brute par le web. RED :
+  5 tests safeBackgroundImageUrl (relative, //, externe, origins exacts vs suffixe forgé,
+  schemes non-http, métacaractères CSS). 162/162 story web.
+- 2e audit, 2e finding prouvé+fixé — la boucle d'audit reste productive.
 
 ## it.61 — Audit ciblé → G7 : fuite illimitée de rows média au hard-delete, FIXÉE (731855e7a)
 
