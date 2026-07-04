@@ -468,12 +468,13 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   testé) — jamais d'audience vide publiée. W3 côté VISIBILITÉS = COMPLET (6/6 parité iOS).
   RESTE (hors visibilités) : overlays composer web (texte positionné etc.) = chantier
   séparé, non couvert par cet item.
-- [ ] **W6 (P2, découvert it.52) PostComposer web publie EXCEPT/ONLY SANS visibilityUserIds.**
+- [x] **W6 (P2, découvert it.52) PostComposer web publie EXCEPT/ONLY SANS visibilityUserIds.** ✅ it.54
   Preuve : VISIBILITY_OPTIONS contient EXCEPT/ONLY (PostComposer.tsx:26-27) mais
   handlePublish n'envoie que {content, type, visibility} (:48-52) — aucun picker, aucune
   liste → visibilité cassée côté serveur (EXCEPT sans exclus / ONLY sans inclus).
-  Le picker est DISPONIBLE depuis it.53 (`components/v2/AudienceUserPicker`) + gate
-  `isAudienceIncomplete` réutilisable — brancher PostComposer = prochain incrément W.
+  LIVRÉ it.54 : picker + gate PARTAGÉS (promus dans le module AudienceUserPicker, source
+  unique Story+Post) ; publish bloqué liste vide, reset au retour vers une visibilité
+  non-audience, payload visibilityUserIds envoyé. 498/498 (33 suites story/feed/composer).
 - [x] **W4 (P3) Realtime web : story:deleted + story:translation-updated.** ✅ it.28
   `story:deleted` abonné dans use-social-socket (événement absent) + handlers dans
   useStoriesRealtime : suppression → retirée du cache tray en direct ; traduction →
@@ -648,6 +649,13 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.54 — W6 : PostComposer ne publie plus d'audience vide (759e4e0ca)
+
+- Gate + picker promus au module AudienceUserPicker (source unique, StoryComposer importe
+  désormais au lieu de définir) ; guard aussi DANS handlePublish (défense en profondeur
+  au-delà du disabled) ; reset de la liste au switch de visibilité non-audience.
+- 498/498 (33 suites — pattern composer élargi). W3+W6 : chapitre visibilités web CLOS.
 
 ## it.53 — W3 inc.2 : picker d'audience web, visibilités 6/6 parité iOS (1268724aa)
 
