@@ -3,7 +3,7 @@
  * @module shared/types/mention
  */
 
-import { hasMentions as hasMentionsCore } from '../utils/mention-parser';
+import { hasMentions as hasMentionsCore } from '../utils/mention-parser.js';
 
 /**
  * Utilisateur mentionné résolu par le serveur.
