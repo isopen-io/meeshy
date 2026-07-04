@@ -14,6 +14,19 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 135i, 2026-07-04)** — piste iOS indépendante (suffixe `i`).
+> - **135i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `1fbda962`)** :
+>   Dynamic Type de `SyncPill` (pastille rotative de synchronisation en haut d'écran). **3/3**
+>   `.font(.system(size:))` → `MeeshyFont.relative` (libellé 11 medium ; compteur 10 regular monospacedDigit ;
+>   icône de statut 11 semibold) → le chip scale sous Dynamic Type, icône alignée avec le libellé. **0 gel**
+>   (capsule dimensionnée au contenu). A11y déjà en place (`children:.ignore` + label + hint ; icône aplatie).
+>   Modèle `SyncPillEntry` / `SyncPillRotator` non touchés. 1 fichier, 0 logique, 0 test/clé i18n neuve.
+>   7 PR ouvertes gateway/calls — aucune sur `SyncPill` → 0 contention. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `SyncPill` Dynamic Type SOLDÉ** : ne plus reprendre (3 éléments inline → `relative`).
+> - **Base de départ 136i : `main` HEAD**. Reste `StoryViewerView+Content` (⚠️ i18n + `@State private`
+>   cross-file). Sinon : `MessageListView` (3), `ConversationLockSheet` (3), `KeypadTab` (3), longue traîne
+>   de fichiers à 2/1 `.system`, ou **passe state-of-the-art** (hexes inline vs tokens) au tarissement.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 134i, 2026-07-04)** — piste iOS indépendante (suffixe `i`).
 > - **134i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `60fb2238`)** :
 >   Dynamic Type + a11y de `AchievementBadgeView` (tuile de badge, anneau de progression fixe 56×56).
