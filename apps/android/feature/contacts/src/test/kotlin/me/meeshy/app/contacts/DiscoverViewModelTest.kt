@@ -11,9 +11,11 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.model.FriendRequest
+import me.meeshy.sdk.model.friend.BlockedUser
 import me.meeshy.sdk.model.friend.ConnectAction
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
@@ -53,8 +55,10 @@ class DiscoverViewModelTest {
 
     private fun viewModel(
         cache: FriendshipCache = FriendshipCache(),
+        blockCache: BlockCache = BlockCache(),
         session: SessionRepository = session(),
-    ): DiscoverViewModel = DiscoverViewModel(userRepository, friendRepository, cache, session)
+    ): DiscoverViewModel =
+        DiscoverViewModel(userRepository, friendRepository, cache, blockCache, session)
 
     @Test
     fun `a sub-threshold query clears results and never hits the network`() = runTest {
@@ -79,6 +83,18 @@ class DiscoverViewModelTest {
         assertThat(vm.state.value.rows.map { it.connect }).containsExactly(ConnectAction.Connect, ConnectAction.Connect)
         assertThat(vm.state.value.isLoading).isFalse()
         assertThat(vm.state.value.isNoResults).isFalse()
+    }
+
+    @Test
+    fun `a blocked user resolves to the Blocked connect action via the shared cache`() = runTest {
+        coEvery { userRepository.searchUsers("bob", any(), any()) } returns
+            NetworkResult.Success(listOf(result("bob")))
+        val blockCache = BlockCache().apply { hydrate(listOf(BlockedUser(id = "bob", username = "bob"))) }
+        val vm = viewModel(blockCache = blockCache)
+
+        vm.onQueryChanged("bob")
+
+        assertThat(vm.state.value.rows.single().connect).isEqualTo(ConnectAction.Blocked)
     }
 
     @Test

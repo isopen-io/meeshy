@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.friend.BlockStatusProvider
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendshipCache
@@ -65,14 +66,15 @@ class DiscoverViewModel @Inject constructor(
     private val userRepository: UserRepository,
     private val friendRepository: FriendRepository,
     private val friendshipCache: FriendshipCache,
+    private val blockCache: BlockCache,
     sessionRepository: SessionRepository,
 ) : ViewModel() {
 
-    // No Android BlockRepository yet — block state is a seam (parity with the
-    // resolver's `BlockStatusProvider`); every other state resolves live.
+    // Block state now resolves live off the shared `BlockCache` (hydrated by the
+    // Blocked tab's `BlockRepository`), closing the resolver's block seam.
     private val resolver = UserRelationshipResolver(
         friendshipCache = friendshipCache,
-        blockStatus = BlockStatusProvider { false },
+        blockStatus = BlockStatusProvider { blockCache.isBlocked(it) },
         currentUserId = { sessionRepository.currentUserId },
     )
 

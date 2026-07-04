@@ -3,6 +3,27 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Design lessons
+- **A functional seam pays off when the real collaborator lands — zero churn to bind it.**
+  (2026-07-04, slice `contacts-blocked-list`.) `UserRelationshipResolver` shipped taking a
+  `BlockStatusProvider` `fun interface` seam (`{ false }` default). Binding the real block data was a
+  one-liner: `BlockStatusProvider { blockCache.isBlocked(it) }` in `DiscoverViewModel` — the resolver
+  class never changed. Confirms the earlier lesson: prefer a functional seam over a throwaway stub, and
+  the payoff is a trivial bind later. Prove the bind is *consumed* with a test (a blocked user →
+  `ConnectAction.Blocked`) so the seam-wiring isn't silent/orphan.
+- **`BlockCache` mirrors `FriendshipCache` deliberately** — same `@Singleton` + `synchronized` +
+  `version: StateFlow<Int>` shape. When adding a second in-memory SSOT store, copy the proven store's
+  structure (defensive-copy snapshot, blank-id inert, full-replace hydrate, version-bump-per-mutation)
+  rather than inventing a new one; the tests port 1:1 too.
+- **Test a ViewModel's transient in-flight state with a gated `CompletableDeferred`, not sleeps.**
+  Under `UnconfinedTestDispatcher` a `viewModelScope.launch` runs to completion synchronously, so a
+  `pendingIds`/`showSkeleton` flag is set-and-cleared before you can observe it. Stub the suspend repo
+  call with `coAnswers { gate.await() }`: assert the mid-flight state, then `gate.complete(...)` and
+  assert the settled state. Also the way to prove an in-flight guard (call the action twice while the
+  gate is open, `coVerify(exactly = 1)`).
+- **Mock an `ApiResponse<Unit>` DELETE as `ApiResponse(success = true, data = Unit)`** — `apiCall`
+  treats `data == null` as failure, and `Unit` is non-null, so a success needs `data = Unit` explicitly
+  (mirrors the existing `FriendRepository.deleteRequest` `ApiResponse<Unit>` pattern).
+
 - **`FriendRequest` carries BOTH id-strings and nested user objects — keep test fixtures consistent.**
   (2026-07-04, slice `contacts-list-friends`.) `FriendshipCache.hydrate` keys the friend graph off the
   `senderId`/`receiverId` **strings**, but `ContactList.fromAcceptedRequests` reads the `sender`/`receiver`

@@ -1039,10 +1039,12 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] Community invite links: list, stats, detail, copy/share
 
 ## J. Contacts & Friends
-- [~] Contacts hub: 4 tabs (Contacts / Requests / Discover / Blocked) with badges —
+- [x] Contacts hub: 4 tabs (Contacts / Requests / Discover / Blocked) with badges —
       `:feature:contacts` hub reachable from the conversations top bar (People icon),
-      4-tab `TabRow` with a live count badge on the **Requests** tab ; Contacts /
-      Discover / Blocked tabs remain placeholders pending their data slices
+      4-tab `TabRow` with a live count badge on the **Requests** tab ; **all four tabs
+      are now live** (Contacts / Requests / Discover / Blocked) — no placeholder remains
+      (slice `contacts-blocked-list`, 2026-07-04). **Pending:** per-tab count badges beyond
+      Requests (Blocked/Discover counts).
 - [~] Contacts list (online/offline filters + counts, search, presence + mood-emoji) —
       **filters + search + presence shipped** (slice `contacts-list-friends`): the Contacts tab now
       renders the online-first friend list with an All/Online/Offline `FilterChip` row, a search field
@@ -1068,8 +1070,10 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `UserRelationshipResolver`), with `FriendshipStatus` + `UserRelationshipState` (`isPending`)
       pure models. The `:sdk-core` `UserRelationshipResolver` supplies the live inputs (the
       `FriendshipCache` status + a `BlockStatusProvider` fun-interface seam + a current-user
-      provider). Block state is a seam pending a `BlockRepository`; every other state resolves live.
-      +31 behavioural tests (10 rules, 13 cache, 8 resolver).
+      provider). **The block seam is now bound** (slice `contacts-blocked-list`): the `:sdk-core`
+      `@Singleton BlockCache` (blocklist SSOT, hydrated by `BlockRepository`) backs the
+      `BlockStatusProvider` in `DiscoverViewModel`, so a blocked user resolves live to `Blocked`
+      everywhere. +31 behavioural tests (10 rules, 13 cache, 8 resolver).
 - [~] Send / accept / decline / cancel friend request — **Requests tab** lists received +
       sent requests (avatars tinted by deterministic `DynamicColorGenerator.colorForName`),
       with optimistic accept / decline (`respond`) + cancel (`deleteRequest`), in-flight
@@ -1088,7 +1092,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       every visible row via the `FriendshipCache.version` stream, so Discover stays in lock-step with
       the Requests tab. +29 tests (13 `DiscoverSearch`, 16 `DiscoverViewModel`). **Pending:** the
       empty-query cache-first suggestions list (iOS `loadSuggestions` via `CacheCoordinator.userSearch`).
-- [ ] Blocked-users list with confirm-to-unblock; optimistic unblock with rollback
+- [x] Blocked-users list with confirm-to-unblock; optimistic unblock with rollback —
+      **shipped** (slice `contacts-blocked-list`, 2026-07-04): the Blocked tab (was placeholder)
+      renders the blocklist from `BlockRepository.listBlocked()` (which hydrates the shared
+      `:sdk-core` `BlockCache` SSOT), skeleton only on cold empty, error+retry, empty state.
+      Unblock pops an `AlertDialog` confirm, then removes the row optimistically (VM restores the
+      snapshot + surfaces the error on network failure), guarded against double-taps via
+      `pendingIds`. Pure `:core:model` `BlockedUser` + `resolvedName`; `:core:network` `BlockApi`
+      (`GET users/me/blocked-users`, `POST/DELETE users/{id}/block`, iOS `BlockService` parity).
+      +29 tests (4 `BlockedUser`, 9 `BlockCache`, 6 `BlockRepository`, 9 `BlockedListViewModel`,
+      +1 `DiscoverViewModel` seam). **Pending:** durable offline-queued unblock (iOS routes it via
+      `OfflineQueue`) — today it's an online-first optimistic REST call with snapshot rollback.
 
 ## K. Profile & Account
 - [ ] View profile (by id / username / public handle / email / phone)
