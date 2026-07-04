@@ -540,7 +540,13 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// prefetch ont déposé (ou déposeront — pin-avant-download supporté).
     static func pinTargets(for story: StoryItem) -> [(urlString: String, store: StoryPinStore)] {
         Self.mediaURLStrings(for: story).map { urlString in
-            switch story.media.first(where: { $0.url == urlString })?.type {
+            // R7 — même résolution de type que le prefetch : le pin doit
+            // protéger le MÊME store que celui où le média est réellement rangé.
+            let kind = StoryMediaStoreRouter.effectiveKind(
+                declaredType: story.media.first(where: { $0.url == urlString })?.type,
+                urlString: urlString
+            )
+            switch kind {
             case .video: return (urlString, .video)
             case .audio: return (urlString, .audio)
             default: return (urlString, .images)
@@ -573,7 +579,12 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// Prefetch les URLs (déjà filtrées) d'une story dans les stores disque + mémoire.
     private static func prefetchStoryMediaURLs(_ urls: [String], in story: StoryItem, imageCache: DiskCacheStore, prerollPlayer: Bool) async {
         for urlString in urls {
-            let mediaType = story.media.first(where: { $0.url == urlString })?.type
+            // R7 — type effectif (déclaré corrigé par sniff d'extension) : un
+            // mp4 mal classé ne doit plus atterrir dans le store `images`.
+            let mediaType = StoryMediaStoreRouter.effectiveKind(
+                declaredType: story.media.first(where: { $0.url == urlString })?.type,
+                urlString: urlString
+            )
 
             if mediaType == .video {
                 // Peupler le store `video` (celui que le canvas relit), pas
@@ -639,6 +650,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             if let j = storyGroups[i].stories.firstIndex(where: { $0.id == storyId }) {
                 var updated = storyGroups[i].stories
                 updated[j].isViewed = true
+                // R11 — horodatage local du vu (DateTime nullable > boolean seul).
+                updated[j].viewedAt = Date()
                 storyGroups[i] = storyGroups[i].with(stories: updated)
                 persistStoryCache()
                 // R5 — la story vient d'être VUE : garantir sa relecture

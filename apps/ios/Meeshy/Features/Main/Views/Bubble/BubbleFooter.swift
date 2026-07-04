@@ -203,7 +203,8 @@ struct BubbleFooter: View, Equatable {
                 status: delivery,
                 isOffline: model.isOffline,
                 tint: tint,
-                readTint: readTint
+                readTint: readTint,
+                sendStartedAt: model.sendStartedAt
             )
             if let onShowReadStatus = actions.onShowReadStatus {
                 // Tap sur les coches -> ouvre le sheet detail a l'onglet

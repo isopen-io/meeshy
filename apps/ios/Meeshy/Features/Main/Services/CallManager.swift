@@ -397,6 +397,16 @@ final class CallManager: ObservableObject {
 
     /// Periodic refresh of TURN credentials before TTL expiry. Cancelled on call end.
     private var turnRefreshTask: Task<Void, Never>?
+    /// Watchdog armed after every `call:request-ice-servers` emit — retries if
+    /// `call:ice-servers-refreshed` doesn't arrive within
+    /// `turnRefreshRetryTimeoutSeconds`. `emitRequestIceServers` carries no ACK,
+    /// so without this a single dropped emit/reply killed the refresh chain for
+    /// the rest of the call. Cancelled on call end and on every successful
+    /// response (via `scheduleTURNCredentialRefresh`).
+    private var turnRefreshWatchdogTask: Task<Void, Never>?
+    /// Consecutive watchdog retries for the current refresh cycle. Reset to 0
+    /// whenever a fresh cycle starts (`scheduleTURNCredentialRefresh`).
+    private var turnRefreshRetryAttempt = 0
     private var participantJoinedCancellable: AnyCancellable?
     /// Audit P3 — replaces the never-assigned `signalOfferCancellable`
     /// (AnyCancellable, dead) with a properly typed Task slot. Two callers
@@ -721,11 +731,24 @@ final class CallManager: ObservableObject {
         }
     }
 
-    func startCall(conversationId: String, userId: String, displayName: String, isVideo: Bool) {
+    /// Starts an outgoing call. Returns `false` (no-op) if a call is already
+    /// active — callers that need to tell the user why nothing happened
+    /// (e.g. `CallStarter`, which shows a busy toast) should check this;
+    /// callers that don't care can ignore it.
+    @discardableResult
+    func startCall(conversationId: String, userId: String, displayName: String, isVideo: Bool) -> Bool {
         resetEndedStateForNewCall()
         guard callState == .idle else {
             Logger.calls.warning("Cannot start call: already in state \(String(describing: self.callState))")
-            return
+            // Every dial entry point (conversation header, call-summary "call
+            // back", conversation-list context menu, CallStarter) previously
+            // no-op'd here with zero user feedback — a tap that visibly did
+            // nothing. Surface it once, centrally, instead of duplicating this
+            // toast at every call site.
+            FeedbackToastManager.shared.showError(
+                String(localized: "call.starter.busy", defaultValue: "Un appel est déjà en cours", bundle: .main)
+            )
+            return false
         }
 
         analyticsCallInitiatedDate = Date()
@@ -885,6 +908,7 @@ final class CallManager: ObservableObject {
         }
 
         HapticFeedback.medium()
+        return true
     }
 
     // MARK: - VoIP Push Incoming Call
@@ -2899,6 +2923,9 @@ final class CallManager: ObservableObject {
         setupCallTask = nil
         turnRefreshTask?.cancel()
         turnRefreshTask = nil
+        turnRefreshWatchdogTask?.cancel()
+        turnRefreshWatchdogTask = nil
+        turnRefreshRetryAttempt = 0
         stopHeartbeat()
         stopScreenCaptureMonitoring()
         stopBackgroundMonitoring()
@@ -3432,7 +3459,7 @@ final class CallManager: ObservableObject {
                     // at the new TTL via `call:ice-servers-refreshed`.
                     self.turnRefreshTask?.cancel()
                     self.turnRefreshTask = nil
-                    MessageSocketManager.shared.emitRequestIceServers(callId: callId)
+                    self.requestFreshTurnCredentials(callId: callId)
                     Logger.calls.info("Socket reconnect — requesting fresh TURN credentials for call \(callId)")
                 }
             }
@@ -3468,6 +3495,11 @@ final class CallManager: ObservableObject {
                 switch event.mediaType {
                 case "video":
                     self.isRemoteVideoEnabled = event.enabled
+                    // System PiP renders the raw remote track directly onto an
+                    // AVSampleBufferDisplayLayer (bypassing SwiftUI's declarative
+                    // placeholder branch below) — it needs an explicit nudge or
+                    // it keeps showing the last live frame frozen indefinitely.
+                    self.pip.setRemoteVideoMuted(!event.enabled)
                     Logger.calls.info("Remote video \(event.enabled ? "enabled" : "disabled") (callId=\(event.callId))")
                 case "audio":
                     self.isRemoteAudioEnabled = event.enabled
@@ -4169,13 +4201,15 @@ extension CallManager: WebRTCServiceDelegate {
         if let callId = currentCallId {
             let userId = AuthManager.shared.currentUser?.id ?? ""
             MessageSocketManager.shared.emitCallReconnecting(callId: callId, participantId: userId, attempt: reconnectAttempt)
-            // Fresh TURN credentials for this attempt (fire-and-forget): the
+            // Fresh TURN credentials for this attempt: the
             // `call:ice-servers-refreshed` listener applies the response via
             // `updateIceServers`, so this restart — or its watchdog escalation —
             // re-gathers relay candidates with fresh credentials instead of
             // reusing creds that may be near the TTL horizon (coturn rejects
             // allocation refreshes past the expiry embedded in the username).
-            MessageSocketManager.shared.emitRequestIceServers(callId: callId)
+            // Routed through `requestFreshTurnCredentials` so a dropped emit/reply
+            // during a reconnection cycle still retries instead of going silent.
+            requestFreshTurnCredentials(callId: callId)
         }
 
         let backoffSeconds = reconnectAttempt > 1 ? min(pow(2.0, Double(reconnectAttempt - 1)), 4.0) : 0.0
@@ -4212,6 +4246,9 @@ extension CallManager: WebRTCServiceDelegate {
     // which `setupSocketListeners` applies via `webRTCService.updateIceServers`.
     private func scheduleTURNCredentialRefresh(ttl: TimeInterval) {
         turnRefreshTask?.cancel()
+        turnRefreshWatchdogTask?.cancel()
+        turnRefreshWatchdogTask = nil
+        turnRefreshRetryAttempt = 0
         // Floor-clamped: a degenerate TTL (zero / negative / short) schedules at
         // the minimum cadence instead of silently disarming the refresh — the
         // old `guard ttl >= 60 else return` left mid-call credentials expiring
@@ -4222,8 +4259,39 @@ extension CallManager: WebRTCServiceDelegate {
             try? await Task.sleep(for: .seconds(refreshDelay))
             guard !Task.isCancelled, let self, self.callState.isActive,
                   let callId = self.currentCallId else { return }
-            Logger.calls.info("Requesting fresh TURN credentials for call \(callId)")
-            MessageSocketManager.shared.emitRequestIceServers(callId: callId)
+            self.requestFreshTurnCredentials(callId: callId)
+        }
+    }
+
+    /// Emits `call:request-ice-servers` and arms the retry watchdog. Shared by
+    /// the periodic scheduler, the socket-reconnect resync, and the
+    /// reconnection-cycle refresh — every requester gets the same
+    /// no-ACK-loss protection.
+    private func requestFreshTurnCredentials(callId: String) {
+        Logger.calls.info("Requesting fresh TURN credentials for call \(callId)")
+        MessageSocketManager.shared.emitRequestIceServers(callId: callId)
+        armTurnRefreshWatchdog(callId: callId)
+    }
+
+    /// Retries `requestFreshTurnCredentials` if `call:ice-servers-refreshed`
+    /// hasn't arrived within `turnRefreshRetryTimeoutSeconds`, bounded by
+    /// `CallReliabilityPolicy.turnRefreshShouldRetry`. Once retries are
+    /// exhausted, falls back to re-arming the next periodic cycle at the
+    /// floor delay instead of leaving the call with no refresh armed at all.
+    private func armTurnRefreshWatchdog(callId: String) {
+        turnRefreshWatchdogTask?.cancel()
+        turnRefreshWatchdogTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(QualityThresholds.turnRefreshRetryTimeoutSeconds))
+            guard !Task.isCancelled, let self, self.callState.isActive,
+                  self.currentCallId == callId else { return }
+            self.turnRefreshRetryAttempt += 1
+            guard CallReliabilityPolicy.turnRefreshShouldRetry(attempt: self.turnRefreshRetryAttempt) else {
+                Logger.calls.error("TURN credential refresh got no response after \(self.turnRefreshRetryAttempt) retries for call \(callId) — re-arming next cycle")
+                self.scheduleTURNCredentialRefresh(ttl: QualityThresholds.turnMinRefreshDelaySeconds)
+                return
+            }
+            Logger.calls.warning("TURN credential refresh got no response — retry #\(self.turnRefreshRetryAttempt) for call \(callId)")
+            self.requestFreshTurnCredentials(callId: callId)
         }
     }
 
@@ -4279,24 +4347,26 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
         // WebRTC connection existed. The manager HOLDS the action and settles
         // it in `transitionToConnected` (fulfill), on pre-connect teardown
         // (fail), or via a 10 s safety net (fulfill) so CallKit can never time
-        // it out. The delegate queue is `nil` = main, so the hand-off to the
-        // @MainActor manager is synchronous (no Sendable capture of the
-        // non-Sendable CXAction in a Task); the off-main branch is a defensive
-        // fallback that preserves the old immediate-fulfill behaviour.
-        if Thread.isMainThread {
-            MainActor.assumeIsolated {
-                guard let manager else {
-                    action.fulfill()
-                    return
-                }
-                manager.holdPendingAnswerAction(action)
-                Task { @MainActor in await manager.answerCallReady() }
+        // it out.
+        //
+        // [Fix 2026-07-03] `CXProvider.setDelegate(_:queue: nil)` makes
+        // CallKit create its OWN private serial queue for delegate callbacks
+        // — it does NOT dispatch on main (Apple's documented behaviour for a
+        // `nil` queue). The previous "are we on the main queue?" check was
+        // therefore always false in production, so the hold above never
+        // engaged: every answered call still fulfilled at tap time and
+        // reintroduced the exact "timer starts before connection" bug this
+        // fix was written for. Always hop to the MainActor and hold — the
+        // 10 s safety net (`holdPendingAnswerAction`) bounds the worst case,
+        // and `@preconcurrency import CallKit` above permits capturing the
+        // non-Sendable `CXAnswerCallAction` across the actor hop.
+        Task { @MainActor [weak self] in
+            guard let manager = self?.manager else {
+                action.fulfill()
+                return
             }
-        } else {
-            action.fulfill()
-            Task { @MainActor [weak self] in
-                await self?.manager?.answerCallReady()
-            }
+            manager.holdPendingAnswerAction(action)
+            await manager.answerCallReady()
         }
     }
 

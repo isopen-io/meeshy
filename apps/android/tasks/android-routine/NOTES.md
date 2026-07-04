@@ -2,6 +2,20 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Design lessons
+- **Identity-less fan-out streams must not drive per-entity teardown.** The gateway fans `call:ended`
+  out to *every* member USER room, so a busy user (active call + a waiting-call banner) receives the
+  *waiting* call's teardown on the same socket. Folding an identity-less `CallEvent.RemoteHangUp` from
+  `CallSignalManager.events` blindly into the active FSM tore down the wrong call. Fix pattern (slice
+  `call-ended-identity-teardown`): teardown frames go **only** through the identity-carrying stream
+  (`endedCalls: SharedFlow<CallEndedSignal>` = id + the FSM event), and the consumer gates on the active
+  id. `CallSignalMapper.map` returns `null` for `call:ended`/`call:missed` — they are deliberately not
+  FSM-facing. Rule of thumb: if a socket frame's effect depends on *which* entity it names, decode the
+  identity at the boundary and gate on it; never let the identity-less convenience event drive a mutation.
+- When two decode helpers on the same object overlap (`endedCallId` returned just the id; the VM later
+  also needed the event), collapse them into one identity-carrying value type rather than calling both —
+  one SSOT decode, no chance of the id and the event disagreeing.
+
 ## PR / CI
 - ⚠ **The monorepo CI (`ci.yml`) is the only gate on an `apps/android` PR, and it stays green
   by construction** — the diff touches none of the JS/TS/Python stack it exercises. `mergeable_state:

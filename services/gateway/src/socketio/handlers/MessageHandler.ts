@@ -60,6 +60,7 @@ import {
   SocketMessageDeleteSchema,
 } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
+import type { RedisDeliveryQueue } from '../../services/RedisDeliveryQueue';
 
 const handlerLogger = enhancedLogger.child({ module: 'MessageHandler' });
 
@@ -78,6 +79,7 @@ export interface MessageHandlerDependencies {
   attachmentService: AttachmentService;
   readStatusService: MessageReadStatusService;
   privacyPreferencesService: PrivacyPreferencesService;
+  deliveryQueue?: RedisDeliveryQueue | null;
 }
 
 export class MessageHandler {
@@ -94,6 +96,7 @@ export class MessageHandler {
   private attachmentService: AttachmentService;
   private readStatusService: MessageReadStatusService;
   private privacyPreferencesService: PrivacyPreferencesService;
+  private deliveryQueue: RedisDeliveryQueue | null;
   private rateLimiter = getSocketRateLimiter();
 
   /**
@@ -119,6 +122,16 @@ export class MessageHandler {
     this.attachmentService = deps.attachmentService;
     this.readStatusService = deps.readStatusService;
     this.privacyPreferencesService = deps.privacyPreferencesService;
+    this.deliveryQueue = deps.deliveryQueue ?? null;
+  }
+
+  /**
+   * Injected after construction by `MeeshySocketIOManager.setDeliveryQueue`
+   * (same instance shared with the REST broadcast path), since the queue is
+   * built once `server.ts` has the Redis-backed CacheStore ready.
+   */
+  setDeliveryQueue(queue: RedisDeliveryQueue): void {
+    this.deliveryQueue = queue;
   }
 
   /**
@@ -967,6 +980,26 @@ export class MessageHandler {
           );
         }
         handlerLogger.debug('conversation:updated emitted', { conversationId: normalizedId, recipients: sharedParticipants.filter((p) => p.userId).length });
+      }
+
+      // Offline delivery queue — parity with the REST send path
+      // (`MeeshySocketIOManager.broadcastMessage` / `_broadcastNewMessage`).
+      // Without this, a message sent via the primary WS `message:send` path
+      // to a currently-offline recipient is never replayed on their next
+      // reconnect (`_drainPendingMessages`) and never triggers the
+      // sent→delivered receipt upgrade for the sender. Uses the cid-stripped
+      // `broadcastPayload` (same one peers receive live) so a replayed
+      // message never leaks the sender's local optimistic id to another user.
+      if (this.deliveryQueue) {
+        for (const p of sharedParticipants) {
+          if (!p.userId || p.id === message.senderId || this.connectedUsers.has(p.userId)) continue;
+          this.deliveryQueue.enqueue(p.userId, {
+            messageId: message.id,
+            conversationId: normalizedId,
+            payload: broadcastPayload,
+            enqueuedAt: new Date().toISOString(),
+          }).catch((err) => handlerLogger.warn('Failed to enqueue message for offline user', { userId: p.userId, error: err }));
+        }
       }
 
       // Mettre à jour unread counts (re-uses the participant list already fetched above)

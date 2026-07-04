@@ -933,6 +933,24 @@ struct StoryCardView: View {
                                           handleStallIndicatorSignal(progressing: progressing)
                                       })
                     .id(story.id)
+                    // U6 inc.2 — la navigation prev/next est une gesture
+                    // SPATIALE (position x du tap dans le canvas) que VoiceOver
+                    // ne peut pas produire : on l'expose en actions custom du
+                    // rotor. Le label donne une identité au canvas (le contenu
+                    // visuel est du CALayer, invisible d'UIAccessibility).
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(String(
+                        localized: "story.viewer.a11y.canvas",
+                        defaultValue: "Story en cours de lecture"
+                    ))
+                    .accessibilityAction(named: String(
+                        localized: "story.viewer.a11y.next",
+                        defaultValue: "Story suivante"
+                    )) { goToNext() }
+                    .accessibilityAction(named: String(
+                        localized: "story.viewer.a11y.previous",
+                        defaultValue: "Story précédente"
+                    )) { goToPrevious() }
                     // Strict 9:16-fit (parité avec UnifiedPostComposer:324).
                     // Sans contrainte, `geometry.size.height` étirait le canvas
                     // hors ratio design et décalait visuellement le contenu.
@@ -1501,6 +1519,10 @@ struct StoryCardView: View {
         stallIndicatorGraceTask?.cancel()
         stallIndicatorGraceTask = nil
         if progressing {
+            // U2 — reprise perceptible au toucher UNIQUEMENT si le gel avait
+            // été montré (pas de haptic sur les micro-stalls absorbés par la
+            // grâce ci-dessous).
+            if showStallIndicator { HapticFeedback.light() }
             withAnimation(.easeOut(duration: 0.15)) { showStallIndicator = false }
             return
         }
@@ -1508,6 +1530,8 @@ struct StoryCardView: View {
             try? await Task.sleep(for: .milliseconds(350))
             guard !Task.isCancelled else { return }
             withAnimation(.easeIn(duration: 0.2)) { showStallIndicator = true }
+            // U2 — le gel devient perceptible en même temps que le spinner.
+            HapticFeedback.light()
         }
     }
 

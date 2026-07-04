@@ -209,6 +209,7 @@ jest.mock('../handlers/MessageHandler', () => ({
     mockMessageHandlerInstance = {
       handleMessageSend: jest.fn().mockResolvedValue(undefined),
       handleMessageSendWithAttachments: jest.fn().mockResolvedValue(undefined),
+      setDeliveryQueue: jest.fn(),
     };
     return mockMessageHandlerInstance;
   }),
@@ -781,6 +782,12 @@ describe('MeeshySocketIOManager', () => {
       const fakeQueue = { drain: jest.fn(), enqueue: jest.fn() };
       manager.setDeliveryQueue(fakeQueue as any);
       expect((manager as any).deliveryQueue).toBe(fakeQueue);
+    });
+
+    it('setDeliveryQueue forwards the same queue to MessageHandler (WS message:send path)', () => {
+      const fakeQueue = { drain: jest.fn(), enqueue: jest.fn() };
+      manager.setDeliveryQueue(fakeQueue as any);
+      expect(mockMessageHandlerInstance.setDeliveryQueue).toHaveBeenCalledWith(fakeQueue);
     });
 
     it('setAgentClient stores the client on the manager', () => {

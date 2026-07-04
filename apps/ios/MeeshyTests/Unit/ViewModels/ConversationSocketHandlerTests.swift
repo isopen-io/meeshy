@@ -718,13 +718,38 @@ final class ConversationSocketHandlerTests: XCTestCase {
     func test_typingStopped_removesUsernameFromDelegate() async throws {
         let (sut, delegate, socket) = makeSUT()
         _ = sut
-        delegate.typingUsernames = ["Alice"]
+
+        socket.typingStarted.send(TypingEvent(userId: otherUserId, username: "Alice", conversationId: conversationId))
+        try await Task.sleep(nanoseconds: 100_000_000)
 
         socket.typingStopped.send(TypingEvent(userId: otherUserId, username: "Alice", conversationId: conversationId))
 
         try await Task.sleep(nanoseconds: 100_000_000)
 
         XCTAssertTrue(delegate.typingUsernames.isEmpty)
+    }
+
+    // Regression test: the typing roster is keyed by `userId`, not display
+    // name. Two participants sharing a display name (e.g. two uncustomized
+    // "John Smith"s in a group) must be tracked independently — one user's
+    // typing:stop must not clear the other's still-active entry.
+    func test_typingStopped_sameDisplayName_differentUsers_doesNotClearOther() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+        let userA = "same-name-user-a"
+        let userB = "same-name-user-b"
+
+        socket.typingStarted.send(TypingEvent(userId: userA, username: "john.a", displayName: "John Smith", conversationId: conversationId))
+        try await Task.sleep(nanoseconds: 100_000_000)
+        socket.typingStarted.send(TypingEvent(userId: userB, username: "john.b", displayName: "John Smith", conversationId: conversationId))
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(delegate.typingUsernames, ["John Smith", "John Smith"], "Both same-name users should be tracked independently")
+
+        socket.typingStopped.send(TypingEvent(userId: userA, username: "john.a", displayName: "John Smith", conversationId: conversationId))
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(delegate.typingUsernames, ["John Smith"], "User B must still show as typing after User A stops")
     }
 
     // MARK: - readStatusUpdated
@@ -955,7 +980,9 @@ final class ConversationSocketHandlerTests: XCTestCase {
     func test_messageReceived_clearsTypingForSender() async throws {
         let (sut, delegate, socket) = makeSUT()
         _ = sut
-        delegate.typingUsernames = ["Bob"]
+
+        socket.typingStarted.send(TypingEvent(userId: otherUserId, username: "bob", displayName: "Bob", conversationId: conversationId))
+        try await Task.sleep(nanoseconds: 100_000_000)
 
         let apiMsg = makeAPIMessage(id: "newmsg", senderId: otherUserId, senderUsername: "bob", senderDisplayName: "Bob")
         socket.simulateMessage(apiMsg)

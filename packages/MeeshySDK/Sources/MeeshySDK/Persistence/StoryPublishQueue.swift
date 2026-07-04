@@ -308,7 +308,14 @@ public actor StoryPublishQueue {
     }
 
     public func clearAll() {
+        // E9/E10 — un clearAll (logout multi-compte) emporte aussi les copies
+        // médias locales de chaque item : les stories en attente d'un compte
+        // ne doivent laisser ni queue ni fichiers au compte suivant.
+        for item in items {
+            removeLocalMedia(of: item)
+        }
         items.removeAll()
+        inFlightIds.removeAll()
         saveToDisk()
     }
 
@@ -398,7 +405,14 @@ public actor StoryPublishQueue {
         }
 
         // Apply the dispositions atomically before notifying observers.
+        // E10 — une disposition TERMINALE (succès OU échec permanent) emporte
+        // ses copies média locales : sans ce cleanup, chaque publication via
+        // la queue laissait son dossier `meeshy_offline_queue/<tempStoryId>/`
+        // orphelin sur disque (fuite confirmée it.12).
         for id in successIds + permanentFailureIds {
+            if let item = items.first(where: { $0.id == id }) {
+                removeLocalMedia(of: item)
+            }
             items.removeAll { $0.id == id }
         }
         saveToDisk()
@@ -412,6 +426,25 @@ public actor StoryPublishQueue {
 
         if !successIds.isEmpty || !permanentFailureIds.isEmpty {
             logger.info("Processed: \(successIds.count) succeeded, \(permanentFailureIds.count) permanently failed, \(self.items.count) still pending")
+        }
+    }
+
+    /// E10 — supprime les copies média locales d'un item en disposition
+    /// terminale puis chaque répertoire parent devenu VIDE (prudent : on ne
+    /// touche jamais un dossier qui contient encore autre chose). Best-effort
+    /// et agnostique du produit : la queue ne connaît que ses `mediaReferences`.
+    private func removeLocalMedia(of item: StoryPublishQueueItem) {
+        let fm = FileManager.default
+        var parents: Set<URL> = []
+        for ref in item.mediaReferences {
+            let url = URL(fileURLWithPath: ref.localFilePath)
+            try? fm.removeItem(at: url)
+            parents.insert(url.deletingLastPathComponent())
+        }
+        for parent in parents {
+            if let contents = try? fm.contentsOfDirectory(atPath: parent.path), contents.isEmpty {
+                try? fm.removeItem(at: parent)
+            }
         }
     }
 

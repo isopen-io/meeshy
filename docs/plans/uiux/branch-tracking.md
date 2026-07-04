@@ -14,6 +14,32 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 133i, 2026-07-03)** — piste iOS indépendante (suffixe `i`).
+> - **133i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `b6ba87ee`)** :
+>   Dynamic Type — annotation de gel de `ReelRepostEmbedCell` (carte de repost de Réel, bande média de
+>   hauteur fixe `stripHeight=116`). **3 figés** commentés **86i** : `music.note` backdrop (30), `play.fill`
+>   affordance centrale (18), badge Réel `play.rectangle.on.rectangle.fill` (13) — glyphes décoratifs bornés
+>   par la bande fixe, sans texte adjacent. **Distinction avec 130i** (`ReelFeedCard` badge `.padding`-driven
+>   plein-cadre → migré) : ici bande de hauteur FIXE → figé. A11y déjà en place (badge masqué ; carte
+>   `children:.ignore` labellisée). 1 fichier, 0 logique, 0 test/clé i18n neuve. 6 PR ouvertes calls/gateway —
+>   aucune sur ce fichier → 0 contention. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `ReelRepostEmbedCell` SOLDÉ** : ne plus reprendre les 3 glyphes figés (bornés par bande média fixe).
+> - **Base de départ 134i : `main` HEAD**. Reste `StoryViewerView+Content` (⚠️ i18n + `@State private`
+>   cross-file). Sinon : `AchievementBadgeView` (3), `SyncPill` (3), fichiers à 2 `.system`, ou **démarrer la
+>   passe state-of-the-art** (hexes inline vs tokens) si le lot migratable s'épuise.
+>
+> **POINTEUR AUTORITAIRE iOS (mis à jour 132i, 2026-07-03)** — piste iOS indépendante (suffixe `i`).
+> - **132i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `6de9912e`)** :
+>   Dynamic Type de `StatusBubbleController` → View co-localisée `MoodReplyConfirmationOverlay` (pop-up
+>   « Répondre à cette humeur ? »). **4/4** `.font(.system(size:))` → `MeeshyFont.relative` (titre 16 semibold,
+>   résumé 14, boutons Quitter 15 medium / Répondre 15 semibold) → libellés scalent sous Dynamic Type.
+>   **0 gel** (aucun cadre fixe). A11y déjà en place (`.accessibilityElement(children:.contain)`, boutons
+>   texte). Contrôleur singleton + ViewModifier non touchés. 1 fichier, 0 logique, 0 test/clé i18n neuve.
+>   0 PR iOS ouverte → 0 contention. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `StatusBubbleController` (`MoodReplyConfirmationOverlay`) Dynamic Type SOLDÉ** : ne plus reprendre.
+> - **Base de départ 133i : `main` HEAD**. Reste `StoryViewerView+Content` (⚠️ i18n + `@State private`
+>   cross-file). Sinon : `ReelRepostEmbedCell` (3), `AchievementBadgeView` (3), `SyncPill` (3), ou passe state-of-the-art.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 131i, 2026-07-03)** — piste iOS indépendante (suffixe `i`).
 > - **131i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `eb74172e`)** :
 >   Dynamic Type + a11y de `MessageDetailSheet` (glyphes hero d'états vides/erreur/confirmation). **3/4**

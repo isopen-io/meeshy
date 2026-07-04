@@ -57,6 +57,30 @@ object CallQualityThresholds {
      * `QualityThresholds.videoSurvivalResumeAfterSeconds`.
      */
     const val VIDEO_SURVIVAL_RESUME_AFTER_SECONDS: Double = 10.0
+
+    /**
+     * Video bitrate (bps) floor the sender-cap plan applies at the `CRITICAL` tier
+     * (whose [VideoQualityLevel.targetVideoBitrateBps] is `0`). Keeps video alive at
+     * minimum cost rather than stalling the encoder. Parity with iOS
+     * `QualityThresholds.minVideoBitrate`.
+     */
+    const val MIN_VIDEO_BITRATE_BPS: Int = 100_000
+
+    /**
+     * Frame-rate floor applied when [VideoQualityLevel.targetFps] is `0` (the `CRITICAL`
+     * tier) — mirrors the `POOR` tier's fps so video keeps flowing instead of stalling on
+     * an fps of zero. Parity with iOS `QualityThresholds.criticalVideoFloorFPS`.
+     */
+    const val CRITICAL_VIDEO_FLOOR_FPS: Int = 15
+
+    /**
+     * Resolution floor (portrait height, px) applied when
+     * [VideoQualityLevel.targetResolutionHeight] is `0` (the `CRITICAL` tier). Together
+     * with [MIN_VIDEO_BITRATE_BPS] and [CRITICAL_VIDEO_FLOOR_FPS] this defines the
+     * 360p15 @ 100 kbps worst-case floor. Parity with iOS
+     * `QualityThresholds.criticalVideoFloorHeight`.
+     */
+    const val CRITICAL_VIDEO_FLOOR_HEIGHT: Int = 360
 }
 
 /**
