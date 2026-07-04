@@ -78,20 +78,6 @@ extension StoryComposerView {
         .adaptiveOnChange(of: viewModel.isTimelineVisible) { _, isVisible in
             if isVisible { viewModel.loadCurrentSlideIntoTimeline() }
         }
-        .sheet(isPresented: $showFilterSheet) {
-            NavigationStack {
-                StoryFilterPicker(selectedFilter: $selectedFilter, previewImage: selectedImage)
-                    .navigationTitle(String(localized: "story.composer.filter", defaultValue: "Filtre", bundle: .module))
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button(String(localized: "story.composer.done", defaultValue: "OK", bundle: .module)) { showFilterSheet = false }
-                        }
-                    }
-            }
-            .presentationDetents([.medium])
-            .presentationDragIndicator(.visible)
-        }
         .sheet(isPresented: $showTransitionSheet) {
             NavigationStack {
                 transitionPicker

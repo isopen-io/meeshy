@@ -299,7 +299,16 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   (DrawingEditFloatingBubbles) + CommandStack timeline (séparé). Ajout/déplacement/suppression
   de texte/média/sticker/fond : irréversibles (seul « annuler » = ⋯ → Supprimer tous les
   slides !). Chantier : étendre le pattern CommandStack au canvas — PLAN requis avant code.
-- [ ] **C10 (P3) Code mort composer** (7 fichiers, confirmé zéro call site) : StickerPickerView
+- [x] **C10 (P3) Code mort composer.** ✅ it.85 — 7 fichiers purgés (FontStylePicker [vue],
+  TextBackgroundStylePicker, MediaPlacementSheet, StoryAudioPanel, TrackDetailPopover,
+  TimelineTrackView, StoryFilterPicker [vue]) + sheet filtre morte (showFilterSheet jamais
+  posé) + 3 commentaires périmés. Extractions AVANT purge : `storyFont(for:size:)` →
+  StoryFont.swift (4 usages vivants) ; `StoryFilterProcessor` → StoryFilterProcessor.swift
+  (source unique du rendu filtres, consommé par le bg layer + la grid — le build a attrapé
+  l'oubli). LEÇON consignée : purger un fichier = inventorier TOUS ses types, pas seulement
+  celui du nom. `.formatPanel(.media,_)` conservé (branche d'exhaustivité enum, pas un
+  fichier). StoryFilterGridView conservé (branché au panel .filters inatteignable —
+  attaché à la décision produit filtres §4). ORIGINE : Code mort composer** (7 fichiers, confirmé zéro call site) : StickerPickerView
   (→ C8), TextBackgroundStylePicker, FontStylePicker (la vue ; garder `storyFont(for:size:)`
   utilisé par TextEditToolOptions:56), MediaPlacementSheet, StoryAudioPanel (+ son
   StoryVoiceRecorder embarqué), TrackDetailPopover, TimelineTrackView. + sheet
@@ -982,6 +991,11 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.85 — C10 : purge du code mort (7 fichiers, −~1500 lignes, 2 extractions)
+
+- Le build a servi de filet : StoryFilterProcessor vivait dans le fichier de la vue morte —
+  récupéré depuis git en fichier propre. Suites filtres/history/text-bg vertes.
 
 ## it.84 — C9 Inc.4+5 : UI discrète livrée + cycle undo vérifié en conditions réelles
 

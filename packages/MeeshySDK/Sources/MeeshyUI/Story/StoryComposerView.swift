@@ -61,7 +61,6 @@ public struct StoryComposerView: View {
     // .resolveComposerSourceLanguage(user:)` for the canonical resolver.
     @State var storyLanguage: String = StoryComposerViewModel
         .resolveComposerSourceLanguage(user: AuthManager.shared.currentUser)
-    @State var showFilterSheet = false
     @State var showTransitionSheet = false
     @State var audioEditorItem: AudioEditorItemWrapper?
     @State var mediaAudioEditorItem: AudioEditorItemWrapper?

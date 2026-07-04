@@ -4,7 +4,7 @@ import MeeshySDK
 /// Source unique de résolution `UIFont` pour le rendu canvas d'un
 /// `StoryTextObject`. Extraite de `StoryTextLayer` pour être partagée avec
 /// `StoryInlineTextEditor` sans dupliquer la logique de style. Le pendant
-/// SwiftUI `storyFont(for:size:)` (`FontStylePicker.swift`) reste séparé : il
+/// SwiftUI `storyFont(for:size:)` (`StoryFont.swift`) reste séparé : il
 /// renvoie un `Font` SwiftUI ; ce resolver n'unifie que le côté UIKit.
 public enum StoryTextFontResolver {
 
