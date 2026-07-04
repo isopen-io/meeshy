@@ -9,7 +9,7 @@
 
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import { PostFeedService } from '../../../services/PostFeedService';
-import { decodeCursor } from '../../../routes/posts/types';
+import { decodeCursor, encodeCursor } from '../../../routes/posts/types';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 // ---------------------------------------------------------------------------
@@ -292,8 +292,8 @@ describe('PostFeedService.getStories', () => {
     const service = new PostFeedService(mockPrisma);
     const result = await service.getStories('user-1');
 
-    expect(result).toHaveLength(1);
-    expect((result[0] as any).currentUserReactions).toEqual([]);
+    expect(result.items).toHaveLength(1);
+    expect((result.items[0] as any).currentUserReactions).toEqual([]);
   });
 
   it('returns currentUserReactions: ["❤️"] when user reacted to a story', async () => {
@@ -305,7 +305,7 @@ describe('PostFeedService.getStories', () => {
     const service = new PostFeedService(mockPrisma);
     const result = await service.getStories('user-1');
 
-    expect((result[0] as any).currentUserReactions).toEqual(['❤️']);
+    expect((result.items[0] as any).currentUserReactions).toEqual(['❤️']);
   });
 
   it('adds an updatedAt delta filter when updatedSince is provided (G1 delta-sync)', async () => {
@@ -372,7 +372,7 @@ describe('PostFeedService.getStories', () => {
     const service = new PostFeedService(mockPrisma);
     const result = await service.getStories('user-1', { projection: 'tray' });
 
-    expect((result[0] as any).isViewedByMe).toBe(true);
+    expect((result.items[0] as any).isViewedByMe).toBe(true);
   });
 
   it('skips the reactions batch query in the tray projection (rings need no reactions)', async () => {
@@ -384,7 +384,49 @@ describe('PostFeedService.getStories', () => {
     const result = await service.getStories('user-1', { projection: 'tray' });
 
     expect(mockPostReactionFindMany).not.toHaveBeenCalled();
-    expect((result[0] as any).currentUserReactions).toEqual([]);
+    expect((result.items[0] as any).currentUserReactions).toEqual([]);
+  });
+
+  it('adds a keyset filter and tiebreaker ordering when a cursor is provided (G1c)', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+    const service = new PostFeedService(mockPrisma);
+    const anchor = makePost('s-anchor', { type: 'STORY' });
+
+    // Round-trip a real cursor (same encoder the service hands out).
+    const first = await service.getStories('user-1');
+    expect(first.nextCursor).toBeNull();
+    await service.getStories('user-1', { cursor: encodeCursor(anchor.createdAt as Date, anchor.id) });
+
+    const args = mockPostFindMany.mock.calls[1][0];
+    expect(JSON.stringify(args.where)).toContain('"lt"');
+    expect(args.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
+  });
+
+  it('returns hasMore + nextCursor when more stories exist than the limit (G1c)', async () => {
+    const rows = Array.from({ length: 3 }, (_, i) =>
+      makePost(`s-page-${i}`, { type: 'STORY', createdAt: new Date(Date.UTC(2025, 0, 10 - i)) }));
+    mockPostFindMany.mockResolvedValue(rows);
+    mockPostViewFindMany.mockResolvedValue([]);
+    mockPostReactionFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getStories('user-1', { limit: 2 });
+
+    expect(result.items).toHaveLength(2);
+    expect(result.hasMore).toBe(true);
+    const decoded = decodeCursor(result.nextCursor as string);
+    expect(decoded?.id).toBe('s-page-1');
+  });
+
+  it('first page without cursor keeps the historic 50 cap and take limit+1 (G1c)', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getStories('user-1');
+
+    const args = mockPostFindMany.mock.calls[0][0];
+    expect(args.take).toBe(51);
+    expect(JSON.stringify(args.where)).not.toContain('"lt"');
   });
 });
 

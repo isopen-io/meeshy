@@ -13,7 +13,7 @@ import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
 const mockGetFeed = jest.fn<any>().mockResolvedValue({ items: [], hasMore: false, nextCursor: null });
-const mockGetStories = jest.fn<any>().mockResolvedValue([]);
+const mockGetStories = jest.fn<any>().mockResolvedValue({ items: [], hasMore: false, nextCursor: null });
 const mockGetReels = jest.fn<any>().mockResolvedValue({ items: [], hasMore: false, nextCursor: null });
 const mockGetStatuses = jest.fn<any>().mockResolvedValue({ items: [], hasMore: false, nextCursor: null });
 const mockGetDiscoverStatuses = jest.fn<any>().mockResolvedValue({ items: [], hasMore: false, nextCursor: null });
@@ -160,6 +160,32 @@ describe('GET /posts/feed/stories — projection parsing (G1b)', () => {
       expect.anything(),
       expect.objectContaining({ projection: undefined })
     );
+    await app.close();
+  });
+});
+
+describe('GET /posts/feed/stories — cursor pagination (G1c)', () => {
+  it('forwards cursor and clamped limit to the service', async () => {
+    const app = await buildApp();
+    await app.inject({ method: 'GET', url: '/posts/feed/stories?cursor=abc123&limit=200' });
+    expect(mockGetStories).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ cursor: 'abc123', limit: 50 })
+    );
+    await app.close();
+  });
+
+  it('exposes hasMore and nextCursor in the pagination envelope, data stays the array', async () => {
+    mockGetStories.mockResolvedValueOnce({
+      items: [{ id: 's-p1', content: null }],
+      hasMore: true,
+      nextCursor: 'next-token',
+    });
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: '/posts/feed/stories?limit=1' });
+    const body = res.json();
+    expect(Array.isArray(body.data)).toBe(true);
+    expect(body.pagination).toEqual(expect.objectContaining({ hasMore: true, nextCursor: 'next-token' }));
     await app.close();
   });
 });
@@ -376,9 +402,11 @@ describe('GET /posts/feed — items with embedded comments resolve mentions', ()
 
 describe('GET /posts/feed/stories — with story content and embedded comments', () => {
   it('returns 200 and collects contents from embedded story comments', async () => {
-    mockGetStories.mockResolvedValueOnce([
-      { id: 's1', content: 'Story content', comments: [{ content: 'Story comment' }] },
-    ]);
+    mockGetStories.mockResolvedValueOnce({
+      items: [{ id: 's1', content: 'Story content', comments: [{ content: 'Story comment' }] }],
+      hasMore: false,
+      nextCursor: null,
+    });
     const app = await buildApp();
     const res = await app.inject({ method: 'GET', url: '/posts/feed/stories' });
     expect(res.statusCode).toBe(200);

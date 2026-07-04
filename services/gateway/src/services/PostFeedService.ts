@@ -229,8 +229,16 @@ export class PostFeedService {
     };
   }
 
-  async getStories(userId: string, options?: { updatedSince?: Date; projection?: 'tray' }) {
+  async getStories(
+    userId: string,
+    options?: { updatedSince?: Date; projection?: 'tray'; cursor?: string; limit?: number }
+  ) {
     const now = new Date();
+    // G1(c) pagination keyset (createdAt, id) — même patron que getStatuses /
+    // getDiscoverStatuses. Sans cursor ni limit explicites, la première page
+    // de 50 reproduit le plafond historique (rétro-compatible).
+    const limit = Math.min(Math.max(options?.limit ?? 50, 1), 50);
+    const cursorData = options?.cursor ? decodeCursor(options.cursor) : null;
     const [friendIds, dmContactIds, communityCoMemberIds] = await Promise.all([
       this.getFriendIds(userId),
       this.getDirectConversationContactIds(userId),
@@ -257,24 +265,39 @@ export class PostFeedService {
       where.AND.push({ updatedAt: { gt: options.updatedSince } });
     }
 
+    if (cursorData) {
+      where.AND.push({
+        OR: [
+          { createdAt: { lt: new Date(cursorData.createdAt) } },
+          { createdAt: new Date(cursorData.createdAt), id: { lt: cursorData.id } },
+        ],
+      });
+    }
+
     // G1(b) projection tray : select léger (anneaux + miniature + vu) au lieu
     // du plein corps — opt-in, le défaut reste l'include canonique complet.
     // Deux appels distincts : Prisma type `select`/`include` comme des
     // overloads exclusifs, un spread conditionnel produit une union rejetée.
     const isTrayProjection = options?.projection === 'tray';
-    const stories = isTrayProjection
+    const fetched = isTrayProjection
       ? await this.prisma.post.findMany({
           where,
           select: trayStorySelect,
-          orderBy: { createdAt: 'desc' },
-          take: 50,
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: limit + 1,
         })
       : await this.prisma.post.findMany({
           where,
           include: feedPostInclude,
-          orderBy: { createdAt: 'desc' },
-          take: 50,
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take: limit + 1,
         });
+
+    const hasMore = fetched.length > limit;
+    const stories = hasMore ? fetched.slice(0, limit) : fetched;
+    const nextCursor = hasMore && stories.length > 0
+      ? encodeCursor(stories[stories.length - 1].createdAt, stories[stories.length - 1].id)
+      : null;
 
     const storyIds = stories.map((s) => s.id);
     // Le tray ne rend pas les réactions — la requête batch est coupée en
@@ -301,11 +324,13 @@ export class PostFeedService {
       userReactionsMap.set(r.postId, list);
     }
 
-    return stories.map((s) => ({
+    const items = stories.map((s) => ({
       ...this.enrichWithLikeStatus(s, userReactionsMap.get(s.id) ?? []),
       isViewedByMe: viewedSet.has(s.id),
       currentUserReactions: userReactionsMap.get(s.id) ?? [],
     }));
+
+    return { items, nextCursor, hasMore };
   }
 
   async getStatuses(userId: string, cursor?: string, limit: number = 20) {

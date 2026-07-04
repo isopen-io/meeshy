@@ -84,16 +84,30 @@ export function registerFeedRoutes(
       const rawProjection = (request.query as Record<string, unknown> | undefined)?.projection;
       const projection = rawProjection === 'tray' ? ('tray' as const) : undefined;
 
-      const stories = await feedService.getStories(authContext.registeredUser.id, { updatedSince, projection });
+      // G1(c) pagination cursor — mêmes conventions que /posts/feed. Sans
+      // paramètres, première page de 50 = plafond historique ; `data` reste
+      // le tableau de stories (les clients existants décodent inchangé),
+      // hasMore/nextCursor voyagent dans `pagination`.
+      const rawCursor = (request.query as Record<string, unknown> | undefined)?.cursor;
+      const cursor = typeof rawCursor === 'string' && rawCursor.length > 0 ? rawCursor : undefined;
+      const rawLimit = Number((request.query as Record<string, unknown> | undefined)?.limit);
+      const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(Math.trunc(rawLimit), 1), 50) : 50;
+
+      const result = await feedService.getStories(authContext.registeredUser.id, {
+        updatedSince, projection, cursor, limit,
+      });
 
       reply.header('Cache-Control', 'private, no-cache');
 
-      const storyContents = collectPostContents(stories);
+      const storyContents = collectPostContents(result.items);
       const storyMentionedUsers = storyContents.length > 0
         ? await resolveMentionedUsers(prisma, storyContents)
         : [];
 
-      return sendSuccess(reply, stories, { meta: { mentionedUsers: storyMentionedUsers } });
+      return sendSuccess(reply, result.items, {
+        pagination: { limit, hasMore: result.hasMore, nextCursor: result.nextCursor },
+        meta: { mentionedUsers: storyMentionedUsers },
+      });
     } catch (error) {
       fastify.log.error(`[GET /posts/feed/stories] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
