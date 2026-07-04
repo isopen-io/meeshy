@@ -1074,11 +1074,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `@Singleton BlockCache` (blocklist SSOT, hydrated by `BlockRepository`) backs the
       `BlockStatusProvider` in `DiscoverViewModel`, so a blocked user resolves live to `Blocked`
       everywhere. +31 behavioural tests (10 rules, 13 cache, 8 resolver).
-- [~] Send / accept / decline / cancel friend request — **Requests tab** lists received +
+- [x] Send / accept / decline / cancel friend request — **Requests tab** lists received +
       sent requests (avatars tinted by deterministic `DynamicColorGenerator.colorForName`),
       with optimistic accept / decline (`respond`) + cancel (`deleteRequest`), in-flight
-      guard (`pendingActionIds`) and snapshot rollback on failure (9 ViewModel tests, EN/FR/ES/PT) ;
-      send (compose-new) + offline-queue + idempotency pending
+      guard (`pendingActionIds`) and snapshot rollback on failure (9 ViewModel tests, EN/FR/ES/PT).
+      **Durable send now shipped** (slice `friend-request-outbox-idempotency`, 2026-07-04): the
+      Discover connect flips the shared `FriendshipCache` optimistically + instantly (even offline),
+      keyed by the outbox `cmid` as a placeholder request id, and queues a `SEND_FRIEND_REQUEST`
+      row on the new `OutboxLanes.FRIEND` lane. The `OutboxCoalescer` dedups a repeated send to the
+      same receiver (idempotent — only one request can exist, latest greeting wins); the
+      `OutboxFlushWorker` sender delivers via `FriendRepository.sendFriendRequest`, classifies the
+      outcome through the pure `FriendRequestSend.classify` (409/blank-id → idempotent already-exists,
+      other 4xx → permanent reject + rollback, 5xx/offline → retry), and grafts the real request id
+      back over the placeholder on delivery; a hard exhaust rolls the pending back. **Also fixed a
+      latent bug**: `OutboxLanes.BLOCK` (and now `FRIEND`) were never in the worker's drain list, so
+      block/unblock rows never delivered — both lanes are now drained. Surpasses iOS (online-only
+      send). +26 tests (9 `FriendRequestSend`, 3 `OutboxCoalescer`, 5 `FriendRepository`, 4 net
+      `DiscoverViewModel`). Remaining: send **compose-new** UI (user-search entry point → connect)
 - [ ] Invite by email; invite by SMS; import phone contacts
 - [x] Discover suggestions (cache-first) + live user search with inline connect —
       **live search + inline connect shipped** (slice `discover-user-search`): the Discover tab

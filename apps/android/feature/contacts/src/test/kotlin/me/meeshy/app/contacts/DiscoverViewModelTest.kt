@@ -6,6 +6,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import androidx.work.WorkManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -50,6 +51,7 @@ class DiscoverViewModelTest {
     private val userRepository: UserRepository = mockk(relaxed = true)
     private val friendRepository: FriendRepository = mockk(relaxed = true)
     private val suggestionsRepository: SuggestionsRepository = mockk(relaxed = true)
+    private val workManager: WorkManager = mockk(relaxed = true)
 
     private fun session(id: String? = "me"): SessionRepository =
         mockk<SessionRepository> { every { currentUserId } returns id }
@@ -65,7 +67,7 @@ class DiscoverViewModelTest {
         blockCache: BlockCache = BlockCache(),
         session: SessionRepository = session(),
     ): DiscoverViewModel =
-        DiscoverViewModel(userRepository, friendRepository, suggestionsRepository, cache, blockCache, session)
+        DiscoverViewModel(userRepository, friendRepository, suggestionsRepository, cache, blockCache, workManager, session)
 
     @Test
     fun `a sub-threshold query clears results and never hits the network`() = runTest {
@@ -158,33 +160,36 @@ class DiscoverViewModelTest {
         assertThat(vm.state.value.rows.single().connect).isEqualTo(ConnectAction.Hidden)
 
         vm.connect("me")
-        coVerify(exactly = 0) { friendRepository.sendFriendRequest(any(), any()) }
+        coVerify(exactly = 0) { friendRepository.enqueueSendFriendRequest(any(), any(), any()) }
     }
 
     @Test
-    fun `connect sends a request and flips the row to pending on success`() = runTest {
+    fun `connect queues a durable request, flips the row to pending optimistically and wakes the flusher`() = runTest {
         coEvery { userRepository.searchUsers(any(), any(), any()) } returns
             NetworkResult.Success(listOf(result("alice")))
-        coEvery { friendRepository.sendFriendRequest("alice", any()) } returns
-            NetworkResult.Success(request(id = "req-1", receiverId = "alice"))
+        coEvery { friendRepository.enqueueSendFriendRequest(eq("alice"), any(), any()) } returns "cmid-1"
         val cache = FriendshipCache()
         val vm = viewModel(cache = cache)
         vm.onQueryChanged("alice")
 
         vm.connect("alice")
 
+        // The pending flip is optimistic (through the shared cache), not gated on
+        // any network round-trip — the request merely queued durably.
         assertThat(vm.state.value.rows.single().connect).isEqualTo(ConnectAction.Pending)
         assertThat(vm.state.value.pendingActionIds).isEmpty()
         assertThat(cache.status("alice").javaClass.simpleName).isEqualTo("PendingSent")
-        coVerify(exactly = 1) { friendRepository.sendFriendRequest("alice", any()) }
+        coVerify(exactly = 1) { friendRepository.enqueueSendFriendRequest(eq("alice"), any(), any()) }
+        verify(exactly = 1) { workManager.enqueue(any<androidx.work.WorkRequest>()) }
     }
 
     @Test
-    fun `a failed connect surfaces the error, leaves the row connectable and mints no pending`() = runTest {
+    fun `a null enqueue result neither flips pending nor wakes the flusher`() = runTest {
         coEvery { userRepository.searchUsers(any(), any(), any()) } returns
             NetworkResult.Success(listOf(result("alice")))
-        coEvery { friendRepository.sendFriendRequest("alice", any()) } returns
-            NetworkResult.Failure(ApiError("nope"))
+        // A null cmid means nothing was durably queued (e.g. a blank/inert enqueue);
+        // the optimistic flip is keyed to a real queued row, so it must not happen.
+        coEvery { friendRepository.enqueueSendFriendRequest(eq("alice"), any(), any()) } returns null
         val cache = FriendshipCache()
         val vm = viewModel(cache = cache)
         vm.onQueryChanged("alice")
@@ -192,9 +197,30 @@ class DiscoverViewModelTest {
         vm.connect("alice")
 
         assertThat(vm.state.value.rows.single().connect).isEqualTo(ConnectAction.Connect)
-        assertThat(vm.state.value.errorMessage).isEqualTo("nope")
+        assertThat(cache.status("alice")).isEqualTo(me.meeshy.sdk.model.friend.FriendshipStatus.None)
         assertThat(vm.state.value.pendingActionIds).isEmpty()
-        assertThat(cache.isFriend("alice")).isFalse()
+        verify(exactly = 0) { workManager.enqueue(any<androidx.work.WorkRequest>()) }
+    }
+
+    @Test
+    fun `a failed local enqueue leaves the row connectable with no phantom pending`() = runTest {
+        coEvery { userRepository.searchUsers(any(), any(), any()) } returns
+            NetworkResult.Success(listOf(result("alice")))
+        coEvery { friendRepository.enqueueSendFriendRequest(eq("alice"), any(), any()) } throws
+            RuntimeException("disk full")
+        val cache = FriendshipCache()
+        val vm = viewModel(cache = cache)
+        vm.onQueryChanged("alice")
+
+        vm.connect("alice")
+
+        // Flip-after-enqueue: the throw happens before any cache mutation, so there
+        // is nothing to roll back and never a Pending with no durable row behind it.
+        assertThat(vm.state.value.rows.single().connect).isEqualTo(ConnectAction.Connect)
+        assertThat(vm.state.value.errorMessage).isEqualTo("disk full")
+        assertThat(vm.state.value.pendingActionIds).isEmpty()
+        assertThat(cache.status("alice")).isEqualTo(me.meeshy.sdk.model.friend.FriendshipStatus.None)
+        verify(exactly = 0) { workManager.enqueue(any<androidx.work.WorkRequest>()) }
     }
 
     @Test
@@ -208,7 +234,7 @@ class DiscoverViewModelTest {
 
         vm.connect("alice")
 
-        coVerify(exactly = 0) { friendRepository.sendFriendRequest(any(), any()) }
+        coVerify(exactly = 0) { friendRepository.enqueueSendFriendRequest(any(), any(), any()) }
     }
 
     @Test
@@ -380,8 +406,7 @@ class DiscoverViewModelTest {
     fun `connect works on a suggestion row and flips it to pending`() = runTest {
         every { suggestionsRepository.suggestionsStream(any()) } returns
             flowOf(CacheResult.Fresh(listOf(result("alice")), ageMillis = 0L))
-        coEvery { friendRepository.sendFriendRequest("alice", any()) } returns
-            NetworkResult.Success(request(id = "req-1", receiverId = "alice"))
+        coEvery { friendRepository.enqueueSendFriendRequest(eq("alice"), any(), any()) } returns "cmid-1"
         val cache = FriendshipCache()
         val vm = viewModel(cache = cache)
         vm.loadSuggestions()

@@ -947,3 +947,33 @@ Append-only log of gotchas and decisions that save time next run.
   real in-memory `MeeshyDatabase` (`Room.inMemoryDatabaseBuilder` + `RobolectricTestRunner`) — the
   established `StoryRepositoryTest`/`MediaUploadQueueTest` pattern. Assert the queued row via
   `outbox.deliverable(lane)`; don't mock the final `OutboxRepository`.
+
+## 2026-07-04 — pattern: durable friend-request send + the lane-in-drain-list gotcha
+- **Adding an `OutboxKind` + `OutboxLanes.X` is NOT enough — you MUST also add lane `X` to the
+  `OutboxFlushWorker` shared-lane drain list.** The prior `block-outbox-durable` slice added
+  `OutboxLanes.BLOCK` + senders but forgot the drain list, so block/unblock rows never delivered (a
+  silent no-op, invisible to the JVM tests because there is no worker integration test). This slice
+  added both `BLOCK` and `FRIEND` to the list. **Follow-up: a worker drain-list test** (Robolectric)
+  that asserts every lane with a registered sender is drained would have caught it — worth wiring.
+- **Optimistic flip of a shared singleton cache must come AFTER the durable enqueue commits, not
+  before.** `DiscoverViewModel.connect` first flipped `FriendshipCache` (an app-wide `@Singleton`)
+  then enqueued in a `viewModelScope` coroutine — a cancellation between the two (VM cleared on
+  nav-away) left a **phantom `PendingSent`** in the cache with no queued row and no rollback, wrong on
+  every screen until a hydrate. Fix: enqueue first, flip only on a non-`null` cmid (the local Room
+  write is sub-ms, so it is still effectively instant). This differs from `BlockedListViewModel`,
+  which flips its **own** `_state` list (dies with the VM) — a cache-derived VM has no such safety, so
+  order matters. Deleted the local-enqueue-failure rollback path entirely (nothing to undo).
+- **A `SEND` overrides the drainer's "404-as-success" default** (ARCHITECTURE.md §5). That rule is for
+  idempotent deletes (404 = already gone). `FriendRequestSend.classify` maps 404 → permanent reject +
+  rollback (404 = receiver not found), never success — else a pending would strand toward a
+  non-existent user. Documented inline so the divergence reads as intentional.
+- **Known optimistic-drift edges (reconciled by a later hydrate, deferred):**
+  1. The gateway returns **409 for a friendRequest in EITHER direction and any status** (already
+     friends / inbound-pending / previously-rejected), so `409 → AlreadyExists` can leave the button
+     showing "Pending sent" when the truth is "Friends"/"Accept". A proper fix triggers a
+     friendship re-hydrate on 409 rather than trusting the optimistic placeholder.
+  2. **Cancel-while-queued**: cancelling a still-queued (placeholder) send does not annihilate the
+     outbox row (no cancel-via-outbox path yet), so on delivery `Delivered → didSendRequest` can
+     resurrect it. When the "cancel a pending sent request" flow lands, route it through a
+     `CANCEL_FRIEND_REQUEST` coalescer rule that **annihilates** a pending `SEND_FRIEND_REQUEST` to
+     the same receiver (mirror the send+delete message annihilation).
