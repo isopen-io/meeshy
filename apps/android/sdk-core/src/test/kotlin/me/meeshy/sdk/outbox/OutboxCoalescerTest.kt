@@ -88,4 +88,57 @@ class OutboxCoalescerTest {
 
         assertThat(decision).isEqualTo(CoalesceDecision.Enqueue(send))
     }
+
+    @Test
+    fun `block then unblock of the same user annihilates the block`() {
+        val block = row("b1", OutboxKind.BLOCK_USER, "u1")
+        val unblock = row("ub1", OutboxKind.UNBLOCK_USER, "u1")
+
+        assertThat(OutboxCoalescer.decide(unblock, listOf(block)))
+            .isEqualTo(CoalesceDecision.Annihilate(listOf("b1")))
+    }
+
+    @Test
+    fun `unblock then block of the same user annihilates the unblock`() {
+        val unblock = row("ub1", OutboxKind.UNBLOCK_USER, "u1")
+        val block = row("b1", OutboxKind.BLOCK_USER, "u1")
+
+        assertThat(OutboxCoalescer.decide(block, listOf(unblock)))
+            .isEqualTo(CoalesceDecision.Annihilate(listOf("ub1")))
+    }
+
+    @Test
+    fun `a repeated block of the same user keeps the latest`() {
+        val first = row("b1", OutboxKind.BLOCK_USER, "u1")
+        val second = row("b2", OutboxKind.BLOCK_USER, "u1")
+
+        assertThat(OutboxCoalescer.decide(second, listOf(first)))
+            .isEqualTo(CoalesceDecision.Replace(listOf("b1"), second))
+    }
+
+    @Test
+    fun `a repeated unblock of the same user keeps the latest`() {
+        val first = row("ub1", OutboxKind.UNBLOCK_USER, "u1")
+        val second = row("ub2", OutboxKind.UNBLOCK_USER, "u1")
+
+        assertThat(OutboxCoalescer.decide(second, listOf(first)))
+            .isEqualTo(CoalesceDecision.Replace(listOf("ub1"), second))
+    }
+
+    @Test
+    fun `a first block of a user is enqueued`() {
+        val block = row("b1", OutboxKind.BLOCK_USER, "u1")
+
+        assertThat(OutboxCoalescer.decide(block, emptyList()))
+            .isEqualTo(CoalesceDecision.Enqueue(block))
+    }
+
+    @Test
+    fun `blocking a different user is not coalesced`() {
+        val blockU1 = row("b1", OutboxKind.BLOCK_USER, "u1")
+        val unblockU2 = row("ub2", OutboxKind.UNBLOCK_USER, "u2")
+
+        assertThat(OutboxCoalescer.decide(unblockU2, listOf(blockU1)))
+            .isEqualTo(CoalesceDecision.Enqueue(unblockU2))
+    }
 }

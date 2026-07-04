@@ -15,6 +15,8 @@ public enum class OutboxKind {
     UPDATE_SETTINGS,
     PUBLISH_STORY,
     UPLOAD_MEDIA,
+    BLOCK_USER,
+    UNBLOCK_USER,
 }
 
 /** Lifecycle of an outbox row; a succeeded mutation is deleted, never flagged. */
@@ -47,6 +49,7 @@ public object OutboxLanes {
     public const val MEDIA: String = "media"
     public const val PROFILE: String = "profile"
     public const val SETTINGS: String = "settings"
+    public const val BLOCK: String = "block"
 }
 
 /**

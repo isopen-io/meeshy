@@ -1112,8 +1112,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `pendingIds`. Pure `:core:model` `BlockedUser` + `resolvedName`; `:core:network` `BlockApi`
       (`GET users/me/blocked-users`, `POST/DELETE users/{id}/block`, iOS `BlockService` parity).
       +29 tests (4 `BlockedUser`, 9 `BlockCache`, 6 `BlockRepository`, 9 `BlockedListViewModel`,
-      +1 `DiscoverViewModel` seam). **Pending:** durable offline-queued unblock (iOS routes it via
-      `OfflineQueue`) — today it's an online-first optimistic REST call with snapshot rollback.
+      +1 `DiscoverViewModel` seam). **Durable offline unblock now shipped** (slice
+      `block-outbox-durable`, 2026-07-04): the write path moved off online-first REST onto the
+      shared durable outbox. Two new `OutboxKind`s (`BLOCK_USER`/`UNBLOCK_USER`) on a dedicated
+      `OutboxLanes.BLOCK` lane, an `OutboxCoalescer.blockToggle` rule (block+unblock of the same
+      user annihilate — the toggle returns to the last-synced server state, exactly like a reaction
+      toggle; a repeated block/unblock is superseded — idempotent terminal state), two
+      `OutboxFlushWorker` senders (`blockApi.block`/`unblock` → Success/TransientFailure) and an
+      `onExhausted` rollback that flips the `BlockCache` SSOT back so the next `listBlocked` re-hydrates
+      truthfully. `BlockRepository.setBlockedDurably(userId, blocked)` flips the cache optimistically +
+      enqueues (blank id inert; returns the cmid, or `null` when the enqueue annihilated a pending
+      opposite); `BlockedListViewModel.unblock` calls it, wakes the flush worker only on a real cmid,
+      and rolls the row back in place on a local enqueue failure. Survives offline + process death,
+      surpassing iOS's online-only block/unblock. +12 tests (6 coalescer, +4 net `BlockRepository`,
+      +2 net `BlockedListViewModel`). **Pending:** durable offline-queued *block* from a future
+      profile/report surface (the `setBlockedDurably(.., true)` half is ready, awaiting its UI).
 
 ## K. Profile & Account
 - [ ] View profile (by id / username / public handle / email / phone)

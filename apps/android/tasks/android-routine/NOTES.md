@@ -925,3 +925,25 @@ Append-only log of gotchas and decisions that save time next run.
   ends it. The `endedCalls` banner-dismiss is correct and self-contained, but the full fix is an
   **identity-aware active-call teardown**: gate the FSM teardown so only a teardown whose `callId`
   matches the active call reduces it. Deferred to keep this slice thin and non-test-breaking.
+
+## 2026-07-04 — pattern: durable absolute-state mutations (block/unblock) via the outbox
+- Block/unblock are **opposite terminal states**, not deltas — but they coalesce **exactly**
+  like the reaction add/remove toggle: a queued opposite for the same target **annihilates**
+  (the pair returns the user to the last-synced server state; the optimistic `BlockCache` flip
+  the second call made is the correct net state), and a repeated same-kind row is **superseded**
+  (idempotent). So reuse the reaction-toggle shape in `OutboxCoalescer`, don't invent a new one.
+- **No payload needed**: like `DELETE_MESSAGE`, the kind (`BLOCK_USER`/`UNBLOCK_USER`) + `targetId`
+  carry everything; `payload = ""`. That means **no DB migration** — a cheap durable slice.
+- **Delivery-exhaust rollback is the worker's job, not the VM's** (precedent: `markReadOptimistic`).
+  The VM writes optimistically + enqueues + wakes `OutboxFlushWorker`; it only rolls back on a
+  **local enqueue failure**. A *delivery* hard-exhaust rolls the **SSOT** (`BlockCache`) back in the
+  worker's `onExhausted`, and the list re-hydrates truthfully on next `load()`. Do **not** wire the
+  VM to `OutboxRepository.outcomes` for per-cmid list restoration — no existing durable mutation does,
+  and it adds a stateful cmid→row map for a rare tail case the SSOT already corrects.
+- **Wake the worker only on a real cmid**: `OutboxRepository.enqueue` returns `null` when the incoming
+  mutation annihilated a pending opposite — nothing to deliver, so schedule no `WorkManager` request
+  (mirrors `ConversationListViewModel.runPrefMutation` gating on the "something was queued" boolean).
+- **Enqueue-repo tests go Robolectric**: a repository that calls `OutboxRepository.enqueue` needs a
+  real in-memory `MeeshyDatabase` (`Room.inMemoryDatabaseBuilder` + `RobolectricTestRunner`) — the
+  established `StoryRepositoryTest`/`MediaUploadQueueTest` pattern. Assert the queued row via
+  `outbox.deliverable(lane)`; don't mock the final `OutboxRepository`.
