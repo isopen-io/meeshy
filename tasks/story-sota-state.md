@@ -425,6 +425,17 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   (poignée C3 = bouton labellisé, fermeture band = chevron, zoom-out = bouton reset,
   swipe-up FAB = tap, undo/redo = boutons labellisés). Audit PRODUCTIF (pas sec).
 
+- [x] **C15 (P3, audit ciblé it.90 — éditeur texte inline).** ✅ it.90
+  FINDING (observé dès les sessions simulateur it.72/84 : « Texte vide » persistants) :
+  AUCUN chemin de sortie de l'édition inline ne purgeait un texte resté vide — fantômes
+  invisibles au canvas, comptés par le badge FAB, sérialisés au draft ET au publish
+  (traduits par le pipeline gateway pour rien). FIX : purge centralisée dans
+  `exitTextEditingMode()` (le point de sortie COMMUN — X, tap ailleurs, slide-switch) :
+  texte vide/blanc → `deleteElement` (respecte les verrouillés + staging C9). 3 tests
+  (vide purgé, blanc purgé, contenu réel conservé). Piège de test : `addText()` ne pose
+  PAS textEditingMode (la View appelle enterTextEditingMode ensuite) — test aligné.
+  Audit n°3 PRODUCTIF — compteur sec retombe à 0/2.
+
 ### ÉDITION — crash recovery & intégrité des données
 
 - [x] **E1 (P0) Autosave draft sur mutation, pas seulement en background.** ✅ it.5
@@ -1018,6 +1029,12 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.90 — Audit ciblé n°3 (éditeur texte inline) → C15 trouvé+fixé — compteur 0/2
+
+- Les « Texte vide » aperçus dans MES sessions simulateur étaient le symptôme — l'audit
+  les a transformés en fix prouvé. Le payload publish ne transporte plus de textObjects
+  fantômes (économie de jobs de traduction gateway au passage).
 
 ## it.89 — Audit ciblé n°2 (flux preview) : SEC — compteur 1/2
 

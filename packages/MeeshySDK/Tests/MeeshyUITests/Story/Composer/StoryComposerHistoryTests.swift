@@ -108,6 +108,46 @@ final class StoryComposerHistoryTests: XCTestCase {
         XCTAssertGreaterThan(vm.zIndex(for: a.id), vm.zIndex(for: b.id))
     }
 
+    // MARK: - Purge des textes vides à la sortie d'édition (audit it.90)
+
+    func test_exitTextEditing_emptyText_isPurged() throws {
+        let vm = StoryComposerViewModel()
+        let text = try XCTUnwrap(vm.addText())  // crée text:""
+        vm.enterTextEditingMode(textId: text.id)  // la View le fait après addText
+        XCTAssertEqual(vm.currentEffects.textObjects.count, 1)
+
+        vm.exitTextEditingMode()
+
+        XCTAssertTrue(vm.currentEffects.textObjects.isEmpty,
+                      "un texte resté vide à la fermeture est un fantôme (badge, publish, traduction gateway) — purgé")
+        XCTAssertNil(vm.currentEffects.textObjects.first(where: { $0.id == text.id }))
+    }
+
+    func test_exitTextEditing_whitespaceOnly_isPurged() throws {
+        let vm = StoryComposerViewModel()
+        let text = try XCTUnwrap(vm.addText())
+        var effects = vm.currentEffects
+        effects.textObjects[0].text = "   \n  "
+        vm.currentEffects = effects
+        vm.enterTextEditingMode(textId: text.id)
+
+        vm.exitTextEditingMode()
+
+        XCTAssertTrue(vm.currentEffects.textObjects.isEmpty)
+    }
+
+    func test_exitTextEditing_realContent_isKept() throws {
+        let vm = StoryComposerViewModel()
+        _ = try XCTUnwrap(vm.addText())
+        var effects = vm.currentEffects
+        effects.textObjects[0].text = "Bonjour"
+        vm.currentEffects = effects
+
+        vm.exitTextEditingMode()
+
+        XCTAssertEqual(vm.currentEffects.textObjects.first?.text, "Bonjour")
+    }
+
     func test_encodeHistorySnapshot_isDeterministic() {
         let slides = [StorySlide()]
         let a = StoryComposerViewModel.encodeHistorySnapshot(slides)
