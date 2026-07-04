@@ -115,7 +115,8 @@ final class StoryViewModelTests: XCTestCase {
         id: String = "item-1",
         content: String? = "Test story",
         isViewed: Bool = false,
-        createdAt: Date = Date()
+        createdAt: Date = Date(),
+        updatedAt: Date? = nil
     ) -> StoryItem {
         StoryItem(
             id: id,
@@ -124,7 +125,8 @@ final class StoryViewModelTests: XCTestCase {
             storyEffects: nil,
             createdAt: createdAt,
             expiresAt: createdAt.addingTimeInterval(72000),
-            isViewed: isViewed
+            isViewed: isViewed,
+            updatedAt: updatedAt
         )
     }
 
@@ -447,6 +449,74 @@ final class StoryViewModelTests: XCTestCase {
         let group = sut.storyGroups.first { $0.id == "u-merge" }
         XCTAssertEqual(group?.stories.map(\.id), ["s-old", "s-new"],
                        "Merge appends ascending by createdAt without duplicating (storyCreated sink contract)")
+    }
+
+    // MARK: - R8 inc.1 : delta-sync du refetch silencieux
+
+    func test_deltaSince_derivesMaxUpdatedAtFromCache() {
+        let t1 = Date(timeIntervalSince1970: 1_000)
+        let t2 = Date(timeIntervalSince1970: 2_000)
+        let groups = [
+            makeStoryGroup(userId: "u1", stories: [makeStoryItem(id: "a", updatedAt: t1)]),
+            makeStoryGroup(userId: "u2", stories: [makeStoryItem(id: "b", updatedAt: t2), makeStoryItem(id: "c")]),
+        ]
+
+        XCTAssertEqual(StoryViewModel.deltaSince(for: groups), t2)
+        XCTAssertNil(StoryViewModel.deltaSince(for: [makeStoryGroup(userId: "u3", stories: [makeStoryItem(id: "d")])]),
+                     "A legacy cache without updatedAt must disable the delta (full fetch)")
+    }
+
+    private static func makeDeltaResponse(postsJSON: String) -> PaginatedAPIResponse<[APIPost]> {
+        JSONStub.decode("""
+        {"success":true,"data":[\(postsJSON)],"pagination":null,"error":null}
+        """)
+    }
+
+    func test_deltaRefresh_passesUpdatedSince_andReplacesModifiedStory_preservingLocalViewed() async {
+        let local = makeStoryItem(id: "s-mod", isViewed: true)
+        sut.storyGroups = [makeStoryGroup(userId: "u-delta", stories: [local])]
+        mockStoryService.listResult = .success(Self.makeDeltaResponse(postsJSON: """
+        {"id":"s-mod","type":"STORY","content":"updated","createdAt":"2026-07-04T06:00:00.000Z",
+         "updatedAt":"2026-07-04T07:00:00.000Z","expiresAt":"2026-07-05T06:00:00.000Z",
+         "viewCount":5,"isViewedByMe":false,
+         "author":{"id":"u-delta","username":"delta"}}
+        """))
+        let since = Date(timeIntervalSince1970: 5_000)
+
+        await sut.fetchStoriesFromNetwork(deltaSince: since)
+
+        XCTAssertEqual(mockStoryService.lastListUpdatedSince, since,
+                       "The silent refresh must forward the delta cursor to the service")
+        let merged = sut.storyGroups.first { $0.id == "u-delta" }?.stories.first { $0.id == "s-mod" }
+        XCTAssertEqual(merged?.viewCount, 5, "Server-side counters must land through the delta merge")
+        XCTAssertEqual(merged?.isViewed, true, "A stale server isViewedByMe must never un-view a local ring (monotone)")
+        XCTAssertNotNil(merged?.updatedAt, "updatedAt must survive the merge — it advances the next delta cursor")
+    }
+
+    func test_deltaRefresh_insertsBrandNewStoryGroup() async {
+        sut.storyGroups = [makeStoryGroup(userId: "u-old", stories: [makeStoryItem(id: "s-old")])]
+        mockStoryService.listResult = .success(Self.makeDeltaResponse(postsJSON: """
+        {"id":"s-new","type":"STORY","content":"fresh","createdAt":"2026-07-04T06:30:00.000Z",
+         "updatedAt":"2026-07-04T06:30:00.000Z","expiresAt":"2026-07-05T06:00:00.000Z",
+         "author":{"id":"u-new","username":"newcomer"}}
+        """))
+
+        await sut.fetchStoriesFromNetwork(deltaSince: Date(timeIntervalSince1970: 5_000))
+
+        XCTAssertNotNil(sut.groupIndex(forUserId: "u-new"), "A new author's delta story must appear in the tray")
+        XCTAssertNotNil(sut.groupIndex(forUserId: "u-old"), "The delta merge must never drop untouched groups")
+    }
+
+    func test_deltaRefresh_emptyDelta_keepsTrayIntact() async {
+        let existing = makeStoryGroup(userId: "u-keep", stories: [makeStoryItem(id: "s-keep")])
+        sut.storyGroups = [existing]
+        mockStoryService.listResult = .success(Self.makeDeltaResponse(postsJSON: ""))
+
+        await sut.fetchStoriesFromNetwork(deltaSince: Date(timeIntervalSince1970: 5_000))
+
+        XCTAssertEqual(sut.storyGroups.map(\.id), ["u-keep"],
+                       "An empty delta must not overwrite the displayed tray")
+        XCTAssertEqual(mockStoryService.listCallCount, 1)
     }
 
     // MARK: - Group intro (interstitiel inter-groupes)

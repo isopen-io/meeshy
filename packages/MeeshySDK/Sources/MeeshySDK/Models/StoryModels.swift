@@ -1574,6 +1574,13 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     /// les rows persistés avant ce champ). Consommateurs futurs : tri des
     /// groupes vus, TTL du pin R5 par date de vue.
     public var viewedAt: Date?
+    /// R8 — horodatage serveur de la dernière modification (compteurs,
+    /// traductions). Alimente le curseur delta-sync `?updatedSince` : le
+    /// « since » du refetch silencieux = max(updatedAt) du cache — état
+    /// DÉRIVÉ, aucune source de vérité supplémentaire. Optionnel → migration
+    /// douce (rows GRDB et payloads antérieurs à ce champ décodent en nil,
+    /// qui désactive simplement le delta au profit du full historique).
+    public var updatedAt: Date?
     public let translations: [StoryTranslation]?
     public let backgroundAudio: StoryBackgroundAudioEntry?
     public var reactionCount: Int
@@ -1642,7 +1649,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
                 createdAt: Date = Date(), expiresAt: Date? = nil, repostOfId: String? = nil,
                 originalRepostOfId: String? = nil, repostAuthorName: String? = nil,
                 visibility: String? = nil, audioUrl: String? = nil,
-                isViewed: Bool = false, viewedAt: Date? = nil, translations: [StoryTranslation]? = nil, backgroundAudio: StoryBackgroundAudioEntry? = nil,
+                isViewed: Bool = false, viewedAt: Date? = nil, updatedAt: Date? = nil, translations: [StoryTranslation]? = nil, backgroundAudio: StoryBackgroundAudioEntry? = nil,
                 reactionCount: Int = 0, commentCount: Int = 0,
                 shareCount: Int? = nil, viewCount: Int? = nil, repostCount: Int? = nil,
                 currentUserReactions: [String]? = nil) {
@@ -1651,7 +1658,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
         self.originalRepostOfId = originalRepostOfId
         self.repostAuthorName = repostAuthorName
         self.visibility = visibility; self.audioUrl = audioUrl
-        self.isViewed = isViewed; self.viewedAt = viewedAt
+        self.isViewed = isViewed; self.viewedAt = viewedAt; self.updatedAt = updatedAt
         self.translations = translations; self.backgroundAudio = backgroundAudio
         self.reactionCount = reactionCount; self.commentCount = commentCount
         self.shareCount = shareCount; self.viewCount = viewCount; self.repostCount = repostCount
@@ -1834,6 +1841,7 @@ extension Array where Element == APIPost {
                                  visibility: post.visibility,
                                  audioUrl: post.audioUrl ?? repostSource?.audioUrl,
                                  isViewed: post.isViewedByMe ?? false,
+                                 updatedAt: post.updatedAt,
                                  translations: storyTranslations,
                                  reactionCount: totalReactions, commentCount: post.commentCount ?? 0,
                                  shareCount: post.shareCount,

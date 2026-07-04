@@ -262,7 +262,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             storyGroups = data
             sortStoryGroupsInPlace()
             prefetchAllStoryMedia(storyGroups)
-            Task { [weak self] in await self?.fetchStoriesFromNetwork() }
+            // R8 inc.1 — le refresh silencieux passe en DELTA quand le cache
+            // porte un curseur updatedAt (sinon nil → full historique).
+            let since = Self.deltaSince(for: data)
+            Task { [weak self] in await self?.fetchStoriesFromNetwork(deltaSince: since) }
             return
         case .expired, .empty:
             break
@@ -273,7 +276,29 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         isLoading = false
     }
 
-    private func fetchStoriesFromNetwork() async {
+    func fetchStoriesFromNetwork(deltaSince: Date? = nil) async {
+        // R8 inc.1 — refetch silencieux DELTA : quand le cache fournit un
+        // curseur (max updatedAt), on ne demande que les stories créées ou
+        // modifiées depuis (G1a serveur). Merge REPLACE (isViewed monotone),
+        // jamais d'overwrite du tray — les stories pendantes et l'état local
+        // survivent par construction. Toute erreur delta retombe sur le full
+        // historique ci-dessous (résilience > économie).
+        if let deltaSince {
+            do {
+                let response = try await storyService.list(cursor: nil, limit: 50, updatedSince: deltaSince)
+                if response.success {
+                    let deltaGroups = response.data.toStoryGroups(currentUserId: AuthManager.shared.currentUser?.id)
+                    if !deltaGroups.isEmpty {
+                        insertOrMergeStoryGroups(deltaGroups, replacingExisting: true)
+                        prefetchAllStoryMedia(storyGroups)
+                    }
+                    return
+                }
+            } catch {
+                Logger.messages.error("[StoryVM] Delta refresh failed (falling back to full): \(error.localizedDescription)")
+            }
+        }
+
         // Capture les stories optimistes hors-ligne AVANT l'overwrite serveur :
         // le payload `getStories` ne contient pas les stories non encore publiées,
         // donc sans ré-injection elles disparaîtraient du tray de l'auteur après
@@ -1604,12 +1629,27 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// stories.last reste la plus fraîche) ; nouvel auteur → append puis
     /// `sortStoryGroupsInPlace` le promeut (self → tête, puis non-vu > vu,
     /// puis plus récent d'abord) ; persistance cache dans la foulée.
-    func insertOrMergeStoryGroups(_ groups: [StoryGroup]) {
+    /// `replacingExisting: false` (défaut, sink storyCreated) = append-dédup
+    /// pur, comportement historique. `true` (delta-sync R8) = une story déjà
+    /// connue est REMPLACÉE par sa version serveur (compteurs, traductions)
+    /// avec la garde isViewed MONOTONE du sink storyUpdated / fetch full —
+    /// un `isViewedByMe` serveur en retard ne dé-voit jamais un anneau local.
+    func insertOrMergeStoryGroups(_ groups: [StoryGroup], replacingExisting: Bool = false) {
         for newGroup in groups {
             if let idx = storyGroups.firstIndex(where: { $0.id == newGroup.id }) {
                 var stories = storyGroups[idx].stories
-                for story in newGroup.stories where !stories.contains(where: { $0.id == story.id }) {
-                    stories.append(story)
+                for story in newGroup.stories {
+                    if let j = stories.firstIndex(where: { $0.id == story.id }) {
+                        guard replacingExisting else { continue }
+                        var replacement = story
+                        if stories[j].isViewed && !replacement.isViewed {
+                            replacement.isViewed = true
+                            replacement.viewedAt = stories[j].viewedAt
+                        }
+                        stories[j] = replacement
+                    } else {
+                        stories.append(story)
+                    }
                 }
                 stories.sort { $0.createdAt < $1.createdAt }
                 storyGroups[idx] = storyGroups[idx].with(stories: stories)
@@ -1619,6 +1659,12 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         }
         sortStoryGroupsInPlace()
         persistStoryCache()
+    }
+
+    /// R8 inc.1 — curseur delta DÉRIVÉ du cache affiché : max(updatedAt) des
+    /// stories. nil (cache legacy sans le champ, ou tray vide) → full fetch.
+    static func deltaSince(for groups: [StoryGroup]) -> Date? {
+        groups.flatMap(\.stories).compactMap(\.updatedAt).max()
     }
 
     /// R4 inc.2 — le tray ignore ce post mais le point d'entrée connaît son
