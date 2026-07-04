@@ -641,6 +641,10 @@ export class MessageHandler {
       const room = ROOMS.conversation(message.conversationId);
       this.io.to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, editedPayload);
 
+      this._enqueueOfflineEventForParticipants(
+        message.conversationId, message.senderId, 'edited', validated.messageId, editedPayload
+      ).catch((err) => handlerLogger.warn('offline enqueue (edit) failed', { error: err }));
+
       callback?.({ success: true, data: { messageId: validated.messageId } });
       handlerLogger.debug('message:edit processed', { messageId: validated.messageId, userId, conversationId: message.conversationId });
     } catch (error: unknown) {
@@ -765,10 +769,15 @@ export class MessageHandler {
       });
 
       const room = ROOMS.conversation(message.conversationId);
-      this.io.to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, {
+      const deletedPayload = {
         messageId: validated.messageId,
         conversationId: message.conversationId,
-      });
+      };
+      this.io.to(room).emit(SERVER_EVENTS.MESSAGE_DELETED, deletedPayload);
+
+      this._enqueueOfflineEventForParticipants(
+        message.conversationId, message.senderId, 'deleted', validated.messageId, deletedPayload
+      ).catch((err) => handlerLogger.warn('offline enqueue (delete) failed', { error: err }));
 
       callback?.({ success: true, data: { messageId: validated.messageId } });
       handlerLogger.debug('message:delete processed', { messageId: validated.messageId, userId, conversationId: message.conversationId });
@@ -1067,6 +1076,43 @@ export class MessageHandler {
       let emitter: ReturnType<SocketIOServer['to']> = this.io.to(firstSid);
       for (const sid of restSids) emitter = emitter.to(sid);
       emitter.emit(SERVER_EVENTS.MESSAGE_NEW, filtered);
+    }
+  }
+
+  /**
+   * Offline delivery queue for message:edit / message:delete — mirrors the
+   * enqueue block in `broadcastNewMessage` for the WS `message:send` path.
+   * Without this, an edit or delete made while a recipient is offline is
+   * lost for them: `RedisDeliveryQueue` only ever replayed `message:new`
+   * entries on reconnect, so the recipient's cached message stays on the
+   * pre-edit content (or a "deleted" message stays visible) until an
+   * unrelated full refetch of that conversation happens to occur.
+   */
+  private async _enqueueOfflineEventForParticipants(
+    conversationId: string,
+    senderParticipantId: string | null | undefined,
+    eventType: 'edited' | 'deleted',
+    messageId: string,
+    payload: Record<string, unknown>
+  ): Promise<void> {
+    if (!this.deliveryQueue) return;
+    try {
+      const participants = await this.prisma.participant.findMany({
+        where: { conversationId, isActive: true },
+        select: { id: true, userId: true }
+      });
+      for (const p of participants) {
+        if (!p.userId || p.id === senderParticipantId || this.connectedUsers.has(p.userId)) continue;
+        this.deliveryQueue.enqueue(p.userId, {
+          messageId,
+          conversationId,
+          payload,
+          enqueuedAt: new Date().toISOString(),
+          eventType,
+        }).catch((err) => handlerLogger.warn('Failed to enqueue offline event', { userId: p.userId, eventType, error: err }));
+      }
+    } catch (err) {
+      handlerLogger.warn('Failed to fetch participants for offline enqueue', { conversationId, eventType, error: err });
     }
   }
 

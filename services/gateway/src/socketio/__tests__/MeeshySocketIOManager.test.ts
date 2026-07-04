@@ -1748,6 +1748,22 @@ describe('MeeshySocketIOManager', () => {
       expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-p2', conversationId: 'conv-1' });
       expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, expect.objectContaining({ count: 2 }));
     });
+
+    it('routes entries by eventType: edited → MESSAGE_EDITED, deleted → MESSAGE_DELETED, default → MESSAGE_NEW', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { id: 'msg-new' }, eventType: undefined },
+          { payload: { id: 'msg-edit' }, eventType: 'edited' },
+          { payload: { messageId: 'msg-del' }, eventType: 'deleted' },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      const socket = makeSocket('sock-drain-types');
+      await (manager as any)._drainPendingMessages(socket, 'user-drain-types');
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-new' });
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_EDITED, { id: 'msg-edit' });
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_DELETED, { messageId: 'msg-del' });
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -3862,6 +3878,28 @@ describe('MeeshySocketIOManager', () => {
       await expect(
         (manager as any)._emitDeliveryForDrainedMessages(userId, pending)
       ).resolves.not.toThrow();
+    });
+
+    it('ignores edited/deleted entries — only "new" entries bump the delivered receipt', async () => {
+      const userId = 'user-drain-eventtype';
+      const convId = '507f1f77bcf86cd799439215';
+      const readStatusSvc = makeReadStatusSvc();
+
+      (manager as any).privacyPreferencesService = makePrivacySvc(userId, true);
+      (manager as any).readStatusService = readStatusSvc;
+
+      prisma.participant.findMany.mockResolvedValue([
+        { id: 'part-evt', conversationId: convId },
+      ]);
+
+      const pending = [
+        { messageId: 'msg-edited', conversationId: convId, payload: {}, enqueuedAt: 1, eventType: 'edited' },
+        { messageId: 'msg-deleted', conversationId: convId, payload: {}, enqueuedAt: 2, eventType: 'deleted' },
+      ];
+
+      await (manager as any)._emitDeliveryForDrainedMessages(userId, pending);
+
+      expect(readStatusSvc.markMessagesAsReceived).not.toHaveBeenCalled();
     });
   });
 
