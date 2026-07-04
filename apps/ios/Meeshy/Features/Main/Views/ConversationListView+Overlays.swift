@@ -591,14 +591,17 @@ extension ConversationListView {
 
     /// Surligne le header de section sous le doigt pendant le drag de la chip
     /// (réutilise l'affordance `isDropTarget` du `SectionDropDelegate`
-    /// historique). "pinned" n'est pas une cible (l'épinglage a son action
-    /// dédiée dans le menu). N'écrit l'état QUE sur changement — le registre
-    /// est hit-testé à chaque tick mais la liste n'est invalidée qu'aux
-    /// franchissements de frontière.
+    /// historique). "Épingles" est une cible LIVE uniquement si la
+    /// conversation n'est pas déjà épinglée (drop = épingler ; le retrait
+    /// reste l'action dédiée du menu). N'écrit l'état QUE sur changement —
+    /// le registre est hit-testé à chaque tick mais la liste n'est invalidée
+    /// qu'aux franchissements de frontière.
     private func updateChipDropTarget(at location: CGPoint) {
-        let target = sectionFrameRegistry.frames
-            .first(where: { $0.key != "pinned" && $0.value.contains(location) })?
+        let hovered = sectionFrameRegistry.frames
+            .first(where: { $0.value.contains(location) })?
             .key
+        let pinnedIsLive = contextMenuConversation?.userState.isPinned == false
+        let target = (hovered == "pinned" && !pinnedIsLive) ? nil : hovered
         if dropTargetSection != target {
             withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
                 dropTargetSection = target
@@ -607,10 +610,11 @@ extension ConversationListView {
         }
     }
 
-    /// Relâchement de la chip : si le doigt est sur un header de section,
-    /// déplace la conversation ("other" = « Mes conversations » = sectionId
-    /// vide, ids de catégorie sinon) puis ferme ; sinon ferme simplement —
-    /// la chip fond sur place (annulation, parité drag n drop natif).
+    /// Relâchement de la chip : « Épingles » épingle la conversation (no-op
+    /// si déjà épinglée), un header de section la déplace ("other" =
+    /// « Mes conversations » = sectionId vide, ids de catégorie sinon),
+    /// hors cible la chip fond sur place (annulation, parité drag n drop
+    /// natif). Décision : `ChipDropResolver`.
     private func handleChipDrop(at location: CGPoint) {
         defer {
             withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
@@ -618,16 +622,46 @@ extension ConversationListView {
             }
             dismissContextMenu()
         }
-        guard let conversation = contextMenuConversation,
-              let sectionId = sectionFrameRegistry.frames
-                  .first(where: { $0.key != "pinned" && $0.value.contains(location) })?
-                  .key
-        else { return }
+        guard let conversation = contextMenuConversation else { return }
+        let hovered = sectionFrameRegistry.frames
+            .first(where: { $0.value.contains(location) })?
+            .key
+        switch ChipDropResolver.action(
+            droppedOn: hovered,
+            isPinned: conversation.userState.isPinned,
+            currentSectionId: conversation.userState.sectionId ?? ""
+        ) {
+        case .none:
+            return
+        case .pin:
+            HapticFeedback.success()
+            Task { await conversationViewModel.togglePin(for: conversation.id) }
+        case .move(let targetId):
+            HapticFeedback.success()
+            conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: targetId)
+        }
+    }
+}
+
+// MARK: - Chip Drop Resolver
+
+/// Décision du drop de la chip : « Épingles » épingle la conversation si
+/// elle ne l'est pas déjà — jamais de dés-épinglage par drop, l'action
+/// dédiée Pin/Unpin du menu reste le seul chemin de retrait ; une section
+/// la déplace sauf no-op (même section) ; hors cible = annulation. Fonction
+/// pure — testée dans `ConversationChipDropResolverTests`.
+enum ChipDropAction: Equatable {
+    case pin
+    case move(sectionId: String)
+    case none
+}
+
+enum ChipDropResolver {
+    static func action(droppedOn sectionId: String?, isPinned: Bool, currentSectionId: String) -> ChipDropAction {
+        guard let sectionId else { return .none }
+        if sectionId == "pinned" { return isPinned ? .none : .pin }
         let targetId = sectionId == "other" ? "" : sectionId
-        let currentId = conversation.userState.sectionId ?? ""
-        guard targetId != currentId else { return }
-        HapticFeedback.success()
-        conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: targetId)
+        return targetId == currentSectionId ? .none : .move(sectionId: targetId)
     }
 }
 
