@@ -381,6 +381,74 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertTrue(imagePinned, "The viewer's image key must be pinned against eviction")
     }
 
+    // MARK: - R4 inc.2 : fetch unitaire par postId (story hors tray)
+
+    private static func isoDate(offset: TimeInterval) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: Date().addingTimeInterval(offset))
+    }
+
+    func test_ensureStoryLoaded_fetchesAndInsertsMissingGroup() async {
+        mockStoryService.fetchPostResult = .success(Self.makeStoryAPIPost(
+            id: "p-solo", authorId: "u-out", authorUsername: "outsider",
+            createdAt: Self.isoDate(offset: -60), expiresAt: Self.isoDate(offset: 3600)))
+
+        let loaded = await sut.ensureStoryLoaded(postId: "p-solo")
+
+        XCTAssertTrue(loaded)
+        XCTAssertNotNil(sut.groupIndex(forUserId: "u-out"),
+                        "A story outside the tray must become viewable after the unit fetch")
+        XCTAssertEqual(mockStoryService.fetchPostCallCount, 1)
+    }
+
+    func test_ensureStoryLoaded_storyAlreadyInTray_skipsNetwork() async {
+        let story = makeStoryItem(id: "p-known")
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [story])]
+
+        let loaded = await sut.ensureStoryLoaded(postId: "p-known")
+
+        XCTAssertTrue(loaded)
+        XCTAssertEqual(mockStoryService.fetchPostCallCount, 0,
+                       "Cache-first: a story already in the tray must not refetch")
+    }
+
+    func test_ensureStoryLoaded_expiredStory_isNotInserted() async {
+        // Factory defaults date from January 2026 — expired relative to now.
+        mockStoryService.fetchPostResult = .success(Self.makeStoryAPIPost(
+            id: "p-dead", authorId: "u-dead", authorUsername: "ghost"))
+
+        let loaded = await sut.ensureStoryLoaded(postId: "p-dead")
+
+        XCTAssertFalse(loaded)
+        XCTAssertNil(sut.groupIndex(forUserId: "u-dead"),
+                     "An expired deep link must not insert a ghost group into the tray")
+    }
+
+    func test_ensureStoryLoaded_fetchFailure_returnsFalse() async {
+        mockStoryService.fetchPostResult = .failure(APIError.networkError(URLError(.notConnectedToInternet)))
+
+        let loaded = await sut.ensureStoryLoaded(postId: "p-fail")
+
+        XCTAssertFalse(loaded)
+        XCTAssertTrue(sut.storyGroups.isEmpty)
+    }
+
+    func test_ensureStoryLoaded_existingAuthor_mergesWithoutDuplicates() async {
+        let existing = makeStoryItem(id: "s-old", createdAt: Date().addingTimeInterval(-120))
+        sut.storyGroups = [makeStoryGroup(userId: "u-merge", stories: [existing])]
+        mockStoryService.fetchPostResult = .success(Self.makeStoryAPIPost(
+            id: "s-new", authorId: "u-merge", authorUsername: "merger",
+            createdAt: Self.isoDate(offset: -30), expiresAt: Self.isoDate(offset: 3600)))
+
+        let loaded = await sut.ensureStoryLoaded(postId: "s-new")
+
+        XCTAssertTrue(loaded)
+        let group = sut.storyGroups.first { $0.id == "u-merge" }
+        XCTAssertEqual(group?.stories.map(\.id), ["s-old", "s-new"],
+                       "Merge appends ascending by createdAt without duplicating (storyCreated sink contract)")
+    }
+
     // MARK: - Group intro (interstitiel inter-groupes)
 
     private func makeIntroGroup(id: String = "intro-user-\(UUID().uuidString)",

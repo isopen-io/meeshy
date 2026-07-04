@@ -16,6 +16,11 @@ struct StoryViewerContainer: View {
     @Binding var isPresented: Bool
     var onReplyToStory: ((ReplyContext) -> Void)? = nil
     var singleGroup: Bool = false
+    /// R4 inc.2 — id exact du post story quand le point d'entrée le connaît
+    /// (bookmark, notification, deep link) : permet un fetch unitaire léger
+    /// si le tray ignore le groupe, au lieu du refetch full-tray bloquant.
+    /// `nil` conserve le comportement historique.
+    var postId: String? = nil
     var initialStoryIndex: Int = 0
     /// Forwarded to `StoryViewerView` : ouvre le viewer sur la première story
     /// non vue (points d'entrée « toucher le profil / avatar / tray »).
@@ -188,6 +193,15 @@ struct StoryViewerContainer: View {
         await viewModel.loadStories()
 
         if viewModel.groupIndex(forUserId: uid) != nil { return }
+
+        // R4 inc.2 — le cache ignore ce groupe mais le point d'entrée connaît
+        // le post exact : fetch unitaire léger (GET /posts/:id) AVANT le
+        // full-tray. Ne court-circuite que si le groupe du uid demandé est
+        // bien monté (un postId d'un autre auteur retombe sur le full fetch).
+        if let postId {
+            _ = await viewModel.ensureStoryLoaded(postId: postId)
+            if viewModel.groupIndex(forUserId: uid) != nil { return }
+        }
 
         // Le cache ne connaît pas ce groupe (story récente d'un contact, tray
         // périmé) : refetch réseau complet — comportement historique conservé.

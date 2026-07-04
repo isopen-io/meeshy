@@ -1597,6 +1597,57 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         }
     }
 
+    /// Insertion/merge d'un lot de groupes fraîchement convertis dans le tray
+    /// — extrait du sink `storyCreated` (R4 inc.2) et partagé avec le fetch
+    /// unitaire par postId. Contrat : auteur existant → append dédupliqué par
+    /// id, stories triées ascendantes par createdAt (`latestStory` ==
+    /// stories.last reste la plus fraîche) ; nouvel auteur → append puis
+    /// `sortStoryGroupsInPlace` le promeut (self → tête, puis non-vu > vu,
+    /// puis plus récent d'abord) ; persistance cache dans la foulée.
+    func insertOrMergeStoryGroups(_ groups: [StoryGroup]) {
+        for newGroup in groups {
+            if let idx = storyGroups.firstIndex(where: { $0.id == newGroup.id }) {
+                var stories = storyGroups[idx].stories
+                for story in newGroup.stories where !stories.contains(where: { $0.id == story.id }) {
+                    stories.append(story)
+                }
+                stories.sort { $0.createdAt < $1.createdAt }
+                storyGroups[idx] = storyGroups[idx].with(stories: stories)
+            } else {
+                storyGroups.append(newGroup)
+            }
+        }
+        sortStoryGroupsInPlace()
+        persistStoryCache()
+    }
+
+    /// R4 inc.2 — le tray ignore ce post mais le point d'entrée connaît son
+    /// id exact (bookmark, notification, deep link) : fetch unitaire LÉGER
+    /// (`GET /posts/:id`) au lieu du refetch full-tray bloquant.
+    /// `toStoryGroups` ne filtre pas l'expiry (contrat tray) — on écarte ici
+    /// les stories mortes pour qu'un deep link périmé n'insère pas de groupe
+    /// fantôme. Retourne true si la story est disponible après coup.
+    func ensureStoryLoaded(postId: String) async -> Bool {
+        if storyGroups.contains(where: { $0.stories.contains(where: { $0.id == postId }) }) {
+            return true
+        }
+        let post: APIPost
+        do {
+            post = try await storyService.fetchPost(id: postId)
+        } catch {
+            Logger.messages.error("[StoryVM] ensureStoryLoaded fetch failed postId=\(postId, privacy: .public): \(error.localizedDescription)")
+            return false
+        }
+        let groups = [post].toStoryGroups(currentUserId: AuthManager.shared.currentUser?.id)
+            .compactMap { group -> StoryGroup? in
+                let alive = group.stories.filter { !$0.isExpired() }
+                return alive.isEmpty ? nil : group.with(stories: alive)
+            }
+        guard !groups.isEmpty else { return false }
+        insertOrMergeStoryGroups(groups)
+        return true
+    }
+
     /// Set dédié aux sinks socket (le `cancellables` partagé porte aussi le
     /// sink de reconnexion posé à l'init) — garde d'idempotence resettable,
     /// même idiome que `FeedViewModel.subscribeToSocketEvents`.
@@ -1612,28 +1663,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             .sink { [weak self] apiPost in
                 guard let self else { return }
                 let currentUserId = AuthManager.shared.currentUser?.id
-                let groups = [apiPost].toStoryGroups(currentUserId: currentUserId)
-                for newGroup in groups {
-                    if let idx = self.storyGroups.firstIndex(where: { $0.id == newGroup.id }) {
-                        // Existing author: append the new stories (de-duped),
-                        // keep the per-group stories ordered ascending by
-                        // createdAt so `latestStory` (== stories.last) keeps
-                        // pointing at the freshest one.
-                        var stories = self.storyGroups[idx].stories
-                        for story in newGroup.stories where !stories.contains(where: { $0.id == story.id }) {
-                            stories.append(story)
-                        }
-                        stories.sort { $0.createdAt < $1.createdAt }
-                        self.storyGroups[idx] = self.storyGroups[idx].with(stories: stories)
-                    } else {
-                        // New author — append; sortStoryGroupsInPlace will
-                        // promote them to the right slot (self → head, then
-                        // unviewed > viewed, then most-recent-first).
-                        self.storyGroups.append(newGroup)
-                    }
-                }
-                self.sortStoryGroupsInPlace()
-                self.persistStoryCache()
+                self.insertOrMergeStoryGroups([apiPost].toStoryGroups(currentUserId: currentUserId))
             }
             .store(in: &socketCancellables)
 

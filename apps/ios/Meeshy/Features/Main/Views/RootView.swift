@@ -27,6 +27,10 @@ struct StoryViewerRequest: Identifiable, Equatable {
     /// de post, ma story) : le viewer ne montre que le groupe de cet
     /// utilisateur. Les contextes « flux » (tray, liste) gardent `false`.
     var singleGroup: Bool = false
+    /// R4 inc.2 — id exact du post story quand le producteur le connaît
+    /// (notification, deep link). Permet au container un fetch unitaire
+    /// léger si le tray ignore le groupe. `nil` = comportement historique.
+    var postId: String? = nil
 }
 
 /// Named magic numbers for the iPhone root-view audio overlay layout.
@@ -512,6 +516,7 @@ struct RootView: View {
                     router.navigateToStoryReply(replyContext, conversationListViewModel: conversationViewModel)
                 },
                 singleGroup: request.singleGroup,
+                postId: request.postId,
                 startAtFirstUnviewed: request.startAtFirstUnviewed,
                 presentationSource: "RootView.fromConv",
                 initialAction: request.initialAction

@@ -81,7 +81,9 @@ struct StoryActiveBridge: View {
             }
         }()
 
-        let request = StoryViewerRequest(id: post.author.id, initialAction: action)
+        // R4 inc.2 — la notification connaît le post story exact : le
+        // container peut le fetch unitairement si le tray l'ignore.
+        let request = StoryViewerRequest(id: post.author.id, initialAction: action, postId: post.id)
         viewerCoordinator.present(request)
         dismiss()
     }

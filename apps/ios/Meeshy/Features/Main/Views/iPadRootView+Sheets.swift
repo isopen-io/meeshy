@@ -112,6 +112,7 @@ extension iPadRootView {
                         handleStoryReply(replyContext)
                     },
                     singleGroup: request.singleGroup,
+                    postId: request.postId,
                     startAtFirstUnviewed: request.startAtFirstUnviewed,
                     presentationSource: "iPadRootView.fromConv",
                     initialAction: request.initialAction
