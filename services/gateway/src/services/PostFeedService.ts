@@ -9,6 +9,7 @@ import {
 } from './posts/reelAffinity';
 import type { CacheStore } from './CacheStore';
 import { getCommunityCoMemberIds, isActiveCommunityMember } from './posts/communityVisibility';
+import { buildPostVisibilityWhere } from './posts/postVisibility';
 
 const FEED_SOCIAL_CACHE_TTL = 300; // 5 min — friend lists change infrequently
 
@@ -818,16 +819,7 @@ export class PostFeedService {
   // ============================================
 
   private buildVisibilityFilter(viewerId: string, friendIds: string[], communityCoMemberIds: string[] = []) {
-    return {
-      OR: [
-        { authorId: viewerId },
-        { visibility: PostVisibility.PUBLIC },
-        { visibility: PostVisibility.COMMUNITY, authorId: { in: communityCoMemberIds } },
-        { visibility: PostVisibility.FRIENDS, authorId: { in: friendIds } },
-        { visibility: PostVisibility.EXCEPT, authorId: { in: friendIds }, NOT: { visibilityUserIds: { has: viewerId } } },
-        { visibility: PostVisibility.ONLY, visibilityUserIds: { has: viewerId } },
-      ],
-    };
+    return buildPostVisibilityWhere({ viewerId, friendIds, communityCoMemberIds });
   }
 
   private async getDirectConversationContactIds(userId: string): Promise<string[]> {

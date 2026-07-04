@@ -345,8 +345,24 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   DÉPLOIEMENT gateway requis (avec G1/G2).
 - [ ] **G4 (P3) Champ mort `Post.storyViews Json?`** (schema L2874, jamais écrit/lu — PostView
   est la vérité). Retirer du schema (migration) ou documenter.
-- [ ] **G5 (P3) Consolider les 3 implémentations de visibilité** (PostFeedService,
-  PostService, canUserViewPost) en un module unique — risque de dérive/fuite documenté.
+- [x] **G5 (P3) Consolider les 3 implémentations de visibilité.** ✅ it.41
+  Re-preuve : `PostFeedService.buildVisibilityFilter` (:820) et `PostService.buildVisibilityFilter`
+  (:522) portaient un OR à 6 clauses BYTE-IDENTIQUE (le commentaire de PostService admettait
+  « Mirrors PostFeedService ») ; `canUserViewPost` (postVisibility.ts) encode la MÊME politique
+  en booléen post-fetch. Trois copies = classe de bug fuite privée si l'une dérive.
+  Livré : politique canonique UNIQUE dans `services/posts/postVisibility.ts` —
+  `buildPostVisibilityWhere({viewerId, friendIds, communityCoMemberIds})` (fragment Prisma
+  `where`) + `buildAnonymousVisibilityWhere()` (PUBLIC-only). Les DEUX services délèguent
+  (refactor pur, sémantique identique — OR mot pour mot). `canUserViewPost` reste co-localisé
+  dans le même module = SSOT. Verrou anti-dérive : `postVisibility.test.ts` — table de vérité
+  de 48 cas (4 relations × 6 visibilités × 2 états de liste) prouvant que le filtre requête
+  et le booléen ACL S'ACCORDENT (un interpréteur minimal évalue le fragment `where` contre un
+  post synthétique) → toute divergence future casse la CI au lieu de fuiter un post.
+  Vérif : 64/64 postVisibility, 815/815 sur l'ensemble Post* (33 suites), tsc --noEmit vert.
+  RESTE (dette mineure notée) : `getFriendIds` (PostFeedService, caché Redis 5 min) vs
+  `getFriendIdsForViewer` (PostService, non caché) — fetchers amis dupliqués ; unifier
+  introduirait le cache sur le fetch unitaire (changement de comportement, staleness) → item
+  séparé si souhaité.
 - [x] **G6 (P3) Constante d'expiry unifiée.** ✅ it.26
   `StoryItem.defaultExpiryInterval = 21 h` (aligné STORY_EXPIRY_HOURS serveur) remplace le
   défaut interne 24 h d'`isExpired` ; test du contrat + pins adaptés (le pin 24 h a échoué
@@ -514,6 +530,24 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 > Format : `## it.N — <titre> (<commit>)` + preuves (RED reproduit, tests verts, vérif visuelle)
 > + items cochés/ajoutés ci-dessus. Si un item s'avère déjà corrigé ou infondé au re-check :
 > le cocher avec la mention ÉCARTÉ + preuve, sans fix.
+
+## it.41 — G5 : SSOT de la politique de visibilité des posts
+
+- Session Linux (pas de Xcode → backlog iOS gelé ; pick = gateway pur, buildable/testable
+  ici sous bun 1.3.11 / node 22). Choix G5 (dette + sécurité/privacy + duplication) sur les
+  items U/W visuels (non vérifiables sans le simulateur iOS de référence).
+- RED : `postVisibility.test.ts` importe `buildPostVisibilityWhere`/`buildAnonymousVisibilityWhere`
+  inexistants → TS2305. GREEN : extraction de la politique canonique dans le module SSOT
+  existant `services/posts/postVisibility.ts`. REFACTOR : les 2 services délèguent (OR
+  identique mot pour mot conservé, zéro changement de comportement).
+- Différenciateur : table de vérité 48 cas croisant le filtre requête ET le booléen ACL
+  (`canUserViewPost`) — verrou anti-dérive permanent (la fuite privée arrivait quand une des
+  3 copies divergeait). Preuve de cohérence actuelle : les 48 cas passent (PRIVATE = pas de
+  clause ⇒ auteur seul, EXCEPT = ami hors liste, etc. concordent).
+- Vérif : 64/64 (postVisibility) puis 815/815 sur 33 suites Post* (non-régression complète),
+  `tsc --noEmit` exit 0. Lint non exécutable (env ESLint 10 flat-config vs .eslintrc legacy
+  du repo — pré-existant, hors périmètre ; le tsc build gate CI est vert).
+- Backlog : nouveau reliquat noté sous G5 (fetchers amis dupliqués cache/non-cache).
 
 ## it.1 — R1 : gel de progression étendu à l'audio (86c2c27de)
 

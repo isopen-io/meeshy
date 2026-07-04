@@ -7,6 +7,7 @@ import type { MobileTranscription } from '../routes/posts/types';
 import { PostAudioService } from './posts/PostAudioService';
 import { NOT_DELETED } from './posts/postIncludes';
 import { getCommunityCoMemberIds } from './posts/communityVisibility';
+import { buildPostVisibilityWhere, buildAnonymousVisibilityWhere } from './posts/postVisibility';
 import { MediaService } from './MediaService';
 import type { MediaStorage, MediaDuplicateResult } from './storage/MediaStorage';
 import type { OrphanMediaCleanupService } from './storage/OrphanMediaCleanupService';
@@ -521,22 +522,13 @@ export class PostService {
   /// queries apply the same rules.
   private async buildVisibilityFilter(viewerUserId?: string) {
     if (!viewerUserId) {
-      return { visibility: PostVisibility.PUBLIC };
+      return buildAnonymousVisibilityWhere();
     }
     const [friendIds, communityCoMemberIds] = await Promise.all([
       this.getFriendIdsForViewer(viewerUserId),
       getCommunityCoMemberIds(this.prisma, viewerUserId),
     ]);
-    return {
-      OR: [
-        { authorId: viewerUserId },
-        { visibility: PostVisibility.PUBLIC },
-        { visibility: PostVisibility.COMMUNITY, authorId: { in: communityCoMemberIds } },
-        { visibility: PostVisibility.FRIENDS, authorId: { in: friendIds } },
-        { visibility: PostVisibility.EXCEPT, authorId: { in: friendIds }, NOT: { visibilityUserIds: { has: viewerUserId } } },
-        { visibility: PostVisibility.ONLY, visibilityUserIds: { has: viewerUserId } },
-      ],
-    };
+    return buildPostVisibilityWhere({ viewerId: viewerUserId, friendIds, communityCoMemberIds });
   }
 
   private async getFriendIdsForViewer(userId: string): Promise<string[]> {
