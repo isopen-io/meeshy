@@ -41,6 +41,13 @@ class FriendshipCache @Inject constructor() {
 
     val friendCount: Int get() = synchronized(lock) { friendIds.size }
 
+    /**
+     * A defensive snapshot of the accepted-friend id set — the read model a
+     * Contacts list reconciles against (port of the iOS `FriendshipCache.friendIds`).
+     * Copied under the lock so callers can iterate it without racing a mutation.
+     */
+    val currentFriendIds: Set<String> get() = synchronized(lock) { friendIds.toSet() }
+
     val pendingReceivedCount: Int get() = synchronized(lock) { receivedPending.size }
 
     // MARK: - Lookup

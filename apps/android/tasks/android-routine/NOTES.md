@@ -3,6 +3,21 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Design lessons
+- **`FriendRequest` carries BOTH id-strings and nested user objects — keep test fixtures consistent.**
+  (2026-07-04, slice `contacts-list-friends`.) `FriendshipCache.hydrate` keys the friend graph off the
+  `senderId`/`receiverId` **strings**, but `ContactList.fromAcceptedRequests` reads the `sender`/`receiver`
+  **user objects** (it needs name/avatar/presence). Production gateway payloads always populate both
+  consistently (`sender.id == senderId`). Two `ContactsListViewModel` tests were RED because the fixture
+  set only the object, leaving `senderId=""` → the cache hydrated empty while the list populated. Fix was
+  in the **test fixture** (derive `senderId`/`receiverId` from the objects), not the production code — a
+  faithful red→green. Lesson: when a model has redundant id+object fields consumed by different collaborators,
+  make fixtures set both, and prefer a helper that derives one from the other so they can't drift.
+- **Loop-guard a StateFlow-version reconcile with a `lastReconciled` snapshot.** The cache-observation
+  reconcile refetches on an unknown friend addition; that refetch re-hydrates the cache → bumps `version`
+  → re-enters the collector. Without a guard (`if (cacheIds == lastReconciledFriendIds) return`, port of
+  iOS's `guard cacheIds != lastObservedFriendIds`) an id the fetch can't resolve (in cache but no user
+  record) loops forever. Under `UnconfinedTestDispatcher` the re-entrancy is synchronous, so the guard is
+  load-bearing even in tests — assert "exactly N fetches" to pin it.
 - **Pivot areas when the current one runs out of pure cores, don't force glue.** (2026-07-04, slice
   `friendship-relationship-resolver`.) The Calls area's remaining parity items are all WebRTC/Telecom/
   FCM platform glue — untestable in JVM, high-risk to merge blind. Rather than stall, the routine

@@ -165,6 +165,28 @@ class FriendshipCacheTest {
     }
 
     @Test
+    fun `currentFriendIds reflects the accepted friends only, not pending`() {
+        val cache = FriendshipCache()
+        cache.didAcceptRequest("alice")
+        cache.didSendRequest("bob", "r1")
+        cache.didReceiveRequest("carol", "r2")
+
+        assertThat(cache.currentFriendIds).containsExactly("alice")
+    }
+
+    @Test
+    fun `currentFriendIds is a defensive copy that does not mutate with the cache`() {
+        val cache = FriendshipCache()
+        cache.didAcceptRequest("alice")
+        val snapshot = cache.currentFriendIds
+
+        cache.didAcceptRequest("bob")
+
+        assertThat(snapshot).containsExactly("alice")
+        assertThat(cache.currentFriendIds).containsExactly("alice", "bob")
+    }
+
+    @Test
     fun `every mutation bumps the version`() {
         val cache = FriendshipCache()
         val start = cache.version.value
