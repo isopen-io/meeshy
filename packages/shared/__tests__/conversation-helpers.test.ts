@@ -56,6 +56,22 @@ describe('resolveUserLanguage', () => {
     };
     expect(resolveUserLanguage(user)).toBe('en');
   });
+
+  // F62 — case parity with resolveUserLanguagesOrdered. Prefs pass validation
+  // case-insensitively (isSupportedLanguage lowercases) but persist verbatim, so
+  // a stored 'EN' would otherwise miss the lowercase-keyed translations produced
+  // by resolveUserLanguagesOrdered → client shows original instead of translation.
+  it('should lowercase an uppercase systemLanguage', () => {
+    expect(resolveUserLanguage({ systemLanguage: 'EN' })).toBe('en');
+  });
+
+  it('should lowercase an uppercase regionalLanguage', () => {
+    expect(resolveUserLanguage({ regionalLanguage: 'ES' })).toBe('es');
+  });
+
+  it('should lowercase a mixed-case customDestinationLanguage', () => {
+    expect(resolveUserLanguage({ customDestinationLanguage: 'De' })).toBe('de');
+  });
 });
 
 describe('generateConversationIdentifier', () => {
@@ -364,6 +380,18 @@ describe('getRequiredLanguages', () => {
     ];
     const languages = getRequiredLanguages(members);
     expect(languages).toEqual(['fr']);
+  });
+
+  // F62 — a member stored 'EN' and another stored 'en' are the SAME translation
+  // destination; without case parity they inflate the target set with a duplicate
+  // ('EN' never matches a lowercase-keyed translation → wasted translation request).
+  it('should deduplicate members that differ only by pref casing', () => {
+    const members = [
+      { systemLanguage: 'EN' },
+      { systemLanguage: 'en' },
+    ];
+    const languages = getRequiredLanguages(members);
+    expect(languages).toEqual(['en']);
   });
 });
 
