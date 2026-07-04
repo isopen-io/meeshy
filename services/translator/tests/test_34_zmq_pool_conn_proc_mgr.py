@@ -391,18 +391,16 @@ class TestProcessSingleTranslation:
         from services.zmq_pool.translation_processor import process_single_translation
         publish = AsyncMock()
         task = _task(target_languages=["fr"])
-        # Patch asyncio.create_task to raise immediately
-        import asyncio as _asyncio
-        original = _asyncio.create_task
 
-        def boom(*a, **kw):
-            raise RuntimeError("create_task failed")
+        class _RaisingIterable:
+            def __iter__(self):
+                raise RuntimeError("target_languages iteration failed")
 
-        _asyncio.create_task = boom
-        try:
-            results = await process_single_translation(task, "w1", None, None, publish)
-        finally:
-            _asyncio.create_task = original
+        # Force an exception outside the per-language try/except (the loop
+        # setup itself), which only the outer try/except in
+        # process_single_translation can catch.
+        task.target_languages = _RaisingIterable()
+        results = await process_single_translation(task, "w1", None, None, publish)
         assert results == []
 
 
