@@ -41,7 +41,7 @@ struct KeypadTab: View {
                 String(localized: "keypad.input.placeholder", defaultValue: "Numero ou nom", bundle: .main),
                 text: $viewModel.input
             )
-            .font(.system(size: 26, weight: .medium, design: .rounded))
+            .font(MeeshyFont.relative(26, weight: .medium, design: .rounded))
             .foregroundColor(theme.textPrimary)
             .multilineTextAlignment(.center)
             .autocorrectionDisabled()
@@ -227,9 +227,11 @@ struct KeypadTab: View {
         } label: {
             VStack(spacing: 1) {
                 Text(key.digit)
+                    // doctrine 82i — chiffre borné par la touche fixe 72×56 du pavé
                     .font(.system(size: 30, weight: .regular, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                 Text(key.letters)
+                    // doctrine 82i — lettres bornées par la touche fixe 72×56 du pavé
                     .font(.system(size: 9, weight: .semibold))
                     .tracking(1)
                     .foregroundColor(theme.textMuted)
