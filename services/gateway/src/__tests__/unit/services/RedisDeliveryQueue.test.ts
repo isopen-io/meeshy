@@ -215,7 +215,8 @@ describe('RedisDeliveryQueue (Redis-backed paths)', () => {
       'delivery:queue:user-r',
       JSON.stringify(entry),
       entry.messageId,
-      String(DELIVERY_QUEUE_TTL_SECONDS)
+      String(DELIVERY_QUEUE_TTL_SECONDS),
+      'new'
     );
   });
 
@@ -557,6 +558,7 @@ describe('RedisDeliveryQueue (Redis path)', () => {
       JSON.stringify(entry),
       entry.messageId,
       String(DELIVERY_QUEUE_TTL_SECONDS),
+      'new',
     );
     // memory fallback was NOT used
     expect(await queue.size('user-redis')).toBe(0);
@@ -906,6 +908,57 @@ describe('RedisDeliveryQueue (memory boundary conditions)', () => {
     await queue.enqueue('user-dup2', makePayload({ messageId: 'msg-b' }));
 
     expect(await queue.size('user-dup2')).toBe(2);
+  });
+
+  test('dedup (memory): an "edited" event for a messageId is NOT dropped by a queued "new" for the same messageId', async () => {
+    const queue = new RedisDeliveryQueue(makeCacheStore(null));
+    const original = makePayload({ messageId: 'msg-edit-me', payload: { content: 'original' } });
+    const edited = makePayload({ messageId: 'msg-edit-me', eventType: 'edited', payload: { content: 'edited content' } });
+
+    await queue.enqueue('user-offline', original);
+    await queue.enqueue('user-offline', edited);
+
+    const drained = await queue.drain('user-offline');
+    expect(drained).toHaveLength(2);
+    expect(drained[0].payload.content).toBe('original');
+    expect(drained[1].payload.content).toBe('edited content');
+  });
+
+  test('dedup (memory): a "deleted" event for a messageId is NOT dropped by a queued "new" for the same messageId', async () => {
+    const queue = new RedisDeliveryQueue(makeCacheStore(null));
+    const original = makePayload({ messageId: 'msg-delete-me' });
+    const deleted = makePayload({ messageId: 'msg-delete-me', eventType: 'deleted' });
+
+    await queue.enqueue('user-offline', original);
+    await queue.enqueue('user-offline', deleted);
+
+    const drained = await queue.drain('user-offline');
+    expect(drained.map(d => d.eventType ?? 'new')).toEqual(['new', 'deleted']);
+  });
+
+  test('dedup (memory): a repeated "edited" event for the same messageId IS still deduped', async () => {
+    const queue = new RedisDeliveryQueue(makeCacheStore(null));
+    const edited = makePayload({ messageId: 'msg-edit-twice', eventType: 'edited' });
+
+    await queue.enqueue('user-offline', edited);
+    await queue.enqueue('user-offline', edited);
+
+    expect(await queue.size('user-offline')).toBe(1);
+  });
+});
+
+describe('RedisDeliveryQueue (Redis dedup via eval, eventType-aware)', () => {
+  test('enqueue passes normalized eventType as ARGV[4] for new/edited/deleted', async () => {
+    const redis = makeMockRedis({ eval: jest.fn().mockResolvedValue(1) });
+    const queue = new RedisDeliveryQueue(makeCacheStore(redis));
+
+    await queue.enqueue('user-evt', makePayload({ messageId: 'm1' }));
+    await queue.enqueue('user-evt', makePayload({ messageId: 'm1', eventType: 'edited' }));
+    await queue.enqueue('user-evt', makePayload({ messageId: 'm1', eventType: 'deleted' }));
+
+    expect(redis.eval).toHaveBeenNthCalledWith(1, expect.any(String), 1, expect.any(String), expect.any(String), 'm1', expect.any(String), 'new');
+    expect(redis.eval).toHaveBeenNthCalledWith(2, expect.any(String), 1, expect.any(String), expect.any(String), 'm1', expect.any(String), 'edited');
+    expect(redis.eval).toHaveBeenNthCalledWith(3, expect.any(String), 1, expect.any(String), expect.any(String), 'm1', expect.any(String), 'deleted');
   });
 });
 
