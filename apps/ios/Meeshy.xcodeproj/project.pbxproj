@@ -305,6 +305,7 @@
 		7A46ACD0F06C1F445F95FFA9 /* MockBlockService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3771B9F3633D6B2DA85EFB2C /* MockBlockService.swift */; };
 		7A4EEF90B99E0730EC46265F /* WebRTCTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = F370AFA86F681D7252BA95A3 /* WebRTCTypes.swift */; };
 		7AC762FB18903F582F246D4F /* IslandEmergingBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7ABB29CBFAD404ABDE04E45F /* IslandEmergingBanner.swift */; };
+		A6BEA2D583CC4D3BAE09E3F6 /* CallSignalGlyph.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0F0EA743B944A3481A2F671 /* CallSignalGlyph.swift */; };
 		7B264C44DD503DBB9439F8C6 /* EngagementTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 413D85A9F42FF8F82012FD2F /* EngagementTracker.swift */; };
 		7C2970BA6A204EDE37202704 /* MessageActionResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BBF3392D5B55ED9E17E68A8 /* MessageActionResolver.swift */; };
 		7C2D606243CDC3349C64D957 /* MeeshyWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B2E8E44274BFD31F63D9A6C5 /* MeeshyWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -1022,6 +1023,7 @@
 		7A20D4256227B29EC41B71CA /* ConversationMediaGalleryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationMediaGalleryView.swift; sourceTree = "<group>"; };
 		7A762CCD7A12D18D76BFA219 /* BubbleDeliveryCheckLabelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BubbleDeliveryCheckLabelTests.swift; sourceTree = "<group>"; };
 		7ABB29CBFAD404ABDE04E45F /* IslandEmergingBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IslandEmergingBanner.swift; sourceTree = "<group>"; };
+		D0F0EA743B944A3481A2F671 /* CallSignalGlyph.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallSignalGlyph.swift; sourceTree = "<group>"; };
 		7B9FC79AAAB5E8688034FEB1 /* SupportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupportView.swift; sourceTree = "<group>"; };
 		7C2E55B5DE9F75D67BF7CE5C /* PostDetailViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostDetailViewModel.swift; sourceTree = "<group>"; };
 		7C4FBE52812B6A28C59CB58D /* MockPreferenceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockPreferenceService.swift; sourceTree = "<group>"; };
@@ -1552,6 +1554,7 @@
 				648054D70EA2348B94997860 /* GlobalEnvironment.swift */,
 				6834C2BE376B2B08DEEEA67F /* InviteFriendsSheet.swift */,
 				7ABB29CBFAD404ABDE04E45F /* IslandEmergingBanner.swift */,
+				D0F0EA743B944A3481A2F671 /* CallSignalGlyph.swift */,
 				1489DD560DF87E13408C850A /* LanguagePickerSheet.swift */,
 				669F87494476EFA1E50C4C0E /* LinkPreviewCard.swift */,
 				17C113ABEF2601E98448BDB5 /* LocationPickerView.swift */,
@@ -2856,6 +2859,7 @@
 				503E14F79A058B99A2A995B7 /* IncomingCallView.swift in Sources */,
 				07408FC46C804C676E69029A /* InviteFriendsSheet.swift in Sources */,
 				7AC762FB18903F582F246D4F /* IslandEmergingBanner.swift in Sources */,
+				A6BEA2D583CC4D3BAE09E3F6 /* CallSignalGlyph.swift in Sources */,
 				489A04724C62B1F24790C39A /* KeypadTab.swift in Sources */,
 				CB6FE9A9E9C940AF24F7C942 /* KeypadViewModel.swift in Sources */,
 				813617795890589972AEFAF3 /* LanguagePickerSheet.swift in Sources */,

@@ -109,13 +109,17 @@ private struct IslandEmergenceStyle: ViewModifier, Animatable {
     let tint: Color
     let topInset: CGFloat
 
+    // `body(content:)` est un @ViewBuilder : un `typealias` déclaré dedans ne
+    // compile pas (« closure containing a declaration cannot be used with
+    // result builder ») — il vit au niveau du type.
+    private typealias Banner = IslandEmergingBanner<EmptyView>
+
     var animatableData: CGFloat {
         get { progress }
         set { progress = newValue }
     }
 
     func body(content: Content) -> some View {
-        typealias Banner = IslandEmergingBanner<EmptyView>
         // Naissance : centre de la capsule posé sur le centre de l'île
         // (écran physique y = islandTop + islandHeight/2), exprimé en offset
         // depuis la position finale (topInset + finalTopPadding + h/2).
