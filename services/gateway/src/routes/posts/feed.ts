@@ -79,7 +79,12 @@ export function registerFeedRoutes(
         ? parsedSince
         : undefined;
 
-      const stories = await feedService.getStories(authContext.registeredUser.id, { updatedSince });
+      // G1(b) projection légère : `?projection=tray` — whitelist stricte,
+      // toute autre valeur retombe sur le plein corps (rétro-compatible).
+      const rawProjection = (request.query as Record<string, unknown> | undefined)?.projection;
+      const projection = rawProjection === 'tray' ? ('tray' as const) : undefined;
+
+      const stories = await feedService.getStories(authContext.registeredUser.id, { updatedSince, projection });
 
       reply.header('Cache-Control', 'private, no-cache');
 

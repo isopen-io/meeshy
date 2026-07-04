@@ -1,7 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
-import { authorSelect, postInclude, NOT_DELETED } from './posts/postIncludes';
+import { authorSelect, postInclude, trayStorySelect, NOT_DELETED } from './posts/postIncludes';
 import {
   reelAffinityScore,
   type ReelAffinityContext,
@@ -229,7 +229,7 @@ export class PostFeedService {
     };
   }
 
-  async getStories(userId: string, options?: { updatedSince?: Date }) {
+  async getStories(userId: string, options?: { updatedSince?: Date; projection?: 'tray' }) {
     const now = new Date();
     const [friendIds, dmContactIds, communityCoMemberIds] = await Promise.all([
       this.getFriendIds(userId),
@@ -257,24 +257,40 @@ export class PostFeedService {
       where.AND.push({ updatedAt: { gt: options.updatedSince } });
     }
 
-    const stories = await this.prisma.post.findMany({
-      where,
-      include: feedPostInclude,
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-    });
+    // G1(b) projection tray : select léger (anneaux + miniature + vu) au lieu
+    // du plein corps — opt-in, le défaut reste l'include canonique complet.
+    // Deux appels distincts : Prisma type `select`/`include` comme des
+    // overloads exclusifs, un spread conditionnel produit une union rejetée.
+    const isTrayProjection = options?.projection === 'tray';
+    const stories = isTrayProjection
+      ? await this.prisma.post.findMany({
+          where,
+          select: trayStorySelect,
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+        })
+      : await this.prisma.post.findMany({
+          where,
+          include: feedPostInclude,
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+        });
 
     const storyIds = stories.map((s) => s.id);
+    // Le tray ne rend pas les réactions — la requête batch est coupée en
+    // projection ; isViewedByMe (anneau vu/non-vu) reste servi dans les deux.
     const [viewedRows, userReactions] = storyIds.length > 0
       ? await Promise.all([
           this.prisma.postView.findMany({
             where: { postId: { in: storyIds }, userId },
             select: { postId: true },
           }),
-          this.prisma.postReaction.findMany({
-            where: { userId, postId: { in: storyIds } },
-            select: { postId: true, emoji: true },
-          }),
+          isTrayProjection
+            ? Promise.resolve([] as { postId: string; emoji: string }[])
+            : this.prisma.postReaction.findMany({
+                where: { userId, postId: { in: storyIds } },
+                select: { postId: true, emoji: true },
+              }),
         ])
       : [[], []];
     const viewedSet = new Set(viewedRows.map((v) => v.postId));

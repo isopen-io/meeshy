@@ -337,6 +337,55 @@ describe('PostFeedService.getStories', () => {
 
     expect(mockPostReactionFindMany).not.toHaveBeenCalled();
   });
+
+  it('uses the lean tray select without storyEffects when projection tray is requested (G1b)', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getStories('user-1', { projection: 'tray' });
+
+    const args = mockPostFindMany.mock.calls[0][0];
+    expect(args.include).toBeUndefined();
+    expect(args.select).toBeDefined();
+    expect(args.select.storyEffects).toBeUndefined();
+    expect(args.select.translations).toBeUndefined();
+    expect(args.select.media).toBeDefined();
+    expect(args.select.author).toBeDefined();
+  });
+
+  it('keeps the full include without projection (backward compatible)', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getStories('user-1');
+
+    const args = mockPostFindMany.mock.calls[0][0];
+    expect(args.include).toBeDefined();
+    expect(args.select).toBeUndefined();
+  });
+
+  it('still flags isViewedByMe in the tray projection', async () => {
+    const story = makePost('s-tray', { type: 'STORY' });
+    mockPostFindMany.mockResolvedValue([story]);
+    mockPostViewFindMany.mockResolvedValue([{ postId: 's-tray' }]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getStories('user-1', { projection: 'tray' });
+
+    expect((result[0] as any).isViewedByMe).toBe(true);
+  });
+
+  it('skips the reactions batch query in the tray projection (rings need no reactions)', async () => {
+    const story = makePost('s-tray-2', { type: 'STORY' });
+    mockPostFindMany.mockResolvedValue([story]);
+    mockPostViewFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getStories('user-1', { projection: 'tray' });
+
+    expect(mockPostReactionFindMany).not.toHaveBeenCalled();
+    expect((result[0] as any).currentUserReactions).toEqual([]);
+  });
 });
 
 // ---------------------------------------------------------------------------

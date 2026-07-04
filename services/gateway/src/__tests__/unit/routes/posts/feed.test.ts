@@ -142,6 +142,28 @@ describe('GET /posts/feed/stories — success', () => {
   });
 });
 
+describe('GET /posts/feed/stories — projection parsing (G1b)', () => {
+  it('forwards projection=tray to the service', async () => {
+    const app = await buildApp();
+    await app.inject({ method: 'GET', url: '/posts/feed/stories?projection=tray' });
+    expect(mockGetStories).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ projection: 'tray' })
+    );
+    await app.close();
+  });
+
+  it('ignores unknown projection values (full body, backward compatible)', async () => {
+    const app = await buildApp();
+    await app.inject({ method: 'GET', url: '/posts/feed/stories?projection=whatever' });
+    expect(mockGetStories).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ projection: undefined })
+    );
+    await app.close();
+  });
+});
+
 describe('GET /posts/feed/stories — service error', () => {
   it('returns 500 when feedService throws', async () => {
     mockGetStories.mockRejectedValueOnce(new Error('DB error'));
