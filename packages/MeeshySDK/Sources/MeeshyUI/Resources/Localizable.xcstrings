@@ -18109,6 +18109,64 @@
         }
       }
     },
+    "story.composer.mediaLoadFailedMessage" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dieses Medium konnte nicht geladen werden. Stelle sicher, dass es auf das Gerät heruntergeladen ist (iCloud), und versuche es erneut."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This media couldn't be loaded. Make sure it's downloaded to the device (iCloud) and try again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo cargar este medio. Comprueba que esté descargado en el dispositivo (iCloud) y vuelve a intentarlo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce média n'a pas pu être chargé. Vérifiez qu'il est téléchargé sur l'appareil (iCloud) et réessayez."
+          }
+        }
+      }
+    },
+    "story.composer.mediaLoadFailedTitle" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Laden fehlgeschlagen"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't load"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No se pudo cargar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chargement impossible"
+          }
+        }
+      }
+    },
     "story.composer.mediaLostMultiple" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {

@@ -251,7 +251,10 @@ extension StoryComposerView {
             }
             let objectId = UUID().uuidString
             if kind == .video {
-                guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+                guard let data = try? await item.loadTransferable(type: Data.self) else {
+                    mediaLoadFailed = true  // C16 — l'échec parle
+                    return
+                }
                 mediaLoadProgress = 0.3
                 let ext = item.supportedContentTypes
                     .first { $0.conforms(to: .audiovisualContent) }?
@@ -315,12 +318,16 @@ extension StoryComposerView {
                     }
                 } catch {
                     Logger.media.error("[StoryComposer] Video write error: \(error.localizedDescription)")
+                    mediaLoadFailed = true  // C16 — l'échec parle
                 }
             } else {
                 // ImageIO downsample for foreground images (max 1080px)
                 mediaLoadProgress = 0.3
                 guard let data = try? await item.loadTransferable(type: Data.self),
-                      let image = await StoryMediaLoader.shared.loadImage(data: data, maxDimension: 1080) else { return }
+                      let image = await StoryMediaLoader.shared.loadImage(data: data, maxDimension: 1080) else {
+                    mediaLoadFailed = true  // C16 — l'échec parle
+                    return
+                }
                 mediaLoadProgress = 0.7
                 // Persist the image to a temp file so StoryMediaLayer.configureImage
                 // can load it via its file:// URL. Without this, media.mediaURL stays

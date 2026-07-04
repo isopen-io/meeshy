@@ -111,6 +111,12 @@ public struct StoryComposerView: View {
     /// ou publié : un debounce d'autosave encore en vol ne doit pas le
     /// re-persister pendant le démontage du composer.
     @State var draftAutosaveSuspended = false
+    /// C16 (audit it.91) — l'échec de chargement d'un média DOIT parler :
+    /// avant, les guards/catch du flux picker retournaient en silence (photo
+    /// iCloud non téléchargeable, format refusé, écriture temp échouée) — le
+    /// spinner disparaissait et l'utilisateur ne savait jamais pourquoi rien
+    /// ne s'était ajouté.
+    @State var mediaLoadFailed = false
     @State var isLoadingMedia = false
     @State var mediaLoadProgress: Double = 0
     @State var mediaLoadLabel: String = ""
@@ -248,6 +254,22 @@ public struct StoryComposerView: View {
                     bundle: .module
                   )
             )
+        }
+        .alert(
+            String(localized: "story.composer.mediaLoadFailedTitle",
+                   defaultValue: "Chargement impossible", bundle: .module),
+            isPresented: $mediaLoadFailed
+        ) {
+            Button(String(localized: "story.composer.ok", defaultValue: "OK", bundle: .module)) {
+                mediaLoadFailed = false
+            }
+            .tint(MeeshyColors.indigo500)
+        } message: {
+            Text(String(
+                localized: "story.composer.mediaLoadFailedMessage",
+                defaultValue: "Ce média n'a pas pu être chargé. Vérifiez qu'il est téléchargé sur l'appareil (iCloud) et réessayez.",
+                bundle: .module
+            ))
         }
         .onAppear {
             checkForDraft()

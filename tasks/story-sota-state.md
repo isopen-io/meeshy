@@ -436,6 +436,16 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   PAS textEditingMode (la View appelle enterTextEditingMode ensuite) — test aligné.
   Audit n°3 PRODUCTIF — compteur sec retombe à 0/2.
 
+- [x] **C16 (P3, audit ciblé it.91 — flux picker médias).** ✅ it.91
+  FINDING : 3 chemins d'échec SILENCIEUX dans `addForegroundMedia` (guard vidéo
+  loadTransferable, catch d'écriture temp, guard image load/downsample) — le spinner
+  disparaissait sans un mot (photo iCloud non téléchargée, format refusé…), l'utilisateur
+  ne savait jamais pourquoi rien ne s'était ajouté. Le reste du flux est SOLIDE (pin
+  anti-course du slideId F2, progress, aspect ratio via preferredTransform, duration
+  pinnée anti « vidéo 1 s »). FIX : alerte `mediaLoadFailed` (canal existant du composer,
+  pattern lostMediaCount) posée aux 3 points, message actionnable (« vérifiez iCloud »),
+  2 clés xcstrings 4 langues. Audit n°4 PRODUCTIF — compteur sec 0/2.
+
 ### ÉDITION — crash recovery & intégrité des données
 
 - [x] **E1 (P0) Autosave draft sur mutation, pas seulement en background.** ✅ it.5
@@ -1029,6 +1039,13 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.91 — Audit ciblé n°4 (picker médias) → C16 trouvé+fixé — compteur 0/2
+
+- « Rendre tout fonctionnel » inclut les échecs : un chargement qui rate doit le dire.
+  Les surfaces majeures du composer sont désormais toutes auditées (chrome, band, texte,
+  dessin[C0], stickers, médias, preview, a11y) — les prochains audits iront aux marges
+  (voice recorder flux, éditeurs plein écran image/vidéo) ou constateront l'assèchement.
 
 ## it.90 — Audit ciblé n°3 (éditeur texte inline) → C15 trouvé+fixé — compteur 0/2
 
