@@ -123,5 +123,20 @@ describe('parseMentions', () => {
     it('retourne false sans mention', () => {
       expect(hasMentions('Bonjour')).toBe(false);
     });
+
+    it('détecte un @DisplayName à initiale accentuée (parité avec parseMentions)', () => {
+      // @Éric est résolu par parseMentions (frontières Unicode) mais l'ancien
+      // /@\w/ ASCII ne le voyait pas — drift corrigé.
+      expect(hasMentions('Salut @Éric')).toBe(true);
+      expect(hasMentions('Coucou @André Tabeth')).toBe(true);
+    });
+
+    it('détecte un @DisplayName non-latin (cyrillique)', () => {
+      expect(hasMentions('Привет @Владимир')).toBe(true);
+    });
+
+    it('ne confond pas une adresse e-mail (@ suivi d\'espace) avec une mention', () => {
+      expect(hasMentions('Email: test@ domain.com')).toBe(false);
+    });
   });
 });

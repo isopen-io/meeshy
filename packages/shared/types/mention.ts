@@ -3,6 +3,8 @@
  * @module shared/types/mention
  */
 
+import { hasMentions as hasMentionsCore } from '../utils/mention-parser';
+
 /**
  * Utilisateur mentionné résolu par le serveur.
  * Inclus dans les réponses API (messages, posts, comments) pour permettre
@@ -237,12 +239,16 @@ export function extractMentions(
 }
 
 /**
- * Vérifie si un texte contient des mentions
+ * Vérifie si un texte contient des mentions.
+ *
+ * Délègue à `hasMentions` de `mention-parser` (source de vérité unique, Unicode-aware) pour
+ * rester cohérent avec la détection de `@DisplayName` accentué de `parseMentions`.
+ *
  * @param content - Le contenu à vérifier
  * @returns true si au moins une mention est présente
  */
 export function hasMentions(content: string): boolean {
-  return /@\w+/.test(content);
+  return hasMentionsCore(content);
 }
 
 /**
