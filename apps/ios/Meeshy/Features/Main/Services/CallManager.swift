@@ -948,7 +948,10 @@ final class CallManager: ObservableObject {
                     VoIPPushManager.shared.clearDedup(callId: callId)
                 }
             }
-            callProvider.reportCall(with: uuid, endedAt: nil, reason: .unanswered)
+            // A nil `endedAt` means "unknown" to CallKit (produces an inaccurate/missing
+            // timestamp in Recents) — every other reportCall site in this file passes
+            // Date(); this synthesized busy-path report ends right now, so do the same.
+            callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
             pendingIncomingCall = (callId: callId, fromUserId: callerUserId, fromUsername: callerName, isVideo: isVideo, iceServers: iceServers)
             showCallWaitingBanner = true
             Logger.calls.info("VoIP push while busy — ended secondary call, showing banner")
@@ -1443,7 +1446,11 @@ final class CallManager: ObservableObject {
         // Audio session is configured at peer-connection setup (handleIncoming…),
         // not here — CallKit drives activation via provider:didActivate:.
 
-        if let uuid = activeCallUUID {
+        // Guard behind `callUsesCallKit`: a foreground in-app call (or iOS-app-on-Mac)
+        // never calls `reportNewIncomingCall`, so requesting CXAnswerCallAction for its
+        // UUID is guaranteed to fail (CallKit never heard of it) — same rationale as
+        // the `callUsesCallKit` guard on `toggleMute()`.
+        if let uuid = activeCallUUID, callUsesCallKit {
             let answerAction = CXAnswerCallAction(call: uuid)
             let transaction = CXTransaction(action: answerAction)
             callController.request(transaction) { error in
@@ -1560,7 +1567,9 @@ final class CallManager: ObservableObject {
 
         emitCallReject(callId: callId)
 
-        if let uuid = activeCallUUID {
+        // Same rationale as answerCall(): a foreground/Mac call never reported to
+        // CallKit must not fire a doomed-to-fail CXEndCallAction.
+        if let uuid = activeCallUUID, callUsesCallKit {
             let endAction = CXEndCallAction(call: uuid)
             callController.request(CXTransaction(action: endAction)) { error in
                 if let error { Logger.calls.error("CallKit reject failed: \(error.localizedDescription)") }
@@ -1648,8 +1657,9 @@ final class CallManager: ObservableObject {
         // double teardown. (`endCallInternal` nil-e `activeCallUUID`, d'où la capture
         // locale ci-dessus.)
         let endUUID = activeCallUUID
+        let endUsedCallKit = callUsesCallKit
         endCallInternal(reason: .local)
-        if let endUUID {
+        if let endUUID, endUsedCallKit {
             let endAction = CXEndCallAction(call: endUUID)
             callController.request(CXTransaction(action: endAction)) { error in
                 if let error { Logger.calls.error("CallKit end failed: \(error.localizedDescription)") }
