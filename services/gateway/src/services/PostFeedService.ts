@@ -2,6 +2,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
 import { authorSelect, postInclude, trayStorySelect, NOT_DELETED } from './posts/postIncludes';
+import { buildPostVisibilityOrFilter } from './posts/postVisibility';
 import {
   reelAffinityScore,
   type ReelAffinityContext,
@@ -858,17 +859,11 @@ export class PostFeedService {
   // PRIVATE HELPERS
   // ============================================
 
+  /// G5 — délègue au filtre canonique unique (posts/postVisibility.ts).
+  /// Audience feed = friends ∪ contacts DM (divergence assumée vs PostService,
+  /// décision produit en attente — story-sota §4).
   private buildVisibilityFilter(viewerId: string, friendIds: string[], communityCoMemberIds: string[] = []) {
-    return {
-      OR: [
-        { authorId: viewerId },
-        { visibility: PostVisibility.PUBLIC },
-        { visibility: PostVisibility.COMMUNITY, authorId: { in: communityCoMemberIds } },
-        { visibility: PostVisibility.FRIENDS, authorId: { in: friendIds } },
-        { visibility: PostVisibility.EXCEPT, authorId: { in: friendIds }, NOT: { visibilityUserIds: { has: viewerId } } },
-        { visibility: PostVisibility.ONLY, visibilityUserIds: { has: viewerId } },
-      ],
-    };
+    return buildPostVisibilityOrFilter(viewerId, friendIds, communityCoMemberIds);
   }
 
   private async getDirectConversationContactIds(userId: string): Promise<string[]> {
