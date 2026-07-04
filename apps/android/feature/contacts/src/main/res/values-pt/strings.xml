@@ -13,4 +13,12 @@
     <string name="contacts_request_accept">Aceitar</string>
     <string name="contacts_request_decline">Recusar</string>
     <string name="contacts_request_cancel">Cancelar</string>
+    <string name="contacts_filter_all">Todos</string>
+    <string name="contacts_filter_online">Online</string>
+    <string name="contacts_filter_offline">Offline</string>
+    <string name="contacts_search_hint">Pesquisar contatos</string>
+    <string name="contacts_list_empty">Nenhum contato ainda</string>
+    <string name="contacts_list_filtered_empty">Nenhum contato correspondente</string>
+    <string name="contacts_list_error">Não foi possível carregar os contatos</string>
+    <string name="contacts_list_retry">Tentar novamente</string>
 </resources>
