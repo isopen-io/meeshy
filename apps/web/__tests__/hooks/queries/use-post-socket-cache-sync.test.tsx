@@ -354,6 +354,47 @@ describe('usePostSocketCacheSync', () => {
       const posts = getFeedPosts(qc) as (typeof mockPost & { currentUserReactions: string[] })[];
       expect(posts[0].currentUserReactions).toHaveLength(0);
     });
+
+    it('does NOT double-count likeCount on the reactor own self-echo (optimistic already applied)', () => {
+      // Reactor optimistically bumped likeCount 5→6 and reactionSummary 😂:2→3.
+      // The gateway self-echo carries the AUTHORITATIVE count (3). A blind +1 would
+      // push likeCount to 7 while the emoji badges still sum to 3 — the F56 drift.
+      const qc = createQueryClient();
+      seedFeed(qc, [{ ...mockPost, likeCount: 6, reactionSummary: { '😂': 3 } as Record<string, number>, currentUserReactions: ['😂'] as string[] }]);
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-2' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:reaction-added', {
+        postId: 'post-1',
+        userId: 'user-2',
+        emoji: '😂',
+        action: 'add',
+        aggregation: { emoji: '😂', count: 3 },
+        timestamp: new Date().toISOString(),
+      }));
+
+      const posts = getFeedPosts(qc) as (typeof mockPost & { likeCount: number; reactionSummary: Record<string, number> })[];
+      expect(posts[0].likeCount).toBe(6);
+      expect(posts[0].reactionSummary['😂']).toBe(3);
+    });
+
+    it('increments likeCount by the authoritative delta for a remote reactor', () => {
+      const qc = createQueryClient();
+      seedFeed(qc, [{ ...mockPost, likeCount: 5, reactionSummary: { '😂': 2 } as Record<string, number>, currentUserReactions: [] as string[] }]);
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-1' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:reaction-added', {
+        postId: 'post-1',
+        userId: 'user-99',
+        emoji: '😂',
+        action: 'add',
+        aggregation: { emoji: '😂', count: 3 },
+        timestamp: new Date().toISOString(),
+      }));
+
+      const posts = getFeedPosts(qc) as (typeof mockPost & { likeCount: number; reactionSummary: Record<string, number> })[];
+      expect(posts[0].likeCount).toBe(6);
+      expect(posts[0].reactionSummary['😂']).toBe(3);
+    });
   });
 
   describe('post:reaction-removed', () => {
@@ -853,6 +894,33 @@ describe('usePostSocketCacheSync', () => {
 
       const data = qc.getQueryData<{ pages: { data: { likeCount: number }[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
       expect(data?.pages[0].data[0].likeCount).toBe(0);
+    });
+
+    it('does NOT double-count likeCount on the reactor own self-echo', () => {
+      // The gateway broadcasts comment:reaction-added for EVERY emoji (incl. ❤️),
+      // so even a plain heart-like double-counted before the delta reconciliation:
+      // optimistic likeCount 3→4 + summary ❤️:3→4, then self-echo authoritative 4.
+      const qc = createQueryClient();
+      const comment = { id: 'c-1', content: 'Hi', likeCount: 4, replyCount: 0, createdAt: new Date().toISOString(), reactionSummary: { '❤️': 4 } as Record<string, number>, currentUserReactions: ['❤️'] as string[] };
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'], {
+        pages: [{ data: [comment], meta: {} }],
+        pageParams: [undefined],
+      });
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-2' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:reaction-added', {
+        postId: 'post-1',
+        commentId: 'c-1',
+        userId: 'user-2',
+        emoji: '❤️',
+        action: 'add',
+        aggregation: { emoji: '❤️', count: 4 },
+        timestamp: new Date().toISOString(),
+      }));
+
+      const data = qc.getQueryData<{ pages: { data: { likeCount: number; reactionSummary: Record<string, number> }[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
+      expect(data?.pages[0].data[0].likeCount).toBe(4);
+      expect(data?.pages[0].data[0].reactionSummary['❤️']).toBe(4);
     });
   });
 
