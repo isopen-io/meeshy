@@ -5,7 +5,7 @@ import { formatTimeRemaining } from '@meeshy/shared/utils/time-remaining';
 import { useI18n } from '@/hooks/use-i18n';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
-import { resolveKeyframeState, type StoryKeyframeData } from '@/lib/story-transforms';
+import { resolveKeyframeState, resolveClipTransitionOpacity, type StoryKeyframeData, type StoryClipTransitionData } from '@/lib/story-transforms';
 import { Avatar } from './Avatar';
 import { TranslationToggle } from './TranslationToggle';
 import { CommentList } from './CommentList';
@@ -93,6 +93,9 @@ interface StoryData {
     textObjects?: StoryTextObjectData[];
     mediaObjects?: StoryMediaObjectData[];
     audioObjects?: StoryAudioObjectData[];
+    /// W1 inc.4 — crossfades intra-slide entre clips foreground (parité
+    /// reader iOS R14). Passthrough intégral depuis le JSON serveur.
+    clipTransitions?: StoryClipTransitionData[];
     /// Slide duration in milliseconds (5000 default if absent). Without this,
     /// every story fell to the hardcoded 5s STORY_DURATION even when the author
     /// set a longer duration to fit a 30s video.
@@ -462,10 +465,14 @@ function StoryViewer({
       (m) => !m.isBackground && m.keyframes?.length
     )
   );
+  // W1 inc.4 — les crossfades intra-slide consomment le même playhead que
+  // les keyframes (et héritent du même gel W2 pause/buffering).
+  const slideNeedsPlayhead = slideHasKeyframes
+    || Boolean(stories[currentIndex]?.storyEffects?.clipTransitions?.length);
   const [playheadSec, setPlayheadSec] = useState(0);
   useEffect(() => {
     setPlayheadSec(0);
-    if (!slideHasKeyframes) return;
+    if (!slideNeedsPlayhead) return;
     let raf = 0;
     const tick = () => {
       const consumedMs = storyDurationMs - remainingMsRef.current;
@@ -475,7 +482,7 @@ function StoryViewer({
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [slideHasKeyframes, currentIndex, storyDurationMs]);
+  }, [slideNeedsPlayhead, currentIndex, storyDurationMs]);
 
   const primaryVideoGateHandlers = {
     onWaiting: () => setIsBuffering(true),
@@ -741,11 +748,19 @@ function StoryViewer({
           const my = mkf?.y ?? m.y;
           const mScale = mkf?.scale ?? m.scale;
           const sizePct = 65 * mScale;
+          // W1 inc.4 — crossfade intra-slide : opacité keyframes × facteur
+          // transition (parité reader iOS R14 : composition multiplicative,
+          // clips hors fenêtre masqués sur les slides à transitions). Sans
+          // transitions, `undefined` préserve le style historique.
+          const clipTransitions = effects?.clipTransitions;
+          const fgOpacity = clipTransitions?.length
+            ? (mkf?.opacity ?? 1) * resolveClipTransitionOpacity(m, clipTransitions, playheadSec)
+            : mkf?.opacity;
           const fgStyle = {
             left: `${mx * 100}%`,
             top: `${my * 100}%`,
             width: `${sizePct}%`,
-            opacity: mkf?.opacity,
+            opacity: fgOpacity,
             transform: `translate(-50%, -50%) rotate(${m.rotation}deg)`,
             zIndex: m.zIndex ?? 1,
           };
