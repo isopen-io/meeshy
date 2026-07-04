@@ -154,17 +154,19 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   en tête de `persistDraft()` ET `autosaveDraftAfterMutation()` — ordre flush → sync → save,
   compatible mergeEffects (E2 : timelineDuration/clipTransitions traversent).
   Vérif : 13/13 suites composer non-régression, build 22 s vert.
-- [~] **E4 (P1) Persister le CommandStack (undo/redo) avec le draft.** — INTRA-SESSION FAIT it.11
+- [x] **E4 (P1) Persister le CommandStack (undo/redo) avec le draft.** ✅ COMPLET it.43 (cross-crash)
   ✅ Incrément 1 : `timelineHistoryBySlide` (composer VM) — stash au shutdown ET avant chaque
   re-bootstrap ; restore via NOUVELLE API `restoreCommandHistoryWithoutReplay` (le projet
   committé EST l'état au cursor ; le `restoreCommandHistory` existant REJOUE et suppose l'état
   zéro → aurait doublé les AddClip). Undo/redo survit à chaque fermeture de sheet + BONUS :
   corrige la contamination cross-slide préexistante (bootstrap ne resettait pas le stack —
   l'historique de la slide A restait actif sur la slide B).
-  RESTE (incrément 2) : persistance disque cross-crash — blob opaque Data dans un sidecar
-  StoryDraftStore (`saveCommandHistoryBlob`/`loadCommandHistoryBlob` + purge dans `clear()`,
-  le store SDK core ne peut pas dépendre de CommandStackSnapshot/MeeshyUI) ; encode/restore
-  au rythme E1 ; restore du dict au restore du draft.
+  ✅ Incrément 2 (it.43) : blob opaque base64 dans `story_draft_meta` (table EXISTANTE —
+  zéro migration, purge gratuite via `clear()`), écrit à chaque autosave E1/persistDraft
+  (y compris le stack LIVE de la timeline ouverte, stash non destructif), réappliqué au
+  restore du draft AVANT tout bootstrap timeline (contrat no-replay it.11 inchangé).
+  `commandHistoryBlobForPersistence()`/`applyPersistedCommandHistory()` (VM, testables) ;
+  blob corrompu = no-op (l'historique mémoire prime). JSONEncoder `.sortedKeys`.
 - [x] **E10 (P2, découvert it.12) Fuite disque : dossiers `meeshy_offline_queue/` jamais
   nettoyés au succès du chemin QUEUE.** ✅ it.16
   Livré : (1) SDK — `removeLocalMedia(of:)` aux DEUX dispositions terminales du drain (succès
@@ -570,6 +572,19 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.43 — E4 inc.2 : undo/redo cross-crash via blob opaque du draft store (6ae5872ee)
+
+- Re-preuve : `CommandStackSnapshot` déjà Codable+Sendable ; `story_draft_meta` (key/value
+  TEXT) déjà purgée par `clear()` → blob base64 sans migration ni nouveau fichier.
+- RED : 4 tests store (round-trip bytes, nil, overwrite, clear-purge) + 3 tests VM dont le
+  bout-en-bout « composer neuf + blob → canUndo + undo revert sans replay ».
+- Vérif : suites StoryDraftStoreSDKTests + TimelineHistoryPersistenceTests passed (simu 18.2,
+  scheme MeeshySDK-Package) ; meeshy.sh build « Build succeeded in 77s » (warning fullSync
+  préexistant, hors périmètre). Aucun bump généré.
+- Piège d'exécution rencontré : `import os` manquant dans +Timeline.swift (Logger) — MeeshyUI
+  n'hérite pas de l'import du core ; vérifier les imports de tout fichier qu'on étend.
+- E4 FERMÉ. P1 restants : G1 (b) projection tray + (c) pagination cursor (avec R8).
 
 ## it.42 — R4 inc.2 : fetch unitaire des stories hors tray par postId (2b8687ef3)
 
