@@ -26,6 +26,7 @@ import type {
   StoryCreatedEventData,
   StoryViewedEventData,
   StoryReactedEventData,
+  StoryDeletedEventData,
   StatusCreatedEventData,
   StatusUpdatedEventData,
   StatusDeletedEventData,
@@ -56,6 +57,7 @@ export interface UseSocialSocketOptions {
   onStoryCreated?: (data: StoryCreatedEventData) => void;
   onStoryViewed?: (data: StoryViewedEventData) => void;
   onStoryReacted?: (data: StoryReactedEventData) => void;
+  onStoryDeleted?: (data: StoryDeletedEventData) => void;
 
   /** Status events */
   onStatusCreated?: (data: StatusCreatedEventData) => void;
@@ -72,8 +74,6 @@ export interface UseSocialSocketOptions {
   onPostTranslationUpdated?: (data: PostTranslationUpdatedEventData) => void;
   onCommentTranslationUpdated?: (data: CommentTranslationUpdatedEventData) => void;
   onStoryTranslationUpdated?: (data: StoryTranslationUpdatedEventData) => void;
-  /// W4 — une story supprimée par son auteur disparaît du tray en direct.
-  onStoryDeleted?: (data: StoryDeletedEventData) => void;
 
   /** When false the hook skips subscription and listener setup. Defaults to true. */
   enabled?: boolean;
@@ -174,6 +174,9 @@ export function useSocialSocket(options: UseSocialSocketOptions = {}): void {
     function handleStoryReacted(data: StoryReactedEventData): void {
       handlersRef.current.onStoryReacted?.(data);
     }
+    function handleStoryDeleted(data: StoryDeletedEventData): void {
+      handlersRef.current.onStoryDeleted?.(data);
+    }
 
     function handleStatusCreated(data: StatusCreatedEventData): void {
       handlersRef.current.onStatusCreated?.(data);
@@ -207,9 +210,6 @@ export function useSocialSocket(options: UseSocialSocketOptions = {}): void {
     function handleStoryTranslationUpdated(data: StoryTranslationUpdatedEventData): void {
       handlersRef.current.onStoryTranslationUpdated?.(data);
     }
-    function handleStoryDeleted(data: StoryDeletedEventData): void {
-      handlersRef.current.onStoryDeleted?.(data);
-    }
 
     // ---- Register listeners ----
 
@@ -224,6 +224,7 @@ export function useSocialSocket(options: UseSocialSocketOptions = {}): void {
     socket.on(SERVER_EVENTS.STORY_CREATED, handleStoryCreated);
     socket.on(SERVER_EVENTS.STORY_VIEWED, handleStoryViewed);
     socket.on(SERVER_EVENTS.STORY_REACTED, handleStoryReacted);
+    socket.on(SERVER_EVENTS.STORY_DELETED, handleStoryDeleted);
 
     socket.on(SERVER_EVENTS.STATUS_CREATED, handleStatusCreated);
     socket.on(SERVER_EVENTS.STATUS_UPDATED, handleStatusUpdated);
@@ -237,7 +238,6 @@ export function useSocialSocket(options: UseSocialSocketOptions = {}): void {
     socket.on(SERVER_EVENTS.POST_TRANSLATION_UPDATED, handlePostTranslationUpdated);
     socket.on(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, handleCommentTranslationUpdated);
     socket.on(SERVER_EVENTS.STORY_TRANSLATION_UPDATED, handleStoryTranslationUpdated);
-    socket.on(SERVER_EVENTS.STORY_DELETED, handleStoryDeleted);
 
     // ---- Cleanup ----
 
@@ -256,6 +256,7 @@ export function useSocialSocket(options: UseSocialSocketOptions = {}): void {
       socket.off(SERVER_EVENTS.STORY_CREATED, handleStoryCreated);
       socket.off(SERVER_EVENTS.STORY_VIEWED, handleStoryViewed);
       socket.off(SERVER_EVENTS.STORY_REACTED, handleStoryReacted);
+      socket.off(SERVER_EVENTS.STORY_DELETED, handleStoryDeleted);
 
       socket.off(SERVER_EVENTS.STATUS_CREATED, handleStatusCreated);
       socket.off(SERVER_EVENTS.STATUS_UPDATED, handleStatusUpdated);
@@ -269,7 +270,6 @@ export function useSocialSocket(options: UseSocialSocketOptions = {}): void {
       socket.off(SERVER_EVENTS.POST_TRANSLATION_UPDATED, handlePostTranslationUpdated);
       socket.off(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, handleCommentTranslationUpdated);
       socket.off(SERVER_EVENTS.STORY_TRANSLATION_UPDATED, handleStoryTranslationUpdated);
-      socket.off(SERVER_EVENTS.STORY_DELETED, handleStoryDeleted);
     };
   }, [enabled, socketBootTick]);
 }
