@@ -243,7 +243,7 @@ export class CallService {
   /**
    * Generate ICE servers with per-user TURN credentials
    */
-  generateIceServers(userId: string): any[] {
+  generateIceServers(userId: string): RTCIceServer[] {
     return this.turnCredentialService.generateCredentials(userId);
   }
 
