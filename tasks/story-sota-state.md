@@ -365,8 +365,8 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   gateway générées encodées, test it.41 vert sur le cas nominal). Fix si symptôme : dériver
   la clé via le MÊME round-trip URL aux deux bouts (pinTargets/prefetch). Pas de fix spéculatif.
 
-- [ ] **R14 (P2, découvert it.49) Le reader iOS ne rend PAS les clipTransitions (crossfade
-  intra-slide).** Preuves : `ReaderTransitionResolver.opacity` (StoryReaderResolvers.swift:28,
+- [x] **R14 (P2, découvert it.49) Le reader iOS ne rend PAS les clipTransitions (crossfade
+  intra-slide).** ✅ it.50 Preuves : `ReaderTransitionResolver.opacity` (StoryReaderResolvers.swift:28,
   maths complète + testée StoryCanvasReaderTransitionTests) n'a AUCUN caller de production
   (vestige du reader SwiftUI supprimé Phase A4) ; le canvas CALayer (StoryCanvasUIView*/
   StoryRendererCache) ignore `clipTransitions` ; seuls le preview timeline et VideoCompositor
@@ -378,6 +378,13 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   (sig.opacity × ReaderTransitionResolver.opacity), cache intact. Vérifier au passage comment
   les keyframes opacity vivent déjà avec la signature (même hazard potentiel préexistant).
   W1 inc.4 (portage web) utilisera la MÊME référence — à faire après ou avec R14.
+  LIVRÉ it.50 : post-passe par tick dans StoryRenderer.render (.play), opacité ABSOLUE =
+  base build-order (fadeOpacity > kf opacity > 1) × ReaderTransitionResolver.opacity,
+  HORS ItemSignature (cache intact, pas de re-création AVPlayer), re-posée à chaque tick
+  pour les clips impliqués (facteur 1.0 hors fenêtre = restauration). 3 tests
+  RenderIntegrationTests dont « cached-ticks : 0.5 → 0.2 absolu → 1.0 » ; 10/10 avec la
+  non-régression StoryCanvasReaderTransitionTests ; build app 86 s vert. Reste visuel
+  simulateur : à grouper avec une story de test portant un crossfade (composer requis).
 
 ### BACKEND — instantanéité réseau
 
@@ -620,6 +627,16 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.50 — R14 : les crossfades intra-slide rendent enfin au playback (40345fc86)
+
+- RED : 3 tests RenderIntegrationTests (sortant 0.5 mi-fenêtre, entrant 0.5, cache
+  cross-ticks absolu 0.5→0.2→1.0) — harnais copié du test kf existant.
+- 1 erreur de compile attrapée en gate (slide.effects NON-optionnel — chaining retiré) ;
+  correction posée AVANT la phase build app du job chaîné → build vert du premier coup.
+- Vérif : SDK 10/10 (dont non-régression StoryCanvasReaderTransitionTests), app 86 s vert.
+- Les 3 pièges identifiés à it.49 tous encodés dans l'impl + pinnés par le test cache.
+- W1 inc.4 (web) DÉBLOQUÉ : même référence (ReaderTransitionResolver maths) → prochain.
 
 ## it.49 — Reconnaissance W1 inc.4 → finding R14 : le reader iOS n'a jamais rendu les
 ## crossfades intra-slide (2ed63683c)
