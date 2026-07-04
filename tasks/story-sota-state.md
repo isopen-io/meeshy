@@ -540,7 +540,7 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.35 — R11 : viewedAt migration douce (hash au push)
+## it.35 — R11 : viewedAt migration douce (2871df2f3)
 
 - 6/6 tests modèles (round-trip + legacy decode) ; build vert.
 
