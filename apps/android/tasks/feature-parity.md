@@ -869,7 +869,10 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] In-call video filters (colour presets, low-light boost, background blur, skin smoothing)
 - [ ] In-call audio effects (voice changer, baby/demon voice, looping background sound)
 - [ ] Camera-covered ("dark frame") detection during video calls
-- [ ] Thermal-aware quality degradation (fps/resolution caps, video disable)
+- [~] Thermal-aware quality degradation (fps/resolution caps, video disable) — **policy layer landed**
+      (slice `call-sender-cap-plan`): pure `ThermalCeiling`/`VideoSenderCapPlan` in `core:model` (port of
+      iOS `VideoThermalProfile`) composes a device thermal tier onto the network sender cap. Pending: the
+      app-side `PowerManager.THERMAL_STATUS_*` → `ThermalState` mapping + the live RTP-sender actuator.
 - [~] Adaptive call quality (bitrate ladder, auto video-disable on critical link) —
       **quality-tier SSOT landed** (slice `call-quality-level`): pure `core:model`
       `VideoQualityLevel` (5-tier `CRITICAL<POOR<FAIR<GOOD<EXCELLENT`, port of iOS
@@ -885,8 +888,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       after a sustained `EXCELLENT`/`GOOD` streak (`Resume`, 10 s), with `FAIR` holding the
       recovery timer and a monotonic-seconds `VideoSurvivalState` (fixed-size, O(1) over a
       marathon call). Duration-based hysteresis (cadence-independent); user camera-off resets
-      to `INITIAL`. +19 tests. **Pending:** the real WebRTC sender-cap application + the
-      actuator seam that consumes `Suspend`/`Resume`.
+      to `INITIAL`. +19 tests. **Adaptive sender-cap plan landed** (slice `call-sender-cap-plan`,
+      2026-07-03): the pure `core:model` `VideoSenderCapPlan` maps a `VideoQualityLevel` (+ a
+      framework-agnostic `ThermalState`) to the concrete RTP sender parameters
+      (`maxBitrateBps`/`maxFramerate`/`scaleResolutionDownBy`) — `forLevel` reads each axis off the
+      tier and floors CRITICAL to 360p15 @ 100 kbps (never a zero encoder / never an upscale);
+      `forConditions` composes it with a `ThermalCeiling` (port of iOS `VideoThermalProfile`,
+      `NOMINAL` a no-op) taking the more conservative value per axis. Closes the
+      "Thermal-aware quality degradation" line at the policy layer. +17 tests. **Pending:** the real
+      WebRTC actuator seam (map `PowerManager.THERMAL_STATUS_*` → `ThermalState`, apply the cap to the
+      live RTP video sender, debounce re-apply) + consuming `Suspend`/`Resume`.
 - [~] Connection-quality indicator; call-waiting banner (second incoming call) —
       **connection-quality indicator landed** (slice `call-quality-level`): the pure
       four-tier `ConnectionQuality` (`VideoQualityLevel` collapsed `CRITICAL→POOR`,

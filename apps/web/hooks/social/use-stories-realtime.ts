@@ -26,43 +26,6 @@ interface UseStoriesRealtimeReturn {
   readonly clearNewStories: () => void;
 }
 
-// `Post.storyEffects` is typed `unknown` in the shared package; these minimal
-// shapes let us narrow the parts we mutate without asserting the whole object.
-type StoryTextObjectShape = {
-  translations?: Record<string, string>;
-  [key: string]: unknown;
-};
-type StoryEffectsShape = {
-  textObjects?: StoryTextObjectShape[];
-  [key: string]: unknown;
-};
-
-/**
- * Immutably merges the newly-translated languages into
- * `storyEffects.textObjects[index].translations`. Returns the SAME reference
- * when there is nothing to merge (unknown/malformed effects, missing
- * `textObjects`, or an out-of-range index) so callers can skip re-renders.
- */
-export function mergeStoryTextObjectTranslations(
-  storyEffects: unknown,
-  textObjectIndex: number,
-  translations: Record<string, string>,
-): unknown {
-  if (!storyEffects || typeof storyEffects !== 'object') return storyEffects;
-  const effects = storyEffects as StoryEffectsShape;
-  const textObjects = effects.textObjects;
-  if (!Array.isArray(textObjects)) return storyEffects;
-  const target = textObjects[textObjectIndex];
-  if (!target || typeof target !== 'object') return storyEffects;
-
-  const nextTextObjects = textObjects.map((obj, i) =>
-    i === textObjectIndex
-      ? { ...obj, translations: { ...(obj.translations ?? {}), ...translations } }
-      : obj
-  );
-  return { ...effects, textObjects: nextTextObjects };
-}
-
 // ============================================================================
 // Hook
 // ============================================================================
@@ -107,41 +70,36 @@ export function useStoriesRealtime(
     []
   );
 
-  // A story text-object was translated by the gateway (NLLB). Merge it into the
-  // feed cache so an open web viewer swaps to the audience's preferred language
-  // live — Prisme Linguistique parity with iOS, which already applies this
-  // event in real time.
-  const onStoryTranslationUpdated = useCallback(
-    (data: StoryTranslationUpdatedEventData) => {
-      queryClient.setQueryData<Post[]>(queryKeys.stories.feed(), (old) => {
-        if (!old) return old;
-        let mutated = false;
-        const next = old.map((s) => {
-          if (s.id !== data.postId) return s;
-          const merged = mergeStoryTextObjectTranslations(
-            s.storyEffects,
-            data.textObjectIndex,
-            data.translations,
-          );
-          if (merged === s.storyEffects) return s;
-          mutated = true;
-          return { ...s, storyEffects: merged };
-        });
-        return mutated ? next : old;
-      });
+  // W4 — une story supprimée disparaît du tray en direct (avant : elle
+  // restait affichée jusqu'au refetch et son ouverture échouait).
+  const onStoryDeleted = useCallback(
+    (data: StoryDeletedEventData) => {
+      queryClient.setQueryData<Post[]>(queryKeys.stories.feed(), (old) =>
+        old?.filter((s) => s.id !== data.storyId)
+      );
     },
     [queryClient]
   );
 
-  // The author deleted a story (or it was force-removed). Drop it from the feed
-  // cache so the tray and viewer stop showing a phantom slide without a refetch.
-  const onStoryDeleted = useCallback(
-    (data: StoryDeletedEventData) => {
-      queryClient.setQueryData<Post[]>(queryKeys.stories.feed(), (old) => {
-        if (!old) return old;
-        const next = old.filter((s) => s.id !== data.storyId);
-        return next.length === old.length ? old : next;
-      });
+  // W4 — les traductions Prisme arrivées après coup se fusionnent en direct,
+  // PAR TEXT-OBJECT (payload { postId, textObjectIndex, translations } —
+  // parité iOS withTextObjectTranslationsMerged). Les langues existantes de
+  // l'objet sont écrasées, les nouvelles ajoutées ; index hors borne → no-op.
+  const onStoryTranslationUpdated = useCallback(
+    (data: StoryTranslationUpdatedEventData) => {
+      queryClient.setQueryData<Post[]>(queryKeys.stories.feed(), (old) =>
+        old?.map((s) => {
+          if (s.id !== data.postId) return s;
+          const textObjects = s.storyEffects?.textObjects;
+          if (!textObjects || !textObjects[data.textObjectIndex]) return s;
+          const merged = textObjects.map((t, i) =>
+            i === data.textObjectIndex
+              ? { ...t, translations: { ...t.translations, ...data.translations } }
+              : t
+          );
+          return { ...s, storyEffects: { ...s.storyEffects, textObjects: merged } };
+        })
+      );
     },
     [queryClient]
   );
@@ -150,8 +108,8 @@ export function useStoriesRealtime(
     onStoryCreated,
     onStoryViewed,
     onStoryReacted,
-    onStoryTranslationUpdated,
     onStoryDeleted,
+    onStoryTranslationUpdated,
     enabled,
   });
 

@@ -159,12 +159,12 @@ private struct MoodReplyConfirmationOverlay: View {
 
             VStack(spacing: 14) {
                 Text(String(localized: "mood.reply.confirm.title", defaultValue: "Répondre à cette humeur ?", bundle: .main))
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(MeeshyFont.relative(16, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                     .multilineTextAlignment(.center)
 
                 Text(moodSummary)
-                    .font(.system(size: 14))
+                    .font(MeeshyFont.relative(14))
                     .foregroundColor(theme.textSecondary)
                     .multilineTextAlignment(.center)
                     .lineLimit(3)
@@ -172,7 +172,7 @@ private struct MoodReplyConfirmationOverlay: View {
                 HStack(spacing: 10) {
                     Button(action: onCancel) {
                         Text(String(localized: "mood.reply.confirm.cancel", defaultValue: "Quitter", bundle: .main))
-                            .font(.system(size: 15, weight: .medium))
+                            .font(MeeshyFont.relative(15, weight: .medium))
                             .foregroundColor(theme.textSecondary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 11)
@@ -184,7 +184,7 @@ private struct MoodReplyConfirmationOverlay: View {
 
                     Button(action: onReply) {
                         Text(String(localized: "mood.reply.confirm.reply", defaultValue: "Répondre", bundle: .main))
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(MeeshyFont.relative(15, weight: .semibold))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 11)

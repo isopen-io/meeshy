@@ -116,11 +116,17 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     func configure(iceServers: [IceServer]) throws {
         // Defensive: callers are expected to `disconnect()` before
         // re-configuring (CallManager's FSM enforces `.idle` first), but if
-        // that invariant is ever violated, closing any stale peer connection
-        // here prevents it from leaking silently with its native threads/sockets.
-        if let stalePeerConnection = peerConnection {
-            Logger.webrtc.warning("configure() called with a live peerConnection — closing it before creating a new one")
-            stalePeerConnection.close()
+        // that invariant is ever violated, tear the stale connection down via
+        // the same `disconnect()` used everywhere else — not just `.close()`.
+        // A bare `.close()` (audit 2026-07-03) left `audioTransceiver` /
+        // `videoTransceiver` / local-track properties pointing at the closed
+        // connection's objects; `addOffererTransceiversIfNeeded(on:)` guards
+        // on `audioTransceiver == nil` and would then skip attaching media to
+        // the brand-new peerConnection, producing a silently medialess SDP
+        // offer (a call that "succeeds" but is completely silent).
+        if peerConnection != nil {
+            Logger.webrtc.warning("configure() called with a live peerConnection — disconnecting it before creating a new one")
+            disconnect()
         }
         let config = RTCConfiguration()
         config.iceServers = iceServers.map { server in

@@ -1,5 +1,30 @@
 # Lessons
 
+## Leçon 57 — Le sibling REST du chemin socket avait le seul enqueue offline (2026-07-03)
+`services/gateway/src/socketio/handlers/MessageHandler.ts#broadcastNewMessage` (le chemin
+`message:send`/`message:send-with-attachments`, DOMINANT selon ce même CLAUDE.md) n'appelait
+JAMAIS `RedisDeliveryQueue.enqueue()` pour les destinataires hors-ligne — seul le sibling REST
+`MeeshySocketIOManager._broadcastNewMessage` (utilisé par `POST /conversations/:id/messages`
+et par les messages système de fin d'appel) le faisait. Un commentaire présent dans le code
+documentait même le fait sans le signaler comme un bug (« le chemin principal `message:send`
+n'enqueue pas offline » — `MeeshySocketIOManager.ts:1852-1858`), ce qui l'a laissé vivre sans
+alerte. **Conséquence concrète** : un message envoyé via le composer normal (WS) à un
+destinataire hors-ligne n'était jamais rejoué à sa reconnexion (`_drainPendingMessages`) et ne
+déclenchait jamais l'avancement du reçu expéditeur de "envoyé" à "distribué" — jusqu'à ce que
+le destinataire ouvre spécifiquement cette conversation. Variante du thème Leçon 56 (fonctionnalité
+testée+câblée sur UN chemin, mais absente du chemin qui compte le plus) : ici pas un hook non
+monté, mais un service partagé (`RedisDeliveryQueue`) jamais injecté dans le second des deux
+constructeurs qui en avaient besoin. **Règle : quand un service in-memory/partagé (queue, cache,
+compteur) est injecté via un setter post-construction (`setXxx()`) sur une classe qui elle-même
+construit un sous-handler dans SON PROPRE constructeur, vérifier que le setter forward bien vers
+CE sous-handler — sinon le sous-handler reste sur sa valeur d'init (`null`) pour toute sa vie,
+même si le service parent est correctement configuré.** Fix : `MessageHandler` reçoit
+`deliveryQueue` (optionnel au constructeur + `setDeliveryQueue()`), et
+`MeeshySocketIOManager.setDeliveryQueue()` forwarde désormais la même instance à
+`this.messageHandler.setDeliveryQueue()`. Enqueue utilise `broadcastPayload` (déjà
+cid-stripped, cohérent avec ce que les autres participants reçoivent en direct). Tests :
+`MessageHandler.test.ts` (3 cas) + `MeeshySocketIOManager.test.ts` (forwarding).
+
 ## Leçon 56 — Un fix "documenté + testé" peut vivre dans un hook jamais monté (2026-07-03)
 `apps/web/hooks/useCallSignaling.ts` (répertoire `components/video-calls/`, PLURIEL) porte une
 ré-émission `call:join` au reconnect socket, entièrement testée (`useCallSignaling.reconnect.test.ts`
@@ -263,3 +288,30 @@ Dernier résidu explicitement reporté à l'issue de l'itération 82 (« F48/F49
 ## Leçon 57 — `routes/messages.ts` DELETE REST était le seul sibling du cursor `lastMessageAt` encore non guardé (2026-07-03, itération 86)
 
 Continuité directe de #51/#55 (« fix appliqué à UN chemin, jamais audité sur le sibling REST vs socket »). `MessageHandler.handleMessageDelete` (socket, `socketio/handlers/MessageHandler.ts:744-752`) avait déjà l'optimistic-concurrency guard sur `conversation.lastMessageAt` (lesson #51/pattern B : `updateMany({ where: { id, lastMessageAt: <valeur lue au début> } })`), mais **`routes/messages.ts` DELETE `/messages/:messageId`** (endpoint REST, ligne 434) faisait toujours un `conversation.update` inconditionnel keyé sur `id` seul — le message est déjà fetché avec `include: { conversation: {...} }` donc `message.conversation.lastMessageAt` était disponible mais jamais utilisé comme garde. **Scénario de course concret** : suppression REST d'un vieux message pendant qu'un nouveau message arrive dans la même conversation (chat de groupe actif, chemin très fréquent) — (1) la lecture `lastNonDeletedMessage` du delete capture l'ancien dernier message ; (2) le nouveau message avance `conversation.lastMessageAt` en parallèle ; (3) le `conversation.update` du delete écrase inconditionnellement `lastMessageAt` en arrière, faisant régresser le curseur au-delà d'un message qui existe toujours — corrompt le tri de la liste de conversations et la pagination par curseur (`routes/conversations/core.ts` `lastMessageAt: { lt: cursor }`). Fix : mirror exact de l'idiome déjà établi côté socket — `conversation.update` → `conversation.updateMany({ where: { id, lastMessageAt: message.conversation.lastMessageAt }, data: {...} })`. Tests : 2 nouveaux dans `messages.test.ts` (guard `updateMany` avec la bonne clause `where`, jamais `update` ; fallback sur `conversation.createdAt` quand tout le fil est supprimé) + mise à jour du mock `conversation` (ajout `lastMessageAt` + `updateMany`) dans `messages.test.ts` ET `messages-extended.test.ts` (2e fichier de test qui monte la même route — un mock Prisma incomplet fait échouer silencieusement TOUT test DELETE existant avec `updateMany is not a function`, pas seulement le nouveau test). **Règle réaffirmée : quand un chemin socket ET REST exposent la même opération d'écriture (delete/edit d'un message), auditer les DEUX — le REST est souvent le jumeau oublié parce que le socket est le chemin optimisé/testé en premier.** Suite gateway (Bun, `--ignore-scripts`, cette sandbox n'a pas de toolchain grpc-tools) : `messages.test.ts` 31/31, `messages-extended.test.ts` 17/17, aucune régression trouvée sur les suites `routes/` restantes (un crash runtime bun sans rapport — `panic: unsupported uv function: uv_async_init` sur `admin-anonymous-users.test.ts` — a interrompu le balayage complet ; isolé et non lié à ce diff, hors périmètre de ce cycle).
+
+## Leçon 58 — Route sans schema de réponse strict = fuite de champs Prisma bruts (2026-07-03, routine calling-feature)
+
+`GET /conversations/:conversationId/active-call` (`services/gateway/src/routes/calls.ts`) contournait un
+bug connu `fast-json-stringify` (`oneOf: [schema, {type:'null'}]` crashe quand la valeur est `null`) en
+supprimant TOUT schema sur `data` (`additionalProperties: true`) au lieu de corriger la vraie cause. Effet
+de bord non anticipé : les 5 routes soeurs (`callSessionSchema` en whitelist stricte) filtrent déjà tout
+champ non déclaré côté serializer Fastify, mais celle-ci sérialisait le document Prisma brut — quand un
+nouveau champ privé (`CallParticipant.analytics`, télémétrie WebRTC) a été ajouté au schema Prisma des
+mois plus tard, il a fuité silencieusement vers n'importe quel membre de la conversation (authz =
+membership, pas participation à CET appel précis) sans qu'aucun diff ne touche cette route. **Règle : un
+contournement de bug de sérialisation qui désactive le filtrage de champs (`additionalProperties: true`,
+schema absent sur une branche `oneOf`) est une dette de sécurité latente — elle ne fuite rien AU MOMENT du
+contournement, mais fuite automatiquement le prochain champ sensible ajouté ailleurs dans le modèle, sans
+qu'aucun reviewer ne relise cette route.** Fix correct pour `oneOf`+`null` : `nullable: true` directement
+sur le schema objet (pas de `oneOf`) — évite le bug fast-json-stringify tout en gardant le filtrage.
+Vérifié par script Node autonome sur `fast-json-stringify` avant d'écrire le test Jest (plus rapide que
+d'itérer sur un test complet pour valider le comportement d'une lib de sérialisation).
+
+**Piège de test associé** : un test qui boote un VRAI Fastify + `.inject()` (nécessaire ici — les tests
+existants du fichier, `calls-routes.test.ts`, mockent `sendSuccess` ET
+`@meeshy/shared/types/api-schemas` en stubs `{type:'object'}`, donc ne peuvent PAS attraper un bug de
+sérialisation) exige que CHAQUE mock de hook `preValidation`/`onRequest` soit une vraie fonction
+`async (request) => {...}`, jamais un `jest.fn()` nu à 0 argument — sous dispatch Fastify réel (pas
+l'extraction-et-appel-direct des tests `getRoute`), un stub nu fait `.inject()` **hang indéfiniment**
+(pas d'erreur, pas de timeout explicite avant celui de Jest) sans qu'aucun mock en aval (prisma, service)
+ne soit jamais invoqué — symptôme distinctif à chercher en premier sur tout futur test `.inject()`-based.

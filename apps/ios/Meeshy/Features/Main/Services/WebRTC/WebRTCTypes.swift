@@ -507,6 +507,20 @@ nonisolated enum CallReliabilityPolicy {
         max(minimumDelay, ttl * 0.8)
     }
 
+    /// Whether a TURN refresh watchdog should retry the `call:request-ice-servers`
+    /// emit after `attempt` retries with no `call:ice-servers-refreshed` response.
+    /// `emitRequestIceServers` carries no ACK, so a single dropped emit or reply
+    /// must not silently disarm the refresh for the rest of the call — but the
+    /// retries are bounded so a persistently unreachable gateway doesn't spin
+    /// forever inside one cycle (the periodic scheduler re-arms the next cycle
+    /// once retries are exhausted).
+    static func turnRefreshShouldRetry(
+        attempt: Int,
+        maxRetries: Int = QualityThresholds.turnRefreshMaxRetries
+    ) -> Bool {
+        attempt < maxRetries
+    }
+
     /// Stuck-muted CallKit fallback gate. On iPhone/iPad,
     /// `RTCAudioSession.isAudioEnabled` is flipped ONLY by `provider:didActivate:`.
     /// If CallKit never delivers it, the call sits `.connected` with dead mic and
@@ -985,6 +999,18 @@ nonisolated enum QualityThresholds {
     /// the TTL reported by the gateway. Guards against a malformed TTL=0 response
     /// that would otherwise trigger an immediate refresh on every call tick.
     static let turnMinRefreshDelaySeconds: TimeInterval = 30
+
+    /// Watchdog window (seconds) after emitting `call:request-ice-servers`
+    /// before retrying, if `call:ice-servers-refreshed` hasn't come back yet.
+    /// `emitRequestIceServers` is fire-and-forget (no ACK) — a single dropped
+    /// emit or gateway reply must not permanently kill the refresh chain for
+    /// the rest of a long call.
+    static let turnRefreshRetryTimeoutSeconds: TimeInterval = 8
+
+    /// Max consecutive retries of a single TURN refresh request before giving
+    /// up on that cycle and falling back to re-arming the next periodic
+    /// refresh (rather than retrying forever).
+    static let turnRefreshMaxRetries: Int = 3
 
     /// Delay after `.connected` before the stuck-muted CallKit fallback
     /// re-checks whether `provider:didActivate:` ever fired. CallKit normally

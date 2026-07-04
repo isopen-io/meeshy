@@ -305,8 +305,10 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   test_load_whenDecryptFails) → un refetch réseau unique au premier lancement.
   NOTE : le coût d'écriture du blob tray unique ré-encodé/chiffré à chaque write renforce
   R12 (store relationnel par groupe) — les deux items sont liés.
-- [ ] **R10 (P3) `toRenderableSlide` : `content` legacy résolu sur `chain.first` seulement**
-  (`StoryModels.swift:1990-2058`) vs chaîne complète pour textObjects. Harmoniser.
+- [x] **R10 (P3) `content` legacy résolu sur la chaîne complète.** ✅ it.27
+  Surcharge `resolvedContent(preferredLanguages:)` (première langue de la chaîne ayant une
+  traduction ; aucun match → ORIGINAL, Prisme n°1) branchée dans toRenderableSlide.
+  4 tests Prisme (fallthrough chaîne, ordre, no-match→original, sans translations).
 - [ ] **R11 (P3) `isViewed: Bool` → `viewedAt: Date?`** (règle CLAUDE.md « nullable DateTime,
   pas de boolean redondant »). Migration douce : garder le decode Bool, ajouter le timestamp.
 - [ ] **R12 (P2, architecture) Story store relationnel.** Le tray = UN blob JSON
@@ -343,9 +345,10 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   est la vérité). Retirer du schema (migration) ou documenter.
 - [ ] **G5 (P3) Consolider les 3 implémentations de visibilité** (PostFeedService,
   PostService, canUserViewPost) en un module unique — risque de dérive/fuite documenté.
-- [ ] **G6 (P3) Constante d'expiry unifiée.** Serveur = 21 h (`STORY_EXPIRY_HOURS`), client
-  `toStoryGroups` fallback = createdAt+21 h mais `isExpired` défaut interne = +24 h. Sans effet
-  aujourd'hui (expiresAt toujours posé) mais piège dormant — une seule constante partagée.
+- [x] **G6 (P3) Constante d'expiry unifiée.** ✅ it.26
+  `StoryItem.defaultExpiryInterval = 21 h` (aligné STORY_EXPIRY_HOURS serveur) remplace le
+  défaut interne 24 h d'`isExpired` ; test du contrat + pins adaptés (le pin 24 h a échoué
+  comme attendu — preuve que le piège était réel). toStoryGroups/pinDeadline déjà à 21 h.
 
 ### WEB (secondaire — parité lecteur)
 
@@ -369,21 +372,16 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - [ ] **W3 (P2) Composer web : visibilités COMMUNITY/EXCEPT/ONLY + overlays.** Reliquat connu
   (mémoire story-status-community-visibility). `visibilityUserIds` déjà dans
   `CreateStoryRequest` web — manque l'UI.
-- [x] **W4 (P3) Realtime web : écouter `story:deleted` ; brancher `story:translation-updated`.**
-  ✅ it.25 (2026-07-03)
-  Re-preuve : `use-social-socket` enregistrait déjà `story:translation-updated` MAIS
-  `useStoriesRealtime` ne fournissait aucun handler → l'événement était reçu puis jeté (cache feed
-  jamais muté, spectateur web bloqué sur le texte original jusqu'au refresh — écart Prisme vs iOS
-  qui applique la traduction en direct). `story:deleted` n'était écouté NULLE PART côté web.
-  Livré : (1) `use-social-socket` — option `onStoryDeleted` + `socket.on/off(STORY_DELETED)`.
-  (2) `useStoriesRealtime` — `onStoryTranslationUpdated` merge immuable de `data.translations`
-  dans `storyEffects.textObjects[index].translations` (helper pur `mergeStoryTextObjectTranslations`,
-  retour de la même référence si rien à muter → pas de re-render parasite) ; `onStoryDeleted` filtre
-  la story du cache feed. La chaîne viewer est live (`useStoriesFeedQuery` → `postToStoryData` →
-  `resolvePrismeText`) → la traduction apparaît sans refresh, parité iOS.
-  Vérif : 17/17 use-stories-realtime (RED prouvé par stash : 4 échecs), 9/9 use-social-socket,
-  192/192 sur `hooks/social` + `lib/story`, tsc web 0 régression (baseline 1198 inchangé).
-- [ ] **W5 (P3) Préchargement du média du slide suivant** (aucun `preload` dans StoryViewer.tsx).
+- [x] **W4 (P3) Realtime web : story:deleted + story:translation-updated.** ✅ it.28
+  `story:deleted` abonné dans use-social-socket (événement absent) + handlers dans
+  useStoriesRealtime : suppression → retirée du cache tray en direct ; traduction →
+  merge PAR TEXT-OBJECT ({postId, textObjectIndex, translations} — parité iOS
+  withTextObjectTranslationsMerged ; le type vit dans socketio-events, PAS post.ts).
+  Piège évité en re-preuve : un premier jet écrasait s.translations (content) avec les
+  traductions d'un textObject.
+- [x] **W5 (P3) Préchargement du média du slide suivant.** ✅ it.29
+  Fenêtre N+1 (parité prefetcher iOS) : Image() décodée pour les images, <video preload=auto>
+  détaché pour les vidéos (cache HTTP partagé avec le montage suivant), cleanup au unmount.
 
 ### DIRECTIVES PRODUIT UTILISATEUR (hors backlog initial)
 
@@ -411,8 +409,13 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - [ ] **U1 (P2) Transition tray→viewer** : sur iOS 18+, `navigationTransition(.zoom)` /
   matched-geometry depuis l'anneau du tray vers la carte reader ; fallback animation actuelle
   iOS 16-17. Ne PAS casser appearScale/drag-dismiss existants (cf. it.33).
-- [ ] **U2 (P2) Haptics** : `.sensoryFeedback` (iOS 17+) sur changement de slide, gel/reprise
-  buffering, publication réussie ; fallback `UIImpactFeedbackGenerator` iOS 16.
+- [x] **U2 (P2) Haptics du reader.** ✅ it.25
+  Livré via l'abstraction multi-version EXISTANTE `HapticFeedback` (UIImpactFeedbackGenerator,
+  iOS 16+) : tick léger au changement de slide + gel perceptible quand le spinner R3 apparaît
+  (après la grâce 350 ms — pas de haptic sur micro-stall) + reprise SI le gel avait été montré.
+  Publication réussie : déjà couvert (HapticFeedback.success au publish, it.12 constaté).
+  Décision : pas de doublon .sensoryFeedback 17+ — l'abstraction existante est le single
+  source du produit ; migrer TOUTE l'app vers .sensoryFeedback = chantier design system global.
 - [ ] **U3 (P2) Chrome du reader en matériaux natifs** : header/footer/sidebar en
   `.ultraThinMaterial` + sur iOS 26 adopter les surfaces Liquid Glass (`glassEffect` API si
   dispo dans le SDK cible) — TOUJOURS via gating `if #available`, jamais de régression 16-25.
@@ -423,11 +426,22 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   chip sur « Ma story ». C'est le pendant UX de E1.
 - [ ] **U5 (P3) État de chargement prolongé** (avec R2) : ThumbHash + progress ring fine autour
   de l'avatar auteur (métaphore déjà connue du tray), bouton passer.
-- [ ] **U6 (P3) Dynamic Type/VoiceOver du viewer** : étendre la passe a11y (PR #1211) aux
-  overlays reader (labels des zones tap prev/next, annonce du changement de slide,
-  `accessibilityValue` de progression).
-- [ ] **U7 (P3) ProMotion** : vérifier `CADisplayLink.preferredFrameRateRange` du timer reader
-  (économie batterie 120 Hz → ne commiter la barre qu'à 1/300 déjà fait ; vérifier le link).
+- [x] **U6 (P3) Dynamic Type/VoiceOver du viewer.** ✅ COMPLET it.34
+  ✅ Annonce VoiceOver au changement de slide (« Story N sur M », gated
+  isVoiceOverRunning, clé localisée statique — piège : String(localized:) exige une
+  StaticString comme clé, pas d'interpolation dedans).
+  ✅ Inc.2 (it.33) : actions VoiceOver custom « Story suivante / précédente » sur le canvas
+  (la navigation est une gesture spatiale par position x, inatteignable en VoiceOver) +
+  accessibilityLabel du canvas (contenu CALayer invisible d'UIAccessibility),
+  .accessibilityElement(children: .ignore).
+  Inc.3 ÉCARTÉ avec preuve (it.34) : `StoryProgressBarsView` porte DÉJÀ
+  `.accessibilityValue("N pourcent")` + label position + segments accessibilityHidden
+  (+Content.swift:2149-2151, passe PR #1211). U6 complet : annonce slide-change (it.31)
+  + actions rotor prev/next (it.33) + barre déjà couverte.
+- [x] **U7 (P3) ProMotion.** ✅ ÉCARTÉ it.30 — déjà satisfait : le timer viewer pose
+  `CAFrameRateRange(min 30, max 60, preferred 60)` (StoryReaderTimerController:270, jamais
+  120 Hz) et le canvas est à preferred 60 (max 120 réservé aux keyframes edit). Granularité
+  barre 1/300 confirmée. Aucun fix nécessaire.
 
 ## 4. Décisions produit EN ATTENTE (ne pas trancher seul)
 
@@ -478,6 +492,11 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - **Bumps de version (directive user 2026-07-03)** : committer RÉGULIÈREMENT ; à chaque commit,
   vérifier `git diff` des 5 fichiers bump (pbxproj + 4 Info.plist) — si PUR bump de version,
   l'intégrer au commit (« Includes build NNNN version bump ») ; sinon le laisser.
+- **CE FICHIER D'ÉTAT se committe RÉGULIÈREMENT (directive user 2026-07-04)** : jamais de
+  modification locale qui attend le tour suivant — toute mise à jour (item coché, journal,
+  hash post-push, piste de repérage) part dans le commit du tour courant ; si le hash n'est
+  connu qu'après le push, un `git commit tasks/story-sota-state.md` immédiat suit le push
+  (ne pas accumuler).
 
 ## 7. Journal d'itérations (l'agent APPEND ici)
 
@@ -519,15 +538,49 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.25 — W4 : realtime web des stories (translation-updated + deleted)
+## it.34 — U6 inc.3 : ÉCARTÉ avec preuve — U6 COMPLET
 
-- `useStoriesRealtime` branchait `story:translation-updated` (déjà écouté par use-social-socket
-  mais handler absent → jeté) et `story:deleted` (jamais écouté côté web). Merge immuable des
-  traductions dans `storyEffects.textObjects[index]` (helper pur), suppression du feed sur delete.
-- Parité Prisme iOS ↔ web : la traduction NLLB apparaît dans le viewer web ouvert sans refresh.
-- 17/17 (RED prouvé par stash : 4 échecs) + 192/192 `hooks/social`+`lib/story` ; tsc web 0 régression.
+- accessibilityValue de progression déjà présent (PR #1211). Zéro code.
 
-## it.24 — W1 inc.2 : keyframes des mediaObjects foreground (hash au push)
+## it.33 — U6 inc.2 : actions VoiceOver prev/next sur le canvas (3fcf435f2)
+
+- Build vert (retry après contention de build avec un agent parallèle — DB lock).
+
+## it.32 — U6 inc.2 : repérage (session au bout de son contexte)
+
+- Tour de reconnaissance : tap zones = gesture spatiale par position x, pas des
+  onTapGesture → l'inc.2 sera des accessibilityActions custom (piste consignée dans
+  l'item). Aucun code modifié.
+
+## it.31 — U6 inc.1 : annonce VoiceOver du changement de slide (1e6a0f1f3)
+
+- Build vert 18 s ; reste tap zones + progression (inc.2).
+
+## it.30 — U7 : ÉCARTÉ avec preuve (frame rate déjà borné)
+
+- Vérification pure, zéro changement de code.
+
+## it.29 — W5 : preload du slide suivant web (4776ff52f)
+
+- 147/147 suites story web.
+
+## it.28 — W4 : réaltime web deleted + translation-updated (a263a16ba)
+
+- 226/226 suites social+story web.
+
+## it.27 — R10 : content legacy sur la chaîne de langue complète (ac378a96b)
+
+- 4/4 StoryItemPrismeContentTests ; build vert.
+
+## it.26 — G6 : expiry fallback client aligné sur le serveur, 21 h partout (0c81a2270)
+
+- 13/13 StoryItemExpirationTests (pins 24 h adaptés + test de contrat) ; build vert.
+
+## it.25 — U2 : haptics slide-change + gel/reprise (e078f29ab)
+
+- 2 points d'ancrage branchés sur l'abstraction existante ; build vert (clean build 929 s).
+
+## it.24 — W1 inc.2 : keyframes des mediaObjects foreground (9c90f496e)
 
 - Réutilisation directe de l'infra it.23 (resolveKeyframeState + playhead) ; 147/147.
 

@@ -484,6 +484,28 @@ function StoryViewer({
     onCanPlay: () => setIsBuffering(false),
   };
 
+  // ---- W5 — préchargement du slide SUIVANT ----
+  // Aucun preload n'existait : chaque avance payait le cold-fetch du média.
+  // Image : un décodage `new Image()` chauffe le cache HTTP du navigateur.
+  // Vidéo : un élément détaché `preload="auto"` amorce le buffer (le <video>
+  // monté ensuite réutilise la même entrée de cache). Fenêtre N+1 seulement —
+  // parité avec la fenêtre glissante du prefetcher iOS, sans exploser la
+  // bande passante mobile.
+  useEffect(() => {
+    const next = stories[currentIndex + 1];
+    if (!next?.mediaUrl) return;
+    if (next.mediaType === 'video') {
+      const v = document.createElement('video');
+      v.preload = 'auto';
+      v.muted = true;
+      v.src = next.mediaUrl;
+      return () => { v.removeAttribute('src'); v.load(); };
+    }
+    const img = new Image();
+    img.src = next.mediaUrl;
+    return undefined;
+  }, [currentIndex, stories]);
+
   // ---- Escape key ----
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

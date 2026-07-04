@@ -416,8 +416,16 @@ remaining platform glue.
    gates on identity: the *active* call's id → reduce the FSM by the carried `RemoteHangUp`/`RingTimeout`;
    the *waiting* call's id → dismiss the banner (no `emitEnd`); neither → inert. A waiting call's teardown
    fanned out to a busy user's rooms can no longer tear down the active call. +new tests. See run log.
-3. **Adaptive sender-cap plan** — a pure `level → (resolutionHeight, fps, bitrate)` mapping (already on
-   `VideoQualityLevel`) folded into the future WebRTC sender-parameters actuator.
+3. ~~**Adaptive sender-cap plan**~~ ✅ shipped as `call-sender-cap-plan` (2026-07-03) — the pure
+   `core:model` `VideoSenderCapPlan` turning a `VideoQualityLevel` + `ThermalState` into the concrete RTP
+   sender parameters (`maxBitrateBps`/`maxFramerate`/`scaleResolutionDownBy`). Network ladder picks the
+   target (CRITICAL floored to 360p15 @ 100 kbps, never a zero encoder / never an upscale); an independent
+   `ThermalCeiling` (port of iOS `VideoThermalProfile`, `NOMINAL` a no-op) sheds encode load on a hot device;
+   the more conservative value wins per axis. +17 tests. See run log. **Next:** the app-side WebRTC actuator
+   seam that (a) maps Android `PowerManager.THERMAL_STATUS_*` → `ThermalState`, (b) folds `VideoSenderCapPlan`
+   + `VideoSurvivalPolicy` on the stats tick, and (c) applies the cap to the live RTP video sender — plus the
+   debounce/change-detection that only re-applies when the cap actually changes (iOS
+   `qualityLevelDebounceSeconds`), all real WebRTC glue behind a testable seam.
 
 --- Stories backlog (area is rich; revisit only if Calls stalls) ---
 Ordered by value:
@@ -605,6 +613,50 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-03 — slice `call-sender-cap-plan` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration (open PRs #1410/#1412/#1413/#1414/#1416
+  were all iOS/gateway, untouched); last Android slice `call-ended-identity-teardown` (#1415) already merged
+  to `main`. Branched `claude/apps/android/call-sender-cap-plan` off latest `origin/main` (`f301d5e`).
+- **What (next testable pure core #3 in Calls):** the adaptive **video-sender-cap plan** — the pure
+  `core:model` SSOT that turns a `VideoQualityLevel` (network) + a device thermal tier into the concrete RTP
+  sender parameters (`maxBitrateBps` / `maxFramerate` / `scaleResolutionDownBy`) a future WebRTC actuator
+  applies to the outbound video track. Port of iOS `WebRTCService.applyVideoQuality` composed with
+  `VideoThermalProfile.apply` — the network ladder picks the target, an independent thermal ceiling sheds
+  encode load on a hot device, and the **more conservative** value wins per axis.
+- **Added (production, 2 files):**
+  - new `VideoSenderCap.kt` (`core:model`) — pure `ThermalState` enum (framework-agnostic port of iOS
+    `ProcessInfo.ThermalState`; the app maps Android `PowerManager.THERMAL_STATUS_*` onto it), the
+    `ThermalCeiling` value type (`bitrateFactor`/`maxFramerate`/`minScaleDownBy`, `forState` at iOS
+    `VideoThermalProfile.ceiling` parity, `NOMINAL` a strict no-op), the `VideoSenderCap` bundle, and the
+    `VideoSenderCapPlan` object: `forLevel(level)` reads each axis off the tier and falls back to the CRITICAL
+    floor (360p15 @ 100 kbps) when the tier target is `0` (no zero encoder; `scaleResolutionDownBy =
+    max(1.0, 720 / height)` so it never upscales); `forConditions(level, thermal)` composes the two, taking
+    the min bitrate/fps and the steeper downscale, hard-floored at `1`/`1`/`1.0`.
+  - `CallQuality.kt` (`core:model`) — three new `CallQualityThresholds` floor constants
+    (`MIN_VIDEO_BITRATE_BPS=100_000`, `CRITICAL_VIDEO_FLOOR_FPS=15`, `CRITICAL_VIDEO_FLOOR_HEIGHT=360`) at
+    iOS `QualityThresholds` parity. No existing constant or behaviour changed.
+- **Tests (red→green, +17 `VideoSenderCapPlanTest`):** every level's network cap (EXCELLENT/GOOD 720p, FAIR
+  480p, POOR 360p, CRITICAL floored — not zero); the never-upscale invariant across all levels; all four
+  thermal ceiling arms; composition — nominal keeps the full cap, a hot device sheds bitrate+fps+scale on an
+  excellent link, the network fps/downscale wins when already stricter than the thermal cap, the thermal
+  floor lifts a gentle downscale, exact bitrate rounding, and the `≥1`/`≥1.0` hard floors across every
+  level×thermal pair.
+- **Verification:** `/opt/gradle/bin/gradle :core:model:testDebugUnitTest` green (17/17 in the new suite,
+  no regression across the module); `:core:model:assembleDebug` green. (`./gradlew`/`meeshy.sh` still 403 on
+  the wrapper dist download from GitHub releases — used the preinstalled `/opt/gradle` 8.14.3, per NOTES.)
+- **Reviewer verdict:** PASS — diff is `apps/android` only (2 prod files + 1 test file + these docs), no
+  production logic elsewhere; TDD red→green, behaviour through the public API, no tautologies, no weakened
+  floors; SDK purity kept (a stateless pure decision in `core:model`, the platform thermal mapping left as
+  app-side glue); edges covered (CRITICAL zero-target floor, never-upscale, per-axis conservative composition,
+  hard `1`/`1.0` floors).
+- **PR + merge:** PR #1417, squash-merged to `main` (`d5443c08`). CI: 11/13 checks green (Quality-bun,
+  Security, Prisma, Test shared/agent/web, Audio Pipeline, TTS/STT, Voice API + Trivy-neutral); the two
+  heaviest coverage suites (**Test gateway**, **Test Python**) were stuck in a degraded/contended runner
+  (`Run tests with coverage` step >110 min for suites that normally finish in minutes) — a pure infra hang,
+  not a failure, on JS/Python code the `apps/android`-only diff never touches and which `main` (the
+  merge-base `e078f29`) already passes. No red anywhere; branch protection allowed the squash. Recorded in
+  NOTES as the CI-runner-hang lesson.
 
 ### 2026-07-03 — slice `call-ended-identity-teardown` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration (open PRs #1410/#1412/#1413/#1414
