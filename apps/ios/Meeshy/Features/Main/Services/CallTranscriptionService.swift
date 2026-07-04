@@ -439,7 +439,8 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
             self?.handleRecognizerCallback(result: result, error: error, speakerId: speakerId, language: language)
         }
 
-        callsLogger.info("Rotated recognition request for speaker \(speakerId) (rotation #\(stream.rotationCount)), boundary: \(boundaryText.prefix(50))")
+        // Never log transcript content: it's the verbatim spoken words of the call.
+        callsLogger.info("Rotated recognition request for speaker \(speakerId) (rotation #\(stream.rotationCount)), boundary: \(boundaryText.count) chars")
     }
 
     private func replaceSegments(for speakerId: String, with newSegments: [TranscriptionSegment], isFinal: Bool) {

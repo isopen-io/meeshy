@@ -1130,7 +1130,9 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             return
         }
         sender.insertDtmf(digits, duration: 100, interToneGap: 70)
-        Logger.webrtc.info("DTMF: sending '\(digits)'")
+        // Never log DTMF digits: they carry conference PINs, voicemail
+        // passwords, and IVR/banking security codes typed on the in-call keypad.
+        Logger.webrtc.info("DTMF: sending \(digits.count) digit(s)")
     }
 
     private func startDataChannelPing() {
