@@ -83,7 +83,7 @@ function makePrisma(overrides: Record<string, any> = {}) {
 
 function makeReactionService(overrides: Record<string, any> = {}) {
   return {
-    addReaction: jest.fn<any>().mockResolvedValue({ id: 'reaction-1', emoji: '👍' }),
+    addReaction: jest.fn<any>().mockResolvedValue({ reaction: { id: 'reaction-1', emoji: '👍' }, replacedEmojis: [] }),
     removeReaction: jest.fn<any>().mockResolvedValue(true),
     getMessageReactions: jest.fn<any>().mockResolvedValue([]),
     createUpdateEvent: jest.fn<any>().mockResolvedValue({ messageId: MESSAGE_ID }),
@@ -208,6 +208,34 @@ describe('ReactionHandler', () => {
       );
     });
 
+    it('broadcasts reaction:removed for each replaced emoji before reaction:added (single-reaction swap)', async () => {
+      const createUpdateEvent = jest.fn<any>()
+        .mockImplementation((_messageId: string, emoji: string, action: string) =>
+          Promise.resolve({ messageId: MESSAGE_ID, emoji, action }));
+      const { handler, io } = buildHandler({
+        reactionService: {
+          addReaction: jest.fn<any>().mockResolvedValue({
+            reaction: { id: 'reaction-2', emoji: '🔥' },
+            replacedEmojis: ['👍'],
+          }),
+          createUpdateEvent,
+        },
+      });
+      const callback = jest.fn<any>();
+
+      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '🔥' }, callback);
+      // Broadcasts are fire-and-forget promises — let them settle.
+      await new Promise(resolve => setImmediate(resolve));
+
+      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+      expect(createUpdateEvent).toHaveBeenCalledWith(MESSAGE_ID, '👍', 'remove', PARTICIPANT_ID, expect.any(String));
+      const emitted = io._emit.mock.calls.map((c: any[]) => ({ event: c[0], payload: c[1] }));
+      expect(emitted).toEqual(expect.arrayContaining([
+        expect.objectContaining({ event: 'reaction:removed', payload: expect.objectContaining({ emoji: '👍' }) }),
+        expect.objectContaining({ event: 'reaction:added', payload: expect.objectContaining({ emoji: '🔥' }) }),
+      ]));
+    });
+
     it('returns error on service exception without crashing', async () => {
       const { handler } = buildHandler({
         reactionService: { addReaction: jest.fn<any>().mockRejectedValue(new Error('db down')), createUpdateEvent: jest.fn<any>() },
@@ -268,15 +296,22 @@ describe('ReactionHandler', () => {
       expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Could not resolve participant' }));
     });
 
-    it('returns error when removeReaction returns false (reaction not found)', async () => {
-      const { handler } = buildHandler({
+    it('replies idempotent success when removeReaction returns false (reaction already absent)', async () => {
+      // Contract 6b5ca4448: an un-react whose reaction is already gone has
+      // reached the caller's desired end-state — replying an error made the
+      // client roll back its optimistic removal and re-show a dead reaction.
+      const { handler, io } = buildHandler({
         reactionService: { removeReaction: jest.fn<any>().mockResolvedValue(false), createUpdateEvent: jest.fn<any>() },
       });
       const callback = jest.fn<any>();
 
       await handler.handleReactionRemove(makeSocket(), { messageId: MESSAGE_ID, emoji: '👍' }, callback);
 
-      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Reaction not found' }));
+      expect(callback).toHaveBeenCalledWith(
+        expect.objectContaining({ success: true, data: { message: 'Reaction already absent' } })
+      );
+      // Nothing changed — no broadcast to the conversation room.
+      expect(io.to).not.toHaveBeenCalled();
     });
 
     it('broadcasts removal and calls callback with success on happy path', async () => {

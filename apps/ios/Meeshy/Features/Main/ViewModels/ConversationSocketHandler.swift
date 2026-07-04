@@ -110,7 +110,12 @@ final class ConversationSocketHandler {
     private static let typingDebounceInterval: TimeInterval = 3.0
     private static let typingReemitInterval: TimeInterval = 3.0
     private static let typingSafetyTimeout: TimeInterval = 15.0
+    // Keyed by userId (NOT display name) — two participants can share a display
+    // name (e.g. two uncustomized "John Smith"s in a group), and keying by name
+    // caused one user's typing:stop to wipe the other's still-active entry.
     nonisolated(unsafe) private var typingSafetyTimers: [String: Timer] = [:]
+    nonisolated(unsafe) private var typingUserOrder: [String] = []
+    nonisolated(unsafe) private var typingUserNames: [String: String] = [:]
 
     /// `true` une fois `activate()` exécuté (instance réelle, installée par
     /// `@StateObject`). SwiftUI alloue EAGER un `ConversationViewModel`
@@ -184,6 +189,8 @@ final class ConversationSocketHandler {
         typingIdleTimer?.invalidate()
         typingSafetyTimers.values.forEach { $0.invalidate() }
         typingSafetyTimers.removeAll()
+        typingUserOrder.removeAll()
+        typingUserNames.removeAll()
         Task { @MainActor [weak self] in
             self?.delegate?.typingUsernames.removeAll()
         }
@@ -279,24 +286,42 @@ final class ConversationSocketHandler {
     // silently dropping typing indicators mid-conversation.
     private static let typingSafetyTimerCap = 1_000
 
-    private func resetTypingSafetyTimer(for username: String) {
-        if typingSafetyTimers[username] == nil,
+    private func resetTypingSafetyTimer(for userId: String) {
+        if typingSafetyTimers[userId] == nil,
            typingSafetyTimers.count >= Self.typingSafetyTimerCap {
             return
         }
-        typingSafetyTimers[username]?.invalidate()
-        typingSafetyTimers[username] = Timer.scheduledTimer(withTimeInterval: Self.typingSafetyTimeout, repeats: false) { [weak self] _ in
+        typingSafetyTimers[userId]?.invalidate()
+        typingSafetyTimers[userId] = Timer.scheduledTimer(withTimeInterval: Self.typingSafetyTimeout, repeats: false) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                self.delegate?.typingUsernames.removeAll { $0 == username }
-                self.typingSafetyTimers.removeValue(forKey: username)
+                self.removeTypingUser(id: userId)
+                self.typingSafetyTimers.removeValue(forKey: userId)
             }
         }
     }
 
-    private func clearTypingSafetyTimer(for username: String) {
-        typingSafetyTimers[username]?.invalidate()
-        typingSafetyTimers.removeValue(forKey: username)
+    private func clearTypingSafetyTimer(for userId: String) {
+        typingSafetyTimers[userId]?.invalidate()
+        typingSafetyTimers.removeValue(forKey: userId)
+    }
+
+    /// Roster of currently-typing users, keyed by userId so a same-name
+    /// collision can't make one user's departure clear another's entry.
+    /// `delegate.typingUsernames` is recomputed from this roster on every
+    /// change, preserving first-seen order.
+    private func addTypingUser(id: String, name: String) {
+        typingUserNames[id] = name
+        if !typingUserOrder.contains(id) {
+            typingUserOrder.append(id)
+        }
+        delegate?.typingUsernames = typingUserOrder.compactMap { typingUserNames[$0] }
+    }
+
+    private func removeTypingUser(id: String) {
+        guard typingUserNames.removeValue(forKey: id) != nil else { return }
+        typingUserOrder.removeAll { $0 == id }
+        delegate?.typingUsernames = typingUserOrder.compactMap { typingUserNames[$0] }
     }
 
     // MARK: - Socket Subscriptions
@@ -494,9 +519,8 @@ final class ConversationSocketHandler {
                     delegate.lastUnreadMessage = msg
 
                     if let sender = apiMsg.sender {
-                        let senderName = sender.displayName ?? sender.username ?? sender.id
-                        delegate.typingUsernames.removeAll { $0 == senderName }
-                        self.clearTypingSafetyTimer(for: senderName)
+                        self.removeTypingUser(id: sender.id)
+                        self.clearTypingSafetyTimer(for: sender.id)
                     }
 
                     // Read PRECISION gate. Being subscribed to the socket is NOT
@@ -545,9 +569,14 @@ final class ConversationSocketHandler {
                     // Write through persistence; store observation surfaces the edit.
                     let msgId = apiMsg.id
                     let content = apiMsg.content ?? ""
+                    // Use the server's editedAt, not the device clock: markEdited
+                    // compares this against the stored editedAt to reject stale,
+                    // out-of-order edit events, which only works if every device
+                    // is comparing the same (server) clock.
+                    let editedAt = apiMsg.editedAt ?? Date()
                     Task {
                         do {
-                            try await persistence.markEdited(localId: msgId, newContent: content, editedAt: Date())
+                            try await persistence.markEdited(localId: msgId, newContent: content, editedAt: editedAt)
                         } catch {
                             Logger.messages.warning("[ConversationSocket] markEdited failed \(msgId, privacy: .public): \(error.localizedDescription, privacy: .public)")
                         }
@@ -709,20 +738,18 @@ final class ConversationSocketHandler {
             .store(in: &cancellables)
 
         // Typing started (with safety timeout). The client picks the name to show —
-        // `preferredDisplayName` is displayName-first, username-fallback. It matches
-        // the `sender.displayName` used by the message-received cleanup above, so
-        // entries clear correctly.
+        // `preferredDisplayName` is displayName-first, username-fallback — but the
+        // roster is keyed by `userId` (see `addTypingUser`/`removeTypingUser`): two
+        // participants can share the same display name, and keying by name would
+        // let one user's typing:stop wipe the other's still-active entry.
         socketManager.typingStarted
             .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let self, let delegate = self.delegate else { return }
+                guard let self, self.delegate != nil else { return }
                 guard event.userId != userId else { return }
-                let name = event.preferredDisplayName
-                if !delegate.typingUsernames.contains(name) {
-                    delegate.typingUsernames.append(name)
-                }
-                self.resetTypingSafetyTimer(for: name)
+                self.addTypingUser(id: event.userId, name: event.preferredDisplayName)
+                self.resetTypingSafetyTimer(for: event.userId)
             }
             .store(in: &cancellables)
 
@@ -731,10 +758,9 @@ final class ConversationSocketHandler {
             .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let self, let delegate = self.delegate else { return }
-                let name = event.preferredDisplayName
-                delegate.typingUsernames.removeAll { $0 == name }
-                self.clearTypingSafetyTimer(for: name)
+                guard let self, self.delegate != nil else { return }
+                self.removeTypingUser(id: event.userId)
+                self.clearTypingSafetyTimer(for: event.userId)
             }
             .store(in: &cancellables)
 
@@ -1104,6 +1130,8 @@ final class ConversationSocketHandler {
                 // will re-emit typing:start only if they are still typing.
                 self.typingSafetyTimers.values.forEach { $0.invalidate() }
                 self.typingSafetyTimers.removeAll()
+                self.typingUserOrder.removeAll()
+                self.typingUserNames.removeAll()
                 self.delegate?.typingUsernames.removeAll()
                 self.triggerSyncIfNeeded()
             }

@@ -168,3 +168,80 @@ describe('timeRemaining', () => {
     expect(result).toMatch(/^\d+h\d*m?$/);
   });
 });
+
+// ── W1 — portage 1:1 de KeyframeInterpolator.swift ────────────────────────────
+
+import {
+  interpolateKeyframeChannel,
+  resolveKeyframeState,
+  applyStoryEasing,
+} from '@/lib/story-transforms';
+
+describe('interpolateKeyframeChannel (W1 iOS parity)', () => {
+  const lin = 'linear' as const;
+
+  it('single keyframe is a constant', () => {
+    expect(interpolateKeyframeChannel([{ time: 2, value: 0.7, easing: lin }], 0)).toBe(0.7);
+    expect(interpolateKeyframeChannel([{ time: 2, value: 0.7, easing: lin }], 9)).toBe(0.7);
+  });
+
+  it('clamps before the first and after the last keyframe', () => {
+    const ch = [
+      { time: 1, value: 0.2, easing: lin },
+      { time: 3, value: 0.8, easing: lin },
+    ];
+    expect(interpolateKeyframeChannel(ch, 0)).toBe(0.2);
+    expect(interpolateKeyframeChannel(ch, 5)).toBe(0.8);
+  });
+
+  it('interpolates linearly inside a segment', () => {
+    const ch = [
+      { time: 0, value: 0, easing: lin },
+      { time: 2, value: 1, easing: lin },
+    ];
+    expect(interpolateKeyframeChannel(ch, 1)).toBeCloseTo(0.5);
+  });
+
+  it('applies the LOW keyframe easing to the segment (iOS semantics)', () => {
+    const ch = [
+      { time: 0, value: 0, easing: 'easeIn' as const },
+      { time: 2, value: 1, easing: lin },
+    ];
+    // u = 0.5, easeIn → 0.25
+    expect(interpolateKeyframeChannel(ch, 1)).toBeCloseTo(0.25);
+  });
+
+  it('empty channel yields undefined', () => {
+    expect(interpolateKeyframeChannel([], 1)).toBeUndefined();
+  });
+});
+
+describe('resolveKeyframeState (W1)', () => {
+  it('resolves channels independently and offsets by startTime', () => {
+    const state = resolveKeyframeState(
+      [
+        { time: 0, x: 0.1, opacity: 0 },
+        { time: 2, x: 0.9, opacity: 1 },
+      ],
+      3, // playhead 3s
+      2  // startTime 2s → local 1s = milieu du segment
+    );
+    expect(state?.x).toBeCloseTo(0.5);
+    expect(state?.opacity).toBeCloseTo(0.5);
+    expect(state?.scale).toBeUndefined();
+  });
+
+  it('returns null without keyframes (static pose fallback)', () => {
+    expect(resolveKeyframeState(undefined, 1, 0)).toBeNull();
+    expect(resolveKeyframeState([], 1, 0)).toBeNull();
+  });
+});
+
+describe('applyStoryEasing (W1)', () => {
+  it('matches the iOS formulas', () => {
+    expect(applyStoryEasing('linear', 0.5)).toBeCloseTo(0.5);
+    expect(applyStoryEasing('easeIn', 0.5)).toBeCloseTo(0.25);
+    expect(applyStoryEasing('easeOut', 0.5)).toBeCloseTo(0.75);
+    expect(applyStoryEasing('easeInOut', 0.25)).toBeCloseTo(0.125);
+  });
+});

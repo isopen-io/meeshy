@@ -170,9 +170,9 @@ describe('ReactionService', () => {
       });
 
       expect(result).toBeDefined();
-      expect(result?.emoji).toBe('👍');
-      expect(result?.messageId).toBe(testMessageId);
-      expect(result?.participantId).toBe(testParticipantId);
+      expect(result?.reaction.emoji).toBe('👍');
+      expect(result?.reaction.messageId).toBe(testMessageId);
+      expect(result?.reaction.participantId).toBe(testParticipantId);
       expect(mockPrisma.reaction.create).toHaveBeenCalledTimes(1);
     });
 
@@ -190,7 +190,7 @@ describe('ReactionService', () => {
       });
 
       expect(result).toBeDefined();
-      expect(result?.participantId).toBe(testParticipantId2);
+      expect(result?.reaction.participantId).toBe(testParticipantId2);
     });
 
     it('should throw error for invalid emoji format', async () => {
@@ -278,19 +278,59 @@ describe('ReactionService', () => {
       expect(mockPrisma.reaction.create).not.toHaveBeenCalled();
     });
 
-    it('should throw error when max reactions per user reached', async () => {
-      // User has already 1 emoji (current max is 1 per user per message)
+    it('should replace the previous reaction when adding a different emoji', async () => {
+      // Single-reaction-per-user model (WhatsApp/iMessage): the user already
+      // has 👍 and now sends 🔥 — the server must swap them, not reject.
       mockPrisma.reaction.findMany.mockResolvedValue([
         { emoji: '👍' }
       ]);
+      mockPrisma.reaction.deleteMany.mockResolvedValue({ count: 1 });
+      mockPrisma.reaction.create.mockResolvedValue(createMockReaction({ emoji: '🔥' }));
+
+      const result = await service.addReaction({
+        messageId: testMessageId,
+        participantId: testParticipantId,
+        emoji: '🔥'
+      });
+
+      expect(mockPrisma.reaction.deleteMany).toHaveBeenCalledWith({
+        where: {
+          messageId: testMessageId,
+          participantId: testParticipantId,
+          emoji: { in: ['👍'] }
+        }
+      });
+      expect(mockPrisma.reaction.create).toHaveBeenCalledTimes(1);
+      expect(result?.reaction.emoji).toBe('🔥');
+      expect(result?.replacedEmojis).toEqual(['👍']);
+    });
+
+    it('should not delete anything when the user has no previous reaction', async () => {
+      mockPrisma.reaction.findMany.mockResolvedValue([]);
+
+      const result = await service.addReaction({
+        messageId: testMessageId,
+        participantId: testParticipantId,
+        emoji: '👍'
+      });
+
+      expect(mockPrisma.reaction.deleteMany).not.toHaveBeenCalled();
+      expect(result?.replacedEmojis).toEqual([]);
+    });
+
+    it('should reject reactions on system messages', async () => {
+      mockPrisma.message.findUnique.mockResolvedValue(
+        createMockMessage({ messageType: 'system' })
+      );
 
       await expect(
         service.addReaction({
           messageId: testMessageId,
           participantId: testParticipantId,
-          emoji: '🔥' // Trying to add a 2nd different emoji
+          emoji: '👍'
         })
-      ).rejects.toThrow('Maximum 1 different reactions per message reached');
+      ).rejects.toThrow('Cannot react to a system message');
+      expect(mockPrisma.reaction.create).not.toHaveBeenCalled();
     });
 
     it('should allow adding same emoji again (returns existing)', async () => {
@@ -308,7 +348,9 @@ describe('ReactionService', () => {
       });
 
       expect(result).toBeDefined();
-      expect(result?.emoji).toBe('👍');
+      expect(result?.reaction.emoji).toBe('👍');
+      expect(result?.replacedEmojis).toEqual([]);
+      expect(mockPrisma.reaction.deleteMany).not.toHaveBeenCalled();
     });
 
     it('should allow adding reaction when user has zero emojis', async () => {
@@ -363,7 +405,7 @@ describe('ReactionService', () => {
       });
 
       expect(result).toBeDefined();
-      expect(result?.id).toBe(existingReaction.id);
+      expect(result?.reaction.id).toBe(existingReaction.id);
       // The race winner already updated the summary — the loser must not double-count it.
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
     });

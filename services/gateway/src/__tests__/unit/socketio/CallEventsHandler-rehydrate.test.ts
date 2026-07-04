@@ -104,15 +104,18 @@ function makePrisma(preAnswerCalls: Array<{ id: string; startedAt: Date }>) {
         initiator: { displayName: 'Alice Smith', username: 'alice' },
       }),
     },
+    participant: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
+    },
   } as unknown as PrismaClient;
 }
 
-type RoomEmission = { room: string; event: string; payload: unknown };
+type RoomEmission = { room: string | string[]; event: string; payload: unknown };
 
 function makeIo() {
   const emissions: RoomEmission[] = [];
   const io = {
-    to: jest.fn((room: string) => ({
+    to: jest.fn((room: string | string[]) => ({
       emit: jest.fn((event: string, payload: unknown) => {
         emissions.push({ room, event, payload });
       }),
@@ -186,10 +189,10 @@ describe('CallEventsHandler — rehydrateActiveCalls (boot rehydration)', () => 
       })
     );
     const ended = emissions.filter(e => e.event === CALL_EVENTS.ENDED);
-    expect(ended.map(e => e.room)).toEqual([
-      `call:${CALL_FRESH}`,
-      `conversation:${CONV_ID}`,
-    ]);
+    expect(ended).toHaveLength(1);
+    expect(ended[0].room).toEqual(
+      expect.arrayContaining([`call:${CALL_FRESH}`, `conversation:${CONV_ID}`])
+    );
     const missed = emissions.find(e => e.event === CALL_EVENTS.MISSED);
     expect(missed).toBeDefined();
     expect(missed!.payload).toEqual({

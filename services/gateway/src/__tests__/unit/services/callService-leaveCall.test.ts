@@ -39,7 +39,7 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
 }));
 
 import { CallService } from '../../../services/CallService';
-import { CallStatus } from '@meeshy/shared/prisma/client';
+import { CallStatus, CallEndReason } from '@meeshy/shared/prisma/client';
 
 type MockFn = jest.Mock<any>;
 
@@ -76,6 +76,75 @@ const setupTransactionPassthrough = (prisma: ReturnType<typeof buildMockPrisma>)
     return cb(tx);
   });
 };
+
+describe('CallService.leaveCall() — never-answered reconnecting call resolves missed', () => {
+  let prisma: ReturnType<typeof buildMockPrisma>;
+  let service: CallService;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    prisma = buildMockPrisma();
+    service = new CallService(prisma as any);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('classifies the last leave of a reconnecting-but-never-answered call as missed (prod 2026-07-03)', async () => {
+    // Same defect as endCall: the pre-answer status list forgot
+    // `reconnecting` (reachable pre-answer via a client watchdog firing
+    // during the ring). answeredAt is the authoritative signal.
+    const callId = 'call-reco-1';
+    const participantId = 'part-1';
+    const userId = 'user-1';
+
+    const callParticipantRow = { id: 'cp-1', callSessionId: callId, participantId, leftAt: null };
+    const callRow = {
+      id: callId,
+      conversationId: 'conv-1',
+      status: CallStatus.reconnecting,
+      startedAt: new Date(Date.now() - 40_000),
+      answeredAt: null,
+      participants: [callParticipantRow],
+      metadata: null,
+    };
+
+    prisma.callParticipant.findFirst.mockResolvedValue(callParticipantRow);
+    prisma.callSession.findUnique
+      .mockResolvedValueOnce(callRow)
+      .mockResolvedValue({ ...callRow, status: CallStatus.missed });
+    prisma.conversation.findUnique.mockResolvedValue({ type: 'direct' });
+
+    let capturedStatus: string | undefined;
+    let capturedReason: string | undefined;
+    prisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
+      const tx = {
+        callParticipant: {
+          update: jest.fn().mockResolvedValue({}),
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+        callSession: {
+          update: jest.fn().mockResolvedValue({}),
+          updateMany: jest.fn().mockImplementation(({ data }: any) => {
+            if (data?.status !== undefined) {
+              capturedStatus = data.status;
+              capturedReason = data.endReason;
+            }
+            return { count: 1 };
+          }),
+          findUnique: jest.fn().mockResolvedValue(null),
+        },
+      };
+      return cb(tx);
+    });
+
+    await service.leaveCall({ callId, userId, participantId });
+
+    expect(capturedStatus).toBe(CallStatus.missed);
+    expect(capturedReason).toBe(CallEndReason.missed);
+  });
+});
 
 describe('CallService.leaveCall() — clearHeartbeats memory leak regression', () => {
   let prisma: ReturnType<typeof buildMockPrisma>;

@@ -1404,7 +1404,11 @@ class ConversationListViewModel: ObservableObject {
             description: nil,
             avatarUrl: nil
         )
-        try? await OfflineQueue.shared.enqueue(.updateConversation, payload: payload, conversationId: conversationId)
+        do {
+            try await OfflineQueue.shared.enqueue(.updateConversation, payload: payload, conversationId: conversationId)
+        } catch {
+            Logger.messages.error("[Rename] enqueue failed id=\(conversationId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
+        }
     }
 
     // MARK: - Mark as Read

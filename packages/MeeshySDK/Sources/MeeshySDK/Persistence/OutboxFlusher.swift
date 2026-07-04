@@ -126,6 +126,18 @@ public actor OutboxFlusher {
     /// `nil` si rien n'est différé. Le planificateur de re-flush s'en sert
     /// pour rejouer le flush à l'échéance plutôt que d'attendre un évènement
     /// de cycle de vie de l'app (boot / premier plan / enqueue / BGTask).
+    /// Visibility timeout des claims : une row `.inflight` dont le claim
+    /// (`updatedAt`, bumpé par `claimPending`) est plus vieux que cette
+    /// fenêtre est un ORPHELIN (dispatch jamais conclu — Task annulée,
+    /// crash post-claim) : comptée par `pendingCount` (bannière
+    /// « Synchronisation… » allumée à vie) mais jamais reprise par le
+    /// SELECT `.pending`. `bootRecovery` ne couvre que le boot et le
+    /// retour foreground — le reclaim au flush ferme la fenêtre des
+    /// longues sessions. 30 min > pire dispatch légitime (gros upload TUS
+    /// sur réseau lent) ; un double-dispatch résiduel est neutralisé par
+    /// l'idempotence cmid côté gateway.
+    public static let staleInflightReclaimSeconds: TimeInterval = 30 * 60
+
     @discardableResult
     public func flush() async -> Date? {
         // BW1 — bandwidth gate. Re-arm later via the same earliestDeferred
@@ -134,6 +146,18 @@ public actor OutboxFlusher {
         guard await isNetworkReachable() else { return nil }
 
         let now = Date()
+        let reclaimCutoff = now.addingTimeInterval(-Self.staleInflightReclaimSeconds)
+        _ = try? await pool.write { db in
+            try OutboxRecord
+                .filter(Column("status") == OutboxStatus.inflight.rawValue)
+                .filter(Column("updatedAt") < reclaimCutoff)
+                .updateAll(
+                    db,
+                    Column("status").set(to: OutboxStatus.pending.rawValue),
+                    Column("updatedAt").set(to: now),
+                    Column("nextAttemptAt").set(to: now)
+                )
+        }
         let pending: [OutboxRecord] = (try? await pool.read { db in
             try OutboxRecord
                 .filter(Column("status") == OutboxStatus.pending.rawValue)
@@ -217,6 +241,29 @@ public actor OutboxFlusher {
         return false
     }
 
+    /// PERMANENT server rejections — a 4xx that will NEVER succeed on retry
+    /// (malformed / forbidden / not found / too large / unprocessable). These
+    /// dead-letter on the FIRST attempt instead of burning the whole retry
+    /// budget + exponential backoff (≈1 min of ⏳ before the user sees "failed").
+    ///
+    /// Deliberately CONSERVATIVE — excludes anything that might recover:
+    /// - 401 → session-expiry, deferred without consuming budget (above);
+    /// - 408 / 429 / 503 → retryable (mirrors APIClient.retryableStatusCodes);
+    /// - 5xx → the server may come back;
+    /// - 409 → a conflict on a deduped clientMessageId can mean "already
+    ///   delivered", which must NOT surface as a failure — left to the generic
+    ///   path rather than dead-lettered.
+    private static let permanentRejectionStatusCodes: Set<Int> = [400, 403, 404, 413, 422]
+    private static func isPermanentServerRejection(_ error: Error) -> Bool {
+        // 403 is surfaced as a distinct `.forbidden` case by APIClient (resource
+        // access loss, not a session problem) — a permanent reject all the same.
+        if case MeeshyError.forbidden = error { return true }
+        if case let MeeshyError.server(statusCode, _) = error {
+            return permanentRejectionStatusCodes.contains(statusCode)
+        }
+        return false
+    }
+
     private func processRecord(_ record: OutboxRecord) async {
         // S1 — claim atomically; skip dispatch if another flusher beat us to it.
         guard await claimPending(record) else { return }
@@ -269,7 +316,9 @@ public actor OutboxFlusher {
             current.lastError = String(describing: error)
             current.updatedAt = Date()
 
-            if current.attempts >= maxAttempts {
+            // A permanent 4xx will never succeed — dead-letter now rather than
+            // spin the full backoff schedule. Otherwise cap at `maxAttempts`.
+            if Self.isPermanentServerRejection(error) || current.attempts >= maxAttempts {
                 current.status = .exhausted
             } else {
                 current.status = .pending

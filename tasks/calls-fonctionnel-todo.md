@@ -665,3 +665,160 @@ faux positif déjà classé) a trouvé un bug réel côté web jamais documenté
   d'ajouter `mockHandleRenegotiationOffer.mockResolvedValue(undefined)` /
   `mockSetRemoteAnswer.mockResolvedValue(undefined)` aux mocks du test existant (les mocks `jest.fn()` nus
   ne retournaient pas de Promise, `.catch` sur `undefined` faisait planter 2 tests préexistants).
+
+## Vague 9 — claim orpheline post-missed + statuts terminaux immuables + index dédup fantôme (2026-07-03, validée E2E prod)
+
+Découvert PENDANT la validation device (item J) : mes appels vidéo sim→iPhone étaient rejetés
+`CALL_ALREADY_ACTIVE` alors qu'aucun appel n'était actif.
+
+- **[CRITIQUE, gateway, b02de2eee, déployé + validé prod]** Claim `Conversation.activeCallId` jamais
+  relâchée quand le ringing timeout résout l'appel `missed` : le handler gagne l'updateMany atomique
+  puis délègue à `handleMissedCall → markCallAsMissed` dont le guard non-ringing early-return AVANT
+  `releaseActiveCallClaim`. Toute la conversation rejetait les `call:initiate` (observé : ~5 min de
+  blocage, et la directe « Compte De Test Store » bloquée 12 HEURES par le missed du matin). Fix 3
+  couches : release dans le handler dès la transition gagnée (avant les étapes qui peuvent throw) ;
+  cleanup idempotent dans l'early-return du guard (statuts terminaux seulement) ; **self-heal** dans
+  `initiateCall` (claim tenue par un holder terminal → compare-and-swap atomique, un claim sain n'est
+  jamais clobberé). 2 claims orphelines hot-fixées en prod avant déploiement. Validation : sonde
+  socket.io headless (ring 60 s sans raccrocher) → missed à 60,04 s → claim `null` ✓.
+- **[CRITIQUE, gateway, c00076e6f, déployé + validé prod]** Statuts terminaux réécrits : la sonde a
+  révélé qu'après le missed, la déconnexion du caller armait une grâce (guards armement l.2893 +
+  expiration l.392 ne couvraient QUE `'ended'`) → `leaveCall` lisait le doc missed et recomputait
+  l'issue → `ended/completed/89s` + 2e summary posté. Fix 4 couches : version-increment sur l'écriture
+  terminale du timeout (protocole version-guard réparé) ; `leaveCall` court-circuite sur appel terminal
+  (leftAt du participant seulement) ; guards `CALL_TERMINAL_STATUSES` (nouvelle constante runtime dans
+  @meeshy/shared/types/video-call) à l'armement ET à l'expiration. Validation : sonde rejouée → statut
+  `missed` préservé, version=2, claim null, UN summary ✓.
+- **[CRITIQUE, prod DB, appliqué manuellement]** L'index unique partiel `(conversationId,
+  clientMessageId)` n'a JAMAIS existé : la migration C6 (et l'originale 2026-05-09) ciblait
+  `db.messages` — collection VIDE (model Prisma `Message` sans `@@map` → collection `db.Message`).
+  Dédup P2002 (summaries + offline-queue) inopérante → 33 paires de doublons en prod : 13 summaries
+  tardifs supprimés (0 référence), 25 messages utilisateur préservés (`$unset clientMessageId`), index
+  créé sur `db.Message` et vérifié par insertion-sonde E11000 ✓. Script de migration corrigé au repo.
+- **[Item J, partiel]** Chemin device réel validé : VoIP push APNs production → CallKit lock-screen →
+  décrochage jcnm → média actif 73 s (RTT 11 ms, opus). RESTE : appel vidéo décroché, caméra, PiP
+  swipe-home, stuck-muted — en attente de disponibilité utilisateur. Sim instable ce soir (2 relaunches
+  spontanés + churn sockets) — envisager un run dédié pour la prochaine session device.
+
+## Vague 10 — le fix web reconnect-rejoin de la vague 3 vivait dans un hook mort, jamais monté (2026-07-03)
+
+Point d'entrée : routine de suivi continu, audit dédié gateway/web (agent d'exploration, lecture seule)
+mandaté à croiser tout candidat contre ce fichier + lessons.md avant de le rapporter.
+
+- **[BUG CRITIQUE, web, CONFIRMÉ + CORRIGÉ]** La vague 3 (« Re-join au reconnect ») documentait
+  `apps/web/hooks/useCallSignaling.ts` + `useCallSignaling.reconnect.test.ts` comme le fix web
+  symétrique du `didReconnect` iOS. Les deux existent réellement et le test passe — **mais le hook
+  n'est importé nulle part dans l'app rendue**. Le composant réellement monté à `app/call/[callId]/
+  page.tsx` est `apps/web/components/video-call/CallManager.tsx` (répertoire SINGULIER, à distinguer
+  du répertoire PLURIEL `components/video-calls/` qui contient le hook mort) : son `useEffect`
+  d'attache des listeners socket réagit bien à `'connect'` (reconnexion incluse) mais ne fait que
+  ré-attacher les 6 listeners `CALL_INITIATED`/`PARTICIPANT_JOINED`/`PARTICIPANT_LEFT`/`CALL_ENDED`/
+  `MEDIA_TOGGLED`/`CALL_ERROR` — **aucune ré-émission de `call:join`**. Conséquence : tout
+  l'investissement résilience-restart des vagues 3/4/6/7/8 (grâce 30s + extensions, réhydratation
+  ringing, etc.) protège iOS mais est **inopérant pour le web** — un redémarrage gateway ou un simple
+  blip réseau navigateur fait tourner les 4 extensions de grâce à vide (le socket ne rejoint jamais la
+  room `call:<callId>` faute de `call:join`), puis le serveur termine un appel dont le média P2P était
+  pourtant sain. Fix (TDD, miroir exact de `rejoinAfterReconnect` du hook mort, appliqué au composant
+  RÉELLEMENT monté) : `CallManager.tsx` — `hasConnectedRef` distingue le 1er `connect` d'un reconnect
+  réel, `rejoinActiveCallAfterReconnect()` ré-émet `call:join` (lecture live `useCallStore.getState()`,
+  pas de dépendance d'effet) si un appel est actif, avec le même traitement `CALL_ENDED` (teardown via
+  `handleCallEndedRef`) que le hook mort. Nouveau fichier `__tests__/components/video-call/
+  CallManager.reconnect.test.tsx` (4 tests : reconnect réel → rejoin ; 1er connect → pas de rejoin ;
+  pas d'appel actif → pas de rejoin ; ack `CALL_ENDED` → teardown), RED confirmé en stashant le fix
+  (2/4 rouges) puis GREEN restauré. Suite complète `*call*` : 16 suites/216 tests verts. Suite web
+  complète : 432/432 suites, 10832/10853 tests (21 skips pré-existants) — aucune régression. `tsc
+  --noEmit` : diff avant/après identique sur `CallManager.tsx` (mêmes erreurs `unknown`/`{}` pré-
+  existantes du typage `socket: unknown`, aucune nouvelle). Le hook mort (`useCallSignaling.ts` +
+  son test) n'a pas été supprimé cette session (portée volontairement minimale) — à trancher : soit le
+  monter pour de vrai en remplaçant l'orchestration ad-hoc de `CallManager.tsx`, soit le supprimer pour
+  ne plus induire les futurs audits en erreur (cette session en particulier a failli le faire).
+- **Leçon pour la prochaine session** : nommage quasi-identique `video-call/` (singulier, réellement
+  monté) vs `video-calls/` (pluriel, contient un hook testé mais mort) — **toujours vérifier qu'un
+  hook/composant "fix" est bien import-atteignable depuis une route rendue** avant de le créditer comme
+  correctif dans ce fichier (variante du thème sibling-drift #5/#40/#42/#45/#50/#51/#55 : ici la
+  divergence est entre un hook réellement utilisé et un jumeau non branché, pas entre deux siblings
+  actifs).
+
+## Vague 11 — dead hook supprimé + 3 derniers handlers call:* sans rate limit corrigés (2026-07-03)
+
+Point d'entrée : routine calling-feature, deux agents d'exploration dédiés (iOS lecture seule — pas de
+toolchain Swift/Xcode ici — et gateway/web) mandatés à croiser tout candidat contre ce fichier avant de
+rapporter quoi que ce soit. iOS : rien de nouveau (couverture de tests déjà exhaustive, aucun code mort,
+aucun test désactivé — seul point structurel confirmé : `CallManager.swift` reste un god object de 4450
+lignes, refactor hors de portée sans compilateur local). Gateway : subsystem déjà très audité (CVE-002/
+004/005/006, dizaines de fixes P0/P1/P2 documentés) — aucune faille d'authz ni de credential en dur
+trouvée, un seul gap réel restant.
+
+- **[CLEANUP web, CONFIRMÉ + APPLIQUÉ]** La vague 10 avait explicitement laissé en suspens la décision
+  sur `components/video-calls/hooks/useCallSignaling.ts` ("monter pour de vrai, ou supprimer pour ne
+  plus induire les futurs audits en erreur"). Reconfirmé mort cette session (`grep useCallSignaling(`
+  ne matche que son propre test, `index.ts` et `README.md`) : `CallManager.tsx` (composant réellement
+  monté à `app/call/[callId]/page.tsx`) porte sa propre implémentation testée et équivalente
+  (`rejoinActiveCallAfterReconnect`, vague 10). Supprimé : le hook, son test dédié
+  (`useCallSignaling.reconnect.test.ts`), son export dans `index.ts`, sa section dans `README.md`
+  (remplacée par un renvoi vers `CallManager.tsx`), et les 2 commentaires résiduels dans
+  `CallManager.tsx`/`CallManager.reconnect.test.tsx` qui le référençaient encore. Suite web complète
+  filtrée `*call*` : 15 suites/212 tests verts (inchangé en nombre — le hook n'avait pas de couverage
+  productif au-delà de son propre test, maintenant supprimé avec lui).
+- **[FIX SÉCURITÉ, gateway, TDD]** `call:reconnecting`, `call:reconnected` et
+  `call:request-ice-servers` étaient les 3 derniers handlers `call:*` sans AUCUN rate limit — contraste
+  avec tous leurs siblings (`HEARTBEAT`, `QUALITY_REPORT`, `TRANSCRIPTION_SEGMENT`, `ANALYTICS`,
+  `SCREEN_CAPTURE`, tous rate-limités). L'authz était déjà correcte sur les 3 (Audit P1-21 / backlog
+  "authz call:request-ice-servers") mais un participant authentifié flood-émettant l'un de ces 3
+  événements pouvait encore amplifier la charge sur Mongo (`updateCallStatus` en écriture pour les 2
+  premiers) ou sur le secret TURN (mint HMAC à chaque `request-ice-servers`). Fix : 3 nouvelles entrées
+  `SOCKET_RATE_LIMITS` (`CALL_RECONNECTING`/`CALL_RECONNECTED` 20/min miroir de `CALL_JOIN`/`CALL_LEAVE`,
+  `CALL_ICE_SERVERS_REFRESH` 10/min — le client ne rafraîchit qu'à ~80% du TTL, largement en dessous) +
+  `checkSocketRateLimit` inséré dans les 3 handlers immédiatement après la résolution `userId`,
+  identique au pattern déjà utilisé par `QUALITY_REPORT`/`TRANSCRIPTION_SEGMENT`. Nouveau fichier de
+  test `CallEventsHandler-reconnect-signal-rate-limit.test.ts` (6 tests : rate-limité + dropped-on-limit
+  pour chacun des 3 handlers) — aucun test existant ne couvrait ces 3 handlers avant cette session (gap
+  de couverture comblé au passage). Suite gateway complète filtrée `*Call*` : 27/27 suites, 780/780
+  tests verts. `tsc --noEmit` : aucune nouvelle erreur (seule erreur préexistante, `SequenceService.ts`
+  → `@prisma/client` racine non généré dans cet environnement sandbox, confirmée présente AVANT ce diff
+  via `git stash`, sans rapport avec les fichiers touchés).
+- **Reste ouvert** : items J (validation device), C6 (court-circuit dédup cosmétique), CALL-DIAG
+  retagging (12 sites, cosmétique) — mêmes raisons de dépriorisation que les vagues précédentes.
+
+## Vague 12 — fuite de télémétrie privée (`CallParticipant.analytics`) sur `GET .../active-call` (2026-07-03)
+
+Point d'entrée : routine calling-feature. Deux commits gateway non encore documentés dans ce backlog
+(`d52b77f` négociationTimeMs, `f4d75121` persistance `CallParticipant.analytics`) ont été audités par
+deux agents dédiés (iOS lecture seule — confirmé `negotiationTimeMs` déjà émis côté iOS depuis
+`CallReliabilityPolicy.callSetupMetrics`, rien à faire ; gateway — exposition/authz de la nouvelle
+persistance).
+
+- **[BUG SÉCURITÉ RÉEL, gateway, CONFIRMÉ + CORRIGÉ]** `GET
+  /conversations/:conversationId/active-call` (`routes/calls.ts`) déclarait son schema
+  `response[200]` avec `additionalProperties: true` et AUCUN schema sur `data` — contournement d'un
+  bug `fast-json-stringify` (`oneOf` + `null` crashe, fix du 2026-05-12) qui avait pour effet de bord
+  de désactiver tout filtrage de champs sur cette route, contrairement à ses 5 routes soeurs
+  (`data: callSessionSchema`, whitelist stricte). `callService.getActiveCallForConversation()` inclut
+  les `CallParticipant` sans `select` dédié (`callSessionInclude`, `CallService.ts:113`) → chaque
+  participant sérialisé brut, y compris le nouveau champ `analytics` (télémétrie privée : deviceModel,
+  codec, averageRtt/packetLoss, negotiationTimeMs…) — lisible par N'IMPORTE QUEL membre de la
+  conversation (authz = membership, pas participation à CET appel), y compris pour un participant
+  ayant déjà raccroché. Fix : remplacé `additionalProperties: true` par `data: { ...callSessionSchema,
+  nullable: true }` — `nullable` (pas `oneOf`) évite le bug fast-json-stringify tout en restaurant le
+  whitelist. Vérifié à la main (script Node direct sur `fast-json-stringify`) : cas `data: null` OK,
+  cas fuite (`analytics` injecté manuellement dans le payload) → strippé.
+- **Nouveau test** `calls-active-call-analytics-leak.test.ts` — contrairement à
+  `calls-routes.test.ts` (mocke `sendSuccess` ET `@meeshy/shared/types/api-schemas` en stubs
+  `{type:'object'}`, bypassant toute sérialisation réelle — ne pouvait PAS attraper ce bug), ce nouveau
+  fichier boote un VRAI Fastify + `.inject()` avec le schema réel. RED confirmé (`git stash` du fix →
+  `analytics`/`SECRET-INTERNAL-CODENAME` présents dans la réponse sérialisée), GREEN restauré. Suite
+  gateway complète filtrée `*[Cc]all*` : 28/28 suites, 801/801 tests verts.
+- **Piège rencontré en écrivant ce test** : un mock de middleware `preValidation` déclaré comme
+  `jest.fn()` nu (0 arguments, aucune implémentation) fait **hang indéfiniment** `.inject()` sous un
+  vrai dispatch Fastify — invisible dans `calls-routes.test.ts` qui extrait et appelle le handler
+  directement (jamais les hooks `preValidation`). Le mock doit être une vraie fonction
+  `async (request) => {...}` qui pose `request.authContext`. Symptôme : timeout Jest sur l'`await
+  app.inject(...)`, aucune des méthodes prisma/service mockées jamais invoquée (log de debug ajouté
+  pour isoler) — piste à vérifier en premier pour tout futur test `.inject()`-based sur une route de
+  ce fichier.
+- **Autres vérifications de cette session (SAFE, aucun fix nécessaire)** : authz de la persistance
+  `call:analytics` (`resolveParticipantIdFromCall` ne peut résoudre qu'au PROPRE participant de
+  l'appelant — aucun vecteur de sur-écriture cross-participant) ; `GET /calls/history` et `GET
+  /calls/active` (schemas de réponse stricts, `analytics` jamais sélectionné côté `listHistory`) ;
+  modèles iOS (`CallModels.swift`/`CallSummaryMetadata.swift`) ne décodent aucun tableau
+  `participants`, non concernés.

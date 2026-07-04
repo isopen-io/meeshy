@@ -807,6 +807,44 @@ describe('CallService', () => {
       );
     });
 
+    it('preserves a terminal status: leave on an already-missed call marks the participant left without rewriting it', async () => {
+      // Probe prod 2026-07-02 22:41Z: the ringing timeout resolved the call
+      // `missed`; 19s later the caller's socket dropped and the expired grace
+      // called leaveCall, which read the missed row, computed
+      // wasPreAnswered=false (missed ∉ pre-answer statuses) and rewrote the
+      // terminal row ended/completed/duration=89 + posted a second summary.
+      // A leave that lands on a terminal call must only stamp the leaver's
+      // leftAt — never touch status/endReason/duration.
+      const participant = createMockParticipant();
+      const endedAt = new Date();
+      const missedCall = createMockCallSession({
+        status: CallStatus.missed,
+        endedAt,
+        duration: 0,
+        participants: [participant],
+        initiator: createMockUser(),
+        conversation: createMockConversation()
+      });
+
+      mockPrisma.callParticipant.findFirst.mockResolvedValue(participant);
+      mockPrisma.callSession.findUnique
+        .mockResolvedValueOnce(missedCall)   // leaveCall read
+        .mockResolvedValueOnce(missedCall);  // getCallSession
+      mockPrisma.callParticipant.update.mockResolvedValue({ ...participant, leftAt: new Date() });
+
+      const result = await callService.leaveCall(validLeaveData);
+
+      expect(result.status).toBe(CallStatus.missed);
+      expect(mockPrisma.callParticipant.update).toHaveBeenCalledWith({
+        where: { id: participant.id },
+        data: { leftAt: expect.any(Date) }
+      });
+      // The terminal write path (transaction + callSession.updateMany) must
+      // never run for a call that is already terminal.
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+      expect(mockPrisma.callSession.updateMany).not.toHaveBeenCalled();
+    });
+
     it('should throw error when call not found', async () => {
       mockPrisma.callParticipant.findFirst.mockResolvedValue(createMockParticipant());
       mockPrisma.callSession.findUnique.mockResolvedValue(null);
@@ -820,6 +858,10 @@ describe('CallService', () => {
       const participant = createMockParticipant();
       const callWithOneParticipant = createMockCallSession({
         status: CallStatus.active,
+        // A real `active` session always carries answeredAt (stamped by
+        // updateCallStatus on the SDP answer) — the missed/ended split keys
+        // on it since 2026-07-03.
+        answeredAt: new Date(Date.now() - 30_000),
         participants: [participant]
       });
       const endedCall = {
@@ -927,8 +969,9 @@ describe('CallService', () => {
 
       await callService.leaveCall(validLeaveData);
 
-      expect(callService.getLastHeartbeat(validLeaveData.callId, validLeaveData.participantId)).toBeUndefined();
-      expect(callService.getLastHeartbeat(validLeaveData.callId, otherParticipant.id)).toBeDefined();
+      const remainingHeartbeats = (callService as any).heartbeats.get(validLeaveData.callId) as Map<string, number> | undefined;
+      expect(remainingHeartbeats?.has(validLeaveData.participantId)).toBe(false);
+      expect(remainingHeartbeats?.has(otherParticipant.id)).toBe(true);
     });
   });
 
@@ -1276,6 +1319,74 @@ describe('CallService', () => {
       expect(updateCall[0].data.status).toBe(CallStatus.ended);
       expect(updateCall[0].data.endReason).toBe(CallEndReason.completed);
     });
+
+    it('resolves a never-answered call stuck in reconnecting as missed (prod 2026-07-03, call 6a47689d)', async () => {
+      // A pre-answer client watchdog dragged the session ringing→reconnecting
+      // while the callee was still ringing; the caller then hung up. The old
+      // status-list check (initiated|ringing|connecting) missed `reconnecting`
+      // and classified this never-answered call as ended/completed. The
+      // authoritative pre-answer signal is answeredAt being null.
+      const initiatorParticipant = createMockParticipant({
+        role: ParticipantRole.initiator
+      });
+      const mockCall = createMockCallSession({
+        status: CallStatus.reconnecting,
+        answeredAt: null,
+        participants: [initiatorParticipant]
+      });
+      const endedCall = {
+        ...mockCall,
+        status: CallStatus.missed,
+        endedAt: new Date(),
+        participants: [{ ...initiatorParticipant, leftAt: new Date(), user: createMockUser() }],
+        initiator: createMockUser(),
+        conversation: createMockConversation()
+      };
+
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(mockCall);
+      mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockPrisma));
+      mockPrisma.callSession.update.mockResolvedValue(undefined);
+      mockPrisma.callParticipant.updateMany.mockResolvedValue(undefined);
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(endedCall);
+
+      await callService.endCall('call-123', 'user-123', 'participant-123');
+
+      const updateCall = mockPrisma.callSession.updateMany.mock.calls[0];
+      expect(updateCall[0].data.status).toBe(CallStatus.missed);
+      expect(updateCall[0].data.endReason).toBe(CallEndReason.missed);
+      expect(updateCall[0].data.duration).toBe(0);
+    });
+
+    it('resolves an ANSWERED call ending during reconnecting as ended/completed (genuine mid-call reconnect)', async () => {
+      const initiatorParticipant = createMockParticipant({
+        role: ParticipantRole.initiator
+      });
+      const mockCall = createMockCallSession({
+        status: CallStatus.reconnecting,
+        answeredAt: new Date(Date.now() - 60_000),
+        participants: [initiatorParticipant]
+      });
+      const endedCall = {
+        ...mockCall,
+        status: CallStatus.ended,
+        endedAt: new Date(),
+        participants: [{ ...initiatorParticipant, leftAt: new Date(), user: createMockUser() }],
+        initiator: createMockUser(),
+        conversation: createMockConversation()
+      };
+
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(mockCall);
+      mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockPrisma));
+      mockPrisma.callSession.update.mockResolvedValue(undefined);
+      mockPrisma.callParticipant.updateMany.mockResolvedValue(undefined);
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(endedCall);
+
+      await callService.endCall('call-123', 'user-123', 'participant-123');
+
+      const updateCall = mockPrisma.callSession.updateMany.mock.calls[0];
+      expect(updateCall[0].data.status).toBe(CallStatus.ended);
+      expect(updateCall[0].data.endReason).toBe(CallEndReason.completed);
+    });
   });
 
   describe('getActiveCallForConversation', () => {
@@ -1442,19 +1553,49 @@ describe('CallService', () => {
       };
 
       mockPrisma.callSession.findUnique.mockResolvedValueOnce(callSession);
-      mockPrisma.callSession.update.mockResolvedValue(missedCall);
+      mockPrisma.callSession.updateMany.mockResolvedValue({ count: 1 });
       mockPrisma.callSession.findUnique.mockResolvedValueOnce(missedCall);
 
       const result = await callService.markCallAsMissed('call-123');
 
       expect(result.status).toBe(CallStatus.missed);
-      expect(mockPrisma.callSession.update).toHaveBeenCalledWith({
-        where: { id: 'call-123' },
+      expect(mockPrisma.callSession.updateMany).toHaveBeenCalledWith({
+        where: { id: 'call-123', status: { in: [CallStatus.initiated, CallStatus.ringing] } },
         data: expect.objectContaining({
           status: CallStatus.missed,
           endReason: 'missed'
         })
       });
+    });
+
+    it('returns current state without releasing claims when it loses the race to a concurrent terminal write', async () => {
+      // Two writers can both pass the top-of-function status guard (both read
+      // `ringing`) then race on the write itself — e.g. the ringing-timeout
+      // handler's own atomic updateMany resolves the row to `missed` a beat
+      // before this path's updateMany runs. The status-scoped where clause
+      // then matches zero rows; count === 0 must short-circuit rather than
+      // re-run clearHeartbeats/releaseActiveCallClaim on stale assumptions.
+      const callSession = createMockCallSession({
+        status: CallStatus.ringing,
+        participants: [createMockParticipant()]
+      });
+      const raceWinnerCall = {
+        ...callSession,
+        status: CallStatus.missed,
+        endedAt: new Date(),
+        participants: [createMockParticipant({ user: createMockUser() })],
+        initiator: createMockUser(),
+        conversation: createMockConversation()
+      };
+
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(callSession);
+      mockPrisma.callSession.updateMany.mockResolvedValueOnce({ count: 0 });
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(raceWinnerCall);
+
+      const result = await callService.markCallAsMissed('call-123');
+
+      expect(result.status).toBe(CallStatus.missed);
+      expect(mockPrisma.conversation.updateMany).not.toHaveBeenCalled();
     });
 
     it('should throw error when call not found', async () => {
@@ -1484,7 +1625,7 @@ describe('CallService', () => {
           conversation: createMockConversation()
         };
         mockPrisma.callSession.findUnique.mockResolvedValueOnce(callSession);
-        mockPrisma.callSession.update.mockResolvedValue(missedCall);
+        mockPrisma.callSession.updateMany.mockResolvedValue({ count: 1 });
         mockPrisma.callSession.findUnique.mockResolvedValueOnce(missedCall);
 
         await callService.markCallAsMissed('call-123');
@@ -1877,31 +2018,12 @@ describe('CallService - Ringing Timeout & Heartbeat Utilities', () => {
     expect(servers.length).toBeGreaterThan(0);
   });
 
-  // recordHeartbeat / getLastHeartbeat
-  it('recordHeartbeat & getLastHeartbeat: stores and retrieves timestamp', () => {
-    const before = Date.now();
-    callService.recordHeartbeat('call-hb1', 'p-1');
-    const ts = callService.getLastHeartbeat('call-hb1', 'p-1');
-    expect(ts).toBeGreaterThanOrEqual(before);
-    expect(ts).toBeLessThanOrEqual(Date.now());
-  });
-
-  it('getLastHeartbeat: returns undefined for unknown participant', () => {
-    const ts = callService.getLastHeartbeat('call-hb2', 'p-unknown');
-    expect(ts).toBeUndefined();
-  });
-
-  it('getLastHeartbeat: returns undefined for unknown call', () => {
-    expect(callService.getLastHeartbeat('call-nope', 'p-1')).toBeUndefined();
-  });
-
   // clearHeartbeats
   it('clearHeartbeats: removes all heartbeats for the call', () => {
     callService.recordHeartbeat('call-hb3', 'p-1');
     callService.recordHeartbeat('call-hb3', 'p-2');
     callService.clearHeartbeats('call-hb3');
-    expect(callService.getLastHeartbeat('call-hb3', 'p-1')).toBeUndefined();
-    expect(callService.getLastHeartbeat('call-hb3', 'p-2')).toBeUndefined();
+    expect(callService.hasHeartbeatData('call-hb3')).toBe(false);
   });
 
   it('clearHeartbeats: no-op when call has no heartbeats', () => {
@@ -2031,6 +2153,51 @@ describe('CallService - updateCallStatus', () => {
     const result = await callService.updateCallStatus('call-123', CallStatus.active);
     expect(result.status).toBe(CallStatus.ended);
     expect(mockPrisma.callSession.update).not.toHaveBeenCalled();
+  });
+
+  it('FSM guard: refuses the reconnecting transition on a never-answered call (pre-answer watchdog)', async () => {
+    // Prod 2026-07-03 (call 6a47689d): the CALLER's client fired its
+    // reconnect watchdog while the call was still RINGING and dragged the
+    // session ringing→reconnecting server-side — hiding `ringing` from the
+    // boot-rehydration path and making endCall classify the never-answered
+    // call as completed. `reconnecting` only makes sense once the call was
+    // answered (media once established).
+    const ringingCall = createMockCallSession({
+      status: CallStatus.ringing,
+      answeredAt: null,
+      participants: [createMockParticipant({ user: createMockUser() })],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    });
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(ringingCall)  // status check read
+      .mockResolvedValueOnce(ringingCall); // getCallSession
+    const result = await callService.updateCallStatus('call-123', CallStatus.reconnecting);
+    expect(result.status).toBe(CallStatus.ringing);
+    expect(mockPrisma.callSession.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('FSM guard: allows the reconnecting transition on an answered call (genuine mid-call reconnect)', async () => {
+    const activeCall = createMockCallSession({
+      status: CallStatus.active,
+      answeredAt: new Date(Date.now() - 30_000),
+      participants: [createMockParticipant({ user: createMockUser() })],
+      initiator: createMockUser(),
+      conversation: createMockConversation()
+    });
+    const reconnectingCall = { ...activeCall, status: CallStatus.reconnecting };
+    mockPrisma.callSession.findUnique
+      .mockResolvedValueOnce(activeCall)
+      .mockResolvedValueOnce(reconnectingCall);
+    mockPrisma.callSession.updateMany.mockResolvedValue({ count: 1 });
+
+    await callService.updateCallStatus('call-123', CallStatus.reconnecting);
+
+    expect(mockPrisma.callSession.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: CallStatus.reconnecting })
+      })
+    );
   });
 
   it('sets endedAt and duration when transitioning to terminal status', async () => {
@@ -2828,12 +2995,21 @@ describe('CallService - markCallAsMissed non-ringing guard', () => {
 
     expect(result.status).toBe(CallStatus.active);
     expect(mockPrisma.callSession.update).not.toHaveBeenCalled();
-    // An active call legitimately holds the conversation's active-call
-    // claim — the guard path must NOT strip it.
+    // An in-progress call (active/connecting/reconnecting) must never be
+    // torn down by this path — no participant leftAt stamping, no
+    // active-call claim release, it's not terminal.
+    expect(mockPrisma.callParticipant.updateMany).not.toHaveBeenCalled();
     expect(mockPrisma.conversation.updateMany).not.toHaveBeenCalled();
   });
 
-  it('returns current session without writing when call is already missed', async () => {
+  it('releases the active-call claim and cleans up when the call was already resolved to missed elsewhere', async () => {
+    // Regression for the 2026-07-02 audit: the ringing-timeout handler's own
+    // atomic `callSession.updateMany` (CallEventsHandler.buildRingingTimeoutHandler)
+    // flips status to `missed` directly, bypassing this method's write path
+    // entirely. Before this fix, hitting the early-return guard below meant
+    // `releaseActiveCallClaim`/`clearHeartbeats`/`clearRingingTimeout` never
+    // ran for that call — permanently locking Conversation.activeCallId and
+    // leaving CallParticipant.leftAt unset (so call:signal kept relaying).
     const missedCall = createMockCallSession({
       status: CallStatus.missed,
       endedAt: new Date(),
@@ -2849,6 +3025,17 @@ describe('CallService - markCallAsMissed non-ringing guard', () => {
 
     expect(result.status).toBe(CallStatus.missed);
     expect(mockPrisma.callSession.update).not.toHaveBeenCalled();
+    expect(mockPrisma.callParticipant.updateMany).toHaveBeenCalledWith({
+      where: {
+        callSessionId: 'call-123',
+        OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
+      },
+      data: { leftAt: expect.any(Date) }
+    });
+    expect(mockPrisma.conversation.updateMany).toHaveBeenCalledWith({
+      where: { id: 'conv-123', activeCallId: 'call-123' },
+      data: { activeCallId: null }
+    });
   });
 
   it('releases the stale active-call claim when the call is already missed (ringing-timeout race)', async () => {
@@ -2877,7 +3064,7 @@ describe('CallService - markCallAsMissed non-ringing guard', () => {
     });
   });
 
-  it('marks ringing call as missed (allowed)', async () => {
+  it('marks ringing call as missed (allowed) and releases the active-call claim', async () => {
     const ringingCall = createMockCallSession({
       status: CallStatus.ringing,
       participants: [createMockParticipant()],
@@ -2894,12 +3081,23 @@ describe('CallService - markCallAsMissed non-ringing guard', () => {
     mockPrisma.callSession.findUnique
       .mockResolvedValueOnce(ringingCall)
       .mockResolvedValueOnce(missedCall);
-    mockPrisma.callSession.update.mockResolvedValue(missedCall);
+    mockPrisma.callSession.updateMany.mockResolvedValue({ count: 1 });
 
     const result = await callService.markCallAsMissed('call-123');
 
     expect(result.status).toBe(CallStatus.missed);
-    expect(mockPrisma.callSession.update).toHaveBeenCalled();
+    expect(mockPrisma.callSession.updateMany).toHaveBeenCalled();
+    expect(mockPrisma.callParticipant.updateMany).toHaveBeenCalledWith({
+      where: {
+        callSessionId: 'call-123',
+        OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
+      },
+      data: { leftAt: expect.any(Date) }
+    });
+    expect(mockPrisma.conversation.updateMany).toHaveBeenCalledWith({
+      where: { id: 'conv-123', activeCallId: 'call-123' },
+      data: { activeCallId: null }
+    });
   });
 });
 
@@ -3196,6 +3394,9 @@ describe('CallService - leaveCall wasPreAnswered=false branch (active call)', ()
     const participant = createMockParticipant({ userId: 'user-123', participantId: 'participant-123' });
     const activeCall = createMockCallSession({
       status: CallStatus.active, // NOT initiated/ringing/connecting
+      // answeredAt is the wasPreAnswered criterion since 2026-07-03 — a real
+      // active session always carries it.
+      answeredAt: new Date(Date.now() - 30_000),
       participants: [participant]
     });
     const endedCall = {

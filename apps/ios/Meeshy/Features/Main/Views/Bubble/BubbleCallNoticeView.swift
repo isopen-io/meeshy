@@ -50,7 +50,14 @@ struct BubbleCallNoticeView: View, Equatable {
                 card
             }
             .buttonStyle(.plain)
-            .simultaneousGesture(
+            // `.highPriorityGesture` (not `.simultaneousGesture`) so a held
+            // press that recognizes the long-press pre-empts the Button's own
+            // tap recognition — otherwise both fired on finger-lift and a
+            // long-press-to-view-details also silently placed a call-back
+            // (pocket-dial bug, found in audit 2026-07-03). A quick tap still
+            // falls through to the Button action since the long-press gesture
+            // fails to recognize before `minimumDuration` elapses.
+            .highPriorityGesture(
                 LongPressGesture(minimumDuration: 0.35).onEnded { _ in
                     HapticFeedback.medium()
                     showDetails = true

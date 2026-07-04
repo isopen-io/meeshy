@@ -9,12 +9,10 @@ import os
 
 struct CallView: View {
     @ObservedObject var callManager = CallManager.shared
-    @Environment(\.colorScheme) private var colorScheme
     // Audit P2-iOS-9 — respect the user's Reduce Motion preference. Without
     // this check, the continuous pulse/ring animations ran indefinitely
     // even for motion-sensitive users (and burned battery).
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     // Instance du CallManager (et non un `@StateObject` local) : les segments
     // distants (DataChannel) et `toggleTranscription` opèrent sur CELLE-CI —
@@ -134,11 +132,14 @@ struct CallView: View {
             // restart recovers. Même gate que le layout : pré-établissement,
             // connectingView affiche déjà "Connexion…" — pas de bannière.
             if showsReconnectingBanner {
+                // P2-iOS-9 / 2026-07-03 — le mouvement (émergence de l'île À
+                // L'INSERTION, retour dans l'île AU RETRAIT) est porté par la
+                // transition interne d'IslandEmergingBanner. Ne PAS reposer de
+                // .transition ici : une transition externe écrase l'interne et
+                // la capsule disparaîtrait en fondu sur place.
                 reconnectingBanner
                     .padding(.horizontal, 56)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    // P2-iOS-9 — l'émergence Island porte le mouvement ; fade à l'insertion/retrait.
-                    .transition(.opacity)
             }
 
             // §4.4 — remote peer quality alert. Gateway emits `call:quality-alert`
@@ -150,7 +151,6 @@ struct CallView: View {
                     .padding(.horizontal, 56)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .padding(.top, showsReconnectingBanner ? 52 : 0)
-                    .transition(.opacity)
             }
 
             // EXIGENCE №1 — signaling dégradé : le socket est tombé pendant un
@@ -163,7 +163,6 @@ struct CallView: View {
                     .padding(.horizontal, 56)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .padding(.top, stackedOffset)
-                    .transition(.opacity)
             }
 
             // Effects overlay — accessible dans tous les etats actifs (pas seulement
@@ -173,7 +172,8 @@ struct CallView: View {
             if callManager.callState.isActive && !callManager.callState.isRinging && callManager.isVideoEnabled {
                 CallEffectsOverlay(
                     isExpanded: $showEffectsToolbar,
-                    isVideoEnabled: callManager.isVideoEnabled
+                    isVideoEnabled: callManager.isVideoEnabled,
+                    callManager: callManager
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -199,6 +199,10 @@ struct CallView: View {
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(.white)
                                 .callControlGlass(diameter: 40, isActive: false, tint: .white)
+                                // Visual glass circle stays 40pt (doctrine 82i), but the
+                                // tappable area must meet the HIG 44×44 minimum.
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
                         }
                         .accessibilityLabel(String(localized: "call.minimize", defaultValue: "Reduire l'appel", bundle: .main))
                         .accessibilityHint(String(localized: "call.minimize.hint", defaultValue: "Garde l'appel en cours dans une banniere flottante", bundle: .main))
@@ -253,9 +257,7 @@ struct CallView: View {
                 break
             }
         }
-        .adaptiveOnChange(of: callManager.liveVideoQualityLevel) { oldLevel, newLevel in
-            let wasDegraded = oldLevel.map { $0 == .poor || $0 == .critical } ?? false
-            let isDegraded = newLevel.map { $0 == .poor || $0 == .critical } ?? false
+        .adaptiveOnChange(of: callManager.isLinkQualityDegraded) { wasDegraded, isDegraded in
             if isDegraded && !wasDegraded {
                 UIAccessibility.post(
                     notification: .announcement,
@@ -312,29 +314,38 @@ struct CallView: View {
             // contact (façon FaceTime audio). Blur + voile sombre dégradé pour
             // préserver la lisibilité du chrome blanc (écran épinglé .dark).
             if !hasActiveRemoteVideo, let backdrop = remoteBackdropURL {
-                CachedAsyncImage(url: backdrop, thumbHash: remoteBackdropThumbHash) {
-                    Color.clear
-                }
-                .scaledToFill()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .scaleEffect(1.08)
-                .blur(radius: 24)
-                .clipped()
-                .opacity(0.45)
-                .overlay(
-                    LinearGradient(
-                        colors: [
-                            Color.black.opacity(0.55),
-                            Color.black.opacity(0.25),
-                            Color.black.opacity(0.60)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
+                // Layout-neutre : `Color.clear` prend EXACTEMENT la proposition
+                // (l'écran) et l'image ne vit qu'en `.overlay` — hors layout.
+                // L'ancien `CachedAsyncImage.scaledToFill()` posé directement
+                // dans le ZStack RÉPONDAIT sa largeur débordante (bannière
+                // paysage ~1400 pt), gonflait le ZStack racine entier et
+                // décalait TOUT l'écran d'appel de +30 pt (chevron minimize
+                // expulsé hors écran à x≈-475). Bug repro simu 2026-07-03.
+                Color.clear
+                    .overlay {
+                        CachedAsyncImage(url: backdrop, thumbHash: remoteBackdropThumbHash) {
+                            Color.clear
+                        }
+                        .scaledToFill()
+                    }
+                    .scaleEffect(1.08)
+                    .blur(radius: 20)
+                    .clipped()
+                    .opacity(0.55)
+                    .overlay(
+                        LinearGradient(
+                            colors: [
+                                Color.black.opacity(0.50),
+                                Color.black.opacity(0.18),
+                                Color.black.opacity(0.55)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
                     )
-                )
-                .ignoresSafeArea()
-                .transition(.opacity)
-                .accessibilityHidden(true)
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+                    .accessibilityHidden(true)
             }
 
             // Animated ambient orbs — decorative only
@@ -386,7 +397,10 @@ struct CallView: View {
 
     /// Résolution cache-first du profil du correspondant (Instant App) : le
     /// store `.profiles` sert `.fresh`/`.stale` immédiatement, l'API rafraîchit
-    /// en silence (et ré-alimente le cache) sauf si le cache était frais.
+    /// en silence (et ré-alimente le cache). Un profil caché PARTIEL — sans
+    /// bannière ni avatar, hydraté par un flux léger — ne court-circuite PAS
+    /// l'API : sinon le fond pleine page restait sur le gradient alors que le
+    /// serveur a les images.
     private func resolveRemoteProfile(userId: String?) async {
         guard let userId, !userId.isEmpty else {
             remoteProfile = nil
@@ -395,7 +409,7 @@ struct CallView: View {
         switch await CacheCoordinator.shared.profiles.load(for: userId) {
         case .fresh(let users, _):
             remoteProfile = users.first
-            return
+            if let user = users.first, Self.hasBackdropImage(user) { return }
         case .stale(let users, _):
             remoteProfile = users.first
         case .expired, .empty:
@@ -407,8 +421,12 @@ struct CallView: View {
             remoteProfile = user
             try? await CacheCoordinator.shared.profiles.save([user], for: userId)
         } catch {
-            Logger.calls.debug("CallView: profil distant non résolu (\(userId)): \(error.localizedDescription)")
+            Logger.calls.warning("CallView: profil distant non résolu (\(userId)): \(error.localizedDescription)")
         }
+    }
+
+    private static func hasBackdropImage(_ user: MeeshyUser) -> Bool {
+        (user.banner?.isEmpty == false) || (user.avatar?.isEmpty == false)
     }
 
     // MARK: - Outgoing Ringing
@@ -650,7 +668,12 @@ struct CallView: View {
     private var audioCallLayout: some View {
         VStack(spacing: 16) {
             // Duo d'avatars (no pulse) — correspondant + pastille locale.
+            // Decorative: the remote user's name is shown as a Text element
+            // directly below, mirroring pulsingAvatar's rationale — without
+            // .accessibilityHidden VoiceOver reads the avatar initial, then
+            // "Vous", then the full name as three disjoint stops.
             callAvatarPair(size: 120)
+                .accessibilityHidden(true)
                 .padding(.bottom, 8)
 
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
@@ -814,8 +837,10 @@ struct CallView: View {
     }
 
     private var isConnectionDegraded: Bool {
-        if let level = callManager.liveVideoQualityLevel {
-            return level == .poor || level == .critical
+        // Sustained flag only (2 consecutive degraded stats ticks) — a single
+        // 5 s sample must never flash the "Connexion instable" pill.
+        if callManager.liveVideoQualityLevel != nil {
+            return callManager.isLinkQualityDegraded
         }
         switch callManager.connectionQuality {
         case .disconnected, .failed: return true
@@ -1069,6 +1094,11 @@ struct CallView: View {
                 .frame(width: 28, height: 28)
                 .background(Color.black.opacity(0.45), in: Circle())
                 .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 0.5))
+                // Visual glyph stays a compact 28pt (the 100×140 tile has no
+                // room for a 44pt circle), but the hit target itself must meet
+                // the HIG 44×44 minimum — expand invisibly via contentShape.
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .accessibilityLabel(label)
         .optionalAccessibilityHint(hint)
@@ -1704,7 +1734,10 @@ private extension View {
     }
 }
 
-private extension View {
+// Not `private`: FloatingCallPillView reuses both modifiers so its mute/speaker
+// controls expose the same toggle semantics (trait + on/off value) as the
+// full-screen call surface's equivalent buttons instead of a plain label swap.
+extension View {
     @ViewBuilder
     func optionalAccessibilityHint(_ hint: String?) -> some View {
         if let h = hint {
@@ -1715,7 +1748,7 @@ private extension View {
     }
 }
 
-private extension View {
+extension View {
     @ViewBuilder
     func callToggleAccessibility(isToggle: Bool, isActive: Bool) -> some View {
         if isToggle {

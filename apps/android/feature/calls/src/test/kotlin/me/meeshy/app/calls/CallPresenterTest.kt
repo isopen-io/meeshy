@@ -3,6 +3,9 @@ package me.meeshy.app.calls
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.call.CallEndReason
 import me.meeshy.sdk.model.call.CallState
+import me.meeshy.sdk.model.call.CallWaitingState
+import me.meeshy.sdk.model.call.ConnectionQuality
+import me.meeshy.sdk.model.call.WaitingCall
 import org.junit.Test
 
 class CallPresenterTest {
@@ -183,5 +186,54 @@ class CallPresenterTest {
             .isNull()
         assertThat(CallPresenter.present(CallState.Ended(CallEndReason.Rejected), config, media, 0).durationLabel)
             .isNull()
+    }
+
+    // --- connectionQuality --------------------------------------------------
+
+    private fun presentQuality(state: CallState, quality: ConnectionQuality?) =
+        CallPresenter.present(state, config, media, 0, quality).connectionQuality
+
+    @Test
+    fun `connection quality surfaces while connected and reconnecting`() {
+        assertThat(presentQuality(CallState.Connected, ConnectionQuality.GOOD))
+            .isEqualTo(ConnectionQuality.GOOD)
+        assertThat(presentQuality(CallState.Reconnecting(attempt = 1), ConnectionQuality.POOR))
+            .isEqualTo(ConnectionQuality.POOR)
+    }
+
+    @Test
+    fun `connection quality is suppressed off the media phases`() {
+        assertThat(presentQuality(CallState.Ringing(isOutgoing = true), ConnectionQuality.EXCELLENT)).isNull()
+        assertThat(presentQuality(CallState.Ringing(isOutgoing = false), ConnectionQuality.EXCELLENT)).isNull()
+        assertThat(presentQuality(CallState.Offering, ConnectionQuality.EXCELLENT)).isNull()
+        assertThat(presentQuality(CallState.Connecting, ConnectionQuality.EXCELLENT)).isNull()
+        assertThat(presentQuality(CallState.Idle, ConnectionQuality.EXCELLENT)).isNull()
+        assertThat(presentQuality(CallState.Ended(CallEndReason.Remote), ConnectionQuality.EXCELLENT)).isNull()
+    }
+
+    @Test
+    fun `connection quality is null when no sample has arrived`() {
+        assertThat(presentQuality(CallState.Connected, null)).isNull()
+    }
+
+    // --- waiting banner derivation -----------------------------------------
+
+    private fun presentWaiting(waiting: CallWaitingState) =
+        CallPresenter.present(CallState.Connected, config, media, waiting = waiting).waitingBanner
+
+    @Test
+    fun `no waiting banner is shown for the empty waiting state`() {
+        assertThat(presentWaiting(CallWaitingState.EMPTY)).isNull()
+    }
+
+    @Test
+    fun `a pending waiting call derives a banner carrying the caller and media`() {
+        val waiting = CallWaitingState(
+            pending = WaitingCall(callId = "c9", callerId = "u3", callerName = "Carol", isVideo = true),
+        )
+
+        val banner = presentWaiting(waiting)
+
+        assertThat(banner).isEqualTo(WaitingBannerUi(callerName = "Carol", isVideo = true))
     }
 }

@@ -164,9 +164,9 @@ struct iPadLeftColumnHeader: View {
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "square.stack.fill")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(MeeshyFont.relative(14, weight: .semibold))
                         Text(String(localized: "root.ipad.feed", defaultValue: "Feed", bundle: .main))
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(MeeshyFont.relative(14, weight: .semibold))
                     }
                     .foregroundStyle(
                         LinearGradient(
@@ -185,8 +185,9 @@ struct iPadLeftColumnHeader: View {
             }
 
             Text(title)
-                .font(.system(size: 20, weight: .bold))
+                .font(MeeshyFont.relative(20, weight: .bold))
                 .foregroundColor(theme.textPrimary)
+                .accessibilityAddTraits(.isHeader)
 
             Spacer()
 
@@ -197,19 +198,23 @@ struct iPadLeftColumnHeader: View {
                 } label: {
                     ZStack(alignment: .topTrailing) {
                         Image(systemName: "bell.fill")
-                            .font(.system(size: 16, weight: .medium))
+                            .font(MeeshyFont.relative(16, weight: .medium))
                             .foregroundColor(theme.textSecondary)
 
                         if notificationCount > 0 {
                             Text("\(min(notificationCount, 99))")
+                                // Doctrine 86i : compteur dans une pastille circulaire fixe 16×16 → figé.
                                 .font(.system(size: 9, weight: .bold))
                                 .foregroundColor(.white)
                                 .frame(width: 16, height: 16)
                                 .background(Circle().fill(MeeshyColors.error))
                                 .offset(x: 6, y: -6)
+                                .accessibilityHidden(true)
                         }
                     }
                 }
+                .accessibilityLabel(String(localized: "root.ipad.notifications", defaultValue: "Notifications", bundle: .main))
+                .accessibilityValue(notificationCount > 0 ? String(notificationCount) : "")
             }
 
             if let onSettingsTap {
@@ -218,9 +223,10 @@ struct iPadLeftColumnHeader: View {
                     onSettingsTap()
                 } label: {
                     Image(systemName: "gearshape.fill")
-                        .font(.system(size: 16, weight: .medium))
+                        .font(MeeshyFont.relative(16, weight: .medium))
                         .foregroundColor(theme.textSecondary)
                 }
+                .accessibilityLabel(String(localized: "root.ipad.settings", defaultValue: "Paramètres", bundle: .main))
             }
         }
         .padding(.horizontal, 16)

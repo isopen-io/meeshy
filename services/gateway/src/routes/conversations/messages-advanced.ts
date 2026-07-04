@@ -1015,13 +1015,13 @@ export function registerMessagesAdvancedRoutes(
       const { ReactionService } = await import('../../services/ReactionService.js');
       const reactionService = new ReactionService(prisma);
 
-      const reaction = await reactionService.addReaction({
+      const addResult = await reactionService.addReaction({
         messageId,
         emoji,
         participantId: currentParticipant.id,
       });
 
-      if (!reaction) {
+      if (!addResult) {
         return sendInternalError(reply, 'Failed to add reaction');
       }
 
@@ -1039,6 +1039,18 @@ export function registerMessagesAdvancedRoutes(
           const socketIOManager = socketIOHandler.getManager?.();
           const io = socketIOHandler.getManager()?.getIO();
           if (io) {
+            // Swap 1-réaction-par-user : l'ancien emoji part avant que le
+            // nouveau arrive (agrégations recalculées par event).
+            for (const removedEmoji of addResult.replacedEmojis) {
+              const removeEvent = await reactionService.createUpdateEvent(
+                messageId,
+                removedEmoji,
+                'remove',
+                currentParticipant.id,
+                conversationId,
+              );
+              io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.REACTION_REMOVED, removeEvent);
+            }
             io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.REACTION_ADDED, updateEvent);
           }
         }
@@ -1062,8 +1074,8 @@ export function registerMessagesAdvancedRoutes(
       if (error.message?.includes('not a member') || error.message?.includes('not a participant')) {
         return sendForbidden(reply, 'Access denied to this conversation');
       }
-      if (error.message?.includes('Maximum')) {
-        return sendBadRequest(reply, error.message);
+      if (error.message === 'Cannot react to a system message') {
+        return sendBadRequest(reply, 'Cannot react to a system message');
       }
 
       return sendInternalError(reply, 'Failed to add reaction');

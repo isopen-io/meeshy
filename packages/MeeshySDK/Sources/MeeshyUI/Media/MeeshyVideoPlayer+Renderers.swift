@@ -524,7 +524,13 @@ internal struct _FullscreenRenderer: View {
                     controls: player.controls,
                     fileName: player.fileName,
                     onClose: { closePlayer() },
-                    onSave: { saveToPhotos() },
+                    onSave: {
+                        if let onSaveRequested = player.onSaveRequested {
+                            onSaveRequested()
+                        } else {
+                            saveToPhotos()
+                        }
+                    },
                     onShare: player.onShare,
                     saveState: saveState
                 )

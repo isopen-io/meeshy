@@ -25,8 +25,17 @@ extension StoryComposerViewModel {
     /// est nil-ée : le prochain `onAppear` → `loadCurrentSlideIntoTimeline()`
     /// recrée un moteur frais.
     public func shutdownTimelineIfNeeded() {
+        stashTimelineHistoryIfLoaded()
         _timelineViewModel?.shutdown()
         _timelineViewModel = nil
+    }
+
+    /// E4 — capture l'historique undo/redo du moteur vivant sous l'id de la
+    /// slide qui y est chargée. Appelé avant tout teardown ET avant tout
+    /// re-bootstrap (changement de slide) — sans forcer la création lazy.
+    func stashTimelineHistoryIfLoaded() {
+        guard let vm = _timelineViewModel, let loadedId = timelineLoadedSlideId else { return }
+        timelineHistoryBySlide[loadedId] = vm.commandHistorySnapshot()
     }
 
     /// Prefix used for clips that the timeline editor surfaces for context but
@@ -110,10 +119,21 @@ extension StoryComposerViewModel {
            let synthetic = project.mediaObjects.first(where: { Self.isSyntheticTimelineClipId($0.id) }) {
             clipImages[synthetic.id] = bgImage
         }
+        // E4 — stash de l'historique de la slide PRÉCÉDEMMENT chargée avant
+        // que bootstrap n'écrase le projet (le stack, lui, n'est pas reset par
+        // bootstrap — sans stash+restore il fuyait d'une slide à l'autre).
+        stashTimelineHistoryIfLoaded()
         timelineViewModel.bootstrap(
             project: project,
             mediaURLs: mediaURLs,
             images: clipImages
+        )
+        timelineLoadedSlideId = slide.id
+        // Restore de l'historique PROPRE à cette slide (snapshot vide sinon —
+        // corrige la contamination cross-slide préexistante). Sans replay :
+        // le projet bootstrappé est DÉJÀ l'état committé au cursor.
+        timelineViewModel.restoreCommandHistoryWithoutReplay(
+            timelineHistoryBySlide[slide.id] ?? CommandStackSnapshot(commands: [], cursor: 0)
         )
         // Clear any selection that no longer exists in the new slide.
         if let id = timelineViewModel.selection.selectedClipId,

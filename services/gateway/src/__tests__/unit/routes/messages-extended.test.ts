@@ -135,6 +135,7 @@ const mockMessage = {
   conversation: {
     id: CONV_ID,
     createdAt: new Date(),
+    lastMessageAt: new Date('2026-07-01T00:00:00Z'),
     participants: [{ userId: USER_ID, role: 'member' }],
   },
   attachments: [],
@@ -194,6 +195,7 @@ async function buildApp(opts: {
     },
     conversation: {
       update: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
   });
 

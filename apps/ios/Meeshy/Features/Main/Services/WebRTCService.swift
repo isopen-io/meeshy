@@ -75,6 +75,9 @@ final class WebRTCService {
     private var qualityMonitorTask: Task<Void, Never>?
     private var lastStats: CallStats?
     private var qualityLevelDebounceDate: Date?
+    // BWE warm-up anchor — the GCC estimate is ignored while it ramps from
+    // its kick-off value (see CallReliabilityPolicy.effectiveQualityLevel).
+    private var qualityMonitorStartDate: Date?
     // §5.6 — last device thermal state applied to the encoder. A change here
     // re-applies the video encoding ceiling even when the network quality
     // level is steady (see adjustBitrate / VideoThermalProfile).
@@ -280,6 +283,7 @@ final class WebRTCService {
 
     func startQualityMonitor() {
         stopQualityMonitor()
+        qualityMonitorStartDate = Date()
         let interval = QualityThresholds.statsIntervalSeconds
         // The outer Task inherits @MainActor isolation (created from a @MainActor
         // method), so all state mutations inside are actor-safe without an extra
@@ -315,6 +319,7 @@ final class WebRTCService {
         qualityMonitorTask?.cancel()
         qualityMonitorTask = nil
         lastStats = nil
+        qualityMonitorStartDate = nil
     }
 
     private func adjustBitrate(basedOn stats: CallStats, previous: CallStats?) {
@@ -330,13 +335,23 @@ final class WebRTCService {
 
         // Merge the RTT/loss heuristic with the TWCC GCC bandwidth estimate.
         // When TWCC is active (bps > 0), GCC has better visibility into the
-        // actual available path capacity than RTT alone. Taking the min of both
-        // ensures we never over-commit beyond what either signal permits.
+        // actual available path capacity than RTT alone — but its ladder is
+        // calibrated on VIDEO tier bitrates, so the policy only lets it
+        // constrain the level when video is actually sending and the
+        // estimator has converged (audio-only calls sit at ~64 kbps forever
+        // and would read as .poor/.critical on a perfectly healthy link).
         let heuristicLevel = VideoQualityLevel.from(rtt: rtt, packetLoss: lossRatio)
         let bweLevel: VideoQualityLevel? = stats.availableOutgoingBitrateBps > 0
             ? VideoQualityLevel.from(availableOutgoingBitrateBps: stats.availableOutgoingBitrateBps)
             : nil
-        let newLevel = bweLevel.map { min(heuristicLevel, $0) } ?? heuristicLevel
+        let newLevel = CallReliabilityPolicy.effectiveQualityLevel(
+            heuristic: heuristicLevel,
+            bwe: bweLevel,
+            isSendingVideo: hasLocalVideoTrack,
+            // nil start date = monitor not formally started → treat as NOT
+            // warmed up (fail-closed: heuristic only), never as warmed-up.
+            secondsSinceMonitorStart: qualityMonitorStartDate.map { Date().timeIntervalSince($0) } ?? 0
+        )
 
         let newBitrate: Int
         if rtt <= QualityThresholds.excellentRTT && lossRatio <= QualityThresholds.excellentPacketLoss {

@@ -304,7 +304,8 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         // assume "fewer than requested" means the tail (matches REST
         // pagination convention).
         if let total = totalCount, total <= firstPage.count {
-            lastSyncTimestamp = Date()
+            // Server time, not the device clock (R15b) — authoritative full fetch.
+            lastSyncTimestamp = SyncWatermark.fromFullSync(receivedUpdatedAt: firstPage.map(\.updatedAt), fallback: lastSyncTimestamp)
             lastFullReconcileAt = Date()
             return true
         }
@@ -498,7 +499,8 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         }
 
         if succeeded {
-            lastSyncTimestamp = Date()
+            // Server time, not the device clock (R15b) — authoritative full fetch.
+            lastSyncTimestamp = SyncWatermark.fromFullSync(receivedUpdatedAt: merged.map(\.updatedAt), fallback: lastSyncTimestamp)
             lastFullReconcileAt = Date()
         }
         return succeeded
@@ -571,7 +573,11 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             await SearchIndex.shared.indexConversations(deltaConversations.filter { $0.isActive })
             _conversationsDidChange.send()
 
-            lastSyncTimestamp = Date()
+            // Advance the delta cursor to the newest SERVER `updatedAt` seen, not
+            // the device clock (R15b) — a device ahead of the server used to push
+            // `updatedSince` past real updates in `[serverNow, deviceNow]` and drop
+            // them. Never regresses; an empty delta keeps the prior cursor.
+            lastSyncTimestamp = SyncWatermark.advanced(previous: lastSyncTimestamp, receivedUpdatedAt: deltaConversations.map(\.updatedAt))
             return true
         } catch {
             Self.logger.error("[SyncEngine] deltaSync error: \(error.localizedDescription)")

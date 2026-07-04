@@ -163,6 +163,12 @@ final class CallManager: ObservableObject {
     @Published private(set) var connectionQuality: PeerConnectionState = .new
     /// RTT+packet-loss quality level from stats samples; nil until first sample.
     @Published private(set) var liveVideoQualityLevel: VideoQualityLevel? = nil
+    /// Sustained-degradation flag for the "Connexion instable" pill — set only
+    /// after `DegradedLinkTracker.consecutiveTicksToAlert` consecutive
+    /// poor/critical stats ticks, cleared on the first healthy one. A single
+    /// bad 5 s sample never alerts the user.
+    @Published private(set) var isLinkQualityDegraded = false
+    private var degradedLinkTracker = DegradedLinkTracker()
     /// Most-recent stats snapshot collected during the active call. Updated every
     /// `QualityThresholds.statsIntervalSeconds`; nil before the first sample.
     /// Persisted to UserDefaults at call teardown for post-call diagnostics.
@@ -370,11 +376,18 @@ final class CallManager: ObservableObject {
 
     // MARK: - Analytics accumulators (reset in endCallInternal)
     private var analyticsCallInitiatedDate: Date?
+    /// answer/join → début de la négociation WebRTC : answerCall côté appelé,
+    /// participant-joined côté appelant. Sépare le temps de sonnerie humain
+    /// (dans setupTimeMs) du temps technique (negotiationTimeMs).
+    private var analyticsNegotiationStartDate: Date?
     private var analyticsConnectedDate: Date?
     private var analyticsNetworkTransitions: Int = 0
     private var analyticsQualitySeconds: [VideoQualityLevel: Double] = [:]
     private var analyticsLastQualityDate: Date?
     private var analyticsCurrentLevel: VideoQualityLevel?
+    /// Snapshots analytics périodiques (60 s, endReason "in_progress") — un
+    /// kill de l'app en background ne perd plus la télémétrie de l'appel.
+    private var analyticsSnapshotTask: Task<Void, Never>?
     private var analyticsRttSum: Double = 0
     private var analyticsSampleCount: Int = 0
     private var analyticsMaxPacketLoss: Double = 0
@@ -384,6 +397,16 @@ final class CallManager: ObservableObject {
 
     /// Periodic refresh of TURN credentials before TTL expiry. Cancelled on call end.
     private var turnRefreshTask: Task<Void, Never>?
+    /// Watchdog armed after every `call:request-ice-servers` emit — retries if
+    /// `call:ice-servers-refreshed` doesn't arrive within
+    /// `turnRefreshRetryTimeoutSeconds`. `emitRequestIceServers` carries no ACK,
+    /// so without this a single dropped emit/reply killed the refresh chain for
+    /// the rest of the call. Cancelled on call end and on every successful
+    /// response (via `scheduleTURNCredentialRefresh`).
+    private var turnRefreshWatchdogTask: Task<Void, Never>?
+    /// Consecutive watchdog retries for the current refresh cycle. Reset to 0
+    /// whenever a fresh cycle starts (`scheduleTURNCredentialRefresh`).
+    private var turnRefreshRetryAttempt = 0
     private var participantJoinedCancellable: AnyCancellable?
     /// Audit P3 — replaces the never-assigned `signalOfferCancellable`
     /// (AnyCancellable, dead) with a properly typed Task slot. Two callers
@@ -652,7 +675,7 @@ final class CallManager: ObservableObject {
         // the engine is live again.
         configureAudioSession()
         audioSessionQueue.async { [weak self] in
-            guard let self else { return }
+            guard self != nil else { return }
             do {
                 try AVAudioSession.sharedInstance().setActive(true, options: [])
             } catch {
@@ -708,11 +731,24 @@ final class CallManager: ObservableObject {
         }
     }
 
-    func startCall(conversationId: String, userId: String, displayName: String, isVideo: Bool) {
+    /// Starts an outgoing call. Returns `false` (no-op) if a call is already
+    /// active — callers that need to tell the user why nothing happened
+    /// (e.g. `CallStarter`, which shows a busy toast) should check this;
+    /// callers that don't care can ignore it.
+    @discardableResult
+    func startCall(conversationId: String, userId: String, displayName: String, isVideo: Bool) -> Bool {
         resetEndedStateForNewCall()
         guard callState == .idle else {
             Logger.calls.warning("Cannot start call: already in state \(String(describing: self.callState))")
-            return
+            // Every dial entry point (conversation header, call-summary "call
+            // back", conversation-list context menu, CallStarter) previously
+            // no-op'd here with zero user feedback — a tap that visibly did
+            // nothing. Surface it once, centrally, instead of duplicating this
+            // toast at every call site.
+            FeedbackToastManager.shared.showError(
+                String(localized: "call.starter.busy", defaultValue: "Un appel est déjà en cours", bundle: .main)
+            )
+            return false
         }
 
         analyticsCallInitiatedDate = Date()
@@ -872,6 +908,7 @@ final class CallManager: ObservableObject {
         }
 
         HapticFeedback.medium()
+        return true
     }
 
     // MARK: - VoIP Push Incoming Call
@@ -1062,6 +1099,53 @@ final class CallManager: ObservableObject {
         struct CallFreshnessData: Decodable {
             let status: String?
         }
+    }
+
+    // MARK: - call_cancel Silent Push (phantom-ring hardening)
+
+    /// Le gateway envoie une push APNs background `call_cancel` quand un appel
+    /// se termine SANS avoir été décroché (missed/rejected), à destination des
+    /// membres dont le socket n'est jamais monté (push VoIP passée par APNs,
+    /// WebSocket bloqué par le réseau) : le fanout socket `call:ended` ne peut
+    /// pas les atteindre et CallKit sonnerait jusqu'au timeout local. Gardé par
+    /// `CallReliabilityPolicy.shouldEndRingingOnCancellation` : seul l'appel
+    /// ENTRANT encore en sonnerie au callId EXACT est terminé — un cancel
+    /// tardif/rejoué ne touche jamais un appel décroché ni un ring sortant.
+    func endRingingFromCancellation(callId: String) {
+        guard CallReliabilityPolicy.shouldEndRingingOnCancellation(
+            pushCallId: callId,
+            currentCallId: currentCallId,
+            callState: callState
+        ) else {
+            Logger.calls.info("call_cancel push ignored (callId=\(callId)) — no matching incoming ring")
+            return
+        }
+        Logger.calls.info("call_cancel push — ending still-ringing call \(callId)")
+        if let uuid = activeCallUUID {
+            callProvider.reportCall(with: uuid, endedAt: Date(), reason: .remoteEnded)
+        }
+        endCallInternal(reason: .remote)
+    }
+
+    /// Pendant multi-device de `endRingingFromCancellation` : un AUTRE device
+    /// du même compte a décroché (push background `call_answered_elsewhere`,
+    /// miroir socketless de `call:already-answered`). Même garde FSM pure ;
+    /// seule la raison CallKit diffère — `.answeredElsewhere` pour que
+    /// Recents affiche « répondu sur un autre appareil » et non « manqué ».
+    func endRingingAnsweredElsewhere(callId: String) {
+        guard CallReliabilityPolicy.shouldEndRingingOnCancellation(
+            pushCallId: callId,
+            currentCallId: currentCallId,
+            callState: callState
+        ) else {
+            Logger.calls.info("call_answered_elsewhere push ignored (callId=\(callId)) — no matching incoming ring")
+            return
+        }
+        Logger.calls.info("call_answered_elsewhere push — dismissing ring for \(callId)")
+        if let uuid = activeCallUUID {
+            callProvider.reportCall(with: uuid, endedAt: Date(), reason: .answeredElsewhere)
+        }
+        endCallInternal(reason: .remote)
     }
 
     // MARK: - Phantom VoIP Call (defense-in-depth)
@@ -1358,6 +1442,7 @@ final class CallManager: ObservableObject {
         ringbackPlayer.stop()
         ringbackPlayer.stopRingtone()
 
+        analyticsNegotiationStartDate = Date()
         callState = .connecting
         // Audio session is configured at peer-connection setup (handleIncoming…),
         // not here — CallKit drives activation via provider:didActivate:.
@@ -1432,6 +1517,7 @@ final class CallManager: ObservableObject {
         guard case .ringing(isOutgoing: false) = callState else { return }
         guard let callId = currentCallId, let userId = remoteUserId else { return }
 
+        analyticsNegotiationStartDate = Date()
         callState = .connecting
 
         if let remoteOffer = pendingRemoteOffer {
@@ -1718,6 +1804,7 @@ final class CallManager: ObservableObject {
     /// case). Replaces the old track.enabled flip, which left the upgrade
     /// invisible to the peer (no transceiver / no renegotiation).
     func toggleVideo() {
+        let previousTask = videoToggleTask
         videoToggleTask?.cancel()
         let target = !isVideoEnabled
         // Optimistic update: reflect intent immediately so rapid double-taps
@@ -1727,6 +1814,13 @@ final class CallManager: ObservableObject {
         // any state — the second Task's result is authoritative.
         isVideoEnabled = target
         videoToggleTask = Task { @MainActor [weak self] in
+            // Serialize on the previous toggle's actuation before starting ours:
+            // `cancel()` above is cooperative and upgradeToVideo/downgradeFromVideo
+            // never observe it mid-flight (they await stopCapture/startCapture), so
+            // without this a rapid double-tap could run two camera/transceiver
+            // actuations concurrently and corrupt state. Mirrors the identical fix
+            // already shipped in handleHold (CallKit hold path).
+            await previousTask?.value
             guard let self, !Task.isCancelled else { return }
             do {
                 let needsRenegotiation: Bool
@@ -2295,6 +2389,11 @@ final class CallManager: ObservableObject {
             analyticsConnectedDate = callStartDate
             callDuration = 0
         }
+        // Snapshots analytics périodiques — idempotent (les reconnexions
+        // repassent ici sans re-armer) ; annulé dans endCallInternal.
+        if let callId = currentCallId {
+            startAnalyticsSnapshots(callId: callId)
+        }
         // Hygiène timer — l'appel est établi : le cutoff "pas de réponse" n'a
         // plus d'objet (son fire-site ne couvre que .ringing/.offering, mais
         // autant ne pas laisser une task morte armée).
@@ -2449,13 +2548,15 @@ final class CallManager: ObservableObject {
         callUsesCallKit = true
         ringbackPlayer.shouldSelfActivateSession = false
         callProvider.reportNewIncomingCall(with: uuid, update: update) { [weak self] error in
-            guard let self else { return }
-            if let error {
-                Logger.calls.error("CallKit late-promote on background failed: \(error.localizedDescription)")
-                self.callUsesCallKit = false
-                self.ringbackPlayer.shouldSelfActivateSession = true
-            } else {
-                Logger.calls.info("Promoted ringing call to CallKit on background entry")
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if let error {
+                    Logger.calls.error("CallKit late-promote on background failed: \(error.localizedDescription)")
+                    self.callUsesCallKit = false
+                    self.ringbackPlayer.shouldSelfActivateSession = true
+                } else {
+                    Logger.calls.info("Promoted ringing call to CallKit on background entry")
+                }
             }
         }
     }
@@ -2677,28 +2778,48 @@ final class CallManager: ObservableObject {
 
     private func emitCallAnalyticsIfNeeded(reason: CallEndReason) {
         guard let callId = currentCallId else { return }
+        // Émission finale — le snapshot est PUR (la fenêtre de niveau ouverte
+        // est repliée virtuellement par qualityDistribution, plus de flush
+        // mutatif ici) ; le gateway écrase le dernier snapshot in_progress
+        // avec la raison terminale réelle.
+        emitCallAnalyticsSnapshot(callId: callId, endReasonLabel: String(describing: reason))
 
-        // Flush the final quality-level window into the distribution table.
-        let now = Date()
-        if let prevDate = analyticsLastQualityDate, let prevLevel = analyticsCurrentLevel {
-            analyticsQualitySeconds[prevLevel, default: 0] += now.timeIntervalSince(prevDate)
-        }
+        // Reset accumulators so a subsequent call starts clean.
+        analyticsCallInitiatedDate = nil
+        analyticsNegotiationStartDate = nil
+        analyticsConnectedDate = nil
+        analyticsNetworkTransitions = 0
+        analyticsQualitySeconds = [:]
+        analyticsLastQualityDate = nil
+        analyticsCurrentLevel = nil
+        analyticsRttSum = 0
+        analyticsSampleCount = 0
+        analyticsMaxPacketLoss = 0
+        analyticsPacketLossSum = 0
+        analyticsEffectsUsed = []
+        analyticsVideoFiltersUsed = false
+    }
 
-        let setupTimeMs: Int = analyticsConnectedDate.map {
-            Int($0.timeIntervalSince(analyticsCallInitiatedDate ?? $0) * 1000)
-        } ?? -1
-
-        let totalSecs = analyticsQualitySeconds.values.reduce(0, +)
-        let qualityDistribution: [String: Double]
-        if totalSecs > 0 {
-            let e = (analyticsQualitySeconds[.excellent] ?? 0) / totalSecs
-            let g = (analyticsQualitySeconds[.good] ?? 0) / totalSecs
-            let f = (analyticsQualitySeconds[.fair] ?? 0) / totalSecs
-            let p = ((analyticsQualitySeconds[.poor] ?? 0) + (analyticsQualitySeconds[.critical] ?? 0)) / totalSecs
-            qualityDistribution = ["excellent": e, "good": g, "fair": f, "poor": p]
-        } else {
-            qualityDistribution = ["excellent": 1.0, "good": 0.0, "fair": 0.0, "poor": 0.0]
-        }
+    /// Snapshot analytics NON destructif — payload complet construit depuis
+    /// les accumulateurs sans les muter (la fenêtre de niveau ouverte est
+    /// repliée virtuellement par `CallReliabilityPolicy.qualityDistribution`).
+    /// Sert (a) aux émissions périodiques `in_progress` pendant l'appel et
+    /// (b) à l'émission finale de teardown. Le gateway persiste par
+    /// updateMany : chaque envoi écrase le précédent — un kill de l'app en
+    /// background (vécu 2026-07-03 : row analytics perdue après 29 min
+    /// d'appel) ne perd plus que la dernière fenêtre.
+    private func emitCallAnalyticsSnapshot(callId: String, endReasonLabel: String) {
+        let setupMetrics = CallReliabilityPolicy.callSetupMetrics(
+            initiatedAt: analyticsCallInitiatedDate,
+            negotiationStartAt: analyticsNegotiationStartDate,
+            connectedAt: analyticsConnectedDate
+        )
+        let qualityDistribution = CallReliabilityPolicy.qualityDistribution(
+            accumulatedSeconds: analyticsQualitySeconds,
+            openWindowLevel: analyticsCurrentLevel,
+            openWindowSince: analyticsLastQualityDate,
+            now: Date()
+        )
 
         let averageRtt = analyticsSampleCount > 0
             ? analyticsRttSum / Double(analyticsSampleCount) : 0
@@ -2708,7 +2829,8 @@ final class CallManager: ObservableObject {
         let filtersUsed = analyticsVideoFiltersUsed || webRTCService.videoFilters.config.isEnabled
 
         let payload: [String: Any] = [
-            "setupTimeMs":         setupTimeMs,
+            "setupTimeMs":         setupMetrics.setupTimeMs,
+            "negotiationTimeMs":   setupMetrics.negotiationTimeMs,
             "durationSeconds":     callDuration,
             "reconnectionCount":   reconnectAttempt,
             "networkTransitions":  analyticsNetworkTransitions,
@@ -2723,23 +2845,29 @@ final class CallManager: ObservableObject {
             "platform":            "ios",
             "deviceModel":         UIDevice.current.model,
             "isVideo":             isVideoEnabled,
-            "endReason":           String(describing: reason)
+            "endReason":           endReasonLabel
         ]
         MessageSocketManager.shared.emitCallAnalytics(callId: callId, payload: payload)
+    }
 
-        // Reset accumulators so a subsequent call starts clean.
-        analyticsCallInitiatedDate = nil
-        analyticsConnectedDate = nil
-        analyticsNetworkTransitions = 0
-        analyticsQualitySeconds = [:]
-        analyticsLastQualityDate = nil
-        analyticsCurrentLevel = nil
-        analyticsRttSum = 0
-        analyticsSampleCount = 0
-        analyticsMaxPacketLoss = 0
-        analyticsPacketLossSum = 0
-        analyticsEffectsUsed = []
-        analyticsVideoFiltersUsed = false
+    /// Démarre les snapshots analytics périodiques (60 s) pour l'appel
+    /// courant. Idempotent (une seule task par appel — les reconnexions
+    /// mid-call repassent par connected sans re-armer). Annulé au teardown.
+    private func startAnalyticsSnapshots(callId: String) {
+        guard analyticsSnapshotTask == nil else { return }
+        analyticsSnapshotTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(QualityThresholds.analyticsSnapshotIntervalSeconds))
+                guard !Task.isCancelled, let self else { return }
+                // Un autre appel a remplacé celui-ci sans passer par le cancel
+                // (défensif) : cette task ne parle plus pour personne.
+                guard self.currentCallId == callId else { return }
+                // Pendant une reconnexion, les stats sont gelées (RTT/loss à 0
+                // liraient "excellent") — sauter la fenêtre, pas la task.
+                guard case .connected = self.callState else { continue }
+                self.emitCallAnalyticsSnapshot(callId: callId, endReasonLabel: "in_progress")
+            }
+        }
     }
 
     /// Audit 2026-07-02 (bug 1) — shared failure teardown. `endCallInternal`
@@ -2795,6 +2923,9 @@ final class CallManager: ObservableObject {
         setupCallTask = nil
         turnRefreshTask?.cancel()
         turnRefreshTask = nil
+        turnRefreshWatchdogTask?.cancel()
+        turnRefreshWatchdogTask = nil
+        turnRefreshRetryAttempt = 0
         stopHeartbeat()
         stopScreenCaptureMonitoring()
         stopBackgroundMonitoring()
@@ -2820,6 +2951,8 @@ final class CallManager: ObservableObject {
         CallManager.callKitDidActivateFired = false
         voipFreshnessTask?.cancel()
         voipFreshnessTask = nil
+        analyticsSnapshotTask?.cancel()
+        analyticsSnapshotTask = nil
         isRemoteQualityDegraded = false
         isSignalingDegraded = false
         pendingRemoteOffer = nil
@@ -2855,6 +2988,8 @@ final class CallManager: ObservableObject {
         callState = .ended(reason: reason)
         connectionQuality = .new
         liveVideoQualityLevel = nil
+        degradedLinkTracker.reset()
+        isLinkQualityDegraded = false
         activeCallUUID = nil
         // Audit P2-iOS-1 — drop any pending "busy" incoming call. If a 2nd
         // call arrived while this one was active and got immediately ended
@@ -3088,7 +3223,11 @@ final class CallManager: ObservableObject {
         // raccrochage — l'audio des autres apps restait ducké jusqu'à une
         // reconfiguration fortuite. Désactivation explicite symétrique.
         if !callUsesCallKit {
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            do {
+                try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            } catch {
+                Logger.calls.error("[no-callkit] AVAudioSession deactivation failed: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -3320,7 +3459,7 @@ final class CallManager: ObservableObject {
                     // at the new TTL via `call:ice-servers-refreshed`.
                     self.turnRefreshTask?.cancel()
                     self.turnRefreshTask = nil
-                    MessageSocketManager.shared.emitRequestIceServers(callId: callId)
+                    self.requestFreshTurnCredentials(callId: callId)
                     Logger.calls.info("Socket reconnect — requesting fresh TURN credentials for call \(callId)")
                 }
             }
@@ -3356,6 +3495,11 @@ final class CallManager: ObservableObject {
                 switch event.mediaType {
                 case "video":
                     self.isRemoteVideoEnabled = event.enabled
+                    // System PiP renders the raw remote track directly onto an
+                    // AVSampleBufferDisplayLayer (bypassing SwiftUI's declarative
+                    // placeholder branch below) — it needs an explicit nudge or
+                    // it keeps showing the last live frame frozen indefinitely.
+                    self.pip.setRemoteVideoMuted(!event.enabled)
                     Logger.calls.info("Remote video \(event.enabled ? "enabled" : "disabled") (callId=\(event.callId))")
                 case "audio":
                     self.isRemoteAudioEnabled = event.enabled
@@ -3443,6 +3587,9 @@ final class CallManager: ObservableObject {
             }
             self.participantJoinedCancellable?.cancel()
             Logger.calls.info("Participant joined call \(callId), creating offer")
+            // Ancrage négociation côté appelant : l'appelé vient de décrocher,
+            // la sonnerie est finie — tout ce qui suit est du setup technique.
+            self.analyticsNegotiationStartDate = Date()
 
             // Update ICE servers with TURN credentials without recreating the peer connection
             if let servers = event.iceServers, !servers.isEmpty {
@@ -3956,6 +4103,7 @@ extension CallManager: WebRTCServiceDelegate {
             // on callState == .connected.
             guard case .connected = self.callState else { return }
             self.liveVideoQualityLevel = level
+            self.isLinkQualityDegraded = self.degradedLinkTracker.record(level: level)
             MessageSocketManager.shared.emitCallQualityReport(
                 callId: callId,
                 level: Self.connectionQualityLabel(for: level),
@@ -4053,13 +4201,15 @@ extension CallManager: WebRTCServiceDelegate {
         if let callId = currentCallId {
             let userId = AuthManager.shared.currentUser?.id ?? ""
             MessageSocketManager.shared.emitCallReconnecting(callId: callId, participantId: userId, attempt: reconnectAttempt)
-            // Fresh TURN credentials for this attempt (fire-and-forget): the
+            // Fresh TURN credentials for this attempt: the
             // `call:ice-servers-refreshed` listener applies the response via
             // `updateIceServers`, so this restart — or its watchdog escalation —
             // re-gathers relay candidates with fresh credentials instead of
             // reusing creds that may be near the TTL horizon (coturn rejects
             // allocation refreshes past the expiry embedded in the username).
-            MessageSocketManager.shared.emitRequestIceServers(callId: callId)
+            // Routed through `requestFreshTurnCredentials` so a dropped emit/reply
+            // during a reconnection cycle still retries instead of going silent.
+            requestFreshTurnCredentials(callId: callId)
         }
 
         let backoffSeconds = reconnectAttempt > 1 ? min(pow(2.0, Double(reconnectAttempt - 1)), 4.0) : 0.0
@@ -4096,6 +4246,9 @@ extension CallManager: WebRTCServiceDelegate {
     // which `setupSocketListeners` applies via `webRTCService.updateIceServers`.
     private func scheduleTURNCredentialRefresh(ttl: TimeInterval) {
         turnRefreshTask?.cancel()
+        turnRefreshWatchdogTask?.cancel()
+        turnRefreshWatchdogTask = nil
+        turnRefreshRetryAttempt = 0
         // Floor-clamped: a degenerate TTL (zero / negative / short) schedules at
         // the minimum cadence instead of silently disarming the refresh — the
         // old `guard ttl >= 60 else return` left mid-call credentials expiring
@@ -4106,8 +4259,39 @@ extension CallManager: WebRTCServiceDelegate {
             try? await Task.sleep(for: .seconds(refreshDelay))
             guard !Task.isCancelled, let self, self.callState.isActive,
                   let callId = self.currentCallId else { return }
-            Logger.calls.info("Requesting fresh TURN credentials for call \(callId)")
-            MessageSocketManager.shared.emitRequestIceServers(callId: callId)
+            self.requestFreshTurnCredentials(callId: callId)
+        }
+    }
+
+    /// Emits `call:request-ice-servers` and arms the retry watchdog. Shared by
+    /// the periodic scheduler, the socket-reconnect resync, and the
+    /// reconnection-cycle refresh — every requester gets the same
+    /// no-ACK-loss protection.
+    private func requestFreshTurnCredentials(callId: String) {
+        Logger.calls.info("Requesting fresh TURN credentials for call \(callId)")
+        MessageSocketManager.shared.emitRequestIceServers(callId: callId)
+        armTurnRefreshWatchdog(callId: callId)
+    }
+
+    /// Retries `requestFreshTurnCredentials` if `call:ice-servers-refreshed`
+    /// hasn't arrived within `turnRefreshRetryTimeoutSeconds`, bounded by
+    /// `CallReliabilityPolicy.turnRefreshShouldRetry`. Once retries are
+    /// exhausted, falls back to re-arming the next periodic cycle at the
+    /// floor delay instead of leaving the call with no refresh armed at all.
+    private func armTurnRefreshWatchdog(callId: String) {
+        turnRefreshWatchdogTask?.cancel()
+        turnRefreshWatchdogTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(QualityThresholds.turnRefreshRetryTimeoutSeconds))
+            guard !Task.isCancelled, let self, self.callState.isActive,
+                  self.currentCallId == callId else { return }
+            self.turnRefreshRetryAttempt += 1
+            guard CallReliabilityPolicy.turnRefreshShouldRetry(attempt: self.turnRefreshRetryAttempt) else {
+                Logger.calls.error("TURN credential refresh got no response after \(self.turnRefreshRetryAttempt) retries for call \(callId) — re-arming next cycle")
+                self.scheduleTURNCredentialRefresh(ttl: QualityThresholds.turnMinRefreshDelaySeconds)
+                return
+            }
+            Logger.calls.warning("TURN credential refresh got no response — retry #\(self.turnRefreshRetryAttempt) for call \(callId)")
+            self.requestFreshTurnCredentials(callId: callId)
         }
     }
 
@@ -4163,24 +4347,26 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
         // WebRTC connection existed. The manager HOLDS the action and settles
         // it in `transitionToConnected` (fulfill), on pre-connect teardown
         // (fail), or via a 10 s safety net (fulfill) so CallKit can never time
-        // it out. The delegate queue is `nil` = main, so the hand-off to the
-        // @MainActor manager is synchronous (no Sendable capture of the
-        // non-Sendable CXAction in a Task); the off-main branch is a defensive
-        // fallback that preserves the old immediate-fulfill behaviour.
-        if Thread.isMainThread {
-            MainActor.assumeIsolated {
-                guard let manager else {
-                    action.fulfill()
-                    return
-                }
-                manager.holdPendingAnswerAction(action)
-                Task { @MainActor in await manager.answerCallReady() }
+        // it out.
+        //
+        // [Fix 2026-07-03] `CXProvider.setDelegate(_:queue: nil)` makes
+        // CallKit create its OWN private serial queue for delegate callbacks
+        // — it does NOT dispatch on main (Apple's documented behaviour for a
+        // `nil` queue). The previous "are we on the main queue?" check was
+        // therefore always false in production, so the hold above never
+        // engaged: every answered call still fulfilled at tap time and
+        // reintroduced the exact "timer starts before connection" bug this
+        // fix was written for. Always hop to the MainActor and hold — the
+        // 10 s safety net (`holdPendingAnswerAction`) bounds the worst case,
+        // and `@preconcurrency import CallKit` above permits capturing the
+        // non-Sendable `CXAnswerCallAction` across the actor hop.
+        Task { @MainActor [weak self] in
+            guard let manager = self?.manager else {
+                action.fulfill()
+                return
             }
-        } else {
-            action.fulfill()
-            Task { @MainActor [weak self] in
-                await self?.manager?.answerCallReady()
-            }
+            manager.holdPendingAnswerAction(action)
+            await manager.answerCallReady()
         }
     }
 

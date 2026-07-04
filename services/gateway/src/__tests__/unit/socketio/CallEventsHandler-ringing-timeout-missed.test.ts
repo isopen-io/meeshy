@@ -275,21 +275,19 @@ describe('CallEventsHandler — ringing timeout call:missed contract', () => {
   });
 
   describe('call:ended payload is preserved', () => {
-    it('emits the existing ended payload to both call and conversation rooms', async () => {
+    it('emits the ended payload once, targeting call + conversation rooms (single deduplicated emit)', async () => {
       const { emissions } = await fireRingingTimeout(makePrisma());
 
       const ended = emissions.filter(e => e.event === CALL_EVENTS.ENDED);
-      expect(ended.map(e => e.room)).toEqual([
-        `call:${CALL_ID}`,
-        `conversation:${CONV_ID}`,
-      ]);
-      ended.forEach(e => {
-        expect(e.payload).toEqual({
-          callId: CALL_ID,
-          duration: 0,
-          endedBy: undefined,
-          reason: 'missed',
-        });
+      expect(ended).toHaveLength(1);
+      expect(ended[0].room).toEqual(
+        expect.arrayContaining([`call:${CALL_ID}`, `conversation:${CONV_ID}`])
+      );
+      expect(ended[0].payload).toEqual({
+        callId: CALL_ID,
+        duration: 0,
+        endedBy: undefined,
+        reason: 'missed',
       });
     });
   });
@@ -307,6 +305,27 @@ describe('CallEventsHandler — ringing timeout call:missed contract', () => {
       await fireRingingTimeout(makePrisma({ updateManyCount: 0 }));
 
       expect(mockReleaseActiveCallClaim).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('terminal write carries a version increment', () => {
+    // Probe prod 2026-07-02 22:41Z: the timeout's terminal updateMany did NOT
+    // bump `version`, so every later version-guarded terminal writer
+    // (leaveCall, endCall, idempotent-leave) still matched the pre-missed
+    // version and could rewrite missed → ended/completed.
+    it('increments the call version when winning the missed transition', async () => {
+      const prisma = makePrisma();
+
+      await fireRingingTimeout(prisma);
+
+      expect((prisma.callSession.updateMany as jest.Mock)).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: 'missed',
+            version: { increment: 1 }
+          })
+        })
+      );
     });
   });
 

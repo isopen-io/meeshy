@@ -100,6 +100,10 @@ struct ConversationScrollState {
     var editingPendingAttachmentId: String? = nil
     var videoToEdit: URL? = nil
     var audioToEdit: PendingAudioEdit? = nil
+    // "Éditer" from the recent-media strip — edited BEFORE staging (the edited
+    // output goes through the camera-capture pipeline, never the original).
+    var recentImageToEdit: UIImage? = nil
+    var recentVideoToEdit: URL? = nil
 }
 
 struct PreviewMedia: Identifiable {
@@ -140,6 +144,11 @@ struct ConversationComposerState {
     var showCamera = false
     var showFilePicker = false
     var selectedPhotoItems: [PhotosPickerItem] = []
+    /// True while `selectedPhotoItems` is being primed with the recent-media
+    /// strip's multi-selection before presenting the PhotosPicker. Priming
+    /// fires the selection onChange once — this flag swallows that echo so
+    /// items are only ingested when the user actually confirms in the picker.
+    var photoPickerPriming = false
     
     // Location & Upload
     var isLoadingLocation = false
@@ -251,6 +260,10 @@ struct ConversationView: View {
     @StateObject var audioRecorder = AudioRecorderManager()
     @StateObject var scrollButtonAudioPlayer = AudioPlaybackManager()
     @StateObject var pendingAudioPlayer = AudioPlaybackManager()
+    /// Composant unifié « Enregistrer » au niveau écran — sert l'action
+    /// `.saveMedia` du menu appui-long (l'overlay n'est pas un cover, la
+    /// sheet de destinations se présente sans conflit).
+    @StateObject var mediaSaveCoordinator = MediaSaveCoordinator()
     
     @FocusState var isTyping: Bool
     @FocusState var isSearchFocused: Bool
@@ -282,8 +295,14 @@ struct ConversationView: View {
     /// effects, blur, ephemeral duration) so the user never loses context when
     /// the app is killed mid-sentence. Empty drafts are purged from
     /// `UserDefaults` by `DraftStore.save(_:for:)`.
-    private func persistDraft(text: String) {
+    private func persistDraft(text: String, attachmentRefs: [DraftAttachmentRef]? = nil) {
         let ref = composerState.pendingReplyReference
+        // Les refs de pièces jointes sont l'autorité du handler background
+        // (copie durable) : une frappe intermédiaire les PRÉSERVE au lieu de
+        // les écraser — sinon chaque lettre tapée perdrait les pièces du
+        // brouillon persisté.
+        let refs = attachmentRefs
+            ?? DraftStore.shared.load(for: viewModel.conversationId)?.attachments
         let draft = MessageDraft(
             text: text,
             replyToId: ref?.messageId,
@@ -293,9 +312,24 @@ struct ConversationView: View {
             selectedLanguage: composerState.selectedLanguage,
             effectFlags: viewModel.pendingEffects.flags.rawValue,
             isBlurEnabled: viewModel.isBlurEnabled,
-            ephemeralDurationRawValue: viewModel.ephemeralDuration?.rawValue
+            ephemeralDurationRawValue: viewModel.ephemeralDuration?.rawValue,
+            attachments: (refs?.isEmpty ?? true) ? nil : refs
         )
         DraftStore.shared.save(draft, for: viewModel.conversationId)
+    }
+
+    /// Copie durable des pièces jointes du tray au passage en background,
+    /// puis re-save du brouillon avec leurs références. Rebuild complet à
+    /// chaque background : une pièce retirée du tray ne ressuscite jamais.
+    private func persistDraftAttachmentsForBackground() {
+        guard let userId = AuthManager.shared.currentUser?.id else { return }
+        let refs = MessageDraftMediaStore.persist(
+            attachments: composerState.pendingAttachments,
+            files: composerState.pendingMediaFiles,
+            userId: userId,
+            conversationId: viewModel.conversationId
+        )
+        persistDraft(text: composerText.text, attachmentRefs: refs)
     }
 
     private func updateComposerHeight(_ contentHeight: CGFloat) {
@@ -468,7 +502,7 @@ struct ConversationView: View {
             Button {
                 HapticFeedback.medium()
                 Task {
-                    try? await blockService.unblockUser(userId: userId)
+                    await BlockActionCoordinator.shared.unblock(userId: userId)
                     await MainActor.run { HapticFeedback.success() }
                 }
             } label: {
@@ -609,6 +643,7 @@ struct ConversationView: View {
                     ImageFullscreen(imageUrl: media.url, accentColor: accentColor)
                 }
             }
+            .mediaSaveFlow(mediaSaveCoordinator)
             .sheet(item: $overlayState.detailSheetMessage) { msg in
                 let ctx = MessageMenuContext(
                     isMine: msg.isMe,
@@ -774,6 +809,27 @@ struct ConversationView: View {
                        let duration = EphemeralDuration(rawValue: raw) {
                         viewModel.ephemeralDuration = duration
                     }
+                    // Pièces jointes du brouillon (copiées en durable au
+                    // background) : restaure les survivantes dans le tray —
+                    // un fichier purgé est sauté silencieusement, le texte
+                    // reste intact. Thumbnails régénérées pour les images.
+                    if let refs = draft.attachments, !refs.isEmpty,
+                       composerState.pendingAttachments.isEmpty,
+                       let userId = AuthManager.shared.currentUser?.id {
+                        let restored = MessageDraftMediaStore.restore(
+                            refs: refs,
+                            userId: userId,
+                            conversationId: viewModel.conversationId
+                        )
+                        composerState.pendingAttachments = restored.attachments
+                        composerState.pendingMediaFiles = restored.files
+                        for attachment in restored.attachments where attachment.kind == .image {
+                            if let url = restored.files[attachment.id],
+                               let thumb = UIImage(contentsOfFile: url.path) {
+                                composerState.pendingThumbnails[attachment.id] = thumb
+                            }
+                        }
+                    }
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { overlayState.longPressEnabled = true }
             }
@@ -812,6 +868,13 @@ struct ConversationView: View {
                 // gateway-level dedup makes a redundant call harmless.
                 if phase == .active && scrollState.isNearBottom {
                     viewModel.markAsRead()
+                }
+                // Pièces jointes du brouillon : copie durable au passage en
+                // background (les fichiers du tray vivent dans tmp/, purgeable
+                // par iOS) — miroir du D1 story. Rebuild complet : la vérité
+                // est l'état courant du tray.
+                if phase == .background {
+                    persistDraftAttachmentsForBackground()
                 }
             }
             .adaptiveOnChange(of: viewModel.accessRevoked) { _, revoked in
@@ -1536,6 +1599,18 @@ struct ConversationView: View {
                 },
                 onDeleteAttachment: { attachmentId in
                     Task { await viewModel.deleteAttachment(messageId: msg.id, attachmentId: attachmentId) }
+                },
+                onSaveMedia: {
+                    // Composant unifié « Enregistrer » — l'action n'apparaît
+                    // que pour un message à exactement UN attachment.
+                    guard let attachment = msg.attachments.first(where: { $0.type != .location }) else { return }
+                    HapticFeedback.light()
+                    mediaSaveCoordinator.requestSave(MediaSaveRequest(
+                        kind: attachment.kind,
+                        remoteURLString: attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl,
+                        suggestedFileName: attachment.originalName.isEmpty ? nil : attachment.originalName,
+                        attachmentId: attachment.id.isEmpty ? nil : attachment.id
+                    ))
                 },
                 onShowThread: {
                     overlayState.replyThreadParentId = msg.id

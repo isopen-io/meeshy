@@ -71,7 +71,15 @@ export function registerFeedRoutes(
         return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
-      const stories = await feedService.getStories(authContext.registeredUser.id);
+      // G1 delta-sync : `?updatedSince=<ISO8601>` (même convention que
+      // GET /conversations?updatedSince) — timestamp invalide ignoré (full).
+      const rawSince = (request.query as Record<string, unknown> | undefined)?.updatedSince;
+      const parsedSince = typeof rawSince === 'string' ? new Date(rawSince) : undefined;
+      const updatedSince = parsedSince && !Number.isNaN(parsedSince.getTime())
+        ? parsedSince
+        : undefined;
+
+      const stories = await feedService.getStories(authContext.registeredUser.id, { updatedSince });
 
       reply.header('Cache-Control', 'private, no-cache');
 

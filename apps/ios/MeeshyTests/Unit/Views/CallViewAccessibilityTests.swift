@@ -107,6 +107,20 @@ final class CallViewAccessibilityTests: XCTestCase {
         )
     }
 
+    func test_callToggleAccessibility_isNotFilePrivate() throws {
+        // FloatingCallPillView (a different file) reuses this modifier for its
+        // mute/speaker buttons so both call surfaces expose identical toggle
+        // semantics to VoiceOver. `private extension View { ... }` at top level
+        // is file-scoped in Swift and would make the modifier invisible outside
+        // CallView.swift.
+        let source = try callViewSource()
+        XCTAssertFalse(
+            source.contains("private extension View {\n    @ViewBuilder\n    func callToggleAccessibility"),
+            "callToggleAccessibility must not be declared in a `private extension View` — " +
+            "that restricts it to CallView.swift and FloatingCallPillView could not reuse it."
+        )
+    }
+
     // MARK: - Connecting state VoiceOver announcement
 
     func test_callState_connecting_postsVoiceOverAnnouncement() throws {
@@ -185,32 +199,34 @@ final class CallViewAccessibilityTests: XCTestCase {
 
     // MARK: - Video quality VoiceOver announcement
 
-    func test_liveVideoQualityLevel_postsVoiceOverAnnouncement() throws {
+    func test_linkQualityDegraded_postsVoiceOverAnnouncement() throws {
         let source = try callViewSource()
         XCTAssertTrue(
-            source.contains("liveVideoQualityLevel"),
-            "CallView must observe liveVideoQualityLevel to announce quality changes."
+            source.contains("adaptiveOnChange(of: callManager.isLinkQualityDegraded)"),
+            "CallView must observe the SUSTAINED degradation flag — not raw " +
+            "liveVideoQualityLevel, whose single 5 s ticks would chat at VoiceOver " +
+            "users on every transient spike — to announce quality changes."
         )
         XCTAssertTrue(
             source.contains("call.a11y.quality"),
-            "CallView must post a VoiceOver announcement when video quality degrades so " +
-            "blind users are informed the video stream is degraded — they cannot see the " +
+            "CallView must post a VoiceOver announcement when the link degrades so " +
+            "blind users are informed the stream is degraded — they cannot see the " +
             "visual quality indicator and would otherwise have no feedback."
         )
     }
 
-    func test_qualityAnnouncement_isInsideLiveQualityOnChangeHandler() throws {
+    func test_qualityAnnouncement_isInsideDegradedFlagOnChangeHandler() throws {
         let source = try callViewSource()
-        guard let changeRange = source.range(of: "liveVideoQualityLevel") else {
-            XCTFail("CallView must observe liveVideoQualityLevel via adaptiveOnChange")
+        guard let changeRange = source.range(of: "adaptiveOnChange(of: callManager.isLinkQualityDegraded)") else {
+            XCTFail("CallView must observe isLinkQualityDegraded via adaptiveOnChange")
             return
         }
         let end = source.index(changeRange.lowerBound, offsetBy: 600, limitedBy: source.endIndex) ?? source.endIndex
         let handler = String(source[changeRange.lowerBound ..< end])
         XCTAssertTrue(
             handler.contains("call.a11y.quality"),
-            "The quality VoiceOver announcement must live inside the liveVideoQualityLevel " +
-            "onChange handler so it fires on every quality transition, not just once."
+            "The quality VoiceOver announcement must live inside the isLinkQualityDegraded " +
+            "onChange handler so it fires on every sustained transition, not just once."
         )
     }
 
@@ -286,6 +302,174 @@ final class CallViewAccessibilityTests: XCTestCase {
             vicinity.contains("call.end.a11y") || vicinity.contains("accessibilityLabel"),
             "The end call button must carry an explicit accessibility label — its red " +
             "colour alone does not convey the destructive action to VoiceOver users."
+        )
+    }
+
+    // MARK: - HIG 44×44 minimum hit targets
+
+    func test_pipFrameButton_hitTargetMeetsHIGMinimum() throws {
+        let source = try callViewSource()
+        guard let range = source.range(of: "private func pipFrameButton") else {
+            XCTFail("pipFrameButton must exist")
+            return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 900, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[range.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains(".frame(width: 44, height: 44)"),
+            "pipFrameButton's visual glyph is 28pt (too small for the 100×140 self-view tile), " +
+            "but its tappable area must still meet the HIG 44×44 minimum via an invisible " +
+            "expanded frame + contentShape."
+        )
+        XCTAssertTrue(
+            body.contains(".contentShape(Rectangle())"),
+            "pipFrameButton must apply .contentShape(Rectangle()) so the entire expanded " +
+            "44×44 frame is tappable, not just the visible 28pt circle."
+        )
+    }
+
+    func test_minimizeChevron_hitTargetMeetsHIGMinimum() throws {
+        let source = try callViewSource()
+        guard let range = source.range(of: "callControlGlass(diameter: 40, isActive: false, tint: .white)") else {
+            XCTFail("Minimize chevron's 40pt glass circle must exist")
+            return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 450, limitedBy: source.endIndex) ?? source.endIndex
+        let vicinity = String(source[range.lowerBound ..< end])
+        XCTAssertTrue(
+            vicinity.contains(".frame(width: 44, height: 44)") && vicinity.contains(".contentShape(Rectangle())"),
+            "The minimize chevron's visual glass circle is 40pt, but its tappable area must " +
+            "still meet the HIG 44×44 minimum via an invisible expanded frame + contentShape."
+        )
+    }
+
+    // MARK: - Dead code
+
+    func test_doesNotDeclareUnusedColorSchemeReader() throws {
+        // CallView pins `.environment(\.colorScheme, .dark)` on its own subtree
+        // (the call chrome is intentionally white-on-dark, FaceTime/WhatsApp
+        // style) so a locally-read `@Environment(\.colorScheme)` always
+        // resolves to `.dark` and the derived `isDark` was permanently `true`
+        // and unused — verified unreferenced anywhere else in this file.
+        let source = try callViewSource()
+        XCTAssertFalse(
+            source.contains("@Environment(\\.colorScheme) private var colorScheme"),
+            "CallView must not declare a dead colorScheme reader — it forces .dark on its " +
+            "own subtree, so a locally-read colorScheme value can never be anything else."
+        )
+        XCTAssertFalse(
+            source.contains("private var isDark: Bool { colorScheme == .dark }"),
+            "CallView must not declare a dead isDark computed property with no readers."
+        )
+        XCTAssertTrue(
+            source.contains(".environment(\\.colorScheme, .dark)"),
+            "CallView must still pin the call chrome subtree to .dark — only the unused " +
+            "local reader/computed property were dead, not the environment override itself."
+        )
+    }
+
+    // MARK: - CallEffectsOverlay wiring
+
+    func test_callEffectsOverlay_receivesCallManagerFromParent() throws {
+        // `CallEffectsOverlay(... )` must not fall back to instantiating
+        // `CallManager.shared` itself (`@ObservedObject private var callManager
+        // = CallManager.shared`) — that re-creates the subscription on every
+        // CallView body re-evaluation (pulse animation, showEffectsToolbar
+        // toggle, control-bar auto-hide). CallView and IncomingCallView were
+        // already fixed for this exact hazard (Audit P1-16); the overlay must
+        // receive the same singleton instance CallView already holds.
+        let source = try callViewSource()
+        guard let range = source.range(of: "CallEffectsOverlay(") else {
+            XCTFail("CallView must instantiate CallEffectsOverlay")
+            return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 200, limitedBy: source.endIndex) ?? source.endIndex
+        let call = String(source[range.lowerBound ..< end])
+        XCTAssertTrue(
+            call.contains("callManager: callManager"),
+            "CallView must pass its own `callManager` into CallEffectsOverlay so the child " +
+            "reuses the parent's @ObservedObject subscription instead of creating its own."
+        )
+    }
+
+    // MARK: - audioCallLayout avatar VoiceOver double-read
+
+    func test_audioCallLayout_avatarPairIsAccessibilityHidden() throws {
+        // `pulsingAvatar` already hides its avatar because the remote user's
+        // name is rendered as a Text directly below it — without this, VoiceOver
+        // reads the avatar initial, then "Vous", then the full name as three
+        // disjoint stops. `audioCallLayout` (the established audio-call screen)
+        // has the exact same avatar-then-name shape but was missing the guard.
+        let source = try callViewSource()
+        guard let layoutRange = source.range(of: "private var audioCallLayout: some View {") else {
+            XCTFail("CallView must define audioCallLayout")
+            return
+        }
+        guard let avatarRange = source.range(
+            of: "callAvatarPair(size: 120)",
+            range: layoutRange.upperBound..<source.endIndex
+        ) else {
+            XCTFail("audioCallLayout must call callAvatarPair(size: 120)")
+            return
+        }
+        let end = source.index(avatarRange.upperBound, offsetBy: 60, limitedBy: source.endIndex) ?? source.endIndex
+        let vicinity = String(source[avatarRange.lowerBound ..< end])
+        XCTAssertTrue(
+            vicinity.contains(".accessibilityHidden(true)"),
+            "audioCallLayout's callAvatarPair(size: 120) must carry .accessibilityHidden(true) " +
+            "to avoid VoiceOver double-reading the avatar initial and the adjacent remote-name Text."
+        )
+    }
+}
+
+// MARK: - Island banner emergence transition (2026-07-03 UX feedback)
+
+/// Retour user : « la pill doit apparaître plus lentement avec une
+/// accélération à mi-chemin — on doit voir comment ça sort de l'encoche, et
+/// comment ça y retourne ». Le mouvement (les DEUX sens) vit dans la
+/// transition interne d'IslandEmergingBanner ; un `.transition` externe au
+/// call-site l'écraserait et la capsule disparaîtrait en fondu sur place.
+@MainActor
+final class IslandBannerEmergenceTransitionTests: XCTestCase {
+
+    private func source(_ path: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent(path)
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_banner_usesSlowStartTimingCurves_forBothDirections() throws {
+        let banner = try source("Meeshy/Features/Main/Components/IslandEmergingBanner.swift")
+        XCTAssertTrue(
+            banner.contains(".asymmetric") && banner.contains("insertion:") && banner.contains("removal:"),
+            "The emergence must be an asymmetric transition — insertion (out of the island) AND removal (back into the island) each with their own curve."
+        )
+        let curveCount = banner.components(separatedBy: ".timingCurve(").count - 1
+        XCTAssertGreaterThanOrEqual(
+            curveCount, 2,
+            "Both directions must use custom slow-start timing curves (user feedback 2026-07-03: slow appearance, mid-way acceleration) — a spring starts fast and hides the emergence from the island."
+        )
+        XCTAssertFalse(
+            banner.contains("withAnimation(.spring"),
+            "The old fast-start spring emergence must not come back — the capsule must visibly grow out of the island."
+        )
+    }
+
+    func test_callSites_haveNoExternalTransition_thatWouldOverrideEmergence() throws {
+        let callView = try source("Meeshy/Features/Main/Views/CallView.swift")
+        guard let start = callView.range(of: "showsReconnectingBanner: Bool"),
+              let end = callView.range(of: "Effects overlay") else {
+            XCTFail("CallView banner block markers not found")
+            return
+        }
+        let bannerBlock = String(callView[start.lowerBound ..< end.lowerBound])
+        XCTAssertFalse(
+            bannerBlock.contains(".transition("),
+            "Island banner call-sites must NOT attach an external .transition — it overrides the internal island-emergence transition and the capsule would fade in place instead of returning into the island."
         )
     }
 }

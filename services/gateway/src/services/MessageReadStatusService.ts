@@ -742,10 +742,12 @@ export class MessageReadStatusService {
         },
       });
 
-      const totalMembers = Math.max(
-        0,
-        participants.length - 1
-      );
+      // Denominator = active recipients EXCLUDING the sender, by IDENTITY. A
+      // blind `participants.length - 1` drops an active recipient when the
+      // sender has LEFT the conversation (absent from `participants`), lighting
+      // up "received/read by all" one recipient too early. Mirrors
+      // `computeRecipientCount` (messages route) and `getLatestMessageSummary`.
+      const totalMembers = participants.filter(p => p.id !== message.senderId).length;
 
       // NOTE: `include: { participant }` is intentionally avoided here.
       // Prisma + MongoDB does not enforce referential integrity on relation

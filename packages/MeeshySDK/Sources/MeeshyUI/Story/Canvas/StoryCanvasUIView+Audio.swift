@@ -65,6 +65,18 @@ extension StoryCanvasUIView {
             pendingBackgroundActivation = true
             return
         }
+        // Gate R1 : la slide porte de l'audio résolu mais le pré-cache async de
+        // `reconfigureAudioForPlayback` n'a pas encore peuplé le mixer. Un
+        // `play()` « à vide » ici poserait la clé de slide (mixer silencieux),
+        // libérerait le gate timeline `isSlideAudioPending()` et forcerait le
+        // vrai schedule à repartir back-daté (audio en retard, désynchronisé).
+        // On attend : la fin du Task de pré-cache re-pose le flag d'après le
+        // contenu réel du mixer puis rappelle cette méthode.
+        if slideHasSchedulableAudio,
+           audioMixer.activeClipCount == 0,
+           audioMixer.backgroundClipCount == 0 {
+            return
+        }
         requestPlaybackSessionIfNeeded()
         let origin = captureSlideTimelineOrigin()
         // Stop any other reader engine before starting this one (RC4.6).
@@ -158,6 +170,10 @@ extension StoryCanvasUIView {
 
         let foreground = effects.resolvedForegroundAudioPlayers
         let background = effects.resolvedBackgroundAudio
+        // Posé SYNC (avant le Task de pré-cache) : la sonde 60 Hz
+        // `isSlideAudioPending()` gèle la timeline dès le premier tick d'une
+        // slide audio-driven, sans recalculer la résolution d'effets par tick.
+        slideHasSchedulableAudio = !foreground.isEmpty || background != nil
         let rawAudioCount = effects.audioPlayerObjects?.count ?? 0
         let legacyBgId = effects.backgroundAudioId ?? "nil"
         os.Logger.storyAudio.info(
@@ -244,6 +260,18 @@ extension StoryCanvasUIView {
 
             self.audioMixer.setMute(self.readerContext.mute)
 
+            // Re-pose du flag R1 d'après ce que le configure a RÉELLEMENT
+            // chargé : si tous les clips ont échoué au cache (URL non résolue,
+            // téléchargement KO), la slide est de facto silencieuse — le gate
+            // timeline se libère immédiatement au lieu d'attendre le watchdog.
+            // Gaté par `slide.id` : l'await du cache bg peut avoir laissé
+            // passer un changement de slide (branche échec sans re-guard) — un
+            // Task périmé ne doit pas écraser le flag de la slide courante.
+            if self.slide.id == slideId {
+                self.slideHasSchedulableAudio = self.audioMixer.activeClipCount > 0
+                    || self.audioMixer.backgroundClipCount > 0
+            }
+
             // The synchronous `startAudioPlayback()` call that follows
             // `reconfigureAudioForPlayback()` in `setMode(.play)` /
             // `setReaderContext` / `slide.didSet` hit the mixer when
@@ -264,6 +292,27 @@ extension StoryCanvasUIView {
         }
         _ = try? await CacheCoordinator.shared.audio.data(for: remote.absoluteString)
         return CacheCoordinator.audioLocalFileURL(for: remote.absoluteString)
+    }
+
+    /// R1 — « la progression = disponibilité des données », étendu à l'AUDIO.
+    /// `true` quand la slide porte de l'audio résolu que le mixer n'a pas
+    /// encore schedulé pour CETTE slide (fichiers en cours de téléchargement /
+    /// cache dans `reconfigureAudioForPlayback`). Le tick santé
+    /// (`refreshPlaybackHealth`) gèle alors la timeline — la reprise est en
+    /// phase car `captureSlideTimelineOrigin()` repart du playhead gelé.
+    ///
+    /// Anti-deadlock (invariant n°9) :
+    /// - clé par slide (`hasStartedPlayback(slideKey:)`) — un `play()` de la
+    ///   slide précédente ne libère pas le gate, et le `play()` de cette slide
+    ///   le libère MÊME si tous les clips ont échoué au cache (slide silencieuse).
+    /// - appel actif : `startAudioPlayback` refuse de démarrer le mixer pendant
+    ///   un appel (WS3.2) — la story joue muette, on ne gate pas.
+    /// - watchdog `playbackStallWatchdogSeconds` en secours absolu côté
+    ///   `applyPlaybackHealth`.
+    func isSlideAudioPending() -> Bool {
+        guard slideHasSchedulableAudio else { return false }
+        guard !MediaSessionCoordinator.shared.isCallActive else { return false }
+        return !audioMixer.hasStartedPlayback(slideKey: currentSlideKey)
     }
 
     /// Test-only seam : read-only access to the reader audio engine so the

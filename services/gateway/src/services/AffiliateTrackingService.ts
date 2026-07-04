@@ -114,30 +114,35 @@ export class AffiliateTrackingService {
         };
       }
 
-      // Réserver un slot d'utilisation de manière ATOMIQUE avant de créer la relation.
-      // Le cap `maxUses` est appliqué dans le filtre `where` (`currentUses < maxUses`) —
-      // le garde `>= maxUses` en amont n'est qu'un fast-path : entre sa lecture et
-      // l'incrément, N conversions concurrentes pouvaient toutes le franchir puis toutes
-      // incrémenter, dépassant le cap (TOCTOU). Ici MongoDB sérialise les updateMany sur
-      // le même document : seuls `maxUses - currentUses` matchent, les suivants renvoient
-      // `count === 0`. L'incrément reste atomique côté DB (jamais `currentUses + 1` en JS).
-      const reservation = await prisma.affiliateToken.updateMany({
-        where: {
-          id: affiliateToken.id,
-          ...(affiliateToken.maxUses
-            ? { currentUses: { lt: affiliateToken.maxUses } }
-            : {})
-        },
-        data: {
-          currentUses: { increment: 1 }
-        }
-      });
+      // Réserver une place de façon atomique AVANT de créer la relation.
+      // Le pré-check `currentUses >= maxUses` (plus haut) est un simple fast-path :
+      // deux conversions concurrentes peuvent toutes deux le franchir quand
+      // `currentUses === maxUses - 1`, créer chacune une relation puis incrémenter,
+      // dépassant le cap (TOCTOU). La clause conditionnelle `updateMany({ where:
+      // { currentUses: { lt: maxUses } } })` est sérialisée côté DB : au plus
+      // `maxUses` incréments réussissent. `count === 0` = le cap a été atteint dans
+      // la fenêtre de course → on rejette AVANT de créer la relation (pas de rollback).
+      if (affiliateToken.maxUses !== null && affiliateToken.maxUses !== undefined) {
+        const reserved = await prisma.affiliateToken.updateMany({
+          where: { id: affiliateToken.id, currentUses: { lt: affiliateToken.maxUses } },
+          data: { currentUses: { increment: 1 } }
+        });
 
-      if (reservation.count === 0) {
-        return { success: false, error: 'Limite d\'utilisation atteinte' };
+        if (reserved.count === 0) {
+          return { success: false, error: 'Limite d\'utilisation atteinte' };
+        }
+      } else {
+        // Token illimité : increment atomique inconditionnel (jamais `currentUses + 1`
+        // calculé en JS, qui perdrait une incrémentation sous concurrence).
+        await prisma.affiliateToken.update({
+          where: { id: affiliateToken.id },
+          data: {
+            currentUses: { increment: 1 }
+          }
+        });
       }
 
-      // Créer la relation d'affiliation (le slot est déjà réservé)
+      // Créer la relation d'affiliation (la place est déjà réservée atomiquement).
       const affiliateRelation = await prisma.affiliateRelation.create({
         data: {
           affiliateTokenId: affiliateToken.id,

@@ -8,10 +8,19 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.model.call.CallEndedSignal
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateResult
+import me.meeshy.sdk.model.call.CallSound
+import me.meeshy.sdk.model.call.CallSoundPolicy
 import me.meeshy.sdk.model.call.CallState
 import me.meeshy.sdk.model.call.CallStateMachine
+import me.meeshy.sdk.model.call.CallWaitingEvent
+import me.meeshy.sdk.model.call.CallWaitingReducer
+import me.meeshy.sdk.model.call.CallWaitingState
+import me.meeshy.sdk.model.call.ConnectionQuality
+import me.meeshy.sdk.model.call.TelecomCallPolicy
+import me.meeshy.sdk.model.call.WaitingCall
 import me.meeshy.sdk.socket.CallSignalManager
 import javax.inject.Inject
 
@@ -38,11 +47,18 @@ import javax.inject.Inject
 class CallViewModel @Inject constructor(
     private val signalManager: CallSignalManager,
     private val ticker: CallSecondsTicker,
+    private val toneController: CallToneController,
+    private val telecomReporter: TelecomCallReporter,
+    private val qualitySampler: CallQualitySampler,
+    private val waitingTimer: CallWaitingTimer,
 ) : ViewModel() {
 
     private var config: CallConfig = CallConfig.EMPTY
     private var media: CallMedia = CallMedia()
     private var callState: CallState = CallState.Idle
+
+    /** The loop currently asked of [toneController]; dedups redundant `setLoop` calls. */
+    private var activeLoop: CallSound = CallSound.None
 
     /** The id every outbound emit is keyed by: from the incoming config, or minted by [start]. */
     private var callId: String = ""
@@ -53,12 +69,30 @@ class CallViewModel @Inject constructor(
     /** The 1-Hz timer job; alive only while media is (or was) flowing this call. */
     private var tickerJob: Job? = null
 
+    /** The latest connection-quality indicator tier, or `null` until a sample arrives. */
+    private var connectionQuality: ConnectionQuality? = null
+
+    /** Collects [CallQualitySampler.samples]; alive only while media is flowing. */
+    private var qualityJob: Job? = null
+
+    /** At most one second incoming call awaiting an accept-swap / reject decision. */
+    private var waiting: CallWaitingState = CallWaitingState.EMPTY
+
+    /** The 15 s auto-dismiss timer for the current banner; cancelled on any resolution. */
+    private var waitingTimerJob: Job? = null
+
     private val _state = MutableStateFlow(CallPresenter.present(callState, config, media, elapsedSeconds))
     val state: StateFlow<CallUiState> = _state.asStateFlow()
 
     init {
         viewModelScope.launch {
             signalManager.events.collect(::dispatch)
+        }
+        viewModelScope.launch {
+            signalManager.incomingOffers.collect(::onIncomingOffer)
+        }
+        viewModelScope.launch {
+            signalManager.endedCalls.collect(::onRemoteEnded)
         }
     }
 
@@ -75,7 +109,11 @@ class CallViewModel @Inject constructor(
         this.media = CallMedia(isCameraOn = config.isVideo)
         this.callId = config.callId
         this.elapsedSeconds = 0L
+        this.connectionQuality = null
+        this.waiting = CallWaitingState.EMPTY
         stopTicker()
+        stopQuality()
+        stopWaitingTimer()
         if (config.isOutgoing) startOutgoing(config) else dispatch(CallEvent.ReceiveIncoming)
     }
 
@@ -134,15 +172,153 @@ class CallViewModel @Inject constructor(
     /** Settle a terminal call back to idle (dismissing the ended screen). */
     fun dismiss() = dispatch(CallEvent.Settle)
 
+    // --- Call waiting: a second incoming call while this one is active ------
+
+    /**
+     * A second incoming offer arrived on the socket. It becomes a call-waiting
+     * banner **only** while a call is already active (parity with iOS busy-path)
+     * and only for a *different* call than the one in progress — a redelivery of
+     * the active call's own offer is ignored. A newer offer replaces an older
+     * pending one and restarts the auto-dismiss window.
+     */
+    private fun onIncomingOffer(call: WaitingCall) {
+        if (!callState.isActive) return
+        if (call.callId == callId) return
+        waitingReduce(CallWaitingEvent.Offered(call))
+        startWaitingTimer(call.callId)
+    }
+
+    /**
+     * Reject the waiting call: end it on the wire (keyed by its own id, leaving
+     * the active call untouched) and dismiss the banner. Also the resolution the
+     * 15 s auto-dismiss reuses — an ignored banner must free the caller, not leave
+     * them ringing.
+     */
+    fun rejectWaiting() {
+        val pending = waiting.pending ?: return
+        stopWaitingTimer()
+        endWaiting(pending)
+    }
+
+    /**
+     * End-this-and-answer: dismiss the banner, hang up the active call, settle it,
+     * and re-present the waiting call as a fresh incoming call the user answers
+     * normally (parity with iOS `endCurrentAndAnswerPending`, which re-reports the
+     * pending call after tearing down the active one).
+     */
+    fun acceptWaitingSwap() {
+        val pending = waiting.pending ?: return
+        stopWaitingTimer()
+        waitingReduce(CallWaitingEvent.Accepted)
+        hangUp()
+        dispatch(CallEvent.Settle)
+        start(
+            CallConfig(
+                peerId = pending.callerId,
+                peerName = pending.callerName,
+                isVideo = pending.isVideo,
+                isOutgoing = false,
+                callId = pending.callId,
+            ),
+        )
+    }
+
+    /**
+     * A call ended remotely (`call:ended` / `call:missed`). This is the **sole**
+     * teardown path, gated on identity so only the *right* call is torn down:
+     *  - the ended id is the **active** call's → reduce the FSM by the carried
+     *    event (`RemoteHangUp` / `RingTimeout`), ending the call the user is on.
+     *  - the ended id is the **waiting** call's → its caller hung up (or the ring
+     *    timed out) before the user chose, so the banner is dismissed and its
+     *    auto-reject timer cancelled **without** an `emitEnd` (nothing is left to
+     *    end once the caller has gone), leaving the active call untouched.
+     *  - neither → inert. Crucially, the gateway fans a `call:ended` out to every
+     *    member room, so a busy user also receives the *waiting* call's teardown;
+     *    because teardown never rides the identity-less [CallSignalManager.events],
+     *    that fan-out can no longer blindly reduce the active call's FSM.
+     */
+    private fun onRemoteEnded(signal: CallEndedSignal) {
+        if (callId.isNotBlank() && signal.callId == callId) {
+            dispatch(signal.event)
+            return
+        }
+        val pending = waiting.pending ?: return
+        if (pending.callId != signal.callId) return
+        stopWaitingTimer()
+        waitingReduce(CallWaitingEvent.RemotelyEnded(signal.callId))
+    }
+
+    private fun endWaiting(pending: WaitingCall) {
+        signalManager.emitEnd(pending.callId)
+        waitingReduce(CallWaitingEvent.Rejected)
+    }
+
+    private fun startWaitingTimer(offeredId: String) {
+        waitingTimerJob?.cancel()
+        waitingTimerJob = viewModelScope.launch {
+            waitingTimer.countdown().collect {
+                val pending = waiting.pending ?: return@collect
+                if (pending.callId != offeredId) return@collect
+                // The single-shot countdown completes right after this — mark the
+                // job done so `endWaiting` never cancels the coroutine it runs in.
+                waitingTimerJob = null
+                endWaiting(pending)
+            }
+        }
+    }
+
+    private fun stopWaitingTimer() {
+        waitingTimerJob?.cancel()
+        waitingTimerJob = null
+    }
+
+    private fun waitingReduce(event: CallWaitingEvent) {
+        waiting = CallWaitingReducer.reduce(waiting, event)
+        publish()
+    }
+
     /** Runs [emit] with the current [callId] only once one is known — inert otherwise. */
     private inline fun emitIfIdentified(emit: (String) -> Unit) {
         if (callId.isNotBlank()) emit(callId)
     }
 
     private fun dispatch(event: CallEvent) {
-        callState = CallStateMachine.reduce(callState, event)
+        val previous = callState
+        callState = CallStateMachine.reduce(previous, event)
+        driveTone(previous, callState)
+        driveTelecom(previous, callState)
         syncTicker()
+        syncQuality()
         publish()
+    }
+
+    /**
+     * Report each genuine FSM edge to the OS telecom layer via the pure
+     * [TelecomCallPolicy]: the policy dedupes inert edges (an already-active call,
+     * a phantom disconnect, a settle back to idle) to `null`, so the reporter only
+     * ever sees a real connection transition.
+     */
+    private fun driveTelecom(previous: CallState, next: CallState) {
+        TelecomCallPolicy.plan(previous, next)?.let(telecomReporter::report)
+    }
+
+    /**
+     * Turn each FSM edge into call audio via the pure [CallSoundPolicy]: switch the
+     * loop only when it genuinely changes (so an inert event never restarts the
+     * ringback) and fire the one-shot cue the edge carries.
+     */
+    private fun driveTone(previous: CallState, next: CallState) {
+        val plan = CallSoundPolicy.plan(previous, next)
+        if (plan.loop != activeLoop) {
+            activeLoop = plan.loop
+            toneController.setLoop(plan.loop)
+        }
+        plan.cue?.let(toneController::playCue)
+    }
+
+    override fun onCleared() {
+        toneController.release()
+        telecomReporter.release()
     }
 
     /**
@@ -170,8 +346,35 @@ class CallViewModel @Inject constructor(
         tickerJob = null
     }
 
+    /**
+     * Collects live quality samples exactly while media is (or is being
+     * re-)established, mapping each through the pure [ConnectionQuality] SSOT; on
+     * any other phase the collection stops and the last reading is cleared so a
+     * stale bar count never lingers past the connected window.
+     */
+    private fun syncQuality() {
+        val clockRunning = callState is CallState.Connected || callState is CallState.Reconnecting
+        if (clockRunning) startQualityIfNeeded() else stopQuality()
+    }
+
+    private fun startQualityIfNeeded() {
+        if (qualityJob != null) return
+        qualityJob = viewModelScope.launch {
+            qualitySampler.samples.collect { sample ->
+                connectionQuality = ConnectionQuality.from(sample.level())
+                publish()
+            }
+        }
+    }
+
+    private fun stopQuality() {
+        qualityJob?.cancel()
+        qualityJob = null
+        connectionQuality = null
+    }
+
     private fun publish() {
-        _state.value = CallPresenter.present(callState, config, media, elapsedSeconds)
+        _state.value = CallPresenter.present(callState, config, media, elapsedSeconds, connectionQuality, waiting)
     }
 
     private companion object {

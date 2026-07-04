@@ -30,6 +30,9 @@ struct MessageOverlayMenu: View {
     var onReport: ((String, String?) -> Void)?
     var onDelete: (() -> Void)?
     var onDeleteAttachment: ((String) -> Void)?
+    /// Composant unifié « Enregistrer » : déclenché par l'action `.saveMedia`
+    /// (message à exactement un attachment enregistrable).
+    var onSaveMedia: (() -> Void)? = nil
     var onShowThread: (() -> Void)?
 
     // Full bubble-rendering context — when `messageBubbleFrame != .zero`, the
@@ -214,7 +217,8 @@ struct MessageOverlayMenu: View {
             // `.history` de la feuille « Plus… », dont le contexte est construit
             // séparément (ConversationView) avec la vraie valeur
             // `!editRevisions(for:).isEmpty`.
-            hasEditRevisions: true
+            hasEditRevisions: true,
+            saveableAttachmentCount: message.attachments.filter { $0.type != .location }.count
         )
     }
 
@@ -230,6 +234,8 @@ struct MessageOverlayMenu: View {
             onShowTranslate?()
         case .copy:
             onCopy?()
+        case .saveMedia:
+            onSaveMedia?()
         case .pin, .unpin:
             onPin?()
         case .star, .unstar:
@@ -269,19 +275,7 @@ struct MessageOverlayMenu: View {
             let bubblePreviewScale: CGFloat = bubbleRect.height > maxPreviewHeight
                 ? max(0.55, maxPreviewHeight / bubbleRect.height)
                 : 1.0
-            let scaledBubbleWidth = bubbleRect.width * bubblePreviewScale
             let scaledBubbleHeight = bubbleRect.height * bubblePreviewScale
-
-            // Ancrage horizontal de la bulle scaled — glué au même bord que
-            // la source : right pour `isMe` (bulles "moi" right-aligned),
-            // left pour les bulles reçues. Au scale 1 l'expression dégénère
-            // en `bubbleRect.midX` (identité, aucune régression). Au scale
-            // < 1 la bulle conserve son edge d'origine au lieu de "flotter"
-            // vers le centre — sans ça une bulle "moi" prés du bord droit
-            // se retrouve décalée vers la gauche après scale-down.
-            let bubbleAnchorX: CGFloat = message.isMe
-                ? bubbleRect.maxX - scaledBubbleWidth / 2
-                : bubbleRect.minX + scaledBubbleWidth / 2
 
             // Mesures du cluster — gaps tightement contrôlés. Heights basées
             // sur les rendus réels mesurés en simulateur.
@@ -317,33 +311,6 @@ struct MessageOverlayMenu: View {
             let clampedClusterTopY = max(minClusterTopY, min(desiredClusterTopY, maxClusterTopY))
             let clusterBottomY = clampedClusterTopY + clusterTotalHeight
 
-            // Positions Y centrales de chaque élément du cluster (pour .position).
-            // Utilise scaledBubbleHeight pour respecter le scale-down visuel
-            // du preview (vidéos / grilles d'images / reply + grid → cap 320pt).
-            let quickActionMenuCenterY = clampedClusterTopY + quickActionMenuHeight / 2
-            let bubbleTopY = clampedClusterTopY + quickActionMenuHeight + quickActionToBubbleGap
-            let bubbleFinalMidY = bubbleTopY + scaledBubbleHeight / 2
-            let emojiBarCenterY = bubbleTopY + scaledBubbleHeight + bubbleToEmojiGap + emojiBarHeight / 2
-
-            // Position X = bubbleAnchorX (centre de la bulle scaled, alignée
-            // au même bord que la source). Action bar et emoji bar suivent
-            // ce même axe vertical avec clamp aux bords écran pour éviter le
-            // débordement quand la bulle est près d'un bord. Au scale 1
-            // `bubbleAnchorX == bubbleRect.midX`, donc pas de régression pour
-            // les bulles courtes ; au scale < 1 le cluster reste solidaire de
-            // la bulle qui ne flotte plus vers le centre.
-            let sidePadding: CGFloat = 16
-            let quickActionMenuWidth = ContextActionMenu.estimatedSize(actionCount: max(1, quickActionsCount)).width
-            let emojiBarApproxWidth: CGFloat = 320
-            let quickActionMenuCenterX: CGFloat = max(
-                sidePadding + quickActionMenuWidth / 2,
-                min(geometry.size.width - sidePadding - quickActionMenuWidth / 2, bubbleAnchorX)
-            )
-            let emojiBarCenterX: CGFloat = max(
-                sidePadding + emojiBarApproxWidth / 2,
-                min(geometry.size.width - sidePadding - emojiBarApproxWidth / 2, bubbleAnchorX)
-            )
-
             // Panel auto-expand : si le cluster termine plus haut que le
             // panel naturel, le panel s'agrandit pour combler le gap (le
             // top du panel monte jusqu'à clusterBottom + clearance).
@@ -356,7 +323,6 @@ struct MessageOverlayMenu: View {
             // étendue).
             let maxExpandUp = -(screenH - panelBaseHeight - safeTop - 20)
             let clampedDrag = min(0, max(maxExpandUp, dragOffset))
-            let panelHeight = panelBaseHeight - clampedDrag
 
             // Fade out de la cluster (action bar + bulle + emoji bar) quand
             // l'utilisateur déplie le panneau via le drag handle. Au-delà de

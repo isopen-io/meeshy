@@ -165,6 +165,38 @@ final class FloatingCallPillViewTests: XCTestCase {
         )
     }
 
+    func test_hangupButton_hasAccessibilityHint() throws {
+        let source = try pillSource()
+        guard let range = source.range(of: "private var hangupButton") else {
+            XCTFail("FloatingCallPillView must define hangupButton")
+            return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 1000, limitedBy: source.endIndex) ?? source.endIndex
+        let vicinity = String(source[range.lowerBound..<end])
+        XCTAssertTrue(
+            vicinity.contains(".accessibilityHint("),
+            "The hang-up button must carry an accessibility hint — CallView's endCallButton " +
+            "already has one (call.end.hint); the pill's hangup button is the same action and " +
+            "must not regress behind it for VoiceOver users."
+        )
+    }
+
+    func test_expandButton_hasAccessibilityHint() throws {
+        let source = try pillSource()
+        guard let range = source.range(of: "private var expandButton") else {
+            XCTFail("FloatingCallPillView must define expandButton")
+            return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 1000, limitedBy: source.endIndex) ?? source.endIndex
+        let vicinity = String(source[range.lowerBound..<end])
+        XCTAssertTrue(
+            vicinity.contains(".accessibilityHint("),
+            "The expand button must carry an accessibility hint describing what happens on tap " +
+            "(returns to the full-screen call), matching the hint-coverage pattern used " +
+            "elsewhere in the calling UI (e.g. call.minimize.hint)."
+        )
+    }
+
     func test_pillContent_hasContainerAccessibilityLabel() throws {
         let source = try pillSource()
         XCTAssertTrue(
@@ -183,6 +215,39 @@ final class FloatingCallPillViewTests: XCTestCase {
         )
     }
 
+    // MARK: - Toggle semantics parity with CallView
+
+    func test_muteButton_appliesToggleAccessibility() throws {
+        let source = try pillSource()
+        guard let range = source.range(of: "private var muteButton") else {
+            XCTFail("FloatingCallPillView must define muteButton")
+            return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 1000, limitedBy: source.endIndex) ?? source.endIndex
+        let vicinity = String(source[range.lowerBound ..< end])
+        XCTAssertTrue(
+            vicinity.contains("callToggleAccessibility(isToggle: true, isActive: callManager.isMuted)"),
+            "The mute button must apply .callToggleAccessibility so VoiceOver exposes the " +
+            "same toggle trait + on/off value as the equivalent control in CallView — a plain " +
+            "label swap alone loses the toggle semantics and rotor navigation support."
+        )
+    }
+
+    func test_speakerButton_appliesToggleAccessibility() throws {
+        let source = try pillSource()
+        guard let range = source.range(of: "private var speakerButton") else {
+            XCTFail("FloatingCallPillView must define speakerButton")
+            return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 1000, limitedBy: source.endIndex) ?? source.endIndex
+        let vicinity = String(source[range.lowerBound ..< end])
+        XCTAssertTrue(
+            vicinity.contains("callToggleAccessibility(isToggle: true, isActive: callManager.isSpeaker)"),
+            "The speaker button must apply .callToggleAccessibility so VoiceOver exposes the " +
+            "same toggle trait + on/off value as the equivalent control in CallView."
+        )
+    }
+
     // MARK: - Status text
 
     func test_statusLine_showsDurationOnlyWhenConnected() throws {
@@ -191,6 +256,26 @@ final class FloatingCallPillViewTests: XCTestCase {
             source.contains("pillStatus.isConnected ? formattedDuration"),
             "The pill status line must show the live duration ONLY for the .connected state " +
             "— pre-connection states must show a textual label, never 00:00."
+        )
+    }
+
+    // MARK: - Dynamic Type sizing
+
+    func test_pillContent_usesMinHeightNotExactHeight() throws {
+        let source = try pillSource()
+        // userInfoSection stacks two Dynamic-Type-scalable Text lines that can
+        // exceed pillHeight at accessibility text sizes (AX1+). An exact
+        // `.frame(height:)` would force-clip the name/status instead of letting
+        // the pill grow to fit its content.
+        XCTAssertTrue(
+            source.contains(".frame(minHeight: pillHeight)"),
+            "pillContent must use .frame(minHeight: pillHeight), not an exact .frame(height:), " +
+            "so the pill grows to fit Dynamic Type text instead of clipping it."
+        )
+        XCTAssertFalse(
+            source.contains(".frame(height: pillHeight)"),
+            "pillContent must not force an exact height on the pill — that clips " +
+            "userInfoSection's text at large accessibility text sizes."
         )
     }
 }

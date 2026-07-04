@@ -112,8 +112,72 @@
 > connect, ticking through a reconnect, frozen at the final length on the ended screen, `null` for a call
 > that never connected. The connected screen shows the running clock; the ended screen appends the final
 > length. +18 tests.
-> **Next:** a full `ConnectionService`/Telecom integration + ringback tone (system call UI), then the
-> actual WebRTC media transport (`stream-webrtc-android`). Follow-up: `SocketManager.reconnectWithToken()`
+> On 2026-07-02 the **call-audio decision core** landed (slice `call-sound-policy`): the pure
+> `core:model` `CallSoundPolicy` is the SSOT mapping call lifecycle → sound — the Android analogue of the
+> iOS `RingbackTonePlayer` call sites collected into one total function. `loopFor(state)`
+> (`CallSound.None/Ringback/Ringtone`) plays the caller **ringback** through the whole pre-answer wait
+> (`Ringing(outgoing)` + `Offering`) and stops it the instant the answer lands (`Connecting`) — tighter
+> than iOS, which drags it to `.connected` — and the callee **ringtone** while `Ringing(incoming)`;
+> `cueFor(prev,next)` fires `CallCue.Connected` on every entry into `Connected` (first connect **and**
+> reconnect-success) and `CallCue.Ended` only when a *live* call ends (`prev.isActive`, mirroring iOS
+> `if wasActive`), so a phantom `Idle→Ended`/idempotent `Ended→Ended` stays silent; `plan(prev,next)`
+> bundles both per edge. The `:feature:calls` `CallToneController` seam (thin `ToneGenerator`/
+> `RingtoneManager` glue behind an interface, `@Binds AndroidCallToneController`) is folded into
+> `CallViewModel.dispatch` — each FSM edge drives the loop (switched only on a genuine change, so an inert
+> event never restarts the ringback) + fires the cue, released on `onCleared`. +28 tests (19 policy, 9
+> VM-fold via a recording fake). `assembleDebug` + all `testDebugUnitTest` green.
+> On 2026-07-03 the **telecom-connection decision core** landed (slice `call-telecom-state-plan`): the pure
+> `core:model` `TelecomCallPolicy` is the SSOT mapping call lifecycle → the OS telecom reports a
+> self-managed `ConnectionService` must make — the Android analogue of the `CXProvider.reportCall(...)` /
+> `report(_:endedAt:)` calls the iOS `CallManager` makes to CallKit, collected into one total function.
+> `connectionStateFor(state)` keys purely on `CallState` (no direction leak): outgoing ring/`Offering` →
+> `Dialing`, incoming ring → `Ringing`, **answered = `Active`** (`Connecting`/`Connected`/`Reconnecting`
+> collapse onto `Active` so an ICE restart never tears the system call down), `Ended` → `Disconnected`,
+> `Idle` → none. `disconnectCauseFor(reason)` maps every `CallEndReason` (lost/failed → `Error`).
+> `plan(prev,next)` reports **only on a genuine transition** — dedupes an already-active edge, a phantom
+> `Idle→Ended` (no connection ever created, mirroring `CallSoundPolicy`'s `prev.isActive` guard), an
+> idempotent `Ended→Ended`, and a settle `Ended→Idle` all to `null`. The `:feature:calls`
+> `TelecomCallReporter` seam (thin `LogTelecomCallReporter` interim glue behind an interface, `@Binds` into
+> a Hilt module) is folded into `CallViewModel.dispatch` (report each genuine edge; released on
+> `onCleared`). +35 tests (28 policy, 7 VM-fold via a recording fake). `assembleDebug` + all
+> `testDebugUnitTest` green.
+> On 2026-07-03 the **connection-quality core + indicator** landed (slice `call-quality-level`): the pure
+> `core:model` `VideoQualityLevel` (5-tier `CRITICAL<POOR<FAIR<GOOD<EXCELLENT`, port of iOS
+> `VideoQualityLevel`/`QualityThresholds`) classifies live stats via `from(rttMs, packetLoss)`
+> (worse-of-two-axes, strict `>`) + `from(availableOutgoingBitrateBps)` and carries each tier's sender
+> caps for the future adaptive-bitrate ladder; the four-tier `ConnectionQuality` collapses it
+> (`CRITICAL→POOR`, parity with iOS `connectionQualityLabel`) with `bars`/`isWeak`. A `CallQualitySampler`
+> stats seam (interim `NoopCallQualitySampler`) is folded into `CallViewModel` exactly while media flows
+> (a `qualityJob` mirroring the duration ticker), projected by `CallPresenter` into
+> `CallUiState.connectionQuality`, and rendered as an accent-coherent 4-bar signal indicator on the call
+> screen (error hue on a weak link). +37 tests (24 core, 6 VM-fold, 3 presenter, +4 strings×4 locales).
+> `assembleDebug` + all `testDebugUnitTest` green.
+> On 2026-07-03 the **video-survival auto-disable policy** landed (slice `call-video-survival-policy`, #1387):
+> the pure `core:model` `VideoSurvivalPolicy.reduce(state, level, nowSeconds, userWantsVideo)` drops
+> outbound video to audio-only after a sustained ≥6 s `POOR`/`CRITICAL` streak and resumes after a
+> sustained ≥10 s `EXCELLENT`/`GOOD` streak (duration-based hysteresis on a monotonic clock, `FAIR` holds
+> the recovery window). +19 tests. The actuator seam is deferred to the WebRTC layer.
+> On 2026-07-03 the **WebRTC-plumbing emits** landed (slice `call-webrtc-plumbing-emits`): `:sdk-core`
+> `CallSignalManager` gains the five remaining outbound call frames at iOS payload-key parity —
+> `emitRequestIceServers`/`emitHeartbeat`/`emitQualityReport`/`emitReconnecting`/`emitReconnected`. The
+> `call:quality-report` `stats` shape is decided once by the pure `core:model` `CallQualityReport.
+> statsFields()` (base five metrics always present; `availableOutgoingBitrateBps`/`jitterMs` appended only
+> when strictly positive, iOS parity), with `ConnectionQuality.wireValue` as the `level` SSOT and `Long`
+> byte counters (surpasses iOS's 32-bit `Int` — no overflow on a marathon call). The outbound emit table
+> for the whole call domain is now complete; only the **app-side driver seams** (heartbeat/quality-report
+> timers, ICE-restart controller) that *call* these emits remain, and land with the WebRTC media
+> transport. +16 tests (10 report, 6 manager). `assembleDebug` + all `testDebugUnitTest` green.
+> On 2026-07-03 the **identity-aware active-call teardown** landed (slice `call-ended-identity-teardown`):
+> a bug fix closing the `call-ended-signal-identity` follow-up. `call:ended`/`call:missed` no longer ride the
+> identity-less `CallSignalManager.events` (they now map to `null` in `CallSignalMapper.map`); the single pure
+> `CallSignalMapper.endedSignal → CallEndedSignal(callId, event)` decode is the sole teardown path, carried on
+> `endedCalls: SharedFlow<CallEndedSignal>`. `CallViewModel.onRemoteEnded` gates on identity — the active
+> call's id reduces its FSM, the waiting call's id only dismisses the banner, neither is inert — so a waiting
+> call's teardown fanned out to a busy user's rooms can no longer tear down the active call.
+> **Next:** the real self-managed `ConnectionService`/`PhoneAccount` registration + full-screen call UI +
+> foreground service (the platform glue that swaps the `LogTelecomCallReporter` `@Binds` for a real
+> reporter and owns the audio session), then the actual WebRTC media transport (`stream-webrtc-android`).
+> Follow-up: `SocketManager.reconnectWithToken()`
 > still has no caller (token-refresh re-attach slice — deferred until a token-rotation trigger exists).
 > See the run log + `feature-parity.md §H`.
 
@@ -308,7 +372,60 @@ dedicated **Calls tab** in the bottom nav wiring `CallHistoryScreen` (`:app`). T
 WebRTC/Telecom/FCM plumbing.
 
 Then the heavier WebRTC/Telecom/FCM-full-screen-intent plumbing (glue-heavy; push every testable
-decision into pure helpers/the VM).
+decision into pure helpers/the VM). The **ringback/ringtone/cue** decision core shipped as
+`call-sound-policy` (2026-07-02), the **telecom-connection** decision core as `call-telecom-state-plan`
+(2026-07-03), and the **connection-quality classification + indicator** as `call-quality-level`
+(2026-07-03) — all pure `core:model` SSOTs folded into `CallViewModel`, leaving only the real
+self-managed `ConnectionService`/`PhoneAccount` registration + foreground-service call UI (which swaps the
+`LogTelecomCallReporter` `@Binds`) and the WebRTC media transport (`stream-webrtc-android`) as the
+remaining platform glue.
+
+**Next testable pure cores in Calls** (highest value first):
+1. ~~**Video-survival auto-disable policy**~~ ✅ shipped as `call-video-survival-policy` (2026-07-03) —
+   the pure `core:model` `VideoSurvivalPolicy` (port of iOS `VideoSurvivalPolicy`): `reduce(state, level,
+   nowSeconds, userWantsVideo) → VideoSurvivalDecision(state, action)`. A sustained `POOR`/`CRITICAL`
+   streak of ≥6 s while sending yields `Suspend` (drop to audio-only); a sustained `EXCELLENT`/`GOOD`
+   streak of ≥10 s while suspended yields `Resume`; `FAIR` **holds** the recovery timer (a brief dip
+   doesn't restart the window) while `POOR`/`CRITICAL` wipes it; a good/fair sample while sending clears
+   the degraded streak. Duration-based hysteresis (monotonic-seconds, cadence-independent), fixed-size
+   `VideoSurvivalState` (O(1) over a marathon call), user camera-off resets to `INITIAL`. Two survival
+   thresholds added to `CallQualityThresholds` at iOS parity. +19 tests. See run log. **Next:** the
+   WebRTC actuator seam that consumes `Suspend`/`Resume` (app-side orchestration).
+2. ~~**Call-waiting banner**~~ ✅ shipped as `call-waiting-banner` (2026-07-03) — a second incoming call
+   while one is active. The pure `core:model` decision core (`WaitingCall` + `WaitingCall.from(payload)`,
+   `CallWaitingState`, total `CallWaitingReducer` — Offered/Rejected/Accepted/RemotelyEnded) is the SSOT,
+   folded into `CallViewModel` end-to-end: a new `CallSignalManager.incomingOffers` surfaces the identity
+   of each `call:initiated` frame (which the FSM-facing `events` discards), the VM routes a *second* offer
+   (different callId, while `CallState.isActive`) to the banner, and a `CallWaitingTimer` seam auto-dismisses
+   after 15s **as a reject** (frees the caller, iOS parity). `rejectWaiting()` ends the waiting call keyed by
+   its own id (active call untouched); `acceptWaitingSwap()` hangs up the active call, settles, and
+   re-presents the waiting call as a fresh incoming (iOS `endCurrentAndAnswerPending`). Accent-coherent
+   top banner in `CallScreen` (error-hue reject + peer-accent answer, a11y-labelled). +35 tests. See run log.
+   The `RemotelyEnded` driver ✅ shipped as `call-ended-signal-identity` (2026-07-03) — the pure
+   `CallSignalMapper.endedCallId(eventName, rawJson)` decodes the `callId` from a `call:ended`/`call:missed`
+   frame (blank/absent/malformed → `null`), a new `CallSignalManager.endedCalls: SharedFlow<String>`
+   republishes it alongside the identity-less `events` (same parallel-stream pattern as `incomingOffers`),
+   and `CallViewModel.onRemoteEnded` folds it into `CallWaitingEvent.RemotelyEnded` — auto-dismissing the
+   banner (and cancelling its 15s auto-reject timer) **only** when the ended id is the *pending* call's,
+   with **no** `emitEnd` (the caller already hung up), leaving the active call untouched. +15 tests.
+   See run log. The **identity-aware active-call teardown** ✅ shipped as `call-ended-identity-teardown`
+   (2026-07-03) — closed that known follow-up: `call:ended`/`call:missed` now route to `null` in
+   `CallSignalMapper.map` (never the identity-less `events`) and are decoded once by the new pure
+   `CallSignalMapper.endedSignal → CallEndedSignal(callId, event)`, so `CallSignalManager.endedCalls` is
+   now `SharedFlow<CallEndedSignal>` (was `String`) — the **sole** teardown path. `CallViewModel.onRemoteEnded`
+   gates on identity: the *active* call's id → reduce the FSM by the carried `RemoteHangUp`/`RingTimeout`;
+   the *waiting* call's id → dismiss the banner (no `emitEnd`); neither → inert. A waiting call's teardown
+   fanned out to a busy user's rooms can no longer tear down the active call. +new tests. See run log.
+3. ~~**Adaptive sender-cap plan**~~ ✅ shipped as `call-sender-cap-plan` (2026-07-03) — the pure
+   `core:model` `VideoSenderCapPlan` turning a `VideoQualityLevel` + `ThermalState` into the concrete RTP
+   sender parameters (`maxBitrateBps`/`maxFramerate`/`scaleResolutionDownBy`). Network ladder picks the
+   target (CRITICAL floored to 360p15 @ 100 kbps, never a zero encoder / never an upscale); an independent
+   `ThermalCeiling` (port of iOS `VideoThermalProfile`, `NOMINAL` a no-op) sheds encode load on a hot device;
+   the more conservative value wins per axis. +17 tests. See run log. **Next:** the app-side WebRTC actuator
+   seam that (a) maps Android `PowerManager.THERMAL_STATUS_*` → `ThermalState`, (b) folds `VideoSenderCapPlan`
+   + `VideoSurvivalPolicy` on the stats tick, and (c) applies the cap to the live RTP video sender — plus the
+   debounce/change-detection that only re-applies when the cap actually changes (iOS
+   `qualityLevelDebounceSeconds`), all real WebRTC glue behind a testable seam.
 
 --- Stories backlog (area is rich; revisit only if Calls stalls) ---
 Ordered by value:
@@ -496,6 +613,386 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-03 — slice `call-sender-cap-plan` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration (open PRs #1410/#1412/#1413/#1414/#1416
+  were all iOS/gateway, untouched); last Android slice `call-ended-identity-teardown` (#1415) already merged
+  to `main`. Branched `claude/apps/android/call-sender-cap-plan` off latest `origin/main` (`f301d5e`).
+- **What (next testable pure core #3 in Calls):** the adaptive **video-sender-cap plan** — the pure
+  `core:model` SSOT that turns a `VideoQualityLevel` (network) + a device thermal tier into the concrete RTP
+  sender parameters (`maxBitrateBps` / `maxFramerate` / `scaleResolutionDownBy`) a future WebRTC actuator
+  applies to the outbound video track. Port of iOS `WebRTCService.applyVideoQuality` composed with
+  `VideoThermalProfile.apply` — the network ladder picks the target, an independent thermal ceiling sheds
+  encode load on a hot device, and the **more conservative** value wins per axis.
+- **Added (production, 2 files):**
+  - new `VideoSenderCap.kt` (`core:model`) — pure `ThermalState` enum (framework-agnostic port of iOS
+    `ProcessInfo.ThermalState`; the app maps Android `PowerManager.THERMAL_STATUS_*` onto it), the
+    `ThermalCeiling` value type (`bitrateFactor`/`maxFramerate`/`minScaleDownBy`, `forState` at iOS
+    `VideoThermalProfile.ceiling` parity, `NOMINAL` a strict no-op), the `VideoSenderCap` bundle, and the
+    `VideoSenderCapPlan` object: `forLevel(level)` reads each axis off the tier and falls back to the CRITICAL
+    floor (360p15 @ 100 kbps) when the tier target is `0` (no zero encoder; `scaleResolutionDownBy =
+    max(1.0, 720 / height)` so it never upscales); `forConditions(level, thermal)` composes the two, taking
+    the min bitrate/fps and the steeper downscale, hard-floored at `1`/`1`/`1.0`.
+  - `CallQuality.kt` (`core:model`) — three new `CallQualityThresholds` floor constants
+    (`MIN_VIDEO_BITRATE_BPS=100_000`, `CRITICAL_VIDEO_FLOOR_FPS=15`, `CRITICAL_VIDEO_FLOOR_HEIGHT=360`) at
+    iOS `QualityThresholds` parity. No existing constant or behaviour changed.
+- **Tests (red→green, +17 `VideoSenderCapPlanTest`):** every level's network cap (EXCELLENT/GOOD 720p, FAIR
+  480p, POOR 360p, CRITICAL floored — not zero); the never-upscale invariant across all levels; all four
+  thermal ceiling arms; composition — nominal keeps the full cap, a hot device sheds bitrate+fps+scale on an
+  excellent link, the network fps/downscale wins when already stricter than the thermal cap, the thermal
+  floor lifts a gentle downscale, exact bitrate rounding, and the `≥1`/`≥1.0` hard floors across every
+  level×thermal pair.
+- **Verification:** `/opt/gradle/bin/gradle :core:model:testDebugUnitTest` green (17/17 in the new suite,
+  no regression across the module); `:core:model:assembleDebug` green. (`./gradlew`/`meeshy.sh` still 403 on
+  the wrapper dist download from GitHub releases — used the preinstalled `/opt/gradle` 8.14.3, per NOTES.)
+- **Reviewer verdict:** PASS — diff is `apps/android` only (2 prod files + 1 test file + these docs), no
+  production logic elsewhere; TDD red→green, behaviour through the public API, no tautologies, no weakened
+  floors; SDK purity kept (a stateless pure decision in `core:model`, the platform thermal mapping left as
+  app-side glue); edges covered (CRITICAL zero-target floor, never-upscale, per-axis conservative composition,
+  hard `1`/`1.0` floors).
+- **PR + merge:** PR #1417, squash-merged to `main` (`d5443c08`). CI: 11/13 checks green (Quality-bun,
+  Security, Prisma, Test shared/agent/web, Audio Pipeline, TTS/STT, Voice API + Trivy-neutral); the two
+  heaviest coverage suites (**Test gateway**, **Test Python**) were stuck in a degraded/contended runner
+  (`Run tests with coverage` step >110 min for suites that normally finish in minutes) — a pure infra hang,
+  not a failure, on JS/Python code the `apps/android`-only diff never touches and which `main` (the
+  merge-base `e078f29`) already passes. No red anywhere; branch protection allowed the squash. Recorded in
+  NOTES as the CI-runner-hang lesson.
+
+### 2026-07-03 — slice `call-ended-identity-teardown` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration (open PRs #1410/#1412/#1413/#1414
+  were all iOS/gateway, untouched). Branched `claude/apps/android/call-ended-identity-teardown` off latest
+  `origin/main` (`b2fcdf5`).
+- **What (bug fix, closes the `call-ended-signal-identity` known follow-up):** the FSM-facing identity-less
+  `CallSignalManager.events` used to carry a `call:ended`/`call:missed` teardown as `RemoteHangUp`/`RingTimeout`,
+  which `CallViewModel.dispatch` folded **blindly** into the *active* FSM. The gateway fans `call:ended` out
+  to every member USER room, so a busy user (one call active + a second ringing as a call-waiting banner)
+  received the *waiting* call's teardown too — and it tore down the **active** call. Now teardown is
+  identity-gated end-to-end: only the active call's own end reduces its FSM.
+- **Changed (production, 3 files):**
+  - `CallSignalMapper` (`core:model`) — `map` now returns `null` for `call:ended`/`call:missed` (they are
+    no longer FSM-facing). Replaced `endedCallId(): String?` with `endedSignal(): CallEndedSignal?` — the
+    single, total, identity-carrying teardown decode (id + the `RemoteHangUp`/`RingTimeout` the FSM reduces).
+    Blank/absent id or malformed JSON → `null` (an untargetable teardown is dropped, never applied blindly).
+  - new `CallEndedSignal(callId, event)` (`core:model`, pure value type).
+  - `CallSignalManager.endedCalls` (`sdk-core`) — now `SharedFlow<CallEndedSignal>` (was `String`); `listen`
+    routes teardown frames through `endedSignal` only. This is the **sole** teardown path.
+  - `CallViewModel.onRemoteEnded(CallEndedSignal)` (`feature:calls`) — active id match → `dispatch(event)`
+    into the FSM; else waiting id match → `RemotelyEnded` (dismiss banner, no `emitEnd`); else inert.
+- **Tests (red→green):**
+  - `CallSignalMapperTest` — ended/missed now inert to `map`; +11 `endedSignal` cases (completed/rejected/
+    no-reason→RemoteHangUp, missed-reason & missed-frame→RingTimeout, non-teardown/initiated→null,
+    blank-ended/blank-missed/absent id→null, malformed→null).
+  - `CallSignalManagerTest` — ended/missed emit **nothing** on `events`; endedCalls republishes the rich
+    `CallEndedSignal` (RemoteHangUp / RingTimeout by reason); non-teardown & blank id emit nothing.
+  - `CallViewModelTest` — the waiting caller hangs up → banner cleared, **active call untouched** (the bug);
+    the active call's own remote end → `ENDED`/`Remote` (with a banner up → banner stays; without one too);
+    a missed teardown for the active ringing call → `ENDED`/`Missed`; an id matching neither → fully inert;
+    an ended id with no active call & no banner → inert.
+- **Verification:** `/opt/gradle/bin/gradle :core:model:testDebugUnitTest :sdk-core:testDebugUnitTest
+  :feature:calls:testDebugUnitTest` green; `:app:assembleDebug` green; full `testDebugUnitTest` (all modules)
+  green. (`./gradlew`/`meeshy.sh` still 403 on the wrapper dist — used the preinstalled `/opt/gradle`, per NOTES.)
+- **Reviewer verdict:** PASS — diff is `apps/android` only (3 prod files + tests + these docs), no production
+  logic elsewhere; TDD red→green, no tautologies, no weakened floors (the two `map`→teardown tests were
+  *re-specified* because that mapping was the bug, not weakened); SDK purity kept (pure decode in `core:model`,
+  stateless stream in `sdk-core`, the "which call to tear down" rule in the `feature:calls` VM); every edge
+  covered (blank/absent/unrelated id, idle, malformed).
+
+### 2026-07-03 — slice `call-ended-signal-identity` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration (only open PR #1410 was iOS,
+  untouched). Branched `claude/apps/android/call-ended-signal-identity` off latest `origin/main`
+  (`6de9912e`).
+- **What:** drove the `CallWaitingEvent.RemotelyEnded` reducer branch (already the tested SSOT, shipped
+  with `call-waiting-banner`) from a real socket signal — a call-waiting banner now auto-dismisses when
+  its caller hangs up (or its ring times out) before the user acts, parity with iOS
+  `clearPendingIncomingCall(ifMatching:)`.
+- **Added (production, 3 files, +50 lines):**
+  - `CallSignalMapper.endedCallId(eventName, rawJson): String?` (`core:model`, pure/total) — decodes the
+    `callId` from a `call:ended`/`call:missed` frame; a non-teardown event, a blank/absent id, or malformed
+    JSON all yield `null`. Mirrors the existing `incomingOffer` identity decode; `map` left untouched so no
+    existing mapper contract changes.
+  - `CallSignalManager.endedCalls: SharedFlow<String>` (`sdk-core`) — republishes the ended id for every
+    teardown frame in `listen`, the same parallel-stream pattern as `incomingOffers` (hot, no replay). The
+    identity-less `events` emission is unchanged (existing manager tests intact).
+  - `CallViewModel.onRemoteEnded(endedCallId)` (`feature:calls`) — collected in `viewModelScope`; folds a
+    match on the *pending* call's id into `CallWaitingEvent.RemotelyEnded` (stop the auto-reject timer +
+    clear the banner) with **no** `emitEnd` (the caller already ended it); inert when there is no pending
+    banner or the id is another call's, so the active call is never disturbed.
+- **Tests (+15, red→green):**
+  - `CallSignalMapperTest` +7 — ended→id, missed→id, non-teardown→null, initiated→null, blank id→null,
+    absent id→null, malformed JSON→null.
+  - `CallSignalManagerTest` +4 — ended frame republishes id, missed frame republishes id, non-teardown
+    emits nothing, blank id emits nothing.
+  - `CallViewModelTest` +4 — waiting caller hangs up → banner cleared, **no** `emitEnd`, active call
+    untouched (still `INCOMING`); ended id ≠ waiting id → banner stays; ended id with no banner → inert;
+    a remotely-ended waiting call cancels its auto-dismiss timer (a later timer fire does not `emitEnd`).
+- **Edge cases covered:** blank/absent/malformed teardown payload; non-teardown frame; no pending banner
+  (inert); id mismatch (active-call id, unknown id) leaves banner up; timer cancellation after a remote
+  end (no double-resolve → no spurious `emitEnd`); remote end distinguished from user reject (no wire emit).
+- **Verify:** system `gradle assembleDebug testDebugUnitTest` (wrapper dist download is 403-blocked in this
+  container; `/opt/gradle` 8.11.1 matches the wrapper version) → **BUILD SUCCESSFUL in 2m30s** (full
+  assemble + all module JVM unit tests). Targeted: `:core:model` 32/`:sdk-core` (CallSignalManagerTest 36)
+  /`:feature:calls` (CallViewModelTest 72) — 0 failures, 0 errors.
+- **Reviewer:** PASS — scope `apps/android` only (3 prod + 3 test, +184 lines); behavioural tests through
+  the public API (`endedCallId` return, `endedCalls` flow emission, VM `waitingBanner` + `emitEnd`
+  verification), no tautologies, no coverage floor lowered, no existing test weakened; SDK purity (the
+  identity decode + republish are building blocks in `core:model`/`sdk-core`; the "when a teardown dismisses
+  *this* banner" product rule lives in `:feature:calls`); single source of truth (the `CallWaitingReducer`
+  `RemotelyEnded` branch); UDF + immutable `UiState`, pure reducer; no dead end (banner dismiss returns to a
+  coherent active call). **Known follow-up (logged in Next):** the identity-less `events` fold still routes a
+  *waiting* call's `call:ended` into the *active* FSM — an identity-aware active-call teardown is the next
+  Calls slice.
+
+### 2026-07-03 — slice `call-waiting-banner` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration. The three open PRs at start
+  (#1399 iOS-a11y `CameraView`, #1400 gateway/security notification routes, #1401 web/gateway calls
+  rate-limit) are `jcnm` continuous-improvement branches from other sessions — all disjoint from
+  `apps/android`, left untouched. Branched `claude/apps/android/call-waiting-banner` off freshly-fetched
+  `origin/main` (`9d30066c`).
+- **Gap closed:** `feature-parity §H` "Next pure core #2" — a second incoming call arriving while a call
+  is active. iOS surfaces a `CallWaitingBannerView` (accept-and-swap / reject-busy / 15s
+  auto-dismiss-as-reject) driven by `CallManager.pendingIncomingCall`; Android had no equivalent — a
+  second offer while busy was silently dropped (the FSM-facing `events` stream discards caller identity,
+  so `ReceiveIncoming` while `Connected` was inert).
+- **What shipped (thin vertical slice, TDD red→green):**
+  - `:core:model` `CallWaiting.kt` — `WaitingCall(callId, callerId, callerName, isVideo)` + the pure
+    `from(CallInitiatedPayload)` builder (blank-id → null; four-tier name resolution display→username→userId
+    →`WAITING_CALL_FALLBACK_NAME`, skipping blank candidates, parity with `CallRecord.displayName`;
+    `type=="video"` → isVideo). `CallWaitingReducer.kt` — `CallWaitingState(pending?)` + total
+    `reduce(state, event)` over `Offered`(newest-wins) / `Rejected` / `Accepted` / `RemotelyEnded(callId)`
+    (clears iff the id matches; inert otherwise or with no pending). `CallSignalMapper.incomingOffer(raw)`
+    — the pure identity decode parallel to `map()`.
+  - `:sdk-core` `CallSignalManager.incomingOffers: SharedFlow<WaitingCall>` — the same `call:initiated`
+    listener now also republishes the decoded caller identity (hot, no replay, like `events`).
+  - `:feature:calls` `CallViewModel` folds `incomingOffers`: `onIncomingOffer` routes a *second* offer
+    (`CallState.isActive` && different callId) to the reducer and arms the auto-dismiss timer;
+    `rejectWaiting()` emits `call:end` keyed by the **waiting** id (active call untouched) + clears;
+    `acceptWaitingSwap()` hangs up the active call, settles, and `start()`s the waiting call as a fresh
+    incoming (parity with iOS re-report). `CallWaitingTimer` seam (mirrors `CallSecondsTicker`) emits once
+    after 15s → reject-if-still-pending. `CallPresenter` derives `CallUiState.waitingBanner: WaitingBannerUi?`.
+    `CallScreen` renders an accent-coherent top banner (error-hue reject + peer-accent answer, a11y labels,
+    FR/ES/PT/EN strings).
+  - **+35 behavioural tests:** 16 `CallWaitingTest` (builder incl. every name-resolution arm + blank-id +
+    media flag; state derivation; every reducer arm incl. newest-wins, match/mismatch/no-pending
+    `RemotelyEnded`), +3 `CallSignalMapperTest` (`incomingOffer` decode/null/malformed), +3
+    `CallSignalManagerTest` (offer republish, malformed no-emit, non-initiated no-emit), +11
+    `CallViewModelTest` (raise banner while active; idle no-banner; redelivery ignored; newest-wins; reject
+    ends waiting id only; reject inert with none; 15s auto-dismiss = reject; accept-swap ends current +
+    re-presents + joins new room; accept inert with none; fresh start clears stale banner), +2
+    `CallPresenterTest` (empty → null, pending → banner).
+- **Verification:** `gradle :core:model:testDebugUnitTest :sdk-core:testDebugUnitTest` then
+  `gradle :feature:calls:testDebugUnitTest`, then full `gradle assembleDebug testDebugUnitTest` →
+  **BUILD SUCCESSFUL** (APK assembles, all module unit tests green). System Gradle 8.14.3 online through
+  the agent proxy — see NOTES.md (the `./gradlew` wrapper's distribution host is egress-blocked 403; the
+  cached wrapper dist is a 0-byte `.part`, so use the system `gradle` binary online, NOT `--offline`).
+- **Reviewer gate:** PASS — diff is `apps/android` only (17 files: 3 new + 6 modified code, 4 strings, 4
+  test files), no production logic outside `apps/android`, TDD behavioural (no tautologies, no floor
+  lowered, no test weakened), edge cases covered (blank id, no-initiator fallback, redelivery, newest-wins,
+  no-pending inert, cancellation-safe self-completing timer job), SDK purity respected (pure SSOT in
+  `:core:model`, transport-only flow in `:sdk-core`, orchestration in `:feature:calls`), accent-coherent
+  banner + natural top-overlay gesture, single source of truth (`DynamicColorGenerator` accent, reducer
+  the sole banner authority). No secrets, `local.properties` gitignored.
+- **Known follow-up (documented, not an orphan):** the `RemotelyEnded` reducer arm is the tested SSOT but
+  is not yet socket-driven — `events` maps `call:ended`/`call:missed` identity-less, so a banner whose
+  caller hangs up before the user acts currently clears only via reject/accept/15s-timeout. A small
+  signalling-identity slice (surface the ended `callId`) wires the last arm. See "Next pure core #2".
+
+### 2026-07-03 — slice `call-webrtc-plumbing-emits` ✅ shipped
+- **Step 0 (housekeeping):** the prior Android iteration's PR **#1387 (`call-video-survival-policy`) was
+  already squash-merged to `main`** (`1c2bb259`, verified `VideoSurvivalPolicy.kt` present on
+  `origin/main`). No open Android PR from a prior iteration. The one open PR (#1392) is a `jcnm`
+  iOS-a11y branch from another session — disjoint from `apps/android`, left untouched. Branched
+  `claude/apps/android/call-webrtc-plumbing-emits` off freshly-fetched `origin/main` (verified the recent
+  `VideoSurvivalPolicy.kt` symbol is present on the fresh checkout before coding).
+- **Gap closed:** the call-domain outbound emit table stopped at the lifecycle frames
+  (`join`/`leave`/`end`/`toggle-audio`/`toggle-video`/`signal`/`initiate`). iOS also emits five
+  WebRTC-plumbing frames the gateway needs for liveness, TURN refresh, quality persistence, and reconnect
+  bookkeeping (`MessageSocketManager.emitRequestIceServers`/`emitCallHeartbeat`/`emitCallQualityReport`/
+  `emitCallReconnecting`/`emitCallReconnected`). Android had none of them — feature-parity §H flagged this
+  as the last outbound-signalling gap. This slice ports the emits with the branch-rich `stats` builder as a
+  pure, JVM-tested core.
+- **What shipped (thin vertical slice, TDD red→green):**
+  - `:core:model` `CallQuality.kt` gains `ConnectionQuality.wireValue` (`excellent|good|fair|poor`, spelled
+    out so an enum rename can't silently change the wire token) and the new `CallQualityReport` data class
+    with the total pure `statsFields(): Map<String, Any>` — the SSOT for the `call:quality-report` `stats`
+    sub-object. Base five metrics (`level`/`rtt`/`packetLoss`/`bytesSent`/`bytesReceived`) always present;
+    `availableOutgoingBitrateBps` and `jitterMs` appended **only when strictly positive** (iOS parity — a
+    not-yet-available `0` or degenerate negative is dropped so the gateway never persists a meaningless
+    value). Byte counters are `Long` (iOS uses a 64-bit `Int`) so a long video call whose cumulative totals
+    exceed the 32-bit range are reported faithfully instead of overflowing.
+  - `:sdk-core` `CallSignalManager` gains `emitRequestIceServers(callId)`, `emitHeartbeat(callId)`,
+    `emitQualityReport(callId, report)` (wraps `report.statsFields()` in `{callId, stats}`),
+    `emitReconnecting(callId, participantId, attempt)`, `emitReconnected(callId, participantId)` — all at
+    iOS-exact event names + payload keys. The manager owns only the transport; the `stats` decision lives
+    once in the pure builder.
+  - **+16 behavioural tests:** 10 `CallQualityReportTest` (base keys/values, every `ConnectionQuality`
+    tier → wire level, bitrate present/absent across the `0`/negative/positive boundary, jitter likewise,
+    both-optionals ordering `inOrder`, `Long` counters beyond `Int.MAX`) + 6 `CallSignalManagerTest`
+    (request-ice-servers/heartbeat callId payloads, quality-report nested stats with & without the
+    optionals, reconnecting callId/participantId/attempt, reconnected callId/participantId). Every branch
+    of `statsFields()` is exercised.
+- **Verification:** `/opt/gradle/bin/gradle :core:model:testDebugUnitTest :sdk-core:testDebugUnitTest`
+  → **BUILD SUCCESSFUL** (CallQualityReportTest 10/10, CallSignalManagerTest 29/29, 0 skipped/failed);
+  full-project `assembleDebug` green. System Gradle 8.14.3 (`--no-daemon`) per NOTES.md.
+- **Reviewer gate:** PASS — diff is `apps/android` only (3 code files + docs), no production logic
+  outside `apps/android`, TDD behavioural (no tautologies, no floor lowered), SDK purity respected (pure
+  payload SSOT in `:core:model`, transport-only emits in `:sdk-core`), near-total branch coverage on the
+  new pure logic, iOS payload-key parity. No secrets, `local.properties` gitignored.
+
+### 2026-07-03 — slice `call-video-survival-policy` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration. The three open PRs
+  (#1384 iOS-a11y, #1385 web-realtime, #1386 gateway/shared) are `jcnm` continuous-improvement
+  branches from other sessions — disjoint from `apps/android`, left untouched. Branched
+  `claude/apps/android/call-video-survival-policy` off freshly-fetched `origin/main` (`80dab7b4`).
+- **Gap closed:** the adaptive-quality story stopped at the tier ladder (`VideoQualityLevel`, slice
+  `call-quality-level`). iOS layers a **last-resort** survival controller on top of the bitrate ladder
+  (`VideoSurvivalController.swift`): when the link stays degraded past the `POOR`/`CRITICAL` floor long
+  enough, it drops outbound video so the call lives on as audio-only, then restores video once the link
+  clearly recovers. Android had the ladder but not this graceful-degradation layer. This slice ports the
+  **pure policy half** (`VideoSurvivalPolicy`, the exhaustively-testable decision core); the async
+  actuator/controller (renegotiation, transition-timeout, one-in-flight guard) is deliberately deferred
+  to the app-side WebRTC seam — SDK purity.
+- **What shipped (thin vertical slice, TDD red→green):**
+  - `:core:model` `VideoSurvivalPolicy.kt` — `VideoSurvivalAction` (`None`/`Suspend`/`Resume`), the
+    fixed-size `VideoSurvivalState(isSending, degradedSince, recoveringSince)` (+ `INITIAL`), the
+    `VideoSurvivalDecision(state, action)` return, and the total pure
+    `VideoSurvivalPolicy.reduce(state, level, nowSeconds, userWantsVideo)`. Faithful port of the iOS
+    `reduce`: **duration-based** hysteresis (thresholds are wall-clock seconds fed a **monotonic** clock,
+    not sample counts → independent of monitor cadence and immune to clock jumps over a multi-hour call);
+    `Suspend` after a sustained ≥6 s `POOR`/`CRITICAL` streak while sending, `Resume` after a sustained
+    ≥10 s `EXCELLENT`/`GOOD` streak while suspended (resume window longer on purpose — renegotiation is
+    expensive, avoid oscillation); `FAIR` **holds** the recovery timer (a brief mid-recovery dip doesn't
+    restart the window) while a degraded dip wipes it; a good/fair sample while sending clears the degraded
+    streak; `userWantsVideo=false` resets to `INITIAL` so survival never re-enables video against intent.
+  - `CallQualityThresholds` gains `VIDEO_SURVIVAL_SUSPEND_AFTER_SECONDS = 6.0` /
+    `VIDEO_SURVIVAL_RESUME_AFTER_SECONDS = 10.0` at iOS `QualityThresholds` parity (the policy's default
+    ctor args, so the tuning lives in one SSOT next to the tier thresholds).
+  - **+19 behavioural tests** (`VideoSurvivalPolicyTest`): the intent gate; opening/holding/tripping the
+    degraded streak (boundary `now-since == 6.0` suspends, `5.9` doesn't); `CRITICAL` counts as degraded;
+    good/fair clearing the streak while sending; opening/holding/tripping the recovery streak (boundary
+    `10.0` resumes); degraded-while-suspended wipe vs `FAIR`-hold (asserted `isSameInstanceAs` — state
+    held verbatim); transient good/fair/degraded dips (window reset vs held); a full sustained
+    degraded→recovered lifecycle suspending then resuming exactly once each; and the default-ctor 6 s/10 s
+    thresholds. Every branch of `reduce` is exercised.
+- **Verification:** `/opt/gradle/bin/gradle :core:model:testDebugUnitTest` → 19/19 green + full module
+  suite green; `:core:model:assembleDebug` green. (`meeshy.sh check`/`./gradlew` unusable — the pinned
+  wrapper distro 403s through the egress proxy; system Gradle 8.14.3 at `/opt/gradle` is the local gate,
+  per NOTES.)
+- **Reviewer gate:** PASS — diff is `apps/android` only (2 `core:model` files + docs), pure stateless
+  building block (SDK purity: the async controller stays app-side), no tautological tests, near-total
+  branch coverage, monotonic/O(1) design faithful to iOS. No production logic outside `apps/android`.
+
+### 2026-07-03 — slice `call-quality-level` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration. The open PRs (#1367–#1379)
+  are `jcnm` web/ios/gateway branches from other sessions — disjoint from `apps/android`, left
+  untouched. Branched `claude/apps/android/call-quality-level` off freshly-fetched `origin/main`
+  (`4a69ef0`).
+- **Gap closed:** the call had no notion of link quality — no connection-quality indicator, no tier
+  model for the future adaptive-bitrate ladder. iOS has `VideoQualityLevel` + `QualityThresholds`
+  (`WebRTCTypes.swift`) classifying live stats into a 5-tier ladder and `connectionQualityLabel`
+  collapsing it to the 4-tier indicator; Android had nothing.
+- **What shipped (thin vertical slice, TDD red→green, same shape as `call-duration-timer`):**
+  - `:core:model` `CallQuality.kt` — the pure classification SSOT. `CallQualityThresholds` (the iOS
+    `QualityThresholds` constants), `VideoQualityLevel` (`CRITICAL<POOR<FAIR<GOOD<EXCELLENT`) with
+    per-tier sender caps (`targetResolutionHeight`/`targetFps`/`targetVideoBitrateBps`) + two total
+    classifiers `from(rttMs, packetLoss)` (worse-of-two-axes, **strict `>`** so a value exactly on a
+    threshold stays in the better tier — iOS parity) and `from(availableOutgoingBitrateBps)`;
+    `CallQualitySample(rttMs, packetLoss).level()`; and the four-tier `ConnectionQuality`
+    (`from(VideoQualityLevel)` collapsing `CRITICAL→POOR`, `bars` 1–4, `isWeak`). **24 tests** (every
+    boundary of both classifiers pinned on both sides, all tier accessors, ordering, collapse/bars/weak).
+  - `:feature:calls` `CallQualitySampler` — the input seam (interface `samples: Flow<CallQualitySample>`)
+    with an interim `NoopCallQualitySampler` (`emptyFlow`, so the indicator stays hidden until the
+    WebRTC stats collector swaps the `@Binds`) + Hilt module. Framework glue → exempt from JVM coverage.
+  - `CallViewModel` folds the sampler stream **only while media flows** (a `qualityJob` started/stopped
+    in `syncQuality` exactly like the ticker's `syncTicker`): each sample → `ConnectionQuality`, cleared
+    to `null` on leaving connected/reconnecting and on a fresh `start`. `CallPresenter` projects
+    `CallUiState.connectionQuality`, suppressing any stale reading off the connected/reconnecting phases.
+    **+6 VM-fold tests** (no quality before connect, healthy→GOOD, critical→POOR collapse, updates through
+    a reconnect, cleared on end, cleared on a new call) + **+3 presenter tests**. CallViewModelTest 51→57,
+    CallPresenterTest 25→28.
+  - `CallScreen` renders an accent-coherent 4-bar signal indicator under the status label when
+    `connectionQuality != null` (bars fill to `bars`, tinted the peer accent or the error hue on a weak
+    link, one VoiceOver tier label; +4 strings × 4 locales).
+- **Verification:** `/opt/gradle/bin/gradle assembleDebug testDebugUnitTest` → **BUILD SUCCESSFUL** (all
+  modules; CallQualityTest 24/24, CallViewModelTest 57/57, CallPresenterTest 28/28). System Gradle
+  8.14.3 per NOTES.md.
+- **Reviewer verdict:** **PASS** — diff is `apps/android` only (12 files), no production logic, TDD
+  behavioural (no tautologies, no floor lowered), SDK purity respected (pure classification in
+  `:core:model`, seam/glue/fold in `:feature:calls`), UDF preserved, cancellation-safe (qualityJob in
+  `viewModelScope`, structured cancel), accent-coherent indicator with no dead-end.
+
+### 2026-07-03 — slice `call-telecom-state-plan` ✅ shipped
+- **Step 0 (housekeeping):** the prior Android iteration's PR **#1375 (`call-sound-policy`) was still
+  open** — rebased it clean on the latest `origin/main` (no `apps/android` file overlap since its base),
+  pushed, waited for all 14 CI jobs green, **squash-merged to `main`** (`26e2500`). The other open PRs
+  (#1367–#1374, #1376) are `jcnm` web/ios/gateway branches — disjoint from `apps/android`, left untouched.
+  Branched `claude/apps/android/call-telecom-state-plan` off the post-merge `origin/main` (`26e2500`) so
+  the tree already carries the sound-policy fold this slice extends.
+- **Gap closed:** the call lifecycle had no bridge to the **OS telecom layer** — no self-managed
+  `ConnectionService`/`PhoneAccount` reporting (the Android analogue of the iOS `CXProvider.reportCall(...)`
+  / `report(_:endedAt:)` calls the `CallManager` makes to CallKit). This slice ships the pure decision core
+  that a future `ConnectionService` glue consumes, so the heavy platform integration is left decision-free.
+- **What shipped (thin vertical slice, TDD red→green):**
+  - `:core:model` `TelecomCallPolicy` — the pure, side-effect-free SSOT mapping call lifecycle → the OS
+    telecom reports. `TelecomConnectionState` (`Dialing/Ringing/Active/Disconnected`) +
+    `TelecomDisconnectCause` (`Local/Remote/Rejected/Missed/Error/Busy`) + `TelecomConnectionUpdate`.
+    `connectionStateFor(state)` keys purely on `CallState` with no direction leak: outgoing ring/offering →
+    `Dialing`, incoming ring → `Ringing`, **answered = `Active`** (`Connecting`/`Connected`/`Reconnecting`
+    all collapse onto `Active`, so an ICE restart never tears the system call down), `Ended` →
+    `Disconnected`, `Idle` → no connection. `disconnectCauseFor(reason)` maps every `CallEndReason`
+    (lost/failed → `Error`). `plan(prev,next)` emits a report **only on a genuine transition** — it dedupes
+    an already-active edge, a phantom `Idle→Ended` (no connection was ever created — mirrors
+    `CallSoundPolicy`'s `prev.isActive` guard), an idempotent `Ended→Ended`, and a settle `Ended→Idle` all
+    to `null`. **28 tests** (every arm of `connectionStateFor` incl. both ring directions, every
+    `disconnectCauseFor`, every `plan` branch: creation / ring→active / dedupe×3 / all disconnect causes /
+    phantom / idempotent / settle).
+  - `:feature:calls` `TelecomCallReporter` — the output seam (interface), with a thin `LogTelecomCallReporter`
+    interim glue (emits each transition to the system log so the seam is live end-to-end while the heavier
+    self-managed `ConnectionService`/`PhoneAccount` registration — which will swap this `@Binds` — is built
+    as its own glue slice), `@Binds` into a Hilt module (mirrors `CallToneModule`/`CallTickerModule`).
+    Framework glue → exempt from JVM coverage per `TDD-COVERAGE.md`.
+  - `CallViewModel.dispatch` folds each FSM edge through `TelecomCallPolicy.plan` — reporting only the
+    genuine transitions the policy surfaces; `onCleared` releases the reporter alongside the tone controller.
+    **7 VM-fold tests** via a recording fake reporter (outgoing→dialing, incoming→ringing, answered→active-
+    once-with-dedupe, inert-no-report, decline→disconnected(rejected), hang-up→disconnected(local),
+    failed-initiate→disconnected(error)). CallViewModelTest 44→51.
+- **Verification:** `/opt/gradle/bin/gradle assembleDebug testDebugUnitTest` → **BUILD SUCCESSFUL** (all
+  modules; TelecomCallPolicyTest 28/28, CallViewModelTest 51/51). System Gradle 8.14.3 fallback per NOTES.md.
+- **Reviewer verdict:** **PASS** — diff is `apps/android` only (6 files), no production logic, TDD
+  behavioural (no tautologies, no floor lowered), SDK purity respected (pure decision in `:core:model`,
+  orchestration/glue in `:feature:calls`), UDF preserved, cancellation-safe (all pure).
+
+### 2026-07-02 — slice `call-sound-policy` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration. The open PRs (#1367–#1374) are
+  `jcnm` branches from other sessions touching web/ios/gateway only — disjoint from `apps/android`, left
+  untouched. Branched off freshly-fetched `origin/main` (`ad3c3b2`) as `claude/apps/android/call-sound-policy`.
+  Confirmed the latest state (top-of-PROGRESS) was `call-duration-timer`; next Calls step per the routine is
+  the Telecom/ringback area — carved a thin, fully-testable pure core out of it.
+- **Gap closed:** the call screen was silent — no ringback for the caller, no ringtone for the callee, no
+  connect/end cue. iOS has a `RingbackTonePlayer` ("the call sound manager") whose start/stop/cue calls are
+  scattered across `CallManager`; Android had nothing.
+- **What shipped (thin vertical slice, TDD red→green):**
+  - `:core:model` `CallSoundPolicy` — the pure, side-effect-free SSOT collecting every iOS `RingbackTonePlayer`
+    call site into one total function. `CallSound` (`None/Ringback/Ringtone`) + `CallCue` (`Connected/Ended`)
+    + `CallSoundPlan`. `loopFor(state)` plays **ringback** across the whole pre-answer wait
+    (`Ringing(outgoing)` + `Offering`, both outgoing-exclusive → no direction ambiguity) and stops it at the
+    answer (`Connecting`) — tighter than iOS which drags it to `.connected` — and **ringtone** while
+    `Ringing(incoming)`. `cueFor(prev,next)` fires `Connected` on every entry into `Connected` (first connect
+    **and** reconnect-success) and `Ended` only when a *live* call ends (`prev.isActive`, iOS `if wasActive`),
+    silent on `Idle→Ended`/`Ended→Ended`. `plan()` bundles both. **19 tests** (every branch of both maps + plan).
+  - `:feature:calls` `CallToneController` — the output seam (interface), with a thin
+    `AndroidCallToneController` glue impl (`ToneGenerator.TONE_SUP_RINGTONE` ringback + `RingtoneManager`
+    ringtone + `TONE_PROP_ACK`/`TONE_PROP_PROMPT` cues, every entry `runCatching`-guarded), `@Binds` into a
+    Hilt module (mirrors `CallTickerModule`). Framework glue → exempt from JVM coverage per `TDD-COVERAGE.md`.
+  - `CallViewModel.dispatch` folds each FSM edge through `CallSoundPolicy.plan`: switches the loop **only on a
+    genuine change** (an inert event never restarts the ringback — tracked via `activeLoop`) and fires the cue;
+    `onCleared` releases. **9 VM-fold tests** via a recording fake controller (outgoing ringback→stop→connected
+    cue, incoming ringtone→stop→connected cue, decline/hang-up ended cue, remote-hangup-after-connect, inert
+    no-restart, reconnect re-cues). CallViewModelTest 35→44.
+- **Verification:** `/opt/gradle/bin/gradle assembleDebug testDebugUnitTest` → **BUILD SUCCESSFUL** (all
+  modules; CallSoundPolicyTest 19/19, CallViewModelTest 44/44). See NOTES.md for the Gradle-8.14.3 fallback.
+- **Reviewer verdict:** **PASS** — diff is `apps/android` only (5 files, +456/−2), no production logic, TDD
+  behavioural (no tautologies, no floor lowered), SDK purity respected (pure decision in `:core:model`,
+  orchestration/glue in `:feature:calls`), UDF preserved, cancellation-safe (all pure/`runCatching`).
 
 ### 2026-07-02 — slice `call-duration-timer` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration. The open PRs (#1366–#1369) are
