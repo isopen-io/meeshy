@@ -4,6 +4,7 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import me.meeshy.core.database.dao.CallHistoryDao
 import me.meeshy.core.database.dao.ConversationDao
+import me.meeshy.core.database.dao.FriendDao
 import me.meeshy.core.database.dao.MediaBlobDao
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.core.database.dao.OutboxDao
@@ -11,6 +12,7 @@ import me.meeshy.core.database.dao.StoryDao
 import me.meeshy.core.database.dao.SyncMetaDao
 import me.meeshy.core.database.entity.CallHistoryEntity
 import me.meeshy.core.database.entity.ConversationEntity
+import me.meeshy.core.database.entity.FriendEntity
 import me.meeshy.core.database.entity.MediaBlobEntity
 import me.meeshy.core.database.entity.MessageEntity
 import me.meeshy.core.database.entity.OutboxEntity
@@ -33,8 +35,9 @@ import me.meeshy.core.database.entity.SyncMetaEntity
         StoryEntity::class,
         MediaBlobEntity::class,
         CallHistoryEntity::class,
+        FriendEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = false,
 )
 public abstract class MeeshyDatabase : RoomDatabase() {
@@ -45,4 +48,5 @@ public abstract class MeeshyDatabase : RoomDatabase() {
     public abstract fun storyDao(): StoryDao
     public abstract fun mediaBlobDao(): MediaBlobDao
     public abstract fun callHistoryDao(): CallHistoryDao
+    public abstract fun friendDao(): FriendDao
 }

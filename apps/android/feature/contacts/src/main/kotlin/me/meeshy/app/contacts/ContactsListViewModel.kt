@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.friend.FriendListRepository
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.model.FriendRequestUser
@@ -44,16 +45,21 @@ data class ContactsListUiState(
  * The Contacts (all-friends) list — port of the iOS `ContactsListViewModel`.
  *
  * The friend graph is exactly the current user's accepted friend requests (there
- * is no dedicated `/friends` endpoint), so [load] fetches received + sent
- * requests, folds them into the online-first friend list via the pure
- * [ContactList], and keeps the shared [FriendshipCache] hydrated. It then
- * reconciles the shown list against that cache whenever any other surface (the
- * Requests tab accepting, a profile sheet, a socket event) mutates the friend
- * graph: removals apply locally, additions trigger a single silent refetch.
+ * is no dedicated `/friends` endpoint), so [load] first paints the last-persisted
+ * roster from the Room-backed [FriendListRepository] for an instant cold-start
+ * view (the Android analogue of iOS `CacheCoordinator.friends`), then fetches
+ * received + sent requests, folds them into the online-first friend list via the
+ * pure [ContactList], writes that roster back through to the cache, and keeps the
+ * shared [FriendshipCache] hydrated. It then reconciles the shown list against
+ * that cache whenever any other surface (the Requests tab accepting, a profile
+ * sheet, a socket event) mutates the friend graph: removals apply locally (and are
+ * written through so the cache stays consistent without a refetch), additions
+ * trigger a single silent refetch.
  */
 @HiltViewModel
 class ContactsListViewModel @Inject constructor(
     private val friendRepository: FriendRepository,
+    private val friendListRepository: FriendListRepository,
     private val friendshipCache: FriendshipCache,
     private val sessionRepository: SessionRepository,
 ) : ViewModel() {
@@ -74,30 +80,53 @@ class ContactsListViewModel @Inject constructor(
 
     fun dismissError() = _state.update { it.copy(errorMessage = null) }
 
-    fun load() = fetchFriends(silent = false)
-
-    private fun fetchFriends(silent: Boolean) {
-        if (!silent) _state.update { it.copy(isLoading = it.friends.isEmpty()) }
+    fun load() {
         viewModelScope.launch {
-            val received = friendRepository.receivedRequests(offset = 0, limit = FETCH_LIMIT)
-            val sent = friendRepository.sentRequests(offset = 0, limit = FETCH_LIMIT)
+            paintFromCache()
+            revalidate()
+        }
+    }
 
-            if (received is NetworkResult.Success && sent is NetworkResult.Success) {
-                friendshipCache.hydrate(sent = sent.data, received = received.data)
-                lastReconciledFriendIds = friendshipCache.currentFriendIds
-                val friends = ContactList.fromAcceptedRequests(
-                    received = received.data,
-                    sent = sent.data,
-                    currentUserId = sessionRepository.currentUserId.orEmpty(),
+    /**
+     * Cache-first cold paint (ARCHITECTURE.md §4): if nothing is on screen yet,
+     * replay the last-persisted roster from Room so the tab shows friends instantly
+     * — no blocking spinner when the cache has data. A `null` snapshot is a cold
+     * cache (never synced) → keep the skeleton until the network answers; a
+     * synced-but-empty snapshot settles to an empty roster with no skeleton.
+     */
+    private suspend fun paintFromCache() {
+        if (_state.value.friends.isNotEmpty()) return
+        val cached = friendListRepository.cachedSnapshot()
+        _state.update {
+            if (cached == null) it.copy(isLoading = true)
+            else it.copy(friends = cached, isLoading = false)
+        }
+    }
+
+    private fun refetch() {
+        viewModelScope.launch { revalidate() }
+    }
+
+    private suspend fun revalidate() {
+        val received = friendRepository.receivedRequests(offset = 0, limit = FETCH_LIMIT)
+        val sent = friendRepository.sentRequests(offset = 0, limit = FETCH_LIMIT)
+
+        if (received is NetworkResult.Success && sent is NetworkResult.Success) {
+            friendshipCache.hydrate(sent = sent.data, received = received.data)
+            lastReconciledFriendIds = friendshipCache.currentFriendIds
+            val friends = ContactList.fromAcceptedRequests(
+                received = received.data,
+                sent = sent.data,
+                currentUserId = sessionRepository.currentUserId.orEmpty(),
+            )
+            _state.update { it.copy(friends = friends, isLoading = false, errorMessage = null) }
+            friendListRepository.persist(friends)
+        } else {
+            _state.update {
+                it.copy(
+                    isLoading = false,
+                    errorMessage = if (it.friends.isEmpty()) firstError(received, sent) else it.errorMessage,
                 )
-                _state.update { it.copy(friends = friends, isLoading = false, errorMessage = null) }
-            } else {
-                _state.update {
-                    it.copy(
-                        isLoading = false,
-                        errorMessage = if (it.friends.isEmpty()) firstError(received, sent) else it.errorMessage,
-                    )
-                }
             }
         }
     }
@@ -117,8 +146,9 @@ class ContactsListViewModel @Inject constructor(
         val result = ContactList.reconcile(current, cacheIds)
         if (result.friends != current) {
             _state.update { it.copy(friends = result.friends) }
+            viewModelScope.launch { friendListRepository.persist(result.friends) }
         }
-        if (result.needsRefetch) fetchFriends(silent = true)
+        if (result.needsRefetch) refetch()
     }
 
     private fun firstError(vararg results: NetworkResult<*>): String? =
