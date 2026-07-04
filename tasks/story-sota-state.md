@@ -162,7 +162,15 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   (swipe-down) + band fermé → écran nu ; seul un tap « au hasard » sur le fond restaure le
   chrome. Aucun indice visuel (pas de poignée fantôme, pas de hint première fois).
   Volet zoom élucidé it.66 → C4 (sortie bouton-only).
-- [ ] **C4 (P1) Sortie du zoom viewport = bouton uniquement, et état zoomé « collant ».**
+- [x] **C4 (P1) Sortie du zoom viewport = bouton uniquement, et état zoomé « collant ».** ✅ it.67
+  Livré : `CanvasViewportZoomPolicy` (rule engine pur MeeshyUI/Canvas) — `settledScale`
+  (clamp [0.5,4] + snap identité |raw−1| < 0,08 → 1.0 exact au `.ended` du pinch) et
+  `doubleTapResetsViewport` (zoomé + aucun item touché). Câblage : double-tap fond en état
+  zoomé = reset viewport PRIORITAIRE (early-return dans `handleDoubleTap` AVANT le cycle
+  videoFitMode, qui reste le double-tap à l'échelle 1 ; item double-tap garde son éditeur
+  même zoomé) ; plumbing `isViewportZoomed`/`onViewportZoomResetRequested` via representable ;
+  le bouton reset RESTE (invariant n°4). Tests : CanvasViewportZoomPolicyTests 10 + BandState
+  19 = 29/29 simu 18.2 ; build app 12 s vert (MeeshyUI recompilé aussi par la suite de tests).
   Preuves : (a) seul exit = `canvasZoomResetButton` (`+Canvas.swift:1028-1046`), AUCUN geste —
   pas de double-tap reset (convention iOS photo-viewer) ; (b) `isCanvasZoomed = canvasScale
   != 1.0` STRICT (`+Elements.swift:123`) sans bande de snap au relâcher du pinch
@@ -803,6 +811,20 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.67 — C4 : sortie gestuelle du zoom viewport (double-tap reset + snap identité)
+
+- RED conceptuel prouvé it.66 (re-preuve maintenue : clamp brut `min(4,max(0.5,…))` à
+  `+Canvas.swift:777`, exit bouton-only). Découverte C0 intégrée : le double-tap fond était
+  DÉJÀ pris (cycle videoFitMode) → règle de précédence pinnée par test
+  (`itemDoubleTapWinsOverReset`, `neverResetsAtIdentity`).
+- Livré : policy pure + branche early-return UIKit + plumbing representable + snap au call
+  site. 29/29 (2 suites), build 12 s. CI du commit C5 encore in_progress au moment du push —
+  à re-vérifier it.68 (les 2 commits seront couverts par le même run suivant).
+- Piège évité : diagnostic SourceKit « No such module 'Testing' » sur le nouveau fichier de
+  test = artefact d'indexation (xcodebuild vert) — ne pas « réparer ».
+- Reste C4 (visuel simulateur) : à grouper avec la passe simulateur du chantier C (vérifier
+  le zoom réel + double-tap sur device/simu, avec C3 affordances quand traité).
 
 ## it.66 — RELANCE : mission C « création discrète gesture-first » (directive user 2026-07-04)
 

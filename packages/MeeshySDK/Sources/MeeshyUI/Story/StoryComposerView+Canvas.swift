@@ -782,7 +782,14 @@ extension StoryComposerView {
                 case .began, .changed:
                     viewportPinchDelta = scale
                 case .ended:
-                    let newScale = min(4.0, max(0.5, viewModel.canvasScale * scale))
+                    // Clamp + snap à l'identité (C4) : un relâcher quasi-1.0
+                    // redevient EXACTEMENT 1.0 — sans ça, isCanvasZoomed
+                    // (comparaison stricte) gardait TopBar cachée + bouton
+                    // reset affiché sur un canvas visuellement à l'échelle 1.
+                    let newScale = CanvasViewportZoomPolicy.settledScale(
+                        current: viewModel.canvasScale,
+                        gestureScale: scale
+                    )
                     withAnimation(.spring(response: 0.2)) {
                         viewModel.canvasScale = newScale
                         if newScale <= 1.0 { viewModel.canvasOffset = .zero }
@@ -808,6 +815,15 @@ extension StoryComposerView {
                     videoFitMode: transform.videoFitMode
                 )
                 viewModel.saveBackgroundTransform()
+            },
+            // C4 — sortie gestuelle du zoom : double-tap fond en état zoomé
+            // = reset viewport (même action que canvasZoomResetButton, qui
+            // reste visible — invariant « ne jamais retirer d'affordance »).
+            isViewportZoomed: viewModel.isCanvasZoomed,
+            onViewportZoomResetRequested: {
+                withAnimation(.spring(response: 0.3)) {
+                    viewModel.resetCanvasZoom()
+                }
             },
             // Quand le drawing overlay est actif, le canvas doit supprimer
             // son drawingLayer persisté — sinon double rendu (ancien drawing
