@@ -152,8 +152,16 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   switch d'outil actif par swipe horizontal sur le band — cohérent mission C).
 - [ ] **C3 (P2) Chrome totalement caché = zéro affordance de récupération.** FABs cachés
   (swipe-down) + band fermé → écran nu ; seul un tap « au hasard » sur le fond restaure le
-  chrome. Aucun indice visuel (pas de poignée fantôme, pas de hint première fois). Vérifier
-  aussi l'état FABs cachés + TopBar cachée (zoom) : quelles sorties ?
+  chrome. Aucun indice visuel (pas de poignée fantôme, pas de hint première fois).
+  Volet zoom élucidé it.66 → C4 (sortie bouton-only).
+- [ ] **C4 (P1) Sortie du zoom viewport = bouton uniquement, et état zoomé « collant ».**
+  Preuves : (a) seul exit = `canvasZoomResetButton` (`+Canvas.swift:1028-1046`), AUCUN geste —
+  pas de double-tap reset (convention iOS photo-viewer) ; (b) `isCanvasZoomed = canvasScale
+  != 1.0` STRICT (`+Elements.swift:123`) sans bande de snap au relâcher du pinch
+  (`+Canvas.swift:776-782` : clamp [0.5, 4.0] brut) → un pinch relâché à ~0,98 garde la
+  TopBar cachée (`showTopBar`, `+TopBar.swift:15`) + bouton reset visible alors que le canvas
+  PARAÎT à l'échelle 1. Fix candidat : double-tap fond = resetCanvasZoom (le bouton reste —
+  invariant n°4) + snap |scale−1| < seuil → 1.0 au `.ended` (qualité invisible).
 
 ### ÉDITION — crash recovery & intégrité des données
 
@@ -761,7 +769,9 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   band mort, zéro affordance de récupération chrome caché).
 - EN COURS : C0 — inventaire exhaustif délégué à un agent d'exploration (tableau
   apparition/disparition/conteneur/gestes par tool + anomalies) ; ses findings alimenteront
-  les items C4+ au prochain tour. Aucun code modifié ce tour (audit d'abord, preuve avant fix).
+  les items C5+ au prochain tour. Aucun code modifié ce tour (audit d'abord, preuve avant fix).
+- Tour 2 (pendant C0) : C4 prouvé (sortie zoom bouton-only + isCanvasZoomed strict sans snap —
+  pinch relâché ≈1 garde le chrome caché) ; build iOS relancé en arrière-plan (gate).
 
 ## it.65 — FIN DE BOUCLE (audit sec 2/2) — rapport final du cycle it.41→65
 
