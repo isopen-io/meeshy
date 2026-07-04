@@ -193,6 +193,7 @@ function makeSocket(overrides: Record<string, any> = {}) {
   const socket = {
     id: SOCKET_ID,
     data: {} as Record<string, unknown>,
+    rooms: new Set<string>([SOCKET_ID]),
     on: (event: string, handler: Function) => { listeners[event] = handler; },
     emit: jest.fn<any>(),
     join: jest.fn<any>(),
