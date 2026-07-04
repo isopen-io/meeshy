@@ -1,5 +1,9 @@
 # Guide de Migration - NotificationService
 
+> ⚠️ **Document historique — obsolète.** Guide de la refactorisation initiale. Le push FCM/APNs est
+> désormais `services/PushNotificationService.ts` ; `FirebaseNotificationService` a été supprimé
+> (itération 92). Conservé pour contexte historique uniquement.
+
 ## Vue d'ensemble
 
 Ce guide explique comment migrer du monolithe `NotificationService.ts` (2,033 lignes) vers l'architecture modulaire.
