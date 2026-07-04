@@ -79,6 +79,7 @@ struct CallVideoView: View {
                         .font(.system(size: 32))
                         .foregroundColor(.white.opacity(0.3))
                 )
+                .accessibilityLabel(String(localized: "call.video.unavailable", defaultValue: "Video non disponible", bundle: .main))
         }
     }
 }
@@ -97,7 +98,7 @@ struct CallVideoView: View {
             .overlay(
                 Text(String(localized: "call.video.unavailable", defaultValue: "Video non disponible", bundle: .main))
                     .foregroundColor(.white.opacity(0.4))
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.footnote.weight(.medium))
             )
     }
 }

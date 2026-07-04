@@ -4439,8 +4439,23 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
         // RFC 4733: forward CallKit keypad input to the WebRTC DTMF sender.
         // Enables conference PINs and IVR navigation during active calls.
         // sendDTMF is a no-op when unavailable; fulfill so CallKit doesn't timeout.
-        manager?.sendDTMF(digits: action.digits)
+        //
+        // [Fix] Unlike every sibling handler (CXSetMutedCallAction,
+        // CXSetHeldCallAction, CXAnswerCallAction, CXEndCallAction), this one
+        // used to touch `manager` synchronously in the delegate callback body.
+        // `CXProvider.setDelegate(_:queue: nil)` delivers callbacks on
+        // CallKit's own private serial queue, NOT main (see the
+        // CXAnswerCallAction comment above) — a synchronous off-main touch of
+        // the MainActor-isolated `manager` is the same class of bug that
+        // previously crashed the WebRTC delegate path. Capture the Sendable
+        // digits, fulfill synchronously (CallKit's contract), then hop to the
+        // MainActor before touching `manager`, matching every other action
+        // handler in this class.
+        let digits = action.digits
         action.fulfill()
+        Task { @MainActor [weak self] in
+            self?.manager?.sendDTMF(digits: digits)
+        }
     }
 
     func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {

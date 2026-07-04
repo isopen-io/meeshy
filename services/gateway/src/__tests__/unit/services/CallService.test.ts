@@ -877,7 +877,7 @@ describe('CallService', () => {
       mockPrisma.callSession.findUnique.mockResolvedValueOnce(callWithOneParticipant);
       mockPrisma.$transaction.mockImplementation(async (callback: (tx: any) => Promise<void>) => {
         const mockTx = {
-          callParticipant: { update: jest.fn() },
+          callParticipant: { update: jest.fn(), updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
           callSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }
         };
         await callback(mockTx);
@@ -887,6 +887,62 @@ describe('CallService', () => {
             data: expect.objectContaining({ status: CallStatus.ended })
           })
         );
+      });
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(endedCall);
+
+      const result = await callService.leaveCall(validLeaveData);
+
+      expect(result.status).toBe(CallStatus.ended);
+    });
+
+    it('stamps leftAt on the OTHER active participant when a direct call ends via leave (mirrors endCall)', async () => {
+      // Regression for the stale-participant authorization gap: leaveCall's
+      // main path previously only stamped the LEAVER's own row, so on a
+      // direct call the other party's CallParticipant.leftAt stayed null
+      // forever even though the CallSession became terminal — every
+      // resolveActiveCallParticipantId-gated event (call:signal, heartbeat,
+      // quality-report, reconnecting/reconnected, request-ice-servers,
+      // backgrounded/foregrounded, screen-capture-detected) kept authorizing
+      // that party against a dead call.
+      const participant = createMockParticipant();
+      const otherParticipant = createMockParticipant({
+        id: 'participant-456',
+        userId: 'user-456'
+      });
+      const callWithTwoParticipants = createMockCallSession({
+        status: CallStatus.active,
+        answeredAt: new Date(Date.now() - 30_000),
+        participants: [participant, otherParticipant]
+      });
+      const endedCall = {
+        ...callWithTwoParticipants,
+        status: CallStatus.ended,
+        endedAt: new Date(),
+        participants: [
+          { ...participant, leftAt: new Date(), user: createMockUser() },
+          { ...otherParticipant, leftAt: new Date(), user: createMockUser({ id: 'user-456' }) }
+        ],
+        initiator: createMockUser(),
+        conversation: createMockConversation()
+      };
+
+      mockPrisma.callParticipant.findFirst.mockResolvedValue(participant);
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(callWithTwoParticipants);
+      mockPrisma.conversation.findUnique.mockResolvedValueOnce(createMockConversation({ type: 'direct' }));
+      mockPrisma.$transaction.mockImplementation(async (callback: (tx: any) => Promise<void>) => {
+        const mockTx = {
+          callParticipant: { update: jest.fn(), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+          callSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }
+        };
+        await callback(mockTx);
+        expect(mockTx.callParticipant.updateMany).toHaveBeenCalledWith({
+          where: {
+            callSessionId: 'call-123',
+            id: { not: participant.id },
+            OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
+          },
+          data: { leftAt: expect.any(Date) }
+        });
       });
       mockPrisma.callSession.findUnique.mockResolvedValueOnce(endedCall);
 
@@ -960,7 +1016,7 @@ describe('CallService', () => {
       mockPrisma.callSession.findUnique.mockResolvedValueOnce(callWithTwoParticipants);
       mockPrisma.$transaction.mockImplementation(async (callback: (tx: any) => Promise<void>) => {
         const mockTx = {
-          callParticipant: { update: jest.fn() },
+          callParticipant: { update: jest.fn(), updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
           callSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }
         };
         await callback(mockTx);
@@ -3418,7 +3474,10 @@ describe('CallService - leaveCall wasPreAnswered=false branch (active call)', ()
     let capturedReason: string | undefined;
     mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
       const tx = {
-        callParticipant: { update: jest.fn().mockResolvedValue({}) },
+        callParticipant: {
+          update: jest.fn().mockResolvedValue({}),
+          updateMany: jest.fn().mockResolvedValue({ count: 0 })
+        },
         callSession: {
           updateMany: jest.fn().mockImplementation(({ data }: any) => {
             capturedStatus = data.status;
@@ -3461,7 +3520,10 @@ describe('CallService - leaveCall wasPreAnswered=false branch (active call)', ()
     let capturedReason: string | undefined;
     mockPrisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
       const tx = {
-        callParticipant: { update: jest.fn().mockResolvedValue({}) },
+        callParticipant: {
+          update: jest.fn().mockResolvedValue({}),
+          updateMany: jest.fn().mockResolvedValue({ count: 0 })
+        },
         callSession: {
           updateMany: jest.fn().mockImplementation(({ data }: any) => {
             capturedStatus = data.status;

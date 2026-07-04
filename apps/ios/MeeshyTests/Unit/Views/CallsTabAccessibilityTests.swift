@@ -34,4 +34,17 @@ final class CallsTabAccessibilityTests: XCTestCase {
             "audio and a video call."
         )
     }
+
+    func test_filterChip_exposesSelectedStateToVoiceOver() throws {
+        let source = try callsTabSource()
+        guard let range = source.range(of: "private func chip(") else {
+            XCTFail("CallsTab.swift must define the filter chip() builder"); return
+        }
+        let vicinity = String(source[range.lowerBound...])
+        XCTAssertTrue(
+            vicinity.contains(".accessibilityAddTraits(") && vicinity.contains("isSelected"),
+            "The Tous/Manques filter chips only convey selection via color — VoiceOver " +
+            "users can't tell which filter is active without an .isSelected trait."
+        )
+    }
 }
