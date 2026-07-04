@@ -20,6 +20,17 @@ interface AudienceUserPickerProps {
   onChange: (ids: string[]) => void;
 }
 
+/// Visibilités qui exigent une audience explicite (`visibilityUserIds`).
+/// Partagé par StoryComposer ET PostComposer (fix W6) — vit avec le picker.
+export const AUDIENCE_VISIBILITIES = ['EXCEPT', 'ONLY'] as const;
+
+/// Gate PUR de publication : une visibilité à audience sans aucun utilisateur
+/// sélectionné ne doit JAMAIS partir (EXCEPT sans exclus = privé fantôme,
+/// ONLY sans inclus = invisible pour tous — sémantique serveur indéfinie).
+export function isAudienceIncomplete(visibility: string, audienceCount: number): boolean {
+  return (AUDIENCE_VISIBILITIES as readonly string[]).includes(visibility) && audienceCount === 0;
+}
+
 interface PickedUser {
   id: string;
   username?: string;

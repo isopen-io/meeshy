@@ -389,6 +389,20 @@ class TestProcessSingleTranslation:
 
     async def test_outer_exception_returns_empty_list(self):
         from services.zmq_pool.translation_processor import process_single_translation
+        # Depuis le fan-out séquentiel (ef9b1487), plus de asyncio.create_task
+        # à saboter : le chemin d'exception EXTERNE s'atteint quand le publish
+        # du résultat d'erreur (except interne) échoue à son tour. publish qui
+        # lève systématiquement : 1er appel (résultat fallback) → except
+        # interne → 2e appel (error_result) lève encore → remonte au try
+        # externe → aucune entrée accumulée, liste vide.
+        publish = AsyncMock(side_effect=RuntimeError("publish failed"))
+        task = _task(target_languages=["fr"])
+        results = await process_single_translation(task, "w1", None, None, publish)
+        assert publish.await_count == 2
+        assert results == []
+
+    async def test_outer_exception_via_language_iteration_failure(self):
+        from services.zmq_pool.translation_processor import process_single_translation
         publish = AsyncMock()
         task = _task(target_languages=["fr"])
 
