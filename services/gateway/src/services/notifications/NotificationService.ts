@@ -1364,8 +1364,12 @@ export class NotificationService {
     commentPreview?: string;
     /** Display name (fallback: username) of the post/story author. */
     postAuthorName?: string;
-    /** True when the parent post is a story (vs a regular feed post). */
-    isStory?: boolean;
+    /**
+     * Type d'entité portant le commentaire réagi. Mirror du sibling
+     * `createPostLikeNotification` : un REEL/STATUS ne s'effondre plus vers 'POST'
+     * dans la métadonnée ni dans le corps localisé.
+     */
+    postType?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
   }): Promise<void> {
     if (params.commentAuthorId === params.reactorUserId) return;
 
@@ -1394,7 +1398,7 @@ export class NotificationService {
       actor: reactorName,
       emoji: params.reactionEmoji,
       author: params.postAuthorName,
-      isStory: params.isStory,
+      postType: params.postType,
     });
 
     // Subtitle (rendu sous le title côté iOS — banner riche) : un aperçu du
@@ -1431,9 +1435,10 @@ export class NotificationService {
       metadata: {
         action: 'view_post',
         reactionEmoji: params.reactionEmoji,
-        // Entité portant le commentaire → le client affiche « Story »/« Publication »
-        // (et non un libellé générique) quand aucun aperçu de commentaire n'est dispo.
-        postType: params.isStory ? 'STORY' : 'POST',
+        // Entité portant le commentaire → le client affiche « Réel »/« Statut »/« Story »/
+        // « Publication » (et non un libellé générique). Ne s'effondre plus vers 'POST'
+        // pour les REEL/STATUS (F58) — cohérent avec le sibling post-reaction.
+        postType: params.postType ?? 'POST',
       },
     });
   }

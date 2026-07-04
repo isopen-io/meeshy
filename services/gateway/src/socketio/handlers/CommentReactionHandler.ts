@@ -335,7 +335,6 @@ export class CommentReactionHandler {
     const postAuthorName = post?.author?.displayName?.trim()
       || post?.author?.username?.trim()
       || '';
-    const isStory = post?.type === 'STORY';
 
     this.notificationService
       .createCommentReactionNotification({
@@ -346,7 +345,9 @@ export class CommentReactionHandler {
         reactionEmoji: emoji,
         commentPreview: comment.content?.slice(0, 80) ?? '',
         postAuthorName,
-        isStory,
+        // Forward the real post type (mirror PostReactionHandler) so a reaction on a
+        // comment under a REEL/STATUS keeps its entity typing instead of collapsing to POST.
+        postType: post?.type,
       })
       .catch((error) => {
         this.logger.error('[CommentReactionHandler] Failed to create comment reaction notification', error, { reactorUserId, commentId, postId, emoji });
