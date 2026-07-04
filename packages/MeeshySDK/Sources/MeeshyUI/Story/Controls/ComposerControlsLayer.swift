@@ -30,6 +30,9 @@ public struct ComposerControlsLayer: View {
     /// panneau de contrôles média redondant dans le composer.
     let onOpenMediaCrop: (String) -> Void
 
+    /// C8 — ouvre le picker de stickers (sheet présentée par StoryComposerView).
+    var onOpenStickerPicker: (() -> Void)? = nil
+
     public init(
         viewModel: StoryComposerViewModel,
         bandStateMachine: Binding<BandStateMachine>,
@@ -42,7 +45,8 @@ public struct ComposerControlsLayer: View {
         bandMinHeight: CGFloat,
         bandMaxHeight: CGFloat,
         bandDrawerCollapsed: Binding<Bool>,
-        onOpenMediaCrop: @escaping (String) -> Void
+        onOpenMediaCrop: @escaping (String) -> Void,
+        onOpenStickerPicker: (() -> Void)? = nil
     ) {
         self.viewModel = viewModel
         self._bandStateMachine = bandStateMachine
@@ -56,6 +60,7 @@ public struct ComposerControlsLayer: View {
         self.bandMaxHeight = bandMaxHeight
         self._bandDrawerCollapsed = bandDrawerCollapsed
         self.onOpenMediaCrop = onOpenMediaCrop
+        self.onOpenStickerPicker = onOpenStickerPicker
     }
 
     /// Le grabber redimensionne ET replie le band pour TOUS les panneaux d'outil
@@ -203,6 +208,7 @@ public struct ComposerControlsLayer: View {
                     onShowInTimeline: {
                         viewModel.isTimelineVisible = true
                     },
+                    onOpenStickerPicker: onOpenStickerPicker,
                     resizableHeight: isBandResizable ? $resizableBandHeight : nil,
                     minHeight: bandMinHeight,
                     maxHeight: bandMaxHeight,

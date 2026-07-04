@@ -224,11 +224,25 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   documenter. Faible valeur/effort élevé — à trancher si le produit demande des animations
   de sortie. Web ne rend NI opening ni closing (parité W* future si opening devient visible
   côté web).
-- [ ] **C8 (P2) Stickers inaccessibles.** `StickerPickerView.swift` complet mais ZÉRO call site ;
-  pas de case sticker dans StoryToolMode/FABs/tuiles ; `@State stickerObjects` jamais alimenté
-  (`StoryComposerView.swift:26`). Le reader rend pourtant les stickers (rétro-compat). Réintroduire
-  un point d'entrée (réutiliser le picker existant — maximize reuse) OU retirer la feature =
-  décision produit si le retrait est envisagé ; la réintroduction est autonome.
+- [x] **C8 (P2) Stickers inaccessibles.** ✅ it.72
+  Livré : bouton « Stickers » dans le panneau Texte (même style que « Ajouter du texte »),
+  chaîne de callbacks View→ControlsLayer→Band→PanelHost, sheet .medium (dismiss gestuel,
+  reste ouverte pour ajouts multiples), `addSticker(emoji:)` par le chemin AUTORITAIRE
+  actuel (@State canvas-authored — cf. C13) avec décalage en cascade. BONUS trouvé/fixé :
+  le picker jamais exercé rendait les EMOJIS INVISIBLES (onglets + grille vides) — cause :
+  boutons sans `.buttonStyle(.plain)` ; piège consigné dans le code. VÉRIFIÉ SIMULATEUR :
+  picker complet (onglets+grille), tap emoji → sticker posé au canvas, autosave draft OK
+  (DraftResumeCard montre la cover avec sticker). Captures it72-*.png.
+- [ ] **C13 (P2, découvert it.72) Source de vérité stickers INCOHÉRENTE — revert latent.**
+  Preuve : VM et canvas mutent `effects.stickerObjects` DIRECTEMENT (deleteElement
+  +Elements:365, duplicate +Slides:180, zOrder, gestes canvas) MAIS `mergeEffects` ÉCRASE
+  ce champ depuis le @State View `stickerObjects` à chaque sync (+SyncRestore:139-140,
+  contrat pinné par le test « deleted stickers must not resurrect ») — le @State n'est
+  rafraîchi qu'au changement de slide (restoreCanvas). Un drag/resize/delete de sticker
+  suivi d'un sync (ex. changement de couleur) peut REVERTIR la mutation. Dormant tant que
+  les stickers étaient inaccessibles — C8 le réveille. Refonte cible : stickers en
+  passthrough `currentEffects` (modèle textObjects) — PLAN REQUIS (change un contrat de
+  test pinné + touche delete/duplicate/gestes).
 - [ ] **C9 (P2) Pas d'undo/redo global composer.** Undo/redo existe UNIQUEMENT en dessin
   (DrawingEditFloatingBubbles) + CommandStack timeline (séparé). Ajout/déplacement/suppression
   de texte/média/sticker/fond : irréversibles (seul « annuler » = ⋯ → Supprimer tous les
@@ -249,6 +263,24 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   xcstrings devRegion=en vs source=fr (cf. mémoire projet) : les clés de l'alerte ont une
   traduction EN, les tuiles retombent sur defaultValue FR (locale simu EN). Auditer les
   xcstrings du composer (story.composer.*) pour une couverture homogène 5 langues.
+
+- [ ] **C-DIR2 (P0, directive user 2026-07-04 #2) Canvas TOUJOURS entièrement visible +
+  chrome unifié header/FABs.** Directive verbatim : (a) le canvas ne doit JAMAIS être coupé
+  sous le header ni sous le band/sheet ; (b) un band replié entièrement (poignée seule) doit
+  être RETIRÉ, remplacé par le retour des FABs ; (c) pendant l'édition d'un composant, NI
+  header NI FABs (inutiles) ; (d) le header apparaît sous les MÊMES conditions que les FABs
+  (canvas plein écran + FABs = header visible ; sinon caché — Publier/preview vivent avec le
+  chrome plein). Chantier layout : StoryCanvasFraming/canvasComposerLayer (cadrage carte
+  sous chrome ?), showTopBar (+TopBar:14-16) à recâbler sur shouldShowFABs, bandDrawerCollapsed
+  → à remplacer par band dismiss + FABs restore (C3 handle devient LE pattern), vérifier
+  keyboard shift. DÉCOUPER en incréments (a)-(d).
+- [ ] **C-DIR3 (P1, directive user 2026-07-04 #3) Device iPhone 16 Pro Max : le fond
+  vidéo/média d'une story ne JOUE PAS à l'ouverture ni en preview** tant qu'un long-press +
+  touch n'est pas fait ; le simulateur, lui, joue correctement. Piste : gating d'activation
+  playback (registerAsActiveAndPreemptOthers ? audio session real-device ? timing
+  isReadyForDisplay device plus lent → contentReady jamais re-déclenché ? `playsVideoInEditMode`
+  concerne l'édition, ici c'est le VIEWER/preview). Analyse code d'abord (chemins .play
+  device-only), puis instrumentation device. Grouper avec la passe device existante.
 
 ### ÉDITION — crash recovery & intégrité des données
 
@@ -843,6 +875,18 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.72 — C8 : stickers de retour (bouton panneau Texte + picker réparé) + 2 directives user
+
+- C8 complet (détail item) : le tap AVEUGLE sur la grille invisible a posé un sticker au
+  canvas — preuve que data+flux étaient sains et que seul le RENDU du picker était cassé
+  (.buttonStyle(.plain) manquant, picker jamais exercé depuis sa création). Nouveau C13
+  (P2) : incohérence de source de vérité stickers (revert latent) réveillée par C8 — plan requis.
+- Directives user reçues EN COURS de tour → C-DIR2 (P0 : canvas jamais coupé + header calé
+  sur les FABs + band replié = retiré au profit des FABs) et C-DIR3 (P1 : playback story
+  muet au boot sur device réel). C-DIR2 = LA priorité du prochain tour.
+- Re-vérifs au passage : C1 (panneau Fond direct avec chips Ouverture ✓), U4 DraftResumeCard
+  (cover composite AVEC le sticker ✓ — autosave E1 couvre les stickers).
 
 ## it.71 — C3 (poignée fantôme) + MAIN DÉBLOQUÉ + directive tray (+ coupé)
 

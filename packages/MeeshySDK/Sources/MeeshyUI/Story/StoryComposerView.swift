@@ -54,6 +54,8 @@ public struct StoryComposerView: View {
 
     @State var showAudioDocumentPicker = false
     @State var showVoiceRecorderSheet = false
+    /// C8 — picker de stickers (bouton « Stickers » du panneau Texte).
+    @State var showStickerPicker = false
     // Prisme Linguistique: the story's source language comes from the user's
     // in-app content preferences (systemLanguage → regionalLanguage → "fr"),
     // NEVER from the keyboard locale. See `StoryComposerViewModel

@@ -75,6 +75,18 @@ extension StoryComposerView {
         lostMediaCount = 0
     }
 
+    /// C8 — ajoute un sticker au slide courant par le chemin AUTORITAIRE
+    /// actuel (le @State canvas-authored `stickerObjects`, écrasé dans
+    /// `mergeEffects` — un ajout direct à `currentEffects` serait effacé au
+    /// sync suivant, cf. C13). Décalage en cascade pour que plusieurs ajouts
+    /// successifs ne s'empilent pas exactement au même point.
+    func addSticker(emoji: String) {
+        let offset = Double(stickerObjects.count % 5) * 0.04
+        stickerObjects.append(StorySticker(emoji: emoji, x: 0.5 + offset, y: 0.5 + offset))
+        syncCurrentSlideEffects()
+        HapticFeedback.light()
+    }
+
     func restoreCanvas(from slide: StorySlide) {
         let e = slide.effects
         if let bgHex = e.background { viewModel.backgroundColor = "#\(bgHex)" }

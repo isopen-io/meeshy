@@ -204,7 +204,8 @@ extension StoryComposerView {
                     bandMinHeight: Self.composerBandMinHeight,
                     bandMaxHeight: Self.composerBandMaxHeight,
                     bandDrawerCollapsed: $bandDrawerCollapsed,
-                    onOpenMediaCrop: { id in openMediaEditor(elementId: id) }
+                    onOpenMediaCrop: { id in openMediaEditor(elementId: id) },
+                    onOpenStickerPicker: { showStickerPicker = true }
                 )
             }
         }

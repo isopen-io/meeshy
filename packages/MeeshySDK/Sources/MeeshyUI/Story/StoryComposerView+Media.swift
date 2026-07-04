@@ -56,6 +56,16 @@ extension StoryComposerView {
             }
             .presentationDetents([.medium])
         }
+        .sheet(isPresented: $showStickerPicker) {
+            // C8 — le picker existait, complet, sans AUCUN call site. Sheet
+            // medium, dismiss gestuel natif ; reste ouverte après un ajout
+            // (poser plusieurs stickers d'affilée, fermer par swipe-down).
+            StickerPickerView { emoji in
+                addSticker(emoji: emoji)
+            }
+            .presentationDetents([.medium])
+            .presentationDragIndicator(.visible)
+        }
         .sheet(isPresented: $viewModel.isTimelineVisible,
                onDismiss: { viewModel.commitTimelineToCurrentSlide() }) {
             TimelineContainerSwitcher(viewModel: viewModel.timelineViewModel)
