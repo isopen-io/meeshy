@@ -309,8 +309,10 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   Surcharge `resolvedContent(preferredLanguages:)` (première langue de la chaîne ayant une
   traduction ; aucun match → ORIGINAL, Prisme n°1) branchée dans toRenderableSlide.
   4 tests Prisme (fallthrough chaîne, ordre, no-match→original, sans translations).
-- [ ] **R11 (P3) `isViewed: Bool` → `viewedAt: Date?`** (règle CLAUDE.md « nullable DateTime,
-  pas de boolean redondant »). Migration douce : garder le decode Bool, ajouter le timestamp.
+- [x] **R11 (P3) `viewedAt: Date?` ajouté (migration douce).** ✅ it.35
+  Champ optionnel sur StoryItem (rétro-compatible cache GRDB + payload serveur Bool-only,
+  testé), posé par markViewed au flip local. `isViewed` reste le decode serveur.
+  Consommateurs futurs notés : tri des vus, TTL pin R5 par date de vue.
 - [ ] **R12 (P2, architecture) Story store relationnel.** Le tray = UN blob JSON
   `stories:recent_tray_v2` ré-encodé en entier à chaque write (chiffrement futur = encore plus
   cher). Cible : clé par groupe (`stories:group:<authorId>`) ou table dédiée + persistence
@@ -421,21 +423,25 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   dispo dans le SDK cible) — TOUJOURS via gating `if #available`, jamais de régression 16-25.
   Respecter la mémoire « texte blanc illisible en Light sur verre » (épingler colorScheme si
   besoin).
-- [ ] **U4 (P2) Reprise de brouillon** : remplacer l'alerte texte par une carte de reprise
-  (cover composite du draft, « Reprendre / Recommencer »), présentée dans le composer et/ou en
-  chip sur « Ma story ». C'est le pendant UX de E1.
+- [~] **U4 (P2) Reprise de brouillon.** — PLAN POSÉ it.36
+  Plan : `docs/superpowers/plans/2026-07-04-story-draft-resume-card-plan.md` (constat :
+  alerte texte nue à StoryComposerView:198 ; cible : carte cover composite via le chemin
+  it.3 renderComposite + restore médias existant ; 3 incréments, pièges consignés).
+  Prochain tour : incrément 1 (DraftResumeCard MeeshyUI, params opaques).
 - [ ] **U5 (P3) État de chargement prolongé** (avec R2) : ThumbHash + progress ring fine autour
   de l'avatar auteur (métaphore déjà connue du tray), bouton passer.
-- [~] **U6 (P3) Dynamic Type/VoiceOver du viewer.** — INCRÉMENT 1 it.31
+- [x] **U6 (P3) Dynamic Type/VoiceOver du viewer.** ✅ COMPLET it.34
   ✅ Annonce VoiceOver au changement de slide (« Story N sur M », gated
   isVoiceOverRunning, clé localisée statique — piège : String(localized:) exige une
   StaticString comme clé, pas d'interpolation dedans).
-  RESTE (inc.2) : labels des zones tap prev/next — PISTE it.32 : ce ne sont PAS des
-  onTapGesture (les seuls du viewer sont le switcher de langue des commentaires) ; chercher
-  la gesture SPATIALE du canvas (+Canvas.swift:96 « course contre onTapGesture ») — les
-  zones prev/next se décident probablement par position x du tap dans le canvas →
-  l'a11y passera par accessibilityAction custom (VoiceOver ne « tape » pas par position) ;
-  + accessibilityValue de la barre de progression.
+  ✅ Inc.2 (it.33) : actions VoiceOver custom « Story suivante / précédente » sur le canvas
+  (la navigation est une gesture spatiale par position x, inatteignable en VoiceOver) +
+  accessibilityLabel du canvas (contenu CALayer invisible d'UIAccessibility),
+  .accessibilityElement(children: .ignore).
+  Inc.3 ÉCARTÉ avec preuve (it.34) : `StoryProgressBarsView` porte DÉJÀ
+  `.accessibilityValue("N pourcent")` + label position + segments accessibilityHidden
+  (+Content.swift:2149-2151, passe PR #1211). U6 complet : annonce slide-change (it.31)
+  + actions rotor prev/next (it.33) + barre déjà couverte.
 - [x] **U7 (P3) ProMotion.** ✅ ÉCARTÉ it.30 — déjà satisfait : le timer viewer pose
   `CAFrameRateRange(min 30, max 60, preferred 60)` (StoryReaderTimerController:270, jamais
   120 Hz) et le canvas est à preferred 60 (max 120 réservé aux keyframes edit). Granularité
@@ -535,6 +541,30 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.36 — U4 : plan de la carte de reprise posé
+
+- Itération de plan (refonte UI → plan d'abord, protocole) ; zéro code.
+
+## it.35 — R11 : viewedAt migration douce (2871df2f3) + HOTFIX build main (ce81369f8)
+
+- ⚠️ Incident : BUILD FAILED masqué par mon enchaînement (le commit R11 est parti malgré le
+  gate rouge — le script chaînait sans conditionner sur le grep). Cause RÉELLE : commit
+  6726391a1 (autre agent) référençait AudioEffectsPanel.swift jamais commité → main cassé
+  pour tous. Fix : xcodegen generate (project.yml = vérité, glob des fichiers RÉELS) +
+  commit du pbxproj régénéré. R11 lui-même sain (tests modèles verts + full build vert
+  post-fix). LEÇON (piège d'exécution) : toujours CONDITIONNER commit/push sur le résultat
+  du gate (`grep -q "Build succeeded" || exit`), jamais un enchaînement inconditionnel.
+
+- 6/6 tests modèles (round-trip + legacy decode) ; build vert.
+
+## it.34 — U6 inc.3 : ÉCARTÉ avec preuve — U6 COMPLET
+
+- accessibilityValue de progression déjà présent (PR #1211). Zéro code.
+
+## it.33 — U6 inc.2 : actions VoiceOver prev/next sur le canvas (3fcf435f2)
+
+- Build vert (retry après contention de build avec un agent parallèle — DB lock).
 
 ## it.32 — U6 inc.2 : repérage (session au bout de son contexte)
 
