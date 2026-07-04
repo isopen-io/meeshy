@@ -1,22 +1,25 @@
-import { VISIBILITY_OPTIONS } from '@/components/v2/StoryComposer';
+import { VISIBILITY_OPTIONS, isAudienceIncomplete } from '@/components/v2/StoryComposer';
 
-describe('StoryComposer visibility options (W3 inc.1)', () => {
-  it('offers COMMUNITY alongside the historic options, in selector order', () => {
+describe('StoryComposer visibility options (W3)', () => {
+  it('offers the 6 PostVisibility values in selector order (iOS parity)', () => {
     expect(VISIBILITY_OPTIONS.map((o) => o.id)).toEqual([
       'PUBLIC',
       'FRIENDS',
       'COMMUNITY',
+      'EXCEPT',
+      'ONLY',
       'PRIVATE',
     ]);
   });
 
-  it('does not offer EXCEPT/ONLY until the audience picker exists', () => {
-    // Publier EXCEPT/ONLY sans `visibilityUserIds` produit une visibilité
-    // cassée (trou constaté sur PostComposer, consigné au backlog story-sota).
-    // Ces options n'entrent dans le sélecteur qu'avec le picker (W3 inc.2).
-    const ids = VISIBILITY_OPTIONS.map((o) => o.id) as string[];
-    expect(ids).not.toContain('EXCEPT');
-    expect(ids).not.toContain('ONLY');
+  it('blocks publishing EXCEPT/ONLY without a selected audience (W6 guard)', () => {
+    // EXCEPT sans exclus / ONLY sans inclus = visibilité cassée côté serveur.
+    expect(isAudienceIncomplete('EXCEPT', 0)).toBe(true);
+    expect(isAudienceIncomplete('ONLY', 0)).toBe(true);
+    expect(isAudienceIncomplete('EXCEPT', 2)).toBe(false);
+    expect(isAudienceIncomplete('ONLY', 1)).toBe(false);
+    expect(isAudienceIncomplete('PUBLIC', 0)).toBe(false);
+    expect(isAudienceIncomplete('COMMUNITY', 0)).toBe(false);
   });
 
   it('has a locale label for every option in the 4 supported languages', () => {
