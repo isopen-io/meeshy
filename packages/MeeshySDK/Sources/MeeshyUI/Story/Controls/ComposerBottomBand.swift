@@ -196,12 +196,20 @@ struct ComposerBottomBand: View {
             .padding(.bottom, 6)
             .frame(maxWidth: .infinity)        // hit-area sur toute la largeur
             .contentShape(Rectangle())
-            .accessibilityLabel("Poignée de la barre d'outils")
+            .accessibilityLabel(String(
+                localized: "story.composer.grabber",
+                defaultValue: "Poignée de la barre d'outils", bundle: .module
+            ))
             .accessibilityAddTraits(.isButton)
 
         if let height = resizableHeight {
             handle
-                .accessibilityHint("Faites glisser vers le haut pour agrandir, vers le bas pour réduire ou replier.")
+                // « replier » périmé depuis C-DIR2 : tirer sous le min FERME.
+                .accessibilityHint(String(
+                    localized: "story.composer.grabber.hint.resize",
+                    defaultValue: "Faites glisser vers le haut pour agrandir, vers le bas pour réduire ou fermer.",
+                    bundle: .module
+                ))
                 .gesture(
                     DragGesture(minimumDistance: 2)
                         .onChanged { value in
@@ -213,14 +221,18 @@ struct ComposerBottomBand: View {
                             let base = dragStartHeight ?? height.wrappedValue
                             let proposed = base - value.translation.height
                             dragStartHeight = nil
-                            // Tiré nettement sous le min → REPLIE le drawer (poignée
-                            // seule) sans quitter l'outil actif (cf. `onResizeDismiss`).
+                            // Tiré nettement sous le min → FERME le band et rend
+                            // les FABs (C-DIR2 (b), cf. `onResizeDismiss`).
                             if proposed < minHeight - 50 { onResizeDismiss?() }
                         }
                 )
         } else {
             handle
-                .accessibilityHint("Faites glisser vers le bas pour réduire ou fermer.")
+                .accessibilityHint(String(
+                    localized: "story.composer.grabber.hint.dismiss",
+                    defaultValue: "Faites glisser vers le bas pour réduire ou fermer.",
+                    bundle: .module
+                ))
         }
     }
 }

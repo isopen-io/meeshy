@@ -413,6 +413,18 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   Note : « recharge des médias » du rapport = conséquence attendue du fix BUG-3 (le
   saveMedia n'écrase plus les copies du draft) — vérif média dédiée à faire.
 
+- [x] **C14 (P3, audit ciblé it.88 — a11y des gestes du composer).** ✅ it.88
+  FINDING : les labels VoiceOver des FABs annonçaient les noms d'ENUM internes
+  (`String(describing: category)` → « texture », « son », « drawing » — jamais localisés,
+  incohérents avec les libellés affichés « Fond »/« Dessin ») et TOUTES les strings a11y du
+  chrome (FABs value/hints + grabber label/hints) étaient des littéraux FR hors xcstrings
+  (VoiceOver bilingue en locale EN — même classe que C12) ; le hint du grabber disait encore
+  « replier » (périmé C-DIR2). FIX : `toolDisplayName(_:)` réutilise les clés story.tool.*
+  (VoiceOver dit CE QUE l'écran montre), 8 strings localisées 4 langues, hint corrigé.
+  Vérifié structurellement : chaque geste du composer a son équivalent actionnable
+  (poignée C3 = bouton labellisé, fermeture band = chevron, zoom-out = bouton reset,
+  swipe-up FAB = tap, undo/redo = boutons labellisés). Audit PRODUCTIF (pas sec).
+
 ### ÉDITION — crash recovery & intégrité des données
 
 - [x] **E1 (P0) Autosave draft sur mutation, pas seulement en background.** ✅ it.5
@@ -1006,6 +1018,13 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.88 — Audit ciblé n°1 (a11y gestes composer) → C14 trouvé+fixé — compteur sec 0/2
+
+- Protocole étape 8 engagé. L'audit a produit du premier coup : VoiceOver annonçait des
+  noms d'enum internes non localisés sur le chrome que la mission vient de refondre.
+  Prochaine surface candidate (audit n°2) : flux preview (onPreview → reader .preview)
+  ou éditeur texte inline en profondeur.
 
 ## it.87 — C11 : fonds dégradés bout-en-bout (format + 3 renderers + palette)
 
