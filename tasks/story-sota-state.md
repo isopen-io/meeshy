@@ -446,6 +446,16 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   pattern lostMediaCount) posée aux 3 points, message actionnable (« vérifiez iCloud »),
   2 clés xcstrings 4 langues. Audit n°4 PRODUCTIF — compteur sec 0/2.
 
+- [x] **C-DIR5 (P2, directive user 2026-07-04 #5 — capture preview reader).** ✅ it.91b
+  « La story doit se placer directement en bas de la date d'expiration — l'espace entre
+  les deux est trop grand. » Cause : `StoryCanvasFraming.resolve` CENTRAIT la carte dans
+  la région [header…bas] — quand la contrainte largeur est active, le mou vertical se
+  répartit moitié haut/moitié bas → vide sous le header. FIX : option
+  `verticalAlignment` (.center historique / .top flush) dans le solveur pur ; le READER
+  passe `.top` (le mou entier va en bas) ; le composer garde `.center` (défaut compat).
+  2 tests géométriques discriminants (contrainte largeur forcée). 17/17 framing, build
+  82 s. VÉRIF : sur la prochaine capture user (build installé sur le simulateur).
+
 ### ÉDITION — crash recovery & intégrité des données
 
 - [x] **E1 (P0) Autosave draft sur mutation, pas seulement en background.** ✅ it.5
@@ -1039,6 +1049,11 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.91b — C-DIR5 : la carte du reader se colle sous le header (alignement top)
+
+- Directive user traitée dans le même tour que C16 (dont le push a été retardé par un
+  lock git de l'agent parallèle — résolu, son merge a embarqué mon commit intact).
 
 ## it.91 — Audit ciblé n°4 (picker médias) → C16 trouvé+fixé — compteur 0/2
 
