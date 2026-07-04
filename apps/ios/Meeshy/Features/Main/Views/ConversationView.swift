@@ -231,6 +231,8 @@ struct ConversationView: View {
     @Environment(\.scenePhase) private var scenePhase
     var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) var colorScheme
+    /// U1 inc.2 — namespace zoom injecté par RootView (no-op < iOS 18/nil).
+    @Environment(\.zoomTransitionNamespace) private var zoomNamespace
     var isDark: Bool { colorScheme == .dark }
     // Lecture directe sans @ObservedObject — évite que chaque event presence force
     // un re-render complet de la conversation. La présence est rafraîchie via les refreshs naturels.
@@ -548,6 +550,9 @@ struct ConversationView: View {
                 .environmentObject(router)
                 .environmentObject(statusViewModel)
                 .environmentObject(conversationListViewModel)
+                // U1 inc.2 — zoom depuis la bulle si elle est enregistrée
+                // (tray in-chat), fallback cover standard sinon (avatar header).
+                .zoomTransitionDestination(sourceID: headerState.storyUserIdForHeader ?? "", in: zoomNamespace)
             }
             .fullScreenCover(isPresented: $overlayState.showStoryViewer) {
                 StoryViewerContainer(
@@ -569,6 +574,7 @@ struct ConversationView: View {
                 .environmentObject(router)
                 .environmentObject(statusViewModel)
                 .environmentObject(conversationListViewModel)
+                .zoomTransitionDestination(sourceID: overlayState.storyViewerUserId ?? "", in: zoomNamespace)
             }
             .sheet(isPresented: $composerState.showConversationInfo) {
                 if let conv = conversation { ConversationInfoSheet(conversation: conv, accentColor: accentColor, messages: viewModel.messages) }

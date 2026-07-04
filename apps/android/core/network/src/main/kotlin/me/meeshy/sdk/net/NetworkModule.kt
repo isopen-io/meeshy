@@ -8,6 +8,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import me.meeshy.core.network.BuildConfig
 import me.meeshy.sdk.net.api.AuthApi
+import me.meeshy.sdk.net.api.BlockApi
 import me.meeshy.sdk.net.api.CallHistoryApi
 import me.meeshy.sdk.net.api.CommunityApi
 import me.meeshy.sdk.net.api.ConversationApi
@@ -65,6 +66,9 @@ internal object NetworkModule {
 
     @Provides
     fun providesFriendApi(api: MeeshyApi): FriendApi = api.friends
+
+    @Provides
+    fun providesBlockApi(api: MeeshyApi): BlockApi = api.blocks
 
     @Provides
     fun providesNotificationApi(api: MeeshyApi): NotificationApi = api.notifications

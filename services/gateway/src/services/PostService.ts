@@ -6,6 +6,7 @@ import { PostReactionService } from './PostReactionService';
 import type { MobileTranscription } from '../routes/posts/types';
 import { PostAudioService } from './posts/PostAudioService';
 import { NOT_DELETED } from './posts/postIncludes';
+import { buildPostVisibilityOrFilter } from './posts/postVisibility';
 import { getCommunityCoMemberIds } from './posts/communityVisibility';
 import { MediaService } from './MediaService';
 import type { MediaStorage, MediaDuplicateResult } from './storage/MediaStorage';
@@ -535,16 +536,9 @@ export class PostService {
       this.getFriendIdsForViewer(viewerUserId),
       getCommunityCoMemberIds(this.prisma, viewerUserId),
     ]);
-    return {
-      OR: [
-        { authorId: viewerUserId },
-        { visibility: PostVisibility.PUBLIC },
-        { visibility: PostVisibility.COMMUNITY, authorId: { in: communityCoMemberIds } },
-        { visibility: PostVisibility.FRIENDS, authorId: { in: friendIds } },
-        { visibility: PostVisibility.EXCEPT, authorId: { in: friendIds }, NOT: { visibilityUserIds: { has: viewerUserId } } },
-        { visibility: PostVisibility.ONLY, visibilityUserIds: { has: viewerUserId } },
-      ],
-    };
+    // G5 — filtre canonique unique. Audience = friends STRICTS ici (le feed
+    // passe friends ∪ contacts DM — divergence remontée, story-sota §4).
+    return buildPostVisibilityOrFilter(viewerUserId, friendIds, communityCoMemberIds);
   }
 
   private async getFriendIdsForViewer(userId: string): Promise<string[]> {

@@ -92,6 +92,8 @@ extension iPadRootView {
                 .environmentObject(conversationViewModel)
                 // Cf. fix sync pill chevauchement 2026-05-27 dans RootView.
                 .environment(\.isStoryViewerPresenting, true)
+                // U1 inc.2 — parité zoom sur le cover legacy du tray in-chat.
+                .zoomTransitionDestination(sourceID: selectedStoryUserIdFromConv ?? "", in: storyZoomNamespace)
             }
             // Coordinator-driven viewer cover used by
             // `StoryNotificationTargetScreen` → `StoryActiveBridge`. Mirrors
@@ -117,6 +119,8 @@ extension iPadRootView {
                     presentationSource: "iPadRootView.fromConv",
                     initialAction: request.initialAction
                 )
+                // U1 inc.2 — zoom depuis la bulle enregistrée (fallback standard sinon).
+                .zoomTransitionDestination(sourceID: request.id, in: storyZoomNamespace)
                 // Re-inject env objects required by StoryViewerView for its
                 // internal SharePickerView sheet. fullScreenCover does NOT
                 // inherit EnvironmentObjects automatically.

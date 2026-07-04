@@ -5,7 +5,8 @@ import { formatTimeRemaining } from '@meeshy/shared/utils/time-remaining';
 import { useI18n } from '@/hooks/use-i18n';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
-import { resolveKeyframeState, resolveClipTransitionOpacity, type StoryKeyframeData, type StoryClipTransitionData } from '@/lib/story-transforms';
+import { resolveKeyframeState, resolveClipTransitionOpacity, safeBackgroundImageUrl, type StoryKeyframeData, type StoryClipTransitionData } from '@/lib/story-transforms';
+import { config } from '@/lib/config';
 import { Avatar } from './Avatar';
 import { TranslationToggle } from './TranslationToggle';
 import { CommentList } from './CommentList';
@@ -213,9 +214,21 @@ function parseBackground(bg?: string): React.CSSProperties {
     return { background: `linear-gradient(135deg, ${from}, ${to})` };
   }
 
-  // Treat as image URL
+  // W7 — treat as image URL, but ONLY internal/allow-listed ones: an
+  // arbitrary URL here would make every viewer of the story issue a request
+  // to a third-party host (tracking pixel / viewer IP-leak). Anything else
+  // falls back to the default gradient.
+  const allowedOrigins = typeof window !== 'undefined'
+    ? [window.location.origin, config.backend.url]
+    : [config.backend.url];
+  const safe = safeBackgroundImageUrl(bg, allowedOrigins);
+  if (!safe) {
+    return {
+      background: 'linear-gradient(135deg, var(--gp-terracotta), var(--gp-deep-teal))',
+    };
+  }
   return {
-    backgroundImage: `url(${bg})`,
+    backgroundImage: `url(${safe})`,
     backgroundSize: 'cover',
     backgroundPosition: 'center',
   };

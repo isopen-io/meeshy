@@ -14,6 +14,21 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 138i, 2026-07-04)** — piste iOS indépendante (suffixe `i`).
+> - **138i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `44053b50`)** :
+>   Dynamic Type de `KeypadTab` (onglet Pavé du hub People). **1/3** `.font(.system(size:))` →
+>   `MeeshyFont.relative` (champ `TextField` numéro/nom, 26 rounded → scale). **2 figés** commentés **82i** :
+>   chiffre (30) + lettres (9) de touche, bornés par la touche fixe 72×56 (`.frame(width:72,height:56)`).
+>   A11y déjà en place (TextField labellisé ; `keyButton` lit le chiffre → lettres aplaties). Logique de
+>   recherche non touchée. 1 fichier, 0 logique, 0 test/clé i18n neuve. 0 PR iOS ouverte → 0 contention.
+>   Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `KeypadTab` Dynamic Type SOLDÉ** : ne plus reprendre les 2 glyphes de touche figés (touches fixes 72×56).
+> - **Base de départ 139i : `main` HEAD**. Reste `StoryViewerView+Content` (⚠️ i18n + `@State private`
+>   cross-file). Sinon : traîne de fichiers à 2/1 `.system` (`ContextActionMenu`, `MentionSuggestionPanel`,
+>   `SecurityVerificationView`, `StatsTimelineChart`, `AudioPostComposerView`, `ConversationBackgroundComponents`,
+>   `MessageViewsDetailView`, `StoryExpiredContent`, `StoryViewerContainer`, `WebRTCVideoView` post-#1440…),
+>   ou **passe state-of-the-art** au tarissement.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 137i, 2026-07-04)** — piste iOS indépendante (suffixe `i`).
 > - **137i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `ee185327`)** :
 >   Dynamic Type — annotation de gel de `ConversationLockSheet` (sheet PIN de verrouillage). **3 figés** :

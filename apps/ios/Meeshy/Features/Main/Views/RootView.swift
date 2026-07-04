@@ -79,6 +79,12 @@ struct RootView: View {
     /// legacy `Identifiable?` contract expected by `.fullScreenCover(item:)`.
     @StateObject private var storyViewerCoordinator = StoryViewerCoordinator()
 
+    /// U1 — namespace de la transition zoom tray→viewer (iOS 18+). Injecté
+    /// dans l'environnement pour que la bulle du tray (source) et le cover
+    /// (destination) partagent la même identité visuelle. iOS 16-17 : les
+    /// helpers `zoomTransition*` sont no-op, comportement historique intact.
+    @Namespace private var storyZoomNamespace
+
     /// Conversation surfaced by a long-press / pull-down on an in-app
     /// notification toast — presented as a reusable `ConversationView` preview
     /// (last messages + simple composer) over the current page.
@@ -416,6 +422,7 @@ struct RootView: View {
         .environmentObject(statusViewModel)
         .environmentObject(conversationViewModel)
         .environmentObject(storyViewerCoordinator)
+        .environment(\.zoomTransitionNamespace, storyZoomNamespace)
         // In-app notification preview: long-press / pull-down on a toast opens
         // the conversation (last messages + simple composer) over the current
         // page. A sheet creates a fresh environment, so the objects the reused
@@ -534,6 +541,11 @@ struct RootView: View {
             // cover ne pouvait pas se cacher sans ça. Bug sync pill
             // chevauche header 2026-05-27.
             .environment(\.isStoryViewerPresenting, true)
+            // U1 — transition zoom depuis la bulle du tray (iOS 18+, no-op
+            // sinon). sourceID = userId du groupe : si la story s'ouvre
+            // depuis un point d'entrée sans bulle enregistrée (notification,
+            // deep link), iOS retombe sur la transition cover standard.
+            .zoomTransitionDestination(sourceID: request.id, in: storyZoomNamespace)
         }
         // Call presentation is split between fullScreen and PiP modes so the
         // user can keep using the rest of the app during an active call:

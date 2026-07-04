@@ -482,3 +482,38 @@ export function resolveClipTransitionOpacity(
   }
   return Math.max(0, Math.min(1, opacity));
 }
+
+/**
+ * W7 — un `storyEffects.background` non-hex/non-gradient est traité comme URL
+ * d'image de fond par les viewers. Rendre une URL ARBITRAIRE (posée par un
+ * client malveillant, le serveur ne borne que la longueur) ferait requêter
+ * chaque viewer vers un domaine tiers : tracking pixel / IP-leak des viewers.
+ * N'autorise que les chemins relatifs internes et les origins explicitement
+ * permis (front, gateway) ; rejette aussi tout métacaractère CSS (parenthèse,
+ * quote, espace — aucun chemin média légitime n'en contient) pour qu'aucune
+ * valeur ne puisse s'échapper du contexte `url(...)`. `null` → le caller
+ * retombe sur le gradient par défaut.
+ */
+export function safeBackgroundImageUrl(
+  bg: string,
+  allowedOrigins: readonly string[]
+): string | null {
+  if (/[()'"\s\\]/.test(bg)) return null;
+  if (bg.startsWith('/') && !bg.startsWith('//')) return bg;
+  let parsed: URL;
+  try {
+    parsed = new URL(bg);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null;
+  return allowedOrigins.some((origin) => {
+    try {
+      return new URL(origin).origin === parsed.origin;
+    } catch {
+      return false;
+    }
+  })
+    ? bg
+    : null;
+}

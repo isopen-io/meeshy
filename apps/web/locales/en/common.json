@@ -270,7 +270,16 @@
       "public": "Public",
       "friends": "Friends",
       "community": "Community",
+      "except": "All except…",
+      "only": "Only…",
       "private": "Private"
+    },
+    "audiencePicker": {
+      "searchPlaceholder": "Search people…",
+      "exceptHint": "Your story will be hidden from the selected people.",
+      "onlyHint": "Only the selected people will see your story.",
+      "empty": "No one found",
+      "remove": "Remove"
     },
     "postComposer": {
       "contentLabel": "Post content",

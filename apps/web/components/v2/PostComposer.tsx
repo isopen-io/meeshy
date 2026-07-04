@@ -5,6 +5,7 @@ import { useI18n } from '@/hooks/use-i18n';
 import { cn } from '@/lib/utils';
 import { Avatar } from './Avatar';
 import { Button } from './Button';
+import { AudienceUserPicker, AUDIENCE_VISIBILITIES, isAudienceIncomplete } from './AudienceUserPicker';
 import type { PostType, PostVisibility } from '@meeshy/shared/types/post';
 
 export interface PostComposerProps {
@@ -37,6 +38,9 @@ function PostComposer({
   const { t } = useI18n('common');
   const [content, setContent] = useState('');
   const [visibility, setVisibility] = useState<PostVisibility>('PUBLIC');
+  // W6 — audience explicite des visibilités EXCEPT/ONLY (fix : ces options
+  // partaient sans liste → visibilité cassée). Même picker/gate que stories.
+  const [visibilityUserIds, setVisibilityUserIds] = useState<string[]>([]);
   const [showVisibilityPicker, setShowVisibilityPicker] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -45,15 +49,21 @@ function PostComposer({
     const trimmed = content.trim();
     if (!trimmed || disabled) return;
 
+    if (isAudienceIncomplete(visibility, visibilityUserIds.length)) return;
+
     onPublish({
       content: trimmed,
       type: 'POST',
       visibility,
+      visibilityUserIds: (AUDIENCE_VISIBILITIES as readonly string[]).includes(visibility)
+        ? visibilityUserIds
+        : undefined,
     });
 
     setContent('');
+    setVisibilityUserIds([]);
     setIsExpanded(false);
-  }, [content, disabled, onPublish, visibility]);
+  }, [content, disabled, onPublish, visibility, visibilityUserIds]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -133,6 +143,9 @@ function PostComposer({
                             key={opt.value}
                             onClick={() => {
                               setVisibility(opt.value);
+                              if (!(AUDIENCE_VISIBILITIES as readonly string[]).includes(opt.value)) {
+                                setVisibilityUserIds([]);
+                              }
                               setShowVisibilityPicker(false);
                             }}
                             className={cn(
@@ -163,10 +176,21 @@ function PostComposer({
                   variant="primary"
                   size="sm"
                   onClick={handlePublish}
-                  disabled={!isValid || disabled}
+                  disabled={!isValid || disabled || isAudienceIncomplete(visibility, visibilityUserIds.length)}
                 >
                   {t('publish')}
                 </Button>
+              </div>
+            )}
+
+            {/* W6 — audience explicite pour EXCEPT/ONLY */}
+            {isExpanded && (AUDIENCE_VISIBILITIES as readonly string[]).includes(visibility) && (
+              <div className="mt-2">
+                <AudienceUserPicker
+                  mode={visibility as 'EXCEPT' | 'ONLY'}
+                  selectedIds={visibilityUserIds}
+                  onChange={setVisibilityUserIds}
+                />
               </div>
             )}
           </div>

@@ -270,7 +270,16 @@
       "public": "Public",
       "friends": "Amis",
       "community": "Communauté",
+      "except": "Tous sauf…",
+      "only": "Seulement…",
       "private": "Privé"
+    },
+    "audiencePicker": {
+      "searchPlaceholder": "Rechercher des personnes…",
+      "exceptHint": "Votre story sera masquée aux personnes sélectionnées.",
+      "onlyHint": "Seules les personnes sélectionnées verront votre story.",
+      "empty": "Aucun résultat",
+      "remove": "Retirer"
     },
     "postComposer": {
       "contentLabel": "Contenu du post",

@@ -386,6 +386,19 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   non-régression StoryCanvasReaderTransitionTests ; build app 86 s vert. Reste visuel
   simulateur : à grouper avec une story de test portant un crossfade (composer requis).
 
+- [x] **G7 (P2, découvert it.61 — audit ciblé) Hard-delete des stories = rows PostMedia
+  orphelines À VIE.** ✅ FIXÉ it.61 (volet DB).
+  Preuve : PostMedia.post ET .comment = `onDelete: SetNull` (schema:3075-3076 zone) — le
+  sweep ExpiredStoriesCleanupService supprimait posts+reposts+comments mais AUCUNE row
+  média : chaque story expirée (100 % expirent, contenu le plus média-lourd) laissait ses
+  rows orphelines sans chemin de récupération. Les autres enfants (reactions/views/
+  mentions) cascadent correctement ✅. Fix : purge explicite des 2 jambes (postId des
+  stories+reposts, commentId de leurs commentaires collectés AVANT leur delete) avant le
+  post.deleteMany. 9/9 suite (2 tests neufs : ordre + jambe commentId).
+  RESTE (suivi, volet 2) : réclamation des FICHIERS DISQUE des médias hard-deleted
+  (résolution fileUrl→chemin UPLOAD_DIR + variantes TTS/transcriptions, prudence prod —
+  à faire avec un accès prod ou en déploiement).
+
 ### BACKEND — instantanéité réseau
 
 - [~] **G1 (P1) Tray léger + delta-sync.** — DELTA-SYNC FAIT it.13
@@ -424,8 +437,11 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   DÉPLOIEMENT gateway requis (avec G1/G2).
 - [ ] **G4 (P3) Champ mort `Post.storyViews Json?`** (schema L2874, jamais écrit/lu — PostView
   est la vérité). Retirer du schema (migration) ou documenter.
-- [ ] **G5 (P3) Consolider les 3 implémentations de visibilité** (PostFeedService,
-  PostService, canUserViewPost) en un module unique — risque de dérive/fuite documenté.
+- [x] **G5 (P3) Consolider les 3 implémentations de visibilité** ✅ it.60
+  `buildPostVisibilityOrFilter` (posts/postVisibility.ts, à côté de son miroir impératif
+  canUserViewPost) = source unique ; les deux services délèguent (no-op strict, chaque
+  call site garde son audience) ; shape pinnée par suite dédiée. La consolidation a
+  RÉVÉLÉ la vraie divergence → décision produit §4 ci-dessous. 134/134, tsc 0.
 - [x] **G6 (P3) Constante d'expiry unifiée.** ✅ it.26
   `StoryItem.defaultExpiryInterval = 21 h` (aligné STORY_EXPIRY_HOURS serveur) remplace le
   défaut interne 24 h d'`isExpired` ; test du contrat + pins adaptés (le pin 24 h a échoué
@@ -462,14 +478,19 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   `visibilityUserIds` plombé composer → feed screen → createStory (service l'acceptait déjà).
   Décision pinnée par test : EXCEPT/ONLY N'ENTRENT PAS au sélecteur sans le picker
   d'audience (publier sans liste = visibilité cassée).
-  RESTE inc.2 : picker d'audience web (liste amis + recherche + multi-sélection, parité
-  AudienceUserPickerView iOS) puis EXCEPT/ONLY au sélecteur — RÉUTILISABLE par PostComposer
-  (voir W6). Overlays composer (texte positionné etc.) = chantier séparé du composer web.
-- [ ] **W6 (P2, découvert it.52) PostComposer web publie EXCEPT/ONLY SANS visibilityUserIds.**
+  ✅ Inc.2 (it.53) : `AudienceUserPicker` (components/v2 — recherche debouncée via
+  useSearchUsersQuery générique, multi-sélection chips, hints par mode, 4 langues) ;
+  EXCEPT/ONLY au sélecteur story ; publication gatée par `isAudienceIncomplete` (pur,
+  testé) — jamais d'audience vide publiée. W3 côté VISIBILITÉS = COMPLET (6/6 parité iOS).
+  RESTE (hors visibilités) : overlays composer web (texte positionné etc.) = chantier
+  séparé, non couvert par cet item.
+- [x] **W6 (P2, découvert it.52) PostComposer web publie EXCEPT/ONLY SANS visibilityUserIds.** ✅ it.54
   Preuve : VISIBILITY_OPTIONS contient EXCEPT/ONLY (PostComposer.tsx:26-27) mais
   handlePublish n'envoie que {content, type, visibility} (:48-52) — aucun picker, aucune
-  liste → visibilité cassée côté serveur (EXCEPT sans exclus / ONLY sans inclus). Fix avec
-  l'inc.2 de W3 : même picker partagé, ou retrait des 2 options en attendant.
+  liste → visibilité cassée côté serveur (EXCEPT sans exclus / ONLY sans inclus).
+  LIVRÉ it.54 : picker + gate PARTAGÉS (promus dans le module AudienceUserPicker, source
+  unique Story+Post) ; publish bloqué liste vide, reset au retour vers une visibilité
+  non-audience, payload visibilityUserIds envoyé. 498/498 (33 suites story/feed/composer).
 - [x] **W4 (P3) Realtime web : story:deleted + story:translation-updated.** ✅ it.28
   `story:deleted` abonné dans use-social-socket (événement absent) + handlers dans
   useStoriesRealtime : suppression → retirée du cache tray en direct ; traduction →
@@ -480,6 +501,18 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - [x] **W5 (P3) Préchargement du média du slide suivant.** ✅ it.29
   Fenêtre N+1 (parité prefetcher iOS) : Image() décodée pour les images, <video preload=auto>
   détaché pour les vidéos (cache HTTP partagé avec le montage suivant), cleanup au unmount.
+
+- [~] **W7 (P2, découvert it.62 — audit ciblé) `storyEffects.background` URL arbitraire =
+  tracking pixel des viewers.** ✅ FIXÉ WEB it.62 ; volet iOS À AUDITER.
+  Preuve : le serveur ne borne background que par max(64) (types.ts:155 — une URL courte
+  passe) ; le web injectait la string brute dans backgroundImage:url(...) → CHAQUE viewer
+  requêtait le domaine tiers (IP/UA-leak de qui a vu, quand). Fix web :
+  `safeBackgroundImageUrl` (chemins relatifs internes + origins front/gateway seulement,
+  métacaractères CSS rejetés → rien ne sort du contexte url(), sinon fallback gradient),
+  5 tests. RESTE : (a) volet iOS — StoryBackgroundLayer.loadImage accepte une URL http
+  arbitraire par le même champ (même vecteur, audit + garde symétrique) ; (b) option
+  serveur : refine Zod (hex|gradient:|chemin interne) — ATTENTION rétro-compat des stories
+  existantes à URLs absolues internes, à trancher avec le déploiement.
 
 ### DIRECTIVES PRODUIT UTILISATEUR (hors backlog initial)
 
@@ -504,9 +537,22 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 
 ### UI/UX — design system par version d'iOS (à traiter APRÈS les P0/P1 fonctionnels)
 
-- [ ] **U1 (P2) Transition tray→viewer** : sur iOS 18+, `navigationTransition(.zoom)` /
-  matched-geometry depuis l'anneau du tray vers la carte reader ; fallback animation actuelle
-  iOS 16-17. Ne PAS casser appearScale/drag-dismiss existants (cf. it.33).
+- [x] **U1 (P2) Transition tray→viewer** ✅ COMPLET it.57
+  Livré : `zoomTransitionNamespace` (EnvironmentKey SDK) + helpers `zoomTransitionSource/
+  Destination` (atomes gated #available(iOS 18), no-op sinon — zéro régression 16-17) ;
+  RootView injecte le namespace + destination sur le cover coordinator (sourceID =
+  request.id, fallback cover standard sans bulle enregistrée) ; StoryRingCell = source
+  (id = group.id). VÉRIFIÉ SIMULATEUR 18.2 : login atabeth, tap bulle J.Charles → zoom
+  capturé EN VOL (scale centré coins arrondis, écran sous-jacent visible — signature zoom,
+  pas le slide-up standard), viewer sain (progression/chrome/traduction), drag-dismiss
+  custom SANS conflit (risque flaggé levé), appearScale/interstitiel/cube intacts.
+  Captures scratchpad it56-t4/now/dismissed.png.
+  ✅ Inc.2 (it.57) : mini-trail épinglée + MyStory = sources ; ConversationView covers ×2
+  + iPad covers ×2 = destinations ; iPadRootView = namespace + injection (parité RootView).
+  sourceID vide/non enregistré → cover standard (fallback guard). Re-vérif simulateur :
+  le chemin principal zoome toujours avec TOUTES les sources enregistrées (pas de
+  régression id dupliqué grande/mini). Restes visuels mineurs (non bloquants) : déclencher
+  visuellement mini-trail épinglée + iPad — à grouper avec une passe device.
 - [x] **U2 (P2) Haptics du reader.** ✅ it.25
   Livré via l'abstraction multi-version EXISTANTE `HapticFeedback` (UIImpactFeedbackGenerator,
   iOS 16+) : tick léger au changement de slide + gel perceptible quand le spinner R3 apparaît
@@ -514,11 +560,15 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   Publication réussie : déjà couvert (HapticFeedback.success au publish, it.12 constaté).
   Décision : pas de doublon .sensoryFeedback 17+ — l'abstraction existante est le single
   source du produit ; migrer TOUTE l'app vers .sensoryFeedback = chantier design system global.
-- [ ] **U3 (P2) Chrome du reader en matériaux natifs** : header/footer/sidebar en
-  `.ultraThinMaterial` + sur iOS 26 adopter les surfaces Liquid Glass (`glassEffect` API si
-  dispo dans le SDK cible) — TOUJOURS via gating `if #available`, jamais de régression 16-25.
-  Respecter la mémoire « texte blanc illisible en Light sur verre » (épingler colorScheme si
-  besoin).
+- [x] **U3 (P2) Chrome du reader en matériaux natifs** ✅ ÉCARTÉ it.58 — DÉJÀ FAIT.
+  Re-preuve : le constat it.39 (« fonds opacity custom ») est périmé. Inventaire réel :
+  bouton ⋯ header = ultraThinMaterial+overlay+stroke+shadow (Sidebar:703-709) ; panneau
+  langues = capsule material (:413-417) ; capsule langue = `adaptiveGlass` (:124) ; spinner
+  R3 + capsule mood U-DIR1 = material. Et `AdaptiveGlass.swift` (MeeshyUI/Compatibility)
+  fournit DÉJÀ l'abstraction iOS 26 : `glassEffect` natif 26+ / fallback material < 26 —
+  exactement la cible U3. Restes NON retenus (valeur nulle) : X preview-mode (black 0.5,
+  surface composer), X d'annulation réponse (micro-chrome), cercles INTERNES du panneau
+  langues (déjà sur material parent), rail de progression (fonctionnel, ne pas toucher).
 - [~] **U4 (P2) Reprise de brouillon.** — PLAN POSÉ it.36
   Plan : `docs/superpowers/plans/2026-07-04-story-draft-resume-card-plan.md` (constat :
   alerte texte nue à StoryComposerView:198 ; cible : carte cover composite via le chemin
@@ -531,8 +581,16 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   dismissal explicite seulement. Pièges : StoryCoverThumbnail est APP-side → taille
   littérale 270×480 SDK-side ; updatedAt absent de l'API draft store → fraîcheur omise
   (micro-item futur). RESTE : inc.3 chip tray (décision produit §4).
-- [ ] **U5 (P3) État de chargement prolongé** (avec R2) : ThumbHash + progress ring fine autour
-  de l'avatar auteur (métaphore déjà connue du tray), bouton passer.
+- [x] **U5 (P3) État de chargement prolongé** ✅ ÉCARTÉ it.59 — l'essence est DÉJÀ servie.
+  Preuve : `StoryReaderLoadingOverlay` (chargement initial : ThumbHash + cover serveur
+  warm-cache + spinner % avec grâce 200 ms, fade à 95 %, suit le cadrage carte) ; R3 couvre
+  le mid-slide ; les TAP ZONES restent actives sous l'overlay (allowsHitTesting(false)) =
+  « passer » disponible ; et le watchdog anti-deadlock 5 s (invariant §5.9) fait avancer la
+  story même sur média mort — jamais de blocage. La « progress ring avatar » = variante
+  cosmétique du spinner existant, sans valeur ajoutée.
+  DELTA réel non couvert (micro-décision produit si souhaitée) : pas d'UI d'ERREUR explicite
+  sur réseau mort (l'utilisateur voit le ThumbHash flou défiler en auto-advance) — état
+  d'erreur visible avec retry = choix design à valider user avant d'exister.
 - [x] **U6 (P3) Dynamic Type/VoiceOver du viewer.** ✅ COMPLET it.34
   ✅ Annonce VoiceOver au changement de slide (« Story N sur M », gated
   isVoiceOverRunning, clé localisée statique — piège : String(localized:) exige une
@@ -551,6 +609,13 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   barre 1/300 confirmée. Aucun fix nécessaire.
 
 ## 4. Décisions produit EN ATTENTE (ne pas trancher seul)
+
+- **Audience FRIENDS/EXCEPT divergente (découverte G5/it.60)** : le FEED élargit à
+  friends ∪ contacts DM ; getPostById/canUserViewPost = friends STRICTS. Impact concret :
+  une story FRIENDS d'un contact DM (non-ami formel) apparaît au tray mais le fetch
+  unitaire (R4 inc.2) et les handlers réactions la REFUSENT. Trancher : élargir partout
+  (contacts DM = cercle proche) ou restreindre le feed (FRIENDS strict). Le fix = 1 call
+  site désormais (buildPostVisibilityOrFilter).
 
 - E7 : câbler ou retirer le publish in-timeline (`handlePublishTap`).
 - E8 : multi-draft (galerie) — oui/non + scope.
@@ -644,6 +709,116 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.62 — Audit ciblé n°2 → W7 : IP-leak des viewers via background URL, FIXÉ web (34ae2d0ff)
+
+- Surface choisie : validation serveur des storyEffects + rendu des URLs qui en sortent.
+  Constat positif au passage : le schema Zod serveur est SOLIDE (caps par champ + 256KB
+  global + refine EXCEPT/ONLY qui validait déjà côté serveur ce que W6 fixait client).
+- Le vecteur restant : background ≤64 chars = URL tierce rendue brute par le web. RED :
+  5 tests safeBackgroundImageUrl (relative, //, externe, origins exacts vs suffixe forgé,
+  schemes non-http, métacaractères CSS). 162/162 story web.
+- 2e audit, 2e finding prouvé+fixé — la boucle d'audit reste productive.
+
+## it.61 — Audit ciblé → G7 : fuite illimitée de rows média au hard-delete, FIXÉE (731855e7a)
+
+- Protocole étape 8 (backlog épuisé) : surfaces candidates listées (delete/expiry lifecycle,
+  viewers sheet, NSE prefetch, repost flow, audio pipeline story) ; choisie = cleanup
+  gateway (jamais audité en 60 itérations, risque intégrité stockage).
+- Preuve AVANT fix : lecture sweep + schema (SetNull vs Cascade enfant par enfant).
+- RED : harnais étendu (postMedia + collecte commentIds) + 2 tests (ordre purge<delete,
+  jambe commentId). 9/9, tsc 0. L'audit ciblé a produit un finding prouvé du premier coup —
+  la boucle continue (pas de critère d'arrêt « 2 itérations sèches »).
+
+## it.60 — G5 : filtre de visibilité canonique unique (9e870ce90)
+
+- No-op strict prouvé par 134/134 suites service+posts (bun) + tsc 0 ; shape suite neuve.
+- La consolidation a fait émerger LA divergence réelle (audience feed vs unitaire) —
+  remontée en décision produit §4 avec impact R4 : exactement le « risque de dérive »
+  que G5 documentait, maintenant visible et réparable en 1 site.
+- BACKLOG AUTONOME ÉPUISÉ : restent G4 (déploiement schema), R13/R12-inc.1 (conditionnels),
+  décisions §4, vérifs device — prochaine itération = audit ciblé (protocole étape 8).
+
+## it.59 — U5 : ÉCARTÉ avec preuve — le chargement prolongé est déjà couvert
+
+- Re-preuve : loader initial complet (overlay ThumbHash/cover/spinner%), R3 mid-slide,
+  tap-zones actives sous l'overlay, watchdog 5 s anti-deadlock = auto-advance garanti.
+  Chapitre UI/UX du backlog AUTONOME entièrement fermé (U1/U2/U6 livrés, U3/U5/U7
+  écartés avec preuve, U4 inc.3 = décision produit §4). Zéro code.
+- Backlog autonome restant : G5 (consolidation visibilité gateway, P3), G4 (semi-bloqué
+  déploiement schema), R13/R12-inc.1 (conditionnels preuve/profil).
+
+## it.58 — U3 : ÉCARTÉ avec preuve — le chrome du reader est déjà material/Liquid Glass
+
+- Re-preuve par inventaire (grep + lecture des surfaces) : les chantiers précédents (R3,
+  U-DIR1, panneau langues, bouton ⋯) ont déjà posé material partout où ça compte, et
+  l'abstraction `adaptiveGlass` couvre iOS 26 depuis sa création. Le plan it.39 §U3 est
+  archivé sans exécution. Zéro code (pattern it.30/it.34).
+
+## it.57 — U1 inc.2 : zoom sur toutes les surfaces secondaires, U1 COMPLET (0f59fa9f3)
+
+- 4 fichiers, +20 lignes — le pattern inc.1 appliqué mécaniquement partout ; aucun effet
+  existant touché. Build 27 s vert (exit 1 = piège warning-free connu, grep du log foi).
+- Re-vérif simulateur : fresh install → tap bulle « meeshy sama » → zoom capturé (z5,
+  échelle intermédiaire coins arrondis), chrome viewer complet, dismiss propre.
+- CI NOTE : le rouge « CI » depuis it.55 = test_34_zmq_pool du TRANSLATOR (contrat
+  exception→[] changé par le fix fallback de l'agent translator, chantier ACTIF chez lui,
+  fichiers en vol worker_pool.py) — hors périmètre story-sota, il possède la réparation.
+
+## it.56 — U1 inc.1 : zoom bulle→viewer iOS 18+, vérifié simulateur (922f966d4)
+
+- Premier chantier visuel du nouveau cycle, exécuté selon le plan design-system (it.39).
+- Vérif simulateur COMPLÈTE (protocole du plan) : réinstallation fresh → login test →
+  tap bulle → rafale de captures (transition attrapée à t4) → viewer sain → swipe-down
+  dismiss propre. Le risque « conflit navigationTransition ↔ drag-dismiss » est LEVÉ.
+- SDK purity : helpers = atomes opaques (namespace/id en params) dans ViewModifiers.swift,
+  la décision « quelles surfaces zooment » reste dans RootView/StoryTrayView (app).
+- Piège d'exécution consigné : le .app fresh se trouve sous apps/ios/Build/Products/ (PAS
+  Build/Build/Products) ; install+launch simctl directs OK une fois le chemin exact connu.
+
+## it.55 — FIN DE CYCLE it.41→54 — rapport (c43401f5b)
+
+**Bilan** : 14 itérations, 14 livraisons main, CI verte sur chaque validation terminée.
+P0/P1 TOUS fermés : R5 (offline replay prouvé — contrat clé viewer/pin pinné), R4 (unit-
+fetch hors tray par postId), E4 (undo/redo cross-crash), G1 serveur COMPLET (delta a +
+projection b + pagination keyset c) + R8 inc.1 (delta consommé client). R12 re-scopé par
+re-preuve (pas de refonte : writes dirty débouncés livrés). R14 découvert ET fixé (les
+crossfades intra-slide ne rendaient JAMAIS en lecture iOS — parité preview/publié rétablie,
+puis portée au web = W1 COMPLET). Visibilités web COMPLÈTES (W3 6/6 parité iOS + fix W6
+PostComposer). Nouveaux findings consignés en route : R13 (clé URL ré-encodée, théorique),
+W6 (fixé it.54).
+
+**PROCHAINE SESSION (contexte frais requis — cycles simulateur/screenshots)** :
+U1 inc.1 (zoom transition : suivre le plan 2026-07-04-story-reader-design-system-plan.md,
+namespace via Environment, vérif visuelle du conflit drag-dismiss), U3 inc.1 (sidebar
+matériaux), U5. P3 conditionnels : G4 (avec déploiement schema), G5, R13 (sur symptôme),
+R12 inc.1 (sur profil).
+
+**EN ATTENTE UTILISATEUR (inchangé + additions du cycle)** :
+1. DÉPLOIEMENT gateway prod groupé G1a/b/c + G2 + G3 (pull + up -d explicite sur
+   /opt/meeshy/production) — active AUSSI le delta-sync client (it.46, inoffensif d'ici là)
+   et les APIs projection/pagination.
+2. Index Prisma `@@index([type, updatedAt])` sur Post à poser avec un déploiement schema.
+3. Décisions produit §4 : E7, E8, WS5.4b, it.44 C.2, Phase 2 cover baké, chantier filtres.
+4. Vérifs terrain device : relecture offline réseau coupé (R5), stall réseau réel (R3),
+   crossfade visuel avec une story de test (R14), interstitiel 2+ groupes (U-DIR1).
+
+## it.54 — W6 : PostComposer ne publie plus d'audience vide (bf63b0205)
+
+- Gate + picker promus au module AudienceUserPicker (source unique, StoryComposer importe
+  désormais au lieu de définir) ; guard aussi DANS handlePublish (défense en profondeur
+  au-delà du disabled) ; reset de la liste au switch de visibilité non-audience.
+- 498/498 (33 suites — pattern composer élargi). W3+W6 : chapitre visibilités web CLOS.
+
+## it.53 — W3 inc.2 : picker d'audience web, visibilités 6/6 parité iOS (1268724aa)
+
+- Réutilisation : useSearchUsersQuery générique (même source que le UserPicker admin —
+  promotion du composant admin écartée : couplage namespace i18n/UserDisplay admin) ;
+  composant v2 dédié ~110 lignes, styles var(--gp-*) cohérents composer.
+- Gate PUR isAudienceIncomplete exporté + testé (6 cas) ; bouton publish désactivé si
+  EXCEPT/ONLY sans sélection ; reset de la liste au close/publish ; deps bug préexistant
+  du useCallback publish corrigé au passage (visibility absent des deps → payload stale).
+- 207/207 story+feed (13 suites). W6 (PostComposer) : picker prêt, branchement = prochain W.
 
 ## it.52 — W3 inc.1 : COMMUNITY au composer web + plomberie visibilityUserIds (e63a64f53)
 
