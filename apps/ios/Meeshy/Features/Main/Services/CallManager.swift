@@ -1379,10 +1379,6 @@ final class CallManager: ObservableObject {
         }
     }
 
-    func handleIncomingOffer(callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, sdp: SessionDescription) {
-        handleIncomingCallNotification(callId: callId, fromUserId: fromUserId, fromUsername: fromUsername, isVideo: isVideo)
-    }
-
     // MARK: - Reliable call:join (incoming paths)
 
     /// [Fix 2026-07-02] Reliable `call:join` — replaces the fire-and-forget
