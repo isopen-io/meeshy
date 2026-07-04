@@ -350,10 +350,16 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   stories créées/modifiées depuis le timestamp (`where.AND += { updatedAt: { gt } }`),
   convention alignée sur le précédent `GET /conversations?updatedSince`. Timestamp invalide
   ignoré (full). Rétro-compatible. Disparitions couvertes par story:deleted + expiry client.
-  RESTE : (b) projection légère `?projection=tray`, (c) pagination cursor (avec R8 client),
-  consommation iOS du delta (`fetchStoriesFromNetwork` + merge), index Prisma
-  `@@index([type, updatedAt])` sur Post à poser avec un déploiement schema, et DÉPLOIEMENT
-  gateway prod (pull+up explicite) avant que le client ne s'y branche.
+  ✅ Incrément (b) it.44 : `?projection=tray` — `trayStorySelect` canonique dans
+  postIncludes.ts (Prisma.validator ; ids/timestamps/author/media/repostOf minimal ;
+  SANS storyEffects/translations/comments preview) ; whitelist stricte (toute autre
+  valeur → plein corps) ; requête réactions coupée sous projection, isViewedByMe conservé
+  (anneaux). Deux findMany explicites (spread conditionnel select/include = union rejetée
+  par l'overload Prisma — piège consigné). AUCUN client ne la consomme encore (opt-in).
+  RESTE : (c) pagination cursor (avec R8 client), consommation iOS du delta + de la
+  projection (`fetchStoriesFromNetwork` + merge — nécessite fetch full au tap via R4
+  inc.2), index Prisma `@@index([type, updatedAt])` sur Post à poser avec un déploiement
+  schema, et DÉPLOIEMENT gateway prod (pull+up explicite) avant que le client s'y branche.
 - [x] **G2 (P2) Double pipeline de traduction du `content` story.** ✅ it.20
   Fix : `shouldTranslateContent = content && postType === 'POST'` (la branche STORY retirée
   de la route ; le service audience-driven `triggerStoryTextTranslation` possède la
@@ -572,6 +578,17 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.44 — G1(b) : projection tray légère côté gateway (b70915dd0)
+
+- RED : 5 tests service (select léger sans storyEffects, include full par défaut,
+  isViewedByMe sous projection, skip réactions) + 2 tests route (whitelist parse).
+- Vérif : 83/83 les 2 suites (bun) ; tsc gateway 0 err APRÈS rebuild shared dist +
+  prisma generate locaux (les erreurs eventType/emoji au premier tsc = dist/client
+  périmés par la PR replay-offline d'un autre agent, PAS mon code).
+- Piège TS consigné : spread conditionnel `{select}|{include}` = union que l'overload
+  findMany rejette → toujours DEUX appels explicites.
+- G1 restes (c/index/conso client/déploiement) documentés dans l'item.
 
 ## it.43 — E4 inc.2 : undo/redo cross-crash via blob opaque du draft store (2474bbf3c)
 
