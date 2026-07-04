@@ -10,9 +10,81 @@ import MeeshySDK
 
 extension StoryComposerView {
     // MARK: - Pickers
+
+    /// C7 — la sheet Transitions était un stub (`Text("Transitions")`).
+    /// Elle pilote désormais le SEUL volet fonctionnel bout-en-bout :
+    /// l'animation d'OUVERTURE du slide courant (`effects.opening`, rendue par
+    /// `StoryRenderer.applyOpening` au passage edit→play et par l'export
+    /// AVCompositor). `closing` est sérialisé mais rendu NULLE PART — pas d'UI
+    /// tant qu'un `applyClosing` n'existe pas (une UI sans effet mentirait).
+    /// Les transitions ENTRE clips vivent dans la timeline (TransitionInspector).
     var transitionPicker: some View {
-        Text(String(localized: "story.composer.transitions", defaultValue: "Transitions", bundle: .module))
-            .foregroundColor(.white)
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(String(
+                    localized: "story.composer.openingTitle",
+                    defaultValue: "Ouverture du slide",
+                    bundle: .module
+                ))
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.white)
+                Text(String(
+                    localized: "story.composer.openingHint",
+                    defaultValue: "Animation d'entrée du slide courant, visible en aperçu et en lecture.",
+                    bundle: .module
+                ))
+                .font(.system(size: 12))
+                .foregroundColor(.white.opacity(0.55))
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    openingEffectChip(nil)
+                    ForEach(StoryTransitionEffect.allCases, id: \.self) { effect in
+                        openingEffectChip(effect)
+                    }
+                }
+                .padding(.horizontal, 2)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    func openingEffectChip(_ effect: StoryTransitionEffect?) -> some View {
+        let isSelected = openingEffect == effect
+        let title = effect?.label ?? String(
+            localized: "story.composer.openingNone",
+            defaultValue: "Aucune",
+            bundle: .module
+        )
+        return Button {
+            openingEffect = effect
+            // Sync immédiat : l'effet appartient au slide COURANT (restauré
+            // par restoreCanvas au changement de slide) — on ne dépend pas de
+            // la chaîne de fingerprint pour persister le choix.
+            syncCurrentSlideEffects()
+            HapticFeedback.light()
+        } label: {
+            Text(title)
+                .font(.system(size: 13, weight: isSelected ? .bold : .medium))
+                .foregroundColor(.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule().fill(
+                        isSelected
+                        ? MeeshyColors.brandPrimary.opacity(0.85)
+                        : Color.white.opacity(0.10)
+                    )
+                )
+                .overlay(
+                    Capsule().strokeBorder(
+                        Color.white.opacity(isSelected ? 0.35 : 0.12),
+                        lineWidth: 1
+                    )
+                )
+        }
     }
 
     func publishAllSlides() {

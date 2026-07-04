@@ -197,11 +197,22 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   de 10 (n'afficher que l'utile ; le guard VM reste en défense). VÉRIFIÉ SIMULATEUR : « + »
   visible à l'ouverture, tap → slide 2 créé+focusé (badge, bordure brand), canvas basculé
   vierge, « + » décalé (captures scratchpad it68-composer/addslide.png). Build 34 s vert.
-- [ ] **C7 (P1) Sheet Transitions = STUB.** `transitionPicker` = `Text("Transitions")` sans
-  contrôle (`+Publication.swift:13-16`) ; `openingEffect`/`closingEffect` sérialisés
-  (`+SyncRestore.swift:59-60,87-88`) mais AUCUNE UI ne les définit. RE-PROUVER d'abord ce que
-  le READER rend de opening/closing avant de bâtir l'UI (si rien → l'UI mentirait). Les vraies
-  transitions de clips vivent dans la timeline (TransitionInspector).
+- [x] **C7 (P1) Sheet Transitions = STUB.** ✅ it.69
+  Re-preuve du rendu AVANT l'UI : `opening` EST rendu bout-en-bout — reader
+  (`StoryRenderer.applyOpening` au passage edit→play, `StoryCanvasUIView+Core.swift:128`)
+  ET export (`StoryAVCompositor.swift:218`) ; enum fade/zoom/slide/reveal avec labels FR ;
+  round-trip sérialisation + restauration PAR SLIDE déjà en place (`+SyncRestore.swift:87`).
+  `closing` rendu NULLE PART → PAS d'UI (elle mentirait) → suivi C7b.
+  Livré : `transitionPicker` réel — section « Ouverture du slide » + hint, chips Aucune +
+  4 effets (sélection brand, sync immédiat `syncCurrentSlideEffects`, haptic) ; sheet
+  .medium + drag indicator préexistants (dismiss gestuel natif). VÉRIFIÉ SIMULATEUR :
+  ⋯ → Transitions → sheet réelle, tap Fondu → sélection + sync (it69-*.png). Build 62 s vert.
+- [ ] **C7b (P3, découvert it.69) `closing` : champ sérialisé jamais rendu.** Un
+  `applyClosing` exigerait une intégration timer (déclencher à durée−0,3 s AVANT l'avance de
+  slide) — chantier reader réel. Alternativement retirer le champ de l'UI pour toujours et
+  documenter. Faible valeur/effort élevé — à trancher si le produit demande des animations
+  de sortie. Web ne rend NI opening ni closing (parité W* future si opening devient visible
+  côté web).
 - [ ] **C8 (P2) Stickers inaccessibles.** `StickerPickerView.swift` complet mais ZÉRO call site ;
   pas de case sticker dans StoryToolMode/FABs/tuiles ; `@State stickerObjects` jamais alimenté
   (`StoryComposerView.swift:26`). Le reader rend pourtant les stickers (rétro-compat). Réintroduire
@@ -821,6 +832,17 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.69 — C7 : la sheet Transitions devient réelle (picker d'ouverture du slide)
+
+- Protocole « preuve avant fix » décisif : la re-preuve a montré qu'opening est DÉJÀ rendu
+  (reader + export) mais closing ne l'est nulle part → l'UI livrée n'expose QUE l'ouverture ;
+  closing consigné C7b au lieu d'une UI mensongère.
+- Vérifié simulateur bout-en-bout : menu ⋯ (au passage : entrées EN → C12 reconfirmé) →
+  sheet réelle → tap Fondu → chip sélectionnée + sync slide courant → swipe-down dismiss →
+  quit propre. Captures it69-overflow/transitions/fondu.png.
+- CI : runs C6 in_progress au moment du commit (concurrency group remplacera par les runs
+  de ce commit) — surveiller it.70.
 
 ## it.68 — C6 : « + » d'ajout de slide + vérification simulateur groupée C5/C6
 
