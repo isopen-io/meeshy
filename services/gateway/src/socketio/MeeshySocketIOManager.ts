@@ -66,6 +66,14 @@ import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 // Logger dédié pour SocketIOManager
 const logger = enhancedLogger.child({ module: 'SocketIOManager' });
 
+// Maps a queued entry's `eventType` (absent = legacy 'new') to the Socket.IO
+// event replayed on reconnect for that offline-queue entry.
+function _drainedEventName(eventType: QueuedMessagePayload['eventType']): string {
+  if (eventType === 'edited') return SERVER_EVENTS.MESSAGE_EDITED;
+  if (eventType === 'deleted') return SERVER_EVENTS.MESSAGE_DELETED;
+  return SERVER_EVENTS.MESSAGE_NEW;
+}
+
 export interface SocketUser {
   id: string;
   socketId: string;
@@ -393,7 +401,7 @@ export class MeeshySocketIOManager {
 
       logger.info(`Delivering ${pending.length} queued messages to ${userId}`);
       for (const entry of pending) {
-        socket.emit(SERVER_EVENTS.MESSAGE_NEW, entry.payload);
+        socket.emit(_drainedEventName(entry.eventType), entry.payload);
       }
       const affectedConversationIds = [...new Set(pending.map(e => e.conversationId))];
       socket.emit(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, { count: pending.length, conversationIds: affectedConversationIds });
@@ -423,6 +431,12 @@ export class MeeshySocketIOManager {
     userId: string,
     pending: QueuedMessagePayload[]
   ): Promise<void> {
+    // Delivery receipts only make sense for actual new messages — an edited
+    // or deleted entry replays its own event (see `_drainedEventName`) but
+    // was never awaiting a "delivered" checkmark in the first place.
+    const newEntries = pending.filter((entry) => (entry.eventType ?? 'new') === 'new');
+    if (newEntries.length === 0) return;
+
     // Check privacy preference first — single cheap cached call.
     const prefMap = await this.privacyPreferencesService.getPreferencesForUsers([
       { id: userId, isAnonymous: false },
@@ -432,7 +446,7 @@ export class MeeshySocketIOManager {
     // Group by conversationId, keeping the last (newest) messageId per conv
     // so we call markMessagesAsReceived once per conversation.
     const convLatest = new Map<string, string>();
-    for (const entry of pending) {
+    for (const entry of newEntries) {
       convLatest.set(entry.conversationId, entry.messageId);
     }
 

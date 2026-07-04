@@ -434,6 +434,41 @@ describe('MessageHandler — handleMessageEdit', () => {
       handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'x' }, undefined)
     ).resolves.not.toThrow();
   });
+
+  it('enqueues the edit for an offline participant into the delivery queue', async () => {
+    const enqueue = jest.fn().mockResolvedValue(undefined);
+    const offlineUserId = 'user-offline-edit-00112233445566';
+    deps = makeDeps({ deliveryQueue: { enqueue } as any });
+    handler = new MessageHandler(deps);
+    deps.socketToUser.set('socket-1', USER_ID);
+    deps.connectedUsers.set(USER_ID, makeSocketUser());
+    mockGetConnectedUser.mockImplementation((id: string, map: Map<string, any>) => {
+      const u = map.get(id);
+      return u ? { user: u, realUserId: u.id } : null;
+    });
+
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord());
+    (deps.prisma.message.update as jest.Mock<any>).mockResolvedValue({
+      id: VALID_MSG_ID, conversationId: VALID_CONV_ID, content: 'Edited content',
+      isEdited: true, editedAt: new Date(), originalLanguage: 'fr',
+      sender: { id: PARTICIPANT_ID, userId: USER_ID, displayName: 'User', avatar: null },
+    });
+    (deps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([
+      { id: PARTICIPANT_ID, userId: USER_ID },
+      { id: 'part-offline-edit', userId: offlineUserId },
+    ]);
+
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'Edited content' }, callback);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    expect(enqueue).toHaveBeenCalledWith(offlineUserId, expect.objectContaining({
+      messageId: VALID_MSG_ID,
+      conversationId: VALID_CONV_ID,
+      eventType: 'edited',
+      payload: expect.objectContaining({ id: VALID_MSG_ID, content: 'Edited content' }),
+    }));
+  });
 });
 
 // ── handleMessageDelete ────────────────────────────────────────────────────
@@ -729,5 +764,35 @@ describe('MessageHandler — handleMessageDelete', () => {
     await expect(
       handler.handleMessageDelete(socket, { messageId: VALID_MSG_ID }, undefined)
     ).resolves.not.toThrow();
+  });
+
+  it('enqueues the delete for an offline participant into the delivery queue', async () => {
+    const enqueue = jest.fn().mockResolvedValue(undefined);
+    const offlineUserId = 'user-offline-del-00112233445566';
+    deps = makeDeps({ deliveryQueue: { enqueue } as any });
+    handler = new MessageHandler(deps);
+    deps.socketToUser.set('socket-1', USER_ID);
+    deps.connectedUsers.set(USER_ID, makeSocketUser());
+    mockGetConnectedUser.mockImplementation((id: string, map: Map<string, any>) => {
+      const u = map.get(id);
+      return u ? { user: u, realUserId: u.id } : null;
+    });
+
+    setupSuccessfulDelete({ senderUserId: USER_ID });
+    (deps.prisma.participant.findMany as jest.Mock<any>).mockResolvedValue([
+      { id: PARTICIPANT_ID, userId: USER_ID },
+      { id: 'part-offline-del', userId: offlineUserId },
+    ]);
+
+    await handler.handleMessageDelete(socket, { messageId: VALID_MSG_ID }, callback);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    expect(enqueue).toHaveBeenCalledWith(offlineUserId, expect.objectContaining({
+      messageId: VALID_MSG_ID,
+      conversationId: VALID_CONV_ID,
+      eventType: 'deleted',
+      payload: expect.objectContaining({ messageId: VALID_MSG_ID, conversationId: VALID_CONV_ID }),
+    }));
   });
 });
