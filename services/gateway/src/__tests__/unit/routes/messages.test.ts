@@ -174,6 +174,8 @@ async function buildApp(): Promise<FastifyInstance> {
     message: {
       findFirst: jest.fn().mockResolvedValue(mockMessage),
       update: jest.fn().mockResolvedValue({ ...mockMessage, isEdited: true }),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      findUniqueOrThrow: jest.fn().mockResolvedValue({ ...mockMessage, isEdited: true }),
     },
     participant: {
       findFirst: jest.fn().mockResolvedValue({ id: PART_ID, conversationId: CONV_ID }),
@@ -267,6 +269,18 @@ describe('PUT /messages/:messageId', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
+    expect((app as any).prisma.message.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: MSG_ID, deletedAt: null },
+    }));
+  });
+
+  it('returns 404 without broadcasting when the message was deleted between read and write (concurrent delete race)', async () => {
+    (app as any).prisma.message.updateMany.mockResolvedValueOnce({ count: 0 });
+    const res = await app.inject({
+      method: 'PUT', url: '/messages/' + MSG_ID,
+      payload: { content: 'Updated content' },
+    });
+    expect(res.statusCode).toBe(404);
   });
 
   it('returns 500 on DB error', async () => {
