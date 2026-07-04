@@ -509,10 +509,14 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   requêtait le domaine tiers (IP/UA-leak de qui a vu, quand). Fix web :
   `safeBackgroundImageUrl` (chemins relatifs internes + origins front/gateway seulement,
   métacaractères CSS rejetés → rien ne sort du contexte url(), sinon fallback gradient),
-  5 tests. RESTE : (a) volet iOS — StoryBackgroundLayer.loadImage accepte une URL http
-  arbitraire par le même champ (même vecteur, audit + garde symétrique) ; (b) option
-  serveur : refine Zod (hex|gradient:|chemin interne) — ATTENTION rétro-compat des stories
-  existantes à URLs absolues internes, à trancher avec le déploiement.
+  5 tests.
+  (a) volet iOS ÉCARTÉ it.63 avec preuve : `effects.background` n'est consommé sur iOS que
+  comme HEX (StoryRenderer.renderBackground → uiColor(fromHex:), aucune branche URL) ; le
+  seul chemin URL directe du reader (slide.mediaURL legacy → directURLIfAny) provient de
+  post.media[].fileUrl, GÉNÉRÉ par le gateway à l'upload (mediaIds ne référencent que des
+  PostMedia existants) — hors de portée d'un payload client. Vecteur web-only, fixé it.62.
+  (b) RESTE option serveur : refine Zod (hex|gradient:|chemin interne) — rétro-compat des
+  stories existantes à URLs absolues internes, à trancher avec un déploiement gateway.
 
 ### DIRECTIVES PRODUIT UTILISATEUR (hors backlog initial)
 
@@ -709,6 +713,13 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.63 — W7 volet iOS : ÉCARTÉ avec preuve (hex-only, URLs = PostMedia serveur)
+
+- Chaîne prouvée : renderBackground (hex only) ; Kind.image = postMediaId (résolu contre
+  post.media internes) ; mediaURL legacy = fileUrl serveur. Zéro code.
+- 3 audits ciblés : 2 findings fixés (G7, W7-web) + 1 écartement prouvé — la surface
+  d'attaque côté effects est close (web whitelist + iOS structurellement sûr + Zod caps).
 
 ## it.62 — Audit ciblé n°2 → W7 : IP-leak des viewers via background URL, FIXÉ web (34ae2d0ff)
 
