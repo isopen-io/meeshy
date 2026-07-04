@@ -330,10 +330,18 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   cover carte rouge → menthe en 2 min). FIX : guard `!showRestoreDraftAlert` sur les DEUX
   chemins d'autosave (mutation + background). VÉRIFIÉ SIMULATEUR : carte affichée 6 s
   (> debounce) → cover intacte → Reprendre → canvas + strip restaurés (255,46,99).
-  ⏳ BUG-2 « zone noire en bas en chrome plein » : REPRODUIT + confirmé par capture user
-  (le canvas colle au top sous le header mais s'arrête ~12 % au-dessus du bord bas ; les
-  FABs débordent sur la zone noire). Diagnostic layout au prochain tour (réservation bas
-  résiduelle : safeAreaBottomInset/canvasEditShift/cadrage plein-chrome à auditer).
+  ✅ BUG-2 « zone noire en bas en chrome plein » : cause = géométrie (un canvas 9:16
+  aspect-fit centré dans un viewport 19.5:9 laisse ~80 pt de letterbox haut/bas ; le haut
+  se cachait sous le header, le bas restait noir nu). FIX it.78 : le letterbox prend la
+  COULEUR DU FOND du slide en présentation libre (noir conservé en carded + fond média) —
+  le canvas paraît occuper tout l'écran. Compilé/committé ; VÉRIF VISUELLE à faire dans
+  une fenêtre simulateur calme (session partagée avec le user en direct it.78).
+  ⏳ BUG-4 (capture user it.78) « canvas COUPÉ en haut quand un tool est actif » : en mode
+  dessin, la carte affiche un ratio ≈ 1:1,47 (mesuré) au lieu de 9:16 → ~100 pt tronqués en
+  HAUT (les chips de couche chevauchent le bord coupé). Suspects : `canvasEditShift` (décalage
+  clavier/édition appliqué en carded ?) ou regionTop du cadrage dessin depuis que le header
+  est masqué pendant l'édition (C-DIR2) — offset calé sur un headerInset devenu 0 pendant
+  que le offset du resolve suppose le header présent. PRIORITÉ prochain tour.
   Note : « recharge des médias » du rapport = conséquence attendue du fix BUG-3 (le
   saveMedia n'écrase plus les copies du draft) — vérif média dédiée à faire.
 
@@ -930,6 +938,16 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.78 — BUG-2 fixé (letterbox couleur de fond) ; BUG-4 signalé en direct par le user
+
+- Le user teste EN DIRECT sur le même simulateur (sticker taco, dessin, changement de
+  couleur — d'où la sheet vocale et le cyan apparus « seuls » dans ma session). RÈGLE
+  adoptée : suspendre mes manipulations simulateur quand ses interactions sont détectées ;
+  vérifs visuelles dans des fenêtres calmes ou sur ses captures.
+- BUG-2 : préexistant à C-DIR2 (visible dès it74-B) mais révélé par l'unification du
+  chrome. Le reader a probablement le même letterbox noir (masqué par son chrome) —
+  parité à évaluer plus tard.
 
 ## it.77 — C-DIR4 : 2 bugs composer user fixés+vérifiés (couleur instantanée, reprise fidèle)
 
