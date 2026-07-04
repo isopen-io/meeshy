@@ -256,3 +256,20 @@ describe('GET /conversations/search — service error', () => {
     await app.close();
   });
 });
+
+describe('GET /conversations/search — last-message preview excludes soft-deleted messages', () => {
+  it('gates the nested messages preview with deletedAt: null (mirror of conversations/core.ts)', async () => {
+    const findMany = jest.fn<any>().mockResolvedValue([mockConversation]);
+    const prisma = makePrisma({
+      user: { findMany: jest.fn<any>().mockResolvedValue([{ id: USER_ID }]) },
+      conversation: { findMany },
+    });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: '/conversations/search?q=alice' });
+    expect(res.statusCode).toBe(200);
+
+    const queryArg = findMany.mock.calls[0][0];
+    expect(queryArg.include.messages.where).toEqual({ deletedAt: null });
+    await app.close();
+  });
+});

@@ -169,6 +169,21 @@ describe('GET /users/me/dashboard-stats (conversation without messages)', () => 
   });
 });
 
+describe('GET /users/me/dashboard-stats (last-message preview excludes soft-deleted)', () => {
+  it('gates the nested recent-conversation messages preview with deletedAt: null', async () => {
+    const findMany = jest.fn().mockResolvedValue([mockConversation]);
+    const app = await buildApp('authenticated', {
+      conversation: { findMany },
+    });
+    const res = await app.inject({ method: 'GET', url: '/users/me/dashboard-stats' });
+    expect(res.statusCode).toBe(200);
+
+    const queryArg = (findMany.mock.calls[0] as any[])[0];
+    expect(queryArg.select.messages.where).toEqual({ deletedAt: null });
+    await app.close();
+  });
+});
+
 describe('GET /users/me/dashboard-stats (DB error)', () => {
   let app: FastifyInstance;
   beforeAll(async () => {

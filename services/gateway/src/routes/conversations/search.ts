@@ -118,6 +118,9 @@ export function registerSearchRoutes(
             take: 5,
           },
           messages: {
+            where: {
+              deletedAt: null
+            },
             orderBy: { createdAt: 'desc' },
             take: 1,
             include: {

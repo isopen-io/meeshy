@@ -153,6 +153,9 @@ export async function getDashboardStats(fastify: FastifyInstance) {
             avatar: true,
             updatedAt: true,
             messages: {
+              where: {
+                deletedAt: null
+              },
               orderBy: { createdAt: 'desc' },
               take: 1,
               select: {
