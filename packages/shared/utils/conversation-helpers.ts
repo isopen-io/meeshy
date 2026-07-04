@@ -98,20 +98,6 @@ export function resolveUserLanguagesOrdered(
 }
 
 /**
- * Collecte toutes les langues cibles pour la traduction automatique d'un utilisateur.
- * autoTranslate ON → systemLanguage (toujours) + regionalLanguage (si configurée)
- */
-export function resolveUserTranslationLanguages(user: {
-  systemLanguage?: string;
-  regionalLanguage?: string;
-}): string[] {
-  const seen = new Set<string>();
-  if (user.systemLanguage?.trim()) seen.add(user.systemLanguage.trim());
-  if (user.regionalLanguage?.trim()) seen.add(user.regionalLanguage.trim());
-  return seen.size > 0 ? Array.from(seen) : ['fr'];
-}
-
-/**
  * Génère un identifiant unique pour une conversation
  * Format: mshy_<titre_sanitisé>-YYYYMMDDHHMMSS ou mshy_<unique_id>-YYYYMMDDHHMMSS si pas de titre
  */
@@ -188,13 +174,14 @@ export function resolveParticipantLanguage(participant: LanguageResolvable): str
   if (participant.type !== 'user' || !participant.user) {
     return participant.language
   }
-  const user = participant.user
-  if (user.systemLanguage) return user.systemLanguage.toLowerCase()
-  if (user.regionalLanguage) return user.regionalLanguage.toLowerCase()
-  if (user.customDestinationLanguage) return user.customDestinationLanguage.toLowerCase()
-  const normalizedDevice = normalizeLanguageCode(user.deviceLocale)
-  if (normalizedDevice) return normalizedDevice
-  return participant.language
+  // Délègue à la source de vérité unique (SSOT) : mêmes 4 niveaux, même
+  // normalisation de casse que resolveUserLanguage — ne PAS ré-implémenter
+  // l'échelle ici (règle CLAUDE.md). Seul le fallback diffère : la langue
+  // déclarée par le call site plutôt que la default app 'fr'.
+  const [top] = resolveUserLanguagesOrdered(participant.user, {
+    deviceLocale: participant.user.deviceLocale ?? undefined,
+  })
+  return top ?? participant.language
 }
 
 /**
@@ -301,12 +288,10 @@ export function getRequiredLanguages(
   const languages = new Set<string>();
 
   conversationMembers.forEach(user => {
-    const lang = resolveUserLanguage(user, {
-      deviceLocale: user.deviceLocale ?? undefined,
-    });
-    if (lang) {
-      languages.add(lang);
-    }
+    // resolveUserLanguage retourne toujours une string non-vide (fallback 'fr').
+    languages.add(
+      resolveUserLanguage(user, { deviceLocale: user.deviceLocale ?? undefined })
+    );
   });
 
   return Array.from(languages);

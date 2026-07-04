@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { logError } from '../utils/logger';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../utils/response';
 import { SecuritySanitizer } from '../utils/sanitize';
+import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import {
   errorResponseSchema,
   anonymousParticipantSchema,
@@ -19,7 +20,11 @@ const joinAnonymousSchema = z.object({
   username: z.string().optional(),
   email: z.email().optional().or(z.literal('')),
   birthday: z.iso.datetime().optional().or(z.literal('')),
-  language: z.string().default('fr'),
+  // Normalise at the write boundary: the participant `language` feeds the
+  // translation-target set (MessageTranslationService), which is keyed lowercase.
+  // Storing 'EN' / 'en-US' verbatim would inject a duplicated, never-matching NLLB
+  // target (Prisme rule #1 miss). `normalizeLanguageCode` also strips region subtags.
+  language: z.string().transform((v) => normalizeLanguageCode(v) ?? v.toLowerCase()).default('fr'),
   deviceFingerprint: z.string().optional()
 });
 
@@ -257,8 +262,12 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'Acces non autorise depuis votre region');
       }
 
-      // Verifier langues autorisees
-      if (shareLink.allowedLanguages.length > 0 && !shareLink.allowedLanguages.includes(body.language)) {
+      // Verifier langues autorisees (case-insensitive : body.language est normalise
+      // lowercase, allowedLanguages peut avoir ete configure en casse mixte)
+      if (
+        shareLink.allowedLanguages.length > 0 &&
+        !shareLink.allowedLanguages.some((l) => l.toLowerCase() === body.language)
+      ) {
         return sendForbidden(reply, 'Langue non autorisee pour ce lien');
       }
 
@@ -918,11 +927,12 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
 
       allActiveParticipants.forEach(p => {
         if (p.type === 'user' && p.user) {
-          if (p.user.systemLanguage) languageSet.add(p.user.systemLanguage);
-          if (p.user.regionalLanguage) languageSet.add(p.user.regionalLanguage);
-          if (p.user.customDestinationLanguage) languageSet.add(p.user.customDestinationLanguage);
+          // Lowercase so 'en'/'EN' from legacy mixed-case rows count once (spokenLanguages stat)
+          if (p.user.systemLanguage) languageSet.add(p.user.systemLanguage.toLowerCase());
+          if (p.user.regionalLanguage) languageSet.add(p.user.regionalLanguage.toLowerCase());
+          if (p.user.customDestinationLanguage) languageSet.add(p.user.customDestinationLanguage.toLowerCase());
         } else {
-          if (p.language) languageSet.add(p.language);
+          if (p.language) languageSet.add(p.language.toLowerCase());
         }
       });
 
