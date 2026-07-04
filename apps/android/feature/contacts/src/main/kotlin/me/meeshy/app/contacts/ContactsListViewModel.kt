@@ -14,6 +14,7 @@ import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.model.FriendRequestUser
 import me.meeshy.sdk.model.friend.ContactFilter
+import me.meeshy.sdk.model.friend.ContactFilterCounts
 import me.meeshy.sdk.model.friend.ContactList
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
@@ -28,6 +29,9 @@ data class ContactsListUiState(
 ) {
     /** The friend list after the active [filter] and search [query] are applied. */
     val visibleFriends: List<FriendRequestUser> get() = ContactList.visible(friends, filter, query)
+
+    /** Per-filter counts for the chip badges, under the active search [query]. */
+    val filterCounts: ContactFilterCounts get() = ContactList.counts(friends, query)
 
     /** True on a cold, non-erroring load with nothing yet — the only time a skeleton shows. */
     val showSkeleton: Boolean get() = isLoading && friends.isEmpty()

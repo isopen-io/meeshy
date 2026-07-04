@@ -353,19 +353,23 @@ Contacts slices:**
    (`discover-user-search`) **and** the empty-query cache-first suggestions
    (`discover-suggestions-cache-first`, 2026-07-04: pure `DiscoverSuggestions.snapshot` +
    `@Singleton SuggestionsRepository` in-memory SWR + `DiscoverViewModel.loadSuggestions()` on appear).
-   +23 tests. See run log. **Follow-up:** a persistent Room suggestions cache for cross-launch cold-start
-   paint (iOS `CacheCoordinator.userSearch`), matching the friends-list in-memory precedent.
+   +23 tests. See run log. **Follow-up:** ~~a persistent Room suggestions cache for cross-launch
+   cold-start paint (iOS `CacheCoordinator.userSearch`)~~ ✅ shipped as `discover-suggestions-room-cache`
+   (2026-07-04) — `:core:database` `SuggestionEntity`/`SuggestionDao` (DB v8→9), a Room-backed
+   `RoomSuggestionsSource` (`SwrCacheSource`) replacing the in-memory one; the Discover tab now paints
+   suggestions cold, before any network call. 11 tests. See run log.
 
-**Recommended next (highest value):** the **suggestions Room cache for cold-start paint** — a persistent
-Room table behind `SuggestionsRepository` so the Discover tab's empty-query suggestions paint instantly
-on cold launch (iOS `CacheCoordinator.userSearch`), now the **last in-memory-only cache gap** (the
-friends list went durable 2026-07-04 as `contacts-friends-room-cache`, mirroring
-`StoryCacheSource`/`CallHistoryCacheSource`). It is a pure-core-heavy SWR slice with a clear iOS
-precedent and the exact `FriendListRepository` template to follow. Alternatively, the **send compose-new
-UI** (a dedicated user-search → connect surface) now that the durable send half is done — but that is
-Compose-glue-heavy with little new pure core, so the suggestions Room cache is the better TDD slice.
-All Contacts durable-mutation gaps are closed (durable block/unblock + friend-request send 2026-07-04),
-and the friends list now paints cache-first cold (2026-07-04).
+**Recommended next (highest value):** the **send compose-new UI** — a dedicated user-search → connect
+surface (a "+ add friend" entry point beyond the Discover tab), now that the durable send half is done
+(`friend-request-outbox-idempotency`) and every Contacts **cache** is durable (friends + suggestions
+cold-paint), every Contacts **durable-mutation** gap is closed (block/unblock + friend-request send), and
+the Contacts list is now filter/search/presence/**counts** complete (`contacts-filter-counts`, 2026-07-04).
+It is more Compose-glue-heavy with less new pure core, so a smaller alternative TDD slice is the tracked
+**worker drain-list test** (a Robolectric test asserting every `OutboxLanes.*` with a registered sender
+is drained — would have caught the BLOCK/FRIEND lane-omission bug; see NOTES 2026-07-04). With Contacts
+(`§J`) now cache-complete + mutation-complete + list-display-complete (only mood-emoji presence remains),
+the routine may also **pivot to the next parity area** — revisit the Calls platform-glue slices (`§H`:
+`ConnectionService`/Telecom + WebRTC media transport) or advance Settings/Profile (`§K`).
 
 ---
 _Historical Calls backlog below (revisit only for the platform-glue slices)._
@@ -679,6 +683,96 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-04 — slice `contacts-filter-counts` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration. The five open PRs (#1463–1469)
+  are all unrelated non-Android work by others (gateway/iOS/shared). Branched
+  `claude/apps/android/contacts-filter-counts` off latest `origin/main` (`65e856d`); the designated
+  `claude/fervent-darwin-j6y6z9` was exactly at main (0 ahead/0 behind).
+- **Why this slice:** parity `§J` gap — the Contacts filter chips (All/Online/Offline) showed **no
+  counts**, but the iOS `ContactFilter` chips do (audit part-01.md:301,310 "All/online chips show
+  counts"). A small, pure-core-heavy slice closing a tracked Contacts follow-up ("per-filter counts")
+  with a strong testable invariant.
+- **Added / changed (production):**
+  - `:core:model` `friend/ContactList.kt` — new immutable `ContactFilterCounts(all, online, offline)`
+    with `forFilter(filter)` (pass-through filters mirror `All`) + `Zero`; new pure
+    `ContactList.counts(friends, query) → ContactFilterCounts` — sizes each chip under the **active
+    search query** (`counts(..).online == visible(.., Online, query).size`), with online+offline
+    partitioning all by construction (offline = matching − online). **Surpasses iOS**, whose chip
+    counts ignore the search field.
+  - `:feature:contacts` `ContactsListViewModel.kt` — `ContactsListUiState.filterCounts` derives the
+    counts from the roster + query (pure, no new state).
+  - `:feature:contacts` `ContactsListTab.kt` — the `FilterRow` chips render `label  count` via
+    `counts.forFilter(filter)` (the `when` stays in the pure accessor, composable is thin glue).
+- **Tests (TDD red→green, +7):**
+  - `ContactListTest` (+6): counts report all/online/offline of the roster; **online+offline partition
+    all under any query** (invariant); counts respect the search query (only bob → all 1 / online 0 /
+    offline 1); empty roster → all zero; `forFilter` maps each selectable filter; pass-through filters
+    (Phonebook/Affiliates) mirror the whole roster.
+  - `ContactsListViewModelTest` (+1): `filterCounts` reflects the loaded roster (all 2 / online 1 /
+    offline 1) then shrinks correctly when a search query is applied.
+- **Edge cases covered:** empty collection (all zero); search-narrowed roster; the partition invariant;
+  the two pass-through filters; blank vs non-blank query.
+- **Verification:** `gradle :core:model:testDebugUnitTest :feature:contacts:testDebugUnitTest` —
+  **BUILD SUCCESSFUL** (both green); `gradle :app:assembleDebug` — **BUILD SUCCESSFUL** (the Compose
+  chip change compiles into the APK). Per NOTES, the wrapper's pinned dist is egress-blocked, so used
+  system Gradle 8.14.3.
+- **Reviewer gate:** **PASS** — diff is `apps/android` only (5 files: 2 prod + 2 test + 1 Compose glue,
+  plus tracking docs); TDD behavioural through the public API, no tautologies (the partition test
+  asserts a derived invariant, not a set constant), no floor lowered; SDK purity held (the counting
+  SSOT is a pure `:core:model` function, the `when` lives in `forFilter` not the composable);
+  single-source-of-truth (`counts` reuses `visible`, no re-implemented filter); instant-app + UDF
+  preserved (pure derived state, no new mutable field); colour/nav untouched.
+- **Follow-up:** mood-emoji presence on rows; the send **compose-new** UI; a worker drain-list test.
+
+### 2026-07-04 — slice `discover-suggestions-room-cache` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration (the two open PRs, #1463 iOS
+  calls + #1464 shared mentions, are unrelated non-Android work by others). Branched
+  `claude/apps/android/discover-suggestions-room-cache` off latest `origin/main` (`b532c2c`).
+- **Why this slice:** PROGRESS "Recommended next" — the **suggestions Room cache for cold-start paint**,
+  the **last in-memory-only cache gap**. `SuggestionsRepository` held its empty-query discover list in a
+  `MutableStateFlow` `InMemorySuggestionsSource`, so a cold launch (process death) lost it and showed a
+  skeleton until the network answered. This makes it durable (iOS `CacheCoordinator.userSearch` parity),
+  mirroring the `FriendEntity`/`CallHistoryEntity` precedents — a pure-core-heavy SWR slice.
+- **Added / changed (production):**
+  - `:core:database` `entity/SuggestionEntity.kt` (NEW) — `discover_suggestions` table: `userId` PK,
+    serialized `UserSearchResult` `payload`, `sortIndex` (preserves the gateway ranking order verbatim —
+    never re-derived in SQL), `cachedAt`.
+  - `:core:database` `dao/SuggestionDao.kt` (NEW) — `observeAll()` `ORDER BY sortIndex ASC`, `upsertAll`,
+    `deleteNotIn`, `clear`.
+  - `:core:database` `MeeshyDatabase.kt` — register `SuggestionEntity` + `suggestionDao()`, **version
+    8→9**; `DatabaseModule.kt` — Hilt `providesSuggestionDao` (destructive migration, the module's
+    standing `fallbackToDestructiveMigration`).
+  - `:sdk-core` `friend/SuggestionsRepository.kt` — replaced `InMemorySuggestionsSource` with a
+    Room-backed `RoomSuggestionsSource` (`SwrCacheSource`, port of `CallHistoryCacheSource`): `observe()`
+    combines `suggestionDao.observeAll()` + `sync_meta` (cold `null` vs synced-empty), `revalidate()`
+    fetches `searchUsers("")` and persists (upsert + `deleteNotIn`, or `clear` for empty) stamping
+    `sync_meta`; `SuggestionsRepository` gained the DB/DAO deps and constructs the Room source. The
+    `suggestionsStream(onSyncError)` public API is byte-identical, so `DiscoverViewModel` is untouched.
+- **Tests (TDD red→green, 11 replacing the old 5 in-memory-source tests):**
+  - `SuggestionsRepositoryTest` (rewritten, Robolectric + real in-memory Room): revalidate fetches +
+    stamps sync time; **`sortIndex` preserves a deliberately non-alphabetical gateway order** over any
+    SQL re-sort; cold cache observes `null`; a synced-but-empty list reads back as empty content (not
+    cold); `deleteNotIn` drops absentees; a later empty sync clears a populated cache; a cold failure
+    throws `SuggestionsSyncException` and leaves the cache cold; a failed revalidation keeps the last
+    good list + sync time; `suggestionsStream` emits `Empty` then paints the fetched list (drains the
+    transient Room-settle frame); **a pre-seeded cache paints instantly with no cold `Empty`** (the
+    cold-start-paint behaviour); a cold failure surfaces via `onSyncError`.
+- **Edge cases covered:** empty / populated / synced-empty vs cold `null`; non-alphabetical order
+  round-trip; row removal; cold vs warm revalidation failure (throws vs keeps stale); process-death
+  cold paint; the transient two-Room-flow settle frame (benign, drained in the assertion).
+- **Verification:** `gradle assembleDebug testDebugUnitTest` — **BUILD SUCCESSFUL** (full project, all
+  modules' unit tests green; whole-app compile exercises the DB v9 schema + Hilt wiring). Per NOTES, the
+  wrapper's pinned Gradle 8.11.1 dist is egress-blocked (github redirect 403) in this container, so
+  verification used the preinstalled system Gradle 8.14.3 (forward-compatible).
+- **Reviewer gate:** **PASS** — diff is `apps/android` only (6 code files + 3 tracking docs); TDD behavioural through the public
+  API, no tautologies, no floor lowered (the 5 removed tests are superseded by 11 stronger Room-backed
+  ones); SDK purity held (entity/DAO in `:core:database`, the stateless `SwrCacheSource` in `:sdk-core`,
+  orchestration untouched in `:feature:contacts`); single source of truth (ranking SSOT stays
+  server-side via `sortIndex`; `CachePolicy.Suggestions` unchanged); instant-app cache-first (cold paint,
+  skeleton only on cold empty) + UDF preserved; colour/nav untouched.
+- **Follow-up:** the send **compose-new** UI (dedicated user-search → connect surface) — now the main
+  remaining Contacts gap; and a worker drain-list test (tracked from the prior slice).
 
 ### 2026-07-04 — slice `contacts-friends-room-cache` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration (only an unrelated iOS PR

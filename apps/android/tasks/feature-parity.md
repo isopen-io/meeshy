@@ -1046,10 +1046,14 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (slice `contacts-blocked-list`, 2026-07-04). **Pending:** per-tab count badges beyond
       Requests (Blocked/Discover counts).
 - [~] Contacts list (online/offline filters + counts, search, presence + mood-emoji) —
-      **filters + search + presence shipped** (slice `contacts-list-friends`): the Contacts tab now
-      renders the online-first friend list with an All/Online/Offline `FilterChip` row, a search field
-      (matches username or resolved name), and a per-row online presence dot. **Pending:** per-filter
-      counts and mood-emoji presence.
+      **filters + search + presence + per-filter counts shipped**. Filters/search/presence landed in
+      `contacts-list-friends`: the Contacts tab renders the online-first friend list with an
+      All/Online/Offline `FilterChip` row, a search field (matches username or resolved name), and a
+      per-row online presence dot. **Per-filter counts shipped** (slice `contacts-filter-counts`,
+      2026-07-04): the pure `:core:model` `ContactList.counts(friends, query) → ContactFilterCounts`
+      (all/online/offline sizes under the active search; online+offline partition all by construction)
+      is the SSOT, exposed on `ContactsListUiState.filterCounts` and rendered as a count badge on each
+      chip. Surpasses iOS, whose counts ignore the search field. **Pending:** mood-emoji presence.
 - [x] Cache-first friends list with cross-screen reconciliation; online-first sorting —
       **shipped** (slices `friendship-relationship-resolver` + `contacts-list-friends`). The store
       landed first: `:sdk-core` `@Singleton FriendshipCache` (port of iOS `FriendshipCache`) is the
@@ -1118,9 +1122,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       suggestions get live relationship badges and cross-screen re-derivation for free; a search cancels
       it and switches surfaces, `retry` re-runs it. Surpasses iOS's `.task`-reload with an in-memory
       singleton cache that paints instantly on a return visit. +23 tests (6 `DiscoverSuggestions`, 5
-      `SuggestionsRepository`, 12 `DiscoverViewModel`). **Pending:** a persistent Room suggestions cache
-      for cross-launch cold-start paint (iOS `CacheCoordinator.userSearch`) — matching the friends-list
-      in-memory precedent, tracked as a follow-up.
+      `SuggestionsRepository`, 12 `DiscoverViewModel`). **The suggestions cache is now durable too**
+      (slice `discover-suggestions-room-cache`, 2026-07-04): the in-memory `SwrCacheSource` was replaced
+      by a Room-backed `RoomSuggestionsSource` — `:core:database` `SuggestionEntity`/`SuggestionDao`
+      (DB v8→9, `discover_suggestions` table, `sortIndex` preserves the gateway ranking), persisting the
+      last empty-query fetch so the Discover tab paints suggestions **on a cold launch**, before any
+      network call, surviving process death (iOS `CacheCoordinator.userSearch` parity). Cold (`null`) vs
+      synced-empty is distinguished via `sync_meta`; a failed revalidation keeps the last good list. The
+      `SuggestionsRepository`/`DiscoverViewModel` public surface is unchanged, so no consumer moved. This
+      closes the **last in-memory-only cache gap** (mirroring `FriendEntity`/`CallHistoryEntity`). 11
+      tests (Robolectric + in-memory Room; replaced the 5 in-memory-source tests).
 - [x] Blocked-users list with confirm-to-unblock; optimistic unblock with rollback —
       **shipped** (slice `contacts-blocked-list`, 2026-07-04): the Blocked tab (was placeholder)
       renders the blocklist from `BlockRepository.listBlocked()` (which hydrates the shared

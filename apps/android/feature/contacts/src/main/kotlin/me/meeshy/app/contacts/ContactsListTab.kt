@@ -39,6 +39,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.contacts.R
 import me.meeshy.sdk.model.FriendRequestUser
 import me.meeshy.sdk.model.friend.ContactFilter
+import me.meeshy.sdk.model.friend.ContactFilterCounts
 import me.meeshy.sdk.model.friend.resolvedName
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
@@ -69,7 +70,7 @@ fun ContactsListTab(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         )
-        FilterRow(selected = state.filter, onSelect = viewModel::setFilter)
+        FilterRow(selected = state.filter, counts = state.filterCounts, onSelect = viewModel::setFilter)
 
         when {
             state.showSkeleton -> Centered { CircularProgressIndicator() }
@@ -82,7 +83,11 @@ fun ContactsListTab(
 }
 
 @Composable
-private fun FilterRow(selected: ContactFilter, onSelect: (ContactFilter) -> Unit) {
+private fun FilterRow(
+    selected: ContactFilter,
+    counts: ContactFilterCounts,
+    onSelect: (ContactFilter) -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -90,10 +95,12 @@ private fun FilterRow(selected: ContactFilter, onSelect: (ContactFilter) -> Unit
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         SELECTABLE_FILTERS.forEach { filter ->
+            val label = stringResource(filter.labelRes)
+            val count = counts.forFilter(filter)
             FilterChip(
                 selected = selected == filter,
                 onClick = { onSelect(filter) },
-                label = { Text(stringResource(filter.labelRes)) },
+                label = { Text("$label  $count") },
             )
         }
     }

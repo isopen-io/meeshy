@@ -14,6 +14,7 @@ import me.meeshy.core.database.dao.MediaBlobDao
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.core.database.dao.OutboxDao
 import me.meeshy.core.database.dao.StoryDao
+import me.meeshy.core.database.dao.SuggestionDao
 import me.meeshy.core.database.dao.SyncMetaDao
 import javax.inject.Singleton
 
@@ -59,6 +60,10 @@ internal object DatabaseModule {
     @Provides
     fun providesFriendDao(database: MeeshyDatabase): FriendDao =
         database.friendDao()
+
+    @Provides
+    fun providesSuggestionDao(database: MeeshyDatabase): SuggestionDao =
+        database.suggestionDao()
 
     private const val DATABASE_NAME = "meeshy.db"
 }
