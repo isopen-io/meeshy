@@ -8,7 +8,15 @@ import os
 // MARK: - Call View
 
 struct CallView: View {
-    @ObservedObject var callManager = CallManager.shared
+    // Audit P1-16 — injected by the caller (RootView/iPadRootView already
+    // hold their own @ObservedObject callManager to gate presentation), NOT
+    // a `= CallManager.shared` default. A defaulted @ObservedObject is
+    // reassigned — and its objectWillChange subscription torn down and
+    // rebuilt — every time the parent's body re-evaluates and reconstructs
+    // this struct, even for churn unrelated to the call (unread counts,
+    // presence, navigation). Threading the parent's existing instance down
+    // avoids that redundant resubscription during an active call.
+    @ObservedObject var callManager: CallManager
     // Audit P2-iOS-9 — respect the user's Reduce Motion preference. Without
     // this check, the continuous pulse/ring animations ran indefinitely
     // even for motion-sensitive users (and burned battery).
