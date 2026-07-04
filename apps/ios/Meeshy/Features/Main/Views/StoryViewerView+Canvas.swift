@@ -933,6 +933,24 @@ struct StoryCardView: View {
                                           handleStallIndicatorSignal(progressing: progressing)
                                       })
                     .id(story.id)
+                    // U6 inc.2 — la navigation prev/next est une gesture
+                    // SPATIALE (position x du tap dans le canvas) que VoiceOver
+                    // ne peut pas produire : on l'expose en actions custom du
+                    // rotor. Le label donne une identité au canvas (le contenu
+                    // visuel est du CALayer, invisible d'UIAccessibility).
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(String(
+                        localized: "story.viewer.a11y.canvas",
+                        defaultValue: "Story en cours de lecture"
+                    ))
+                    .accessibilityAction(named: String(
+                        localized: "story.viewer.a11y.next",
+                        defaultValue: "Story suivante"
+                    )) { goToNext() }
+                    .accessibilityAction(named: String(
+                        localized: "story.viewer.a11y.previous",
+                        defaultValue: "Story précédente"
+                    )) { goToPrevious() }
                     // Strict 9:16-fit (parité avec UnifiedPostComposer:324).
                     // Sans contrainte, `geometry.size.height` étirait le canvas
                     // hors ratio design et décalait visuellement le contenu.

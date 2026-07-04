@@ -650,6 +650,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             if let j = storyGroups[i].stories.firstIndex(where: { $0.id == storyId }) {
                 var updated = storyGroups[i].stories
                 updated[j].isViewed = true
+                // R11 — horodatage local du vu (DateTime nullable > boolean seul).
+                updated[j].viewedAt = Date()
                 storyGroups[i] = storyGroups[i].with(stories: updated)
                 persistStoryCache()
                 // R5 — la story vient d'être VUE : garantir sa relecture

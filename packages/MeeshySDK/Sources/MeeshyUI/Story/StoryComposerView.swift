@@ -109,6 +109,10 @@ public struct StoryComposerView: View {
 
     @State var showDiscardAlert = false
     @State var showRestoreDraftAlert = false
+    /// U4 inc.2 — données de la carte de reprise (cover rendu async depuis
+    /// les médias du draft, SANS muter le ViewModel avant le choix user).
+    @State var draftResumeCover: UIImage?
+    @State var draftResumeSlideCount: Int = 1
     /// E1 — clés média du dernier `saveMedia` d'autosave : gate la re-copie
     /// des bitmaps aux vrais changements de médias.
     @State var lastAutosavedMediaKeys: Set<String>?
@@ -195,12 +199,31 @@ public struct StoryComposerView: View {
 
     public var body: some View {
         sheetModifiers
-        .alert(String(localized: "story.composer.resumeStory", defaultValue: "Reprendre votre story ?", bundle: .module), isPresented: $showRestoreDraftAlert) {
-            Button(String(localized: "story.composer.resume", defaultValue: "Reprendre", bundle: .module)) { restoreDraft() }
-                .tint(MeeshyColors.indigo500)
-            Button(String(localized: "story.composer.clearDraft", defaultValue: "Effacer le brouillon", bundle: .module), role: .destructive) { clearAllDrafts() }
-        } message: {
-            Text(String(localized: "story.composer.unpublishedDraft", defaultValue: "Vous avez un brouillon non publie.", bundle: .module))
+        // U4 inc.2 — la reprise de brouillon montre CE QU'ON reprend (carte
+        // cover composite) au lieu de l'ancienne alerte texte nue. Dismissal
+        // explicite uniquement (pas de tap-outside : le brouillon est précieux).
+        .overlay {
+            if showRestoreDraftAlert {
+                ZStack {
+                    Color.black.opacity(0.55).ignoresSafeArea()
+                    DraftResumeCard(
+                        cover: draftResumeCover,
+                        slideCount: draftResumeSlideCount,
+                        updatedAt: nil,
+                        onResume: {
+                            showRestoreDraftAlert = false
+                            restoreDraft()
+                        },
+                        onDiscard: {
+                            showRestoreDraftAlert = false
+                            clearAllDrafts()
+                        }
+                    )
+                    .padding(28)
+                }
+                .transition(.opacity)
+                .zIndex(40)
+            }
         }
         .alert(
             String(localized: "story.composer.quitWithoutPublishing", defaultValue: "Quitter sans publier ?", bundle: .module),

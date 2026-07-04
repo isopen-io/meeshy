@@ -11,7 +11,9 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.friend.FriendRepository
+import me.meeshy.sdk.friend.FriendshipCache
 import me.meeshy.sdk.model.FriendRequest
+import me.meeshy.sdk.model.friend.FriendshipStatus
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import org.junit.After
@@ -124,6 +126,79 @@ class ContactsViewModelTest {
         vm.cancelRequest("s1")
 
         assertThat(vm.state.value.sentRequests.map { it.id }).containsExactly("s1")
+    }
+
+    @Test
+    fun `load hydrates the friendship cache from received and sent requests`() = runTest {
+        val cache = FriendshipCache()
+        coEvery { repository.receivedRequests(any(), any()) } returns
+            NetworkResult.Success(listOf(FriendRequest(id = "r1", senderId = "alice", status = "pending")))
+        coEvery { repository.sentRequests(any(), any()) } returns
+            NetworkResult.Success(listOf(FriendRequest(id = "s1", receiverId = "bob", status = "accepted")))
+
+        ContactsViewModel(repository, cache)
+
+        assertThat(cache.status("alice")).isEqualTo(FriendshipStatus.PendingReceived("r1"))
+        assertThat(cache.status("bob")).isEqualTo(FriendshipStatus.Friend)
+    }
+
+    @Test
+    fun `acceptRequest befriends the sender in the cache`() = runTest {
+        val cache = FriendshipCache()
+        coEvery { repository.receivedRequests(any(), any()) } returns
+            NetworkResult.Success(listOf(FriendRequest(id = "r1", senderId = "alice", status = "pending")))
+        coEvery { repository.sentRequests(any(), any()) } returns NetworkResult.Success(emptyList())
+        coEvery { repository.respond("r1", true) } returns
+            NetworkResult.Success(FriendRequest(id = "r1", senderId = "alice", status = "accepted"))
+        val vm = ContactsViewModel(repository, cache)
+
+        vm.acceptRequest("r1")
+
+        assertThat(cache.status("alice")).isEqualTo(FriendshipStatus.Friend)
+    }
+
+    @Test
+    fun `acceptRequest failure rolls the cache back to pending received`() = runTest {
+        val cache = FriendshipCache()
+        coEvery { repository.receivedRequests(any(), any()) } returns
+            NetworkResult.Success(listOf(FriendRequest(id = "r1", senderId = "alice", status = "pending")))
+        coEvery { repository.sentRequests(any(), any()) } returns NetworkResult.Success(emptyList())
+        coEvery { repository.respond("r1", true) } returns NetworkResult.Failure(ApiError("nope"))
+        val vm = ContactsViewModel(repository, cache)
+
+        vm.acceptRequest("r1")
+
+        assertThat(cache.status("alice")).isEqualTo(FriendshipStatus.PendingReceived("r1"))
+    }
+
+    @Test
+    fun `declineRequest drops the received pending without befriending`() = runTest {
+        val cache = FriendshipCache()
+        coEvery { repository.receivedRequests(any(), any()) } returns
+            NetworkResult.Success(listOf(FriendRequest(id = "r1", senderId = "alice", status = "pending")))
+        coEvery { repository.sentRequests(any(), any()) } returns NetworkResult.Success(emptyList())
+        coEvery { repository.respond("r1", false) } returns
+            NetworkResult.Success(FriendRequest(id = "r1", senderId = "alice", status = "rejected"))
+        val vm = ContactsViewModel(repository, cache)
+
+        vm.declineRequest("r1")
+
+        assertThat(cache.status("alice")).isEqualTo(FriendshipStatus.None)
+        assertThat(cache.isFriend("alice")).isFalse()
+    }
+
+    @Test
+    fun `cancelRequest clears the sent pending, restoring it on failure`() = runTest {
+        val cache = FriendshipCache()
+        coEvery { repository.receivedRequests(any(), any()) } returns NetworkResult.Success(emptyList())
+        coEvery { repository.sentRequests(any(), any()) } returns
+            NetworkResult.Success(listOf(FriendRequest(id = "s1", receiverId = "bob", status = "pending")))
+        coEvery { repository.deleteRequest("s1") } returns NetworkResult.Failure(ApiError("offline"))
+        val vm = ContactsViewModel(repository, cache)
+
+        vm.cancelRequest("s1")
+
+        assertThat(cache.status("bob")).isEqualTo(FriendshipStatus.PendingSent("s1"))
     }
 
     @Test

@@ -304,6 +304,31 @@ slide's media and `dependsOn` only that slide's offline uploads, and removing a 
 
 ## Next slice (pick one for the next run)
 
+**Pivoted to Contacts (`feature-parity.md §J`) 2026-07-04.** The Calls area's remaining work is
+WebRTC/Telecom/FCM platform glue with no more pure testable cores, so the routine advanced to the
+next-richest area already in progress. The **friendship/relationship SSOT** landed
+(`friendship-relationship-resolver`): pure `UserRelationshipRules` + `FriendshipStatus`/
+`UserRelationshipState` in `:core:model`, the `@Singleton FriendshipCache` store + `UserRelationshipResolver`
+in `:sdk-core`, wired into `ContactsViewModel`. The **Contacts list** now landed too
+(`contacts-list-friends`, 2026-07-04): the Contacts tab renders the online-first friend list with
+filter chips + search + presence dots, reconciling against the `FriendshipCache`. **Next highest-value
+Contacts slices:**
+1. ~~**Contacts list data slice**~~ ✅ shipped as `contacts-list-friends` (2026-07-04) — pure
+   `:core:model` `ContactList` (assemble from accepted requests, online-first sort, filter+search,
+   cache reconcile), `ContactsListViewModel` over `FriendRepository` + `FriendshipCache`, and the
+   `ContactsListTab` Compose UI. **Follow-up:** a persistent Room `friends` cache for cold-start paint
+   (iOS `CacheCoordinator.friends`) — today it's network-first + in-memory reconciled; and per-filter
+   counts + mood-emoji presence.
+2. **Send friend request (compose-new)** — user search + inline connect, optimistic `didSendRequest`
+   + offline-queue + `cmid` idempotency (the "send" half the Requests tab still lacks).
+3. **BlockRepository + `BlockStatusProvider` binding** — the block half of the resolver (Blocked state
+   currently a seam), a Blocked tab list with confirm-to-unblock + optimistic rollback.
+4. **Discover suggestions + live user search** — cache-first suggestions, inline connect using the
+   resolver to render per-user relationship state.
+
+---
+_Historical Calls backlog below (revisit only for the platform-glue slices)._
+
 **Now in the Calls area** (`feature-parity.md §H`). The pure FSM (`core:model`
 `me.meeshy.sdk.model.call`) landed 2026-06-30; the `:feature:calls` consumer landed 2026-07-01
 (slice `calls-viewmodel-screen`). Ordered by value:
@@ -613,6 +638,111 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-04 — slice `contacts-list-friends` ✅ shipped
+- **Step 0 (housekeeping):** the prior iteration's Android PR **#1431** (`friendship-relationship-resolver`)
+  was open, apps/android-only, CI green, `mergeable_state: clean` → **squash-merged to `main`** before
+  starting. Synced local `main`, branched `claude/apps/android/contacts-list-friends` off it.
+- **Why this slice:** PROGRESS "Next" #1 — the friendship SSOT (#1431) needed its consumer. Port of iOS
+  `ContactsListViewModel`: the friend graph is exactly the accepted friend requests (no `/friends`
+  endpoint), so the list is built from received+sent accepted requests, online-first, reconciled
+  against the shared `FriendshipCache` on every cross-screen mutation.
+- **Added (production, 3 files):**
+  - `:core:model` `me.meeshy.sdk.model.friend.ContactList.kt` — the pure derivation SSOT:
+    `ContactFilter` enum (All/Online/Offline/Phonebook/Affiliates, parity with iOS `ContactsShared`),
+    the `FriendRequestUser.resolvedName` display-name SSOT (port of iOS `.name`), and `object ContactList`
+    with `fromAcceptedRequests(received, sent, currentUserId)` (counterparty pick, dedup by id via
+    `LinkedHashMap`, online-first then most-recently-active sort), `visible(friends, filter, query)`
+    (filter + trimmed case-insensitive username/name search), and `reconcile(current, cacheFriendIds)`
+    → `ContactReconcile(friends, needsRefetch)` (drop non-cache friends locally, flag one refetch for
+    unknown additions — port of iOS `reconcileWithCache`).
+  - `:sdk-core` `FriendshipCache.currentFriendIds` — a defensive (locked-copy) snapshot of the accepted
+    friend-id set (port of iOS `FriendshipCache.friendIds`), the read model reconcile consumes.
+  - `:feature:contacts` `ContactsListViewModel.kt` — UDF VM over `FriendRepository` + `FriendshipCache`
+    + `SessionRepository`: `load()` fetches received+sent (limit 100), hydrates the cache, folds via
+    `ContactList.fromAcceptedRequests`; `setFilter`/`search` drive the derived `visibleFriends`; a
+    `version`-flow collector reconciles on cross-screen mutations (removals local, additions → one
+    silent refetch, guarded by `lastReconciledFriendIds` against loops). `ContactsListUiState` exposes
+    pure `visibleFriends`/`showSkeleton`/`isFilteredEmpty`/`isEmpty` derivations.
+- **Wired (product UI, `:feature:contacts`):** `ContactsListTab.kt` — the Contacts tab (was
+  `ComingSoon()`) now renders search + All/Online/Offline `FilterChip` row + online-first `LazyColumn`
+  of friend rows (accent-seeded `MeeshyAvatar` via `DynamicColorGenerator`, name, `@username`, success-
+  green presence dot), skeleton only on cold empty, distinct filtered-empty / cold-empty / error+retry
+  states. `ContactsScreen.displayLabel` refactored to defer to the new `resolvedName` SSOT. +8 strings
+  in all four locales (en/fr/es/pt).
+- **Tests (red→green, +38, 0 skips):** 25 `ContactListTest` (resolvedName 4, fromAcceptedRequests 8
+  incl. accepted-only/counterparty/self-exclusion/dedup/no-counterparty/online-first/recency/null-date,
+  visible 9 incl. every filter arm + search/trim/combine/no-match, reconcile 4 incl. drop/refetch/inert/
+  empty), +2 `FriendshipCacheTest` (currentFriendIds accepted-only + defensive-copy), 11
+  `ContactsListViewModelTest` (online-first load, self-exclusion, cache hydration, both-fail error,
+  filter, search, dismissError, cross-screen unfriend drops locally w/ exactly-1 fetch, unknown addition
+  → exactly-2 fetches, plus showSkeleton / isFilteredEmpty state derivations). All behavioural through
+  the public API; no tautologies.
+- **Verification:** `/opt/gradle/bin/gradle :core:model:testDebugUnitTest :sdk-core:testDebugUnitTest
+  :feature:contacts:testDebugUnitTest :app:assembleDebug` → BUILD SUCCESSFUL; suites
+  ContactListTest 25/25, FriendshipCacheTest 15/15, ContactsListViewModelTest 11/11, ContactsViewModelTest
+  14/14, 0 failures/0 skips; `:app:assembleDebug` green. (Bootstrapped the Android SDK + `/opt/gradle`
+  8.14.3 per NOTES; wrapper dist still 403.)
+- **Reviewer verdict:** PASS — diff is `apps/android` only (3 prod + 1 UI + strings + 3 test files +
+  these docs), no production logic elsewhere; TDD red→green (2 VM tests were RED on unrealistic payloads
+  — fixed the test fixtures to carry both id-strings and user objects as the gateway does, not the
+  production code); behaviour through the public API, no tautologies, no weakened floors; SDK purity kept
+  (pure derivation in `:core:model`, cache snapshot in `:sdk-core`, VM + Compose orchestration in
+  `:feature:contacts`); SSOT respected (`ContactList` the one list derivation, `resolvedName` the one
+  display-name rule, `FriendshipCache` the one friend graph); instant-app (skeleton only on cold empty,
+  populated roster paints immediately); edges covered (empty roster, self-as-friend, missing counterparty,
+  null presence/date sort, filter×search combine, cross-screen add/remove, loop-guarded reconcile).
+
+### 2026-07-04 — slice `friendship-relationship-resolver` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration (open PRs #1423–#1430 were all
+  iOS/gateway/web from other sessions, untouched). Branched
+  `claude/apps/android/friendship-relationship-resolver` off latest `origin/main` (`e5a65563`).
+- **Why this slice:** the Calls area's remaining work is WebRTC/Telecom platform glue (no more pure
+  testable cores), and Contacts is already in-progress (`[~]` hub + Requests tab). The natural
+  highest-value pure vertical is the **friendship / relationship-state SSOT** — the read model every
+  future Discover / profile / contact-cell surface needs, plus the write store the Requests tab feeds.
+  Port of iOS `UserRelationshipState.swift` + `FriendshipCache.swift`.
+- **Added (production, 3 files):**
+  - `:core:model` `me.meeshy.sdk.model.friend.UserRelationship.kt` — the pure `FriendshipStatus`
+    (`Friend`/`PendingSent(id)`/`PendingReceived(id)`/`None`) and `UserRelationshipState`
+    (`Current`/`Blocked`/`Connected`/`PendingSent`/`PendingReceived`/`None` + `isPending`) sealed
+    models, and the total `UserRelationshipRules.resolve(target, currentUserId, isBlocked, friendship)`
+    precedence SSOT: blank target → None; current wins over everything; block wins over friendship;
+    else friendship maps straight through (faithful to iOS `UserRelationshipResolver.resolve`).
+  - `:sdk-core` `FriendshipCache.kt` — `@Singleton` in-memory friend-graph store (port of iOS
+    `FriendshipCache`): three disjoint `synchronized` stores (friendIds / sentPending `receiver→reqId`
+    / receivedPending `sender→reqId`), `status(userId)` lookup, `hydrate(sent, received)` (accepted→
+    friend, pending→directional, other statuses dropped, blank counterparty skipped, full replace so
+    stale entries can't survive), optimistic mutations (didSend/Cancel/Accept/Reject/Receive/Remove),
+    rollbacks, `clear()`, count accessors, and a `version: StateFlow<Int>` bumped on every mutation
+    (Android analogue of the iOS `@Published version`).
+  - `:sdk-core` `UserRelationshipResolver.kt` — the thin stateful wiring over the pure rules: a
+    `BlockStatusProvider` fun-interface seam (mirrors iOS `BlockServiceProviding.isBlocked`; no
+    Android BlockService yet) + `FriendshipCache.status` + a current-user provider. Short-circuits the
+    block lookup on a blank id.
+- **Wired (product, `:feature:contacts`):** `ContactsViewModel` now takes the `@Singleton
+  FriendshipCache` (default-constructed fallback keeps existing direct-construction tests intact) and
+  keeps it in lock-step with the Requests tab: `loadRequests` hydrates it when both fetches succeed;
+  accept → `didAcceptRequest` (rollback `rollbackAccept` on failure); decline → `didRejectRequest`
+  (rollback `rollbackReject`); cancel → `didCancelRequest` (restore via `didSendRequest` on failure).
+  The store is genuinely consumed — not orphan code.
+- **Tests (red→green, +36):** 10 `UserRelationshipRulesTest` (blank/current/block/friendship
+  precedence, every arm, `isPending` across all states, null current id), 13 `FriendshipCacheTest`
+  (every mutation + rollback + hydrate mapping/replace/blank-skip + clear + version-bump count), 8
+  `UserRelationshipResolverTest` (each state, block-over-friend, blank short-circuits the provider,
+  null current id), +5 `ContactsViewModelTest` (hydrate on load, accept befriends, accept-failure
+  rollback, decline drops without befriending, cancel-failure restore). All behavioural through the
+  public API; no tautologies.
+- **Verification:** `/opt/gradle/bin/gradle :core:model:testDebugUnitTest :sdk-core:testDebugUnitTest
+  :feature:contacts:testDebugUnitTest` green (new suites 10/10, 13/13, 8/8, ContactsVM 14/14, 0
+  skipped); `:app:assembleDebug` green. (`./gradlew`/`meeshy.sh` still 403 on the wrapper dist — used
+  the preinstalled `/opt/gradle` 8.14.3 per NOTES.)
+- **Reviewer verdict:** PASS — diff is `apps/android` only (3 prod + 4 test files + these docs), no
+  production logic elsewhere; TDD red→green, behaviour through the public API, no tautologies, no
+  weakened floors; SDK purity kept (pure precedence in `:core:model`, stateful store + resolver in
+  `:sdk-core`, product hydrate/optimistic wiring in `:feature:contacts`); SSOT respected (one
+  relationship resolver, no re-implementation); edges covered (blank id, null current user, block>
+  friend precedence, hydrate full-replace + blank-skip, every rollback/failure path).
 
 ### 2026-07-03 — slice `call-sender-cap-plan` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration (open PRs #1410/#1412/#1413/#1414/#1416

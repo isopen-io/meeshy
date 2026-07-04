@@ -54,12 +54,20 @@ import { z } from 'zod';
 // Atoms
 // ============================================================================
 
-/** ISO 639-1 (or BCP-47-ish prefix) language code, e.g. "fr", "en", "pt-BR". */
+/**
+ * ISO 639-1/639-3 (or BCP-47-ish prefix) language code, e.g. "fr", "en",
+ * "pt-BR", "bas". The primary subtag is 2 OR 3 letters: the platform treats
+ * the 3-letter ISO 639-3 codes `bas`/`ksf`/`nnh`/`dua`/`ewo` (supported
+ * Cameroonian languages, see languages.ts) as canonical and never truncates
+ * them — a `[a-zA-Z]{2}` anchor would reject a legitimate `bas` transcription
+ * or `{ bas: {...} }` translation map at the trust boundary. Mirrors the
+ * widened `CommonSchemas.language` regex in validation.ts.
+ */
 export const languageCodeSchema = z
   .string()
   .min(2)
   .max(16)
-  .regex(/^[a-zA-Z]{2}(-[a-zA-Z0-9]+)*$/, 'Invalid language code');
+  .regex(/^[a-zA-Z]{2,3}(-[a-zA-Z0-9]+)*$/, 'Invalid language code');
 
 /** Confidence score in the [0, 1] range. */
 export const confidenceScoreSchema = z.number().min(0).max(1);

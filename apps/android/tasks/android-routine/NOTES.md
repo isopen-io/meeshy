@@ -3,6 +3,39 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Design lessons
+- **`FriendRequest` carries BOTH id-strings and nested user objects — keep test fixtures consistent.**
+  (2026-07-04, slice `contacts-list-friends`.) `FriendshipCache.hydrate` keys the friend graph off the
+  `senderId`/`receiverId` **strings**, but `ContactList.fromAcceptedRequests` reads the `sender`/`receiver`
+  **user objects** (it needs name/avatar/presence). Production gateway payloads always populate both
+  consistently (`sender.id == senderId`). Two `ContactsListViewModel` tests were RED because the fixture
+  set only the object, leaving `senderId=""` → the cache hydrated empty while the list populated. Fix was
+  in the **test fixture** (derive `senderId`/`receiverId` from the objects), not the production code — a
+  faithful red→green. Lesson: when a model has redundant id+object fields consumed by different collaborators,
+  make fixtures set both, and prefer a helper that derives one from the other so they can't drift.
+- **Loop-guard a StateFlow-version reconcile with a `lastReconciled` snapshot.** The cache-observation
+  reconcile refetches on an unknown friend addition; that refetch re-hydrates the cache → bumps `version`
+  → re-enters the collector. Without a guard (`if (cacheIds == lastReconciledFriendIds) return`, port of
+  iOS's `guard cacheIds != lastObservedFriendIds`) an id the fetch can't resolve (in cache but no user
+  record) loops forever. Under `UnconfinedTestDispatcher` the re-entrancy is synchronous, so the guard is
+  load-bearing even in tests — assert "exactly N fetches" to pin it.
+- **Pivot areas when the current one runs out of pure cores, don't force glue.** (2026-07-04, slice
+  `friendship-relationship-resolver`.) The Calls area's remaining parity items are all WebRTC/Telecom/
+  FCM platform glue — untestable in JVM, high-risk to merge blind. Rather than stall, the routine
+  advanced to the next-richest in-progress area (Contacts §J) where a genuine pure vertical existed.
+  Build-order is a *default* sequencing, not a hard gate: when an area's testable surface is exhausted,
+  move to the highest-value pure slice available and note the pivot in PROGRESS "Next".
+- **Missing-dependency seam pattern: `fun interface` provider, not a stub service.** The iOS
+  `UserRelationshipResolver` folds in block state via `BlockServiceProviding.isBlocked`, but Android
+  has no BlockService yet. Instead of inventing a throwaway stub, the resolver takes a
+  `BlockStatusProvider` `fun interface { isBlocked(id): Boolean }` seam — fully testable now, and a
+  future `BlockRepository` binds to it with zero resolver churn. The `Blocked` state is honestly
+  tracked as `[~]`/seam-pending in feature-parity until that binding lands. Prefer a functional seam
+  over a fake when the real collaborator doesn't exist yet.
+- **Default constructor param keeps prior direct-construction tests green when injecting a new
+  `@Singleton`.** `ContactsViewModel` gained a `FriendshipCache` param; giving it a
+  `= FriendshipCache()` default meant the existing `ContactsViewModel(repository)` test calls compiled
+  unchanged (Hilt still injects the real singleton in prod — it ignores the default). Minimal test
+  churn, no weakened tests.
 - **Identity-less fan-out streams must not drive per-entity teardown.** The gateway fans `call:ended`
   out to *every* member USER room, so a busy user (active call + a waiting-call banner) receives the
   *waiting* call's teardown on the same socket. Folding an identity-less `CallEvent.RemoteHangUp` from

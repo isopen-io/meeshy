@@ -44,6 +44,23 @@ import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesServ
 
 import { CLIENT_MESSAGE_ID_REGEX } from '@meeshy/shared/utils/client-message-id';
 
+// Mirrors MessageReadStatusService's isStaleCursorMessageId (MongoDB ObjectId
+// hex strings sort chronologically). Duplicated rather than imported: several
+// test suites `jest.mock('../../services/MessageReadStatusService', ...)`
+// with a factory that only exports `MessageReadStatusService`, so a named
+// import of this helper resolves to `undefined` under those mocks.
+const OBJECT_ID_RE = /^[0-9a-f]{24}$/i;
+function isStaleCursorMessageId(
+  candidateMessageId: string,
+  currentCursorMessageId: string | null | undefined
+): boolean {
+  if (!currentCursorMessageId) return false;
+  if (!OBJECT_ID_RE.test(candidateMessageId) || !OBJECT_ID_RE.test(currentCursorMessageId)) {
+    return false;
+  }
+  return candidateMessageId.toLowerCase() < currentCursorMessageId.toLowerCase();
+}
+
 /**
  * Nested-user fields fetched for a message sender in the GET messages select.
  *
@@ -828,7 +845,8 @@ export function registerMessagesRoutes(
               select: {
                 systemLanguage: true,
                 regionalLanguage: true,
-                customDestinationLanguage: true
+                customDestinationLanguage: true,
+                deviceLocale: true
               }
             })
           : Promise.resolve(null)
@@ -897,7 +915,7 @@ export function registerMessagesRoutes(
 
       // Déterminer la langue préférée de l'utilisateur
       const userPreferredLanguage = userPrefs
-        ? resolveUserLanguage(userPrefs)
+        ? resolveUserLanguage(userPrefs, { deviceLocale: userPrefs.deviceLocale ?? undefined })
         : 'fr';
 
       // DEBUG: Log détaillé pour vérifier les transcriptions audio
@@ -1835,6 +1853,26 @@ export function registerMessagesRoutes(
 
       if (!participantForCursor) {
         return sendForbidden(reply, 'Not a participant');
+      }
+
+      // Guard against a race with a concurrent, fresher read: another device
+      // may have read a message newer than `latestMessage` between our read
+      // above and this write. Without this check the unconditional upsert
+      // below would roll the cursor backward past that fresher read,
+      // resurrecting already-read messages as unread (mirrors the
+      // isStaleCursorMessageId guard in MessageReadStatusService.markMessagesAsRead).
+      const currentCursor = await prisma.conversationReadCursor.findUnique({
+        where: {
+          conversation_participant_cursor: { participantId: participantForCursor.id, conversationId }
+        },
+        select: { lastReadMessageId: true }
+      });
+
+      if (isStaleCursorMessageId(latestMessage.id, currentCursor?.lastReadMessageId)) {
+        logger.info(
+          `[MARK-UNREAD] Ignoring stale mark-unread for user ${userId} in conversation ${conversationId}: cursor already advanced past message ${latestMessage.id}`
+        );
+        return sendSuccess(reply, { unreadCount: 0 });
       }
 
       await prisma.conversationReadCursor.upsert({

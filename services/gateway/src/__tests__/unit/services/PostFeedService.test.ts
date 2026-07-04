@@ -589,13 +589,18 @@ describe('PostFeedService.getReels', () => {
     expect(where.AND).toEqual(expect.arrayContaining([{ id: { not: 'seed-1' } }]));
   });
 
-  it('récupère un pool de candidats plus large que la page (limit×4) pour scorer', async () => {
+  it('récupère une fenêtre chronologique limit+1 (pas d\'over-fetch-then-drop, cf. getFeed)', async () => {
+    // Anciennement `limit * 4` : la fenêtre était sur-dimensionnée puis tronquée,
+    // et le curseur pris sur un item réordonné par score sautait/re-servait des
+    // réels. Aligné sur l'invariant lossless documenté de getFeed : fenêtre
+    // chronologique + 1 ligne sonde pour détecter hasMore ; le scoring ne
+    // réordonne QUE l'affichage.
     mockPostFindMany.mockResolvedValue([]);
 
     const service = new PostFeedService(mockPrisma);
     await service.getReels('user-1', { limit: 5 });
 
-    expect(mockPostFindMany.mock.calls[0][0].take).toBe(20);
+    expect(mockPostFindMany.mock.calls[0][0].take).toBe(6);
   });
 
   it('classe le réel du même auteur que le seed AVANT un réel sans affinité', async () => {
@@ -716,5 +721,81 @@ describe('PostFeedService — deletedAt soft-delete matcher (MongoDB isSet)', ()
     const where = mockPostFindMany.mock.calls[0][0].where;
     expect(where.deletedAt).toEqual({ isSet: false });
     expect(where.deletedAt).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PostFeedService.getReels — chronological cursor (lossless infinite scroll)
+//
+// Regression: getReels used to over-fetch a `limit * 4` pool, score the whole
+// pool, and take `nextCursor` from the score-sorted last item. Since the next
+// page filters `createdAt < cursor.createdAt`, a cursor pulled from an
+// arbitrary score position silently skips (or re-serves) reels. The cursor MUST
+// be the chronologically-oldest reel of the SHOWN window — captured before
+// score reordering — mirroring getFeed's documented lossless-window invariant.
+// ---------------------------------------------------------------------------
+describe('PostFeedService.getReels — chronological cursor', () => {
+  beforeEach(() => {
+    mockPostReactionFindMany.mockResolvedValue([]);
+  });
+
+  const rNew = makePost('r-new', {
+    type: 'REEL',
+    createdAt: new Date('2025-03-03T00:00:00Z'),
+    likeCount: 0,
+    commentCount: 0,
+    viewCount: 0,
+  });
+  const rMid = makePost('r-mid', {
+    type: 'REEL',
+    createdAt: new Date('2025-03-02T00:00:00Z'),
+    commentCount: 1000,
+    viewCount: 100000,
+  });
+  const rOld = makePost('r-old', {
+    type: 'REEL',
+    createdAt: new Date('2025-03-01T00:00:00Z'),
+  });
+
+  it('derives nextCursor from the chronologically-oldest SHOWN reel, not the score-sorted last item', async () => {
+    // findMany returns createdAt desc: [r-new, r-mid, r-old]. limit=2 → the
+    // probe row (r-old) proves hasMore; the shown window is [r-new, r-mid].
+    mockPostFindMany.mockResolvedValue([rNew, rMid, rOld]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getReels('user-1', { limit: 2 });
+
+    // Scoring still reorders the DISPLAY: r-mid has heavy engagement and
+    // outscores the fresher-but-empty r-new, so it renders first.
+    expect(result.items.map((p: any) => p.id)).toEqual(['r-mid', 'r-new']);
+
+    // But the cursor is the chronological boundary of the shown window (r-mid,
+    // the oldest of the two shown) — NOT the score-sorted last item (r-new).
+    expect(result.hasMore).toBe(true);
+    const decoded = decodeCursor(result.nextCursor as string);
+    expect(decoded?.id).toBe('r-mid');
+    expect(decoded?.createdAt).toBe(rMid.createdAt.toISOString());
+    // Guard against the reintroduced bug: never the newest (r-new) reel.
+    expect(decoded?.createdAt).not.toBe(rNew.createdAt.toISOString());
+  });
+
+  it('fetches only a limit+1 window (no over-fetch-then-drop)', async () => {
+    mockPostFindMany.mockResolvedValue([rNew, rMid, rOld]);
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getReels('user-1', { limit: 2 });
+
+    expect(mockPostFindMany.mock.calls[0][0].take).toBe(3);
+  });
+
+  it('returns hasMore:false and a null cursor when the window fits in one page', async () => {
+    mockPostFindMany.mockResolvedValue([rNew, rMid]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getReels('user-1', { limit: 2 });
+
+    expect(result.hasMore).toBe(false);
+    expect(result.nextCursor).toBeNull();
+    expect(result.items).toHaveLength(2);
   });
 });

@@ -18,7 +18,11 @@ const log = enhancedLogger.child({ module: 'PostService' });
 
 interface StoryTextObjectRaw {
   id?: string;
-  content: string;
+  // The iOS composer encodes overlay text under `text`; `content` is the
+  // pre-rename legacy alias (still accepted by the SDK decoder and the web
+  // transform). Both optional — resolve via `PostService.storyTextObjectText`.
+  text?: string;
+  content?: string;
   sourceLanguage?: string;
   translations?: Record<string, string>;
   [key: string]: unknown;
@@ -203,7 +207,7 @@ export class PostService {
 
     if (textObjects?.length) {
       const searchContent = textObjects
-        .map((t) => t.content)
+        .map((t) => PostService.storyTextObjectText(t))
         .filter(Boolean)
         .join(' ');
 
@@ -229,7 +233,7 @@ export class PostService {
     const trackingContent =
       data.content
       ?? (textObjects?.length
-        ? textObjects.map((t) => t.content).filter(Boolean).join(' ')
+        ? textObjects.map((t) => PostService.storyTextObjectText(t)).filter(Boolean).join(' ')
         : undefined);
     if (trackingContent) {
       try {
@@ -260,8 +264,19 @@ export class PostService {
 
   private async triggerStoryTextTranslation(postId: string, content: string, authorId: string, sourceLanguageOverride?: string): Promise<void> {
     try {
-      // 1. Résoudre les langues cibles depuis les contacts de l'auteur
-      const targetLanguages = await this.resolveAudienceTargetLanguages(authorId);
+      // An explicit source (e.g. the language chosen when editing a post) wins
+      // over the heuristic detector, which only guesses from word patterns.
+      const sourceLanguage = sourceLanguageOverride ?? detectLanguage(content);
+
+      // 1. Résoudre les langues cibles depuis les contacts de l'auteur, hors
+      // la langue source elle-même — même garde que le sibling
+      // `triggerStoryTextObjectTranslation`. Sans elle, un auteur écrivant
+      // dans une langue déjà parlée par (une partie de) son audience
+      // déclenche un aller-retour NLLB source→source qui réécrit
+      // `translations.<source>` avec une paraphrase de l'original au lieu de
+      // le laisser intact.
+      const allTargetLanguages = await this.resolveAudienceTargetLanguages(authorId);
+      const targetLanguages = allTargetLanguages.filter(l => l !== sourceLanguage);
 
       if (targetLanguages.length === 0) {
         log.info('StoryTranslation: no target languages', { postId });
@@ -276,9 +291,6 @@ export class PostService {
       }
 
       const storyMessageId = `story:${postId}`;
-      // An explicit source (e.g. the language chosen when editing a post) wins
-      // over the heuristic detector, which only guesses from word patterns.
-      const sourceLanguage = sourceLanguageOverride ?? detectLanguage(content);
 
       log.info('StoryTranslation: sending ZMQ request', { postId, sourceLanguage, targetLanguages });
 
@@ -389,7 +401,7 @@ export class PostService {
     }
 
     textObjects.forEach((obj, index) => {
-      const text = obj.content?.trim();
+      const text = PostService.storyTextObjectText(obj)?.trim();
       if (!text) return;
 
       const zmqClient = ZMQSingleton.getInstanceSync();
@@ -416,6 +428,19 @@ export class PostService {
         targetLanguages,
       });
     });
+  }
+
+  /** Résolution canonique du texte d'un overlay de story. Le composer iOS encode
+   *  désormais le texte sous `text` ; `content` est l'alias legacy pré-renommage
+   *  (encore accepté par le décodeur SDK et le transform web). On lit la clé
+   *  canonique d'abord, fallback sur la legacy — sans ça la gateway abandonnait
+   *  chaque overlay iOS de l'indexation de recherche, de l'extraction des liens
+   *  de tracking ET de la traduction (mêmes symptômes que le bug déjà corrigé
+   *  côté web dans `apps/web/lib/story-transforms.ts`). */
+  static storyTextObjectText(obj: { text?: unknown; content?: unknown }): string | undefined {
+    if (typeof obj.text === 'string') return obj.text;
+    if (typeof obj.content === 'string') return obj.content;
+    return undefined;
   }
 
   /** G3 — cœur PUR de la résolution d'audience (testable) : systemLanguage

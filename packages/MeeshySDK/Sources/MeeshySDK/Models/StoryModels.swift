@@ -1567,6 +1567,13 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     public let visibility: String?
     public let audioUrl: String?
     public var isViewed: Bool
+    /// R11 — horodatage du « vu » local (règle CLAUDE.md : DateTime nullable
+    /// plutôt que boolean seul). Migration DOUCE : `isViewed` reste décodé du
+    /// serveur (qui n'envoie qu'un Bool) ; `viewedAt` est posé côté client au
+    /// markViewed et survit au cache GRDB (optionnel → rétro-compatible avec
+    /// les rows persistés avant ce champ). Consommateurs futurs : tri des
+    /// groupes vus, TTL du pin R5 par date de vue.
+    public var viewedAt: Date?
     public let translations: [StoryTranslation]?
     public let backgroundAudio: StoryBackgroundAudioEntry?
     public var reactionCount: Int
@@ -1635,7 +1642,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
                 createdAt: Date = Date(), expiresAt: Date? = nil, repostOfId: String? = nil,
                 originalRepostOfId: String? = nil, repostAuthorName: String? = nil,
                 visibility: String? = nil, audioUrl: String? = nil,
-                isViewed: Bool = false, translations: [StoryTranslation]? = nil, backgroundAudio: StoryBackgroundAudioEntry? = nil,
+                isViewed: Bool = false, viewedAt: Date? = nil, translations: [StoryTranslation]? = nil, backgroundAudio: StoryBackgroundAudioEntry? = nil,
                 reactionCount: Int = 0, commentCount: Int = 0,
                 shareCount: Int? = nil, viewCount: Int? = nil, repostCount: Int? = nil,
                 currentUserReactions: [String]? = nil) {
@@ -1644,7 +1651,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
         self.originalRepostOfId = originalRepostOfId
         self.repostAuthorName = repostAuthorName
         self.visibility = visibility; self.audioUrl = audioUrl
-        self.isViewed = isViewed
+        self.isViewed = isViewed; self.viewedAt = viewedAt
         self.translations = translations; self.backgroundAudio = backgroundAudio
         self.reactionCount = reactionCount; self.commentCount = commentCount
         self.shareCount = shareCount; self.viewCount = viewCount; self.repostCount = repostCount

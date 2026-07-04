@@ -14,6 +14,33 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 134i, 2026-07-04)** — piste iOS indépendante (suffixe `i`).
+> - **134i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `60fb2238`)** :
+>   Dynamic Type + a11y de `AchievementBadgeView` (tuile de badge, anneau de progression fixe 56×56).
+>   Ajout `import MeeshyUI`. **2/3** `.font(.system(size:))` → `MeeshyFont.relative` (nom 11 bold ; compteur
+>   9 medium rounded). **1 figée** commentée **86i** : icône d'accomplissement bornée par l'anneau fixe 56×56.
+>   A11y déjà en place (tuile `children:.combine` + label complet ; icône aplatie). 1 fichier, 0 logique,
+>   0 test/clé i18n neuve. 8 PR ouvertes gateway/web/affiliate — aucune iOS → 0 contention. Gate = CI
+>   `ios-tests`. PR à venir.
+> - **⚠️ `AchievementBadgeView` Dynamic Type + a11y SOLDÉ** : ne plus reprendre l'icône figée (anneau fixe 56×56).
+> - **Base de départ 135i : `main` HEAD**. Reste `StoryViewerView+Content` (⚠️ i18n + `@State private`
+>   cross-file). Sinon : `SyncPill` (3), fichiers à 2 `.system`, ou **démarrer la passe state-of-the-art**
+>   (hexes inline vs tokens) si le lot migratable s'épuise.
+>
+> **POINTEUR AUTORITAIRE iOS (mis à jour 133i, 2026-07-03)** — piste iOS indépendante (suffixe `i`).
+> - **133i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `b6ba87ee`)** :
+>   Dynamic Type — annotation de gel de `ReelRepostEmbedCell` (carte de repost de Réel, bande média de
+>   hauteur fixe `stripHeight=116`). **3 figés** commentés **86i** : `music.note` backdrop (30), `play.fill`
+>   affordance centrale (18), badge Réel `play.rectangle.on.rectangle.fill` (13) — glyphes décoratifs bornés
+>   par la bande fixe, sans texte adjacent. **Distinction avec 130i** (`ReelFeedCard` badge `.padding`-driven
+>   plein-cadre → migré) : ici bande de hauteur FIXE → figé. A11y déjà en place (badge masqué ; carte
+>   `children:.ignore` labellisée). 1 fichier, 0 logique, 0 test/clé i18n neuve. 6 PR ouvertes calls/gateway —
+>   aucune sur ce fichier → 0 contention. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `ReelRepostEmbedCell` SOLDÉ** : ne plus reprendre les 3 glyphes figés (bornés par bande média fixe).
+> - **Base de départ 134i : `main` HEAD**. Reste `StoryViewerView+Content` (⚠️ i18n + `@State private`
+>   cross-file). Sinon : `AchievementBadgeView` (3), `SyncPill` (3), fichiers à 2 `.system`, ou **démarrer la
+>   passe state-of-the-art** (hexes inline vs tokens) si le lot migratable s'épuise.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 132i, 2026-07-03)** — piste iOS indépendante (suffixe `i`).
 > - **132i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `6de9912e`)** :
 >   Dynamic Type de `StatusBubbleController` → View co-localisée `MoodReplyConfirmationOverlay` (pop-up
