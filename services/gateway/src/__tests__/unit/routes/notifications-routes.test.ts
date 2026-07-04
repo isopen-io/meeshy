@@ -460,81 +460,23 @@ describe('DELETE /notifications/:id', () => {
   });
 });
 
-// ─── DELETE /notifications/test/clear-all ────────────────────────────────────
+// ─── Removed debug routes stay removed (broken access control) ───────────────
+//
+// DELETE /notifications/test/clear-all and POST /notifications/test/create
+// were reachable by any authenticated USER (no admin/ownership check) and let
+// any account wipe every notification in the system or spoof a notification
+// to an arbitrary recipientUserId. The sanctioned, admin-gated equivalent is
+// DELETE /notifications/admin/clear-all below.
 
-describe('DELETE /notifications/test/clear-all', () => {
-  beforeEach(() => jest.clearAllMocks());
-
-  it('clears all notifications successfully', async () => {
-    const { fastify, pr, reply } = setup();
-    const route = getRoute(fastify, 'DELETE', 'test/clear-all');
-    pr.notification.deleteMany.mockResolvedValue({ count: 42 });
-
-    const req = makeRequest();
-    await route.handler(req, reply);
-
-    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { deletedCount: 42 });
+describe('removed debug notification routes', () => {
+  it('no longer registers DELETE /notifications/test/clear-all', () => {
+    const { fastify } = setup();
+    expect(() => getRoute(fastify, 'DELETE', 'test/clear-all')).toThrow();
   });
 
-  it('returns 500 on error', async () => {
-    const { fastify, pr, reply } = setup();
-    const route = getRoute(fastify, 'DELETE', 'test/clear-all');
-    pr.notification.deleteMany.mockRejectedValue(new Error('DB error'));
-
-    const req = makeRequest();
-    await route.handler(req, reply);
-
-    expect(mockSendInternalError).toHaveBeenCalledWith(reply, expect.any(String));
-  });
-});
-
-// ─── POST /notifications/test/create ─────────────────────────────────────────
-
-describe('POST /notifications/test/create', () => {
-  beforeEach(() => jest.clearAllMocks());
-
-  it('creates test notification for current user by default', async () => {
-    const { fastify, ns, reply } = setup();
-    const route = getRoute(fastify, 'POST', 'test/create');
-    ns.createMessageNotification.mockResolvedValue({ id: 'new-notif' });
-
-    const req = makeRequest({ body: {} });
-    await route.handler(req, reply);
-
-    expect(mockSendSuccess).toHaveBeenCalled();
-    expect(ns.createMessageNotification).toHaveBeenCalledWith(
-      expect.objectContaining({ recipientUserId: USER_ID })
-    );
-  });
-
-  it('creates test notification for recipientUserId when provided', async () => {
-    const { fastify, ns, reply } = setup();
-    const route = getRoute(fastify, 'POST', 'test/create');
-    ns.createMessageNotification.mockResolvedValue({ id: 'new-notif' });
-
-    const req = makeRequest({
-      body: { recipientUserId: 'other-user', conversationId: CONV_ID, message: 'Test!' },
-    });
-    await route.handler(req, reply);
-
-    expect(ns.createMessageNotification).toHaveBeenCalledWith(
-      expect.objectContaining({
-        recipientUserId: 'other-user',
-        conversationId: CONV_ID,
-        messagePreview: 'Test!',
-      })
-    );
-  });
-
-  it('returns 500 on error', async () => {
-    const { fastify, ns, reply } = setup();
-    const route = getRoute(fastify, 'POST', 'test/create');
-    ns.createMessageNotification.mockRejectedValue(new Error('Service error'));
-
-    const req = makeRequest({ body: {} });
-    await route.handler(req, reply);
-
-    expect(mockSendInternalError).toHaveBeenCalledWith(reply, expect.any(String));
+  it('no longer registers POST /notifications/test/create', () => {
+    const { fastify } = setup();
+    expect(() => getRoute(fastify, 'POST', 'test/create')).toThrow();
   });
 });
 

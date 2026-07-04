@@ -20,7 +20,13 @@ struct CallEffectsOverlay: View {
     @Binding var isExpanded: Bool
     let isVideoEnabled: Bool
     @State private var activePanel: EffectsPanelType?
-    @ObservedObject private var callManager = CallManager.shared
+    // Received from CallView, NOT instantiated here (`= CallManager.shared`
+    // would re-create the @ObservedObject subscription on every parent body
+    // re-evaluation — CallView re-evaluates often: pulse animation,
+    // showEffectsToolbar toggle, the control-bar auto-hide `.task(id:)`.
+    // CallView and IncomingCallView were already fixed for this same reason;
+    // this overlay was added afterwards and missed the same treatment.
+    @ObservedObject var callManager: CallManager
 
     var body: some View {
         Group {

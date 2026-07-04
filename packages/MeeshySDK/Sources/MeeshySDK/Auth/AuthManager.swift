@@ -396,6 +396,13 @@ public final class AuthManager: ObservableObject, AuthManaging {
         PushNotificationManager.shared.resetSession()
         await BlockService.shared.reset()
         StoryService.shared.reset()
+        // E9 — confidentialité multi-compte : le brouillon de story (DB GRDB
+        // dédiée + meeshy_draft_media/) et la queue de publication persistée
+        // (items + copies médias) appartiennent au compte sortant. Sans ces
+        // purges, le compte suivant retrouvait le draft du précédent ET le
+        // drain aurait PUBLIÉ ses stories en attente sous la mauvaise session.
+        StoryDraftStore.shared.clear()
+        await StoryPublishQueue.shared.clearAll()
         await ConversationStore.shared.reset()
         UserPreferencesManager.shared.resetSession()
         FriendshipCache.shared.clear()

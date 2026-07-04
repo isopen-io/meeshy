@@ -61,6 +61,11 @@ struct CallWaitingBannerView: View {
                             .foregroundStyle(.white)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
+                            // HIG 44x44pt minimum tap target (audit 2026-07-03):
+                            // the capsule's own padding alone yields a ~32-36pt
+                            // hit height, undersized for a ringing banner where a
+                            // mis-tap answers/rejects a live incoming call.
+                            .frame(minHeight: 44)
                             .background(MeeshyColors.error, in: Capsule())
                     }
                     .accessibilityLabel(String(localized: "call.waiting.reject.a11y", defaultValue: "Refuser l'appel de \(callerName)", bundle: .main))
@@ -74,6 +79,7 @@ struct CallWaitingBannerView: View {
                             .foregroundStyle(.white)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
+                            .frame(minHeight: 44)
                             .background(MeeshyColors.success, in: Capsule())
                     }
                     .accessibilityLabel(String(localized: "call.waiting.answer.a11y", defaultValue: "Raccrocher et repondre a \(callerName)", bundle: .main))

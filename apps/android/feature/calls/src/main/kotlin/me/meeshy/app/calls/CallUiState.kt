@@ -3,6 +3,7 @@ package me.meeshy.app.calls
 import me.meeshy.sdk.model.call.CallDuration
 import me.meeshy.sdk.model.call.CallEndReason
 import me.meeshy.sdk.model.call.CallState
+import me.meeshy.sdk.model.call.CallWaitingState
 import me.meeshy.sdk.model.call.ConnectionQuality
 
 /**
@@ -69,6 +70,16 @@ data class CallConfig(
 }
 
 /**
+ * What a call-waiting banner renders: a *second* incoming call arrived while this
+ * call is active. Presence of this on [CallUiState.waitingBanner] is the sole
+ * trigger for the banner surface; `null` = no second call pending.
+ */
+data class WaitingBannerUi(
+    val callerName: String,
+    val isVideo: Boolean,
+)
+
+/**
  * The single immutable snapshot the call screen renders. Every field is derived
  * — the screen stays pure glue and makes no decisions of its own.
  */
@@ -95,6 +106,12 @@ data class CallUiState(
      * hidden). Surfaced only for the connected/reconnecting phases.
      */
     val connectionQuality: ConnectionQuality? = null,
+    /**
+     * The call-waiting banner for a *second* incoming call that arrived while this
+     * one is active — `null` when none is pending. Rendered as a top overlay
+     * independent of [status]; the user may reject it or end-this-and-answer it.
+     */
+    val waitingBanner: WaitingBannerUi? = null,
 ) {
     /** Accept / decline are only offered for an incoming, still-ringing call. */
     val showAnswerControls: Boolean
@@ -142,6 +159,7 @@ object CallPresenter {
         media: CallMedia,
         elapsedSeconds: Long = 0,
         connectionQuality: ConnectionQuality? = null,
+        waiting: CallWaitingState = CallWaitingState.EMPTY,
     ): CallUiState {
         val status = statusOf(state)
         return CallUiState(
@@ -154,6 +172,7 @@ object CallPresenter {
             reconnectAttempt = (state as? CallState.Reconnecting)?.attempt ?: 0,
             durationLabel = durationLabelFor(status, elapsedSeconds),
             connectionQuality = connectionQualityFor(status, connectionQuality),
+            waitingBanner = waiting.pending?.let { WaitingBannerUi(it.callerName, it.isVideo) },
         )
     }
 

@@ -83,7 +83,11 @@ struct FloatingCallPillView: View {
             controlButtons
         }
         .padding(.horizontal, 16)
-        .frame(height: pillHeight)
+        // minHeight (not an exact height): userInfoSection stacks two
+        // Dynamic-Type-scalable Text lines that can exceed pillHeight at
+        // accessibility text sizes (AX1+) — an exact frame would force-clip
+        // the name/status instead of letting the pill grow to fit.
+        .frame(minHeight: pillHeight)
         // iOS 26 Liquid Glass capsule surface (SDK Compatibility wrapper owns the
         // gating + the .ultraThinMaterial fallback). The small inner controls stay
         // as vibrancy fills ON the glass — Apple HIG: don't nest glass in glass.
@@ -200,6 +204,7 @@ struct FloatingCallPillView: View {
         .accessibilityLabel(callManager.isMuted
             ? String(localized: "call.pill.unmute", defaultValue: "Réactiver le micro")
             : String(localized: "call.pill.mute", defaultValue: "Couper le micro"))
+        .callToggleAccessibility(isToggle: true, isActive: callManager.isMuted)
     }
 
     private var speakerButton: some View {
@@ -220,6 +225,7 @@ struct FloatingCallPillView: View {
         .accessibilityLabel(callManager.isSpeaker
             ? String(localized: "call.pill.speaker.off", defaultValue: "Désactiver le haut-parleur")
             : String(localized: "call.pill.speaker.on", defaultValue: "Activer le haut-parleur"))
+        .callToggleAccessibility(isToggle: true, isActive: callManager.isSpeaker)
     }
 
     private var expandButton: some View {
@@ -237,6 +243,7 @@ struct FloatingCallPillView: View {
         }
         .pressable()
         .accessibilityLabel(String(localized: "call.pill.expand", defaultValue: "Agrandir l'appel"))
+        .accessibilityHint(String(localized: "call.pill.expand.hint", defaultValue: "Revient à l'affichage plein écran de l'appel"))
     }
 
     private var hangupButton: some View {
@@ -261,6 +268,7 @@ struct FloatingCallPillView: View {
         }
         .pressable()
         .accessibilityLabel(String(localized: "call.pill.hangup", defaultValue: "Raccrocher"))
+        .accessibilityHint(String(localized: "call.end.hint", defaultValue: "Termine l'appel en cours", bundle: .main))
     }
 
     // MARK: - Actions

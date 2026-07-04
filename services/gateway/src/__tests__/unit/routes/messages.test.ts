@@ -143,6 +143,7 @@ const mockMessage = {
   conversation: {
     id: CONV_ID,
     createdAt: new Date(),
+    lastMessageAt: new Date('2026-07-01T00:00:00Z'),
     participants: [{ userId: USER_ID, role: 'member' }],
   },
   attachments: [],
@@ -183,6 +184,7 @@ async function buildApp(): Promise<FastifyInstance> {
     },
     conversation: {
       update: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
   });
 
@@ -316,6 +318,36 @@ describe('DELETE /messages/:messageId', () => {
     (app as any).prisma.message.findFirst.mockRejectedValueOnce(new Error('DB'));
     const res = await app.inject({ method: 'DELETE', url: '/messages/' + MSG_ID });
     expect(res.statusCode).toBe(500);
+  });
+
+  it('recomputes lastMessageAt via an optimistic-concurrency updateMany guarded on the pre-delete value', async () => {
+    const lastNonDeletedAt = new Date('2026-07-02T00:00:00Z');
+    (app as any).prisma.message.findFirst
+      .mockResolvedValueOnce(mockMessage)
+      .mockResolvedValueOnce({ createdAt: lastNonDeletedAt });
+
+    const res = await app.inject({ method: 'DELETE', url: '/messages/' + MSG_ID });
+
+    expect(res.statusCode).toBe(200);
+    expect((app as any).prisma.conversation.update).not.toHaveBeenCalled();
+    expect((app as any).prisma.conversation.updateMany).toHaveBeenCalledWith({
+      where: { id: CONV_ID, lastMessageAt: mockMessage.conversation.lastMessageAt },
+      data: { lastMessageAt: lastNonDeletedAt },
+    });
+  });
+
+  it('falls back to conversation.createdAt when every message in the conversation is deleted', async () => {
+    (app as any).prisma.message.findFirst
+      .mockResolvedValueOnce(mockMessage)
+      .mockResolvedValueOnce(null);
+
+    const res = await app.inject({ method: 'DELETE', url: '/messages/' + MSG_ID });
+
+    expect(res.statusCode).toBe(200);
+    expect((app as any).prisma.conversation.updateMany).toHaveBeenCalledWith({
+      where: { id: CONV_ID, lastMessageAt: mockMessage.conversation.lastMessageAt },
+      data: { lastMessageAt: mockMessage.conversation.createdAt },
+    });
   });
 });
 

@@ -233,6 +233,7 @@ function makePrisma(overrides: Record<string, any> = {}) {
     },
     callParticipant: {
       findMany: jest.fn<any>().mockResolvedValue([]),
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
     },
     $transaction: jest.fn<any>().mockImplementation(async (fn: Function) => fn({
       callParticipant: {
@@ -692,6 +693,69 @@ describe('CallEventsHandler', () => {
       io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
 
       await expect(socket._trigger('call:join', validData)).resolves.not.toThrow();
+    });
+
+    // Multi-device socketless : le `call:already-answered` (socket) ne peut
+    // pas atteindre un device secondaire réveillé par push VoIP dont le
+    // WebSocket n'est jamais monté — il sonnerait jusqu'au timeout alors que
+    // l'appel a été décroché ailleurs. Miroir du call_cancel : une push APNs
+    // background `call_answered_elsewhere` part vers les devices du joiner
+    // (le device qui a décroché l'ignore par garde FSM côté client).
+    describe('call_answered_elsewhere background push on answer join', () => {
+      const answerSetup = (sessionOverrides: Record<string, any>) => {
+        const participant = makeParticipant();
+        const callSession = makeCallSession({ participants: [participant], ...sessionOverrides });
+        mockCallServiceJoinCall.mockResolvedValue({ callSession, iceServers: [] });
+        const ctx = setupWithSocket();
+        ctx.io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
+        const pushService = { sendToUser: jest.fn<any>().mockResolvedValue([]) };
+        ctx.handler.setPushNotificationService(pushService as any);
+        return { ...ctx, pushService };
+      };
+
+      it('callee answer join (status connecting) → silent call_answered_elsewhere push to the joiner devices', async () => {
+        const { socket, pushService } = answerSetup({ initiatorId: 'caller-user', status: 'connecting' });
+
+        await socket._trigger('call:join', validData, jest.fn());
+
+        expect(pushService.sendToUser).toHaveBeenCalledWith(
+          expect.objectContaining({
+            userId: USER_ID,
+            types: ['apns'],
+            platforms: ['ios'],
+            payload: expect.objectContaining({
+              silent: true,
+              data: expect.objectContaining({ type: 'call_answered_elsewhere', callId: CALL_ID }),
+            }),
+          })
+        );
+      });
+
+      it('initiator join never sends the push (their other devices are not ringing)', async () => {
+        const { socket, pushService } = answerSetup({ initiatorId: USER_ID, status: 'connecting' });
+
+        await socket._trigger('call:join', validData, jest.fn());
+
+        expect(pushService.sendToUser).not.toHaveBeenCalled();
+      });
+
+      it('rejoin of an active call never sends the push (not an answer)', async () => {
+        const { socket, pushService } = answerSetup({ initiatorId: 'caller-user', status: 'active' });
+
+        await socket._trigger('call:join', validData, jest.fn());
+
+        expect(pushService.sendToUser).not.toHaveBeenCalled();
+      });
+
+      it('push failure never breaks the join (ack still success)', async () => {
+        const { socket, pushService } = answerSetup({ initiatorId: 'caller-user', status: 'connecting' });
+        pushService.sendToUser.mockRejectedValue(new Error('APNS down'));
+
+        const ack = jest.fn();
+        await socket._trigger('call:join', validData, ack);
+
+        expect(ack).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+      });
     });
   });
 
@@ -1248,6 +1312,91 @@ describe('CallEventsHandler', () => {
       expect(ack).toHaveBeenCalledWith({ success: false });
       expect(socket.emit).toHaveBeenCalledWith('call:error', expect.any(Object));
     });
+
+    // Durcissement sonnerie fantôme (app suspendue) : quand un appel se
+    // termine SANS avoir été décroché (missed/rejected), les membres qui
+    // n'ont jamais rejoint la call room ont potentiellement CallKit qui
+    // sonne via la push VoIP initiale ET un socket jamais monté (réseau
+    // pauvre) — le fanout call:ended ne les atteint pas. On leur envoie une
+    // push APNs background `call_cancel` (JAMAIS VoIP : chaque push VoIP
+    // exige un reportNewIncomingCall). Best-effort, silencieuse, iOS only.
+    describe('call_cancel background push to never-joined members on pre-answer termination', () => {
+      const cancelSetup = (endReason: string) => {
+        const endedSession = makeCallSession({
+          status: endReason === 'completed' ? 'ended' : 'missed',
+          endReason,
+          duration: 0,
+        });
+        mockCallServiceEndCall.mockResolvedValue(endedSession);
+        const ctx = setupWithSocket({
+          participant: {
+            findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }),
+            findMany: jest.fn<any>().mockResolvedValue([
+              { userId: USER_ID },              // endedBy (the caller)
+              { userId: 'ringing-callee-id' },  // never joined — target
+              { userId: 'joined-member-id' },   // joined the call — not a target
+            ]),
+          },
+          callParticipant: {
+            findMany: jest.fn<any>().mockResolvedValue([
+              { participant: { userId: USER_ID } },
+              { participant: { userId: 'joined-member-id' } },
+            ]),
+          },
+        });
+        ctx.io.in.mockReturnValue({ fetchSockets: jest.fn<any>().mockResolvedValue([]) });
+        const pushService = { sendToUser: jest.fn<any>().mockResolvedValue([]) };
+        ctx.handler.setPushNotificationService(pushService as any);
+        return { ...ctx, pushService };
+      };
+
+      it('sends a silent call_cancel push to never-joined members only (not endedBy, not joined)', async () => {
+        const { socket, pushService } = cancelSetup('missed');
+
+        await socket._trigger('call:end', validData, jest.fn());
+
+        expect(pushService.sendToUser).toHaveBeenCalledTimes(1);
+        expect(pushService.sendToUser).toHaveBeenCalledWith(
+          expect.objectContaining({
+            userId: 'ringing-callee-id',
+            types: ['apns'],
+            platforms: ['ios'],
+            payload: expect.objectContaining({
+              silent: true,
+              data: expect.objectContaining({ type: 'call_cancel', callId: CALL_ID }),
+            }),
+          })
+        );
+      });
+
+      it('sends the cancel push on rejected (other multi-device sockets may still ring)', async () => {
+        const { socket, pushService } = cancelSetup('rejected');
+
+        await socket._trigger('call:end', validData, jest.fn());
+
+        expect(pushService.sendToUser).toHaveBeenCalledWith(
+          expect.objectContaining({ userId: 'ringing-callee-id' })
+        );
+      });
+
+      it('does NOT send any cancel push when the call was answered (completed)', async () => {
+        const { socket, pushService } = cancelSetup('completed');
+
+        await socket._trigger('call:end', validData, jest.fn());
+
+        expect(pushService.sendToUser).not.toHaveBeenCalled();
+      });
+
+      it('cancel-push failure never breaks the terminal path (ack still true)', async () => {
+        const { socket, pushService } = cancelSetup('missed');
+        pushService.sendToUser.mockRejectedValue(new Error('APNS down'));
+
+        const ack = jest.fn();
+        await socket._trigger('call:end', validData, ack);
+
+        expect(ack).toHaveBeenCalledWith({ success: true });
+      });
+    });
   });
 
   // ── call:heartbeat ───────────────────────────────────────────────────────
@@ -1286,7 +1435,28 @@ describe('CallEventsHandler', () => {
       expect(mockCallServicePersistCallStats).not.toHaveBeenCalled();
     });
 
-    it('persists stats and emits quality alert on high RTT', async () => {
+    it('persists stats and emits quality alert on SUSTAINED high RTT (2nd consecutive report), reporter excluded', async () => {
+      mockCallServicePersistCallStats.mockResolvedValue(undefined);
+      const { socket, io } = setupWithSocket();
+      const degraded = {
+        callId: CALL_ID,
+        stats: { rtt: 500, packetLoss: 1, bytesSent: 1000, bytesReceived: 2000, level: 'good' },
+      };
+
+      await socket._trigger('call:quality-report', degraded);
+      await socket._trigger('call:quality-report', degraded);
+
+      expect(mockCallServicePersistCallStats).toHaveBeenCalled();
+      // The alert goes through socket.to (room minus the reporter) — the
+      // degraded participant must never see "your contact has a bad
+      // connection" about its OWN link. io.to would include it.
+      const ioCalls = (io.to as jest.Mock<any>).mock.calls;
+      expect(ioCalls.some((c: any[]) => c[0] === `call:${CALL_ID}`)).toBe(false);
+      const socketToCalls = (socket.to as jest.Mock<any>).mock.calls;
+      expect(socketToCalls.some((c: any[]) => c[0] === `call:${CALL_ID}`)).toBe(true);
+    });
+
+    it('does NOT alert on a single isolated degraded report (sustained gate)', async () => {
       mockCallServicePersistCallStats.mockResolvedValue(undefined);
       const { socket, io } = setupWithSocket();
 
@@ -1295,21 +1465,22 @@ describe('CallEventsHandler', () => {
         stats: { rtt: 500, packetLoss: 1, bytesSent: 1000, bytesReceived: 2000, level: 'good' },
       });
 
-      expect(mockCallServicePersistCallStats).toHaveBeenCalled();
-      const ioCalls = (io.to as jest.Mock<any>).mock.calls;
-      expect(ioCalls.some((c: any[]) => c[0] === `call:${CALL_ID}`)).toBe(true);
+      expect((io.to as jest.Mock<any>).mock.calls.length).toBe(0);
+      expect((socket.to as jest.Mock<any>).mock.calls.length).toBe(0);
     });
 
-    it('emits quality alert on high packet loss', async () => {
+    it('emits quality alert on sustained high packet loss', async () => {
       mockCallServicePersistCallStats.mockResolvedValue(undefined);
-      const { socket, io } = setupWithSocket();
-
-      await socket._trigger('call:quality-report', {
+      const { socket } = setupWithSocket();
+      const degraded = {
         callId: CALL_ID,
         stats: { rtt: 100, packetLoss: 10, bytesSent: 100, bytesReceived: 100, level: 'poor' },
-      });
+      };
 
-      const roomEmit = (io.to as jest.Mock<any>).mock.results[0]?.value?.emit as jest.Mock<any>;
+      await socket._trigger('call:quality-report', degraded);
+      await socket._trigger('call:quality-report', degraded);
+
+      const roomEmit = (socket.to as jest.Mock<any>).mock.results[0]?.value?.emit as jest.Mock<any>;
       expect(roomEmit).toHaveBeenCalledWith('call:quality-alert', expect.objectContaining({ metric: 'packetLoss' }));
     });
 
@@ -1327,16 +1498,18 @@ describe('CallEventsHandler', () => {
       expect(ioCalls.length).toBe(0);
     });
 
-    it('emits rtt alert when both RTT and packet loss exceed thresholds (RTT wins)', async () => {
+    it('emits rtt alert when both RTT and packet loss exceed thresholds (RTT wins, sustained)', async () => {
       mockCallServicePersistCallStats.mockResolvedValue(undefined);
-      const { socket, io } = setupWithSocket();
-
-      await socket._trigger('call:quality-report', {
+      const { socket } = setupWithSocket();
+      const degraded = {
         callId: CALL_ID,
         stats: { rtt: 450, packetLoss: 8, bytesSent: 500, bytesReceived: 500, level: 'poor' },
-      });
+      };
 
-      const roomEmit = (io.to as jest.Mock<any>).mock.results[0]?.value?.emit as jest.Mock<any>;
+      await socket._trigger('call:quality-report', degraded);
+      await socket._trigger('call:quality-report', degraded);
+
+      const roomEmit = (socket.to as jest.Mock<any>).mock.results[0]?.value?.emit as jest.Mock<any>;
       expect(roomEmit).toHaveBeenCalledWith(
         'call:quality-alert',
         expect.objectContaining({ metric: 'rtt', value: 450, threshold: 300 })
@@ -3525,6 +3698,34 @@ describe('CallEventsHandler', () => {
       // analytics is log-only — no response emitted back to client
       expect(socket.emit).not.toHaveBeenCalled();
       expect(socket.to).not.toHaveBeenCalled();
+    });
+
+    // La télémétrie de fin d'appel n'était que loggée : impossible de suivre
+    // la fiabilité (reconnectionCount, qualityDistribution, negotiationTimeMs)
+    // sur les appels réels. Persistée par PARTICIPANT (une row CallParticipant
+    // chacun — deux emitters simultanés en fin d'appel n'écrasent rien,
+    // contrairement à un champ unique sur CallSession).
+    it('persists the validated payload on the emitter CallParticipant row', async () => {
+      const { socket, prisma } = setupWithSocket();
+
+      await socket._trigger('call:analytics', validAnalyticsData);
+
+      expect((prisma as any).callParticipant.updateMany).toHaveBeenCalledWith({
+        where: { callSessionId: CALL_ID, participantId: PARTICIPANT_ID },
+        data: { analytics: expect.objectContaining({ setupTimeMs: 1250, platform: 'ios' }) },
+      });
+    });
+
+    it('a persistence failure stays silent (fire-and-forget, no emit, no throw)', async () => {
+      const { socket } = setupWithSocket({
+        callParticipant: {
+          findMany: jest.fn<any>().mockResolvedValue([]),
+          updateMany: jest.fn<any>().mockRejectedValue(new Error('DB down')),
+        },
+      });
+
+      await expect(socket._trigger('call:analytics', validAnalyticsData)).resolves.not.toThrow();
+      expect(socket.emit).not.toHaveBeenCalled();
     });
   });
 });

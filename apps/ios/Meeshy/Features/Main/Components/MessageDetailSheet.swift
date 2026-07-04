@@ -1488,8 +1488,9 @@ struct MessageDetailSheet: View {
     private func emptyStateView(icon: String, text: String, accent: Color) -> some View {
         VStack(spacing: 8) {
             Image(systemName: icon)
-                .font(.system(size: 28, weight: .light))
+                .font(MeeshyFont.relative(28, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
+                .accessibilityHidden(true)
             Text(text)
                 .font(.footnote.weight(.medium))
                 .foregroundColor(theme.textMuted)
@@ -1501,8 +1502,9 @@ struct MessageDetailSheet: View {
     private func retryableErrorView(accent: Color) -> some View {
         VStack(spacing: 12) {
             Image(systemName: "wifi.slash")
-                .font(.system(size: 28, weight: .light))
+                .font(MeeshyFont.relative(28, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
+                .accessibilityHidden(true)
             Text(readStatusError ?? String(localized: "message-detail.load-error", defaultValue: "Impossible de charger les donnees", bundle: .main))
                 .font(.footnote.weight(.medium))
                 .foregroundColor(theme.textMuted)
@@ -1658,8 +1660,10 @@ struct MessageDetailSheet: View {
             Spacer().frame(height: 20)
 
             Image(systemName: "trash.fill")
+                // doctrine 84i — glyphe hero décoratif ≥40pt (le titre porte le sens)
                 .font(.system(size: 48))
                 .foregroundColor(MeeshyColors.error)
+                .accessibilityHidden(true)
                 .scaleEffect(deleteIconScale)
                 .onAppear {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
@@ -2158,7 +2162,8 @@ struct MessageDetailSheet: View {
             // Empty state with transcribe button
             VStack(spacing: 12) {
                 Image(systemName: "text.word.spacing")
-                    .font(.system(size: 28, weight: .light))
+                    .font(MeeshyFont.relative(28, weight: .light))
+                    .accessibilityHidden(true)
                     .foregroundColor(theme.textMuted.opacity(0.4))
 
                 Text(String(localized: "message-detail.transcription.empty", defaultValue: "Aucune transcription", bundle: .main))

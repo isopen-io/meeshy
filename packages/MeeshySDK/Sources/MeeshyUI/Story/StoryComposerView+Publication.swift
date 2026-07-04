@@ -31,6 +31,9 @@ extension StoryComposerView {
             let snapshot = await snapshotAllSlides()
             guard !Task.isCancelled else { return }
             clearAllDrafts()
+            // E1 — un debounce d'autosave en vol ne doit pas re-persister le
+            // brouillon d'une story qui vient de partir en publication.
+            draftAutosaveSuspended = true
             HapticFeedback.success()
             let mode = PostVisibility(rawValue: visibility) ?? .public
             let ids = mode.requiresUserSelection ? visibilityUserIds : []
@@ -165,6 +168,9 @@ extension StoryComposerView {
         publishTask?.cancel()
         publishTask = nil
         clearAllDrafts()
+        // E1 — le « Quitter » jette le brouillon : suspendre l'autosave pour
+        // qu'un debounce en vol ne le re-persiste pas pendant le démontage.
+        draftAutosaveSuspended = true
         onDismiss()
     }
 

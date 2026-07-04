@@ -99,6 +99,16 @@ function makePrisma(overrides: { hasParticipant?: boolean } = {}) {
   } as unknown as PrismaClient;
 }
 
+function makeCallServiceWithParticipant(participantId: string | null) {
+  return {
+    getCallSession: jest.fn<any>().mockResolvedValue({
+      participants: participantId
+        ? [{ participantId, participant: { userId: USER_ID }, leftAt: null }]
+        : [],
+    }),
+  } as any;
+}
+
 function makeSocket(rooms: string[] = []) {
   const handlers: Record<string, (...args: any[]) => any> = {};
   const socket = {
@@ -176,7 +186,7 @@ describe('CallEventsHandler — call:analytics / call:screen-capture-detected ha
       const prisma = makePrisma();
       const { socket, io, handlers } = makeSocket([`call:${VALID_CALL_ID}`]);
 
-      const handler = new CallEventsHandler(prisma);
+      const handler = new CallEventsHandler(prisma, makeCallServiceWithParticipant('participant-1'));
       handler.setupCallEvents(socket as any, io as any, () => USER_ID);
 
       await handlers[CALL_EVENTS.SCREEN_CAPTURE_DETECTED]({
@@ -206,6 +216,57 @@ describe('CallEventsHandler — call:analytics / call:screen-capture-detected ha
       await handlers[CALL_EVENTS.SCREEN_CAPTURE_DETECTED]({
         callId: VALID_CALL_ID,
         participantId: 'participant-1',
+        isCapturing: true,
+      });
+
+      expect(socket.to).not.toHaveBeenCalled();
+    });
+
+    // Security fix 2026-07-03: unlike call:backgrounded/call:foregrounded
+    // (which resolve the caller's own participantId server-side), this
+    // handler used to trust the client-supplied participantId verbatim —
+    // letting a participant impersonate the OTHER participant in the room
+    // and forge/suppress their screen-capture alert.
+    it('relays the caller-resolved participantId, ignoring a spoofed client-supplied one', async () => {
+      const emitSpy = jest.fn();
+      const prisma = makePrisma();
+      const { socket, io, handlers } = makeSocket([`call:${VALID_CALL_ID}`]);
+      socket.to = jest.fn().mockReturnValue({ emit: emitSpy });
+
+      const mockCallService = {
+        getCallSession: jest.fn<any>().mockResolvedValue({
+          participants: [
+            { participantId: 'participant-mine', participant: { userId: USER_ID }, leftAt: null },
+            { participantId: 'participant-victim', participant: { userId: 'victim-user' }, leftAt: null },
+          ],
+        }),
+      };
+
+      const handler = new CallEventsHandler(prisma, mockCallService as any);
+      handler.setupCallEvents(socket as any, io as any, () => USER_ID);
+
+      await handlers[CALL_EVENTS.SCREEN_CAPTURE_DETECTED]({
+        callId: VALID_CALL_ID,
+        participantId: 'participant-victim',
+        isCapturing: true,
+      });
+
+      expect(emitSpy).toHaveBeenCalledWith(
+        CALL_EVENTS.SCREEN_CAPTURE_ALERT,
+        expect.objectContaining({ participantId: 'participant-mine' })
+      );
+    });
+
+    it('drops the event when the caller has no active participant record in the call', async () => {
+      const prisma = makePrisma();
+      const { socket, io, handlers } = makeSocket([`call:${VALID_CALL_ID}`]);
+
+      const handler = new CallEventsHandler(prisma, makeCallServiceWithParticipant(null));
+      handler.setupCallEvents(socket as any, io as any, () => USER_ID);
+
+      await handlers[CALL_EVENTS.SCREEN_CAPTURE_DETECTED]({
+        callId: VALID_CALL_ID,
+        participantId: 'participant-victim',
         isCapturing: true,
       });
 

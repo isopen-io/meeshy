@@ -14,6 +14,100 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 132i, 2026-07-03)** — piste iOS indépendante (suffixe `i`).
+> - **132i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `6de9912e`)** :
+>   Dynamic Type de `StatusBubbleController` → View co-localisée `MoodReplyConfirmationOverlay` (pop-up
+>   « Répondre à cette humeur ? »). **4/4** `.font(.system(size:))` → `MeeshyFont.relative` (titre 16 semibold,
+>   résumé 14, boutons Quitter 15 medium / Répondre 15 semibold) → libellés scalent sous Dynamic Type.
+>   **0 gel** (aucun cadre fixe). A11y déjà en place (`.accessibilityElement(children:.contain)`, boutons
+>   texte). Contrôleur singleton + ViewModifier non touchés. 1 fichier, 0 logique, 0 test/clé i18n neuve.
+>   0 PR iOS ouverte → 0 contention. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `StatusBubbleController` (`MoodReplyConfirmationOverlay`) Dynamic Type SOLDÉ** : ne plus reprendre.
+> - **Base de départ 133i : `main` HEAD**. Reste `StoryViewerView+Content` (⚠️ i18n + `@State private`
+>   cross-file). Sinon : `ReelRepostEmbedCell` (3), `AchievementBadgeView` (3), `SyncPill` (3), ou passe state-of-the-art.
+>
+> **POINTEUR AUTORITAIRE iOS (mis à jour 131i, 2026-07-03)** — piste iOS indépendante (suffixe `i`).
+> - **131i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `eb74172e`)** :
+>   Dynamic Type + a11y de `MessageDetailSheet` (glyphes hero d'états vides/erreur/confirmation). **3/4**
+>   `.font(.system(size:))` → `MeeshyFont.relative(28, weight: .light)` (empty-state générique, `wifi.slash`,
+>   `text.word.spacing` — < 40pt, scalent avec le texte). **1 figé** commenté **84i** : `trash.fill` (48,
+>   animé, hero décoratif ≥40pt). **4 `.accessibilityHidden(true)`** sur les hero décoratifs (le texte
+>   adjacent porte le sens) → a11y améliorée. 1 fichier, 0 logique, 0 test/clé i18n neuve. 0 PR iOS ouverte
+>   → 0 contention. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `MessageDetailSheet` glyphes hero SOLDÉ** : ne plus reprendre le `trash.fill` figé (84i).
+> - **Note i18n** : valeurs FR littérales de `viewsSentContent`/`deliveryBadge` (« Distribue », « Envoye »…)
+>   → gap **pré-existant**, passe i18n dédiée.
+> - **Base de départ 132i : `main` HEAD**. Reste `StoryViewerView+Content` (⚠️ i18n + `@State private`
+>   cross-file). Sinon : `StatusBubbleController` (4), `ReelRepostEmbedCell`/`AchievementBadgeView`/`SyncPill` (3), ou passe state-of-the-art.
+>
+> **POINTEUR AUTORITAIRE iOS (mis à jour 130i, 2026-07-03)** — piste iOS indépendante (suffixe `i`).
+> - **130i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `1061dcb0`)** :
+>   Dynamic Type de `ReelFeedCard` (carte Réel plein-cadre du feed). **4/4** `.font(.system(size:))` →
+>   `MeeshyFont.relative` : badge logo Réel (15 bold, `.padding`-driven), métrique inline reach (10 semibold),
+>   glyphe d'action (18) + overlay de bordure accent (18, même taille → aligné). Tous **scalent avec le texte
+>   adjacent** (méta `.caption2`, compteurs `.footnote`) sous Dynamic Type. **0 gel** (aucun cadre fixe).
+>   A11y déjà en place (badge/like/reelButton labellisés, metricInline combiné). 1 fichier, 0 logique,
+>   0 test/clé i18n neuve. 0 PR iOS ouverte → 0 contention. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `ReelFeedCard` Dynamic Type SOLDÉ** : ne plus reprendre (4 glyphes → `relative`).
+> - **Base de départ 131i : `main` HEAD**. Reste `StoryViewerView+Content` (⚠️ i18n + `@State private`
+>   cross-file). Sinon : `MessageDetailSheet` (4), `StatusBubbleController` (4), `ReelRepostEmbedCell`/
+>   `AchievementBadgeView`/`SyncPill` (3), ou passe state-of-the-art.
+>
+> **POINTEUR AUTORITAIRE iOS (mis à jour 129i, 2026-07-03)** — piste iOS indépendante (suffixe `i`).
+> - **129i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `806fc972`)** :
+>   Dynamic Type + a11y de `CameraView` (écran de capture photo/vidéo). **2/5** `.font(.system(size:))` →
+>   `MeeshyFont.relative` (libellé onglet de mode « Photo »/« Vidéo » ; chrono d'enregistrement monospaced).
+>   **3 figés** commentés **82i** : `xmark` fermer + `flashIcon` (cercles tap 44×44), `camera.rotate.fill`
+>   switch (cercle tap 50×50). Les 3 boutons icône portent déjà leur `.accessibilityLabel` (flash à état
+>   dynamique) → a11y intacte. 1 fichier, 0 logique, 0 test/clé i18n neuve. 0 PR iOS ouverte → 0 contention.
+>   Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `CameraView` Dynamic Type + a11y SOLDÉ** : ne plus reprendre les 3 glyphes figés (cadres tap fixes).
+> - **Note i18n** : « Photo »/« Vidéo » de `CameraView` restent des littéraux (gap **pré-existant**, hors
+>   périmètre d'un sweep font/a11y) — à traiter en passe i18n dédiée.
+> - **Base de départ 130i : `main` HEAD**. Reste `StoryViewerView+Content` (⚠️ i18n + `@State private`
+>   cross-file). Sinon : `ReelFeedCard` (4), `MessageDetailSheet` (4), `StatusBubbleController` (4), ou passe state-of-the-art.
+>
+> **POINTEUR AUTORITAIRE iOS (mis à jour 128i, 2026-07-03)** — piste iOS indépendante (suffixe `i`).
+> - **128i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `14f80c20`)** :
+>   Dynamic Type de `FeedPostCard` (carte de publication du feed — barre d'actions + menu « … »).
+>   **9/9** `.font(.system(size:))` → `MeeshyFont.relative` : ellipsis (16), like `heart.fill`+bordure (18),
+>   commenter `bubble.right` (17), repartager+bordure (17), enregistrer+bordure (17), partager (17) → les
+>   glyphes d'action **scalent avec leurs compteurs** (`.footnote`) sous Dynamic Type. **0 gel** : icônes
+>   inline non bornées (HStack+padding, pas de `.frame` fixe) ; overlays de bordure migrés à la même taille
+>   → alignés. A11y déjà en place (labels/values/hints sur chaque bouton). 1 fichier, 0 logique, 0 test/clé
+>   i18n neuve. 2 PR iOS ouvertes (#1396 push-Android, #1395 _calls_ — disjointes) → 0 contention. PR à venir.
+> - **⚠️ `FeedPostCard` Dynamic Type SOLDÉ** : ne plus reprendre (9 glyphes d'action → `relative`).
+> - **Base de départ 129i : `main` HEAD**. Reste `StoryViewerView+Content` (⚠️ i18n + `@State private`
+>   cross-file). Sinon : `CameraView` (5), `ReelFeedCard` (4), `MessageDetailSheet` (4), ou passe state-of-the-art.
+>
+> **POINTEUR AUTORITAIRE iOS (mis à jour 127i, 2026-07-03)** — piste iOS indépendante (suffixe `i`).
+> - **127i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `7f187ca8`)** :
+>   Dynamic Type de `BubbleDeliveryCheck` (glyphe unique de statut de distribution des pieds de bulle,
+>   inline avec l'horodatage de la meta-row). **8/8** `.font(.system(size:))` → `MeeshyFont.relative`
+>   (hourglass, 2×clock, slow, checkmark envoyé, échec, 2×checkmark du `doubleCheck`) → les glyphes de
+>   statut **scalent avec le texte** sous Dynamic Type. **0 gel** : indicateurs inline non bornés par un
+>   cadre fixe (le `.frame(width:)` du `doubleCheck` réserve la largeur mais ne rogne pas — pas de
+>   `.clipped()`). Les 7 `.accessibilityLabel` déjà en place. 1 fichier, 0 logique, 0 test/clé i18n neuve.
+>   1 PR iOS ouverte (#1391 _calls_, disjointe) → 0 contention. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `BubbleDeliveryCheck` Dynamic Type SOLDÉ** : ne plus reprendre (8 glyphes de statut → `relative`).
+> - **Base de départ 128i : `main` HEAD**. Reste le gros lot risqué `StoryViewerView+Content` (⚠️ i18n +
+>   piège `@State private` cross-file). Sinon : passe state-of-the-art (hexes inline vs tokens).
+>
+> **POINTEUR AUTORITAIRE iOS (mis à jour 126i, 2026-07-03)** — piste iOS indépendante (suffixe `i`).
+> - **126i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `3fa30792`)** :
+>   Dynamic Type + a11y de `ConversationView+Composer` (bandeaux réponse/édition, previews & tuiles
+>   d'attachments). Lot critique → **édits `.font()`-only, 0 logique, 0 accès `@State`**. **10/22**
+>   `.font(.system(size:))` → `MeeshyFont.relative` (textes des bandeaux + libellé de tuile). **12
+>   figés** : 3 croix (annuler réponse/édition, supprimer) dans cercles fixes 24×24/18×18 (82i) ; 9
+>   glyphes décoratifs (overlays play/eye/mappin/type/fallback) bornés par tuiles fixes 40×40/56×56
+>   (86i). 9 masquages décoratifs + crayon masqué ; croix déjà labellisées. 1 fichier, 0 test/clé i18n
+>   neuve. 0 contention iOS. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `ConversationView+Composer` Dynamic Type + a11y SOLDÉ** : ne plus reprendre les 12 glyphes figés.
+>   **`ConversationMediaGalleryView` déjà soldé** (7 `relative` + 6 figés commentés « doctrine » minuscule) → ne pas reprendre.
+> - **Base de départ 127i : `main` HEAD**. Reste le gros lot risqué `StoryViewerView+Content` (⚠️ i18n +
+>   piège `@State private` cross-file). Sinon : passe state-of-the-art (palette hexes inline vs tokens —
+>   `F8B500`/`9B59B6` dans FeedView, `9933CC` dans ConversationAnimatedBackground —, dark/light, gestes).
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 125i, 2026-07-03)** — piste iOS indépendante (suffixe `i`).
 > - **125i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `e027b523`)** :
 >   Dynamic Type + a11y de `AttachmentLoadingTile` (tuile de chargement d'attachment, carré fixe

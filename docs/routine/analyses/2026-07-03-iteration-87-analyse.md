@@ -1,125 +1,90 @@
 # Iteration 87 — Analyse d'optimisation (2026-07-03)
 
 ## Protocole (démarrage)
-`main` @ `5624aa26` (working tree propre, branche `claude/brave-archimedes-f0k0p1` réalignée sur
-`origin/main`, 0 commit non-mergé). PR ouvertes au démarrage : #1390 (web/realtime — resync feed room +
-typing keepalive), #1389 (iOS composer photothèque), #1388 (iOS a11y Dynamic Type composer). Les trois
-couvrent des surfaces disjointes (web-realtime, iOS-SwiftUI) de mes cibles — cette itération vise
-délibérément des **bugs de correction backend/shared purement vérifiables en jest/vitest**,
-indépendants de ces PR (l'env Linux n'a ni toolchain Swift ni MongoDB live).
+`main` @ `0a64d3b7` (PR #1393 « android/calls WebRTC-plumbing » mergée). Branche de travail
+`claude/brave-archimedes-okvqw1` recréée à neuf depuis `origin/main` (working tree propre,
+aucun commit non-mergé à préserver).
 
-Méthode : fan-out de 3 agents d'exploration en parallèle sur des clusters disjoints (services
-messaging/social, shared utils/validation, routes/handlers gateway). Deux défauts de correction
-indépendants, haute confiance, retenus ; les surfaces routes/handlers gateway auditées se sont
-révélées propres (codebase déjà durci, commentaires `Audit gateway prod` documentant les fixes
-antérieurs).
+PR ouvertes au démarrage : #1394 (gateway `StatusHandler` — enforce membership sur `typing:*`)
+et #1392 (iOS a11y `BubbleDeliveryCheck`) — deux pistes indépendantes gérées par d'autres
+sessions. Cible retenue **hors de ces deux fichiers** (aucun conflit de merge attendu).
 
-## Cible 87-A — `getReels` : curseur dérivé de l'ordre de score, pas de l'ordre chronologique
+## Cible : compléter le fix badge F1 pour Android (FCM `notificationCount`)
 
 ### Current state
-`services/gateway/src/services/PostFeedService.ts`. Le sibling `getFeed` (l.79-151) porte un invariant
-**documenté** : `candidateLimit = limit + 1` — fenêtre chronologique + 1 ligne sonde, *« We
-deliberately do NOT over-fetch then drop: the cursor advances by createdAt, so any candidate we
-fetch-but-drop would be silently skipped (or re-served as a duplicate) on the next page. Ranking
-reorders within the window only, which keeps infinite scroll lossless »* (l.80-84). Le curseur y est
-pris sur le post **chronologiquement le plus ancien** de la fenêtre affichée, **avant** réordonnancement
-par score (l.142-151).
-
-`getReels` (l.389-483) faisait l'**inverse** : `candidatePoolSize = Math.min(limit * 4, 120)` — un pool
-4× sur-dimensionné — scoré **en entier** par `reelAffinityScore`, puis `top = scored.slice(0, limit+1)`
-et `nextCursor = encodeCursor(lastItem.post.createdAt, ...)` où `lastItem` est le **dernier item
-trié par score** (l.470-476).
+Le fix **F1** (`f2ee0d71`, 2026-07-03 — « badge unread embarqué dans le push ») a résolu le
+badge d'icône **gelé app fermée** en injectant le compte unread dans le payload push :
+`NotificationService.sendToUser` calcule `prisma.notification.count({ readAt: null })` et le
+propage via `payload.badge` (+ `data.unreadCount`). Côté transport, `PushNotificationService`
+(le service **live**, appelé par `NotificationService` + `CallEventsHandler`) forwarde
+`payload.badge` :
+- **iOS** (`sendViaFCM`, branche `platform === 'ios'`) → `aps.badge = payload.badge` ✓
+- **APNs natif** (via `apn.Provider`) → `note.badge` ✓
+- **Android** (`sendViaFCM`, branche `platform === 'android'`) → **rien.** Le bloc
+  `message.android.notification` ne pose que `sound` + `channelId`. `payload.badge` est
+  silencieusement ignoré.
 
 ### Problems identified
-La page suivante filtre `createdAt < cursor.createdAt` (l.417). Le curseur pris sur un item à une
-position **arbitraire dans le pool** (déterminée par le score, pas la date) casse le parcours :
-
-Scénario concret : `limit=20` ⇒ pool de 80 réels T80 (récent)…T1 (ancien). Le scoring d'affinité
-sélectionne le top 20. Si le plus mal classé des 20 affichés a été créé à **T60** (un réel récent bien
-noté), `nextCursor=(T60)`. Page 2 filtre `createdAt < T60` ⇒ **les réels T61–T80 non affichés
-(scorés plus bas) sont définitivement sautés** — l'utilisateur ne les voit jamais. À l'inverse si le
-plus mal classé affiché est ancien (T5), page 2 démarre à `< T5` et abandonne ~55 réels T6–T80. Le
-thread de scroll infini est lossy dans les deux sens.
+Sur Android, le badge d'icône du launcher (pour les launchers qui supportent le badging) n'est
+**jamais piloté par le payload push**. C'est exactement la classe de bug que F1 visait — mais F1
+n'a été câblé que pour iOS. App fermée, le badge Android reste figé quel que soit le nombre de
+messages/notifications reçus.
 
 ### Root cause
-Sibling-drift (leçons #40/#42/#45/#50/#55) : `getFeed` a été corrigé pour capturer le curseur sur la
-borne chronologique **avant** le tri par score, mais `getReels` — écrit avec le même moteur de scoring
-— a gardé le pattern « over-fetch → score tout → curseur sur l'item score-trié ». L'invariant lossless
-documenté sur `getFeed` n'avait jamais été propagé à son sibling.
+FCM expose `AndroidNotification.notificationCount` (→ `notification_count`) : « the number of
+items this notification represents, may be displayed as a badge count for launchers that support
+badging ». C'est l'analogue Android de `aps.badge`. La branche `platform === 'android'` de
+`sendViaFCM` ne l'a jamais posé — le champ n'a probablement pas été ajouté à l'époque de l'écriture
+initiale de FCM, et le fix F1 (récent) s'est concentré sur le chemin iOS/widget (`data.unreadCount`
+alimente le miroir App Group, câblé pour toutes plateformes ; mais le badge natif Android manquait).
 
 ### Business impact
-Le thread de découverte Reels (« Pour toi ») est **incomplet** : des réels présents dans le pool de
-retrieval sont invisibles pour le viewer, d'autres re-servis. Régression fonctionnelle directe d'une
-feature sociale à fort engagement.
+Parité de l'expérience « badge unread fidèle app fermée » entre iOS et Android. L'app Android est
+en développement actif (cf. PR #1393 android/calls) → un badge gelé est une régression UX perçue
+directement sur l'écran d'accueil.
 
 ### Technical impact
-`getReels` aligné sur `getFeed` : `candidatePoolSize = limit + 1` (fenêtre chronologique + sonde) ;
-`hasMore = candidates.length > limit` ; `page = slice(0, limit)` ; `nextCursor` sur le
-**chronologiquement plus ancien** de la page affichée, capturé **avant** le tri ; le scoring
-d'affinité ne réordonne QUE l'affichage (`scored.map(s => s.post)`). Aucune signature modifiée. Le
-scoring d'affinité reste actif (réordonne la page) — la valeur de découverte est préservée, la perte
-de données éliminée. `getFeed` inchangé.
+1 ligne conditionnelle dans la branche android de `sendViaFCM`. Zéro nouvelle dépendance, zéro
+changement de signature, zéro impact perf (champ ajouté au message FCM déjà construit).
 
 ### Risk assessment
-FAIBLE. Le changement adopte l'invariant déjà validé en production sur le sibling `getFeed`. Perte
-de comportement : le « meilleur 20 sur 80 par affinité » disparaît au profit des « 20 plus récents
-réordonnés par affinité » — mais ce « meilleur 20 sur 80 » n'était jamais livré losslessly (il
-produisait de la perte de données). Le commentaire d'origine (l.386-387) reconnaissait déjà le
-retrieval chronologique comme fondation. Couverture : 3 régressions neuves + 1 test préexistant
-(qui encodait le pool `limit×4` bogué) recadré sur l'invariant corrigé.
+TRÈS FAIBLE. Ajout conditionnel (`payload.badge !== undefined`) → aucun changement de payload
+quand aucun badge n'est fourni (compatibilité stricte : le test d'égalité exacte existant
+`should include android-specific config` reste vert). `notificationCount: 0` est un entier FCM
+valide (représente « pas de badge »), cohérent avec la sémantique de recale de F1.
 
-## Cible 87-B — `languageCodeSchema` rejette les codes ISO 639-3 supportés
+### Proposed improvements
+Dans `PushNotificationService.sendViaFCM`, branche `platform === 'android'` :
+```ts
+notification: {
+  sound: payload.sound || 'default',
+  channelId: 'meeshy_notifications',
+  ...(payload.badge !== undefined ? { notificationCount: payload.badge } : {}),
+}
+```
 
-### Current state
-`packages/shared/utils/attachment-validators.ts:58-62`. `languageCodeSchema = z.string().min(2).max(16)
-.regex(/^[a-zA-Z]{2}(-[a-zA-Z0-9]+)*$/)`. Consommé par `attachmentTranscriptionSchema.language`
-(l.111), `transcriptionSegmentSchema.language`/`translatedLanguage` (l.96/99), et les **clés** de
-`attachmentTranslationsMapSchema` (l.189-192).
+### Expected benefits
+- Badge d'icône Android piloté par le push → fidèle app fermée (parité iOS).
+- Clôt le résidu Android du fix F1.
 
-### Problems identified
-Le corps `[a-zA-Z]{2}` fige le sous-tag primaire à exactement 2 lettres. Les 5 codes ISO 639-3 à
-3 lettres **officiellement supportés** — `bas` (Basaa), `ksf`, `nnh`, `dua`, `ewo` (langues
-camerounaises, `languages.ts:1035-1118`, `supportsSTT/supportsTranslation: true`, préservés verbatim
-par `language-normalize.ts` comme **forme canonique** *« NE doivent JAMAIS être tronqués »*) — sont
-**rejetés** au trust boundary.
+### Implementation complexity
+TRÈS FAIBLE — 1 spread conditionnel + 3 tests (badge présent, badge 0, badge absent).
 
-Incohérence inter-schémas : `isSupportedLanguage('bas') === true` ⇒ `updateUserProfileSchema
-.systemLanguage` et `CommonSchemas.language` (regex déjà élargi `/^[a-z]{2,3}(-[A-Z]{2})?$/` en
-itération 86-B) **acceptent** `bas`. Un utilisateur peut définir `systemLanguage: 'bas'` et
-s'enregistrer, mais toute transcription/traduction étiquetée `bas` est **rejetée** :
-`parseAttachmentTranscription({ language: 'bas', ... })` ⇒ `INVALID_TRANSCRIPTION` ;
-`parseAttachmentTranslationsMap({ bas: {...} })` ⇒ `INVALID_TRANSLATIONS_MAP`. Contradiction directe
-avec le Prisme Linguistique (support multilingue = cœur produit).
+### Validation criteria
+- `PushNotificationService.test.ts` : 73/73 verts (3 régressions neuves incluses).
+- RED prouvé : sans le fix prod, 2 des 3 nouveaux tests échouent.
+- Suites `[Nn]otification` : 644/644 verts (29 suites).
+- `tsc --noEmit` gateway : 0 erreur.
 
-### Root cause
-Même motif « règle non homogène entre siblings » que l'itération 86-B, sur un **second** schéma de
-langue (`languageCodeSchema` dans `attachment-validators.ts`) que le fix 86-B (`CommonSchemas.language`
-dans `validation.ts`) n'avait pas couvert. Le regex fige la forme 2-lettres 639-1 et ignore les 639-3
-que le reste de la plateforme traite comme canoniques.
+## Note — `FirebaseNotificationService` (dead code parallèle)
+Constaté durant l'analyse : `services/notifications/FirebaseNotificationService.ts` (multicast
+`sendEachForMulticast`, badge hardcodé `1`) n'est **jamais instancié en production** — seul
+`PushNotificationService` est câblé (`MeeshySocketIOManager`, `CallEventsHandler`,
+`NotificationService`). Candidat consolidation/suppression pour une itération dédiée (voir F51).
 
-### Technical impact
-Regex élargi à `/^[a-zA-Z]{2,3}(-[a-zA-Z0-9]+)*$/` — accepte 2 **ou** 3 lettres pour le sous-tag
-primaire + sous-tags BCP-47 optionnels inchangés. `min(2)/max(16)` inchangés (`bas` passe ;
-`bas-Latn` reste dans les bornes). Choix du regex (vs bascule sur `.refine(isSupportedLanguage)`)
-délibéré et cohérent avec 86-B : ne **widen** que l'acceptation (aucun input valide existant cassé),
-conserve `pt-BR`/`zh-Hans`.
-
-### Risk assessment
-FAIBLE. N'élargit l'acceptation qu'aux codes 3-lettres (même profil de risque que 86-B). Rejette
-toujours `a`, `1`, `!!`, `''`. Couverture : cas neuf `languageCodeSchema — 639-3 ×5` ajouté à la
-suite existante (auparavant : 2-lettres + région seulement, jamais les 639-3).
-
-## Validation
-- `vitest __tests__/attachment-validators.test.ts` (shared) → 36/36 ✓ (dont `639-3 ×5` neuf)
-- `jest PostFeedService.test.ts` → 35/35 ✓ (dont `getReels — chronological cursor` ×3 neufs +
-  1 test recadré)
-- `jest PostFeedService|posts-engagement-feed|reelAffinity` → 6 suites / 88 tests ✓, 0 régression
-- `bun run build` (shared) → 0 erreur (attachment-validators.ts compile)
-
-## Validation criteria (rappel)
-- [x] `getReels` prend `nextCursor` sur le réel chronologiquement le plus ancien de la page affichée
-  (pas l'item score-trié) ; fenêtre `limit+1` ; le scoring réordonne l'affichage seulement.
-- [x] `getFeed` (invariant SSOT) inchangé.
-- [x] `languageCodeSchema` accepte `bas`/`ksf`/`nnh`/`dua`/`ewo` et `pt-BR` ; rejette les malformés.
-- [x] Homogène avec `CommonSchemas.language` (86-B) — aucun autre sibling `[a-zA-Z]{2}` résiduel.
-- [x] Aucune régression sur les suites feed/reel/posts.
+## Améliorations futures (report)
+- **F51** : `FirebaseNotificationService` = implémentation FCM parallèle inutilisée (badge hardcodé
+  `1`, pas de circuit breaker, pas de retry) vs `PushNotificationService.sendViaFCM` (live, circuit
+  breaker + retry + badge dynamique). Supprimer le mort ou fusionner — chantier de consolidation.
+- **F49/F50** : résidus lost-update in-process sur caches stats (report des iter 82-84, sévérité
+  basse, auto-guéris par TTL / `recompute()`).

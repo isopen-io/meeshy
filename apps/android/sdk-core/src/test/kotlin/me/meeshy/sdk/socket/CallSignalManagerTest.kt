@@ -7,8 +7,11 @@ import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
+import me.meeshy.sdk.model.call.CallEndedSignal
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateResult
+import me.meeshy.sdk.model.call.CallQualityReport
+import me.meeshy.sdk.model.call.ConnectionQuality
 import org.json.JSONObject
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -45,6 +48,42 @@ class CallSignalManagerTest {
     }
 
     @Test
+    fun `call initiated also republishes the caller identity on incomingOffers`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.incomingOffers.test {
+            deliver(
+                handlers,
+                "call:initiated",
+                """{"callId":"c1","type":"video","initiator":{"userId":"u9","username":"al","displayName":"Alice"}}""",
+            )
+            val offer = awaitItem()
+            assertThat(offer.callId).isEqualTo("c1")
+            assertThat(offer.callerId).isEqualTo("u9")
+            assertThat(offer.callerName).isEqualTo("Alice")
+            assertThat(offer.isVideo).isTrue()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a malformed initiated frame emits no incoming offer`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.incomingOffers.test {
+            deliver(handlers, "call:initiated", """{"type":"video"}""") // no callId
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `a non-initiated frame emits nothing on incomingOffers`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.incomingOffers.test {
+            deliver(handlers, "call:participant-joined", """{"callId":"c1"}""")
+            expectNoEvents()
+        }
+    }
+
+    @Test
     fun `call participant-joined maps to ParticipantJoined`() = runTest {
         val (managerAndSocket, handlers) = managerWithHandlers()
         managerAndSocket.first.events.test {
@@ -74,32 +113,23 @@ class CallSignalManagerTest {
     }
 
     @Test
-    fun `call ended with missed reason maps to RingTimeout`() = runTest {
-        val (managerAndSocket, handlers) = managerWithHandlers()
-        managerAndSocket.first.events.test {
-            deliver(handlers, "call:ended", """{"callId":"c1","reason":"missed"}""")
-            assertThat(awaitItem()).isEqualTo(CallEvent.RingTimeout)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
-    fun `call ended with rejected reason maps to RemoteHangUp`() = runTest {
+    fun `an ended frame emits nothing on the identity-less events stream`() = runTest {
+        // Teardown is identity-gated (endedCalls), never folded blindly into the
+        // active FSM — the bug fix: a *waiting* call's fanned-out teardown must not
+        // reduce the active call.
         val (managerAndSocket, handlers) = managerWithHandlers()
         managerAndSocket.first.events.test {
             deliver(handlers, "call:ended", """{"callId":"c1","reason":"rejected"}""")
-            assertThat(awaitItem()).isEqualTo(CallEvent.RemoteHangUp)
-            cancelAndIgnoreRemainingEvents()
+            expectNoEvents()
         }
     }
 
     @Test
-    fun `call missed maps to RingTimeout`() = runTest {
+    fun `a missed frame emits nothing on the identity-less events stream`() = runTest {
         val (managerAndSocket, handlers) = managerWithHandlers()
         managerAndSocket.first.events.test {
             deliver(handlers, "call:missed", """{"callId":"c1"}""")
-            assertThat(awaitItem()).isEqualTo(CallEvent.RingTimeout)
-            cancelAndIgnoreRemainingEvents()
+            expectNoEvents()
         }
     }
 
@@ -146,6 +176,56 @@ class CallSignalManagerTest {
         val (managerAndSocket, handlers) = managerWithHandlers()
         managerAndSocket.first.events.test {
             handlers.getValue("call:initiated").invoke(arrayOf("not-an-object"))
+            expectNoEvents()
+        }
+    }
+
+    // --- Inbound: teardown frames republish the identity-carrying signal on endedCalls ---
+
+    @Test
+    fun `an ended frame republishes an identity-carrying RemoteHangUp on endedCalls`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.endedCalls.test {
+            deliver(handlers, "call:ended", """{"callId":"c7","reason":"completed"}""")
+            assertThat(awaitItem()).isEqualTo(CallEndedSignal("c7", CallEvent.RemoteHangUp))
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `an ended frame with a missed reason republishes a RingTimeout on endedCalls`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.endedCalls.test {
+            deliver(handlers, "call:ended", """{"callId":"c7","reason":"missed"}""")
+            assertThat(awaitItem()).isEqualTo(CallEndedSignal("c7", CallEvent.RingTimeout))
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a missed frame republishes an identity-carrying RingTimeout on endedCalls`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.endedCalls.test {
+            deliver(handlers, "call:missed", """{"callId":"c8"}""")
+            assertThat(awaitItem()).isEqualTo(CallEndedSignal("c8", CallEvent.RingTimeout))
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a non-teardown frame emits nothing on endedCalls`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.endedCalls.test {
+            deliver(handlers, "call:participant-joined", """{"callId":"c1"}""")
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `an ended frame with a blank call id emits nothing on endedCalls`() = runTest {
+        val (managerAndSocket, handlers) = managerWithHandlers()
+        managerAndSocket.first.endedCalls.test {
+            deliver(handlers, "call:ended", """{"callId":"","reason":"completed"}""")
             expectNoEvents()
         }
     }
@@ -287,5 +367,100 @@ class CallSignalManagerTest {
         assertThat(payload.captured.getString("callId")).isEqualTo("call-9")
         assertThat(payload.captured.getJSONObject("signal").getString("type")).isEqualTo("answer")
         assertThat(payload.captured.getJSONObject("signal").getString("sdp")).isEqualTo("blob")
+    }
+
+    // --- Outbound: the WebRTC-plumbing emits (iOS payload-key parity) ---
+
+    @Test
+    fun `emitRequestIceServers sends call request-ice-servers with the callId payload`() {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, socket) = managerAndSocket
+        val payload = slot<JSONObject>()
+        manager.emitRequestIceServers("call-9")
+        verify { socket.emit("call:request-ice-servers", capture(payload)) }
+        assertThat(payload.captured.getString("callId")).isEqualTo("call-9")
+    }
+
+    @Test
+    fun `emitHeartbeat sends call heartbeat with the callId payload`() {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, socket) = managerAndSocket
+        val payload = slot<JSONObject>()
+        manager.emitHeartbeat("call-9")
+        verify { socket.emit("call:heartbeat", capture(payload)) }
+        assertThat(payload.captured.getString("callId")).isEqualTo("call-9")
+    }
+
+    @Test
+    fun `emitQualityReport nests the stats sub-object under the callId envelope`() {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, socket) = managerAndSocket
+        val payload = slot<JSONObject>()
+        manager.emitQualityReport(
+            "call-9",
+            CallQualityReport(
+                level = ConnectionQuality.FAIR,
+                rttMs = 180.0,
+                packetLoss = 0.04,
+                bytesSent = 5_000L,
+                bytesReceived = 7_000L,
+                availableOutgoingBitrateBps = 800_000,
+                jitterMs = 4.0,
+            ),
+        )
+        verify { socket.emit("call:quality-report", capture(payload)) }
+        assertThat(payload.captured.getString("callId")).isEqualTo("call-9")
+        val stats = payload.captured.getJSONObject("stats")
+        assertThat(stats.getString("level")).isEqualTo("fair")
+        assertThat(stats.getDouble("rtt")).isEqualTo(180.0)
+        assertThat(stats.getDouble("packetLoss")).isEqualTo(0.04)
+        assertThat(stats.getLong("bytesSent")).isEqualTo(5_000L)
+        assertThat(stats.getLong("bytesReceived")).isEqualTo(7_000L)
+        assertThat(stats.getInt("availableOutgoingBitrateBps")).isEqualTo(800_000)
+        assertThat(stats.getDouble("jitterMs")).isEqualTo(4.0)
+    }
+
+    @Test
+    fun `emitQualityReport omits the optional stats when not positive`() {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, socket) = managerAndSocket
+        val payload = slot<JSONObject>()
+        manager.emitQualityReport(
+            "call-9",
+            CallQualityReport(
+                level = ConnectionQuality.EXCELLENT,
+                rttMs = 40.0,
+                packetLoss = 0.0,
+                bytesSent = 10L,
+                bytesReceived = 20L,
+            ),
+        )
+        verify { socket.emit("call:quality-report", capture(payload)) }
+        val stats = payload.captured.getJSONObject("stats")
+        assertThat(stats.has("availableOutgoingBitrateBps")).isFalse()
+        assertThat(stats.has("jitterMs")).isFalse()
+    }
+
+    @Test
+    fun `emitReconnecting sends callId participantId and attempt`() {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, socket) = managerAndSocket
+        val payload = slot<JSONObject>()
+        manager.emitReconnecting("call-9", participantId = "p-1", attempt = 2)
+        verify { socket.emit("call:reconnecting", capture(payload)) }
+        assertThat(payload.captured.getString("callId")).isEqualTo("call-9")
+        assertThat(payload.captured.getString("participantId")).isEqualTo("p-1")
+        assertThat(payload.captured.getInt("attempt")).isEqualTo(2)
+    }
+
+    @Test
+    fun `emitReconnected sends callId and participantId`() {
+        val (managerAndSocket, _) = managerWithHandlers()
+        val (manager, socket) = managerAndSocket
+        val payload = slot<JSONObject>()
+        manager.emitReconnected("call-9", participantId = "p-1")
+        verify { socket.emit("call:reconnected", capture(payload)) }
+        assertThat(payload.captured.getString("callId")).isEqualTo("call-9")
+        assertThat(payload.captured.getString("participantId")).isEqualTo("p-1")
     }
 }

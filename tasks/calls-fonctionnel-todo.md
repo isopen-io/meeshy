@@ -738,3 +738,87 @@ mandaté à croiser tout candidat contre ce fichier + lessons.md avant de le rap
   correctif dans ce fichier (variante du thème sibling-drift #5/#40/#42/#45/#50/#51/#55 : ici la
   divergence est entre un hook réellement utilisé et un jumeau non branché, pas entre deux siblings
   actifs).
+
+## Vague 11 — dead hook supprimé + 3 derniers handlers call:* sans rate limit corrigés (2026-07-03)
+
+Point d'entrée : routine calling-feature, deux agents d'exploration dédiés (iOS lecture seule — pas de
+toolchain Swift/Xcode ici — et gateway/web) mandatés à croiser tout candidat contre ce fichier avant de
+rapporter quoi que ce soit. iOS : rien de nouveau (couverture de tests déjà exhaustive, aucun code mort,
+aucun test désactivé — seul point structurel confirmé : `CallManager.swift` reste un god object de 4450
+lignes, refactor hors de portée sans compilateur local). Gateway : subsystem déjà très audité (CVE-002/
+004/005/006, dizaines de fixes P0/P1/P2 documentés) — aucune faille d'authz ni de credential en dur
+trouvée, un seul gap réel restant.
+
+- **[CLEANUP web, CONFIRMÉ + APPLIQUÉ]** La vague 10 avait explicitement laissé en suspens la décision
+  sur `components/video-calls/hooks/useCallSignaling.ts` ("monter pour de vrai, ou supprimer pour ne
+  plus induire les futurs audits en erreur"). Reconfirmé mort cette session (`grep useCallSignaling(`
+  ne matche que son propre test, `index.ts` et `README.md`) : `CallManager.tsx` (composant réellement
+  monté à `app/call/[callId]/page.tsx`) porte sa propre implémentation testée et équivalente
+  (`rejoinActiveCallAfterReconnect`, vague 10). Supprimé : le hook, son test dédié
+  (`useCallSignaling.reconnect.test.ts`), son export dans `index.ts`, sa section dans `README.md`
+  (remplacée par un renvoi vers `CallManager.tsx`), et les 2 commentaires résiduels dans
+  `CallManager.tsx`/`CallManager.reconnect.test.tsx` qui le référençaient encore. Suite web complète
+  filtrée `*call*` : 15 suites/212 tests verts (inchangé en nombre — le hook n'avait pas de couverage
+  productif au-delà de son propre test, maintenant supprimé avec lui).
+- **[FIX SÉCURITÉ, gateway, TDD]** `call:reconnecting`, `call:reconnected` et
+  `call:request-ice-servers` étaient les 3 derniers handlers `call:*` sans AUCUN rate limit — contraste
+  avec tous leurs siblings (`HEARTBEAT`, `QUALITY_REPORT`, `TRANSCRIPTION_SEGMENT`, `ANALYTICS`,
+  `SCREEN_CAPTURE`, tous rate-limités). L'authz était déjà correcte sur les 3 (Audit P1-21 / backlog
+  "authz call:request-ice-servers") mais un participant authentifié flood-émettant l'un de ces 3
+  événements pouvait encore amplifier la charge sur Mongo (`updateCallStatus` en écriture pour les 2
+  premiers) ou sur le secret TURN (mint HMAC à chaque `request-ice-servers`). Fix : 3 nouvelles entrées
+  `SOCKET_RATE_LIMITS` (`CALL_RECONNECTING`/`CALL_RECONNECTED` 20/min miroir de `CALL_JOIN`/`CALL_LEAVE`,
+  `CALL_ICE_SERVERS_REFRESH` 10/min — le client ne rafraîchit qu'à ~80% du TTL, largement en dessous) +
+  `checkSocketRateLimit` inséré dans les 3 handlers immédiatement après la résolution `userId`,
+  identique au pattern déjà utilisé par `QUALITY_REPORT`/`TRANSCRIPTION_SEGMENT`. Nouveau fichier de
+  test `CallEventsHandler-reconnect-signal-rate-limit.test.ts` (6 tests : rate-limité + dropped-on-limit
+  pour chacun des 3 handlers) — aucun test existant ne couvrait ces 3 handlers avant cette session (gap
+  de couverture comblé au passage). Suite gateway complète filtrée `*Call*` : 27/27 suites, 780/780
+  tests verts. `tsc --noEmit` : aucune nouvelle erreur (seule erreur préexistante, `SequenceService.ts`
+  → `@prisma/client` racine non généré dans cet environnement sandbox, confirmée présente AVANT ce diff
+  via `git stash`, sans rapport avec les fichiers touchés).
+- **Reste ouvert** : items J (validation device), C6 (court-circuit dédup cosmétique), CALL-DIAG
+  retagging (12 sites, cosmétique) — mêmes raisons de dépriorisation que les vagues précédentes.
+
+## Vague 12 — fuite de télémétrie privée (`CallParticipant.analytics`) sur `GET .../active-call` (2026-07-03)
+
+Point d'entrée : routine calling-feature. Deux commits gateway non encore documentés dans ce backlog
+(`d52b77f` négociationTimeMs, `f4d75121` persistance `CallParticipant.analytics`) ont été audités par
+deux agents dédiés (iOS lecture seule — confirmé `negotiationTimeMs` déjà émis côté iOS depuis
+`CallReliabilityPolicy.callSetupMetrics`, rien à faire ; gateway — exposition/authz de la nouvelle
+persistance).
+
+- **[BUG SÉCURITÉ RÉEL, gateway, CONFIRMÉ + CORRIGÉ]** `GET
+  /conversations/:conversationId/active-call` (`routes/calls.ts`) déclarait son schema
+  `response[200]` avec `additionalProperties: true` et AUCUN schema sur `data` — contournement d'un
+  bug `fast-json-stringify` (`oneOf` + `null` crashe, fix du 2026-05-12) qui avait pour effet de bord
+  de désactiver tout filtrage de champs sur cette route, contrairement à ses 5 routes soeurs
+  (`data: callSessionSchema`, whitelist stricte). `callService.getActiveCallForConversation()` inclut
+  les `CallParticipant` sans `select` dédié (`callSessionInclude`, `CallService.ts:113`) → chaque
+  participant sérialisé brut, y compris le nouveau champ `analytics` (télémétrie privée : deviceModel,
+  codec, averageRtt/packetLoss, negotiationTimeMs…) — lisible par N'IMPORTE QUEL membre de la
+  conversation (authz = membership, pas participation à CET appel), y compris pour un participant
+  ayant déjà raccroché. Fix : remplacé `additionalProperties: true` par `data: { ...callSessionSchema,
+  nullable: true }` — `nullable` (pas `oneOf`) évite le bug fast-json-stringify tout en restaurant le
+  whitelist. Vérifié à la main (script Node direct sur `fast-json-stringify`) : cas `data: null` OK,
+  cas fuite (`analytics` injecté manuellement dans le payload) → strippé.
+- **Nouveau test** `calls-active-call-analytics-leak.test.ts` — contrairement à
+  `calls-routes.test.ts` (mocke `sendSuccess` ET `@meeshy/shared/types/api-schemas` en stubs
+  `{type:'object'}`, bypassant toute sérialisation réelle — ne pouvait PAS attraper ce bug), ce nouveau
+  fichier boote un VRAI Fastify + `.inject()` avec le schema réel. RED confirmé (`git stash` du fix →
+  `analytics`/`SECRET-INTERNAL-CODENAME` présents dans la réponse sérialisée), GREEN restauré. Suite
+  gateway complète filtrée `*[Cc]all*` : 28/28 suites, 801/801 tests verts.
+- **Piège rencontré en écrivant ce test** : un mock de middleware `preValidation` déclaré comme
+  `jest.fn()` nu (0 arguments, aucune implémentation) fait **hang indéfiniment** `.inject()` sous un
+  vrai dispatch Fastify — invisible dans `calls-routes.test.ts` qui extrait et appelle le handler
+  directement (jamais les hooks `preValidation`). Le mock doit être une vraie fonction
+  `async (request) => {...}` qui pose `request.authContext`. Symptôme : timeout Jest sur l'`await
+  app.inject(...)`, aucune des méthodes prisma/service mockées jamais invoquée (log de debug ajouté
+  pour isoler) — piste à vérifier en premier pour tout futur test `.inject()`-based sur une route de
+  ce fichier.
+- **Autres vérifications de cette session (SAFE, aucun fix nécessaire)** : authz de la persistance
+  `call:analytics` (`resolveParticipantIdFromCall` ne peut résoudre qu'au PROPRE participant de
+  l'appelant — aucun vecteur de sur-écriture cross-participant) ; `GET /calls/history` et `GET
+  /calls/active` (schemas de réponse stricts, `analytics` jamais sélectionné côté `listHistory`) ;
+  modèles iOS (`CallModels.swift`/`CallSummaryMetadata.swift`) ne décodent aucun tableau
+  `participants`, non concernés.

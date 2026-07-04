@@ -308,6 +308,27 @@ describe('PostFeedService.getStories', () => {
     expect((result[0] as any).currentUserReactions).toEqual(['❤️']);
   });
 
+  it('adds an updatedAt delta filter when updatedSince is provided (G1 delta-sync)', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+    const since = new Date('2026-07-03T10:00:00Z');
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getStories('user-1', { updatedSince: since });
+
+    const where = mockPostFindMany.mock.calls[0][0].where;
+    expect(where.AND).toEqual(expect.arrayContaining([{ updatedAt: { gt: since } }]));
+  });
+
+  it('omits the delta filter without updatedSince (full tray, backward compatible)', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getStories('user-1');
+
+    const where = mockPostFindMany.mock.calls[0][0].where;
+    expect(JSON.stringify(where)).not.toContain('updatedAt');
+  });
+
   it('skips the postReaction batch query when the stories list is empty', async () => {
     mockPostFindMany.mockResolvedValue([]);
 

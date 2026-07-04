@@ -551,6 +551,15 @@ extension ReaderAudioMixer {
     /// slide. Reset on `teardown()` / `configureBackground(...)` / `stop()`.
     public var hasStartedPlayback: Bool { startedSlideKey != nil }
 
+    /// `true` once `play(originHost:slideKey:)` has scheduled the engine for
+    /// THIS specific slide key. The unkeyed `hasStartedPlayback` cannot tell a
+    /// fresh slide (audio still caching) apart from the previous slide's pass
+    /// that has not been torn down yet — the timeline audio gate (R1) needs the
+    /// keyed answer.
+    public func hasStartedPlayback(slideKey: String) -> Bool {
+        startedSlideKey == slideKey
+    }
+
     /// Configures a single background audio source. Replaces any prior bg entry.
     /// `looping=true` schedules the buffer to repeat sample-accurately.
     ///

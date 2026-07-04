@@ -12,16 +12,30 @@ import MeeshySDK
 /// started) rather than silently creating one.
 @MainActor
 enum CallStarter {
+    /// Default `onUnavailable`: a local-action failure toast (per the
+    /// two-tier toast rule in apps/ios/CLAUDE.md, FeedbackToastManager owns
+    /// this — never NotificationToastManager). Call sites that want a richer
+    /// fallback (e.g. opening the profile) override this; sites that don't
+    /// (redial buttons in CallsTab/CallDetailSheet) previously fell through to
+    /// a no-op `{}` with zero user feedback on a tap that visibly did nothing.
+    private static func showUnavailableToast() {
+        FeedbackToastManager.shared.showError(
+            String(localized: "call.starter.unavailable", defaultValue: "Impossible de démarrer l'appel", bundle: .main)
+        )
+    }
+
     /// Starts a call. If `conversationId` is known (e.g. a call-journal record),
     /// it dials immediately; otherwise it resolves the direct conversation with
     /// `userId` and dials, falling back to `onUnavailable` when none exists or
-    /// resolution fails.
+    /// resolution fails. `CallManager.startCall` itself surfaces a busy toast
+    /// if another call is already active, so every dial entry point (this one
+    /// included) gets that feedback for free.
     static func start(
         userId: String,
         displayName: String,
         isVideo: Bool,
         conversationId: String? = nil,
-        onUnavailable: @escaping () -> Void = {}
+        onUnavailable: @escaping () -> Void = { showUnavailableToast() }
     ) {
         if let conversationId, !conversationId.isEmpty {
             CallManager.shared.startCall(

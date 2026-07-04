@@ -48,8 +48,7 @@ export function CallManager() {
   // CALL-RESILIENCE — tracks whether we've already observed this effect's
   // first `connect`. Any subsequent `connect` is a genuine reconnect
   // (network blip or gateway restart) that must re-enter the call room —
-  // see rejoinActiveCallAfterReconnect below. Mirrors the (unmounted) sibling
-  // hook `components/video-calls/hooks/useCallSignaling.ts`.
+  // see rejoinActiveCallAfterReconnect below.
   const hasConnectedRef = useRef(false);
 
   /**
@@ -417,7 +416,7 @@ export function CallManager() {
    * the socket reconnects and its listeners re-attach, but the gateway never
    * sees it back in the call room, so grace extensions run out and the call
    * is ended server-side even though both peers' media is fine. Mirrors iOS
-   * CallManager.didReconnect / useCallSignaling.rejoinAfterReconnect.
+   * CallManager.didReconnect.
    */
   const rejoinActiveCallAfterReconnect = useCallback((socket: unknown) => {
     const { isInCall: activeInCall, currentCall: activeCall } = useCallStore.getState();

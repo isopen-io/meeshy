@@ -183,6 +183,14 @@ describe('PostTranslationService', () => {
       expect(zmqClient.translateToMultipleLanguages).not.toHaveBeenCalled();
     });
 
+    it('skips URL-only post content (links preserved verbatim, never sent to NLLB)', async () => {
+      const { service, zmqClient } = makeService({
+        post: { content: 'https://example.com/shared-link', originalLanguage: 'en', translations: {} },
+      });
+      await service.translateOnDemand('post-1', 'fr');
+      expect(zmqClient.translateToMultipleLanguages).not.toHaveBeenCalled();
+    });
+
     it('returns early when source and target languages are the same', async () => {
       const { service, zmqClient } = makeService({
         post: { content: 'Hello', originalLanguage: 'en', translations: null },
@@ -237,6 +245,12 @@ describe('PostTranslationService', () => {
   });
 
   describe('translateComment', () => {
+    it('skips URL-only comment content (links preserved verbatim, never sent to NLLB)', async () => {
+      const { service, zmqClient } = makeService();
+      await service.translateComment('comment-1', 'post-1', 'https://example.com/shared-link', 'en');
+      expect(zmqClient.translateToMultipleLanguages).not.toHaveBeenCalled();
+    });
+
     it('sends ZMQ request with comment:<id> messageId', async () => {
       const { service, zmqClient } = makeService();
       await service.translateComment('comment-1', 'post-1', 'Hello world', 'en');

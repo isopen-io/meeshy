@@ -380,6 +380,9 @@ export class MeeshySocketIOManager {
 
   setDeliveryQueue(queue: RedisDeliveryQueue): void {
     this.deliveryQueue = queue;
+    // The WS `message:send` path (MessageHandler) enqueues offline recipients
+    // itself, in parallel with this REST-path queue — same shared instance.
+    this.messageHandler.setDeliveryQueue(queue);
   }
 
   private async _drainPendingMessages(socket: Socket, userId: string): Promise<void> {

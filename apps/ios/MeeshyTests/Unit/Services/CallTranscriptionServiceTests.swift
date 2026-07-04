@@ -424,3 +424,40 @@ final class TranscriptionErrorTests: XCTestCase {
         XCTAssertTrue(error.errorDescription?.contains("zh") ?? false)
     }
 }
+
+// MARK: - Dead Code Regression (rotateRecognitionRequest)
+
+@MainActor
+final class CallTranscriptionServiceDeadCodeTests: XCTestCase {
+
+    private func serviceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Services/
+            .deletingLastPathComponent()   // Unit/
+            .deletingLastPathComponent()   // MeeshyTests/
+            .deletingLastPathComponent()   // ios/
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallTranscriptionService.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    func test_rotateRecognitionRequest_doesNotCheckTaskForNil() throws {
+        // `SFSpeechRecognizer.recognitionTask(with:)` returns a non-optional
+        // SFSpeechRecognitionTask — it can never fail synchronously, so
+        // `stream.task == nil` was dead code that could never execute, and the
+        // "3 consecutive rotation failures" error it guarded never surfaced.
+        // Genuine failures already reach `lastError` on every occurrence via
+        // handleRecognizerCallback's `error` branch, so removing the dead
+        // branch does not weaken error reporting.
+        let source = try serviceSource()
+        XCTAssertFalse(
+            source.contains("stream.task == nil"),
+            "rotateRecognitionRequest must not check stream.task for nil — " +
+            "recognitionTask(with:) never returns nil, making that branch unreachable."
+        )
+        XCTAssertFalse(
+            source.contains("Recognition rotation failed 3 times consecutively"),
+            "The unreachable 3-consecutive-failures error path must be removed, not left " +
+            "as dead code that silently never fires."
+        )
+    }
+}

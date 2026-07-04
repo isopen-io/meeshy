@@ -9,12 +9,10 @@ import os
 
 struct CallView: View {
     @ObservedObject var callManager = CallManager.shared
-    @Environment(\.colorScheme) private var colorScheme
     // Audit P2-iOS-9 — respect the user's Reduce Motion preference. Without
     // this check, the continuous pulse/ring animations ran indefinitely
     // even for motion-sensitive users (and burned battery).
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     // Instance du CallManager (et non un `@StateObject` local) : les segments
     // distants (DataChannel) et `toggleTranscription` opèrent sur CELLE-CI —
@@ -134,11 +132,14 @@ struct CallView: View {
             // restart recovers. Même gate que le layout : pré-établissement,
             // connectingView affiche déjà "Connexion…" — pas de bannière.
             if showsReconnectingBanner {
+                // P2-iOS-9 / 2026-07-03 — le mouvement (émergence de l'île À
+                // L'INSERTION, retour dans l'île AU RETRAIT) est porté par la
+                // transition interne d'IslandEmergingBanner. Ne PAS reposer de
+                // .transition ici : une transition externe écrase l'interne et
+                // la capsule disparaîtrait en fondu sur place.
                 reconnectingBanner
                     .padding(.horizontal, 56)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    // P2-iOS-9 — l'émergence Island porte le mouvement ; fade à l'insertion/retrait.
-                    .transition(.opacity)
             }
 
             // §4.4 — remote peer quality alert. Gateway emits `call:quality-alert`
@@ -150,7 +151,6 @@ struct CallView: View {
                     .padding(.horizontal, 56)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .padding(.top, showsReconnectingBanner ? 52 : 0)
-                    .transition(.opacity)
             }
 
             // EXIGENCE №1 — signaling dégradé : le socket est tombé pendant un
@@ -163,7 +163,6 @@ struct CallView: View {
                     .padding(.horizontal, 56)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                     .padding(.top, stackedOffset)
-                    .transition(.opacity)
             }
 
             // Effects overlay — accessible dans tous les etats actifs (pas seulement
@@ -173,7 +172,8 @@ struct CallView: View {
             if callManager.callState.isActive && !callManager.callState.isRinging && callManager.isVideoEnabled {
                 CallEffectsOverlay(
                     isExpanded: $showEffectsToolbar,
-                    isVideoEnabled: callManager.isVideoEnabled
+                    isVideoEnabled: callManager.isVideoEnabled,
+                    callManager: callManager
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -668,7 +668,12 @@ struct CallView: View {
     private var audioCallLayout: some View {
         VStack(spacing: 16) {
             // Duo d'avatars (no pulse) — correspondant + pastille locale.
+            // Decorative: the remote user's name is shown as a Text element
+            // directly below, mirroring pulsingAvatar's rationale — without
+            // .accessibilityHidden VoiceOver reads the avatar initial, then
+            // "Vous", then the full name as three disjoint stops.
             callAvatarPair(size: 120)
+                .accessibilityHidden(true)
                 .padding(.bottom, 8)
 
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
@@ -1729,7 +1734,10 @@ private extension View {
     }
 }
 
-private extension View {
+// Not `private`: FloatingCallPillView reuses both modifiers so its mute/speaker
+// controls expose the same toggle semantics (trait + on/off value) as the
+// full-screen call surface's equivalent buttons instead of a plain label swap.
+extension View {
     @ViewBuilder
     func optionalAccessibilityHint(_ hint: String?) -> some View {
         if let h = hint {
@@ -1740,7 +1748,7 @@ private extension View {
     }
 }
 
-private extension View {
+extension View {
     @ViewBuilder
     func callToggleAccessibility(isToggle: Bool, isActive: Bool) -> some View {
         if isToggle {

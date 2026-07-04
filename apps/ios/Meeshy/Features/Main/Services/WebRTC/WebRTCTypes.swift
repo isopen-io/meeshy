@@ -432,6 +432,68 @@ nonisolated enum CallReliabilityPolicy {
         return min(heuristic, bwe)
     }
 
+    /// Quality distribution for the analytics payload — PURE: the currently
+    /// open level window (since the last level change) is folded in
+    /// virtually, the accumulator is never mutated. This lets the same code
+    /// serve the periodic in-call snapshots AND the final teardown emit.
+    /// `critical` merges into `poor` (the payload contract has 4 buckets);
+    /// an empty call (never connected / no samples) reads as fully excellent;
+    /// clock skew (window start in the future) contributes zero, never
+    /// negative time.
+    static func qualityDistribution(
+        accumulatedSeconds: [VideoQualityLevel: Double],
+        openWindowLevel: VideoQualityLevel?,
+        openWindowSince: Date?,
+        now: Date
+    ) -> [String: Double] {
+        var seconds = accumulatedSeconds
+        if let level = openWindowLevel, let since = openWindowSince {
+            seconds[level, default: 0] += max(0, now.timeIntervalSince(since))
+        }
+        let total = seconds.values.reduce(0, +)
+        guard total > 0 else {
+            return ["excellent": 1.0, "good": 0.0, "fair": 0.0, "poor": 0.0]
+        }
+        return [
+            "excellent": (seconds[.excellent] ?? 0) / total,
+            "good": (seconds[.good] ?? 0) / total,
+            "fair": (seconds[.fair] ?? 0) / total,
+            "poor": ((seconds[.poor] ?? 0) + (seconds[.critical] ?? 0)) / total
+        ]
+    }
+
+    /// Ring/negotiation split for the end-of-call analytics. `setupTimeMs`
+    /// (initiated → connected) includes the HUMAN ringing time — 23 s observed
+    /// in prod, useless for spotting a WebRTC setup regression.
+    /// `negotiationTimeMs` (answer/join → connected) isolates the technical
+    /// part. Pure: -1 whenever an anchor is missing — never a lying 0.
+    static func callSetupMetrics(
+        initiatedAt: Date?,
+        negotiationStartAt: Date?,
+        connectedAt: Date?
+    ) -> (setupTimeMs: Int, negotiationTimeMs: Int) {
+        guard let connectedAt else { return (-1, -1) }
+        let setup = initiatedAt.map { Int(connectedAt.timeIntervalSince($0) * 1000) } ?? -1
+        let negotiation = negotiationStartAt.map { Int(connectedAt.timeIntervalSince($0) * 1000) } ?? -1
+        return (setup, negotiation)
+    }
+
+    /// Gate for the `call_cancel` silent push (phantom-ring hardening): the
+    /// gateway sends it when a call ends WITHOUT ever being answered, aimed
+    /// at devices whose socket never came up (VoIP push delivered, WebSocket
+    /// blocked). It may ONLY kill a still-ringing INCOMING call whose callId
+    /// matches — a late/replayed cancel must never end a connected call, an
+    /// outgoing ring, or an unrelated call.
+    static func shouldEndRingingOnCancellation(
+        pushCallId: String,
+        currentCallId: String?,
+        callState: CallState
+    ) -> Bool {
+        guard pushCallId == currentCallId else { return false }
+        guard case .ringing(isOutgoing: false) = callState else { return false }
+        return true
+    }
+
     /// Delay before the periodic TURN credential refresh, at 80% of the TTL.
     /// A degenerate TTL (zero, negative, or shorter than the floor) clamps to
     /// `minimumDelay` instead of disarming the refresh — silently skipping it
@@ -443,6 +505,20 @@ nonisolated enum CallReliabilityPolicy {
         minimumDelay: TimeInterval = QualityThresholds.turnMinRefreshDelaySeconds
     ) -> TimeInterval {
         max(minimumDelay, ttl * 0.8)
+    }
+
+    /// Whether a TURN refresh watchdog should retry the `call:request-ice-servers`
+    /// emit after `attempt` retries with no `call:ice-servers-refreshed` response.
+    /// `emitRequestIceServers` carries no ACK, so a single dropped emit or reply
+    /// must not silently disarm the refresh for the rest of the call — but the
+    /// retries are bounded so a persistently unreachable gateway doesn't spin
+    /// forever inside one cycle (the periodic scheduler re-arms the next cycle
+    /// once retries are exhausted).
+    static func turnRefreshShouldRetry(
+        attempt: Int,
+        maxRetries: Int = QualityThresholds.turnRefreshMaxRetries
+    ) -> Bool {
+        attempt < maxRetries
     }
 
     /// Stuck-muted CallKit fallback gate. On iPhone/iPad,
@@ -805,6 +881,12 @@ nonisolated enum QualityThresholds {
     /// WhatsApp/Telegram with 10s/30s. Reference §5.12.
     static let heartbeatIntervalSeconds: TimeInterval = 10.0
 
+    /// Cadence des snapshots analytics « in_progress » pendant un appel
+    /// connecté. 60 s = 1-2 req/min avec l'émission finale — bien sous le
+    /// rate limit gateway CALL_ANALYTICS (10/min) ; un kill de l'app perd au
+    /// pire la dernière minute de télémétrie.
+    static let analyticsSnapshotIntervalSeconds: TimeInterval = 60.0
+
     /// 3 missed beats (~30s) marks heartbeat as lost. After this, FSM
     /// transitions active → reconnecting.
     static let heartbeatLostThresholdSeconds: TimeInterval = 30.0
@@ -917,6 +999,18 @@ nonisolated enum QualityThresholds {
     /// the TTL reported by the gateway. Guards against a malformed TTL=0 response
     /// that would otherwise trigger an immediate refresh on every call tick.
     static let turnMinRefreshDelaySeconds: TimeInterval = 30
+
+    /// Watchdog window (seconds) after emitting `call:request-ice-servers`
+    /// before retrying, if `call:ice-servers-refreshed` hasn't come back yet.
+    /// `emitRequestIceServers` is fire-and-forget (no ACK) — a single dropped
+    /// emit or gateway reply must not permanently kill the refresh chain for
+    /// the rest of a long call.
+    static let turnRefreshRetryTimeoutSeconds: TimeInterval = 8
+
+    /// Max consecutive retries of a single TURN refresh request before giving
+    /// up on that cycle and falling back to re-arming the next periodic
+    /// refresh (rather than retrying forever).
+    static let turnRefreshMaxRetries: Int = 3
 
     /// Delay after `.connected` before the stuck-muted CallKit fallback
     /// re-checks whether `provider:didActivate:` ever fired. CallKit normally

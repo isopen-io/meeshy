@@ -18,6 +18,7 @@ import { PushNotificationService } from '../services/PushNotificationService';
 import { logger } from '../utils/logger';
 import { CALL_EVENTS, CALL_ERROR_CODES, CALL_TERMINAL_STATUSES } from '@meeshy/shared/types/video-call';
 import { ROOMS } from '@meeshy/shared/types/socketio-events';
+import { resolveCallEndedRooms } from '../utils/callEndedFanout';
 import { validateSocketEvent, isValidationFailure } from '../middleware/validation';
 import {
   socketInitiateCallSchema,
@@ -94,6 +95,20 @@ export class CallEventsHandler {
    */
   private messageBroadcaster: ((message: unknown, conversationId: string) => Promise<void>) | null = null;
   private rateLimiter = getSocketRateLimiter();
+
+  /**
+   * Consecutive degraded quality-report streaks per `${callId}:${participantId}`.
+   * The remote-quality alert only fires once a participant's link has been bad
+   * for SUSTAINED consecutive reports (~10 s at the client's 5 s cadence) —
+   * server-side mirror of the client's DegradedLinkTracker, so an isolated RTT
+   * blip never flashes "your contact has a bad connection" at the other side.
+   * A healthy report clears the streak; entries older than STREAK_STALE_MS
+   * restart from zero (reports stopped flowing — not consecutive anymore).
+   */
+  private qualityDegradedStreaks = new Map<string, { streak: number; lastAt: number }>();
+  private static readonly QUALITY_ALERT_SUSTAINED_REPORTS = 2;
+  private static readonly QUALITY_STREAK_STALE_MS = 60_000;
+  private static readonly QUALITY_STREAK_MAP_MAX = 5_000;
 
   /**
    * §4.6 — last-offer buffer per call. The signaling relay is otherwise
@@ -258,25 +273,76 @@ export class CallEventsHandler {
     conversationId: string | undefined,
     endedEvent: Omit<CallEndedEvent, 'endedBy'> & { endedBy?: string }
   ): Promise<void> {
-    const rooms: string[] = [ROOMS.call(callId)];
-    if (conversationId) {
-      rooms.push(ROOMS.conversation(conversationId));
-      try {
-        const members = await this.prisma.participant.findMany({
+    const rooms = await resolveCallEndedRooms(this.prisma, callId, conversationId);
+    io.to(rooms).emit(CALL_EVENTS.ENDED, endedEvent);
+    await this.sendCallCancellationPushes(callId, conversationId, endedEvent);
+  }
+
+  /**
+   * Sonnerie fantôme (app suspendue) — le fanout socket ci-dessus n'atteint
+   * pas un appelé dont le socket n'est JAMAIS monté (réseau pauvre : la push
+   * VoIP passe par APNs mais le WebSocket ne s'établit pas ; le freshness
+   * check REST a déjà validé l'appel au moment du push). Quand l'appel se
+   * termine SANS avoir été décroché (missed/rejected), on envoie aux membres
+   * n'ayant jamais rejoint la call room une push APNs **background**
+   * `call_cancel` qui coupe CallKit. JAMAIS en type voip : chaque push VoIP
+   * exige un reportNewIncomingCall (sinon kill) — c'est précisément pourquoi
+   * la cancellation passe par une push standard silencieuse. Best-effort :
+   * aucun échec ne doit casser le chemin terminal.
+   */
+  private async sendCallCancellationPushes(
+    callId: string,
+    conversationId: string | undefined,
+    endedEvent: Omit<CallEndedEvent, 'endedBy'> & { endedBy?: string }
+  ): Promise<void> {
+    if (!this.pushService || !conversationId) return;
+    if (endedEvent.reason !== 'missed' && endedEvent.reason !== 'rejected') return;
+
+    try {
+      const [members, joined] = await Promise.all([
+        this.prisma.participant.findMany({
           where: { conversationId, isActive: true, userId: { not: null } },
           select: { userId: true }
-        });
-        for (const member of members) {
-          if (member.userId) rooms.push(ROOMS.user(member.userId));
-        }
-      } catch (error) {
-        logger.error('broadcastCallEnded: member fanout lookup failed — falling back to call+conversation rooms', {
-          callId,
-          error
-        });
-      }
+        }),
+        this.prisma.callParticipant.findMany({
+          where: { callSessionId: callId },
+          select: { participant: { select: { userId: true } } }
+        })
+      ]);
+
+      const excluded = new Set<string>(
+        joined.map((p) => p.participant?.userId).filter((uid): uid is string => !!uid)
+      );
+      if (endedEvent.endedBy) excluded.add(endedEvent.endedBy);
+
+      const targets = members
+        .map((m) => m.userId)
+        .filter((uid): uid is string => !!uid && !excluded.has(uid));
+      if (targets.length === 0) return;
+
+      await Promise.all(targets.map((uid) =>
+        this.pushService!.sendToUser({
+          userId: uid,
+          payload: {
+            title: '',
+            body: '',
+            silent: true,
+            data: { type: 'call_cancel', callId }
+          },
+          types: ['apns'],
+          platforms: ['ios']
+        }).catch((error) => {
+          logger.error('call_cancel push failed', { callId, userId: uid, error });
+        })
+      ));
+
+      logger.info('📲 call_cancel background push sent to never-joined members', {
+        callId,
+        targets
+      });
+    } catch (error) {
+      logger.error('call_cancel push fanout failed — terminal path unaffected', { callId, error });
     }
-    io.to(rooms).emit(CALL_EVENTS.ENDED, endedEvent);
   }
 
   private buildRingingTimeoutHandler(io: SocketIOServer, callId: string): () => Promise<void> {
@@ -1555,6 +1621,35 @@ export class CallEventsHandler {
           callId: data.callId
         });
 
+        // Multi-device socketless — the socket event above cannot reach a
+        // secondary device woken by the VoIP push whose WebSocket never came
+        // up: it would ring until its local timeout although the call was
+        // answered elsewhere. Mirror of the call_cancel hardening: a silent
+        // background push to the joiner's devices; the answering device (and
+        // any device not ringing on this callId) drops it via the client-side
+        // FSM guard. Only on a real ANSWER (callee, initiated/ringing →
+        // connecting) — never for the initiator's own room join nor rejoins.
+        // Best-effort: a push failure must never fail the join.
+        if (this.pushService
+            && userId !== callSession.initiatorId
+            && (callSession.status as string) === 'connecting') {
+          this.pushService.sendToUser({
+            userId,
+            payload: {
+              title: '',
+              body: '',
+              silent: true,
+              data: { type: 'call_answered_elsewhere', callId: data.callId }
+            },
+            types: ['apns'],
+            platforms: ['ios']
+          }).catch((error) => {
+            logger.error('call_answered_elsewhere push failed (join unaffected)', {
+              callId: data.callId, userId, error
+            });
+          });
+        }
+
         logger.info('✅ Socket: User joined call', {
           callId: data.callId,
           userId,
@@ -2504,18 +2599,48 @@ export class CallEventsHandler {
           level: stats.level
         });
 
-        if (stats.rtt > 300 || stats.packetLoss > 5) {
-          const metric = stats.rtt > 300 ? 'rtt' : 'packetLoss';
-          const value = metric === 'rtt' ? stats.rtt : stats.packetLoss;
-          const threshold = metric === 'rtt' ? 300 : 5;
+        const isDegraded = stats.rtt > 300 || stats.packetLoss > 5;
+        const streakKey = `${data.callId}:${participantId}`;
+        if (!isDegraded) {
+          this.qualityDegradedStreaks.delete(streakKey);
+        } else {
+          const nowMs = Date.now();
+          const prev = this.qualityDegradedStreaks.get(streakKey);
+          const consecutive = prev && nowMs - prev.lastAt <= CallEventsHandler.QUALITY_STREAK_STALE_MS
+            ? prev.streak
+            : 0;
+          const streak = consecutive + 1;
+          this.qualityDegradedStreaks.set(streakKey, { streak, lastAt: nowMs });
 
-          io.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.QUALITY_ALERT, {
-            callId: data.callId,
-            participantId,
-            metric,
-            value,
-            threshold
-          });
+          // Leak guard: calls that end on a degraded report leave their entry
+          // behind — sweep stale entries when the map grows unusually large.
+          if (this.qualityDegradedStreaks.size > CallEventsHandler.QUALITY_STREAK_MAP_MAX) {
+            for (const [key, entry] of this.qualityDegradedStreaks) {
+              if (nowMs - entry.lastAt > CallEventsHandler.QUALITY_STREAK_STALE_MS) {
+                this.qualityDegradedStreaks.delete(key);
+              }
+            }
+          }
+
+          if (streak >= CallEventsHandler.QUALITY_ALERT_SUSTAINED_REPORTS) {
+            const metric = stats.rtt > 300 ? 'rtt' : 'packetLoss';
+            const value = metric === 'rtt' ? stats.rtt : stats.packetLoss;
+            const threshold = metric === 'rtt' ? 300 : 5;
+
+            // `socket.to` (NOT `io.to`): the reporter must never receive the
+            // "your contact has a bad connection" alert about ITS OWN link —
+            // its local pill already covers that, and the double banner read
+            // as contradictory. Re-emitted on every sustained report so the
+            // remote's 15 s auto-clear keeps being refreshed while the link
+            // stays bad.
+            socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.QUALITY_ALERT, {
+              callId: data.callId,
+              participantId,
+              metric,
+              value,
+              threshold
+            });
+          }
         }
       } catch (error) {
         logger.error('Error processing quality report', { error });
@@ -2530,6 +2655,11 @@ export class CallEventsHandler {
         const userId = getUserId(socket.id);
         if (!userId) return;
         rememberAuth(userId);
+
+        const rateLimitPassed = await checkSocketRateLimit(
+          socket, userId, SOCKET_RATE_LIMITS.CALL_RECONNECTING, this.rateLimiter, CALL_EVENTS.ERROR
+        );
+        if (!rateLimitPassed) return;
 
         const validation = validateSocketEvent(socketReconnectingSchema, data);
         if (!validation.success) return;
@@ -2561,6 +2691,11 @@ export class CallEventsHandler {
         const userId = getUserId(socket.id);
         if (!userId) return;
         rememberAuth(userId);
+
+        const rateLimitPassed = await checkSocketRateLimit(
+          socket, userId, SOCKET_RATE_LIMITS.CALL_RECONNECTED, this.rateLimiter, CALL_EVENTS.ERROR
+        );
+        if (!rateLimitPassed) return;
 
         const validation = validateSocketEvent(socketReconnectedSchema, data);
         if (!validation.success) return;
@@ -2665,6 +2800,11 @@ export class CallEventsHandler {
         const userId = getUserId(socket.id);
         if (!userId) return;
         rememberAuth(userId);
+
+        const rateLimitPassed = await checkSocketRateLimit(
+          socket, userId, SOCKET_RATE_LIMITS.CALL_ICE_SERVERS_REFRESH, this.rateLimiter, CALL_EVENTS.ERROR
+        );
+        if (!rateLimitPassed) return;
 
         const validation = validateSocketEvent(socketRequestIceServersSchema, data);
         if (!validation.success) return;
@@ -2803,16 +2943,24 @@ export class CallEventsHandler {
           return;
         }
 
+        // Security fix 2026-07-03: resolve the caller's own participantId
+        // server-side rather than trusting the client-supplied one — same
+        // rationale as call:backgrounded/call:foregrounded. Otherwise either
+        // participant in a call could impersonate the other, forging or
+        // suppressing that peer's screen-capture privacy alert.
+        const screenCaptureParticipantId = await this.resolveActiveCallParticipantId(userId, data.callId);
+        if (!screenCaptureParticipantId) return;
+
         const alertEvent: CallScreenCaptureEvent = {
           callId: data.callId,
-          participantId: data.participantId,
+          participantId: screenCaptureParticipantId,
           isCapturing: data.isCapturing,
         };
         socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.SCREEN_CAPTURE_ALERT, alertEvent);
 
         logger.info('📞 Socket: call:screen-capture-detected relayed', {
           callId: data.callId,
-          participantId: data.participantId,
+          participantId: screenCaptureParticipantId,
           isCapturing: data.isCapturing,
           userId,
         });
@@ -2827,6 +2975,7 @@ export class CallEventsHandler {
     socket.on(CALL_EVENTS.ANALYTICS, async (data: {
       callId: string;
       setupTimeMs: number;
+      negotiationTimeMs?: number;
       durationSeconds: number;
       reconnectionCount: number;
       networkTransitions: number;
@@ -2874,6 +3023,7 @@ export class CallEventsHandler {
           platform: data.platform,
           durationSeconds: data.durationSeconds,
           setupTimeMs: data.setupTimeMs,
+          negotiationTimeMs: data.negotiationTimeMs ?? -1,
           reconnectionCount: data.reconnectionCount,
           networkTransitions: data.networkTransitions,
           averageRtt: data.averageRtt,
@@ -2885,6 +3035,23 @@ export class CallEventsHandler {
           qualityDistribution: data.qualityDistribution,
           userId,
         });
+
+        // Persist the VALIDATED payload on this participant's CallParticipant
+        // row so reliability can be tracked on real calls (reconnectionCount,
+        // qualityDistribution, negotiationTimeMs…) — log-only telemetry is
+        // invisible to dashboards. Per-participant row: both ends emit at
+        // hangup within the same second and must never clobber each other.
+        // Best-effort — telemetry loss must stay invisible to the client.
+        try {
+          await this.prisma.callParticipant.updateMany({
+            where: { callSessionId: data.callId, participantId: analyticsParticipantId },
+            data: { analytics: validation.data }
+          });
+        } catch (persistError) {
+          logger.error('call:analytics persistence failed (telemetry lost, client unaffected)', {
+            callId: data.callId, participantId: analyticsParticipantId, error: persistError
+          });
+        }
       } catch (error) {
         logger.error('Error handling call:analytics', { error });
       }

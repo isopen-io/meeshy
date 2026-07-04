@@ -229,7 +229,7 @@ export class PostFeedService {
     };
   }
 
-  async getStories(userId: string) {
+  async getStories(userId: string, options?: { updatedSince?: Date }) {
     const now = new Date();
     const [friendIds, dmContactIds, communityCoMemberIds] = await Promise.all([
       this.getFriendIds(userId),
@@ -247,6 +247,15 @@ export class PostFeedService {
         { OR: [{ expiresAt: { isSet: false } }, { expiresAt: { equals: null } }, { expiresAt: { gt: now } }] },
       ],
     };
+
+    // G1 delta-sync : `updatedSince` ne renvoie que les stories créées ou
+    // modifiées (compteurs, traductions) depuis le timestamp — le client
+    // fusionne avec son cache 24 h. Les disparitions restent couvertes par
+    // les événements socket (story:deleted) et le filtre expiry client.
+    // Sans le paramètre, comportement historique complet (rétro-compatible).
+    if (options?.updatedSince) {
+      where.AND.push({ updatedAt: { gt: options.updatedSince } });
+    }
 
     const stories = await this.prisma.post.findMany({
       where,

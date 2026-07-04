@@ -228,18 +228,21 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertTrue(sut.storyGroups[0].stories[0].isViewed)
     }
 
-    func test_markViewed_callsServiceMarkViewed() async {
+    func test_markViewed_enqueuesDurableOutboxRecord() async {
+        // R6 — le « vu » passe par l'outbox durable (survit kill/offline),
+        // plus par le POST fire-and-forget direct.
         let item = makeStoryItem(id: "view-service-test", isViewed: false)
         let group = makeStoryGroup(userId: "u1", stories: [item])
         sut.storyGroups = [group]
+        var enqueuedStoryIds: [String] = []
+        sut.markViewedOutboxEnqueuer = { enqueuedStoryIds.append($0) }
 
         sut.markViewed(storyId: "view-service-test")
 
         // Give the fire-and-forget Task time to execute
         try? await Task.sleep(nanoseconds: 100_000_000)
 
-        XCTAssertEqual(mockStoryService.markViewedCallCount, 1)
-        XCTAssertEqual(mockStoryService.lastMarkViewedStoryId, "view-service-test")
+        XCTAssertEqual(enqueuedStoryIds, ["view-service-test"])
     }
 
     func test_markViewed_nonExistentStoryId_doesNothing() {
@@ -250,6 +253,183 @@ final class StoryViewModelTests: XCTestCase {
         sut.markViewed(storyId: "non-existent")
 
         XCTAssertFalse(sut.storyGroups[0].stories[0].isViewed, "Should not modify unrelated stories")
+    }
+
+    // MARK: - R5 offline replay : pin plan + wiring
+
+    private func makeMediaStoryItem(id: String = "pin-item",
+                                    videoURL: String? = "https://cdn.test/clip.mp4",
+                                    audioURL: String? = "https://cdn.test/voice.m4a",
+                                    imageURL: String? = "https://cdn.test/photo.jpg",
+                                    expiresAt: Date = Date().addingTimeInterval(3600)) -> StoryItem {
+        var media: [FeedMedia] = []
+        if let videoURL {
+            media.append(FeedMedia(id: "m-video", type: .video, url: videoURL, duration: 5))
+        }
+        if let audioURL {
+            media.append(FeedMedia(id: "m-audio", type: .audio, url: audioURL, duration: 5))
+        }
+        if let imageURL {
+            media.append(FeedMedia(id: "m-image", type: .image, url: imageURL))
+        }
+        return StoryItem(
+            id: id,
+            content: nil,
+            media: media,
+            storyEffects: nil,
+            createdAt: Date(),
+            expiresAt: expiresAt,
+            isViewed: false
+        )
+    }
+
+    func test_pinTargets_routesMediaByType() {
+        let story = makeMediaStoryItem()
+
+        let targets = StoryViewModel.pinTargets(for: story)
+
+        XCTAssertEqual(targets.count, 3)
+        XCTAssertEqual(targets.first(where: { $0.urlString == "https://cdn.test/clip.mp4" })?.store, .video)
+        XCTAssertEqual(targets.first(where: { $0.urlString == "https://cdn.test/voice.m4a" })?.store, .audio)
+        XCTAssertEqual(targets.first(where: { $0.urlString == "https://cdn.test/photo.jpg" })?.store, .images,
+                       "Images (and unknown types) route to the images store, mirroring the prefetch path")
+    }
+
+    func test_pinTargets_contradictoryDeclaredType_sniffedByExtension() {
+        // R7 — un mp4 déclaré image doit être pinné dans le store video
+        // (là où prefetch/lecture le rangent réellement).
+        let media = [FeedMedia(id: "m-x", type: .image, url: "https://cdn.test/really-a-video.mp4")]
+        let story = StoryItem(
+            id: "pin-sniff", content: nil, media: media, storyEffects: nil,
+            createdAt: Date(), expiresAt: Date().addingTimeInterval(3600), isViewed: false
+        )
+
+        let targets = StoryViewModel.pinTargets(for: story)
+
+        XCTAssertEqual(targets.first(where: { $0.urlString.hasSuffix(".mp4") })?.store, .video)
+    }
+
+    func test_pinDeadline_usesStoryExpiry() {
+        let expiry = Date().addingTimeInterval(1234)
+        let story = makeMediaStoryItem(expiresAt: expiry)
+
+        XCTAssertEqual(StoryViewModel.pinDeadline(for: story), expiry,
+                       "The pin must not outlive the story")
+    }
+
+    func test_markViewed_pinsViewedStoryMediaUntilExpiry() async {
+        let unique = UUID().uuidString
+        let videoURL = "https://cdn.test/\(unique).mp4"
+        let story = makeMediaStoryItem(id: "pin-wiring", videoURL: videoURL,
+                                       audioURL: nil, imageURL: nil)
+        let group = makeStoryGroup(userId: "u1", stories: [story])
+        sut.storyGroups = [group]
+
+        sut.markViewed(storyId: "pin-wiring")
+
+        // The pin runs in a fire-and-forget Task — give it time to land.
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        let pinned = await CacheCoordinator.shared.video.isPinned(videoURL)
+        XCTAssertTrue(pinned, "Viewing a story must pin its media for offline replay until expiry")
+    }
+
+    // MARK: - Group intro (interstitiel inter-groupes)
+
+    private func makeIntroGroup(id: String = "intro-user-\(UUID().uuidString)",
+                                username: String = "alice") -> StoryGroup {
+        StoryGroup(id: id, username: username, avatarColor: "6366F1",
+                   stories: [makeStoryItem()])
+    }
+
+    private static func makeStatusPost(authorId: String, authorName: String,
+                                       mood: String, content: String?) -> APIPost {
+        let contentJSON = content.map { "\"\($0)\"" } ?? "null"
+        return JSONStub.decode("""
+        {
+            "id": "status-\(authorId)",
+            "type": "STATUS",
+            "moodEmoji": "\(mood)",
+            "content": \(contentJSON),
+            "createdAt": "2026-07-03T10:00:00.000Z",
+            "author": {"id": "\(authorId)", "username": "\(authorName)"}
+        }
+        """)
+    }
+
+    func test_resolveGroupIntro_mapsProfileFromResolver() async {
+        let group = makeIntroGroup()
+        sut.introProfileResolver = { _ in
+            MeeshyUser(id: group.id, username: "alice",
+                       firstName: "Alice", lastName: "Martin",
+                       banner: "https://cdn.test/banner.jpg", bannerThumbHash: "bh")
+        }
+        sut.introMoodFeedLoader = { [] }
+
+        let intro = await sut.resolveGroupIntro(for: group)
+
+        XCTAssertEqual(intro.displayName, "Alice Martin",
+                       "Full name is built from first+last when displayName is absent")
+        XCTAssertEqual(intro.bannerURL, "https://cdn.test/banner.jpg")
+        XCTAssertEqual(intro.bannerThumbHash, "bh")
+    }
+
+    func test_resolveGroupIntro_mapsMoodFromStatusFeed() async {
+        let group = makeIntroGroup()
+        sut.introProfileResolver = { _ in MeeshyUser(id: group.id, username: "alice") }
+        sut.introMoodFeedLoader = {
+            [Self.makeStatusPost(authorId: group.id, authorName: "alice",
+                                 mood: "🔥", content: "En feu aujourd'hui")]
+        }
+
+        let intro = await sut.resolveGroupIntro(for: group)
+
+        XCTAssertEqual(intro.moodEmoji, "🔥")
+        XCTAssertEqual(intro.moodMessage, "En feu aujourd'hui")
+    }
+
+    func test_resolveGroupIntro_moodFeedFetchedOncePerSession() async {
+        let group = makeIntroGroup()
+        sut.introProfileResolver = { _ in MeeshyUser(id: group.id, username: "alice") }
+        var fetchCount = 0
+        sut.introMoodFeedLoader = { fetchCount += 1; return [] }
+
+        _ = await sut.resolveGroupIntro(for: group)
+        _ = await sut.resolveGroupIntro(for: makeIntroGroup(username: "bob"))
+
+        XCTAssertEqual(fetchCount, 1,
+                       "The statuses feed is fetched once per ViewModel session, then reused")
+    }
+
+    func test_resolveGroupIntro_survivesResolverFailure() async {
+        let group = makeIntroGroup(username: "carol")
+        sut.introProfileResolver = { _ in throw URLError(.notConnectedToInternet) }
+        sut.introMoodFeedLoader = { throw URLError(.notConnectedToInternet) }
+
+        let intro = await sut.resolveGroupIntro(for: group)
+
+        XCTAssertEqual(intro.userId, group.id)
+        XCTAssertEqual(intro.username, "carol",
+                       "Offline: the intro still renders with the group's own data")
+        XCTAssertNil(intro.displayName)
+        XCTAssertNil(intro.moodEmoji)
+    }
+
+    func test_markViewed_expiredStory_doesNotPin() async {
+        let unique = UUID().uuidString
+        let videoURL = "https://cdn.test/\(unique).mp4"
+        let story = makeMediaStoryItem(id: "pin-expired", videoURL: videoURL,
+                                       audioURL: nil, imageURL: nil,
+                                       expiresAt: Date().addingTimeInterval(-60))
+        let group = makeStoryGroup(userId: "u1", stories: [story])
+        sut.storyGroups = [group]
+
+        sut.markViewed(storyId: "pin-expired")
+
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        let pinned = await CacheCoordinator.shared.video.isPinned(videoURL)
+        XCTAssertFalse(pinned, "An already-expired story must not leave a pin behind")
     }
 
     func test_markViewed_preservesAllStoryFields() {

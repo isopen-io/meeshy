@@ -1744,6 +1744,14 @@ model CallParticipant {
   /// restarts so CallCleanupService can detect zombie calls without in-memory state.
   lastHeartbeatAt DateTime?
 
+  /// End-of-call telemetry emitted by THIS participant's client
+  /// (`call:analytics` payload, Zod-validated): setupTimeMs,
+  /// negotiationTimeMs, reconnectionCount, qualityDistribution, codec,
+  /// platform… One row per participant — concurrent end-of-call emitters
+  /// never clobber each other. Null when the client never reported
+  /// (missed call, old build, crash).
+  analytics Json?
+
   /// Media state
   isAudioEnabled Boolean @default(true)
   isVideoEnabled Boolean @default(true)

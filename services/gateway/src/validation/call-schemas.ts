@@ -372,6 +372,11 @@ export type SocketCallScreenCaptureDetectedInput = z.infer<typeof socketCallScre
 export const socketCallAnalyticsSchema = z.object({
   callId: objectIdSchema,
   setupTimeMs: z.number().int(),
+  // answer/join → connected : la négociation WebRTC seule, SANS le temps de
+  // sonnerie humain que setupTimeMs inclut (23 s observés — métrique
+  // inutilisable pour détecter une régression de setup). Optionnel : absent
+  // des builds iOS < 2026-07-03 ; -1 = jamais connecté / ancrage manquant.
+  negotiationTimeMs: z.number().int().optional(),
   durationSeconds: z.number().nonnegative(),
   reconnectionCount: z.number().int().nonnegative(),
   networkTransitions: z.number().int().nonnegative(),

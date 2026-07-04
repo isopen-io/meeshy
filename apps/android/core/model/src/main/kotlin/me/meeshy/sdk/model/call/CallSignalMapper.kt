@@ -33,11 +33,11 @@ object CallSignalMapper {
                 CallEvent.ParticipantJoined
             }
             "call:signal" -> mapSignal(json.decodeFromString<CallSignalEnvelope>(rawJson))
-            "call:ended" -> mapEnded(json.decodeFromString<CallEndedPayload>(rawJson))
-            "call:missed" -> {
-                json.decodeFromString<CallMissedPayload>(rawJson)
-                CallEvent.RingTimeout
-            }
+            // `call:ended` / `call:missed` are **identity-gated** teardown — decoded
+            // by [endedSignal], not folded here. They are inert to the identity-less
+            // FSM-facing stream so a *waiting* call's teardown (fanned out to a busy
+            // user's rooms) can never blindly reduce the *active* call.
+            "call:ended", "call:missed" -> null
             "call:media-toggled" -> {
                 json.decodeFromString<CallMediaTogglePayload>(rawJson)
                 null
@@ -46,6 +46,47 @@ object CallSignalMapper {
             "call:already-answered" -> {
                 json.decodeFromString<CallAlreadyAnsweredPayload>(rawJson)
                 CallEvent.RemoteHangUp
+            }
+            else -> null
+        }
+    }.getOrNull()
+
+    /**
+     * Decode the **identity** of an inbound `call:initiated` frame into a
+     * [WaitingCall], or `null` when the frame is malformed or carries no call id.
+     *
+     * The FSM-facing [map] deliberately discards identity ([CallEvent.ReceiveIncoming]
+     * carries none); this parallel, side-effect-free decode surfaces the caller +
+     * media so a *second* incoming call arriving while busy can be rendered as a
+     * call-waiting banner (and rejected / answered by its own id).
+     */
+    fun incomingOffer(rawJson: String): WaitingCall? = runCatching {
+        WaitingCall.from(json.decodeFromString<CallInitiatedPayload>(rawJson))
+    }.getOrNull()
+
+    /**
+     * Decode an inbound teardown frame (`call:ended` / `call:missed`) into the
+     * identity-carrying [CallEndedSignal] — the ended call's id plus the
+     * [CallEvent] the FSM reduces iff that id is the *active* call's — or `null`
+     * when the frame is not a teardown, is malformed, or carries no (blank) id.
+     *
+     * The FSM-facing [map] deliberately returns `null` for both frames; this
+     * parallel, total, side-effect-free decode is the **only** teardown path, so
+     * the consumer can gate the FSM teardown on the active id (only the active
+     * call's own end reduces it) while dismissing a call-waiting banner keyed by
+     * the *waiting* call's id via [CallWaitingEvent.RemotelyEnded]. A blank/absent
+     * id yields `null` — an untargetable teardown is dropped, never applied to an
+     * arbitrary call.
+     */
+    fun endedSignal(eventName: String, rawJson: String): CallEndedSignal? = runCatching {
+        when (eventName) {
+            "call:ended" -> {
+                val payload = json.decodeFromString<CallEndedPayload>(rawJson)
+                payload.callId.takeIf { it.isNotBlank() }?.let { CallEndedSignal(it, endedEvent(payload)) }
+            }
+            "call:missed" -> {
+                val payload = json.decodeFromString<CallMissedPayload>(rawJson)
+                payload.callId.takeIf { it.isNotBlank() }?.let { CallEndedSignal(it, CallEvent.RingTimeout) }
             }
             else -> null
         }
@@ -64,11 +105,11 @@ object CallSignalMapper {
 
     /**
      * The FSM has no distinct remote-reject/failed event, so every remote
-     * teardown except a ring-timeout maps to [CallEvent.RemoteHangUp]; a
-     * `missed` reason maps to [CallEvent.RingTimeout] (parity with the dedicated
+     * teardown except a ring-timeout carries [CallEvent.RemoteHangUp]; a
+     * `missed` reason carries [CallEvent.RingTimeout] (parity with the dedicated
      * `call:missed` event the gateway emits alongside).
      */
-    private fun mapEnded(payload: CallEndedPayload): CallEvent =
+    private fun endedEvent(payload: CallEndedPayload): CallEvent =
         when (payload.reason) {
             "missed" -> CallEvent.RingTimeout
             else -> CallEvent.RemoteHangUp

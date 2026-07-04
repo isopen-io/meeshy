@@ -100,6 +100,10 @@ struct ConversationScrollState {
     var editingPendingAttachmentId: String? = nil
     var videoToEdit: URL? = nil
     var audioToEdit: PendingAudioEdit? = nil
+    // "Éditer" from the recent-media strip — edited BEFORE staging (the edited
+    // output goes through the camera-capture pipeline, never the original).
+    var recentImageToEdit: UIImage? = nil
+    var recentVideoToEdit: URL? = nil
 }
 
 struct PreviewMedia: Identifiable {
@@ -140,6 +144,11 @@ struct ConversationComposerState {
     var showCamera = false
     var showFilePicker = false
     var selectedPhotoItems: [PhotosPickerItem] = []
+    /// True while `selectedPhotoItems` is being primed with the recent-media
+    /// strip's multi-selection before presenting the PhotosPicker. Priming
+    /// fires the selection onChange once — this flag swallows that echo so
+    /// items are only ingested when the user actually confirms in the picker.
+    var photoPickerPriming = false
     
     // Location & Upload
     var isLoadingLocation = false

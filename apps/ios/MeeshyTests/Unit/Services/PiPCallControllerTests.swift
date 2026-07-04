@@ -67,6 +67,12 @@ final class PiPCallControllerTests: XCTestCase {
         makeSUT().updateRemoteTrack(NSObject())
     }
 
+    func test_noOp_setRemoteVideoMuted_doesNotCrash() {
+        let sut = makeSUT()
+        sut.setRemoteVideoMuted(true)
+        sut.setRemoteVideoMuted(false)
+    }
+
     // MARK: Protocol idempotency
 
     func test_noOp_repeatedStartStop_doesNotCrash() {
@@ -220,6 +226,73 @@ final class PiPCallControllerSourceTests: XCTestCase {
         XCTAssertTrue(
             body.contains("desiredFrameRate = QualityThresholds.pipFrameRateDefault"),
             "tearDown() must reset desiredFrameRate to the default so the next call's PiP doesn't inherit a throttled fps from a previous call"
+        )
+    }
+
+    // MARK: - Remote video mute → placeholder (never the frozen last frame)
+
+    func test_setRemoteVideoMuted_forwardsToRendererAndPersistsState() {
+        XCTAssertTrue(
+            Self.source.contains("func setRemoteVideoMuted(_ muted: Bool) {\n        isRemoteVideoMuted = muted\n        renderer?.setRemoteVideoMuted(muted)"),
+            "setRemoteVideoMuted must persist isRemoteVideoMuted on the controller (survives renderer re-attach " +
+            "on ICE restart) AND forward it to the currently-attached renderer"
+        )
+    }
+
+    func test_attachRenderer_appliesCurrentMuteStateBeforeAddingTrack() {
+        let attachRange = Self.source.range(of: "func attachRenderer() {\n")
+        XCTAssertNotNil(attachRange, "PiPCallController.attachRenderer() implementation must be present")
+        guard let attachStart = attachRange?.lowerBound,
+              let bodyEnd = Self.source.range(of: "\n    }", range: attachStart..<Self.source.endIndex) else {
+            return XCTFail("Could not locate attachRenderer() body")
+        }
+        let body = Self.source[attachStart..<bodyEnd.lowerBound]
+        guard let muteCallRange = body.range(of: "renderer.setRemoteVideoMuted(isRemoteVideoMuted)"),
+              let addRange = body.range(of: "remoteTrack.add(renderer)") else {
+            return XCTFail("attachRenderer must call renderer.setRemoteVideoMuted(isRemoteVideoMuted) before remoteTrack.add(renderer)")
+        }
+        XCTAssertLessThan(
+            muteCallRange.lowerBound, addRange.lowerBound,
+            "The mute state must be applied to a freshly-created renderer BEFORE it's attached to the track, " +
+            "so a re-attach while the peer's camera is already off can't let a stray real frame through first"
+        )
+    }
+
+    func test_tearDown_resetsRemoteVideoMutedState() {
+        let teardownRange = Self.source.range(of: "func tearDown() {\n")
+        guard let teardownStart = teardownRange?.lowerBound,
+              let bodyEnd = Self.source.range(of: "\n    }", range: teardownStart..<Self.source.endIndex) else {
+            return XCTFail("Could not locate tearDown() body")
+        }
+        let body = Self.source[teardownStart..<bodyEnd.lowerBound]
+        XCTAssertTrue(
+            body.contains("isRemoteVideoMuted = false"),
+            "tearDown() must reset isRemoteVideoMuted — PiPCallController is a singleton, so a call that ended " +
+            "with the peer's camera off must not leak that state into the next call's PiP"
+        )
+    }
+
+    // MARK: - Rotation wiring (PiPVideoRenderer.onRotation → surfaceView.applyRotation)
+
+    func test_attachRenderer_wiresOnRotationToSurfaceViewApplyRotation() {
+        // PiPVideoRenderer enqueues the raw, unrotated pixel buffer (unlike
+        // WebRTC's own RTCMTLVideoView) — without forwarding onRotation to
+        // PiPVideoSampleBufferView.applyRotation, the system PiP window renders
+        // a portrait-held remote camera sideways.
+        let attachRange = Self.source.range(of: "func attachRenderer() {\n")
+        XCTAssertNotNil(attachRange, "PiPCallController.attachRenderer() implementation must be present")
+        guard let attachStart = attachRange?.lowerBound,
+              let bodyEnd = Self.source.range(of: "\n    }", range: attachStart..<Self.source.endIndex) else {
+            return XCTFail("Could not locate attachRenderer() body")
+        }
+        let body = Self.source[attachStart..<bodyEnd.lowerBound]
+        XCTAssertTrue(
+            body.contains("onRotation:"),
+            "attachRenderer() must pass an onRotation callback to PiPVideoRenderer"
+        )
+        XCTAssertTrue(
+            body.contains("surfaceView.applyRotation(degrees)"),
+            "The onRotation callback must forward the rotation degrees to surfaceView.applyRotation so the PiP window compensates for the remote camera's orientation"
         )
     }
 }
