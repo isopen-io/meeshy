@@ -14,6 +14,20 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 140i, 2026-07-04)** — piste iOS indépendante (suffixe `i`).
+> - **140i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `c735c016`)** :
+>   Dynamic Type de `StatsTimelineChart` (graphique d'activité Swift Charts). Ajout `import MeeshyUI`.
+>   **2/2** `.font(.system(size: 9))` → `MeeshyFont.relative(9)` sur les `AxisValueLabel()` des axes X et Y →
+>   les libellés de graduation scalent sous Dynamic Type. **0 gel** (libellés d'axe = vrai texte non borné).
+>   A11y globale du graphique déjà en place. 1 fichier, 0 logique, 0 test/clé i18n neuve. GitHub MCP en
+>   ré-auth au dev → contention non vérifiée via API (surface stats risque négligeable, 0 test référent) ;
+>   PR à la reconnexion. Gate = CI `ios-tests`.
+> - **⚠️ `StatsTimelineChart` Dynamic Type SOLDÉ** : ne plus reprendre (2 libellés d'axe → `relative`).
+> - **Base de départ 141i : `main` HEAD**. Reste `StoryViewerView+Content` (⚠️ i18n + `@State private`
+>   cross-file). Sinon : traîne 2/1 `.system` (`ContextActionMenu`, `SecurityVerificationView`,
+>   `AudioPostComposerView`, `ConversationBackgroundComponents`, `MessageViewsDetailView`, `StoryExpiredContent`,
+>   `StoryViewerContainer`, `BubbleStandardLayout`, `WebRTCVideoView` post-PR…), ou **passe state-of-the-art**.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 139i, 2026-07-04)** — piste iOS indépendante (suffixe `i`).
 > - **139i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `b6ba6a1a`)** :
 >   Dynamic Type de `MentionSuggestionPanel` (panneau d'autocomplétion de mentions au-dessus du composer).

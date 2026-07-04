@@ -2,6 +2,7 @@ import SwiftUI
 import Combine
 import Charts
 import MeeshySDK
+import MeeshyUI
 
 struct StatsTimelineChart: View {
     let timeline: [TimelinePoint]
@@ -38,14 +39,14 @@ struct StatsTimelineChart: View {
         .chartXAxis {
             AxisMarks(values: .automatic(desiredCount: 6)) { _ in
                 AxisValueLabel()
-                    .font(.system(size: 9))
+                    .font(MeeshyFont.relative(9))
                     .foregroundStyle(theme.textMuted)
             }
         }
         .chartYAxis {
             AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { _ in
                 AxisValueLabel()
-                    .font(.system(size: 9))
+                    .font(MeeshyFont.relative(9))
                     .foregroundStyle(theme.textMuted)
                 AxisGridLine()
                     .foregroundStyle(theme.textMuted.opacity(0.15))
