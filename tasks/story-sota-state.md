@@ -426,9 +426,11 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   chip sur « Ma story ». C'est le pendant UX de E1.
 - [ ] **U5 (P3) État de chargement prolongé** (avec R2) : ThumbHash + progress ring fine autour
   de l'avatar auteur (métaphore déjà connue du tray), bouton passer.
-- [ ] **U6 (P3) Dynamic Type/VoiceOver du viewer** : étendre la passe a11y (PR #1211) aux
-  overlays reader (labels des zones tap prev/next, annonce du changement de slide,
-  `accessibilityValue` de progression).
+- [~] **U6 (P3) Dynamic Type/VoiceOver du viewer.** — INCRÉMENT 1 it.31
+  ✅ Annonce VoiceOver au changement de slide (« Story N sur M », gated
+  isVoiceOverRunning, clé localisée statique — piège : String(localized:) exige une
+  StaticString comme clé, pas d'interpolation dedans).
+  RESTE : labels des zones tap prev/next, accessibilityValue de la barre de progression.
 - [x] **U7 (P3) ProMotion.** ✅ ÉCARTÉ it.30 — déjà satisfait : le timer viewer pose
   `CAFrameRateRange(min 30, max 60, preferred 60)` (StoryReaderTimerController:270, jamais
   120 Hz) et le canvas est à preferred 60 (max 120 réservé aux keyframes edit). Granularité
@@ -523,6 +525,10 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.31 — U6 inc.1 : annonce VoiceOver du changement de slide (hash au push)
+
+- Build vert 18 s ; reste tap zones + progression (inc.2).
 
 ## it.30 — U7 : ÉCARTÉ avec preuve (frame rate déjà borné)
 

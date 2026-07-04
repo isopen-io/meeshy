@@ -496,6 +496,19 @@ struct StoryViewerView: View {
         .adaptiveOnChange(of: currentStoryIndex) { oldValue, _ in
             // U2 — tick haptique léger au passage de slide (parité Instagram).
             HapticFeedback.light()
+            // U6 — VoiceOver : annonce du changement de slide (« Story 2 sur
+            // 5 ») — sans elle, un utilisateur non-voyant n'a AUCUN signal
+            // que le contenu vient de changer sous ses doigts.
+            if UIAccessibility.isVoiceOverRunning,
+               let total = currentGroup?.stories.count {
+                UIAccessibility.post(
+                    notification: .announcement,
+                    argument: String(
+                        localized: "story.viewer.a11y.slideChanged",
+                        defaultValue: "Story \(currentStoryIndex + 1) sur \(total)"
+                    )
+                )
+            }
             skipExpiredStoriesIfNeeded()
             isContentReady = false
             refreshPrefetchWindowAndTimer()
