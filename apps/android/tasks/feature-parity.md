@@ -1044,8 +1044,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       4-tab `TabRow` with a live count badge on the **Requests** tab ; Contacts /
       Discover / Blocked tabs remain placeholders pending their data slices
 - [ ] Contacts list (online/offline filters + counts, search, presence + mood-emoji)
-- [ ] Cache-first friends list with cross-screen reconciliation; online-first sorting
-- [ ] Friendship status resolution (friend / pending sent / pending received / blocked)
+- [~] Cache-first friends list with cross-screen reconciliation; online-first sorting —
+      the cross-screen reconciliation **store landed** (slice `friendship-relationship-resolver`):
+      `:sdk-core` `@Singleton FriendshipCache` (port of iOS `FriendshipCache`) is the in-memory
+      SSOT for the friend graph (accepted / sent-pending / received-pending), mutated optimistically
+      by `ContactsViewModel` (hydrate on load + accept/decline/cancel + rollback) so every future
+      profile-rendering surface resolves the same status without re-querying. Version `StateFlow`
+      drives reactive recompute. **Pending:** the persistent friends **list** UI + online-first sorting.
+- [x] Friendship status resolution (friend / pending sent / pending received / blocked) —
+      **shipped** (slice `friendship-relationship-resolver`): the pure `:core:model`
+      `UserRelationshipRules.resolve(target, currentUserId, isBlocked, friendship)` is the total
+      precedence SSOT (blank→None, current wins over block wins over friendship, port of iOS
+      `UserRelationshipResolver`), with `FriendshipStatus` + `UserRelationshipState` (`isPending`)
+      pure models. The `:sdk-core` `UserRelationshipResolver` supplies the live inputs (the
+      `FriendshipCache` status + a `BlockStatusProvider` fun-interface seam + a current-user
+      provider). Block state is a seam pending a `BlockRepository`; every other state resolves live.
+      +31 behavioural tests (10 rules, 13 cache, 8 resolver).
 - [~] Send / accept / decline / cancel friend request — **Requests tab** lists received +
       sent requests (avatars tinted by deterministic `DynamicColorGenerator.colorForName`),
       with optimistic accept / decline (`respond`) + cancel (`deleteRequest`), in-flight

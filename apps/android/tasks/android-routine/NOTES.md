@@ -3,6 +3,24 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Design lessons
+- **Pivot areas when the current one runs out of pure cores, don't force glue.** (2026-07-04, slice
+  `friendship-relationship-resolver`.) The Calls area's remaining parity items are all WebRTC/Telecom/
+  FCM platform glue — untestable in JVM, high-risk to merge blind. Rather than stall, the routine
+  advanced to the next-richest in-progress area (Contacts §J) where a genuine pure vertical existed.
+  Build-order is a *default* sequencing, not a hard gate: when an area's testable surface is exhausted,
+  move to the highest-value pure slice available and note the pivot in PROGRESS "Next".
+- **Missing-dependency seam pattern: `fun interface` provider, not a stub service.** The iOS
+  `UserRelationshipResolver` folds in block state via `BlockServiceProviding.isBlocked`, but Android
+  has no BlockService yet. Instead of inventing a throwaway stub, the resolver takes a
+  `BlockStatusProvider` `fun interface { isBlocked(id): Boolean }` seam — fully testable now, and a
+  future `BlockRepository` binds to it with zero resolver churn. The `Blocked` state is honestly
+  tracked as `[~]`/seam-pending in feature-parity until that binding lands. Prefer a functional seam
+  over a fake when the real collaborator doesn't exist yet.
+- **Default constructor param keeps prior direct-construction tests green when injecting a new
+  `@Singleton`.** `ContactsViewModel` gained a `FriendshipCache` param; giving it a
+  `= FriendshipCache()` default meant the existing `ContactsViewModel(repository)` test calls compiled
+  unchanged (Hilt still injects the real singleton in prod — it ignores the default). Minimal test
+  churn, no weakened tests.
 - **Identity-less fan-out streams must not drive per-entity teardown.** The gateway fans `call:ended`
   out to *every* member USER room, so a busy user (active call + a waiting-call banner) receives the
   *waiting* call's teardown on the same socket. Folding an identity-less `CallEvent.RemoteHangUp` from
