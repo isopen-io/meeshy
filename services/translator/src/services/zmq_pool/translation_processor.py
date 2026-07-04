@@ -27,17 +27,20 @@ logger = logging.getLogger(__name__)
 # silencieuse du Prisme Linguistique. Le budget croît avec la longueur
 # (le coût CPU est ~linéaire au nombre de segments), borné pour ne pas
 # monopoliser un worker sur un input pathologique.
+# Calibration : mesure prod ~30 s/500 chars par langue seule (lock libre) ;
+# la pente à 45 s garde ~1.5× de marge pour la contention inter-workers sur
+# le lock d'inférence du modèle.
 INFERENCE_TIMEOUT_BASE_S = 45.0
-INFERENCE_TIMEOUT_PER_500_CHARS_S = 30.0
-INFERENCE_TIMEOUT_MAX_S = 240.0
+INFERENCE_TIMEOUT_PER_500_CHARS_S = 45.0
+INFERENCE_TIMEOUT_MAX_S = 360.0
 
 
 def inference_timeout_for(text_length: int) -> float:
     """Budget d'inférence (secondes) proportionnel à la longueur du texte.
 
     ≤ 500 chars : base 45 s (comportement historique, inchangé pour les
-    messages courts) ; au-delà : +30 s par tranche de 500 chars, plafonné
-    à 240 s.
+    messages courts) ; au-delà : +45 s par tranche de 500 chars, plafonné
+    à 360 s.
     """
     extra = INFERENCE_TIMEOUT_PER_500_CHARS_S * max(0, text_length - 500) / 500.0
     return min(INFERENCE_TIMEOUT_MAX_S, INFERENCE_TIMEOUT_BASE_S + extra)
@@ -66,25 +69,20 @@ async def process_single_translation(
     results = []
 
     try:
-        # Lancer les traductions en parallèle pour chaque langue cible
-        translation_tasks = []
-
+        # Une langue à la fois : l'inférence ML est sérialisée par le lock
+        # modèle (model_loader.get_model_inference_lock), un fan-out
+        # concurrent ne parallélise rien mais fait courir le budget de
+        # CHAQUE langue pendant l'attente des autres — un texte long
+        # multi-langues expirait alors toutes ses langues d'un coup.
         for target_language in task.target_languages:
-            translation_task = asyncio.create_task(
-                _translate_single_language(
+            try:
+                result = await _translate_single_language(
                     task=task,
                     target_language=target_language,
                     worker_name=worker_name,
                     translation_service=translation_service,
                     translation_cache=translation_cache
                 )
-            )
-            translation_tasks.append((target_language, translation_task))
-
-        # Attendre toutes les traductions
-        for target_language, translation_task in translation_tasks:
-            try:
-                result = await translation_task
 
                 # Ajouter métadonnées
                 result['poolType'] = 'any' if task.conversation_id == 'any' else 'normal'
