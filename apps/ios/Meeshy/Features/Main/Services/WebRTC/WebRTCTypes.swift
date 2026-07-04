@@ -726,7 +726,7 @@ protocol WebRTCClientProviding: AnyObject {
 
 // MARK: - DataChannel Transcription Message
 
-struct DataChannelTranscriptionMessage: Codable, Sendable, Equatable {
+nonisolated struct DataChannelTranscriptionMessage: Codable, Sendable, Equatable {
     let type: String  // "transcription-segment"
     let text: String
     let speakerId: String
@@ -746,7 +746,7 @@ struct DataChannelTranscriptionMessage: Codable, Sendable, Equatable {
 /// AUTORITATIF (et le seul qui atteint un pair dont le média est déjà mort) ;
 /// le bye n'est qu'un raccourci — les deux chemins sont dédupliqués par le
 /// garde `.ended` de `handleRemoteEnd`.
-struct DataChannelControlMessage: Codable, Sendable, Equatable {
+nonisolated struct DataChannelControlMessage: Codable, Sendable, Equatable {
     let type: String
     let reason: String?
 }
@@ -754,7 +754,9 @@ struct DataChannelControlMessage: Codable, Sendable, Equatable {
 /// Routage typé des messages entrants du data channel. Pur et testable :
 /// une seule passe de décodage décide bye / segment de transcription / bruit
 /// (ping keep-alive, payload inconnu d'une version future).
-enum DataChannelInbound: Equatable {
+/// `nonisolated` : value type pur, décodable depuis n'importe quel contexte
+/// (le callback data channel WebRTC arrive hors main thread).
+nonisolated enum DataChannelInbound: Equatable {
     case bye(reason: String?)
     case transcription(DataChannelTranscriptionMessage)
     case ignored
