@@ -75,6 +75,10 @@ public nonisolated struct BandStateMachine: Equatable, Sendable {
     public init() {}
 
     public mutating func tapFAB(_ category: BandCategory) {
+        // La timeline se présente en SHEET (ComposerToolPanelHost la rend en
+        // EmptyView, panelHeight 0) — le band ne doit jamais atteindre
+        // .toolPanel(.timeline). Les call sites ouvrent la sheet à la place.
+        guard category != .timeline else { return }
         switch state {
         case .hidden:
             state = .toolPanel(StoryToolMode.from(category: category))
@@ -91,6 +95,7 @@ public nonisolated struct BandStateMachine: Equatable, Sendable {
     }
 
     public mutating func swipeUpOnFAB(_ category: BandCategory) {
+        guard category != .timeline else { return }  // sheet-only (cf. tapFAB)
         // Force open (idempotent on same category).
         switch state {
         case .formatPanel:
@@ -120,6 +125,7 @@ public nonisolated struct BandStateMachine: Equatable, Sendable {
     }
 
     public mutating func tapTile(_ tool: StoryToolMode) {
+        guard tool != .timeline else { return }  // sheet-only (cf. tapFAB)
         switch state {
         case .formatPanel:
             break  // formatPanel takes precedence

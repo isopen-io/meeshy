@@ -441,6 +441,14 @@ extension StoryComposerView {
                 pickerSelectedTool = tool
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+                // La timeline se présente en SHEET, jamais dans le band (C5) :
+                // la tuile ouvre la sheet directement, sans selectTool ni band
+                // (parité avec le chemin overflow ⋯ et les switch-chips).
+                if tool == .timeline {
+                    viewModel.isTimelineVisible = true
+                    pickerSelectedTool = nil
+                    return
+                }
                 // For the Text tile, jump straight into the inline editor :
                 // viewModel.addText() itself spawns a fresh text + sets
                 // selectedElementId + sets activeTool = .text, so calling
