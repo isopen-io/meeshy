@@ -104,7 +104,7 @@ fun ContactsScreen(
                     onCancel = viewModel::cancelRequest,
                 )
                 ContactsTab.Discover -> DiscoverTab()
-                else -> ComingSoon()
+                ContactsTab.Blocked -> BlockedTab()
             }
         }
     }
@@ -249,11 +249,6 @@ private fun EmptyState(message: String) {
             modifier = Modifier.padding(32.dp),
         )
     }
-}
-
-@Composable
-private fun ComingSoon() {
-    EmptyState(stringResource(R.string.contacts_coming_soon))
 }
 
 private fun FriendRequestUser?.displayLabel(): String =

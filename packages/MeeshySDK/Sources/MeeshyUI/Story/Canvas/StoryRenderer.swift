@@ -161,6 +161,33 @@ public enum StoryRenderer {
                 }
             }
 
+            // R14 — crossfade intra-slide (`clipTransitions`) au playback :
+            // opacité ABSOLUE posée en POST-PASSE par tick, HORS ItemSignature
+            // (l'y intégrer invaliderait le cache à chaque frame de transition
+            // → rebuild du layer complet, re-création d'AVPlayer pour les
+            // clips vidéo). Pour un média IMPLIQUÉ dans une transition on
+            // repose TOUJOURS base × facteur — jamais de multiplication en
+            // place (le layer caché garde l'opacité du tick précédent) et le
+            // facteur 1.0 hors fenêtre restaure la base. Base fidèle à l'ordre
+            // du build : fade envelope (écrase) > opacité keyframes > 1.
+            if mode == .play,
+               let media = item as? StoryMediaObject,
+               let transitions = slide.effects.clipTransitions,
+               transitions.contains(where: { $0.fromClipId == media.id || $0.toClipId == media.id }) {
+                let factor = ReaderTransitionResolver.opacity(
+                    for: media,
+                    transitions: transitions,
+                    currentTime: Float(time.seconds)
+                )
+                let kfOverrides = applyKeyframes(
+                    keyframes: media.keyframes ?? [],
+                    at: time.seconds,
+                    startTime: media.startTime ?? 0
+                )
+                let base = fadeOpacity(item: media, at: time.seconds) ?? kfOverrides.opacity ?? 1.0
+                layer.opacity = Float(base * Double(factor))
+            }
+
             // A cached layer might still be attached to the previous frame's
             // root layer. addSublayer auto-detaches before re-attaching, so
             // this is safe and cheap (CALayer parenting is O(1) bookkeeping).

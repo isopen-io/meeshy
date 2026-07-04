@@ -320,11 +320,21 @@ Contacts slices:**
    (iOS `CacheCoordinator.friends`) — today it's network-first + in-memory reconciled; and per-filter
    counts + mood-emoji presence.
 2. **Send friend request (compose-new)** — user search + inline connect, optimistic `didSendRequest`
-   + offline-queue + `cmid` idempotency (the "send" half the Requests tab still lacks).
-3. **BlockRepository + `BlockStatusProvider` binding** — the block half of the resolver (Blocked state
-   currently a seam), a Blocked tab list with confirm-to-unblock + optimistic rollback.
-4. **Discover suggestions + live user search** — cache-first suggestions, inline connect using the
-   resolver to render per-user relationship state.
+   + offline-queue + `cmid` idempotency (the "send" half the Requests tab still lacks). Note: live
+   search + inline connect already shipped (`discover-user-search`); the gap is the durable
+   **offline-queue + idempotency** for the send.
+3. ~~**BlockRepository + `BlockStatusProvider` binding**~~ ✅ shipped as `contacts-blocked-list`
+   (2026-07-04) — pure `:core:model` `BlockedUser` + `resolvedName`; `:core:network` `BlockApi`;
+   `:sdk-core` `@Singleton BlockCache` (blocklist SSOT) + `BlockRepository`; `:feature:contacts`
+   `BlockedListViewModel` + `BlockedTab` (confirm-to-unblock + optimistic rollback). The block seam
+   is now bound — `DiscoverViewModel`'s `BlockStatusProvider` reads the live `BlockCache`. +29 tests.
+   See run log. **Next Contacts pure cores:**
+   - **Durable offline unblock/block** — route the mutation through the outbox (iOS `OfflineQueue`),
+     surviving offline + process death (today it's online-first optimistic REST + snapshot rollback).
+   - **Send friend request offline-queue + `cmid` idempotency** (#2 above).
+   - **Discover cache-first suggestions** — the empty-query suggestions list (iOS `loadSuggestions`).
+4. ~~**Discover suggestions + live user search**~~ live search + inline connect ✅ (`discover-user-search`);
+   the empty-query **cache-first suggestions** list remains (folded into #3's "Next" above).
 
 ---
 _Historical Calls backlog below (revisit only for the platform-glue slices)._
@@ -638,6 +648,64 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-04 — slice `contacts-blocked-list` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration — the one open PR (#1444,
+  `claude/upbeat-euler-s5qysh`) is an iOS a11y annotation change from another session (production
+  logic, not Android), left untouched. Branched `claude/apps/android/contacts-blocked-list` off
+  latest `origin/main` (`67b70e8f`).
+- **Why this slice:** PROGRESS/parity "Next" #3 for Contacts — the last un-bound half of the
+  relationship resolver. The `UserRelationshipResolver` shipped with a `BlockStatusProvider` **seam**
+  (`{ false }`); this slice supplies the real block data (SSOT + repository + list UI) and binds the
+  seam. Port of iOS `BlockService` + `BlockedViewModel`/`BlockedTab`. Also promotes the 4th Contacts
+  tab from placeholder → live, so no dead-end tab remains.
+- **Added (production, 5 files):**
+  - `:core:model` `friend/BlockedUser.kt` — `@Serializable` `BlockedUser` (id/username/displayName/
+    avatar/`blockedAt` as raw ISO string, keeping the module date-free) + pure `resolvedName` (display
+    name → username, port of iOS `BlockedUser.name`).
+  - `:core:network` `net/api/BlockApi.kt` — `GET users/me/blocked-users`, `POST users/{id}/block`,
+    `DELETE users/{id}/block` (iOS `BlockService` endpoints) + `BlockActionResponse`; wired through
+    `MeeshyApi.blocks` + a `NetworkModule` `@Provides`.
+  - `:sdk-core` `friend/BlockCache.kt` — `@Singleton` in-memory blocklist SSOT (port of iOS
+    `BlockService.blockedUserIds`): `isBlocked`/`hydrate`(full-replace, blank-skip)/`setBlocked`
+    (blank-inert)/`clear`, `currentBlockedIds` defensive snapshot, `version: StateFlow<Int>` bumped
+    on every mutation. The `BlockStatusProvider` binds straight onto `isBlocked`.
+  - `:sdk-core` `friend/BlockRepository.kt` — over `BlockApi` + `BlockCache`: `listBlocked` hydrates
+    the cache on success; `block`/`unblock` flip the single entry on success; a failure never touches
+    the cache.
+  - `:feature:contacts` `BlockedListViewModel.kt` — UDF VM over `BlockRepository`: `load()` (skeleton
+    only on cold empty), `unblock()` optimistic remove + `pendingIds` guard + snapshot rollback on
+    failure, `dismissError()`. Pure `showSkeleton`/`isEmpty` derivations.
+- **Wired (product UI, `:feature:contacts`):** `BlockedTab.kt` — the Blocked tab (was placeholder)
+  renders the blocklist (accent-seeded `MeeshyAvatar` via `DynamicColorGenerator`, name/`@username`),
+  an `Unblock` button → `AlertDialog` confirm → optimistic unblock, distinct cold-skeleton /
+  error+retry / empty states. `ContactsScreen` mounts it (removed the `ComingSoon` placeholder + its
+  now-dead string in all 4 locales; the `when` is now exhaustive over all 4 tabs). `DiscoverViewModel`
+  now builds its `BlockStatusProvider` from the shared `BlockCache` (was `{ false }`), so a blocked
+  user resolves live to `ConnectAction.Blocked`. +9 strings in all four locales (en/fr/es/pt).
+- **Tests (red→green, +29, 0 skips):** 4 `BlockedUserTest` (`resolvedName` present/null/blank/both-
+  empty), 9 `BlockCacheTest` (fresh/hydrate/full-replace/blank-skip/setBlocked toggle/blank-inert-no-
+  bump/defensive-copy/version-count/clear), 6 `BlockRepositoryTest` (list success hydrates + failure
+  untouched; unblock success flips off + failure keeps; block success flips on + failure untouched),
+  9 `BlockedListViewModelTest` (load populate/empty-state/error/cold-skeleton-in-flight via a gated
+  deferred/optimistic remove/failure rollback/unknown-id inert/in-flight guard via gated deferred/
+  dismissError), +1 `DiscoverViewModelTest` (a blocked user → `ConnectAction.Blocked` via the shared
+  cache — proves the seam is consumed). Behaviour through the public API; no tautologies.
+- **Verification:** `/opt/gradle/bin/gradle :core:model:testDebugUnitTest :sdk-core:testDebugUnitTest
+  :feature:contacts:testDebugUnitTest :app:assembleDebug` → BUILD SUCCESSFUL; suites
+  BlockedUserTest 4/4, BlockCacheTest 9/9, BlockRepositoryTest 6/6, BlockedListViewModelTest 9/9,
+  DiscoverViewModelTest 17/17, module totals core:model 413/0/0, sdk-core 343/0/0, feature:contacts
+  51/0/0 (tests/skipped/failures); `:app:assembleDebug` green (Hilt DI wiring compiles end-to-end).
+  (Bootstrapped Android SDK + `/opt/gradle` 8.14.3 per NOTES; wrapper dist still 403.)
+- **Reviewer verdict:** PASS — diff is `apps/android` only (5 prod + 1 UI + 1 wiring + strings×4 +
+  4 test files + these docs), no production logic elsewhere; TDD red→green, behaviour through the
+  public API, no tautologies, no weakened floors; SDK purity kept (pure model in `:core:model`,
+  stateful store + repository in `:sdk-core`, VM + Compose in `:feature:contacts`); SSOT respected
+  (`BlockCache` the one blocklist, `resolvedName` the one name rule, the resolver seam now bound —
+  no re-implementation); instant-app (skeleton only cold empty, populated list paints immediately);
+  UDF + immutable `StateFlow`; accent-coherent rows + confirm dialog, no dead-end (4th tab now live);
+  edges covered (empty blocklist, blank/unknown id inert, in-flight guard, failure rollback, full
+  hydrate replace + blank-skip).
 
 ### 2026-07-04 — slice `discover-user-search` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration — the one open PR (#1440,

@@ -365,8 +365,8 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   gateway générées encodées, test it.41 vert sur le cas nominal). Fix si symptôme : dériver
   la clé via le MÊME round-trip URL aux deux bouts (pinTargets/prefetch). Pas de fix spéculatif.
 
-- [ ] **R14 (P2, découvert it.49) Le reader iOS ne rend PAS les clipTransitions (crossfade
-  intra-slide).** Preuves : `ReaderTransitionResolver.opacity` (StoryReaderResolvers.swift:28,
+- [x] **R14 (P2, découvert it.49) Le reader iOS ne rend PAS les clipTransitions (crossfade
+  intra-slide).** ✅ it.50 Preuves : `ReaderTransitionResolver.opacity` (StoryReaderResolvers.swift:28,
   maths complète + testée StoryCanvasReaderTransitionTests) n'a AUCUN caller de production
   (vestige du reader SwiftUI supprimé Phase A4) ; le canvas CALayer (StoryCanvasUIView*/
   StoryRendererCache) ignore `clipTransitions` ; seuls le preview timeline et VideoCompositor
@@ -378,6 +378,13 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   (sig.opacity × ReaderTransitionResolver.opacity), cache intact. Vérifier au passage comment
   les keyframes opacity vivent déjà avec la signature (même hazard potentiel préexistant).
   W1 inc.4 (portage web) utilisera la MÊME référence — à faire après ou avec R14.
+  LIVRÉ it.50 : post-passe par tick dans StoryRenderer.render (.play), opacité ABSOLUE =
+  base build-order (fadeOpacity > kf opacity > 1) × ReaderTransitionResolver.opacity,
+  HORS ItemSignature (cache intact, pas de re-création AVPlayer), re-posée à chaque tick
+  pour les clips impliqués (facteur 1.0 hors fenêtre = restauration). 3 tests
+  RenderIntegrationTests dont « cached-ticks : 0.5 → 0.2 absolu → 1.0 » ; 10/10 avec la
+  non-régression StoryCanvasReaderTransitionTests ; build app 86 s vert. Reste visuel
+  simulateur : à grouper avec une story de test portant un crossfade (composer requis).
 
 ### BACKEND — instantanéité réseau
 
@@ -426,14 +433,21 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 
 ### WEB (secondaire — parité lecteur)
 
-- [~] **W1 (P2) Keyframes/transitions non rendus.** — INCRÉMENT 1 FAIT it.23
+- [x] **W1 (P2) Keyframes/transitions non rendus.** ✅ COMPLET it.51
   Plan : `docs/superpowers/plans/2026-07-03-web-story-keyframes-plan.md`.
   ✅ Inc.1 : portage 1:1 de `KeyframeInterpolator.swift` en TS pur (`story-transforms.ts` —
   tri, constante, clamp, easing du kf BAS, canaux indépendants, time relatif au startTime),
   hook playhead rAF activé UNIQUEMENT si le slide a des keyframes (hérite du gel W2 :
   startedAtRef nul → temps figé), appliqué aux TEXTOBJECTS (x/y/scale/opacity).
   ✅ Inc.2 (it.24) : mediaObjects foreground animés (mêmes canaux, style factorisé,
-  slideHasKeyframes étendu). RESTE : inc.4 clipTransitions (voir plan).
+  slideHasKeyframes étendu).
+  ✅ Inc.4 (it.51) : `resolveClipTransitionOpacity` — portage 1:1 des maths
+  ReaderTransitionResolver (référence R14) : sortant/entrant linéaires, multiplicatif,
+  dissolve ignoré, clips hors fenêtre masqués sur slides à transitions ; rAF armé aussi
+  sur transitions-seules (gel W2 hérité) ; opacité FG = kf × facteur, styles intacts sans
+  transitions ; type `clipTransitions` ajouté au StoryData local (passthrough serveur déjà
+  intégral). 154/154 les 9 suites story web (7 tests parité neufs).
+  Inc.3 (rotation animée) = non-item tant que le composer ne l'émet pas (plan).
 - [x] **W2 (P2) Timer découplé de la vidéo.** ✅ it.22
   Porté le pattern iOS R1/R2 : `isBuffering` piloté par les événements natifs du <video>
   principal (waiting/stalled → gel ; playing/canplay → reprise), watchdog 5 s anti-deadlock
@@ -443,9 +457,24 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   Handlers posés sur les 2 formes de fond vidéo (mediaUrl + mediaObjects isBackground).
   Piège de test consigné : avec fake timers, le timer reposé par un effet React post-watchdog
   ne se flush qu'à la fin de l'act → découper les advanceTimersByTime.
-- [ ] **W3 (P2) Composer web : visibilités COMMUNITY/EXCEPT/ONLY + overlays.** Reliquat connu
-  (mémoire story-status-community-visibility). `visibilityUserIds` déjà dans
-  `CreateStoryRequest` web — manque l'UI.
+- [~] **W3 (P2) Composer web : visibilités COMMUNITY/EXCEPT/ONLY + overlays.** — INC.1 it.52
+  ✅ Inc.1 : COMMUNITY au sélecteur (sémantique complète sans picker, labels 4 langues) +
+  `visibilityUserIds` plombé composer → feed screen → createStory (service l'acceptait déjà).
+  Décision pinnée par test : EXCEPT/ONLY N'ENTRENT PAS au sélecteur sans le picker
+  d'audience (publier sans liste = visibilité cassée).
+  ✅ Inc.2 (it.53) : `AudienceUserPicker` (components/v2 — recherche debouncée via
+  useSearchUsersQuery générique, multi-sélection chips, hints par mode, 4 langues) ;
+  EXCEPT/ONLY au sélecteur story ; publication gatée par `isAudienceIncomplete` (pur,
+  testé) — jamais d'audience vide publiée. W3 côté VISIBILITÉS = COMPLET (6/6 parité iOS).
+  RESTE (hors visibilités) : overlays composer web (texte positionné etc.) = chantier
+  séparé, non couvert par cet item.
+- [x] **W6 (P2, découvert it.52) PostComposer web publie EXCEPT/ONLY SANS visibilityUserIds.** ✅ it.54
+  Preuve : VISIBILITY_OPTIONS contient EXCEPT/ONLY (PostComposer.tsx:26-27) mais
+  handlePublish n'envoie que {content, type, visibility} (:48-52) — aucun picker, aucune
+  liste → visibilité cassée côté serveur (EXCEPT sans exclus / ONLY sans inclus).
+  LIVRÉ it.54 : picker + gate PARTAGÉS (promus dans le module AudienceUserPicker, source
+  unique Story+Post) ; publish bloqué liste vide, reset au retour vers une visibilité
+  non-audience, payload visibilityUserIds envoyé. 498/498 (33 suites story/feed/composer).
 - [x] **W4 (P3) Realtime web : story:deleted + story:translation-updated.** ✅ it.28
   `story:deleted` abonné dans use-social-socket (événement absent) + handlers dans
   useStoriesRealtime : suppression → retirée du cache tray en direct ; traduction →
@@ -480,9 +509,22 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 
 ### UI/UX — design system par version d'iOS (à traiter APRÈS les P0/P1 fonctionnels)
 
-- [ ] **U1 (P2) Transition tray→viewer** : sur iOS 18+, `navigationTransition(.zoom)` /
-  matched-geometry depuis l'anneau du tray vers la carte reader ; fallback animation actuelle
-  iOS 16-17. Ne PAS casser appearScale/drag-dismiss existants (cf. it.33).
+- [x] **U1 (P2) Transition tray→viewer** ✅ COMPLET it.57
+  Livré : `zoomTransitionNamespace` (EnvironmentKey SDK) + helpers `zoomTransitionSource/
+  Destination` (atomes gated #available(iOS 18), no-op sinon — zéro régression 16-17) ;
+  RootView injecte le namespace + destination sur le cover coordinator (sourceID =
+  request.id, fallback cover standard sans bulle enregistrée) ; StoryRingCell = source
+  (id = group.id). VÉRIFIÉ SIMULATEUR 18.2 : login atabeth, tap bulle J.Charles → zoom
+  capturé EN VOL (scale centré coins arrondis, écran sous-jacent visible — signature zoom,
+  pas le slide-up standard), viewer sain (progression/chrome/traduction), drag-dismiss
+  custom SANS conflit (risque flaggé levé), appearScale/interstitiel/cube intacts.
+  Captures scratchpad it56-t4/now/dismissed.png.
+  ✅ Inc.2 (it.57) : mini-trail épinglée + MyStory = sources ; ConversationView covers ×2
+  + iPad covers ×2 = destinations ; iPadRootView = namespace + injection (parité RootView).
+  sourceID vide/non enregistré → cover standard (fallback guard). Re-vérif simulateur :
+  le chemin principal zoome toujours avec TOUTES les sources enregistrées (pas de
+  régression id dupliqué grande/mini). Restes visuels mineurs (non bloquants) : déclencher
+  visuellement mini-trail épinglée + iPad — à grouper avec une passe device.
 - [x] **U2 (P2) Haptics du reader.** ✅ it.25
   Livré via l'abstraction multi-version EXISTANTE `HapticFeedback` (UIImpactFeedbackGenerator,
   iOS 16+) : tick léger au changement de slide + gel perceptible quand le spinner R3 apparaît
@@ -620,6 +662,99 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.57 — U1 inc.2 : zoom sur toutes les surfaces secondaires, U1 COMPLET (0f59fa9f3)
+
+- 4 fichiers, +20 lignes — le pattern inc.1 appliqué mécaniquement partout ; aucun effet
+  existant touché. Build 27 s vert (exit 1 = piège warning-free connu, grep du log foi).
+- Re-vérif simulateur : fresh install → tap bulle « meeshy sama » → zoom capturé (z5,
+  échelle intermédiaire coins arrondis), chrome viewer complet, dismiss propre.
+- CI NOTE : le rouge « CI » depuis it.55 = test_34_zmq_pool du TRANSLATOR (contrat
+  exception→[] changé par le fix fallback de l'agent translator, chantier ACTIF chez lui,
+  fichiers en vol worker_pool.py) — hors périmètre story-sota, il possède la réparation.
+
+## it.56 — U1 inc.1 : zoom bulle→viewer iOS 18+, vérifié simulateur (922f966d4)
+
+- Premier chantier visuel du nouveau cycle, exécuté selon le plan design-system (it.39).
+- Vérif simulateur COMPLÈTE (protocole du plan) : réinstallation fresh → login test →
+  tap bulle → rafale de captures (transition attrapée à t4) → viewer sain → swipe-down
+  dismiss propre. Le risque « conflit navigationTransition ↔ drag-dismiss » est LEVÉ.
+- SDK purity : helpers = atomes opaques (namespace/id en params) dans ViewModifiers.swift,
+  la décision « quelles surfaces zooment » reste dans RootView/StoryTrayView (app).
+- Piège d'exécution consigné : le .app fresh se trouve sous apps/ios/Build/Products/ (PAS
+  Build/Build/Products) ; install+launch simctl directs OK une fois le chemin exact connu.
+
+## it.55 — FIN DE CYCLE it.41→54 — rapport (c43401f5b)
+
+**Bilan** : 14 itérations, 14 livraisons main, CI verte sur chaque validation terminée.
+P0/P1 TOUS fermés : R5 (offline replay prouvé — contrat clé viewer/pin pinné), R4 (unit-
+fetch hors tray par postId), E4 (undo/redo cross-crash), G1 serveur COMPLET (delta a +
+projection b + pagination keyset c) + R8 inc.1 (delta consommé client). R12 re-scopé par
+re-preuve (pas de refonte : writes dirty débouncés livrés). R14 découvert ET fixé (les
+crossfades intra-slide ne rendaient JAMAIS en lecture iOS — parité preview/publié rétablie,
+puis portée au web = W1 COMPLET). Visibilités web COMPLÈTES (W3 6/6 parité iOS + fix W6
+PostComposer). Nouveaux findings consignés en route : R13 (clé URL ré-encodée, théorique),
+W6 (fixé it.54).
+
+**PROCHAINE SESSION (contexte frais requis — cycles simulateur/screenshots)** :
+U1 inc.1 (zoom transition : suivre le plan 2026-07-04-story-reader-design-system-plan.md,
+namespace via Environment, vérif visuelle du conflit drag-dismiss), U3 inc.1 (sidebar
+matériaux), U5. P3 conditionnels : G4 (avec déploiement schema), G5, R13 (sur symptôme),
+R12 inc.1 (sur profil).
+
+**EN ATTENTE UTILISATEUR (inchangé + additions du cycle)** :
+1. DÉPLOIEMENT gateway prod groupé G1a/b/c + G2 + G3 (pull + up -d explicite sur
+   /opt/meeshy/production) — active AUSSI le delta-sync client (it.46, inoffensif d'ici là)
+   et les APIs projection/pagination.
+2. Index Prisma `@@index([type, updatedAt])` sur Post à poser avec un déploiement schema.
+3. Décisions produit §4 : E7, E8, WS5.4b, it.44 C.2, Phase 2 cover baké, chantier filtres.
+4. Vérifs terrain device : relecture offline réseau coupé (R5), stall réseau réel (R3),
+   crossfade visuel avec une story de test (R14), interstitiel 2+ groupes (U-DIR1).
+
+## it.54 — W6 : PostComposer ne publie plus d'audience vide (bf63b0205)
+
+- Gate + picker promus au module AudienceUserPicker (source unique, StoryComposer importe
+  désormais au lieu de définir) ; guard aussi DANS handlePublish (défense en profondeur
+  au-delà du disabled) ; reset de la liste au switch de visibilité non-audience.
+- 498/498 (33 suites — pattern composer élargi). W3+W6 : chapitre visibilités web CLOS.
+
+## it.53 — W3 inc.2 : picker d'audience web, visibilités 6/6 parité iOS (1268724aa)
+
+- Réutilisation : useSearchUsersQuery générique (même source que le UserPicker admin —
+  promotion du composant admin écartée : couplage namespace i18n/UserDisplay admin) ;
+  composant v2 dédié ~110 lignes, styles var(--gp-*) cohérents composer.
+- Gate PUR isAudienceIncomplete exporté + testé (6 cas) ; bouton publish désactivé si
+  EXCEPT/ONLY sans sélection ; reset de la liste au close/publish ; deps bug préexistant
+  du useCallback publish corrigé au passage (visibility absent des deps → payload stale).
+- 207/207 story+feed (13 suites). W6 (PostComposer) : picker prêt, branchement = prochain W.
+
+## it.52 — W3 inc.1 : COMMUNITY au composer web + plomberie visibilityUserIds (e63a64f53)
+
+- Re-preuve : composer web limité à PUBLIC/FRIENDS/PRIVATE ; parité iOS = 6 visibilités
+  dont EXCEPT/ONLY à picker (AudienceUserPickerView). Découverte en route : W6 —
+  PostComposer OFFRE déjà EXCEPT/ONLY mais publie SANS liste (visibilité cassée).
+- Livré : option COMMUNITY (labels en/fr/es/pt, diffs locales chirurgicaux +1 ligne),
+  payload visibilityUserIds bout-en-bout, décision « pas d'EXCEPT/ONLY sans picker »
+  pinnée par test dédié. 157/157 story + 50/50 feed (bun).
+- inc.2 (picker partagé) = prochain morceau W3, fixera W6 du même geste.
+
+## it.51 — W1 inc.4 : crossfades intra-slide au viewer web, W1 COMPLET (939cec8c0)
+
+- RED : 7 tests parité (sortant/entrant, hors fenêtres, dissolve/non-impliqué, multiplicatif
+  + clamp, sans transitions + durée 0 guardée). 154/154 les 9 suites story web.
+- Réutilisation : mêmes maths que R14 (référence unique ReaderTransitionResolver) ; le
+  passthrough storyEffects serveur→viewer était déjà intégral (zéro plomberie).
+- Cross-platform : le crossfade authoré rend désormais iOS (it.50) ET web (it.51).
+
+## it.50 — R14 : les crossfades intra-slide rendent enfin au playback (7397e72d3)
+
+- RED : 3 tests RenderIntegrationTests (sortant 0.5 mi-fenêtre, entrant 0.5, cache
+  cross-ticks absolu 0.5→0.2→1.0) — harnais copié du test kf existant.
+- 1 erreur de compile attrapée en gate (slide.effects NON-optionnel — chaining retiré) ;
+  correction posée AVANT la phase build app du job chaîné → build vert du premier coup.
+- Vérif : SDK 10/10 (dont non-régression StoryCanvasReaderTransitionTests), app 86 s vert.
+- Les 3 pièges identifiés à it.49 tous encodés dans l'impl + pinnés par le test cache.
+- W1 inc.4 (web) DÉBLOQUÉ : même référence (ReaderTransitionResolver maths) → prochain.
 
 ## it.49 — Reconnaissance W1 inc.4 → finding R14 : le reader iOS n'a jamais rendu les
 ## crossfades intra-slide (2ed63683c)

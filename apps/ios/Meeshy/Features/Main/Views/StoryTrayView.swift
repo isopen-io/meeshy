@@ -26,6 +26,9 @@ struct StoryTrayView: View {
 
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
+    /// U1 — namespace zoom injecté par RootView (nil hors de ce sous-arbre
+    /// ou < iOS 18 : les helpers sont no-op, transition historique).
+    @Environment(\.zoomTransitionNamespace) private var zoomNamespace
     private var isDark: Bool { colorScheme == .dark }
     // Lecture directe sans @ObservedObject — évite que chaque event presence force
     // un re-render complet du tray. La présence est rafraîchie lors des refreshs naturels.
@@ -181,6 +184,8 @@ struct StoryTrayView: View {
             },
             onAddStatus: onAddStatus
         )
+        // U1 inc.2 — « ma story » zoome aussi (id vide jamais matché → fallback).
+        .zoomTransitionSource(id: AuthManager.shared.currentUser?.id ?? "", in: zoomNamespace)
     }
 
     // MARK: - Story Ring
@@ -194,6 +199,9 @@ struct StoryTrayView: View {
             onViewStory: { presentStory(userId: group.id) },
             onShowProfile: { selectedProfileUser = .from(storyGroup: group) }
         )
+        // U1 — source de la transition zoom : la bulle « devient » le viewer
+        // (id = userId du groupe, apparié au sourceID du cover RootView).
+        .zoomTransitionSource(id: group.id, in: zoomNamespace)
     }
 
     /// Chemin de présentation unique pour toute la trail (feeds + chats). Si un
@@ -557,6 +565,8 @@ private struct StoryUploadOverlay: View {
 /// (add a story); everyone else's rings render at half size
 /// (`.storyTrayCompact`, 44pt) with the same design and horizontal scroll.
 struct PinnedStoryTrailBand: View {
+    /// U1 inc.2 — namespace zoom injecté par RootView (no-op < iOS 18/nil).
+    @Environment(\.zoomTransitionNamespace) private var zoomNamespace
     @ObservedObject var viewModel: StoryViewModel
     /// Same negative scroll offset the `CollapsibleHeader` consumes (0 at rest,
     /// more negative as the content scrolls up).
@@ -629,6 +639,8 @@ struct PinnedStoryTrailBand: View {
                         onViewStory: { presentStory(userId: group.id) },
                         onShowProfile: { selectedProfileUser = .from(storyGroup: group) }
                     )
+                    // U1 inc.2 — la mini-trail épinglée zoome aussi.
+                    .zoomTransitionSource(id: group.id, in: zoomNamespace)
                 }
             }
             .padding(.horizontal, 16)
