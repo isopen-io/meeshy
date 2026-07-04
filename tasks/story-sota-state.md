@@ -545,7 +545,7 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.37 — U4 inc.1 : DraftResumeCard livré (hash au push)
+## it.37 — U4 inc.1 : DraftResumeCard livré (0289e3f7a)
 
 - 4/4 tests helper pur ; build app vert (gate CONDITIONNÉ — leçon it.35 appliquée).
 
