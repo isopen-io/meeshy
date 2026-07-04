@@ -686,6 +686,40 @@ describe('POST /posts — translatePost rejects (line 111)', () => {
   });
 });
 
+// ─── G2 : STORY content must NOT trigger the fixed-languages route pipeline ───
+
+describe('POST /posts — STORY content translation is owned by the service pipeline (G2)', () => {
+  it('does not call translatePost for a STORY with content', async () => {
+    const { PostTranslationService } = jest.requireMock('../../../../services/posts/PostTranslationService') as any;
+    PostTranslationService.shared.translatePost.mockClear();
+    mockCreatePost.mockResolvedValueOnce({ id: 'story-g2', content: 'Bonjour', type: 'STORY', visibility: 'PUBLIC', createdAt: new Date() });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'POST', url: '/posts',
+      payload: { content: 'Bonjour', type: 'STORY' },
+    });
+    expect(res.statusCode).toBe(201);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(PostTranslationService.shared.translatePost).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('still calls translatePost for a plain POST with content', async () => {
+    const { PostTranslationService } = jest.requireMock('../../../../services/posts/PostTranslationService') as any;
+    PostTranslationService.shared.translatePost.mockClear();
+    mockCreatePost.mockResolvedValueOnce({ id: 'post-g2', content: 'Hello', type: 'POST', visibility: 'PUBLIC', createdAt: new Date() });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'POST', url: '/posts',
+      payload: { content: 'Hello', type: 'POST' },
+    });
+    expect(res.statusCode).toBe(201);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(PostTranslationService.shared.translatePost).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+});
+
 // ─── POST /posts — content without translation (no-translate path) ────────────
 
 describe('POST /posts — STATUS type does not trigger translation', () => {

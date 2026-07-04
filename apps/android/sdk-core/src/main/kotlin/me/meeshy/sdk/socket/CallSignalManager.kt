@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
+import me.meeshy.sdk.model.call.CallEndedSignal
 import me.meeshy.sdk.model.call.CallEvent
 import me.meeshy.sdk.model.call.CallInitiateAckParser
 import me.meeshy.sdk.model.call.CallInitiateResult
@@ -56,15 +57,20 @@ class CallSignalManager @Inject constructor(
     val incomingOffers: SharedFlow<WaitingCall> = _incomingOffers.asSharedFlow()
 
     /**
-     * The **identity** of each inbound teardown frame (`call:ended` / `call:missed`),
-     * alongside the FSM-facing [events]. [events] republishes an identity-less
-     * [CallEvent.RemoteHangUp] / [CallEvent.RingTimeout]; this parallel stream
-     * carries the ended call's id so a call-waiting banner whose caller hangs up
-     * before the user acts can be auto-dismissed by its own id (leaving the active
-     * call untouched). Hot, no replay — like [events].
+     * The **identity-carrying** decode of each inbound teardown frame
+     * (`call:ended` / `call:missed`): the ended call's id plus the [CallEvent] the
+     * FSM reduces iff that id is the *active* call's. This is the **sole** teardown
+     * path — [events] deliberately omits `call:ended` / `call:missed` (they route
+     * to `null` in [CallSignalMapper.map]) so a teardown is never folded blindly.
+     *
+     * The gateway fans a `call:ended` out to every member USER room, so a busy
+     * user receives the *waiting* call's teardown too; keeping the id here lets the
+     * consumer gate the active-call FSM teardown on identity (only the active call's
+     * own end reduces it) and merely dismiss the banner when the waiting call ends.
+     * Hot, no replay — like [events].
      */
-    private val _endedCalls = MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 16)
-    val endedCalls: SharedFlow<String> = _endedCalls.asSharedFlow()
+    private val _endedCalls = MutableSharedFlow<CallEndedSignal>(replay = 0, extraBufferCapacity = 16)
+    val endedCalls: SharedFlow<CallEndedSignal> = _endedCalls.asSharedFlow()
 
     fun attach() {
         INBOUND_EVENTS.forEach(::listen)
@@ -182,7 +188,7 @@ class CallSignalManager @Inject constructor(
             if (event == INITIATED_EVENT) {
                 CallSignalMapper.incomingOffer(raw)?.let(_incomingOffers::tryEmit)
             }
-            CallSignalMapper.endedCallId(event, raw)?.let(_endedCalls::tryEmit)
+            CallSignalMapper.endedSignal(event, raw)?.let(_endedCalls::tryEmit)
         }
     }
 

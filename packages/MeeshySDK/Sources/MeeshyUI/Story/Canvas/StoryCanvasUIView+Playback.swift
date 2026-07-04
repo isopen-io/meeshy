@@ -286,7 +286,23 @@ extension StoryCanvasUIView {
         applyPlaybackHealth(status: player?.timeControlStatus,
                             failed: player?.currentItem?.status == .failed,
                             audioPending: isSlideAudioPending(),
+                            mediaPending: isBackgroundImagePending(),
                             now: now)
+    }
+
+    /// R2 — image de fond dont le bitmap FINAL n'est pas encore stampé : le
+    /// failsafe readiness 2 s peut avoir démarré la timeline sur le ThumbHash
+    /// flou (KVO raté OU download lent — indistinguables au moment du
+    /// failsafe). Le gel santé attend `hasFinalContentStamped` (posé par
+    /// l'unique choke point `stampFinalImage`, tous chemins : warm hit,
+    /// cache composer, URL). Vidéo bg : déjà couverte par `timeControlStatus` ;
+    /// couleur/gradient : jamais pending. Anti-deadlock : watchdog 5 s (un
+    /// download qui échoue définitivement retombe sur l'horloge murale).
+    func isBackgroundImagePending() -> Bool {
+        if case .image = backgroundLayer.kind {
+            return !backgroundLayer.hasFinalContentStamped
+        }
+        return false
     }
 
     /// Cœur testable : timing du watchdog + mapping pur (`StoryPlaybackHealth`)
@@ -295,13 +311,15 @@ extension StoryCanvasUIView {
     func applyPlaybackHealth(status: AVPlayer.TimeControlStatus?,
                                      failed: Bool,
                                      audioPending: Bool = false,
+                                     mediaPending: Bool = false,
                                      now: CFTimeInterval) {
         // Le watchdog n'accumule QUE pendant une non-disponibilité réelle d'un
-        // média gaté — vidéo primaire non-`.playing` OU audio pas encore
-        // schedulé (R1). Pause user et échec comptent comme « sains » (reset) —
-        // l'échec retombe déjà sur l'horloge murale.
+        // média gaté — vidéo primaire non-`.playing`, audio pas encore
+        // schedulé (R1), OU image bg pas encore stampée (R2). Pause user et
+        // échec comptent comme « sains » (reset) — l'échec retombe déjà sur
+        // l'horloge murale.
         let videoGated = status != nil && status != .playing
-        let gatedForWatchdog = (videoGated || audioPending) && !isPlaybackPaused && !failed
+        let gatedForWatchdog = (videoGated || audioPending || mediaPending) && !isPlaybackPaused && !failed
         if !gatedForWatchdog {
             playbackStallSince = nil
         } else if playbackStallSince == nil {
@@ -313,7 +331,8 @@ extension StoryCanvasUIView {
             isUserPaused: isPlaybackPaused,
             isFailed: failed,
             watchdogExpired: watchdogExpired,
-            isAudioPending: audioPending
+            isAudioPending: audioPending,
+            isPrimaryMediaPending: mediaPending
         )
         isPlaybackStalled = !progressing
         guard progressing != lastProgressingEmitted else { return }
@@ -337,8 +356,10 @@ extension StoryCanvasUIView {
     public func _refreshPlaybackHealthForTesting(status: AVPlayer.TimeControlStatus?,
                                                  failed: Bool,
                                                  audioPending: Bool = false,
+                                                 mediaPending: Bool = false,
                                                  now: CFTimeInterval) {
-        applyPlaybackHealth(status: status, failed: failed, audioPending: audioPending, now: now)
+        applyPlaybackHealth(status: status, failed: failed,
+                            audioPending: audioPending, mediaPending: mediaPending, now: now)
     }
 
     /// Test-only seam : run the gated playhead advance exactly as `displayLinkTick`

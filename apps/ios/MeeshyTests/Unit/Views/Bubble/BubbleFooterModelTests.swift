@@ -8,7 +8,8 @@ final class BubbleFooterModelTests: XCTestCase {
     private func makeModel(
         deliveryStatus: MeeshyMessage.DeliveryStatus = .sent,
         isMe: Bool = true,
-        isOnline: Bool = true
+        isOnline: Bool = true,
+        sendStartedAt: Date? = nil
     ) -> BubbleFooterModel {
         BubbleFooterModel.make(
             timeString: "09:41",
@@ -17,7 +18,8 @@ final class BubbleFooterModelTests: XCTestCase {
             isOnline: isOnline,
             sender: nil,
             flags: [],
-            showsTranslate: false
+            showsTranslate: false,
+            sendStartedAt: sendStartedAt
         )
     }
 
@@ -75,6 +77,23 @@ final class BubbleFooterModelTests: XCTestCase {
     func test_isFailed_onlyForFailed() {
         XCTAssertTrue(makeModel(deliveryStatus: .failed).isFailed)
         XCTAssertFalse(makeModel(deliveryStatus: .sending).isFailed)
+    }
+
+    // MARK: - sendStartedAt (backlog B.4 — clock reveal debounce)
+
+    func test_make_sending_carriesSendStartedAt() {
+        let start = Date()
+        XCTAssertEqual(makeModel(deliveryStatus: .sending, sendStartedAt: start).sendStartedAt, start)
+    }
+
+    func test_make_notSending_omitsSendStartedAt() {
+        XCTAssertNil(makeModel(deliveryStatus: .sent, sendStartedAt: Date()).sendStartedAt)
+    }
+
+    func test_make_receivedSending_omitsSendStartedAt() {
+        // isMe gates `delivery` itself to nil already; sendStartedAt must
+        // follow the same gate rather than leaking a start time nobody reads.
+        XCTAssertNil(makeModel(deliveryStatus: .sending, isMe: false, sendStartedAt: Date()).sendStartedAt)
     }
 
     // MARK: - BUG3 — single retry affordance (footer vs orange band)

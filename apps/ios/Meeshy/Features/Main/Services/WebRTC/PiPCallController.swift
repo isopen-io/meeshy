@@ -44,6 +44,10 @@ protocol PiPCallProviding: AnyObject {
     func updateRemoteTrack(_ remoteTrack: AnyObject)
     /// Ajuste le framerate du PiP (thermal-aware).
     func setMaxFrameRate(_ fps: Int)
+    /// Le pair a coupé (ou rallumé) sa caméra distante. `true` remplace le flux
+    /// live par un placeholder générique dans le renderer, plutôt que de laisser
+    /// le dernier frame reçu figé indéfiniment dans la fenêtre PiP flottante.
+    func setRemoteVideoMuted(_ muted: Bool)
     func start()
     func stop()
     func tearDown()
@@ -60,6 +64,7 @@ final class NoOpPiPController: PiPCallProviding {
                    onStop: @escaping @MainActor () -> Void) {}
     func updateRemoteTrack(_ remoteTrack: AnyObject) {}
     func setMaxFrameRate(_ fps: Int) {}
+    func setRemoteVideoMuted(_ muted: Bool) {}
     func start() {}
     func stop() {}
     func tearDown() {}
@@ -85,6 +90,9 @@ final class PiPCallController: NSObject, PiPCallProviding {
     private var onRestoreUI: (@MainActor () -> Void)?
     private var onStop: (@MainActor () -> Void)?
     private var desiredFrameRate = QualityThresholds.pipFrameRateDefault
+    /// Applied to the renderer on attach so a mid-PiP camera toggle is
+    /// remembered even across a renderer re-attach (ICE restart, upgrade).
+    private var isRemoteVideoMuted = false
 
     override init() {
         isPiPSupported = AVPictureInPictureController.isPictureInPictureSupported()
@@ -152,6 +160,11 @@ final class PiPCallController: NSObject, PiPCallProviding {
         renderer?.setMaxFrameRate(fps)
     }
 
+    func setRemoteVideoMuted(_ muted: Bool) {
+        isRemoteVideoMuted = muted
+        renderer?.setRemoteVideoMuted(muted)
+    }
+
     func tearDown() {
         // Si un PiP est actif (ex : l'appel se termine pendant que la fenêtre
         // flotte par-dessus une autre app), l'arrêter AVANT de libérer le
@@ -171,6 +184,7 @@ final class PiPCallController: NSObject, PiPCallProviding {
         // `PiPCallController` is a singleton, so a thermally-throttled fps from
         // the previous call must not silently carry over into the next one.
         desiredFrameRate = QualityThresholds.pipFrameRateDefault
+        isRemoteVideoMuted = false
     }
 }
 
@@ -230,6 +244,10 @@ extension PiPCallController {
                 }
             }
         )
+        // Applied BEFORE attaching to the track: if the peer's camera was
+        // already off when the renderer re-attaches (ICE restart mid-mute),
+        // the very first frame delivered must not slip through as a real one.
+        renderer.setRemoteVideoMuted(isRemoteVideoMuted)
         remoteTrack.add(renderer)
         self.renderer = renderer
     }

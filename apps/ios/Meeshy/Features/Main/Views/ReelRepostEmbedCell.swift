@@ -186,6 +186,7 @@ struct ReelRepostEmbedCell: View {
             ZStack {
                 Color(hex: repost.authorColor).opacity(0.45)
                 Image(systemName: "music.note")
+                    // doctrine 86i — glyphe décoratif borné par la bande média de hauteur fixe (stripHeight)
                     .font(.system(size: 30, weight: .semibold))
                     .foregroundColor(.white.opacity(0.85))
             }
@@ -197,6 +198,7 @@ struct ReelRepostEmbedCell: View {
     private func centerPlayButton(_ repost: RepostContent) -> some View {
         if repost.primaryReelMedia?.type == .video {
             Image(systemName: "play.fill")
+                // doctrine 86i — affordance décorative bornée par la bande média de hauteur fixe (stripHeight)
                 .font(.system(size: 18, weight: .bold))
                 .foregroundColor(.white)
                 .padding(13)
@@ -213,6 +215,7 @@ struct ReelRepostEmbedCell: View {
             HStack {
                 Spacer()
                 Image(systemName: "play.rectangle.on.rectangle.fill")
+                    // doctrine 86i — badge décoratif borné par la bande média de hauteur fixe (stripHeight)
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(.white)
                     .padding(6)

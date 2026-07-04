@@ -2660,23 +2660,37 @@ final class CallManagerAudioInterruptionHardeningTests: XCTestCase {
 
     func test_turnRefreshTask_cancelledBeforeReconnectRefreshRequest() throws {
         let source = try callManagerSource()
-        // Find the emitRequestIceServers call inside the socket-reconnect handler.
-        guard let emitRange = source.range(of: "emitRequestIceServers(callId: callId)") else {
-            XCTFail("emitRequestIceServers not found"); return
+        // Scope to the socket-reconnect handler specifically (anchored on
+        // socket.didReconnect) rather than searching the whole file — the raw
+        // emitRequestIceServers call now lives one level down inside
+        // requestFreshTurnCredentials (shared by every TURN-refresh trigger, see
+        // CallManagerTURNRefreshWatchdogTests), so a file-wide first-occurrence
+        // search would land on the wrong call site.
+        guard let reconnectRange = source.range(of: "socket.didReconnect") else {
+            XCTFail("socket.didReconnect handler not found"); return
         }
-        // The cancel of turnRefreshTask must appear BEFORE the emit call in the
-        // reconnect handler so the old deadline cannot fire while the fresh
+        let reconnectHandlerEnd = source.range(
+            of: ".store(in: &cancellables)",
+            range: reconnectRange.upperBound..<source.endIndex
+        )?.upperBound ?? source.endIndex
+        let handlerBody = String(source[reconnectRange.lowerBound..<reconnectHandlerEnd])
+
+        guard let requestRange = handlerBody.range(of: "requestFreshTurnCredentials(callId: callId)") else {
+            XCTFail("requestFreshTurnCredentials not found in the socket-reconnect handler"); return
+        }
+        // The cancel of turnRefreshTask must appear BEFORE the refresh request in
+        // the reconnect handler so the old deadline cannot fire while the fresh
         // response is in flight, causing duplicate credential requests.
-        let beforeEmit = String(source[..<emitRange.lowerBound])
-        guard let cancelRange = beforeEmit.range(of: "turnRefreshTask?.cancel()", options: .backwards) else {
-            XCTFail("turnRefreshTask?.cancel() must precede emitRequestIceServers on the reconnect path"); return
+        let beforeRequest = String(handlerBody[..<requestRange.lowerBound])
+        guard let cancelRange = beforeRequest.range(of: "turnRefreshTask?.cancel()", options: .backwards) else {
+            XCTFail("turnRefreshTask?.cancel() must precede requestFreshTurnCredentials on the reconnect path"); return
         }
         // Verify the cancel is in the same reconnect context by checking there's
-        // no function definition boundary between the cancel and the emit.
-        let between = String(beforeEmit[cancelRange.upperBound...])
+        // no function definition boundary between the cancel and the request.
+        let between = String(beforeRequest[cancelRange.upperBound...])
         XCTAssertFalse(
             between.contains("func "),
-            "turnRefreshTask?.cancel() must be in the same function as emitRequestIceServers — " +
+            "turnRefreshTask?.cancel() must be in the same function as requestFreshTurnCredentials — " +
             "a function boundary would mean the cancel is in a different code path")
     }
 

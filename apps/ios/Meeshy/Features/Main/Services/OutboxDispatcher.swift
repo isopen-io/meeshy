@@ -54,6 +54,9 @@ struct OutboxDispatcher: OutboxDispatching {
         case .markAsRead:
             try await dispatchMarkAsRead(record)
 
+        case .markStoryViewed:
+            try await dispatchMarkStoryViewed(record)
+
         case .createConversation:
             try await dispatchCreateConversation(record)
 
@@ -233,6 +236,25 @@ struct OutboxDispatcher: OutboxDispatching {
     /// `X-Client-Mutation-Id` header (no server-side dedup to feed).
     /// A 404 means the conversation was deleted while the row was pending
     /// — swallow as success so the flusher removes the row.
+    /// R6 — `POST /posts/:id/view`, même contrat que le chemin direct
+    /// historique (`StoryService.markViewed`) : le gateway renvoie
+    /// `{ viewed: true }` (Bool) et un P2002 (déjà vu) est un no-op serveur.
+    /// Une story supprimée/expirée (404) rend le « vu » obsolète — succès.
+    private func dispatchMarkStoryViewed(_ record: OutboxRecord) async throws {
+        let payload = try decodePayload(record, as: MarkStoryViewedPayload.self)
+        do {
+            let _: APIResponse<[String: Bool]> = try await APIClient.shared.request(
+                endpoint: "/posts/\(payload.storyId)/view",
+                method: "POST",
+                body: nil,
+                queryItems: nil
+            )
+            logger.info("markStoryViewed dispatched story=\(payload.storyId, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
+        } catch let MeeshyError.server(statusCode, _) where statusCode == 404 {
+            logger.warning("markStoryViewed 404 story=\(payload.storyId, privacy: .public) — story gone, accepting as success")
+        }
+    }
+
     private func dispatchMarkAsRead(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: MarkAsReadPayload.self)
         do {

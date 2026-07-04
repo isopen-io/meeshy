@@ -38,6 +38,12 @@ public enum StoryPlaybackHealth {
     ///     caching). Once scheduled, the mixer plays local files — there is no
     ///     mid-flight underrun, so this covers the whole audio-availability
     ///     window. Guarded by the same watchdog as a video stall.
+    ///   - isPrimaryMediaPending: the slide's primary VISUAL media is not on
+    ///     screen yet — a background image whose FINAL bitmap has not been
+    ///     stamped (the 2 s readiness failsafe may have started the timeline
+    ///     over the blurry ThumbHash, R2). Background video needs no such
+    ///     flag: its buffering is already gated through `status`. Guarded by
+    ///     the same watchdog.
     /// - Returns: `true` when the timeline may advance, `false` when it must freeze.
     ///
     /// `nonisolated` : MeeshyUI builds with `SWIFT_DEFAULT_ACTOR_ISOLATION =
@@ -48,12 +54,14 @@ public enum StoryPlaybackHealth {
         isUserPaused: Bool,
         isFailed: Bool,
         watchdogExpired: Bool,
-        isAudioPending: Bool = false
+        isAudioPending: Bool = false,
+        isPrimaryMediaPending: Bool = false
     ) -> Bool {
         if isUserPaused { return true }
         if isFailed { return true }
         if watchdogExpired { return true }
         if isAudioPending { return false }
+        if isPrimaryMediaPending { return false }
         guard let status else { return true }
         switch status {
         case .playing:

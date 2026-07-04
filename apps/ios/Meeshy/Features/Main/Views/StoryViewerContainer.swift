@@ -179,6 +179,18 @@ struct StoryViewerContainer: View {
 
         Logger.messages.info("[StoryViewerContainer] Group missing uid=\(uid, privacy: .public) source=\(presentationSource, privacy: .public) groupCount=\(viewModel.storyGroups.count) availableIds=\(viewModel.storyGroups.map(\.id).joined(separator: ","), privacy: .public)")
 
+        // R4 — Cache-first (mission produit n°2 : jamais de spinner si un rendu
+        // partiel est possible) : un deep link / une notification à froid arrive
+        // AVANT le `loadStories` du boot — le tray du cache 24 h contient très
+        // probablement le groupe. `loadStories()` le sert immédiatement
+        // (`.fresh` → zéro réseau ; `.stale` → servi + refetch silencieux) et
+        // le body réactif monte le viewer sans spinner plein écran.
+        await viewModel.loadStories()
+
+        if viewModel.groupIndex(forUserId: uid) != nil { return }
+
+        // Le cache ne connaît pas ce groupe (story récente d'un contact, tray
+        // périmé) : refetch réseau complet — comportement historique conservé.
         await viewModel.loadStories(forceNetwork: true)
 
         if viewModel.groupIndex(forUserId: uid) != nil { return }

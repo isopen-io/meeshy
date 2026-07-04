@@ -225,4 +225,26 @@ final class CallWaitingBannerViewTests: XCTestCase {
             "withAnimation(.spring(...)) — motion-sensitive users must not see a spring bounce."
         )
     }
+
+    // MARK: - HIG 44x44pt minimum hit target (audit 2026-07-03)
+
+    /// Reject/Answer are plain Text-in-Capsule buttons with only
+    /// `.padding(.vertical, 8)` — at default Dynamic Type that's a ~32-36pt
+    /// tap height, under Apple HIG's 44pt minimum, while every other call
+    /// control in this app (CallView, FloatingCallPillView) explicitly
+    /// enforces 44x44. Two adjacent under-sized targets on a ringing banner
+    /// risk mis-tapping Answer/Reject for a live incoming call.
+    func test_rejectAndAnswerButtons_enforce44ptMinimumHeight() throws {
+        let source = try bannerSource()
+        let occurrences = source.components(separatedBy: "background(MeeshyColors.error, in: Capsule())").count - 1
+            + source.components(separatedBy: "background(MeeshyColors.success, in: Capsule())").count - 1
+        XCTAssertEqual(occurrences, 2, "Expected exactly the reject + answer buttons in this view.")
+        XCTAssertTrue(
+            source.contains(".frame(minHeight: 44)"),
+            "Reject/Answer buttons must enforce .frame(minHeight: 44) to satisfy the " +
+            "Apple HIG 44x44pt minimum tap target — without it, Dynamic Type default " +
+            "size yields a ~32-36pt hit area on a ringing banner where a mis-tap answers " +
+            "or rejects a live incoming call."
+        )
+    }
 }

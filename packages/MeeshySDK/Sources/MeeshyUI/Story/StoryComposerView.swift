@@ -109,6 +109,13 @@ public struct StoryComposerView: View {
 
     @State var showDiscardAlert = false
     @State var showRestoreDraftAlert = false
+    /// E1 — clés média du dernier `saveMedia` d'autosave : gate la re-copie
+    /// des bitmaps aux vrais changements de médias.
+    @State var lastAutosavedMediaKeys: Set<String>?
+    /// E1 — levé quand le brouillon vient d'être explicitement jeté (quit)
+    /// ou publié : un debounce d'autosave encore en vol ne doit pas le
+    /// re-persister pendant le démontage du composer.
+    @State var draftAutosaveSuspended = false
     @State var isLoadingMedia = false
     @State var mediaLoadProgress: Double = 0
     @State var mediaLoadLabel: String = ""
@@ -239,6 +246,12 @@ public struct StoryComposerView: View {
         // fire onDisappear et re-persisterait un draft explicitement jeté).
         .adaptiveOnChange(of: scenePhase) { _, newPhase in
             if newPhase == .background { autoSaveDraftForBackground() }
+        }
+        // E1 — le travail d'édition survit à un CRASH DUR : auto-save
+        // débouncé ~2,5 s après la dernière mutation du ViewModel
+        // (publisher STABLE côté VM — cf. `autosaveTrigger`).
+        .onReceive(viewModel.autosaveTrigger) { _ in
+            autosaveDraftAfterMutation()
         }
     }
 

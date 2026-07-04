@@ -245,6 +245,42 @@ final class StoryCanvasPlaybackHealthTests: XCTestCase {
                        "A slide without any resolved audio must never be gated on the mixer")
     }
 
+    // MARK: - R2 : primary media pending freezes the timeline (bg image not stamped)
+
+    func test_mediaPending_emitsStall_thenResume_whenStamped() {
+        let view = makeCanvasView(slide: makeSolidColorSlide())
+        var events: [Bool] = []
+        view.onPlaybackProgressing = { events.append($0) }
+
+        view._refreshPlaybackHealthForTesting(status: nil, failed: false, mediaPending: true, now: 100)
+        XCTAssertEqual(events, [false], "A bg image still loading must emit progressing=false")
+        XCTAssertTrue(view.isPlaybackStalled)
+
+        view._refreshPlaybackHealthForTesting(status: nil, failed: false, mediaPending: false, now: 101)
+        XCTAssertEqual(events, [false, true], "The stamped final bitmap must resume the timeline")
+        XCTAssertFalse(view.isPlaybackStalled)
+    }
+
+    func test_mediaPending_watchdog_fallsBackToProgressing() {
+        let view = makeCanvasView(slide: makeSolidColorSlide())
+        var events: [Bool] = []
+        view.onPlaybackProgressing = { events.append($0) }
+        let watchdog = StoryCanvasUIView.playbackStallWatchdogSeconds
+
+        view._refreshPlaybackHealthForTesting(status: nil, failed: false, mediaPending: true, now: 100)
+        XCTAssertEqual(events, [false])
+
+        view._refreshPlaybackHealthForTesting(status: nil, failed: false, mediaPending: true, now: 100 + watchdog)
+        XCTAssertEqual(events, [false, true],
+                       "An image that never lands must fall back to wall-clock, never deadlock")
+    }
+
+    func test_isBackgroundImagePending_falseForNonImageBackground() {
+        let view = makeCanvasView(slide: makeSolidColorSlide())
+        XCTAssertFalse(view.isBackgroundImagePending(),
+                       "Colour/gradient backgrounds are never media-pending")
+    }
+
     func test_startAudioPlayback_withEmptyMixer_doesNotReleaseAudioGate() {
         let view = makeCanvasView(slide: makeBackgroundAudioSlide())
         view.reconfigureAudioForPlayback()

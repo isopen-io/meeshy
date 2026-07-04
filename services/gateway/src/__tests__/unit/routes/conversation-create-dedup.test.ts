@@ -124,6 +124,27 @@ describe('POST /conversations — direct-DM idempotence', () => {
     await app.close();
   });
 
+  it('reopens the MOST RECENTLY ACTIVE DM when several duplicates exist (orderBy lastMessageAt desc)', async () => {
+    // 5 DM atabeth↔jcnm observées en prod (doublons historiques d'avant le
+    // fix) : sans orderBy, findFirst rouvrirait une DM arbitraire — celle
+    // que l'utilisateur N'UTILISE PAS. La plus récemment active gagne.
+    const { prisma, conversationFindFirst } = createMockPrisma({ existingDirect: true });
+    const app = await buildApp(prisma);
+
+    await app.inject({
+      method: 'POST',
+      url: '/conversations',
+      headers: { authorization: 'Bearer x' },
+      payload: { type: 'direct', participantIds: [OTHER_ID] },
+    });
+
+    const dedupCall = conversationFindFirst.mock.calls.find((c: any[]) => c[0]?.where?.type === 'direct');
+    expect(dedupCall).toBeDefined();
+    expect((dedupCall as any[])[0].orderBy).toEqual({ lastMessageAt: 'desc' });
+
+    await app.close();
+  });
+
   it('creates the direct DM when none exists between the two users', async () => {
     const { prisma, conversationCreate } = createMockPrisma({ existingDirect: false });
     const app = await buildApp(prisma);

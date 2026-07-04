@@ -859,6 +859,10 @@ export function registerCoreRoutes(
               { participants: { some: { userId: uniqueParticipantIds[0], isActive: true } } }
             ]
           },
+          // Des doublons historiques existent (5 DM atabeth↔jcnm datant
+          // d'avant ce fix) : rouvrir la plus RÉCEMMENT ACTIVE, pas une
+          // arbitraire — sinon l'utilisateur retombe sur une DM morte.
+          orderBy: { lastMessageAt: 'desc' },
           include: {
             participants: {
               include: {

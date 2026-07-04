@@ -1567,6 +1567,13 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     public let visibility: String?
     public let audioUrl: String?
     public var isViewed: Bool
+    /// R11 — horodatage du « vu » local (règle CLAUDE.md : DateTime nullable
+    /// plutôt que boolean seul). Migration DOUCE : `isViewed` reste décodé du
+    /// serveur (qui n'envoie qu'un Bool) ; `viewedAt` est posé côté client au
+    /// markViewed et survit au cache GRDB (optionnel → rétro-compatible avec
+    /// les rows persistés avant ce champ). Consommateurs futurs : tri des
+    /// groupes vus, TTL du pin R5 par date de vue.
+    public var viewedAt: Date?
     public let translations: [StoryTranslation]?
     public let backgroundAudio: StoryBackgroundAudioEntry?
     public var reactionCount: Int
@@ -1617,11 +1624,25 @@ public struct StoryItem: Identifiable, Codable, Sendable {
         return translations.first { $0.language == lang }?.content ?? content
     }
 
+    /// R10 — résolution du `content` legacy sur la CHAÎNE de langue COMPLÈTE
+    /// (parité avec les textObjects qui la parcourent déjà) : première langue
+    /// de la chaîne ayant une traduction. Aucun match → ORIGINAL (Prisme
+    /// règle n°1 : jamais `translations.first`).
+    public func resolvedContent(preferredLanguages: [String]) -> String? {
+        guard let translations, !translations.isEmpty else { return content }
+        for lang in preferredLanguages {
+            if let hit = translations.first(where: { $0.language == lang })?.content {
+                return hit
+            }
+        }
+        return content
+    }
+
     public init(id: String, content: String? = nil, media: [FeedMedia] = [], storyEffects: StoryEffects? = nil,
                 createdAt: Date = Date(), expiresAt: Date? = nil, repostOfId: String? = nil,
                 originalRepostOfId: String? = nil, repostAuthorName: String? = nil,
                 visibility: String? = nil, audioUrl: String? = nil,
-                isViewed: Bool = false, translations: [StoryTranslation]? = nil, backgroundAudio: StoryBackgroundAudioEntry? = nil,
+                isViewed: Bool = false, viewedAt: Date? = nil, translations: [StoryTranslation]? = nil, backgroundAudio: StoryBackgroundAudioEntry? = nil,
                 reactionCount: Int = 0, commentCount: Int = 0,
                 shareCount: Int? = nil, viewCount: Int? = nil, repostCount: Int? = nil,
                 currentUserReactions: [String]? = nil) {
@@ -1630,7 +1651,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
         self.originalRepostOfId = originalRepostOfId
         self.repostAuthorName = repostAuthorName
         self.visibility = visibility; self.audioUrl = audioUrl
-        self.isViewed = isViewed
+        self.isViewed = isViewed; self.viewedAt = viewedAt
         self.translations = translations; self.backgroundAudio = backgroundAudio
         self.reactionCount = reactionCount; self.commentCount = commentCount
         self.shareCount = shareCount; self.viewCount = viewCount; self.repostCount = repostCount
@@ -1648,12 +1669,19 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     /// surfaced (cache TTL > 24h is intentional so we don't redownload
     /// avatars/text on every cold start, but the *content* must not be
     /// rendered).
+    /// G6 — durée de vie d'une story SANS `expiresAt` explicite : alignée sur
+    /// la constante serveur `STORY_EXPIRY_HOURS = 21` (PostService.ts) et sur
+    /// le fallback client de `toStoryGroups`/`pinDeadline` (createdAt + 21 h).
+    /// L'ancien défaut interne de 24 h était un piège dormant : sans effet
+    /// tant que le serveur pose toujours `expiresAt`, mais une story au
+    /// fallback aurait survécu 3 h de plus que sa vie serveur.
+    public static let defaultExpiryInterval: TimeInterval = 21 * 60 * 60
+
     public func isExpired(at now: Date = Date()) -> Bool {
         if let explicit = expiresAt {
             return explicit <= now
         }
-        let twentyFourHoursAfterCreation = createdAt.addingTimeInterval(24 * 60 * 60)
-        return twentyFourHoursAfterCreation <= now
+        return createdAt.addingTimeInterval(Self.defaultExpiryInterval) <= now
     }
 
     /// Prisme realtime : le gateway diffuse les traductions PAR text-object via
@@ -1988,7 +2016,9 @@ extension StoryItem {
     /// donc le BG layer reste vide et le loader infini masque tout — y
     /// compris le foreground correctement stampé par `StoryMediaLayer`.
     public func toRenderableSlide(preferredLanguages: [String]) -> StorySlide {
-        let resolvedContent = self.resolvedContent(preferredLanguage: preferredLanguages.first)
+        // R10 — chaîne complète (et plus seulement `.first`) : un viewer
+        // fr→es voit la traduction es si la fr manque, au lieu de l'original.
+        let resolvedContent = self.resolvedContent(preferredLanguages: preferredLanguages)
                               ?? self.content
         var effects = self.storyEffects ?? StoryEffects()
 

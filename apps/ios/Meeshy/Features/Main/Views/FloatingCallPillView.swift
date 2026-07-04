@@ -243,6 +243,7 @@ struct FloatingCallPillView: View {
         }
         .pressable()
         .accessibilityLabel(String(localized: "call.pill.expand", defaultValue: "Agrandir l'appel"))
+        .accessibilityHint(String(localized: "call.pill.expand.hint", defaultValue: "Revient à l'affichage plein écran de l'appel"))
     }
 
     private var hangupButton: some View {
@@ -267,6 +268,7 @@ struct FloatingCallPillView: View {
         }
         .pressable()
         .accessibilityLabel(String(localized: "call.pill.hangup", defaultValue: "Raccrocher"))
+        .accessibilityHint(String(localized: "call.end.hint", defaultValue: "Termine l'appel en cours", bundle: .main))
     }
 
     // MARK: - Actions
