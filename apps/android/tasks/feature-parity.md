@@ -1080,7 +1080,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       guard (`pendingActionIds`) and snapshot rollback on failure (9 ViewModel tests, EN/FR/ES/PT) ;
       send (compose-new) + offline-queue + idempotency pending
 - [ ] Invite by email; invite by SMS; import phone contacts
-- [~] Discover suggestions (cache-first) + live user search with inline connect —
+- [x] Discover suggestions (cache-first) + live user search with inline connect —
       **live search + inline connect shipped** (slice `discover-user-search`): the Discover tab
       (was `ComingSoon()`) now runs a debounced-by-threshold user search (pure `:core:model`
       `DiscoverSearch.action` — trim + ≥2-char gate, port of iOS `performSearch` guard) via
@@ -1090,8 +1090,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `connect` sends a request (row flips to Pending once the gateway mints the id), `acceptReceived`
       accepts an inbound one optimistically with rollback; a cross-screen friendship change re-derives
       every visible row via the `FriendshipCache.version` stream, so Discover stays in lock-step with
-      the Requests tab. +29 tests (13 `DiscoverSearch`, 16 `DiscoverViewModel`). **Pending:** the
-      empty-query cache-first suggestions list (iOS `loadSuggestions` via `CacheCoordinator.userSearch`).
+      the Requests tab. **The empty-query cache-first suggestions list now landed too** (slice
+      `discover-suggestions-cache-first`, 2026-07-04): a `:sdk-core` `@Singleton SuggestionsRepository`
+      (in-memory `SwrCacheSource` over `searchUsers("")`, reusing the shared `cacheFirstFlow` +
+      `CachePolicy.Suggestions`) feeds a pure `DiscoverSuggestions.snapshot(CacheResult) →
+      SuggestionsSnapshot` projection (skeleton only on cold empty; any cached data paints without a
+      spinner; a revalidated-empty list is a quiet empty state). `DiscoverViewModel.loadSuggestions()`
+      (called on tab appear, iOS `.task`) streams it into the same `rows`/connect-control surface, so
+      suggestions get live relationship badges and cross-screen re-derivation for free; a search cancels
+      it and switches surfaces, `retry` re-runs it. Surpasses iOS's `.task`-reload with an in-memory
+      singleton cache that paints instantly on a return visit. +23 tests (6 `DiscoverSuggestions`, 5
+      `SuggestionsRepository`, 12 `DiscoverViewModel`). **Pending:** a persistent Room suggestions cache
+      for cross-launch cold-start paint (iOS `CacheCoordinator.userSearch`) — matching the friends-list
+      in-memory precedent, tracked as a follow-up.
 - [x] Blocked-users list with confirm-to-unblock; optimistic unblock with rollback —
       **shipped** (slice `contacts-blocked-list`, 2026-07-04): the Blocked tab (was placeholder)
       renders the blocklist from `BlockRepository.listBlocked()` (which hydrates the shared

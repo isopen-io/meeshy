@@ -5,15 +5,21 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendshipCache
+import me.meeshy.sdk.friend.SuggestionsRepository
 import me.meeshy.sdk.model.FriendRequest
 import me.meeshy.sdk.model.friend.BlockedUser
 import me.meeshy.sdk.model.friend.ConnectAction
@@ -43,6 +49,7 @@ class DiscoverViewModelTest {
 
     private val userRepository: UserRepository = mockk(relaxed = true)
     private val friendRepository: FriendRepository = mockk(relaxed = true)
+    private val suggestionsRepository: SuggestionsRepository = mockk(relaxed = true)
 
     private fun session(id: String? = "me"): SessionRepository =
         mockk<SessionRepository> { every { currentUserId } returns id }
@@ -58,7 +65,7 @@ class DiscoverViewModelTest {
         blockCache: BlockCache = BlockCache(),
         session: SessionRepository = session(),
     ): DiscoverViewModel =
-        DiscoverViewModel(userRepository, friendRepository, cache, blockCache, session)
+        DiscoverViewModel(userRepository, friendRepository, suggestionsRepository, cache, blockCache, session)
 
     @Test
     fun `a sub-threshold query clears results and never hits the network`() = runTest {
@@ -304,5 +311,146 @@ class DiscoverViewModelTest {
         vm.dismissError()
 
         assertThat(vm.state.value.errorMessage).isNull()
+    }
+
+    // ── Suggestions surface (empty-query, cache-first) ───────────────────────
+
+    @Test
+    fun `loadSuggestions paints the fetched suggestions with connect actions`() = runTest {
+        every { suggestionsRepository.suggestionsStream(any()) } returns
+            flowOf(CacheResult.Fresh(listOf(result("carol"), result("dan")), ageMillis = 0L))
+        val vm = viewModel()
+
+        vm.loadSuggestions()
+
+        assertThat(vm.state.value.rows.map { it.user.id }).containsExactly("carol", "dan").inOrder()
+        assertThat(vm.state.value.rows.map { it.connect })
+            .containsExactly(ConnectAction.Connect, ConnectAction.Connect)
+        assertThat(vm.state.value.isLoading).isFalse()
+        assertThat(vm.state.value.isShowingSuggestions).isTrue()
+        assertThat(vm.state.value.isSuggestionsEmpty).isFalse()
+    }
+
+    @Test
+    fun `a cold suggestions cache shows the loading skeleton`() = runTest {
+        every { suggestionsRepository.suggestionsStream(any()) } returns flowOf(CacheResult.Empty)
+        val vm = viewModel()
+
+        vm.loadSuggestions()
+
+        assertThat(vm.state.value.rows).isEmpty()
+        assertThat(vm.state.value.isLoading).isTrue()
+        assertThat(vm.state.value.isShowingSuggestions).isTrue()
+        assertThat(vm.state.value.isSuggestionsEmpty).isFalse()
+    }
+
+    @Test
+    fun `a revalidated-empty suggestions list is a quiet empty state, not a spinner`() = runTest {
+        every { suggestionsRepository.suggestionsStream(any()) } returns
+            flowOf(CacheResult.Fresh(emptyList(), ageMillis = 0L))
+        val vm = viewModel()
+
+        vm.loadSuggestions()
+
+        assertThat(vm.state.value.rows).isEmpty()
+        assertThat(vm.state.value.isLoading).isFalse()
+        assertThat(vm.state.value.isSuggestionsEmpty).isTrue()
+        assertThat(vm.state.value.showEmptyPrompt).isFalse()
+    }
+
+    @Test
+    fun `a failed suggestions revalidation surfaces the error and leaves the skeleton`() = runTest {
+        every { suggestionsRepository.suggestionsStream(any()) } answers {
+            val onError = firstArg<(Throwable) -> Unit>()
+            flow {
+                emit(CacheResult.Empty)
+                onError(RuntimeException("offline"))
+            }
+        }
+        val vm = viewModel()
+
+        vm.loadSuggestions()
+
+        assertThat(vm.state.value.errorMessage).isEqualTo("offline")
+        assertThat(vm.state.value.isLoading).isFalse()
+        assertThat(vm.state.value.rows).isEmpty()
+    }
+
+    @Test
+    fun `connect works on a suggestion row and flips it to pending`() = runTest {
+        every { suggestionsRepository.suggestionsStream(any()) } returns
+            flowOf(CacheResult.Fresh(listOf(result("alice")), ageMillis = 0L))
+        coEvery { friendRepository.sendFriendRequest("alice", any()) } returns
+            NetworkResult.Success(request(id = "req-1", receiverId = "alice"))
+        val cache = FriendshipCache()
+        val vm = viewModel(cache = cache)
+        vm.loadSuggestions()
+
+        vm.connect("alice")
+
+        assertThat(vm.state.value.rows.single().connect).isEqualTo(ConnectAction.Pending)
+        assertThat(cache.status("alice").javaClass.simpleName).isEqualTo("PendingSent")
+    }
+
+    @Test
+    fun `a cross-screen friendship change re-derives the suggestion rows`() = runTest {
+        every { suggestionsRepository.suggestionsStream(any()) } returns
+            flowOf(CacheResult.Fresh(listOf(result("alice")), ageMillis = 0L))
+        val cache = FriendshipCache()
+        val vm = viewModel(cache = cache)
+        vm.loadSuggestions()
+        assertThat(vm.state.value.rows.single().connect).isEqualTo(ConnectAction.Connect)
+
+        cache.didAcceptRequest("alice")
+
+        assertThat(vm.state.value.rows.single().connect).isEqualTo(ConnectAction.Contact)
+    }
+
+    @Test
+    fun `loadSuggestions is inert while suggestions are already streaming`() = runTest {
+        every { suggestionsRepository.suggestionsStream(any()) } returns MutableSharedFlow()
+        val vm = viewModel()
+
+        vm.loadSuggestions()
+        vm.loadSuggestions()
+
+        verify(exactly = 1) { suggestionsRepository.suggestionsStream(any()) }
+    }
+
+    @Test
+    fun `searching cancels the suggestions surface and switches to results`() = runTest {
+        every { suggestionsRepository.suggestionsStream(any()) } returns MutableSharedFlow()
+        coEvery { userRepository.searchUsers("alice", any(), any()) } returns
+            NetworkResult.Success(listOf(result("alice")))
+        val vm = viewModel()
+        vm.loadSuggestions()
+        assertThat(vm.state.value.isShowingSuggestions).isTrue()
+
+        vm.onQueryChanged("alice")
+
+        assertThat(vm.state.value.isShowingSuggestions).isFalse()
+        assertThat(vm.state.value.rows.map { it.user.id }).containsExactly("alice")
+    }
+
+    @Test
+    fun `retry after a failed cold suggestions load re-runs the stream`() = runTest {
+        every { suggestionsRepository.suggestionsStream(any()) } answers {
+            val onError = firstArg<(Throwable) -> Unit>()
+            flow {
+                emit(CacheResult.Empty)
+                onError(RuntimeException("down"))
+            }
+        } andThenAnswer {
+            flowOf(CacheResult.Fresh(listOf(result("carol")), ageMillis = 0L))
+        }
+        val vm = viewModel()
+        vm.loadSuggestions()
+        assertThat(vm.state.value.errorMessage).isEqualTo("down")
+
+        vm.retry()
+
+        assertThat(vm.state.value.rows.map { it.user.id }).containsExactly("carol")
+        assertThat(vm.state.value.errorMessage).isNull()
+        verify(exactly = 2) { suggestionsRepository.suggestionsStream(any()) }
     }
 }
