@@ -429,8 +429,12 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   it.3 renderComposite + restore médias existant ; 3 incréments, pièges consignés).
   ✅ Inc.1 (it.37) : `DraftResumeCard` (MeeshyUI, params opaques : cover/slideCount/
   updatedAt/onResume/onDiscard ; dégradation cover nil ; a11y ; helper pur freshnessLabel
-  testé ×4 avec clamp horloge future). RESTE : inc.2 câblage composer (cover async +
-  remplacement de l'alerte), inc.3 chip tray (décision produit).
+  testé ×4 avec clamp horloge future).
+  ✅ Inc.2 (it.38) : alerte texte REMPLACÉE par l'overlay DraftResumeCard — cover composite
+  du 1er slide rendu async APRÈS affichage (loadMedia sans muter le VM), voile 0.55,
+  dismissal explicite seulement. Pièges : StoryCoverThumbnail est APP-side → taille
+  littérale 270×480 SDK-side ; updatedAt absent de l'API draft store → fraîcheur omise
+  (micro-item futur). RESTE : inc.3 chip tray (décision produit §4).
 - [ ] **U5 (P3) État de chargement prolongé** (avec R2) : ThumbHash + progress ring fine autour
   de l'avatar auteur (métaphore déjà connue du tray), bouton passer.
 - [x] **U6 (P3) Dynamic Type/VoiceOver du viewer.** ✅ COMPLET it.34
@@ -544,6 +548,13 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.38 — U4 inc.2 : la carte de reprise remplace l'alerte (9c4167dab)
+
+- Gate conditionné vert après 1 correction (type app-side hors SDK). Incident mineur
+  d'outillage : l'ancre du patch d'état a raté → commit code parti sans l'état ; réparé
+  dans la foulée (ce commit). LEÇON : les patchs d'état à ancres longues sont fragiles —
+  ancrer sur les titres de section courts.
 
 ## it.37 — U4 inc.1 : DraftResumeCard livré (0289e3f7a)
 
