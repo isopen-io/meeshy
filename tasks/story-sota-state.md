@@ -426,7 +426,7 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   chip sur « Ma story ». C'est le pendant UX de E1.
 - [ ] **U5 (P3) État de chargement prolongé** (avec R2) : ThumbHash + progress ring fine autour
   de l'avatar auteur (métaphore déjà connue du tray), bouton passer.
-- [~] **U6 (P3) Dynamic Type/VoiceOver du viewer.** — INCRÉMENT 1 it.31
+- [x] **U6 (P3) Dynamic Type/VoiceOver du viewer.** ✅ COMPLET it.34
   ✅ Annonce VoiceOver au changement de slide (« Story N sur M », gated
   isVoiceOverRunning, clé localisée statique — piège : String(localized:) exige une
   StaticString comme clé, pas d'interpolation dedans).
@@ -434,7 +434,10 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   (la navigation est une gesture spatiale par position x, inatteignable en VoiceOver) +
   accessibilityLabel du canvas (contenu CALayer invisible d'UIAccessibility),
   .accessibilityElement(children: .ignore).
-  RESTE (inc.3, mineur) : accessibilityValue de la barre de progression.
+  Inc.3 ÉCARTÉ avec preuve (it.34) : `StoryProgressBarsView` porte DÉJÀ
+  `.accessibilityValue("N pourcent")` + label position + segments accessibilityHidden
+  (+Content.swift:2149-2151, passe PR #1211). U6 complet : annonce slide-change (it.31)
+  + actions rotor prev/next (it.33) + barre déjà couverte.
 - [x] **U7 (P3) ProMotion.** ✅ ÉCARTÉ it.30 — déjà satisfait : le timer viewer pose
   `CAFrameRateRange(min 30, max 60, preferred 60)` (StoryReaderTimerController:270, jamais
   120 Hz) et le canvas est à preferred 60 (max 120 réservé aux keyframes edit). Granularité
@@ -534,6 +537,10 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.34 — U6 inc.3 : ÉCARTÉ avec preuve — U6 COMPLET
+
+- accessibilityValue de progression déjà présent (PR #1211). Zéro code.
 
 ## it.33 — U6 inc.2 : actions VoiceOver prev/next sur le canvas (3fcf435f2)
 
