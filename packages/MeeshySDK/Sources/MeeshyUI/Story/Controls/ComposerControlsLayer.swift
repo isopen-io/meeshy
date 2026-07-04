@@ -110,11 +110,22 @@ public struct ComposerControlsLayer: View {
                             // `tapFAB` seul ouvrait un band sans contrôles (bug user 2026-06-01).
                             if cat == .drawing {
                                 viewModel.selectTool(.drawing)
+                            } else if cat == .timeline {
+                                // La timeline vit en SHEET — le band n'a aucun
+                                // panneau pour elle (C5 : le FAB ouvrait un band
+                                // vide de hauteur 0, titré sans contenu).
+                                viewModel.isTimelineVisible = true
                             } else {
                                 bandStateMachine.tapFAB(cat)
                             }
                         },
-                        onSwipeUp: { cat in bandStateMachine.swipeUpOnFAB(cat) },
+                        onSwipeUp: { cat in
+                            if cat == .timeline {
+                                viewModel.isTimelineVisible = true
+                            } else {
+                                bandStateMachine.swipeUpOnFAB(cat)
+                            }
+                        },
                         onSwipeDownAny: { areFabsVisible = false }
                     )
                     Spacer()

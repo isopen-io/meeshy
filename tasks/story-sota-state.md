@@ -17,6 +17,12 @@
    discret, et reprend en phase.
 5. **SOTA UI/UX** : exploiter le design system de chaque version d'iOS (16 → 26) au maximum,
    sans jamais retirer d'effet visuel existant (règle user ferme).
+6. **Création DISCRÈTE et gesture-first (directive user 2026-07-04, relance de la boucle)** :
+   le composer n'affiche QUE ce qui est utile à l'instant t. Chaque tool/écran/contenu doit
+   pouvoir apparaître ET disparaître par un GESTE simple et cohérent (pas seulement des
+   boutons) ; passer d'un outil à l'autre = gestuelle fluide. Tous les tools doivent être
+   FONCTIONNELS (audit exhaustif requis — série d'items `C*` au §3). Moderniser le processus
+   de création sans violer l'invariant n°4 (ne jamais retirer d'effet visuel).
 
 ## 1. Architecture — fichiers pivots (carte vérifiée)
 
@@ -119,6 +125,108 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 > actuel, fixer en TDD, vérifier, commit+push, mettre à jour ce fichier. Un item par itération
 > (ou un groupe cohérent petit). P0 = casse la mission produit ; P1 = écart majeur ; P2 = dette
 > structurante ; P3 = polish/mineur.
+
+### CRÉATION DISCRÈTE / GESTURE-FIRST — mission C (directive user 2026-07-04)
+
+> Grammaire gestuelle EXISTANTE vérifiée it.66 (à préserver et étendre, jamais régresser) :
+> tap fond canvas = toggle FABs (`+Canvas.swift:789-793`) ; tap FAB = toggle panneau ;
+> swipe-up FAB = ouvre ; swipe-down colonne FABs = cache les FABs ; swipe-down band = ferme
+> + restaure FABs (`ComposerControlsLayer.swift:200-219`) ; grabber = resize/replie le panneau
+> en poignée seule, outil actif, canvas 100 % (`BandState.allowsCollapsibleDrawer`) ; pinch
+> 3 doigts = zoom viewport + drag pan (`+Canvas.swift:770-787`) ; FABs auto-masqués quand un
+> panneau est ouvert (`shouldShowFABs`, ControlsLayer:86-88) ; TopBar auto-masquée en
+> manipulation libre zoomée (`showTopBar`, `+TopBar.swift:14-16`) ; band reset au changement
+> de slide (ControlsLayer:225-229).
+
+- [x] **C0 (P0) Inventaire exhaustif des tools + audit fonctionnel.** ✅ it.66
+  Livré (agent d'exploration, 40 tool-uses) : chrome = TopBar 60pt (X/strip/visibilité/
+  preview/publish/⋯) + colonne 6 FABs gauche (timeline/texture/drawing/text/son/media,
+  badges) + empty-state large picker 6 tuiles (exclusif du band). 4 états orthogonaux :
+  activeTool (StoryToolMode?), TextEditingMode (8 TextEditTool), DrawingEditingMode
+  (4 DrawingEditTool), BandStateMachine (.hidden/.toolPanel/.formatPanel). Sheets :
+  timeline (detents .45/.large), voice recorder (.medium), audience, transitions ;
+  fullScreenCover : éditeurs image/vidéo/audio, composer lui-même (3 entrées app-side).
+  Canvas UIKit : single-tap (fond=toggle FABs, item=select+front), double-tap (fond média=
+  cycle videoFitMode, item=éditeur dédié), pan/pinch/rotation par élément (snap rails,
+  rotation interdite sur bg, sensibilités réduites), pinch 3 doigts=viewport, long-press=
+  context menu (Modifier/Dupliquer/Plans/Supprimer). Anomalies → C5-C11 ci-dessous.
+- [ ] **C1 (P2) Accès Transitions et Timeline enterrés dans le menu ⋯** (`+TopBar.swift:138-149`).
+  Deux tools de création à part entière cachés derrière un menu à 2 niveaux — contraire à
+  « passer à autre chose par une gestuelle ». La timeline a pourtant un FAB (badge
+  timelineBadge) ; Transitions n'a AUCUN accès gestuel. À réconcilier avec la grammaire FAB/band.
+- [ ] **C2 (P3) `swipeHorizontalOnBand()` = code mort** (corps vide, BandStateMachine.swift:114-116)
+  MAIS le DragGesture du band détecte toujours le swipe horizontal et l'appelle pour rien
+  (ControlsLayer:214-217). Soit retirer la détection, soit lui donner un sens (candidat :
+  switch d'outil actif par swipe horizontal sur le band — cohérent mission C).
+- [ ] **C3 (P2) Chrome totalement caché = zéro affordance de récupération.** FABs cachés
+  (swipe-down) + band fermé → écran nu ; seul un tap « au hasard » sur le fond restaure le
+  chrome. Aucun indice visuel (pas de poignée fantôme, pas de hint première fois).
+  Volet zoom élucidé it.66 → C4 (sortie bouton-only).
+- [x] **C4 (P1) Sortie du zoom viewport = bouton uniquement, et état zoomé « collant ».** ✅ it.67
+  Livré : `CanvasViewportZoomPolicy` (rule engine pur MeeshyUI/Canvas) — `settledScale`
+  (clamp [0.5,4] + snap identité |raw−1| < 0,08 → 1.0 exact au `.ended` du pinch) et
+  `doubleTapResetsViewport` (zoomé + aucun item touché). Câblage : double-tap fond en état
+  zoomé = reset viewport PRIORITAIRE (early-return dans `handleDoubleTap` AVANT le cycle
+  videoFitMode, qui reste le double-tap à l'échelle 1 ; item double-tap garde son éditeur
+  même zoomé) ; plumbing `isViewportZoomed`/`onViewportZoomResetRequested` via representable ;
+  le bouton reset RESTE (invariant n°4). Tests : CanvasViewportZoomPolicyTests 10 + BandState
+  19 = 29/29 simu 18.2 ; build app 12 s vert (MeeshyUI recompilé aussi par la suite de tests).
+  Preuves : (a) seul exit = `canvasZoomResetButton` (`+Canvas.swift:1028-1046`), AUCUN geste —
+  pas de double-tap reset (convention iOS photo-viewer) ; (b) `isCanvasZoomed = canvasScale
+  != 1.0` STRICT (`+Elements.swift:123`) sans bande de snap au relâcher du pinch
+  (`+Canvas.swift:776-782` : clamp [0.5, 4.0] brut) → un pinch relâché à ~0,98 garde la
+  TopBar cachée (`showTopBar`, `+TopBar.swift:15`) + bouton reset visible alors que le canvas
+  PARAÎT à l'échelle 1. Fix candidat : double-tap fond = resetCanvasZoom (le bouton reste —
+  invariant n°4) + snap |scale−1| < seuil → 1.0 au `.ended` (qualité invisible).
+  ⚠️ Contrainte découverte C0 : le double-tap fond est DÉJÀ pris (cycle videoFitMode sur fond
+  média, `+Gestures.swift:73-97` ; no-op sur fond couleur) → règle : viewport zoomé = reset
+  PRIORITAIRE, sinon comportement existant. UIKit ne connaît pas le zoom (état SwiftUI) →
+  plomber `isViewportZoomed` via le representable.
+- [x] **C5 (P0) FAB/tuile/swipe-up Timeline ouvraient un panneau band VIDE.** ✅ it.66
+  Preuve : `ComposerToolPanelHost.panelHeight = 0` + `placeholderPanel → EmptyView()` pour
+  `.timeline` (« presented as sheet, not in band » — intention jamais honorée par le routage) ;
+  seuls ⋯/switch-chips/row-buttons posaient `isTimelineVisible`. Fix 2 couches : (1) machine
+  pure — `.toolPanel(.timeline)` inatteignable (guards tapFAB/swipeUpOnFAB/tapTile) ;
+  (2) View — FAB onTap + onSwipeUp + tuile empty-state routent vers `isTimelineVisible = true`
+  (parité chemin ⋯). Tests : BandStateMachineTests 19/19 (4 nouveaux) simu 18.2.
+- [x] **C6 (P1) Aucun bouton/geste « ajouter un slide ».** ✅ it.68
+  Re-preuve : `addSlide()` testé (append+focus+cap 10+no-op au cap, StoryComposerViewModelTests)
+  mais zéro call site UI — seul chemin = long-press → Dupliquer. Livré : `addSlideThumb` en
+  bout de slide strip (vignette pointillée « + », même gabarit 42pt que les thumbs, séquence
+  sync→addSlide→restoreCanvas identique à la sélection, haptic, a11y label) ; MASQUÉ au cap
+  de 10 (n'afficher que l'utile ; le guard VM reste en défense). VÉRIFIÉ SIMULATEUR : « + »
+  visible à l'ouverture, tap → slide 2 créé+focusé (badge, bordure brand), canvas basculé
+  vierge, « + » décalé (captures scratchpad it68-composer/addslide.png). Build 34 s vert.
+- [ ] **C7 (P1) Sheet Transitions = STUB.** `transitionPicker` = `Text("Transitions")` sans
+  contrôle (`+Publication.swift:13-16`) ; `openingEffect`/`closingEffect` sérialisés
+  (`+SyncRestore.swift:59-60,87-88`) mais AUCUNE UI ne les définit. RE-PROUVER d'abord ce que
+  le READER rend de opening/closing avant de bâtir l'UI (si rien → l'UI mentirait). Les vraies
+  transitions de clips vivent dans la timeline (TransitionInspector).
+- [ ] **C8 (P2) Stickers inaccessibles.** `StickerPickerView.swift` complet mais ZÉRO call site ;
+  pas de case sticker dans StoryToolMode/FABs/tuiles ; `@State stickerObjects` jamais alimenté
+  (`StoryComposerView.swift:26`). Le reader rend pourtant les stickers (rétro-compat). Réintroduire
+  un point d'entrée (réutiliser le picker existant — maximize reuse) OU retirer la feature =
+  décision produit si le retrait est envisagé ; la réintroduction est autonome.
+- [ ] **C9 (P2) Pas d'undo/redo global composer.** Undo/redo existe UNIQUEMENT en dessin
+  (DrawingEditFloatingBubbles) + CommandStack timeline (séparé). Ajout/déplacement/suppression
+  de texte/média/sticker/fond : irréversibles (seul « annuler » = ⋯ → Supprimer tous les
+  slides !). Chantier : étendre le pattern CommandStack au canvas — PLAN requis avant code.
+- [ ] **C10 (P3) Code mort composer** (7 fichiers, confirmé zéro call site) : StickerPickerView
+  (→ C8), TextBackgroundStylePicker, FontStylePicker (la vue ; garder `storyFont(for:size:)`
+  utilisé par TextEditToolOptions:56), MediaPlacementSheet, StoryAudioPanel (+ son
+  StoryVoiceRecorder embarqué), TrackDetailPopover, TimelineTrackView. + sheet
+  `showFilterSheet` jamais ouvrable (`+Media.swift:69-82`), état `.formatPanel(.media,_)`
+  jamais produit (EmptyView, `ComposerBottomBand.swift:140-144`). Purger APRÈS décisions C8/C7.
+- [ ] **C11 (P3) Fond : gradients définis mais jamais offerts.** `StoryBackgroundPalette.gradients`
+  (`StoryComposerSupportTypes.swift:19-26`) jamais consommé ; `texturePanel` = couleurs unies
+  seulement (`ComposerToolPanelHost.swift:640-667`). Offrir la rangée gradients (réutilisation
+  directe).
+- [ ] **C12 (P3, découvert it.68 simulateur) Chrome composer bilingue.** Preuve visuelle
+  (it68-quit.png) : alerte discard « Quit without publishing? / Save / Quit / Cancel » en
+  ANGLAIS pendant que les tuiles/titres sont en français, même écran. Cause probable = piège
+  xcstrings devRegion=en vs source=fr (cf. mémoire projet) : les clés de l'alerte ont une
+  traduction EN, les tuiles retombent sur defaultValue FR (locale simu EN). Auditer les
+  xcstrings du composer (story.composer.*) pour une couverture homogène 5 langues.
 
 ### ÉDITION — crash recovery & intégrité des données
 
@@ -713,6 +821,57 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.68 — C6 : « + » d'ajout de slide + vérification simulateur groupée C5/C6
+
+- C6 livré (addSlideThumb, View-only — comportement VM déjà pinné par
+  StoryComposerViewModelTests append/focus/cap). VÉRIFICATIONS SIMULATEUR (fresh install,
+  compte atabeth) : (1) C6 — « + » pointillé en bout de strip, tap → slide 2 créé/focusé/
+  canvas vierge ; (2) C5 — tuile Timeline empty-state → la SHEET timeline s'ouvre (Simple/
+  Pro, transport, règle) au lieu de l'ancien band vide ; swipe-down la ferme, retour propre
+  à l'empty-state (boucle apparition/disparition 100 % gestuelle) ; sortie X → alerte →
+  Quit (brouillon de test jeté). Captures it68-*.png au scratchpad.
+- CI des commits C5/C4 : runs C5 « cancelled » = concurrency group (remplacés par les runs
+  C4 qui couvrent les 2 commits) ; C4 in_progress au moment du commit — vérifier it.69.
+- Nouveau finding C12 (P3) : chrome composer bilingue (alerte EN / tuiles FR, capture) —
+  piège xcstrings devRegion, audit story.composer.* à faire.
+- C4 visuel : double-tap reset NON vérifiable au simulateur (pinch 3 doigts impossible) —
+  reste pour la passe device (avec C4-snap au relâcher réel).
+
+## it.67 — C4 : sortie gestuelle du zoom viewport (double-tap reset + snap identité)
+
+- RED conceptuel prouvé it.66 (re-preuve maintenue : clamp brut `min(4,max(0.5,…))` à
+  `+Canvas.swift:777`, exit bouton-only). Découverte C0 intégrée : le double-tap fond était
+  DÉJÀ pris (cycle videoFitMode) → règle de précédence pinnée par test
+  (`itemDoubleTapWinsOverReset`, `neverResetsAtIdentity`).
+- Livré : policy pure + branche early-return UIKit + plumbing representable + snap au call
+  site. 29/29 (2 suites), build 12 s. CI du commit C5 encore in_progress au moment du push —
+  à re-vérifier it.68 (les 2 commits seront couverts par le même run suivant).
+- Piège évité : diagnostic SourceKit « No such module 'Testing' » sur le nouveau fichier de
+  test = artefact d'indexation (xcodebuild vert) — ne pas « réparer ».
+- Reste C4 (visuel simulateur) : à grouper avec la passe simulateur du chantier C (vérifier
+  le zoom réel + double-tap sur device/simu, avec C3 affordances quand traité).
+
+## it.66 — RELANCE : mission C « création discrète gesture-first » (directive user 2026-07-04)
+
+- La boucle close à it.65 est ROUVERTE par directive user : audit de TOUS les tools du
+  composer + création discrète — gestes suffisants pour apparition/disparition de chaque
+  tool/écran/contenu, n'afficher que l'utile à l'instant t, tout rendre fonctionnel.
+- Fait ce tour : mission ajoutée §0.6 ; grammaire gestuelle existante cartographiée et
+  consignée en tête de la section C (§3) — elle est déjà riche (tap canvas toggle chrome,
+  FAB tap/swipe-up/swipe-down, band swipe-down, grabber resize/collapse, pinch viewport) ;
+  premiers items C1-C3 prouvés (Transitions/Timeline enterrés au menu ⋯, swipe horizontal
+  band mort, zéro affordance de récupération chrome caché).
+- EN COURS : C0 — inventaire exhaustif délégué à un agent d'exploration (tableau
+  apparition/disparition/conteneur/gestes par tool + anomalies) ; ses findings alimenteront
+  les items C5+ au prochain tour. Aucun code modifié ce tour (audit d'abord, preuve avant fix).
+- Tour 2 (pendant C0) : C4 prouvé (sortie zoom bouton-only + isCanvasZoomed strict sans snap —
+  pinch relâché ≈1 garde le chrome caché) ; build iOS relancé en arrière-plan (gate).
+- Tour 3 : C0 LIVRÉ (inventaire complet → item coché, findings C5-C11 consignés avec preuves).
+  C5 FIXÉ dans la foulée (P0 : FAB/tuile/swipe-up timeline → panneau vide) — guards machine
+  pure + routage View vers la sheet ; BandStateMachineTests 19/19 dont 4 nouveaux (simu 18.2).
+  Note TDD : tests écrits avant fix mais exécutés après (RED structurellement certain — l'ancien
+  code posait .toolPanel(.timeline), les tests exigent .hidden). Build app en gate au commit.
 
 ## it.65 — FIN DE BOUCLE (audit sec 2/2) — rapport final du cycle it.41→65
 

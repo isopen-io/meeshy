@@ -462,6 +462,13 @@ public final class StoryCanvasUIView: UIView {
     /// Notifié lors d'un tap sur le fond (zone vide) du canvas.
     public var onBackgroundTapped: (() -> Void)?
 
+    /// Miroir du zoom viewport SwiftUI (`canvasScale != 1`). Quand `true`,
+    /// un double-tap sur le fond demande un reset du viewport — prioritaire
+    /// sur le cycle videoFitMode, qui reste le double-tap à l'échelle 1 (C4).
+    public var isViewportZoomed: Bool = false
+    /// Notifié quand un double-tap fond doit réinitialiser le zoom viewport.
+    public var onViewportZoomResetRequested: (() -> Void)?
+
     // MARK: - Active canvas registry (canvas-wide preemption)
 
     /// Faible-ref registry de toutes les instances actuellement en `.play`
