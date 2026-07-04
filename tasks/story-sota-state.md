@@ -430,7 +430,12 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   ✅ Annonce VoiceOver au changement de slide (« Story N sur M », gated
   isVoiceOverRunning, clé localisée statique — piège : String(localized:) exige une
   StaticString comme clé, pas d'interpolation dedans).
-  RESTE : labels des zones tap prev/next, accessibilityValue de la barre de progression.
+  RESTE (inc.2) : labels des zones tap prev/next — PISTE it.32 : ce ne sont PAS des
+  onTapGesture (les seuls du viewer sont le switcher de langue des commentaires) ; chercher
+  la gesture SPATIALE du canvas (+Canvas.swift:96 « course contre onTapGesture ») — les
+  zones prev/next se décident probablement par position x du tap dans le canvas →
+  l'a11y passera par accessibilityAction custom (VoiceOver ne « tape » pas par position) ;
+  + accessibilityValue de la barre de progression.
 - [x] **U7 (P3) ProMotion.** ✅ ÉCARTÉ it.30 — déjà satisfait : le timer viewer pose
   `CAFrameRateRange(min 30, max 60, preferred 60)` (StoryReaderTimerController:270, jamais
   120 Hz) et le canvas est à preferred 60 (max 120 réservé aux keyframes edit). Granularité
@@ -526,7 +531,13 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.31 — U6 inc.1 : annonce VoiceOver du changement de slide (hash au push)
+## it.32 — U6 inc.2 : repérage (session au bout de son contexte)
+
+- Tour de reconnaissance : tap zones = gesture spatiale par position x, pas des
+  onTapGesture → l'inc.2 sera des accessibilityActions custom (piste consignée dans
+  l'item). Aucun code modifié.
+
+## it.31 — U6 inc.1 : annonce VoiceOver du changement de slide (1e6a0f1f3)
 
 - Build vert 18 s ; reste tap zones + progression (inc.2).
 
