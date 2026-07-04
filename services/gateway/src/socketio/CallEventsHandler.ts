@@ -453,7 +453,7 @@ export class CallEventsHandler {
    * participant gets DISCONNECT_GRACE_MS to re-join before the call is ended.
    */
   private armDisconnectGrace(opts: {
-    io: any;
+    io: SocketIOServer;
     getUserId: (socketId: string) => string | undefined;
     participation: DisconnectParticipation;
     userId: string;
@@ -481,7 +481,7 @@ export class CallEventsHandler {
    * the call room. Otherwise the call rides on untouched.
    */
   private async onDisconnectGraceExpired(opts: {
-    io: any;
+    io: SocketIOServer;
     getUserId: (socketId: string) => string | undefined;
     participation: DisconnectParticipation;
     userId: string;
@@ -552,7 +552,7 @@ export class CallEventsHandler {
    * call summary, with a force-cleanup fallback if leaveCall throws.
    */
   private async leaveParticipationAndBroadcast(opts: {
-    io: any;
+    io: SocketIOServer;
     participation: DisconnectParticipation;
     userId: string;
   }): Promise<void> {
@@ -758,7 +758,7 @@ export class CallEventsHandler {
    * Resolve target userId to their socket IDs within a call room
    */
   private async resolveTargetSockets(
-    io: any,
+    io: SocketIOServer,
     callId: string,
     targetUserId: string,
     getUserId: (socketId: string) => string | undefined
@@ -998,7 +998,7 @@ export class CallEventsHandler {
    */
   setupCallEvents(
     socket: Socket,
-    io: any,
+    io: SocketIOServer,
     getUserId: (socketId: string) => string | undefined,
     getUserInfo?: (socketId: string) => { id: string; isAnonymous: boolean } | undefined
   ): void {

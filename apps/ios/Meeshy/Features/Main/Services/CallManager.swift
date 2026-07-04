@@ -2533,7 +2533,7 @@ final class CallManager: ObservableObject {
         guard !callUsesCallKit, Self.platformSupportsCallKit else { return }
         guard let uuid = activeCallUUID else { return }
 
-        let handleValue = (remoteUserId?.isEmpty == false) ? remoteUserId! : (remoteUsername ?? "")
+        let handleValue = (remoteUserId?.isEmpty == false ? remoteUserId : nil) ?? (remoteUsername ?? "")
         let update = CXCallUpdate()
         update.remoteHandle = CXHandle(type: .generic, value: handleValue)
         update.localizedCallerName = remoteUsername
