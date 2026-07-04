@@ -309,8 +309,10 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   Surcharge `resolvedContent(preferredLanguages:)` (première langue de la chaîne ayant une
   traduction ; aucun match → ORIGINAL, Prisme n°1) branchée dans toRenderableSlide.
   4 tests Prisme (fallthrough chaîne, ordre, no-match→original, sans translations).
-- [ ] **R11 (P3) `isViewed: Bool` → `viewedAt: Date?`** (règle CLAUDE.md « nullable DateTime,
-  pas de boolean redondant »). Migration douce : garder le decode Bool, ajouter le timestamp.
+- [x] **R11 (P3) `viewedAt: Date?` ajouté (migration douce).** ✅ it.35
+  Champ optionnel sur StoryItem (rétro-compatible cache GRDB + payload serveur Bool-only,
+  testé), posé par markViewed au flip local. `isViewed` reste le decode serveur.
+  Consommateurs futurs notés : tri des vus, TTL pin R5 par date de vue.
 - [ ] **R12 (P2, architecture) Story store relationnel.** Le tray = UN blob JSON
   `stories:recent_tray_v2` ré-encodé en entier à chaque write (chiffrement futur = encore plus
   cher). Cible : clé par groupe (`stories:group:<authorId>`) ou table dédiée + persistence
@@ -537,6 +539,10 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.35 — R11 : viewedAt migration douce (2871df2f3)
+
+- 6/6 tests modèles (round-trip + legacy decode) ; build vert.
 
 ## it.34 — U6 inc.3 : ÉCARTÉ avec preuve — U6 COMPLET
 
