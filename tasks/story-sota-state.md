@@ -288,13 +288,23 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   header+FABs de retour ; swipe-down FABs → canvas nu + poignée fantôme C3 (première vérif
   visuelle C3 ✓) ; tap poignée → chrome plein restauré. Restent hors-scope de cette vérif :
   cas clavier texte (édition inline) et zoom — à observer lors d'usages réels.
-- [ ] **C-DIR3 (P1, directive user 2026-07-04 #3) Device iPhone 16 Pro Max : le fond
+- [~] **C-DIR3 (P1, directive user 2026-07-04 #3) Device iPhone 16 Pro Max : le fond
   vidéo/média d'une story ne JOUE PAS à l'ouverture ni en preview** tant qu'un long-press +
-  touch n'est pas fait ; le simulateur, lui, joue correctement. Piste : gating d'activation
-  playback (registerAsActiveAndPreemptOthers ? audio session real-device ? timing
-  isReadyForDisplay device plus lent → contentReady jamais re-déclenché ? `playsVideoInEditMode`
-  concerne l'édition, ici c'est le VIEWER/preview). Analyse code d'abord (chemins .play
-  device-only), puis instrumentation device. Grouper avec la passe device existante.
+  relâcher n'est pas fait. — SELF-HEAL LIVRÉ it.75 ; vérif device restante.
+  DIAGNOSTIC (analyse code) : les didSet `isPlaybackActive` (bg layer :109-118, fg :256-261)
+  ne rejouent que sur CHANGEMENT de valeur — un player externe-pausé (interruption d'audio
+  session device, préemption d'un canvas mourant pendant la transition) avec un flag resté
+  `true` n'est JAMAIS re-play()é. Le long-press/relâcher répare car
+  `setStoryPlaybackPaused(false)` force le flip false→true → didSet → play(). Simulateur
+  épargné (pas d'interruptions de session, timings différents).
+  LIVRÉ : `StoryPlaybackHealth.shouldKickPlayback` (règle pure, 7 tests — kick UNIQUEMENT
+  sur `.paused` [`.waiting` = stall gate], jamais contre pause user/asset mort, grâce 0,75 s,
+  budget 3/session) + la sonde 60 Hz traque l'épisode `.paused` + `kickPlayback()` re-drive
+  le chemin canonique du resume (flip forcé bg+fg + startAlignedIfActive), os.log
+  story-media pour le diagnostic terrain. Piège : constantes statiques `nonisolated`
+  obligatoires (defaultIsolation MainActor). 41/41 les 2 suites santé, build 53 s.
+  RESTE : vérif sur LE device user (story vidéo au boot → doit jouer seule ; sinon
+  Console.app filtre « self-heal kick » dira si le kick tire et si un tiers re-pause).
 
 ### ÉDITION — crash recovery & intégrité des données
 
@@ -889,6 +899,14 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.75 — C-DIR3 : self-heal du playback (kick borné quand un player reste .paused)
+
+- Cause racine identifiée par lecture (pas de device requis) : didSet à garde d'égalité +
+  pause externe = play() jamais rappelé ; le remède imite le geste réparateur du user
+  (flip forcé), automatiquement, avec grâce/budget/log. Détail item C-DIR3.
+- La vérif finale appartient au user (device réel) — le log story-media transformera tout
+  échec résiduel en diagnostic précis (kick tiré ? re-pause immédiat ?).
 
 ## it.74 — C-DIR2 : vérification simulateur complète (a/b/c/d) + C3 visuel
 

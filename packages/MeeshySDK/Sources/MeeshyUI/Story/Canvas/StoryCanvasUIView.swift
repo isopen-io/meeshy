@@ -650,6 +650,14 @@ public final class StoryCanvasUIView: UIView {
     /// non-lecture. `nil` tant que la lecture est saine. Alimente le watchdog.
     var playbackStallSince: CFTimeInterval?
 
+    /// C-DIR3 — début de l'épisode continu où le player primaire est `.paused`
+    /// alors que toutes les portes disent « joue ». Alimente le self-heal
+    /// (`StoryPlaybackHealth.shouldKickPlayback`). `nil` hors épisode.
+    var playbackPausedProbeSince: CFTimeInterval?
+    /// Kicks de self-heal déjà délivrés pour la session de lecture courante
+    /// (reset par `resetPlaybackHealthState`). Borné par `maxPlaybackKicks`.
+    var playbackSelfHealKicks: Int = 0
+
     /// `true` quand la slide courante porte au moins un clip audio résolu
     /// (foreground ou background). Posé de façon SYNCHRONE par
     /// `reconfigureAudioForPlayback()` (une fois par `slideContentRevision`)
