@@ -509,10 +509,14 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   requêtait le domaine tiers (IP/UA-leak de qui a vu, quand). Fix web :
   `safeBackgroundImageUrl` (chemins relatifs internes + origins front/gateway seulement,
   métacaractères CSS rejetés → rien ne sort du contexte url(), sinon fallback gradient),
-  5 tests. RESTE : (a) volet iOS — StoryBackgroundLayer.loadImage accepte une URL http
-  arbitraire par le même champ (même vecteur, audit + garde symétrique) ; (b) option
-  serveur : refine Zod (hex|gradient:|chemin interne) — ATTENTION rétro-compat des stories
-  existantes à URLs absolues internes, à trancher avec le déploiement.
+  5 tests.
+  (a) volet iOS ÉCARTÉ it.63 avec preuve : `effects.background` n'est consommé sur iOS que
+  comme HEX (StoryRenderer.renderBackground → uiColor(fromHex:), aucune branche URL) ; le
+  seul chemin URL directe du reader (slide.mediaURL legacy → directURLIfAny) provient de
+  post.media[].fileUrl, GÉNÉRÉ par le gateway à l'upload (mediaIds ne référencent que des
+  PostMedia existants) — hors de portée d'un payload client. Vecteur web-only, fixé it.62.
+  (b) RESTE option serveur : refine Zod (hex|gradient:|chemin interne) — rétro-compat des
+  stories existantes à URLs absolues internes, à trancher avec un déploiement gateway.
 
 ### DIRECTIVES PRODUIT UTILISATEUR (hors backlog initial)
 
@@ -710,7 +714,49 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.62 — Audit ciblé n°2 → W7 : IP-leak des viewers via background URL, FIXÉ web (a2b878df4)
+## it.65 — FIN DE BOUCLE (audit sec 2/2) — rapport final du cycle it.41→65
+
+- Audit n°4 (viewers sheet) : SEC — getPostViews/getPostInteractions gardent authorId
+  (FORBIDDEN→403), auth registered obligatoire, pagination saine. Privacy OK.
+- Critère d'arrêt du protocole ATTEINT (2 audits consécutifs sans finding) → STOP.
+
+**BILAN GLOBAL it.41→65 (25 itérations)** : 18 livraisons de code main (CI verte),
+7 écartements/constats prouvés. P0/P1/P2/P3 autonomes : TOUS fermés. Faits marquants :
+R5 offline garanti+prouvé ; G1 delta/projection/pagination serveur + delta client ;
+E4 undo cross-crash ; R14 crossfades jamais rendus → fixés iOS+web (W1 complet) ;
+visibilités web 6/6 + W6 ; U1 zoom toutes surfaces (vérifié simulateur) ; R12 re-scopé
+→ writes dirty ; G5 filtre canonique → divergence audience REMONTÉE ; audits : G7 fuite
+média DB fixée, W7 IP-leak viewers fixé web + écarté iOS, NSE et viewers sheet sains.
+
+**EN ATTENTE UTILISATEUR (récapitulatif final)** :
+1. DÉPLOIEMENT gateway prod groupé : G1a/b/c + G2 + G3 + G7 + G5 (pull + up -d
+   /opt/meeshy/production) — active aussi le delta client it.46.
+2. Index Prisma `@@index([type, updatedAt])` (avec déploiement schema).
+3. Décisions produit §4 (7 items, dont audience FRIENDS divergente + option refine
+   Zod background).
+4. Vérifs device : offline replay réseau coupé, stall réel, crossfade visuel, interstitiel
+   2+ groupes, mini-trail/iPad zoom visuel.
+5. Suivi技 : volet fichiers disque de G7 (réclamation des médias hard-deleted).
+
+## it.64 — Audit ciblé n°3 : chemin NSE prefetch story — SAIN, aucun finding (sec 1/2)
+
+- Surface : NSEPendingPostConsumer bout-en-bout. Constat : consumer défensif exemplaire
+  (décodage à 2 formats de date, corrupt → drop définitif, fichier App Group retiré
+  SEULEMENT après cache réussi → retry au prochain launch, seed feed + comments inline +
+  tray StoryService gated expiresAt) ; drainé aux 4 bons points (StoryNotificationTarget
+  AVANT lecture, PostDetailViewModel.loadPost, RootView boot, BackgroundTransition
+  foreground). Zéro code, zéro finding.
+- Compteur d'arrêt du protocole : 1 itération d'audit sèche / 2. Prochaine surface
+  (dernière avant STOP+rapport si sèche) : viewers sheet OU flux repost complet.
+
+## it.63 — W7 volet iOS : ÉCARTÉ avec preuve (hex-only, URLs = PostMedia serveur)
+
+- Chaîne prouvée : renderBackground (hex only) ; Kind.image = postMediaId (résolu contre
+  post.media internes) ; mediaURL legacy = fileUrl serveur. Zéro code.
+- 3 audits ciblés : 2 findings fixés (G7, W7-web) + 1 écartement prouvé — la surface
+  d'attaque côté effects est close (web whitelist + iOS structurellement sûr + Zod caps).
+
+## it.62 — Audit ciblé n°2 → W7 : IP-leak des viewers via background URL, FIXÉ web (34ae2d0ff)
 
 - Surface choisie : validation serveur des storyEffects + rendu des URLs qui en sortent.
   Constat positif au passage : le schema Zod serveur est SOLIDE (caps par champ + 256KB
