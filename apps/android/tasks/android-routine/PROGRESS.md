@@ -329,8 +329,12 @@ Contacts slices:**
    `BlockedListViewModel` + `BlockedTab` (confirm-to-unblock + optimistic rollback). The block seam
    is now bound — `DiscoverViewModel`'s `BlockStatusProvider` reads the live `BlockCache`. +29 tests.
    See run log. **Next Contacts pure cores:**
-   - **Durable offline unblock/block** — route the mutation through the outbox (iOS `OfflineQueue`),
-     surviving offline + process death (today it's online-first optimistic REST + snapshot rollback).
+   - ~~**Durable offline unblock/block**~~ ✅ shipped as `block-outbox-durable` (2026-07-04) — new
+     `OutboxKind.BLOCK_USER`/`UNBLOCK_USER` on a `OutboxLanes.BLOCK` lane, an `OutboxCoalescer.blockToggle`
+     rule (block+unblock annihilate; repeat superseded), two `OutboxFlushWorker` senders + `onExhausted`
+     `BlockCache` rollback, `BlockRepository.setBlockedDurably` (optimistic flip + enqueue), and
+     `BlockedListViewModel.unblock` rewired to the durable path. +12 tests. See run log. **Follow-up:**
+     wire the ready `setBlockedDurably(.., true)` half into a future profile/report block surface.
    - **Send friend request offline-queue + `cmid` idempotency** (#2 above).
 4. ~~**Discover suggestions + live user search**~~ ✅ fully shipped — live search + inline connect
    (`discover-user-search`) **and** the empty-query cache-first suggestions
@@ -340,10 +344,11 @@ Contacts slices:**
    paint (iOS `CacheCoordinator.userSearch`), matching the friends-list in-memory precedent.
 
 **Recommended next (highest value):** slice #2 — **send friend request offline-queue + `cmid` idempotency**
-(the durable send half the Requests tab still lacks), or the **durable offline unblock/block** pure core.
-Both route a Contacts mutation through the existing outbox (`OutboxRepository`/`OutboxKind`), so each is a
-pure-core-heavy vertical slice (an idempotency/dedup rule + outbox mapping + delivery-outcome classification)
-with no DB migration.
+(the durable send half the Requests tab still lacks). Now the sole remaining Contacts durable-mutation gap
+(durable unblock/block landed 2026-07-04). It routes the friend-request send through the existing outbox
+(`OutboxRepository`/`OutboxKind`), a pure-core-heavy vertical slice (a `cmid`-idempotency/dedup rule +
+outbox mapping + delivery-outcome classification, with the placeholder→real request-id write-back into
+`FriendshipCache` on delivery) and no DB migration.
 
 ---
 _Historical Calls backlog below (revisit only for the platform-glue slices)._
@@ -657,6 +662,56 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-04 — slice `block-outbox-durable` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration. The one open PR (#1453) is
+  web/gateway work from another session (production logic in `apps/web` + `services/gateway`), left
+  untouched. Branched `claude/apps/android/block-outbox-durable` off latest `origin/main` (`6cd1a3c4`).
+- **Why this slice:** parity `§J` / PROGRESS "Next Contacts pure cores" — **durable offline
+  unblock/block**, the one remaining Contacts durable-mutation gap after Discover closed. The Blocked
+  tab's unblock was online-first optimistic REST (a dropped connection silently lost it); this routes
+  it through the shared durable outbox so it survives offline + process death (iOS is online-only).
+  A pure-core-heavy vertical slice with **no DB migration** (block/unblock carry no payload and reuse
+  the existing outbox schema).
+- **Added / changed (production):**
+  - `:sdk-core` `outbox/OutboxModel.kt` — two new `OutboxKind`s (`BLOCK_USER`, `UNBLOCK_USER`) + a
+    dedicated `OutboxLanes.BLOCK` lane (so block mutations coalesce per-target without colliding with
+    other social rows sharing a target id).
+  - `:sdk-core` `outbox/OutboxCoalescer.kt` — new `blockToggle` branch: a queued **opposite** for the
+    same user **annihilates** (block+unblock returns to the last-synced server state, exactly like the
+    reaction toggle); else a pending **same-kind** row is **superseded** (a repeated block/unblock is
+    idempotent — one terminal state); else enqueue.
+  - `:sdk-core` `outbox/OutboxFlushWorker.kt` — two senders (`blockApi.block`/`unblock` →
+    `Success`/`TransientFailure`) + an `onExhausted` rollback that flips the `BlockCache` SSOT back
+    (a hard-exhausted block/unblock un-does its optimistic flip, so the next `listBlocked` re-hydrates
+    truthfully). Injects `BlockApi` + `BlockCache`.
+  - `:sdk-core` `friend/BlockRepository.kt` — replaced the online-first `block`/`unblock` with
+    `setBlockedDurably(userId, blocked)`: flips `BlockCache` optimistically + enqueues the durable
+    mutation. Blank id inert (`null`); returns the cmid, or `null` when the enqueue annihilated a
+    pending opposite. `listBlocked` (hydration) unchanged.
+  - `:feature:contacts` `BlockedListViewModel.kt` — `unblock` now calls `setBlockedDurably(.., false)`,
+    wakes the flush worker **only** on a real cmid (a coalesced-away enqueue schedules nothing), and
+    rolls the row back in place on a **local enqueue failure** (cancellation-safe). Injects `WorkManager`.
+  - `:feature:contacts/build.gradle.kts` — `implementation(libs.work.runtime)` for the VM's scheduler.
+- **Tests (TDD red→green, +12 net):**
+  - `OutboxCoalescerTest` +6 — block↔unblock annihilation (both directions), repeated block/unblock
+    supersede, first-block enqueue, different-user not coalesced.
+  - `BlockRepositoryTest` +4 net (converted to Robolectric for the real in-memory outbox, the
+    established enqueue-repo pattern) — durable block/unblock flip+queue the right kind on the BLOCK
+    lane, blank id inert (no flip, nothing queued), block-then-unblock cancels out (empty queue, cache
+    reflects the net terminal state).
+  - `BlockedListViewModelTest` +2 net — durable unblock removes-optimistically + wakes the worker;
+    a coalesced-away (`null` cmid) unblock **skips** the flush; a **local enqueue throw** restores the
+    row + surfaces the error and queues nothing; unknown-id inert; in-flight double-tap guarded.
+- **Verification:** `gradle assembleDebug testDebugUnitTest` — **BUILD SUCCESSFUL** (full project; the
+  wrapper's pinned 8.11.1 distribution download is egress-blocked in this container, so verification
+  used the system Gradle 8.14.3, a forward-compatible superset — build + all unit tests green).
+- **Reviewer gate:** **PASS** — diff is `apps/android` only (9 files); TDD behavioural, no tautologies,
+  no floor lowered; edge cases (blank/unknown id, annihilation, enqueue-failure restore, in-flight
+  guard, `CancellationException` rethrown) covered; SDK purity held (coalescer/repo = stateless rule +
+  SSOT keeper in `:sdk-core`, orchestration in `:feature`); SSOT = `BlockCache`; UDF preserved.
+- **Follow-up:** the ready `setBlockedDurably(.., true)` block half awaits a profile/report block
+  surface; a persistent Room blocklist cache for cold-start paint (iOS `CacheCoordinator`) still open.
 
 ### 2026-07-04 — slice `discover-suggestions-cache-first` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration — the two open PRs (#1450, #1448)

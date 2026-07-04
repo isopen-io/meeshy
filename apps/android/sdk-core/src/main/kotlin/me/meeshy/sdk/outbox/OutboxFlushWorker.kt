@@ -13,12 +13,14 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.conversation.MessageRepository
+import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.media.MediaBlobStore
 import me.meeshy.sdk.media.MediaRepository
 import me.meeshy.sdk.media.MediaUploadSender
 import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.AddReactionRequest
+import me.meeshy.sdk.net.api.BlockApi
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.net.api.ConversationPreferencesUpdate
 import me.meeshy.sdk.net.api.CreateStoryRequest
@@ -50,6 +52,8 @@ class OutboxFlushWorker @AssistedInject constructor(
     private val postApi: PostApi,
     private val mediaRepository: MediaRepository,
     private val mediaBlobStore: MediaBlobStore,
+    private val blockApi: BlockApi,
+    private val blockCache: BlockCache,
     private val json: Json,
 ) : CoroutineWorker(context, params) {
 
@@ -64,6 +68,10 @@ class OutboxFlushWorker @AssistedInject constructor(
                 when (row.kindEnum) {
                     OutboxKind.SEND_MESSAGE -> messageRepository.markSendFailed(row.cmid)
                     OutboxKind.UPLOAD_MEDIA -> mediaBlobStore.remove(row.cmid)
+                    // A hard-exhausted block/unblock rolls the optimistic SSOT flip
+                    // back so the blocklist re-hydrates truthfully on next load.
+                    OutboxKind.BLOCK_USER -> blockCache.setBlocked(row.targetId, blocked = false)
+                    OutboxKind.UNBLOCK_USER -> blockCache.setBlocked(row.targetId, blocked = true)
                     else -> Unit
                 }
             },
@@ -185,6 +193,18 @@ class OutboxFlushWorker @AssistedInject constructor(
                 mediaBlobStore.remove(row.cmid)
             }
             result
+        },
+        OutboxKind.BLOCK_USER to MutationSender { row ->
+            when (apiCall { blockApi.block(row.targetId) }) {
+                is NetworkResult.Success -> SendResult.Success
+                is NetworkResult.Failure -> SendResult.TransientFailure
+            }
+        },
+        OutboxKind.UNBLOCK_USER to MutationSender { row ->
+            when (apiCall { blockApi.unblock(row.targetId) }) {
+                is NetworkResult.Success -> SendResult.Success
+                is NetworkResult.Failure -> SendResult.TransientFailure
+            }
         },
     )
 
