@@ -1734,8 +1734,8 @@ final class CallManagerDurationReconnectTests: XCTestCase {
 ///    reconnect with stale candidates that belong to a superseded ICE generation.
 ///
 /// 2. **TURN refresh on socket reconnect** — the periodic scheduler fires at
-///    80% of the 480 s TTL (384 s).  If the socket was down for the remaining
-///    20% (96 s), TURN credentials approach expiry before a refresh can fire.
+///    80% of the TTL. If the socket was down for the remaining 20% of the
+///    window, TURN credentials approach expiry before a refresh can fire.
 ///    After reconnect, proactively requesting fresh credentials ensures the
 ///    next ICE restart uses valid relay paths.
 @MainActor
@@ -1793,9 +1793,8 @@ final class CallManagerIceCandidateBufferTests: XCTestCase {
             afterReconnect.contains("emitRequestIceServers"),
             "socket.didReconnect sink must call emitRequestIceServers after rejoining " +
             "the call room — the socket may have been down long enough for TURN " +
-            "credentials to approach expiry (TTL=480s, refresh fires at 384s, " +
-            "leaving a 96s vulnerability window). Proactive refresh keeps relay " +
-            "paths valid for the next ICE restart.")
+            "credentials to approach expiry before the periodic 80%-of-TTL refresh " +
+            "fires. Proactive refresh keeps relay paths valid for the next ICE restart.")
     }
 }
 

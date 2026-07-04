@@ -1034,11 +1034,17 @@ nonisolated enum QualityThresholds {
     static let outgoingRingTimeoutSeconds: TimeInterval = 45.0
 
     /// Default TURN credential TTL (seconds) used when the signalling path does
-    /// not carry an explicit `ttl` field (VoIP push, socket-only incoming). The
-    /// 80%-of-TTL refresh fires at 384 s — well before any standard TURN server
-    /// eviction window (Coturn default 600 s; Meeshy gateway issues 480 s by
-    /// default so credentials stay valid for the first 96 s after refresh).
-    static let turnDefaultCredentialTTLSeconds: TimeInterval = 480
+    /// not carry an explicit `ttl` field (VoIP push, socket-only incoming — neither
+    /// payload carries a `ttl`). Mirrors the gateway's own default
+    /// (`TURNCredentialService.credentialTTL`, `services/gateway/src/services/TURNCredentialService.ts`,
+    /// `TURN_CREDENTIAL_TTL` env, 24h) rather than guessing a shorter window: the
+    /// gateway raised its default from 600s to 86400s (CALL-FIX 2026-06-25) after the
+    /// short value silently killed TURN-relayed calls once credentials expired mid-call.
+    /// A client-side guess much shorter than the real TTL only costs an extra refresh
+    /// round-trip (harmless), but one that's a fraction of the true value — like the
+    /// previous 480s here — would have been actively misleading documentation for
+    /// anyone tuning this against the gateway.
+    static let turnDefaultCredentialTTLSeconds: TimeInterval = 86400
 
     /// Minimum delay (seconds) before a TURN credential refresh, regardless of
     /// the TTL reported by the gateway. Guards against a malformed TTL=0 response

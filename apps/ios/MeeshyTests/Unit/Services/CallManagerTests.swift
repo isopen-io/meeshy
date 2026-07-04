@@ -3600,6 +3600,86 @@ final class CallManagerTURNRefreshGuardTests: XCTestCase {
     }
 }
 
+// MARK: - Immediate TURN Request on STUN-Only Fallback (§armTurnCredentialsAfterConfigure)
+
+/// Source-level guards verifying that when an incoming call's VoIP push/notification
+/// payload carries no usable ICE servers (missing/malformed/all dropped by the
+/// credential-length guard in `VoIPPushManager.parseIceServers`), CallManager requests
+/// real per-user TURN credentials immediately instead of waiting for the periodic
+/// scheduler — a STUN-only peer connection reliably fails to connect behind
+/// symmetric/CGNAT (common on cellular carriers).
+@MainActor
+final class CallManagerArmTurnCredentialsAfterConfigureTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func functionBody(_ source: String, signature: String) -> String? {
+        guard let start = source.range(of: signature) else { return nil }
+        let end = source.range(of: "\n    private func ", range: start.upperBound..<source.endIndex)?.lowerBound
+                ?? source.range(of: "\n    func ", range: start.upperBound..<source.endIndex)?.lowerBound
+                ?? source.endIndex
+        return String(source[start.lowerBound..<end])
+    }
+
+    func test_armTurnCredentialsAfterConfigure_requestsImmediately_whenNoIceServers() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(source, signature: "func armTurnCredentialsAfterConfigure(callId: String, iceServers: [IceServer]?)") else {
+            XCTFail("armTurnCredentialsAfterConfigure not found in CallManager.swift"); return
+        }
+        guard let guardRange = body.range(of: "guard let iceServers, !iceServers.isEmpty else {") else {
+            XCTFail("armTurnCredentialsAfterConfigure must guard on a nil-or-empty iceServers array"); return
+        }
+        let guardBody = String(body[guardRange.upperBound...])
+        XCTAssertTrue(
+            guardBody.contains("requestFreshTurnCredentials(callId: callId)"),
+            "When the call has no usable ICE servers, armTurnCredentialsAfterConfigure must " +
+            "request fresh TURN credentials immediately rather than waiting for the periodic " +
+            "scheduler — a STUN-only connection reliably fails behind symmetric/CGNAT."
+        )
+    }
+
+    func test_armTurnCredentialsAfterConfigure_schedulesPeriodicRefresh_whenIceServersPresent() throws {
+        let source = try callManagerSource()
+        guard let body = functionBody(source, signature: "func armTurnCredentialsAfterConfigure(callId: String, iceServers: [IceServer]?)") else {
+            XCTFail("armTurnCredentialsAfterConfigure not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("scheduleTURNCredentialRefresh(ttl: QualityThresholds.turnDefaultCredentialTTLSeconds)"),
+            "When the push already carries usable ICE servers, armTurnCredentialsAfterConfigure " +
+            "must fall back to the periodic scheduler — no immediate re-request is needed."
+        )
+    }
+
+    func test_incomingCallPaths_routeThroughArmTurnCredentialsAfterConfigure() throws {
+        let source = try callManagerSource()
+        // Both incoming-call entry points (VoIP push and socket/notification-only)
+        // must decide via armTurnCredentialsAfterConfigure right after configuring
+        // WebRTC — neither should call scheduleTURNCredentialRefresh directly, which
+        // would always wait for the periodic cadence even with a STUN-only fallback.
+        let signatures = [
+            "func reportIncomingVoIPCall(callId: String, callerUserId: String, callerName: String, isVideo: Bool, iceServers: [IceServer]? = nil)",
+            "func handleIncomingCallNotification(callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, iceServers: [IceServer]? = nil)"
+        ]
+        for signature in signatures {
+            guard let body = functionBody(source, signature: signature) else {
+                XCTFail("\(signature) not found in CallManager.swift"); continue
+            }
+            XCTAssertTrue(
+                body.contains("armTurnCredentialsAfterConfigure(callId: callId, iceServers: iceServers)"),
+                "\(signature) must call armTurnCredentialsAfterConfigure after webRTCService.configure."
+            )
+        }
+    }
+}
+
 // MARK: - TURN Refresh Retry Watchdog (§requestFreshTurnCredentials)
 
 /// Source-level guards verifying every `call:request-ice-servers` requester

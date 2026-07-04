@@ -109,7 +109,14 @@ final class WebRTCService {
 
     func configure(isVideo: Bool, iceServers: [IceServer]? = nil) {
         do {
-            let servers = iceServers ?? IceServer.defaultServers
+            // Treat an empty array the same as nil: a VoIP push whose
+            // `iceServers` field decodes to zero usable servers (all entries
+            // dropped by the credential-length guard, or an explicit `[]`)
+            // must still fall back to STUN — passing `[]` through to libwebrtc
+            // means no candidate gathering at all beyond host candidates,
+            // which fails behind virtually any NAT.
+            let resolved = iceServers ?? []
+            let servers = resolved.isEmpty ? IceServer.defaultServers : resolved
             try client.configure(iceServers: servers)
             Logger.webrtc.info("WebRTC configured - video: \(isVideo), ICE servers: \(servers.count)")
         } catch {
