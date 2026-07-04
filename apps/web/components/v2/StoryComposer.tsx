@@ -8,7 +8,7 @@ import { Button } from './Button';
 import { toast } from 'sonner';
 import { useAttachmentUpload } from '@/hooks/composer/useAttachmentUpload';
 import { useAuthStore } from '@/stores/auth-store';
-import { AudienceUserPicker } from './AudienceUserPicker';
+import { AudienceUserPicker, AUDIENCE_VISIBILITIES, isAudienceIncomplete } from './AudienceUserPicker';
 
 // ============================================================================
 // Types
@@ -19,19 +19,10 @@ type TextStyle = 'bold' | 'neon' | 'typewriter' | 'handwriting';
 type MediaCategory = 'image' | 'video' | 'audio';
 
 /// W3 — parité `PostVisibility` complète (inc.2) : EXCEPT/ONLY sont servis
-/// par l'AudienceUserPicker et gatés à la publication (`isAudienceIncomplete`)
-/// — jamais publiés sans liste (le trou W6 de PostComposer).
+/// par l'AudienceUserPicker et gatés à la publication (`isAudienceIncomplete`,
+/// partagé avec PostComposer depuis le module du picker) — jamais publiés
+/// sans liste (le trou W6).
 type StoryVisibility = 'PUBLIC' | 'FRIENDS' | 'COMMUNITY' | 'PRIVATE' | 'EXCEPT' | 'ONLY';
-
-/// Visibilités qui exigent une audience explicite (`visibilityUserIds`).
-export const AUDIENCE_VISIBILITIES: readonly StoryVisibility[] = ['EXCEPT', 'ONLY'];
-
-/// Gate PUR de publication : une visibilité à audience sans aucun utilisateur
-/// sélectionné ne doit JAMAIS partir (EXCEPT sans exclus = privé fantôme,
-/// ONLY sans inclus = invisible pour tous — sémantique serveur indéfinie).
-export function isAudienceIncomplete(visibility: StoryVisibility, audienceCount: number): boolean {
-  return AUDIENCE_VISIBILITIES.includes(visibility) && audienceCount === 0;
-}
 
 interface StoryComposerProps {
   open: boolean;
@@ -199,7 +190,7 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
         textStyle: selectedTextStyle,
       },
       visibility,
-      visibilityUserIds: AUDIENCE_VISIBILITIES.includes(visibility) ? visibilityUserIds : undefined,
+      visibilityUserIds: (AUDIENCE_VISIBILITIES as readonly string[]).includes(visibility) ? visibilityUserIds : undefined,
       mediaIds: mediaIds.length > 0 ? mediaIds : undefined,
     });
     setContent('');
@@ -480,7 +471,7 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
           </div>
 
           {/* W3 inc.2 — audience explicite pour EXCEPT/ONLY */}
-          {AUDIENCE_VISIBILITIES.includes(visibility) && (
+          {(AUDIENCE_VISIBILITIES as readonly string[]).includes(visibility) && (
             <AudienceUserPicker
               mode={visibility as 'EXCEPT' | 'ONLY'}
               selectedIds={visibilityUserIds}

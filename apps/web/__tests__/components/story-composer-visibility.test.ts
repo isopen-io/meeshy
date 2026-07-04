@@ -1,4 +1,5 @@
-import { VISIBILITY_OPTIONS, isAudienceIncomplete } from '@/components/v2/StoryComposer';
+import { VISIBILITY_OPTIONS } from '@/components/v2/StoryComposer';
+import { isAudienceIncomplete } from '@/components/v2/AudienceUserPicker';
 
 describe('StoryComposer visibility options (W3)', () => {
   it('offers the 6 PostVisibility values in selector order (iOS parity)', () => {
