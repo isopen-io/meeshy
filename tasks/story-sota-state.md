@@ -252,15 +252,22 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   Vérif : simulateur — story lue normalement, barre avance, AUCUN spinner parasite en lecture
   saine (screenshot) ; build 23 s vert. Reste terrain : provoquer un vrai stall réseau device
   (à grouper avec les tests device réseau dégradé).
-- [~] **R4 (P1) Deep link / notification : rendu progressif au lieu du spinner bloquant.** — it.9
+- [x] **R4 (P1) Deep link / notification : rendu progressif au lieu du spinner bloquant.** ✅ COMPLET it.42
   ✅ Incrément 1 (le cas majoritaire) : `ensureGroupAvailable` est désormais CACHE-FIRST —
   `loadStories()` (SWR : .fresh zéro réseau / .stale servi + refetch silencieux) sert le tray
   du cache 24 h AVANT tout réseau ; le body réactif (`groupIndex` sur @Published) monte le
   viewer sans spinner. `forceNetwork: true` ne court plus QUE si le cache ignore le groupe
   (comportement historique conservé, y c. guard isLoading vs boot load).
-  RESTE (incrément 2) : fetch unitaire par POST id → groupe minimal → rendu ThumbHash
-  immédiat pour le cas « story hors tray » (nécessite le plumbing postId dans les ~5 call
-  sites du container + éventuellement endpoint stories-par-user, à coordonner avec G1/R8).
+  ✅ Incrément 2 (it.42) : `StoryViewModel.ensureStoryLoaded(postId:)` — fetch unitaire
+  `GET /posts/:id` tenté par le container ENTRE le cache-first et le full-tray bloquant,
+  quand le point d'entrée connaît le post exact ; logique d'insertion extraite du sink
+  storyCreated (`insertOrMergeStoryGroups`, contrat identique pinné par les 5 tests sink) ;
+  guard expiry (deep link périmé → pas de groupe fantôme, `toStoryGroups` ne filtrant pas).
+  Plumbing : `StoryViewerRequest.postId` + covers coordinator iPhone/iPad +
+  `StoryActiveBridge` (notifications = LE chemin hors tray). NON branchés à dessein :
+  FeedView/RootViewComponents/Bookmarks (ouvrent « stories de l'AUTEUR d'un post », le
+  postId n'y est pas une story sûre). Résiduel documenté : deep link vers un USER hors
+  tray sans postId → full refetch inchangé (exige un endpoint stories-par-user → G1/R8).
 - [x] **R5 (P0) Garantir la relecture OFFLINE des stories vues.** ✅ COMPLET it.41
   (a) ÉCARTÉ après re-preuve it.2 : l'annulation des `prefetchTasks`/`currentVideoLoadTask`
   ne tue PAS un download en vol — le funnel `DiskCacheStore.networkData` exécute chaque
@@ -563,6 +570,19 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.42 — R4 inc.2 : fetch unitaire des stories hors tray par postId (24e3c7ae2)
+
+- Re-preuve : container identifié par userId seul — story hors tray (plafond 50, auteur
+  non suivi) = « introuvable » même quand GET /posts/:id la servirait. Le sink storyCreated
+  portait déjà la logique d'insertion/merge exacte → extraite et partagée (réutilisation max).
+- RED : 5 tests ensureStoryLoaded (compile RED — API inexistante) + assertion postId bridge.
+- Vérif : 88/88 verts simu 18.2 (StoryViewModelTests 85 dont 5 nouveaux + sink non-régression,
+  StoryActiveBridgeTests 3) ; TEST BUILD SUCCEEDED (app+tests). Pas de vérif visuelle : chemin
+  réseau de secours non déclenchable simplement en simu (nécessite notif story hors tray).
+- Worktree partagé : fichiers translator d'un autre agent en vol (translation_processor.py)
+  laissés intacts, commit pathspec 7 fichiers.
+- CI it.41 : run « CI » cancelled = concurrency group (PR #1438 derrière), pas un échec.
 
 ## it.41 — R5(c) : contrat d'intégration de la relecture offline pinné (855e6c673)
 
