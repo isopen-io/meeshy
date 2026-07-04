@@ -54,7 +54,18 @@ function makeFakePrisma(opts: { storyIds: string[]; repostIds: string[]; comment
         return { count: opts.storyIds.length };
       }),
     },
+    postMedia: {
+      deleteMany: jest.fn(async (args: any) => {
+        calls.push('postMedia.deleteMany');
+        return { count: 0 };
+      }),
+    },
     postComment: {
+      findMany: jest.fn(async (args: any) => {
+        return state.comments
+          .filter((c) => inSet(c.postId, args.where))
+          .map((c) => ({ id: c.id ?? 'c-' + c.postId }));
+      }),
       updateMany: jest.fn(async (args: any) => {
         calls.push('postComment.updateMany');
         let count = 0;
@@ -86,7 +97,11 @@ function makeSimplePrisma() {
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     postComment: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+    postMedia: {
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
   };
@@ -215,5 +230,48 @@ describe('ExpiredStoriesCleanupService — hard-delete P2014 regression', () => 
       String(c[0]).includes('hard-delete'),
     );
     expect(warnedHardDelete).toBe(false);
+  });
+});
+
+describe('ExpiredStoriesCleanupService — G7 media-orphan purge', () => {
+  // PostMedia.post and PostMedia.comment are `onDelete: SetNull`: without an
+  // explicit purge, every hard-deleted story left its media rows orphaned
+  // (postId/commentId = null) forever — stories are the most media-heavy
+  // content and ALL of them expire. Disk files are a separate follow-up.
+  it('purges media rows of the deleted posts BEFORE deleting the posts', async () => {
+    const fake = makeFakePrisma({
+      storyIds: ['story1'],
+      repostIds: ['repost1'],
+      comments: [],
+    });
+    const service = new ExpiredStoriesCleanupService(fake.prisma as any, { hardDeleteAgeMs: 0 });
+
+    await service.cleanup();
+
+    const mediaIdx = fake.calls.indexOf('postMedia.deleteMany');
+    const postIdx = fake.calls.indexOf('post.deleteMany');
+    expect(mediaIdx).toBeGreaterThanOrEqual(0);
+    expect(mediaIdx).toBeLessThan(postIdx);
+
+    const args = (fake.prisma.postMedia.deleteMany as jest.Mock).mock.calls[0][0] as any;
+    const orClauses = args.where.OR as any[];
+    const postClause = orClauses.find((c) => c.postId);
+    expect(postClause.postId.in).toEqual(expect.arrayContaining(['story1', 'repost1']));
+  });
+
+  it('also purges media attached to the deleted comments (commentId leg)', async () => {
+    const fake = makeFakePrisma({
+      storyIds: ['story1'],
+      repostIds: [],
+      comments: [{ id: 'c1', postId: 'story1', parentId: null }],
+    });
+    const service = new ExpiredStoriesCleanupService(fake.prisma as any, { hardDeleteAgeMs: 0 });
+
+    await service.cleanup();
+
+    const args = (fake.prisma.postMedia.deleteMany as jest.Mock).mock.calls[0][0] as any;
+    const orClauses = args.where.OR as any[];
+    const commentClause = orClauses.find((c) => c.commentId);
+    expect(commentClause.commentId.in).toEqual(['c1']);
   });
 });
