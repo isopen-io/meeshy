@@ -365,6 +365,20 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   gateway générées encodées, test it.41 vert sur le cas nominal). Fix si symptôme : dériver
   la clé via le MÊME round-trip URL aux deux bouts (pinTargets/prefetch). Pas de fix spéculatif.
 
+- [ ] **R14 (P2, découvert it.49) Le reader iOS ne rend PAS les clipTransitions (crossfade
+  intra-slide).** Preuves : `ReaderTransitionResolver.opacity` (StoryReaderResolvers.swift:28,
+  maths complète + testée StoryCanvasReaderTransitionTests) n'a AUCUN caller de production
+  (vestige du reader SwiftUI supprimé Phase A4) ; le canvas CALayer (StoryCanvasUIView*/
+  StoryRendererCache) ignore `clipTransitions` ; seuls le preview timeline et VideoCompositor
+  (export) les rendent → l'auteur voit son crossfade en preview mais PAS dans la story
+  publiée (la donnée traverse pourtant le publish depuis E2/it.4). Piste : point de tick =
+  StoryRenderer.swift:131 → cache.layer(for:at:) ; ⚠️ PIÈGE PERF consigné : NE PAS mettre le
+  facteur transition dans ItemSignature (opacité continue → cache miss/rebuild layer PAR TICK,
+  re-création AVPlayer pour les vidéos) — muter `layer.opacity` en POST-PASSE par tick
+  (sig.opacity × ReaderTransitionResolver.opacity), cache intact. Vérifier au passage comment
+  les keyframes opacity vivent déjà avec la signature (même hazard potentiel préexistant).
+  W1 inc.4 (portage web) utilisera la MÊME référence — à faire après ou avec R14.
+
 ### BACKEND — instantanéité réseau
 
 - [~] **G1 (P1) Tray léger + delta-sync.** — DELTA-SYNC FAIT it.13
@@ -606,6 +620,16 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.49 — Reconnaissance W1 inc.4 → finding R14 : le reader iOS n'a jamais rendu les
+## crossfades intra-slide (hash au commit)
+
+- Parti pour porter W1 inc.4 (clipTransitions web), la re-preuve a montré plus grave côté
+  produit principal : le resolver iOS existe, est testé, et n'est branché NULLE PART en
+  lecture (détail et piste dans l'item R14 ci-dessus). Le web attendra la même référence.
+- Aucun code ce tour (reconnaissance type it.32) : le branchement touche le pipeline de
+  rendu par tick (RendererCache/signatures) avec un piège perf AVPlayer identifié AVANT
+  de coder. it.50 = R14 (reader iOS d'abord, fidélité du produit principal), puis W1 inc.4.
 
 ## it.48 — R12 inc.2 : mutations locales sur le chemin dirty débouncé (40f75bf9d)
 
