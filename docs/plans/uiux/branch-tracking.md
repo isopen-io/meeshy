@@ -14,6 +14,21 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 136i, 2026-07-04)** — piste iOS indépendante (suffixe `i`).
+> - **136i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `6b2a335f`)** :
+>   Dynamic Type de `MessageListView` (`swipeIndicator` — retour visuel du swipe répondre/transférer).
+>   **3/3** `.font(.system(size:))` → `MeeshyFont.relative` (flèche répondre/transférer 22 semibold ; tampon
+>   jour 11 medium ; tampon heure 12 semibold) → tout scale sous Dynamic Type ; flèche et tampons s'échangent
+>   dans le même emplacement (crossfade) donc migrés ensemble. **0 gel** : ZStack contraint en largeur
+>   seulement (`.frame(width: 64)`, pas une vignette de dimension fixe). Retour transitoire de geste non
+>   exposé au rotor → pas d'a11y à ajouter. Logique de geste non touchée. 1 fichier, 0 logique, 0 test/clé
+>   i18n neuve. 1 PR ouverte #1440 (calls/`WebRTCVideoView`/`CallsTab`) — pas `MessageListView` → 0 contention.
+>   Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `MessageListView` (`swipeIndicator`) Dynamic Type SOLDÉ** : ne plus reprendre (3 → `relative`).
+> - **Base de départ 137i : `main` HEAD**. Reste `StoryViewerView+Content` (⚠️ i18n + `@State private`
+>   cross-file). Sinon : `ConversationLockSheet` (3), `KeypadTab` (3), traîne 2/1 `.system` (⚠️ éviter
+>   `WebRTCVideoView` tant que #1440 ouverte), ou **passe state-of-the-art** au tarissement.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 135i, 2026-07-04)** — piste iOS indépendante (suffixe `i`).
 > - **135i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `1fbda962`)** :
 >   Dynamic Type de `SyncPill` (pastille rotative de synchronisation en haut d'écran). **3/3**
