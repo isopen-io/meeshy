@@ -1688,6 +1688,42 @@ describe('CallService', () => {
       });
     });
 
+    it('bumps CallSession.version on the terminal write so a version-guarded writer that already read the row no-ops afterward', async () => {
+      // Every other terminal writer (endCall, leaveCall, updateCallStatus, the
+      // ringing-timeout handler) bumps `version` on its terminal write — this
+      // is the invariant version-guarded writers (`where: { version: call.version }`)
+      // rely on to detect a concurrent transition. markCallAsMissed's
+      // status-scoped updateMany protects itself from double-writing, but
+      // without bumping `version` too, a concurrent endCall()/leaveCall() that
+      // read the row a moment earlier still matches its stale `version` guard
+      // and clobbers this write's endedAt/duration/endReason right after.
+      const callSession = createMockCallSession({
+        status: CallStatus.ringing,
+        version: 3,
+        participants: [createMockParticipant()]
+      });
+      const missedCall = {
+        ...callSession,
+        status: CallStatus.missed,
+        endedAt: new Date(),
+        participants: [createMockParticipant({ user: createMockUser() })],
+        initiator: createMockUser(),
+        conversation: createMockConversation()
+      };
+
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(callSession);
+      mockPrisma.callSession.updateMany.mockResolvedValue({ count: 1 });
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(missedCall);
+
+      await callService.markCallAsMissed('call-123');
+
+      expect(mockPrisma.callSession.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ version: { increment: 1 } })
+        })
+      );
+    });
+
     it('returns current state without releasing claims when it loses the race to a concurrent terminal write', async () => {
       // Two writers can both pass the top-of-function status guard (both read
       // `ringing`) then race on the write itself — e.g. the ringing-timeout

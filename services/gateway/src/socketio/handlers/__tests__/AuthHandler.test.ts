@@ -440,6 +440,40 @@ describe('AuthHandler', () => {
       expect(connectedUsers.has('anon-123')).toBe(false);
     });
 
+    it('should skip the stale offline broadcast when the user reconnects during anonymous call-cleanup await (race)', async () => {
+      // The anonymous branch awaits callParticipant.findMany before reaching the
+      // offline broadcast. If the client reconnects during that await (flaky
+      // network / app foreground), the new socket's own auth flow already
+      // broadcast isOnline:true — a subsequent unconditional isOnline:false here
+      // would be a stale last-write-wins clobber of both the room broadcast and
+      // the DB flag.
+      (mockPrisma.callParticipant.findMany as jest.Mock).mockImplementation(async () => {
+        userSockets.set('anon-123', new Set(['socket-456']));
+        connectedUsers.set('anon-123', {
+          id: 'anon-123',
+          socketId: 'socket-456',
+          isAnonymous: true,
+          language: 'en'
+        });
+        return [];
+      });
+
+      socketToUser.set('socket-123', 'anon-123');
+      connectedUsers.set('anon-123', {
+        id: 'anon-123',
+        socketId: 'socket-123',
+        isAnonymous: true,
+        language: 'en'
+      });
+      userSockets.set('anon-123', new Set(['socket-123']));
+
+      await authHandler.handleDisconnection(createMockSocket({ id: 'socket-123' }));
+
+      expect(mockMaintenanceService.updateAnonymousOnlineStatus).not.toHaveBeenCalled();
+      // The reconnect's own connectedUsers entry must survive untouched
+      expect(connectedUsers.get('anon-123')?.socketId).toBe('socket-456');
+    });
+
     it('should still clean maps when updateUserOnlineStatus throws', async () => {
       socketToUser.set('socket-123', 'user-123');
       connectedUsers.set('user-123', {

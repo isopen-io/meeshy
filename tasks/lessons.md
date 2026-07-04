@@ -577,6 +577,7 @@ d'extraction de prod sur usernames ASCII-validés `/^[a-z0-9_]{1,30}$/`) ; une i
 Leçon transverse : toujours grep les call-sites non-test AVANT d'inscrire (ou de clore) un item comme
 dette — et vérifier `origin/main` juste avant de statuer, un cycle parallèle peut l'avoir traité.
 
+
 ## Leçon 64 — F61 soldé : le fallback `@username` de `parseMentions` gardait une frontière gauche ASCII, jumelle résiduelle de F57 (2026-07-04, itération 96)
 
 Suite de la Leçon 44 (mention par préfixe) et de F57 (it.95, `hasMentions` ASCII→Unicode). Le module
@@ -596,6 +597,26 @@ quand un module déclare une constante « source de vérité unique » pour une 
 chemin voisin ne doit réimplémenter la même frontière à la main — auditer TOUS les paths du module
 (F57 avait unifié `hasMentions` + `@DisplayName` mais oublié le fallback `@username` : un seul path
 oublié réintroduit la dérive ASCII↔Unicode).**
+
+                                               
+## Leçon 65 — Un nouveau `NotificationType` non câblé dans `isTypeEnabled` contourne la préférence via `default:true` (F59, it.97)
+`isTypeEnabled(prefs, type)` mappe chaque `NotificationType` → son champ booléen de préférence. Son
+`default: return true` est destiné aux types système/toujours-actifs (`login_new_device`,
+`translation_ready`…). **Piège** : quand on ajoute un nouveau type gouverné par une préférence
+utilisateur existante et qu'on oublie de l'ajouter au `switch`, il tombe silencieusement sur
+`default:true` — il IGNORE l'opt-out utilisateur. C'était le cas de `comment_reaction` (chemin socket)
+alors que son sibling REST `comment_like` était bien gaté sur `commentLikeEnabled`. Résultat : couper
+« like de commentaire » n'éteignait que le REST, la réaction socket passait quand même.
+
+**Règle réutilisable** : deux chemins/transports du MÊME geste produit (ici réagir à un commentaire)
+DOIVENT honorer la même préférence. À chaque nouveau type de notif, se demander « quelle préférence
+existante le gouverne ? » et l'ajouter explicitement au `switch` — ne jamais le laisser au `default`
+sauf s'il est intentionnellement toujours-actif (sécurité/système). Audit rapide : lister l'union
+`NotificationType` et cross-check vs les `case` — les types tombant sur `default` doivent être
+soit système, soit sans champ de préférence à créer (décision produit), jamais un type qui a déjà un
+toggle câblé pour son sibling.
+
+                                               
 
 ## Leçon 66 — F62 soldé : `resolveUserLanguage` renvoyait les préférences in-app en casse brute, `resolveUserLanguagesOrdered` les lowercasait — drift de casse live sur le Prisme (2026-07-04, itération 98)
 Deux résolveurs sœurs du même module (`packages/shared/utils/conversation-helpers.ts`) répondaient à
@@ -618,3 +639,5 @@ insensible à la casse mais ne normalise pas la valeur stockée, la casse en bas
 le résolveur de lecture (source de vérité) DOIT normaliser, et TOUS les résolveurs sœurs du même
 champ doivent partager la même politique de casse (auditer le module entier, pas la seule fonction
 touchée).**
+                                               
+                                               

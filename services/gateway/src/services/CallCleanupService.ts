@@ -372,7 +372,19 @@ export class CallCleanupService {
     const ended = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.callSession.updateMany({
         where: { id: callId, status: { in: fromStatuses } },
-        data: { status, endedAt: now, duration, endReason }
+        data: {
+          status,
+          endedAt: now,
+          duration,
+          endReason,
+          // Terminal write protocol: every terminal writer MUST bump
+          // `version`, even one guarded by status rather than by version —
+          // otherwise a version-guarded writer (endCall/leaveCall/
+          // updateCallStatus) that read the row a moment before this GC
+          // write still matches its stale `version` and clobbers this
+          // terminal state right after.
+          version: { increment: 1 }
+        }
       });
       if (updated.count === 0) {
         return false;

@@ -1695,7 +1695,13 @@ export class CallService {
         status: CallStatus.missed,
         endedAt: now,
         duration,
-        endReason: CallEndReason.missed
+        endReason: CallEndReason.missed,
+        // Terminal write protocol: every terminal writer MUST bump `version`,
+        // even one guarded by status rather than by version — otherwise a
+        // version-guarded writer (endCall/leaveCall/updateCallStatus) that
+        // read the row a moment before this write still matches its stale
+        // `version` and clobbers this terminal state right after.
+        version: { increment: 1 }
       }
     });
 
