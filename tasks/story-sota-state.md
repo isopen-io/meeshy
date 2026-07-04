@@ -262,7 +262,11 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   aux choke points — pas de conversion command-based des dizaines de call sites ; pile
   `[StorySlide]` cap 50, capture à syncCurrentSlideEffects + fin de geste + ops slides,
   piège bitmaps purgés consigné, UI discrète shake + icônes header conditionnelles).
-  5 incréments ; Inc.1 = HistoryStore pur TDD. ORIGINE :** Undo/redo existe UNIQUEMENT en dessin
+  5 incréments. ✅ Inc.1 it.81 : `HistoryStore<S>` (MeeshyUI/Controls, struct pure
+  nonisolated parité BandStateMachine) — push dédup/troncature redo/cap avec ÉVINCÉ
+  RETOURNÉ (seam purge bitmaps différée), undo/redo trajectoire exacte ; 6 tests.
+  RESTE : Inc.2 câblage capture, Inc.3 restore+purge paresseuse, Inc.4 UI discrète
+  (shake + icônes conditionnelles), Inc.5 vérif simulateur. ORIGINE :** Undo/redo existe UNIQUEMENT en dessin
   (DrawingEditFloatingBubbles) + CommandStack timeline (séparé). Ajout/déplacement/suppression
   de texte/média/sticker/fond : irréversibles (seul « annuler » = ⋯ → Supprimer tous les
   slides !). Chantier : étendre le pattern CommandStack au canvas — PLAN requis avant code.
@@ -949,6 +953,11 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.81 — C9 Inc.1 : HistoryStore (pile d'états pure, 6 tests)
+
+- Brique autonome livrée selon le plan ; l'évincé-retourné prépare la purge différée des
+  bitmaps (piège Inc.3). Prochain : Inc.2 (seed + push aux 3 choke points).
 
 ## it.80 — C2 retiré (geste mort) + plan C9 posé (undo global par snapshots)
 
