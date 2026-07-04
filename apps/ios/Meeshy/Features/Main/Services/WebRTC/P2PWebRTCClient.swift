@@ -973,8 +973,6 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         let generation = sessionGeneration
         do {
             try await capturer.startCapture(with: camera, format: format, fps: fps)
-            // See `sessionGeneration` doc — compare on MainActor, not on whatever
-            // thread the capture-session completion resumed us on.
             let isStale = await MainActor.run { generation != sessionGeneration }
             if isStale {
                 Logger.webrtc.warning("[WEBRTC] session changed during capturer restart — stopping orphan capture")
@@ -1015,8 +1013,6 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         await capturer.stopCapture()
         let fps = targetFrameRate(for: selectedFormat)
         try await capturer.startCapture(with: camera, format: selectedFormat, fps: fps)
-        // See `sessionGeneration` doc — compare on MainActor, not on whatever
-        // thread the capture-session completion resumed us on.
         let isStale = await MainActor.run { generation != sessionGeneration }
         if isStale {
             Logger.webrtc.warning("[WEBRTC] session changed during camera switch — stopping orphan capture")
@@ -1072,8 +1068,6 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         await capturer.stopCapture()
         let fps = targetFrameRate(for: selectedFormat)
         try await capturer.startCapture(with: camera, format: selectedFormat, fps: fps)
-        // See `sessionGeneration` doc — compare on MainActor, not on whatever
-        // thread the capture-session completion resumed us on.
         let isStale = await MainActor.run { generation != sessionGeneration }
         if isStale {
             Logger.webrtc.warning("[WEBRTC] session changed during camera switch (by ID) — stopping orphan capture")

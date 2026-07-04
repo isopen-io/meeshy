@@ -64,7 +64,7 @@ final class P2PWebRTCClientConcurrencySourceTests: XCTestCase {
             to: "func switchCamera()"
         )
         XCTAssertTrue(
-            fn.contains("await MainActor.run { generation != self.sessionGeneration }"),
+            fn.contains("await MainActor.run { generation != sessionGeneration }"),
             "restartCapturerIfStopped must compare sessionGeneration on MainActor after the await."
         )
     }
@@ -72,7 +72,7 @@ final class P2PWebRTCClientConcurrencySourceTests: XCTestCase {
     func test_switchCamera_reHopsGenerationCheckToMainActor() throws {
         let fn = try body(from: "func switchCamera() async throws {", to: "func availableCameras()")
         XCTAssertTrue(
-            fn.contains("await MainActor.run { generation != self.sessionGeneration }"),
+            fn.contains("await MainActor.run { generation != sessionGeneration }"),
             "switchCamera must compare sessionGeneration on MainActor after the await."
         )
     }
@@ -80,7 +80,7 @@ final class P2PWebRTCClientConcurrencySourceTests: XCTestCase {
     func test_switchToCamera_reHopsGenerationCheckToMainActor() throws {
         let fn = try body(from: "func switchToCamera(uniqueID: String)", to: "func getStats()")
         XCTAssertTrue(
-            fn.contains("await MainActor.run { generation != self.sessionGeneration }"),
+            fn.contains("await MainActor.run { generation != sessionGeneration }"),
             "switchToCamera must compare sessionGeneration on MainActor after the await."
         )
     }
