@@ -509,7 +509,7 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 
 ### UI/UX — design system par version d'iOS (à traiter APRÈS les P0/P1 fonctionnels)
 
-- [~] **U1 (P2) Transition tray→viewer** — INC.1 it.56 ✅
+- [x] **U1 (P2) Transition tray→viewer** ✅ COMPLET it.57
   Livré : `zoomTransitionNamespace` (EnvironmentKey SDK) + helpers `zoomTransitionSource/
   Destination` (atomes gated #available(iOS 18), no-op sinon — zéro régression 16-17) ;
   RootView injecte le namespace + destination sur le cover coordinator (sourceID =
@@ -519,8 +519,12 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   pas le slide-up standard), viewer sain (progression/chrome/traduction), drag-dismiss
   custom SANS conflit (risque flaggé levé), appearScale/interstitiel/cube intacts.
   Captures scratchpad it56-t4/now/dismissed.png.
-  RESTE inc.2 : sites secondaires (mini-trail pinned StoryTrayView compact, iPad covers
-  ×2 — le namespace env est déjà visible partout, ajouter source/destination) ; MyStory.
+  ✅ Inc.2 (it.57) : mini-trail épinglée + MyStory = sources ; ConversationView covers ×2
+  + iPad covers ×2 = destinations ; iPadRootView = namespace + injection (parité RootView).
+  sourceID vide/non enregistré → cover standard (fallback guard). Re-vérif simulateur :
+  le chemin principal zoome toujours avec TOUTES les sources enregistrées (pas de
+  régression id dupliqué grande/mini). Restes visuels mineurs (non bloquants) : déclencher
+  visuellement mini-trail épinglée + iPad — à grouper avec une passe device.
 - [x] **U2 (P2) Haptics du reader.** ✅ it.25
   Livré via l'abstraction multi-version EXISTANTE `HapticFeedback` (UIImpactFeedbackGenerator,
   iOS 16+) : tick léger au changement de slide + gel perceptible quand le spinner R3 apparaît
@@ -658,6 +662,16 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.57 — U1 inc.2 : zoom sur toutes les surfaces secondaires, U1 COMPLET (0f59fa9f3)
+
+- 4 fichiers, +20 lignes — le pattern inc.1 appliqué mécaniquement partout ; aucun effet
+  existant touché. Build 27 s vert (exit 1 = piège warning-free connu, grep du log foi).
+- Re-vérif simulateur : fresh install → tap bulle « meeshy sama » → zoom capturé (z5,
+  échelle intermédiaire coins arrondis), chrome viewer complet, dismiss propre.
+- CI NOTE : le rouge « CI » depuis it.55 = test_34_zmq_pool du TRANSLATOR (contrat
+  exception→[] changé par le fix fallback de l'agent translator, chantier ACTIF chez lui,
+  fichiers en vol worker_pool.py) — hors périmètre story-sota, il possède la réparation.
 
 ## it.56 — U1 inc.1 : zoom bulle→viewer iOS 18+, vérifié simulateur (922f966d4)
 
