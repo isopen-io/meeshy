@@ -386,12 +386,17 @@ export class AuthHandler {
       }
     }
 
-    // Guard: a new socket may have reconnected while async cleanup was in progress.
-    // Only delete the connectedUsers entry if no new sockets exist for this user.
+    // Guard: a new socket may have reconnected while async cleanup (the
+    // anonymous call-participation lookup above awaits Prisma) was in
+    // progress. That reconnect's own auth flow already broadcast the correct
+    // isOnline:true and repopulated userSockets/connectedUsers — broadcasting
+    // isOnline:false below would be a stale last-write-wins clobber of both
+    // the room presence event and the DB flag. Bail out entirely in that case.
     const stillHasSockets = (this.userSockets.get(userIdOrToken)?.size ?? 0) > 0;
-    if (!stillHasSockets) {
-      this.connectedUsers.delete(userIdOrToken);
+    if (stillHasSockets) {
+      return;
     }
+    this.connectedUsers.delete(userIdOrToken);
 
     try {
       if (isAnonymous) {
