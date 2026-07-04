@@ -573,7 +573,7 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.43 — E4 inc.2 : undo/redo cross-crash via blob opaque du draft store (6ae5872ee)
+## it.43 — E4 inc.2 : undo/redo cross-crash via blob opaque du draft store (2474bbf3c)
 
 - Re-preuve : `CommandStackSnapshot` déjà Codable+Sendable ; `story_draft_meta` (key/value
   TEXT) déjà purgée par `clear()` → blob base64 sans migration ni nouveau fichier.
