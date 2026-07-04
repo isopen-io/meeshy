@@ -6,7 +6,6 @@
     <string name="contacts_tab_requests">Solicitações</string>
     <string name="contacts_tab_discover">Descobrir</string>
     <string name="contacts_tab_blocked">Bloqueados</string>
-    <string name="contacts_coming_soon">Em breve</string>
     <string name="contacts_requests_received">Recebidas</string>
     <string name="contacts_requests_sent">Enviadas</string>
     <string name="contacts_requests_empty">Nenhuma solicitação pendente</string>
@@ -29,4 +28,12 @@
     <string name="contacts_discover_pending">Pendente</string>
     <string name="contacts_discover_contact">Contato</string>
     <string name="contacts_discover_blocked">Bloqueado</string>
+    <string name="contacts_blocked_empty">Nenhum usuário bloqueado</string>
+    <string name="contacts_blocked_error">Não foi possível carregar os usuários bloqueados</string>
+    <string name="contacts_blocked_unblock">Desbloquear</string>
+    <string name="contacts_blocked_unblock_a11y">Desbloquear %1$s</string>
+    <string name="contacts_blocked_unblock_title">Desbloquear?</string>
+    <string name="contacts_blocked_unblock_message">Desbloquear %1$s?</string>
+    <string name="contacts_blocked_unblock_confirm">Desbloquear</string>
+    <string name="contacts_blocked_unblock_cancel">Cancelar</string>
 </resources>

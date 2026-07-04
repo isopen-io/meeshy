@@ -257,13 +257,14 @@ export function PostsFeedScreen() {
   );
 
   const handleStoryPublish = useCallback(
-    (story: { content?: string; storyEffects: Record<string, unknown>; visibility: StoryVisibility; mediaIds?: string[] }) => {
+    (story: { content?: string; storyEffects: Record<string, unknown>; visibility: StoryVisibility; visibilityUserIds?: string[]; mediaIds?: string[] }) => {
       setStoryComposerOpen(false);
       createStoryMutation.mutate(
         {
           content: story.content,
           storyEffects: story.storyEffects,
           visibility: story.visibility,
+          visibilityUserIds: story.visibilityUserIds,
           mediaIds: story.mediaIds,
           originalLanguage: userLanguage,
         },

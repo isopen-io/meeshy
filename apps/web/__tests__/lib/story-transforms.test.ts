@@ -175,6 +175,8 @@ import {
   interpolateKeyframeChannel,
   resolveKeyframeState,
   applyStoryEasing,
+  resolveClipTransitionOpacity,
+  type StoryClipTransitionData,
 } from '@/lib/story-transforms';
 
 describe('interpolateKeyframeChannel (W1 iOS parity)', () => {
@@ -243,5 +245,59 @@ describe('applyStoryEasing (W1)', () => {
     expect(applyStoryEasing('easeIn', 0.5)).toBeCloseTo(0.25);
     expect(applyStoryEasing('easeOut', 0.5)).toBeCloseTo(0.75);
     expect(applyStoryEasing('easeInOut', 0.25)).toBeCloseTo(0.125);
+  });
+});
+
+describe('resolveClipTransitionOpacity (W1 inc.4 — ReaderTransitionResolver parity)', () => {
+  const clipA = { id: 'clip-a', startTime: 0, duration: 4 };
+  const clipB = { id: 'clip-b', startTime: 4, duration: 4 };
+  const crossfade: StoryClipTransitionData = {
+    fromClipId: 'clip-a', toClipId: 'clip-b', kind: 'crossfade', duration: 1,
+  };
+
+  it('fades the outgoing clip 1→0 over [end-d, end]', () => {
+    expect(resolveClipTransitionOpacity(clipA, [crossfade], 3.5)).toBeCloseTo(0.5);
+    expect(resolveClipTransitionOpacity(clipA, [crossfade], 3.8)).toBeCloseTo(0.2);
+  });
+
+  it('fades the incoming clip 0→1 over [start, start+d]', () => {
+    expect(resolveClipTransitionOpacity(clipB, [crossfade], 4.5)).toBeCloseTo(0.5);
+    expect(resolveClipTransitionOpacity(clipB, [crossfade], 4.9)).toBeCloseTo(0.9);
+  });
+
+  it('returns 1 outside the transition window but inside the media window', () => {
+    expect(resolveClipTransitionOpacity(clipA, [crossfade], 1.0)).toBe(1);
+    expect(resolveClipTransitionOpacity(clipB, [crossfade], 6.0)).toBe(1);
+  });
+
+  it('returns 0 outside the media [start, end] window (transitions present)', () => {
+    expect(resolveClipTransitionOpacity(clipA, [crossfade], 5.0)).toBe(0);
+    expect(resolveClipTransitionOpacity(clipB, [crossfade], 1.0)).toBe(0);
+  });
+
+  it('ignores dissolve (compositor-only, iOS reader parity) and uninvolved clips', () => {
+    const dissolve: StoryClipTransitionData = {
+      fromClipId: 'clip-a', toClipId: 'clip-b', kind: 'dissolve', duration: 1,
+    };
+    expect(resolveClipTransitionOpacity(clipA, [dissolve], 3.5)).toBe(1);
+    const other = { id: 'clip-z', startTime: 0, duration: 8 };
+    expect(resolveClipTransitionOpacity(other, [crossfade], 3.5)).toBe(1);
+  });
+
+  it('multiplies overlapping matching transitions and clamps to [0, 1]', () => {
+    const secondFade: StoryClipTransitionData = {
+      fromClipId: 'clip-a', toClipId: 'clip-x', kind: 'crossfade', duration: 1,
+    };
+    const combined = resolveClipTransitionOpacity(clipA, [crossfade, secondFade], 3.5);
+    expect(combined).toBeCloseTo(0.25);
+  });
+
+  it('treats no transitions as fully opaque and guards zero-duration', () => {
+    expect(resolveClipTransitionOpacity(clipA, undefined, 3.5)).toBe(1);
+    expect(resolveClipTransitionOpacity(clipA, [], 3.5)).toBe(1);
+    const degenerate: StoryClipTransitionData = {
+      fromClipId: 'clip-a', toClipId: 'clip-b', kind: 'crossfade', duration: 0,
+    };
+    expect(resolveClipTransitionOpacity(clipA, [degenerate], 4.0)).toBe(1);
   });
 });

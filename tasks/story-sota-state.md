@@ -433,14 +433,21 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 
 ### WEB (secondaire — parité lecteur)
 
-- [~] **W1 (P2) Keyframes/transitions non rendus.** — INCRÉMENT 1 FAIT it.23
+- [x] **W1 (P2) Keyframes/transitions non rendus.** ✅ COMPLET it.51
   Plan : `docs/superpowers/plans/2026-07-03-web-story-keyframes-plan.md`.
   ✅ Inc.1 : portage 1:1 de `KeyframeInterpolator.swift` en TS pur (`story-transforms.ts` —
   tri, constante, clamp, easing du kf BAS, canaux indépendants, time relatif au startTime),
   hook playhead rAF activé UNIQUEMENT si le slide a des keyframes (hérite du gel W2 :
   startedAtRef nul → temps figé), appliqué aux TEXTOBJECTS (x/y/scale/opacity).
   ✅ Inc.2 (it.24) : mediaObjects foreground animés (mêmes canaux, style factorisé,
-  slideHasKeyframes étendu). RESTE : inc.4 clipTransitions (voir plan).
+  slideHasKeyframes étendu).
+  ✅ Inc.4 (it.51) : `resolveClipTransitionOpacity` — portage 1:1 des maths
+  ReaderTransitionResolver (référence R14) : sortant/entrant linéaires, multiplicatif,
+  dissolve ignoré, clips hors fenêtre masqués sur slides à transitions ; rAF armé aussi
+  sur transitions-seules (gel W2 hérité) ; opacité FG = kf × facteur, styles intacts sans
+  transitions ; type `clipTransitions` ajouté au StoryData local (passthrough serveur déjà
+  intégral). 154/154 les 9 suites story web (7 tests parité neufs).
+  Inc.3 (rotation animée) = non-item tant que le composer ne l'émet pas (plan).
 - [x] **W2 (P2) Timer découplé de la vidéo.** ✅ it.22
   Porté le pattern iOS R1/R2 : `isBuffering` piloté par les événements natifs du <video>
   principal (waiting/stalled → gel ; playing/canplay → reprise), watchdog 5 s anti-deadlock
@@ -450,9 +457,23 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   Handlers posés sur les 2 formes de fond vidéo (mediaUrl + mediaObjects isBackground).
   Piège de test consigné : avec fake timers, le timer reposé par un effet React post-watchdog
   ne se flush qu'à la fin de l'act → découper les advanceTimersByTime.
-- [ ] **W3 (P2) Composer web : visibilités COMMUNITY/EXCEPT/ONLY + overlays.** Reliquat connu
-  (mémoire story-status-community-visibility). `visibilityUserIds` déjà dans
-  `CreateStoryRequest` web — manque l'UI.
+- [~] **W3 (P2) Composer web : visibilités COMMUNITY/EXCEPT/ONLY + overlays.** — INC.1 it.52
+  ✅ Inc.1 : COMMUNITY au sélecteur (sémantique complète sans picker, labels 4 langues) +
+  `visibilityUserIds` plombé composer → feed screen → createStory (service l'acceptait déjà).
+  Décision pinnée par test : EXCEPT/ONLY N'ENTRENT PAS au sélecteur sans le picker
+  d'audience (publier sans liste = visibilité cassée).
+  ✅ Inc.2 (it.53) : `AudienceUserPicker` (components/v2 — recherche debouncée via
+  useSearchUsersQuery générique, multi-sélection chips, hints par mode, 4 langues) ;
+  EXCEPT/ONLY au sélecteur story ; publication gatée par `isAudienceIncomplete` (pur,
+  testé) — jamais d'audience vide publiée. W3 côté VISIBILITÉS = COMPLET (6/6 parité iOS).
+  RESTE (hors visibilités) : overlays composer web (texte positionné etc.) = chantier
+  séparé, non couvert par cet item.
+- [ ] **W6 (P2, découvert it.52) PostComposer web publie EXCEPT/ONLY SANS visibilityUserIds.**
+  Preuve : VISIBILITY_OPTIONS contient EXCEPT/ONLY (PostComposer.tsx:26-27) mais
+  handlePublish n'envoie que {content, type, visibility} (:48-52) — aucun picker, aucune
+  liste → visibilité cassée côté serveur (EXCEPT sans exclus / ONLY sans inclus).
+  Le picker est DISPONIBLE depuis it.53 (`components/v2/AudienceUserPicker`) + gate
+  `isAudienceIncomplete` réutilisable — brancher PostComposer = prochain incrément W.
 - [x] **W4 (P3) Realtime web : story:deleted + story:translation-updated.** ✅ it.28
   `story:deleted` abonné dans use-social-socket (événement absent) + handlers dans
   useStoriesRealtime : suppression → retirée du cache tray en direct ; traduction →
@@ -627,6 +648,34 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.53 — W3 inc.2 : picker d'audience web, visibilités 6/6 parité iOS (1268724aa)
+
+- Réutilisation : useSearchUsersQuery générique (même source que le UserPicker admin —
+  promotion du composant admin écartée : couplage namespace i18n/UserDisplay admin) ;
+  composant v2 dédié ~110 lignes, styles var(--gp-*) cohérents composer.
+- Gate PUR isAudienceIncomplete exporté + testé (6 cas) ; bouton publish désactivé si
+  EXCEPT/ONLY sans sélection ; reset de la liste au close/publish ; deps bug préexistant
+  du useCallback publish corrigé au passage (visibility absent des deps → payload stale).
+- 207/207 story+feed (13 suites). W6 (PostComposer) : picker prêt, branchement = prochain W.
+
+## it.52 — W3 inc.1 : COMMUNITY au composer web + plomberie visibilityUserIds (e63a64f53)
+
+- Re-preuve : composer web limité à PUBLIC/FRIENDS/PRIVATE ; parité iOS = 6 visibilités
+  dont EXCEPT/ONLY à picker (AudienceUserPickerView). Découverte en route : W6 —
+  PostComposer OFFRE déjà EXCEPT/ONLY mais publie SANS liste (visibilité cassée).
+- Livré : option COMMUNITY (labels en/fr/es/pt, diffs locales chirurgicaux +1 ligne),
+  payload visibilityUserIds bout-en-bout, décision « pas d'EXCEPT/ONLY sans picker »
+  pinnée par test dédié. 157/157 story + 50/50 feed (bun).
+- inc.2 (picker partagé) = prochain morceau W3, fixera W6 du même geste.
+
+## it.51 — W1 inc.4 : crossfades intra-slide au viewer web, W1 COMPLET (939cec8c0)
+
+- RED : 7 tests parité (sortant/entrant, hors fenêtres, dissolve/non-impliqué, multiplicatif
+  + clamp, sans transitions + durée 0 guardée). 154/154 les 9 suites story web.
+- Réutilisation : mêmes maths que R14 (référence unique ReaderTransitionResolver) ; le
+  passthrough storyEffects serveur→viewer était déjà intégral (zéro plomberie).
+- Cross-platform : le crossfade authoré rend désormais iOS (it.50) ET web (it.51).
 
 ## it.50 — R14 : les crossfades intra-slide rendent enfin au playback (7397e72d3)
 

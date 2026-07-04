@@ -440,3 +440,45 @@ export function resolveKeyframeState(
     opacity: interpolateKeyframeChannel(channel((k) => k.opacity), local),
   };
 }
+
+export interface StoryClipTransitionData {
+  id?: string;
+  fromClipId: string;
+  toClipId: string;
+  kind: 'crossfade' | 'dissolve';
+  duration: number;
+  easing?: StoryEasingName;
+}
+
+/**
+ * W1 inc.4 — portage 1:1 de `ReaderTransitionResolver.opacity` (iOS, branché
+ * au playback par R14) : facteur d'opacité d'un clip foreground sous ses
+ * `clipTransitions` crossfade. Sortant : 1→0 sur `[end-d, end]` ; entrant :
+ * 0→1 sur `[start, start+d]` ; multiplicatif quand plusieurs transitions
+ * matchent ; `dissolve` ignoré (compositor-only, parité reader iOS) ; hors
+ * fenêtre `[start, end]` du média → 0 ; interpolation linéaire (l'easing est
+ * ignoré par le reader iOS). Clamp [0, 1].
+ */
+export function resolveClipTransitionOpacity(
+  media: { id: string; startTime?: number; duration?: number },
+  transitions: readonly StoryClipTransitionData[] | undefined,
+  currentTime: number
+): number {
+  if (!transitions || transitions.length === 0) return 1;
+  const start = media.startTime ?? 0;
+  const end = start + (media.duration ?? 0);
+  if (currentTime < start || currentTime > end) return 0;
+
+  let opacity = 1;
+  for (const tr of transitions) {
+    if (tr.kind !== 'crossfade' || tr.duration <= 0) continue;
+    const isOutgoing = tr.fromClipId === media.id;
+    const isIncoming = tr.toClipId === media.id;
+    if (!isOutgoing && !isIncoming) continue;
+    const trStart = isOutgoing ? end - tr.duration : start;
+    if (currentTime < trStart || currentTime > trStart + tr.duration) continue;
+    const progress = (currentTime - trStart) / tr.duration;
+    opacity *= isOutgoing ? 1 - progress : progress;
+  }
+  return Math.max(0, Math.min(1, opacity));
+}
