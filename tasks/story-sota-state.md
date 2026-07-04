@@ -314,10 +314,17 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   StoryVoiceRecorder embarqué), TrackDetailPopover, TimelineTrackView. + sheet
   `showFilterSheet` jamais ouvrable (`+Media.swift:69-82`), état `.formatPanel(.media,_)`
   jamais produit (EmptyView, `ComposerBottomBand.swift:140-144`). Purger APRÈS décisions C8/C7.
-- [ ] **C11 (P3) Fond : gradients définis mais jamais offerts.** `StoryBackgroundPalette.gradients`
-  (`StoryComposerSupportTypes.swift:19-26`) jamais consommé ; `texturePanel` = couleurs unies
-  seulement (`ComposerToolPanelHost.swift:640-667`). Offrir la rangée gradients (réutilisation
-  directe).
+- [x] **C11 (P3) Fond : gradients définis mais jamais offerts.** ✅ it.87 (re-scopé it.77 :
+  le renderer ne parsait AUCUN gradient — l'offrir sans rendu aurait menti).
+  LIVRÉ bout-en-bout iOS : format sérialisé `"gradient:HEX1:HEX2"` (`StoryBackgroundValue`,
+  SDK Models — parse tolérant, roundtrip, ≤64 chars caps serveur, 5 tests) ; rendu aux
+  3 renderers (canvas CALayer `renderBackground` → `Kind.gradient` ; composite
+  `StorySlideRenderer` → CGGradient ; miniatures `SlideMiniPreview` + letterbox composer →
+  `storyBackgroundStyle` AnyShapeStyle partagé, direction topLeading→bottomTrailing
+  partout) ; rangée de 6 pastilles dégradés dans le panneau Fond (sérialisé SANS «#»,
+  restoreCanvas routé) ; clé xcstrings ajoutée 4 langues (leçon C12 appliquée à chaud).
+  Web : dégrade gracieusement (fallback gradient W7) — parité rendu réelle = W-item si
+  demandé. ORIGINE :
 - [x] **C12 (P3, découvert it.68 simulateur) Chrome composer bilingue.** ✅ it.86
   Audit scripté : 108 clés story.* utilisées dans MeeshyUI ; 28 ABSENTES du xcstrings
   (dont les ajouts C4-C9 : addSlide/opening*/undo/redo/showTools + draft.resume/freshness/
@@ -999,6 +1006,12 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.87 — C11 : fonds dégradés bout-en-bout (format + 3 renderers + palette)
+
+- Le re-scope d'it.77 respecté : d'abord le RENDU (source unique de parsing), ensuite
+  l'offre UI. Les covers composites reflètent le dégradé (Prisme des miniatures).
+  Dernier item autonome du backlog C — prochaine étape : protocole de fin (audits ciblés).
 
 ## it.86 — C12 : le chrome composer parle UNE langue (couverture fr/en/es/de complète)
 

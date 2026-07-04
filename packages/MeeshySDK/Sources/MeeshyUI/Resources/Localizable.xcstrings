@@ -16512,6 +16512,35 @@
         }
       }
     },
+    "story.background.gradient" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hintergrund mit Farbverlauf"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gradient background"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fondo degradado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fond dégradé"
+          }
+        }
+      }
+    },
     "story.background.swatch" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {

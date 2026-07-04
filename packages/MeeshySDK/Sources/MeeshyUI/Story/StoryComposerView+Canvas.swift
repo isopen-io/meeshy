@@ -44,9 +44,11 @@ extension StoryComposerView {
             // donc la COULEUR DU FOND du slide : le canvas paraît occuper tout
             // l'écran. Noir conservé en carded (contraste voulu de la carte)
             // et sur fond MÉDIA (letterbox cinéma).
-            (canvasIsCarded || viewModel.hasBackgroundImage
-                ? Color.black
-                : Color(hex: viewModel.backgroundColor))
+            Rectangle()
+                .fill(canvasIsCarded || viewModel.hasBackgroundImage
+                    ? AnyShapeStyle(Color.black)
+                    : storyBackgroundStyle(
+                        viewModel.backgroundColor.replacingOccurrences(of: "#", with: "")))
                 .ignoresSafeArea()
                 .animation(.easeInOut(duration: 0.25), value: canvasIsCarded)
 

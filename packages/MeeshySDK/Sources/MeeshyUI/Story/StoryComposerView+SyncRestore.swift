@@ -76,8 +76,11 @@ extension StoryComposerView {
 
     func restoreCanvas(from slide: StorySlide) {
         let e = slide.effects
-        if let bgHex = e.background { viewModel.backgroundColor = "#\(bgHex)" }
-        else { viewModel.backgroundColor = "#\(StoryBackgroundPalette.randomBackgroundColor())" }
+        if let bg = e.background {
+            // Gradient (C11) : pas de préfixe « # » — la valeur sérialisée
+            // voyage telle quelle dans backgroundColor.
+            viewModel.backgroundColor = bg.hasPrefix("gradient:") ? bg : "#\(bg)"
+        } else { viewModel.backgroundColor = "#\(StoryBackgroundPalette.randomBackgroundColor())" }
         selectedImage = viewModel.slideImages[slide.id]
         viewModel.hasBackgroundImage = selectedImage != nil
         selectedFilter = e.filter.flatMap { StoryFilter(rawValue: $0) }

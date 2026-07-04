@@ -686,6 +686,36 @@ struct ComposerToolPanelHost: View {
                         .accessibilityHint(String(localized: "story.background.swatch.hint", defaultValue: "Touchez pour appliquer ce fond.", bundle: .module))
                         .accessibilityAddTraits(isSelected ? .isSelected : [])
                     }
+                    // C11 — la palette de dégradés (définie depuis l'origine
+                    // mais jamais offerte) rejoint la rangée : même format de
+                    // pastille, valeur sérialisée « gradient:HEX1:HEX2 »
+                    // (StoryBackgroundValue, rendue par les 3 renderers).
+                    ForEach(Array(StoryBackgroundPalette.gradients.enumerated()), id: \.offset) { _, pair in
+                        let serialized = StoryBackgroundValue.gradient(pair.0, pair.1).serialized
+                        let isSelected = viewModel.backgroundColor == serialized
+                        Button {
+                            viewModel.backgroundColor = serialized
+                            viewModel.hasBackgroundImage = false
+                            HapticFeedback.light()
+                        } label: {
+                            Circle()
+                                .fill(LinearGradient(
+                                    colors: [Color(hex: pair.0), Color(hex: pair.1)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ))
+                                .frame(width: 44, height: 44)
+                                .overlay(
+                                    Circle().stroke(Color.white, lineWidth: isSelected ? 3 : 0)
+                                        .padding(2)
+                                )
+                                .shadow(color: Color(hex: pair.0).opacity(isSelected ? 0.5 : 0), radius: 6)
+                        }
+                        .accessibilityLabel(String(localized: "story.background.gradient",
+                                                   defaultValue: "Fond dégradé", bundle: .module))
+                        .accessibilityValue("\(pair.0) → \(pair.1)")
+                        .accessibilityAddTraits(isSelected ? .isSelected : [])
+                    }
                 }
                 .padding(.horizontal, 2)
                 .padding(.vertical, 14)
