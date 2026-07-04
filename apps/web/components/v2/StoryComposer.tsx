@@ -17,7 +17,12 @@ type TextStyle = 'bold' | 'neon' | 'typewriter' | 'handwriting';
 
 type MediaCategory = 'image' | 'video' | 'audio';
 
-type StoryVisibility = 'PUBLIC' | 'FRIENDS' | 'PRIVATE';
+/// W3 — aligné sur le sous-ensemble de `PostVisibility` que le composer web
+/// sait publier avec une sémantique COMPLÈTE. EXCEPT/ONLY exigent le picker
+/// d'audience (`visibilityUserIds`) — ils n'entrent ici qu'avec lui (inc.2) :
+/// offrir l'option sans la liste publierait une visibilité cassée (trou
+/// constaté sur PostComposer, consigné au backlog story-sota).
+type StoryVisibility = 'PUBLIC' | 'FRIENDS' | 'COMMUNITY' | 'PRIVATE';
 
 interface StoryComposerProps {
   open: boolean;
@@ -26,6 +31,9 @@ interface StoryComposerProps {
     content?: string;
     storyEffects: Record<string, unknown>;
     visibility: StoryVisibility;
+    /// W3 — audience explicite (EXCEPT/ONLY). Plombé jusqu'au service ;
+    /// alimenté par le picker à l'inc.2.
+    visibilityUserIds?: string[];
     mediaIds?: string[];
   }) => void;
   defaultVisibility?: StoryVisibility;
@@ -67,9 +75,10 @@ const TEXT_STYLES: { id: TextStyle; label: string }[] = [
   { id: 'handwriting', label: 'Hh' },
 ];
 
-const VISIBILITY_OPTIONS: { id: StoryVisibility; labelKey: string; icon: string }[] = [
+export const VISIBILITY_OPTIONS: { id: StoryVisibility; labelKey: string; icon: string }[] = [
   { id: 'PUBLIC', labelKey: 'storyVisibility.public', icon: '\uD83C\uDF0D' },
   { id: 'FRIENDS', labelKey: 'storyVisibility.friends', icon: '\uD83D\uDC65' },
+  { id: 'COMMUNITY', labelKey: 'storyVisibility.community', icon: '\uD83C\uDFD8\uFE0F' },
   { id: 'PRIVATE', labelKey: 'storyVisibility.private', icon: '\uD83D\uDD12' },
 ];
 

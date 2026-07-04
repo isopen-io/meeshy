@@ -269,6 +269,7 @@
     "storyVisibility": {
       "public": "Público",
       "friends": "Amigos",
+      "community": "Comunidade",
       "private": "Privado"
     },
     "postComposer": {
