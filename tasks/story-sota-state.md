@@ -457,9 +457,19 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   Handlers posés sur les 2 formes de fond vidéo (mediaUrl + mediaObjects isBackground).
   Piège de test consigné : avec fake timers, le timer reposé par un effet React post-watchdog
   ne se flush qu'à la fin de l'act → découper les advanceTimersByTime.
-- [ ] **W3 (P2) Composer web : visibilités COMMUNITY/EXCEPT/ONLY + overlays.** Reliquat connu
-  (mémoire story-status-community-visibility). `visibilityUserIds` déjà dans
-  `CreateStoryRequest` web — manque l'UI.
+- [~] **W3 (P2) Composer web : visibilités COMMUNITY/EXCEPT/ONLY + overlays.** — INC.1 it.52
+  ✅ Inc.1 : COMMUNITY au sélecteur (sémantique complète sans picker, labels 4 langues) +
+  `visibilityUserIds` plombé composer → feed screen → createStory (service l'acceptait déjà).
+  Décision pinnée par test : EXCEPT/ONLY N'ENTRENT PAS au sélecteur sans le picker
+  d'audience (publier sans liste = visibilité cassée).
+  RESTE inc.2 : picker d'audience web (liste amis + recherche + multi-sélection, parité
+  AudienceUserPickerView iOS) puis EXCEPT/ONLY au sélecteur — RÉUTILISABLE par PostComposer
+  (voir W6). Overlays composer (texte positionné etc.) = chantier séparé du composer web.
+- [ ] **W6 (P2, découvert it.52) PostComposer web publie EXCEPT/ONLY SANS visibilityUserIds.**
+  Preuve : VISIBILITY_OPTIONS contient EXCEPT/ONLY (PostComposer.tsx:26-27) mais
+  handlePublish n'envoie que {content, type, visibility} (:48-52) — aucun picker, aucune
+  liste → visibilité cassée côté serveur (EXCEPT sans exclus / ONLY sans inclus). Fix avec
+  l'inc.2 de W3 : même picker partagé, ou retrait des 2 options en attendant.
 - [x] **W4 (P3) Realtime web : story:deleted + story:translation-updated.** ✅ it.28
   `story:deleted` abonné dans use-social-socket (événement absent) + handlers dans
   useStoriesRealtime : suppression → retirée du cache tray en direct ; traduction →
@@ -634,6 +644,16 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.52 — W3 inc.1 : COMMUNITY au composer web + plomberie visibilityUserIds (e63a64f53)
+
+- Re-preuve : composer web limité à PUBLIC/FRIENDS/PRIVATE ; parité iOS = 6 visibilités
+  dont EXCEPT/ONLY à picker (AudienceUserPickerView). Découverte en route : W6 —
+  PostComposer OFFRE déjà EXCEPT/ONLY mais publie SANS liste (visibilité cassée).
+- Livré : option COMMUNITY (labels en/fr/es/pt, diffs locales chirurgicaux +1 ligne),
+  payload visibilityUserIds bout-en-bout, décision « pas d'EXCEPT/ONLY sans picker »
+  pinnée par test dédié. 157/157 story + 50/50 feed (bun).
+- inc.2 (picker partagé) = prochain morceau W3, fixera W6 du même geste.
 
 ## it.51 — W1 inc.4 : crossfades intra-slide au viewer web, W1 COMPLET (939cec8c0)
 
