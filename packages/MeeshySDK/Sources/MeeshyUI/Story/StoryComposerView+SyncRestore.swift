@@ -234,6 +234,10 @@ extension StoryComposerView {
     /// JAMAIS sur onDisappear : le discard fire onDisappear et
     /// re-persisterait le draft que l'utilisateur vient de jeter.
     func autoSaveDraftForBackground() {
+        // Même garde que l'autosave débouncé (BUG-3) : backgrounder l'app
+        // pendant que la carte de reprise est affichée ne doit pas écraser
+        // le draft avec le composer vierge.
+        guard !showRestoreDraftAlert else { return }
         guard composerHasContent, publishTask == nil else { return }
         persistDraft()
     }
@@ -256,6 +260,11 @@ extension StoryComposerView {
     /// background + `draftAutosaveSuspended` (un debounce en vol ne doit pas
     /// re-persister un brouillon explicitement jeté/publié).
     func autosaveDraftAfterMutation() {
+        // BUG-3 (user 2026-07-04) : tant que la carte de reprise est affichée,
+        // le composer VIERGE dessous (dont l'onAppear pose déjà le fond pastel
+        // = mutation → debounce) ne doit JAMAIS écraser le draft qu'on propose
+        // justement de reprendre — sinon « Reprendre » restaure du vide.
+        guard !showRestoreDraftAlert else { return }
         guard !draftAutosaveSuspended, composerHasContent, publishTask == nil else { return }
         flushOpenTimelineIntoSlide()
         syncCurrentSlideEffects()

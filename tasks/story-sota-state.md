@@ -316,6 +316,27 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   RESTE : vérif sur LE device user (story vidéo au boot → doit jouer seule ; sinon
   Console.app filtre « self-heal kick » dira si le kick tire et si un tiers re-pause).
 
+- [~] **C-DIR4 (P0, directives user 2026-07-04 #4 — 3 bugs composer).** 2/3 FIXÉS it.77.
+  ✅ BUG-1 « couleur de fond pas reflétée instantanément » : `contentIdentity(.solidColor)`
+  valait « color » quelle que soit la couleur → le no-op diff de `configure()` avalait le
+  changement (`hasVisibleContent` satisfait par l'ANCIENNE couleur) ; la mini-preview SwiftUI
+  (lit effects) devenait rouge, le canvas CALayer restait rose — signature du bug. FIX :
+  valeur RGBA dans l'identité (+gradients) ; reconstruction couleur = synchrone, zéro flash.
+  Seam interne + 4 tests StoryBackgroundLayerIdentityTests. VÉRIFIÉ SIMULATEUR : tap pastille
+  → (255,46,99) instantané au canvas.
+  ✅ BUG-3 « reprise de brouillon → composer vide » : le composer VIERGE sous la carte de
+  reprise mute dès son onAppear (fond pastel posé) → l'autosave E1 débouncé 2,5 s ÉCRASAIT le
+  draft pendant que la carte était affichée → « Reprendre » restaurait du vide (prouvé :
+  cover carte rouge → menthe en 2 min). FIX : guard `!showRestoreDraftAlert` sur les DEUX
+  chemins d'autosave (mutation + background). VÉRIFIÉ SIMULATEUR : carte affichée 6 s
+  (> debounce) → cover intacte → Reprendre → canvas + strip restaurés (255,46,99).
+  ⏳ BUG-2 « zone noire en bas en chrome plein » : REPRODUIT + confirmé par capture user
+  (le canvas colle au top sous le header mais s'arrête ~12 % au-dessus du bord bas ; les
+  FABs débordent sur la zone noire). Diagnostic layout au prochain tour (réservation bas
+  résiduelle : safeAreaBottomInset/canvasEditShift/cadrage plein-chrome à auditer).
+  Note : « recharge des médias » du rapport = conséquence attendue du fix BUG-3 (le
+  saveMedia n'écrase plus les copies du draft) — vérif média dédiée à faire.
+
 ### ÉDITION — crash recovery & intégrité des données
 
 - [x] **E1 (P0) Autosave draft sur mutation, pas seulement en background.** ✅ it.5
@@ -909,6 +930,18 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.77 — C-DIR4 : 2 bugs composer user fixés+vérifiés (couleur instantanée, reprise fidèle)
+
+- Session simulateur laborieuse mais décisive : repro des 3 bugs (dont crash parasite de
+  l'agent calls — appel entrant WebRTC a tué l'app mi-session, à ne pas confondre avec
+  BUG-3), diagnostic par pixel-sampling, 2 fixes TDD livrés+vérifiés bout-en-bout.
+  Piège consigné : depuis C-DIR2, QUITTER le composer exige de fermer le band d'abord
+  (le X vit dans le header, masqué pendant l'édition) — mes anciennes coordonnées de
+  session tapaient dans le vide.
+- C2/C11 (P3) reportés : C11 re-scopé — le renderer n'a AUCUN parsing gradient depuis
+  effects.background (l'offrir serait une UI mensongère) ; exige un format sérialisé
+  (« gradient:HEX1:HEX2 » ?) + rendu + parité web → item enrichi, à trancher avec C7b.
 
 ## it.76 — C13 : stickers en passthrough currentEffects (source unique, plan + incrément atomique)
 
