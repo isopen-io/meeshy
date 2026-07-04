@@ -184,6 +184,8 @@ struct StoryTrayView: View {
             },
             onAddStatus: onAddStatus
         )
+        // U1 inc.2 — « ma story » zoome aussi (id vide jamais matché → fallback).
+        .zoomTransitionSource(id: AuthManager.shared.currentUser?.id ?? "", in: zoomNamespace)
     }
 
     // MARK: - Story Ring
@@ -563,6 +565,8 @@ private struct StoryUploadOverlay: View {
 /// (add a story); everyone else's rings render at half size
 /// (`.storyTrayCompact`, 44pt) with the same design and horizontal scroll.
 struct PinnedStoryTrailBand: View {
+    /// U1 inc.2 — namespace zoom injecté par RootView (no-op < iOS 18/nil).
+    @Environment(\.zoomTransitionNamespace) private var zoomNamespace
     @ObservedObject var viewModel: StoryViewModel
     /// Same negative scroll offset the `CollapsibleHeader` consumes (0 at rest,
     /// more negative as the content scrolls up).
@@ -635,6 +639,8 @@ struct PinnedStoryTrailBand: View {
                         onViewStory: { presentStory(userId: group.id) },
                         onShowProfile: { selectedProfileUser = .from(storyGroup: group) }
                     )
+                    // U1 inc.2 — la mini-trail épinglée zoome aussi.
+                    .zoomTransitionSource(id: group.id, in: zoomNamespace)
                 }
             }
             .padding(.horizontal, 16)
