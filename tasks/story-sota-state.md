@@ -386,6 +386,19 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   non-régression StoryCanvasReaderTransitionTests ; build app 86 s vert. Reste visuel
   simulateur : à grouper avec une story de test portant un crossfade (composer requis).
 
+- [x] **G7 (P2, découvert it.61 — audit ciblé) Hard-delete des stories = rows PostMedia
+  orphelines À VIE.** ✅ FIXÉ it.61 (volet DB).
+  Preuve : PostMedia.post ET .comment = `onDelete: SetNull` (schema:3075-3076 zone) — le
+  sweep ExpiredStoriesCleanupService supprimait posts+reposts+comments mais AUCUNE row
+  média : chaque story expirée (100 % expirent, contenu le plus média-lourd) laissait ses
+  rows orphelines sans chemin de récupération. Les autres enfants (reactions/views/
+  mentions) cascadent correctement ✅. Fix : purge explicite des 2 jambes (postId des
+  stories+reposts, commentId de leurs commentaires collectés AVANT leur delete) avant le
+  post.deleteMany. 9/9 suite (2 tests neufs : ordre + jambe commentId).
+  RESTE (suivi, volet 2) : réclamation des FICHIERS DISQUE des médias hard-deleted
+  (résolution fileUrl→chemin UPLOAD_DIR + variantes TTS/transcriptions, prudence prod —
+  à faire avec un accès prod ou en déploiement).
+
 ### BACKEND — instantanéité réseau
 
 - [~] **G1 (P1) Tray léger + delta-sync.** — DELTA-SYNC FAIT it.13
@@ -684,6 +697,16 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.61 — Audit ciblé → G7 : fuite illimitée de rows média au hard-delete, FIXÉE (731855e7a)
+
+- Protocole étape 8 (backlog épuisé) : surfaces candidates listées (delete/expiry lifecycle,
+  viewers sheet, NSE prefetch, repost flow, audio pipeline story) ; choisie = cleanup
+  gateway (jamais audité en 60 itérations, risque intégrité stockage).
+- Preuve AVANT fix : lecture sweep + schema (SetNull vs Cascade enfant par enfant).
+- RED : harnais étendu (postMedia + collecte commentIds) + 2 tests (ordre purge<delete,
+  jambe commentId). 9/9, tsc 0. L'audit ciblé a produit un finding prouvé du premier coup —
+  la boucle continue (pas de critère d'arrêt « 2 itérations sèches »).
 
 ## it.60 — G5 : filtre de visibilité canonique unique (9e870ce90)
 
