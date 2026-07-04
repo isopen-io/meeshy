@@ -622,7 +622,7 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
 ## it.49 — Reconnaissance W1 inc.4 → finding R14 : le reader iOS n'a jamais rendu les
-## crossfades intra-slide (hash au commit)
+## crossfades intra-slide (2ed63683c)
 
 - Parti pour porter W1 inc.4 (clipTransitions web), la re-preuve a montré plus grave côté
   produit principal : le resolver iOS existe, est testé, et n'est branché NULLE PART en
