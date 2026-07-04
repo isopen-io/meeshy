@@ -356,10 +356,16 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   valeur → plein corps) ; requête réactions coupée sous projection, isViewedByMe conservé
   (anneaux). Deux findMany explicites (spread conditionnel select/include = union rejetée
   par l'overload Prisma — piège consigné). AUCUN client ne la consomme encore (opt-in).
-  RESTE : (c) pagination cursor (avec R8 client), consommation iOS du delta + de la
-  projection (`fetchStoriesFromNetwork` + merge — nécessite fetch full au tap via R4
-  inc.2), index Prisma `@@index([type, updatedAt])` sur Post à poser avec un déploiement
-  schema, et DÉPLOIEMENT gateway prod (pull+up explicite) avant que le client s'y branche.
+  ✅ Incrément (c) it.45 : pagination keyset (createdAt, id) desc, take limit+1 — patron
+  exact getStatuses ; retour `{ items, nextCursor, hasMore }` (getStories était la seule
+  liste non paginée du service) ; route : `?cursor` + `?limit` (clamp 1..50, défaut 50 =
+  plafond historique), hasMore/nextCursor dans l'enveloppe pagination standard, `data`
+  reste le tableau (clients existants inchangés). Compose avec ?updatedSince et
+  ?projection=tray. VOLET SERVEUR G1 COMPLET (a+b+c).
+  RESTE (client + infra) : R8 — consommation iOS du delta + projection + cursor
+  (`fetchStoriesFromNetwork` + merge, fetch full au tap via R4 inc.2) ; index Prisma
+  `@@index([type, updatedAt])` sur Post à poser avec un déploiement schema ; DÉPLOIEMENT
+  gateway prod (pull+up explicite) avant que le client s'y branche.
 - [x] **G2 (P2) Double pipeline de traduction du `content` story.** ✅ it.20
   Fix : `shouldTranslateContent = content && postType === 'POST'` (la branche STORY retirée
   de la route ; le service audience-driven `triggerStoryTextTranslation` possède la
@@ -578,6 +584,18 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.45 — G1(c) : pagination keyset du tray stories, volet serveur G1 fermé (ca867d419)
+
+- Réutilisation : patron getStatuses copié à l'identique (decodeCursor/encodeCursor,
+  OR keyset, take limit+1, slice) ; getStories aligné sur la shape { items, nextCursor,
+  hasMore } commune à toutes les listes du service.
+- RED : 3 tests service (keyset+tiebreaker, hasMore/nextCursor round-trip décodé,
+  première page take 51 sans filtre) + 2 tests route (forward cursor/limit clampé,
+  enveloppe pagination avec data tableau).
+- Vérif : 593/593 sur 18 suites posts (bun) — la suite legacy posts-feed.test.ts stubbait
+  encore la shape array (500 au premier run) → mock adapté ; tsc gateway 0 err.
+- Rétro-compat : data reste [APIPost] ; hasMore/nextCursor ignorés par les clients actuels.
 
 ## it.44 — G1(b) : projection tray légère côté gateway (b70915dd0)
 
