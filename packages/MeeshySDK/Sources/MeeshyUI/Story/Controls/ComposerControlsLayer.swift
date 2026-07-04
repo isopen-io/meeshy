@@ -134,6 +134,22 @@ public struct ComposerControlsLayer: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
+            // C3 — état « chrome caché » (FABs masqués par swipe-down du
+            // FAB column, band fermé) : l'écran était NU, sans aucune
+            // affordance de récupération — seul un tap « au hasard » sur le
+            // canvas ramenait les outils. Une poignée fantôme discrète (même
+            // grammaire que le grabber du band replié) marque le point de
+            // retour : tap ou swipe-up = réafficher les FABs. Le tap sur le
+            // fond du canvas reste actif en parallèle.
+            if !areFabsVisible && effectiveBandState == .hidden {
+                HStack {
+                    fabRestoreHandle
+                    Spacer()
+                }
+                .padding(.bottom, 16)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
             // Band — with swipe-down to dismiss
             if effectiveBandState != .hidden {
                 ComposerBottomBand(
@@ -238,6 +254,38 @@ public struct ComposerControlsLayer: View {
             bandStateMachine.reset()
             areFabsVisible = true
         }
+    }
+
+    // MARK: - Poignée de récupération du chrome (C3)
+
+    private var fabRestoreHandle: some View {
+        Capsule()
+            .fill(Color.white.opacity(0.28))
+            .frame(width: 34, height: 5)
+            .padding(.horizontal, 26)   // aligné sur la colonne de FABs
+            .padding(.vertical, 16)     // zone tappable ≥ 44 pt
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                    areFabsVisible = true
+                }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 15)
+                    .onEnded { value in
+                        if value.translation.height < -20 {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                areFabsVisible = true
+                            }
+                        }
+                    }
+            )
+            .accessibilityLabel(String(
+                localized: "story.composer.showTools",
+                defaultValue: "Afficher les outils",
+                bundle: .module
+            ))
+            .accessibilityAddTraits(.isButton)
     }
 
     // MARK: - Badges
