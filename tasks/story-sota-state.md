@@ -261,7 +261,7 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   RESTE (incrément 2) : fetch unitaire par POST id → groupe minimal → rendu ThumbHash
   immédiat pour le cas « story hors tray » (nécessite le plumbing postId dans les ~5 call
   sites du container + éventuellement endpoint stories-par-user, à coordonner avec G1/R8).
-- [~] **R5 (P0) Garantir la relecture OFFLINE des stories vues.** — EN COURS
+- [x] **R5 (P0) Garantir la relecture OFFLINE des stories vues.** ✅ COMPLET it.41
   (a) ÉCARTÉ après re-preuve it.2 : l'annulation des `prefetchTasks`/`currentVideoLoadTask`
   ne tue PAS un download en vol — le funnel `DiskCacheStore.networkData` exécute chaque
   download dans une `Task<Data, Error>` NON STRUCTURÉE (ligne ~281) qui va au bout et
@@ -277,9 +277,16 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   (expiresAt, fallback createdAt+21 h) + `pinStoryMediaForOfflineReplay` (fire-and-forget,
   ne télécharge rien → pas d'interaction MediaDownloadPreferences). Tests StoryViewModelTests
   (plan pur + câblage bout-en-bout via `isPinned`, story expirée → pas de pin).
-  RESTE (it.4+) : (c) test d'intégration « voir → couper réseau → relire → zéro requête »
-  (scénario simulateur) ; raffinement : les stories de l'AUTEUR courant ne passent pas par
-  markViewed → non pinnées (mineur : l'auteur garde ses assets composer en local).
+  (c) ✅ it.41 : test d'intégration `test_offlineReplay_viewedStory_mediaResolvesFromDisk
+  ThroughViewerKeys` (StoryViewModelTests) — contrat pinné : écriture avec la clé BRUTE
+  `FeedMedia.url` (chemin prefetch), lecture avec la clé VIEWER reconstruite indépendamment
+  (`URL(string:).absoluteString`, miroir de StoryViewerView.mediaIndex), résolution DISK-ONLY
+  via les mêmes helpers zéro-réseau que les layers (`videoLocalFileURL`/`imageLocalFileURL`/
+  `audioLocalFileURL`) + pin vérifié sous la clé viewer pour les 3 stores. Zéro requête par
+  construction (helpers sync disk-only). Raffinement ÉCARTÉ (mineur) : stories de l'auteur
+  courant non pinnées (pas de markViewed sur soi) — ses assets composer restent locaux.
+  Reste terrain (avec les tests device réseau dégradé, cf. it.40 §user) : couper le réseau
+  matériellement sur device et relire.
 - [x] **R6 (P2) `OutboxKind.markStoryViewed` — état vu durable offline.** ✅ it.14
   Livré : kind appendé (règle append-only de l'enum), `MarkStoryViewedPayload`
   (cmid + storyId), coalescing par anchor = storyId (re-voir la même story remplace le row —
@@ -318,6 +325,14 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   cher). Cible : clé par groupe (`stories:group:<authorId>`) ou table dédiée + persistence
   actor (parité feed/messages). Gros chantier — passer par un plan dédié
   (`docs/superpowers/plans/`), pas une itération loop.
+
+- [ ] **R13 (P3, découvert it.41) Clé cache média non normalisée entre écriture et lecture.**
+  Preuve (script Foundation) : `URL(string: raw).absoluteString` ré-encode espaces/accents
+  (`with space.jpg` → `with%20space.jpg`) — si le gateway émettait une URL média NON encodée,
+  la clé viewer (mediaIndex, URL round-trip) divergerait de la clé prefetch/pin (string brute)
+  → relecture offline cassée pour ce média + double entrée cache. Impact actuel : nul (URLs
+  gateway générées encodées, test it.41 vert sur le cas nominal). Fix si symptôme : dériver
+  la clé via le MÊME round-trip URL aux deux bouts (pinTargets/prefetch). Pas de fix spéculatif.
 
 ### BACKEND — instantanéité réseau
 
@@ -548,6 +563,22 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.41 — R5(c) : contrat d'intégration de la relecture offline pinné (855e6c673)
+
+- Choix : seul reliquat P0 du backlog. Re-preuve de la chaîne complète avant conception :
+  écriture = clé brute `FeedMedia.url` (prefetch/pin, routage R7) ; lecture = clé
+  `URL(string:).absoluteString` (StoryViewerView.mediaIndex:795-806) + helpers disk-only
+  (`videoLocalFileURL` StoryBackgroundLayer:658, `images.data` disk-hit loadImage:312,
+  `audioLocalFileURL` mixer). Le maillon jamais prouvé : cohérence clé+store entre les 2 bouts.
+- Test non-tautologique (dérivations indépendantes des 2 clés) ajouté à StoryViewModelTests
+  (fichier EXISTANT — pas de churn xcodegen) : seed 3 stores → markViewed → disk-hit + pin
+  sous la clé viewer pour video/audio/images.
+- Vérif : 80/80 StoryViewModelTests verts simu 18.2 (build-for-testing + test-without-building,
+  xcresult « TEST EXECUTE SUCCEEDED ») ; le seul « failed » du log = log runtime attendu du
+  test loadStories_failure (-1009).
+- Découverte backlog : R13 (P3) — `URL(string:)` ré-encode espaces/accents → divergence de
+  clé théorique si URL serveur non encodée (preuve script ; pas de fix spéculatif).
 
 ## it.40 — FIN DE CYCLE (session au terme de son contexte) — rapport
 
