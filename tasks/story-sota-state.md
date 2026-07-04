@@ -553,8 +553,16 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   dismissal explicite seulement. Pièges : StoryCoverThumbnail est APP-side → taille
   littérale 270×480 SDK-side ; updatedAt absent de l'API draft store → fraîcheur omise
   (micro-item futur). RESTE : inc.3 chip tray (décision produit §4).
-- [ ] **U5 (P3) État de chargement prolongé** (avec R2) : ThumbHash + progress ring fine autour
-  de l'avatar auteur (métaphore déjà connue du tray), bouton passer.
+- [x] **U5 (P3) État de chargement prolongé** ✅ ÉCARTÉ it.59 — l'essence est DÉJÀ servie.
+  Preuve : `StoryReaderLoadingOverlay` (chargement initial : ThumbHash + cover serveur
+  warm-cache + spinner % avec grâce 200 ms, fade à 95 %, suit le cadrage carte) ; R3 couvre
+  le mid-slide ; les TAP ZONES restent actives sous l'overlay (allowsHitTesting(false)) =
+  « passer » disponible ; et le watchdog anti-deadlock 5 s (invariant §5.9) fait avancer la
+  story même sur média mort — jamais de blocage. La « progress ring avatar » = variante
+  cosmétique du spinner existant, sans valeur ajoutée.
+  DELTA réel non couvert (micro-décision produit si souhaitée) : pas d'UI d'ERREUR explicite
+  sur réseau mort (l'utilisateur voit le ThumbHash flou défiler en auto-advance) — état
+  d'erreur visible avec retry = choix design à valider user avant d'exister.
 - [x] **U6 (P3) Dynamic Type/VoiceOver du viewer.** ✅ COMPLET it.34
   ✅ Annonce VoiceOver au changement de slide (« Story N sur M », gated
   isVoiceOverRunning, clé localisée statique — piège : String(localized:) exige une
@@ -666,6 +674,15 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.59 — U5 : ÉCARTÉ avec preuve — le chargement prolongé est déjà couvert
+
+- Re-preuve : loader initial complet (overlay ThumbHash/cover/spinner%), R3 mid-slide,
+  tap-zones actives sous l'overlay, watchdog 5 s anti-deadlock = auto-advance garanti.
+  Chapitre UI/UX du backlog AUTONOME entièrement fermé (U1/U2/U6 livrés, U3/U5/U7
+  écartés avec preuve, U4 inc.3 = décision produit §4). Zéro code.
+- Backlog autonome restant : G5 (consolidation visibilité gateway, P3), G4 (semi-bloqué
+  déploiement schema), R13/R12-inc.1 (conditionnels preuve/profil).
 
 ## it.58 — U3 : ÉCARTÉ avec preuve — le chrome du reader est déjà material/Liquid Glass
 
