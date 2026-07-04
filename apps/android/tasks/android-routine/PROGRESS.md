@@ -359,11 +359,19 @@ Contacts slices:**
    `RoomSuggestionsSource` (`SwrCacheSource`) replacing the in-memory one; the Discover tab now paints
    suggestions cold, before any network call. 11 tests. See run log.
 
+**Three-state presence dot shipped** (`presence-away-indicator`, 2026-07-04): the previously-dead
+`:core:model` `PresenceState`/`UserPresence` are now live — pure `UserPresence.state(now)` (offline → no
+dot, online → green, online-but-idle > 5min → amber away, iOS `UserPresence.state` parity) reached via a
+new `FriendRequestUser.presenceState(now)` adapter and a new nullable `isoToEpochMillisOrNull` helper
+(so an absent timestamp stays online but an ancient one goes away); the friend row renders green/amber/none.
++23 tests. See run log. The **last Contacts-list display gap is mood-emoji presence**.
+
 **Recommended next (highest value):** the **send compose-new UI** — a dedicated user-search → connect
 surface (a "+ add friend" entry point beyond the Discover tab), now that the durable send half is done
 (`friend-request-outbox-idempotency`) and every Contacts **cache** is durable (friends + suggestions
 cold-paint), every Contacts **durable-mutation** gap is closed (block/unblock + friend-request send), and
-the Contacts list is now filter/search/presence/**counts** complete (`contacts-filter-counts`, 2026-07-04).
+the Contacts list is now filter/search/presence(**3-state**)/**counts** complete
+(`presence-away-indicator` + `contacts-filter-counts`, 2026-07-04).
 It is more Compose-glue-heavy with less new pure core, so a smaller alternative TDD slice is the tracked
 **worker drain-list test** (a Robolectric test asserting every `OutboxLanes.*` with a registered sender
 is drained — would have caught the BLOCK/FRIEND lane-omission bug; see NOTES 2026-07-04). With Contacts
@@ -683,6 +691,39 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-04 — slice `presence-away-indicator` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration. One open PR (#1473) is unrelated
+  iOS story-text work by another author (`claude/text-editor-enhancements`); left untouched. Branched
+  `claude/apps/android/presence-away-indicator` off latest `origin/main` (`d40529c`); the designated
+  `claude/fervent-darwin-g3xfvo` was exactly at main (0 ahead / 0 behind).
+- **Why this slice:** the last Contacts-list display gap that had a genuine **pure testable core**. The
+  `:core:model` `PresenceState` (ONLINE/AWAY/OFFLINE) + `UserPresence` were fully **dead code** (no
+  non-test caller, no test), while the friend row only rendered a binary green dot from `isOnline` —
+  never the iOS three-state green/**amber-away**/none (`PresenceModels.swift` `UserPresence.state`,
+  away at lastActive > 5min). Bring the dead SSOT to life and wire it.
+- **Added / changed (production):**
+  - `:core:model` `IsoTime.kt` — new `isoToEpochMillisOrNull(value): Long?` (null for absent/blank/
+    unparseable, the parsed epoch otherwise — the epoch instant `0L` is a **valid** result, not "absent");
+    `isoToEpochMillis` now delegates (`?: 0L`), one parse path preserved.
+  - `:core:model` `Presence.kt` — pure `UserPresence.state(nowEpochMillis): PresenceState` (offline →
+    OFFLINE; online + no reliable `lastActiveAt` → ONLINE; else AWAY iff `now - last > 300_000ms`,
+    boundary/future → ONLINE) + `AWAY_THRESHOLD_MS = 300_000L` (iOS 300s parity, clock injected for purity).
+  - `:core:model` `friend/ContactList.kt` — `FriendRequestUser.presenceState(now)` adapter (nullable
+    `isOnline` → offline, bridges the roster record to the `UserPresence.state` SSOT).
+  - `:feature:contacts` `ContactsListTab.kt` — friend row renders green(ONLINE)/amber(AWAY)/none(OFFLINE)
+    via a pure `presenceDotColor(state): Color?` mapping + new static `AwayIndicator` (0xFFFBBF24), reading
+    `friend.presenceState(System.currentTimeMillis())`. Semantic dot colours kept static per the design system.
+- **Tests (red → green):** +23 — `IsoTimeTest` (8: null/blank/unparseable → null, UTC + offset parse,
+  epoch-as-zero-not-absent, `isoToEpochMillis` 0L default), `PresenceTest` (10: offline regardless of
+  timestamp, online on null/blank/unparseable, recent → online, 300s boundary → online, 300s+1ms → away,
+  1h → away, future → online), `FriendPresenceTest` (5: null/false `isOnline` → offline, recent → online,
+  stale → away, no-timestamp → online). Behavioural through the public API; boundary + null edges covered.
+- **Verification:** `assembleDebug` + all `testDebugUnitTest` **green** (system Gradle 8.14.3; wrapper
+  dist 403-blocked — see NOTES). Diff = `apps/android` only (4 prod + 3 test + docs).
+- **Reviewer verdict:** **PASS** — pure SSOT in `:core:model`, UI glue in `:feature:contacts`, no prod
+  logic outside android, near-total branch coverage on the resolver, boundary/null/future edges tested,
+  dead code brought to parity rather than re-implemented.
 
 ### 2026-07-04 — slice `contacts-filter-counts` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration. The five open PRs (#1463–1469)

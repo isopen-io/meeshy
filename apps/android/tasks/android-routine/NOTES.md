@@ -3,6 +3,15 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Design lessons
+- **"Absent" ≠ "epoch 0" — a 0L-defaulting parse silently poisons time-delta logic.**
+  (2026-07-04, slice `presence-away-indicator`.) `isoToEpochMillis` returns `0L` for both an absent/
+  unparseable string **and** the legitimate `1970-01-01T00:00:00Z`. Reusing it for presence
+  (`now - last > 5min → away`) would classify a friend with **no** `lastActiveAt` as "last active in
+  1970" → always away — the opposite of the iOS `UserPresence.state` rule (no timestamp ⇒ *online*).
+  Fix: a nullable `isoToEpochMillisOrNull` (null = no reliable time, `0L` = the real epoch instant),
+  with `isoToEpochMillis` delegating (`?: 0L`) so the single parse path stays the SSOT. Lesson: when a
+  helper collapses "missing" and "zero" into one sentinel, add a nullable sibling before building
+  time-arithmetic on top of it — and unit-test the epoch-0 case explicitly.
 - **A functional seam pays off when the real collaborator lands — zero churn to bind it.**
   (2026-07-04, slice `contacts-blocked-list`.) `UserRelationshipResolver` shipped taking a
   `BlockStatusProvider` `fun interface` seam (`{ false }` default). Binding the real block data was a

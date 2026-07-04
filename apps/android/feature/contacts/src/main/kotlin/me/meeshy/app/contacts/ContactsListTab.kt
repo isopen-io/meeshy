@@ -38,15 +38,18 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.contacts.R
 import me.meeshy.sdk.model.FriendRequestUser
+import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.friend.ContactFilter
 import me.meeshy.sdk.model.friend.ContactFilterCounts
+import me.meeshy.sdk.model.friend.presenceState
 import me.meeshy.sdk.model.friend.resolvedName
 import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.theme.hexColor
 
-/** Success-green presence dot (semantic colour, kept static per the design system). */
+/** Presence dot colours (semantic, kept static per the design system): green online, amber away. */
 private val OnlineIndicator = Color(0xFF34D399)
+private val AwayIndicator = Color(0xFFFBBF24)
 
 /**
  * The Contacts (all-friends) tab — the online-first friend list with a filter
@@ -148,9 +151,9 @@ private fun FriendRow(friend: FriendRequestUser) {
                 )
             }
         }
-        if (friend.isOnline == true) {
+        presenceDotColor(friend.presenceState(System.currentTimeMillis()))?.let { dot ->
             Surface(
-                color = OnlineIndicator,
+                color = dot,
                 shape = CircleShape,
                 modifier = Modifier
                     .size(10.dp)
@@ -158,6 +161,13 @@ private fun FriendRow(friend: FriendRequestUser) {
             ) {}
         }
     }
+}
+
+/** The dot colour for a resolved presence, or null when no dot should show (offline). */
+private fun presenceDotColor(state: PresenceState): Color? = when (state) {
+    PresenceState.ONLINE -> OnlineIndicator
+    PresenceState.AWAY -> AwayIndicator
+    PresenceState.OFFLINE -> null
 }
 
 @Composable

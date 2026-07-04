@@ -1049,11 +1049,15 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       **filters + search + presence + per-filter counts shipped**. Filters/search/presence landed in
       `contacts-list-friends`: the Contacts tab renders the online-first friend list with an
       All/Online/Offline `FilterChip` row, a search field (matches username or resolved name), and a
-      per-row online presence dot. **Per-filter counts shipped** (slice `contacts-filter-counts`,
+      per-row presence dot. **Per-filter counts shipped** (slice `contacts-filter-counts`,
       2026-07-04): the pure `:core:model` `ContactList.counts(friends, query) → ContactFilterCounts`
       (all/online/offline sizes under the active search; online+offline partition all by construction)
       is the SSOT, exposed on `ContactsListUiState.filterCounts` and rendered as a count badge on each
-      chip. Surpasses iOS, whose counts ignore the search field. **Pending:** mood-emoji presence.
+      chip. Surpasses iOS, whose counts ignore the search field. **Three-state presence dot shipped**
+      (slice `presence-away-indicator`, 2026-07-04): the previously-dead `:core:model` `UserPresence.state(now)`
+      is now the pure SSOT (port of iOS `UserPresence.state` — offline → no dot, online → green,
+      online-but-idle > 5min → amber away), reached via the `FriendRequestUser.presenceState(now)` adapter,
+      and the friend row renders green/amber/none accordingly. **Pending:** mood-emoji presence.
 - [x] Cache-first friends list with cross-screen reconciliation; online-first sorting —
       **shipped** (slices `friendship-relationship-resolver` + `contacts-list-friends`). The store
       landed first: `:sdk-core` `@Singleton FriendshipCache` (port of iOS `FriendshipCache`) is the

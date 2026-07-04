@@ -4,7 +4,24 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Contacts) — slice `contacts-filter-counts` ✅
+## This loop (Phase: Contacts) — slice `presence-away-indicator` ✅
+The **three-state presence dot** on the Contacts friend row (iOS parity — `UserPresence.state`).
+The `:core:model` `PresenceState`/`UserPresence` were dead code; this slice makes them live. Pure
+`UserPresence.state(nowEpochMillis)` is the SSOT: offline → no dot, online → green, online-but-idle
+> 5min (300s, iOS parity) → amber **away**; a null/blank/unparseable `lastActiveAt` stays online, an
+exactly-at-threshold or future timestamp stays online. Backed by a new nullable
+`isoToEpochMillisOrNull` (distinguishes "no reliable timestamp" from the epoch instant — `isoToEpochMillis`
+now delegates to it) and the `FriendRequestUser.presenceState(now)` adapter (nullable `isOnline` → offline).
+The friend row renders green/amber/none via a pure `presenceDotColor` mapping. +23 tests (8 IsoTime,
+10 Presence, 5 FriendPresence). Full `assembleDebug` + all `testDebugUnitTest` green (system Gradle
+8.14.3). Diff = `apps/android` only (4 prod + 3 test). See PROGRESS.md run log.
+
+### Next
+1. **Mood-emoji presence** on friend rows (last remaining Contacts-list display gap), or the **send
+   compose-new UI** (dedicated user-search → connect surface), or the **worker drain-list test** (Robolectric).
+2. Then Profile & Account (§K) or back to Calls platform glue (ConnectionService/WebRTC).
+
+## Prior loop (Phase: Contacts) — slice `contacts-filter-counts` ✅
 The **per-filter chip counts** on the Contacts list (iOS parity — "All/online chips show counts").
 Pure `:core:model` `ContactList.counts(friends, query) → ContactFilterCounts` (all/online/offline sizes
 under the active search; online+offline partition all by construction) is the SSOT, exposed on
@@ -12,11 +29,6 @@ under the active search; online+offline partition all by construction) is the SS
 `ContactFilterCounts.forFilter`. **Surpasses iOS**, whose counts ignore the search field. +7 tests
 (6 model, 1 VM). `:core:model` + `:feature:contacts` `testDebugUnitTest` + `:app:assembleDebug` green
 (system Gradle 8.14.3). Diff = `apps/android` only. See PROGRESS.md run log.
-
-### Next
-1. **Mood-emoji presence** on friend rows (last Contacts-list display gap), or the **send compose-new UI**
-   (dedicated user-search → connect surface), or the **worker drain-list test** (Robolectric).
-2. Then Profile & Account (§K) or back to Calls platform glue (ConnectionService/WebRTC).
 
 ## Prior loop (Phase: Contacts) — slice `contacts-friends-room-cache` ✅
 The **friends Room cache for cold-start paint** (iOS `CacheCoordinator.friends`) — the Contacts tab
