@@ -59,6 +59,36 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         .map { _ in () }
         .eraseToAnyPublisher()
 
+    // MARK: - Undo/redo global (C9)
+
+    /// Pile de snapshots `[StorySlide]` encodés (JSON `.sortedKeys` —
+    /// déterminisme requis pour la dédup, l'ordre des clés JSONEncoder est
+    /// instable sur iOS 26). Voir le plan
+    /// `2026-07-04-composer-global-undo-plan.md`.
+    var history = HistoryStore<Data>(cap: 50)
+    /// Miroirs @Published de `history.canUndo/canRedo` — n'assignent QUE sur
+    /// changement réel (sinon la boucle flags → objectWillChange → trigger →
+    /// push ne se poserait jamais ; la dédup du store ferme le cycle).
+    /// Setter interne (pas `private(set)`) : muté par l'extension `+History`.
+    @Published var canUndoGlobal = false
+    @Published var canRedoGlobal = false
+
+    /// Intervalle du debounce de capture. `var` pour les tests uniquement
+    /// (à poser AVANT le premier accès à `historyTrigger`, lazy figé).
+    var historyDebounceInterval: TimeInterval = 0.5
+
+    /// Publisher STABLE (lazy stored — même piège que `autosaveTrigger` :
+    /// un debounce inline dans `body` serait re-souscrit à chaque render et
+    /// ne tirerait jamais) : émet ~0,5 s après la DERNIÈRE mutation du VM —
+    /// « l'édition s'est posée, capture une étape d'annulation ». Couverture
+    /// TOTALE par construction (toute mutation passe par objectWillChange) ;
+    /// la dédup du HistoryStore absorbe les émissions sans changement de
+    /// `slides` (sélections, états d'UI…).
+    private(set) lazy var historyTrigger: AnyPublisher<Void, Never> = objectWillChange
+        .debounce(for: .seconds(historyDebounceInterval), scheduler: DispatchQueue.main)
+        .map { _ in () }
+        .eraseToAnyPublisher()
+
     // MARK: - Floating Text Edit Mode
 
     /// Mode d'édition de texte plein écran (overlay flottant). `.inactive` par

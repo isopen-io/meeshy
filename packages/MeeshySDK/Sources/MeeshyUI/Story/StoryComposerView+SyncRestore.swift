@@ -336,6 +336,10 @@ extension StoryComposerView {
         if let first = viewModel.slides.first {
             restoreCanvas(from: first)
         }
+        // C9 — l'undo ne traverse pas la frontière de reprise : la
+        // trajectoire repart de l'état restauré (revenir « avant » le
+        // brouillon n'a pas de sens et exposerait le composer vierge).
+        viewModel.seedHistory()
     }
 
     func clearAllDrafts() {

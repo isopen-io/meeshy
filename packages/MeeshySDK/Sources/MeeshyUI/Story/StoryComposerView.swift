@@ -250,7 +250,12 @@ public struct StoryComposerView: View {
                   )
             )
         }
-        .onAppear { checkForDraft() }
+        .onAppear {
+            checkForDraft()
+            // C9 — trajectoire d'annulation : seed sur l'état d'entrée
+            // (composer vierge ; `restoreDraft()` re-seed après reprise).
+            viewModel.seedHistory()
+        }
         // D1 — le travail d'édition survit au kill de l'app : auto-save du
         // draft au passage en BACKGROUND (jamais onDisappear — le discard
         // fire onDisappear et re-persisterait un draft explicitement jeté).
@@ -262,6 +267,14 @@ public struct StoryComposerView: View {
         // (publisher STABLE côté VM — cf. `autosaveTrigger`).
         .onReceive(viewModel.autosaveTrigger) { _ in
             autosaveDraftAfterMutation()
+        }
+        // C9 Inc.2 — capture débouncée d'une étape d'annulation après chaque
+        // accalmie de mutation. Mêmes gardes que l'autosave : jamais pendant
+        // la décision de reprise (le composer vierge sous la carte ne doit
+        // pas semer d'étapes), ni pendant le démontage post-discard/publish.
+        .onReceive(viewModel.historyTrigger) { _ in
+            guard !showRestoreDraftAlert, !draftAutosaveSuspended else { return }
+            viewModel.pushHistorySnapshot()
         }
     }
 

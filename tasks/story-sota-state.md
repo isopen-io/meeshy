@@ -265,8 +265,18 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   5 incréments. ✅ Inc.1 it.81 : `HistoryStore<S>` (MeeshyUI/Controls, struct pure
   nonisolated parité BandStateMachine) — push dédup/troncature redo/cap avec ÉVINCÉ
   RETOURNÉ (seam purge bitmaps différée), undo/redo trajectoire exacte ; 6 tests.
-  RESTE : Inc.2 câblage capture, Inc.3 restore+purge paresseuse, Inc.4 UI discrète
-  (shake + icônes conditionnelles), Inc.5 vérif simulateur. ORIGINE :** Undo/redo existe UNIQUEMENT en dessin
+  ✅ Inc.2 it.82 : capture câblée — AMÉLIORATION vs plan : au lieu de 3 câblages
+  point-par-point, UN publisher `historyTrigger` (objectWillChange.debounce 0,5 s, lazy
+  stored — pattern E1, piège re-souscription évité) + dédup du store = couverture TOTALE
+  par construction. Snapshots = Data JSON `.sortedKeys` (StorySlide non-Equatable + ordre
+  de clés instable iOS 26). Seed à l'entrée + RE-seed post-restoreDraft (l'undo ne traverse
+  pas la frontière de reprise) ; gardes View = celles de l'autosave (carte de reprise,
+  démontage) ; exclusion dessin actif (capture à la sortie). Flags @Published assignés
+  sur changement réel uniquement (boucle trigger fermée par la dédup). 5 tests
+  StoryComposerHistoryTests (dédup/capture/re-seed/exclusion dessin/déterminisme encodage).
+  Piège : `private(set)` inaccessible depuis l'extension +History → setter interne.
+  RESTE : Inc.3 restore+purge paresseuse, Inc.4 UI discrète (shake + icônes
+  conditionnelles), Inc.5 vérif simulateur. ORIGINE :** Undo/redo existe UNIQUEMENT en dessin
   (DrawingEditFloatingBubbles) + CommandStack timeline (séparé). Ajout/déplacement/suppression
   de texte/média/sticker/fond : irréversibles (seul « annuler » = ⋯ → Supprimer tous les
   slides !). Chantier : étendre le pattern CommandStack au canvas — PLAN requis avant code.
@@ -953,6 +963,11 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.82 — C9 Inc.2 : capture globale câblée (un trigger débouncé, zéro trou)
+
+- L'insight E1 réutilisé : objectWillChange débouncé couvre TOUTES les mutations sans
+  énumérer les call sites ; la dédup d'octets stables fait le tri. 16/16 (3 suites).
 
 ## it.81 — C9 Inc.1 : HistoryStore (pile d'états pure, 6 tests)
 
