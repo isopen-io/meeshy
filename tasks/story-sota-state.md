@@ -430,12 +430,11 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   ✅ Annonce VoiceOver au changement de slide (« Story N sur M », gated
   isVoiceOverRunning, clé localisée statique — piège : String(localized:) exige une
   StaticString comme clé, pas d'interpolation dedans).
-  RESTE (inc.2) : labels des zones tap prev/next — PISTE it.32 : ce ne sont PAS des
-  onTapGesture (les seuls du viewer sont le switcher de langue des commentaires) ; chercher
-  la gesture SPATIALE du canvas (+Canvas.swift:96 « course contre onTapGesture ») — les
-  zones prev/next se décident probablement par position x du tap dans le canvas →
-  l'a11y passera par accessibilityAction custom (VoiceOver ne « tape » pas par position) ;
-  + accessibilityValue de la barre de progression.
+  ✅ Inc.2 (it.33) : actions VoiceOver custom « Story suivante / précédente » sur le canvas
+  (la navigation est une gesture spatiale par position x, inatteignable en VoiceOver) +
+  accessibilityLabel du canvas (contenu CALayer invisible d'UIAccessibility),
+  .accessibilityElement(children: .ignore).
+  RESTE (inc.3, mineur) : accessibilityValue de la barre de progression.
 - [x] **U7 (P3) ProMotion.** ✅ ÉCARTÉ it.30 — déjà satisfait : le timer viewer pose
   `CAFrameRateRange(min 30, max 60, preferred 60)` (StoryReaderTimerController:270, jamais
   120 Hz) et le canvas est à preferred 60 (max 120 réservé aux keyframes edit). Granularité
@@ -535,6 +534,10 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.33 — U6 inc.2 : actions VoiceOver prev/next sur le canvas (hash au push)
+
+- Build vert (retry après contention de build avec un agent parallèle — DB lock).
 
 ## it.32 — U6 inc.2 : repérage (session au bout de son contexte)
 
