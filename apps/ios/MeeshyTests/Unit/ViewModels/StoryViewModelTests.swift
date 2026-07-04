@@ -334,6 +334,53 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertTrue(pinned, "Viewing a story must pin its media for offline replay until expiry")
     }
 
+    func test_offlineReplay_viewedStory_mediaResolvesFromDiskThroughViewerKeys() async {
+        // R5(c) — contrat d'intégration de la relecture offline. L'ÉCRITURE
+        // (prefetch/pin) travaille avec la clé BRUTE `FeedMedia.url` ; la
+        // LECTURE (StoryViewerView.mediaIndex) reconstruit la clé via
+        // `URL(string: raw).absoluteString` puis les layers résolvent en
+        // DISK-ONLY (`videoLocalFileURL` / `imageLocalFileURL` /
+        // `audioLocalFileURL` — zéro réseau par construction). Toute
+        // divergence de chaîne ou de store entre les deux bouts casserait la
+        // relecture offline en silence : ce test dérive chaque clé
+        // indépendamment et exige le disk-hit + le pin sous la clé VIEWER.
+        let unique = UUID().uuidString
+        let rawVideo = "https://cdn.test/\(unique)/clip.mp4"
+        let rawAudio = "https://cdn.test/\(unique)/voice.m4a"
+        let rawImage = "https://cdn.test/\(unique)/photo.jpg"
+        let story = makeMediaStoryItem(id: "offline-replay", videoURL: rawVideo,
+                                       audioURL: rawAudio, imageURL: rawImage)
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [story])]
+
+        let payload = Data("offline-replay-bytes".utf8)
+        await CacheCoordinator.shared.video.save(payload, for: rawVideo)
+        await CacheCoordinator.shared.audio.save(payload, for: rawAudio)
+        await CacheCoordinator.shared.images.save(payload, for: rawImage)
+
+        sut.markViewed(storyId: "offline-replay")
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        guard let viewerVideoKey = URL(string: rawVideo)?.absoluteString,
+              let viewerAudioKey = URL(string: rawAudio)?.absoluteString,
+              let viewerImageKey = URL(string: rawImage)?.absoluteString else {
+            return XCTFail("Fixture URLs must parse — the viewer would drop them from mediaIndex")
+        }
+
+        XCTAssertNotNil(CacheCoordinator.videoLocalFileURL(for: viewerVideoKey),
+                        "Video bg must replay from disk (StoryBackgroundLayer path) without network")
+        XCTAssertNotNil(CacheCoordinator.audioLocalFileURL(for: viewerAudioKey),
+                        "Audio must replay from disk (ReaderAudioMixer path) without network")
+        XCTAssertNotNil(CacheCoordinator.imageLocalFileURL(for: viewerImageKey),
+                        "Image bg must replay from disk (loadImage disk-hit) without network")
+
+        let videoPinned = await CacheCoordinator.shared.video.isPinned(viewerVideoKey)
+        let audioPinned = await CacheCoordinator.shared.audio.isPinned(viewerAudioKey)
+        let imagePinned = await CacheCoordinator.shared.images.isPinned(viewerImageKey)
+        XCTAssertTrue(videoPinned, "The viewer's video key must be pinned against eviction")
+        XCTAssertTrue(audioPinned, "The viewer's audio key must be pinned against eviction")
+        XCTAssertTrue(imagePinned, "The viewer's image key must be pinned against eviction")
+    }
+
     // MARK: - Group intro (interstitiel inter-groupes)
 
     private func makeIntroGroup(id: String = "intro-user-\(UUID().uuidString)",
