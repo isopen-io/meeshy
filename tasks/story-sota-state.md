@@ -17,6 +17,12 @@
    discret, et reprend en phase.
 5. **SOTA UI/UX** : exploiter le design system de chaque version d'iOS (16 → 26) au maximum,
    sans jamais retirer d'effet visuel existant (règle user ferme).
+6. **Création DISCRÈTE et gesture-first (directive user 2026-07-04, relance de la boucle)** :
+   le composer n'affiche QUE ce qui est utile à l'instant t. Chaque tool/écran/contenu doit
+   pouvoir apparaître ET disparaître par un GESTE simple et cohérent (pas seulement des
+   boutons) ; passer d'un outil à l'autre = gestuelle fluide. Tous les tools doivent être
+   FONCTIONNELS (audit exhaustif requis — série d'items `C*` au §3). Moderniser le processus
+   de création sans violer l'invariant n°4 (ne jamais retirer d'effet visuel).
 
 ## 1. Architecture — fichiers pivots (carte vérifiée)
 
@@ -119,6 +125,35 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 > actuel, fixer en TDD, vérifier, commit+push, mettre à jour ce fichier. Un item par itération
 > (ou un groupe cohérent petit). P0 = casse la mission produit ; P1 = écart majeur ; P2 = dette
 > structurante ; P3 = polish/mineur.
+
+### CRÉATION DISCRÈTE / GESTURE-FIRST — mission C (directive user 2026-07-04)
+
+> Grammaire gestuelle EXISTANTE vérifiée it.66 (à préserver et étendre, jamais régresser) :
+> tap fond canvas = toggle FABs (`+Canvas.swift:789-793`) ; tap FAB = toggle panneau ;
+> swipe-up FAB = ouvre ; swipe-down colonne FABs = cache les FABs ; swipe-down band = ferme
+> + restaure FABs (`ComposerControlsLayer.swift:200-219`) ; grabber = resize/replie le panneau
+> en poignée seule, outil actif, canvas 100 % (`BandState.allowsCollapsibleDrawer`) ; pinch
+> 3 doigts = zoom viewport + drag pan (`+Canvas.swift:770-787`) ; FABs auto-masqués quand un
+> panneau est ouvert (`shouldShowFABs`, ControlsLayer:86-88) ; TopBar auto-masquée en
+> manipulation libre zoomée (`showTopBar`, `+TopBar.swift:14-16`) ; band reset au changement
+> de slide (ControlsLayer:225-229).
+
+- [ ] **C0 (P0) Inventaire exhaustif des tools + audit fonctionnel** — EN COURS it.66
+  (agent d'exploration sur StoryComposerView+extensions, panneaux, sheets, pickers, timeline,
+  éditeurs texte/dessin/média, entrée app-side). Livrable : tableau apparition/disparition/
+  conteneur/gestes par tool + anomalies → items C* additionnels ci-dessous.
+- [ ] **C1 (P2) Accès Transitions et Timeline enterrés dans le menu ⋯** (`+TopBar.swift:138-149`).
+  Deux tools de création à part entière cachés derrière un menu à 2 niveaux — contraire à
+  « passer à autre chose par une gestuelle ». La timeline a pourtant un FAB (badge
+  timelineBadge) ; Transitions n'a AUCUN accès gestuel. À réconcilier avec la grammaire FAB/band.
+- [ ] **C2 (P3) `swipeHorizontalOnBand()` = code mort** (corps vide, BandStateMachine.swift:114-116)
+  MAIS le DragGesture du band détecte toujours le swipe horizontal et l'appelle pour rien
+  (ControlsLayer:214-217). Soit retirer la détection, soit lui donner un sens (candidat :
+  switch d'outil actif par swipe horizontal sur le band — cohérent mission C).
+- [ ] **C3 (P2) Chrome totalement caché = zéro affordance de récupération.** FABs cachés
+  (swipe-down) + band fermé → écran nu ; seul un tap « au hasard » sur le fond restaure le
+  chrome. Aucun indice visuel (pas de poignée fantôme, pas de hint première fois). Vérifier
+  aussi l'état FABs cachés + TopBar cachée (zoom) : quelles sorties ?
 
 ### ÉDITION — crash recovery & intégrité des données
 
@@ -713,6 +748,20 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.66 — RELANCE : mission C « création discrète gesture-first » (directive user 2026-07-04)
+
+- La boucle close à it.65 est ROUVERTE par directive user : audit de TOUS les tools du
+  composer + création discrète — gestes suffisants pour apparition/disparition de chaque
+  tool/écran/contenu, n'afficher que l'utile à l'instant t, tout rendre fonctionnel.
+- Fait ce tour : mission ajoutée §0.6 ; grammaire gestuelle existante cartographiée et
+  consignée en tête de la section C (§3) — elle est déjà riche (tap canvas toggle chrome,
+  FAB tap/swipe-up/swipe-down, band swipe-down, grabber resize/collapse, pinch viewport) ;
+  premiers items C1-C3 prouvés (Transitions/Timeline enterrés au menu ⋯, swipe horizontal
+  band mort, zéro affordance de récupération chrome caché).
+- EN COURS : C0 — inventaire exhaustif délégué à un agent d'exploration (tableau
+  apparition/disparition/conteneur/gestes par tool + anomalies) ; ses findings alimenteront
+  les items C4+ au prochain tour. Aucun code modifié ce tour (audit d'abord, preuve avant fix).
 
 ## it.65 — FIN DE BOUCLE (audit sec 2/2) — rapport final du cycle it.41→65
 
