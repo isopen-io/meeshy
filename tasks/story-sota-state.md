@@ -535,7 +535,7 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.33 — U6 inc.2 : actions VoiceOver prev/next sur le canvas (hash au push)
+## it.33 — U6 inc.2 : actions VoiceOver prev/next sur le canvas (3fcf435f2)
 
 - Build vert (retry après contention de build avec un agent parallèle — DB lock).
 
