@@ -549,6 +549,27 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
+## it.40 — FIN DE CYCLE (session au terme de son contexte) — rapport
+
+**Bilan it.1→it.40** : ~30 livraisons de code sur main (CI verte), 3 plans posés dont 2
+exécutés majoritairement. P0 4/4 ✅, P1 6/6 ✅ (+incréments partiels tracés), P2/P3
+autonomes quasi épuisés. Missions produit : édition crash-safe ✅ · offline ✅ ·
+progression=données ✅ (iOS+web) · lecture instantanée 🔶 (inc.1) · SOTA UI/UX 🔶.
+
+**Pour la PROCHAINE session (contexte frais requis — cycles simulateur/screenshots)** :
+U3 inc.1 (sidebar matériaux), U1 inc.1 (zoom transition, risque gestuel flaggé), U5,
+W3, W1-inc.4, R12/G1-projection (plans), incréments 2 de R4/E4.
+
+**EN ATTENTE DE L'UTILISATEUR** :
+1. Décisions produit §4 : E7 (publish in-timeline : câbler ou retirer), E8 (multi-draft),
+   WS5.4b (promotion media[0]), it.44 C.2 (repost-as-post), Phase 2 cover baké
+   (touche RAW-publish/Prisme), chantier filtres (6 sans kernel Metal).
+2. DÉPLOIEMENT gateway prod groupé : G1 (?updatedSince) + G2 (pipeline unique) +
+   G3 (audience-driven) — pull + up -d explicite sur /opt/meeshy/production.
+3. Validation visuelle de l'interstitiel d'identité (dès 2+ groupes tiers au tray)
+   + réglages design éventuels.
+4. Tests terrain device (stall réseau réel, TestFlight).
+
 ## it.39 — U1/U3 : plan design-system du reader posé
 
 - Itération de plan (chantiers visuels → plan + vérif simulateur obligatoire par étape) ;
