@@ -427,7 +427,10 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   Plan : `docs/superpowers/plans/2026-07-04-story-draft-resume-card-plan.md` (constat :
   alerte texte nue à StoryComposerView:198 ; cible : carte cover composite via le chemin
   it.3 renderComposite + restore médias existant ; 3 incréments, pièges consignés).
-  Prochain tour : incrément 1 (DraftResumeCard MeeshyUI, params opaques).
+  ✅ Inc.1 (it.37) : `DraftResumeCard` (MeeshyUI, params opaques : cover/slideCount/
+  updatedAt/onResume/onDiscard ; dégradation cover nil ; a11y ; helper pur freshnessLabel
+  testé ×4 avec clamp horloge future). RESTE : inc.2 câblage composer (cover async +
+  remplacement de l'alerte), inc.3 chip tray (décision produit).
 - [ ] **U5 (P3) État de chargement prolongé** (avec R2) : ThumbHash + progress ring fine autour
   de l'avatar auteur (métaphore déjà connue du tray), bouton passer.
 - [x] **U6 (P3) Dynamic Type/VoiceOver du viewer.** ✅ COMPLET it.34
@@ -541,6 +544,10 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.37 — U4 inc.1 : DraftResumeCard livré (hash au push)
+
+- 4/4 tests helper pur ; build app vert (gate CONDITIONNÉ — leçon it.35 appliquée).
 
 ## it.36 — U4 : plan de la carte de reprise posé
 
