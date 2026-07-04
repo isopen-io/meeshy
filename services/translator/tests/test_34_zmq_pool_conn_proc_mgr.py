@@ -401,6 +401,22 @@ class TestProcessSingleTranslation:
         assert publish.await_count == 2
         assert results == []
 
+    async def test_outer_exception_via_language_iteration_failure(self):
+        from services.zmq_pool.translation_processor import process_single_translation
+        publish = AsyncMock()
+        task = _task(target_languages=["fr"])
+
+        class _RaisingIterable:
+            def __iter__(self):
+                raise RuntimeError("target_languages iteration failed")
+
+        # Force an exception outside the per-language try/except (the loop
+        # setup itself), which only the outer try/except in
+        # process_single_translation can catch.
+        task.target_languages = _RaisingIterable()
+        results = await process_single_translation(task, "w1", None, None, publish)
+        assert results == []
+
 
 class TestProcessBatchTranslation:
     async def test_empty_tasks_returns_zero(self):
