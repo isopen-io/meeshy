@@ -185,6 +185,8 @@ async function buildApp(opts: {
     message: {
       findFirst: jest.fn().mockResolvedValue(opts.messageOverride ?? mockMessage),
       update: jest.fn().mockResolvedValue({ ...mockMessage, isEdited: true }),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      findUniqueOrThrow: jest.fn().mockResolvedValue({ ...mockMessage, isEdited: true }),
     },
     participant: {
       findFirst: jest.fn().mockResolvedValue({ id: PART_ID, conversationId: CONV_ID }),

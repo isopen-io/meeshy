@@ -597,24 +597,38 @@ export class MessageHandler {
         return;
       }
 
-      const updatedMessage = await this.prisma.message.update({
-        where: { id: validated.messageId },
+      // Optimistic-concurrency guard: only write while the message is still
+      // non-deleted. A `message:delete` landing between the read above and
+      // this write would otherwise resurrect the row with edited content
+      // (unconditional `update` by id succeeds regardless of `deletedAt`),
+      // and the gateway would broadcast MESSAGE_EDITED for a message clients
+      // already removed. Mirrors the guarded `updateMany` used by
+      // handleMessageDelete's lastMessageAt recompute.
+      const editedAt = new Date();
+      const editResult = await this.prisma.message.updateMany({
+        where: { id: validated.messageId, deletedAt: null },
         data: {
           content: validated.content.trim(),
           isEdited: true,
-          editedAt: new Date(),
+          editedAt,
           translations: null,
         },
-        select: {
-          id: true,
-          conversationId: true,
-          content: true,
-          isEdited: true,
-          editedAt: true,
-          originalLanguage: true,
-          sender: { select: { id: true, userId: true, displayName: true, avatar: true } },
-        },
       });
+
+      if (editResult.count === 0) {
+        this._sendGenericError(callback, 'Message not found or you are not authorized to edit it', socket);
+        return;
+      }
+
+      const updatedMessage = {
+        id: message.id,
+        conversationId: message.conversationId,
+        content: validated.content.trim(),
+        isEdited: true,
+        editedAt,
+        originalLanguage: message.originalLanguage,
+        sender: message.sender,
+      };
 
       // Trigger async retranslation — fire-and-forget, non-blocking
       const retranslationPayload = {
