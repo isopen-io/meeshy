@@ -549,6 +549,13 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
+## it.39 — U1/U3 : plan design-system du reader posé
+
+- Itération de plan (chantiers visuels → plan + vérif simulateur obligatoire par étape) ;
+  plan : docs/superpowers/plans/2026-07-04-story-reader-design-system-plan.md ; zéro code.
+- U1 : 6 sites de présentation recensés, namespace à faire voyager via le coordinator ;
+  risque identifié : conflit navigationTransition ↔ drag-dismiss custom.
+
 ## it.38 — U4 inc.2 : la carte de reprise remplace l'alerte (9c4167dab)
 
 - Gate conditionné vert après 1 correction (type app-side hors SDK). Incident mineur
