@@ -540,7 +540,15 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.35 — R11 : viewedAt migration douce (2871df2f3)
+## it.35 — R11 : viewedAt migration douce (2871df2f3) + HOTFIX build main (ce81369f8)
+
+- ⚠️ Incident : BUILD FAILED masqué par mon enchaînement (le commit R11 est parti malgré le
+  gate rouge — le script chaînait sans conditionner sur le grep). Cause RÉELLE : commit
+  6726391a1 (autre agent) référençait AudioEffectsPanel.swift jamais commité → main cassé
+  pour tous. Fix : xcodegen generate (project.yml = vérité, glob des fichiers RÉELS) +
+  commit du pbxproj régénéré. R11 lui-même sain (tests modèles verts + full build vert
+  post-fix). LEÇON (piège d'exécution) : toujours CONDITIONNER commit/push sur le résultat
+  du gate (`grep -q "Build succeeded" || exit`), jamais un enchaînement inconditionnel.
 
 - 6/6 tests modèles (round-trip + legacy decode) ; build vert.
 
