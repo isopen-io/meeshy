@@ -519,6 +519,36 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertEqual(mockStoryService.listCallCount, 1)
     }
 
+    // MARK: - R12 inc.2 : persistance dirty des mutations locales
+
+    func test_persistStoryCache_localMutation_landsInStoreAndSurvivesDirtyFlush() async {
+        // R12 inc.2 — persistStoryCache est passé de save() synchrone (full
+        // rewrite + freshness reset) à mergeUpdate (dirty débouncé, freshness
+        // préservée — sémantique pinnée par GRDBCacheStoreFreshnessTests côté
+        // SDK). Ce test caractérise le câblage : une mutation locale traverse
+        // le nouveau chemin et survit au flush dirty.
+        let unique = UUID().uuidString
+        let storyId = "flush-\(unique)"
+        let item = makeStoryItem(id: storyId, isViewed: false)
+        sut.storyGroups = [makeStoryGroup(userId: "u-\(unique)", stories: [item])]
+
+        sut.markViewed(storyId: storyId)
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        await CacheCoordinator.shared.stories.flushDirtyKeys()
+        let result = await CacheCoordinator.shared.stories.load(for: StoryViewModel.storiesCacheKey)
+
+        let groups: [StoryGroup]
+        switch result {
+        case .fresh(let g, _), .stale(let g, _): groups = g
+        case .expired, .empty:
+            return XCTFail("The mutated tray must be readable back from the stories store")
+        }
+        let story = groups.first { $0.id == "u-\(unique)" }?.stories.first { $0.id == storyId }
+        XCTAssertEqual(story?.isViewed, true,
+                       "A local mutation must land in the store through the dirty mergeUpdate path")
+    }
+
     // MARK: - Group intro (interstitiel inter-groupes)
 
     private func makeIntroGroup(id: String = "intro-user-\(UUID().uuidString)",

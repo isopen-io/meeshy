@@ -2007,8 +2007,18 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         persistStoryCache()
     }
 
+    /// R12 inc.2 — TOUS les callers de ce wrapper sont des mutations locales
+    /// ou des pushs socket (classification it.48, plan
+    /// 2026-07-04-story-store-dirty-write-plan.md) : écriture DIRTY débouncée
+    /// (L1 + markDirty → flush coalescé ~2 s), freshness PRÉSERVÉE — ces
+    /// chemins n'ont pas re-validé le tray entier auprès du serveur, le
+    /// prochain `.stale` doit toujours déclencher son refetch delta. Le SEUL
+    /// write full + freshness-reset est le `save()` direct du fetch réseau
+    /// complet (fetchStoriesFromNetwork). Fenêtre de perte ≤2 s sur kill dur
+    /// assumée : cache dont la vérité est serveur ; le « vu » est durable via
+    /// l'outbox markStoryViewed (R6), pas via ce cache.
     private func persistStoryCache() {
         let snapshot = storyGroups
-        Task { try? await CacheCoordinator.shared.stories.save(snapshot, for: Self.storiesCacheKey) }
+        Task { await CacheCoordinator.shared.stories.mergeUpdate(for: Self.storiesCacheKey) { _ in snapshot } }
     }
 }
