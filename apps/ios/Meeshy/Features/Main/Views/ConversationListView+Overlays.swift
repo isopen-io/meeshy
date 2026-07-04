@@ -236,6 +236,7 @@ extension ConversationListView {
         // retire réellement l'overlay après la durée du spring. Purge annulable :
         // si l'utilisateur rouvre un menu avant la fin du zoom-out, `onLongPress`
         // annule ce work item, sinon il effacerait le menu fraîchement rouvert.
+        chipAutoScrollDriver.stop()
         contextMenuDismissWork?.cancel()
         // min() : ne jamais RE-déplier une carte repliée par le drag vers le
         // haut (0.0 → 0.7 ferait flasher l'aperçu pendant le fondu de sortie).
@@ -544,6 +545,7 @@ extension ConversationListView {
                     dragOffsetY = translation
                     dragOffsetX = value.translation.width
                     updateChipDropTarget(at: value.location)
+                    chipAutoScrollDriver.update(fingerLocation: value.location)
                 } else if translation < 0 {
                     previewScale = max(0, 1.0 + translation / 100)
                     dragOffsetY = 0
@@ -553,15 +555,22 @@ extension ConversationListView {
                     dragOffsetX = value.translation.width * dragMorphProgress
                     if dragMorphProgress >= 1 {
                         // Morph complet → verrouille le mode chip (drag n drop
-                        // engagé tant que le doigt reste posé).
+                        // engagé tant que le doigt reste posé). L'auto-scroll
+                        // de bord s'arme ici : stationner près d'un bord fait
+                        // défiler la liste vers les headers hors écran.
                         chipModeLatched = true
                         HapticFeedback.light()
                         updateChipDropTarget(at: value.location)
+                        chipAutoScrollDriver.onScrollTick = { location in
+                            updateChipDropTarget(at: location)
+                        }
+                        chipAutoScrollDriver.update(fingerLocation: value.location)
                     }
                 }
             }
             .onEnded { value in
                 if chipModeLatched {
+                    chipAutoScrollDriver.stop()
                     handleChipDrop(at: value.location)
                     return
                 }
@@ -619,6 +628,131 @@ extension ConversationListView {
         guard targetId != currentId else { return }
         HapticFeedback.success()
         conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: targetId)
+    }
+}
+
+// MARK: - Chip Auto-Scroll (Phase 3 du morph drag-n-drop)
+
+/// Loi de vitesse de l'auto-scroll pendant le drag de la chip : le doigt qui
+/// stationne dans une zone de bord du viewport fait défiler la liste pour
+/// rendre atteignables les headers de section hors écran. Rampe linéaire
+/// (bord = pleine vitesse, sortie de zone = 0) et clamp de l'offset aux
+/// bornes réelles du contenu. Fonctions pures — testées dans
+/// `ConversationChipAutoScrollTests`.
+enum ChipAutoScroll {
+    /// Profondeur (pt) des zones de déclenchement en haut/bas du viewport.
+    static let zoneHeight: CGFloat = 130
+    /// Vitesse de défilement (pt/s) au bord même du viewport.
+    static let maxSpeed: CGFloat = 900
+
+    /// Vitesse signée pour une position de doigt donnée (coordonnées fenêtre) :
+    /// négative = défile vers le haut (révèle les sections au-dessus),
+    /// positive = vers le bas, 0 hors des zones de bord.
+    static func speed(fingerY: CGFloat, viewportMinY: CGFloat, viewportMaxY: CGFloat) -> CGFloat {
+        let topDepth = (viewportMinY + zoneHeight - fingerY) / zoneHeight
+        if topDepth > 0 { return -min(1, topDepth) * maxSpeed }
+        let bottomDepth = (fingerY - (viewportMaxY - zoneHeight)) / zoneHeight
+        if bottomDepth > 0 { return min(1, bottomDepth) * maxSpeed }
+        return 0
+    }
+
+    /// Offset proposé, ramené dans [-topInset, fin de contenu] — l'auto-scroll
+    /// ne doit jamais produire d'overscroll (qui armerait visuellement le
+    /// pull-to-refresh ou ferait rebondir la liste sous la chip).
+    static func clampedOffset(
+        _ proposed: CGFloat,
+        contentHeight: CGFloat,
+        viewportHeight: CGFloat,
+        topInset: CGFloat,
+        bottomInset: CGFloat
+    ) -> CGFloat {
+        let minOffset = -topInset
+        let maxOffset = max(minOffset, contentHeight + bottomInset - viewportHeight)
+        return min(max(proposed, minOffset), maxOffset)
+    }
+}
+
+/// Pilote l'auto-scroll : boîte de référence VOLONTAIREMENT hors du graphe
+/// SwiftUI (même famille que `SectionFrameRegistry`) — le tick écrit
+/// `contentOffset` directement sur l'UIScrollView hôte, donc aucune
+/// invalidation de la liste ; les GeometryReader des headers republient leurs
+/// frames dans le registre inerte à chaque frame défilée, et `onScrollTick`
+/// re-hit-teste la cible sous le doigt STATIONNAIRE (le DragGesture ne
+/// re-fire pas sans mouvement du doigt).
+@MainActor
+final class ChipAutoScrollDriver {
+    weak var scrollView: UIScrollView?
+    /// Rebranché à chaque verrouillage de la chip, relâché par `stop()` (le
+    /// closure capture la View : le garder à demeure lierait le cycle
+    /// State-box → driver → closure → View → State-box).
+    var onScrollTick: ((CGPoint) -> Void)?
+
+    private var timer: Timer?
+    private var fingerLocation: CGPoint = .zero
+
+    func update(fingerLocation location: CGPoint) {
+        fingerLocation = location
+        guard timer == nil else { return }
+        let tick = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+            // Timer main-runloop → déjà sur le main thread.
+            MainActor.assumeIsolated { self?.tick() }
+        }
+        RunLoop.main.add(tick, forMode: .common)
+        timer = tick
+    }
+
+    func stop() {
+        timer?.invalidate()
+        timer = nil
+        onScrollTick = nil
+    }
+
+    private func tick() {
+        guard let scrollView else { return }
+        let viewport = scrollView.convert(scrollView.bounds, to: nil)
+        let speed = ChipAutoScroll.speed(
+            fingerY: fingerLocation.y,
+            viewportMinY: viewport.minY,
+            viewportMaxY: viewport.maxY
+        )
+        guard speed != 0 else { return }
+        let clamped = ChipAutoScroll.clampedOffset(
+            scrollView.contentOffset.y + speed / 60.0,
+            contentHeight: scrollView.contentSize.height,
+            viewportHeight: scrollView.bounds.height,
+            topInset: scrollView.adjustedContentInset.top,
+            bottomInset: scrollView.adjustedContentInset.bottom
+        )
+        guard clamped != scrollView.contentOffset.y else { return }
+        scrollView.contentOffset.y = clamped
+        onScrollTick?(fingerLocation)
+    }
+}
+
+/// UIView invisible plantée dans le contenu du scroll : remonte la hiérarchie
+/// jusqu'à l'UIScrollView hôte et le confie au driver. Seul moyen sous
+/// iOS 16 de piloter l'offset en continu — `ScrollViewReader.scrollTo` ne
+/// sait pas défiler proportionnellement (et rate les ids non instanciés du
+/// LazyVStack), `scrollPosition(y:)` est iOS 17+.
+struct ChipAutoScrollGrabber: UIViewRepresentable {
+    let driver: ChipAutoScrollDriver
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        // La chaîne de superviews n'est attachée qu'après le montage — hop
+        // asynchrone pour marcher jusqu'au scroll hôte une fois en place.
+        DispatchQueue.main.async { [weak driver] in
+            var candidate: UIView? = uiView.superview
+            while let current = candidate, !(current is UIScrollView) {
+                candidate = current.superview
+            }
+            driver?.scrollView = candidate as? UIScrollView
+        }
     }
 }
 
