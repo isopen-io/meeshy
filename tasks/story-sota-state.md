@@ -1050,6 +1050,17 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
+## it.92 — Audit ciblé n°5 (voice recorder) : SEC — compteur 1/2
+
+- 3 axes vérifiés SAINS : permission micro refusée → errorMessage localisé (piège
+  d'isolation TCC/defaultIsolation documenté dans le code, crash 2026-06-15 déjà fixé) ;
+  confirm/cancel des éditeurs audio propres (item=nil) ; temp file d'un vocal annulé =
+  stratégie temp générale (purge iOS + cleanupTempFiles à l'upload) — pas d'orphelin
+  problématique. Auto-open du recorder sur panneau vide = UX volontaire (C0).
+- Zéro code. Audit n°6 (DERNIER si sec → STOP+rapport) : éditeurs plein écran
+  image/vidéo (MeeshyImage/VideoEditorView — composants génériques, angle story :
+  boundaries onAccept/onCancel + loadedImagesVersion).
+
 ## it.91b — C-DIR5 : la carte du reader se colle sous le header (alignement top)
 
 - Directive user traitée dans le même tour que C16 (dont le push a été retardé par un
