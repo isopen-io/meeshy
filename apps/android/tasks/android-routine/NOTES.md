@@ -998,3 +998,15 @@ Append-only log of gotchas and decisions that save time next run.
      resurrect it. When the "cancel a pending sent request" flow lands, route it through a
      `CANCEL_FRIEND_REQUEST` coalescer rule that **annihilates** a pending `SEND_FRIEND_REQUEST` to
      the same receiver (mirror the send+delete message annihilation).
+
+## 2026-07-04 — env gotcha: the Gradle wrapper distribution is 403-blocked; use system gradle
+- **`./gradlew` cannot bootstrap in this container.** The wrapper downloads
+  `services.gradle.org/distributions/gradle-8.11.1-bin.zip`, which 302-redirects to
+  `github.com/gradle/gradle-distributions/releases/...` — a host the egress policy **blocks (403)**.
+  The cached dist under `~/.gradle/wrapper/dists/gradle-8.11.1-bin/` is a **partial** (`.part`+`.lck`
+  only), so the wrapper never completes.
+- **Fix:** a system Gradle is preinstalled at `/opt/gradle/bin/gradle` (8.14.3). Run the build with
+  `gradle <tasks>` instead of `./gradlew`. AGP 8.7.3 runs fine under it. Maven Central + Google Maven
+  are allowed, so **do NOT pass `--offline`** (the AGP plugin marker isn't pre-cached → resolution
+  fails). `meeshy.sh` calls `./gradlew`, so invoke `gradle` directly for `assembleDebug`/
+  `testDebugUnitTest` until a full wrapper dist can be primed.
