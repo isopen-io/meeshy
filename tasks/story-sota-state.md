@@ -347,8 +347,15 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   mergeUpdate + dirty-flush débouncé 2 s, parité messages/conversations).
   Plan : `docs/superpowers/plans/2026-07-04-story-store-dirty-write-plan.md` — piège
   freshness consigné (mergeUpdate PRÉSERVE loadedAt ; seuls les sites post-réseau full
-  gardent save). RESTE : inc.2 (2 wrappers + classification des ~11 sites + tests
-  flush/reload/SWR) puis inc.1 (upsertPatch mono-story site par site).
+  gardent save).
+  ✅ Inc.2 (it.48) : classification des 10 callers → TOUS mutations locales/push socket
+  (le fetch full a son save() DIRECT hors wrapper — découverte qui réduit l'inc.2 au corps
+  de persistStoryCache : save → mergeUpdate `{ _ in snapshot }`). Bonus sémantique : une
+  mutation locale ne ressuscite plus un cache expiré (contrat SDK doesNotResurrectFreshness).
+  Test caractérisation app (mutation → flushDirtyKeys → reload) ; freshness pinnée par
+  GRDBCacheStoreFreshnessTests (SDK, préexistants). RESTE : inc.1 (upsertPatch mono-story
+  site par site — gain marginal maintenant que le full-rewrite est débouncé/coalescé ;
+  P3 de facto, à ne faire que si un profil montre l'encodage N groupes comme coût réel).
 
 - [ ] **R13 (P3, découvert it.41) Clé cache média non normalisée entre écriture et lecture.**
   Preuve (script Foundation) : `URL(string: raw).absoluteString` ré-encode espaces/accents
@@ -599,6 +606,16 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.48 — R12 inc.2 : mutations locales sur le chemin dirty débouncé (40f75bf9d)
+
+- Classification préalable des 10 callers de persistStoryCache : tous mutations locales/
+  push socket ; le fetch full réseau sauve DIRECT (L351) hors wrapper → l'inc.2 = 1 corps
+  de fonction (save → mergeUpdate), prouvé site par site cette fois.
+- Vérif : 90/90 StoryViewModelTests (nouveau test caractérisation flush dirty) ; TEST
+  BUILD SUCCEEDED. Le RED strict vit côté SDK (GRDBCacheStoreFreshnessTests, préexistants).
+- R12 inc.1 (upsertPatch par story) DÉPRIORISÉ P3 de facto : le débounce coalesce déjà les
+  rafales — l'encodage des N groupes par flush n'est plus dans le chemin critique.
 
 ## it.47 — R12 : re-preuve + plan, le « gros chantier » n'existe pas (356fc397c)
 
