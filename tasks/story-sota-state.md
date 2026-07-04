@@ -312,9 +312,18 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   Kind depuis les EFFECTS (StoryMediaObject.mediaType), pas FeedMedia.type — autre source,
   à auditer séparément si un symptôme apparaît. Migration lazy des .mp4 orphelins du store
   Images : NON faite (option) — les orphelins expirent au TTL 1 an/éviction budget.
-- [ ] **R8 (P2) Pagination du tray (client).** `fetchStoriesFromNetwork` appelle
-  `list(cursor: nil, limit: 50)` — curseur ignoré, plafond 50. À traiter AVEC G1 (le serveur ne
-  pagine pas non plus).
+- [~] **R8 (P2) Consommation client des APIs G1 (delta / projection / cursor).** — INC.1 FAIT it.46
+  ✅ Inc.1 DELTA : le refetch silencieux SWR (`.stale`) dérive son curseur du cache
+  (`deltaSince = max(StoryItem.updatedAt)` — état dérivé, zéro nouvelle source de vérité) et
+  appelle `list(updatedSince:)` ; merge REPLACE via `insertOrMergeStoryGroups(replacingExisting:
+  true)` (isViewed MONOTONE + viewedAt préservé, stories pendantes intactes par construction) ;
+  toute erreur delta → fallback full. `StoryItem.updatedAt` optionnel (migration douce, copié
+  par toStoryGroups) ; protocole `list(cursor:limit:updatedSince:)` + extension compat 2-params.
+  ⚠️ Le delta ne sert RIEN tant que le gateway prod n'est pas déployé (G1a serveur) — inoffensif
+  d'ici là (le serveur ignore le param inconnu → réponse full → merge replace = même résultat).
+  RESTE : inc.2 pagination cursor client (`hasMore`/`nextCursor` déjà servis par G1c, décider
+  l'UX tray >50) ; inc.3 consommation `?projection=tray` (exige fetch full au tap → R4 inc.2 le
+  fournit ; à séquencer après déploiement prod).
 - [x] **R9 (P2) Chiffrer le store `stories`.** ✅ it.19
   `encrypted: true` (1 ligne). Migration douce sans code : rows legacy en clair → decrypt
   fail → cache-miss propre (contrat DÉJÀ pinné par GRDBCacheStoreEncryptionTests
@@ -584,6 +593,20 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.46 — R8 inc.1 : le refetch silencieux consomme le delta-sync (ae6eefaf4)
+
+- Re-preuve : `.stale` → fetch full 50 plein corps à chaque refresh silencieux ; APIPost.updatedAt
+  existait déjà, StoryItem non → champ ajouté (pattern viewedAt it.35).
+- Design : curseur DÉRIVÉ du cache (pas de lastSyncedAt persisté) ; merge = généralisation de
+  insertOrMergeStoryGroups (mode replace, monotone) — le sink storyCreated garde son
+  comportement append-dédup (défaut inchangé).
+- RED : 4 tests VM (curseur max/nil legacy, replace+monotone+updatedAt traversant, insertion
+  nouveau groupe, delta vide → tray intact) + capture lastListUpdatedSince au mock.
+- Vérif : app 89/89 (StoryViewModelTests) + SDK 63/63 (StoryModels 50, StoryService 13 — le
+  MockAPIClient stubbe par endpoint, le passage paginatedRequest→request(queryItems:) est
+  transparent) ; TEST BUILD SUCCEEDED (recompile complète SDK→app ~10 min).
+- Note déploiement : le delta est inoffensif AVANT le déploiement gateway (param ignoré → full).
 
 ## it.45 — G1(c) : pagination keyset du tray stories, volet serveur G1 fermé (ca867d419)
 
