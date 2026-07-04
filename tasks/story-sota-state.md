@@ -1019,6 +1019,17 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
+## it.89 — Audit ciblé n°2 (flux preview) : SEC — compteur 1/2
+
+- Surface : bouton ▶ → snapshotAllSlides → onPreview → cover reader .preview → dismiss.
+  3 suspects vérifiés SAINS avec preuves : (1) le snapshot re-build les effects du slide
+  courant depuis l'état LIVE (`+Publication:80` — l'aperçu ne peut pas être périmé) ;
+  (2) mute/unmute canvas symétriques (post mute au ▶, post unmute au onDismiss du cover,
+  StoryTrayView:107) ; (3) rendu preview = moteur reader partagé (gradients C11, opening
+  C7, stickers C13 hérités par construction) ; dismiss gestuel standard.
+- Zéro code. Prochain (DERNIER avant STOP+rapport si sec) : audit n°3 — éditeur texte
+  inline en profondeur (états/gestes/clavier) OU flux picker médias.
+
 ## it.88 — Audit ciblé n°1 (a11y gestes composer) → C14 trouvé+fixé — compteur sec 0/2
 
 - Protocole étape 8 engagé. L'audit a produit du premier coup : VoiceOver annonçait des
