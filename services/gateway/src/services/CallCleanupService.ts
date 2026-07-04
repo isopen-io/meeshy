@@ -16,6 +16,11 @@ import { logger } from '../utils/logger';
 import type { CallService } from './CallService';
 
 export class CallCleanupService {
+  // Static + public so other services/tests can tie their own limits to the
+  // server's hard cap on active-call lifetime without duplicating the magic
+  // number (see TURNCredentialService, whose credential TTL must cover this).
+  static readonly MAX_ACTIVE_MS = 2 * 60 * 60 * 1000;
+
   private cleanupInterval: NodeJS.Timeout | null = null;
   private readonly CLEANUP_INTERVAL_MS = 60 * 1000;
 
@@ -30,7 +35,6 @@ export class CallCleanupService {
   // who answered late only the remainder of 30s to negotiate, force-FAILing
   // healthy calls mid-handshake ("it rings, I answer, it drops").
   private readonly MAX_CONNECTING_MS = 90 * 1000;
-  private readonly MAX_ACTIVE_MS = 2 * 60 * 60 * 1000;
   // CALL-FIX 2026-06-25 — 60s→120s: heartbeat interval is 10s on the iOS
   // client; a device with moderate network latency may miss 5-6 beats before
   // the connection recovers, and the 60s window was too tight for cellular
@@ -95,7 +99,7 @@ export class CallCleanupService {
       intervalMs: this.CLEANUP_INTERVAL_MS,
       maxInitiatedMs: this.MAX_INITIATED_RINGING_MS,
       maxConnectingMs: this.MAX_CONNECTING_MS,
-      maxActiveMs: this.MAX_ACTIVE_MS,
+      maxActiveMs: CallCleanupService.MAX_ACTIVE_MS,
       heartbeatTimeoutMs: this.HEARTBEAT_TIMEOUT_MS
     });
 
@@ -185,7 +189,7 @@ export class CallCleanupService {
     // never a duration limit: a multi-hour call whose participants still beat
     // is legitimate and must be spared (tier 4 already reaps real zombies
     // within HEARTBEAT_TIMEOUT_MS, no need to wait 2h for those).
-    const activeCutoff = new Date(now.getTime() - this.MAX_ACTIVE_MS);
+    const activeCutoff = new Date(now.getTime() - CallCleanupService.MAX_ACTIVE_MS);
     const staleActive = await this.prisma.callSession.findMany({
       where: {
         status: { in: [CallStatus.active, CallStatus.reconnecting] },

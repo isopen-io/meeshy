@@ -1379,10 +1379,6 @@ final class CallManager: ObservableObject {
         }
     }
 
-    func handleIncomingOffer(callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, sdp: SessionDescription) {
-        handleIncomingCallNotification(callId: callId, fromUserId: fromUserId, fromUsername: fromUsername, isVideo: isVideo)
-    }
-
     // MARK: - Reliable call:join (incoming paths)
 
     /// [Fix 2026-07-02] Reliable `call:join` — replaces the fire-and-forget
@@ -4440,17 +4436,13 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
         // Enables conference PINs and IVR navigation during active calls.
         // sendDTMF is a no-op when unavailable; fulfill so CallKit doesn't timeout.
         //
-        // [Fix] Unlike every sibling handler (CXSetMutedCallAction,
-        // CXSetHeldCallAction, CXAnswerCallAction, CXEndCallAction), this one
-        // used to touch `manager` synchronously in the delegate callback body.
-        // `CXProvider.setDelegate(_:queue: nil)` delivers callbacks on
-        // CallKit's own private serial queue, NOT main (see the
-        // CXAnswerCallAction comment above) — a synchronous off-main touch of
-        // the MainActor-isolated `manager` is the same class of bug that
-        // previously crashed the WebRTC delegate path. Capture the Sendable
-        // digits, fulfill synchronously (CallKit's contract), then hop to the
-        // MainActor before touching `manager`, matching every other action
-        // handler in this class.
+        // `sendDTMF` is @MainActor-isolated (like the rest of CallManager), but
+        // `CXProvider.setDelegate(_:queue: nil)` dispatches this callback on
+        // CallKit's own private serial queue, NOT main (see the CXAnswerCallAction
+        // fix note above). Calling straight into `manager?.sendDTMF` from that
+        // queue raced with any other MainActor call-state work (renegotiation,
+        // ICE restart, mute toggles) in flight at the same moment. Hop to the
+        // MainActor first, matching every other delegate method in this proxy.
         let digits = action.digits
         action.fulfill()
         Task { @MainActor [weak self] in

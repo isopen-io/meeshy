@@ -462,18 +462,26 @@ export class PostReactionHandler {
   ): Promise<void> {
     const post = await this.prisma.post.findUnique({
       where: { id: postId },
-      select: { authorId: true },
+      select: { authorId: true, type: true, content: true, createdAt: true, expiresAt: true },
     });
 
     if (!post?.authorId) return;
 
+    // Mirror the REST like route (`routes/posts/interactions.ts`) exactly: forward the
+    // real post type + ephemeral context so a reaction on a STORY/STATUS/REEL yields the
+    // correctly-typed notification (`story_reaction`/`status_reaction`, expiry context)
+    // instead of a generic `post_like`. Hardcoding `'POST'` here dropped that typing on
+    // every socket-path reaction.
     this.notificationService
       .createPostLikeNotification({
         actorId: reactorUserId,
         postId,
         postAuthorId: post.authorId,
         emoji,
-        postType: 'POST',
+        postType: post.type,
+        postPreview: post.content?.slice(0, 80) ?? undefined,
+        postCreatedAt: post.createdAt ?? undefined,
+        postExpiresAt: post.expiresAt ?? undefined,
       })
       .catch((error) => {
         this.logger.error('[PostReactionHandler] Failed to create post reaction notification', error, { reactorUserId, postId, emoji });

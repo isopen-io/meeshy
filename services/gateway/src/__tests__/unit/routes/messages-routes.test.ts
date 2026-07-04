@@ -244,6 +244,7 @@ const makePrisma = () => ({
   },
   conversationReadCursor: {
     findMany: jest.fn().mockResolvedValue([]),
+    findUnique: jest.fn().mockResolvedValue(null),
     upsert: jest.fn().mockResolvedValue({}),
   },
   attachmentStatusEntry: {
@@ -1955,6 +1956,38 @@ describe('POST /conversations/:id/mark-unread — coverage extension', () => {
         update: expect.objectContaining({ lastReadMessageId: null }),
       }),
     );
+    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { unreadCount: 1 });
+  });
+
+  it('race guard: a newer message was read concurrently after latestMessage was captured → skips the stale rewind, never overwrites the fresher cursor', async () => {
+    // A message strictly newer (lexicographically greater ObjectId) than MSG_ID
+    // was read by another device between our `latestMessage` read and the
+    // cursor write — the cursor now points past what we captured.
+    const NEWER_MSG_ID = '507f1f77bcf86cd799439099';
+    prisma.participant.findFirst
+      .mockResolvedValueOnce({ id: PART_ID }) // currentParticipant
+      .mockResolvedValueOnce({ id: PART_ID }); // participantForCursor
+    prisma.message.findFirst
+      .mockResolvedValueOnce({ id: MSG_ID, createdAt: new Date('2024-06-10') }) // latestMessage
+      .mockResolvedValueOnce({ id: 'prev-msg-id' }); // previousMessage
+    prisma.conversationReadCursor.findUnique.mockResolvedValueOnce({ lastReadMessageId: NEWER_MSG_ID });
+    const reply = makeReply();
+    await getHandler_()(makeRequest(), reply);
+    expect(prisma.conversationReadCursor.upsert).not.toHaveBeenCalled();
+    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { unreadCount: 0 });
+  });
+
+  it('cursor already exactly at latestMessage (not stale) → proceeds with the rewind as normal', async () => {
+    prisma.participant.findFirst
+      .mockResolvedValueOnce({ id: PART_ID }) // currentParticipant
+      .mockResolvedValueOnce({ id: PART_ID }); // participantForCursor
+    prisma.message.findFirst
+      .mockResolvedValueOnce({ id: MSG_ID, createdAt: new Date('2024-06-10') }) // latestMessage
+      .mockResolvedValueOnce({ id: 'prev-msg-id' }); // previousMessage
+    prisma.conversationReadCursor.findUnique.mockResolvedValueOnce({ lastReadMessageId: MSG_ID });
+    const reply = makeReply();
+    await getHandler_()(makeRequest(), reply);
+    expect(prisma.conversationReadCursor.upsert).toHaveBeenCalled();
     expect(mockSendSuccess).toHaveBeenCalledWith(reply, { unreadCount: 1 });
   });
 });

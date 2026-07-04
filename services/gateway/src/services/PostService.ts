@@ -264,8 +264,19 @@ export class PostService {
 
   private async triggerStoryTextTranslation(postId: string, content: string, authorId: string, sourceLanguageOverride?: string): Promise<void> {
     try {
-      // 1. Résoudre les langues cibles depuis les contacts de l'auteur
-      const targetLanguages = await this.resolveAudienceTargetLanguages(authorId);
+      // An explicit source (e.g. the language chosen when editing a post) wins
+      // over the heuristic detector, which only guesses from word patterns.
+      const sourceLanguage = sourceLanguageOverride ?? detectLanguage(content);
+
+      // 1. Résoudre les langues cibles depuis les contacts de l'auteur, hors
+      // la langue source elle-même — même garde que le sibling
+      // `triggerStoryTextObjectTranslation`. Sans elle, un auteur écrivant
+      // dans une langue déjà parlée par (une partie de) son audience
+      // déclenche un aller-retour NLLB source→source qui réécrit
+      // `translations.<source>` avec une paraphrase de l'original au lieu de
+      // le laisser intact.
+      const allTargetLanguages = await this.resolveAudienceTargetLanguages(authorId);
+      const targetLanguages = allTargetLanguages.filter(l => l !== sourceLanguage);
 
       if (targetLanguages.length === 0) {
         log.info('StoryTranslation: no target languages', { postId });
@@ -280,9 +291,6 @@ export class PostService {
       }
 
       const storyMessageId = `story:${postId}`;
-      // An explicit source (e.g. the language chosen when editing a post) wins
-      // over the heuristic detector, which only guesses from word patterns.
-      const sourceLanguage = sourceLanguageOverride ?? detectLanguage(content);
 
       log.info('StoryTranslation: sending ZMQ request', { postId, sourceLanguage, targetLanguages });
 
