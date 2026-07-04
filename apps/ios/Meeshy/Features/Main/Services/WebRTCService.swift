@@ -127,6 +127,13 @@ final class WebRTCService {
     }
 
     func createOffer() async -> SessionDescription? {
+        // Le data channel doit exister AVANT l'offre pour être négocié dans le
+        // SDP (m=application). Côté offreur uniquement — l'answerer le reçoit
+        // via `didOpen`. Idempotent : les offres de re-négociation (ICE
+        // restart, escalade vidéo) ne créent pas de second channel. Il porte
+        // les segments de transcription ET les messages de contrôle in-band
+        // (`bye` = raccroché instantané sans aller-retour serveur).
+        _ = client.createDataChannel(label: "transcription")
         do {
             let offer = try await client.createOffer()
             Logger.webrtc.info("Created SDP offer")
@@ -443,6 +450,16 @@ final class WebRTCService {
     }
 
     func sendTranscription(_ message: DataChannelTranscriptionMessage) {
+        guard let data = try? JSONEncoder().encode(message) else { return }
+        client.sendDataChannelMessage(data)
+    }
+
+    /// Raccroché in-band : pousse `{type: "bye"}` au pair en P2P direct pour
+    /// une coupure instantanée, AVANT que le fanout serveur `call:ended`
+    /// n'arrive (multi-requêtes DB côté gateway). No-op si le channel n'est
+    /// pas ouvert (appel jamais connecté) — le chemin socket reste autoritatif.
+    func sendHangupBye(reason: String = "completed") {
+        let message = DataChannelControlMessage(type: "bye", reason: reason)
         guard let data = try? JSONEncoder().encode(message) else { return }
         client.sendDataChannelMessage(data)
     }

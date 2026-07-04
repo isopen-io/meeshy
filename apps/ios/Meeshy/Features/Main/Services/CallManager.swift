@@ -1628,6 +1628,14 @@ final class CallManager: ObservableObject {
         // `emitCallEndWithAck` (3s timeout, retry interne au gateway) en
         // Task détaché : ne bloque pas le cleanup local mais garantit que
         // le gateway sait que l'appel est fini.
+        // Raccroché instantané côté pair (parité WhatsApp) : `bye` in-band sur
+        // le data channel P2P — arrive en millisecondes, sans dépendre des
+        // allers-retours DB du gateway avant son fanout `call:ended`. Émis
+        // AVANT `endCallInternal` (qui ferme la peer connection). No-op si le
+        // channel n'est pas ouvert ; le chemin socket ci-dessous reste
+        // l'autorité et le filet de sécurité.
+        webRTCService.sendHangupBye()
+
         if let callId {
             emitCallEndReliably(callId: callId)
         }
@@ -4032,20 +4040,31 @@ extension CallManager: WebRTCServiceDelegate {
     nonisolated func webRTCService(_ service: WebRTCService, didReceiveTranscriptionData data: Data) {
         Task { @MainActor [weak self] in
             guard let self else { return }
-            guard let message = try? JSONDecoder().decode(DataChannelTranscriptionMessage.self, from: data) else { return }
-            let segment = TranscriptionSegment(
-                id: UUID(),
-                text: message.text,
-                speakerId: message.speakerId,
-                startTime: message.startTime,
-                endTime: message.startTime + 1.0,
-                isFinal: message.isFinal,
-                confidence: 1.0,
-                language: message.language,
-                translatedText: message.translatedText,
-                translatedLanguage: message.translatedLanguage
-            )
-            self.transcriptionService.receiveRemoteSegment(segment)
+            switch DataChannelInbound.decode(data) {
+            case .bye(let reason):
+                // Raccroché in-band du pair : coupure IMMÉDIATE, sans attendre
+                // le fanout serveur `call:ended` (qui suit et se dédup via le
+                // garde `.ended` de handleRemoteEnd).
+                guard let callId = self.currentCallId else { return }
+                Logger.calls.info("DataChannel bye received — ending call instantly (callId=\(callId))")
+                self.handleRemoteEnd(callId: callId, rawReason: reason)
+            case .transcription(let message):
+                let segment = TranscriptionSegment(
+                    id: UUID(),
+                    text: message.text,
+                    speakerId: message.speakerId,
+                    startTime: message.startTime,
+                    endTime: message.startTime + 1.0,
+                    isFinal: message.isFinal,
+                    confidence: 1.0,
+                    language: message.language,
+                    translatedText: message.translatedText,
+                    translatedLanguage: message.translatedLanguage
+                )
+                self.transcriptionService.receiveRemoteSegment(segment)
+            case .ignored:
+                break
+            }
         }
     }
 

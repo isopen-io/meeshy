@@ -65,12 +65,35 @@ final class CallPillStatusTests: XCTestCase {
     }
 
     func test_label_nonEmptyForNonConnectedStates() {
+        // Les libellés survivent pour VoiceOver même si le rendu visuel est
+        // devenu un glyphe code couleur (retour user 2026-07-04).
         XCTAssertFalse(CallPillStatus.ringing.label.isEmpty,
-                       "ringing status label must not be empty — pill shows pre-connection text")
+                       "ringing status label must not be empty — VoiceOver reads it")
         XCTAssertFalse(CallPillStatus.connecting.label.isEmpty,
-                       "connecting status label must not be empty — pill shows pre-connection text")
+                       "connecting status label must not be empty — VoiceOver reads it")
         XCTAssertFalse(CallPillStatus.reconnecting.label.isEmpty,
-                       "reconnecting status label must not be empty — pill shows pre-connection text")
+                       "reconnecting status label must not be empty — VoiceOver reads it")
+    }
+
+    // MARK: - Status glyphs (2026-07-04 — glyphes + code couleur)
+
+    func test_glyph_nilForConnected_durationTakesOver() {
+        XCTAssertNil(CallPillStatus.connected.glyphSystemName)
+        XCTAssertNil(CallPillStatus.connected.glyphColor)
+    }
+
+    func test_glyph_definedForEveryPreConnectionState() {
+        for status in [CallPillStatus.ringing, .connecting, .reconnecting] {
+            XCTAssertNotNil(status.glyphSystemName, "\(status) must expose a status glyph")
+            XCTAssertNotNil(status.glyphColor, "\(status) must expose a status color")
+        }
+    }
+
+    func test_glyph_reconnecting_isNetworkDropGlyph() {
+        // Rupture réseau = glyphe wifi barré, code couleur rouge — distinct de
+        // l'attente ambre (sonnerie/connexion).
+        XCTAssertEqual(CallPillStatus.reconnecting.glyphSystemName, "wifi.exclamationmark")
+        XCTAssertNotEqual(CallPillStatus.reconnecting.glyphColor, CallPillStatus.ringing.glyphColor)
     }
 }
 
@@ -157,11 +180,43 @@ final class FloatingCallPillViewTests: XCTestCase {
         )
     }
 
-    func test_expandButton_hasAccessibilityLabel() throws {
+    // 2026-07-04 — le bouton « agrandir » dédié est RETIRÉ : toucher la
+    // bannière remet en plein écran (le bouton était redondant et chargeait
+    // la barre). Le retour plein écran reste couvert par le tap container.
+    func test_expandButton_isRemoved_tapOnBannerExpands() throws {
+        let source = try pillSource()
+        XCTAssertFalse(
+            source.contains("private var expandButton"),
+            "The dedicated expand button must stay removed — tapping the banner itself " +
+            "returns to the full-screen call (user feedback 2026-07-04)."
+        )
+        XCTAssertTrue(
+            source.contains(".onTapGesture {") && source.contains("expandToFullScreen()"),
+            "The banner container must keep its tap-to-expand gesture — it is the only " +
+            "affordance left to return to the full-screen call."
+        )
+    }
+
+    func test_banner_isFullWidth_whatsAppStyle() throws {
         let source = try pillSource()
         XCTAssertTrue(
-            source.contains("call.pill.expand"),
-            "The expand button must carry an accessibility label describing its function."
+            source.contains(".frame(maxWidth: .infinity)"),
+            "The minimised call banner must stretch edge-to-edge (WhatsApp-style bar " +
+            "over the whole app) instead of floating as a content-sized capsule."
+        )
+    }
+
+    func test_avatar_resolvesRemoteProfile_cacheFirst() throws {
+        let source = try pillSource()
+        XCTAssertTrue(
+            source.contains("CacheCoordinator.shared.profiles.load(for:"),
+            "The banner must resolve the remote user's real avatar cache-first " +
+            "(Instant App) instead of always showing the initial fallback."
+        )
+        XCTAssertFalse(
+            source.contains("UserService.shared.getProfileById"),
+            "The banner must NOT hit the network for the profile — CallView already " +
+            "refreshes and re-feeds the cache; the banner serves cached data only."
         )
     }
 
@@ -178,22 +233,6 @@ final class FloatingCallPillViewTests: XCTestCase {
             "The hang-up button must carry an accessibility hint — CallView's endCallButton " +
             "already has one (call.end.hint); the pill's hangup button is the same action and " +
             "must not regress behind it for VoiceOver users."
-        )
-    }
-
-    func test_expandButton_hasAccessibilityHint() throws {
-        let source = try pillSource()
-        guard let range = source.range(of: "private var expandButton") else {
-            XCTFail("FloatingCallPillView must define expandButton")
-            return
-        }
-        let end = source.index(range.lowerBound, offsetBy: 1000, limitedBy: source.endIndex) ?? source.endIndex
-        let vicinity = String(source[range.lowerBound..<end])
-        XCTAssertTrue(
-            vicinity.contains(".accessibilityHint("),
-            "The expand button must carry an accessibility hint describing what happens on tap " +
-            "(returns to the full-screen call), matching the hint-coverage pattern used " +
-            "elsewhere in the calling UI (e.g. call.minimize.hint)."
         )
     }
 
