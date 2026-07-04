@@ -2295,6 +2295,66 @@ final class CallManagerHardeningTests: XCTestCase {
             "causes the first offer to unnecessarily request an ICE restart")
     }
 
+    private func webRTCServiceSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTCService.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// `WebRTCService.close()` must tear down via `disconnectAfterFlushingPendingSend()`,
+    /// not `client.disconnect()` directly. `CallManager.endCall()` sends the P2P
+    /// hangup `bye` on the DataChannel immediately before this runs; `sendData`
+    /// only enqueues onto libwebrtc's SCTP thread, so closing the peer connection
+    /// synchronously right after can silently drop the just-enqueued `bye` —
+    /// degrading the "instant hangup" fast path back to the slower socket
+    /// `call:end` fanout it exists to bypass.
+    func test_webRTCService_close_usesFlushAwareDisconnect() throws {
+        let source = try webRTCServiceSource()
+        guard let closeRange = source.range(of: "func close()") else {
+            XCTFail("close() not found in WebRTCService"); return
+        }
+        guard let closingBrace = source.range(of: "\n    }", range: closeRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not isolate close() body"); return
+        }
+        let body = String(source[closeRange.upperBound..<closingBrace.lowerBound])
+        XCTAssertTrue(
+            body.contains("client.disconnectAfterFlushingPendingSend()"),
+            "close() must call client.disconnectAfterFlushingPendingSend() so a just-sent " +
+            "hangup `bye` gets a chance to flush before the transport is torn down")
+        XCTAssertFalse(
+            body.contains("client.disconnect()"),
+            "close() must not call client.disconnect() directly — that races the hangup " +
+            "`bye` send against the peer connection teardown")
+    }
+
+    /// `disconnectAfterFlushingPendingSend()` must be a no-op difference from
+    /// `disconnect()` when nothing is buffered on the DataChannel — it should not
+    /// add latency to the overwhelming majority of hangups (remote hangup, error
+    /// paths, or a `bye` that already flushed before this runs).
+    func test_p2pWebRTCClient_disconnectAfterFlushingPendingSend_earlyReturnsWhenNothingBuffered() throws {
+        let source = try p2pClientSource()
+        guard let methodRange = source.range(of: "func disconnectAfterFlushingPendingSend()") else {
+            XCTFail("disconnectAfterFlushingPendingSend() not found in P2PWebRTCClient"); return
+        }
+        guard let closingBrace = source.range(of: "\n    }", range: methodRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not isolate disconnectAfterFlushingPendingSend() body"); return
+        }
+        let body = String(source[methodRange.upperBound..<closingBrace.lowerBound])
+        XCTAssertTrue(
+            body.contains("bufferedAmount > 0"),
+            "disconnectAfterFlushingPendingSend() must guard on bufferedAmount > 0 and fall " +
+            "through to an immediate disconnect() otherwise")
+        XCTAssertTrue(
+            body.contains("sessionGeneration"),
+            "disconnectAfterFlushingPendingSend() must capture sessionGeneration before " +
+            "waiting so a fresh call reconfiguring this same client instance during the " +
+            "flush window isn't torn down by this stale wait")
+    }
+
     /// scheduleTURNCredentialRefresh must clamp TTL to at least
     /// turnMinRefreshDelaySeconds so a malformed TTL=0 from the gateway never
     /// schedules an immediate refresh that would hammer the signalling server.

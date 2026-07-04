@@ -717,6 +717,14 @@ protocol WebRTCClientProviding: AnyObject {
     /// established. Valid characters: 0-9, A-D, *, #, comma (2 s pause).
     func sendDTMF(digits: String)
     func disconnect()
+    /// Same teardown as `disconnect()`, but first gives a just-enqueued
+    /// DataChannel send (e.g. the local hangup `bye`, see `sendHangupBye()`)
+    /// a bounded grace period to actually reach the wire before the
+    /// transport is destroyed. `RTCDataChannel.sendData` only enqueues onto
+    /// libwebrtc's SCTP thread — closing the peer connection immediately
+    /// after can silently drop an unflushed send. No-op difference from
+    /// `disconnect()` when nothing is buffered.
+    func disconnectAfterFlushingPendingSend()
 
     var audioEffectsService: CallAudioEffectsServiceProviding? { get }
     var videoFilterPipeline: VideoFilterPipeline { get }
@@ -1074,6 +1082,15 @@ nonisolated enum QualityThresholds {
     /// How often the data-channel keep-alive ping fires. 15 s matches the
     /// TURN server's minimum activity requirement (Coturn refreshTimeout).
     static let dataChannelPingIntervalSeconds: TimeInterval = 15
+
+    /// Bound on how long `disconnectAfterFlushingPendingSend()` waits for a
+    /// just-enqueued DataChannel send (the local hangup `bye`) to actually
+    /// reach the wire before forcing teardown regardless. A stuck/never-
+    /// draining buffer (peer already gone) must not delay hangup indefinitely.
+    static let dataChannelFlushTimeoutMilliseconds: Int = 200
+
+    /// Poll interval while waiting for `dataChannelFlushTimeoutMilliseconds`.
+    static let dataChannelFlushPollIntervalMilliseconds: Int = 20
 
     /// How long a remote-quality-degraded badge stays visible before it
     /// auto-resets to healthy. 15 s is long enough to be meaningful without

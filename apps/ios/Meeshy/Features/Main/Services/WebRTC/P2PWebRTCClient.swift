@@ -1202,6 +1202,29 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         Logger.webrtc.info("Peer connection disconnected and cleaned up")
     }
 
+    func disconnectAfterFlushingPendingSend() {
+        guard let channel = transcriptionDataChannel, channel.bufferedAmount > 0 else {
+            disconnect()
+            return
+        }
+        // Captured before the wait: `configure()` and `disconnect()` both bump
+        // `sessionGeneration`, so if a fresh call reuses this same client
+        // instance while we're waiting, the mismatch below stops this stale
+        // flush from tearing down the NEW call's peer connection.
+        let generation = sessionGeneration
+        let pollInterval = Duration.milliseconds(QualityThresholds.dataChannelFlushPollIntervalMilliseconds)
+        let deadline = ContinuousClock.now + .milliseconds(QualityThresholds.dataChannelFlushTimeoutMilliseconds)
+        Task { [weak self] in
+            while ContinuousClock.now < deadline {
+                guard let self, self.sessionGeneration == generation else { return }
+                guard (self.transcriptionDataChannel?.bufferedAmount ?? 0) > 0 else { break }
+                try? await Task.sleep(for: pollInterval)
+            }
+            guard let self, self.sessionGeneration == generation else { return }
+            self.disconnect()
+        }
+    }
+
     deinit {
         // disconnect() is MainActor-isolated; callers must call it explicitly
         // before release. ARC handles per-property cleanup here.
@@ -1638,6 +1661,7 @@ final class P2PWebRTCClient: WebRTCClientProviding {
     func sendDataChannelMessage(_ data: Data) {}
     func sendDTMF(digits: String) {}
     func disconnect() {}
+    func disconnectAfterFlushingPendingSend() {}
 
     var audioEffectsService: CallAudioEffectsServiceProviding? { nil }
     var videoFilterPipeline = VideoFilterPipeline()

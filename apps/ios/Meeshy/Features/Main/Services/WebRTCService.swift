@@ -511,7 +511,13 @@ final class WebRTCService {
         pendingCandidateTask = nil
         switchCameraTask?.cancel()
         switchCameraTask = nil
-        client.disconnect()
+        // Uses the flush-aware teardown variant, not a bare disconnect() call:
+        // `endCall()` sends the P2P hangup `bye` on the data channel right
+        // before this runs (CallManager.swift), and closing the peer
+        // connection synchronously after an enqueued-but-unflushed send can
+        // silently drop it — degrading the "instant hangup" fast path back
+        // to the slower socket `call:end` fanout it was built to bypass.
+        client.disconnectAfterFlushingPendingSend()
         iceCandidateBuffer.removeAll()
         hasRemoteDescription = false
         connectionState = .closed

@@ -329,6 +329,11 @@ nonisolated final class MockWebRTCClient: WebRTCClientProviding {
     func createDataChannel(label: String) -> Bool { false }
     func sendDataChannelMessage(_ data: Data) {}
     func disconnect() { disconnectCallCount += 1; isConnected = false }
+    private(set) var disconnectAfterFlushingPendingSendCallCount = 0
+    func disconnectAfterFlushingPendingSend() {
+        disconnectAfterFlushingPendingSendCallCount += 1
+        disconnect()
+    }
     private(set) var restartIceCallCount = 0
     func restartIce() { restartIceCallCount += 1 }
     func applyAudioEncoding(maxBitrateBps: Int) {}
