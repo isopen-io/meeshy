@@ -532,11 +532,15 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   Publication réussie : déjà couvert (HapticFeedback.success au publish, it.12 constaté).
   Décision : pas de doublon .sensoryFeedback 17+ — l'abstraction existante est le single
   source du produit ; migrer TOUTE l'app vers .sensoryFeedback = chantier design system global.
-- [ ] **U3 (P2) Chrome du reader en matériaux natifs** : header/footer/sidebar en
-  `.ultraThinMaterial` + sur iOS 26 adopter les surfaces Liquid Glass (`glassEffect` API si
-  dispo dans le SDK cible) — TOUJOURS via gating `if #available`, jamais de régression 16-25.
-  Respecter la mémoire « texte blanc illisible en Light sur verre » (épingler colorScheme si
-  besoin).
+- [x] **U3 (P2) Chrome du reader en matériaux natifs** ✅ ÉCARTÉ it.58 — DÉJÀ FAIT.
+  Re-preuve : le constat it.39 (« fonds opacity custom ») est périmé. Inventaire réel :
+  bouton ⋯ header = ultraThinMaterial+overlay+stroke+shadow (Sidebar:703-709) ; panneau
+  langues = capsule material (:413-417) ; capsule langue = `adaptiveGlass` (:124) ; spinner
+  R3 + capsule mood U-DIR1 = material. Et `AdaptiveGlass.swift` (MeeshyUI/Compatibility)
+  fournit DÉJÀ l'abstraction iOS 26 : `glassEffect` natif 26+ / fallback material < 26 —
+  exactement la cible U3. Restes NON retenus (valeur nulle) : X preview-mode (black 0.5,
+  surface composer), X d'annulation réponse (micro-chrome), cercles INTERNES du panneau
+  langues (déjà sur material parent), rail de progression (fonctionnel, ne pas toucher).
 - [~] **U4 (P2) Reprise de brouillon.** — PLAN POSÉ it.36
   Plan : `docs/superpowers/plans/2026-07-04-story-draft-resume-card-plan.md` (constat :
   alerte texte nue à StoryComposerView:198 ; cible : carte cover composite via le chemin
@@ -662,6 +666,13 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.58 — U3 : ÉCARTÉ avec preuve — le chrome du reader est déjà material/Liquid Glass
+
+- Re-preuve par inventaire (grep + lecture des surfaces) : les chantiers précédents (R3,
+  U-DIR1, panneau langues, bouton ⋯) ont déjà posé material partout où ça compte, et
+  l'abstraction `adaptiveGlass` couvre iOS 26 depuis sa création. Le plan it.39 §U3 est
+  archivé sans exécution. Zéro code (pattern it.30/it.34).
 
 ## it.57 — U1 inc.2 : zoom sur toutes les surfaces secondaires, U1 COMPLET (0f59fa9f3)
 
