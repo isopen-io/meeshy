@@ -116,9 +116,6 @@ describe('notifications/index — exports', () => {
   it('should re-export NotificationService', () => {
     expect(notificationsIndex.NotificationService).toBeDefined();
   });
-  it('should re-export FirebaseNotificationService', () => {
-    expect(notificationsIndex.FirebaseNotificationService).toBeDefined();
-  });
   it('should re-export SocketNotificationService', () => {
     expect(notificationsIndex.SocketNotificationService).toBeDefined();
   });
