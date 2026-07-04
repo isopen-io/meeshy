@@ -646,10 +646,10 @@ final class CallManagerEarlyJoinTests: XCTestCase {
             return
         }
         guard let endedAtRange = body.range(
-            of: "reportCall(with: uuid, endedAt: nil, reason: .unanswered)",
+            of: "reportCall(with: uuid, endedAt: Date(), reason: .unanswered)",
             range: reportRange.upperBound..<body.endIndex
         ) else {
-            XCTFail("Expected reportCall(...endedAt: nil...) after the busy-path report closure")
+            XCTFail("Expected reportCall(...endedAt: Date()...) after the busy-path report closure")
             return
         }
         let closureBody = String(body[reportRange.upperBound..<endedAtRange.lowerBound])
@@ -4089,6 +4089,95 @@ final class CallManagerToggleVideoCXUpdateTests: XCTestCase {
             toggleBody.contains("callUsesCallKit"),
             "toggleVideo must guard CXCallUpdate reporting behind callUsesCallKit to avoid " +
             "calling CXProvider methods when CallKit is not active (Mac / foreground in-app calls)."
+        )
+    }
+
+    /// `answerCall()` is the in-app (non-CallKit) answer path fired from
+    /// `IncomingCallView` — reached precisely when `handleIncomingCallNotification` set
+    /// `callUsesCallKit = false` (foreground call / iOS-app-on-Mac never calls
+    /// `reportNewIncomingCall`). Without this guard, `CXAnswerCallAction` is requested
+    /// against a UUID CallKit was never told about — a guaranteed-to-fail transaction
+    /// on every single foreground/Mac call answer.
+    func test_answerCall_guardsCXAnswerCallActionBehindCallUsesCallKit() throws {
+        let source = try callManagerSource()
+        guard let funcRange = source.range(of: "func answerCall()") else {
+            XCTFail("answerCall() not found in CallManager.swift"); return
+        }
+        let searchEnd = source.range(
+            of: "private func scheduleSdpOfferTimeout",
+            range: funcRange.upperBound..<source.endIndex
+        )?.lowerBound ?? source.endIndex
+        let body = String(source[funcRange.lowerBound..<searchEnd])
+
+        XCTAssertTrue(
+            body.contains("if let uuid = activeCallUUID, callUsesCallKit {"),
+            "answerCall() must guard CXAnswerCallAction behind callUsesCallKit — a foreground " +
+            "in-app call (or iOS-app-on-Mac) never calls reportNewIncomingCall, so requesting " +
+            "CXAnswerCallAction for its UUID is guaranteed to fail and only adds log noise."
+        )
+    }
+
+    /// Same rationale as `answerCall()`: `rejectCall()` must not fire `CXEndCallAction`
+    /// for a UUID CallKit never heard about.
+    func test_rejectCall_guardsCXEndCallActionBehindCallUsesCallKit() throws {
+        let source = try callManagerSource()
+        guard let funcRange = source.range(of: "func rejectCall()") else {
+            XCTFail("rejectCall() not found in CallManager.swift"); return
+        }
+        let searchEnd = source.range(
+            of: "// MARK: - End Call",
+            range: funcRange.upperBound..<source.endIndex
+        )?.lowerBound ?? source.endIndex
+        let body = String(source[funcRange.lowerBound..<searchEnd])
+
+        XCTAssertTrue(
+            body.contains("if let uuid = activeCallUUID, callUsesCallKit {"),
+            "rejectCall() must guard CXEndCallAction behind callUsesCallKit — same rationale " +
+            "as answerCall(): the UUID was never reported to CallKit for foreground/Mac calls."
+        )
+    }
+
+    /// Same rationale as `answerCall()`/`rejectCall()`: `endCall()` must not fire
+    /// `CXEndCallAction` for a UUID CallKit never heard about. `callUsesCallKit` is
+    /// captured BEFORE `endCallInternal()` — mirroring the existing `endUUID` local
+    /// capture — since `endCallInternal` may reset call-scoped state.
+    func test_endCall_guardsCXEndCallActionBehindCallUsesCallKit() throws {
+        let source = try callManagerSource()
+        guard let funcRange = source.range(of: "func endCall()") else {
+            XCTFail("endCall() not found in CallManager.swift"); return
+        }
+        let searchEnd = source.range(
+            of: "// MARK: - System Picture-in-Picture",
+            range: funcRange.upperBound..<source.endIndex
+        )?.lowerBound ?? source.endIndex
+        let body = String(source[funcRange.lowerBound..<searchEnd])
+
+        XCTAssertTrue(
+            body.contains("if let endUUID, endUsedCallKit {"),
+            "endCall() must guard CXEndCallAction behind callUsesCallKit — same rationale as " +
+            "answerCall()/rejectCall()."
+        )
+    }
+
+    /// `reportIncomingVoIPCall`'s busy path (VoIP push arrives while already on a call)
+    /// synthesizes an immediate reportCall — `endedAt` must be `Date()`, not `nil`.
+    /// `nil` means "unknown" to CallKit and produces an inaccurate/missing Recents
+    /// timestamp; every other reportCall site in the file passes `Date()`.
+    func test_reportIncomingVoIPCall_busyPath_reportsCallEndedNowNotUnknown() throws {
+        let source = try callManagerSource()
+        guard let funcRange = source.range(of: "func reportIncomingVoIPCall(") else {
+            XCTFail("reportIncomingVoIPCall not found in CallManager.swift"); return
+        }
+        let searchEnd = source.range(
+            of: "private func checkVoIPCallFreshness",
+            range: funcRange.upperBound..<source.endIndex
+        )?.lowerBound ?? source.endIndex
+        let body = String(source[funcRange.lowerBound..<searchEnd])
+
+        XCTAssertFalse(
+            body.contains("endedAt: nil"),
+            "reportIncomingVoIPCall must never pass endedAt: nil to reportCall — nil means " +
+            "'unknown' to CallKit, producing an inaccurate/missing Recents timestamp."
         )
     }
 

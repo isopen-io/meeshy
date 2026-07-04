@@ -106,28 +106,6 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
         }
     }
 
-    func clearVoiceEffect() {
-        configQueue.sync { [self] in
-            tearDownVoiceNodesOnConfigQueue()
-            currentVoiceConfig = nil
-            setActiveVoiceEffect(nil)
-        }
-        Logger.audioEffects.info("Voice effect cleared")
-    }
-
-    func clearBackSound() {
-        configQueue.sync { [self] in
-            stopEngineOnConfigQueue()
-            tearDownBackSoundNodesOnConfigQueue()
-            currentBackSoundConfig = nil
-            setBackSoundActive(false)
-            backSoundAudioFile = nil
-            rebuildRenderBlocksOnConfigQueue()
-            restartEngineIfNeededOnConfigQueue()
-        }
-        Logger.audioEffects.info("BackSound cleared")
-    }
-
     // MARK: - Update Params
 
     func updateParams(_ config: AudioEffectConfig) throws {
@@ -532,12 +510,6 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
         if engine.isRunning {
             engine.stop()
         }
-    }
-
-    private func restartEngineIfNeededOnConfigQueue() {
-        let active = stateLock.withLock { $0.activeVoiceEffect != nil || $0.isBackSoundActive }
-        guard active else { return }
-        rebuildEngineGraphOnConfigQueue()
     }
 
     private func tearDownVoiceNodesOnConfigQueue() {
