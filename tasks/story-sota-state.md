@@ -594,7 +594,7 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.46 — R8 inc.1 : le refetch silencieux consomme le delta-sync (ae6eefaf4)
+## it.46 — R8 inc.1 : le refetch silencieux consomme le delta-sync (c5c0c1e33)
 
 - Re-preuve : `.stale` → fetch full 50 plein corps à chaque refresh silencieux ; APIPost.updatedAt
   existait déjà, StoryItem non → champ ajouté (pattern viewedAt it.35).
