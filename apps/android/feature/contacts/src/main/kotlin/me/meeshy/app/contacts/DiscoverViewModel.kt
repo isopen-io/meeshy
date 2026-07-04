@@ -12,8 +12,10 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.friend.BlockStatusProvider
+import me.meeshy.sdk.friend.DiscoverSuggestions
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.friend.FriendshipCache
+import me.meeshy.sdk.friend.SuggestionsRepository
 import me.meeshy.sdk.friend.UserRelationshipResolver
 import me.meeshy.sdk.model.friend.ConnectAction
 import me.meeshy.sdk.model.friend.DiscoverSearch
@@ -37,18 +39,24 @@ data class DiscoverUiState(
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val pendingActionIds: Set<String> = emptySet(),
+    /** True while the empty-query cache-first suggestions surface owns [rows]. */
+    val isShowingSuggestions: Boolean = false,
 ) {
     /** True when the trimmed query is long enough that a network search is in play. */
     val isSearchActive: Boolean
         get() = DiscoverSearch.action(query) is DiscoverSearchAction.Search
 
-    /** The neutral prompt shows before the user has typed a searchable query. */
+    /** The neutral prompt shows only before either surface has produced rows. */
     val showEmptyPrompt: Boolean
-        get() = !isSearchActive && rows.isEmpty() && !isLoading
+        get() = !isSearchActive && !isShowingSuggestions && rows.isEmpty() && !isLoading
 
     /** A searchable query settled with zero matches (and no error) → "no users found". */
     val isNoResults: Boolean
         get() = isSearchActive && !isLoading && errorMessage == null && rows.isEmpty()
+
+    /** The suggestions surface settled with nobody to suggest → a quiet empty state. */
+    val isSuggestionsEmpty: Boolean
+        get() = isShowingSuggestions && !isLoading && errorMessage == null && rows.isEmpty()
 }
 
 /**
@@ -65,6 +73,7 @@ data class DiscoverUiState(
 class DiscoverViewModel @Inject constructor(
     private val userRepository: UserRepository,
     private val friendRepository: FriendRepository,
+    private val suggestionsRepository: SuggestionsRepository,
     private val friendshipCache: FriendshipCache,
     private val blockCache: BlockCache,
     sessionRepository: SessionRepository,
@@ -82,9 +91,22 @@ class DiscoverViewModel @Inject constructor(
     val state: StateFlow<DiscoverUiState> = _state.asStateFlow()
 
     private var searchJob: Job? = null
+    private var suggestionsJob: Job? = null
 
     init {
         observeFriendshipCache()
+    }
+
+    /**
+     * Start the cache-first empty-query suggestions surface. Idempotent while it
+     * is already streaming, so the UI can call it on every appear (parity with
+     * iOS `.task { await vm.loadSuggestions() }`) without re-fetching; the
+     * `@Singleton` [SuggestionsRepository] keeps the last list, so a return to the
+     * Discover tab paints instantly.
+     */
+    fun loadSuggestions() {
+        if (suggestionsJob?.isActive == true) return
+        startSuggestions()
     }
 
     fun onQueryChanged(rawQuery: String) {
@@ -93,7 +115,16 @@ class DiscoverViewModel @Inject constructor(
             is DiscoverSearchAction.Clear -> {
                 searchJob?.cancel()
                 searchJob = null
-                _state.update { it.copy(rows = emptyList(), isLoading = false, errorMessage = null) }
+                suggestionsJob?.cancel()
+                suggestionsJob = null
+                _state.update {
+                    it.copy(
+                        rows = emptyList(),
+                        isLoading = false,
+                        errorMessage = null,
+                        isShowingSuggestions = false,
+                    )
+                }
             }
             is DiscoverSearchAction.Search -> search(action.query)
         }
@@ -102,20 +133,56 @@ class DiscoverViewModel @Inject constructor(
     fun retry() {
         when (val action = DiscoverSearch.action(_state.value.query)) {
             is DiscoverSearchAction.Search -> search(action.query)
-            is DiscoverSearchAction.Clear -> Unit
+            is DiscoverSearchAction.Clear -> startSuggestions()
+        }
+    }
+
+    private fun startSuggestions() {
+        suggestionsJob?.cancel()
+        _state.update { it.copy(isShowingSuggestions = true, errorMessage = null) }
+        suggestionsJob = viewModelScope.launch {
+            suggestionsRepository.suggestionsStream(
+                onSyncError = { error ->
+                    _state.update { it.copy(isLoading = false, errorMessage = error.message) }
+                },
+            ).collect { result ->
+                val snapshot = DiscoverSuggestions.snapshot(result)
+                _state.update {
+                    it.copy(
+                        rows = rowsFor(snapshot.users),
+                        isLoading = snapshot.isLoading,
+                        errorMessage = null,
+                        isShowingSuggestions = true,
+                    )
+                }
+            }
         }
     }
 
     private fun search(query: String) {
+        suggestionsJob?.cancel()
+        suggestionsJob = null
         searchJob?.cancel()
-        _state.update { it.copy(isLoading = true, errorMessage = null) }
+        _state.update { it.copy(isLoading = true, errorMessage = null, isShowingSuggestions = false) }
         searchJob = viewModelScope.launch {
             when (val result = userRepository.searchUsers(query)) {
                 is NetworkResult.Success ->
-                    _state.update { it.copy(rows = rowsFor(result.data), isLoading = false, errorMessage = null) }
+                    _state.update {
+                        it.copy(
+                            rows = rowsFor(result.data),
+                            isLoading = false,
+                            errorMessage = null,
+                            isShowingSuggestions = false,
+                        )
+                    }
                 is NetworkResult.Failure ->
                     _state.update {
-                        it.copy(rows = emptyList(), isLoading = false, errorMessage = result.error.message)
+                        it.copy(
+                            rows = emptyList(),
+                            isLoading = false,
+                            errorMessage = result.error.message,
+                            isShowingSuggestions = false,
+                        )
                     }
             }
         }

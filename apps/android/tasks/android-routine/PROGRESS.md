@@ -332,9 +332,18 @@ Contacts slices:**
    - **Durable offline unblock/block** — route the mutation through the outbox (iOS `OfflineQueue`),
      surviving offline + process death (today it's online-first optimistic REST + snapshot rollback).
    - **Send friend request offline-queue + `cmid` idempotency** (#2 above).
-   - **Discover cache-first suggestions** — the empty-query suggestions list (iOS `loadSuggestions`).
-4. ~~**Discover suggestions + live user search**~~ live search + inline connect ✅ (`discover-user-search`);
-   the empty-query **cache-first suggestions** list remains (folded into #3's "Next" above).
+4. ~~**Discover suggestions + live user search**~~ ✅ fully shipped — live search + inline connect
+   (`discover-user-search`) **and** the empty-query cache-first suggestions
+   (`discover-suggestions-cache-first`, 2026-07-04: pure `DiscoverSuggestions.snapshot` +
+   `@Singleton SuggestionsRepository` in-memory SWR + `DiscoverViewModel.loadSuggestions()` on appear).
+   +23 tests. See run log. **Follow-up:** a persistent Room suggestions cache for cross-launch cold-start
+   paint (iOS `CacheCoordinator.userSearch`), matching the friends-list in-memory precedent.
+
+**Recommended next (highest value):** slice #2 — **send friend request offline-queue + `cmid` idempotency**
+(the durable send half the Requests tab still lacks), or the **durable offline unblock/block** pure core.
+Both route a Contacts mutation through the existing outbox (`OutboxRepository`/`OutboxKind`), so each is a
+pure-core-heavy vertical slice (an idempotency/dedup rule + outbox mapping + delivery-outcome classification)
+with no DB migration.
 
 ---
 _Historical Calls backlog below (revisit only for the platform-glue slices)._
@@ -648,6 +657,51 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-04 — slice `discover-suggestions-cache-first` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration — the two open PRs (#1450, #1448)
+  are iOS work from other sessions (production logic, not Android), left untouched. Branched
+  `claude/apps/android/discover-suggestions-cache-first` off latest `origin/main` (`cdda4598`).
+- **Why this slice:** parity `§J` "Next" — the last pending Discover item (`loadSuggestions`, cache-first
+  empty-query suggestions). Live search + inline connect already shipped; this closes the empty-query
+  surface. A clean pure-core-heavy vertical slice with no DB migration (in-memory cache, consistent with
+  the friends-list in-memory precedent; persistent Room deferred as a tracked follow-up).
+- **Added (production):**
+  - `:sdk-core` `friend/DiscoverSuggestions.kt` — pure `SuggestionsSnapshot` + total
+    `DiscoverSuggestions.snapshot(CacheResult<List<UserSearchResult>>) → SuggestionsSnapshot`: cold
+    `Empty`/`Syncing(null)` → skeleton (the ONLY loading state); any cached data (`Fresh`/`Stale`/
+    `Syncing(data)`) paints without a spinner; a revalidated-empty list is content, not a spinner. Port
+    of iOS `loadSuggestions` loadState/searchResults handling.
+  - `:sdk-core` `friend/SuggestionsRepository.kt` — `@Singleton SuggestionsRepository` exposing
+    `suggestionsStream(onSyncError)` = the shared `cacheFirstFlow(CachePolicy.Suggestions, source)` over
+    an internal in-memory `SwrCacheSource` (`InMemorySuggestionsSource`): `revalidate()` hits
+    `UserRepository.searchUsers("", 20, 0)` (iOS empty-query = gateway "discover" list), stores the last
+    good fetch + sync time, throws `SuggestionsSyncException` on failure (surfaced via `onSyncError`),
+    and keeps prior data on a failed revalidation.
+  - `:sdk-core` `cache/CachePolicy.kt` — new `Suggestions` policy (fresh 1 min, kept 6 h).
+  - `:feature:contacts` `DiscoverViewModel` — `loadSuggestions()` (idempotent while streaming; called on
+    tab appear) folds the stream through `DiscoverSuggestions.snapshot` into the existing `rows`/connect-
+    control surface, so suggestions get live relationship badges + cross-screen re-derivation for free;
+    a search cancels the suggestions job and switches surfaces; `retry` re-runs it. `DiscoverUiState`
+    gains `isShowingSuggestions` + derived `isSuggestionsEmpty`; `showEmptyPrompt` now also gates on the
+    suggestions surface. `DiscoverTab` loads on appear (`LaunchedEffect`), shows a "Suggestions" list
+    header, and a quiet empty state (strings ×4 locales).
+- **Tests (+23):** `DiscoverSuggestionsTest` (6 — every `CacheResult` arm incl. empty-list content),
+  `SuggestionsRepositoryTest` (5 — revalidate success/cold-failure/failure-keeps-prior; SWR stream
+  Empty→Fresh; cold failure via `onSyncError`), `DiscoverViewModelTest` (+12 — paint, cold skeleton,
+  revalidated-empty quiet state, failed revalidation surfaces error, connect on a suggestion row,
+  cross-screen re-derive, idempotent-while-streaming guard, search cancels+switches, retry re-runs).
+- **Edge cases covered:** cold empty (skeleton), stale/expired paint-without-spinner, revalidated-empty
+  (content not spinner), network failure (message surfaced, last data kept), idempotent load guard,
+  surface switch (suggestions↔search), retry restart, single/empty collections.
+- **Verify:** full `assembleDebug` + all module `testDebugUnitTest` → **BUILD SUCCESSFUL** (run with the
+  system Gradle 8.14.3 — the wrapper's 8.11.1 distribution download is egress-policy-blocked in this
+  container; AGP 8.7.3 runs clean on 8.14.3. CI uses the wrapper's 8.11.1). See NOTES.
+- **Reviewer:** PASS — scope `apps/android` only; behavioural tests, no tautologies; SDK purity (the
+  cache source + repository + pure projection are stateless building blocks in `:sdk-core`; the "when to
+  load / which surface" product rule lives in the `:feature:contacts` ViewModel); single source of truth
+  (reuses `cacheFirstFlow`/`CacheResult`/`CachePolicy`, `ConnectAction`, the shared resolver); Instant-App
+  (cache-first, skeleton only on cold empty); UDF + immutable `UiState`; accent-coherent rows, no dead end.
 
 ### 2026-07-04 — slice `contacts-blocked-list` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration — the one open PR (#1444,
