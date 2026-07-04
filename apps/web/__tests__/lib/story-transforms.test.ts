@@ -176,6 +176,7 @@ import {
   resolveKeyframeState,
   applyStoryEasing,
   resolveClipTransitionOpacity,
+  safeBackgroundImageUrl,
   type StoryClipTransitionData,
 } from '@/lib/story-transforms';
 
@@ -299,5 +300,36 @@ describe('resolveClipTransitionOpacity (W1 inc.4 — ReaderTransitionResolver pa
       fromClipId: 'clip-a', toClipId: 'clip-b', kind: 'crossfade', duration: 0,
     };
     expect(resolveClipTransitionOpacity(clipA, [degenerate], 4.0)).toBe(1);
+  });
+});
+
+describe('safeBackgroundImageUrl (W7 — viewer IP-leak guard)', () => {
+  const allowed = ['https://gate.meeshy.me', 'https://meeshy.me'];
+
+  it('accepts internal relative paths', () => {
+    expect(safeBackgroundImageUrl('/api/v1/attachments/file/2026/07/bg.jpg', allowed))
+      .toBe('/api/v1/attachments/file/2026/07/bg.jpg');
+  });
+
+  it('rejects protocol-relative and external absolute URLs', () => {
+    expect(safeBackgroundImageUrl('//evil.tld/pixel.png', allowed)).toBeNull();
+    expect(safeBackgroundImageUrl('https://evil.tld/pixel.png', allowed)).toBeNull();
+  });
+
+  it('accepts allowed origins only, exact origin match', () => {
+    expect(safeBackgroundImageUrl('https://gate.meeshy.me/api/v1/attachments/x.jpg', allowed))
+      .toBe('https://gate.meeshy.me/api/v1/attachments/x.jpg');
+    expect(safeBackgroundImageUrl('https://gate.meeshy.me.evil.tld/x.jpg', allowed)).toBeNull();
+  });
+
+  it('rejects non-http(s) schemes', () => {
+    expect(safeBackgroundImageUrl('javascript:alert(1)', allowed)).toBeNull();
+    expect(safeBackgroundImageUrl('file:///etc/passwd', allowed)).toBeNull();
+  });
+
+  it('rejects CSS metacharacters so nothing escapes the url() context', () => {
+    expect(safeBackgroundImageUrl('/x),url(//evil.tld/p', allowed)).toBeNull();
+    expect(safeBackgroundImageUrl("/x'y.png", allowed)).toBeNull();
+    expect(safeBackgroundImageUrl('/x y.png', allowed)).toBeNull();
   });
 });
