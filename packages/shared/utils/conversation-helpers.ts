@@ -29,8 +29,17 @@ export type ResolveUserLanguageOpts = {
  *   4. deviceLocale             (locale appareil — Prisme étendu 2026-05-26)
  *   5. 'fr'                     (fallback ultime)
  *
+ * Les préférences in-app sont lowercased à la lecture — parité stricte avec
+ * {@link resolveUserLanguagesOrdered}. `isSupportedLanguage` valide les codes de
+ * manière insensible à la casse (il lowercase avant lookup) mais ne les
+ * transforme pas : un `systemLanguage: 'EN'` est donc accepté et persisté
+ * verbatim. Sans ce lowercase, `meta.userLanguage` renverrait `'EN'` alors que
+ * le pipeline de traduction stocke ses cibles en minuscules (`'en'`) — le client
+ * manquerait la traduction et retomberait sur l'original (violation du Prisme).
+ *
  * L'option `deviceLocale` est facultative — les call sites legacy qui passent
- * un seul argument restent valides.
+ * un seul argument restent valides. `normalizeLanguageCode` retourne déjà un
+ * code lowercase pour la locale appareil.
  *
  * @see resolveUserLanguagesOrdered pour la liste complète (sans fallback 'fr')
  */
@@ -42,9 +51,9 @@ export function resolveUserLanguage(
   },
   opts: ResolveUserLanguageOpts = {}
 ): string {
-  if (user.systemLanguage) return user.systemLanguage;
-  if (user.regionalLanguage) return user.regionalLanguage;
-  if (user.customDestinationLanguage) return user.customDestinationLanguage;
+  if (user.systemLanguage) return user.systemLanguage.toLowerCase();
+  if (user.regionalLanguage) return user.regionalLanguage.toLowerCase();
+  if (user.customDestinationLanguage) return user.customDestinationLanguage.toLowerCase();
   const normalized = normalizeLanguageCode(opts.deviceLocale);
   if (normalized) return normalized;
   return 'fr';
@@ -180,9 +189,9 @@ export function resolveParticipantLanguage(participant: LanguageResolvable): str
     return participant.language
   }
   const user = participant.user
-  if (user.systemLanguage) return user.systemLanguage
-  if (user.regionalLanguage) return user.regionalLanguage
-  if (user.customDestinationLanguage) return user.customDestinationLanguage
+  if (user.systemLanguage) return user.systemLanguage.toLowerCase()
+  if (user.regionalLanguage) return user.regionalLanguage.toLowerCase()
+  if (user.customDestinationLanguage) return user.customDestinationLanguage.toLowerCase()
   const normalizedDevice = normalizeLanguageCode(user.deviceLocale)
   if (normalizedDevice) return normalizedDevice
   return participant.language
