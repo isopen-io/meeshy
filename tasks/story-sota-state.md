@@ -1050,6 +1050,45 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
+## it.93 — Audit ciblé n°6 (frontières éditeurs plein écran) : SEC — 2/2 → FIN DE BOUCLE
+
+- onAccept image : bitmap + aspectRatio recadré + bump loadedImagesVersion (bug stale-canvas
+  2026-05-27 couvert) ; édition durable draft/publish (bitmaps mémoire transmis) ; média
+  sans bitmap impossible (purge lostMedia au restore). Zéro code.
+- CRITÈRE D'ARRÊT ATTEINT (2 audits secs consécutifs : n°5 recorder, n°6 éditeurs).
+
+**RAPPORT FINAL DU CYCLE it.66→93 (28 itérations, mission « création discrète
+gesture-first + tout fonctionnel », directive user 2026-07-04) :**
+
+~24 livraisons code vérifiées (tests + build + simulateur pour l'essentiel) :
+- Tools réparés/ressuscités : timeline (C5 P0), transitions (C7 stub→réel), stickers
+  (C8 + picker invisible fixé), ajout de slide (C6), gradients (C11 bout-en-bout).
+- Grammaire gestuelle unifiée : chrome header⟺FABs (C-DIR2, ComposerChromePolicy),
+  band replié→retiré, poignée fantôme (C3), double-tap zoom + snap (C4), ouverture par
+  geste dans le panneau Fond (C1 + migration @State→VM), purge du geste mort (C2).
+- Undo/redo GLOBAL (C9, 5 incréments : HistoryStore pur, capture 1-trigger sans trou,
+  restore + purge paresseuse des bitmaps, UI conditionnelle, vérifié en conditions réelles).
+- Intégrité : source de vérité stickers (C13), textes vides purgés (C15), échecs médias
+  parlants (C16), reprise de brouillon fiable + couleur instantanée + letterbox couleur +
+  carte non coupée (C-DIR4 4/4), carte reader flush sous le header (C-DIR5).
+- Qualité : self-heal playback device (C-DIR3, log diagnostic), code mort purgé
+  (C10, −1600 lignes, 2 extractions vitales), localisation complète fr/en/es/de
+  (C12 + C14 a11y : VoiceOver parle la langue de l'UI), main débloqué (hotfix pbxproj
+  +ViewBuilder), badge tray non coupé.
+- Audits secs (surfaces déclarées saines avec preuves) : flux preview (n°2), voice
+  recorder (n°5), frontières éditeurs (n°6).
+
+**EN ATTENTE UTILISATEUR :**
+1. Vérif device iPhone (C-DIR3 self-heal : story vidéo au boot doit jouer seule ;
+   Console.app « self-heal kick » si problème) + retours visuels C-DIR5/BUG-2/BUG-4.
+2. Décisions produit §4 : E7 publish in-timeline, E8 multi-draft, audience FRIENDS
+   divergente, chantier filtres, cover baké Phase 2, WS5.4b media[0], C7b closing effect,
+   import repost-as-post C.2.
+3. Héritage cycle précédent : déploiement gateway prod groupé (G1a/b/c+G2+G3+G7+G5),
+   index Prisma [type, updatedAt], vérifs device (offline replay, stall réel, crossfade,
+   interstitiel 2+ groupes, zoom mini-trail/iPad), volet fichiers disque G7.
+4. Web : parité gradients (C11) et opening (C7) si souhaitée.
+
 ## it.92 — Audit ciblé n°5 (voice recorder) : SEC — compteur 1/2
 
 - 3 axes vérifiés SAINS : permission micro refusée → errorMessage localisé (piège
