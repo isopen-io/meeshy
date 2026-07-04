@@ -462,14 +462,18 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   `visibilityUserIds` plombé composer → feed screen → createStory (service l'acceptait déjà).
   Décision pinnée par test : EXCEPT/ONLY N'ENTRENT PAS au sélecteur sans le picker
   d'audience (publier sans liste = visibilité cassée).
-  RESTE inc.2 : picker d'audience web (liste amis + recherche + multi-sélection, parité
-  AudienceUserPickerView iOS) puis EXCEPT/ONLY au sélecteur — RÉUTILISABLE par PostComposer
-  (voir W6). Overlays composer (texte positionné etc.) = chantier séparé du composer web.
+  ✅ Inc.2 (it.53) : `AudienceUserPicker` (components/v2 — recherche debouncée via
+  useSearchUsersQuery générique, multi-sélection chips, hints par mode, 4 langues) ;
+  EXCEPT/ONLY au sélecteur story ; publication gatée par `isAudienceIncomplete` (pur,
+  testé) — jamais d'audience vide publiée. W3 côté VISIBILITÉS = COMPLET (6/6 parité iOS).
+  RESTE (hors visibilités) : overlays composer web (texte positionné etc.) = chantier
+  séparé, non couvert par cet item.
 - [ ] **W6 (P2, découvert it.52) PostComposer web publie EXCEPT/ONLY SANS visibilityUserIds.**
   Preuve : VISIBILITY_OPTIONS contient EXCEPT/ONLY (PostComposer.tsx:26-27) mais
   handlePublish n'envoie que {content, type, visibility} (:48-52) — aucun picker, aucune
-  liste → visibilité cassée côté serveur (EXCEPT sans exclus / ONLY sans inclus). Fix avec
-  l'inc.2 de W3 : même picker partagé, ou retrait des 2 options en attendant.
+  liste → visibilité cassée côté serveur (EXCEPT sans exclus / ONLY sans inclus).
+  Le picker est DISPONIBLE depuis it.53 (`components/v2/AudienceUserPicker`) + gate
+  `isAudienceIncomplete` réutilisable — brancher PostComposer = prochain incrément W.
 - [x] **W4 (P3) Realtime web : story:deleted + story:translation-updated.** ✅ it.28
   `story:deleted` abonné dans use-social-socket (événement absent) + handlers dans
   useStoriesRealtime : suppression → retirée du cache tray en direct ; traduction →
@@ -644,6 +648,16 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.53 — W3 inc.2 : picker d'audience web, visibilités 6/6 parité iOS (1268724aa)
+
+- Réutilisation : useSearchUsersQuery générique (même source que le UserPicker admin —
+  promotion du composant admin écartée : couplage namespace i18n/UserDisplay admin) ;
+  composant v2 dédié ~110 lignes, styles var(--gp-*) cohérents composer.
+- Gate PUR isAudienceIncomplete exporté + testé (6 cas) ; bouton publish désactivé si
+  EXCEPT/ONLY sans sélection ; reset de la liste au close/publish ; deps bug préexistant
+  du useCallback publish corrigé au passage (visibility absent des deps → payload stale).
+- 207/207 story+feed (13 suites). W6 (PostComposer) : picker prêt, branchement = prochain W.
 
 ## it.52 — W3 inc.1 : COMMUNITY au composer web + plomberie visibilityUserIds (e63a64f53)
 
