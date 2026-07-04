@@ -4,7 +4,22 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Calls) — slice `call-ended-identity-teardown` ✅
+## This loop (Phase: Contacts) — slice `discover-user-search` ✅
+The **Discover live user-search + inline connect** — the read-side consumer of the friendship SSOT.
+The Discover tab (was `ComingSoon()`) now runs a trim+≥2-char-gated user search and renders each result
+with an inline connect control (Connect / Pending / Accept / Contact / Blocked / hidden-for-self) whose
+state is the shared `UserRelationshipResolver`; connect/accept are optimistic and every visible row
+re-derives on any cross-screen friendship mutation via `FriendshipCache.version`. Two new pure SSOTs
+in `:core:model` (`DiscoverSearch.action`, `ConnectAction.from`), a UDF `DiscoverViewModel`, and the
+`DiscoverTab` Compose UI. +29 tests. See PROGRESS.md run log for the full record.
+
+### Next
+1. Discover **empty-query cache-first suggestions** (iOS `loadSuggestions`), or the **Blocked-users list**
+   (needs a `BlockRepository` to fill the resolver's `BlockStatusProvider` seam), or **send-request from
+   the Requests tab compose-new** — any completes the Contacts area.
+2. Then Profile & Account (§K) or back to Calls platform glue (ConnectionService/WebRTC).
+
+## Prior loop (Phase: Calls) — slice `call-ended-identity-teardown` ✅
 The **identity-aware active-call teardown** — bug fix closing the `call-ended-signal-identity` follow-up.
 The gateway fans `call:ended` out to every member USER room, so a busy user (active call + a waiting-call
 banner) received the *waiting* call's teardown on the identity-less `events` stream, which the VM folded

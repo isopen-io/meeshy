@@ -21,4 +21,12 @@
     <string name="contacts_list_filtered_empty">No matching contacts</string>
     <string name="contacts_list_error">Couldn\'t load contacts</string>
     <string name="contacts_list_retry">Retry</string>
+    <string name="contacts_discover_search_hint">Search Meeshy users</string>
+    <string name="contacts_discover_prompt">Search for people to connect with</string>
+    <string name="contacts_discover_no_results">No users found</string>
+    <string name="contacts_discover_error">Couldn\'t search users</string>
+    <string name="contacts_discover_connect">Connect</string>
+    <string name="contacts_discover_pending">Pending</string>
+    <string name="contacts_discover_contact">Contact</string>
+    <string name="contacts_discover_blocked">Blocked</string>
 </resources>

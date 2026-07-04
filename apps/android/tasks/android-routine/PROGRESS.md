@@ -639,6 +639,61 @@ After Stories richness is sufficient, advance to the **Calls** area
 
 ## Run log
 
+### 2026-07-04 — slice `discover-user-search` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration — the one open PR (#1440,
+  `claude/eager-hamilton-x3zdk6`) is an iOS/gateway calls audit from another session (production
+  logic, not Android), left untouched. Branched `claude/apps/android/discover-user-search` off latest
+  `origin/main` (`6b2a335f`).
+- **Why this slice:** PROGRESS/parity "Next" for Contacts — the `UserRelationshipResolver` (#1431)
+  and the `FriendshipCache` needed their **read-side consumer**. The Discover tab was still
+  `ComingSoon()`; this is the live user-search + inline-connect surface, port of iOS `DiscoverViewModel`
+  search path + `ConnectionActionView`.
+- **Added (production, 2 files):**
+  - `:core:model` `me.meeshy.sdk.model.friend.DiscoverSearch.kt` — two pure SSOTs: `DiscoverSearch.action(raw)
+    → DiscoverSearchAction{Clear|Search(trimmed)}` (trim + ≥2-char gate, port of iOS `performSearch`
+    guard; the sub-threshold path clears instead of hitting the network), and `ConnectAction.from(state)
+    → {Hidden|Connect|Pending|Accept(id)|Contact|Blocked}` — the inline-connect button-decision SSOT
+    derived from `UserRelationshipState` (port of the iOS `ConnectionActionView` switch, total over
+    all six arms).
+  - `:feature:contacts` `DiscoverViewModel.kt` — UDF VM over `UserRepository` + `FriendRepository` +
+    `FriendshipCache` + `UserRelationshipResolver` (built in-VM with a `{ false }` block seam, no
+    BlockRepository yet). `onQueryChanged` folds through `DiscoverSearch.action` (Clear cancels the job
+    + empties rows; Search launches a cancel-the-previous search job); results map to `DiscoverRow`s
+    carrying a derived `ConnectAction`; `connect` sends a request (mints the pending entry via
+    `didSendRequest` only on success, so the row flips to Pending — parity with iOS) with an in-flight
+    `pendingActionIds` guard; `acceptReceived` accepts an inbound request optimistically
+    (`didAcceptRequest`) with `rollbackAccept` on failure; a `version`-flow collector re-derives every
+    visible row's `ConnectAction` on any cross-screen friendship mutation. Pure `DiscoverUiState`
+    derivations: `isSearchActive`/`showEmptyPrompt`/`isNoResults`.
+- **Wired (product UI, `:feature:contacts`):** `DiscoverTab.kt` — search field + result `LazyColumn`
+  with accent-seeded `MeeshyAvatar` (`DynamicColorGenerator`), name/`@username`, and an inline
+  `ConnectControl` switching on `ConnectAction` (Connect `FilledTonalButton` / Accept / disabled
+  Pending / Contact check badge / Blocked / hidden-for-self). Distinct loading / error+retry /
+  empty-prompt / no-results states. `ContactsScreen` mounts it on the Discover tab (was `ComingSoon`).
+  +8 strings in all four locales (en/fr/es/pt).
+- **Tests (red→green, +29, 0 skips):** 13 `DiscoverSearchTest` (action: blank/whitespace/1-char/
+  exactly-2 boundary/longer/trim/padded-single; `ConnectAction.from` every one of the six arms), 16
+  `DiscoverViewModelTest` (sub-threshold clears w/ 0 network calls; searchable query populates rows w/
+  Connect; no-results state; failure→error+empty rows; friend→Contact + sent→Pending derivation; self
+  row Hidden + inert connect; connect success flips to Pending + mints cache; connect failure surfaces
+  error, stays connectable, no cache write; non-connectable connect inert; acceptReceived optimistic
+  befriend + clears pending; accept failure rollback; cross-screen change re-derives rows; clear-after-
+  search empties + showEmptyPrompt; retry re-runs current query; retry sub-threshold inert; dismissError).
+  Behaviour through the public API, no tautologies.
+- **Verification:** `/opt/gradle/bin/gradle :core:model:testDebugUnitTest :feature:contacts:testDebugUnitTest
+  :app:assembleDebug` → BUILD SUCCESSFUL (DiscoverSearchTest 13/13, DiscoverViewModelTest 16/16, 0
+  failures/skips); full `testDebugUnitTest` across all modules → BUILD SUCCESSFUL; `:app:assembleDebug`
+  green. (Bootstrapped Android SDK + `/opt/gradle` 8.14.3 per NOTES; wrapper dist still 403.)
+- **Reviewer verdict:** PASS — diff is `apps/android` only (2 prod + 1 UI + 4 locale strings + 2 test
+  files + these docs), no production logic elsewhere; TDD red→green, behaviour through the public API,
+  no tautologies, no weakened floors; SDK purity kept (pure search-gate + button-decision in
+  `:core:model`, VM + Compose orchestration in `:feature:contacts`, the resolver/cache reused from
+  `:sdk-core`); SSOT respected (`DiscoverSearch` the one search gate, `ConnectAction` the one button
+  decision, `UserRelationshipResolver` the one relationship read — no re-implementation); UDF +
+  immutable `StateFlow`; accent-coherent rows, no dead-end (self hidden, cross-screen consistency);
+  edges covered (empty/boundary query, self row, non-connectable rows, every failure/rollback path,
+  in-flight guard, cross-screen re-derive).
+
 ### 2026-07-04 — slice `contacts-list-friends` ✅ shipped
 - **Step 0 (housekeeping):** the prior iteration's Android PR **#1431** (`friendship-relationship-resolver`)
   was open, apps/android-only, CI green, `mergeable_state: clean` → **squash-merged to `main`** before

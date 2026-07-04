@@ -103,6 +103,7 @@ fun ContactsScreen(
                     onDecline = viewModel::declineRequest,
                     onCancel = viewModel::cancelRequest,
                 )
+                ContactsTab.Discover -> DiscoverTab()
                 else -> ComingSoon()
             }
         }

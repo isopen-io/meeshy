@@ -21,4 +21,12 @@
     <string name="contacts_list_filtered_empty">No hay contactos coincidentes</string>
     <string name="contacts_list_error">No se pudieron cargar los contactos</string>
     <string name="contacts_list_retry">Reintentar</string>
+    <string name="contacts_discover_search_hint">Buscar usuarios de Meeshy</string>
+    <string name="contacts_discover_prompt">Busca personas para conectar</string>
+    <string name="contacts_discover_no_results">No se encontraron usuarios</string>
+    <string name="contacts_discover_error">No se pudo buscar usuarios</string>
+    <string name="contacts_discover_connect">Conectar</string>
+    <string name="contacts_discover_pending">Pendiente</string>
+    <string name="contacts_discover_contact">Contacto</string>
+    <string name="contacts_discover_blocked">Bloqueado</string>
 </resources>
