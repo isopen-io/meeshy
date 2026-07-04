@@ -1017,7 +1017,8 @@ struct BubbleStandardLayout: View {
             flags: showFlags
                 ? buildAvailableFlags().map { FooterFlag(code: $0, isActive: $0 == secondaryLangCode) }
                 : [],
-            showsTranslate: showTranslation
+            showsTranslate: showTranslation,
+            sendStartedAt: message.createdAt
         )
 
         // Le tap sur les coches n'a de sens que sur les messages envoyes
