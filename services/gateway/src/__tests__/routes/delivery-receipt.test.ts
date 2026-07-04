@@ -52,6 +52,8 @@ const mockPrisma: any = {
   message: { findUnique: jest.fn(), findFirst: jest.fn(), count: jest.fn() },
   conversationReadCursor: {
     upsert: jest.fn(),
+    updateMany: jest.fn(),
+    create: jest.fn(),
     findUnique: jest.fn(),
     update: jest.fn(),
     findMany: jest.fn()
@@ -97,6 +99,7 @@ describe('POST /conversations/:conversationId/messages/:messageId/delivery-recei
       deletedAt: null
     });
     mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
+    mockPrisma.conversationReadCursor.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
     mockPrisma.conversationReadCursor.update.mockResolvedValue({});
     mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
@@ -117,10 +120,9 @@ describe('POST /conversations/:conversationId/messages/:messageId/delivery-recei
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ success: true });
 
-    expect(mockPrisma.conversationReadCursor.upsert).toHaveBeenCalledTimes(1);
-    const upsertArg = mockPrisma.conversationReadCursor.upsert.mock.calls[0][0];
-    expect(upsertArg.update.lastDeliveredMessageId).toBe(MESSAGE_ID);
-    expect(upsertArg.create.lastDeliveredMessageId).toBe(MESSAGE_ID);
+    expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledTimes(1);
+    const updateManyArg = mockPrisma.conversationReadCursor.updateMany.mock.calls[0][0];
+    expect(updateManyArg.data.lastDeliveredMessageId).toBe(MESSAGE_ID);
 
     expect(emitMock).toHaveBeenCalledTimes(1);
     const [eventName, payload] = emitMock.mock.calls[0];
@@ -222,7 +224,7 @@ describe('POST /conversations/:conversationId/messages/:messageId/delivery-recei
     const response = await app.inject({ method: 'POST', url: url() });
 
     expect(response.statusCode).toBe(200);
-    expect(mockPrisma.conversationReadCursor.upsert).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.conversationReadCursor.updateMany).toHaveBeenCalledTimes(1);
     expect(emitMock).not.toHaveBeenCalled();
   });
 
