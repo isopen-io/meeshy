@@ -423,9 +423,11 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   dispo dans le SDK cible) — TOUJOURS via gating `if #available`, jamais de régression 16-25.
   Respecter la mémoire « texte blanc illisible en Light sur verre » (épingler colorScheme si
   besoin).
-- [ ] **U4 (P2) Reprise de brouillon** : remplacer l'alerte texte par une carte de reprise
-  (cover composite du draft, « Reprendre / Recommencer »), présentée dans le composer et/ou en
-  chip sur « Ma story ». C'est le pendant UX de E1.
+- [~] **U4 (P2) Reprise de brouillon.** — PLAN POSÉ it.36
+  Plan : `docs/superpowers/plans/2026-07-04-story-draft-resume-card-plan.md` (constat :
+  alerte texte nue à StoryComposerView:198 ; cible : carte cover composite via le chemin
+  it.3 renderComposite + restore médias existant ; 3 incréments, pièges consignés).
+  Prochain tour : incrément 1 (DraftResumeCard MeeshyUI, params opaques).
 - [ ] **U5 (P3) État de chargement prolongé** (avec R2) : ThumbHash + progress ring fine autour
   de l'avatar auteur (métaphore déjà connue du tray), bouton passer.
 - [x] **U6 (P3) Dynamic Type/VoiceOver du viewer.** ✅ COMPLET it.34
@@ -539,6 +541,10 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.36 — U4 : plan de la carte de reprise posé
+
+- Itération de plan (refonte UI → plan d'abord, protocole) ; zéro code.
 
 ## it.35 — R11 : viewedAt migration douce (2871df2f3) + HOTFIX build main (ce81369f8)
 
