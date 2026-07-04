@@ -571,7 +571,7 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.42 — R4 inc.2 : fetch unitaire des stories hors tray par postId (24e3c7ae2)
+## it.42 — R4 inc.2 : fetch unitaire des stories hors tray par postId (2b8687ef3)
 
 - Re-preuve : container identifié par userId seul — story hors tray (plafond 50, auteur
   non suivi) = « introuvable » même quand GET /posts/:id la servirait. Le sink storyCreated
