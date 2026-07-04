@@ -89,68 +89,44 @@ export class ReactionService {
       throw new Error('User is not a participant of this conversation');
     }
 
-    const userExistingReactions = await this.prisma.reaction.findMany({
-      where: {
-        messageId,
-        participantId
-      },
+    const previousReaction = await this.prisma.reaction.findFirst({
+      where: { messageId, participantId },
       select: { emoji: true }
     });
 
-    // Single-reaction-per-user model (mirror of AttachmentReactionService):
-    // sending a different emoji swaps the previous one instead of stacking or
-    // rejecting. The DB unique key is (messageId, participantId, emoji), so
-    // this application-level swap is what enforces the one-emoji cap.
-    const replacedEmojis = Array.from(new Set(userExistingReactions.map(r => r.emoji)))
-      .filter(existing => existing !== sanitized);
+    if (previousReaction?.emoji === sanitized) {
+      const existingReaction = await this.prisma.reaction.findFirst({
+        where: { messageId, participantId, emoji: sanitized }
+      });
+      if (existingReaction) {
+        return { reaction: this.mapReactionToData(existingReaction), replacedEmojis: [] };
+      }
+    }
+
+    // Single-reaction-per-user model: the DB unique key is (messageId,
+    // participantId) — no emoji — so this upsert is atomic at the Mongo
+    // level. Two concurrent addReaction calls for different emojis now race
+    // on the SAME document instead of each inserting its own row (the prior
+    // find/deleteMany/create sequence let both pass the "no existing
+    // reaction" check before either committed).
+    const reaction = await this.prisma.reaction.upsert({
+      where: { participant_reaction_unique: { messageId, participantId } },
+      update: { emoji: sanitized },
+      create: { messageId, participantId, emoji: sanitized }
+    });
+
+    const replacedEmojis = previousReaction && previousReaction.emoji !== sanitized
+      ? [previousReaction.emoji]
+      : [];
 
     if (replacedEmojis.length > 0) {
-      await this.prisma.reaction.deleteMany({
-        where: {
-          messageId,
-          participantId,
-          emoji: { in: replacedEmojis }
-        }
-      });
       for (const removed of replacedEmojis) {
         await this.updateMessageReactionSummary(messageId, removed, 'remove', 1);
       }
     }
+    await this.updateMessageReactionSummary(messageId, sanitized, 'add');
 
-    const existingReaction = await this.prisma.reaction.findFirst({
-      where: {
-        messageId,
-        participantId,
-        emoji: sanitized
-      }
-    });
-
-    if (existingReaction) {
-      return { reaction: this.mapReactionToData(existingReaction), replacedEmojis };
-    }
-
-    try {
-      const reaction = await this.prisma.reaction.create({
-        data: {
-          messageId,
-          participantId,
-          emoji: sanitized
-        }
-      });
-
-      await this.updateMessageReactionSummary(messageId, sanitized, 'add');
-
-      return { reaction: this.mapReactionToData(reaction), replacedEmojis };
-    } catch (err: unknown) {
-      if (err && typeof err === 'object' && 'code' in err && err.code === 'P2002') {
-        // Concurrent insert race: treat as idempotent success, summary already correct.
-        const existing = await this.prisma.reaction.findFirst({
-          where: { messageId, participantId, emoji: sanitized }
-        });
-        if (existing) return { reaction: this.mapReactionToData(existing), replacedEmojis };
-      }
-      throw err;
-    }
+    return { reaction: this.mapReactionToData(reaction), replacedEmojis };
   }
 
   async removeReaction(options: RemoveReactionOptions): Promise<boolean> {
