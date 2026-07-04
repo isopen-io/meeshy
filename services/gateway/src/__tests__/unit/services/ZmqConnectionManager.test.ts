@@ -1,15 +1,26 @@
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { ZmqConnectionManager, ConnectionManagerConfig } from '../../../services/zmq-translation/ZmqConnectionManager';
-import * as zmq from 'zeromq';
 
-// Mock zeromq
-jest.mock('zeromq');
+// Mock zeromq with a stable factory whose constructors live in the module
+// registry the manager imports. The prior auto-mock + per-test namespace
+// reassignment (`zmq.Context = jest.fn()`) was flaky under the coverage build:
+// the imported namespace could diverge from the instance the manager invoked,
+// so a test asserting on the constructor reference read 0 calls even though
+// initialization succeeded. The lazy arrows read the current mock sockets, so
+// beforeEach can still hand each test fresh ones, and the tests now assert on
+// observable behavior (connected sockets) rather than constructor identity.
+let mockPushSocket: any;
+let mockSubSocket: any;
+let mockContext: any;
+
+jest.mock('zeromq', () => ({
+  Context: jest.fn(() => mockContext),
+  Push: jest.fn(() => mockPushSocket),
+  Subscriber: jest.fn(() => mockSubSocket),
+}));
 
 describe('ZmqConnectionManager', () => {
   let manager: ZmqConnectionManager;
-  let mockPushSocket: any;
-  let mockSubSocket: any;
-  let mockContext: any;
   const config: ConnectionManagerConfig = {
     host: 'localhost',
     pushPort: 5555,
@@ -37,11 +48,6 @@ describe('ZmqConnectionManager', () => {
 
     mockContext = {};
 
-    // Mock zmq module
-    (zmq.Context as jest.MockedClass<typeof zmq.Context>) = jest.fn(() => mockContext) as any;
-    (zmq.Push as jest.MockedClass<typeof zmq.Push>) = jest.fn(() => mockPushSocket) as any;
-    (zmq.Subscriber as jest.MockedClass<typeof zmq.Subscriber>) = jest.fn(() => mockSubSocket) as any;
-
     manager = new ZmqConnectionManager(config);
   });
 
@@ -60,8 +66,17 @@ describe('ZmqConnectionManager', () => {
     it('should initialize ZMQ context and sockets successfully', async () => {
       await manager.initialize();
 
-      expect(zmq.Push).toHaveBeenCalled();
-      expect(zmq.Subscriber).toHaveBeenCalled();
+      // Assert observable initialization behavior, not zmq constructor-reference
+      // identity. Under the full-suite coverage build the imported `zmq.*`
+      // namespace can diverge from the instance the manager invokes, so
+      // `expect(zmq.Context).toHaveBeenCalled()` intermittently read 0 calls even
+      // though initialization succeeded. The mock sockets are shared through the
+      // factory closure, so the manager wiring them up (right endpoints, exposed
+      // sockets, connected state) fully proves the constructors ran and returned
+      // the mocks — without depending on that fragile reference identity.
+      const sockets = manager.getSockets();
+      expect(sockets.pushSocket).toBe(mockPushSocket);
+      expect(sockets.subSocket).toBe(mockSubSocket);
       expect(mockPushSocket.connect).toHaveBeenCalledWith(`tcp://${config.host}:${config.pushPort}`);
       expect(mockSubSocket.connect).toHaveBeenCalledWith(`tcp://${config.host}:${config.subPort}`);
       expect(mockSubSocket.subscribe).toHaveBeenCalledWith('');
