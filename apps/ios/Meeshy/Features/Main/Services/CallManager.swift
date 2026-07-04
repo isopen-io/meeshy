@@ -1006,7 +1006,7 @@ final class CallManager: ObservableObject {
         // so RTCPeerConnection is built with TURN BEFORE the offer is set.
         Logger.calls.info("[CALL_SETUP] incoming 1/4 webRTC.configure begin (isVideo=\(isVideo))")
         webRTCService.configure(isVideo: isVideo, iceServers: iceServers)
-        scheduleTURNCredentialRefresh(ttl: QualityThresholds.turnDefaultCredentialTTLSeconds)
+        armTurnCredentialsAfterConfigure(callId: callId, iceServers: iceServers)
         applyNegotiationRole()
         Logger.calls.info("[CALL_SETUP] incoming 2/4 configureAudioSession begin")
         configureAudioSession()
@@ -1252,7 +1252,7 @@ final class CallManager: ObservableObject {
 
         // Auto-join call room + configure WebRTC so SDP offer can be received while ringing
         webRTCService.configure(isVideo: isVideo, iceServers: iceServers)
-        scheduleTURNCredentialRefresh(ttl: QualityThresholds.turnDefaultCredentialTTLSeconds)
+        armTurnCredentialsAfterConfigure(callId: callId, iceServers: iceServers)
         applyNegotiationRole()
         configureAudioSession()
         startReliabilityMonitor()
@@ -3466,8 +3466,9 @@ final class CallManager: ObservableObject {
                     Logger.calls.info("Socket reconnect — re-syncing audio mute state to peer (isMuted=\(self.isMuted))")
                     // Request fresh TURN credentials after reconnect. The socket may
                     // have been down long enough for our credentials to approach
-                    // expiry (TTL=480s, refresh at 80%=384s — a 96-second window
-                    // of vulnerability). Cancel the periodic scheduler first so the
+                    // expiry (the periodic refresh only fires at 80% of the TTL,
+                    // leaving a window of vulnerability for the remaining 20%).
+                    // Cancel the periodic scheduler first so the
                     // old deadline doesn't fire while the fresh response is in flight,
                     // causing duplicate requests. The response re-arms the scheduler
                     // at the new TTL via `call:ice-servers-refreshed`.
@@ -4264,6 +4265,23 @@ extension CallManager: WebRTCServiceDelegate {
             guard !Task.isCancelled, case .reconnecting(let current) = self.callState, current == attempt else { return }
             self.emitCallOffer(callId: callId, toUserId: userId, isVideo: self.isVideoEnabled, sdp: offer)
         }
+    }
+
+    /// After configuring WebRTC for an incoming VoIP/notification call, decide whether
+    /// the periodic refresh is enough or a real credential fetch is needed right away.
+    /// A VoIP push payload never carries a TTL, and when it also carries no usable ICE
+    /// servers (missing/malformed/all dropped by `parseIceServers`'s credential-length
+    /// guard) `WebRTCService.configure` falls back to STUN-only — which reliably fails
+    /// to connect behind symmetric/CGNAT (common on cellular). Request real per-user
+    /// TURN credentials immediately in that case instead of waiting up to
+    /// `turnDefaultCredentialTTLSeconds * 0.8` for the periodic scheduler.
+    private func armTurnCredentialsAfterConfigure(callId: String, iceServers: [IceServer]?) {
+        guard let iceServers, !iceServers.isEmpty else {
+            Logger.calls.warning("VoIP push carried no usable ICE servers — configured STUN-only fallback; requesting fresh TURN credentials immediately")
+            requestFreshTurnCredentials(callId: callId)
+            return
+        }
+        scheduleTURNCredentialRefresh(ttl: QualityThresholds.turnDefaultCredentialTTLSeconds)
     }
 
     // Schedules a TURN credential refresh at 80% of the credential TTL.
