@@ -165,6 +165,38 @@ final class FloatingCallPillViewTests: XCTestCase {
         )
     }
 
+    func test_hangupButton_hasAccessibilityHint() throws {
+        let source = try pillSource()
+        guard let range = source.range(of: "private var hangupButton") else {
+            XCTFail("FloatingCallPillView must define hangupButton")
+            return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 1000, limitedBy: source.endIndex) ?? source.endIndex
+        let vicinity = String(source[range.lowerBound..<end])
+        XCTAssertTrue(
+            vicinity.contains(".accessibilityHint("),
+            "The hang-up button must carry an accessibility hint — CallView's endCallButton " +
+            "already has one (call.end.hint); the pill's hangup button is the same action and " +
+            "must not regress behind it for VoiceOver users."
+        )
+    }
+
+    func test_expandButton_hasAccessibilityHint() throws {
+        let source = try pillSource()
+        guard let range = source.range(of: "private var expandButton") else {
+            XCTFail("FloatingCallPillView must define expandButton")
+            return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 1000, limitedBy: source.endIndex) ?? source.endIndex
+        let vicinity = String(source[range.lowerBound..<end])
+        XCTAssertTrue(
+            vicinity.contains(".accessibilityHint("),
+            "The expand button must carry an accessibility hint describing what happens on tap " +
+            "(returns to the full-screen call), matching the hint-coverage pattern used " +
+            "elsewhere in the calling UI (e.g. call.minimize.hint)."
+        )
+    }
+
     func test_pillContent_hasContainerAccessibilityLabel() throws {
         let source = try pillSource()
         XCTAssertTrue(
