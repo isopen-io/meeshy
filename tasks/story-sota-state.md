@@ -650,6 +650,33 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
+## it.55 — FIN DE CYCLE it.41→54 — rapport (hash au commit)
+
+**Bilan** : 14 itérations, 14 livraisons main, CI verte sur chaque validation terminée.
+P0/P1 TOUS fermés : R5 (offline replay prouvé — contrat clé viewer/pin pinné), R4 (unit-
+fetch hors tray par postId), E4 (undo/redo cross-crash), G1 serveur COMPLET (delta a +
+projection b + pagination keyset c) + R8 inc.1 (delta consommé client). R12 re-scopé par
+re-preuve (pas de refonte : writes dirty débouncés livrés). R14 découvert ET fixé (les
+crossfades intra-slide ne rendaient JAMAIS en lecture iOS — parité preview/publié rétablie,
+puis portée au web = W1 COMPLET). Visibilités web COMPLÈTES (W3 6/6 parité iOS + fix W6
+PostComposer). Nouveaux findings consignés en route : R13 (clé URL ré-encodée, théorique),
+W6 (fixé it.54).
+
+**PROCHAINE SESSION (contexte frais requis — cycles simulateur/screenshots)** :
+U1 inc.1 (zoom transition : suivre le plan 2026-07-04-story-reader-design-system-plan.md,
+namespace via Environment, vérif visuelle du conflit drag-dismiss), U3 inc.1 (sidebar
+matériaux), U5. P3 conditionnels : G4 (avec déploiement schema), G5, R13 (sur symptôme),
+R12 inc.1 (sur profil).
+
+**EN ATTENTE UTILISATEUR (inchangé + additions du cycle)** :
+1. DÉPLOIEMENT gateway prod groupé G1a/b/c + G2 + G3 (pull + up -d explicite sur
+   /opt/meeshy/production) — active AUSSI le delta-sync client (it.46, inoffensif d'ici là)
+   et les APIs projection/pagination.
+2. Index Prisma `@@index([type, updatedAt])` sur Post à poser avec un déploiement schema.
+3. Décisions produit §4 : E7, E8, WS5.4b, it.44 C.2, Phase 2 cover baké, chantier filtres.
+4. Vérifs terrain device : relecture offline réseau coupé (R5), stall réseau réel (R3),
+   crossfade visuel avec une story de test (R14), interstitiel 2+ groupes (U-DIR1).
+
 ## it.54 — W6 : PostComposer ne publie plus d'audience vide (bf63b0205)
 
 - Gate + picker promus au module AudienceUserPicker (source unique, StoryComposer importe
