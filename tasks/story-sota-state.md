@@ -714,6 +714,30 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
+## it.65 — FIN DE BOUCLE (audit sec 2/2) — rapport final du cycle it.41→65
+
+- Audit n°4 (viewers sheet) : SEC — getPostViews/getPostInteractions gardent authorId
+  (FORBIDDEN→403), auth registered obligatoire, pagination saine. Privacy OK.
+- Critère d'arrêt du protocole ATTEINT (2 audits consécutifs sans finding) → STOP.
+
+**BILAN GLOBAL it.41→65 (25 itérations)** : 18 livraisons de code main (CI verte),
+7 écartements/constats prouvés. P0/P1/P2/P3 autonomes : TOUS fermés. Faits marquants :
+R5 offline garanti+prouvé ; G1 delta/projection/pagination serveur + delta client ;
+E4 undo cross-crash ; R14 crossfades jamais rendus → fixés iOS+web (W1 complet) ;
+visibilités web 6/6 + W6 ; U1 zoom toutes surfaces (vérifié simulateur) ; R12 re-scopé
+→ writes dirty ; G5 filtre canonique → divergence audience REMONTÉE ; audits : G7 fuite
+média DB fixée, W7 IP-leak viewers fixé web + écarté iOS, NSE et viewers sheet sains.
+
+**EN ATTENTE UTILISATEUR (récapitulatif final)** :
+1. DÉPLOIEMENT gateway prod groupé : G1a/b/c + G2 + G3 + G7 + G5 (pull + up -d
+   /opt/meeshy/production) — active aussi le delta client it.46.
+2. Index Prisma `@@index([type, updatedAt])` (avec déploiement schema).
+3. Décisions produit §4 (7 items, dont audience FRIENDS divergente + option refine
+   Zod background).
+4. Vérifs device : offline replay réseau coupé, stall réel, crossfade visuel, interstitiel
+   2+ groupes, mini-trail/iPad zoom visuel.
+5. Suivi技 : volet fichiers disque de G7 (réclamation des médias hard-deleted).
+
 ## it.64 — Audit ciblé n°3 : chemin NSE prefetch story — SAIN, aucun finding (sec 1/2)
 
 - Surface : NSEPendingPostConsumer bout-en-bout. Constat : consumer défensif exemplaire
