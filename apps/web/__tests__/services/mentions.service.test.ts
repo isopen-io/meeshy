@@ -226,6 +226,15 @@ describe('mentionsService.hasMentions', () => {
   it('returns false for empty string', () => {
     expect(mentionsService.hasMentions('')).toBe(false);
   });
+
+  it('detects an accented @DisplayName (Unicode parity with parseMentions)', () => {
+    expect(mentionsService.hasMentions('coucou @Éric')).toBe(true);
+    expect(mentionsService.hasMentions('salut @André Tabeth')).toBe(true);
+  });
+
+  it('does not treat an email address (@ followed by space) as a mention', () => {
+    expect(mentionsService.hasMentions('write to test@ domain.com')).toBe(false);
+  });
 });
 
 describe('mentionsService.extractMentions', () => {

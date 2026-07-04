@@ -4,8 +4,11 @@ export interface MentionParticipant {
   readonly displayName: string;
 }
 
-const NAME_BOUNDARY_LEFT = '(?<![\\p{L}\\p{N}_])';
-const NAME_BOUNDARY_RIGHT = '(?![\\p{L}\\p{N}_])';
+// Classe de caractères d'un nom : lettre/chiffre/underscore Unicode. Source de vérité unique
+// pour les frontières de mention ET pour `hasMentions` — un seul jeu de caractères, zéro drift.
+const NAME_CHAR = '[\\p{L}\\p{N}_]';
+const NAME_BOUNDARY_LEFT = `(?<!${NAME_CHAR})`;
+const NAME_BOUNDARY_RIGHT = `(?!${NAME_CHAR})`;
 
 /**
  * Parse les mentions dans un message.
@@ -60,10 +63,15 @@ export function parseMentions(
 }
 
 /**
- * Vérifie si un texte contient au moins une mention (@)
+ * Vérifie si un texte contient au moins une mention (@).
+ *
+ * Unicode-aware (frontière `\p{L}\p{N}_`) pour rester cohérent avec la détection de
+ * `@DisplayName` de `parseMentions` : un `@Éric` / `@André` / `@Владимир` est bien reconnu,
+ * là où l'ancien `/@\w/` ASCII les manquait. Un `@` suivi d'un espace (adresse e-mail
+ * `test@ domain`) n'est PAS une mention.
  */
 export function hasMentions(content: string): boolean {
-  return /@\w/.test(content);
+  return new RegExp(`@${NAME_CHAR}`, 'u').test(content);
 }
 
 function escapeRegex(str: string): string {
