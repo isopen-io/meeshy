@@ -186,7 +186,52 @@ struct BubbleCallNoticeView: View, Equatable {
 
     // MARK: - Derived visuals
 
-    private var tint: Color {
+    private var presentation: CallNoticePresentation {
+        CallNoticePresentation(summary: summary, isOutgoing: isOutgoing)
+    }
+
+    private var tint: Color { presentation.tint }
+
+    /// Media type only — direction is carried by the corner chip.
+    private var mediaGlyph: String { presentation.mediaGlyph }
+
+    /// Direction arrow: incoming points down-left, outgoing points up-right.
+    private var directionGlyph: String { presentation.directionGlyph }
+
+    private var title: String { presentation.title }
+
+    /// Duration chip only for connected calls that actually lasted.
+    private var durationLabel: String? {
+        guard summary.outcome == .completed, summary.durationSeconds > 0 else { return nil }
+        return summary.durationLabel
+    }
+
+    private var directionWord: String {
+        isOutgoing
+            ? String(localized: "bubble.call.outgoing", defaultValue: "Sortant", bundle: .main)
+            : String(localized: "bubble.call.incoming", defaultValue: "Entrant", bundle: .main)
+    }
+
+    // MARK: - Accessibility
+
+    private var accessibilityLabel: Text {
+        var parts: [String] = [title, directionWord, notice.timeString]
+        if let duration = durationLabel { parts.append(duration) }
+        if let data = summary.dataSpentLabel { parts.append(data) }
+        return Text(parts.joined(separator: ", "))
+    }
+}
+
+// MARK: - Shared presentation
+
+/// Shared presentation derivations for a call summary (tint, glyphs, title) — single
+/// source of truth so the compact bubble and its long-press detail sheet can never
+/// drift apart on how they describe the same call.
+private struct CallNoticePresentation {
+    let summary: CallSummaryMetadata
+    let isOutgoing: Bool
+
+    var tint: Color {
         switch summary.outcome {
         case .completed: return MeeshyColors.indigo500
         case .missed, .rejected: return MeeshyColors.error
@@ -195,16 +240,16 @@ struct BubbleCallNoticeView: View, Equatable {
     }
 
     /// Media type only — direction is carried by the corner chip.
-    private var mediaGlyph: String {
+    var mediaGlyph: String {
         summary.callType == .video ? "video.fill" : "phone.fill"
     }
 
     /// Direction arrow: incoming points down-left, outgoing points up-right.
-    private var directionGlyph: String {
+    var directionGlyph: String {
         isOutgoing ? "arrow.up.right" : "arrow.down.left"
     }
 
-    private var title: String {
+    var title: String {
         let isVideo = summary.callType == .video
         switch summary.outcome {
         case .completed:
@@ -228,27 +273,6 @@ struct BubbleCallNoticeView: View, Equatable {
                 ? String(localized: "bubble.call.video.failed", defaultValue: "Appel vidéo interrompu", bundle: .main)
                 : String(localized: "bubble.call.audio.failed", defaultValue: "Appel audio interrompu", bundle: .main)
         }
-    }
-
-    /// Duration chip only for connected calls that actually lasted.
-    private var durationLabel: String? {
-        guard summary.outcome == .completed, summary.durationSeconds > 0 else { return nil }
-        return summary.durationLabel
-    }
-
-    private var directionWord: String {
-        isOutgoing
-            ? String(localized: "bubble.call.outgoing", defaultValue: "Sortant", bundle: .main)
-            : String(localized: "bubble.call.incoming", defaultValue: "Entrant", bundle: .main)
-    }
-
-    // MARK: - Accessibility
-
-    private var accessibilityLabel: Text {
-        var parts: [String] = [title, directionWord, notice.timeString]
-        if let duration = durationLabel { parts.append(duration) }
-        if let data = summary.dataSpentLabel { parts.append(data) }
-        return Text(parts.joined(separator: ", "))
     }
 }
 
@@ -428,47 +452,17 @@ struct CallSummaryDetailSheet: View {
 
     // MARK: - Derived visuals
 
-    private var tint: Color {
-        switch summary.outcome {
-        case .completed: return MeeshyColors.indigo500
-        case .missed, .rejected: return MeeshyColors.error
-        case .failed: return MeeshyColors.warning
-        }
+    private var presentation: CallNoticePresentation {
+        CallNoticePresentation(summary: summary, isOutgoing: isOutgoing)
     }
 
-    private var mediaGlyph: String {
-        summary.callType == .video ? "video.fill" : "phone.fill"
-    }
+    private var tint: Color { presentation.tint }
 
-    private var directionGlyph: String {
-        isOutgoing ? "arrow.up.right" : "arrow.down.left"
-    }
+    private var mediaGlyph: String { presentation.mediaGlyph }
 
-    private var title: String {
-        let isVideo = summary.callType == .video
-        switch summary.outcome {
-        case .completed:
-            let type = isVideo
-                ? String(localized: "bubble.call.video", defaultValue: "Appel vidéo", bundle: .main)
-                : String(localized: "bubble.call.audio", defaultValue: "Appel audio", bundle: .main)
-            let direction = isOutgoing
-                ? String(localized: "bubble.call.outgoing.suffix", defaultValue: "sortant", bundle: .main)
-                : String(localized: "bubble.call.incoming.suffix", defaultValue: "entrant", bundle: .main)
-            return "\(type) \(direction)"
-        case .missed:
-            return isVideo
-                ? String(localized: "bubble.call.video.missed", defaultValue: "Appel vidéo manqué", bundle: .main)
-                : String(localized: "bubble.call.audio.missed", defaultValue: "Appel audio manqué", bundle: .main)
-        case .rejected:
-            return isOutgoing
-                ? String(localized: "bubble.call.rejected.sent", defaultValue: "Appel refusé", bundle: .main)
-                : String(localized: "bubble.call.rejected.received", defaultValue: "Appel rejeté", bundle: .main)
-        case .failed:
-            return isVideo
-                ? String(localized: "bubble.call.video.failed", defaultValue: "Appel vidéo interrompu", bundle: .main)
-                : String(localized: "bubble.call.audio.failed", defaultValue: "Appel audio interrompu", bundle: .main)
-        }
-    }
+    private var directionGlyph: String { presentation.directionGlyph }
+
+    private var title: String { presentation.title }
 
     private func qualityColor(_ quality: CallSummaryMetadata.NetworkQuality) -> Color {
         switch quality {

@@ -1586,8 +1586,8 @@ final class CallManagerCameraPermissionTests: XCTestCase {
 
     func test_cameraPermissionDenied_handledIn_socketIncoming() throws {
         let source = try callManagerSource()
-        // Socket-based incoming calls arrive via handleIncomingCallNotification
-        // (called from handleIncomingOffer, which is the socket:notification path)
+        // Socket-based incoming calls arrive via handleIncomingCallNotification,
+        // invoked from the callOfferReceived sink (socket "call:signal" offer path).
         guard let socketRange = source.range(of: "func handleIncomingCallNotification(") else {
             XCTFail("handleIncomingCallNotification not found in CallManager.swift"); return
         }
