@@ -628,7 +628,7 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.50 — R14 : les crossfades intra-slide rendent enfin au playback (40345fc86)
+## it.50 — R14 : les crossfades intra-slide rendent enfin au playback (7397e72d3)
 
 - RED : 3 tests RenderIntegrationTests (sortant 0.5 mi-fenêtre, entrant 0.5, cache
   cross-ticks absolu 0.5→0.2→1.0) — harnais copié du test kf existant.
