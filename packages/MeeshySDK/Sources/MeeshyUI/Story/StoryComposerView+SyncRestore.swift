@@ -262,8 +262,25 @@ extension StoryComposerView {
     }
 
     func checkForDraft() {
-        if StoryDraftStore.shared.load() != nil {
+        if let stored = StoryDraftStore.shared.load() {
+            draftResumeSlideCount = max(1, stored.slides.count)
             showRestoreDraftAlert = true
+            // U4 inc.2 — cover composite du 1er slide, rendu APRÈS l'affichage
+            // (la carte dégrade sans image) et SANS muter le ViewModel : le
+            // draft ne s'applique qu'au « Reprendre ».
+            Task { @MainActor in
+                guard let first = stored.slides.first else { return }
+                let media = StoryDraftStore.shared.loadMedia()
+                let bg = media.images[first.id] ?? media.images["slide-bg-\(first.id)"]
+                // 270×480 (9:16) : suffisant pour la carte 108×192 @3x —
+                // `StoryCoverThumbnail.renderSize` est app-side, hors SDK.
+                draftResumeCover = StorySlideRenderer.renderComposite(
+                    slide: first,
+                    bgImage: bg,
+                    loadedImages: media.images,
+                    size: CGSize(width: 270, height: 480)
+                )
+            }
         } else if UserDefaults.standard.data(forKey: StoryComposerDraft.userDefaultsKey) != nil {
             showRestoreDraftAlert = true
         }
