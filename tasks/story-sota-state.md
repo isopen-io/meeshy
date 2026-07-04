@@ -650,7 +650,7 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.55 — FIN DE CYCLE it.41→54 — rapport (hash au commit)
+## it.55 — FIN DE CYCLE it.41→54 — rapport (c43401f5b)
 
 **Bilan** : 14 itérations, 14 livraisons main, CI verte sur chaque validation terminée.
 P0/P1 TOUS fermés : R5 (offline replay prouvé — contrat clé viewer/pin pinné), R4 (unit-
