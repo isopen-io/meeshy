@@ -116,10 +116,6 @@ public nonisolated struct BandStateMachine: Equatable, Sendable {
         }
     }
 
-    public mutating func swipeHorizontalOnBand() {
-        // No horizontal swipe anymore as we removed categories
-    }
-
     public mutating func openFormatPanel(_ kind: BandElementKind, id: String) {
         state = .formatPanel(kind, elementId: id)
     }

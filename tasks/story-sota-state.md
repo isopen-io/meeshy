@@ -161,7 +161,11 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   granularCanvasSync (openingEffect tracké O(1) — l'explicit sync de la sheet C7 supprimé).
   Piège rencontré : +GranularSync.swift n'importait pas MeeshySDK (erreurs en cascade sur les
   tests — fix = import). 39/39 (3 suites composer), build 57 s vert.
-- [ ] **C2 (P3) `swipeHorizontalOnBand()` = code mort** (corps vide, BandStateMachine.swift:114-116)
+- [x] **C2 (P3) `swipeHorizontalOnBand()` = code mort.** ✅ it.80 — détection ET méthode
+  no-op RETIRÉES (un swipe-vers-outil aurait conflué avec les ScrollView horizontaux
+  omniprésents des panneaux — pastilles, chips, grilles ; les switch-chips couvrent déjà
+  le changement d'outil). 25/25 machine+policy.
+  ORIGINE : `swipeHorizontalOnBand()` = code mort** (corps vide, BandStateMachine.swift:114-116)
   MAIS le DragGesture du band détecte toujours le swipe horizontal et l'appelle pour rien
   (ControlsLayer:214-217). Soit retirer la détection, soit lui donner un sens (candidat :
   switch d'outil actif par swipe horizontal sur le band — cohérent mission C).
@@ -253,7 +257,12 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   les stickers étaient inaccessibles — C8 le réveille. Refonte cible : stickers en
   passthrough `currentEffects` (modèle textObjects) — PLAN REQUIS (change un contrat de
   test pinné + touche delete/duplicate/gestes).
-- [ ] **C9 (P2) Pas d'undo/redo global composer.** Undo/redo existe UNIQUEMENT en dessin
+- [~] **C9 (P2) Pas d'undo/redo global composer.** — PLAN POSÉ it.80 :
+  `docs/superpowers/plans/2026-07-04-composer-global-undo-plan.md` (architecture SNAPSHOTS
+  aux choke points — pas de conversion command-based des dizaines de call sites ; pile
+  `[StorySlide]` cap 50, capture à syncCurrentSlideEffects + fin de geste + ops slides,
+  piège bitmaps purgés consigné, UI discrète shake + icônes header conditionnelles).
+  5 incréments ; Inc.1 = HistoryStore pur TDD. ORIGINE :** Undo/redo existe UNIQUEMENT en dessin
   (DrawingEditFloatingBubbles) + CommandStack timeline (séparé). Ajout/déplacement/suppression
   de texte/média/sticker/fond : irréversibles (seul « annuler » = ⋯ → Supprimer tous les
   slides !). Chantier : étendre le pattern CommandStack au canvas — PLAN requis avant code.
@@ -940,6 +949,14 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.80 — C2 retiré (geste mort) + plan C9 posé (undo global par snapshots)
+
+- C2 : le sens alternatif envisagé (swipe = switch d'outil) rejeté — conflit garanti avec
+  les scrollers horizontaux internes des panneaux ; suppression nette.
+- C9 : décision d'architecture documentée (snapshots vs commandes) — les mutations
+  convergent déjà vers 3 choke points, la pile d'états est compacte (médias par clés).
+  Exécution aux prochains tours (Inc.1 d'abord).
 
 ## it.79 — BUG-4 : carte cardée sous header fantôme + zoom viewport résiduel (2 fixes)
 

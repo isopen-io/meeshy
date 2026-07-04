@@ -244,11 +244,6 @@ public struct ComposerControlsLayer: View {
                                     areFabsVisible = true
                                 }
                             }
-                            // Swipe left/right: switch category
-                            if abs(value.translation.width) > abs(value.translation.height),
-                               abs(value.translation.width) > 40 {
-                                bandStateMachine.swipeHorizontalOnBand()
-                            }
                         }
                 )
             }
