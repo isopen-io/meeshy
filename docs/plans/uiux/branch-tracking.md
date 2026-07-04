@@ -14,6 +14,19 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR AUTORITAIRE iOS (mis à jour 137i, 2026-07-04)** — piste iOS indépendante (suffixe `i`).
+> - **137i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `ee185327`)** :
+>   Dynamic Type — annotation de gel de `ConversationLockSheet` (sheet PIN de verrouillage). **3 figés** :
+>   hero cadenas (44, **84i** décoratif ≥40pt) + `.accessibilityHidden(true)` ; `delete.left.fill` (22) et
+>   chiffre du pavé (26 rounded) **82i** (bornés par touches fixes 76×76). Le `delete` porte déjà son label ;
+>   le `Button` du chiffre lit le chiffre pour VoiceOver. **0 migration `relative`** (annotation pure, pas
+>   d'`import MeeshyUI`). Logique de saisie du PIN non touchée. 1 fichier, 0 logique, 0 test/clé i18n neuve.
+>   1 PR ouverte #1440 (calls) — pas `ConversationLockSheet` → 0 contention. Gate = CI `ios-tests`. PR à venir.
+> - **⚠️ `ConversationLockSheet` SOLDÉ** : ne plus reprendre les 3 glyphes figés (hero 84i + 2 touches 82i).
+> - **Base de départ 138i : `main` HEAD**. Reste `StoryViewerView+Content` (⚠️ i18n + `@State private`
+>   cross-file). Sinon : `KeypadTab` (3), traîne 2/1 `.system` (⚠️ éviter `WebRTCVideoView` tant que #1440
+>   ouverte), ou **passe state-of-the-art** au tarissement.
+>
 > **POINTEUR AUTORITAIRE iOS (mis à jour 136i, 2026-07-04)** — piste iOS indépendante (suffixe `i`).
 > - **136i (terminée, branche `claude/upbeat-euler-s5qysh`, base `main` HEAD `6b2a335f`)** :
 >   Dynamic Type de `MessageListView` (`swipeIndicator` — retour visuel du swipe répondre/transférer).

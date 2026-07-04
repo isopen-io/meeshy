@@ -71,6 +71,7 @@ struct ConversationLockSheet: View {
     private var headerSection: some View {
         VStack(spacing: 8) {
             Image(systemName: iconName)
+                // doctrine 84i — glyphe hero décoratif ≥40pt (le titre porte le sens)
                 .font(.system(size: 44))
                 .foregroundStyle(
                     LinearGradient(
@@ -80,6 +81,7 @@ struct ConversationLockSheet: View {
                     )
                 )
                 .padding(.top, 24)
+                .accessibilityHidden(true)
 
             Text(titleText)
                 .font(.headline)
@@ -137,6 +139,7 @@ struct ConversationLockSheet: View {
                     deleteLastDigit()
                 } label: {
                     Image(systemName: "delete.left.fill")
+                        // doctrine 82i — glyphe borné par la touche fixe 76×76 du pavé
                         .font(.system(size: 22, weight: .medium))
                         .foregroundColor(theme.textPrimary)
                         .frame(width: 76, height: 76)
@@ -155,6 +158,7 @@ struct ConversationLockSheet: View {
             appendDigit(digit)
         } label: {
             Text("\(digit)")
+                // doctrine 82i — chiffre borné par la touche fixe 76×76 du pavé
                 .font(.system(size: 26, weight: .medium, design: .rounded))
                 .foregroundColor(theme.textPrimary)
                 .frame(width: 76, height: 76)
