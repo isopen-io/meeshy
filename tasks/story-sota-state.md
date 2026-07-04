@@ -283,6 +283,11 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   clavier (texte) — prochain tour.
   Gates : ComposerChromePolicyTests 6 + BandStateMachine 19 + ControlsLayer/Timeline suites
   verts ; build app 49 s vert.
+  ✅ (a)+(b)+(c)+(d) VÉRIFIÉS SIMULATEUR it.74 (captures it74-A/B/C/D) : band Texte ouvert →
+  header ABSENT + canvas ENTIER cardé au-dessus du band ; grabber tiré à fond → band fermé +
+  header+FABs de retour ; swipe-down FABs → canvas nu + poignée fantôme C3 (première vérif
+  visuelle C3 ✓) ; tap poignée → chrome plein restauré. Restent hors-scope de cette vérif :
+  cas clavier texte (édition inline) et zoom — à observer lors d'usages réels.
 - [ ] **C-DIR3 (P1, directive user 2026-07-04 #3) Device iPhone 16 Pro Max : le fond
   vidéo/média d'une story ne JOUE PAS à l'ouverture ni en preview** tant qu'un long-press +
   touch n'est pas fait ; le simulateur, lui, joue correctement. Piste : gating d'activation
@@ -884,6 +889,15 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.74 — C-DIR2 : vérification simulateur complète (a/b/c/d) + C3 visuel
+
+- Cycle gestuel entier prouvé en 4 captures : (A) band ouvert = header absent + canvas
+  entier cardé ; (B) grabber à fond = band fermé + chrome plein de retour ; (C) swipe-down
+  FABs = canvas nu + poignée fantôme (C3 vérifié visuellement — restait de it.71) ;
+  (D) tap poignée = chrome restauré. C3 item → vérif faite ; C-DIR2 → fermé côté autonome.
+- CI du commit it.73 in_progress au moment de la vérif — à confirmer it.75.
+- Prochain focus : C-DIR3 (playback device muet au boot — analyse code des chemins .play).
 
 ## it.73 — C-DIR2 (b)(c)(d) : chrome unifié header↔FABs + suppression du band replié
 
