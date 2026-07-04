@@ -18,7 +18,11 @@ const log = enhancedLogger.child({ module: 'PostService' });
 
 interface StoryTextObjectRaw {
   id?: string;
-  content: string;
+  // The iOS composer encodes overlay text under `text`; `content` is the
+  // pre-rename legacy alias (still accepted by the SDK decoder and the web
+  // transform). Both optional — resolve via `PostService.storyTextObjectText`.
+  text?: string;
+  content?: string;
   sourceLanguage?: string;
   translations?: Record<string, string>;
   [key: string]: unknown;
@@ -203,7 +207,7 @@ export class PostService {
 
     if (textObjects?.length) {
       const searchContent = textObjects
-        .map((t) => t.content)
+        .map((t) => PostService.storyTextObjectText(t))
         .filter(Boolean)
         .join(' ');
 
@@ -229,7 +233,7 @@ export class PostService {
     const trackingContent =
       data.content
       ?? (textObjects?.length
-        ? textObjects.map((t) => t.content).filter(Boolean).join(' ')
+        ? textObjects.map((t) => PostService.storyTextObjectText(t)).filter(Boolean).join(' ')
         : undefined);
     if (trackingContent) {
       try {
@@ -389,7 +393,7 @@ export class PostService {
     }
 
     textObjects.forEach((obj, index) => {
-      const text = obj.content?.trim();
+      const text = PostService.storyTextObjectText(obj)?.trim();
       if (!text) return;
 
       const zmqClient = ZMQSingleton.getInstanceSync();
@@ -416,6 +420,19 @@ export class PostService {
         targetLanguages,
       });
     });
+  }
+
+  /** Résolution canonique du texte d'un overlay de story. Le composer iOS encode
+   *  désormais le texte sous `text` ; `content` est l'alias legacy pré-renommage
+   *  (encore accepté par le décodeur SDK et le transform web). On lit la clé
+   *  canonique d'abord, fallback sur la legacy — sans ça la gateway abandonnait
+   *  chaque overlay iOS de l'indexation de recherche, de l'extraction des liens
+   *  de tracking ET de la traduction (mêmes symptômes que le bug déjà corrigé
+   *  côté web dans `apps/web/lib/story-transforms.ts`). */
+  static storyTextObjectText(obj: { text?: unknown; content?: unknown }): string | undefined {
+    if (typeof obj.text === 'string') return obj.text;
+    if (typeof obj.content === 'string') return obj.content;
+    return undefined;
   }
 
   /** G3 — cœur PUR de la résolution d'audience (testable) : systemLanguage
