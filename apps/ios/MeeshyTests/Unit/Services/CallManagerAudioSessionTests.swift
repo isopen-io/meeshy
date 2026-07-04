@@ -1122,24 +1122,37 @@ final class CallManagerCallKitDTMFTests: XCTestCase {
             "CXPlayDTMFCallAction must be handled — without it the CallKit keypad sends no tones")
     }
 
+    private func dtmfHandlerBody(in source: String) throws -> String {
+        let handlerRange = try XCTUnwrap(source.range(of: "perform action: CXPlayDTMFCallAction"))
+        let afterHandler = String(source[handlerRange.upperBound...])
+        let nextHandlerBoundary = afterHandler.range(of: "func provider")?.lowerBound
+            ?? afterHandler.endIndex
+        return String(afterHandler[..<nextHandlerBoundary])
+    }
+
     func test_dtmfHandler_forwardsDigitsToWebRTCService() throws {
-        let source = try callManagerSource()
+        let handlerBody = try dtmfHandlerBody(in: try callManagerSource())
         XCTAssertTrue(
-            source.contains("sendDTMF(digits: action.digits)"),
+            handlerBody.contains("sendDTMF(digits: digits)"),
             "CXPlayDTMFCallAction handler must forward action.digits to webRTCService.sendDTMF")
     }
 
     func test_dtmfHandler_fulfillsAction() throws {
-        let source = try callManagerSource()
-        let handlerRange = source.range(of: "perform action: CXPlayDTMFCallAction")
-        XCTAssertNotNil(handlerRange)
-        let afterHandler = String(source[handlerRange!.upperBound...])
-        let nextHandlerBoundary = afterHandler.range(of: "func provider")?.lowerBound
-            ?? afterHandler.endIndex
-        let handlerBody = String(afterHandler[..<nextHandlerBoundary])
+        let handlerBody = try dtmfHandlerBody(in: try callManagerSource())
         XCTAssertTrue(
             handlerBody.contains("action.fulfill()"),
             "CXPlayDTMFCallAction handler must call action.fulfill() so CallKit does not timeout")
+    }
+
+    /// Regression guard for the actor-isolation bug fixed 2026-07-04: `CXProvider.setDelegate(_:queue:
+    /// nil)` dispatches this callback on CallKit's own private serial queue, not main, so calling straight
+    /// into the @MainActor-isolated `sendDTMF` raced with other MainActor call-state work. Every sibling
+    /// delegate method (answer/end/mute/hold) hops via `Task { @MainActor [weak self] in ... }`; DTMF must too.
+    func test_dtmfHandler_hopsToMainActorBeforeForwarding() throws {
+        let handlerBody = try dtmfHandlerBody(in: try callManagerSource())
+        XCTAssertTrue(
+            handlerBody.contains("Task { @MainActor [weak self] in"),
+            "CXPlayDTMFCallAction handler must hop to the MainActor (matching every sibling CXProvider delegate method) instead of calling the @MainActor-isolated sendDTMF directly from CallKit's private queue")
     }
 
     func test_sendDTMF_isInWebRTCClientProvidingProtocol() throws {
