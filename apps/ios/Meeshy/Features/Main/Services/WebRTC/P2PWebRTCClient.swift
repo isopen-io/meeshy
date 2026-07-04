@@ -324,14 +324,14 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         // against disconnect() on MainActor, not run on whatever thread the
         // capture-session completion resumed us on.
         let isStale = await MainActor.run { () -> Bool in
-            guard generation != self.sessionGeneration else { return false }
+            guard generation != sessionGeneration else { return false }
             // L'appel s'est terminé (ou un nouvel appel a été configuré)
             // pendant le warm-up : on ne nil-e les propriétés que si elles
             // pointent encore notre capturer — un nouvel appel a pu poser les siennes.
-            if self.videoCapturer === capturer {
-                self.localVideoTrack_ = nil
-                self.videoCapturer = nil
-                self.videoFilterDelegate = nil
+            if videoCapturer === capturer {
+                localVideoTrack_ = nil
+                videoCapturer = nil
+                videoFilterDelegate = nil
             }
             return true
         }
@@ -975,7 +975,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             try await capturer.startCapture(with: camera, format: format, fps: fps)
             // See `sessionGeneration` doc — compare on MainActor, not on whatever
             // thread the capture-session completion resumed us on.
-            let isStale = await MainActor.run { generation != self.sessionGeneration }
+            let isStale = await MainActor.run { generation != sessionGeneration }
             if isStale {
                 Logger.webrtc.warning("[WEBRTC] session changed during capturer restart — stopping orphan capture")
                 await capturer.stopCapture()
@@ -1017,7 +1017,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         try await capturer.startCapture(with: camera, format: selectedFormat, fps: fps)
         // See `sessionGeneration` doc — compare on MainActor, not on whatever
         // thread the capture-session completion resumed us on.
-        let isStale = await MainActor.run { generation != self.sessionGeneration }
+        let isStale = await MainActor.run { generation != sessionGeneration }
         if isStale {
             Logger.webrtc.warning("[WEBRTC] session changed during camera switch — stopping orphan capture")
             await capturer.stopCapture()
@@ -1074,7 +1074,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         try await capturer.startCapture(with: camera, format: selectedFormat, fps: fps)
         // See `sessionGeneration` doc — compare on MainActor, not on whatever
         // thread the capture-session completion resumed us on.
-        let isStale = await MainActor.run { generation != self.sessionGeneration }
+        let isStale = await MainActor.run { generation != sessionGeneration }
         if isStale {
             Logger.webrtc.warning("[WEBRTC] session changed during camera switch (by ID) — stopping orphan capture")
             await capturer.stopCapture()

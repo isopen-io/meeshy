@@ -646,10 +646,10 @@ final class CallManagerEarlyJoinTests: XCTestCase {
             return
         }
         guard let endedAtRange = body.range(
-            of: "reportCall(with: uuid, endedAt: nil, reason: .unanswered)",
+            of: "reportCall(with: uuid, endedAt: Date(), reason: .unanswered)",
             range: reportRange.upperBound..<body.endIndex
         ) else {
-            XCTFail("Expected reportCall(...endedAt: nil...) after the busy-path report closure")
+            XCTFail("Expected reportCall(...endedAt: Date()...) after the busy-path report closure")
             return
         }
         let closureBody = String(body[reportRange.upperBound..<endedAtRange.lowerBound])

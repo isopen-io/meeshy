@@ -948,7 +948,7 @@ final class CallManager: ObservableObject {
                     VoIPPushManager.shared.clearDedup(callId: callId)
                 }
             }
-            // `endedAt: nil` means "unknown" to CallKit (produces an inaccurate/missing
+            // A nil `endedAt` means "unknown" to CallKit (produces an inaccurate/missing
             // timestamp in Recents) — every other reportCall site in this file passes
             // Date(); this synthesized busy-path report ends right now, so do the same.
             callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
