@@ -509,9 +509,18 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 
 ### UI/UX — design system par version d'iOS (à traiter APRÈS les P0/P1 fonctionnels)
 
-- [ ] **U1 (P2) Transition tray→viewer** : sur iOS 18+, `navigationTransition(.zoom)` /
-  matched-geometry depuis l'anneau du tray vers la carte reader ; fallback animation actuelle
-  iOS 16-17. Ne PAS casser appearScale/drag-dismiss existants (cf. it.33).
+- [~] **U1 (P2) Transition tray→viewer** — INC.1 it.56 ✅
+  Livré : `zoomTransitionNamespace` (EnvironmentKey SDK) + helpers `zoomTransitionSource/
+  Destination` (atomes gated #available(iOS 18), no-op sinon — zéro régression 16-17) ;
+  RootView injecte le namespace + destination sur le cover coordinator (sourceID =
+  request.id, fallback cover standard sans bulle enregistrée) ; StoryRingCell = source
+  (id = group.id). VÉRIFIÉ SIMULATEUR 18.2 : login atabeth, tap bulle J.Charles → zoom
+  capturé EN VOL (scale centré coins arrondis, écran sous-jacent visible — signature zoom,
+  pas le slide-up standard), viewer sain (progression/chrome/traduction), drag-dismiss
+  custom SANS conflit (risque flaggé levé), appearScale/interstitiel/cube intacts.
+  Captures scratchpad it56-t4/now/dismissed.png.
+  RESTE inc.2 : sites secondaires (mini-trail pinned StoryTrayView compact, iPad covers
+  ×2 — le namespace env est déjà visible partout, ajouter source/destination) ; MyStory.
 - [x] **U2 (P2) Haptics du reader.** ✅ it.25
   Livré via l'abstraction multi-version EXISTANTE `HapticFeedback` (UIImpactFeedbackGenerator,
   iOS 16+) : tick léger au changement de slide + gel perceptible quand le spinner R3 apparaît
@@ -649,6 +658,17 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.56 — U1 inc.1 : zoom bulle→viewer iOS 18+, vérifié simulateur (922f966d4)
+
+- Premier chantier visuel du nouveau cycle, exécuté selon le plan design-system (it.39).
+- Vérif simulateur COMPLÈTE (protocole du plan) : réinstallation fresh → login test →
+  tap bulle → rafale de captures (transition attrapée à t4) → viewer sain → swipe-down
+  dismiss propre. Le risque « conflit navigationTransition ↔ drag-dismiss » est LEVÉ.
+- SDK purity : helpers = atomes opaques (namespace/id en params) dans ViewModifiers.swift,
+  la décision « quelles surfaces zooment » reste dans RootView/StoryTrayView (app).
+- Piège d'exécution consigné : le .app fresh se trouve sous apps/ios/Build/Products/ (PAS
+  Build/Build/Products) ; install+launch simctl directs OK une fois le chemin exact connu.
 
 ## it.55 — FIN DE CYCLE it.41→54 — rapport (c43401f5b)
 
