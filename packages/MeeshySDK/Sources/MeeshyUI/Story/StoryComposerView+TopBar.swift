@@ -165,7 +165,7 @@ extension StoryComposerView {
             Divider()
             Button(role: .destructive) {
                 // Bug fix: viewModel.reset() wipes ViewModel data (slides, effects,
-                // images), but composer-local @State (stickerObjects, selectedFilter,
+                // images), but composer-local @State (selectedFilter,
                 // openingEffect, closingEffect, selectedImage, audio inputs, drawing
                 // canvas, picker scratch) survives. The canvasSyncFingerprint chain
                 // (.onChange → syncCurrentSlideEffects → buildEffects) re-injects

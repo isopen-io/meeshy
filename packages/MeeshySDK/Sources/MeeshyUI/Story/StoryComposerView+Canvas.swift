@@ -144,7 +144,7 @@ extension StoryComposerView {
         }
         .adaptiveOnChange(of: fgMediaItem) { _, item in handleForegroundMediaSelection(from: item) }
         // Real-time canvas sync — Task 2.18 migration. Toolbars + sheets
-        // mutate composer-local @State (`selectedFilter`, `stickerObjects`,
+        // mutate composer-local @State (`selectedFilter`,
         // `selectedImage`, …); the CALayer canvas reads from
         // `viewModel.currentSlide.effects` exclusively, so re-serialize on
         // each toolbar mutation. Five separate `.onChange` modifiers tipped
@@ -172,7 +172,7 @@ extension StoryComposerView {
         .granularCanvasSync(
             filter: selectedFilter?.rawValue,
             hasImage: selectedImage != nil,
-            stickersCount: stickerObjects.count,
+            stickersCount: viewModel.currentEffects.stickerObjects?.count ?? 0,
             drawingCount: viewModel.drawingData?.count ?? 0,
             bgColor: viewModel.backgroundColor,
             opening: viewModel.openingEffect,
@@ -247,7 +247,6 @@ extension StoryComposerView {
                 && (slide.effects.drawingStrokes ?? []).isEmpty
         }
         return slidesEmpty
-            && stickerObjects.isEmpty
             && viewModel.drawingData == nil
             && viewModel.drawingStrokes.isEmpty
     }

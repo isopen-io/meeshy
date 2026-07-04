@@ -180,7 +180,7 @@ extension StoryComposerView {
         Self.composerHasContent(
             slides: viewModel.slides,
             slideImageIds: Set(viewModel.slideImages.keys),
-            hasStickerObjects: !stickerObjects.isEmpty,
+            hasStickerObjects: !(viewModel.currentEffects.stickerObjects ?? []).isEmpty,
             hasDrawingData: viewModel.drawingData != nil,
             hasDrawingStrokes: !viewModel.drawingStrokes.isEmpty
         )

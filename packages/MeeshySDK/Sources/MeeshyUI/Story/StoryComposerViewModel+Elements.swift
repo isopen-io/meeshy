@@ -200,6 +200,25 @@ extension StoryComposerViewModel {
         return currentEffects.textObjects.first { $0.id == obj.id } ?? obj
     }
 
+    /// C13 — les stickers suivent le modèle moderne : `currentEffects` est la
+    /// SEULE source de vérité (parité addText). L'ancien chemin @State View
+    /// canvas-authored révertait les mutations VM/canvas au sync suivant.
+    /// Décalage en cascade pour que des ajouts successifs ne s'empilent pas
+    /// exactement au même point.
+    @discardableResult
+    func addSticker(emoji: String) -> StorySticker {
+        let count = currentEffects.stickerObjects?.count ?? 0
+        let offset = Double(count % 5) * 0.04
+        let sticker = StorySticker(emoji: emoji, x: 0.5 + offset, y: 0.5 + offset)
+        var effects = currentEffects
+        var stickers = effects.stickerObjects ?? []
+        stickers.append(sticker)
+        effects.stickerObjects = stickers
+        currentEffects = effects
+        bringToFront(id: sticker.id)
+        return currentEffects.stickerObjects?.first { $0.id == sticker.id } ?? sticker
+    }
+
     @discardableResult
     func addMediaObject(kind: StoryMediaKind, toSlideId: String? = nil) -> StoryMediaObject? {
         guard canAddMedia else { return nil }

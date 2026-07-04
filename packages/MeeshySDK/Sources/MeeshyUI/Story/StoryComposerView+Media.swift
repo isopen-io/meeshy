@@ -61,7 +61,9 @@ extension StoryComposerView {
             // medium, dismiss gestuel natif ; reste ouverte après un ajout
             // (poser plusieurs stickers d'affilée, fermer par swipe-down).
             StickerPickerView { emoji in
-                addSticker(emoji: emoji)
+                // C13 — chemin VM unique (currentEffects source de vérité).
+                viewModel.addSticker(emoji: emoji)
+                HapticFeedback.light()
             }
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)

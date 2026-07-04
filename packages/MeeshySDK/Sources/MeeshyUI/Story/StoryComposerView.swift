@@ -23,7 +23,6 @@ public struct StoryComposerView: View {
 
     @State var selectedFilter: StoryFilter?
     @State var selectedImage: UIImage?
-    @State var stickerObjects: [StorySticker] = []
 
     // MARK: - Background audio (legacy panel state)
 

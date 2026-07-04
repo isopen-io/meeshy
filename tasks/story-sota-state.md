@@ -233,7 +233,17 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   boutons sans `.buttonStyle(.plain)` ; piège consigné dans le code. VÉRIFIÉ SIMULATEUR :
   picker complet (onglets+grille), tap emoji → sticker posé au canvas, autosave draft OK
   (DraftResumeCard montre la cover avec sticker). Captures it72-*.png.
-- [ ] **C13 (P2, découvert it.72) Source de vérité stickers INCOHÉRENTE — revert latent.**
+- [x] **C13 (P2, découvert it.72) Source de vérité stickers INCOHÉRENTE — revert latent.** ✅ it.76
+  Plan : `docs/superpowers/plans/2026-07-04-sticker-source-of-truth-plan.md` (incrément
+  unique atomique — les deux moitiés étaient inséparables). LIVRÉ : `addSticker` VM
+  (pattern addText : currentEffects + bringToFront + cascade) ; `mergeEffects` n'authore
+  PLUS les stickers (retirés de CanvasAuthoredState, passthrough par copie de current,
+  projection legacy `stickers` dérivée au choke point) ; @State View purgé de 8 sites
+  (déclaration, reset, restore, buildEffects, granular stickersCount, composerHasContent,
+  emptiness, helper it.72 → appel VM). Tests réécrits au NOUVEAU contrat : passthrough +
+  non-revert d'une mutation x (le scénario du bug) + projection nettoyée + addSticker VM.
+  56/56 (5 suites composer, 1 skip préexistant), build 20 s.
+  ORIGINE (pin périmé) :
   Preuve : VM et canvas mutent `effects.stickerObjects` DIRECTEMENT (deleteElement
   +Elements:365, duplicate +Slides:180, zOrder, gestes canvas) MAIS `mergeEffects` ÉCRASE
   ce champ depuis le @State View `stickerObjects` à chaque sync (+SyncRestore:139-140,
@@ -899,6 +909,14 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.76 — C13 : stickers en passthrough currentEffects (source unique, plan + incrément atomique)
+
+- Le test pinné de l'ancien monde (« deleted stickers must not resurrect ») encodait
+  l'écrasement canvas-authored — réécrit au nouveau contrat, avec le test du BUG réel
+  (mutation x d'un sticker survit au sync ; avant : revertée). Détail item C13 + plan.
+- Directive user reçue en cours de tour (bannière d'appel réductible en bulle) puis ANNULÉE
+  par le user (« pas dans tes activités » — domaine de l'agent calls). Aucune action.
 
 ## it.75 — C-DIR3 : self-heal du playback (kick borné quand un player reste .paused)
 

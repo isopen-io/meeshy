@@ -53,7 +53,6 @@ extension StoryComposerView {
         // Canvas-local state (read by buildEffects via canvasSyncFingerprint)
         selectedFilter = nil
         selectedImage = nil
-        stickerObjects = []
 
         // Transitions : état VM depuis it.70 — couvert par viewModel.reset(),
         // plus rien à nettoyer côté View.
@@ -75,25 +74,12 @@ extension StoryComposerView {
         lostMediaCount = 0
     }
 
-    /// C8 — ajoute un sticker au slide courant par le chemin AUTORITAIRE
-    /// actuel (le @State canvas-authored `stickerObjects`, écrasé dans
-    /// `mergeEffects` — un ajout direct à `currentEffects` serait effacé au
-    /// sync suivant, cf. C13). Décalage en cascade pour que plusieurs ajouts
-    /// successifs ne s'empilent pas exactement au même point.
-    func addSticker(emoji: String) {
-        let offset = Double(stickerObjects.count % 5) * 0.04
-        stickerObjects.append(StorySticker(emoji: emoji, x: 0.5 + offset, y: 0.5 + offset))
-        syncCurrentSlideEffects()
-        HapticFeedback.light()
-    }
-
     func restoreCanvas(from slide: StorySlide) {
         let e = slide.effects
         if let bgHex = e.background { viewModel.backgroundColor = "#\(bgHex)" }
         else { viewModel.backgroundColor = "#\(StoryBackgroundPalette.randomBackgroundColor())" }
         selectedImage = viewModel.slideImages[slide.id]
         viewModel.hasBackgroundImage = selectedImage != nil
-        stickerObjects = e.stickerObjects ?? []
         selectedFilter = e.filter.flatMap { StoryFilter(rawValue: $0) }
         viewModel.openingEffect = e.opening
         viewModel.closingEffect = e.closing
@@ -127,7 +113,6 @@ extension StoryComposerView {
     /// E2 2026-07-03).
     struct CanvasAuthoredState {
         var backgroundHex: String?
-        var stickerObjects: [StorySticker] = []
         var drawingData: Data?
         var drawingStrokes: [StoryDrawingStroke] = []
         var backgroundAudioId: String?
@@ -148,8 +133,15 @@ extension StoryComposerView {
     static func mergeEffects(current: StoryEffects, canvas: CanvasAuthoredState) -> StoryEffects {
         var effects = current
         effects.background = canvas.backgroundHex
-        effects.stickers = canvas.stickerObjects.isEmpty ? nil : canvas.stickerObjects.map(\.emoji)
-        effects.stickerObjects = canvas.stickerObjects.isEmpty ? nil : canvas.stickerObjects
+        // C13 — stickers PASSTHROUGH : `currentEffects` est la source unique
+        // (addSticker VM, deleteElement, duplicate, zOrder, gestes canvas via
+        // le binding $viewModel.currentSlide). Le canvas n'authore plus ce
+        // champ — l'ancien écrasement depuis un @State View rafraîchi
+        // seulement au slide-switch REVERTAIT ces mutations au sync suivant.
+        // Seule la projection legacy `stickers` (emojis, rétro-compat reader)
+        // est dérivée ici, au choke point unique du sync.
+        effects.stickers = (current.stickerObjects?.isEmpty == false)
+            ? current.stickerObjects?.map(\.emoji) : nil
         effects.drawingData = canvas.drawingData
         effects.drawingStrokes = canvas.drawingStrokes.isEmpty ? nil : canvas.drawingStrokes
         effects.backgroundAudioId = canvas.backgroundAudioId
@@ -182,7 +174,6 @@ extension StoryComposerView {
             current: viewModel.currentEffects,
             canvas: CanvasAuthoredState(
                 backgroundHex: bgHex,
-                stickerObjects: stickerObjects,
                 drawingData: viewModel.drawingData,
                 drawingStrokes: viewModel.drawingStrokes,
                 backgroundAudioId: selectedAudioId,
