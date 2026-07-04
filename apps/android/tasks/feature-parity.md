@@ -1076,7 +1076,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       guard (`pendingActionIds`) and snapshot rollback on failure (9 ViewModel tests, EN/FR/ES/PT) ;
       send (compose-new) + offline-queue + idempotency pending
 - [ ] Invite by email; invite by SMS; import phone contacts
-- [ ] Discover suggestions (cache-first) + live user search with inline connect
+- [~] Discover suggestions (cache-first) + live user search with inline connect —
+      **live search + inline connect shipped** (slice `discover-user-search`): the Discover tab
+      (was `ComingSoon()`) now runs a debounced-by-threshold user search (pure `:core:model`
+      `DiscoverSearch.action` — trim + ≥2-char gate, port of iOS `performSearch` guard) via
+      `UserRepository.searchUsers`, and renders each result with an inline connect control whose
+      state is the shared `UserRelationshipResolver` (pure `:core:model` `ConnectAction.from`,
+      port of iOS `ConnectionActionView`): Connect / Pending / Accept / Contact / Blocked / Hidden.
+      `connect` sends a request (row flips to Pending once the gateway mints the id), `acceptReceived`
+      accepts an inbound one optimistically with rollback; a cross-screen friendship change re-derives
+      every visible row via the `FriendshipCache.version` stream, so Discover stays in lock-step with
+      the Requests tab. +29 tests (13 `DiscoverSearch`, 16 `DiscoverViewModel`). **Pending:** the
+      empty-query cache-first suggestions list (iOS `loadSuggestions` via `CacheCoordinator.userSearch`).
 - [ ] Blocked-users list with confirm-to-unblock; optimistic unblock with rollback
 
 ## K. Profile & Account
