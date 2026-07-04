@@ -928,6 +928,16 @@ export class CallService {
         if (error === versionConflict) {
           return 'conflict' as const;
         }
+        // MongoDB can also detect the two racing transactions at the
+        // document level BEFORE our version guard returns count=0 — Prisma
+        // surfaces that as P2034 ("write conflict or deadlock, please
+        // retry"). Same semantics as versionConflict: retry against fresh
+        // state, where the already-joined check resolves a same-user
+        // double-join idempotently (observed in prod 2026-07-04: two
+        // call:join within ms → one joined, one errored to the client).
+        if ((error as { code?: string })?.code === 'P2034') {
+          return 'conflict' as const;
+        }
         throw error;
       }
     );

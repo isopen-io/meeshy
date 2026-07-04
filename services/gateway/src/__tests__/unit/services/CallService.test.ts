@@ -634,6 +634,70 @@ describe('CallService', () => {
       expect(result.iceServers).toBeDefined();
     });
 
+    it('retries on Mongo P2034 write conflict and resolves idempotently when the winner was the same user (prod 2026-07-04: double call:join within ms)', async () => {
+      const emptyCall = createMockCallSession({
+        status: CallStatus.initiated,
+        participants: [createMockParticipant()],
+        conversation: createMockConversation()
+      });
+      const callAfterWinner = createMockCallSession({
+        status: CallStatus.ringing,
+        participants: [
+          createMockParticipant(),
+          createMockParticipant({
+            participantId: 'participant-456',
+            userId: 'user-456',
+            user: createMockUser({ id: 'user-456' })
+          })
+        ],
+        initiator: createMockUser(),
+        conversation: createMockConversation()
+      });
+
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(emptyCall);
+      mockPrisma.participant.findFirst.mockResolvedValue({
+        id: 'member-456',
+        conversationId: 'conv-123',
+        userId: 'user-456',
+        isActive: true
+      });
+      const p2034 = Object.assign(new Error('Transaction failed due to a write conflict or a deadlock. Please retry your transaction'), {
+        code: 'P2034'
+      });
+      mockPrisma.$transaction.mockRejectedValueOnce(p2034);
+      mockPrisma.callSession.findUnique.mockResolvedValue(callAfterWinner);
+
+      const result = await callService.joinCall(validJoinData);
+
+      expect(result.callSession).toBeDefined();
+      expect(result.iceServers).toBeDefined();
+      expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('surfaces CALL_STATE_CONFLICT when the P2034 write conflict persists across the retry', async () => {
+      const emptyCall = createMockCallSession({
+        status: CallStatus.initiated,
+        participants: [createMockParticipant()],
+        conversation: createMockConversation()
+      });
+
+      mockPrisma.callSession.findUnique.mockResolvedValue(emptyCall);
+      mockPrisma.participant.findFirst.mockResolvedValue({
+        id: 'member-456',
+        conversationId: 'conv-123',
+        userId: 'user-456',
+        isActive: true
+      });
+      const p2034 = Object.assign(new Error('Transaction failed due to a write conflict or a deadlock. Please retry your transaction'), {
+        code: 'P2034'
+      });
+      mockPrisma.$transaction.mockRejectedValue(p2034);
+
+      await expect(callService.joinCall(validJoinData)).rejects.toThrow(
+        'CALL_STATE_CONFLICT'
+      );
+    });
+
     it('should throw error when max participants reached for P2P', async () => {
       const callWith2Participants = createMockCallSession({
         status: CallStatus.active,
