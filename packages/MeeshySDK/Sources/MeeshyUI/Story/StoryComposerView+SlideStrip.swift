@@ -17,9 +17,46 @@ extension StoryComposerView {
                 ForEach(Array(viewModel.slides.enumerated()), id: \.element.id) { index, slide in
                     slideThumb(slide: slide, index: index)
                 }
+                // C6 — l'ajout de slide a une affordance directe (avant, le
+                // seul chemin était long-press → Dupliquer). Masqué au cap de
+                // 10 slides : on n'affiche que l'utile ; `addSlide()` garde
+                // son guard `canAddSlide` en défense.
+                if viewModel.canAddSlide {
+                    addSlideThumb
+                }
             }
             .padding(.horizontal, 8)
         }
+    }
+
+    var addSlideThumb: some View {
+        let thumbH: CGFloat = 42
+        let thumbW: CGFloat = thumbH * 9 / 16
+        return Button {
+            // Même séquence que la sélection d'une vignette : figer le canvas
+            // courant dans son slide AVANT de basculer, puis recharger le
+            // canvas depuis le nouveau slide (vierge) focusé par addSlide().
+            syncCurrentSlideEffects()
+            withAnimation(.spring(response: 0.25)) { viewModel.addSlide() }
+            restoreCanvas(from: viewModel.currentSlide)
+            HapticFeedback.light()
+        } label: {
+            RoundedRectangle(cornerRadius: 3)
+                .strokeBorder(
+                    Color.white.opacity(0.35),
+                    style: StrokeStyle(lineWidth: 1, dash: [3, 2.5])
+                )
+                .frame(width: thumbW, height: thumbH)
+                .overlay(
+                    Image(systemName: "plus")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.white.opacity(0.85))
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 3))
+        }
+        .accessibilityLabel(
+            String(localized: "story.composer.addSlide", defaultValue: "Ajouter un slide", bundle: .module)
+        )
     }
 
     func slideThumb(slide: StorySlide, index: Int) -> some View {

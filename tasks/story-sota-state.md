@@ -189,10 +189,14 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   pure — `.toolPanel(.timeline)` inatteignable (guards tapFAB/swipeUpOnFAB/tapTile) ;
   (2) View — FAB onTap + onSwipeUp + tuile empty-state routent vers `isTimelineVisible = true`
   (parité chemin ⋯). Tests : BandStateMachineTests 19/19 (4 nouveaux) simu 18.2.
-- [ ] **C6 (P1) Aucun bouton/geste « ajouter un slide ».** `addSlide()` existe, testé, protocole
-  (`+Slides.swift:69`, `StoryComposerProviding.swift:143`) mais ZÉRO call site UI — seul chemin
-  utilisateur = long-press slide → Dupliquer (`+SlideStrip.swift:65-71`). Un processus de
-  création moderne exige un « + » évident (fin du slide strip) et/ou un geste.
+- [x] **C6 (P1) Aucun bouton/geste « ajouter un slide ».** ✅ it.68
+  Re-preuve : `addSlide()` testé (append+focus+cap 10+no-op au cap, StoryComposerViewModelTests)
+  mais zéro call site UI — seul chemin = long-press → Dupliquer. Livré : `addSlideThumb` en
+  bout de slide strip (vignette pointillée « + », même gabarit 42pt que les thumbs, séquence
+  sync→addSlide→restoreCanvas identique à la sélection, haptic, a11y label) ; MASQUÉ au cap
+  de 10 (n'afficher que l'utile ; le guard VM reste en défense). VÉRIFIÉ SIMULATEUR : « + »
+  visible à l'ouverture, tap → slide 2 créé+focusé (badge, bordure brand), canvas basculé
+  vierge, « + » décalé (captures scratchpad it68-composer/addslide.png). Build 34 s vert.
 - [ ] **C7 (P1) Sheet Transitions = STUB.** `transitionPicker` = `Text("Transitions")` sans
   contrôle (`+Publication.swift:13-16`) ; `openingEffect`/`closingEffect` sérialisés
   (`+SyncRestore.swift:59-60,87-88`) mais AUCUNE UI ne les définit. RE-PROUVER d'abord ce que
@@ -217,6 +221,12 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   (`StoryComposerSupportTypes.swift:19-26`) jamais consommé ; `texturePanel` = couleurs unies
   seulement (`ComposerToolPanelHost.swift:640-667`). Offrir la rangée gradients (réutilisation
   directe).
+- [ ] **C12 (P3, découvert it.68 simulateur) Chrome composer bilingue.** Preuve visuelle
+  (it68-quit.png) : alerte discard « Quit without publishing? / Save / Quit / Cancel » en
+  ANGLAIS pendant que les tuiles/titres sont en français, même écran. Cause probable = piège
+  xcstrings devRegion=en vs source=fr (cf. mémoire projet) : les clés de l'alerte ont une
+  traduction EN, les tuiles retombent sur defaultValue FR (locale simu EN). Auditer les
+  xcstrings du composer (story.composer.*) pour une couverture homogène 5 langues.
 
 ### ÉDITION — crash recovery & intégrité des données
 
@@ -811,6 +821,22 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.68 — C6 : « + » d'ajout de slide + vérification simulateur groupée C5/C6
+
+- C6 livré (addSlideThumb, View-only — comportement VM déjà pinné par
+  StoryComposerViewModelTests append/focus/cap). VÉRIFICATIONS SIMULATEUR (fresh install,
+  compte atabeth) : (1) C6 — « + » pointillé en bout de strip, tap → slide 2 créé/focusé/
+  canvas vierge ; (2) C5 — tuile Timeline empty-state → la SHEET timeline s'ouvre (Simple/
+  Pro, transport, règle) au lieu de l'ancien band vide ; swipe-down la ferme, retour propre
+  à l'empty-state (boucle apparition/disparition 100 % gestuelle) ; sortie X → alerte →
+  Quit (brouillon de test jeté). Captures it68-*.png au scratchpad.
+- CI des commits C5/C4 : runs C5 « cancelled » = concurrency group (remplacés par les runs
+  C4 qui couvrent les 2 commits) ; C4 in_progress au moment du commit — vérifier it.69.
+- Nouveau finding C12 (P3) : chrome composer bilingue (alerte EN / tuiles FR, capture) —
+  piège xcstrings devRegion, audit story.composer.* à faire.
+- C4 visuel : double-tap reset NON vérifiable au simulateur (pinch 3 doigts impossible) —
+  reste pour la passe device (avec C4-snap au relâcher réel).
 
 ## it.67 — C4 : sortie gestuelle du zoom viewport (double-tap reset + snap identité)
 
