@@ -650,7 +650,7 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.54 — W6 : PostComposer ne publie plus d'audience vide (759e4e0ca)
+## it.54 — W6 : PostComposer ne publie plus d'audience vide (bf63b0205)
 
 - Gate + picker promus au module AudienceUserPicker (source unique, StoryComposer importe
   désormais au lieu de définir) ; guard aussi DANS handlePublish (défense en profondeur
