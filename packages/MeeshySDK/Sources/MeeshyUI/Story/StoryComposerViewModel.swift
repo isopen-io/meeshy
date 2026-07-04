@@ -89,6 +89,15 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         .map { _ in () }
         .eraseToAnyPublisher()
 
+    /// C9 Inc.3 — purge PARESSEUSE : les bitmaps/URLs des médias supprimés
+    /// sont mis de côté (au lieu d'être jetés) tant que l'historique peut les
+    /// restaurer — sans ça, l'undo d'une suppression ramènerait une référence
+    /// SANS bitmap (le piège du plan). Vidés par `seedHistory()` et `reset()`.
+    var retiredImages: [String: UIImage] = [:]
+    var retiredVideoURLs: [String: URL] = [:]
+    var retiredAudioURLs: [String: URL] = [:]
+    var retiredSlideImages: [String: UIImage] = [:]
+
     // MARK: - Floating Text Edit Mode
 
     /// Mode d'édition de texte plein écran (overlay flottant). `.inactive` par

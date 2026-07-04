@@ -386,9 +386,11 @@ extension StoryComposerViewModel {
         if selectedElementId == id { selectedElementId = nil }
         // Si on supprime le texte en cours d'édition flottante, sortir du mode.
         if textEditingMode.activeTextId == id { textEditingMode = .inactive }
-        loadedImages.removeValue(forKey: id)
-        loadedVideoURLs.removeValue(forKey: id)
-        loadedAudioURLs.removeValue(forKey: id)
+        // C9 Inc.3 — retrait PARESSEUX : l'historique global peut restaurer
+        // cet élément ; ses ressources partent en staging, pas à la poubelle.
+        if let img = loadedImages.removeValue(forKey: id) { retiredImages[id] = img }
+        if let url = loadedVideoURLs.removeValue(forKey: id) { retiredVideoURLs[id] = url }
+        if let url = loadedAudioURLs.removeValue(forKey: id) { retiredAudioURLs[id] = url }
         mediaAspectRatios.removeValue(forKey: id)
         zIndexMap.removeValue(forKey: id)
     }

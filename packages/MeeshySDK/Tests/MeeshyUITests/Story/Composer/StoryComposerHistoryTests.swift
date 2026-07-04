@@ -50,6 +50,64 @@ final class StoryComposerHistoryTests: XCTestCase {
         XCTAssertTrue(vm.canUndoGlobal, "la sortie du dessin capture le résultat")
     }
 
+    // MARK: - Inc.3 — restauration
+
+    func test_undoGlobal_restoresPreviousState_andRedoReapplies() throws {
+        let vm = StoryComposerViewModel()
+        vm.seedHistory()
+        let text = try XCTUnwrap(vm.addText())
+        vm.pushHistorySnapshot()
+        vm.deleteElement(id: text.id)
+        vm.pushHistorySnapshot()
+        XCTAssertTrue(vm.currentEffects.textObjects.isEmpty)
+
+        XCTAssertTrue(vm.undoGlobal())
+        XCTAssertEqual(vm.currentEffects.textObjects.first?.id, text.id,
+                       "l'undo ramène le texte supprimé")
+        XCTAssertTrue(vm.canRedoGlobal)
+
+        XCTAssertTrue(vm.redoGlobal())
+        XCTAssertTrue(vm.currentEffects.textObjects.isEmpty,
+                      "le redo ré-applique la suppression")
+    }
+
+    func test_undoGlobal_restoresRetiredMediaBitmap() {
+        let vm = StoryComposerViewModel()
+        vm.seedHistory()
+        var effects = vm.currentEffects
+        effects.mediaObjects = [StoryMediaObject(id: "m1", mediaType: "image",
+                                                 aspectRatio: 1.0, zIndex: 1)]
+        vm.currentEffects = effects
+        vm.loadedImages["m1"] = UIImage()
+        vm.pushHistorySnapshot()
+
+        vm.deleteElement(id: "m1")
+        vm.pushHistorySnapshot()
+        XCTAssertNil(vm.loadedImages["m1"], "le bitmap part en staging à la suppression")
+
+        XCTAssertTrue(vm.undoGlobal())
+        XCTAssertNotNil(vm.loadedImages["m1"],
+                        "purge paresseuse : l'undo restaure la référence ET son bitmap")
+    }
+
+    func test_undoGlobal_rehydratesZOrderFromRestoredObjects() throws {
+        let vm = StoryComposerViewModel()
+        vm.seedHistory()
+        let a = try XCTUnwrap(vm.addText())
+        let b = try XCTUnwrap(vm.addText())
+        vm.bringToFront(id: a.id)
+        vm.pushHistorySnapshot()
+        let promotedZ = vm.zIndex(for: a.id)
+
+        vm.deleteElement(id: a.id)
+        vm.pushHistorySnapshot()
+        XCTAssertTrue(vm.undoGlobal())
+
+        XCTAssertEqual(vm.zIndex(for: a.id), promotedZ,
+                       "le z-order VM se réhydrate depuis les champs persistés restaurés")
+        XCTAssertGreaterThan(vm.zIndex(for: a.id), vm.zIndex(for: b.id))
+    }
+
     func test_encodeHistorySnapshot_isDeterministic() {
         let slides = [StorySlide()]
         let a = StoryComposerViewModel.encodeHistorySnapshot(slides)

@@ -275,8 +275,15 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   sur changement réel uniquement (boucle trigger fermée par la dédup). 5 tests
   StoryComposerHistoryTests (dédup/capture/re-seed/exclusion dessin/déterminisme encodage).
   Piège : `private(set)` inaccessible depuis l'extension +History → setter interne.
-  RESTE : Inc.3 restore+purge paresseuse, Inc.4 UI discrète (shake + icônes
-  conditionnelles), Inc.5 vérif simulateur. ORIGINE :** Undo/redo existe UNIQUEMENT en dessin
+  ✅ Inc.3 it.83 : restauration + purge PARESSEUSE — `undoGlobal`/`redoGlobal` (décodage,
+  clamp d'index, sélection reset, `rehydrateZIndexMapFromSlide()` RÉUTILISÉ — mécanisme
+  existant du changement de slide) ; le piège bitmaps FERMÉ : deleteElement/removeSlide
+  mettent les ressources en STAGING (`retired*`) au lieu de les jeter, le restore re-merge
+  ce que l'état restauré référence, seed/reset vident le staging. La dédup absorbe le cycle
+  trigger post-restore (l'état appliqué EST entries[index]). 3 tests restauration (undo/redo
+  structurel, bitmap récupéré, z-order réhydraté) — 49/49 sur 3 suites.
+  RESTE : Inc.4 UI discrète (shake + icônes conditionnelles), Inc.5 vérif simulateur.
+  ORIGINE :** Undo/redo existe UNIQUEMENT en dessin
   (DrawingEditFloatingBubbles) + CommandStack timeline (séparé). Ajout/déplacement/suppression
   de texte/média/sticker/fond : irréversibles (seul « annuler » = ⋯ → Supprimer tous les
   slides !). Chantier : étendre le pattern CommandStack au canvas — PLAN requis avant code.
@@ -963,6 +970,12 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.83 — C9 Inc.3 : undo/redo appliqués, purge des médias devenue paresseuse
+
+- Réutilisation clef : rehydrateZIndexMapFromSlide (déjà éprouvé au slide-switch) évite
+  toute nouvelle logique z-order au restore. Le staging retired* borne la mémoire au
+  contenu réellement supprimé pendant la session.
 
 ## it.82 — C9 Inc.2 : capture globale câblée (un trigger débouncé, zéro trou)
 
