@@ -132,11 +132,6 @@ public struct StoryComposerView: View {
     @State var audiencePickerMode: PostVisibility?
     @State var lostMediaCount: Int = 0  // > 0 triggers an alert after restoreDraft
 
-    // MARK: - Transition effects (local until synced to effects)
-
-    @State var openingEffect: StoryTransitionEffect?
-    @State var closingEffect: StoryTransitionEffect?
-
     // MARK: - Keyboard observation + canvas shift
 
     @State var keyboardHeight: CGFloat = 0

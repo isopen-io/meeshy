@@ -122,6 +122,16 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
 
     @Published var backgroundColor: String = "#\(StoryBackgroundPalette.randomBackgroundColor())"
 
+    // MARK: - Transitions du slide courant
+    //
+    // État VM (et non @State View) : une seule source de vérité pour la sheet
+    // ⋯ Transitions ET le panneau Fond du band (C1), et surtout couverte par
+    // `reset()` — l'ancien @State View survivait à `viewModel.reset()` et la
+    // chaîne de sync ré-injectait l'effet dans le slide vierge (la classe de
+    // bug que `resetLocalState()` documente).
+    @Published var openingEffect: StoryTransitionEffect?
+    @Published var closingEffect: StoryTransitionEffect?
+
     // Per-slide background image transforms (persisted across slide changes)
     struct BackgroundTransform {
         var scale: CGFloat = 1.0

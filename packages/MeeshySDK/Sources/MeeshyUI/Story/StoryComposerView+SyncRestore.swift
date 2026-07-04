@@ -55,9 +55,8 @@ extension StoryComposerView {
         selectedImage = nil
         stickerObjects = []
 
-        // Transitions (read by buildEffects)
-        openingEffect = nil
-        closingEffect = nil
+        // Transitions : état VM depuis it.70 — couvert par viewModel.reset(),
+        // plus rien à nettoyer côté View.
 
         // Background audio panel (read by buildEffects)
         selectedAudioId = nil
@@ -84,8 +83,8 @@ extension StoryComposerView {
         viewModel.hasBackgroundImage = selectedImage != nil
         stickerObjects = e.stickerObjects ?? []
         selectedFilter = e.filter.flatMap { StoryFilter(rawValue: $0) }
-        openingEffect = e.opening
-        closingEffect = e.closing
+        viewModel.openingEffect = e.opening
+        viewModel.closingEffect = e.closing
         selectedAudioId = e.backgroundAudioId
         selectedAudioTitle = selectedAudioId != nil ? "Audio" : nil
         audioVolume = e.backgroundAudioVolume ?? 0.7
@@ -178,8 +177,8 @@ extension StoryComposerView {
                 audioVolume: audioVolume,
                 audioTrimStart: audioTrimStart,
                 audioTrimEnd: audioTrimEnd,
-                opening: openingEffect,
-                closing: closingEffect,
+                opening: viewModel.openingEffect,
+                closing: viewModel.closingEffect,
                 backgroundTransform: bgTransform
             )
         )

@@ -180,6 +180,7 @@ extension StoryComposerView {
             stickersCount: stickerObjects.count,
             drawingCount: viewModel.drawingData?.count ?? 0,
             bgColor: viewModel.backgroundColor,
+            opening: viewModel.openingEffect,
             action: { syncCurrentSlideEffects() }
         )
     }

@@ -181,7 +181,7 @@ struct ComposerToolPanelHost: View {
         case .audio:    return 220
         case .drawing:  return 280   // liste des traits
         case .text:     return 280
-        case .texture:  return 160
+        case .texture:  return 236  // couleurs + rangée « Ouverture » (C1)
         case .filters:  return 180
         case .timeline: return 0  // presented as sheet, not in band
         }
@@ -638,31 +638,52 @@ struct ComposerToolPanelHost: View {
     }
 
     private var texturePanel: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                ForEach(StoryBackgroundPalette.colors, id: \.self) { hex in
-                    let isSelected = viewModel.backgroundColor == "#\(hex)"
-                    Button {
-                        viewModel.backgroundColor = "#\(hex)"
-                        viewModel.hasBackgroundImage = false
-                        HapticFeedback.light()
-                    } label: {
-                        Circle().fill(Color(hex: hex))
-                            .frame(width: 44, height: 44)
-                            .overlay(
-                                Circle().stroke(Color.white, lineWidth: isSelected ? 3 : 0)
-                                    .padding(2)
-                            )
-                            .shadow(color: Color(hex: hex).opacity(isSelected ? 0.5 : 0), radius: 6)
+        VStack(alignment: .leading, spacing: 0) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(StoryBackgroundPalette.colors, id: \.self) { hex in
+                        let isSelected = viewModel.backgroundColor == "#\(hex)"
+                        Button {
+                            viewModel.backgroundColor = "#\(hex)"
+                            viewModel.hasBackgroundImage = false
+                            HapticFeedback.light()
+                        } label: {
+                            Circle().fill(Color(hex: hex))
+                                .frame(width: 44, height: 44)
+                                .overlay(
+                                    Circle().stroke(Color.white, lineWidth: isSelected ? 3 : 0)
+                                        .padding(2)
+                                )
+                                .shadow(color: Color(hex: hex).opacity(isSelected ? 0.5 : 0), radius: 6)
+                        }
+                        .accessibilityLabel(String(localized: "story.background.swatch", defaultValue: "Couleur de fond", bundle: .module))
+                        .accessibilityValue("#\(hex)")
+                        .accessibilityHint(String(localized: "story.background.swatch.hint", defaultValue: "Touchez pour appliquer ce fond.", bundle: .module))
+                        .accessibilityAddTraits(isSelected ? .isSelected : [])
                     }
-                    .accessibilityLabel(String(localized: "story.background.swatch", defaultValue: "Couleur de fond", bundle: .module))
-                    .accessibilityValue("#\(hex)")
-                    .accessibilityHint(String(localized: "story.background.swatch.hint", defaultValue: "Touchez pour appliquer ce fond.", bundle: .module))
-                    .accessibilityAddTraits(isSelected ? .isSelected : [])
                 }
+                .padding(.horizontal, 2)
+                .padding(.vertical, 14)
             }
+
+            // C1 — l'animation d'ouverture du slide devient accessible par
+            // GESTE (FAB Fond → band → chips ; swipe-down pour fermer), plus
+            // seulement via le menu ⋯ → sheet Transitions. Même source de
+            // vérité (viewModel.openingEffect) et même persistance
+            // (granularCanvasSync) que la sheet — cf. OpeningEffectChips.
+            Text(String(
+                localized: "story.composer.openingTitle",
+                defaultValue: "Ouverture du slide",
+                bundle: .module
+            ))
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundColor(.white.opacity(0.65))
             .padding(.horizontal, 2)
-            .padding(.vertical, 14)
+            .padding(.bottom, 8)
+
+            OpeningEffectChips(selection: viewModel.openingEffect) { effect in
+                viewModel.openingEffect = effect
+            }
         }
     }
 }

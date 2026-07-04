@@ -79,6 +79,8 @@ extension StoryComposerViewModel {
         activeBrushSmoothing = .raw
         drawingEditingMode = .inactive
         backgroundColor = "#\(StoryBackgroundPalette.randomBackgroundColor())"
+        openingEffect = nil
+        closingEffect = nil
         loadedImages = [:]
         loadedVideoURLs = [:]
         loadedAudioURLs = [:]

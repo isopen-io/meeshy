@@ -150,10 +150,17 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   cycle videoFitMode, item=éditeur dédié), pan/pinch/rotation par élément (snap rails,
   rotation interdite sur bg, sensibilités réduites), pinch 3 doigts=viewport, long-press=
   context menu (Modifier/Dupliquer/Plans/Supprimer). Anomalies → C5-C11 ci-dessous.
-- [ ] **C1 (P2) Accès Transitions et Timeline enterrés dans le menu ⋯** (`+TopBar.swift:138-149`).
-  Deux tools de création à part entière cachés derrière un menu à 2 niveaux — contraire à
-  « passer à autre chose par une gestuelle ». La timeline a pourtant un FAB (badge
-  timelineBadge) ; Transitions n'a AUCUN accès gestuel. À réconcilier avec la grammaire FAB/band.
+- [x] **C1 (P2) Accès Transitions et Timeline enterrés dans le menu ⋯.** ✅ it.70
+  Volet timeline : résolu par C5 (FAB → sheet). Volet transitions : l'ouverture du slide est
+  désormais dans le PANNEAU FOND (FAB Fond → band → rangée « Ouverture », swipe-down ferme) —
+  accès 100 % gestuel ; la sheet ⋯ reste (deux surfaces, une source de vérité).
+  FIX D'ALTITUDE au passage : `openingEffect`/`closingEffect` migrés @State View → @Published
+  VM (classe de bug « survit à vm.reset() » documentée par resetLocalState — FERMÉE pour ces
+  champs : reset() les couvre, test RED→GREEN `test_reset_clearsOpeningAndClosingEffects`) ;
+  composant partagé `OpeningEffectChips` (sheet + panneau) ; persistance UNIFIÉE via
+  granularCanvasSync (openingEffect tracké O(1) — l'explicit sync de la sheet C7 supprimé).
+  Piège rencontré : +GranularSync.swift n'importait pas MeeshySDK (erreurs en cascade sur les
+  tests — fix = import). 39/39 (3 suites composer), build 57 s vert.
 - [ ] **C2 (P3) `swipeHorizontalOnBand()` = code mort** (corps vide, BandStateMachine.swift:114-116)
   MAIS le DragGesture du band détecte toujours le swipe horizontal et l'appelle pour rien
   (ControlsLayer:214-217). Soit retirer la détection, soit lui donner un sens (candidat :
@@ -832,6 +839,12 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.70 — C1 : ouverture du slide accessible par geste (panneau Fond) + état VM
+
+- Détail dans l'item C1 §3. Reste vérif simulateur du panneau Fond enrichi (prochain tour,
+  avec la passe visuelle du band). Directive user re-confirmée en cours de tour : committer
+  régulièrement, pusher dès que compile + tests verts — appliqué (push immédiat post-gates).
 
 ## it.69 — C7 : la sheet Transitions devient réelle (picker d'ouverture du slide)
 

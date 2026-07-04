@@ -36,55 +36,15 @@ extension StoryComposerView {
                 .font(.system(size: 12))
                 .foregroundColor(.white.opacity(0.55))
             }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    openingEffectChip(nil)
-                    ForEach(StoryTransitionEffect.allCases, id: \.self) { effect in
-                        openingEffectChip(effect)
-                    }
-                }
-                .padding(.horizontal, 2)
+            // Persistance via granularCanvasSync (openingEffect tracké) —
+            // même chemin que le panneau Fond du band (C1, source unique VM).
+            OpeningEffectChips(selection: viewModel.openingEffect) { effect in
+                viewModel.openingEffect = effect
             }
             Spacer(minLength: 0)
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    func openingEffectChip(_ effect: StoryTransitionEffect?) -> some View {
-        let isSelected = openingEffect == effect
-        let title = effect?.label ?? String(
-            localized: "story.composer.openingNone",
-            defaultValue: "Aucune",
-            bundle: .module
-        )
-        return Button {
-            openingEffect = effect
-            // Sync immédiat : l'effet appartient au slide COURANT (restauré
-            // par restoreCanvas au changement de slide) — on ne dépend pas de
-            // la chaîne de fingerprint pour persister le choix.
-            syncCurrentSlideEffects()
-            HapticFeedback.light()
-        } label: {
-            Text(title)
-                .font(.system(size: 13, weight: isSelected ? .bold : .medium))
-                .foregroundColor(.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(
-                    Capsule().fill(
-                        isSelected
-                        ? MeeshyColors.brandPrimary.opacity(0.85)
-                        : Color.white.opacity(0.10)
-                    )
-                )
-                .overlay(
-                    Capsule().strokeBorder(
-                        Color.white.opacity(isSelected ? 0.35 : 0.12),
-                        lineWidth: 1
-                    )
-                )
-        }
     }
 
     func publishAllSlides() {
