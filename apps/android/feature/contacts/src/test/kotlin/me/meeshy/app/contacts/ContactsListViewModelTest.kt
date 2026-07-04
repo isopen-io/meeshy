@@ -162,6 +162,26 @@ class ContactsListViewModelTest {
     }
 
     @Test
+    fun `filterCounts reflects the roster and shrinks with the search query`() = runTest {
+        val vm = viewModel(
+            received = listOf(
+                accepted("r1", sender = user("online", username = "online", isOnline = true)),
+                accepted("r2", sender = user("offline", username = "offline", isOnline = false)),
+            ),
+        )
+
+        assertThat(vm.state.value.filterCounts.all).isEqualTo(2)
+        assertThat(vm.state.value.filterCounts.online).isEqualTo(1)
+        assertThat(vm.state.value.filterCounts.offline).isEqualTo(1)
+
+        vm.search("online")
+
+        assertThat(vm.state.value.filterCounts.all).isEqualTo(1)
+        assertThat(vm.state.value.filterCounts.online).isEqualTo(1)
+        assertThat(vm.state.value.filterCounts.offline).isEqualTo(0)
+    }
+
+    @Test
     fun `dismissError clears the error message`() = runTest {
         coEvery { repository.receivedRequests(any(), any()) } returns NetworkResult.Failure(ApiError("boom"))
         coEvery { repository.sentRequests(any(), any()) } returns NetworkResult.Failure(ApiError("boom"))

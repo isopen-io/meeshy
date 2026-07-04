@@ -4,7 +4,21 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Contacts) — slice `contacts-friends-room-cache` ✅
+## This loop (Phase: Contacts) — slice `contacts-filter-counts` ✅
+The **per-filter chip counts** on the Contacts list (iOS parity — "All/online chips show counts").
+Pure `:core:model` `ContactList.counts(friends, query) → ContactFilterCounts` (all/online/offline sizes
+under the active search; online+offline partition all by construction) is the SSOT, exposed on
+`ContactsListUiState.filterCounts` and rendered as a `label  count` badge on each chip via
+`ContactFilterCounts.forFilter`. **Surpasses iOS**, whose counts ignore the search field. +7 tests
+(6 model, 1 VM). `:core:model` + `:feature:contacts` `testDebugUnitTest` + `:app:assembleDebug` green
+(system Gradle 8.14.3). Diff = `apps/android` only. See PROGRESS.md run log.
+
+### Next
+1. **Mood-emoji presence** on friend rows (last Contacts-list display gap), or the **send compose-new UI**
+   (dedicated user-search → connect surface), or the **worker drain-list test** (Robolectric).
+2. Then Profile & Account (§K) or back to Calls platform glue (ConnectionService/WebRTC).
+
+## Prior loop (Phase: Contacts) — slice `contacts-friends-room-cache` ✅
 The **friends Room cache for cold-start paint** (iOS `CacheCoordinator.friends`) — the Contacts tab
 now paints the last-known friend list instantly on cold launch, surviving process death and working
 offline, instead of blocking on the received/sent fetch behind a skeleton. `:core:database`
