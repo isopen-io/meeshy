@@ -165,10 +165,14 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   MAIS le DragGesture du band détecte toujours le swipe horizontal et l'appelle pour rien
   (ControlsLayer:214-217). Soit retirer la détection, soit lui donner un sens (candidat :
   switch d'outil actif par swipe horizontal sur le band — cohérent mission C).
-- [ ] **C3 (P2) Chrome totalement caché = zéro affordance de récupération.** FABs cachés
-  (swipe-down) + band fermé → écran nu ; seul un tap « au hasard » sur le fond restaure le
-  chrome. Aucun indice visuel (pas de poignée fantôme, pas de hint première fois).
-  Volet zoom élucidé it.66 → C4 (sortie bouton-only).
+- [x] **C3 (P2) Chrome totalement caché = zéro affordance de récupération.** ✅ it.71
+  Livré : `fabRestoreHandle` — poignée capsule fantôme (34×5, blanc 0.28, zone tappable
+  ≥44 pt, a11y « Afficher les outils ») affichée UNIQUEMENT dans l'état nu
+  (`!areFabsVisible && band == .hidden`), même grammaire que le grabber du band replié ;
+  tap OU swipe-up = FABs de retour ; le tap canvas reste actif en parallèle. Le picker
+  empty-state n'est pas concerné (il remplace ControlsLayer). Build vert, commit 0f8b5d3d1.
+  RESTE : vérif visuelle simulateur (exige composer non-vide → swipe-down FABs) — prochaine
+  passe simulateur.
 - [x] **C4 (P1) Sortie du zoom viewport = bouton uniquement, et état zoomé « collant ».** ✅ it.67
   Livré : `CanvasViewportZoomPolicy` (rule engine pur MeeshyUI/Canvas) — `settledScale`
   (clamp [0.5,4] + snap identité |raw−1| < 0,08 → 1.0 exact au `.ended` du pinch) et
@@ -839,6 +843,22 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.71 — C3 (poignée fantôme) + MAIN DÉBLOQUÉ + directive tray (+ coupé)
+
+- C3 livré (détail item §3). En route, MAIN CASSÉ découvert (commit calls 0f5eefe59) :
+  CallSignalGlyph.swift jamais enregistré au pbxproj (CI verte car elle régénère via
+  xcodegen ; TOUT build local meeshy.sh cassé) + typealias déclaré dans un body @ViewBuilder
+  (rejeté par le result builder). Fix : enregistrement pbxproj MANUEL (4 entrées — PAS de
+  régénération xcodegen : project.yml porte encore CURRENT_PROJECT_VERSION=1 vs 1216 live,
+  piège connu du chantier xcodegen reverté) + typealias remonté au niveau du type
+  (0f4f43cbd). Piège consigné : « CI verte ≠ main buildable localement » pour tout commit
+  qui ajoute un .swift sans toucher le pbxproj.
+- DIRECTIVE USER (screenshot) : badge « + » de la bulle « Moi » COUPÉ dans le tray — cause :
+  offset(-4,-4) faisait déborder le badge 40 pt du cadre de cellule, rogné par le conteneur.
+  Fix : badge 34 pt SANS offset (entièrement contenu — plus rien ne peut être rogné quel que
+  soit le clipping parent), glyphe 19, stroke 2.5. VÉRIFIÉ SIMULATEUR (it71-tray.png :
+  cercle complet, mood intact).
 
 ## it.70 — C1 : ouverture du slide accessible par geste (panneau Fond) + état VM
 
