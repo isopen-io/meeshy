@@ -282,7 +282,19 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   ce que l'état restauré référence, seed/reset vident le staging. La dédup absorbe le cycle
   trigger post-restore (l'état appliqué EST entries[index]). 3 tests restauration (undo/redo
   structurel, bitmap récupéré, z-order réhydraté) — 49/49 sur 3 suites.
-  RESTE : Inc.4 UI discrète (shake + icônes conditionnelles), Inc.5 vérif simulateur.
+  ✅ Inc.4 it.84 : icônes undo/redo dans le header, PRÉSENTES UNIQUEMENT quand la
+  trajectoire le permet (canUndo/canRedo — « n'afficher que l'utile ») ; performUndo/Redo
+  View-side = même séquence que la sélection de vignette (restoreCanvas + timeline reload).
+  Shake-to-undo DIFFÉRÉ : conflit de first responder avec l'éditeur texte inline (risque
+  documenté — à trancher produit).
+  ✅ Inc.5 it.84 : VÉRIFIÉ SIMULATEUR en conditions réelles — trait ajouté par accident sur
+  le draft du user → sortie dessin → icône undo APPARUE dans le header (redo absente) →
+  tap → trait disparu (pixels redevenus cyan) → header basculé sur redo-seul (plancher).
+  L'accident a été réparé par l'outil lui-même. C9 COMPLET côté autonome (shake = option).
+  BONUS it.84 : BUG-2 VÉRIFIÉ VISUELLEMENT (draft user plein écran bord à bord, letterbox
+  cyan, zéro zone noire) et BUG-4 VÉRIFIÉ (carte cardée sous la status bar en mode dessin,
+  9:16 entier). C-DIR4 : 4/4 bugs fixés ET vérifiés. Le draft du user (cyan+taco+trait) a
+  été PRÉSERVÉ tel quel (reprise fidèle re-prouvée + sortie par Save).
   ORIGINE :** Undo/redo existe UNIQUEMENT en dessin
   (DrawingEditFloatingBubbles) + CommandStack timeline (séparé). Ajout/déplacement/suppression
   de texte/média/sticker/fond : irréversibles (seul « annuler » = ⋯ → Supprimer tous les
@@ -970,6 +982,12 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.84 — C9 Inc.4+5 : UI discrète livrée + cycle undo vérifié en conditions réelles
+
+- La vérification s'est faite SUR le draft vivant du user (préservé) : mon trait accidentel
+  de session a servi de mutation de test, retiré par l'undo global fraîchement livré.
+  BUG-2 et BUG-4 confirmés visuellement au passage — C-DIR4 entièrement clos.
 
 ## it.83 — C9 Inc.3 : undo/redo appliqués, purge des médias devenue paresseuse
 
