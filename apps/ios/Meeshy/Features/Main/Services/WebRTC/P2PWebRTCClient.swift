@@ -1105,6 +1105,10 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     // MARK: - DataChannel
 
     func createDataChannel(label: String) -> Bool {
+        // Idempotent : les re-négociations (ICE restart, escalade vidéo)
+        // repassent par createOffer — ne jamais empiler un second channel
+        // sur la même peer connection.
+        if transcriptionDataChannel != nil { return true }
         guard let pc = peerConnection else { return false }
         let config = RTCDataChannelConfiguration()
         config.isOrdered = true

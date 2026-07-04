@@ -2452,6 +2452,25 @@ export class CallEventsHandler {
         const userInfo = getUserInfo?.(socket.id);
         const isAnonymous = userInfo?.isAnonymous || false;
 
+        // [Perf raccroché 2026-07-04] Fast-path : le pair doit couper
+        // INSTANTANÉMENT quand l'autre raccroche — or le chemin terminal
+        // ci-dessous enchaîne plusieurs allers-retours MongoDB
+        // (resolveParticipantIdFromCall → endCall → resolveCallEndedRooms)
+        // avant le premier broadcast. L'appartenance du socket émetteur à la
+        // call room EST l'autorisation (rejoindre la room a exigé un
+        // call:join vérifié en DB) : on notifie la room immédiatement,
+        // en mémoire pure. Le broadcast autoritatif (durée réelle, raison
+        // normalisée, audience élargie conversation + user rooms) suit —
+        // les clients dédupliquent sur leur état terminal.
+        if (socket.rooms.has(ROOMS.call(data.callId))) {
+          socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.ENDED, {
+            callId: data.callId,
+            duration: 0,
+            endedBy: userId,
+            reason: (data.reason || 'completed') as CallEndReason
+          } as CallEndedEvent);
+        }
+
         const endParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
         if (!endParticipantId) {
           socket.emit(CALL_EVENTS.ERROR, {

@@ -726,7 +726,7 @@ protocol WebRTCClientProviding: AnyObject {
 
 // MARK: - DataChannel Transcription Message
 
-struct DataChannelTranscriptionMessage: Codable, Sendable {
+struct DataChannelTranscriptionMessage: Codable, Sendable, Equatable {
     let type: String  // "transcription-segment"
     let text: String
     let speakerId: String
@@ -735,6 +735,41 @@ struct DataChannelTranscriptionMessage: Codable, Sendable {
     let language: String
     let translatedText: String?
     let translatedLanguage: String?
+}
+
+// MARK: - DataChannel Control Messages
+
+/// Message de CONTRÔLE in-band sur le data channel — enveloppe minimale
+/// `{type, reason?}`. Le type `"bye"` signale le raccroché du pair en P2P
+/// direct : zéro aller-retour serveur, l'autre bout coupe instantanément
+/// (parité WhatsApp). Le fanout socket `call:ended` reste le chemin
+/// AUTORITATIF (et le seul qui atteint un pair dont le média est déjà mort) ;
+/// le bye n'est qu'un raccourci — les deux chemins sont dédupliqués par le
+/// garde `.ended` de `handleRemoteEnd`.
+struct DataChannelControlMessage: Codable, Sendable, Equatable {
+    let type: String
+    let reason: String?
+}
+
+/// Routage typé des messages entrants du data channel. Pur et testable :
+/// une seule passe de décodage décide bye / segment de transcription / bruit
+/// (ping keep-alive, payload inconnu d'une version future).
+enum DataChannelInbound: Equatable {
+    case bye(reason: String?)
+    case transcription(DataChannelTranscriptionMessage)
+    case ignored
+
+    static func decode(_ data: Data) -> DataChannelInbound {
+        if let segment = try? JSONDecoder().decode(DataChannelTranscriptionMessage.self, from: data),
+           segment.type == "transcription-segment" {
+            return .transcription(segment)
+        }
+        if let control = try? JSONDecoder().decode(DataChannelControlMessage.self, from: data),
+           control.type == "bye" {
+            return .bye(reason: control.reason)
+        }
+        return .ignored
+    }
 }
 
 // MARK: - WebRTC Client Delegate
