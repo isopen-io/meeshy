@@ -424,8 +424,11 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
   DÉPLOIEMENT gateway requis (avec G1/G2).
 - [ ] **G4 (P3) Champ mort `Post.storyViews Json?`** (schema L2874, jamais écrit/lu — PostView
   est la vérité). Retirer du schema (migration) ou documenter.
-- [ ] **G5 (P3) Consolider les 3 implémentations de visibilité** (PostFeedService,
-  PostService, canUserViewPost) en un module unique — risque de dérive/fuite documenté.
+- [x] **G5 (P3) Consolider les 3 implémentations de visibilité** ✅ it.60
+  `buildPostVisibilityOrFilter` (posts/postVisibility.ts, à côté de son miroir impératif
+  canUserViewPost) = source unique ; les deux services délèguent (no-op strict, chaque
+  call site garde son audience) ; shape pinnée par suite dédiée. La consolidation a
+  RÉVÉLÉ la vraie divergence → décision produit §4 ci-dessous. 134/134, tsc 0.
 - [x] **G6 (P3) Constante d'expiry unifiée.** ✅ it.26
   `StoryItem.defaultExpiryInterval = 21 h` (aligné STORY_EXPIRY_HOURS serveur) remplace le
   défaut interne 24 h d'`isExpired` ; test du contrat + pins adaptés (le pin 24 h a échoué
@@ -582,6 +585,13 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 
 ## 4. Décisions produit EN ATTENTE (ne pas trancher seul)
 
+- **Audience FRIENDS/EXCEPT divergente (découverte G5/it.60)** : le FEED élargit à
+  friends ∪ contacts DM ; getPostById/canUserViewPost = friends STRICTS. Impact concret :
+  une story FRIENDS d'un contact DM (non-ami formel) apparaît au tray mais le fetch
+  unitaire (R4 inc.2) et les handlers réactions la REFUSENT. Trancher : élargir partout
+  (contacts DM = cercle proche) ou restreindre le feed (FRIENDS strict). Le fix = 1 call
+  site désormais (buildPostVisibilityOrFilter).
+
 - E7 : câbler ou retirer le publish in-timeline (`handlePublishTap`).
 - E8 : multi-draft (galerie) — oui/non + scope.
 - WS5.4b (hérité) : promotion `media[0]` non flaggé en fond statique — règle produit requise.
@@ -674,6 +684,15 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Vérif : 39/39 (4 suites DiskCacheStore*) simu 18.2 ; `meeshy.sh build` vert (42 s).
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
+
+## it.60 — G5 : filtre de visibilité canonique unique (9e870ce90)
+
+- No-op strict prouvé par 134/134 suites service+posts (bun) + tsc 0 ; shape suite neuve.
+- La consolidation a fait émerger LA divergence réelle (audience feed vs unitaire) —
+  remontée en décision produit §4 avec impact R4 : exactement le « risque de dérive »
+  que G5 documentait, maintenant visible et réparable en 1 site.
+- BACKLOG AUTONOME ÉPUISÉ : restent G4 (déploiement schema), R13/R12-inc.1 (conditionnels),
+  décisions §4, vérifs device — prochaine itération = audit ciblé (protocole étape 8).
 
 ## it.59 — U5 : ÉCARTÉ avec preuve — le chargement prolongé est déjà couvert
 
