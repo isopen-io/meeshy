@@ -2,6 +2,8 @@ package me.meeshy.sdk.model.friend
 
 import me.meeshy.sdk.model.FriendRequest
 import me.meeshy.sdk.model.FriendRequestUser
+import me.meeshy.sdk.model.PresenceState
+import me.meeshy.sdk.model.UserPresence
 
 /**
  * The filter a Contacts-list surface applies over the friend list. Port of the
@@ -31,6 +33,15 @@ val FriendRequestUser.resolvedName: String
         if (full.isNotBlank()) return full
         return username
     }
+
+/**
+ * The three-state presence dot for a friend row at the caller's reference clock
+ * [nowEpochMillis]. Bridges the roster record (whose `isOnline` is a nullable flag)
+ * to the pure [UserPresence.state] SSOT: a null flag is treated as offline, so an
+ * unknown-presence friend shows no dot rather than a false green one.
+ */
+fun FriendRequestUser.presenceState(nowEpochMillis: Long): PresenceState =
+    UserPresence(isOnline = isOnline == true, lastActiveAt = lastActiveAt).state(nowEpochMillis)
 
 /**
  * The friend counts shown as a badge on each selectable Contacts filter chip
