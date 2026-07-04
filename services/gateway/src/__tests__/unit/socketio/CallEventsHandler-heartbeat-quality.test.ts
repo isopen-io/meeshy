@@ -300,4 +300,114 @@ describe('CallEventsHandler — call:heartbeat / call:quality-report hardening',
       expect(callService.persistCallStats).not.toHaveBeenCalled();
     });
   });
+
+  // L'alerte « votre contact a une mauvaise connexion » ne doit être diffusée
+  // qu'après un signal SOUTENU (2 rapports dégradés consécutifs ≈ 10 s, miroir
+  // serveur du DegradedLinkTracker client) et JAMAIS revenir au rapporteur
+  // lui-même (socket.to exclut l'émetteur ; io.to inondait toute la room, donc
+  // le participant dégradé voyait « votre contact » pour sa PROPRE connexion).
+  describe('call:quality-alert emission (sustained + reporter excluded)', () => {
+    const degradedReport = {
+      callId: VALID_CALL_ID,
+      stats: { bytesSent: 100, bytesReceived: 200, level: 'poor', rtt: 400, packetLoss: 0 },
+    };
+    const healthyReport = {
+      callId: VALID_CALL_ID,
+      stats: { bytesSent: 100, bytesReceived: 200, level: 'good', rtt: 50, packetLoss: 0 },
+    };
+
+    it('does NOT alert on a single isolated degraded report', async () => {
+      const prisma = makePrisma();
+      const callService = makeCallService();
+      const { socket, io, handlers } = makeSocket();
+
+      const handler = new CallEventsHandler(prisma, callService);
+      handler.setupCallEvents(socket as any, io as any, () => USER_ID);
+
+      await handlers[CALL_EVENTS.QUALITY_REPORT](degradedReport);
+
+      expect(socket.to).not.toHaveBeenCalled();
+      expect(io.to).not.toHaveBeenCalled();
+    });
+
+    it('alerts on the 2nd consecutive degraded report, via socket.to (reporter excluded), never io.to', async () => {
+      const prisma = makePrisma();
+      const callService = makeCallService();
+      const { socket, io, handlers } = makeSocket();
+
+      const handler = new CallEventsHandler(prisma, callService);
+      handler.setupCallEvents(socket as any, io as any, () => USER_ID);
+
+      await handlers[CALL_EVENTS.QUALITY_REPORT](degradedReport);
+      await handlers[CALL_EVENTS.QUALITY_REPORT](degradedReport);
+
+      expect(io.to).not.toHaveBeenCalled();
+      expect(socket.to).toHaveBeenCalledWith(`call:${VALID_CALL_ID}`);
+      const roomEmit = (socket.to as jest.Mock).mock.results[0]?.value?.emit as jest.Mock;
+      expect(roomEmit).toHaveBeenCalledWith(
+        CALL_EVENTS.QUALITY_ALERT,
+        expect.objectContaining({
+          callId: VALID_CALL_ID,
+          participantId: 'participant-1',
+          metric: 'rtt',
+          value: 400,
+          threshold: 300,
+        })
+      );
+    });
+
+    it('keeps alerting on the 3rd+ consecutive degraded report (client auto-clear needs refreshes)', async () => {
+      const prisma = makePrisma();
+      const callService = makeCallService();
+      const { socket, io, handlers } = makeSocket();
+
+      const handler = new CallEventsHandler(prisma, callService);
+      handler.setupCallEvents(socket as any, io as any, () => USER_ID);
+
+      await handlers[CALL_EVENTS.QUALITY_REPORT](degradedReport);
+      await handlers[CALL_EVENTS.QUALITY_REPORT](degradedReport);
+      await handlers[CALL_EVENTS.QUALITY_REPORT](degradedReport);
+
+      expect(socket.to).toHaveBeenCalledTimes(2);
+    });
+
+    it('a healthy report resets the streak — degraded/healthy/degraded never alerts', async () => {
+      const prisma = makePrisma();
+      const callService = makeCallService();
+      const { socket, io, handlers } = makeSocket();
+
+      const handler = new CallEventsHandler(prisma, callService);
+      handler.setupCallEvents(socket as any, io as any, () => USER_ID);
+
+      await handlers[CALL_EVENTS.QUALITY_REPORT](degradedReport);
+      await handlers[CALL_EVENTS.QUALITY_REPORT](healthyReport);
+      await handlers[CALL_EVENTS.QUALITY_REPORT](degradedReport);
+
+      expect(socket.to).not.toHaveBeenCalled();
+      expect(io.to).not.toHaveBeenCalled();
+    });
+
+    it('tracks streaks per participant — two different reporters at 1 degraded report each never alert', async () => {
+      const prisma = makePrisma();
+      const callService = makeCallService({
+        participants: [
+          { participantId: 'participant-1', userId: USER_ID, leftAt: null },
+          { participantId: 'participant-2', userId: 'user-other', leftAt: null },
+        ],
+      });
+      const { socket, io, handlers } = makeSocket();
+
+      const handler = new CallEventsHandler(prisma, callService);
+      handler.setupCallEvents(socket as any, io as any, () => USER_ID);
+
+      const other = makeSocket();
+      handler.setupCallEvents(other.socket as any, other.io as any, () => 'user-other');
+
+      await handlers[CALL_EVENTS.QUALITY_REPORT](degradedReport);
+      await other.handlers[CALL_EVENTS.QUALITY_REPORT](degradedReport);
+
+      expect(socket.to).not.toHaveBeenCalled();
+      expect(other.socket.to).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -7,12 +7,29 @@ final class MessageActionResolverTests: XCTestCase {
         isMine: Bool = false, canEdit: Bool = false, canDelete: Bool = false,
         hasText: Bool = true, hasMedia: Bool = false, hasTimebasedMedia: Bool = false,
         isPinned: Bool = false, isStarred: Bool = false,
-        isEdited: Bool = false, hasEditRevisions: Bool = false
+        isEdited: Bool = false, hasEditRevisions: Bool = false,
+        saveableAttachmentCount: Int = 0
     ) -> MessageMenuContext {
         MessageMenuContext(isMine: isMine, canEdit: canEdit, canDelete: canDelete,
             hasText: hasText, hasMedia: hasMedia, hasTimebasedMedia: hasTimebasedMedia,
             isPinned: isPinned, isStarred: isStarred, isEdited: isEdited,
-            hasEditRevisions: hasEditRevisions)
+            hasEditRevisions: hasEditRevisions,
+            saveableAttachmentCount: saveableAttachmentCount)
+    }
+
+    func test_primaryActions_singleAttachment_includesSaveMediaBeforePin() {
+        let a = MessageActionResolver.primaryActions(ctx(hasMedia: true, saveableAttachmentCount: 1))
+        XCTAssertEqual(a, [.translate, .copy, .saveMedia, .pin, .star, .more])
+    }
+
+    func test_primaryActions_multiAttachment_dropsSaveMedia() {
+        let a = MessageActionResolver.primaryActions(ctx(hasMedia: true, saveableAttachmentCount: 3))
+        XCTAssertFalse(a.contains(.saveMedia), "multi-attachment passe par la galerie, pas le menu")
+    }
+
+    func test_primaryActions_noAttachment_dropsSaveMedia() {
+        let a = MessageActionResolver.primaryActions(ctx())
+        XCTAssertFalse(a.contains(.saveMedia))
     }
 
     func test_primaryActions_receivedTextBasic_isTranslateCopyPinStarMore() {

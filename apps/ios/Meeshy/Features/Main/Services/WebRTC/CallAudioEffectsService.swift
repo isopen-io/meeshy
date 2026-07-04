@@ -23,6 +23,10 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
         var isAutoDegraded: Bool = false
         var consecutiveOverBudgetFrames: Int = 0
         var consecutiveUnderBudgetFrames: Int = 0
+        // Same dual-thread hazard as the two counters above: written from the
+        // audio thread (processAudioBuffer) and reset from any caller thread
+        // (reset()) — guarded by stateLock rather than a plain property.
+        var lastProcessingTimeMs: Double?
     }
 
     private let stateLock = OSAllocatedUnfairLock(initialState: LockedState())
@@ -30,6 +34,7 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
     var activeVoiceEffect: AudioEffectType? { stateLock.withLock { $0.activeVoiceEffect } }
     var isBackSoundActive: Bool { stateLock.withLock { $0.isBackSoundActive } }
     var isAutoDegraded: Bool { stateLock.withLock { $0.isAutoDegraded } }
+    var lastProcessingTimeMs: Double? { stateLock.withLock { $0.lastProcessingTimeMs } }
 
     var isEffectsActive: Bool {
         stateLock.withLock { $0.activeVoiceEffect != nil || $0.isBackSoundActive }
@@ -80,13 +85,11 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
 
     // MARK: - Performance Monitoring
     //
-    // consecutiveOverBudgetFrames/consecutiveUnderBudgetFrames live in
-    // LockedState (guarded by stateLock) because they are written from the
-    // audio thread (processAudioBuffer) and can be reset concurrently from
-    // any other thread (reset()) — an unsynchronized Int mutation from two
-    // threads is a data race even though it rarely crashes.
-
-    private(set) var lastProcessingTimeMs: Double?
+    // consecutiveOverBudgetFrames/consecutiveUnderBudgetFrames/lastProcessingTimeMs
+    // live in LockedState (guarded by stateLock) because they are written from
+    // the audio thread (processAudioBuffer) and can be reset concurrently from
+    // any other thread (reset()) — an unsynchronized mutation from two threads
+    // is a data race even though it rarely crashes.
 
     // MARK: - Set Effect
 
@@ -168,7 +171,6 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
         let start = CACurrentMediaTime()
         let processed = renderThroughBlocks(buffer, blocks: blocks)
         let elapsed = (CACurrentMediaTime() - start) * 1000
-        lastProcessingTimeMs = elapsed
         updatePerformanceCounters(ms: elapsed)
 
         return processed
@@ -188,8 +190,8 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
             $0.isAutoDegraded = false
             $0.consecutiveOverBudgetFrames = 0
             $0.consecutiveUnderBudgetFrames = 0
+            $0.lastProcessingTimeMs = nil
         }
-        lastProcessingTimeMs = nil
         Logger.audioEffects.info("Audio effects service reset")
     }
 
@@ -217,6 +219,7 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
         let underBudgetThreshold = AudioEffectsConstants.underBudgetThreshold
 
         let transition = stateLock.withLock { state -> PerformanceTransition in
+            state.lastProcessingTimeMs = ms
             if ms > maxProcessingTimeMs {
                 state.consecutiveOverBudgetFrames += 1
                 state.consecutiveUnderBudgetFrames = 0

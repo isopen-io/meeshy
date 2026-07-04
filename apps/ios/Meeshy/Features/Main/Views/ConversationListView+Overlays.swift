@@ -237,10 +237,94 @@ extension ConversationListView {
         // si l'utilisateur rouvre un menu avant la fin du zoom-out, `onLongPress`
         // annule ce work item, sinon il effacerait le menu fraîchement rouvert.
         contextMenuDismissWork?.cancel()
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.9)) { contextMenuAppeared = false }
-        let work = DispatchWorkItem { contextMenuConversation = nil }
+        // min() : ne jamais RE-déplier une carte repliée par le drag vers le
+        // haut (0.0 → 0.7 ferait flasher l'aperçu pendant le fondu de sortie).
+        // Le shrink est ANIMÉ dans la même transaction que le fondu : la carte
+        // se résorbe (zoom-out + blur progressif lié au scale) pendant que le
+        // menu redescend et se dissout — miroir du zoom d'ouverture.
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
+            previewScale = min(previewScale, 0.7)
+            if !chipModeLatched && dragOffsetY <= 110 {
+                // Fermeture normale : la carte revient en place en fondant.
+                // Fermeture depuis le morph drag (chip relâchée) : la carte
+                // fond SUR PLACE sous le doigt — la faire remonter au centre
+                // pendant le fondu serait un aller-retour parasite.
+                dragOffsetY = 0
+                dragOffsetX = 0
+            }
+            contextMenuAppeared = false
+        }
+        let work = DispatchWorkItem {
+            contextMenuConversation = nil
+            previewScale = 1.0
+            previewEmergeOffset = 0
+            dragOffsetY = 0
+            dragOffsetX = 0
+            chipModeLatched = false
+            contextMenuSourceFrame = nil
+        }
         contextMenuDismissWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.26, execute: work)
+    }
+
+    /// Progression du morph drag-n-drop pendant le drag vers le bas sur la
+    /// carte (0 = menu ouvert, 1 = carte devenue chip draggable) : le blur du
+    /// fond s'efface, le menu se dissout, la carte rétrécit et suit le doigt.
+    /// Tout dérive de `dragOffsetY` — le snap-back du geste restaure tout.
+    /// Une fois LATCHÉE (`chipModeLatched`), la chip reste chip même si le
+    /// doigt remonte (pour viser un header de section au-dessus).
+    var dragMorphProgress: CGFloat {
+        chipModeLatched ? 1 : min(1, max(0, dragOffsetY / 140))
+    }
+
+    /// Émergence de l'aperçu depuis la ligne pressée. Tick 1 : la frame de
+    /// repos de la carte vient d'être mesurée (layout au repos, overlay
+    /// invisible) — placer la carte SUR la ligne source, sans animation.
+    /// Tick 2 : animer vers la position/taille finales avec un départ LENT,
+    /// une accélération à mi-course et un léger rebond (timingCurve à
+    /// overshoot) ; le menu remonte et le fond se floute dans la même
+    /// transaction (coordonné).
+    func runContextMenuEmergence() {
+        DispatchQueue.main.async {
+            var placement = Transaction()
+            placement.disablesAnimations = true
+            withTransaction(placement) {
+                if let source = contextMenuSourceFrame, previewRestFrame.height > 0 {
+                    let scale = max(0.22, min(0.7, source.height / previewRestFrame.height))
+                    previewScale = scale
+                    // scaleEffect est ancré .bottom : le centre visuel de la
+                    // carte réduite est à maxY - scale·H/2 — l'offset aligne
+                    // ce centre sur celui de la ligne pressée.
+                    previewEmergeOffset = source.midY
+                        - (previewRestFrame.maxY - scale * previewRestFrame.height / 2)
+                } else {
+                    previewScale = 0.7
+                    previewEmergeOffset = 0
+                }
+            }
+            DispatchQueue.main.async {
+                // Overshoot 1.3 : rebond nettement perceptible à l'arrivée de
+                // la carte (le rebond appartient au long-press/preview, pas
+                // au swipe des lignes — feedback user 2026-07-03).
+                withAnimation(.timingCurve(0.5, 0.0, 0.15, 1.3, duration: 0.55)) {
+                    contextMenuAppeared = true
+                    previewScale = 1.0
+                    previewEmergeOffset = 0
+                }
+            }
+        }
+    }
+
+    /// Capture de la frame de REPOS de la carte — uniquement hors
+    /// transformation (avant l'émergence : overlay invisible, scale 1,
+    /// offsets nuls), sinon la mesure inclurait scale/offset en vol.
+    func capturePreviewRestFrameIfIdle(_ frame: CGRect) {
+        guard !contextMenuAppeared,
+              previewScale == 1.0,
+              previewEmergeOffset == 0,
+              dragOffsetY == 0
+        else { return }
+        previewRestFrame = frame
     }
 
     @ViewBuilder
@@ -253,7 +337,9 @@ extension ConversationListView {
                     .overlay(Color.black.opacity(0.12).ignoresSafeArea())
                     .contentShape(Rectangle())
                     .onTapGesture { dismissContextMenu() }
-                    .opacity(contextMenuAppeared ? 1 : 0)
+                    // Le blur du fond s'EFFACE pendant le morph drag : la
+                    // liste réapparaît sous la carte devenue chip draggable.
+                    .opacity(contextMenuAppeared ? Double(1 - dragMorphProgress) : 0)
 
                 VStack(spacing: 16) {
                     ConversationPreviewView(
@@ -273,7 +359,7 @@ extension ConversationListView {
                                 CallManager.shared.startCall(
                                     conversationId: conversation.id,
                                     userId: uid,
-                                    displayName: conversation.name ?? "",
+                                    displayName: conversation.name,
                                     isVideo: false
                                 )
                             }
@@ -286,11 +372,48 @@ extension ConversationListView {
                         onInfo: { dismissContextMenu(); conversationInfoConversation = conversation },
                         onProfileInfo: { dismissContextMenu(); handleProfileView(conversation) }
                     )
+                    // Preview STATIQUE (parité `.contextMenu` natif) : le
+                    // ScrollView interne des messages interceptait le pan et
+                    // volait le drag du geste de repli/morph ci-dessous — le
+                    // contenu défilait dans la carte au lieu de la déplacer
+                    // (vérifié frame par frame 2026-07-03).
+                    .scrollDisabled(true)
                     .frame(width: 340)
-                    // Aperçu : zoom (grandit depuis 0.7) + fondu, piloté par
-                    // `contextMenuAppeared` (spring à rebond, cf. .onAppear).
-                    .scaleEffect(contextMenuAppeared ? 1 : 0.7, anchor: .center)
+                    // Frame de repos de la carte (mesurée overlay invisible,
+                    // hors transformation) — point d'arrivée de l'émergence.
+                    .background(
+                        GeometryReader { geo in
+                            Color.clear
+                                .onAppear { capturePreviewRestFrameIfIdle(geo.frame(in: .global)) }
+                                .adaptiveOnChange(of: geo.frame(in: .global)) { _, frame in
+                                    capturePreviewRestFrameIfIdle(frame)
+                                }
+                        }
+                    )
+                    // Aperçu : émerge DEPUIS la ligne pressée (placement par
+                    // `runContextMenuEmergence` : scale ≈ hauteur ligne /
+                    // hauteur carte + offset vers la ligne) puis rejoint sa
+                    // position finale — départ lent, accélération, rebond.
+                    // Pendant le morph drag vers le bas, la carte rétrécit en
+                    // chip (multiplicateur dragMorphProgress) et suit le doigt.
+                    // Glisser vers le haut replie la carte (previewScale → 0,
+                    // ancre .bottom : elle se résorbe vers le menu) pour donner
+                    // toute la place au menu ; glisser vers le bas au-delà du
+                    // seuil ferme l'overlay (parité contextMenu natif). Ce
+                    // geste vit ICI et jamais sur les lignes de la liste : un
+                    // DragGesture plein-ligne entrait en contention avec le pan
+                    // du ScrollView et figeait le scroll (régression ff5d5649).
+                    .scaleEffect(previewScale * (1 - 0.45 * dragMorphProgress), anchor: .bottom)
+                    .offset(x: dragOffsetX, y: dragOffsetY + previewEmergeOffset)
                     .opacity(contextMenuAppeared ? 1 : 0)
+                    // Blur PROGRESSIF lié au scale (continu, sans saut au
+                    // franchissement d'un seuil) : net à 1.0, flouté au départ
+                    // de l'émergence, jusqu'à 3.0 carte repliée — la carte se
+                    // matérialise à l'ouverture et se dissout au repli/
+                    // fermeture. max(0,…) : l'overshoot du rebond dépasse 1.0,
+                    // le radius ne doit jamais être négatif.
+                    .blur(radius: 3.0 * max(0, 1.0 - previewScale))
+                    .gesture(previewCollapseGesture)
 
                     ConversationContextMenuView(
                         accentHex: conversation.accentColor,
@@ -321,7 +444,7 @@ extension ConversationListView {
                         },
                         onDetails: { conversationInfoConversation = conversation },
                         onRename: {
-                            renameText = conversation.name ?? ""
+                            renameText = conversation.name
                             renameTarget = conversation
                         },
                         onSetFavorite: { emoji in
@@ -370,20 +493,132 @@ extension ConversationListView {
                         },
                         onDismiss: { dismissContextMenu() }
                     )
-                    // Menu : remonte depuis le bas + fondu (piloté).
-                    .offset(y: contextMenuAppeared ? 0 : 70)
-                    .opacity(contextMenuAppeared ? 1 : 0)
+                    // Menu : slide-up 70 pt + fondu + dé-blur, dans la MÊME
+                    // transaction que l'émergence de l'aperçu — le menu
+                    // remonte pendant que la carte rejoint sa place
+                    // (coordonné), et redescend en se dissolvant (blur) à la
+                    // fermeture. Pendant le morph drag, il glisse vers le bas
+                    // et se dissout (opacité + blur ∝ dragMorphProgress).
+                    // L'ancienne formule `70 * (1 - previewScale)` valait 0
+                    // au montage (previewScale démarrait à 1.0) : le slide-up
+                    // était inerte.
+                    .offset(y: contextMenuAppeared ? 40 * dragMorphProgress : 70)
+                    .opacity(contextMenuAppeared ? Double(1 - dragMorphProgress) : 0)
+                    .blur(radius: contextMenuAppeared ? 6 * dragMorphProgress : 6)
                 }
                 .padding(.horizontal, 20)
             }
             .zIndex(300)
             .onAppear {
-                // Zoom + rebond : l'aperçu grandit et le menu remonte au montage.
-                withAnimation(.spring(response: 0.44, dampingFraction: 0.6)) {
-                    contextMenuAppeared = true
-                }
+                // Émergence depuis la ligne pressée : placement invisible sur
+                // la ligne (tick 1, frame de repos mesurée) puis départ lent,
+                // accélération et rebond vers la position finale (tick 2).
+                dragOffsetY = 0
+                dragOffsetX = 0
+                runContextMenuEmergence()
             }
         }
+    }
+
+    /// Geste de repli / morph de l'aperçu (feature « shrink preview » de
+    /// a98b93a7, rebranchée au bon étage).
+    /// Vers le HAUT : repli progressif (100 pt = replié) qui donne toute la
+    /// place au menu ; au lâcher sous 0.45 la carte reste repliée jusqu'à la
+    /// fermeture (`dismissContextMenu` restaure 1.0).
+    /// Vers le BAS : morph drag-n-drop — la carte suit le doigt 1:1 (x et y),
+    /// rétrécit en chip, le blur du fond s'efface et le menu se dissout
+    /// (`dragMorphProgress`). Au lâcher au-delà de 110 pt le menu se ferme
+    /// (la chip fond sur place) ; en deçà, snap-back complet en 0.30 s.
+    /// Drop de la chip sur une section (déplacement) : Phase 2 — le
+    /// `SectionDropDelegate` dormant sera rebranché à ce geste.
+    /// Les lignes de la liste ne portent AUCUN DragGesture : ici le
+    /// ScrollView est masqué par l'overlay, zéro contention de scroll
+    /// possible.
+    private var previewCollapseGesture: some Gesture {
+        DragGesture(coordinateSpace: .global)
+            .onChanged { value in
+                let translation = value.translation.height
+                if chipModeLatched {
+                    // Chip libre : suit le doigt sur les deux axes, y compris
+                    // vers le haut pour viser un header de section.
+                    dragOffsetY = translation
+                    dragOffsetX = value.translation.width
+                    updateChipDropTarget(at: value.location)
+                } else if translation < 0 {
+                    previewScale = max(0, 1.0 + translation / 100)
+                    dragOffsetY = 0
+                    dragOffsetX = 0
+                } else {
+                    dragOffsetY = translation
+                    dragOffsetX = value.translation.width * dragMorphProgress
+                    if dragMorphProgress >= 1 {
+                        // Morph complet → verrouille le mode chip (drag n drop
+                        // engagé tant que le doigt reste posé).
+                        chipModeLatched = true
+                        HapticFeedback.light()
+                        updateChipDropTarget(at: value.location)
+                    }
+                }
+            }
+            .onEnded { value in
+                if chipModeLatched {
+                    handleChipDrop(at: value.location)
+                    return
+                }
+                if value.translation.height > 110 {
+                    dismissContextMenu()
+                    return
+                }
+                let collapsed = previewScale < 0.45
+                // Faster, bouncier snap-back: (0.35, 0.8) → (0.30, 0.72)
+                // Creates snappier feel when preview collapses or re-expands
+                withAnimation(.spring(response: 0.30, dampingFraction: 0.72)) {
+                    previewScale = collapsed ? 0 : 1.0
+                    dragOffsetY = 0
+                    dragOffsetX = 0
+                }
+            }
+    }
+
+    /// Surligne le header de section sous le doigt pendant le drag de la chip
+    /// (réutilise l'affordance `isDropTarget` du `SectionDropDelegate`
+    /// historique). "pinned" n'est pas une cible (l'épinglage a son action
+    /// dédiée dans le menu). N'écrit l'état QUE sur changement — le registre
+    /// est hit-testé à chaque tick mais la liste n'est invalidée qu'aux
+    /// franchissements de frontière.
+    private func updateChipDropTarget(at location: CGPoint) {
+        let target = sectionFrameRegistry.frames
+            .first(where: { $0.key != "pinned" && $0.value.contains(location) })?
+            .key
+        if dropTargetSection != target {
+            withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                dropTargetSection = target
+            }
+            if target != nil { HapticFeedback.light() }
+        }
+    }
+
+    /// Relâchement de la chip : si le doigt est sur un header de section,
+    /// déplace la conversation ("other" = « Mes conversations » = sectionId
+    /// vide, ids de catégorie sinon) puis ferme ; sinon ferme simplement —
+    /// la chip fond sur place (annulation, parité drag n drop natif).
+    private func handleChipDrop(at location: CGPoint) {
+        defer {
+            withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                dropTargetSection = nil
+            }
+            dismissContextMenu()
+        }
+        guard let conversation = contextMenuConversation,
+              let sectionId = sectionFrameRegistry.frames
+                  .first(where: { $0.key != "pinned" && $0.value.contains(location) })?
+                  .key
+        else { return }
+        let targetId = sectionId == "other" ? "" : sectionId
+        let currentId = conversation.userState.sectionId ?? ""
+        guard targetId != currentId else { return }
+        HapticFeedback.success()
+        conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: targetId)
     }
 }
 

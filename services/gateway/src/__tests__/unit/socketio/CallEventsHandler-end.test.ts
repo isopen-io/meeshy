@@ -122,6 +122,7 @@ function makePrisma(overrides: {
     participant: {
       findFirst: overrides.participantFindFirst
         ?? jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }),
+      findMany: jest.fn<any>().mockResolvedValue([]),
     },
   } as unknown as PrismaClient;
 }
@@ -193,22 +194,22 @@ describe('CallEventsHandler — call:end handler', () => {
       );
     });
 
-    it('broadcasts ENDED to the call room', () => {
+    it('broadcasts ENDED targeting the call room', () => {
       const callRoomCalls = (io.to as jest.MockedFunction<any>).mock.calls
-        .filter(([room]) => room === `call:${CALL_ID}`);
+        .filter(([rooms]) => Array.isArray(rooms) && rooms.includes(`call:${CALL_ID}`));
       expect(callRoomCalls).toHaveLength(1);
     });
 
-    it('broadcasts ENDED to the conversation room', () => {
+    it('broadcasts ENDED targeting the conversation room', () => {
       const convRoomCalls = (io.to as jest.MockedFunction<any>).mock.calls
-        .filter(([room]) => room === `conversation:${CONV_ID}`);
+        .filter(([rooms]) => Array.isArray(rooms) && rooms.includes(`conversation:${CONV_ID}`));
       expect(convRoomCalls).toHaveLength(1);
     });
 
-    it('emits CALL_EVENTS.ENDED on both rooms', () => {
-      expect(roomEmit).toHaveBeenCalledTimes(2);
+    it('emits CALL_EVENTS.ENDED once (single deduplicated multi-room emit)', () => {
+      expect(roomEmit).toHaveBeenCalledTimes(1);
       const events = roomEmit.mock.calls.map(([ev]) => ev);
-      expect(events).toEqual([CALL_EVENTS.ENDED, CALL_EVENTS.ENDED]);
+      expect(events).toEqual([CALL_EVENTS.ENDED]);
     });
 
     it('acks { success: true }', () => {

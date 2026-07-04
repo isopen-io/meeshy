@@ -515,6 +515,9 @@ extension StoryViewerView {
         || showCommentsOverlay
         || isTransitioning
         || isDismissing
+        // Interstitiel d'identité inter-groupes : la lecture (timer + canvas +
+        // audio) attend la fin des 2,2 s (ou le tap skip) — reprise sans saut.
+        || showGroupIntro
     }
 
     func startTimer() {

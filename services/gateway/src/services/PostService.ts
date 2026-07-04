@@ -214,7 +214,9 @@ export class PostService {
         });
       }
 
-      this.triggerStoryTextObjectTranslation(post.id, textObjects);
+      this.triggerStoryTextObjectTranslation(post.id, textObjects, userId).catch((err: unknown) => {
+        log.error('triggerStoryTextObjectTranslation failed', err instanceof Error ? err : new Error(String(err)));
+      });
     }
 
     // Tracking des URLs brutes du post/story : mapping `url → token` rangé dans
@@ -259,20 +261,7 @@ export class PostService {
   private async triggerStoryTextTranslation(postId: string, content: string, authorId: string, sourceLanguageOverride?: string): Promise<void> {
     try {
       // 1. Résoudre les langues cibles depuis les contacts de l'auteur
-      const contacts = await this.prisma.participant.findMany({
-        where: {
-          conversation: { participants: { some: { userId: authorId } } },
-          userId: { not: authorId },
-        },
-        include: { user: { select: { systemLanguage: true } } },
-        take: 100,
-      });
-
-      const targetLanguages: string[] = [...new Set(
-        contacts
-          .map((c) => c.user?.systemLanguage ?? undefined)
-          .filter((l): l is string => !!l && l !== 'en')
-      )].slice(0, 10);
+      const targetLanguages = await this.resolveAudienceTargetLanguages(authorId);
 
       if (targetLanguages.length === 0) {
         log.info('StoryTranslation: no target languages', { postId });
@@ -382,15 +371,22 @@ export class PostService {
     }
   }
 
-  private triggerStoryTextObjectTranslation(
+  private async triggerStoryTextObjectTranslation(
     postId: string,
-    textObjects: StoryTextObjectRaw[]
-  ): void {
+    textObjects: StoryTextObjectRaw[],
+    authorId: string
+  ): Promise<void> {
     // Envoie les textObjects au pipeline de traduction.
     // La persistence des résultats est gérée par le handler ZMQ Task 15
     // (story_text_object_translation_completed → storyEffects.textObjects[n].translations).
-    // TODO: query audience's actual languages (like triggerStoryTextTranslation does for message content)
-    const allTargetLanguages = this.getActiveTargetLanguages();
+    // G3 — langues RÉELLES de l'audience (mêmes règles que le pipeline
+    // `content` ci-dessus), plus la liste fixe de 10 langues : un auteur
+    // sans contact n'émet aucun job (le Prisme sert l'original au viewer).
+    const allTargetLanguages = await this.resolveAudienceTargetLanguages(authorId);
+    if (allTargetLanguages.length === 0) {
+      log.info('StoryTextObjectTranslation: no audience languages', { postId });
+      return;
+    }
 
     textObjects.forEach((obj, index) => {
       const text = obj.content?.trim();
@@ -422,8 +418,27 @@ export class PostService {
     });
   }
 
-  private getActiveTargetLanguages(): string[] {
-    return ['en', 'fr', 'es', 'de', 'pt', 'ar', 'zh', 'ja', 'ko', 'ru'];
+  /** G3 — cœur PUR de la résolution d'audience (testable) : systemLanguage
+   *  des contacts, dédupliqués, hors 'en' (langue pivot), cap 10. */
+  static audienceLanguages(systemLanguages: Array<string | null | undefined>): string[] {
+    return [...new Set(
+      systemLanguages.filter((l): l is string => !!l && l !== 'en')
+    )].slice(0, 10);
+  }
+
+  /** G3 — langues cibles réelles de l'audience de `authorId` (participants de
+   *  conversations communes). Partagée par les pipelines `content`
+   *  (triggerStoryTextTranslation) et `textObjects`. */
+  private async resolveAudienceTargetLanguages(authorId: string): Promise<string[]> {
+    const contacts = await this.prisma.participant.findMany({
+      where: {
+        conversation: { participants: { some: { userId: authorId } } },
+        userId: { not: authorId },
+      },
+      include: { user: { select: { systemLanguage: true } } },
+      take: 100,
+    });
+    return PostService.audienceLanguages(contacts.map((c) => c.user?.systemLanguage));
   }
 
   /// Returns the post if and only if `viewerUserId` is allowed to see it,

@@ -283,13 +283,6 @@ export class CallService {
   }
 
   /**
-   * Get last heartbeat timestamp for a participant
-   */
-  getLastHeartbeat(callId: string, participantId: string): number | undefined {
-    return this.heartbeats.get(callId)?.get(participantId);
-  }
-
-  /**
    * Returns true when at least one heartbeat has been recorded in-memory for
    * this call. Used by CallCleanupService to distinguish "no data yet" (post-restart)
    * from "data exists but no stale entries".
@@ -445,6 +438,20 @@ export class CallService {
 
     if (TERMINAL_STATUSES.includes(call.status)) {
       logger.warn('Call already in terminal state', { callId, currentStatus: call.status, requestedStatus: newStatus });
+      return this.getCallSession(callId);
+    }
+
+    // FSM guard (2026-07-03, prod call 6a47689d) — `reconnecting` only makes
+    // sense for a call that was actually answered (media once established).
+    // A stale client whose ring-time watchdog fires during the ring (the
+    // pre-f86a907c4 iOS .offering bug) must not drag the session out of
+    // `ringing`: it hid `ringing` from the boot-rehydration path and made
+    // endCall/leaveCall classify the never-answered call as completed.
+    // Server-side mirror of CallReliabilityPolicy.reconnectingAllowed.
+    if (newStatus === CallStatus.reconnecting && !call.answeredAt) {
+      logger.warn('⚠️ Ignoring reconnecting transition on a never-answered call', {
+        callId, currentStatus: call.status
+      });
       return this.getCallSession(callId);
     }
 
@@ -1014,10 +1021,8 @@ export class CallService {
 
       // Direct call (or last participant): end it so the OTHER party is notified.
       const idemNow = new Date();
-      const idemPreAnswered =
-        existing.status === CallStatus.initiated ||
-        existing.status === CallStatus.ringing ||
-        existing.status === CallStatus.connecting;
+      // Same `answeredAt` criterion as the main path below (2026-07-03).
+      const idemPreAnswered = !existing.answeredAt;
       // Version-guarded (see endCall()'s doc comment): a racing terminal
       // writer (call:end, force-end) could resolve this same call between
       // the `existing` read above and this write; scope to `existing.version`
@@ -1119,18 +1124,18 @@ export class CallService {
     const activeParticipants = call.participants.filter((p) => !p.leftAt && p.id !== callParticipant.id);
     const isLastParticipant = activeParticipants.length === 0 || isDirectCall;
 
-    // Audit P1-29 — distinguish "leave during ringing/connecting" (callee
-    // declined or initiator cancelled before media negotiation completed)
-    // from "leave during an active call". The pre-answer case must map to
-    // `missed` (with `endReason: missed`) so:
+    // Audit P1-29 — distinguish "leave before the call was ever answered"
+    // (callee declined or initiator cancelled before media negotiation
+    // completed) from "leave during an active call". The pre-answer case
+    // must map to `missed` (with `endReason: missed`) so:
     //   - the iOS UI surfaces a missed-call banner on the OTHER device,
     //   - Recents shows "Missed" / "Cancelled" instead of "Ended",
     //   - the gateway emits `call:missed` in addition to `call:ended` and
     //     can create missed-call push notifications for offline callees.
-    const wasPreAnswered =
-      call.status === CallStatus.initiated ||
-      call.status === CallStatus.ringing ||
-      call.status === CallStatus.connecting;
+    // 2026-07-03 — keyed on `answeredAt` (stamped once, on the SDP answer),
+    // not on a status list: `reconnecting` is reachable pre-answer via a
+    // stale client's ring-time watchdog (see endCall's doc comment).
+    const wasPreAnswered = !call.answeredAt;
     const targetEndedStatus = wasPreAnswered ? CallStatus.missed : CallStatus.ended;
     const targetEndReason = wasPreAnswered ? CallEndReason.missed : CallEndReason.completed;
 
@@ -1327,19 +1332,22 @@ export class CallService {
       : 0;
 
     // Audit C3/C4 (2026-07-02 prod audit) — mirror leaveCall()'s pre-answer
-    // handling: a call ended before it was ever answered (still initiated/
-    // ringing/connecting) must resolve to `missed`, never `completed`.
-    // Without this, `call:end` fired before the callee's `call:join` (a race
-    // observed in prod) persisted status='ended'/duration=0/reason='completed'
+    // handling: a call ended before it was ever answered must resolve to
+    // `missed`, never `completed`. Without this, `call:end` fired before the
+    // callee answered persisted status='ended'/duration=0/reason='completed'
     // — a phantom "completed" call in history that never triggered a
     // missed-call notification for the other party. An explicit non-default
     // reason (rejected/failed/...) is preserved as endReason; only the status
     // is normalized to `missed` so history/Recents filters stay consistent
     // with leaveCall().
-    const wasPreAnswered =
-      call.status === CallStatus.initiated ||
-      call.status === CallStatus.ringing ||
-      call.status === CallStatus.connecting;
+    // 2026-07-03 (prod call 6a47689d) — the criterion is `answeredAt`, NOT a
+    // status list: a pre-answer client watchdog dragged the session
+    // ringing→reconnecting during the ring, and the old
+    // initiated|ringing|connecting check classified that never-answered call
+    // as completed. `answeredAt` is stamped exactly once, on the SDP answer
+    // (updateCallStatus → active) — it is the authoritative "was ever
+    // answered" signal across every status the session may pass through.
+    const wasPreAnswered = !call.answeredAt;
     const resolvedReason = this.resolveEndReason(reason);
     const endReason = wasPreAnswered && resolvedReason === CallEndReason.completed
       ? CallEndReason.missed
@@ -1618,15 +1626,24 @@ export class CallService {
     // already `missed`. Unconditionally re-writing it drifts `endedAt`
     // (+a few ms) and `duration` (+a few seconds) on every retry.
     if (callSession.status !== CallStatus.initiated && callSession.status !== CallStatus.ringing) {
-      if (TERMINAL_STATUSES.includes(callSession.status)) {
-        this.clearHeartbeats(callId);
-        this.clearRingingTimeout(callId);
-        await this.releaseActiveCallClaim(callSession.conversationId, callId);
-      }
       logger.info('Call already in non-ringing state — skipping markCallAsMissed write', {
         callId,
         currentStatus: callSession.status
       });
+      // Audit 2026-07-02 — if the status write already landed via another
+      // path (the ringing-timeout handler's own atomic `updateMany`), that
+      // path only touches CallSession.status: it never stamps participant
+      // rows, clears in-memory heartbeats/timers, or releases the
+      // conversation's active-call claim. Skipping those here left the claim
+      // locked forever (every future `call:initiate` on the conversation
+      // failed CALL_ALREADY_ACTIVE) and left `call:signal` still relaying
+      // SDP/ICE between "missed" participants (their `leftAt` was never
+      // set). Only run this for genuinely terminal statuses — an `active`/
+      // `connecting`/`reconnecting` call must never be torn down here.
+      // Idempotent: a no-op if another terminal path already did it.
+      if (TERMINAL_STATUSES.includes(callSession.status)) {
+        await this.finalizeMissedCallCleanup(callSession.conversationId, callId);
+      }
       return this.getCallSession(callId);
     }
 
@@ -1634,8 +1651,17 @@ export class CallService {
     const now = new Date();
     const duration = Math.floor((now.getTime() - callSession.startedAt.getTime()) / 1000);
 
-    await this.prisma.callSession.update({
-      where: { id: callId },
+    // Version/status-scoped write, mirroring updateCallStatus()'s optimistic
+    // lock — a concurrent terminal writer (call:end, call:leave, the ringing
+    // timeout handler on another path, CallCleanupService GC) can resolve this
+    // call between the findUnique read above and this write. Scoping the
+    // update to the source statuses we actually read makes a losing writer's
+    // update a no-op instead of clobbering endedAt/duration/endReason.
+    const result = await this.prisma.callSession.updateMany({
+      where: {
+        id: callId,
+        status: { in: [CallStatus.initiated, CallStatus.ringing] }
+      },
       data: {
         status: CallStatus.missed,
         endedAt: now,
@@ -1644,13 +1670,36 @@ export class CallService {
       }
     });
 
-    this.clearHeartbeats(callId);
-    this.clearRingingTimeout(callId);
-    await this.releaseActiveCallClaim(callSession.conversationId, callId);
+    if (result.count === 0) {
+      logger.warn('⚠️ markCallAsMissed lost race to a concurrent terminal write — no-op', { callId });
+      return this.getCallSession(callId);
+    }
+
+    await this.finalizeMissedCallCleanup(callSession.conversationId, callId);
 
     logger.info('Call marked as missed', { callId, duration });
 
     return this.getCallSession(callId);
+  }
+
+  /**
+   * Shared terminal cleanup for a call resolved to `missed` — stamps any
+   * still-open participant rows so `call:signal` stops relaying between them,
+   * clears in-memory heartbeat/ringing-timer state, and releases the
+   * conversation's active-call claim. Safe to call more than once: every
+   * write here is scoped/idempotent.
+   */
+  private async finalizeMissedCallCleanup(conversationId: string, callId: string): Promise<void> {
+    await this.prisma.callParticipant.updateMany({
+      where: {
+        callSessionId: callId,
+        OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
+      },
+      data: { leftAt: new Date() }
+    });
+    this.clearHeartbeats(callId);
+    this.clearRingingTimeout(callId);
+    await this.releaseActiveCallClaim(conversationId, callId);
   }
 
   /**

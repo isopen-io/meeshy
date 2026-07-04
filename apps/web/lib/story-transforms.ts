@@ -364,3 +364,79 @@ export function groupStoriesByAuthor(posts: Post[]): Map<string, Post[]> {
 export function timeRemaining(expiresAt: string): string | null {
   return formatTimeRemaining(new Date(expiresAt).getTime(), Date.now());
 }
+
+// ── W1 — Keyframes (portage 1:1 de KeyframeInterpolator.swift) ────────────────
+
+export type StoryEasingName = 'linear' | 'easeIn' | 'easeOut' | 'easeInOut';
+
+export interface StoryKeyframeData {
+  time: number;          // secondes, RELATIF au startTime de l'objet porteur
+  x?: number;            // normalisé 0-1
+  y?: number;
+  scale?: number;
+  opacity?: number;
+  easing?: StoryEasingName;
+}
+
+export function applyStoryEasing(easing: StoryEasingName, t: number): number {
+  switch (easing) {
+    case 'easeIn': return t * t;
+    case 'easeOut': return 1 - (1 - t) * (1 - t);
+    case 'easeInOut': return t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2;
+    default: return t;
+  }
+}
+
+/** Portage exact de `KeyframeInterpolator.interpolate` : tri par time, un seul
+ *  keyframe = constante, clamp avant le premier / après le dernier, sinon
+ *  interpolation du segment avec l'easing du keyframe BAS. */
+export function interpolateKeyframeChannel(
+  channel: Array<{ time: number; value: number; easing: StoryEasingName }>,
+  at: number
+): number | undefined {
+  if (channel.length === 0) return undefined;
+  const sorted = [...channel].sort((a, b) => a.time - b.time);
+  if (sorted.length === 1) return sorted[0].value;
+  if (at <= sorted[0].time) return sorted[0].value;
+  if (at >= sorted[sorted.length - 1].time) return sorted[sorted.length - 1].value;
+  for (let i = 0; i < sorted.length - 1; i += 1) {
+    const lo = sorted[i];
+    const hi = sorted[i + 1];
+    if (at >= lo.time && at <= hi.time) {
+      const span = hi.time - lo.time;
+      const u = span > 0 ? (at - lo.time) / span : 0;
+      const eased = applyStoryEasing(lo.easing, u);
+      return lo.value + (hi.value - lo.value) * eased;
+    }
+  }
+  return undefined;
+}
+
+export interface ResolvedKeyframeState {
+  x?: number;
+  y?: number;
+  scale?: number;
+  opacity?: number;
+}
+
+/** État interpolé d'un objet à `playheadSec` (temps slide). `startTime` est
+ *  celui de l'objet porteur — `keyframe.time` lui est relatif (spec 2.1). */
+export function resolveKeyframeState(
+  keyframes: StoryKeyframeData[] | undefined,
+  playheadSec: number,
+  startTime: number = 0
+): ResolvedKeyframeState | null {
+  if (!keyframes || keyframes.length === 0) return null;
+  const local = playheadSec - startTime;
+  const channel = (pick: (k: StoryKeyframeData) => number | undefined) =>
+    keyframes.flatMap((k) => {
+      const v = pick(k);
+      return v == null ? [] : [{ time: k.time, value: v, easing: k.easing ?? ('linear' as StoryEasingName) }];
+    });
+  return {
+    x: interpolateKeyframeChannel(channel((k) => k.x), local),
+    y: interpolateKeyframeChannel(channel((k) => k.y), local),
+    scale: interpolateKeyframeChannel(channel((k) => k.scale), local),
+    opacity: interpolateKeyframeChannel(channel((k) => k.opacity), local),
+  };
+}

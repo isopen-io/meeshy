@@ -28,6 +28,7 @@ export class ConversationStatsService {
   private readonly cache = new Map<string, CacheEntry>();
   private readonly ttlMs: number;
   private cleanupInterval: ReturnType<typeof setInterval> | null = null;
+  private readonly updateLocks = new Map<string, Promise<void>>();
 
   private constructor(ttlMs: number = 60 * 60 * 1000) { // 1h par défaut
     this.ttlMs = ttlMs;
@@ -90,26 +91,54 @@ export class ConversationStatsService {
     messageLanguage: string,
     getConnectedUserIds: () => string[]
   ): Promise<ConversationStats> {
-    const existing = this.cache.get(conversationId);
-    if (!this.isValid(existing)) {
-      // Recompute from DB if not present/expired
-      return await this.getOrCompute(prisma, conversationId, getConnectedUserIds);
-    }
+    // Serialized per conversationId: two messages landing back-to-back in the
+    // same conversation must not both read the pre-increment snapshot across
+    // the `await computeOnlineUsers` below, which would drop one increment.
+    return this.withConversationLock(conversationId, async () => {
+      const existing = this.cache.get(conversationId);
+      if (!this.isValid(existing)) {
+        // Recompute from DB if not present/expired
+        return await this.getOrCompute(prisma, conversationId, getConnectedUserIds);
+      }
 
-    // Incremental update on message language count
-    const stats = { ...existing!.stats };
-    stats.messagesPerLanguage = { ...stats.messagesPerLanguage };
-    stats.messagesPerLanguage[messageLanguage] = (stats.messagesPerLanguage[messageLanguage] || 0) + 1;
+      // Incremental update on message language count
+      const stats = { ...existing!.stats };
+      stats.messagesPerLanguage = { ...stats.messagesPerLanguage };
+      stats.messagesPerLanguage[messageLanguage] = (stats.messagesPerLanguage[messageLanguage] || 0) + 1;
 
-    // Refresh online users snapshot quickly (cheap intersection)
-    stats.onlineUsers = await this.computeOnlineUsers(prisma, conversationId, getConnectedUserIds());
-    stats.updatedAt = new Date();
+      // Refresh online users snapshot quickly (cheap intersection)
+      stats.onlineUsers = await this.computeOnlineUsers(prisma, conversationId, getConnectedUserIds());
+      stats.updatedAt = new Date();
 
-    this.cache.set(conversationId, {
-      stats,
-      expiresAt: Date.now() + this.ttlMs
+      this.cache.set(conversationId, {
+        stats,
+        expiresAt: Date.now() + this.ttlMs
+      });
+      return stats;
     });
-    return stats;
+  }
+
+  /**
+   * Chains `fn` after any in-flight update for the same key so concurrent
+   * callers never interleave a read-modify-write on the same cache entry.
+   * Self-cleaning: the lock entry is removed once its chain drains, so
+   * `updateLocks` only holds entries for conversations with an update
+   * in flight (bounded by concurrency, not by total conversations ever seen).
+   */
+  private async withConversationLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    const previous = this.updateLocks.get(key) ?? Promise.resolve();
+    const result = previous.then(fn, fn);
+    const settled = result.then(
+      () => undefined,
+      () => undefined
+    );
+    this.updateLocks.set(key, settled);
+    settled.finally(() => {
+      if (this.updateLocks.get(key) === settled) {
+        this.updateLocks.delete(key);
+      }
+    });
+    return result;
   }
 
   public async recompute(

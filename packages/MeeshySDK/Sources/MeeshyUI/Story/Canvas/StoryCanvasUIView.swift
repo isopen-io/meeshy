@@ -643,6 +643,13 @@ public final class StoryCanvasUIView: UIView {
     /// non-lecture. `nil` tant que la lecture est saine. Alimente le watchdog.
     var playbackStallSince: CFTimeInterval?
 
+    /// `true` quand la slide courante porte au moins un clip audio résolu
+    /// (foreground ou background). Posé de façon SYNCHRONE par
+    /// `reconfigureAudioForPlayback()` (une fois par `slideContentRevision`)
+    /// pour que la sonde 60 Hz `isSlideAudioPending()` ne recalcule pas la
+    /// résolution d'effets à chaque tick.
+    var slideHasSchedulableAudio: Bool = false
+
     // MARK: - ProMotion edit-mode link
 
     var lastEditBackdropTimestamp: CFTimeInterval = 0

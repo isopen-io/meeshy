@@ -49,6 +49,7 @@ function makePrisma(overrides: Partial<{
   conversationFindUnique: unknown;
   userFindUnique: unknown;
   participantFindUnique: unknown;
+  participantFindFirst: unknown;
 }> = {}) {
   return {
     conversation: {
@@ -76,6 +77,15 @@ function makePrisma(overrides: Partial<{
         overrides.participantFindUnique !== undefined
           ? overrides.participantFindUnique
           : { id: USER_ID, displayName: 'Guest', nickname: null }
+      ),
+      // Backs `resolveParticipant`'s conversation-membership lookup for registered
+      // users (typing:start/typing:stop authorization guard). Defaults to an active
+      // participant so pre-existing tests that don't care about this guard keep
+      // passing; override to `null` to simulate a caller who isn't a member.
+      findFirst: jest.fn().mockResolvedValue(
+        overrides.participantFindFirst !== undefined
+          ? overrides.participantFindFirst
+          : { id: 'participant-1', displayName: 'Alice Smith', nickname: null }
       ),
     },
   } as any;
@@ -240,6 +250,15 @@ describe('StatusHandler', () => {
       await handler.handleTypingStart(makeSocket() as any, TYPING_PAYLOAD);
       expect(deps.statusService.updateLastSeen).toHaveBeenCalledWith(USER_ID, false);
     });
+
+    it('does not broadcast when the caller is not a participant of the conversation', async () => {
+      const prisma = makePrisma({ participantFindFirst: null });
+      const deps = makeDeps({ prisma });
+      const handler = new StatusHandler(deps);
+      const socket = makeSocket();
+      await handler.handleTypingStart(socket as any, TYPING_PAYLOAD);
+      expect(socket.to).not.toHaveBeenCalled();
+    });
   });
 
   // ─── anonymous user typing:start ──────────────────────────────────────────
@@ -302,6 +321,15 @@ describe('StatusHandler', () => {
 
     it('returns early when registered user is not found in DB', async () => {
       const prisma = makePrisma({ userFindUnique: null });
+      const deps = makeDeps({ prisma });
+      const handler = new StatusHandler(deps);
+      const socket = makeSocket();
+      await handler.handleTypingStop(socket as any, TYPING_PAYLOAD);
+      expect(socket.to).not.toHaveBeenCalled();
+    });
+
+    it('does not broadcast when the caller is not a participant of the conversation', async () => {
+      const prisma = makePrisma({ participantFindFirst: null });
       const deps = makeDeps({ prisma });
       const handler = new StatusHandler(deps);
       const socket = makeSocket();

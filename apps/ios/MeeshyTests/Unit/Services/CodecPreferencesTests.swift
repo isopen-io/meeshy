@@ -326,6 +326,18 @@ final class CodecPreferencesTests: XCTestCase {
         )
     }
 
+    func test_audioCodecFloorBitrateBps_isBelowAdaptationFloor() {
+        // The SDP codec floor must be strictly below the adaptation algorithm's floor
+        // (minBitrate). This allows the encoder to survive extreme network conditions
+        // even after the adaptation algorithm has already descended to its own floor.
+        XCTAssertLessThan(
+            QualityThresholds.audioCodecFloorBitrateBps,
+            QualityThresholds.minBitrate,
+            "SDP codec floor (\(QualityThresholds.audioCodecFloorBitrateBps)) must be < " +
+            "adaptation floor (\(QualityThresholds.minBitrate))"
+        )
+    }
+
     func test_p2pClient_removesAudioRedundancyMunging() throws {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -365,10 +377,13 @@ final class CodecPreferencesTests: XCTestCase {
         let body = String(source[range.lowerBound..<end])
 
         XCTAssertTrue(
-            body.contains("stalePeerConnection.close()"),
-            "configure() must close any pre-existing peerConnection before overwriting the reference — " +
-            "otherwise a caller that violates the .idle-before-configure FSM invariant silently leaks " +
-            "a native RTCPeerConnection (threads/sockets)."
+            body.contains("disconnect()"),
+            "configure() must fully tear down any pre-existing peerConnection via disconnect() " +
+            "(not just close it) before overwriting the reference — otherwise a caller that violates " +
+            "the .idle-before-configure FSM invariant leaves audioTransceiver/videoTransceiver pointing " +
+            "at the closed connection's objects, and addOffererTransceiversIfNeeded(on:)'s " +
+            "`audioTransceiver == nil` guard then skips attaching media to the new connection, " +
+            "producing a call that silently has no audio/video (audit 2026-07-03)."
         )
     }
 }

@@ -804,13 +804,19 @@ public actor OfflineQueue {
         // sont comptées — un accusé de lecture (`markAsRead`) coincé ne doit
         // pas maintenir le bandeau alors que la conversation est synchronisée.
         let excludedKinds = Self.syncIndicatorExcludedKinds
+        // Échec de lecture GRDB → 0, PAS le miroir mémoire `items` : le
+        // flusher draine la table SANS toucher le miroir (il devient périmé
+        // après tout drain) et `refreshPendingUIItems` retombe déjà sur `[]`
+        // — un fallback divergent affichait la bannière « Synchronisation »
+        // générique (pendingCount > 0, pendingUIItems vide) en permanence.
+        // Cohérence : pendingCount == 0 ⟺ pendingUIItems == [] en dégradé.
         let count: Int = (try? await pool.read { db in
             try OutboxRecord
                 .filter([OutboxStatus.pending.rawValue, OutboxStatus.inflight.rawValue]
                     .contains(Column("status")))
                 .filter(!excludedKinds.contains(Column("kind")))
                 .fetchCount(db)
-        }) ?? items.count
+        }) ?? 0
         pendingCountSubject.send(count)
         nearCapacitySubject.send(count >= Self.nearCapacityThreshold)
         await refreshPendingUIItems()
@@ -1114,6 +1120,12 @@ public actor OfflineQueue {
     private static func coalescesByAnchor(kind: OutboxKind) -> Bool {
         switch kind {
         case .markAsRead:
+            return true
+        case .markStoryViewed:
+            // R6 — anchor = storyId : re-voir la même story remplace le row
+            // pendant/failed précédent (le « vu » est binaire et idempotent) ;
+            // des stories différentes ont des anchors différents et sont
+            // toutes conservées.
             return true
         default:
             return false

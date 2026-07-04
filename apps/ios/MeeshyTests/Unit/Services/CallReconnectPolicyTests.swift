@@ -95,6 +95,38 @@ final class TurnRefreshDelayPolicyTests: XCTestCase {
     }
 }
 
+// MARK: - TURN refresh watchdog retry
+
+/// `call:request-ice-servers` carries no ACK — the only signal that a refresh
+/// succeeded is the `call:ice-servers-refreshed` reply. A single dropped emit
+/// or reply must not permanently kill the periodic refresh for the rest of a
+/// long call, but retries must still be bounded.
+@MainActor
+final class TurnRefreshRetryPolicyTests: XCTestCase {
+
+    func test_turnRefreshShouldRetry_belowMax_retries() {
+        XCTAssertTrue(CallReliabilityPolicy.turnRefreshShouldRetry(attempt: 0, maxRetries: 3))
+        XCTAssertTrue(CallReliabilityPolicy.turnRefreshShouldRetry(attempt: 2, maxRetries: 3))
+    }
+
+    func test_turnRefreshShouldRetry_atMax_stops() {
+        XCTAssertFalse(CallReliabilityPolicy.turnRefreshShouldRetry(attempt: 3, maxRetries: 3))
+    }
+
+    func test_turnRefreshShouldRetry_pastMax_stops() {
+        XCTAssertFalse(CallReliabilityPolicy.turnRefreshShouldRetry(attempt: 10, maxRetries: 3))
+    }
+
+    func test_turnRefreshShouldRetry_defaultMaxRetries_matchesThreshold() {
+        XCTAssertTrue(
+            CallReliabilityPolicy.turnRefreshShouldRetry(attempt: QualityThresholds.turnRefreshMaxRetries - 1)
+        )
+        XCTAssertFalse(
+            CallReliabilityPolicy.turnRefreshShouldRetry(attempt: QualityThresholds.turnRefreshMaxRetries)
+        )
+    }
+}
+
 // MARK: - Half-open monitor across connection epochs
 
 /// Two defects in the old Task-local `halfOpenSettled` bool:

@@ -2017,6 +2017,85 @@ describe('MessageHandler', () => {
     });
   });
 
+  // ── Offline delivery queue — WS message:send path parity with REST ─────────
+
+  describe('broadcastNewMessage — offline delivery queue enqueue', () => {
+    const offlineUserId = 'user-offline-0011223344556677';
+    const offlinePartId = 'part-offline-0011223344556677';
+    const onlineUserId = 'user-online-0011223344556677';
+    const onlinePartId = 'part-online-0011223344556677';
+
+    function makeMsg(overrides: Record<string, unknown> = {}) {
+      return {
+        id: 'msg-dq', conversationId: VALID_CONV_ID, senderId: PARTICIPANT_ID,
+        content: 'hi', originalLanguage: 'fr', messageType: 'text',
+        createdAt: new Date(), sender: { userId: USER_ID }, attachments: [], translations: [],
+        ...overrides,
+      };
+    }
+
+    it('enqueues the message for a participant who is not connected', async () => {
+      const enqueue = jest.fn().mockResolvedValue(undefined);
+      const d = makeDeps({ deliveryQueue: { enqueue } as any });
+      d.socketToUser.set('socket-1', USER_ID);
+      d.connectedUsers.set(USER_ID, makeSocketUser());
+      d.connectedUsers.set(onlineUserId, makeSocketUser({ id: onlineUserId, userId: onlineUserId }));
+      const h = new MessageHandler(d);
+
+      (d.prisma.participant.findMany as jest.Mock<any>)
+        .mockResolvedValueOnce([
+          { id: PARTICIPANT_ID, userId: USER_ID, joinedAt: new Date() },
+          { id: onlinePartId, userId: onlineUserId, joinedAt: new Date() },
+          { id: offlinePartId, userId: offlineUserId, joinedAt: new Date() },
+        ]) // sharedParticipants (CONVERSATION_UPDATED + _updateUnreadCounts)
+        .mockResolvedValue([]); // _autoDeliverToOnlineRecipients
+      (d.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockResolvedValue(new Map());
+
+      await h.broadcastNewMessage(makeMsg() as any, VALID_CONV_ID, socket);
+
+      expect(enqueue).toHaveBeenCalledTimes(1);
+      expect(enqueue).toHaveBeenCalledWith(offlineUserId, expect.objectContaining({
+        messageId: 'msg-dq',
+        conversationId: VALID_CONV_ID,
+        payload: expect.objectContaining({ id: 'msg-dq' }),
+        enqueuedAt: expect.any(String),
+      }));
+    });
+
+    it('does not enqueue for the sender or for already-connected recipients', async () => {
+      const enqueue = jest.fn().mockResolvedValue(undefined);
+      const d = makeDeps({ deliveryQueue: { enqueue } as any });
+      d.socketToUser.set('socket-1', USER_ID);
+      d.connectedUsers.set(USER_ID, makeSocketUser());
+      d.connectedUsers.set(onlineUserId, makeSocketUser({ id: onlineUserId, userId: onlineUserId }));
+      const h = new MessageHandler(d);
+
+      (d.prisma.participant.findMany as jest.Mock<any>)
+        .mockResolvedValueOnce([
+          { id: PARTICIPANT_ID, userId: USER_ID, joinedAt: new Date() },
+          { id: onlinePartId, userId: onlineUserId, joinedAt: new Date() },
+        ])
+        .mockResolvedValue([]);
+      (d.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockResolvedValue(new Map());
+
+      await h.broadcastNewMessage(makeMsg() as any, VALID_CONV_ID, socket);
+
+      expect(enqueue).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when no delivery queue is configured', async () => {
+      (deps.prisma.participant.findMany as jest.Mock<any>)
+        .mockResolvedValueOnce([
+          { id: PARTICIPANT_ID, userId: USER_ID, joinedAt: new Date() },
+          { id: offlinePartId, userId: offlineUserId, joinedAt: new Date() },
+        ])
+        .mockResolvedValue([]);
+      (deps.readStatusService.getUnreadCountsForParticipants as jest.Mock<any>).mockResolvedValue(new Map());
+
+      await expect(handler.broadcastNewMessage(makeMsg() as any, VALID_CONV_ID, socket)).resolves.toBeUndefined();
+    });
+  });
+
   // ── Branch-gap-filling: _notifyAgent replyToId null (?? undefined) ─────────
 
   describe('_notifyAgent — replyToId null ?? undefined (line 1054)', () => {

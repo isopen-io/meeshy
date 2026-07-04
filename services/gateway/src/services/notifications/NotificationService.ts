@@ -20,6 +20,8 @@ import type {
   NotificationType,
   Notification,
 } from '@meeshy/shared/types/notification';
+import type { UserUpdatedEventData } from '@meeshy/shared/types/socketio-events';
+import { getDistinctConversationPartnerUserIds } from '../../utils/conversation-partners';
 import {
   NOTIFICATION_PREFERENCE_DEFAULTS,
   type NotificationPreference as NotifPrefs,
@@ -772,6 +774,23 @@ export class NotificationService {
             undefined;
           const pushBody = params.content.substring(0, 200);
 
+          // F1 — app fermée, le badge d'icône iOS et le widget ne vivent QUE
+          // par le payload push : embarquer le même compte unread que
+          // `notification:counts` (même source → même sémantique, pas de
+          // flicker au recale foreground). `badge` pilote `aps.badge`
+          // nativement ; `data.unreadCount` (string) alimente le miroir App
+          // Group écrit par la NSE pour le widget. Best-effort : sur échec
+          // du count, le push part sans badge (comportement historique).
+          let unreadBadge: number | undefined;
+          try {
+            const count = await this.prisma.notification.count({
+              where: { userId: params.userId, readAt: null },
+            });
+            if (typeof count === 'number') unreadBadge = count;
+          } catch {
+            unreadBadge = undefined;
+          }
+
           notificationLogger.debug('push (APNs/FCM) sending', { userId: params.userId, type: params.type, conversationId: params.context.conversationId ?? 'none' });
           this.pushService.sendToUser({
             userId: params.userId,
@@ -789,7 +808,9 @@ export class NotificationService {
               body: pushBody,
               link,
               collapseId: params.collapseId,
+              ...(unreadBadge !== undefined ? { badge: unreadBadge } : {}),
               data: {
+                ...(unreadBadge !== undefined ? { unreadCount: String(unreadBadge) } : {}),
                 type: params.type,
                 conversationId: params.context.conversationId || '',
                 conversationTitle: params.context.conversationTitle || '',
@@ -2197,6 +2218,27 @@ export class NotificationService {
       friendRequestId: params.friendRequestId,
       rejecterId: params.rejecterId,
     });
+  }
+
+  /**
+   * Propagates a profile change (displayName, avatar, banner, username) to
+   * every user sharing an active conversation with `userId`, instead of a
+   * full broadcast. Realtime-only signal — no `Notification` row, same
+   * pattern as `emitFriendRequestCancelled`. See
+   * tasks/socketio-events-cleanup.md #6.
+   */
+  async emitUserUpdated(params: {
+    userId: string;
+    changes: UserUpdatedEventData['changes'];
+  }): Promise<void> {
+    if (!this.io) return;
+    const partnerIds = await getDistinctConversationPartnerUserIds(this.prisma, params.userId);
+    if (partnerIds.length === 0) return;
+
+    const payload: UserUpdatedEventData = { userId: params.userId, changes: params.changes };
+    for (const partnerId of partnerIds) {
+      this.io.to(ROOMS.user(partnerId)).emit(SERVER_EVENTS.USER_UPDATED, payload);
+    }
   }
 
   // ==============================================

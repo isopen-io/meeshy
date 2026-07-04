@@ -200,8 +200,16 @@ struct CommentsSheetView: View {
     @State private var commentAttachments: [ComposerAttachment] = []
     @State private var showCommentPhotoPicker: Bool = false
     @State private var commentPhotoItems: [PhotosPickerItem] = []
+    /// True while `commentPhotoItems` is being primed with the recent-media
+    /// strip's multi-selection before presenting the PhotosPicker — swallows
+    /// the priming onChange echo so only a user confirmation ingests items.
+    @State private var commentPhotoPickerPriming: Bool = false
     @State private var showCommentFilePicker: Bool = false
     @State private var showCommentLocationPicker: Bool = false
+    /// "Éditer" from the recent-media strip — the editor opens before staging;
+    /// the edited output is ingested, never the original.
+    @State private var commentRecentImageToEdit: UIImage? = nil
+    @State private var commentRecentVideoToEdit: URL? = nil
 
     /// Enregistreur vocal parent-managed — MÊME composant que les conversations
     /// (`ConversationView`). Produit un vrai fichier audio (pas un timer) déposé
@@ -822,16 +830,22 @@ struct CommentsSheetView: View {
             onPhotoLibrary: { showCommentPhotoPicker = true },
             onFilePicker: { showCommentFilePicker = true },
             onRecentMediaSelected: { pick in ingestCommentRecentMedia(pick) },
+            onRecentMediaEdit: { pick in editCommentRecentMedia(pick) },
+            onPhotoLibraryPreselecting: { ids in openCommentLibraryPreselecting(ids) },
             isBlurEnabled: $commentBlurEnabled,
             pendingEffects: $commentEffects,
             externalAttachments: commentAttachments,
             focusTrigger: $composerFocusTrigger
         )
+        // `photoLibrary: .shared()` est requis pour la présélection : les
+        // PhotosPickerItem(itemIdentifier:) injectés depuis le strip ne
+        // matchent les assets du picker que sur la photothèque partagée.
         .photosPicker(
             isPresented: $showCommentPhotoPicker,
             selection: $commentPhotoItems,
             maxSelectionCount: 10,
-            matching: .any(of: [.images, .videos])
+            matching: .any(of: [.images, .videos]),
+            photoLibrary: .shared()
         )
         .fileImporter(
             isPresented: $showCommentFilePicker,
@@ -850,6 +864,38 @@ struct CommentsSheetView: View {
         }
         .adaptiveOnChange(of: commentPhotoItems) { _, items in
             handleCommentPhotoSelection(items)
+        }
+        // "Éditer" from the recent-media strip → edit BEFORE staging: only the
+        // edited output lands in the comment attachments.
+        .fullScreenCover(isPresented: Binding(
+            get: { commentRecentImageToEdit != nil },
+            set: { if !$0 { commentRecentImageToEdit = nil } }
+        )) {
+            if let image = commentRecentImageToEdit {
+                MeeshyImageEditorView(image: image, context: .post, accentColor: accentColor, onAccept: { edited in
+                    commentRecentImageToEdit = nil
+                    ingestCommentRecentMedia(.image(edited))
+                }, onCancel: {
+                    commentRecentImageToEdit = nil
+                })
+            }
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { commentRecentVideoToEdit != nil },
+            set: { if !$0 { commentRecentVideoToEdit = nil } }
+        )) {
+            if let url = commentRecentVideoToEdit {
+                MeeshyVideoEditorView(
+                    url: url,
+                    context: .post,
+                    accentColor: accentColor,
+                    onComplete: { result in
+                        commentRecentVideoToEdit = nil
+                        ingestCommentRecentMedia(.video(result.url))
+                    },
+                    onCancel: { commentRecentVideoToEdit = nil }
+                )
+            }
         }
     }
 
@@ -909,8 +955,32 @@ struct CommentsSheetView: View {
 
     // MARK: - Comment Attachment Pickers
 
+    /// Opens the full photo library with the strip's multi-selection already
+    /// checked (identifier-based priming — see `commentPhotoPickerPriming`).
+    /// Capped at the picker's `maxSelectionCount` (10); with no strip
+    /// selection, stale primed items from a cancelled run are dropped.
+    private func openCommentLibraryPreselecting(_ assetIds: [String]) {
+        if !assetIds.isEmpty {
+            let primed = assetIds.prefix(10).map { PhotosPickerItem(itemIdentifier: $0) }
+            // Arm the echo-swallow ONLY when priming actually mutates the
+            // binding — an unchanged binding fires no onChange, and a stale
+            // armed flag would swallow the user's real confirmation instead.
+            commentPhotoPickerPriming = primed != commentPhotoItems
+            commentPhotoItems = primed
+        } else {
+            commentPhotoItems = []
+        }
+        showCommentPhotoPicker = true
+    }
+
     private func handleCommentPhotoSelection(_ items: [PhotosPickerItem]) {
         guard !items.isEmpty else { return }
+        // Priming echo (strip multi-selection injected before presenting the
+        // picker) — not a user confirmation, nothing to ingest yet.
+        if commentPhotoPickerPriming {
+            commentPhotoPickerPriming = false
+            return
+        }
         Task {
             for item in items {
                 let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
@@ -928,6 +998,15 @@ struct CommentsSheetView: View {
                 await MainActor.run { commentAttachments.append(attachment) }
             }
             await MainActor.run { commentPhotoItems = [] }
+        }
+    }
+
+    /// "Éditer" from the strip's long-press menu: opens the media editor on the
+    /// resolved pick; the edited result is ingested like a strip tap.
+    private func editCommentRecentMedia(_ pick: RecentMediaPick) {
+        switch pick {
+        case .image(let image): commentRecentImageToEdit = image
+        case .video(let url): commentRecentVideoToEdit = url
         }
     }
 

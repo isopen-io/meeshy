@@ -4,6 +4,17 @@ import os
 import MeeshySDK
 import MeeshyUI
 
+// MARK: - Section Frame Registry
+
+/// Boîte mutable INERTE : les GeometryReader des headers de section y écrivent
+/// leur frame globale à chaque layout (scroll compris) sans déclencher
+/// d'invalidation SwiftUI — une @State [String: CGRect] re-évaluerait la liste
+/// à chaque tick. Le morph drag de l'overlay (+Overlays) hit-teste le doigt
+/// contre ces frames pour surligner puis résoudre la section de drop.
+final class SectionFrameRegistry {
+    var frames: [String: CGRect] = [:]
+}
+
 // MARK: - Section Drop Delegate
 
 struct SectionDropDelegate: DropDelegate {
@@ -151,15 +162,56 @@ struct ConversationListView: View {
     /// pour l'annuler si une nouvelle ouverture survient avant la fin du zoom-out,
     /// sinon la purge en vol effacerait le menu qui vient de se rouvrir.
     @State var contextMenuDismissWork: DispatchWorkItem? = nil
+    /// Scale de la carte d'aperçu de l'overlay (1.0 = dépliée, 0 = repliée via
+    /// le drag vers le haut sur la carte — `previewCollapseGesture`, +Overlays).
+    /// Muté uniquement quand l'overlay est ouvert ; les lignes ne le reçoivent
+    /// plus (gate Equatable intact pendant le geste).
+    @State var previewScale: CGFloat = 1.0
+    /// Offset de la carte d'aperçu pendant le drag vers le bas — suit le doigt
+    /// 1:1 et pilote le morph drag-n-drop (`dragMorphProgress`, +Overlays).
+    /// > 110 pt au lâcher = fermeture du menu.
+    @State var dragOffsetY: CGFloat = 0
+    /// Offset horizontal du drag — actif uniquement en morph (la carte suit
+    /// le doigt latéralement une fois le mode drag engagé).
+    @State var dragOffsetX: CGFloat = 0
+    /// Frame GLOBALE de la ligne pressée au déclenchement du long-press —
+    /// point de départ de l'émergence de l'aperçu. nil = inconnu (rotor
+    /// accessibilité) → fallback zoom centré 0.7 → 1.0.
+    @State var contextMenuSourceFrame: CGRect? = nil
+    /// Frame de REPOS de la carte d'aperçu (mesurée hors transformation,
+    /// overlay invisible) — sert à calculer le placement initial de
+    /// l'émergence depuis la ligne. Voir `runContextMenuEmergence` (+Overlays).
+    @State var previewRestFrame: CGRect = .zero
+    /// Offset y d'émergence : la carte part de la position de la ligne
+    /// (placement invisible) puis rejoint sa position finale — départ lent,
+    /// accélération, léger rebond (timingCurve overshoot).
+    @State var previewEmergeOffset: CGFloat = 0
 
     /// Renommage : conversation cible + texte en cours d'édition (action
     /// « Renommer » du menu contextuel, groupes/communautés uniquement).
     @State var renameTarget: Conversation? = nil
     @State var renameText: String = ""
 
-    // Drag & Drop state
+    // Drag & Drop state — infra DORMANTE depuis le retrait de `.onDrag`
+    // (135af8f2 : il capturait le long-press du menu custom). Conservée comme
+    // point de reconnexion (poignée dédiée / mode édition futur) : le
+    // `SectionDropDelegate` + `handleDrop` restent câblés sur les sections,
+    // coût runtime nul tant que rien ne pose `draggingConversation`.
+    // Le déplacement utilisateur passe par « Déplacer vers » dans le menu.
     @State private var draggingConversation: Conversation? = nil
-    @State private var dropTargetSection: String? = nil
+    /// Section surlignée comme cible de drop. Alimenté par le morph drag de
+    /// l'overlay (chip sous le doigt — voir `previewCollapseGesture`,
+    /// +Overlays) en plus du `SectionDropDelegate` historique. Pas `private` :
+    /// muté depuis le fichier d'extension +Overlays.
+    @State var dropTargetSection: String? = nil
+    /// Frames GLOBALES des headers de section, tenues à jour par leurs
+    /// GeometryReader dans une boîte INERTE (aucune invalidation par tick de
+    /// scroll) — hit-test du drop de la chip du morph drag.
+    @State var sectionFrameRegistry = SectionFrameRegistry()
+    /// true dès que le morph drag a atteint sa pleine progression : la carte
+    /// RESTE une chip qui suit librement le doigt (y compris vers le haut,
+    /// pour viser un header au-dessus) jusqu'au relâchement — drop ou dismiss.
+    @State var chipModeLatched = false
 
     @State var userCommunityLookup: [String: MeeshyCommunity] = [:]
 
@@ -220,6 +272,17 @@ struct ConversationListView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
+            // Frame globale du header → registre inerte : cible de drop de la
+            // chip du morph drag (l'overlay hit-teste le doigt au relâchement).
+            .background(
+                GeometryReader { geo in
+                    Color.clear
+                        .onAppear { sectionFrameRegistry.frames[group.section.id] = geo.frame(in: .global) }
+                        .adaptiveOnChange(of: geo.frame(in: .global)) { _, frame in
+                            sectionFrameRegistry.frames[group.section.id] = frame
+                        }
+                }
+            )
             .onDrop(of: [.text], delegate: SectionDropDelegate(
                 sectionId: group.section.id,
                 dropTargetSection: $dropTargetSection,
@@ -323,24 +386,34 @@ struct ConversationListView: View {
                     onSelect(conversation)
                 }
             },
-            onDragStart: {
-                draggingConversation = conversation
-                HapticFeedback.medium()
-            },
             onLoadPreview: {
                 await conversationViewModel.loadPreviewMessages(for: conversation.id)
             },
-            onLongPress: {
+            onLongPress: { sourceFrame in
                 Task { await conversationViewModel.loadPreviewMessages(for: conversation.id) }
-                // Montage instantané à l'état "replié" ; l'overlay anime
-                // ensuite via `.onAppear` (zoom + rebond). Reset explicite au
-                // cas où l'état resterait à true d'une ouverture précédente.
+                // Montage au REPOS invisible (scale 1, offset 0, opacité 0) :
+                // le GeometryReader de l'overlay mesure la frame de repos de
+                // la carte, puis `runContextMenuEmergence` place la carte sur
+                // la ligne pressée (toujours invisible) et anime l'émergence.
                 // Annule une purge de fermeture encore en vol, sinon elle
                 // effacerait ce menu fraîchement ouvert (~0.26 s plus tard).
                 contextMenuDismissWork?.cancel()
                 contextMenuDismissWork = nil
+                let wasMounted = contextMenuConversation != nil
                 contextMenuAppeared = false
+                contextMenuSourceFrame = sourceFrame.height > 0 ? sourceFrame : nil
+                previewScale = 1.0
+                previewEmergeOffset = 0
+                dragOffsetY = 0
+                dragOffsetX = 0
+                chipModeLatched = false
                 contextMenuConversation = conversation
+                if wasMounted {
+                    // Réouverture rapide : l'overlay est encore monté, donc
+                    // `.onAppear` ne re-fire pas — sans relance ici le menu
+                    // resterait invisible (contextMenuAppeared bloqué à false).
+                    runContextMenuEmergence()
+                }
             }
         )
         .equatable()

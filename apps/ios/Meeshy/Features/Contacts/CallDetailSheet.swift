@@ -46,10 +46,12 @@ struct CallDetailSheet: View {
             HStack(spacing: 6) {
                 Image(systemName: record.isVideo ? "video.fill" : "phone.fill")
                     .font(.caption)
+                    .accessibilityHidden(true)
                 Text(statusLine)
                     .font(.subheadline.weight(.medium))
             }
             .foregroundColor(record.isMissed ? MeeshyColors.error : theme.textMuted)
+            .accessibilityElement(children: .combine)
         }
         .padding(.top, 8)
     }
@@ -146,6 +148,7 @@ struct CallDetailSheet: View {
                 .font(.subheadline)
                 .foregroundColor(MeeshyColors.indigo500)
                 .frame(width: 24)
+                .accessibilityHidden(true)
             Text(label)
                 .font(.subheadline)
                 .foregroundColor(theme.textMuted)
@@ -156,5 +159,6 @@ struct CallDetailSheet: View {
         }
         .padding(.horizontal, MeeshySpacing.md)
         .padding(.vertical, MeeshySpacing.md)
+        .accessibilityElement(children: .combine)
     }
 }

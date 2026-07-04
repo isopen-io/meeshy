@@ -175,6 +175,8 @@ extension ConversationView {
                 }
             },
             onRecentMediaSelected: { pick in ingestRecentMediaPick(pick) },
+            onRecentMediaEdit: { pick in editRecentMediaPick(pick) },
+            onPhotoLibraryPreselecting: { ids in openPhotoLibraryPreselecting(ids) },
             injectedEmoji: $composerState.emojiToInject,
             ephemeralDuration: $viewModel.ephemeralDuration,
             hideEphemeral: composerState.editingMessageId != nil,
@@ -198,7 +200,10 @@ extension ConversationView {
         .sheet(isPresented: $viewModel.showEffectsPicker) {
             EffectsPickerView(effects: $viewModel.pendingEffects, accentColor: accentColor)
         }
-        .photosPicker(isPresented: $composerState.showPhotoPicker, selection: $composerState.selectedPhotoItems, maxSelectionCount: 10, matching: .any(of: [.images, .videos]))
+        // `photoLibrary: .shared()` est requis pour la présélection : les
+        // PhotosPickerItem(itemIdentifier:) injectés depuis le strip ne
+        // matchent les assets du picker que sur la photothèque partagée.
+        .photosPicker(isPresented: $composerState.showPhotoPicker, selection: $composerState.selectedPhotoItems, maxSelectionCount: 10, matching: .any(of: [.images, .videos]), photoLibrary: .shared())
         .fileImporter(isPresented: $composerState.showFilePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             handleFileImport(result)
         }
@@ -280,6 +285,39 @@ extension ConversationView {
                 )
             }
         }
+        // D2. "Éditer" from the recent-media strip → the editor opens BEFORE
+        // staging; the edited output goes through the same preparation pipeline
+        // as a camera capture (the pre-edit original is never staged).
+        .fullScreenCover(isPresented: Binding(
+            get: { scrollState.recentImageToEdit != nil },
+            set: { if !$0 { scrollState.recentImageToEdit = nil } }
+        )) {
+            if let image = scrollState.recentImageToEdit {
+                MeeshyImageEditorView(image: image, context: .message, accentColor: accentColor, onAccept: { edited in
+                    scrollState.recentImageToEdit = nil
+                    handleCameraCapture(edited)
+                }, onCancel: {
+                    scrollState.recentImageToEdit = nil
+                })
+            }
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { scrollState.recentVideoToEdit != nil },
+            set: { if !$0 { scrollState.recentVideoToEdit = nil } }
+        )) {
+            if let url = scrollState.recentVideoToEdit {
+                MeeshyVideoEditorView(
+                    url: url,
+                    context: .message,
+                    accentColor: accentColor,
+                    onComplete: { result in
+                        scrollState.recentVideoToEdit = nil
+                        handleCameraVideo(result.url)
+                    },
+                    onCancel: { scrollState.recentVideoToEdit = nil }
+                )
+            }
+        }
         // E. Audio → MeeshyAudioEditorView
         .fullScreenCover(item: Binding(
             get: { scrollState.audioToEdit },
@@ -311,6 +349,37 @@ extension ConversationView {
         case .image(let image): handleCameraCapture(image)
         case .video(let url): handleCameraVideo(url)
         }
+    }
+
+    /// "Éditer" from the strip's long-press menu: opens the media editor on the
+    /// resolved pick; the edited result is staged like a camera capture.
+    func editRecentMediaPick(_ pick: RecentMediaPick) {
+        switch pick {
+        case .image(let image): scrollState.recentImageToEdit = image
+        case .video(let url): scrollState.recentVideoToEdit = url
+        }
+    }
+
+    /// Opens the full photo library with the strip's multi-selection already
+    /// checked. The picker binding is primed with identifier-based items
+    /// (`photoLibrary: .shared()` makes them match real assets); the priming
+    /// echo on the selection onChange is swallowed via `photoPickerPriming`.
+    /// The handoff is capped at the picker's `maxSelectionCount` (10). With no
+    /// strip selection, stale primed items from a cancelled run are dropped so
+    /// the picker opens clean.
+    func openPhotoLibraryPreselecting(_ assetIds: [String]) {
+        if !assetIds.isEmpty {
+            let primed = assetIds.prefix(10).map { PhotosPickerItem(itemIdentifier: $0) }
+            // Arm the echo-swallow ONLY when priming actually mutates the
+            // binding — an unchanged binding (same picks re-handed after a
+            // cancelled run) fires no onChange, and a stale armed flag would
+            // swallow the user's real confirmation instead.
+            composerState.photoPickerPriming = primed != composerState.selectedPhotoItems
+            composerState.selectedPhotoItems = primed
+        } else {
+            composerState.selectedPhotoItems = []
+        }
+        composerState.showPhotoPicker = true
     }
 
     // MARK: - Contact Selection Handler
@@ -365,33 +434,33 @@ extension ConversationView {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(composerReplyTitle(reply))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(Color(hex: reply.isMe ? accentColor : reply.authorColor))
 
                 HStack(spacing: 4) {
                     if let emoji = reply.moodEmoji {
                         // Réponse à un mood : emoji + contenu entier + date.
                         Text(emoji)
-                            .font(.system(size: 12))
+                            .font(MeeshyFont.relative(12))
                         if let date = reply.storyPublishedAt {
                             Text(date, style: .relative)
-                                .font(.system(size: 11))
+                                .font(MeeshyFont.relative(11))
                                 .foregroundColor(theme.textMuted)
                         }
                         if !reply.previewText.isEmpty {
                             Text(reply.previewText)
-                                .font(.system(size: 12))
+                                .font(MeeshyFont.relative(12))
                                 .foregroundColor(theme.textSecondary)
                                 .lineLimit(1)
                         }
                     } else {
                         if let attType = reply.attachmentType {
                             Image(systemName: composerReplyAttachmentIcon(attType))
-                                .font(.system(size: 10, weight: .medium))
+                                .font(MeeshyFont.relative(10, weight: .medium))
                                 .foregroundColor(theme.textSecondary)
                         }
                         Text(reply.previewText)
-                            .font(.system(size: 12))
+                            .font(MeeshyFont.relative(12))
                             .foregroundColor(theme.textSecondary)
                             .lineLimit(1)
                     }
@@ -412,6 +481,7 @@ extension ConversationView {
                 }
             } label: {
                 Image(systemName: "xmark")
+                    // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 24×24 → figé.
                     .font(.system(size: 10, weight: .bold))
                     .foregroundColor(theme.textMuted)
                     .frame(width: 24, height: 24)
@@ -441,16 +511,17 @@ extension ConversationView {
                 .frame(width: 3, height: 36)
 
             Image(systemName: "pencil")
-                .font(.system(size: 14, weight: .semibold))
+                .font(MeeshyFont.relative(14, weight: .semibold))
                 .foregroundColor(MeeshyColors.warning)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(String(localized: "conversation.view.composer.edit_message", defaultValue: "Modifier le message", bundle: .main))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(MeeshyColors.warning)
 
                 Text(composerState.editingOriginalContent ?? "")
-                    .font(.system(size: 12))
+                    .font(MeeshyFont.relative(12))
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(1)
             }
@@ -461,6 +532,7 @@ extension ConversationView {
                 cancelEdit()
             } label: {
                 Image(systemName: "xmark")
+                    // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 24×24 → figé.
                     .font(.system(size: 10, weight: .bold))
                     .foregroundColor(theme.textMuted)
                     .frame(width: 24, height: 24)
@@ -551,8 +623,10 @@ extension ConversationView {
                     .clipShape(RoundedRectangle(cornerRadius: 8))
 
                     Image(systemName: "play.circle.fill")
+                        // Doctrine 86i : overlay play décoratif borné par la vignette fixe 40×40 → figé + masqué.
                         .font(.system(size: 18))
                         .foregroundStyle(.white, .black.opacity(0.4))
+                        .accessibilityHidden(true)
                 }
                 .onTapGesture {
                     if let url = MeeshyConfig.resolveMediaURL(thumbUrl) {
@@ -566,8 +640,10 @@ extension ConversationView {
         case "audio":
             HStack(spacing: 4) {
                 Image(systemName: "play.fill")
+                    // Doctrine 86i : glyphe décoratif du badge audio (waveform) → figé + masqué.
                     .font(.system(size: 8, weight: .bold))
                     .foregroundColor(accent.opacity(0.6))
+                    .accessibilityHidden(true)
 
                 HStack(spacing: 1.5) {
                     ForEach(0..<8, id: \.self) { i in
@@ -613,8 +689,10 @@ extension ConversationView {
 
                 VStack(spacing: 1) {
                     Image(systemName: "mappin.circle.fill")
+                        // Doctrine 86i : glyphe décoratif borné par la vignette fixe 40×40 → figé + masqué.
                         .font(.system(size: 18))
                         .foregroundStyle(MeeshyColors.success, MeeshyColors.success.opacity(0.2))
+                        .accessibilityHidden(true)
                     Circle()
                         .fill(MeeshyColors.success.opacity(0.3))
                         .frame(width: 6, height: 3)
@@ -640,8 +718,10 @@ extension ConversationView {
                         .stroke(color.opacity(0.2), lineWidth: 0.5)
                 )
             Image(systemName: icon)
+                // Doctrine 86i : glyphe décoratif borné par le badge fixe 40×40 → figé + masqué.
                 .font(.system(size: 16))
                 .foregroundColor(color.opacity(0.7))
+                .accessibilityHidden(true)
         }
     }
 
@@ -691,16 +771,20 @@ extension ConversationView {
 
                             if attachment.type == .video {
                                 Image(systemName: "play.circle.fill")
+                                    // Doctrine 86i : overlay décoratif borné par la tuile fixe 56×56 → figé + masqué.
                                     .font(.system(size: 20))
                                     .foregroundStyle(.white, .black.opacity(0.4))
+                                    .accessibilityHidden(true)
                             } else if attachment.type == .image {
                                 Image(systemName: "eye.fill")
+                                    // Doctrine 86i : indicateur décoratif borné par la tuile fixe 56×56 → figé + masqué.
                                     .font(.system(size: 10, weight: .bold))
                                     .foregroundColor(.white)
                                     .padding(4)
                                     .background(Circle().fill(.black.opacity(0.4)))
                                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                                     .padding(3)
+                                    .accessibilityHidden(true)
                             }
                         } else if attachment.type == .audio {
                             audioTileFallback(attachment)
@@ -718,8 +802,11 @@ extension ConversationView {
                                 .frame(width: 56, height: 56)
 
                             Image(systemName: iconForAttachmentType(attachment.type))
+                                // Doctrine 86i : glyphe de type décoratif borné par la tuile fixe 56×56 → figé + masqué
+                                // (le libellé sous la tuile porte le nom du fichier).
                                 .font(.system(size: 22))
                                 .foregroundColor(.white)
+                                .accessibilityHidden(true)
                         }
                     }
                     .frame(width: 56, height: 56)
@@ -739,6 +826,7 @@ extension ConversationView {
                     }
                 } label: {
                     Image(systemName: "xmark")
+                        // Doctrine 82i : glyphe de suppression dans un cadre tap fixe 18×18 → figé.
                         .font(.system(size: 8, weight: .bold))
                         .foregroundColor(.white)
                         .frame(width: 18, height: 18)
@@ -753,7 +841,7 @@ extension ConversationView {
             }
 
             Text(labelForAttachment(attachment))
-                .font(.system(size: 10, weight: .medium))
+                .font(MeeshyFont.relative(10, weight: .medium))
                 .foregroundColor(theme.textSecondary)
                 .lineLimit(1)
                 .frame(width: 60)
@@ -815,8 +903,10 @@ extension ConversationView {
                 .frame(height: 20)
 
                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                    // Doctrine 86i : glyphe décoratif borné par la tuile fixe 56×56 → figé + masqué.
                     .font(.system(size: 10, weight: .bold))
                     .foregroundColor(.white.opacity(0.8))
+                    .accessibilityHidden(true)
             }
         }
     }
@@ -835,8 +925,10 @@ extension ConversationView {
 
             VStack(spacing: 2) {
                 Image(systemName: "mappin.circle.fill")
+                    // Doctrine 86i : glyphe décoratif borné par la tuile fixe 56×56 → figé + masqué.
                     .font(.system(size: 22))
                     .foregroundStyle(.white, .white.opacity(0.3))
+                    .accessibilityHidden(true)
                 Circle()
                     .fill(Color.white.opacity(0.3))
                     .frame(width: 8, height: 4)

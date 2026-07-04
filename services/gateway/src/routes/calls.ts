@@ -69,8 +69,15 @@ export default async function callRoutes(fastify: FastifyInstance) {
   // Get decorated prisma instance
   const prisma = fastify.prisma;
 
-  // Initialize CallService
-  const callService = new CallService(prisma);
+  // Reuse the Socket.IO layer's CallService (shares its in-memory
+  // ringingTimeouts/heartbeats/backgroundedParticipants maps with
+  // CallEventsHandler and CallCleanupService) so a call initiated via REST
+  // gets its ringing timeout tracked on the same instance that later reads
+  // it. Falls back to a fresh instance only if routes register before
+  // setupSocketIO() decorates it (should not happen in normal boot order —
+  // see Server.setupSocketIO/setupRoutes call sequence — but keeps this
+  // route usable in isolation, e.g. targeted route tests).
+  const callService = fastify.callService ?? new CallService(prisma);
 
   // Authentication middleware (required for all routes)
   const requiredAuth = createUnifiedAuthMiddleware(prisma, {
@@ -812,12 +819,16 @@ export default async function callRoutes(fastify: FastifyInstance) {
           // FIX 2026-05-12 — `oneOf: [callSessionSchema, { type: 'null' }]`
           // déclenchait `TypeError: The value of '#/properties/data' does not
           // match schema definition.` sur fast-json-stringify quand data===null
-          // (limitation connue de la lib pour oneOf+null). On retire la
-          // contrainte de schema sur `data` côté serializer (additionalProperties
-          // true), la doc OpenAPI reste correcte via description.
-          additionalProperties: true,
+          // (limitation connue de la lib pour oneOf+null). `nullable: true` sur
+          // le schema objet directement (au lieu d'un oneOf) évite ce bug tout
+          // en gardant `data` comme whitelist de champs — la version précédente
+          // (`additionalProperties: true` sans schema sur `data`) désactivait
+          // tout filtrage et laissait fuiter des champs Prisma bruts non
+          // destinés au client (ex: `CallParticipant.analytics`, télémétrie
+          // privée d'un AUTRE participant) à tout membre de la conversation.
           properties: {
-            success: { type: 'boolean', example: true }
+            success: { type: 'boolean', example: true },
+            data: { ...callSessionSchema, nullable: true }
           }
         },
         400: {

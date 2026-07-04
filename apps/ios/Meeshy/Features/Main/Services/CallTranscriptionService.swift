@@ -431,20 +431,12 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         let language = stream.language
 
         // PERF-005: same nonisolated-callback hop as startRecognitionTask.
+        // `recognitionTask(with:)` returns a non-optional SFSpeechRecognitionTask —
+        // it never fails synchronously, failures surface later via the `error`
+        // param of the completion handler, which handleRecognizerCallback already
+        // routes into `lastError` on every occurrence (not just after N rotations).
         stream.task = stream.recognizer.recognitionTask(with: newRequest) { [weak self] result, error in
             self?.handleRecognizerCallback(result: result, error: error, speakerId: speakerId, language: language)
-        }
-
-        if stream.task == nil {
-            let consecutiveFailures = stream.rotationCount
-            if consecutiveFailures >= 3 {
-                lastError = .recognitionFailed(underlying: NSError(
-                    domain: "CallTranscriptionService",
-                    code: -1,
-                    userInfo: [NSLocalizedDescriptionKey: "Recognition rotation failed 3 times consecutively"]
-                ))
-                callsLogger.error("Recognition rotation failed 3 times for speaker \(speakerId) — fallback needed")
-            }
         }
 
         callsLogger.info("Rotated recognition request for speaker \(speakerId) (rotation #\(stream.rotationCount)), boundary: \(boundaryText.prefix(50))")

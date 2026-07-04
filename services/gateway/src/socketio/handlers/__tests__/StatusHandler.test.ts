@@ -13,10 +13,15 @@ import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals
 const mockNormalizeConversationId = jest.fn() as jest.Mock<any>;
 const mockGetConnectedUser = jest.fn() as jest.Mock<any>;
 const mockValidateSocketEvent = jest.fn() as jest.Mock<any>;
+const mockResolveParticipant = jest.fn() as jest.Mock<any>;
 
 jest.mock('../../utils/socket-helpers', () => ({
   normalizeConversationId: (...args: unknown[]) => mockNormalizeConversationId(...args),
   getConnectedUser: (...args: unknown[]) => mockGetConnectedUser(...args),
+}));
+
+jest.mock('../../utils/participant-resolver', () => ({
+  resolveParticipant: (...args: unknown[]) => mockResolveParticipant(...args),
 }));
 
 jest.mock('../../../middleware/validation.js', () => ({
@@ -120,6 +125,9 @@ describe('StatusHandler', () => {
     mockGetConnectedUser.mockReturnValue({
       user: { id: USER_ID, isAnonymous: false, socketId: SOCKET_ID, language: 'fr', resolvedLanguages: [] },
       realUserId: USER_ID,
+    });
+    mockResolveParticipant.mockResolvedValue({
+      participantId: 'participant-1', userId: USER_ID, isAnonymous: false, displayName: 'Alice',
     });
   });
 
@@ -236,6 +244,21 @@ describe('StatusHandler', () => {
       expect(emitFn).toHaveBeenCalledWith(
         SERVER_EVENTS.TYPING_START,
         expect.objectContaining({ displayName: 'carol', username: 'carol' })
+      );
+    });
+
+    it('returns early without broadcasting when caller is not a participant of the conversation', async () => {
+      mockResolveParticipant.mockResolvedValue(null);
+      const dbUser = { id: USER_ID, username: 'eve', firstName: null, lastName: null, displayName: 'Eve' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+
+      await handler.handleTypingStart(socket, { conversationId: CONV_ID });
+
+      expect(socket.to).not.toHaveBeenCalled();
+      expect(mockResolveParticipant).toHaveBeenCalledWith(
+        expect.objectContaining({ userIdOrToken: USER_ID, conversationId: CONV_ID })
       );
     });
 
@@ -514,6 +537,21 @@ describe('StatusHandler', () => {
       const handler = makeHandler();
 
       await expect(handler.handleTypingStop(socket, { conversationId: CONV_ID })).resolves.toBeUndefined();
+    });
+
+    it('returns early without broadcasting when caller is not a participant of the conversation', async () => {
+      mockResolveParticipant.mockResolvedValue(null);
+      const dbUser = { id: USER_ID, username: 'eve', firstName: null, lastName: null, displayName: 'Eve' };
+      const prisma = makePrisma({ user: { findUnique: jest.fn<any>().mockResolvedValue(dbUser) } });
+      const socket = makeSocket();
+      const handler = makeHandler({ prisma });
+
+      await handler.handleTypingStop(socket, { conversationId: CONV_ID });
+
+      expect(socket.to).not.toHaveBeenCalled();
+      expect(mockResolveParticipant).toHaveBeenCalledWith(
+        expect.objectContaining({ userIdOrToken: USER_ID, conversationId: CONV_ID })
+      );
     });
 
     it('does not call statusService.updateLastSeen on typing stop', async () => {

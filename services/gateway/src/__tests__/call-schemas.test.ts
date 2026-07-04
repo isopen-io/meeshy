@@ -585,6 +585,26 @@ describe('socketCallAnalyticsSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  // setupTimeMs inclut le temps de sonnerie (humain) — negotiationTimeMs
+  // isole answer→connected (la partie technique WebRTC seule). Optionnel :
+  // les anciens builds iOS ne l'envoient pas.
+  it('accepts the optional negotiationTimeMs field', () => {
+    const result = socketCallAnalyticsSchema.safeParse({ ...validPayload, negotiationTimeMs: 850 });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.negotiationTimeMs).toBe(850);
+  });
+
+  it('accepts a payload WITHOUT negotiationTimeMs (older iOS builds)', () => {
+    const result = socketCallAnalyticsSchema.safeParse(validPayload);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.negotiationTimeMs).toBeUndefined();
+  });
+
+  it('accepts negotiationTimeMs of -1 (never connected / anchor missing)', () => {
+    const result = socketCallAnalyticsSchema.safeParse({ ...validPayload, negotiationTimeMs: -1 });
+    expect(result.success).toBe(true);
+  });
+
   it('accepts empty effectsUsed array', () => {
     const result = socketCallAnalyticsSchema.safeParse({ ...validPayload, effectsUsed: [] });
     expect(result.success).toBe(true);

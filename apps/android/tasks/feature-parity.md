@@ -869,7 +869,10 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] In-call video filters (colour presets, low-light boost, background blur, skin smoothing)
 - [ ] In-call audio effects (voice changer, baby/demon voice, looping background sound)
 - [ ] Camera-covered ("dark frame") detection during video calls
-- [ ] Thermal-aware quality degradation (fps/resolution caps, video disable)
+- [~] Thermal-aware quality degradation (fps/resolution caps, video disable) — **policy layer landed**
+      (slice `call-sender-cap-plan`): pure `ThermalCeiling`/`VideoSenderCapPlan` in `core:model` (port of
+      iOS `VideoThermalProfile`) composes a device thermal tier onto the network sender cap. Pending: the
+      app-side `PowerManager.THERMAL_STATUS_*` → `ThermalState` mapping + the live RTP-sender actuator.
 - [~] Adaptive call quality (bitrate ladder, auto video-disable on critical link) —
       **quality-tier SSOT landed** (slice `call-quality-level`): pure `core:model`
       `VideoQualityLevel` (5-tier `CRITICAL<POOR<FAIR<GOOD<EXCELLENT`, port of iOS
@@ -877,9 +880,24 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       constants) + two classifiers `from(rttMs, packetLoss)` (worse-of-two-axes,
       strict `>` boundaries) and `from(availableOutgoingBitrateBps)`, plus each
       tier's sender caps (`targetResolutionHeight`/`targetFps`/`targetVideoBitrateBps`)
-      the future adaptive-bitrate ladder will apply. **Pending:** the real WebRTC
-      sender-cap application + the time-hysteresis auto-video-disable policy (port of
-      iOS `VideoSurvivalPolicy`).
+      the future adaptive-bitrate ladder will apply. **Time-hysteresis auto-video-disable
+      policy landed** (slice `call-video-survival-policy`): the pure `core:model`
+      `VideoSurvivalPolicy` (port of iOS `VideoSurvivalPolicy`) — `reduce(state, level,
+      nowSeconds, userWantsVideo) → (state, VideoSurvivalAction)` drops outbound video to
+      audio-only after a sustained `POOR`/`CRITICAL` streak (`Suspend`, 6 s) and resumes
+      after a sustained `EXCELLENT`/`GOOD` streak (`Resume`, 10 s), with `FAIR` holding the
+      recovery timer and a monotonic-seconds `VideoSurvivalState` (fixed-size, O(1) over a
+      marathon call). Duration-based hysteresis (cadence-independent); user camera-off resets
+      to `INITIAL`. +19 tests. **Adaptive sender-cap plan landed** (slice `call-sender-cap-plan`,
+      2026-07-03): the pure `core:model` `VideoSenderCapPlan` maps a `VideoQualityLevel` (+ a
+      framework-agnostic `ThermalState`) to the concrete RTP sender parameters
+      (`maxBitrateBps`/`maxFramerate`/`scaleResolutionDownBy`) — `forLevel` reads each axis off the
+      tier and floors CRITICAL to 360p15 @ 100 kbps (never a zero encoder / never an upscale);
+      `forConditions` composes it with a `ThermalCeiling` (port of iOS `VideoThermalProfile`,
+      `NOMINAL` a no-op) taking the more conservative value per axis. Closes the
+      "Thermal-aware quality degradation" line at the policy layer. +17 tests. **Pending:** the real
+      WebRTC actuator seam (map `PowerManager.THERMAL_STATUS_*` → `ThermalState`, apply the cap to the
+      live RTP video sender, debounce re-apply) + consuming `Suspend`/`Resume`.
 - [~] Connection-quality indicator; call-waiting banner (second incoming call) —
       **connection-quality indicator landed** (slice `call-quality-level`): the pure
       four-tier `ConnectionQuality` (`VideoQualityLevel` collapsed `CRITICAL→POOR`,
@@ -888,9 +906,26 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `CallViewModel` exactly while media flows (connected/reconnecting), projected by
       `CallPresenter` into `CallUiState.connectionQuality` and rendered as an
       accent-coherent 4-bar signal indicator on the call screen (error hue on a weak
-      link, VoiceOver tier label). +37 tests. **Pending:** the WebRTC stats source
-      that feeds real samples, and the **call-waiting banner** for a second incoming
-      call (port of iOS `CallWaitingBannerView`).
+      link, VoiceOver tier label). +37 tests. The **call-waiting banner** landed
+      (slice `call-waiting-banner`, 2026-07-03): pure `core:model` `WaitingCall` +
+      `CallWaitingReducer` (Offered/Rejected/Accepted/RemotelyEnded), a
+      `CallSignalManager.incomingOffers` identity stream, a `CallViewModel` fold that
+      raises the banner for a *second* offer while active, a 15s auto-dismiss-as-reject
+      `CallWaitingTimer` seam, `rejectWaiting()`/`acceptWaitingSwap()` (end-and-answer,
+      parity with iOS `endCurrentAndAnswerPending`), and an accent-coherent top banner in
+      `CallScreen`. +35 tests. The **`RemotelyEnded` socket driver** landed (slice
+      `call-ended-signal-identity`, 2026-07-03): pure `CallSignalMapper.endedCallId` decode
+      of a `call:ended`/`call:missed` frame's `callId`, a `CallSignalManager.endedCalls`
+      identity stream (parallel to `incomingOffers`), and a `CallViewModel.onRemoteEnded`
+      fold that auto-dismisses the banner + cancels its timer (no `emitEnd`) only for the
+      *pending* call's id. +15 tests. The **identity-aware active-call teardown** landed (slice
+      `call-ended-identity-teardown`, 2026-07-03): `call:ended`/`call:missed` are now `null` in
+      `CallSignalMapper.map` (off the identity-less `events`); the single pure `endedSignal →
+      CallEndedSignal(callId, event)` decode on `endedCalls: SharedFlow<CallEndedSignal>` is the
+      sole teardown path, and `onRemoteEnded` gates on identity — active id reduces the FSM,
+      waiting id only dismisses the banner, neither is inert — so a waiting call's fanned-out
+      teardown no longer tears down the active call. **Pending:** the WebRTC stats source that
+      feeds real quality samples.
 - [ ] Front-camera mirroring; extensible call media pipeline hook bus
 - [~] Voice/video call signaling events (initiate, answer, ICE, end, missed, media toggle) —
       **inbound event models + pure frame→`CallEvent` mapper landed** (slice `call-signalling-events`):
@@ -946,8 +981,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       → CallConfig`) now owns the route as the SSOT; the CHAT composable threads its own `conversationId`
       nav-arg into `Routes.call(...)` and the CALL composable decodes the args through `CallRoute.config`.
       Outgoing calls now initiate into the real room. +8 behavioural tests (first `:app` test source set).
-      **Pending:** WebRTC-plumbing emits (`request-ice-servers`/`heartbeat`/`quality-report`/
-      `reconnecting`/`reconnected`).
+      **WebRTC-plumbing emits landed** (slice `call-webrtc-plumbing-emits`): `CallSignalManager` gains the
+      five remaining outbound frames at iOS payload-key parity — `emitRequestIceServers(callId)`
+      (`call:request-ice-servers`, TURN-credential refresh), `emitHeartbeat(callId)` (`call:heartbeat`,
+      dead-peer liveness), `emitQualityReport(callId, report)` (`call:quality-report`, `{callId, stats}`),
+      `emitReconnecting(callId, participantId, attempt)` and `emitReconnected(callId, participantId)`
+      (ICE-restart bookkeeping). The `stats` shape is decided once by the pure `core:model`
+      `CallQualityReport.statsFields()` — base five metrics always present, `availableOutgoingBitrateBps`
+      and `jitterMs` appended only when strictly positive (iOS parity); `ConnectionQuality.wireValue`
+      (`excellent|good|fair|poor`) is the SSOT for the `level` token. Byte counters modelled as `Long`
+      (iOS `Int`) so a long call's cumulative totals never overflow the 32-bit range. +16 tests (10 report,
+      6 manager). **Pending:** the app-side driver seams (heartbeat/quality-report timers, ICE-restart
+      controller) that call these emits — land with the WebRTC media transport.
 - [x] Call history / journal (recent + missed calls list, direction, duration, data usage) —
       **pure call-journal model landed** (slice `call-history-model`): `core:model`
       `me.meeshy.sdk.model.call` gains `CallDirection` (incoming/outgoing/missed, `fromRaw` degrades

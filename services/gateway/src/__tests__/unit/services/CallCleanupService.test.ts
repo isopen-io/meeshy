@@ -20,7 +20,8 @@ jest.mock('@meeshy/shared/types/video-call', () => ({
 jest.mock('@meeshy/shared/types/socketio-events', () => ({
   ROOMS: {
     call: (id: string) => `call:${id}`,
-    conversation: (id: string) => `conversation:${id}`
+    conversation: (id: string) => `conversation:${id}`,
+    user: (id: string) => `user:${id}`
   }
 }));
 
@@ -55,6 +56,10 @@ const createMockPrisma = () => ({
   // forceEndCall clears it directly since it isn't a CallService method.
   conversation: {
     updateMany: jest.fn().mockResolvedValue({ count: 1 }) as MockFn
+  },
+  // Member lookup for the call:ended user-room fanout (resolveCallEndedRooms).
+  participant: {
+    findMany: jest.fn().mockResolvedValue([]) as MockFn
   },
   $transaction: jest.fn() as MockFn
 });
@@ -421,6 +426,124 @@ describe('CallCleanupService', () => {
 
       expect(result.cleaned).toBe(1);
       expect(result.errors).toBe(0);
+    });
+
+    // Tier-3 liveness guard — a multi-hour call whose participants still beat
+    // must NEVER be reaped by the wall-clock cap. The 2h cap only applies to
+    // rows with no fresh liveness (orphans, dead clients, or no CallService).
+    describe('tier 3 liveness guard (multi-hour calls)', () => {
+      const threeHoursMs = 3 * 60 * 60 * 1000;
+      const makeLongCall = (participants: unknown[], id = 'call-long') => ({
+        ...makeStaleCall(CallStatus.active, threeHoursMs, id),
+        participants
+      });
+
+      it('spares an active call >2h whose in-memory heartbeats are fresh', async () => {
+        const service = new CallCleanupService(prisma as any, callService as any);
+        const longCall = makeLongCall([{ id: 'p-1', leftAt: null }]);
+
+        prisma.callSession.findMany
+          .mockResolvedValueOnce([])          // tier 1
+          .mockResolvedValueOnce([])          // tier 2
+          .mockResolvedValueOnce([longCall])  // tier 3
+          .mockResolvedValueOnce([]);         // heartbeat tier
+        callService.hasHeartbeatData.mockReturnValue(true);
+        callService.getStaleHeartbeats.mockReturnValue([]); // everyone fresh
+
+        const result = await service.runCleanup();
+
+        expect(result.cleaned).toBe(0);
+        expect(result.errors).toBe(0);
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+      });
+
+      it('still GCs an active call >2h when ALL in-memory heartbeats are stale', async () => {
+        const service = new CallCleanupService(prisma as any, callService as any);
+        const longCall = makeLongCall([{ id: 'p-1', leftAt: null }], 'call-long-stale');
+
+        prisma.callSession.findMany
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([longCall])
+          .mockResolvedValueOnce([]);
+        callService.hasHeartbeatData.mockReturnValue(true);
+        callService.getStaleHeartbeats.mockReturnValue(['p-1']); // 1 stale >= 1 total
+
+        prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-1' });
+        setupTransactionPassthrough(prisma);
+
+        const result = await service.runCleanup();
+
+        expect(result.cleaned).toBe(1);
+        expect(result.errors).toBe(0);
+      });
+
+      it('still GCs an orphaned active call >2h with zero live participants', async () => {
+        const service = new CallCleanupService(prisma as any, callService as any);
+        const orphan = makeLongCall([], 'call-long-orphan');
+
+        prisma.callSession.findMany
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([orphan])
+          .mockResolvedValueOnce([]);
+        callService.hasHeartbeatData.mockReturnValue(false);
+
+        prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-1' });
+        setupTransactionPassthrough(prisma);
+
+        const result = await service.runCleanup();
+
+        expect(result.cleaned).toBe(1);
+        expect(result.errors).toBe(0);
+      });
+
+      it('spares an active call >2h via the DB fallback when lastHeartbeatAt is fresh', async () => {
+        // bootedAt is old so the boot-floor grace period cannot mask the check.
+        const oldBoot = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const service = new CallCleanupService(prisma as any, callService as any, oldBoot);
+        const longCall = makeLongCall(
+          [{ id: 'p-1', leftAt: null, lastHeartbeatAt: new Date(), joinedAt: new Date(Date.now() - threeHoursMs) }],
+          'call-long-db-fresh'
+        );
+
+        prisma.callSession.findMany
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([longCall])
+          .mockResolvedValueOnce([]);
+        callService.hasHeartbeatData.mockReturnValue(false); // post-restart
+
+        const result = await service.runCleanup();
+
+        expect(result.cleaned).toBe(0);
+        expect(prisma.$transaction).not.toHaveBeenCalled();
+      });
+
+      it('still GCs >2h via the DB fallback when every lastHeartbeatAt is stale', async () => {
+        const oldBoot = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const service = new CallCleanupService(prisma as any, callService as any, oldBoot);
+        const stale = new Date(Date.now() - 10 * 60 * 1000);
+        const longCall = makeLongCall(
+          [{ id: 'p-1', leftAt: null, lastHeartbeatAt: stale, joinedAt: new Date(Date.now() - threeHoursMs) }],
+          'call-long-db-stale'
+        );
+
+        prisma.callSession.findMany
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([longCall])
+          .mockResolvedValueOnce([]);
+        callService.hasHeartbeatData.mockReturnValue(false);
+
+        prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-1' });
+        setupTransactionPassthrough(prisma);
+
+        const result = await service.runCleanup();
+
+        expect(result.cleaned).toBe(1);
+        expect(result.errors).toBe(0);
+      });
     });
 
     it('counts errors when forceEndCall throws on tier 1 (initiated) → errors:1', async () => {
@@ -951,9 +1074,37 @@ describe('CallCleanupService', () => {
 
       await service.runCleanup();
 
-      expect(io.to).toHaveBeenCalledWith('call:call-bc1');
-      expect(io.to).toHaveBeenCalledWith('conversation:conv-bc1');
+      const rooms = (io.to as MockFn).mock.calls[0][0];
+      expect(rooms).toEqual(expect.arrayContaining(['call:call-bc1', 'conversation:conv-bc1']));
       expect(io.emit).toHaveBeenCalledWith('call:ended', expect.objectContaining({ callId: 'call-bc1' }));
+    });
+
+    it('fans out call:ended to every conversation member user room (GC path must match the invitation audience — a ringing callee has joined neither the call nor conversation room)', async () => {
+      const io = createMockIo();
+      const service = new CallCleanupService(prisma as any);
+      service.attachSocketServer(io);
+
+      const staleCall = makeStaleCall(CallStatus.initiated, 130_000, 'call-fanout');
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([staleCall])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-fanout' });
+      prisma.participant.findMany.mockResolvedValue([{ userId: 'caller-1' }, { userId: 'callee-1' }]);
+      setupTransactionPassthrough(prisma);
+
+      await service.runCleanup();
+
+      expect(prisma.participant.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ conversationId: 'conv-fanout' }) })
+      );
+      const rooms = (io.to as MockFn).mock.calls[0][0];
+      expect(rooms).toEqual(
+        expect.arrayContaining(['call:call-fanout', 'conversation:conv-fanout', 'user:caller-1', 'user:callee-1'])
+      );
+      // Single deduplicated multi-room emit, not one call per room.
+      expect(io.to).toHaveBeenCalledTimes(1);
+      expect(io.emit).toHaveBeenCalledTimes(1);
     });
 
     it('emits only to call room when conversationId is null', async () => {
@@ -971,12 +1122,8 @@ describe('CallCleanupService', () => {
 
       await service.runCleanup();
 
-      // Called once (call room only), NOT twice
-      const convRoomCalls = (io.to as MockFn).mock.calls.filter(
-        (args: unknown[]) => typeof args[0] === 'string' && (args[0] as string).startsWith('conversation:')
-      );
-      expect(convRoomCalls.length).toBe(0);
-      expect(io.to).toHaveBeenCalledWith('call:call-bc2');
+      const rooms = (io.to as MockFn).mock.calls[0][0];
+      expect(rooms).toEqual(['call:call-bc2']);
     });
 
     it('emits only to call room when session.conversationId is undefined (findUnique returns null)', async () => {
@@ -995,11 +1142,29 @@ describe('CallCleanupService', () => {
 
       await service.runCleanup();
 
-      // only call room, no conversation room
-      const convRoomCalls = (io.to as MockFn).mock.calls.filter(
-        (args: unknown[]) => typeof args[0] === 'string' && (args[0] as string).startsWith('conversation:')
-      );
-      expect(convRoomCalls.length).toBe(0);
+      const rooms = (io.to as MockFn).mock.calls[0][0];
+      expect(rooms).toEqual(['call:call-bc3']);
+    });
+
+    it('falls back to call+conversation rooms (no crash) when the member fanout lookup throws', async () => {
+      const io = createMockIo();
+      const service = new CallCleanupService(prisma as any);
+      service.attachSocketServer(io);
+
+      const staleCall = makeStaleCall(CallStatus.initiated, 90_000, 'call-bc4');
+      prisma.callSession.findMany
+        .mockResolvedValueOnce([staleCall])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      prisma.callSession.findUnique.mockResolvedValue({ conversationId: 'conv-bc4' });
+      prisma.participant.findMany.mockRejectedValue(new Error('member lookup DB error'));
+      setupTransactionPassthrough(prisma);
+
+      const result = await service.runCleanup();
+
+      expect(result.cleaned).toBe(1);
+      const rooms = (io.to as MockFn).mock.calls[0][0];
+      expect(rooms).toEqual(['call:call-bc4', 'conversation:conv-bc4']);
     });
 
     it('logs warning instead of emitting when no io attached', async () => {

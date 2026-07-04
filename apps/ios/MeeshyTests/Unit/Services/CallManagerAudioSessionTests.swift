@@ -931,6 +931,63 @@ final class CallEffectsOverlayAccessibilityTests: XCTestCase {
             "toolbarButton must declare .accessibilityHint so VoiceOver describes what the button will do"
         )
     }
+
+    func test_toolbarButton_hasExplicitAccessibilityLabel() throws {
+        let source = try callEffectsSource()
+        guard let range = source.range(of: "private func toolbarButton") else {
+            XCTFail("toolbarButton must exist")
+            return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let body = String(source[range.lowerBound ..< end])
+        XCTAssertTrue(
+            body.contains(".accessibilityLabel(label)"),
+            "toolbarButton must set an explicit .accessibilityLabel(label) rather than relying " +
+            "on the visible caption Text being auto-combined into the button's label."
+        )
+    }
+
+    func test_backdrop_isExposedAsDismissButtonToVoiceOver() throws {
+        let source = try callEffectsSource()
+        guard let range = source.range(of: "onTapGesture { dismiss() }") else {
+            XCTFail("Backdrop tap-to-dismiss gesture must exist")
+            return
+        }
+        let end = source.index(range.lowerBound, offsetBy: 400, limitedBy: source.endIndex) ?? source.endIndex
+        let vicinity = String(source[range.lowerBound ..< end])
+        XCTAssertTrue(
+            vicinity.contains(".accessibilityAddTraits(.isButton)"),
+            "The tap-outside-to-dismiss backdrop must be exposed as a button trait so " +
+            "VoiceOver users can discover and trigger it."
+        )
+        XCTAssertTrue(
+            vicinity.contains(".accessibilityLabel("),
+            "The backdrop must have an explicit accessibility label describing the dismiss action."
+        )
+    }
+
+    func test_overlay_pinsColorSchemeDark() throws {
+        let source = try callEffectsSource()
+        XCTAssertTrue(
+            source.contains(".environment(\\.colorScheme, .dark)"),
+            "CallEffectsOverlay must pin .dark colorScheme like its sibling call chrome " +
+            "(CallWaitingBannerView, FloatingCallPillView) so it renders correctly even if " +
+            "ever presented outside CallView's forced-dark subtree."
+        )
+    }
+
+    func test_filtersPanel_heightIsResponsiveNotHardcoded() throws {
+        let source = try callEffectsSource()
+        XCTAssertFalse(
+            source.contains(".frame(maxHeight: 360)"),
+            "The filters panel must not hardcode a fixed maxHeight — it must derive from " +
+            "available geometry so it doesn't clip content on short/landscape viewports."
+        )
+        XCTAssertTrue(
+            source.contains("proxy.size.height"),
+            "The filters panel height must be derived from a GeometryReader proxy."
+        )
+    }
 }
 
 // MARK: - Idle timer + proximity sensor management
@@ -1210,9 +1267,10 @@ final class CallViewVoiceOverAnnouncementTests: XCTestCase {
     func test_voiceOver_usesAdaptiveOnChange_forQualityLevel() throws {
         let source = try callViewSource()
         XCTAssertTrue(
-            source.contains("adaptiveOnChange(of: callManager.liveVideoQualityLevel)"),
-            "Quality VoiceOver announcement must use adaptiveOnChange so it " +
-            "only fires when the quality tier actually changes")
+            source.contains("adaptiveOnChange(of: callManager.isLinkQualityDegraded)"),
+            "Quality VoiceOver announcement must use adaptiveOnChange on the " +
+            "SUSTAINED degradation flag so it only fires when the link is " +
+            "genuinely degraded (2+ consecutive ticks), not on transient spikes")
     }
 }
 
@@ -2602,23 +2660,37 @@ final class CallManagerAudioInterruptionHardeningTests: XCTestCase {
 
     func test_turnRefreshTask_cancelledBeforeReconnectRefreshRequest() throws {
         let source = try callManagerSource()
-        // Find the emitRequestIceServers call inside the socket-reconnect handler.
-        guard let emitRange = source.range(of: "emitRequestIceServers(callId: callId)") else {
-            XCTFail("emitRequestIceServers not found"); return
+        // Scope to the socket-reconnect handler specifically (anchored on
+        // socket.didReconnect) rather than searching the whole file — the raw
+        // emitRequestIceServers call now lives one level down inside
+        // requestFreshTurnCredentials (shared by every TURN-refresh trigger, see
+        // CallManagerTURNRefreshWatchdogTests), so a file-wide first-occurrence
+        // search would land on the wrong call site.
+        guard let reconnectRange = source.range(of: "socket.didReconnect") else {
+            XCTFail("socket.didReconnect handler not found"); return
         }
-        // The cancel of turnRefreshTask must appear BEFORE the emit call in the
-        // reconnect handler so the old deadline cannot fire while the fresh
+        let reconnectHandlerEnd = source.range(
+            of: ".store(in: &cancellables)",
+            range: reconnectRange.upperBound..<source.endIndex
+        )?.upperBound ?? source.endIndex
+        let handlerBody = String(source[reconnectRange.lowerBound..<reconnectHandlerEnd])
+
+        guard let requestRange = handlerBody.range(of: "requestFreshTurnCredentials(callId: callId)") else {
+            XCTFail("requestFreshTurnCredentials not found in the socket-reconnect handler"); return
+        }
+        // The cancel of turnRefreshTask must appear BEFORE the refresh request in
+        // the reconnect handler so the old deadline cannot fire while the fresh
         // response is in flight, causing duplicate credential requests.
-        let beforeEmit = String(source[..<emitRange.lowerBound])
-        guard let cancelRange = beforeEmit.range(of: "turnRefreshTask?.cancel()", options: .backwards) else {
-            XCTFail("turnRefreshTask?.cancel() must precede emitRequestIceServers on the reconnect path"); return
+        let beforeRequest = String(handlerBody[..<requestRange.lowerBound])
+        guard let cancelRange = beforeRequest.range(of: "turnRefreshTask?.cancel()", options: .backwards) else {
+            XCTFail("turnRefreshTask?.cancel() must precede requestFreshTurnCredentials on the reconnect path"); return
         }
         // Verify the cancel is in the same reconnect context by checking there's
-        // no function definition boundary between the cancel and the emit.
-        let between = String(beforeEmit[cancelRange.upperBound...])
+        // no function definition boundary between the cancel and the request.
+        let between = String(beforeRequest[cancelRange.upperBound...])
         XCTAssertFalse(
             between.contains("func "),
-            "turnRefreshTask?.cancel() must be in the same function as emitRequestIceServers — " +
+            "turnRefreshTask?.cancel() must be in the same function as requestFreshTurnCredentials — " +
             "a function boundary would mean the cancel is in a different code path")
     }
 

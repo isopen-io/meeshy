@@ -124,15 +124,13 @@ private struct AudioFullscreenPage: View {
     @StateObject private var player = AudioPlaybackManager()
     @StateObject private var waveformAnalyzer = AudioWaveformAnalyzer()
 
-    @State private var saveState: SaveState = .idle
+    @StateObject private var saveCoordinator = MediaSaveCoordinator()
     @State private var isSeeking = false
     @State private var seekValue: Double = 0
     @State private var selectedLanguage: String = "orig"
     @State private var showLanguagePicker = false
     @State private var selectedProfileUser: ProfileSheetUser?
     @State private var isRequestingTranscription = false
-
-    private enum SaveState { case idle, saving, saved, failed }
 
     private var attachment: MessageAttachment { item.attachment }
     private var message: Message { item.message }
@@ -394,17 +392,12 @@ private struct AudioFullscreenPage: View {
     // MARK: - Download Button
 
     private var downloadButton: some View {
-        Button { saveAudio() } label: {
+        Button { requestSave() } label: {
             Group {
-                switch saveState {
-                case .idle:
-                    Image(systemName: "arrow.down.to.line")
-                case .saving:
+                if saveCoordinator.isProcessing {
                     ProgressView().tint(.white)
-                case .saved:
-                    Image(systemName: "checkmark")
-                case .failed:
-                    Image(systemName: "xmark")
+                } else {
+                    Image(systemName: "arrow.down.to.line")
                 }
             }
             // Glyphe chrome dans un cadre de tap fixe 36×36 : figé (doctrine 82i) ; le libellé porte le sens
@@ -413,17 +406,21 @@ private struct AudioFullscreenPage: View {
             .frame(width: 36, height: 36)
             .background(Circle().fill(Color.white.opacity(0.2)))
         }
-        .disabled(saveState == .saving || saveState == .saved)
-        .accessibilityLabel(downloadAccessibilityLabel)
+        .disabled(saveCoordinator.isProcessing)
+        .accessibilityLabel(String(localized: "media.download", defaultValue: "Télécharger", bundle: .main))
+        // Composant UNIFIÉ « Enregistrer » : même sheet de destinations que
+        // les images, vidéos et documents (issue via toast + haptics).
+        .mediaSaveFlow(saveCoordinator)
     }
 
-    private var downloadAccessibilityLabel: String {
-        switch saveState {
-        case .saving: return String(localized: "audio.fullscreen.save.saving", defaultValue: "Enregistrement en cours", bundle: .main)
-        case .saved: return String(localized: "audio.fullscreen.save.saved", defaultValue: "Enregistré", bundle: .main)
-        case .failed: return String(localized: "audio.fullscreen.save.failed", defaultValue: "Échec de l'enregistrement", bundle: .main)
-        case .idle: return String(localized: "media.download", defaultValue: "Télécharger", bundle: .main)
-        }
+    private func requestSave() {
+        HapticFeedback.light()
+        saveCoordinator.requestSave(MediaSaveRequest(
+            kind: .audio,
+            remoteURLString: currentAudioUrl,
+            suggestedFileName: attachment.originalName.isEmpty ? nil : attachment.originalName,
+            attachmentId: attachment.id.isEmpty ? nil : attachment.id
+        ))
     }
 
     // MARK: - Waveform Section
@@ -878,47 +875,4 @@ private struct AudioFullscreenPage: View {
         }
     }
 
-    private func saveAudio() {
-        let url = currentAudioUrl
-        guard let resolved = MeeshyConfig.resolveMediaURL(url) else { return }
-        saveState = .saving
-        HapticFeedback.light()
-
-        Task {
-            do {
-                let (tempURL, _) = try await URLSession.shared.download(from: resolved)
-                let ext = resolved.pathExtension.isEmpty ? "m4a" : resolved.pathExtension
-                let tempFile = FileManager.default.temporaryDirectory
-                    .appendingPathComponent("audio_\(UUID().uuidString).\(ext)")
-                try FileManager.default.moveItem(at: tempURL, to: tempFile)
-                defer { try? FileManager.default.removeItem(at: tempFile) }
-
-                // One-tap save into the Files app (Documents) — no share sheet
-                // detour (the previous UIActivityViewController was presented
-                // without an iPad popover anchor and crashed there).
-                let preferred = attachment.originalName.isEmpty
-                    ? "Audio Meeshy.\(ext)"
-                    : attachment.originalName
-                _ = try MediaFileSaver.save(tempFile, preferredName: preferred)
-
-                await MainActor.run {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        saveState = .saved
-                    }
-                    HapticFeedback.success()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        withAnimation { saveState = .idle }
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    withAnimation { saveState = .failed }
-                    HapticFeedback.error()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        withAnimation { saveState = .idle }
-                    }
-                }
-            }
-        }
-    }
 }

@@ -393,16 +393,29 @@ final class AdjustBitrateSourceGuardTests: XCTestCase {
         )
     }
 
-    /// BWE merge: when TWCC is active, quality level must be min(heuristic, bweLevel).
-    func test_adjustBitrate_mergesBWEWithHeuristicViaMin() throws {
+    /// BWE merge: the effective level must flow through the gated policy.
+    /// 2026-07-03 — the previous unconditional `min(heuristic, bwe)` WAS the
+    /// "Connexion instable à 00:06" bug: the BWE ladder is calibrated on
+    /// VIDEO tier bitrates, so audio-only calls (~64 kbps forever) and the
+    /// GCC ramp-up both read as .poor on a perfectly healthy link. The merge
+    /// now goes through CallReliabilityPolicy.effectiveQualityLevel, which
+    /// gates the BWE signal on video-sending + warm-up and still takes
+    /// min(heuristic, bwe) after warm-up (see QualityLevelMergePolicyTests).
+    func test_adjustBitrate_mergesBWEWithHeuristicViaPolicy() throws {
         let source = try webRTCServiceSource()
         XCTAssertTrue(
             source.contains("stats.availableOutgoingBitrateBps > 0"),
             "BWE gate: TWCC estimate should only be applied when availableOutgoingBitrateBps > 0"
         )
         XCTAssertTrue(
-            source.contains("min(heuristicLevel, $0)") || source.contains("min(heuristicLevel,"),
-            "BWE merge: effective quality level must be min(heuristicLevel, bweLevel) — never exceed what either signal permits."
+            source.contains("CallReliabilityPolicy.effectiveQualityLevel("),
+            "BWE merge: the effective quality level must be computed by " +
+            "CallReliabilityPolicy.effectiveQualityLevel (video-sending + " +
+            "warm-up gated min) — never an unconditional min(heuristic, bwe)."
+        )
+        XCTAssertTrue(
+            source.contains("isSendingVideo: hasLocalVideoTrack"),
+            "BWE merge: the video-sending gate must be driven by hasLocalVideoTrack."
         )
     }
 
