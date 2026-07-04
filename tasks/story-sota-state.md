@@ -600,7 +600,7 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
-## it.47 — R12 : re-preuve + plan (le « gros chantier » n'existe pas — hash au commit suivant)
+## it.47 — R12 : re-preuve + plan, le « gros chantier » n'existe pas (356fc397c)
 
 - Itération de PLAN (protocole R12). La re-preuve a invalidé la prémisse : le store est
   DÉJÀ relationnel par groupe (writeToL2 = row par item chiffrée) ; le vrai coût = save()
