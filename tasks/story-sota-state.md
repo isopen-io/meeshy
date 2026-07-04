@@ -714,6 +714,17 @@ Issues des audits it.1→it.58 (`tasks/story-consolidation-backlog.md`) + explor
 - Ambiguïté tranchée : si TOUT est pinné et over-budget, la passe ne libère rien — accepté
   car les pins sont bornés par `until` (auto-résorption) ; documenté dans le code.
 
+## it.64 — Audit ciblé n°3 : chemin NSE prefetch story — SAIN, aucun finding (sec 1/2)
+
+- Surface : NSEPendingPostConsumer bout-en-bout. Constat : consumer défensif exemplaire
+  (décodage à 2 formats de date, corrupt → drop définitif, fichier App Group retiré
+  SEULEMENT après cache réussi → retry au prochain launch, seed feed + comments inline +
+  tray StoryService gated expiresAt) ; drainé aux 4 bons points (StoryNotificationTarget
+  AVANT lecture, PostDetailViewModel.loadPost, RootView boot, BackgroundTransition
+  foreground). Zéro code, zéro finding.
+- Compteur d'arrêt du protocole : 1 itération d'audit sèche / 2. Prochaine surface
+  (dernière avant STOP+rapport si sèche) : viewers sheet OU flux repost complet.
+
 ## it.63 — W7 volet iOS : ÉCARTÉ avec preuve (hex-only, URLs = PostMedia serveur)
 
 - Chaîne prouvée : renderBackground (hex only) ; Kind.image = postMediaId (résolu contre
