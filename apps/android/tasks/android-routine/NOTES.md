@@ -13,6 +13,17 @@ Append-only log of gotchas and decisions that save time next run.
   system binary for local verification. `--offline` fails on a cold cache (AGP 8.7.3 not pre-seeded);
   run online the first time so Gradle can fetch AGP + deps. (2026-07-05, slice `profile-header-presentation`.)
 
+## CI / merge
+- **The monorepo `CI` workflow can run 40+ min (or sit queued behind the runner pool) on an
+  `apps/android`-only PR — `updated_at` on the run object freezes while it waits.** (2026-07-05, slice
+  `profile-details-rows`.) Only the `CI` workflow triggers for an android-only diff (iOS Tests / SDK
+  Tests are path-filtered out — good). Do **not** busy-poll `actions_list`/`actions_get`: each response
+  embeds the full ~5-6k-token repository object even with `minimal_output`/`perPage=1`, and
+  `get_status` returns `total_count:0` (CI is a check-run, not a legacy commit status). When CI is slow,
+  hand off to a recurring `CronCreate` (`*/8 * * * *`) that re-checks the run and squash-merges the
+  moment `status==completed && conclusion==success`, then `CronDelete`s itself — instead of blocking the
+  turn on `sleep`. A CI *failure* also arrives via the PR-activity webhook subscription.
+
 ## Design lessons
 - **Reuse the existing pure SSOTs when building a projection — don't re-derive.** (2026-07-05, slice
   `profile-header-presentation`.) `ProfileHeaderBuilder` composes three already-tested SSOTs rather than
