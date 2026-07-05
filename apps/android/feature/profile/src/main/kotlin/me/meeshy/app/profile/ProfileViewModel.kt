@@ -14,6 +14,7 @@ import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.UpdateProfileRequest
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.user.ProfileStatsCacheRepository
 import me.meeshy.sdk.user.UserRepository
 import javax.inject.Inject
 
@@ -33,6 +34,7 @@ data class ProfileUiState(
 class ProfileViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val userRepository: UserRepository,
+    private val statsCache: ProfileStatsCacheRepository,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -124,9 +126,13 @@ class ProfileViewModel @Inject constructor(
         statsLoadedForId = id
         viewModelScope.launch {
             try {
+                statsCache.cachedStats(id)?.let { cached ->
+                    _state.update { it.copy(stats = UserStatsBuilder.build(cached)) }
+                }
                 val result = userRepository.getUserStats(id)
                 if (result is NetworkResult.Success) {
                     _state.update { it.copy(stats = UserStatsBuilder.build(result.data)) }
+                    statsCache.persistStats(id, result.data)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -148,9 +154,15 @@ class ProfileViewModel @Inject constructor(
         timelineLoaded = true
         viewModelScope.launch {
             try {
+                statsCache.cachedTimeline()?.let { cached ->
+                    StatsTimelineBuilder.build(cached)?.let { presentation ->
+                        _state.update { it.copy(timeline = presentation) }
+                    }
+                }
                 val result = userRepository.getUserStatsTimeline()
                 if (result is NetworkResult.Success) {
                     _state.update { it.copy(timeline = StatsTimelineBuilder.build(result.data)) }
+                    statsCache.persistTimeline(result.data)
                 }
             } catch (e: CancellationException) {
                 throw e

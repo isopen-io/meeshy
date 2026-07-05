@@ -214,6 +214,13 @@ Append-only log of gotchas and decisions that save time next run.
   is an **infix member of `MockKStubScope`** (the receiver `coEvery {…}` returns) — do **not**
   `import io.mockk.coAnswers` (there is no such top-level symbol; it fails to resolve). Used in
   `contacts-friends-room-cache`.
+- **A `relaxed = true` MockK returns a NON-null fabricated instance even for a `T?` return type**
+  (e.g. `suspend fun cachedStats(id): UserStats?` → a mock `UserStats`, not `null`). (2026-07-05, slice
+  `profile-stats-room-cache`.) This silently defeats a "cache is cold → paints nothing" assumption: the
+  relaxed cache mock hands back data, so a network-failure test that expected an empty state suddenly sees
+  a painted one and fails. When a test needs a **cold** collaborator, stub it explicitly —
+  `coEvery { cache.cachedStats(any()) } returns null` (a small `coldStatsCache()` factory) — rather than
+  trusting `relaxed` to yield null. Only trust `relaxed` for values you don't assert on.
 - **Dagger `@Inject constructor` ignores Kotlin default args:** a param like
   `clock: CacheClock = SystemCacheClock` still demands a binding and there is none for
   `CacheClock`. For `@Singleton` repos that need `now`, call `SystemCacheClock.nowMillis()`

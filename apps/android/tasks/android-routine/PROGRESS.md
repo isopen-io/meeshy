@@ -2,7 +2,23 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache)** → rest`
+
+> On 2026-07-05 the **profile stats/timeline Room cache** landed (slice `profile-stats-room-cache`, §K): the
+> profile dashboard now paints instantly from Room on cold start / offline, closing the last cache gap in
+> §K (iOS `CacheCoordinator.stats`/`.timeline`). New `:core:database` `ProfileStatsCacheEntity`
+> (`profile_stats_cache`, keyed JSON store) + `ProfileStatsCacheDao` (DB **v9→v10**, destructive fallback) +
+> `DatabaseModule` provider; new `:sdk-core` `ProfileStatsCacheRepository` (stateless Room building block) —
+> `cachedStats(userId)`/`persistStats` (keyed per-user, isolated) and `cachedTimeline()`/`persistTimeline`
+> (me-only constant key). Cold vs synced-empty is carried by **row presence** (absent → `null` cold; present
+> `[]` → `emptyList` synced-empty, so an empty 30-day window never re-reads as cold — no `sync_meta` needed);
+> a payload that fails to decode is a cache **miss** (`null`), never a crash. `ProfileViewModel` rewired
+> cache-first for both surfaces: paint the cached projection immediately, then revalidate over the network and
+> write-through on success (network is truth — it overwrites the cached paint; a failed fetch keeps the cached
+> paint; no write-through on failure). SDK purity kept — the projection SSOT stays in the `:feature:profile`
+> builders, the repo holds no projection logic. +20 tests (11 Robolectric repo, 6 VM cache-first behaviour,
+> +3 existing VM tests hardened to cold-cache). `assembleDebug` + all `testDebugUnitTest` green (system Gradle
+> 8.14.3). Diff = `apps/android` only (5 prod + 4 test + docs).
 
 > On 2026-07-05 the **30-day activity timeline** landed (slice `profile-stats-timeline`, §K): the me-only
 > `UserApi`/`UserRepository` `getUserStatsTimeline(days=30)` (`/users/me/stats/timeline`, `days` clamped to
@@ -361,12 +377,16 @@ into a tested list, with case-insensitive dup-language collapse; consumed by the
    `getUserStatsTimeline(days=30)` (me-only) + the pure `StatsTimelineBuilder → StatsTimelinePresentation?`
    (empty→null, all-zero flat, negative-floor, peak-normalized bars, order-preserved, `DD/MM` labels,
    total/average/active-days) wired into `ProfileViewModel` (own-profile-only, failure-inert) and rendered
-   as an accent-coherent line+area sparkline in `ProfileScreen`. +17 tests. **Next highest-value follow-up:**
-   a durable **Room stats/timeline cache** (cache-first cold paint, iOS `CacheCoordinator.stats`/`.timeline`)
-   so the dashboard paints instantly — a clean pure-core-rich slice (`SwrCacheSource` port precedent).
-4. **`edit-profile-optimistic`** — richer `ProfileViewModel` edit path (content-language selection,
+   as an accent-coherent line+area sparkline in `ProfileScreen`. +17 tests.
+4. ~~**`profile-stats-room-cache`**~~ ✅ shipped 2026-07-05 — the durable **Room stats/timeline cache**
+   (cache-first cold paint, iOS `CacheCoordinator.stats`/`.timeline`). New `:core:database`
+   `ProfileStatsCacheEntity`/`Dao` (DB v9→v10) + `:sdk-core` `ProfileStatsCacheRepository` (per-user stats
+   key + me-only timeline key; cold-vs-synced-empty by row presence; undecodable payload → miss), and
+   `ProfileViewModel` rewired cache-first (paint cached → revalidate → write-through). +20 tests. See run log.
+   This closes the last §K cache gap.
+5. **`edit-profile-optimistic`** — richer `ProfileViewModel` edit path (content-language selection,
    optimistic + offline-queued save via the outbox), building on the existing display-name/bio edit.
-5. Or **pivot back to Calls §H platform-glue** (`ConnectionService`/Telecom + WebRTC transport) — the
+6. Or **pivot back to Calls §H platform-glue** (`ConnectionService`/Telecom + WebRTC transport) — the
    remaining non-pure work, or advance **Settings §L** (theme persistence is a clean pure-core start).
 
 ---

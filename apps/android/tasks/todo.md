@@ -4,7 +4,23 @@
 > **`apps/android/tasks/android-routine/PROGRESS.md`**. The loop procedure is in
 > `apps/android/tasks/android-routine/ROUTINE.md`. This file is a short pointer.
 
-## This loop (Phase: Contacts / outbox hardening) — slice `outbox-lane-map-ssot` ✅
+## This loop (Phase: Profile §K) — slice `profile-stats-room-cache` ✅
+Durable **Room cache for the profile dashboard** (iOS `CacheCoordinator.stats`/`.timeline`) — the stats grid
+and 30-day timeline now paint instantly from Room on cold start / offline. New `:core:database`
+`ProfileStatsCacheEntity`/`ProfileStatsCacheDao` (`profile_stats_cache` keyed JSON store, DB **v9→v10**) +
+`:sdk-core` `ProfileStatsCacheRepository` (stateless building block: per-user stats key + me-only timeline
+key; cold-vs-synced-empty carried by row presence, undecodable payload → cache miss). `ProfileViewModel`
+rewired cache-first (paint cached projection → revalidate → write-through on success; network overwrites the
+cached paint, a failed fetch keeps it). Projection SSOT stays in the `:feature:profile` builders (SDK purity).
++20 tests (11 Robolectric repo, 6 VM cache-first, +3 existing hardened to cold-cache). Full `assembleDebug` +
+all `testDebugUnitTest` green (system Gradle 8.14.3). Diff = `apps/android` only. See PROGRESS.md run log.
+
+### Next
+1. **`edit-profile-optimistic`** — richer edit path (content-language selection, optimistic + offline-queued
+   save via the outbox), or the dedicated full-screen profile dashboard, or **Settings §L** (theme persistence
+   is a clean pure-core start), or pivot back to **Calls §H** platform-glue (ConnectionService/WebRTC).
+
+## Prior loop (Phase: Contacts / outbox hardening) — slice `outbox-lane-map-ssot` ✅
 Structural close of the **lane-in-drain-list gotcha** (NOTES 2026-07-04). The `OutboxFlushWorker`
 kept a hand-maintained `listOf(...)` of shared lanes to drain, disjoint from the `buildSenders()`
 kind→sender registry — a kind could have a sender yet be stranded off the drain list (the BLOCK/FRIEND

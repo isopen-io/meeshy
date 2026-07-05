@@ -1209,8 +1209,15 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       **own** profile only (me-only endpoint — never for a viewed id), failure-inert like stats;
       `ProfileScreen` renders an accent-coherent line+area sparkline (Canvas) with an empty-state label
       (EN/FR/ES/PT). +17 tests (`StatsTimelineBuilderTest` 11, `ProfileViewModelTimelineTest` 6).
-      **Pending:** a durable Room stats/timeline cache (cache-first cold paint, iOS `CacheCoordinator.stats`
-      / `.timeline`), and the dedicated full-screen dashboard.
+      **Durable Room cache shipped** (slice `profile-stats-room-cache`, 2026-07-05): `:core:database`
+      `ProfileStatsCacheEntity`/`ProfileStatsCacheDao` (`profile_stats_cache` keyed JSON store, DB v9→v10) +
+      `:sdk-core` `ProfileStatsCacheRepository` (per-user stats key + me-only timeline key; cold-vs-synced-empty
+      by row presence — absent → `null`, present `[]` → `emptyList`; undecodable payload → cache miss).
+      `ProfileViewModel` rewired cache-first for both surfaces (paint cached projection → revalidate →
+      write-through on success; network overwrites cache, a failed fetch keeps the cached paint). This is the
+      Android analogue of iOS `CacheCoordinator.stats`/`.timeline` and closes the §K cache gap. +20 tests
+      (`ProfileStatsCacheRepositoryTest` 11 Robolectric, `ProfileViewModelCacheTest` 6, +3 existing hardened).
+      **Pending:** the dedicated full-screen dashboard.
 - [x] Profile completion ring — **shipped** (slice `profile-header-presentation`, 2026-07-05): the
       accent-coloured `ProfileCompletionRing` Canvas arc around the avatar, driven by the pure
       `ProfileHeaderPresentation.completionPercent` (clamped `0..100` so a malformed server value never
