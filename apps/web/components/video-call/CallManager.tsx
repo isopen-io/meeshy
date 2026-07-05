@@ -305,6 +305,23 @@ export function CallManager() {
       return;
     }
 
+    // Sibling-drift fix (2026-07-05): iOS's call:error subscriber whitelists
+    // these 3 codes as transient/non-fatal, each backed by a real prod
+    // incident (CallManager.swift ~3480-3510) — RATE_LIMIT_EXCEEDED throttles
+    // a single ICE candidate (redundant by design, gateway cap is 50/5s vs. a
+    // legitimate gathering flush of 15-25/ms) and killed a live call 382ms
+    // after connect when treated as fatal; TARGET_NOT_FOUND is the peer's
+    // socket momentarily missing from the call room during churn/reconnect
+    // and killed a healthy call while the peer re-joined seconds later;
+    // INVALID_SIGNAL is a per-message relay rejection, not an operation
+    // error. The gateway emits all 3 to web the same way it does to iOS
+    // (CallEventsHandler.ts call:signal/call:toggle-*), so an unrelated web
+    // call showed a scary, self-healing "error" mid-call with no fix here.
+    if (error?.code === 'RATE_LIMIT_EXCEEDED' || error?.code === 'TARGET_NOT_FOUND' || error?.code === 'INVALID_SIGNAL') {
+      logger.debug('[CallManager]', `Ignoring transient call:error (${error.code}): ${errorMessage}`);
+      return;
+    }
+
     logger.error('[CallManager]', 'Call error: ' + errorMessage, { error });
     toast.error(errorMessage);
   }, []);
