@@ -2,7 +2,16 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard)** → rest`
+
+> On 2026-07-05 the **stats projection SSOT** landed (slice `profile-stats-presentation`, §K): the pure
+> `:feature:profile` `UserStatsBuilder.build(stats) → UserStatsPresentation` (precedent `ProfileHeaderBuilder`)
+> projects `UserStats` into six ranked/compact-formatted counter tiles + defensively-reconciled achievement
+> badges (progress clamped `0..100`, `isUnlocked` recomputed from `current >= threshold`, negatives floored,
+> ranked unlocked→progress→current→id) + an unlocked summary, plus a boundary-safe `formatCompactCount`
+> (K/M/B, no `1000.0K` artifact). `ProfileViewModel` fetches `getUserStats` once per resolved user and is
+> failure-inert (a stats error never clobbers the profile); `ProfileScreen` renders the read-only tile grid +
+> "N of M unlocked" achievements list (EN/FR/ES/PT). +35 tests. `assembleDebug`+`testDebugUnitTest` green.
 
 > On 2026-07-05 the **profile-header enrichment** landed (slice `profile-header-presentation`,
 > §K): the pure `:feature:profile` `ProfileHeaderBuilder.build(user, now) → ProfileHeaderPresentation`
@@ -331,12 +340,21 @@ into a tested list, with case-insensitive dup-language collapse; consumed by the
 **Next highest-value §K slices (all pure-core-rich):**
 1. ~~**`profile-details-rows`**~~ ✅ shipped 2026-07-05 — see run log. `timezone` added to the header
    presentation. +14 tests.
-2. **`profile-stats-model`** — the pure `:core:model` `UserStats` + `UserStatsApi` + repository
-   (cache-first) mirroring the gateway stats contract (messages/conversations/translations counts),
-   the SSOT the future stats dashboard cards render.
-3. **`edit-profile-optimistic`** — richer `ProfileViewModel` edit path (content-language selection,
+2. ~~**`profile-stats-model`**~~ ✅ shipped as `profile-stats-presentation` (2026-07-05) — the raw
+   `UserStats`/`Achievement` models + `UserApi.getUserStats` + `UserRepository.getUserStats` already
+   existed (online-only, untested), so the slice delivered the genuinely additive part: the pure
+   `UserStatsBuilder → UserStatsPresentation` projection SSOT (six ranked/formatted counter tiles +
+   defensively-reconciled achievement badges + boundary-safe `formatCompactCount`), wired into
+   `ProfileViewModel` (fetch-once per resolved user, failure-inert) and rendered as a read-only
+   dashboard section in `ProfileScreen`. +35 tests. See run log.
+3. **`profile-stats-timeline`** (next §K pure core) — the 30-day activity timeline: `TimelinePoint`
+   model already exists; add `getUserStatsTimeline(days)` to `UserApi`/`UserRepository` + a pure
+   `StatsTimeline` reducer (bucket/normalize/max-scale for a sparkline) the dashboard chart renders.
+   Consider a durable **Room stats cache** (cache-first cold paint, iOS `CacheCoordinator.stats`) as a
+   sibling follow-up so the dashboard paints instantly.
+4. **`edit-profile-optimistic`** — richer `ProfileViewModel` edit path (content-language selection,
    optimistic + offline-queued save via the outbox), building on the existing display-name/bio edit.
-4. Or **pivot back to Calls §H platform-glue** (`ConnectionService`/Telecom + WebRTC transport) — the
+5. Or **pivot back to Calls §H platform-glue** (`ConnectionService`/Telecom + WebRTC transport) — the
    remaining non-pure work, or advance **Settings §L** (theme persistence is a clean pure-core start).
 
 ---
@@ -729,6 +747,48 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-05 — slice `profile-stats-presentation` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration. The two open PRs (#1488 gateway/iOS
+  calls, #1487 web utils) are unrelated work by another author — left untouched. Branched
+  `claude/apps/android/profile-stats-presentation` off latest `origin/main`; the designated
+  `claude/fervent-darwin-ceep4x` was exactly at main.
+- **Why this slice:** the §K "Next #2" (`profile-stats-model`). The raw `UserStats`/`Achievement` models,
+  `UserApi.getUserStats` and `UserRepository.getUserStats` already existed (online-only, untested), so the
+  genuinely additive, pure, richly-coverable work was the **stats projection SSOT** + a real consumer.
+- **Added / changed (production, `:feature:profile` only):**
+  - `UserStatsPresentation.kt` (new) — pure `UserStatsBuilder.build(stats) → UserStatsPresentation`
+    (precedent `ProfileHeaderBuilder`): six `StatTile`s in fixed dashboard order (negative counts floored);
+    `AchievementBadge`s with every server value reconciled defensively — `progressPercent` clamped `0..100`,
+    negative `current`/`threshold` floored, `isUnlocked` recomputed from `current >= threshold` when a
+    threshold exists (else the server flag is trusted) — then ranked unlocked-first → progressPercent desc →
+    current desc → id asc; `unlockedCount`/`totalCount` summary. Plus a pure boundary-safe
+    `formatCompactCount(Int)` (`0..999` verbatim, then K/M/B with a dropped `.0`; tier thresholds are the
+    pre-rounding magnitudes `999_950`/`999_950_000` so a value just under a tier rolls to `1M`/`1B`, never
+    `1000.0K` — the same class of bug web PR #1487 F66 fixed).
+  - `ProfileViewModel.kt` — `ProfileUiState.stats: UserStatsPresentation?`; `loadStatsOnce(id)` fetches
+    `getUserStats` once per resolved user (own = session id when non-blank; other = `getProfile` result id,
+    fallback to the requested id) and projects into state. Stats are a secondary surface: a `Failure` or a
+    thrown exception is swallowed (Cancellation rethrown) — it never surfaces an error or clobbers the
+    loaded profile.
+  - `ProfileScreen.kt` — read-only view renders a 2-wide counter-tile grid (`surfaceVariant` cards, compact
+    value + localized metric label) and, when badges exist, an "N of M unlocked" achievements list
+    (unlocked names emphasised). 9 new strings × 4 locales (EN/FR/ES/PT). Compose glue only (coverage-exempt).
+- **Tests (red → green):** +24 `UserStatsBuilderTest` (tile order/values, negative floor, empty stats,
+  progress clamp over/under/mid, current+threshold floor, isUnlocked recompute both directions, no-threshold
+  flag trust, unlocked-vs-locked ranking, progress-desc ordering, progress-tie → current → id tiebreak,
+  unlocked/total counts, and the full `formatCompactCount` boundary sweep incl. 999/1000, 999_949/999_950,
+  999_949_999/999_950_000, 2.1B, negative) + 5 `ProfileViewModelStatsTest` (success projection, Failure keeps
+  stats null + profile intact + no error, throw swallowed, own-profile loads exactly once across repeated
+  same-id session emissions, no load while session user absent). Behavioural through the public API; every
+  `when`/`if` arm exercised.
+- **Verification:** full `gradle assembleDebug testDebugUnitTest` (`meeshy.sh check`) **green** in ~3m12s
+  (system Gradle 8.14.3; wrapper dist still 403-blocked — see NOTES). Diff = `apps/android` only (2 prod +
+  1 new prod + 4 res + 2 test).
+- **Reviewer verdict:** **PASS** — pure projector in `:feature:profile` (product-side, consumes existing
+  model SSOT, no re-implementation), UDF VM + immutable `StateFlow`, cancellation-safe, defensive clamps
+  mirror `ProfileHeaderBuilder`, near-total branch coverage incl. tier boundaries + tie-breaks + failure
+  paths, UI kept dumb, colour via `MaterialTheme` tokens. No prod logic outside android.
 
 ### 2026-07-05 — slice `profile-details-rows` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration. The open PRs (#1484/#1483/#1481/

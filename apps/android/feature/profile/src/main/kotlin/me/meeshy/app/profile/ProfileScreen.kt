@@ -236,9 +236,124 @@ fun ProfileScreen(
                     )
                 }
                 header?.let { ProfileDetailsSection(it) }
+                state.stats?.let { ProfileStatsSection(it) }
             }
         }
     }
+}
+
+/** The read-only activity stats dashboard — counter tiles + achievement badges. */
+@Composable
+private fun ProfileStatsSection(stats: UserStatsPresentation) {
+    if (stats.tiles.isEmpty()) return
+    Spacer(Modifier.height(MeeshySpacing.md))
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        Text(
+            text = stringResource(R.string.profile_stats_title),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        stats.tiles.chunked(2).forEach { rowTiles ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+            ) {
+                rowTiles.forEach { tile ->
+                    StatTileView(tile, modifier = Modifier.weight(1f))
+                }
+                if (rowTiles.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+
+        if (stats.badges.isNotEmpty()) {
+            Spacer(Modifier.height(MeeshySpacing.xs))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(R.string.profile_achievements_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = stringResource(
+                        R.string.profile_achievements_unlocked,
+                        stats.unlockedCount,
+                        stats.totalCount,
+                    ),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            stats.badges.forEach { AchievementBadgeView(it) }
+        }
+    }
+}
+
+@Composable
+private fun StatTileView(tile: StatTile, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceVariant,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(MeeshySpacing.md),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = tile.formattedValue,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = stringResource(statMetricLabel(tile.metric)),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AchievementBadgeView(badge: AchievementBadge) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = badge.name,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (badge.isUnlocked) MaterialTheme.colorScheme.onSurface
+            else MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = if (badge.isUnlocked) FontWeight.SemiBold else FontWeight.Normal,
+        )
+        Text(
+            text = "${badge.progressPercent}%",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+private fun statMetricLabel(metric: StatMetric): Int = when (metric) {
+    StatMetric.MESSAGES -> R.string.profile_stat_messages
+    StatMetric.CONVERSATIONS -> R.string.profile_stat_conversations
+    StatMetric.TRANSLATIONS -> R.string.profile_stat_translations
+    StatMetric.FRIEND_REQUESTS -> R.string.profile_stat_friend_requests
+    StatMetric.LANGUAGES -> R.string.profile_stat_languages
+    StatMetric.MEMBER_DAYS -> R.string.profile_stat_member_days
 }
 
 /** Presence dot colours (semantic, static per the design system): green online, amber away. */

@@ -1186,7 +1186,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       to the system one (case-insensitively) is collapsed. `timezone` added to the header presentation.
       +14 `ProfileDetailRowsTest` cases. **Pending:** banner, tabs (Profile/Conversations/Stats), achievements.
 - [ ] Edit profile (avatar + banner upload, display name, bio, content languages) — optimistic + offline save
-- [ ] User stats dashboard: stat cards, 30-day activity timeline chart, achievement badges
+- [~] User stats dashboard: stat cards, 30-day activity timeline chart, achievement badges —
+      **stats projection SSOT + read-only dashboard shipped** (slice `profile-stats-presentation`,
+      2026-07-05): the pure `UserStatsBuilder.build(stats) → UserStatsPresentation` (`:feature:profile`,
+      precedent `ProfileHeaderBuilder`) projects the six counter tiles (fixed order, negative counts
+      floored, compact boundary-safe `formatCompactCount` K/M/B labels that never render `1000.0K`) and
+      the achievement badges — every server value reconciled defensively (progress clamped `0..100`,
+      `isUnlocked` recomputed from `current >= threshold`, negative current/threshold floored) then ranked
+      unlocked-first → progress desc → current desc → id. `ProfileViewModel` fetches
+      `getUserStats(id)` once per resolved user (own = session id, other = `getProfile` id) and projects
+      into `ProfileUiState.stats`; a stats failure/throw never clobbers the profile or surfaces an error.
+      `ProfileScreen` renders a counter-tile grid + an "N of M unlocked" achievements list (EN/FR/ES/PT).
+      +35 tests (`UserStatsBuilderTest` 24, `ProfileViewModelStatsTest` 5, +existing). **Pending:** the
+      30-day activity timeline chart (`/users/me/stats/timeline`), a durable Room stats cache
+      (cache-first cold paint, iOS `CacheCoordinator.stats`), and the dedicated full-screen dashboard.
 - [x] Profile completion ring — **shipped** (slice `profile-header-presentation`, 2026-07-05): the
       accent-coloured `ProfileCompletionRing` Canvas arc around the avatar, driven by the pure
       `ProfileHeaderPresentation.completionPercent` (clamped `0..100` so a malformed server value never
