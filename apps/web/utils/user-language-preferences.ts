@@ -12,35 +12,54 @@ import { getDeviceLocale } from '@/lib/device-locale';
  * Génère les choix de langues disponibles pour un utilisateur
  * Basé sur ses préférences système, régionale et personnalisée
  */
+/**
+ * Recherche l'entrée du catalogue de langues de manière insensible à la casse.
+ * Les codes du catalogue sont lowercase ; une préférence stockée `'EN'` (casse
+ * mixte issue d'un ancien client) doit tout de même résoudre son nom/drapeau —
+ * sinon `getUserLanguageChoices` retombait silencieusement sur 🇫🇷 « Français ».
+ */
+function findLanguageMeta(code: string | null | undefined) {
+  if (!code) return undefined;
+  const lc = code.toLowerCase();
+  return SUPPORTED_LANGUAGES.find(l => l.code.toLowerCase() === lc);
+}
+
 export function getUserLanguageChoices(user: User): LanguageChoice[] {
+  // Lookup by the raw (lowercased) preference so an absent systemLanguage keeps
+  // the historical 🇫🇷 « Français » fallback; the emitted code still defaults to 'fr'.
+  const systemRaw = user.systemLanguage?.toLowerCase();
+  const systemCode = systemRaw || 'fr';
+  const regionalCode = user.regionalLanguage?.toLowerCase();
+  const customCode = user.customDestinationLanguage?.toLowerCase();
+
   const choices: LanguageChoice[] = [
     {
-      code: user.systemLanguage || 'fr',
+      code: systemCode,
       name: 'Langue système',
-      description: SUPPORTED_LANGUAGES.find(l => l.code === user.systemLanguage)?.name || 'Français',
-      flag: SUPPORTED_LANGUAGES.find(l => l.code === user.systemLanguage)?.flag || '🇫🇷',
+      description: findLanguageMeta(systemRaw)?.name || 'Français',
+      flag: findLanguageMeta(systemRaw)?.flag || '🇫🇷',
       isDefault: true
     }
   ];
 
-  if (user.regionalLanguage && user.regionalLanguage !== user.systemLanguage) {
+  if (regionalCode && regionalCode !== systemCode) {
     choices.push({
-      code: user.regionalLanguage,
+      code: regionalCode,
       name: 'Langue régionale',
-      description: SUPPORTED_LANGUAGES.find(l => l.code === user.regionalLanguage)?.name || user.regionalLanguage,
-      flag: SUPPORTED_LANGUAGES.find(l => l.code === user.regionalLanguage)?.flag || '🌍',
+      description: findLanguageMeta(regionalCode)?.name || regionalCode,
+      flag: findLanguageMeta(regionalCode)?.flag || '🌍',
       isDefault: false
     });
   }
 
-  if (user.customDestinationLanguage && 
-      user.customDestinationLanguage !== user.systemLanguage && 
-      user.customDestinationLanguage !== user.regionalLanguage) {
+  if (customCode &&
+      customCode !== systemCode &&
+      customCode !== regionalCode) {
     choices.push({
-      code: user.customDestinationLanguage,
+      code: customCode,
       name: 'Langue personnalisée',
-      description: SUPPORTED_LANGUAGES.find(l => l.code === user.customDestinationLanguage)?.name || user.customDestinationLanguage,
-      flag: SUPPORTED_LANGUAGES.find(l => l.code === user.customDestinationLanguage)?.flag || '🎯',
+      description: findLanguageMeta(customCode)?.name || customCode,
+      flag: findLanguageMeta(customCode)?.flag || '🎯',
       isDefault: false
     });
   }
@@ -75,25 +94,31 @@ export function resolveUserPreferredLanguage(user: User): string {
  * Obtient la liste des langues utilisées par l'utilisateur
  */
 export function getUserLanguagePreferences(user: User): string[] {
+  // Lowercase avant déduplication — parité avec resolveUserLanguagesOrdered
+  // (@meeshy/shared) : 'EN' et 'en' sont la même langue, un seul code émis.
+  const systemCode = user.systemLanguage?.toLowerCase();
+  const regionalCode = user.regionalLanguage?.toLowerCase();
+  const customCode = user.customDestinationLanguage?.toLowerCase();
+
   const languages = new Set<string>();
-  
+
   // Toujours inclure la langue système
-  if (user.systemLanguage) {
-    languages.add(user.systemLanguage);
+  if (systemCode) {
+    languages.add(systemCode);
   }
-  
+
   // Inclure la langue régionale si différente
-  if (user.regionalLanguage && user.regionalLanguage !== user.systemLanguage) {
-    languages.add(user.regionalLanguage);
+  if (regionalCode && regionalCode !== systemCode) {
+    languages.add(regionalCode);
   }
-  
+
   // Inclure la langue personnalisée si définie et différente
-  if (user.customDestinationLanguage && 
-      user.customDestinationLanguage !== user.systemLanguage && 
-      user.customDestinationLanguage !== user.regionalLanguage) {
-    languages.add(user.customDestinationLanguage);
+  if (customCode &&
+      customCode !== systemCode &&
+      customCode !== regionalCode) {
+    languages.add(customCode);
   }
-  
+
   return Array.from(languages);
 }
 
