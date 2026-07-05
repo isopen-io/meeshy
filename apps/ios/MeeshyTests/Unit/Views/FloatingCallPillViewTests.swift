@@ -245,6 +245,22 @@ final class FloatingCallPillViewTests: XCTestCase {
         )
     }
 
+    func test_pillContent_isAnnouncedAsAButton() throws {
+        let source = try pillSource()
+        guard let pillContentRange = source.range(of: "private var pillContent: some View {"),
+              let nextVarRange = source.range(of: "\n    private var ", range: pillContentRange.upperBound..<source.endIndex) else {
+            XCTFail("expected to locate the pillContent computed property body")
+            return
+        }
+        let body = source[pillContentRange.upperBound..<nextVarRange.lowerBound]
+        XCTAssertTrue(
+            body.contains(".accessibilityAddTraits(.isButton)"),
+            "pillContent has .onTapGesture { expandToFullScreen() } — without .isButton, VoiceOver " +
+            "does not announce this whole banner as tappable, unlike the equivalent tap-to-toggle " +
+            "region on the full-screen CallView which explicitly adds this trait."
+        )
+    }
+
     func test_pillContent_hasTapToReturnHint() throws {
         let source = try pillSource()
         XCTAssertTrue(

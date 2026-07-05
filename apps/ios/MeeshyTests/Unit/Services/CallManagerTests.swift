@@ -4817,6 +4817,35 @@ final class CallErrorNonFatalWhitelistTests: XCTestCase {
             "the TARGET_NOT_FOUND early-return must guard BEFORE the call:error teardown"
         )
     }
+
+    func test_callErrorForADifferentCall_isIgnored_beforeAnyCodeSpecificHandling() throws {
+        // Root-cause fix for the class of bug behind test_targetNotFound_isNonFatal
+        // above: TARGET_NOT_FOUND/RATE_LIMIT_EXCEEDED/INVALID_SIGNAL were each
+        // whitelisted one prod incident at a time because `CallError` carried no
+        // callId — every code had to be manually proven safe. Any error naming a
+        // DIFFERENT call than the one currently active must be ignored regardless
+        // of its code, and this guard must run before the per-code whitelist so a
+        // future/unlisted code can't still tear down an unrelated healthy call.
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("errorCallId != self.currentCallId"),
+            "call:error must guard on event.callId vs currentCallId — an error for a different " +
+            "call must never affect this device's active, healthy call"
+        )
+        guard let callIdGuardRange = source.range(of: "errorCallId != self.currentCallId"),
+              let targetNotFoundRange = source.range(of: "event.code == \"TARGET_NOT_FOUND\""),
+              let teardownRange = source.range(of: "self.failCall(message)") else {
+            XCTFail("expected the callId guard, the per-code whitelist, and the teardown to coexist"); return
+        }
+        XCTAssertLessThan(
+            callIdGuardRange.lowerBound, targetNotFoundRange.lowerBound,
+            "the callId scoping guard must run BEFORE the per-code whitelist checks"
+        )
+        XCTAssertLessThan(
+            callIdGuardRange.lowerBound, teardownRange.lowerBound,
+            "the callId scoping guard must run BEFORE the call:error teardown"
+        )
+    }
 }
 
 // MARK: - Local teardown must materialise server-side (chaos-test prod 2026-07-02)

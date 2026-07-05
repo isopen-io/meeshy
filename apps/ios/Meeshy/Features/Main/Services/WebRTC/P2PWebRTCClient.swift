@@ -1090,7 +1090,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
                 let numericKeys = [
                     "currentRoundTripTime", "availableOutgoingBitrate",
                     "packetsLost", "packetsReceived",
-                    "packetsSent", "bytesSent", "bytesReceived"
+                    "packetsSent", "bytesSent", "bytesReceived", "jitter"
                 ]
                 var parsed: [CallStats.RawEntry] = []
                 parsed.reserveCapacity(report.statistics.count)
@@ -1410,7 +1410,14 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         }
         let extmapLine = "a=extmap:\(extID) \(transportCCURI)"
 
-        for i in 0..<lines.count where lines[i].hasPrefix("m=audio ") || lines[i].hasPrefix("m=video ") {
+        // Snapshot m-line indices before mutating `lines`, then insert from the
+        // last section backward — inserting at index i shifts every subsequent
+        // line by +1, which would desync a forward-walking loop's remaining
+        // (stale) indices once more than one m-section exists (e.g. audio+video).
+        // Walking in reverse means every remaining index still points at its
+        // original line, since only later positions have shifted.
+        let mLineIndices = lines.indices.filter { lines[$0].hasPrefix("m=audio ") || lines[$0].hasPrefix("m=video ") }
+        for i in mLineIndices.reversed() {
             var insertIdx = i + 1
             while insertIdx < lines.count && !lines[insertIdx].hasPrefix("m=") {
                 if lines[insertIdx].hasPrefix("a=extmap:") {

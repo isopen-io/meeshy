@@ -2085,7 +2085,8 @@ export class CallEventsHandler {
         if (!userId) {
           socket.emit(CALL_EVENTS.ERROR, {
             code: 'NOT_AUTHENTICATED',
-            message: 'User not authenticated'
+            message: 'User not authenticated',
+            callId: data.callId
           } as CallError);
           return;
         }
@@ -2112,7 +2113,8 @@ export class CallEventsHandler {
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.INVALID_SIGNAL,
             message: validationError,
-            details: validationDetails ? { issues: validationDetails } : undefined
+            details: validationDetails ? { issues: validationDetails } : undefined,
+            callId: data.callId
           } as CallError);
           return;
         }
@@ -2136,7 +2138,8 @@ export class CallEventsHandler {
           if (!iceAllowed) {
             socket.emit(CALL_EVENTS.ERROR, {
               code: CALL_ERROR_CODES.RATE_LIMIT_EXCEEDED,
-              message: 'Too many ICE candidates — slow down'
+              message: 'Too many ICE candidates — slow down',
+              callId: data.callId
             } as CallError);
             ack?.({ success: false });
             return;
@@ -2156,7 +2159,8 @@ export class CallEventsHandler {
           });
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
-            message: 'You are not in this call'
+            message: 'You are not in this call',
+            callId: data.callId
           } as CallError);
           return;
         }
@@ -2170,8 +2174,9 @@ export class CallEventsHandler {
           });
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.SIGNAL_SENDER_MISMATCH,
-            message: 'Signal sender does not match authenticated user'
-          });
+            message: 'Signal sender does not match authenticated user',
+            callId: data.callId
+          } as CallError);
           return;
         }
 
@@ -2187,8 +2192,9 @@ export class CallEventsHandler {
           });
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.TARGET_NOT_FOUND,
-            message: 'Target participant not found in call'
-          });
+            message: 'Target participant not found in call',
+            callId: data.callId
+          } as CallError);
           return;
         }
 
@@ -2218,8 +2224,9 @@ export class CallEventsHandler {
           });
           socket.emit(CALL_EVENTS.ERROR, {
             code: CALL_ERROR_CODES.TARGET_NOT_FOUND,
-            message: 'Target participant has no active connection'
-          });
+            message: 'Target participant has no active connection',
+            callId: data.callId
+          } as CallError);
           ack?.({ success: false });
           return;
         }
@@ -2263,7 +2270,8 @@ export class CallEventsHandler {
 
         socket.emit(CALL_EVENTS.ERROR, {
           code: 'SIGNAL_FAILED',
-          message: 'Failed to forward WebRTC signal'
+          message: 'Failed to forward WebRTC signal',
+          callId: data.callId
         } as CallError);
       }
     });
