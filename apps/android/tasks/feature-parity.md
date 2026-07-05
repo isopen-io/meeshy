@@ -1178,7 +1178,13 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       **identity block advanced** (slice `profile-header-presentation`): the read-only `ProfileScreen`
       now renders the presence dot (green/amber, semantic, bordered) overlaid on the avatar, the
       accent-coloured completion ring around it, an E2EE lock badge, and a localized "member since"
-      line (EN/FR/ES/PT). **Pending:** banner, tabs (Profile/Conversations/Stats), achievements.
+      line (EN/FR/ES/PT). **Secondary identity rows shipped** (slice `profile-details-rows`, 2026-07-05):
+      the pure `ProfileDetailRows.build(header) → List<ProfileDetailRow>` projects the primary/secondary
+      language (flag + name via the `LanguageData` SSOT, unknown code → uppercased raw), the country
+      (ISO alpha-2 → regional-indicator flag + uppercased code, non-code → plain text), and the timezone
+      into an ordered, tested list the sheet renders as label↔flag+value rows; a regional language equal
+      to the system one (case-insensitively) is collapsed. `timezone` added to the header presentation.
+      +14 `ProfileDetailRowsTest` cases. **Pending:** banner, tabs (Profile/Conversations/Stats), achievements.
 - [ ] Edit profile (avatar + banner upload, display name, bio, content languages) — optimistic + offline save
 - [ ] User stats dashboard: stat cards, 30-day activity timeline chart, achievement badges
 - [x] Profile completion ring — **shipped** (slice `profile-header-presentation`, 2026-07-05): the

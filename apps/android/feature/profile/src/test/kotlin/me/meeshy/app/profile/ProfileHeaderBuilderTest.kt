@@ -24,6 +24,7 @@ class ProfileHeaderBuilderTest {
         systemLanguage: String? = null,
         regionalLanguage: String? = null,
         registrationCountry: String? = null,
+        timezone: String? = null,
     ) = MeeshyUser(
         id = "u1",
         username = username,
@@ -40,6 +41,7 @@ class ProfileHeaderBuilderTest {
         systemLanguage = systemLanguage,
         regionalLanguage = regionalLanguage,
         registrationCountry = registrationCountry,
+        timezone = timezone,
     )
 
     // ---- display name ladder --------------------------------------------
@@ -83,7 +85,10 @@ class ProfileHeaderBuilderTest {
     @Test
     fun `blank optional fields become null`() {
         val header = ProfileHeaderBuilder.build(
-            user(bio = "  ", avatar = "", systemLanguage = " ", regionalLanguage = "", registrationCountry = " "),
+            user(
+                bio = "  ", avatar = "", systemLanguage = " ", regionalLanguage = "",
+                registrationCountry = " ", timezone = "  ",
+            ),
             now,
         )
         assertThat(header.bio).isNull()
@@ -91,6 +96,7 @@ class ProfileHeaderBuilderTest {
         assertThat(header.systemLanguage).isNull()
         assertThat(header.regionalLanguage).isNull()
         assertThat(header.country).isNull()
+        assertThat(header.timezone).isNull()
     }
 
     @Test
@@ -102,6 +108,7 @@ class ProfileHeaderBuilderTest {
                 systemLanguage = "fr",
                 regionalLanguage = "en",
                 registrationCountry = "FR",
+                timezone = "Europe/Paris",
             ),
             now,
         )
@@ -110,6 +117,7 @@ class ProfileHeaderBuilderTest {
         assertThat(header.systemLanguage).isEqualTo("fr")
         assertThat(header.regionalLanguage).isEqualTo("en")
         assertThat(header.country).isEqualTo("FR")
+        assertThat(header.timezone).isEqualTo("Europe/Paris")
     }
 
     // ---- presence --------------------------------------------------------
