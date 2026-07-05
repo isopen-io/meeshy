@@ -22,6 +22,7 @@ import me.meeshy.sdk.media.MediaBlobStore
 import me.meeshy.sdk.media.MediaRepository
 import me.meeshy.sdk.media.MediaUploadSender
 import me.meeshy.sdk.model.SendMessageRequest
+import me.meeshy.sdk.model.UpdateProfileRequest
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.AddReactionRequest
 import me.meeshy.sdk.net.api.BlockApi
@@ -33,7 +34,9 @@ import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.api.PostApi
 import me.meeshy.sdk.net.api.ReactionApi
 import me.meeshy.sdk.net.apiCall
+import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.story.PublishMediaWriteBack
+import me.meeshy.sdk.user.UserRepository
 import timber.log.Timber
 import java.util.concurrent.TimeUnit
 
@@ -60,6 +63,8 @@ class OutboxFlushWorker @AssistedInject constructor(
     private val blockCache: BlockCache,
     private val friendRepository: FriendRepository,
     private val friendshipCache: FriendshipCache,
+    private val userRepository: UserRepository,
+    private val sessionRepository: SessionRepository,
     private val json: Json,
 ) : CoroutineWorker(context, params) {
 
@@ -81,6 +86,9 @@ class OutboxFlushWorker @AssistedInject constructor(
                     // A hard-exhausted friend request rolls the optimistic pending
                     // entry back so the connect button re-offers on next resolve.
                     OutboxKind.SEND_FRIEND_REQUEST -> friendshipCache.rollbackSendRequest(row.targetId)
+                    // A hard-exhausted profile edit reverts the optimistic paint to
+                    // the gateway's truth so the identity never drifts from the server.
+                    OutboxKind.UPDATE_PROFILE -> sessionRepository.refresh()
                     else -> Unit
                 }
             },
@@ -204,6 +212,19 @@ class OutboxFlushWorker @AssistedInject constructor(
         OutboxKind.UNBLOCK_USER to MutationSender { row ->
             when (apiCall { blockApi.unblock(row.targetId) }) {
                 is NetworkResult.Success -> SendResult.Success
+                is NetworkResult.Failure -> SendResult.TransientFailure
+            }
+        },
+        OutboxKind.UPDATE_PROFILE to MutationSender { row ->
+            val req = runCatching { json.decodeFromString<UpdateProfileRequest>(row.payload) }
+                .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
+            when (val result = userRepository.updateProfile(req)) {
+                is NetworkResult.Success -> {
+                    // Reconcile the optimistic paint with the server-authoritative user
+                    // (server may normalise names / derive fields the local merge cannot).
+                    sessionRepository.adopt(result.data)
+                    SendResult.Success
+                }
                 is NetworkResult.Failure -> SendResult.TransientFailure
             }
         },

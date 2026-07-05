@@ -67,6 +67,7 @@ class ProfileViewModelStatsTest {
         sessionRepository = session,
         userRepository = userRepo,
         statsCache = statsCache,
+        workManager = mockk(relaxed = true),
         savedStateHandle = SavedStateHandle(mapOf(ProfileViewModel.USER_ID_ARG to viewedId)),
     )
 
@@ -126,6 +127,7 @@ class ProfileViewModelStatsTest {
             sessionRepository = session,
             userRepository = userRepo,
             statsCache = coldStatsCache(),
+            workManager = mockk(relaxed = true),
             savedStateHandle = SavedStateHandle(),
         )
 
@@ -149,6 +151,7 @@ class ProfileViewModelStatsTest {
             sessionRepository = session,
             userRepository = userRepo,
             statsCache = coldStatsCache(),
+            workManager = mockk(relaxed = true),
             savedStateHandle = SavedStateHandle(),
         )
         advanceUntilIdle()

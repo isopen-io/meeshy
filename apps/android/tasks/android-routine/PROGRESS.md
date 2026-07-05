@@ -2,7 +2,27 @@
 
 ## Current build-order position
 
-`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache)** → rest`
+`Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard + durable cache + optimistic edit)** → rest`
+
+> On 2026-07-05 the **optimistic + offline profile edit** landed (slice `edit-profile-optimistic`, §K): the
+> already-declared `OutboxKind.UPDATE_PROFILE` (lane `PROFILE`, drained but with no sender) is now wired
+> end-to-end. Pure cores: `:core:model` `ProfileEditApply.apply(user, request)` — the edit-merge SSOT with
+> `PATCH /users/me` omit-null parity (null field = absent → unchanged, non-null overwrites) so the optimistic
+> paint equals the server result; `:feature:profile` `ProfileEditRequestBuilder.build(...)` — trims the
+> editor buffers and degrades blank→null (a blank edit is a server no-op, never an accidental clear); and the
+> `OutboxCoalescer` `UPDATE_PROFILE` rule (latest full-snapshot wins, keyed by the own user id). Wiring:
+> `SessionRepository.applyProfileEdit` (optimistic republish of the merged identity, inert with no session),
+> `UserRepository.enqueueProfileEdit` (optimistic flip + durable profile-lane enqueue, `null`/blank session
+> inert — mirrors `BlockRepository.setBlockedDurably`), an `OutboxFlushWorker` `UPDATE_PROFILE` sender
+> (decode → `updateProfile` → `adopt(server user)`) + an `onExhausted` `sessionRepository.refresh()` revert to
+> server truth. `ProfileViewModel` carries the three content-language buffers, saves through the
+> optimistic/offline path (editor closes instantly, worker woken only on a real `cmid`, a local-enqueue
+> failure reopens the editor + surfaces the error), and guards the editor buffers from a background session
+> emission mid-edit; `ProfileScreen` renders three `LanguageData`-backed content-language dropdowns
+> (flag + name) in the edit form (EN/FR/ES/PT). +31 tests (`ProfileEditApplyTest` 7, `ProfileEditRequestBuilderTest`
+> 6, `OutboxCoalescerTest` +3, `SessionRepositoryTest` +2, `UserRepositoryTest` 4, `ProfileViewModelEditTest` 9).
+> `assembleDebug` + `testDebugUnitTest` (full) green. Surpasses iOS, whose profile edit is online-only.
+> Reviewer: PASS (diff apps/android only; behaviour-through-public-API tests; optimistic/UDF/SDK-purity honoured).
 
 > On 2026-07-05 the **profile stats/timeline Room cache** landed (slice `profile-stats-room-cache`, §K): the
 > profile dashboard now paints instantly from Room on cold start / offline, closing the last cache gap in
@@ -384,10 +404,24 @@ into a tested list, with case-insensitive dup-language collapse; consumed by the
    key + me-only timeline key; cold-vs-synced-empty by row presence; undecodable payload → miss), and
    `ProfileViewModel` rewired cache-first (paint cached → revalidate → write-through). +20 tests. See run log.
    This closes the last §K cache gap.
-5. **`edit-profile-optimistic`** — richer `ProfileViewModel` edit path (content-language selection,
-   optimistic + offline-queued save via the outbox), building on the existing display-name/bio edit.
+5. ~~**`edit-profile-optimistic`**~~ ✅ shipped 2026-07-05 — the `UPDATE_PROFILE` outbox kind (already
+   declared, lane `PROFILE`, drained but senderless) wired end-to-end. Pure cores: `ProfileEditApply`
+   (`:core:model` edit-merge SSOT, `PATCH` omit-null parity), `ProfileEditRequestBuilder` (`:feature:profile`
+   trim/blank→null), and the `OutboxCoalescer` `UPDATE_PROFILE` latest-snapshot rule. Wiring:
+   `SessionRepository.applyProfileEdit` (optimistic republish), `UserRepository.enqueueProfileEdit`
+   (optimistic flip + durable enqueue, mirrors `setBlockedDurably`), `OutboxFlushWorker` `UPDATE_PROFILE`
+   sender (`updateProfile` → `adopt`) + `onExhausted` `refresh()` rollback. `ProfileViewModel` gains the three
+   content-language buffers + optimistic/offline save (editor closes instantly, worker woken on a real `cmid`,
+   enqueue-failure reopens the editor) + a mid-edit buffer-clobber guard; `ProfileScreen` renders three
+   `LanguageData` dropdowns. +31 tests. See run log. Avatar/banner upload + first/last-name fields remain.
 6. Or **pivot back to Calls §H platform-glue** (`ConnectionService`/Telecom + WebRTC transport) — the
    remaining non-pure work, or advance **Settings §L** (theme persistence is a clean pure-core start).
+
+**Recommended next:** avatar + banner upload is media-pipeline heavy (needs the durable `UPLOAD_MEDIA`
+chain + an image picker), so a cleaner next pure-core slice is **Settings §L theme persistence** (a
+tested `SettingsRepository` theme store) or the tracked **worker drain-list Robolectric test** (asserts
+every `OutboxLanes.*` with a registered sender is drained — would have caught the historic BLOCK/FRIEND
+omission, and now covers the new `PROFILE` lane wiring).
 
 ---
 _Historical Contacts/Calls backlog below._

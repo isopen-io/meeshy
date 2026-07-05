@@ -2,6 +2,23 @@
 
 Append-only log of gotchas and decisions that save time next run.
 
+## Lessons
+- **2026-07-05 (`edit-profile-optimistic`): outbox kinds can be pre-declared but wired only partway.**
+  `OutboxKind.UPDATE_PROFILE` already existed with a lane (`OutboxLanes.PROFILE`, in `sharedDrainLanes`)
+  but no `OutboxFlushWorker` sender and no `OutboxCoalescer` rule — an enqueued row would drain, find no
+  sender, and `markExhausted("No sender registered…")`. When a slice "just needs an outbox mutation," grep
+  `buildSenders()` + `OutboxCoalescer.decide` for the kind first; a lane assignment alone is not a live path.
+- **2026-07-05: PATCH omit-null is the optimistic-merge contract.** kotlinx serialization omits null fields
+  (`encodeDefaults=false`), so the gateway `PATCH /users/me` never receives a null field → it's "leave
+  unchanged," not "clear." The optimistic local merge (`ProfileEditApply`) must use the exact same rule
+  (null → keep existing, non-null → overwrite) or the optimistic paint and the server result diverge. This
+  also means a blank editor field must degrade to `null` in the request builder (a blank edit = no-op),
+  never an empty string (which would clear the field server-side).
+- **2026-07-05: guard editor buffers against background state emissions.** The own-profile VM collects
+  `SessionRepository.currentUser`; naively re-seeding the editable buffers on every emission clobbers a
+  user's in-flight typing when a background `refresh()` fires. Fix: only re-seed the buffers when
+  `!isEditing`; while editing, advance only the read-only `user` reference.
+
 ## Environment
 - **The Gradle wrapper's 8.11.1 distribution zip is blocked in the web container (403 from
   github.com/gradle releases via the agent proxy).** `./gradlew` / `./apps/android/meeshy.sh check`

@@ -64,6 +64,7 @@ class ProfileViewModelTimelineTest {
             sessionRepository = session,
             userRepository = userRepo,
             statsCache = statsCache,
+            workManager = mockk(relaxed = true),
             savedStateHandle = SavedStateHandle(),
         )
 
@@ -156,6 +157,7 @@ class ProfileViewModelTimelineTest {
             sessionRepository = mockk(relaxed = true),
             userRepository = userRepo,
             statsCache = coldStatsCache(),
+            workManager = mockk(relaxed = true),
             savedStateHandle = SavedStateHandle(mapOf(ProfileViewModel.USER_ID_ARG to "u9")),
         )
         advanceUntilIdle()
