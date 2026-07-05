@@ -148,6 +148,8 @@ jest.mock('@meeshy/shared/types/video-call', () => ({
     INVALID_SIGNAL: 'INVALID_SIGNAL',
     SIGNAL_SENDER_MISMATCH: 'SIGNAL_SENDER_MISMATCH',
     TARGET_NOT_FOUND: 'TARGET_NOT_FOUND',
+    CALL_NOT_FOUND: 'CALL_NOT_FOUND',
+    MEDIA_TOGGLE_FAILED: 'MEDIA_TOGGLE_FAILED',
   },
   CALL_TERMINAL_STATUSES: ['ended', 'missed', 'rejected', 'failed'],
 }));
