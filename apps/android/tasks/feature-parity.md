@@ -1197,9 +1197,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `getUserStats(id)` once per resolved user (own = session id, other = `getProfile` id) and projects
       into `ProfileUiState.stats`; a stats failure/throw never clobbers the profile or surfaces an error.
       `ProfileScreen` renders a counter-tile grid + an "N of M unlocked" achievements list (EN/FR/ES/PT).
-      +35 tests (`UserStatsBuilderTest` 24, `ProfileViewModelStatsTest` 5, +existing). **Pending:** the
-      30-day activity timeline chart (`/users/me/stats/timeline`), a durable Room stats cache
-      (cache-first cold paint, iOS `CacheCoordinator.stats`), and the dedicated full-screen dashboard.
+      +35 tests (`UserStatsBuilderTest` 24, `ProfileViewModelStatsTest` 5, +existing). **30-day activity
+      timeline shipped** (slice `profile-stats-timeline`, 2026-07-05): `UserApi.getUserStatsTimeline(days)`
+      + `UserRepository.getUserStatsTimeline(days=30)` (me-only `/users/me/stats/timeline`, `days` clamped
+      to the gateway `7..90` window) feed the pure `StatsTimelineBuilder.build(points) →
+      StatsTimelinePresentation?` (`:feature:profile`, precedent `UserStatsBuilder`): empty → `null`
+      (nothing to chart), non-empty all-zero → a flat presentation with `hasActivity=false`, negative
+      counts floored, each bar peak-normalized `0f..1f` (no divide-by-zero), input order preserved
+      (oldest→newest), `DD/MM` axis labels ported from iOS `shortDate` (malformed date → raw), plus
+      total / rounded per-day average / active-day count. `ProfileViewModel` fetches it once for the
+      **own** profile only (me-only endpoint — never for a viewed id), failure-inert like stats;
+      `ProfileScreen` renders an accent-coherent line+area sparkline (Canvas) with an empty-state label
+      (EN/FR/ES/PT). +17 tests (`StatsTimelineBuilderTest` 11, `ProfileViewModelTimelineTest` 6).
+      **Pending:** a durable Room stats/timeline cache (cache-first cold paint, iOS `CacheCoordinator.stats`
+      / `.timeline`), and the dedicated full-screen dashboard.
 - [x] Profile completion ring — **shipped** (slice `profile-header-presentation`, 2026-07-05): the
       accent-coloured `ProfileCompletionRing` Canvas arc around the avatar, driven by the pure
       `ProfileHeaderPresentation.completionPercent` (clamped `0..100` so a malformed server value never

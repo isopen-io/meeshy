@@ -26,6 +26,7 @@ data class ProfileUiState(
     val errorMessage: String? = null,
     val isSaving: Boolean = false,
     val stats: UserStatsPresentation? = null,
+    val timeline: StatsTimelinePresentation? = null,
 )
 
 @HiltViewModel
@@ -41,6 +42,7 @@ class ProfileViewModel @Inject constructor(
     val state: StateFlow<ProfileUiState> = _state.asStateFlow()
 
     private var statsLoadedForId: String? = null
+    private var timelineLoaded = false
 
     init {
         if (userId == null) {
@@ -48,7 +50,10 @@ class ProfileViewModel @Inject constructor(
             viewModelScope.launch {
                 sessionRepository.currentUser.collect { user ->
                     _state.update { it.copy(user = user, displayName = user?.displayName ?: "", bio = user?.bio ?: "") }
-                    user?.id?.takeIf { it.isNotBlank() }?.let(::loadStatsOnce)
+                    user?.id?.takeIf { it.isNotBlank() }?.let {
+                        loadStatsOnce(it)
+                        loadTimelineOnce()
+                    }
                 }
             }
         } else {
@@ -127,6 +132,30 @@ class ProfileViewModel @Inject constructor(
                 throw e
             } catch (_: Exception) {
                 // Stats are non-critical — swallow so the profile view is never broken by them.
+            }
+        }
+    }
+
+    /**
+     * Fetches and projects the signed-in user's 30-day activity timeline exactly
+     * once. The `/users/me/stats/timeline` endpoint reports only the caller's own
+     * activity, so this fires solely for the own-profile view (never for a viewed
+     * user id) and, like the stats fetch, is failure-inert: a network error leaves
+     * the sparkline absent rather than surfacing an error or clobbering the profile.
+     */
+    private fun loadTimelineOnce() {
+        if (timelineLoaded) return
+        timelineLoaded = true
+        viewModelScope.launch {
+            try {
+                val result = userRepository.getUserStatsTimeline()
+                if (result is NetworkResult.Success) {
+                    _state.update { it.copy(timeline = StatsTimelineBuilder.build(result.data)) }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Timeline is non-critical — swallow so the profile view is never broken by it.
             }
         }
     }

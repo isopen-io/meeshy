@@ -28,4 +28,7 @@
     <string name="profile_stat_member_days">Jours de membre</string>
     <string name="profile_achievements_title">Succès</string>
     <string name="profile_achievements_unlocked">%1$d sur %2$d débloqués</string>
+    <string name="profile_activity_title">Activité</string>
+    <string name="profile_activity_average">%1$d / jour</string>
+    <string name="profile_activity_empty">Aucune activité ces 30 derniers jours</string>
 </resources>
