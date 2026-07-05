@@ -42,7 +42,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
@@ -237,6 +240,7 @@ fun ProfileScreen(
                 }
                 header?.let { ProfileDetailsSection(it) }
                 state.stats?.let { ProfileStatsSection(it) }
+                state.timeline?.let { ProfileTimelineSection(it) }
             }
         }
     }
@@ -294,6 +298,99 @@ private fun ProfileStatsSection(stats: UserStatsPresentation) {
             }
             stats.badges.forEach { AchievementBadgeView(it) }
         }
+    }
+}
+
+/** The read-only 30-day activity sparkline — accent-coherent line + area chart. */
+@Composable
+private fun ProfileTimelineSection(timeline: StatsTimelinePresentation) {
+    if (timeline.bars.isEmpty()) return
+    val accent = MaterialTheme.colorScheme.primary
+    Spacer(Modifier.height(MeeshySpacing.md))
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.sm),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(R.string.profile_activity_title),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = stringResource(R.string.profile_activity_average, timeline.averagePerDay),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (timeline.hasActivity) {
+            ActivitySparkline(
+                bars = timeline.bars,
+                color = accent,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(80.dp),
+            )
+        } else {
+            Text(
+                text = stringResource(R.string.profile_activity_empty),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/**
+ * A fixed-height sparkline over the per-day normalized activity. Draws a subtle
+ * top-to-bottom area fill under an accent line. Pure rendering — every decision
+ * (normalization, ordering, activity gating) is made upstream in
+ * [StatsTimelineBuilder], so this Composable only maps `0f..1f` heights to pixels.
+ */
+@Composable
+private fun ActivitySparkline(
+    bars: List<TimelineBar>,
+    color: Color,
+    modifier: Modifier = Modifier,
+) {
+    Canvas(modifier = modifier) {
+        val count = bars.size
+        val stepX = if (count > 1) size.width / (count - 1) else 0f
+        val usableHeight = size.height - 4.dp.toPx()
+
+        fun pointAt(index: Int): Offset {
+            val x = if (count > 1) stepX * index else size.width / 2f
+            val y = 2.dp.toPx() + usableHeight * (1f - bars[index].normalized)
+            return Offset(x, y)
+        }
+
+        val linePath = Path().apply {
+            moveTo(pointAt(0).x, pointAt(0).y)
+            for (i in 1 until count) lineTo(pointAt(i).x, pointAt(i).y)
+        }
+        val areaPath = Path().apply {
+            addPath(linePath)
+            lineTo(pointAt(count - 1).x, size.height)
+            lineTo(pointAt(0).x, size.height)
+            close()
+        }
+
+        drawPath(
+            path = areaPath,
+            brush = Brush.verticalGradient(
+                colors = listOf(color.copy(alpha = 0.28f), color.copy(alpha = 0f)),
+            ),
+        )
+        drawPath(
+            path = linePath,
+            color = color,
+            style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round),
+        )
     }
 }
 

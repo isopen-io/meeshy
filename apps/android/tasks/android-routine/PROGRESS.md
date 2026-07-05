@@ -4,6 +4,16 @@
 
 `Auth ✅ → Conversations ✅ → Chat ✅ → Feed ✅ → Stories ✅ (rich) → Calls ✅ (pure cores) → Contacts ✅ (near-complete) → **Profile/Settings §K/§L (in progress: header + detail rows + stats dashboard)** → rest`
 
+> On 2026-07-05 the **30-day activity timeline** landed (slice `profile-stats-timeline`, §K): the me-only
+> `UserApi`/`UserRepository` `getUserStatsTimeline(days=30)` (`/users/me/stats/timeline`, `days` clamped to
+> the gateway `7..90` window) feeds the pure `:feature:profile` `StatsTimelineBuilder.build(points) →
+> StatsTimelinePresentation?` (precedent `UserStatsBuilder`) — empty→`null` (nothing to chart), non-empty
+> all-zero→a flat inactive presentation (no divide-by-zero), negative counts floored, peak-normalized
+> `0f..1f` bars, input order preserved (oldest→newest), `DD/MM` labels ported from iOS `shortDate`, plus
+> total/rounded-average/active-days. `ProfileViewModel` fetches it once for the **own** profile only
+> (me-only endpoint), failure-inert; `ProfileScreen` renders an accent-coherent line+area sparkline (Canvas)
+> with an empty-state label (EN/FR/ES/PT). +17 tests. `assembleDebug`+`testDebugUnitTest` green.
+
 > On 2026-07-05 the **stats projection SSOT** landed (slice `profile-stats-presentation`, §K): the pure
 > `:feature:profile` `UserStatsBuilder.build(stats) → UserStatsPresentation` (precedent `ProfileHeaderBuilder`)
 > projects `UserStats` into six ranked/compact-formatted counter tiles + defensively-reconciled achievement
@@ -347,11 +357,13 @@ into a tested list, with case-insensitive dup-language collapse; consumed by the
    defensively-reconciled achievement badges + boundary-safe `formatCompactCount`), wired into
    `ProfileViewModel` (fetch-once per resolved user, failure-inert) and rendered as a read-only
    dashboard section in `ProfileScreen`. +35 tests. See run log.
-3. **`profile-stats-timeline`** (next §K pure core) — the 30-day activity timeline: `TimelinePoint`
-   model already exists; add `getUserStatsTimeline(days)` to `UserApi`/`UserRepository` + a pure
-   `StatsTimeline` reducer (bucket/normalize/max-scale for a sparkline) the dashboard chart renders.
-   Consider a durable **Room stats cache** (cache-first cold paint, iOS `CacheCoordinator.stats`) as a
-   sibling follow-up so the dashboard paints instantly.
+3. ~~**`profile-stats-timeline`**~~ ✅ shipped 2026-07-05 — see run log. `UserApi`/`UserRepository`
+   `getUserStatsTimeline(days=30)` (me-only) + the pure `StatsTimelineBuilder → StatsTimelinePresentation?`
+   (empty→null, all-zero flat, negative-floor, peak-normalized bars, order-preserved, `DD/MM` labels,
+   total/average/active-days) wired into `ProfileViewModel` (own-profile-only, failure-inert) and rendered
+   as an accent-coherent line+area sparkline in `ProfileScreen`. +17 tests. **Next highest-value follow-up:**
+   a durable **Room stats/timeline cache** (cache-first cold paint, iOS `CacheCoordinator.stats`/`.timeline`)
+   so the dashboard paints instantly — a clean pure-core-rich slice (`SwrCacheSource` port precedent).
 4. **`edit-profile-optimistic`** — richer `ProfileViewModel` edit path (content-language selection,
    optimistic + offline-queued save via the outbox), building on the existing display-name/bio edit.
 5. Or **pivot back to Calls §H platform-glue** (`ConnectionService`/Telecom + WebRTC transport) — the
@@ -747,6 +759,49 @@ After Stories richness is sufficient, advance to the **Calls** area
 (`feature-parity.md` §"Calls").
 
 ## Run log
+
+### 2026-07-05 — slice `profile-stats-timeline` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration (`list_pull_requests state=open` → `[]`).
+  Branched `claude/apps/android/profile-stats-timeline` off latest `origin/main` (`d94be65`).
+- **Why this slice:** the §K "Next #3" (`profile-stats-timeline`) — the 30-day activity timeline. The
+  `TimelinePoint` model already existed; the genuinely additive, pure, richly-coverable work was the
+  timeline projection SSOT + the me-only fetch wiring + the sparkline.
+- **Added / changed (production, `apps/android` only):**
+  - `core/network` `UserApi.kt` — `getUserStatsTimeline(days) → ApiResponse<List<TimelinePoint>>`
+    (`GET users/me/stats/timeline`, the me-only gateway route; the only per-user stats route is
+    `/users/:id/stats`, so the timeline is never keyed by a viewed id).
+  - `sdk-core` `UserRepository.kt` — `getUserStatsTimeline(days = 30)`, `days` clamped to the
+    gateway-accepted `7..90` window.
+  - `feature/profile` `StatsTimeline.kt` (new) — pure `StatsTimelineBuilder.build(points) →
+    StatsTimelinePresentation?` (precedent `UserStatsBuilder`): **empty → `null`** (nothing to chart,
+    mirrors iOS `if !timeline.isEmpty`); non-empty **all-zero → a flat presentation** with
+    `hasActivity=false` (no divide-by-zero on a zero peak); **negative counts floored** so a malformed
+    payload can't invert a bar/peak; each `TimelineBar.normalized` = count/peak (`0f..1f`); **input order
+    preserved** (gateway emits oldest→newest); a `DD/MM` axis label via the internal `shortDate` ported
+    from the iOS `StatsTimelineChart` (malformed date → raw string); plus `total`, rounded `averagePerDay`
+    over every day (incl. silent ones), `activeDays`, `hasActivity`.
+  - `ProfileViewModel.kt` — `ProfileUiState.timeline: StatsTimelinePresentation?`; `loadTimelineOnce()`
+    fetches the timeline **once, own-profile only** (me-only endpoint — the other-profile branch never
+    calls it), failure-inert exactly like `loadStatsOnce` (Cancellation rethrown; Failure/throw swallowed).
+  - `ProfileScreen.kt` — a read-only `ProfileTimelineSection`: an "Activity" header + "N / day" average,
+    then an accent-coherent **line + area sparkline** (Canvas, `colorScheme.primary`) when `hasActivity`,
+    else a localized empty-state label. Pure rendering — every decision is upstream in the builder. 3 new
+    strings × 4 locales (EN/FR/ES/PT). Compose glue only (coverage-exempt).
+- **Tests (red → green):** +11 `StatsTimelineBuilderTest` (empty→null, single full-height bar, peak
+  normalizes to 1 + proportional shorter days, all-zero flat/inactive no-divide-by-zero, negative floor,
+  total+activeDays count only active days, average round-down 3.33→3, average round-half-up 2.5→3, order
+  preserved, ISO→`DD/MM`, malformed date→raw) + 6 `ProfileViewModelTimelineTest` (own-profile success
+  projection, Failure keeps timeline null + profile intact + no error, throw swallowed, loads exactly once
+  across repeated session emissions, no load while session user absent, other-profile never loads). All
+  behavioural through the public API (`build()` result, VM `state`); every `when`/`if` arm exercised.
+- **Verification:** full `gradle assembleDebug testDebugUnitTest` (`meeshy.sh check`) **green** (system
+  Gradle 8.14.3; wrapper dist still 403-blocked — see NOTES). Diff = `apps/android` only (3 prod edits +
+  1 new prod + 4 res + 2 test).
+- **Reviewer verdict:** **PASS** — pure projector in `:feature:profile` (product-side, consumes the
+  existing `TimelinePoint` SSOT, no re-implementation), UDF VM + immutable `StateFlow`, cancellation-safe,
+  me-only endpoint correctly gated, near-total branch coverage incl. empty/all-zero/negative/rounding
+  boundaries + failure paths, UI kept dumb, colour via `MaterialTheme.primary` accent. No prod logic
+  outside android.
 
 ### 2026-07-05 — slice `profile-stats-presentation` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration. The two open PRs (#1488 gateway/iOS

@@ -5,6 +5,7 @@ import me.meeshy.sdk.model.ChangeEmailResponse
 import me.meeshy.sdk.model.ChangePhoneRequest
 import me.meeshy.sdk.model.ChangePhoneResponse
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.TimelinePoint
 import me.meeshy.sdk.model.UpdateProfileRequest
 import me.meeshy.sdk.model.UserStats
 import me.meeshy.sdk.model.VerifyEmailChangeRequest
@@ -73,4 +74,13 @@ class UserRepository @Inject constructor(
 
     suspend fun getUserStats(userId: String): NetworkResult<UserStats> =
         apiCall { userApi.getUserStats(userId) }
+
+    /**
+     * The signed-in user's daily message-activity timeline. This is a `me`-only
+     * gateway endpoint (`/users/me/stats/timeline`) — it always reports the
+     * caller's own activity, so it is never keyed by a viewed user id. [days] is
+     * clamped to the gateway-accepted `7..90` window.
+     */
+    suspend fun getUserStatsTimeline(days: Int = 30): NetworkResult<List<TimelinePoint>> =
+        apiCall { userApi.getUserStatsTimeline(days.coerceIn(7, 90)) }
 }
