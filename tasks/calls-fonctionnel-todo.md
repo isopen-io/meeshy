@@ -900,3 +900,70 @@ session documentée.
   cosmétique), CALL-DIAG retagging (12 sites, cosmétique) ; nouvelle piste basse-priorité notée ci-dessus
   (`forceEndCall` ne vide pas la room Socket.IO) pour une session future si un scénario d'exploitation
   concret émerge.
+
+## Vague 14 — GC path leaked `qualityDegradedStreaks` (gateway) + web toast noise on transient `call:error` (2026-07-05)
+
+Point d'entrée : routine calling-feature. `git fetch --unshallow` d'abord (le clone shallow local
+masquait la vraie relation avec `origin/main` — après unshallow, branche et main pointaient sur le
+même commit, rien à réconcilier). Lecture complète du backlog (902 lignes) + `lessons.md` avant audit.
+5 commits gateway/iOS non encore documentés depuis la Vague 13 (`a813b31`, `3a6c006`, `08aa433`,
+`6b6e335`, `2d240d1`) — les 3 commits iOS (hold/unhold SDP renegotiation, audio-effect capture-hook
+guard, audio-session mode reapplication) relus en entier et jugés corrects, structurellement identiques
+aux sibling call-sites déjà établis (`toggleVideo`/`applySurvivalVideoSend`) ; pas de nouveau candidat
+côté iOS cette session (pas de toolchain Swift dans cet environnement, review lecture seule comme les
+sessions gateway-only précédentes). Gateway et web audités en profondeur.
+
+- **[BUG RÉEL, gateway, CONFIRMÉ + CORRIGÉ, TDD]** `a813b31` (2026-07-05, plus tôt aujourd'hui) a ajouté
+  `CallEventsHandler.clearQualityDegradedStreaks(callId)` — un sweep qui purge toutes les entrées
+  `qualityDegradedStreaks` (map keyée `callId:participantId`, jamais nettoyée autrement qu'un sweep
+  size-capped à 5000) d'un appel terminé — câblé sur les 3 chemins terminaux que `CallEventsHandler`
+  possède lui-même (`broadcastCallEnded`, disconnect leave à 0 participant, disconnect force-cleanup via
+  `forceEndOrphanedCallSession`). **Un 4e chemin terminal existe et n'a reçu AUCUN des deux traitements** :
+  `CallCleanupService.forceEndCall` (le tier GC — cron 60s, spec section 2.6 : `initiated/ringing` >120s
+  → missed, `connecting` >90s → failed, `active`/`reconnecting` >2h → garbageCollected, heartbeat stale
+  >120s → heartbeatTimeout) vit dans une classe séparée sans aucune référence à l'instance
+  `CallEventsHandler` (contrairement à `CallService`, partagé via `setCallService`). Sibling-drift exact
+  du même thème que `a813b31` lui-même documente pour `forceEndOrphanedCallSession` vs. l'ancien
+  `endCall`/`leaveCall` non traités — sauf qu'ici c'est le fix du jour qui a lui-même introduit le drift
+  en oubliant son propre 4e chemin. Impact : un appel GC-terminé (abandonné, personne n'a raccroché
+  proprement — exactement le scénario "dernier rapport dégradé" que ce nettoyage cible) laisse fuir son
+  entrée `qualityDegradedStreaks` pour de bon ; sur une gateway à trafic modéré, le cap de 5000 peut
+  n'être jamais atteint.
+- **Fix** : `clearQualityDegradedStreaks` passé `private` → publique sur `CallEventsHandler` (aucun
+  changement de comportement — la visibilité seule). Nouveau bridge symétrique de
+  `setPostSummaryCallback` (même raison, même pattern) : `CallCleanupService.setQualityStreakCleanupCallback(fn)`,
+  appelé dans `forceEndCall` juste après `clearHeartbeats`/`clearRingingTimeout`, câblé dans `server.ts`
+  juste après `setPostSummaryCallback` (`callEventsHandler.clearQualityDegradedStreaks`). No-op silencieux
+  si le callback n'est pas encore attaché (miroir exact de `postSummary`).
+- **Tests TDD** : 3 nouveaux cas dans `CallCleanupService.test.ts` (`setQualityStreakCleanupCallback`,
+  miroir exact de la suite `setPostSummaryCallback` : invoque avec le bon callId, no-op si la race guard
+  saute l'écriture, no-op silencieux sans callback enregistré). Suite `CallCleanupService.test.ts` complète :
+  55/55. Suite gateway filtrée `*[Cc]all*` : 28/28 suites, 828/828 tests verts (825 + 3 nouveaux).
+  `tsc --noEmit` : aucune nouvelle erreur (seule l'erreur `SequenceService.ts` pré-existante, confirmée
+  déjà présente avant ce diff).
+- **[BUG RÉEL, web, CONFIRMÉ + CORRIGÉ]** Audit dédié web (agent lecture seule, mandaté à falsifier ses
+  propres candidats avant de rapporter). `CallManager.tsx` (`handleCallError`, le composant réellement
+  monté) n'inspectait que `error.message` (une substring `"not in this call"`) et affichait un
+  `toast.error()` pour absolument tout le reste — **jamais `error.code`**. iOS (`CallManager.swift`
+  ~3480-3510) whiteliste explicitement 3 codes comme transitoires/non-fatals, chacun documenté avec un
+  **incident prod réel** : `RATE_LIMIT_EXCEEDED` (throttle d'UN candidat ICE — redondant par design, le
+  cap gateway est 50/5s vs. un flush de gathering légitime de 15-25/ms — a tué un appel sain 382ms après
+  connexion en prod) ; `TARGET_NOT_FOUND` (le socket du pair est momentanément absent de la room pendant
+  un churn/reconnect — le média P2P est intact — a tué un appel sain pendant le chaos-test prod du
+  2026-07-02) ; `INVALID_SIGNAL` (rejet de relais d'UN message, pas une erreur d'opération). Le gateway
+  émet ces 3 codes de façon identique à web et iOS (`CallEventsHandler.ts` `call:signal`/
+  `call:toggle-*`/etc.) — rien ne gate ce comportement à iOS. Repro : deux onglets web en appel, l'un
+  churn son socket (blip réseau) pendant que l'autre émet un burst de candidats ICE ou une offre
+  ICE-restart au même instant → le gateway relaie l'échec transitoire via `call:error` → web affiche un
+  `toast.error()` brut et inquiétant en plein appel par ailleurs sain, pour une condition qui
+  s'auto-guérit et ne requiert aucune action.
+- **Fix** : `handleCallError` court-circuite maintenant sur `error.code === 'RATE_LIMIT_EXCEEDED' |
+  'TARGET_NOT_FOUND' | 'INVALID_SIGNAL'` (log debug, pas de toast), exactement le même whitelist qu'iOS,
+  juste après le check `"not in this call"` préexistant (inchangé). Nouveau fichier de test
+  `CallManager.callError.test.tsx` (5 cas : les 3 codes transitoires silencieux, un code inconnu/fatal
+  affiche bien le toast, le message `"not in this call"` préexistant reste ignoré quel que soit le code).
+  Suite `*CallManager*` web : 2 suites/9 tests verts (4 préexistants + 5 nouveaux). `tsc --noEmit` web :
+  diff avant/après identique sur `CallManager.tsx` (mêmes erreurs `unknown`/`{}` préexistantes du typage
+  socket, seuls les numéros de ligne décalent — confirmé par diff textuel, aucune nouvelle erreur).
+- **Reste ouvert** (inchangé) : items J, C6, CALL-DIAG retagging, `forceEndCall` room Socket.IO non
+  vidée (piste basse-priorité, toujours pas de scénario d'exploitation concret).
