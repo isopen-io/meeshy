@@ -15,8 +15,13 @@
     <string name="settings_section_about">About</string>
     <string name="settings_section_danger">Danger zone</string>
     <string name="settings_display_language">Display language</string>
+    <string name="settings_language_system">System default</string>
+    <string name="settings_language_dialog_close">Close</string>
     <string name="settings_regional_language">Regional language</string>
     <string name="settings_push_notifications">Push notifications</string>
+    <string name="settings_new_message_notifications">New messages</string>
+    <string name="settings_notification_sound">Sound</string>
+    <string name="settings_notification_vibration">Vibration</string>
     <string name="settings_two_factor">Two-factor auth</string>
     <string name="settings_active_sessions">Active sessions</string>
     <string name="settings_blocked_users">Blocked users</string>

@@ -3,6 +3,18 @@
 Append-only log of gotchas and decisions that save time next run.
 
 ## Lessons
+- **2026-07-05 (`settings-interface-language`): re-localise a pure-Compose app app-wide with no AppCompat.**
+  minSdk 26 and the app is a `ComponentActivity` (not `AppCompatActivity`), so `AppCompatDelegate.setApplicationLocales`
+  isn't the free path (needs appcompat + the metadata service, and would become a *second* persistence SSOT next to
+  our DataStore). Instead: keep DataStore as the single persisted SSOT, and *apply* the locale by wrapping the whole
+  Compose tree — `CompositionLocalProvider(LocalContext provides base.createConfigurationContext(cfg.apply{setLocale}), LocalConfiguration provides cfg)` — so every `stringResource` re-resolves. Works on every API ≥17, no new
+  dependency, and the *decision* (`resolveInterfaceLocaleTag` → tag or null) stays a pure tested function; the
+  wrapper is the only (coverage-exempt) glue. Also: `null` = "follow the device locale" (System) is a cleaner model
+  than a magic sentinel — the pure codec maps corrupt/unsupported/`"system"`/blank all to `null`, and the applier
+  no-ops on `null` so an untranslated device locale still falls through Android's own resource resolution.
+  Distinguish **interface** language (app UI chrome → app locale, this slice) from **regional/content** language
+  (Prisme `ContentLanguagePreferences` → `LanguageResolver`, backend profile) — they are different stores; don't
+  wire the content row to the interface store.
 - **2026-07-05 (`settings-theme-mode`): DataStore allows only one active instance per file per process.**
   A test that writes through one `DataStore`, cancels its scope, then opens a *second* `DataStore` over the
   same file to prove persistence will hang/`TimeoutCancellationException` — cancelling the scope doesn't
@@ -1100,3 +1112,18 @@ Append-only log of gotchas and decisions that save time next run.
   are allowed, so **do NOT pass `--offline`** (the AGP plugin marker isn't pre-cached → resolution
   fails). `meeshy.sh` calls `./gradlew`, so invoke `gradle` directly for `assembleDebug`/
   `testDebugUnitTest` until a full wrapper dist can be primed.
+
+## 2026-07-05 — durable-preference codec: record-token (JSON) vs enum-token variant
+- The theme/language stores persist a **single enum token** with a pure `when`-based codec. The
+  notification block (`settings-notification-prefs`) persists a **whole record**
+  (`UserNotificationPreferences`, 30+ fields), so the codec round-trips as **JSON**, not an enum
+  string. Kept the same corruption-proof contract: `notificationPreferencesFromStorage(raw)` wraps
+  `decodeFromString` in `runCatching` → blank/absent/malformed/wrong-shape all degrade to
+  `UserNotificationPreferences()` defaults; `ignoreUnknownKeys` drops legacy fields; `encodeDefaults`
+  makes every field survive the round-trip. Same `:core:model` purity (private `Json` instance,
+  precedent `CallSignalMapper`) + `:sdk-core` DataStore store + `stateIn(Eagerly)` hydration pattern.
+- **ViewModel intent shape for a multi-field record:** don't add 30 setters. One private
+  `updateNotifications { copy(field = value) }` read-modify-writes the whole block from
+  `store.preferences.value`, so a single toggle never clobbers the others (tested by the
+  successive-toggles-compose case). Screen: push is the **master** — sub-toggles `enabled = pushEnabled`
+  so a coherent parent/child relationship, no dead ends.

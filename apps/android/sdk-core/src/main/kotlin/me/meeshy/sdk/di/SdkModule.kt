@@ -14,7 +14,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.SystemCacheClock
+import me.meeshy.sdk.language.DataStoreInterfaceLanguageStore
+import me.meeshy.sdk.language.InterfaceLanguageStore
 import me.meeshy.sdk.net.MeeshyApi
+import me.meeshy.sdk.notification.DataStoreNotificationPreferencesStore
+import me.meeshy.sdk.notification.NotificationPreferencesStore
 import me.meeshy.sdk.reaction.EmojiUsageStore
 import me.meeshy.sdk.reaction.SharedPrefsEmojiUsageStore
 import me.meeshy.sdk.theme.DataStoreThemeStore
@@ -49,6 +53,26 @@ object SdkModule {
             context.preferencesDataStoreFile("meeshy_theme")
         }
         return DataStoreThemeStore(dataStore, scope)
+    }
+
+    @Provides
+    @Singleton
+    fun providesInterfaceLanguageStore(@ApplicationContext context: Context): InterfaceLanguageStore {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val dataStore = PreferenceDataStoreFactory.create(scope = scope) {
+            context.preferencesDataStoreFile("meeshy_language")
+        }
+        return DataStoreInterfaceLanguageStore(dataStore, scope)
+    }
+
+    @Provides
+    @Singleton
+    fun providesNotificationPreferencesStore(@ApplicationContext context: Context): NotificationPreferencesStore {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val dataStore = PreferenceDataStoreFactory.create(scope = scope) {
+            context.preferencesDataStoreFile("meeshy_notifications")
+        }
+        return DataStoreNotificationPreferencesStore(dataStore, scope)
     }
 
     @Provides

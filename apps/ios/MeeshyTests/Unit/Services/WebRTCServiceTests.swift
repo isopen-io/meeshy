@@ -871,7 +871,6 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
     var lastDataChannelLabel: String?
     var lastSentData: Data?
 
-    var audioEffectsService: CallAudioEffectsServiceProviding? = nil
     let videoFilterPipeline = VideoFilterPipeline()
 
     func configure(iceServers: [IceServer]) throws {
@@ -939,8 +938,6 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
     private(set) var restartIceCallCount = 0
     func restartIce() { restartIceCallCount += 1 }
     func sendDTMF(digits: String) {}
-    func setAudioEffect(_ effect: AudioEffectConfig?) throws {}
-    func updateAudioEffectParams(_ config: AudioEffectConfig) throws {}
 }
 
 // MARK: - Camera switch serialization source guard

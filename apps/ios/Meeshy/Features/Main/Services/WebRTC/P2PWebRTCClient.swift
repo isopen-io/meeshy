@@ -83,9 +83,6 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     private var transcriptionDataChannel: RTCDataChannel?
     private var dataChannelPingTask: Task<Void, Never>?
     private var toggleVideoTask: Task<Void, Never>?
-    private let _audioEffectsService: CallAudioEffectsService
-
-    var audioEffectsService: CallAudioEffectsServiceProviding? { _audioEffectsService }
 
     var isConnected: Bool {
         peerConnection?.connectionState == .connected
@@ -95,8 +92,6 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     var remoteVideoTrack: Any? { remoteVideoTrack_ }
 
     override init() {
-        self._audioEffectsService = CallAudioEffectsService()
-
         // PERF-001: reuse the process-wide cached factory (initialized lazily once).
         // SSL init is performed inside the factory's lazy block.
         self.factory = WebRTCSharedFactory.factory
@@ -1090,7 +1085,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
                 let numericKeys = [
                     "currentRoundTripTime", "availableOutgoingBitrate",
                     "packetsLost", "packetsReceived",
-                    "packetsSent", "bytesSent", "bytesReceived"
+                    "packetsSent", "bytesSent", "bytesReceived", "jitter"
                 ]
                 var parsed: [CallStats.RawEntry] = []
                 parsed.reserveCapacity(report.statistics.count)
@@ -1173,22 +1168,10 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         dataChannelPingTask = nil
     }
 
-    // MARK: - Audio Effects
-
-    func setAudioEffect(_ effect: AudioEffectConfig?) throws {
-        try _audioEffectsService.setEffect(effect)
-        Logger.webrtc.info("Audio effect set: \(effect?.effectType.rawValue ?? "none")")
-    }
-
-    func updateAudioEffectParams(_ config: AudioEffectConfig) throws {
-        try _audioEffectsService.updateParams(config)
-    }
-
     // MARK: - Disconnect
 
     func disconnect() {
         sessionGeneration += 1
-        _audioEffectsService.reset()
         toggleVideoTask?.cancel()
         toggleVideoTask = nil
         stopDataChannelPing()
@@ -1410,7 +1393,14 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         }
         let extmapLine = "a=extmap:\(extID) \(transportCCURI)"
 
-        for i in 0..<lines.count where lines[i].hasPrefix("m=audio ") || lines[i].hasPrefix("m=video ") {
+        // Snapshot m-line indices before mutating `lines`, then insert from the
+        // last section backward — inserting at index i shifts every subsequent
+        // line by +1, which would desync a forward-walking loop's remaining
+        // (stale) indices once more than one m-section exists (e.g. audio+video).
+        // Walking in reverse means every remaining index still points at its
+        // original line, since only later positions have shifted.
+        let mLineIndices = lines.indices.filter { lines[$0].hasPrefix("m=audio ") || lines[$0].hasPrefix("m=video ") }
+        for i in mLineIndices.reversed() {
             var insertIdx = i + 1
             while insertIdx < lines.count && !lines[insertIdx].hasPrefix("m=") {
                 if lines[insertIdx].hasPrefix("a=extmap:") {
@@ -1681,10 +1671,7 @@ final class P2PWebRTCClient: WebRTCClientProviding {
     func disconnect() {}
     func disconnectAfterFlushingPendingSend() {}
 
-    var audioEffectsService: CallAudioEffectsServiceProviding? { nil }
     var videoFilterPipeline = VideoFilterPipeline()
-    func setAudioEffect(_ effect: AudioEffectConfig?) throws { throw WebRTCError.notSupported }
-    func updateAudioEffectParams(_ config: AudioEffectConfig) throws { throw WebRTCError.notSupported }
 }
 
 #endif
