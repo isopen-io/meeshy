@@ -492,7 +492,11 @@ describe('CommentReactionHandler', () => {
       });
     });
 
-    it('test_handleRemoveReaction_notFound_callbackError', async () => {
+    it('test_handleRemoveReaction_alreadyAbsent_isIdempotent_callbackSuccessNoBroadcast', async () => {
+      // The reaction is already gone (concurrent removal, retry of an applied
+      // remove, double-tap un-like). `{ success: false }` would make the client
+      // roll the optimistic un-like back, re-showing a like that is gone.
+      // Mirrors ReactionHandler.handleReactionRemove (message reactions).
       const socket = createMockSocket();
       const data = { commentId: COMMENT_ID, postId: POST_ID, emoji: EMOJI };
       const callback = jest.fn();
@@ -504,8 +508,8 @@ describe('CommentReactionHandler', () => {
 
       expect(mockIO.to).not.toHaveBeenCalled();
       expect(callback).toHaveBeenCalledWith({
-        success: false,
-        error: 'Reaction not found',
+        success: true,
+        data: { message: 'Reaction already absent' },
       });
     });
 
