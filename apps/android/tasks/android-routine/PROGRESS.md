@@ -692,6 +692,36 @@ After Stories richness is sufficient, advance to the **Calls** area
 
 ## Run log
 
+### 2026-07-05 — slice `outbox-lane-map-ssot` ✅ shipped
+- **Step 0 (housekeeping):** no Android PR open from a prior iteration. The four open PRs (#1477/#1476/
+  #1475/#1473) are all unrelated gateway/iOS work by another author — left untouched. Branched
+  `claude/apps/android/outbox-lane-map-ssot` off latest `origin/main` (`b3c9675`, the merged
+  `presence-away-indicator` #1474); the designated `claude/fervent-darwin-izcrp5` was exactly at main.
+- **Why this slice:** structural close of the **lane-in-drain-list gotcha** flagged in NOTES 2026-07-04
+  (the tracked "worker drain-list test" follow-up). `OutboxFlushWorker` kept a hand-maintained
+  `listOf(...)` of shared lanes to drain, **disjoint** from the `buildSenders()` kind→sender registry —
+  a kind could have a sender yet be stranded off the drain list (exactly the BLOCK/FRIEND omission that
+  silently killed block/unblock + friend-request delivery). Rather than guard the drift with a
+  Robolectric test, remove the drift: derive the drain list from a kind→lane SSOT.
+- **Added / changed (production):**
+  - `:sdk-core` `outbox/OutboxModel.kt` — new pure `OutboxLaneAssignment` (`PerConversation` |
+    `Shared(lane)`) + `OutboxLaneMap.assignmentFor(kind)` (SSOT, **exhaustive `when`** over `OutboxKind`
+    → a new kind cannot compile without a lane assignment) + derived `sharedDrainLanes` (every distinct
+    `Shared` lane, stable enum order, deduped).
+  - `:sdk-core` `outbox/OutboxFlushWorker.kt` — replaced the literal `lanes = listOf(...)` with
+    `lanes = OutboxLaneMap.sharedDrainLanes`. Behaviour-preserving except it drops the always-empty
+    `PRESENCE`/`SOCIAL` lanes (no kind maps there, no enqueue site → draining them was a no-op).
+- **Tests (red → green):** +9 `OutboxLaneMapTest` — per-arm mapping (message→PerConversation;
+  reaction/block collapse to their shared lane; each remaining kind → its dedicated lane), the
+  `entries`-wide non-blank invariant, `sharedDrainLanes` covers every `Shared` kind, the BLOCK/FRIEND
+  regression (both present), dedup (BLOCK/REACTION appear once), and per-conversation lanes never leak
+  into the shared list. Behavioural through the public API; every `when` arm exercised.
+- **Verification:** `assembleDebug` + all `testDebugUnitTest` **green** (system Gradle 8.14.3; wrapper
+  dist 403-blocked — see NOTES). Diff = `apps/android` only (2 prod + 1 test + docs).
+- **Reviewer verdict:** **PASS** — pure stateless SSOT in `:sdk-core`, worker derives from it (no
+  re-implementation), no prod logic outside android, every kind-arm + dedup + regression edge covered,
+  a drift-class bug made structurally impossible rather than merely tested.
+
 ### 2026-07-04 — slice `presence-away-indicator` ✅ shipped
 - **Step 0 (housekeeping):** no Android PR open from a prior iteration. One open PR (#1473) is unrelated
   iOS story-text work by another author (`claude/text-editor-enhancements`); left untouched. Branched

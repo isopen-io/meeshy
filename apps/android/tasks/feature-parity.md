@@ -1102,7 +1102,10 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       other 4xx → permanent reject + rollback, 5xx/offline → retry), and grafts the real request id
       back over the placeholder on delivery; a hard exhaust rolls the pending back. **Also fixed a
       latent bug**: `OutboxLanes.BLOCK` (and now `FRIEND`) were never in the worker's drain list, so
-      block/unblock rows never delivered — both lanes are now drained. Surpasses iOS (online-only
+      block/unblock rows never delivered — both lanes are now drained. *(Hardened structurally
+      2026-07-05 `outbox-lane-map-ssot`: the worker now derives its drain list from the
+      `OutboxLaneMap` kind→lane SSOT, so a sender can never again be stranded off an undrained lane.)*
+      Surpasses iOS (online-only
       send). +26 tests (9 `FriendRequestSend`, 3 `OutboxCoalescer`, 5 `FriendRepository`, 4 net
       `DiscoverViewModel`). Remaining: send **compose-new** UI (user-search entry point → connect)
 - [ ] Invite by email; invite by SMS; import phone contacts

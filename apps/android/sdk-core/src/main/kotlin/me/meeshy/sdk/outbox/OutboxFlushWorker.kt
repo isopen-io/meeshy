@@ -87,19 +87,9 @@ class OutboxFlushWorker @AssistedInject constructor(
             graftProducedId = PublishMediaWriteBack::graft,
         )
 
-        val lanes = listOf(
-            OutboxLanes.REACTION,
-            OutboxLanes.READ_RECEIPT,
-            OutboxLanes.CONVERSATION_PREFS,
-            OutboxLanes.PRESENCE,
-            OutboxLanes.SOCIAL,
-            OutboxLanes.MEDIA,
-            OutboxLanes.STORY,
-            OutboxLanes.PROFILE,
-            OutboxLanes.SETTINGS,
-            OutboxLanes.BLOCK,
-            OutboxLanes.FRIEND,
-        )
+        // Derived from the kind→lane SSOT so a registered sender can never be
+        // stranded on an undrained lane (see OutboxLaneMap).
+        val lanes = OutboxLaneMap.sharedDrainLanes
 
         val reports = mutableListOf<DrainReport>()
 
